@@ -160,12 +160,7 @@ describe("workflow card terminal outcome fold-in", () => {
         {...buildT3TeamMessagesTimelineTestProps()}
         threadActivities={activities}
         timelineEntries={[
-          {
-            id: "timeline-0",
-            kind: "message" as const,
-            createdAt: shape.createdAt,
-            message: shape,
-          },
+          { id: "timeline-0", kind: "message" as const, createdAt: shape.createdAt, message: shape },
           {
             id: "timeline-1",
             kind: "message" as const,
@@ -239,12 +234,7 @@ describe("workflow card terminal outcome fold-in", () => {
       <MessagesTimeline
         {...buildT3TeamMessagesTimelineTestProps()}
         timelineEntries={[
-          {
-            id: "timeline-0",
-            kind: "message" as const,
-            createdAt: outcome.createdAt,
-            message: outcome,
-          },
+          { id: "timeline-0", kind: "message" as const, createdAt: outcome.createdAt, message: outcome },
         ]}
       />,
     );

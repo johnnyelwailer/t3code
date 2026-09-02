@@ -76,6 +76,71 @@ export const tailscaleServePortFlag = Flag.integer("tailscale-serve-port").pipe(
   Flag.optional,
 );
 
+/**
+ * Decodes either the `"unlimited"` sentinel `WorkflowEphemeralConcurrencyPolicy`'s fields already
+ * accept, or a positive integer. Nonsense values (0, negative, non-numeric) fail decode with a
+ * message the CLI surfaces as a startup error, rather than silently falling back. Shared by both
+ * ephemeral-workflow limit flags below — only the label in the error message differs.
+ */
+const positiveIntegerOrUnlimitedFromString = (label: string) =>
+  Schema.String.pipe(
+    Schema.decodeTo(
+      Schema.Union([Schema.Literal("unlimited"), Schema.Int]),
+      // Explicit type args: without them, TS infers the decode/encode pair's shared type
+      // independently per property and narrows to `number` (dropping the `"unlimited"` arm)
+      // rather than unifying to the declared union — pin it explicitly instead of fighting
+      // inference.
+      SchemaTransformation.transformOrFail<"unlimited" | number, string>({
+        decode: (value) => {
+          const trimmed = value.trim();
+          if (trimmed.toLowerCase() === "unlimited") {
+            return Effect.succeed("unlimited" as const);
+          }
+          const parsed = Number(trimmed);
+          if (!Number.isInteger(parsed) || parsed < 1) {
+            return Effect.fail(
+              new SchemaIssue.InvalidValue({
+                message: `${label} must be a positive integer or "unlimited".`,
+              }),
+            );
+          }
+          return Effect.succeed(parsed);
+        },
+        encode: (value) => Effect.succeed(String(value)),
+      }),
+    ),
+  );
+
+const EphemeralWorkflowMaxActiveStepsFromString = positiveIntegerOrUnlimitedFromString(
+  "Ephemeral workflow max active steps",
+);
+const EphemeralWorkflowMaxLiveRunsFromString = positiveIntegerOrUnlimitedFromString(
+  "Ephemeral workflow max live runs",
+);
+
+export const ephemeralWorkflowMaxActiveStepsFlag = Flag.string(
+  "ephemeral-workflow-max-active-steps",
+).pipe(
+  Flag.withSchema(EphemeralWorkflowMaxActiveStepsFromString),
+  Flag.withDescription(
+    'Max concurrent ephemeral-workflow steps admitted at once, or "unlimited" (equivalent to ' +
+      "T3CODE_EPHEMERAL_WORKFLOW_MAX_ACTIVE_STEPS). Wins over any pack-provided policy.",
+  ),
+  Flag.optional,
+);
+
+export const ephemeralWorkflowMaxLiveRunsFlag = Flag.string(
+  "ephemeral-workflow-max-live-runs",
+).pipe(
+  Flag.withSchema(EphemeralWorkflowMaxLiveRunsFromString),
+  Flag.withDescription(
+    "Max live ephemeral workflow runs (running/suspended/sleeping/paused) per launching thread, " +
+      'or "unlimited" (equivalent to T3CODE_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS). Wins over any ' +
+      "pack-provided policy.",
+  ),
+  Flag.optional,
+);
+
 const EnvServerConfig = Config.all({
   logLevel: Config.logLevel("T3CODE_LOG_LEVEL").pipe(Config.withDefault("Info")),
   traceMinLevel: Config.logLevel("T3CODE_TRACE_MIN_LEVEL").pipe(Config.withDefault("Info")),
@@ -155,6 +220,12 @@ export interface CliServerFlags {
   readonly logWebSocketEvents: Option.Option<boolean>;
   readonly tailscaleServeEnabled: Option.Option<boolean>;
   readonly tailscaleServePort: Option.Option<number>;
+  /** Optional: only `cli/server.ts`/`cli/t3team-server.ts` read these (via
+   * `resolveEphemeralWorkflowMaxActiveStepsOverride`/`resolveEphemeralWorkflowMaxLiveRunsOverride`),
+   * so they stay out of `resolveServerConfig` and the exhaustive `ServerConfig` context shape
+   * every other flag here feeds into. */
+  readonly ephemeralWorkflowMaxActiveSteps?: Option.Option<number | "unlimited">;
+  readonly ephemeralWorkflowMaxLiveRuns?: Option.Option<number | "unlimited">;
 }
 
 export interface CliAuthLocationFlags {
@@ -189,6 +260,8 @@ export const sharedServerCommandFlags = {
   logWebSocketEvents: logWebSocketEventsFlag,
   tailscaleServeEnabled: tailscaleServeFlag,
   tailscaleServePort: tailscaleServePortFlag,
+  ephemeralWorkflowMaxActiveSteps: ephemeralWorkflowMaxActiveStepsFlag,
+  ephemeralWorkflowMaxLiveRuns: ephemeralWorkflowMaxLiveRunsFlag,
 } as const;
 
 export const authLocationFlags = sharedServerLocationFlags;
@@ -196,6 +269,53 @@ export const authLocationFlags = sharedServerLocationFlags;
 const resolveOptionPrecedence = <Value>(
   ...values: ReadonlyArray<Option.Option<Value>>
 ): Option.Option<Value> => Option.firstSomeOf(values);
+
+/**
+ * CLI flag → env var precedence for the ephemeral-workflow step-admission override, on the exact
+ * shape `resolveServerConfig` uses for every other flag here (`Flag` + a `Config` env binding +
+ * `resolveOptionPrecedence`/`Option.firstSomeOf`). Kept separate from `resolveServerConfig`
+ * itself: nothing in the generic `ServerConfig` context needs this value, only the two CLI entry
+ * points (`cli/server.ts`, `cli/t3team-server.ts`) that call `setWorkflowEphemeralConcurrencyPolicy`.
+ *
+ * Returns `undefined` when the operator expressed no preference — the caller must then leave
+ * whatever pack policy (or the core default) already in effect alone, rather than resolving a
+ * synthetic fallback here that would silently clobber it.
+ */
+export const resolveEphemeralWorkflowMaxActiveStepsOverride = Effect.fn(function* (
+  flags: Pick<CliServerFlags, "ephemeralWorkflowMaxActiveSteps">,
+) {
+  const envValue = yield* Config.schema(
+    EphemeralWorkflowMaxActiveStepsFromString,
+    "T3CODE_EPHEMERAL_WORKFLOW_MAX_ACTIVE_STEPS",
+  ).pipe(Config.option, Config.map(Option.getOrUndefined));
+  return Option.getOrUndefined(
+    resolveOptionPrecedence(
+      flags.ephemeralWorkflowMaxActiveSteps ?? Option.none(),
+      Option.fromUndefinedOr(envValue),
+    ),
+  );
+});
+
+/**
+ * Same precedence and shape as `resolveEphemeralWorkflowMaxActiveStepsOverride` above, for the
+ * per-launching-thread ephemeral run-count cap (`T3TEAM_EPHEMERAL_RUN_CAP`,
+ * `t3team-toolBrokerWorkflowRunTools.ts`) — PJ's original directive ("run cap of 8 should
+ * definitely not be hardcoded") applies to this limit too, not only to `maxActiveSteps`.
+ */
+export const resolveEphemeralWorkflowMaxLiveRunsOverride = Effect.fn(function* (
+  flags: Pick<CliServerFlags, "ephemeralWorkflowMaxLiveRuns">,
+) {
+  const envValue = yield* Config.schema(
+    EphemeralWorkflowMaxLiveRunsFromString,
+    "T3CODE_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS",
+  ).pipe(Config.option, Config.map(Option.getOrUndefined));
+  return Option.getOrUndefined(
+    resolveOptionPrecedence(
+      flags.ephemeralWorkflowMaxLiveRuns ?? Option.none(),
+      Option.fromUndefinedOr(envValue),
+    ),
+  );
+});
 
 const loadPersistedObservabilitySettings = Effect.fn(function* (settingsPath: string) {
   const fs = yield* FileSystem.FileSystem;

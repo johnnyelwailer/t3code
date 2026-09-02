@@ -765,15 +765,7 @@ describe("resolveSidebarThreadStatus", () => {
   describe("durable workflow run liveness (launch thread has no session of its own)", () => {
     const workflowRunStatus = (
       overrides: Partial<{
-        status:
-          | "queued"
-          | "running"
-          | "suspended"
-          | "sleeping"
-          | "paused"
-          | "completed"
-          | "failed"
-          | "cancelled";
+        status: "queued" | "running" | "suspended" | "sleeping" | "paused" | "completed" | "failed" | "cancelled";
         pendingKind: "thread.turn" | "user.input" | null;
       }>,
     ) => ({

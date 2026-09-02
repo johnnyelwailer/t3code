@@ -18,7 +18,15 @@ import {
 import * as NetService from "@t3tools/shared/Net";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { deriveServerPaths } from "../config.ts";
-import { resolveServerConfig } from "./config.ts";
+import {
+  getWorkflowEphemeralConcurrencyPolicy,
+  setWorkflowEphemeralConcurrencyPolicy,
+} from "../t3team-workflowEphemeralConcurrencyPolicy.ts";
+import {
+  resolveEphemeralWorkflowMaxActiveStepsOverride,
+  resolveEphemeralWorkflowMaxLiveRunsOverride,
+  resolveServerConfig,
+} from "./config.ts";
 
 const deriveExplicitServerPaths = (baseDir: string, devUrl: URL | undefined) =>
   deriveServerPaths(baseDir, devUrl, { baseDirIsExplicit: true });
@@ -740,6 +748,255 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
           tailscaleServeEnabled: false,
           tailscaleServePort: 443,
         });
+      }),
+  );
+
+  // `resolveEphemeralWorkflowMaxActiveStepsOverride` — CLI flag / env var precedence for the
+  // ephemeral-workflow step-admission override (Problem 1). Kept separate from
+  // `resolveServerConfig` itself (see the function's own doc comment), so tested separately here
+  // rather than via the `toEqual` blocks above.
+  it.effect("ephemeral workflow max active steps: CLI flag wins over env var", () =>
+    Effect.gen(function* () {
+      const resolved = yield* resolveEphemeralWorkflowMaxActiveStepsOverride({
+        ephemeralWorkflowMaxActiveSteps: Option.some(5),
+      }).pipe(
+        Effect.provide(
+          ConfigProvider.layer(
+            ConfigProvider.fromEnv({
+              env: { T3CODE_EPHEMERAL_WORKFLOW_MAX_ACTIVE_STEPS: "20" },
+            }),
+          ),
+        ),
+      );
+      expect(resolved).toEqual(5);
+    }),
+  );
+
+  it.effect("ephemeral workflow max active steps: env var applies when no CLI flag", () =>
+    Effect.gen(function* () {
+      const resolved = yield* resolveEphemeralWorkflowMaxActiveStepsOverride({
+        ephemeralWorkflowMaxActiveSteps: Option.none(),
+      }).pipe(
+        Effect.provide(
+          ConfigProvider.layer(
+            ConfigProvider.fromEnv({
+              env: { T3CODE_EPHEMERAL_WORKFLOW_MAX_ACTIVE_STEPS: "12" },
+            }),
+          ),
+        ),
+      );
+      expect(resolved).toEqual(12);
+    }),
+  );
+
+  it.effect('ephemeral workflow max active steps: accepts the "unlimited" sentinel', () =>
+    Effect.gen(function* () {
+      const resolved = yield* resolveEphemeralWorkflowMaxActiveStepsOverride({
+        ephemeralWorkflowMaxActiveSteps: Option.some("unlimited"),
+      }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }))));
+      expect(resolved).toEqual("unlimited");
+    }),
+  );
+
+  it.effect(
+    "ephemeral workflow max active steps: returns undefined with neither CLI flag nor env var",
+    () =>
+      Effect.gen(function* () {
+        const resolved = yield* resolveEphemeralWorkflowMaxActiveStepsOverride({
+          ephemeralWorkflowMaxActiveSteps: Option.none(),
+        }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }))));
+        expect(resolved).toBeUndefined();
+      }),
+  );
+
+  for (const badValue of ["0", "-3", "not-a-number", "1.5"]) {
+    it.effect(
+      `ephemeral workflow max active steps: rejects an invalid env value (${badValue}) with a clear error`,
+      () =>
+        Effect.gen(function* () {
+          const outcome = yield* resolveEphemeralWorkflowMaxActiveStepsOverride({
+            ephemeralWorkflowMaxActiveSteps: Option.none(),
+          }).pipe(
+            Effect.provide(
+              ConfigProvider.layer(
+                ConfigProvider.fromEnv({
+                  env: { T3CODE_EPHEMERAL_WORKFLOW_MAX_ACTIVE_STEPS: badValue },
+                }),
+              ),
+            ),
+            Effect.result,
+          );
+          assert.strictEqual(outcome._tag, "Failure");
+        }),
+    );
+  }
+
+  it.effect(
+    "ephemeral workflow max active steps: an operator override applied after a pack policy wins",
+    () =>
+      Effect.gen(function* () {
+        // Simulate pack activation (`loadPackWorkflowEphemeralConcurrencyPolicy` /
+        // `activateCompiledInDistribution`), which happens BEFORE the operator override is
+        // applied in `cli/server.ts` / `cli/t3team-server.ts` (see those files' comments on why
+        // this call is made last). The precedence property under test: whichever policy call
+        // happens last wins, so applying the resolved override after the pack's own call — the
+        // real ordering in both CLI entry points — must leave the operator's value in effect.
+        setWorkflowEphemeralConcurrencyPolicy({ maxActiveSteps: 3 });
+        try {
+          const resolved = yield* resolveEphemeralWorkflowMaxActiveStepsOverride({
+            ephemeralWorkflowMaxActiveSteps: Option.none(),
+          }).pipe(
+            Effect.provide(
+              ConfigProvider.layer(
+                ConfigProvider.fromEnv({
+                  env: { T3CODE_EPHEMERAL_WORKFLOW_MAX_ACTIVE_STEPS: "20" },
+                }),
+              ),
+            ),
+          );
+          if (resolved !== undefined) {
+            setWorkflowEphemeralConcurrencyPolicy({ maxActiveSteps: resolved });
+          }
+          expect(getWorkflowEphemeralConcurrencyPolicy()).toEqual({
+            maxActiveSteps: 20,
+            maxLiveRuns: 8,
+          });
+        } finally {
+          setWorkflowEphemeralConcurrencyPolicy({ maxActiveSteps: 8 });
+        }
+      }),
+  );
+
+  // `resolveEphemeralWorkflowMaxLiveRunsOverride` — same CLI flag / env var precedence, for the
+  // per-launching-thread run-count cap (PJ: "run cap of 8 should definitely not be hardcoded" —
+  // this was the limit still missing an override path after the first pass).
+  it.effect("ephemeral workflow max live runs: CLI flag wins over env var", () =>
+    Effect.gen(function* () {
+      const resolved = yield* resolveEphemeralWorkflowMaxLiveRunsOverride({
+        ephemeralWorkflowMaxLiveRuns: Option.some(5),
+      }).pipe(
+        Effect.provide(
+          ConfigProvider.layer(
+            ConfigProvider.fromEnv({
+              env: { T3CODE_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS: "20" },
+            }),
+          ),
+        ),
+      );
+      expect(resolved).toEqual(5);
+    }),
+  );
+
+  it.effect("ephemeral workflow max live runs: env var applies when no CLI flag", () =>
+    Effect.gen(function* () {
+      const resolved = yield* resolveEphemeralWorkflowMaxLiveRunsOverride({
+        ephemeralWorkflowMaxLiveRuns: Option.none(),
+      }).pipe(
+        Effect.provide(
+          ConfigProvider.layer(
+            ConfigProvider.fromEnv({
+              env: { T3CODE_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS: "12" },
+            }),
+          ),
+        ),
+      );
+      expect(resolved).toEqual(12);
+    }),
+  );
+
+  it.effect('ephemeral workflow max live runs: accepts the "unlimited" sentinel', () =>
+    Effect.gen(function* () {
+      const resolved = yield* resolveEphemeralWorkflowMaxLiveRunsOverride({
+        ephemeralWorkflowMaxLiveRuns: Option.some("unlimited"),
+      }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }))));
+      expect(resolved).toEqual("unlimited");
+    }),
+  );
+
+  it.effect(
+    "ephemeral workflow max live runs: returns undefined with neither CLI flag nor env var",
+    () =>
+      Effect.gen(function* () {
+        const resolved = yield* resolveEphemeralWorkflowMaxLiveRunsOverride({
+          ephemeralWorkflowMaxLiveRuns: Option.none(),
+        }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }))));
+        expect(resolved).toBeUndefined();
+      }),
+  );
+
+  for (const badValue of ["0", "-3", "not-a-number", "1.5"]) {
+    it.effect(
+      `ephemeral workflow max live runs: rejects an invalid env value (${badValue}) with a clear error`,
+      () =>
+        Effect.gen(function* () {
+          const outcome = yield* resolveEphemeralWorkflowMaxLiveRunsOverride({
+            ephemeralWorkflowMaxLiveRuns: Option.none(),
+          }).pipe(
+            Effect.provide(
+              ConfigProvider.layer(
+                ConfigProvider.fromEnv({
+                  env: { T3CODE_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS: badValue },
+                }),
+              ),
+            ),
+            Effect.result,
+          );
+          assert.strictEqual(outcome._tag, "Failure");
+        }),
+    );
+  }
+
+  it.effect(
+    "ephemeral workflow max live runs: an operator override applied after a pack policy wins",
+    () =>
+      Effect.gen(function* () {
+        // Same precedence property as the maxActiveSteps version above, for the sibling field:
+        // a pack-provided run-count cap (`maxLiveRuns`) is applied first (at pack-activation
+        // time), and the operator override is applied last in both CLI entry points, so it wins.
+        setWorkflowEphemeralConcurrencyPolicy({ maxLiveRuns: 3 });
+        try {
+          const resolved = yield* resolveEphemeralWorkflowMaxLiveRunsOverride({
+            ephemeralWorkflowMaxLiveRuns: Option.none(),
+          }).pipe(
+            Effect.provide(
+              ConfigProvider.layer(
+                ConfigProvider.fromEnv({
+                  env: { T3CODE_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS: "20" },
+                }),
+              ),
+            ),
+          );
+          if (resolved !== undefined) {
+            setWorkflowEphemeralConcurrencyPolicy({ maxLiveRuns: resolved });
+          }
+          expect(getWorkflowEphemeralConcurrencyPolicy()).toEqual({
+            maxActiveSteps: 8,
+            maxLiveRuns: 20,
+          });
+        } finally {
+          setWorkflowEphemeralConcurrencyPolicy({ maxLiveRuns: 8 });
+        }
+      }),
+  );
+
+  it.effect(
+    "ephemeral workflow policy: setting one field via merge never resets the other back to its default",
+    () =>
+      Effect.gen(function* () {
+        // Guards the Partial-merge design in `setWorkflowEphemeralConcurrencyPolicy`: a pack (or
+        // an operator override) that only supplies ONE field must never silently clobber the
+        // other field's current value — that was the bug a naive whole-object replace would have
+        // reintroduced the moment a second independently-settable field existed.
+        setWorkflowEphemeralConcurrencyPolicy({ maxActiveSteps: 2 });
+        setWorkflowEphemeralConcurrencyPolicy({ maxLiveRuns: 5 });
+        try {
+          expect(getWorkflowEphemeralConcurrencyPolicy()).toEqual({
+            maxActiveSteps: 2,
+            maxLiveRuns: 5,
+          });
+        } finally {
+          setWorkflowEphemeralConcurrencyPolicy({ maxActiveSteps: 8, maxLiveRuns: 8 });
+        }
       }),
   );
 });

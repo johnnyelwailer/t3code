@@ -144,7 +144,7 @@ describe("compiled-in distribution bootstrap", () => {
       totalTimeBudgetMs: 900_000,
     });
     expect(getWorkflowAgentModelPolicy()).toEqual({ instanceId: "nexplore", model: "light" });
-    expect(getWorkflowEphemeralConcurrencyPolicy()).toEqual({ maxActiveSteps: 8 });
+    expect(getWorkflowEphemeralConcurrencyPolicy()).toEqual({ maxActiveSteps: 8, maxLiveRuns: 8 });
 
     const appearance = getPackAppearanceOverlay();
     expect(appearance?.themeId).toBe("nexplore");

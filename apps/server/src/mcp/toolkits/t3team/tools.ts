@@ -162,7 +162,7 @@ export const T3TeamStartChildTool = Tool.make("t3team_start_child", {
 });
 
 // Child-thread management: ONE meta tool with an `op` discriminator (list /
-// status / wait / watch / unwatch / stop / close / sweep / help) instead of a tool
+// status / wait / watch / unwatch / stop / close / help) instead of a tool
 // per operation, so the context cost stays one compact description no matter
 // how many ops exist. Per-op detail is discovered on demand via `help` or
 // carried in a malformed call's error message. Routes to the t3team.thread.
@@ -171,8 +171,7 @@ export const T3TeamStartChildTool = Tool.make("t3team_start_child", {
 const CHILDREN_TOOL_DESCRIPTION =
   "Manage this thread's child sessions (STATE, not content — use send_message to talk to a " +
   "child). One tool; `op` selects the operation:\n" +
-  "- list: this thread's children with live state (all:true = whole project; " +
-  "include_settled:true lists settled children too — they are excluded by default)\n" +
+  "- list: this thread's children with live state (all:true = whole project)\n" +
   "- status: one thread's current turn state, in-progress work, elapsed\n" +
   "- wait: durably resume this turn when a child reaches a terminal state (on: " +
   "terminal|completed|failed; timeout in ms)\n" +
@@ -183,33 +182,16 @@ const CHILDREN_TOOL_DESCRIPTION =
   "- unwatch: cancel all silence watches on the target\n" +
   "- stop: halt a child's running turn\n" +
   "- close: mark a child done from this side\n" +
-  "- sweep: settle terminal (completed/failed/aborted) threads in bulk — given thread ids " +
-  "and/or all of this thread's terminal children older than N hours. Cleanup protocol: verify " +
-  "each state first (final result / discarded work / unpushed work in worktrees), then sweep; " +
-  "settled threads keep their transcripts and drop out of the active rosters\n" +
   "- help: exact schema for one op (op_name)";
 
 export const T3TeamChildrenTool = Tool.make("t3team_children", {
   description: CHILDREN_TOOL_DESCRIPTION,
   parameters: Schema.Struct({
-    op: Schema.Literals([
-      "list",
-      "status",
-      "wait",
-      "watch",
-      "unwatch",
-      "stop",
-      "close",
-      "sweep",
-      "help",
-    ]),
+    op: Schema.Literals(["list", "status", "wait", "watch", "unwatch", "stop", "close", "help"]),
     thread_id: Schema.optional(Schema.String),
-    thread_ids: Schema.optional(Schema.Array(Schema.String)),
     on: Schema.optional(Schema.Literals(["terminal", "completed", "failed"])),
     timeout: Schema.optional(Schema.Number),
     all: Schema.optional(Schema.Boolean),
-    all_older_than_hours: Schema.optional(Schema.Number),
-    include_settled: Schema.optional(Schema.Boolean),
     reason: Schema.optional(Schema.String),
     op_name: Schema.optional(Schema.String),
   }),
@@ -359,12 +341,16 @@ export const T3TeamOrchestrationStatusTool = Tool.make("t3team_orchestration_sta
 const orchestrationResumeDescription =
   "Resume a paused or failed agent-orchestration run from its journal. Pass the `runId` from " +
   "t3team_orchestration_run/t3team_orchestration_status; optionally pass corrected `source` for " +
-  "an ephemeral run (same-prefix replay — do not change already-executed steps). Returns " +
+  "an ephemeral run (same-prefix replay — do not change already-executed steps), or corrected " +
+  "`args` when the failure was an invalid-inputs error (the source was correct, the launch " +
+  "arguments were not) — prefer `args` over `source` for that case, and prefer resuming over " +
+  "calling t3team_orchestration_run again, which would create a second card. Returns " +
   "{runId, status: accepted|suspended|sleeping, hint}; observe progress via " +
   "t3team_orchestration_status.";
 const orchestrationResumeParameters = Schema.Struct({
   runId: Schema.String,
   source: Schema.optional(Schema.String),
+  args: Schema.optional(Schema.Unknown),
 });
 
 export const T3TeamOrchestrationResumeTool = Tool.make("t3team_orchestration_resume", {

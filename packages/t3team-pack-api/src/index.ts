@@ -28,6 +28,10 @@ export type WorkflowAgentModelPolicyDefinition = {
 
 export type WorkflowEphemeralConcurrencyPolicyDefinition = {
   readonly maxActiveSteps: number | "unlimited";
+  /** Max ephemeral runs (agent-authored via `t3team.orchestration.run`) holding engine resources
+   * — running/suspended/sleeping/paused — per launching thread, at once. Optional: a pack that
+   * only cares about step concurrency can omit it and leave the run-count cap untouched. */
+  readonly maxLiveRuns?: number | "unlimited";
 };
 
 export type AgentProviderModel = {

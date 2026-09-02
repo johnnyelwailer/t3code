@@ -91,16 +91,12 @@ describe("durable workflow engine — a body cannot swallow its own suspension",
 
   it("fires exactly one ask when the body swallows the signal on every turn of a loop", async () => {
     const broker = createMockBroker(alwaysDefer);
-    const run = await startWorkflow(
-      swallowLoopWorkflow,
-      {},
-      {
-        runsRoot,
-        tools: [],
-        broker,
-        launchThreadId: "launch-thread",
-      },
-    );
+    const run = await startWorkflow(swallowLoopWorkflow, {}, {
+      runsRoot,
+      tools: [],
+      broker,
+      launchThreadId: "launch-thread",
+    });
 
     if (!isSuspended(run)) throw new Error(`expected a suspended run, got ${JSON.stringify(run)}`);
     expect(run.correlationId).toBe(`${run.runId}:1`);

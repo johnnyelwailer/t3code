@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 
 import "./t3team-DotColorVariants.css";
-import "./t3team-DotColorVariantsCD.css";
+import "./t3team-DotColorVariantsC.css";
 
 /**
  * "Living status dots" polish — four directions for SMOOTH, theme-oriented
@@ -144,7 +144,7 @@ function VariantCard({
   paletteNote: string;
   children: React.ReactNode;
   /** Extra scope class(es) this card inherits paint from (B inherits A). */
-  alsoInherits?: string;
+  alsoInherits?: string | undefined;
 }) {
   return (
     <div
@@ -215,11 +215,11 @@ const VARIANTS: readonly VariantConfig[] = [
     id: "D",
     scope: "sdv2-vD",
     letter: "D",
-    name: "Porcelain orb (recommended)",
+    name: "Porcelain orb — PRODUCTION paint (what ships)",
     technique:
-      "420ms soft-out color morph on everything · drifting orb sheen (position + opacity + color) · very subtle 4px halo · waiting = soft breathing halo (no hard ring)",
+      "this card carries NO story overrides: it renders the t3team-index.css state section as shipped - 420ms color morph (morph-in on remount, transition elsewhere), drifting orb sheen, 4px halo, soft waiting halo",
     paletteNote:
-      "Accent-anchored tokens, chroma nudged up slightly. The sheen is a blurred color-mix(state, white) highlight that slowly drifts position and opacity while its color follows the state transition - the dot behaves like a lit orb. The waiting state's old hard ring is gone (soft halo instead, no layout impact) and the flip-demo labels reserve width so state changes never reflow the row.",
+      "Theme-token palette (color-mix in oklch) lives on .t3team-aci-cell in t3team-index.css; the drifting sheen, clipped inside the orb, drifts position + size + opacity + hue with a per-dot phase offset. The flip demo below uses persistent cells, so the color crossfade you see IS the production transition path. A/B/C above are story-only alternatives.",
   },
 ];
 

@@ -85,6 +85,10 @@ export interface LaunchWorkflowRecipeInput {
   readonly allowRepairThreadFallback?: boolean;
   readonly readWorkflowSource?: () => Promise<string>;
   readonly replaceWorkflowSource?: (source: string) => Promise<void>;
+  /** Correct the SAME run's persisted launch args (an input-contract repair). Must also rewrite
+   * whatever baseline the journal checks a resume's supplied args against — see the launch
+   * host's implementation for why that part is not optional. */
+  readonly replaceWorkflowArgs?: (args: unknown) => Promise<void>;
   readonly recordRepairAudit?: (audit: {
     readonly attempt: number;
     readonly originalError: string;

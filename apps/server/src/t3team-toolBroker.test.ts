@@ -189,11 +189,26 @@ describe("T3TeamToolBrokerLive", () => {
         name: "t3team.thread.read_message",
       }),
       "t3team.orchestration.run": expect.objectContaining({ name: "t3team.orchestration.run" }),
+      "t3team.orchestration.status": expect.objectContaining({
+        name: "t3team.orchestration.status",
+      }),
+      "t3team.orchestration.resume": expect.objectContaining({
+        name: "t3team.orchestration.resume",
+      }),
       // Ad-hoc widgets are a host tool too — bound for every thread, with or
       // without a stored view context (see genericThreadToolIds).
       "t3team.widget.show": expect.objectContaining({ name: "t3team.widget.show" }),
       "t3team.recipe.list": expect.objectContaining({ name: "t3team.recipe.list" }),
       "t3team.recipe.validate": expect.objectContaining({ name: "t3team.recipe.validate" }),
+    });
+
+    const models = await Effect.runPromise(
+      binding!.callTool({ server: "t3team", tool: "t3team.runtime.models" }),
+    );
+    expect(models.structuredContent).toMatchObject({
+      source: "ProviderRegistry live snapshots",
+      currentSelection: { instanceId: "codex", model: "gpt-5.4-mini" },
+      providers: [],
     });
   });
 

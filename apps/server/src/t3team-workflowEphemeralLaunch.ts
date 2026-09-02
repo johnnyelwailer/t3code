@@ -11,6 +11,7 @@
  * preview into the launch thread (observability — an unreadable source skips it), then launches
  * through `launchWorkflowRecipe`.
  */
+import { hashArgs } from "@t3team/sdk";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -129,6 +130,28 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
         ? {}
         : { generateRepairStructured: deps.generateRepairStructured }),
       allowRepairThreadFallback: false,
+      // Unlike source replacement, correcting args needs no filesystem access — it writes the
+      // durable run row (and the journal's args baseline; see below) through services this
+      // funnel always has, so it is unconditional rather than folded into the fs-gated block.
+      replaceWorkflowArgs: async (nextArgs: unknown) => {
+        const argsHash = hashArgs(nextArgs);
+        await Effect.runPromise(
+          deps.runRepository.updateArgs({
+            runId: input.runId,
+            args: nextArgs,
+            argsHash,
+            updatedAt: nowIso(),
+          }),
+        );
+        // resumeWorkflow's assertInputArgsMatch has no bypass policy (unlike
+        // workflowVersionPolicy for source): it hard-fails replay at seq 0 unless the journal's
+        // runMeta.argsHash already matches the args the resume is about to supply. Establish
+        // that new baseline here, before the coordinator resumes.
+        const meta = await deps.journalStore.readRunMeta(input.runId);
+        if (meta !== undefined) {
+          await deps.journalStore.writeRunMeta(input.runId, { ...meta, argsHash });
+        }
+      },
       ...(deps.fileSystem === undefined || pathService === undefined
         ? {}
         : {

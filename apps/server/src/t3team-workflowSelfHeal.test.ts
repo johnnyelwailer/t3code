@@ -1,9 +1,12 @@
+import { WorkflowInputDecodeError } from "@t3team/sdk";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
   canAttemptWorkflowRepair,
   coordinateWorkflowRepair,
+  parseWorkflowArgsRepairChildResult,
   parseWorkflowRepairChildResult,
+  workflowRepairTargetFor,
 } from "./t3team-workflowSelfHeal.ts";
 import {
   awaitWorkflowRepairChildReply,
@@ -12,7 +15,10 @@ import {
 import { workflowRepairIsStopped } from "./t3team-workflowEngineRepair.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
-import { validateWorkflowRepairCandidate } from "./t3team-workflowRepairGuardrails.ts";
+import {
+  validateWorkflowArgsRepairCandidate,
+  validateWorkflowRepairCandidate,
+} from "./t3team-workflowRepairGuardrails.ts";
 
 const intent = {
   goal: "Fix review",
@@ -32,9 +38,12 @@ const run = async (overrides: Partial<Parameters<typeof coordinateWorkflowRepair
     intent,
     args: { review: true },
     workspaceRoot: "/repo",
-    generateRepair: async () => ({ kind: "replacement", source }),
+    generateRepair: async () => ({ kind: "sourceReplacement", source }),
     replaceSource: async () => {
       calls.push("replace-same-workflow.ts");
+    },
+    replaceArgs: async () => {
+      calls.push("replace-args");
     },
     resumeWorkflowAfterRepair: async () => {
       calls.push("resume-same-run");
@@ -121,6 +130,48 @@ describe("workflow self-heal coordinator", () => {
       ),
     ).toBeNull();
   });
+  it("routes an input-decode failure to the args target, every other failure to source", () => {
+    const decodeFailure = new WorkflowInputDecodeError(
+      'Invalid inputs for workflow \'x\': Missing key ["words"]',
+    );
+    expect(workflowRepairTargetFor(decodeFailure)).toBe("args");
+    expect(workflowRepairTargetFor(new Error("SyntaxError: bad token"))).toBe("source");
+    expect(workflowRepairTargetFor("SyntaxError: bad token")).toBe("source");
+  });
+  it("accepts only the exact args-repair-child JSON protocol", () => {
+    expect(
+      parseWorkflowArgsRepairChildResult(
+        '{"safeToResume":true,"correctedArgs":{"words":["a","b"]},"summary":"fixed"}',
+      ),
+    ).toEqual({ outcome: "fixed", updatedArgs: { words: ["a", "b"] }, summary: "fixed" });
+    expect(
+      parseWorkflowArgsRepairChildResult('{"safeToResume":false,"cancelReason":"unsafe change"}'),
+    ).toEqual({ outcome: "cannot-fix", reason: "unsafe change" });
+    expect(
+      parseWorkflowArgsRepairChildResult(
+        '{"safeToResume":true,"correctedArgs":{},"summary":"y","extra":true}',
+      ),
+    ).toBeNull();
+    expect(parseWorkflowArgsRepairChildResult("```json\n{}\n```")).toBeNull();
+  });
+  it("validates corrected args against the original workflow's declared meta.inputs", () => {
+    const withInputs =
+      'export const meta = { name: "x", inputs: Schema.Struct({ words: Schema.Array(Schema.String) }) } as const;\nthread.askUser("go");';
+    expect(
+      validateWorkflowArgsRepairCandidate({
+        originalSource: withInputs,
+        replacementArgs: { words: ["a", "b"] },
+        absolutePath: "/tmp/args-ok.workflow.ts",
+      }),
+    ).toEqual({ ok: true, args: { words: ["a", "b"] } });
+    expect(
+      validateWorkflowArgsRepairCandidate({
+        originalSource: withInputs,
+        replacementArgs: { words: "not-an-array" },
+        absolutePath: "/tmp/args-bad.workflow.ts",
+      }),
+    ).toEqual({ ok: false });
+  });
   it("repairs once in the same run/card boundary", async () => {
     const { result, phases, calls } = await run();
     expect(result).toEqual({ kind: "recovered", repairAttempts: 1 });
@@ -128,11 +179,49 @@ describe("workflow self-heal coordinator", () => {
     expect(calls).toEqual(["replace-same-workflow.ts", "resume-same-run", "audit"]);
   });
 
+  it("an input-decode failure is repaired as ARGS, not source, and resumes the same run", async () => {
+    let receivedTarget: string | undefined;
+    const { result, phases, calls } = await run({
+      failure: new WorkflowInputDecodeError(
+        'Invalid inputs for workflow \'qa-pipeline\': Missing key ["words"]',
+      ),
+      generateRepair: async ({ target }) => {
+        receivedTarget = target;
+        return { kind: "argsReplacement", args: { words: ["a", "b"] }, summary: "added words" };
+      },
+    });
+    expect(receivedTarget).toBe("args");
+    expect(result).toEqual({ kind: "recovered", repairAttempts: 1 });
+    expect(phases).toEqual(["analysing", "repairing", "resuming", "recovered"]);
+    // replaceArgs (never replaceSource) is what carries the correction to the same run.
+    expect(calls).toEqual(["replace-args", "resume-same-run", "audit"]);
+  });
+
+  it("rejects an args correction that fails the caller's validateArgs gate", async () => {
+    const { result, calls } = await run({
+      failure: new WorkflowInputDecodeError("Invalid inputs for workflow 'x': Missing key"),
+      generateRepair: async () => ({ kind: "argsReplacement", args: { words: "not-an-array" } }),
+      validateArgs: () => ({ ok: false }),
+    });
+    expect(result).toEqual({
+      kind: "failed",
+      repairAttempts: 1,
+      reason: "Provider returned invalid workflow args.",
+      retryable: true,
+    });
+    expect(calls).toEqual(["audit"]);
+  });
+
   it("records a visible failure when provider cannot repair", async () => {
     const { result, phases, calls } = await run({
       generateRepair: async () => ({ kind: "cannotRepair", reason: "unsupported" }),
     });
-    expect(result).toEqual({ kind: "failed", repairAttempts: 1, reason: "unsupported" });
+    expect(result).toEqual({
+      kind: "failed",
+      repairAttempts: 1,
+      reason: "unsupported",
+      retryable: false,
+    });
     expect(phases).toEqual(["analysing", "failed"]);
     expect(calls).toEqual(["audit"]);
   });
@@ -143,7 +232,7 @@ describe("workflow self-heal coordinator", () => {
       failure: "Authentication required",
       generateRepair: async () => {
         generated = true;
-        return { kind: "replacement", source };
+        return { kind: "sourceReplacement", source };
       },
     });
     expect(result).toEqual({ kind: "not-attempted" });
@@ -156,6 +245,7 @@ describe("workflow self-heal coordinator", () => {
       kind: "failed",
       repairAttempts: 1,
       reason: "Repaired workflow could not resume from its stable checkpoint.",
+      retryable: true,
     });
     expect(phases).toEqual(["analysing", "repairing", "resuming", "failed"]);
   });

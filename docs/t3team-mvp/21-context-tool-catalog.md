@@ -636,7 +636,8 @@ result vocabulary aligned with Copilot session tooling:
 - required `isolation` (`shared` or `own-worktree`)
 - optional `kickoff_prompt`
 - optional `kickoff_mode` (`plan`, `interactive`, `autopilot`)
-- optional `model` and `reasoning_effort`
+- optional provider instance id, exact model slug, and `reasoning_effort`; provider/model values
+  come from `t3team.runtime.models`
 - `repo_full_name` required for `own-worktree` scope when the workspace has linked repositories (omit it in a local workspace to isolate the child in a worktree of the local repository), and forbidden for `shared` scope
 - result metadata including `project_session_id`, navigation hint, and repo/worktree details
 

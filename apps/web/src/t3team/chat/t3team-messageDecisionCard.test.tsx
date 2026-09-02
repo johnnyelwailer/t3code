@@ -504,8 +504,9 @@ describe("T3TeamWorkflowDecisionCard clicks", () => {
     // fell through to the generic system-notice fallback (the `<p>System</p>` bubble). The fix is
     // to always mint a fresh id for the reply, since there is no optimistic bubble to reconcile
     // with here (unlike the composer path).
-    const { T3TeamSystemTimelineDecisionRow } =
-      await import("~/t3team/chat/t3team-SystemTimelineDecisionRow");
+    const { T3TeamSystemTimelineDecisionRow } = await import(
+      "~/t3team/chat/t3team-SystemTimelineDecisionRow"
+    );
     const ask = decisionMessage("message-decision-1");
     const dispatchWorkflowDecision = vi.fn(async (_decision: { readonly messageId: string }) => {});
     const threadRef = {

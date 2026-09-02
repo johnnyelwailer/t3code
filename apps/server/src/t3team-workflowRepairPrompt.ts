@@ -43,3 +43,45 @@ export function buildWorkflowRepairPrompt(input: {
     `Source:\n${source}`,
   ].join("\n\n");
 }
+
+/**
+ * Prompt variant for an INPUT-CONTRACT failure (see `WorkflowInputDecodeError` /
+ * `workflowRepairTargetFor` in `t3team-workflowRepairGuardrails.ts`): the workflow SOURCE is
+ * correct, the CALLER's launch args are not. Asks for corrected args only — the source is
+ * included read-only, for its declared `meta.inputs` schema, never as something to rewrite.
+ */
+export function buildWorkflowArgsRepairPrompt(input: {
+  readonly intent: {
+    readonly goal: string;
+    readonly expectedOutcome: string;
+    readonly guardrails: ReadonlyArray<string>;
+  };
+  readonly failure: string;
+  readonly priorReasons: ReadonlyArray<string>;
+  readonly args: unknown;
+  readonly workspaceRoot: string;
+  readonly source: string;
+}): string {
+  const source =
+    input.source.length > MAX_EMBEDDED_SOURCE_CHARS
+      ? `${input.source.slice(0, MAX_EMBEDDED_SOURCE_CHARS)}\n// … source truncated for repair (${input.source.length} chars total)`
+      : input.source;
+  return [
+    "This t3team workflow's SOURCE is correct. The CALLER passed the wrong launch arguments — " +
+      "do NOT rewrite the workflow body, only propose corrected arguments.",
+    'Return exact JSON only: {"safeToResume":true,"correctedArgs":<value matching the workflow\'s ' +
+      'declared meta.inputs schema below>,"summary":"..."} or ' +
+      '{"safeToResume":false,"cancelReason":"..."}.',
+    `Intent goal: ${input.intent.goal}`,
+    `Expected outcome: ${input.intent.expectedOutcome}`,
+    `Guardrails (must not widen): ${input.intent.guardrails.join(" | ")}`,
+    `Failure (names the exact invalid/missing argument): ${input.failure}`,
+    ...(input.priorReasons.length === 0
+      ? []
+      : [`Prior repair failures: ${input.priorReasons.join(" | ")}`]),
+    `Args the workflow was actually launched with: ${JSON.stringify(input.args)}`,
+    `Workspace root: ${input.workspaceRoot}`,
+    `Workflow source, read-only — do not rewrite it, only read its declared \`meta.inputs\` ` +
+      `schema:\n${source}`,
+  ].join("\n\n");
+}

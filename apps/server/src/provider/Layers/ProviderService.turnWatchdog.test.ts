@@ -667,3 +667,88 @@ perProviderHarness.layer("turn inactivity watchdog: per-provider timeout", (it) 
     }),
   );
 });
+
+const codexReplaced = makeFakeAdapter(CODEX_DRIVER);
+const replacedHarness = makeWatchdogHarness({ [CODEX_DRIVER]: codexReplaced.adapter });
+
+replacedHarness.layer("turn inactivity watchdog: replaced runtime", (it) => {
+  // A watchdog is armed for the turn of a specific runtime, but it aborts by
+  // thread id. Restarting the session — a runtime-mode, model or cwd change —
+  // replaces the runtime and takes its in-flight turn with it, yet nothing
+  // used to disarm the entry. It then fired against the replacement and
+  // aborted a turn nobody asked it to. On Claude that is worse than an abort:
+  // `interruptTurn` there ignores the turn id and closes the whole session, so
+  // a stale entry kills the session the user just restarted.
+  it.effect("does not abort the runtime that replaced the one it was armed for", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const threadId = asThreadId("thread-replaced");
+
+      yield* startCodexSession(provider, threadId);
+      yield* provider.sendTurn({ threadId, input: "hello", attachments: [] });
+      yield* drainFibers;
+
+      // The restart. The turn the watchdog is holding died with the runtime.
+      yield* startCodexSession(provider, threadId);
+      yield* drainFibers;
+
+      yield* advanceTestClock(600_000);
+      yield* drainFibers;
+
+      assert.deepEqual(
+        codexReplaced.interruptTurnCalls,
+        [],
+        "a watchdog armed for a replaced runtime aborted its replacement",
+      );
+    }),
+  );
+
+  // The clear above is not enough on its own. Stream events re-arm the
+  // watchdog and they arrive without the thread's permit, so an event that was
+  // already in flight when the restart happened would re-install the entry the
+  // restart just removed — putting the wrong-runtime interruption back by
+  // another route. A re-arm may therefore only extend a turn that is still the
+  // armed one; it may never create an entry.
+  //
+  // NOTE: this test pins the sequential half only — that a late event finds no
+  // entry and creates none. It does NOT discriminate the conditional install:
+  // reaching that needs the event handler to read a live entry, a restart to
+  // clear it, and the handler's write to land after, which no sequential test
+  // can produce. Forcing it needs a latch inside `armTurnWatchdog`, which this
+  // harness does not expose. The conditional install is reasoned, not proven.
+  it.effect("a late event from the replaced runtime cannot re-arm the cleared watchdog", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const threadId = asThreadId("thread-late-event");
+
+      yield* startCodexSession(provider, threadId);
+      yield* provider.sendTurn({ threadId, input: "hello", attachments: [] });
+      yield* drainFibers;
+
+      yield* startCodexSession(provider, threadId);
+      yield* drainFibers;
+
+      // A content delta from the runtime that has just been replaced, still
+      // carrying its own turn id.
+      codexReplaced.emit({
+        type: "content.delta",
+        eventId: asEventId("late-delta"),
+        provider: CODEX_DRIVER,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        threadId,
+        turnId: asTurnId(`turn-${String(threadId)}`),
+        payload: { text: "late chunk" },
+      });
+      yield* drainFibers;
+
+      yield* advanceTestClock(600_000);
+      yield* drainFibers;
+
+      assert.deepEqual(
+        codexReplaced.interruptTurnCalls,
+        [],
+        "a late event re-armed a watchdog that a restart had cleared",
+      );
+    }),
+  );
+});

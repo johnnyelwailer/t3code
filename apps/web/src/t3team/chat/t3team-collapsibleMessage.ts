@@ -19,7 +19,6 @@ export function shouldCollapseMessageText(text: string): boolean {
   }
 
   return (
-    text.length > COLLAPSED_MESSAGE_MAX_LENGTH ||
-    text.split("\n").length > COLLAPSED_MESSAGE_MAX_LINES
+    text.length > COLLAPSED_MESSAGE_MAX_LENGTH || text.split("\n").length > COLLAPSED_MESSAGE_MAX_LINES
   );
 }

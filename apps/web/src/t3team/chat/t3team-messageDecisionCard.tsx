@@ -108,9 +108,7 @@ export function T3TeamWorkflowDecisionCard(props: {
       ) : (
         <div className="mb-2 flex items-center gap-1.5 text-primary">
           <CircleHelpIcon className="size-3.5" />
-          <span className="text-[11px] font-semibold uppercase tracking-wide">
-            Needs your input
-          </span>
+          <span className="text-[11px] font-semibold uppercase tracking-wide">Needs your input</span>
         </div>
       )}
       <T3TeamWorkflowQuestionProse question={decision.question} />

@@ -67,6 +67,46 @@ describe("T3TeamActiveAgentsIndicator", () => {
     container.remove();
   });
 
+  it("stamps data-t3team-from with the PREVIOUS state on a state change (0.0.39 color morph)", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    let root: Root;
+    act(() => {
+      root = createRoot(container);
+      root.render(<T3TeamActiveAgentsIndicator entries={ENTRIES} onOpenAgents={() => {}} />);
+    });
+    const firstCell = container.querySelector<HTMLElement>('.t3team-aci-cell[data-t3team-state="writing"]');
+    expect(firstCell).not.toBeNull();
+    // First render: no previous state known, no morph stamp.
+    expect(firstCell!.hasAttribute("data-t3team-from")).toBe(false);
+    // Re-render with the SAME id but a changed dotState (+ fresh activityKey so
+    // the entry is recognized as live): the cell (keyed by id) persists and
+    // must carry data-t3team-from="writing" so the remounted dot's one-shot
+    // morph-in keyframe interpolates FROM the previous state's color.
+    const CHANGED: readonly ActiveAgentEntry[] = [
+      {
+        id: ENTRIES[0]!.id,
+        source: ENTRIES[0]!.source,
+        title: ENTRIES[0]!.title,
+        statusLabel: ENTRIES[0]!.statusLabel,
+        dotState: "working",
+        activityKey: "k1b",
+      },
+      ENTRIES[1]!,
+    ];
+    act(() => {
+      root.render(<T3TeamActiveAgentsIndicator entries={CHANGED} onOpenAgents={() => {}} />);
+    });
+    const changedCell = container.querySelector<HTMLElement>('.t3team-aci-cell[data-t3team-state="working"][data-t3team-from="writing"]');
+    expect(changedCell).not.toBeNull();
+    // The second dot (unchanged state) must NOT get a morph stamp - the
+    // previous state equals the current one.
+    const unchanged = container.querySelector<HTMLElement>('.t3team-aci-cell[data-t3team-state="working"]:not([data-t3team-from="working"])');
+    expect(unchanged).not.toBeNull();
+    act(() => root.unmount());
+    container.remove();
+  });
+
   it("stamps each dot with its entry's dotState (state-texture hook)", () => {
     const markup = renderToStaticMarkup(
       <T3TeamActiveAgentsIndicator entries={ENTRIES} onOpenAgents={() => {}} />,

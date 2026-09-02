@@ -10,36 +10,20 @@
 import type { ProjectSource } from "@t3tools/project-context";
 import {
   getT3TeamToolDefinition,
+  requiresWorkSourceT3TeamTool,
   type T3TeamToolId,
-  type T3TeamToolSurface,
 } from "@t3tools/project-context/t3teamToolCatalog";
 
 import { isWorkProjectSource } from "~/t3team/t3team-isWorkProject";
 
 /**
- * Surfaces that only make sense against a real work source (Jira/Atlassian, Linear, a
- * GitHub-managed project, ...). A loose local workspace has no backlog, no "my work" queue,
- * and no work items behind it.
- */
-const WORK_SOURCE_ONLY_SURFACES: ReadonlySet<T3TeamToolSurface> = new Set([
-  "backlog",
-  "my-work",
-  "work-item",
-]);
-
-/**
- * ANY work-source surface disqualifies the tool, not all of them.
- *
- * `surfaces` does double duty in the catalog: it names the UI surface a tool belongs to AND
- * acts as the selector for a set (`DEFAULT_T3TEAM_THREAD_TOOL_IDS` is everything tagged
- * `"thread"`). So a work-item tool offered to thread agents is tagged
- * `["work-item", "thread"]` — `t3team.work_item.refresh_context_bundle` is exactly that, and
- * it is the one work-source tool in the default thread set. Requiring *every* surface to be
- * work-source-only would let it through and make this gate a no-op.
+ * ANY work-source surface disqualifies the tool, not all of them — see
+ * `requiresWorkSourceT3TeamTool`'s own docstring (packages/project-context/src/t3teamToolCatalogCore.ts)
+ * for why "any" rather than "every". Kept as a thin wrapper here so every call site in this file
+ * still reads `requiresWorkSource(toolId)` rather than a two-step catalog lookup.
  */
 function requiresWorkSource(toolId: T3TeamToolId): boolean {
-  const tool = getT3TeamToolDefinition(toolId);
-  return tool.surfaces.some((surface) => WORK_SOURCE_ONLY_SURFACES.has(surface));
+  return requiresWorkSourceT3TeamTool(getT3TeamToolDefinition(toolId));
 }
 
 export function resolveT3TeamThreadToolIds<TToolId extends T3TeamToolId>(input: {

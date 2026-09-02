@@ -44,6 +44,18 @@ This repository is a VERY EARLY WIP. Proposing sweeping changes that improve lon
 
 If a tradeoff is required, choose correctness and robustness over short-term convenience.
 
+## Multi-Host Reuse
+
+This code is used across multiple hosts, consumers, and runtime environments, including Nexi Work,
+Nexi Portal, and external automation hosts. Before changing a shared contract, runtime, capability,
+provider, or workflow, check which hosts consume it and preserve their compatibility. Prefer small,
+host-neutral contracts with host-specific adapters over copying concrete implementations. Build new
+features so their behavior, persistence, and failure modes can be reused outside the first surface
+where they are needed. Verify each affected host or explicitly document why a host does not apply.
+For event-driven or recurring behavior, treat the event-source and trigger design in GHE issue #332
+as foundational prior art; reuse its source registration, durable delivery, and resume model rather
+than inventing a parallel trigger mechanism.
+
 ## Maintainability
 
 ### ALWAYS check whether the functionality already exists — before writing it
@@ -165,6 +177,7 @@ This project vendors external repositories under `.repos/` as read-only referenc
 
 ## Session-learned gotchas (friction-optimizer, 2026-07-07)
 
+- For GitHub Enterprise, use `GH_HOST=nexplore.ghe.com gh issue view <issue-url>`; `gh issue view` has no `--hostname` flag.
 - `vp run dev:desktop` hot-reloads **web + desktop only**; the backend runs from the prebuilt `apps/server/dist/bin.mjs`. After server-source changes: `pnpm -C apps/server build:bundle` + restart, or use `dev:server` for a watched backend. **New HTTP routes are registered once**, in the route-merge list in `server.ts` — the former `makeT3TeamRoutesLayer` duplicate registry (and the whole `t3team-server.ts` copy of `server.ts`) was removed in the 2026-08 upstream sync, because it drifted on every sync. Verify a new endpoint against the actually-running server/port before claiming done.
 - Run vitest packages **serially** — full concurrent runs die with exit 137 (OOM SIGKILL). A 137 is a kill, not a test failure; re-run that package serially before triaging.
 - Pre-commit hook duplicates lint/test; bypass with `--no-verify` only when test+typecheck already ran green in-session, and say so.

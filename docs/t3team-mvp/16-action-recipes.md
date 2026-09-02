@@ -1031,7 +1031,7 @@ isolated thread whose typed result lives as a normal variable in the orchestrati
 ```ts
 const summary = await agent(`Summarize this diff:\n\n${pr.diff}`, {
   schema: SummarySchema, // Effect Schema; typed return
-  model: { provider: "anthropic-primary", model: models.anthropic.claudeHaiku45 },
+  effort: "light", // provider-neutral; omit for the launching thread's exact selection
 });
 // summary is Schema.Schema.Type<typeof SummarySchema>
 ```

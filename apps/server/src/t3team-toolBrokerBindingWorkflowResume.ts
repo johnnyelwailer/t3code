@@ -18,10 +18,11 @@ const readArgs = (value: unknown): ResumeWorkflowHandlerArgs => {
   if (!value || typeof value !== "object" || globalThis.Array.isArray(value)) {
     return {};
   }
-  const record = value as { readonly runId?: unknown; readonly source?: unknown };
+  const record = value as { readonly runId?: unknown; readonly source?: unknown; readonly args?: unknown };
   return {
     runId: typeof record.runId === "string" ? record.runId : undefined,
     source: typeof record.source === "string" ? record.source : undefined,
+    args: record.args,
   };
 };
 

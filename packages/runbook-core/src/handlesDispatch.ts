@@ -2,7 +2,12 @@ import { hashArgs } from "./canonicalJson.ts";
 import { CancelledError, WorkflowAborted } from "./errors.ts";
 import { emitSafe } from "./events.ts";
 import type { PrimitiveKind } from "./runtimeTypes.ts";
-import type { HandleDispatch, HandleSeat, HandleSendCall, ReplyResolver } from "./handles.ts";
+import type {
+  HandleDispatch,
+  HandleSeat,
+  HandleSendCall,
+  ReplyResolver,
+} from "./handles.ts";
 import { assertJournalMatch, gapDrift } from "./replayDrift.ts";
 
 const noopResolver: ReplyResolver = { resolve: () => {}, reject: () => {} };

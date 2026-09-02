@@ -1,6 +1,10 @@
 /** Static host guardrails for agent-proposed ephemeral workflow replacements. */
-import { extractMeta, prepareWorkflow } from "@t3team/sdk";
+import { extractMeta, prepareWorkflow, WorkflowInputDecodeError } from "@t3team/sdk";
 import * as Schema from "effect/Schema";
+
+// The args-repair guardrails are their own module (additive size budget); re-exported so
+// existing importers of this module keep resolving.
+export * from "./t3team-workflowRepairArgsGuardrails.ts";
 
 type MetaRecord = Record<string, unknown>;
 const unsafePatterns = [
@@ -65,6 +69,16 @@ export const validateWorkflowRepairCandidate = (input: {
   }
   return input.replacementSource;
 };
+
+/** Which artifact a repair attempt must correct. An input-contract failure (the CALLER passed
+ * wrong/missing launch args) is not a source defect — asking the repair model to rewrite the
+ * workflow body would repair the wrong artifact. Typed discriminator on the raised error class
+ * (see `WorkflowInputDecodeError`), never a message-string heuristic — this repo forbids
+ * keyword/regex heuristics in an agent decision path. */
+export type WorkflowRepairTarget = "args" | "source";
+
+export const workflowRepairTargetFor = (error: unknown): WorkflowRepairTarget =>
+  error instanceof WorkflowInputDecodeError ? "args" : "source";
 
 /**
  * Attempt ceilings and failure/source admissibility, moved here from `t3team-workflowSelfHeal.ts`.
@@ -156,8 +170,16 @@ export const parseWorkflowRepairChildResult = (
 const unsafeFailure =
   /\b(?:cancel(?:led|ed|ation)?|abort(?:ed|ing)?|auth(?:entication|orization)?|unauthori[sz]ed|forbidden|policy|capabilit(?:y|ies)|permission|approval|user[ _-]?input)\b/i;
 
-/** Only compiler/runtime defects can be repaired. Human, auth, and policy failures must surface. */
+/**
+ * Only compiler/runtime defects can be repaired. Human, auth, and policy failures must surface.
+ *
+ * An input-contract failure ({@link WorkflowInputDecodeError}) is checked FIRST and by type, not
+ * by message: the decode error names the offending key verbatim (e.g. `Missing key at
+ * ["permission"]`), and a field literally named `permission`/`approval`/`capability` would
+ * otherwise false-positive against `unsafeFailure` below and be wrongly refused.
+ */
 export const isRepairableWorkflowFailure = (error: unknown): boolean => {
+  if (error instanceof WorkflowInputDecodeError) return true;
   const message = error instanceof Error ? error.message : String(error);
   return message.trim().length > 0 && !unsafeFailure.test(message);
 };

@@ -31,7 +31,13 @@ import { setWorkflowRepairPolicy } from "../t3team-workflowRepairPolicy.ts";
 import { setWorkflowAgentModelPolicy } from "../t3team-workflowAgentModelPolicy.ts";
 import { setWorkflowEphemeralConcurrencyPolicy } from "../t3team-workflowEphemeralConcurrencyPolicy.ts";
 import { workflowAdmissionQueue } from "../t3team-workflowAdmissionQueue.ts";
-import { type CliServerFlags, resolveServerConfig, sharedServerCommandFlags } from "./config.ts";
+import {
+  type CliServerFlags,
+  resolveEphemeralWorkflowMaxActiveStepsOverride,
+  resolveEphemeralWorkflowMaxLiveRunsOverride,
+  resolveServerConfig,
+  sharedServerCommandFlags,
+} from "./config.ts";
 
 class WorkspacePackLoadError extends Data.TaggedError("WorkspacePackLoadError")<{
   readonly cause: unknown;
@@ -186,6 +192,25 @@ export const runT3TeamServerCommand = (
         activeTheme: appearanceOverlay?.themeId,
         setupProfiles: setupProfileOverlay?.map((profile) => profile.id) ?? [],
       });
+    }
+    // Applied LAST — after both the compiled-in distribution (step 1, above) and any workspace
+    // pack (just above) have had their say — so an explicit operator override (CLI flag or env
+    // var) always wins, regardless of which pack source set a policy or in what order.
+    // `setWorkflowEphemeralConcurrencyPolicy` merges, so passing only the fields that actually
+    // have an override never clobbers whatever the pack set for the other one.
+    const ephemeralWorkflowMaxActiveSteps =
+      yield* resolveEphemeralWorkflowMaxActiveStepsOverride(flags);
+    const ephemeralWorkflowMaxLiveRuns = yield* resolveEphemeralWorkflowMaxLiveRunsOverride(flags);
+    if (ephemeralWorkflowMaxActiveSteps !== undefined || ephemeralWorkflowMaxLiveRuns !== undefined) {
+      setWorkflowEphemeralConcurrencyPolicy({
+        ...(ephemeralWorkflowMaxActiveSteps === undefined
+          ? {}
+          : { maxActiveSteps: ephemeralWorkflowMaxActiveSteps }),
+        ...(ephemeralWorkflowMaxLiveRuns === undefined
+          ? {}
+          : { maxLiveRuns: ephemeralWorkflowMaxLiveRuns }),
+      });
+      workflowAdmissionQueue.reconfigure();
     }
     return yield* runServer.pipe(Effect.provideService(ServerConfig, config));
   });

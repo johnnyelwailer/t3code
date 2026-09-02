@@ -37,6 +37,10 @@ export type {
   T3TeamToolStatus,
   T3TeamToolSurface,
 } from "./t3teamToolCatalogCore.ts";
+export {
+  requiresWorkSourceT3TeamTool,
+  WORK_SOURCE_ONLY_T3TEAM_TOOL_SURFACES,
+} from "./t3teamToolCatalogCore.ts";
 
 export const T3TEAM_TOOL_CATALOG = {
   ...PLANNED_PROJECT_BACKLOG_MY_WORK_TOOL_CATALOG,

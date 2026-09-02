@@ -53,10 +53,7 @@ export function T3TeamSystemTimelineNotificationBody({
         data-workflow-notification-fade={isCollapsed ? "true" : "false"}
         style={
           isCollapsed
-            ? {
-                WebkitMaskImage: COLLAPSED_MESSAGE_FADE_MASK,
-                maskImage: COLLAPSED_MESSAGE_FADE_MASK,
-              }
+            ? { WebkitMaskImage: COLLAPSED_MESSAGE_FADE_MASK, maskImage: COLLAPSED_MESSAGE_FADE_MASK }
             : undefined
         }
       >

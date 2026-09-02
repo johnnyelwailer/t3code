@@ -141,7 +141,30 @@ THE ENGINE API (import the ones you use from "@t3team/sdk")
 - getArgs()                   the orchestration input (validated against meta.inputs if
                               declared).
 
-For exact provider/model selection, call t3team_help("model-selection").
+EXACT PROVIDER / MODEL SELECTION
+Provider instance ids and model slugs are live runtime facts, not an SDK catalog. Before naming an
+exact target, call t3team_models and use one returned instanceId + model slug verbatim. Never copy
+ids from examples or guess from a provider family name. Then construct the typed value generically:
+
+  import { agent, defineModel } from "@t3team/sdk"
+
+  const selected = {
+    provider: '<instanceId returned by t3team_models>',
+    model: defineModel({
+      provider: '<same runtime instanceId>',
+      id: '<model slug returned for that instance>',
+    }),
+  }
+
+  await agent('Review this change', {
+    label: 'Runtime-selected review',
+    capabilities: 'inherit',
+    model: selected,
+  })
+
+The host validates this selection against the same live ProviderRegistry again when the child
+starts. Omit model to inherit the currentSelection reported by t3team_models. Prefer effort:
+'light' | 'standard' | 'high' when the task needs a thinking tier rather than an exact model.
 
 DURABLE TIMERS AND ROUTINES
 For the focused timer reference and copyable examples, call t3team_help("timers").

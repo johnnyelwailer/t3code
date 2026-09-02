@@ -281,3 +281,98 @@ it.live(
       });
     }).pipe(Effect.provide(TestLayer)),
 );
+
+// Declares meta.inputs, so a launch with the wrong shape fails BEFORE the body runs — an
+// input-contract fault (WorkflowInputDecodeError), not a source defect.
+const argsFixtureSource = `import { Schema } from "effect";
+import { getArgs } from "@t3team/sdk";
+export const Inputs = Schema.Struct({ words: Schema.Array(Schema.String) });
+export const Outputs = Schema.Struct({ joined: Schema.String });
+export const meta = { name: "resume-tool.args-fixture", inputs: Inputs, outputs: Outputs } as const;
+export default async function run() {
+  const input = getArgs();
+  return { joined: input.words.join(",") };
+}
+`;
+
+it.live(
+  "failed + corrected args: rewrites the journal's args baseline and the run completes",
+  () =>
+    Effect.gen(function* () {
+      const repo = yield* WorkflowRunRepository;
+      const store = yield* WorkflowJournalStore;
+      const handlers = yield* makeHandlers;
+      const runId = "failed-args-run";
+      const runDir = NodePath.join(cwd, ".t3team-runs", runId);
+      const workflowPath = NodePath.join(runDir, "workflow.ts");
+      NodeFS.mkdirSync(runDir, { recursive: true });
+      NodeFS.writeFileSync(workflowPath, argsFixtureSource);
+
+      // Launch with args missing the declared `words` key — resumeWorkflow's own
+      // assertInputArgsMatch never runs on a fresh start, so this fails inside the body's
+      // meta.inputs decode, before any journal entry is written.
+      const throwaway = makeWorkflowEngineRegistry();
+      let seq = 0;
+      const launched = yield* Effect.promise(() =>
+        launchWorkflowRecipe({
+          runId,
+          workflowPath,
+          args: {},
+          runsRoot: NodePath.join(cwd, ".t3team-runs"),
+          launchThreadId: String(threadId),
+          projectId,
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          registry: throwaway,
+          dispatch: () => Promise.resolve(),
+          newId: () => `id-${(seq += 1)}`,
+          nowIso,
+          store,
+          lifecycle: makeWorkflowRunLifecycle({
+            repo,
+            row: { ...baseRow(runId), workflowPath },
+            nowIso,
+          }),
+        }),
+      );
+      assert.strictEqual(launched.status, "failed");
+      assert.strictEqual(Option.getOrThrow(yield* repo.getById({ runId })).status, "failed");
+
+      const value = yield* handlers.resumeWorkflowRun({ runId, args: { words: ["a", "b"] } });
+      assert.strictEqual(value.status, "accepted");
+
+      // The re-drive runs detached; the durable row is the observable outcome. Had the journal's
+      // args baseline not been rewritten, resumeWorkflow's assertInputArgsMatch would reject this
+      // as replay drift instead of completing — that failure mode is what this test guards.
+      yield* Effect.gen(function* () {
+        for (let i = 0; i < 200; i += 1) {
+          const row = Option.getOrThrow(yield* repo.getById({ runId }));
+          if (row.status === "completed") return;
+          yield* Effect.sleep(Duration.millis(25));
+        }
+        return yield* Effect.die(new Error("timed out waiting for resumed run to complete"));
+      });
+      const finalRow = Option.getOrThrow(yield* repo.getById({ runId }));
+      assert.deepStrictEqual(finalRow.args, { words: ["a", "b"] });
+    }).pipe(Effect.provide(TestLayer)),
+);
+
+it.effect("scopes a corrected-args resume to the calling thread", () =>
+  Effect.gen(function* () {
+    const repo = yield* WorkflowRunRepository;
+    const handlers = yield* makeHandlers;
+    yield* repo.upsert({
+      ...baseRow("other-thread-args-run"),
+      status: "failed",
+      launchThreadId: "someone-else",
+    });
+    const error = yield* handlers
+      .resumeWorkflowRun({ runId: "other-thread-args-run", args: { words: ["x"] } })
+      .pipe(Effect.flip);
+    assert.match(error, /No orchestration run found/);
+    // Never touched: scoping is checked before any source/args replacement runs.
+    const row = Option.getOrThrow(yield* repo.getById({ runId: "other-thread-args-run" }));
+    assert.deepStrictEqual(row.args, {});
+  }).pipe(Effect.provide(TestLayer)),
+);

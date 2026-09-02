@@ -3,43 +3,42 @@
  * needs but the working row never renders.
  *
  * The rest of the state-motion dot language (base dot, the five live states
- * thinking/writing/working/waiting/settled, the waiting ring, hue wander and
- * reduced-motion fallback) lives ONCE in t3team-index.css, keyed off
- * `.t3team-aci-cell[data-t3team-state]` + `.t3team-aci-dot` — the EXACT DOM the
- * panel stamps via AgentsPanelStatusDot. This file does NOT re-port that
- * language; it only adds:
+ * thinking/writing/working/waiting/settled, the orb sheen, the waiting
+ * halo, the 0.0.39 porcelain palette, hue wander and reduced-motion
+ * fallback) lives ONCE in t3team-index.css, keyed off
+ * `.t3team-aci-cell[data-t3team-state]` + `.t3team-aci-dot` — the EXACT DOM
+ * the panel stamps via AgentsPanelStatusDot. This file does NOT re-port
+ * that language; it only adds:
  *   done  → success (green, still) · error → failure (red, still)
- * so a settled sub-run reads its outcome at a glance. Scoped under `.t3team-agp`
- * (the panel root, set by AgentsPanel.tsx) so the additions can never leak onto
- * the working-row dots, which never set these two states.
+ * so a settled sub-run reads its outcome at a glance. The result colors
+ * use the SAME shared --t3team-aci-c token the index.css palette defines
+ * (its [data-t3team-state="done"/"error"] mappings resolve to the
+ * --t3team-dot-done/--t3team-dot-error tokens), so halo + sheen + color
+ * morph stay one language. Scoped under `.t3team-agp` (the panel root, set
+ * by AgentsPanel.tsx) so the additions can never leak onto the
+ * working-row dots, which never set these two states.
  * ========================================================================= */
 
-/* Success: a still, readable green. */
+/* Success: a still, readable green (theme-oriented; no raw hex). */
 .t3team-agp .t3team-aci-cell[data-t3team-state="done"] .t3team-aci-dot {
-  background: #22c55e;
+  background: var(--t3team-aci-c);
   animation: none;
   opacity: 0.9;
   transform: scale(1.5);
-  box-shadow: 0 0 4px 0 rgb(34 197 94 / 0.35);
-}
-.dark .t3team-agp .t3team-aci-cell[data-t3team-state="done"] .t3team-aci-dot {
-  background: #4ade80;
+  box-shadow: 0 0 4px 0 color-mix(in oklch, var(--t3team-aci-c) 22%, transparent);
 }
 
 /* Failure: a still, prominent red. */
 .t3team-agp .t3team-aci-cell[data-t3team-state="error"] .t3team-aci-dot {
-  background: #ef4444;
+  background: var(--t3team-aci-c);
   animation: none;
   opacity: 1;
   transform: scale(1.6);
-  box-shadow: 0 0 5px 0 rgb(239 68 68 / 0.4);
-}
-.dark .t3team-agp .t3team-aci-cell[data-t3team-state="error"] .t3team-aci-dot {
-  background: #f87171;
+  box-shadow: 0 0 4px 0 color-mix(in oklch, var(--t3team-aci-c) 22%, transparent);
 }
 
-/* Reduced motion: the shared block already stills the live dots; just drop the
-   glow on the two result states to match. */
+/* Reduced motion: the shared block already stills the live dots; just drop
+   the glow on the two result states to match. */
 @media (prefers-reduced-motion: reduce) {
   .t3team-agp .t3team-aci-cell[data-t3team-state="done"] .t3team-aci-dot,
   .t3team-agp .t3team-aci-cell[data-t3team-state="error"] .t3team-aci-dot {

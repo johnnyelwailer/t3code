@@ -37,7 +37,7 @@ import { nowIso } from "./t3team-thread-recipe-workflow-routes-resolve.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
-import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
+import { resolveT3TeamWorkflowHostToolBinding } from "./t3team-workflowHostToolAvailability.ts";
 import { resolveRecipeHostToolScope } from "./t3team-recipeWorkflowToolScope.ts";
 
 export { t3teamThreadWorkflowResolveInputRouteLayer } from "./t3team-thread-recipe-workflow-routes-resolve.ts";
@@ -154,22 +154,15 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
       recipePath,
       workflowPath,
     });
-    if (hostToolScope.kind === "denied") {
-      yield* Effect.logDebug("workflow launch runs without host tools", {
-        runId,
-        reason: hostToolScope.reason,
-      });
-    }
-    const hostToolGrant =
-      hostToolScope.kind === "granted" ? { toolGroups: hostToolScope.toolGroups } : undefined;
-    const hostToolClient =
-      hostToolScope.kind === "granted"
-        ? makeT3TeamWorkflowHostDraftToolClient({
-            broker: toolBroker,
-            launchThreadId: threadIdInput,
-            allowedToolGroups: hostToolScope.toolGroups,
-          })
-        : undefined;
+    // Narrows `hostToolScope` (what the recipe may reach) to what the PROJECT actually provides
+    // (its `source`, from `loadThreadProjectContext` above) — see t3team-workflowHostToolAvailability.ts.
+    const { hostToolGrant, hostToolClient } = yield* resolveT3TeamWorkflowHostToolBinding({
+      runId,
+      hostToolScope,
+      projectSource: project.source,
+      broker: toolBroker,
+      launchThreadId: threadIdInput,
+    });
 
     // Shared launch-prep (spec D10): durable lifecycle row (origin 'recipe'), best-effort
     // play-as-shape preview, then the durable engine launch — the same funnel the ephemeral

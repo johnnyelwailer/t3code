@@ -1,12 +1,13 @@
 /**
  * The `t3team.orchestration.resume` action implementations, split from
  * {@link ./t3team-toolBrokerWorkflowResumeTool.ts} for the additive size budget:
- * optional corrected-source replacement (ephemeral runs only), the paused-run continuation
- * restore (mirrors the HTTP control route). The failed-run journal re-drive lives in
- * ./t3team-toolBrokerWorkflowResumeFailed.ts (additive size budget).
+ * optional corrected-source replacement (ephemeral runs only), optional corrected-args
+ * replacement (any origin), and the paused-run continuation restore (mirrors the HTTP control
+ * route). The failed-run journal re-drive lives in ./t3team-toolBrokerWorkflowResumeFailed.ts
+ * (additive size budget).
  */
 import type { OrchestrationCommand, ThreadId } from "@t3tools/contracts";
-import { workflowSourceVersion, type JournalStore, type WorkflowRef } from "@t3team/sdk";
+import { hashArgs, workflowSourceVersion, type JournalStore, type WorkflowRef } from "@t3team/sdk";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -105,6 +106,39 @@ export const replaceRunSourceIfRequested = <E>(
           ...meta,
           workflowVersion: workflowSourceVersion(ref),
         }),
+      );
+    }
+  });
+
+/**
+ * Swap in corrected launch args before resuming. Unlike corrected source, this is not
+ * restricted to ephemeral runs — a recipe run's args can be wrong too, and correcting them
+ * never touches the recipe's `.workflow.ts` on disk.
+ *
+ * Must also rewrite the journal's `runMeta.argsHash`: `resumeWorkflow`'s `assertInputArgsMatch`
+ * has no bypass policy (unlike `workflowVersionPolicy` for source) — it hard-fails replay at
+ * seq 0 unless the recorded baseline already matches the args a resume supplies.
+ */
+export const replaceRunArgsIfRequested = <E>(
+  deps: WorkflowResumeToolDeps<E>,
+  run: WorkflowRun,
+  args: ResumeWorkflowHandlerArgs["args"],
+): Effect.Effect<void, string> =>
+  Effect.gen(function* () {
+    if (args === undefined) return;
+    let argsHash: string;
+    try {
+      argsHash = hashArgs(args);
+    } catch (error) {
+      return yield* Effect.fail(`Corrected args are not valid: ${errorMessage(error)}`);
+    }
+    yield* deps.runRepository
+      .updateArgs({ runId: run.runId, args, argsHash, updatedAt: nowIso() })
+      .pipe(Effect.mapError(errorMessage));
+    const meta = yield* Effect.promise(() => deps.journalStore.readRunMeta(run.runId));
+    if (meta !== undefined) {
+      yield* Effect.promise(() =>
+        deps.journalStore.writeRunMeta(run.runId, { ...meta, argsHash }),
       );
     }
   });

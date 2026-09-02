@@ -384,9 +384,7 @@ durabilityLayer("workflow durability — DB-backed suspend survives a restart", 
 
       const userAsk = registry.takePending(launchThreadId);
       assert.strictEqual(userAsk?.kind, "user.input");
-      yield* Effect.promise(() =>
-        registry.getRun(runId)!.resume(userAsk!.correlationId, { merge: true }),
-      );
+      yield* Effect.promise(() => registry.getRun(runId)!.resume(userAsk!.correlationId, { merge: true }));
 
       const finalRow = Option.getOrThrow(yield* repo.getById({ runId }));
       assert.strictEqual(finalRow.status, "completed");

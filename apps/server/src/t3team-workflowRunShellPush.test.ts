@@ -46,11 +46,7 @@ describe("pushWorkflowRunThreadShell", () => {
     // Mirrors the recipe-workflow test harness launcher, which builds a lifecycle without
     // dispatch/newId — a missing push capability must never throw.
     expect(() =>
-      pushWorkflowRunThreadShell({
-        launchThreadId: "launch-1",
-        dispatch: undefined,
-        newId: undefined,
-      }),
+      pushWorkflowRunThreadShell({ launchThreadId: "launch-1", dispatch: undefined, newId: undefined }),
     ).not.toThrow();
   });
 

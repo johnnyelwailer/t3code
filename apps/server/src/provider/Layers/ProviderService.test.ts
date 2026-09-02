@@ -25,6 +25,8 @@ import {
 import { createModelSelection } from "@t3tools/shared/model";
 import { it, assert, describe, vi } from "@effect/vitest";
 
+import * as Cause from "effect/Cause";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
@@ -37,6 +39,7 @@ import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
+import { HttpServer } from "effect/unstable/http";
 
 import {
   ProviderAdapterRequestError,
@@ -59,6 +62,10 @@ import {
   SqlitePersistenceMemory,
 } from "../../persistence/Layers/Sqlite.ts";
 import * as ServerConfig from "../../config.ts";
+import * as ServerEnvironment from "../../environment/ServerEnvironment.ts";
+import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
+import * as McpCredentialContinuity from "../../t3team-mcp-credentialContinuity.ts";
 import * as ServerSettings from "../../serverSettings.ts";
 import * as AnalyticsService from "../../telemetry/AnalyticsService.ts";
 import { makeAdapterRegistryMock } from "../testUtils/providerAdapterRegistryMock.ts";
@@ -2244,5 +2251,999 @@ describe("agent browser access", () => {
 
       assert.deepEqual(issued, [threadId]);
     }).pipe(Effect.provide(NodeServices.layer)),
+  );
+});
+
+describe("MCP credential continuity", () => {
+  const fakeHttpServer = HttpServer.HttpServer.of({
+    address: { _tag: "TcpAddress", hostname: "127.0.0.1", port: 43123 },
+    serve: (() => Effect.void) as HttpServer.HttpServer["Service"]["serve"],
+  });
+  const fakeServerEnvironment = ServerEnvironment.ServerEnvironment.of({
+    getEnvironmentId: Effect.succeed(EnvironmentId.make("environment-continuity")),
+    getDescriptor: Effect.die("unused"),
+  });
+  const registryLayer = McpSessionRegistry.layer.pipe(
+    Layer.provide(Layer.succeed(HttpServer.HttpServer, fakeHttpServer)),
+    Layer.provide(Layer.succeed(ServerEnvironment.ServerEnvironment, fakeServerEnvironment)),
+    Layer.provide(NodeServices.layer),
+  );
+
+  // The agent is handed its bearer once, when its session starts. A second
+  // `startSession` that mints a new one revokes the old one and has nowhere to
+  // deliver the replacement — the pack drivers keep their live session and drop
+  // the `mcp` config a restart carries — so every later `/mcp` call 401s for
+  // the rest of the thread's life. That is the incident this guards.
+  it.effect("does not rotate the bearer a live thread's agent already holds", () =>
+    Effect.gen(function* () {
+      const threadId = asThreadId("thread-mcp-continuity");
+      const claims: Array<ThreadId> = [];
+      const codex = makeFakeCodexAdapter();
+      const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
+        Layer.provide(SqlitePersistenceMemory),
+      );
+      const providerLayer = makeProviderServiceLive({
+        issueMcpCredential: (request) =>
+          Effect.sync(() => void claims.push(request.threadId)).pipe(
+            Effect.andThen(McpCredentialContinuity.claimThreadMcpCredential(request)),
+          ),
+      }).pipe(
+        Layer.provide(
+          Layer.succeed(
+            ProviderAdapterRegistry.ProviderAdapterRegistry,
+            makeAdapterRegistryMock({ [CODEX_DRIVER]: codex.adapter }),
+          ),
+        ),
+        Layer.provide(ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer))),
+        Layer.provide(ServerSettings.ServerSettingsService.layerTest({})),
+        Layer.provide(serverConfigTestLayer),
+        Layer.provide(AnalyticsService.layerTest),
+        Layer.provide(
+          Layer.succeed(
+            ProviderEventLoggers.ProviderEventLoggers,
+            ProviderEventLoggers.NoOpProviderEventLoggers,
+          ),
+        ),
+      );
+
+      yield* Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        const start = () =>
+          provider.startSession(threadId, {
+            provider: CODEX_DRIVER,
+            providerInstanceId: codexInstanceId,
+            threadId,
+            runtimeMode: "full-access",
+          });
+        yield* start();
+        const first = McpProviderSession.readMcpProviderSession(threadId)?.authorizationHeader;
+        assert.equal(typeof first, "string");
+
+        // Restarting the session for a runtime-mode / cwd / model change.
+        yield* start();
+        const second = McpProviderSession.readMcpProviderSession(threadId)?.authorizationHeader;
+
+        // The re-prepare still asks — it must, or the browser-access gate
+        // would stop being consulted — but it comes back with the credential
+        // the agent already has rather than a replacement it cannot receive.
+        assert.equal(claims.length, 2);
+        assert.equal(second, first);
+
+        // The token the agent holds still resolves after the restart.
+        const registry = yield* McpSessionRegistry.McpSessionRegistry;
+        const token = (first ?? "").replace(/^Bearer\s+/, "");
+        assert.equal((yield* registry.resolve(token))?.threadId, threadId);
+
+        McpProviderSession.clearMcpProviderSession(threadId);
+      }).pipe(Effect.provide(providerLayer));
+    }).pipe(Effect.provide(registryLayer), Effect.scoped),
+  );
+
+  // A stop that fails is still a stop that ran. The adapter may have torn the
+  // runtime down, or half torn it down, before it failed — and `Effect`
+  // short-circuits, so a withdrawal placed after that call is simply skipped.
+  // What survives is a bearer that still resolves against `/mcp` and an epoch
+  // that never moved, which keeps the driver's recovery hook alive as well.
+  // Withdrawing first is not the mirror image: a credential revoked before a
+  // stop that then fails is merely unavailable to a session that may still be
+  // running, and it is told exactly that.
+  it.effect("withdraws the thread's credential even when the adapter's stop fails", () =>
+    Effect.gen(function* () {
+      const threadId = asThreadId("thread-mcp-stop-failure");
+      const codex = makeFakeCodexAdapter();
+      codex.stopSession.mockImplementation(() =>
+        Effect.fail(
+          new ProviderAdapterRequestError({
+            provider: String(CODEX_DRIVER),
+            method: "stopSession",
+            detail: "simulated stopSession failure",
+          }),
+        ),
+      );
+      const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
+        Layer.provide(SqlitePersistenceMemory),
+      );
+      const providerLayer = makeProviderServiceLive().pipe(
+        Layer.provide(
+          Layer.succeed(
+            ProviderAdapterRegistry.ProviderAdapterRegistry,
+            makeAdapterRegistryMock({ [CODEX_DRIVER]: codex.adapter }),
+          ),
+        ),
+        Layer.provide(ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer))),
+        Layer.provide(ServerSettings.ServerSettingsService.layerTest({})),
+        Layer.provide(serverConfigTestLayer),
+        Layer.provide(AnalyticsService.layerTest),
+        Layer.provide(
+          Layer.succeed(
+            ProviderEventLoggers.ProviderEventLoggers,
+            ProviderEventLoggers.NoOpProviderEventLoggers,
+          ),
+        ),
+      );
+
+      yield* Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        const registry = yield* McpSessionRegistry.McpSessionRegistry;
+        yield* provider.startSession(threadId, {
+          provider: CODEX_DRIVER,
+          providerInstanceId: codexInstanceId,
+          threadId,
+          runtimeMode: "full-access",
+        });
+        const token = (
+          McpProviderSession.readMcpProviderSession(threadId)?.authorizationHeader ?? ""
+        ).replace(/^Bearer\s+/, "");
+        assert.equal((yield* registry.resolve(token))?.threadId, threadId);
+        const epoch = yield* registry.withdrawalCount(threadId);
+
+        const exit = yield* provider.stopSession({ threadId }).pipe(Effect.exit);
+        assert.equal(Exit.isFailure(exit), true);
+        assert.equal(codex.stopSession.mock.calls.length, 1);
+
+        // The failure is reported, and the credential is gone anyway.
+        assert.equal(yield* registry.resolve(token), undefined);
+        // Advanced, not advanced exactly once: a stop withdraws before the
+        // shutdown and again on the way out, so the count is not the property
+        // — every authority stamped before this stop being retired is.
+        assert.equal((yield* registry.withdrawalCount(threadId)) > epoch, true);
+        assert.equal(McpProviderSession.readMcpProviderSession(threadId), undefined);
+      }).pipe(Effect.provide(providerLayer));
+    }).pipe(Effect.provide(registryLayer), Effect.scoped),
+  );
+
+  // The other half of the same failure, and the reason the withdrawal cannot
+  // simply be moved in front of the shutdown and left there. The runtime
+  // survives its failed stop and keeps answering `hasSession`, so routing
+  // would hand the next turn straight back to it — and a turn can only
+  // `touch` a credential record that still exists, never recreate the one the
+  // stop deleted. That thread would 401 for the rest of its life, which is the
+  // exact incident this whole mechanism exists to prevent. An ordinary next
+  // turn has to recover; needing a full restart is not good enough.
+  it.effect("an ordinary next turn recovers from a stop whose shutdown failed", () =>
+    Effect.gen(function* () {
+      const threadId = asThreadId("thread-mcp-stop-failure-next-turn");
+      const codex = makeFakeCodexAdapter();
+      codex.stopSession.mockImplementation(() =>
+        Effect.fail(
+          new ProviderAdapterRequestError({
+            provider: String(CODEX_DRIVER),
+            method: "stopSession",
+            detail: "simulated stopSession failure",
+          }),
+        ),
+      );
+      const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
+        Layer.provide(SqlitePersistenceMemory),
+      );
+      const providerLayer = makeProviderServiceLive().pipe(
+        Layer.provide(
+          Layer.succeed(
+            ProviderAdapterRegistry.ProviderAdapterRegistry,
+            makeAdapterRegistryMock({ [CODEX_DRIVER]: codex.adapter }),
+          ),
+        ),
+        Layer.provide(ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer))),
+        Layer.provide(ServerSettings.ServerSettingsService.layerTest({})),
+        Layer.provide(serverConfigTestLayer),
+        Layer.provide(AnalyticsService.layerTest),
+        Layer.provide(
+          Layer.succeed(
+            ProviderEventLoggers.ProviderEventLoggers,
+            ProviderEventLoggers.NoOpProviderEventLoggers,
+          ),
+        ),
+      );
+
+      yield* Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        const registry = yield* McpSessionRegistry.McpSessionRegistry;
+        yield* provider.startSession(threadId, {
+          provider: CODEX_DRIVER,
+          providerInstanceId: codexInstanceId,
+          threadId,
+          runtimeMode: "full-access",
+        });
+        const before = McpProviderSession.readMcpProviderSession(threadId)?.authorizationHeader;
+
+        const exit = yield* provider.stopSession({ threadId }).pipe(Effect.exit);
+        assert.equal(Exit.isFailure(exit), true);
+        // The runtime really did survive the failed stop: this is the state
+        // the wedge needs, not a session that quietly went away.
+        assert.equal(yield* codex.adapter.hasSession(threadId), true);
+        assert.equal(McpProviderSession.readMcpProviderSession(threadId), undefined);
+
+        // An ordinary turn. Not a restart.
+        yield* provider.sendTurn({ threadId, input: "hello", attachments: [] });
+
+        const after = McpProviderSession.readMcpProviderSession(threadId)?.authorizationHeader;
+        assert.equal(typeof after, "string");
+        assert.notEqual(after, before);
+        // And it is a credential that actually works against `/mcp`.
+        const token = (after ?? "").replace(/^Bearer\s+/, "");
+        assert.equal((yield* registry.resolve(token))?.threadId, threadId);
+        // The replacement was a new session, not the orphaned runtime adopted.
+        assert.equal(codex.startSession.mock.calls.length, 2);
+
+        McpProviderSession.clearMcpProviderSession(threadId);
+      }).pipe(Effect.provide(providerLayer));
+    }).pipe(Effect.provide(registryLayer), Effect.scoped),
+  );
+
+  // The same heal, one step harder: a session that dies — or fails to stop —
+  // before its first turn completes has never produced a resume cursor, and
+  // the recovery path used to refuse outright ("no provider resume state is
+  // persisted"). That is a dead end the user cannot act on, on a thread whose
+  // messages are all still there. What is actually lost is the provider's
+  // continuation, not the thread, so it starts fresh and says so.
+  it.effect("a thread with nothing to resume from heals by starting fresh", () =>
+    Effect.gen(function* () {
+      {
+        const threadId = asThreadId("thread-mcp-unresumable");
+        const codex = makeFakeCodexAdapter();
+
+        // A provider whose session never saved a point to continue from. The
+        // original implementation still runs, so the adapter really does hold
+        // the session; only the cursor it reports back is missing.
+        const startWithCursor = codex.startSession.getMockImplementation();
+        assert.equal(typeof startWithCursor, "function");
+        codex.startSession.mockImplementation((sessionInput) =>
+          (startWithCursor as NonNullable<typeof startWithCursor>)(sessionInput).pipe(
+            Effect.map((session) => {
+              const withoutCursor = { ...session };
+              delete (withoutCursor as { resumeCursor?: unknown }).resumeCursor;
+              return withoutCursor;
+            }),
+          ),
+        );
+        codex.stopSession.mockImplementation(() =>
+          Effect.fail(
+            new ProviderAdapterRequestError({
+              provider: String(CODEX_DRIVER),
+              method: "stopSession",
+              detail: "simulated stopSession failure",
+            }),
+          ),
+        );
+
+        const recoveryStrategies: Array<unknown> = [];
+        const recordingAnalytics = Layer.succeed(
+          AnalyticsService.AnalyticsService,
+          AnalyticsService.AnalyticsService.of({
+            record: (event, properties) =>
+              Effect.sync(() => {
+                if (event === "provider.session.recovered") {
+                  recoveryStrategies.push(
+                    (properties as { strategy?: unknown } | undefined)?.strategy,
+                  );
+                }
+              }),
+            flush: Effect.void,
+          }),
+        );
+        const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
+          Layer.provide(SqlitePersistenceMemory),
+        );
+        const providerLayer = makeProviderServiceLive().pipe(
+          Layer.provide(
+            Layer.succeed(
+              ProviderAdapterRegistry.ProviderAdapterRegistry,
+              makeAdapterRegistryMock({ [CODEX_DRIVER]: codex.adapter }),
+            ),
+          ),
+          Layer.provide(ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer))),
+          Layer.provide(ServerSettings.ServerSettingsService.layerTest({})),
+          Layer.provide(serverConfigTestLayer),
+          Layer.provide(recordingAnalytics),
+          Layer.provide(
+            Layer.succeed(
+              ProviderEventLoggers.ProviderEventLoggers,
+              ProviderEventLoggers.NoOpProviderEventLoggers,
+            ),
+          ),
+        );
+
+        yield* Effect.gen(function* () {
+          const provider = yield* ProviderService.ProviderService;
+          const registry = yield* McpSessionRegistry.McpSessionRegistry;
+          yield* provider.startSession(threadId, {
+            provider: CODEX_DRIVER,
+            providerInstanceId: codexInstanceId,
+            threadId,
+            runtimeMode: "full-access",
+          });
+          const before = McpProviderSession.readMcpProviderSession(threadId)?.authorizationHeader;
+
+          const exit = yield* provider.stopSession({ threadId }).pipe(Effect.exit);
+          assert.equal(Exit.isFailure(exit), true);
+
+          // Collect what the user would be shown while the turn runs.
+          const warnings: Array<string> = [];
+          const collector = yield* Stream.runForEach(provider.streamEvents, (event) =>
+            Effect.sync(() => {
+              if (event.type === "runtime.warning") warnings.push(event.payload.message);
+            }),
+          ).pipe(Effect.forkChild);
+          yield* Effect.yieldNow;
+
+          // The message the user just typed. It must land.
+          yield* provider.sendTurn({ threadId, input: "hello", attachments: [] });
+          assert.equal(codex.sendTurn.mock.calls.length, 1);
+
+          yield* Effect.yieldNow;
+          yield* Fiber.interrupt(collector);
+
+          // A working credential, as in the resumable case.
+          const after = McpProviderSession.readMcpProviderSession(threadId)?.authorizationHeader;
+          assert.equal(typeof after, "string");
+          assert.notEqual(after, before);
+          const token = (after ?? "").replace(/^Bearer\s+/, "");
+          assert.equal((yield* registry.resolve(token))?.threadId, threadId);
+
+          // The user is told, in their own vocabulary, on the surface the work
+          // log already renders — no thread id, no "resume cursor".
+          assert.equal(
+            warnings.some((message) => message.includes("without its earlier context")),
+            true,
+          );
+          // And it is measurable, distinctly from an ordinary resume.
+          assert.deepEqual(recoveryStrategies, ["fresh-start"]);
+
+          McpProviderSession.clearMcpProviderSession(threadId);
+        }).pipe(Effect.provide(providerLayer));
+      }
+    }).pipe(Effect.provide(registryLayer), Effect.scoped),
+  );
+
+  // "Stop" asks for a state, not for an action: make it not be running. On a
+  // runtime that is already gone that state holds, so the honest answer is
+  // yes, not an error the user can do nothing with. Both sides matter — the
+  // no-op is only for a runtime that demonstrably is not there, and an
+  // interrupt against one that IS there must still fail loudly when it fails.
+  it.effect("interrupting is a no-op when the runtime is gone, and still fails when it is not", () =>
+    Effect.gen(function* () {
+      const goneThreadId = asThreadId("thread-interrupt-runtime-gone");
+      const liveThreadId = asThreadId("thread-interrupt-runtime-live");
+      const codex = makeFakeCodexAdapter();
+
+      // One thread's runtime went away without a clean stop, the way a crash
+      // does; the other is still there.
+      const realHasSession = codex.hasSession.getMockImplementation();
+      assert.equal(typeof realHasSession, "function");
+      codex.hasSession.mockImplementation((tid) =>
+        tid === goneThreadId
+          ? Effect.succeed(false)
+          : (realHasSession as NonNullable<typeof realHasSession>)(tid),
+      );
+
+      const interruptedEvents: Array<string> = [];
+      const recordingAnalytics = Layer.succeed(
+        AnalyticsService.AnalyticsService,
+        AnalyticsService.AnalyticsService.of({
+          record: (event) =>
+            Effect.sync(() => {
+              if (event === "provider.turn.interrupted") interruptedEvents.push(event);
+            }),
+          flush: Effect.void,
+        }),
+      );
+      const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
+        Layer.provide(SqlitePersistenceMemory),
+      );
+      const providerLayer = makeProviderServiceLive().pipe(
+        Layer.provide(
+          Layer.succeed(
+            ProviderAdapterRegistry.ProviderAdapterRegistry,
+            makeAdapterRegistryMock({ [CODEX_DRIVER]: codex.adapter }),
+          ),
+        ),
+        Layer.provide(ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer))),
+        Layer.provide(ServerSettings.ServerSettingsService.layerTest({})),
+        Layer.provide(serverConfigTestLayer),
+        Layer.provide(recordingAnalytics),
+        Layer.provide(
+          Layer.succeed(
+            ProviderEventLoggers.ProviderEventLoggers,
+            ProviderEventLoggers.NoOpProviderEventLoggers,
+          ),
+        ),
+      );
+
+      yield* Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        const start = (threadId: ThreadId) =>
+          provider.startSession(threadId, {
+            provider: CODEX_DRIVER,
+            providerInstanceId: codexInstanceId,
+            threadId,
+            runtimeMode: "full-access",
+          });
+        yield* start(goneThreadId);
+        yield* start(liveThreadId);
+        const startCallsBefore = codex.startSession.mock.calls.length;
+
+        // Side one: nothing is running, so the answer is yes.
+        yield* provider.interruptTurn({ threadId: goneThreadId });
+        // Honestly vacuous — no agent spawned to interrupt...
+        assert.equal(codex.startSession.mock.calls.length, startCallsBefore);
+        assert.equal(codex.interruptTurn.mock.calls.length, 0);
+        // ...and nothing claimed a turn was interrupted, because none was.
+        assert.deepEqual(interruptedEvents, []);
+
+        // Side two: a runtime that is there and genuinely fails to interrupt.
+        // The no-op must not have turned into a blanket "interrupt succeeds".
+        codex.interruptTurn.mockImplementation(() =>
+          Effect.fail(
+            new ProviderAdapterRequestError({
+              provider: String(CODEX_DRIVER),
+              method: "interruptTurn",
+              detail: "simulated interrupt failure",
+            }),
+          ),
+        );
+        const exit = yield* provider.interruptTurn({ threadId: liveThreadId }).pipe(Effect.exit);
+        assert.equal(Exit.isFailure(exit), true);
+        assert.equal(codex.interruptTurn.mock.calls.length, 1);
+
+        McpProviderSession.clearMcpProviderSession(goneThreadId);
+        McpProviderSession.clearMcpProviderSession(liveThreadId);
+      }).pipe(Effect.provide(providerLayer));
+    }).pipe(Effect.provide(registryLayer), Effect.scoped),
+  );
+
+  // The boundary of the fresh-start heal, pinned on an operation that a fresh
+  // runtime genuinely cannot serve. Answering a question means answering the
+  // agent that asked it; spawning a new one that never asked would accept a
+  // reply nobody is waiting for, which is worse than saying the request is
+  // gone. It refuses — in words about the answer, not about a resume cursor.
+  it.effect("answering a request a dead agent asked refuses, and says so plainly", () =>
+    Effect.gen(function* () {
+      const threadId = asThreadId("thread-mcp-unresumable-respond");
+      const codex = makeFakeCodexAdapter();
+      const startWithCursor = codex.startSession.getMockImplementation();
+      assert.equal(typeof startWithCursor, "function");
+      codex.startSession.mockImplementation((sessionInput) =>
+        (startWithCursor as NonNullable<typeof startWithCursor>)(sessionInput).pipe(
+          Effect.map((session) => {
+            const withoutCursor = { ...session };
+            delete (withoutCursor as { resumeCursor?: unknown }).resumeCursor;
+            return withoutCursor;
+          }),
+        ),
+      );
+      const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
+        Layer.provide(SqlitePersistenceMemory),
+      );
+      const providerLayer = makeProviderServiceLive().pipe(
+        Layer.provide(
+          Layer.succeed(
+            ProviderAdapterRegistry.ProviderAdapterRegistry,
+            makeAdapterRegistryMock({ [CODEX_DRIVER]: codex.adapter }),
+          ),
+        ),
+        Layer.provide(ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer))),
+        Layer.provide(ServerSettings.ServerSettingsService.layerTest({})),
+        Layer.provide(serverConfigTestLayer),
+        Layer.provide(AnalyticsService.layerTest),
+        Layer.provide(
+          Layer.succeed(
+            ProviderEventLoggers.ProviderEventLoggers,
+            ProviderEventLoggers.NoOpProviderEventLoggers,
+          ),
+        ),
+      );
+
+      yield* Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        yield* provider.startSession(threadId, {
+          provider: CODEX_DRIVER,
+          providerInstanceId: codexInstanceId,
+          threadId,
+          runtimeMode: "full-access",
+        });
+        codex.hasSession.mockImplementation(() => Effect.succeed(false));
+        const startCallsBefore = codex.startSession.mock.calls.length;
+
+        const exit = yield* provider
+          .respondToRequest({ threadId, requestId: asRequestId("req-gone"), decision: "accept" })
+          .pipe(Effect.exit);
+
+        assert.equal(Exit.isFailure(exit), true);
+        // It refused rather than quietly starting an agent nobody asked for.
+        assert.equal(codex.startSession.mock.calls.length, startCallsBefore);
+        // And in the user's vocabulary: about their answer, not about internals.
+        const failure = Exit.isFailure(exit) ? String(Cause.squash(exit.cause)) : "";
+        assert.equal(failure.includes("your answer could not be delivered"), true);
+        assert.equal(failure.includes("resume"), false);
+        assert.equal(failure.includes(String(threadId)), false);
+
+        McpProviderSession.clearMcpProviderSession(threadId);
+      }).pipe(Effect.provide(providerLayer));
+    }).pipe(Effect.provide(registryLayer), Effect.scoped),
+  );
+
+  // The orphan marker's core invariant is "nothing routes work into this
+  // runtime". `stopSession` was not its only caller that skips recovery —
+  // `uploadFeedback` probes with `allowRecovery: false` first — and reporting
+  // a present-but-orphaned runtime as active let that probe call straight into
+  // the runtime the marker exists to keep everyone away from.
+  it.effect("an orphaned runtime is not reachable through a non-recovering caller", () =>
+    Effect.gen(function* () {
+      const threadId = asThreadId("thread-orphan-upload-feedback");
+      const codex = makeFakeCodexAdapter();
+      codex.stopSession.mockImplementation(() =>
+        Effect.fail(
+          new ProviderAdapterRequestError({
+            provider: String(CODEX_DRIVER),
+            method: "stopSession",
+            detail: "simulated stopSession failure",
+          }),
+        ),
+      );
+      const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
+        Layer.provide(SqlitePersistenceMemory),
+      );
+      const providerLayer = makeProviderServiceLive().pipe(
+        Layer.provide(
+          Layer.succeed(
+            ProviderAdapterRegistry.ProviderAdapterRegistry,
+            makeAdapterRegistryMock({ [CODEX_DRIVER]: codex.adapter }),
+          ),
+        ),
+        Layer.provide(ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer))),
+        Layer.provide(ServerSettings.ServerSettingsService.layerTest({})),
+        Layer.provide(serverConfigTestLayer),
+        Layer.provide(AnalyticsService.layerTest),
+        Layer.provide(
+          Layer.succeed(
+            ProviderEventLoggers.ProviderEventLoggers,
+            ProviderEventLoggers.NoOpProviderEventLoggers,
+          ),
+        ),
+      );
+
+      yield* Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        const registry = yield* McpSessionRegistry.McpSessionRegistry;
+        yield* provider.startSession(threadId, {
+          provider: CODEX_DRIVER,
+          providerInstanceId: codexInstanceId,
+          threadId,
+          runtimeMode: "full-access",
+        });
+
+        // Orphan it: the shutdown fails, so the runtime survives with a
+        // credential this host has already withdrawn.
+        const stopExit = yield* provider.stopSession({ threadId }).pipe(Effect.exit);
+        assert.equal(Exit.isFailure(stopExit), true);
+        assert.equal(yield* codex.adapter.hasSession(threadId), true);
+        const startCallsBefore = codex.startSession.mock.calls.length;
+
+        yield* provider.uploadFeedback({ threadId, reason: "looks good" });
+
+        // It went through a replacement rather than the orphan...
+        assert.equal(codex.startSession.mock.calls.length, startCallsBefore + 1);
+        // ...so the thread ends holding a credential that actually works,
+        // which an orphan-served upload would have left untrue.
+        const stored = McpProviderSession.readMcpProviderSession(threadId)?.authorizationHeader;
+        assert.equal(typeof stored, "string");
+        assert.equal(
+          (yield* registry.resolve((stored ?? "").replace(/^Bearer\s+/, "")))?.threadId,
+          threadId,
+        );
+
+        McpProviderSession.clearMcpProviderSession(threadId);
+      }).pipe(Effect.provide(providerLayer));
+    }).pipe(Effect.provide(registryLayer), Effect.scoped),
+  );
+
+  // The operations that reach the provider while holding the thread's permit
+  // do so over transports that apply no deadline: Codex's `client.request` is
+  // a bare `Deferred.await`, and OpenCode's SDK installs a fetch that sets
+  // `req.timeout = false`. A provider that stops answering would therefore
+  // hold the permit for the life of the process, and every later start, stop,
+  // interrupt and turn on that thread would queue behind it. The bound is
+  // host-side and deliberately not "move the call out of the permit" — outside
+  // it, the operation would be routed against one runtime and delivered to
+  // another.
+  it.effect("a provider that never answers cannot wedge the thread", () =>
+    Effect.gen(function* () {
+      const threadId = asThreadId("thread-unbounded-rpc");
+      const codex = makeFakeCodexAdapter();
+      // A reply that never comes back, the way a hung provider process looks.
+      codex.respondToRequest.mockImplementation(() => Effect.never);
+
+      const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
+        Layer.provide(SqlitePersistenceMemory),
+      );
+      const providerLayer = makeProviderServiceLive().pipe(
+        Layer.provide(
+          Layer.succeed(
+            ProviderAdapterRegistry.ProviderAdapterRegistry,
+            makeAdapterRegistryMock({ [CODEX_DRIVER]: codex.adapter }),
+          ),
+        ),
+        Layer.provide(ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer))),
+        Layer.provide(ServerSettings.ServerSettingsService.layerTest({})),
+        Layer.provide(serverConfigTestLayer),
+        Layer.provide(AnalyticsService.layerTest),
+        Layer.provide(
+          Layer.succeed(
+            ProviderEventLoggers.ProviderEventLoggers,
+            ProviderEventLoggers.NoOpProviderEventLoggers,
+          ),
+        ),
+      );
+
+      yield* Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        yield* provider.startSession(threadId, {
+          provider: CODEX_DRIVER,
+          providerInstanceId: codexInstanceId,
+          threadId,
+          runtimeMode: "full-access",
+        });
+
+        const answering = yield* provider
+          .respondToRequest({
+            threadId,
+            requestId: asRequestId("req-hung"),
+            decision: "accept",
+          })
+          .pipe(Effect.exit, Effect.forkChild);
+
+        // Past the approval-reply bound. Without one this fiber never settles.
+        yield* advanceTestClock(15_001);
+        const answered = yield* Fiber.join(answering);
+
+        assert.equal(Exit.isFailure(answered), true);
+        const failure = Exit.isFailure(answered) ? String(Cause.squash(answered.cause)) : "";
+        assert.equal(failure.includes("stopped answering"), true);
+        // It must NOT claim the operation did not happen: giving up on the
+        // wait interrupts only the local Effect and establishes nothing about
+        // what the provider did with the request.
+        assert.equal(failure.includes("may still have been carried out"), true);
+
+        // And the thread is usable afterwards: the permit came back, so a stop
+        // does not queue behind a provider that is never going to reply.
+        const stopped = yield* provider
+          .stopSession({ threadId })
+          .pipe(Effect.exit, Effect.timeoutOption("2 seconds"));
+        assert.equal(Option.isSome(stopped), true, "the hung reply held the thread's permit");
+
+        McpProviderSession.clearMcpProviderSession(threadId);
+      }).pipe(Effect.provide(providerLayer));
+    }).pipe(Effect.provide(registryLayer), Effect.scoped),
+  );
+
+  // `adapter.sendTurn` is a dispatch on some providers and the whole turn on
+  // others: Claude queues the prompt and returns, OpenCode awaits only the
+  // submit, but Cursor — and every ACP provider sharing that adapter — awaits
+  // `acp.prompt` to completion and emits `turn.completed` before returning.
+  // So the thread's permit must NOT be held across it. Held, the only two ways
+  // a user can call off a running agent, interrupt and stop, would queue
+  // behind the turn they are meant to end.
+  //
+  // The cost of not holding it is disclosed and narrow: between routing and
+  // dispatch, a replacement could take the prompt. The bookkeeping does not
+  // follow it there — that is taken back under the permit — but the prompt can.
+  it.effect("an in-flight turn does not block calling the agent off", () =>
+    Effect.gen(function* () {
+      const threadId = asThreadId("thread-route-then-deliver");
+      const codex = makeFakeCodexAdapter();
+
+      // Park *after* routing, inside the adapter call — the span the permit
+      // either covers or does not. Parking inside routing would prove nothing:
+      // routing is under the permit in both shapes.
+      const enteredSend = yield* Deferred.make<void>();
+      const releaseSend = yield* Deferred.make<void>();
+      // Which runtime the turn actually lands on, sampled after the concurrent
+      // start has had its chance rather than before it.
+      const deliveredTo: Array<string> = [];
+      const realSendTurn = codex.sendTurn.getMockImplementation();
+      assert.equal(typeof realSendTurn, "function");
+      codex.sendTurn.mockImplementation((turnInput) =>
+        Effect.gen(function* () {
+          yield* Deferred.succeed(enteredSend, undefined);
+          yield* Deferred.await(releaseSend);
+          const live = yield* codex.adapter.listSessions();
+          const mine = live.find((session) => session.threadId === turnInput.threadId);
+          const cursor = mine?.resumeCursor as { opaque?: unknown } | undefined;
+          deliveredTo.push(String(cursor?.opaque ?? "none"));
+          return yield* (realSendTurn as NonNullable<typeof realSendTurn>)(turnInput);
+        }),
+      );
+
+      const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
+        Layer.provide(SqlitePersistenceMemory),
+      );
+      const providerLayer = makeProviderServiceLive().pipe(
+        Layer.provide(
+          Layer.succeed(
+            ProviderAdapterRegistry.ProviderAdapterRegistry,
+            makeAdapterRegistryMock({ [CODEX_DRIVER]: codex.adapter }),
+          ),
+        ),
+        Layer.provide(ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer))),
+        Layer.provide(ServerSettings.ServerSettingsService.layerTest({})),
+        Layer.provide(serverConfigTestLayer),
+        Layer.provide(AnalyticsService.layerTest),
+        Layer.provide(
+          Layer.succeed(
+            ProviderEventLoggers.ProviderEventLoggers,
+            ProviderEventLoggers.NoOpProviderEventLoggers,
+          ),
+        ),
+      );
+
+      yield* Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        // Runtime A, tagged so delivery is identifiable.
+        yield* provider.startSession(threadId, {
+          provider: CODEX_DRIVER,
+          providerInstanceId: codexInstanceId,
+          threadId,
+          runtimeMode: "full-access",
+          resumeCursor: { opaque: "runtime-A" },
+        });
+
+        const turnFiber = yield* provider
+          .sendTurn({ threadId, input: "hello", attachments: [] })
+          .pipe(Effect.exit, Effect.forkChild);
+        // The turn has routed against runtime A and is now parked in the
+        // adapter call, which is where the permit either still covers it or
+        // has already been given back.
+        yield* Deferred.await(enteredSend);
+
+        // The user calls the agent off while the turn is still running. This
+        // must complete now, not after the turn finishes: on Cursor and every
+        // ACP provider, `adapter.sendTurn` awaits `acp.prompt` to completion,
+        // so a permit held across it would make the interrupt queue behind the
+        // very turn it is trying to stop — the agent would be unstoppable for
+        // as long as it kept working.
+        const interrupted = yield* provider
+          .interruptTurn({ threadId })
+          .pipe(Effect.exit, Effect.timeoutOption("2 seconds"));
+
+        assert.equal(
+          Option.isSome(interrupted),
+          true,
+          "an interrupt blocked behind an in-flight turn on the same thread",
+        );
+        assert.equal(codex.interruptTurn.mock.calls.length, 1);
+
+        yield* Deferred.succeed(releaseSend, undefined);
+        yield* Fiber.join(turnFiber);
+        // The prompt itself still went to the runtime it was routed against —
+        // nothing replaced it here. What this test pins is that calling the
+        // agent off does not have to wait for it.
+        assert.deepEqual(deliveredTo, ["runtime-A"]);
+
+        // And the turn's bookkeeping did NOT run: the interrupt aborted the
+        // very turn it describes. An armed watchdog here would never be
+        // cleared — the adapter emits the turn's terminal event before
+        // `sendTurn` returns, when the entry does not yet exist — so at its
+        // deadline it would abort whatever turn the thread holds by then, and
+        // on Claude-shaped adapters `interruptTurn` ignores the turn id and
+        // closes the session outright.
+        codex.interruptTurn.mock.calls.length = 0;
+        yield* advanceTestClock(600_000);
+        assert.deepEqual(
+          codex.interruptTurn.mock.calls,
+          [],
+          "a watchdog armed for an already-aborted turn fired later",
+        );
+
+        McpProviderSession.clearMcpProviderSession(threadId);
+      }).pipe(Effect.provide(providerLayer));
+    }).pipe(Effect.provide(registryLayer), Effect.scoped),
+  );
+
+  // The interleaving every sequential test misses, and the one that shipped an
+  // authentication hole through five rounds.
+  //
+  // A stop withdraws its thread's credential, then calls the adapter. If a
+  // start lands in that gap it publishes a NEW credential and a NEW runtime —
+  // and the adapter is addressed by thread id, so the stop's shutdown then
+  // tears down the *replacement* while the replacement's credential stays
+  // valid against `/mcp`. Stop succeeded, so it never withdraws again.
+  //
+  // The assertion is the invariant rather than an ordering, because either
+  // order is a legitimate outcome of a genuine race: whoever wins, the thread
+  // must never end with a resolvable bearer and no runtime to own it.
+  it.effect("a stop and a start racing never leave a credential without its runtime", () =>
+    Effect.gen(function* () {
+      const threadId = asThreadId("thread-stop-start-race");
+      const codex = makeFakeCodexAdapter();
+
+      // A shutdown we can hold open exactly where the hole is: after the stop
+      // has withdrawn the credential, before the runtime is torn down.
+      const enteredShutdown = yield* Deferred.make<void>();
+      const releaseShutdown = yield* Deferred.make<void>();
+      const realStop = codex.stopSession.getMockImplementation();
+      assert.equal(typeof realStop, "function");
+      codex.stopSession.mockImplementation((tid) =>
+        Effect.gen(function* () {
+          yield* Deferred.succeed(enteredShutdown, undefined);
+          yield* Deferred.await(releaseShutdown);
+          return yield* (realStop as NonNullable<typeof realStop>)(tid);
+        }),
+      );
+
+      const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
+        Layer.provide(SqlitePersistenceMemory),
+      );
+      const providerLayer = makeProviderServiceLive().pipe(
+        Layer.provide(
+          Layer.succeed(
+            ProviderAdapterRegistry.ProviderAdapterRegistry,
+            makeAdapterRegistryMock({ [CODEX_DRIVER]: codex.adapter }),
+          ),
+        ),
+        Layer.provide(ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer))),
+        Layer.provide(ServerSettings.ServerSettingsService.layerTest({})),
+        Layer.provide(serverConfigTestLayer),
+        Layer.provide(AnalyticsService.layerTest),
+        Layer.provide(
+          Layer.succeed(
+            ProviderEventLoggers.ProviderEventLoggers,
+            ProviderEventLoggers.NoOpProviderEventLoggers,
+          ),
+        ),
+      );
+
+      yield* Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        const registry = yield* McpSessionRegistry.McpSessionRegistry;
+        const start = () =>
+          provider.startSession(threadId, {
+            provider: CODEX_DRIVER,
+            providerInstanceId: codexInstanceId,
+            threadId,
+            runtimeMode: "full-access",
+          });
+        yield* start();
+
+        const stopFiber = yield* provider.stopSession({ threadId }).pipe(Effect.exit, Effect.forkChild);
+        // The stop is now parked inside the adapter, past its withdrawal.
+        yield* Deferred.await(enteredShutdown);
+
+        const startFiber = yield* start().pipe(Effect.exit, Effect.forkChild);
+        // Give the start every chance to overtake. Unserialized it runs to
+        // completion here; serialized it is parked on the thread's permit.
+        yield* Effect.yieldNow;
+        yield* Effect.yieldNow;
+        yield* Effect.yieldNow;
+
+        // The mechanism itself, not just its outcome: while a stop is parked
+        // inside the adapter, a start for the same thread has not run. Without
+        // the permit this is 2 — the start has already spawned the runtime the
+        // parked shutdown is about to tear down.
+        assert.equal(
+          codex.startSession.mock.calls.length,
+          1,
+          "a start overtook a stop that was mid-shutdown on the same thread",
+        );
+
+        yield* Deferred.succeed(releaseShutdown, undefined);
+        yield* Fiber.join(stopFiber);
+        yield* Fiber.join(startFiber);
+
+        // Whoever won, the two must agree.
+        const runtimeAlive = yield* codex.adapter.hasSession(threadId);
+        const stored = McpProviderSession.readMcpProviderSession(threadId)?.authorizationHeader;
+        const credentialAlive =
+          stored === undefined
+            ? false
+            : (yield* registry.resolve(stored.replace(/^Bearer\s+/, ""))) !== undefined;
+
+        // Both directions, because each failure mode is one of them and a fix
+        // for either alone turns into the other. A credential outliving its
+        // runtime is the authentication hole; a runtime outliving its
+        // credential is the wedge, routable and permanently 401ing.
+        assert.equal(
+          credentialAlive && !runtimeAlive,
+          false,
+          "a bearer still resolves for a thread whose runtime was torn down",
+        );
+        assert.equal(
+          runtimeAlive && !credentialAlive,
+          false,
+          "a runtime is still running for a thread whose credential was withdrawn",
+        );
+
+        McpProviderSession.clearMcpProviderSession(threadId);
+      }).pipe(Effect.provide(providerLayer));
+    }).pipe(Effect.provide(registryLayer), Effect.scoped),
+  );
+
+  // The shutdown path has the same asymmetry as a single stop, one instance at
+  // a time. `stopAll()` may tear runtimes down and then fail, so the
+  // withdrawal cannot sit after it — the failure would short-circuit it and
+  // leave every thread's bearer resolving. (It does not sit at the very top of
+  // `runStopAll` either: stranded ahead of the directory work above it, an
+  // unrelated failure there would revoke every credential without asking a
+  // single runtime to stop.)
+  it.effect("revokes every credential even when the shutdown fails", () =>
+    Effect.gen(function* () {
+      const threadId = asThreadId("thread-mcp-stopall-failure");
+      const codex = makeFakeCodexAdapter();
+      codex.stopAll.mockImplementation(() =>
+        Effect.fail(
+          new ProviderAdapterRequestError({
+            provider: String(CODEX_DRIVER),
+            method: "stopAll",
+            detail: "simulated stopAll failure",
+          }),
+        ),
+      );
+      const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
+        Layer.provide(SqlitePersistenceMemory),
+      );
+      const providerLayer = makeProviderServiceLive().pipe(
+        Layer.provide(
+          Layer.succeed(
+            ProviderAdapterRegistry.ProviderAdapterRegistry,
+            makeAdapterRegistryMock({ [CODEX_DRIVER]: codex.adapter }),
+          ),
+        ),
+        Layer.provide(ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer))),
+        Layer.provide(ServerSettings.ServerSettingsService.layerTest({})),
+        Layer.provide(serverConfigTestLayer),
+        Layer.provide(AnalyticsService.layerTest),
+        Layer.provide(
+          Layer.succeed(
+            ProviderEventLoggers.ProviderEventLoggers,
+            ProviderEventLoggers.NoOpProviderEventLoggers,
+          ),
+        ),
+      );
+
+      // The registry outlives the provider service, so the credential can be
+      // inspected after the service finalizer has run.
+      const registry = yield* McpSessionRegistry.McpSessionRegistry;
+      const scope = yield* Scope.make();
+      const runtimeServices = yield* Layer.build(providerLayer).pipe(Scope.provide(scope));
+      yield* Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        yield* provider.startSession(threadId, {
+          provider: CODEX_DRIVER,
+          providerInstanceId: codexInstanceId,
+          threadId,
+          runtimeMode: "full-access",
+        });
+      }).pipe(Effect.provide(runtimeServices));
+
+      const token = (
+        McpProviderSession.readMcpProviderSession(threadId)?.authorizationHeader ?? ""
+      ).replace(/^Bearer\s+/, "");
+      assert.equal((yield* registry.resolve(token))?.threadId, threadId);
+
+      const closeExit = yield* Scope.close(scope, Exit.void).pipe(Effect.exit);
+      assert.equal(Exit.isSuccess(closeExit), true);
+      assert.equal(codex.stopAll.mock.calls.length, 1);
+      assert.equal(yield* registry.resolve(token), undefined);
+      assert.equal(McpProviderSession.readMcpProviderSession(threadId), undefined);
+    }).pipe(Effect.provide(registryLayer), Effect.scoped),
   );
 });

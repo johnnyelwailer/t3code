@@ -39,6 +39,10 @@ import {
 import { launchWorkflowRecipe } from "./t3team-workflowEngineLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
+import {
+  makeT3TeamWorkflowHostDraftToolUnavailableClient,
+  resolveT3TeamWorkflowHostDraftToolAvailability,
+} from "./t3team-workflowHostToolAvailability.ts";
 
 const DRAFT_TOOL = "t3team.work_item.description.draft_update";
 const fixturePath = (name: string): string =>
@@ -104,14 +108,20 @@ async function launch(input: {
   readonly launchThreadId: string | undefined;
   readonly broker: T3TeamToolBrokerShape;
   readonly allowedToolGroups?: ReadonlyArray<string>;
+  /** Override the client the launch route would have built — used by the project-availability
+   * tests below, which route through `resolveT3TeamWorkflowHostDraftToolAvailability` exactly the
+   * way `t3team-thread-recipe-workflow-routes.ts` does before ever calling this helper. */
+  readonly hostToolClientOverride?: ReturnType<typeof makeT3TeamWorkflowHostDraftToolClient>;
 }) {
-  const hostToolClient = makeT3TeamWorkflowHostDraftToolClient({
-    broker: input.broker,
-    launchThreadId: input.launchThreadId,
-    ...(input.allowedToolGroups === undefined
-      ? {}
-      : { allowedToolGroups: input.allowedToolGroups }),
-  });
+  const hostToolClient =
+    input.hostToolClientOverride ??
+    makeT3TeamWorkflowHostDraftToolClient({
+      broker: input.broker,
+      launchThreadId: input.launchThreadId,
+      ...(input.allowedToolGroups === undefined
+        ? {}
+        : { allowedToolGroups: input.allowedToolGroups }),
+    });
   const completed: unknown[] = [];
   const errors: unknown[] = [];
   let seq = 0;
@@ -245,5 +255,96 @@ describe("workflow host draft tools", () => {
     expect(String(errors[0])).toContain("thread-bound host runtime");
     expect(String(errors[0])).not.toContain("Cannot read properties of undefined");
     expect(findDraftCarrier(brokerDispatched)).toBeUndefined();
+  });
+});
+
+describe("resolveT3TeamWorkflowHostDraftToolAvailability", () => {
+  it("is available for a project with a connected work-source integration", () => {
+    expect(
+      resolveT3TeamWorkflowHostDraftToolAvailability({
+        provider: "atlassian",
+        accountId: "acct-1",
+        externalProjectId: "ext-1",
+      }),
+    ).toEqual({ kind: "available" });
+    expect(
+      resolveT3TeamWorkflowHostDraftToolAvailability({
+        provider: "linear",
+        accountId: "acct-1",
+        externalProjectId: "ext-1",
+      }),
+    ).toEqual({ kind: "available" });
+  });
+
+  it("is unavailable for a `local` source and for a project with no recorded source at all", () => {
+    expect(resolveT3TeamWorkflowHostDraftToolAvailability({ provider: "local" })).toMatchObject({
+      kind: "unavailable",
+    });
+    expect(resolveT3TeamWorkflowHostDraftToolAvailability(undefined)).toMatchObject({
+      kind: "unavailable",
+    });
+  });
+
+  it("names the missing integration in the reason, for the launch log", () => {
+    const availability = resolveT3TeamWorkflowHostDraftToolAvailability({ provider: "local" });
+    if (availability.kind !== "unavailable") throw new Error("expected unavailable");
+    expect(availability.reason).toContain("no connected work-source integration");
+  });
+});
+
+describe("workflow host draft tools — project connectivity (t3team-thread-recipe-workflow-routes.ts's gate)", () => {
+  it("a project WITH the integration still binds the tools and publishes the draft", async () => {
+    const { broker, brokerDispatched } = await makeBrokerWithSeededThread();
+    const availability = resolveT3TeamWorkflowHostDraftToolAvailability({
+      provider: "atlassian",
+      accountId: "acct-1",
+      externalProjectId: "ext-1",
+    });
+    expect(availability.kind).toBe("available");
+
+    const { result } = await launch({
+      runId: "host-tool-project-connected",
+      workflowPath: declaredWorkflowPath,
+      launchThreadId: threadId,
+      broker,
+      allowedToolGroups: ["integration.read", "mutation.draft"],
+    });
+
+    expect(result.status).toBe("completed");
+    expect(findDraftCarrier(brokerDispatched)?.command.threadId).toBe(threadId);
+  });
+
+  it("a project WITHOUT the integration does not bind the tools — the broker is never called, and the failure names the real reason", async () => {
+    const { broker, brokerDispatched } = await makeBrokerWithSeededThread();
+    // No source at all — same as a project record with an absent `source` (replay-compat).
+    const availability = resolveT3TeamWorkflowHostDraftToolAvailability(undefined);
+    expect(availability).toMatchObject({ kind: "unavailable" });
+    if (availability.kind !== "unavailable") throw new Error("expected unavailable");
+
+    const { result, errors } = await launch({
+      runId: "host-tool-project-disconnected",
+      workflowPath: declaredWorkflowPath,
+      launchThreadId: threadId,
+      broker,
+      hostToolClientOverride: makeT3TeamWorkflowHostDraftToolUnavailableClient(
+        availability.reason,
+      ),
+    });
+
+    expect(result.status).toBe("failed");
+    expect(errors).toHaveLength(1);
+    // The reason names the actual cause (no connected integration) — never the generic
+    // "needs a thread-bound host runtime" text, which would be misleading here: the thread IS
+    // bound, the PROJECT just has nothing behind these tools.
+    expect(String(errors[0])).toContain("no connected work-source integration");
+    expect(String(errors[0])).not.toContain("thread-bound host runtime");
+    // Fail-closed all the way: nothing reached the broker, so nothing was dispatched at all.
+    expect(brokerDispatched).toHaveLength(0);
+    expect(findDraftCarrier(brokerDispatched)).toBeUndefined();
+  });
+
+  it("a `local`-source project is treated the same as no source at all", async () => {
+    const availability = resolveT3TeamWorkflowHostDraftToolAvailability({ provider: "local" });
+    expect(availability).toMatchObject({ kind: "unavailable" });
   });
 });

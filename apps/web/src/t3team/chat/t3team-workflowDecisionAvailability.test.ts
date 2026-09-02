@@ -74,9 +74,7 @@ describe("workflowDecisionUnavailableMessage", () => {
     const otherRun = { runId: "run-2", status: "completed" } as unknown as Parameters<
       typeof workflowDecisionUnavailableMessage
     >[1];
-    expect(
-      workflowDecisionUnavailableMessage(DECISION, otherRun, undefined, false),
-    ).toBeUndefined();
+    expect(workflowDecisionUnavailableMessage(DECISION, otherRun, undefined, false)).toBeUndefined();
   });
 
   it("returns nothing when there is no decision at all", () => {

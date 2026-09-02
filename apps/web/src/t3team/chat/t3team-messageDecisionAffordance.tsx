@@ -12,7 +12,10 @@ import type { ProjectRecipeWorkflowDecisionPayload } from "@t3tools/project-reci
 
 import { Button } from "~/components/ui/button";
 
-import { T3TeamWorkflowDecisionForm } from "./t3team-messageDecisionForm";
+import {
+  parseT3TeamDecisionFormAnswer,
+  T3TeamWorkflowDecisionForm,
+} from "./t3team-messageDecisionForm";
 
 type Affordance = ProjectRecipeWorkflowDecisionPayload["affordance"];
 
@@ -117,6 +120,31 @@ export function T3TeamWorkflowDecisionAffordance({
   }
 
   if (affordance.kind === "form") {
+    if (answeredChoice !== undefined) {
+      const answeredValues = parseT3TeamDecisionFormAnswer(answeredChoice);
+      if (answeredValues === null) {
+        // Not a JSON struct — the user answered from the composer instead of the form (or the
+        // form's own submission somehow wasn't JSON). Show the raw text as one summary line
+        // rather than guessing which field it was meant to fill.
+        return (
+          <p
+            className="mt-3 text-sm text-foreground"
+            data-workflow-decision-status="answered-form-summary"
+          >
+            {answeredChoice}
+          </p>
+        );
+      }
+      return (
+        <T3TeamWorkflowDecisionForm
+          fields={affordance.fields}
+          disabled={formDisabled}
+          submitting={false}
+          answeredValues={answeredValues}
+          onSubmit={() => {}}
+        />
+      );
+    }
     return (
       <T3TeamWorkflowDecisionForm
         fields={affordance.fields}

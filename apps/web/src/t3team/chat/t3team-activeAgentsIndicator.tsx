@@ -40,6 +40,14 @@ export function T3TeamActiveAgentsIndicator({
   const [pulseCounts, setPulseCounts] = useState<ReadonlyMap<string, number>>(() => new Map());
   const [hotIds, setHotIds] = useState<ReadonlySet<string>>(() => new Set());
   const seenActivity = useRef<ReadonlyMap<string, string> | null>(null);
+  const lastDotState = useRef<Map<string, string>>(new Map());
+  // Per-dot pending color morph: when an entry's dotState changes, its
+  // PREVIOUS state is remembered here (React state, so it survives the
+  // follow-up pulse re-render that the keyed remount triggers) and stamped
+  // as data-t3team-from on the cell - the remounted dot's one-shot
+  // morph-in keyframe then interpolates from the previous state's color
+  // instead of snapping.
+  const [morphFrom, setMorphFrom] = useState<ReadonlyMap<string, string>>(() => new Map());
   const decayTimers = useRef<Map<string, number>>(new Map());
 
   // Event detection: when a merged entry's activityKey changes, replay its
@@ -81,6 +89,18 @@ export function T3TeamActiveAgentsIndicator({
         }, 1200),
       );
     }
+  }, [entries]);
+
+  // GHE #201 follow-up (0.0.39 porcelain orbs): detect dotState changes and
+  // record the previous state for the color-morph stamp (see morphFrom).
+  useEffect(() => {
+    const changed = new Map<string, string>();
+    for (const entry of entries) {
+      const prev = lastDotState.current.get(entry.id);
+      if (prev !== undefined && prev !== entry.dotState) changed.set(entry.id, prev);
+      lastDotState.current.set(entry.id, entry.dotState);
+    }
+    if (changed.size > 0) setMorphFrom(changed);
   }, [entries]);
 
   // Clear any pending decay timers on unmount.
@@ -247,6 +267,7 @@ export function T3TeamActiveAgentsIndicator({
               onFocus={() => setActiveAgentHover(entry)}
               onBlur={() => setActiveAgentHover(null)}
               data-t3team-state={entry.dotState}
+              data-t3team-from={morphFrom.get(entry.id)}
               style={{ "--t3team-aci-i": i } as React.CSSProperties}
               className="t3team-aci-cell inline-flex size-3 items-center justify-center"
             >

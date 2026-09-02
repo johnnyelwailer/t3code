@@ -152,6 +152,15 @@ export const activateCompiledInDistribution = async (): Promise<void> => {
       "Ephemeral workflow concurrency maxActiveSteps must be a positive integer or unlimited",
     );
   }
+  if (
+    ephemeralPolicy?.maxLiveRuns !== undefined &&
+    ephemeralPolicy.maxLiveRuns !== "unlimited" &&
+    (!Number.isInteger(ephemeralPolicy.maxLiveRuns) || ephemeralPolicy.maxLiveRuns < 1)
+  ) {
+    throw new Error(
+      "Ephemeral workflow concurrency maxLiveRuns must be a positive integer or unlimited",
+    );
+  }
 
   if (providers.length > 0 || drivers.length > 0) {
     setPackProviderOverlay({

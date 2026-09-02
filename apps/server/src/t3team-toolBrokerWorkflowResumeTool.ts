@@ -1,8 +1,9 @@
 /**
  * `t3team.orchestration.resume` — broker tool resuming a paused/failed workflow run from its
  * journal (Epic 25 resume/replay semantics), optionally with corrected source for an
- * ephemeral run. Scoped to the CALLING thread via the run row's `launchThreadId`, like
- * `t3team.orchestration.status` — an unknown id and another thread's run answer identically.
+ * ephemeral run, or corrected args for an input-contract fault (any origin — see
+ * `WorkflowInputDecodeError`). Scoped to the CALLING thread via the run row's `launchThreadId`,
+ * like `t3team.orchestration.status` — an unknown id and another thread's run answer identically.
  *
  *   • `paused` — restores the parked continuation (pending ask back into the registry, or the
  *     scheduler re-armed for a timer park), mirroring the HTTP control route's resume action.
@@ -18,6 +19,7 @@ import type { WorkflowRun } from "./persistence/Services/WorkflowRuns.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import {
   makeResumePausedRun,
+  replaceRunArgsIfRequested,
   replaceRunSourceIfRequested,
   type WorkflowResumeToolDeps,
 } from "./t3team-toolBrokerWorkflowResumeActions.ts";
@@ -26,6 +28,10 @@ import { makeResumeFailedRun } from "./t3team-toolBrokerWorkflowResumeFailed.ts"
 export interface ResumeWorkflowHandlerArgs {
   readonly runId?: string | undefined;
   readonly source?: string | undefined;
+  /** Corrected launch args (an input-contract repair): the workflow's SOURCE was correct, the
+   * CALLER's args were not. See `WorkflowInputDecodeError` / the orchestration manual's guidance
+   * to resume-with-corrected-args instead of re-launching (which would create a duplicate card). */
+  readonly args?: unknown;
 }
 
 export interface WorkflowResumeToolValue {
@@ -76,10 +82,15 @@ export function makeWorkflowResumeToolHandlers<E>(
           );
         }
         yield* replaceRunSourceIfRequested(deps, threadId, run, args.source);
+        yield* replaceRunArgsIfRequested(deps, run, args.args);
         if (run.status === "paused") {
           return yield* makeResumePausedRun(deps)(run);
         }
-        return yield* makeResumeFailedRun(deps, threadId, () => t3teamRandomUUID())(run);
+        // `run` was fetched BEFORE the args correction above; the failed-run re-drive replays
+        // with whatever `.args` it is handed, so a corrected value must be threaded in here —
+        // re-fetching the row would work too, but this avoids a redundant round-trip.
+        const runToResume: WorkflowRun = args.args === undefined ? run : { ...run, args: args.args };
+        return yield* makeResumeFailedRun(deps, threadId, () => t3teamRandomUUID())(runToResume);
       }),
   });
 }

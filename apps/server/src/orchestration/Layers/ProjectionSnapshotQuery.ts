@@ -198,11 +198,6 @@ const ProjectionProjectLookupRowSchema = ProjectionProjectDbRowSchema;
 const ProjectionThreadIdLookupRowSchema = Schema.Struct({
   threadId: ThreadId,
 });
-const ParentChildRelationRowSchema = Schema.Struct({
-  childThreadId: ThreadId,
-  parentThreadId: ThreadId,
-  createdAt: Schema.String,
-});
 const ProjectionThreadCheckpointContextThreadRowSchema = Schema.Struct({
   threadId: ThreadId,
   projectId: ProjectId,
@@ -1033,34 +1028,6 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             )
           )
         ORDER BY t.updated_at DESC, t.thread_id ASC
-      `,
-  });
-
-  // Every durable parent/child relation in the store, in both directions
-  // (child's own t3team.handoff.created parentThreadId, or the parent's
-  // t3team.handoff.started childThreadId). The caller dedups per child with
-  // the newest handoff winning. Workflow-owned children never appear: their
-  // handoff.created payload carries workflowRunId instead of parentThreadId.
-  const listParentChildRelationsQuery = SqlSchema.findAll({
-    Request: Schema.Struct({}),
-    Result: ParentChildRelationRowSchema,
-    execute: () =>
-      sql`
-        SELECT
-          c.thread_id AS "childThreadId",
-          json_extract(c.payload_json, '$.parentThreadId') AS "parentThreadId",
-          c.created_at AS "createdAt"
-        FROM projection_thread_activities AS c
-        WHERE c.kind = 't3team.handoff.created'
-          AND json_extract(c.payload_json, '$.parentThreadId') <> ''
-        UNION
-        SELECT
-          json_extract(s.payload_json, '$.childThreadId') AS "childThreadId",
-          s.thread_id AS "parentThreadId",
-          s.created_at AS "createdAt"
-        FROM projection_thread_activities AS s
-        WHERE s.kind = 't3team.handoff.started'
-          AND json_extract(s.payload_json, '$.childThreadId') <> ''
       `,
   });
 
@@ -2792,32 +2759,6 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       Effect.map((rows) => rows.map((row) => row.threadId)),
     );
 
-  const listParentChildRelations: ProjectionSnapshotQueryShape["listParentChildRelations"] = () =>
-    listParentChildRelationsQuery({}).pipe(
-      Effect.mapError(
-        toPersistenceSqlOrDecodeError(
-          "ProjectionSnapshotQuery.listParentChildRelations:query",
-          "ProjectionSnapshotQuery.listParentChildRelations:decodeRows",
-        ),
-      ),
-      Effect.map((rows) =>
-        rows
-          .toSorted(
-            (a, b) =>
-              Date.parse(b.createdAt) - Date.parse(a.createdAt) ||
-              a.childThreadId.toString().localeCompare(b.childThreadId.toString()),
-          )
-          .filter(
-            (row, index, all) =>
-              all.findIndex((r) => r.childThreadId === row.childThreadId) === index,
-          )
-          .map((row) => ({
-            childThreadId: row.childThreadId,
-            parentThreadId: row.parentThreadId,
-          })),
-      ),
-    );
-
   const getThreadCheckpointContext: ProjectionSnapshotQueryShape["getThreadCheckpointContext"] = (
     threadId,
   ) =>
@@ -3375,7 +3316,6 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     getProjectShellById,
     getFirstActiveThreadIdByProjectId,
     listChildThreadIdsByParent,
-    listParentChildRelations,
     getThreadCheckpointContext,
     getFullThreadDiffContext,
     getThreadShellById,

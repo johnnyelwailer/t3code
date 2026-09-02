@@ -1847,22 +1847,13 @@ describe("isVisibleMessagesTimelineRow", () => {
   });
 
   it("keeps suppressing legacy visibleToUser === false rows unrelated to workflow replies", () => {
-    const hidden = msg({
-      id: "hidden-1",
-      role: "user",
-      text: "framing",
-      t3teamExt: { visibleToUser: false },
-    });
+    const hidden = msg({ id: "hidden-1", role: "user", text: "framing", t3teamExt: { visibleToUser: false } });
 
     expect(isVisibleMessagesTimelineRow(messageRow(hidden), new Set())).toBe(false);
   });
 
   it("does not affect non-message rows", () => {
-    const workingRow: MessagesTimelineRow = {
-      kind: "working",
-      id: "working-indicator-row",
-      createdAt: null,
-    };
+    const workingRow: MessagesTimelineRow = { kind: "working", id: "working-indicator-row", createdAt: null };
 
     expect(isVisibleMessagesTimelineRow(workingRow, new Set())).toBe(true);
   });

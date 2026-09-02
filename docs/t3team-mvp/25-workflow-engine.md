@@ -190,7 +190,7 @@ What's allowed in `meta`:
 - Value imports from the engine's pure-modules allowlist:
   - `effect` (Schema combinators, etc.)
   - `@t3team/sdk/groups` (typed `ToolGroupRef`s)
-  - `@t3team/sdk/models` (typed `ModelRef`s; see [§Model selection](#model-selection))
+  - `@t3team/sdk/models` (generic `defineModel`; see [§Model selection](#model-selection))
   - `@t3team/sdk/surfaces` (typed surface placement consts — optional; raw `RecipeSurface`
     literal strings also work since they're a closed-set Schema.Literals union)
   - any other modules the SDK adds to the allowlist in future releases
@@ -209,28 +209,32 @@ What's forbidden in `meta`:
 
 ### Model selection
 
-`meta.model` selects the default LLM for `agent` / `askAgent` calls. Per the
-type-safety principle, the model identifier is a typed `ModelRef` from the SDK's
-`models.*` registry, not a free-form string. Provider instance ids stay as strings
-because they reference user-configured provider instances (dynamic per installation,
-not knowable at SDK build time):
+`meta.model` selects the default LLM for `agent` / `askAgent` calls. Provider instances and
+model slugs are both runtime facts: they come from configured provider instances and their live
+snapshots, not an SDK-maintained list. Before naming an exact target, the authoring agent calls
+`t3team_models` and copies one returned `instanceId` plus one model `slug` from that instance:
 
 ```ts
-import { models } from "@t3team/sdk/models";
+import { defineModel } from "@t3team/sdk/models";
+
+// Both values came from t3team_models immediately before authoring.
+const exactModel = defineModel({ provider: RUNTIME_INSTANCE_ID, id: RUNTIME_MODEL_SLUG });
 
 export const meta = {
   // …
   model: {
-    provider: "anthropic-primary", // project-configured provider instance id (string)
-    model: models.anthropic.claudeHaiku45, // typed ModelRef — autocomplete + typo-safe
+    provider: RUNTIME_INSTANCE_ID,
+    model: exactModel,
   },
 } as const;
 ```
 
-`models.*` is a typed tree (imported from `@t3team/sdk`) mirroring the providers and model slugs the SDK knows
-about (`models.anthropic.claudeOpus47`, `models.openai.gpt5_4`, etc.). Each leaf is a
-`ModelRef` whose `id` is the canonical provider-scoped slug. The engine still passes the
-string slug to the provider adapter; the type is what authors interact with.
+The SDK intentionally has no provider/model tree. `defineModel` only brands the two runtime values
+as a `ModelRef`; it does not invent, normalize, or validate them. At execution, the host validates
+the selection against the same live `ProviderRegistry` used by the model picker and turn router.
+An unknown instance or model fails with the currently valid runtime choices instead of silently
+falling back. When exact routing is unnecessary, omit `model` to inherit the launch thread, or use
+the provider-neutral `effort` tier.
 
 `meta.model` is the orchestration-wide default. Individual `agent(prompt, { model })` /
 `askAgent(prompt, { model })` calls can override per-call (same `{ provider, model: ModelRef }`
@@ -246,16 +250,18 @@ against the live provider registry, first available one wins.
 await agent("Judge this gate", {
   label: "Judge gate",
   models: [
-    { instanceId: "nexplore", model: "minimax-m2.7-reap-139b-q4-160k" }, // instance + model
-    { instanceId: "nexplore", model: "qwen3.6-35b-a3b-q6-192k:nothink" },
-    { instanceId: "claudeAgent" }, // instance only — its default/matching model
-    { model: models.anthropic.claudeOpus48 }, // model only — the run's CURRENT instance
+    { instanceId: PRIMARY_RUNTIME_INSTANCE_ID, model: PRIMARY_RUNTIME_MODEL_SLUG },
+    { instanceId: FALLBACK_RUNTIME_INSTANCE_ID }, // its default/matching live model
+    { model: CURRENT_INSTANCE_RUNTIME_MODEL_SLUG }, // current instance only
   ],
   effort: "high",
 });
 ```
 
 Rules:
+
+- **Source**: every instance id and model slug in the ladder must come from `t3team_models`; the
+  SDK never ships a provider/model list.
 
 - **Availability** is exactly `t3team.thread.start_child`'s definition (same resolver,
   `resolveStartChildModelSelection`): the instance exists, its driver is available, it is
@@ -1181,7 +1187,7 @@ longer a `recipe.json` / step-union path.
 
 The engine already has a **reactive** repair path: `t3team-workflowSelfHeal.ts`,
 `t3team-workflowEngineRepair.ts`, and `t3team-workflowRepair{Generate,Guardrails,Policy,Prompt}.ts`,
-with a distribution-tunable `t3team-pack-workflowRepairPolicy.ts`. It fires *after* a run fails,
+with a distribution-tunable `t3team-pack-workflowRepairPolicy.ts`. It fires _after_ a run fails,
 hands a no-tools structured repair model the failure plus `T3TEAM_WORKFLOW_MANUAL`, and retries.
 
 The intent is a **proactive** counterpart that reuses the same machinery:
@@ -1197,14 +1203,14 @@ Why this is worth having, from live QA on 2026-08-29: `precheckWorkflowSource`
 (`t3team-workflowSourcePrecheck.ts`) is the only gate today, it runs **only** for inline `source`
 (never for `workflowPath`), and it checks exactly two things — that `export const meta` is present
 and that the TypeScript parses. A file carrying `import { readFileSync } from "node:fs"`, a `meta`
-declared *after* the default export, and an `agent()` call with no `capabilities` passed both
+declared _after_ the default export, and an `agent()` call with no `capabilities` passed both
 checks and died at runtime with a bare `ReferenceError: readFileSync is not defined`. Each of those
 violates a rule the manual states explicitly, and none is cheaply expressible as a static check —
 which is exactly the shape a cheap-model conformance pass handles well.
 
 ## Self-build from prompt, not only self-repair (design intent — PJ, 2026-08-29, not built)
 
-Extends the pre-run review phase above. Today an orchestration is authored *inline* by the calling
+Extends the pre-run review phase above. Today an orchestration is authored _inline_ by the calling
 agent and the engine only ever repairs it reactively. The intent is that the builder can also
 **self-build from a prompt**, the same way `widget.show` should (Epic 24 § Widget composition
 default).
@@ -1214,7 +1220,7 @@ structure it wants instead of emitting 60–110 lines of TypeScript into its own
 
 **Risk, stated by PJ** — vision drift: the full idea may not survive the prompt lens.
 
-**Mitigation that already exists.** `t3team.orchestration.run` already *requires*
+**Mitigation that already exists.** `t3team.orchestration.run` already _requires_
 `intent: { goal, expectedOutcome, guardrails }` — non-blank goal and expectedOutcome, at least one
 non-blank guardrail (`packages/t3team-sdk/src/tools/t3team-sdk.workflow.ts`). That is already a
 structured contract for carrying intent through a lens, rather than free prose, and a prompt-built
@@ -1245,8 +1251,8 @@ to resolve what it found.
 
 **Why.** A delivery run failed its QA gate, posted a 4460-character wall of prose through
 `notifyUser`, and ended. Two blockers, both real, both already root-caused, both small — and the run
-handed the whole routing decision back to the user. PJ, on reading it: *"a super verbose ugly
-formatted report that i honestly dont want to read"*. Separately he asked the launching agent to
+handed the whole routing decision back to the user. PJ, on reading it: _"a super verbose ugly
+formatted report that i honestly dont want to read"_. Separately he asked the launching agent to
 summarise it and was told the pipeline was still running, because `notifyUser` messages were
 `visibleToAgent: false` (fixed since). Three failures, one shape: the run produced knowledge and had
 no reliable way to deliver it to whoever needed it.
@@ -1257,11 +1263,11 @@ not build a report-specific composer; a report is the second caller of the one a
 
 **Decisions (PJ, 2026-08-29):**
 
-- **It is an `agent()` call.** *"the report is just like a specialized form of an agent() call. it's
-  also replayed"* — so it needs no new determinism machinery: journaled and replayed like any other
+- **It is an `agent()` call.** _"the report is just like a specialized form of an agent() call. it's
+  also replayed"_ — so it needs no new determinism machinery: journaled and replayed like any other
   agent step, and a replayed run re-renders rather than re-composes.
-- **The reporter chooses the length.** *"reporter decides how long it must be.. as long as
-  necessary"* — no `expectedLength` parameter and no cap. Brevity is the composer's editorial
+- **The reporter chooses the length.** _"reporter decides how long it must be.. as long as
+  necessary"_ — no `expectedLength` parameter and no cap. Brevity is the composer's editorial
   judgement, supervised by its own iteration loop, not a number imposed by the caller. That is the
   point of moving composition off the orchestration author: a specialised, supervised writer does
   not need to be told to be short.
@@ -1276,10 +1282,10 @@ not build a report-specific composer; a report is the second caller of the one a
 **Routing.** "Who resolves this" is already a choice of recipient in
 `t3team-workflowEngineBrokerNotify.ts`, so no new transport is needed:
 
-| recipient | message role | effect |
-| --------- | ------------ | ------ |
+| recipient | message role | effect                                |
+| --------- | ------------ | ------------------------------------- |
 | `agent`   | `user`       | turn input — the agent wakes and acts |
-| `user`    | `system`     | note — no turn, a human resolves |
+| `user`    | `system`     | note — no turn, a human resolves      |
 
 In the motivating run the correct route was arguably `agent`: two small fixes, both diagnosed, in a
 worktree the agent still had.
@@ -1296,6 +1302,101 @@ decides whether a human is needed. Small migration, large payoff.
 - It must never land on a thread with an in-flight turn. That is the same failure as
   `nexi-distribution#317`, where a message sent into a busy child stranded the server's
   turn-tracking. Building this promotes #317 from "file for later" to a blocker.
+
+## Author-defined event triggers (design intent — PJ, 2026-08-30, not built)
+
+> "an agent creating a workflow should be able to define a custom event trigger of sorts... as a
+> node style script"
+
+The motivating prompts, all four of which a user should be able to type and have work:
+
+| prompt                                                                                               | shape                                   |
+| ---------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| "every Sunday morning at 9 do X"                                                                     | recurring, clock                        |
+| "be my GitHub maintainer for repo X — watch issues and PRs, triage, merge easy fixes, sync upstream" | permanent, external event               |
+| "babysit PR 123 until it is merged"                                                                  | one-shot, long-lived, external event    |
+| "digest me whatever changes in this Jira project that touches my work"                               | recurring digest over an external query |
+
+All of them must survive an app restart, and the engine should decide for itself that these need an
+orchestration at all.
+
+### What exists, checked rather than assumed
+
+A parked run already has TWO peers that can wake it, and this is deliberate architecture rather than
+coincidence — `t3team-workflowScheduler.ts` describes itself as "the clock-based peer to the event
+reactor":
+
+| waker                             | wakes a run parked on                   | durable across restart |
+| --------------------------------- | --------------------------------------- | ---------------------- |
+| `t3team-workflowScheduler.ts`     | `waitUntil` — a wall-clock deadline     | yes                    |
+| `t3team-workflowEngineReactor.ts` | `askUser` / `askAgent` — a domain event | yes                    |
+
+Durability is real and not hoped for: the timer lives in memory, the deadlines live in the DB, and
+`rehydrateSuspendedWorkflowRuns` rebuilds each sleeping run's resume closure and re-arms on boot. A
+deadline that PASSED during downtime fires almost immediately instead of waiting another full
+interval. Verified live 2026-08-29 — a `waitUntil` timer survived the server being killed mid-wait
+and completed on catch-up.
+
+So the clock prompt is supported today. The other three are not, for one reason:
+
+**There is no inbound webhook route.** Grepping `apps/server/src` for `webhook` returns a single
+non-test hit, `t3team-github-pr-project-resolver.ts`, which is not an ingress. The reactor's event
+half is real but INTERNALLY FED ONLY — nothing outside the host can turn into a domain event.
+
+### The gap is one path short, not a missing mechanism
+
+Scripts are the existing seam and they are already wired — on one path:
+
+- `defineScript` exists (`packages/runbook-scripts/src/index.ts:62`).
+- The RECIPE path wires them: a `recipe.ts` module's `scripts` registration becomes the body's
+  `scripts.*` tree (`t3team-thread-recipe-workflow-routes.ts:140-143`).
+- The EPHEMERAL path (agent-authored, `t3team.orchestration.run`) forwards `input.scripts` if present
+  (`t3team-workflowEphemeralLaunch.ts:103`) — but **nothing ever populates it**. Grepping the
+  ephemeral tool path for `scripts` returns nothing, so an agent-authored run always gets `{}`.
+
+Letting an agent-authored orchestration carry its own scripts, the way a recipe already can, is the
+whole enabling step. That is far smaller than building push ingress, and it puts the trigger INSIDE
+the artifact rather than making it host infrastructure the agent must be granted.
+
+### A trigger is a script plus a cursor
+
+The one thing a trigger needs that an ordinary script does not: **state across invocations**. A
+script is called and returns; a trigger must answer "what changed since last time?" — an ETag, a
+`since` timestamp, a last-seen id. Without it every wake re-reports everything and the Jira digest
+says "here is everything, again" every hour.
+
+That state belongs in the journal, not in the script. A cursor is exactly the kind of value that must
+REPLAY rather than be re-fetched, or a replayed run re-reports a window it already reported.
+
+The composition is then entirely made of parts that already exist:
+
+    trigger script  +  journaled cursor  +  waitUntil cadence
+
+which is durable across restart with catch-up, and turns "poll" from the naive option into the
+correct one.
+
+### Design the author-facing API so push can arrive later
+
+The trigger a workflow author writes should not say HOW it is invoked. If the API is "here is a
+function that returns what changed since this cursor", then adding real push ingress later is an
+engine-side swap — the same trigger script stops being polled and starts being called on delivery,
+unchanged. If instead the API leaks the polling interval into the author's code, every existing
+trigger has to be rewritten the day ingress lands.
+
+### Open questions
+
+- **Capabilities.** A trigger makes network calls. Which capability authorises that, and is it the
+  run's own grant or a narrower one? A trigger that can reach anything is a worse hazard than a body
+  that can, because it runs unattended and forever.
+- **Cadence and backoff.** Who picks the interval — the author, the engine, or the trigger itself
+  from what it observed? What happens on repeated failure: back off, or park and ask the user?
+- **Cost.** A permanent watcher is an unbounded spend. A run that polls forever needs either a budget
+  or a "still useful?" check-in.
+- **Dedup across restart.** Catch-up firing on a passed deadline is correct for a timer, but a
+  trigger that missed six hours must not emit six hours of digests at once.
+- **Termination.** "Babysit PR 123 until it is merged" ends; "be my maintainer" does not. The API
+  needs both, and the permanent one needs a way to be stopped that is not "find the run and cancel
+  it".
 
 ## Open questions
 

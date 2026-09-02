@@ -14,10 +14,15 @@ import { CommandId, MessageId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import type { LaunchWorkflowRecipeInput } from "./t3team-workflowEngineLaunchTypes.ts";
-import { buildWorkflowRepairPrompt } from "./t3team-workflowRepairPrompt.ts";
 import {
+  buildWorkflowArgsRepairPrompt,
+  buildWorkflowRepairPrompt,
+} from "./t3team-workflowRepairPrompt.ts";
+import {
+  parseWorkflowArgsRepairChildResult,
   parseWorkflowRepairChildResult,
   type GenerateWorkflowRepair,
+  type WorkflowRepairTarget,
 } from "./t3team-workflowSelfHeal.ts";
 
 /**
@@ -47,6 +52,33 @@ export type WorkflowRepairGenerateContext = {
   readonly onRepairChildId: (childId: string) => void;
 };
 
+/** Parse a raw reply against the protocol for `target`, and shape it into the
+ * `GenerateWorkflowRepair` result. `fallbackReason` covers both "no parseable JSON" and
+ * (for the child-thread path) a pre-parse failure the caller already knows about — see the
+ * two call sites below. */
+function toRepairOutcome(
+  target: WorkflowRepairTarget,
+  reply: string,
+  fallbackReason: string,
+): Awaited<ReturnType<GenerateWorkflowRepair>> {
+  if (target === "args") {
+    const parsed = parseWorkflowArgsRepairChildResult(reply);
+    if (parsed?.outcome === "fixed")
+      return { kind: "argsReplacement", args: parsed.updatedArgs, summary: parsed.summary };
+    return {
+      kind: "cannotRepair",
+      reason: parsed?.outcome === "cannot-fix" ? parsed.reason : fallbackReason,
+    };
+  }
+  const parsed = parseWorkflowRepairChildResult(reply);
+  if (parsed?.outcome === "fixed")
+    return { kind: "sourceReplacement", source: parsed.updatedSource, summary: parsed.summary };
+  return {
+    kind: "cannotRepair",
+    reason: parsed?.outcome === "cannot-fix" ? parsed.reason : fallbackReason,
+  };
+}
+
 export function makeWorkflowRepairGenerator(ctx: WorkflowRepairGenerateContext) {
   const { input, stopped, priorReasons, repairModelSelection, attempt, timeoutMs } = ctx;
   return async ({
@@ -55,11 +87,14 @@ export function makeWorkflowRepairGenerator(ctx: WorkflowRepairGenerateContext) 
     intent,
     args,
     workspaceRoot,
+    target,
   }: Parameters<GenerateWorkflowRepair>[0]) => {
     // Local to one attempt: the original declared it in the loop scope but never read it outside.
     let repairReason: string | undefined;
     if (stopped()) throw new Error("Workflow was stopped");
-    const prompt = buildWorkflowRepairPrompt({
+    // An input-contract fault gets its own prompt + response protocol: corrected ARGS, never a
+    // source rewrite (see WorkflowRepairTarget in t3team-workflowRepairGuardrails.ts).
+    const prompt = (target === "args" ? buildWorkflowArgsRepairPrompt : buildWorkflowRepairPrompt)({
       intent,
       failure,
       priorReasons,
@@ -73,20 +108,11 @@ export function makeWorkflowRepairGenerator(ctx: WorkflowRepairGenerateContext) 
           prompt,
           modelSelection: repairModelSelection,
         });
-        const parsed = parseWorkflowRepairChildResult(JSON.stringify(generated));
-        if (parsed?.outcome === "fixed")
-          return {
-            kind: "replacement" as const,
-            source: parsed.updatedSource,
-            summary: parsed.summary,
-          };
-        return {
-          kind: "cannotRepair" as const,
-          reason:
-            parsed?.outcome === "cannot-fix"
-              ? parsed.reason
-              : "Repair generator returned invalid structured output.",
-        };
+        return toRepairOutcome(
+          target,
+          JSON.stringify(generated),
+          "Repair generator returned invalid structured output.",
+        );
       } catch (cause) {
         return {
           kind: "cannotRepair" as const,
@@ -165,18 +191,6 @@ export function makeWorkflowRepairGenerator(ctx: WorkflowRepairGenerateContext) 
       repairReason = cause instanceof Error ? cause.message : String(cause);
       return "";
     });
-    const parsed = parseWorkflowRepairChildResult(reply);
-    if (parsed?.outcome === "fixed")
-      return {
-        kind: "replacement" as const,
-        source: parsed.updatedSource,
-        summary: parsed.summary,
-      };
-    return {
-      kind: "cannotRepair" as const,
-      reason:
-        repairReason ??
-        (parsed?.outcome === "cannot-fix" ? parsed.reason : "Repair child returned invalid JSON."),
-    };
+    return toRepairOutcome(target, reply, repairReason ?? "Repair child returned invalid JSON.");
   };
 }

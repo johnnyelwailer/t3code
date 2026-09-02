@@ -5,7 +5,8 @@
  * `origin`), the real launch funnel, and a captured orchestration dispatch standing in for the
  * live engine. Covers: argument validation (exactly one of source/workflowPath), pure-compute
  * inline source (completed + output + persisted file), askUser suspension (decision card on the
- * calling thread + `origin='ephemeral'` row), workspace containment, and the concurrency cap.
+ * calling thread + `origin='ephemeral'` row), workspace containment, the step-admission
+ * concurrency cap, and the live-run cap (`T3TEAM_EPHEMERAL_RUN_CAP`).
  */
 
 import * as NodeFS from "node:fs";
@@ -39,6 +40,7 @@ import {
 import { callT3TeamWorkflowRunTool } from "./t3team-toolBrokerBindingWorkflowRun.ts";
 import {
   makeWorkflowRunToolHandlers,
+  T3TEAM_EPHEMERAL_RUN_CAP,
   type T3TeamWorkflowRunToolHandlers,
 } from "./t3team-toolBrokerWorkflowRunTools.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
@@ -114,7 +116,9 @@ const makeHarness = Effect.fn("makeHarness")(function* () {
   });
   const dispatched: OrchestrationCommand[] = [];
   const registry = makeWorkflowEngineRegistry();
-  const handlers = makeWorkflowRunToolHandlers({
+  // Unapplied factory, so a test can bind a SECOND thread over the same repo/workspace to prove
+  // the run-count cap is scoped per launching thread rather than server-wide.
+  const makeHandlersForThread = makeWorkflowRunToolHandlers({
     fileSystem,
     path,
     launch: {
@@ -137,8 +141,9 @@ const makeHarness = Effect.fn("makeHarness")(function* () {
           modelSelection,
         },
       }),
-  })(threadId);
-  return { handlers, dispatched, workspaceRoot, repo, registry };
+  });
+  const handlers = makeHandlersForThread(threadId);
+  return { handlers, makeHandlersForThread, dispatched, workspaceRoot, repo, registry };
 });
 
 testLayer("t3team.orchestration.run — ephemeral workflow tool", (it) => {
@@ -308,6 +313,126 @@ testLayer("t3team.orchestration.run — ephemeral workflow tool", (it) => {
           workflowAdmissionQueue.release("blocker");
           const completed = yield* waitForRunStatus(repo, result.runId, "completed");
           assert.strictEqual(completed.status, "completed");
+        }),
+      ),
+  );
+
+  it.effect(
+    "refuses a new run once T3TEAM_EPHEMERAL_RUN_CAP live ephemeral runs already exist",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const { handlers, repo, workspaceRoot } = yield* makeHarness();
+          // "Live" per `countLiveByOrigin` covers running/suspended/sleeping/paused — use
+          // `running` (the default from `buildRunningWorkflowRunRow`), the simplest of the four,
+          // to fill the cap without needing a real engine to drive a run into the other states.
+          for (let index = 0; index < T3TEAM_EPHEMERAL_RUN_CAP; index += 1) {
+            yield* repo.upsert(
+              buildRunningWorkflowRunRow({
+                runId: `cap-filler-${index}`,
+                workflowPath: `${workspaceRoot}/cap-filler-${index}.workflow.ts`,
+                args: {},
+                launchThreadId: threadId,
+                projectId,
+                modelSelection,
+                runtimeMode: "full-access" as const,
+                interactionMode: "default" as const,
+                origin: "ephemeral" as const,
+                nowIso: "2026-07-19T00:00:00.000Z",
+              }),
+            );
+          }
+
+          const result = yield* handlers
+            .runWorkflow({ source: PURE_SUM_SOURCE, args: { a: 1, b: 1 }, intent })
+            .pipe(Effect.result);
+          assert.strictEqual(result._tag, "Failure");
+          if (result._tag === "Failure") {
+            assert.include(result.failure, "Too many live ephemeral workflow runs");
+            assert.include(result.failure, String(T3TEAM_EPHEMERAL_RUN_CAP));
+          }
+          // Refused before any file/DB write: this test's own (freshly made, per-test) workspace
+          // never gets a `.t3team-runs` directory for the refused call.
+          assert.isFalse(NodeFS.existsSync(`${workspaceRoot}/.t3team-runs`));
+        }),
+      ),
+  );
+
+  it.effect(
+    "scopes the live-run cap per launching thread: two threads each one below their own cap can both still launch",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const { makeHandlersForThread, repo, workspaceRoot } = yield* makeHarness();
+          // Fresh thread ids, distinct from the module-level `threadId` other tests in this file
+          // use (the in-memory DB is shared across the whole describe block, so reusing it here
+          // would inherit leftover live rows from earlier tests and make the count unpredictable).
+          const threadA = ThreadId.make("thread-eph-cap-a");
+          const threadB = ThreadId.make("thread-eph-cap-b");
+
+          // Fill EACH thread to one below the cap. A server-wide (unscoped) counter summing both
+          // threads would already be at 2 * (CAP - 1) — past any reasonable cap — proving that if
+          // BOTH threads' next launch is admitted below, the count is kept per-thread, not global.
+          for (const thread of [threadA, threadB]) {
+            for (let index = 0; index < T3TEAM_EPHEMERAL_RUN_CAP - 1; index += 1) {
+              yield* repo.upsert(
+                buildRunningWorkflowRunRow({
+                  runId: `${thread}-filler-${index}`,
+                  workflowPath: `${workspaceRoot}/${thread}-filler-${index}.workflow.ts`,
+                  args: {},
+                  launchThreadId: thread,
+                  projectId,
+                  modelSelection,
+                  runtimeMode: "full-access" as const,
+                  interactionMode: "default" as const,
+                  origin: "ephemeral" as const,
+                  nowIso: "2026-07-19T00:00:00.000Z",
+                }),
+              );
+            }
+          }
+
+          const resultA = yield* makeHandlersForThread(threadA).runWorkflow({
+            source: PURE_SUM_SOURCE,
+            args: { a: 1, b: 1 },
+            intent,
+          });
+          assert.strictEqual(resultA.status, "accepted");
+
+          const resultB = yield* makeHandlersForThread(threadB).runWorkflow({
+            source: PURE_SUM_SOURCE,
+            args: { a: 2, b: 2 },
+            intent,
+          });
+          assert.strictEqual(resultB.status, "accepted");
+
+          // Both threads' launches above are pure-compute and complete near-instantly, so their
+          // rows may already be back below cap by the time a THIRD call would check — an
+          // over-cap re-check would be flaky here, not a real gap. That "one scope exceeding is
+          // refused" property is already covered deterministically (via synthetic, never-settling
+          // rows) by the preceding test; add one MORE synthetic filler row instead, to prove
+          // thread A's cap still binds regardless of what its own real run above just did.
+          yield* repo.upsert(
+            buildRunningWorkflowRunRow({
+              runId: `${threadA}-filler-extra`,
+              workflowPath: `${workspaceRoot}/${threadA}-filler-extra.workflow.ts`,
+              args: {},
+              launchThreadId: threadA,
+              projectId,
+              modelSelection,
+              runtimeMode: "full-access" as const,
+              interactionMode: "default" as const,
+              origin: "ephemeral" as const,
+              nowIso: "2026-07-19T00:00:00.000Z",
+            }),
+          );
+          const resultAOverCap = yield* makeHandlersForThread(threadA)
+            .runWorkflow({ source: PURE_SUM_SOURCE, args: { a: 3, b: 3 }, intent })
+            .pipe(Effect.result);
+          assert.strictEqual(resultAOverCap._tag, "Failure");
+          if (resultAOverCap._tag === "Failure") {
+            assert.include(resultAOverCap.failure, "for this thread");
+          }
         }),
       ),
   );

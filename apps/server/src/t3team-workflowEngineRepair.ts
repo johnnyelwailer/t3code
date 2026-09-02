@@ -7,7 +7,10 @@ import type {
   WorkflowRunController,
 } from "./t3team-workflowEngineLaunch.ts";
 import { coordinateWorkflowRepair } from "./t3team-workflowSelfHeal.ts";
-import { validateWorkflowRepairCandidate } from "./t3team-workflowRepairGuardrails.ts";
+import {
+  validateWorkflowArgsRepairCandidate,
+  validateWorkflowRepairCandidate,
+} from "./t3team-workflowRepairGuardrails.ts";
 import { makeWorkflowRepairGenerator } from "./t3team-workflowRepairGenerate.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
 
@@ -47,6 +50,12 @@ export async function tryWorkflowRepair(
   const deadline =
     (await Effect.runPromise(Clock.currentTimeMillis)) +
     Math.max(1_000, input.repairTotalTimeBudgetMs ?? 900_000);
+  // Mutable across attempts, mirroring `readWorkflowSource`/`replaceWorkflowSource` for the
+  // source path: a corrected value from attempt N must be what attempt N+1 sees and what
+  // `resumeWorkflowAfterRepair` actually resumes with. `input.args` (the ORIGINAL launch args)
+  // never changes, so without this the repair could persist corrected args yet still resume
+  // with the stale ones.
+  let currentArgs: unknown = input.args;
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     if (stopped()) return false;
     const timeoutMs = remainingWorkflowRepairBudget(
@@ -64,7 +73,7 @@ export async function tryWorkflowRepair(
       source,
       failure: error,
       intent: input.repairIntent,
-      args: input.args,
+      args: currentArgs,
       workspaceRoot: input.runsRoot,
       generateRepair: makeWorkflowRepairGenerator({
         input,
@@ -83,17 +92,30 @@ export async function tryWorkflowRepair(
           replacementSource: replacement,
           absolutePath: input.workflowPath,
         }),
+      validateArgs: (replacement, original) =>
+        validateWorkflowArgsRepairCandidate({
+          originalSource: original,
+          replacementArgs: replacement,
+          absolutePath: input.workflowPath,
+        }),
       replaceSource: async (nextSource) => {
         if (stopped()) throw new Error("Workflow was stopped");
         if (input.replaceWorkflowSource === undefined)
           throw new Error("Workflow source replacement is unavailable.");
         await input.replaceWorkflowSource(nextSource);
       },
+      replaceArgs: async (nextArgs) => {
+        if (stopped()) throw new Error("Workflow was stopped");
+        if (input.replaceWorkflowArgs === undefined)
+          throw new Error("Workflow args replacement is unavailable.");
+        await input.replaceWorkflowArgs(nextArgs);
+        currentArgs = nextArgs;
+      },
       resumeWorkflowAfterRepair: async () => {
         if (stopped()) return false;
         try {
           await controller.settle(
-            await resumeWorkflow(input.runId, controller.ref, input.args, {
+            await resumeWorkflow(input.runId, controller.ref, currentArgs, {
               ...controller.options,
               workflowVersionPolicy: "allow-change",
             }),
@@ -142,6 +164,10 @@ export async function tryWorkflowRepair(
     if (result.kind === "recovered") return true;
     if (result.kind === "not-attempted") return false;
     priorReasons.push(result.reason.slice(0, 240));
+    // The provider explicitly refused (cannotRepair) on its very first look at this failure —
+    // further attempts would see the same source/args and the same reasoning, so burning the
+    // rest of the attempt budget (and its shared wall-clock deadline) buys nothing.
+    if (!result.retryable) return false;
   }
   return false;
 }

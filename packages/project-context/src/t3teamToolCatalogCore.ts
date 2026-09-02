@@ -89,3 +89,31 @@ export function hasT3TeamToolSurface(
 ): boolean {
   return tool.surfaces.some((candidate) => candidate === surface);
 }
+
+/**
+ * Surfaces that only make sense against a real work source (Jira/Atlassian, Linear, a
+ * GitHub-managed project, ...). A loose local workspace has no backlog, no "my work" queue, and
+ * no work items behind it. The single canonical definition — both the web client's tool-visibility
+ * gate (`apps/web/src/t3team/t3team-toolPolicy.ts`) and the server's workflow host-tool
+ * availability gate (`apps/server/src/t3team-workflowHostToolAvailability.ts`) import this rather
+ * than keeping their own copy, so the two can never drift apart.
+ */
+export const WORK_SOURCE_ONLY_T3TEAM_TOOL_SURFACES: ReadonlySet<T3TeamToolSurface> = new Set([
+  "backlog",
+  "my-work",
+  "work-item",
+]);
+
+/**
+ * ANY work-source surface disqualifies the tool, not all of them.
+ *
+ * `surfaces` does double duty in the catalog: it names the UI surface a tool belongs to AND acts
+ * as a selector for a set (`DEFAULT_T3TEAM_THREAD_TOOL_IDS` is everything tagged `"thread"`). So a
+ * work-item tool offered to thread agents is tagged `["work-item", "thread"]` —
+ * `t3team.work_item.refresh_context_bundle` is exactly that, and it is the one work-source tool in
+ * the default thread set. Requiring *every* surface to be work-source-only would let it through
+ * and make this gate a no-op.
+ */
+export function requiresWorkSourceT3TeamTool(tool: T3TeamToolCatalogEntry): boolean {
+  return tool.surfaces.some((surface) => WORK_SOURCE_ONLY_T3TEAM_TOOL_SURFACES.has(surface));
+}
