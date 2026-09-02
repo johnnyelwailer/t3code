@@ -184,4 +184,104 @@ describe("activity state tracker (GHE #208)", () => {
     tracker.note({ threadId: "t1", type: "turn-started" });
     expect(persisted.map((entry) => entry.state)).toEqual(["thinking"]);
   });
+
+  // GHE #297 Defect 2: a pending tool call used to suppress the `waiting`
+  // promotion forever — a tool that never reports back pinned the state word
+  // on "Working" indefinitely. `ACTIVITY_STATE_TOOL_STALL_CEILING_MS` caps
+  // how long that suppression can last.
+  describe("tool-stall ceiling (GHE #297 Defect 2)", () => {
+    it("stays working across the idle gap while a tool is in flight, then promotes once the stall ceiling elapses", async () => {
+      let t = 0;
+      const timers = makeTimers();
+      const persisted: Array<{ state: ThreadActivityState | null }> = [];
+      const tracker = createActivityStateTracker({
+        persist: async ({ state }) => {
+          persisted.push({ state });
+        },
+        now: () => t,
+        setTimer: timers.setTimer,
+        clearTimer: timers.clearTimer,
+        idleGapMs: 30_000,
+        toolStallCeilingMs: 600_000,
+        minTransitionMs: 0,
+      });
+
+      tracker.note({ threadId: "t1", type: "tool-started" });
+      expect(persisted.map((entry) => entry.state)).toEqual(["working"]);
+
+      // Each idle-gap firing re-arms itself (GHE #297 Defect 2 fix) instead
+      // of firing once and giving up: 600_000 / 30_000 = 20 firings before
+      // the ceiling is reached.
+      for (let i = 0; i < 19; i += 1) {
+        t += 30_000;
+        await timers.fire(timers.delays.length - 1);
+        expect(tracker.stateOf("t1")).toBe("working");
+      }
+      expect(persisted.map((entry) => entry.state)).toEqual(["working"]);
+
+      t += 30_000; // t = 600_000: the stall ceiling is reached.
+      await timers.fire(timers.delays.length - 1);
+      expect(persisted.map((entry) => entry.state)).toEqual(["working", "waiting"]);
+      expect(tracker.stateOf("t1")).toBe("waiting");
+    });
+
+    it("never promotes while a stalled tool keeps getting other output activity", async () => {
+      let t = 0;
+      const timers = makeTimers();
+      const persisted: Array<{ state: ThreadActivityState | null }> = [];
+      const tracker = createActivityStateTracker({
+        persist: async ({ state }) => {
+          persisted.push({ state });
+        },
+        now: () => t,
+        setTimer: timers.setTimer,
+        clearTimer: timers.clearTimer,
+        idleGapMs: 30_000,
+        toolStallCeilingMs: 600_000,
+        minTransitionMs: 0,
+      });
+
+      tracker.note({ threadId: "t1", type: "tool-started" });
+      // Output arrives just before every idle-gap firing, well past where
+      // the ceiling would otherwise trip (700_000ms > the 600_000 ceiling),
+      // because each "output" observation refreshes `lastOutputAt` and
+      // re-arms the timer.
+      for (let i = 0; i < 25; i += 1) {
+        t += 28_000;
+        tracker.note({ threadId: "t1", type: "output" });
+        t += 2_000;
+        await timers.fire(timers.delays.length - 1);
+        expect(tracker.stateOf("t1")).toBe("working");
+      }
+      expect(persisted.map((entry) => entry.state)).toEqual(["working"]);
+    });
+
+    it("resumes normal idle promotion (no ceiling wait) after the stalled tool completes", async () => {
+      let t = 0;
+      const timers = makeTimers();
+      const persisted: Array<{ state: ThreadActivityState | null }> = [];
+      const tracker = createActivityStateTracker({
+        persist: async ({ state }) => {
+          persisted.push({ state });
+        },
+        now: () => t,
+        setTimer: timers.setTimer,
+        clearTimer: timers.clearTimer,
+        idleGapMs: 30_000,
+        toolStallCeilingMs: 600_000,
+        minTransitionMs: 0,
+      });
+
+      tracker.note({ threadId: "t1", type: "tool-started" });
+      t += 30_000;
+      tracker.note({ threadId: "t1", type: "tool-completed" }); // thinking, no tool in flight
+      expect(persisted.map((entry) => entry.state)).toEqual(["working", "thinking"]);
+
+      // No tool in flight any more: the plain idle gap promotes on the very
+      // next firing, without waiting anywhere near the stall ceiling.
+      t += 30_000;
+      await timers.fire(timers.delays.length - 1);
+      expect(persisted.map((entry) => entry.state)).toEqual(["working", "thinking", "waiting"]);
+    });
+  });
 });

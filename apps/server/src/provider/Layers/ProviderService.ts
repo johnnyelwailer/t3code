@@ -32,6 +32,7 @@ import { causeErrorTag } from "@t3tools/shared/observability";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -83,6 +84,17 @@ const isModelSelection = Schema.is(ModelSelection);
  * matches the pack-level watchdog default (600s).
  */
 const DEFAULT_TURN_INACTIVITY_TIMEOUT_MS = 600_000;
+
+/**
+ * Defect 1 (GHE #297): when the watchdog's `interruptTurn` call SUCCEEDS but
+ * the provider never emits the terminal event it implies (turn.aborted /
+ * turn.completed / session.exited), the turn is stuck "running" forever with
+ * no backstop. This mirrors the shape of the 30s force-settle backstop in
+ * `ProviderCommandReactor` (interrupt-requested path) but lives here because
+ * only the turn watchdog's OWN interrupt call needs this grace — the
+ * reactor's backstop already covers user-initiated interrupts.
+ */
+const TURN_WATCHDOG_SETTLE_GRACE_MS = 30_000;
 
 /**
  * Announced-retry backoff budgeting (GHE #306 addendum).
@@ -141,6 +153,13 @@ export interface ProviderServiceLiveOptions {
   readonly issueMcpCredential?: typeof McpSessionRegistry.issueActiveMcpCredential;
   /** Same seam as `issueMcpCredential`, for observing the deny path's revoke. */
   readonly revokeMcpCredential?: typeof McpSessionRegistry.revokeActiveMcpThread;
+  /**
+   * Overrides `TURN_WATCHDOG_SETTLE_GRACE_MS` (GHE #297) — the grace window
+   * after a successful watchdog `interruptTurn` before the host synthesizes
+   * a `session.exited` if no terminal event arrived. Tests shrink this from
+   * the 30s default so `TestClock` assertions stay fast.
+   */
+  readonly turnWatchdogSettleGraceMs?: number;
 }
 
 type ProviderServiceMethod<Name extends keyof ProviderService.ProviderService["Service"]> =
@@ -295,6 +314,8 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     options?.issueMcpCredential ?? McpSessionRegistry.issueActiveMcpCredential;
   const revokeMcpCredential =
     options?.revokeMcpCredential ?? McpSessionRegistry.revokeActiveMcpThread;
+  const turnWatchdogSettleGraceMs =
+    options?.turnWatchdogSettleGraceMs ?? TURN_WATCHDOG_SETTLE_GRACE_MS;
   const runtimeEventPubSub = yield* PubSub.unbounded<ProviderRuntimeEvent>();
   const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
   /**
@@ -365,6 +386,12 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   // clears the map.
   const serviceScope = yield* Scope.Scope;
   const turnWatchdogs = yield* Ref.make(new Map<ThreadId, TurnWatchdogEntry>());
+  // Defect 1 (GHE #297): threads whose watchdog-triggered `interruptTurn`
+  // succeeded but have not yet seen a terminal event. A settle-grace fiber
+  // (armed in `fireTurnWatchdog`) synthesizes `session.exited` for an entry
+  // still present here after the grace window; any terminal event for the
+  // SAME turn clears it early (see `recordTurnActivity`).
+  const awaitingTurnSettle = yield* Ref.make(new Map<ThreadId, TurnId>());
 
   const resolveTurnInactivityTimeoutMs = (instanceId: ProviderInstanceId): Effect.Effect<number> =>
     registry.getInstanceInfo(instanceId).pipe(
@@ -384,6 +411,63 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       next.delete(threadId);
       return next;
     });
+
+  // Clears the awaiting-settle marker for `threadId`. When `turnId` is given
+  // (turn-scoped terminal events), only clears if it matches the awaited
+  // turn — the same superseded-turn guard `recordTurnActivity` already
+  // applies to `turnWatchdogs` (GHE #256), so a stale terminal event for an
+  // older turn cannot cancel the settle-grace fiber armed for the current one.
+  const clearAwaitingSettleFor = (threadId: ThreadId, turnId?: TurnId): Effect.Effect<void> =>
+    Ref.update(awaitingTurnSettle, (map) => {
+      const current = map.get(threadId);
+      if (current === undefined) return map;
+      if (turnId !== undefined && current !== turnId) return map;
+      const next = new Map(map);
+      next.delete(threadId);
+      return next;
+    });
+
+  // Synthesizes the terminal event a dead provider session never sent
+  // (GHE #297 Defect 1). `exitKind: "error"` / `recoverable: false`: this is
+  // reached only when the watchdog itself could not confirm the turn ended
+  // cleanly (a failed interrupt, or a successful interrupt with no
+  // follow-up event), so it must not be classified as the kind of transient
+  // stall `t3team-threadTransientTurnRetry.ts` auto-retries. That tracker
+  // only re-issues a `session.exited` episode when its own `onTurnTerminal`
+  // previously marked `lastTerminal = "transient"` (set exclusively from a
+  // watchdog-stalled `turn.aborted`, see `stallDecisionFor` at
+  // t3team-threadTransientTurnRetry.ts:379-383); a synthetic
+  // `session.exited` with no preceding `turn.aborted` never sets that flag,
+  // so `onTurnTerminal`'s `session.exited` branch (:357-364) takes the
+  // `state.delete(threadId)` path and the episode simply ends — no retry
+  // loop, regardless of `recoverable`. `recoverable: false` is still the
+  // correct signal for any other consumer: the host could not confirm a
+  // clean handoff, so it should not present this as a "safe to silently
+  // resume" exit.
+  const publishSyntheticSessionExited = Effect.fn("ProviderService.turnWatchdog.syntheticExit")(
+    function* (
+      threadId: ThreadId,
+      turnId: TurnId,
+      instanceId: ProviderInstanceId,
+      provider: ProviderDriverKind,
+      inactivitySeconds: number,
+    ) {
+      yield* publishRuntimeEvent({
+        eventId: EventId.make(nodeRandomUUID()),
+        provider,
+        providerInstanceId: instanceId,
+        threadId,
+        createdAt: yield* nowIso,
+        turnId,
+        type: "session.exited",
+        payload: {
+          reason: `Provider session died during turn (no stream activity for ${inactivitySeconds} seconds)`,
+          exitKind: "error",
+          recoverable: false,
+        },
+      });
+    },
+  );
 
   const fireTurnWatchdog = Effect.fn("ProviderService.turnWatchdog.fire")(function* (
     threadId: ThreadId,
@@ -433,16 +517,64 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       .getByInstance(instanceId)
       .pipe(Effect.orElseSucceed(() => undefined));
     if (adapter !== undefined) {
-      yield* adapter.interruptTurn(threadId, turnId).pipe(
-        Effect.catchCause((cause) =>
-          Effect.logWarning("provider.turn.inactivity-interrupt-failed", {
-            threadId: String(threadId),
-            turnId: String(turnId),
-            providerInstanceId: String(instanceId),
-            cause,
-          }),
-        ),
-      );
+      // GHE #297 Defect 1: a dead provider session makes `interruptTurn`
+      // itself fail (e.g. ProviderAdapterSessionNotFoundError) — the OLD
+      // code only logged this and left the turn "running" forever, since
+      // no adapter is left to ever emit the terminal event. Capture the
+      // outcome instead of only logging it, so both failure shapes settle.
+      const interruptExit = yield* adapter.interruptTurn(threadId, turnId).pipe(Effect.exit);
+      if (Exit.isFailure(interruptExit)) {
+        yield* Effect.logWarning("provider.turn.inactivity-interrupt-failed", {
+          threadId: String(threadId),
+          turnId: String(turnId),
+          providerInstanceId: String(instanceId),
+          cause: interruptExit.cause,
+        });
+        yield* publishSyntheticSessionExited(
+          threadId,
+          turnId,
+          instanceId,
+          provider,
+          inactivitySeconds,
+        );
+      } else {
+        // Interrupt succeeded: the provider is expected to settle the turn
+        // itself (turn.aborted / turn.completed / session.exited). Arm a
+        // one-shot settle-grace fiber that synthesizes `session.exited` if
+        // no such event lands — mirrors the interrupt-requested backstop in
+        // ProviderCommandReactor (30s grace), but scoped to the watchdog's
+        // own interrupt so it does not duplicate that reactor's coverage of
+        // user-initiated stops.
+        yield* Ref.update(awaitingTurnSettle, (map) => new Map(map).set(threadId, turnId));
+        yield* Effect.sleep(Duration.millis(turnWatchdogSettleGraceMs)).pipe(
+          Effect.andThen(
+            Effect.gen(function* () {
+              const stillAwaited = yield* Ref.get(awaitingTurnSettle).pipe(
+                Effect.map((map) => map.get(threadId) === turnId),
+              );
+              if (!stillAwaited) return; // a terminal event already settled it
+              yield* clearAwaitingSettleFor(threadId, turnId);
+              yield* Effect.logWarning("provider.turn.inactivity-interrupt-no-terminal-event", {
+                threadId: String(threadId),
+                turnId: String(turnId),
+                providerInstanceId: String(instanceId),
+                graceMs: turnWatchdogSettleGraceMs,
+              });
+              yield* publishSyntheticSessionExited(
+                threadId,
+                turnId,
+                instanceId,
+                provider,
+                inactivitySeconds,
+              );
+            }),
+          ),
+          Effect.forkScoped,
+          // Same reasoning as armTurnWatchdog's timer: attach to the
+          // captured service scope, not the ambient ScopeService.
+          Effect.provideService(Scope.Scope, serviceScope),
+        );
+      }
     }
   });
 
@@ -495,36 +627,55 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
    * (GHE #256: pack emits the old turn's `turn.aborted` "superseded by a
    * new message" alongside the new turn's `turn.started`). `session.exited`
    * is thread-scoped and always settles.
+   *
+   * Independently of `turnWatchdogs` (which `fireTurnWatchdog` already
+   * cleared for the fired turn before this runs), a real terminal event for
+   * the awaited turn also cancels the settle-grace fiber armed in
+   * `fireTurnWatchdog` — the double-settle guard for GHE #297 Defect 1: the
+   * provider DID recover in time, so the synthetic `session.exited` must
+   * not fire on top of the real one.
    */
   const recordTurnActivity = (event: ProviderRuntimeEvent): Effect.Effect<void> =>
-    Ref.get(turnWatchdogs).pipe(
-      Effect.flatMap((map) => {
-        const entry = map.get(event.threadId);
-        if (entry === undefined) return Effect.void;
-        if (event.type === "session.exited") {
-          return clearTurnWatchdog(event.threadId);
+    Effect.gen(function* () {
+      // Independent of `turnWatchdogs` below: a real terminal event for the
+      // awaited turn also cancels the settle-grace fiber armed in
+      // `fireTurnWatchdog` (GHE #297 Defect 1) — the provider DID recover in
+      // time, so the synthetic `session.exited` must not fire on top of the
+      // real one.
+      if (event.type === "session.exited") {
+        yield* clearAwaitingSettleFor(event.threadId);
+      } else if (event.type === "turn.completed" || event.type === "turn.aborted") {
+        yield* clearAwaitingSettleFor(event.threadId, event.turnId);
+      }
+
+      const map = yield* Ref.get(turnWatchdogs);
+      const entry = map.get(event.threadId);
+      if (entry === undefined) return;
+      if (event.type === "session.exited") {
+        yield* clearTurnWatchdog(event.threadId);
+        return;
+      }
+      if (event.type === "turn.completed" || event.type === "turn.aborted") {
+        // Only the armed turn's own terminal event settles it; a terminal
+        // event for an older/superseded turn is ignored so it cannot clear
+        // the watchdog of the turn that is now in flight.
+        if (event.turnId !== undefined && event.turnId !== entry.turnId) {
+          return;
         }
-        if (event.type === "turn.completed" || event.type === "turn.aborted") {
-          // Only the armed turn's own terminal event settles it; a terminal
-          // event for an older/superseded turn is ignored so it cannot clear
-          // the watchdog of the turn that is now in flight.
-          if (event.turnId !== undefined && event.turnId !== entry.turnId) {
-            return Effect.void;
-          }
-          return clearTurnWatchdog(event.threadId);
-        }
-        // An announced retry backoff (driver detail "provider.retry")
-        // extends the budget to cover the sleep; every other event
-        // re-arms the plain budget.
-        return armTurnWatchdog(
-          event.threadId,
-          entry.turnId,
-          entry.instanceId,
-          entry.provider,
-          announcedRetryBudgetMs(event),
-        );
-      }),
-    );
+        yield* clearTurnWatchdog(event.threadId);
+        return;
+      }
+      // An announced retry backoff (driver detail "provider.retry")
+      // extends the budget to cover the sleep; every other event re-arms
+      // the plain budget.
+      yield* armTurnWatchdog(
+        event.threadId,
+        entry.turnId,
+        entry.instanceId,
+        entry.provider,
+        announcedRetryBudgetMs(event),
+      );
+    });
 
   const requireBindingInstanceId = (
     operation: string,
