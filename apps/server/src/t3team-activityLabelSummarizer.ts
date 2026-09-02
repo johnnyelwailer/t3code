@@ -14,6 +14,7 @@ import {
   scheduleLabelTtl,
 } from "./t3team-activityLabelSummarizerCore.ts";
 import { createBoundedThreadMap } from "./t3team-boundedThreadMap.ts";
+import { createActivityLabelPersistTracker } from "./t3team-activityLabelPersistTracker.ts";
 
 /**
  * Out-of-band live-activity-label coordinator for active threads (GHE #40, extended
@@ -68,6 +69,9 @@ export function createActivityLabelSummarizer(input: {
   const now = input.now ?? Date.now;
   const setTimer = input.setTimer ?? setTimeout;
   const clearTimer = input.clearTimer ?? clearTimeout;
+  // GHE #341 race tracking lives in a sibling module (this file is already
+  // over the LOC cap): see `t3team-activityLabelPersistTracker.ts`.
+  const persistTracker = createActivityLabelPersistTracker();
   /** Cancel `threadId`'s timers and drop it from `pending`; returns the state it had, if any. */
   const clearPendingState = (threadId: string) => {
     const state = pending.get(threadId);
@@ -79,11 +83,31 @@ export function createActivityLabelSummarizer(input: {
   // GHE #203: windowByThread is the FIFO source of truth for eviction; its
   // onEvict keeps `pending` (keyed the same way) from drifting out of sync
   // when a never-idling thread gets evicted to make room for a new one.
+  // GHE #341: an evicted thread with a REAL persisted label needs that
+  // label cleared too, or it is stranded forever once `pending` is gone.
   const windowByThread = createBoundedThreadMap<Array<{ kind: string; summary: string }>>(
     ACTIVITY_LABEL_MAX_TRACKED_THREADS,
-    (evictedThreadId) => clearPendingState(evictedThreadId),
+    (evictedThreadId) => {
+      const state = clearPendingState(evictedThreadId);
+      if (persistTracker.clear(evictedThreadId)) {
+        void input
+          .persist({
+            threadId: evictedThreadId,
+            label: null,
+            generation: (state?.generation ?? 0) + 1,
+          })
+          .catch(input.onError);
+      }
+    },
   );
-  const runtime: ActivityLabelSummarizerRuntime = { pending, input, now, setTimer, clearTimer };
+  const runtime: ActivityLabelSummarizerRuntime = {
+    pending,
+    input,
+    now,
+    setTimer,
+    clearTimer,
+    persistTracker,
+  };
 
   return {
     /** Debounced note of new activity; skips generation when the window is unchanged. */
@@ -156,15 +180,15 @@ export function createActivityLabelSummarizer(input: {
     clear: async (threadId: string) => {
       windowByThread.delete(threadId);
       const state = clearPendingState(threadId);
-      // GHE #202: nothing was ever noted for this thread (the flag was off, or
-      // no activity landed) — there is no label to clear, so skip the
-      // meta.update entirely instead of dispatching a no-op clear every idle.
-      if (!state) return;
+      const hadPersistedLabel = persistTracker.clear(threadId);
+      // GHE #202: never noted, nothing to clear. GHE #341: a persisted label
+      // can outlive `pending` (FIFO-evicted) — check both before skipping.
+      if (!state && !hadPersistedLabel) return;
       // Bump the generation so any in-flight generation never persists after us.
       await input.persist({
         threadId,
         label: null,
-        generation: state.generation + 1,
+        generation: (state?.generation ?? 0) + 1,
       });
     },
     /**
@@ -175,6 +199,7 @@ export function createActivityLabelSummarizer(input: {
     forget: (threadId: string) => {
       windowByThread.delete(threadId);
       clearPendingState(threadId);
+      persistTracker.forget(threadId);
     },
   };
 }

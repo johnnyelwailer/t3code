@@ -39,6 +39,9 @@
 import type { ModelSelection } from "@t3tools/contracts";
 
 import { parseActivityLabel, type ActivityLabelGeneration } from "./t3team-activityLabelContext.ts";
+import { createActivityLabelPersistTracker } from "./t3team-activityLabelPersistTracker.ts";
+
+type ActivityLabelPersistTracker = ReturnType<typeof createActivityLabelPersistTracker>;
 
 /**
  * Minimum lifetime of a persisted LLM activity label (GHE #208 follow-up,
@@ -94,6 +97,9 @@ export interface ActivityLabelSummarizerRuntime {
   readonly now: () => number;
   readonly setTimer: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
   readonly clearTimer: (timer: ReturnType<typeof setTimeout>) => void;
+  /** GHE #341: side state for the label-persistence races (stranded labels
+   *  after FIFO eviction; stale post-persist writes after forget()). */
+  readonly persistTracker: ActivityLabelPersistTracker;
 }
 
 /**
@@ -129,6 +135,7 @@ export async function runActivityLabelGeneration(
   const state = runtime.pending.get(threadId);
   if (!state || state.generation !== generation || state.hash !== hash) return;
   if (!runtime.input.isActive()) return;
+  const epoch = runtime.persistTracker.epochOf(threadId);
   const rawLabel = await runtime.input.generate({
     modelSelection: state.model,
     context: state.context,
@@ -139,7 +146,13 @@ export async function runActivityLabelGeneration(
   if (!label || !current || current.generation !== generation || current.hash !== hash) {
     return;
   }
+  // forget() raced generate(): thread is gone, don't persist onto it.
+  if (runtime.persistTracker.epochOf(threadId) !== epoch) return;
   await runtime.input.persist({ threadId, label, generation });
+  // GHE #341: forget() can also race the persist() await itself — recheck
+  // after it resolves and discard rather than resurrect the thread.
+  if (runtime.persistTracker.epochOf(threadId) !== epoch) return;
+  runtime.persistTracker.markPersisted(threadId);
   current.lastGeneratedHash = hash;
   current.lastGeneratedAt = runtime.now();
   // GHE #208 follow-up: give this label its minimum life, then let the
