@@ -148,15 +148,18 @@ export function loadT3TeamThreadPlacements(
     const startedRows = yield* sql<HandoffStartedRow>`
       SELECT
         thread_id AS "threadId",
-        CAST(json_extract(payload_json, '$.childThreadId') AS TEXT) AS "childThreadId"
+        json_extract(payload_json, '$.childThreadId') AS "childThreadId"
       FROM projection_thread_activities
       WHERE kind = 't3team.handoff.started'
+        AND json_type(payload_json, '$.childThreadId') = 'text'
       ORDER BY created_at DESC, activity_id DESC
     `;
     for (const row of startedRows) {
-      const childThreadId = normalizeJsonText(row.childThreadId);
+      // Exact-string match, no trim: same semantics as the former
+      // `json_extract(...) = ${threadId}` comparison.
+      const childThreadId = row.childThreadId;
       if (
-        childThreadId !== null &&
+        typeof childThreadId === "string" &&
         requested.has(childThreadId) &&
         !startedParentByChild.has(childThreadId)
       ) {
