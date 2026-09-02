@@ -48,6 +48,14 @@ export interface WorkflowPendingAsk {
   readonly resolveLive?: (reply: unknown) => Promise<void>;
   /** Settle an in-memory waiter when its owning run is cancelled. */
   readonly cancelLive?: () => void;
+  /**
+   * Present when this step's turn was INTERRUPTED by a host restart and the ask was rehydrated
+   * from the `workflow_runs` row (`turn_retries`, migration 052) — never set by the live broker.
+   * It carries the journaled re-drive count so a no-text settle re-drives the step instead of
+   * failing the run, up to the bounded budget (see t3team-workflowEngineTurnRetry.ts). A live
+   * step that simply says nothing still fails the run.
+   */
+  readonly turnRetries?: number;
 }
 
 export interface WorkflowRegisteredRun {

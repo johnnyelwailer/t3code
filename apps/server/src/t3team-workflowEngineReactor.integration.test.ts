@@ -55,6 +55,7 @@ import * as Stream from "effect/Stream";
 import { OrchestrationCommandReceiptRepositoryLive } from "./persistence/Layers/OrchestrationCommandReceipts.ts";
 import { OrchestrationEventStoreLive } from "./persistence/Layers/OrchestrationEventStore.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
 import { OrchestrationEngineLive } from "./orchestration/Layers/OrchestrationEngine.ts";
 import { OrchestrationProjectionPipelineLive } from "./orchestration/Layers/ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./orchestration/Layers/ProjectionSnapshotQuery.ts";
@@ -139,7 +140,27 @@ const EngineLive = OrchestrationEngineLive.pipe(
 // both use); `provideMerge` keeps the engine + registry in the output for the test body. The
 // reactor/stub forked fibers live for the duration of the provided effect.
 const TestLayer = Layer.mergeAll(T3TeamWorkflowEngineReactorLive, StubProviderDriverLive).pipe(
-  Layer.provideMerge(Layer.merge(EngineLive, T3TeamWorkflowEngineRegistryLive)),
+  Layer.provideMerge(
+    Layer.merge(
+      EngineLive,
+      Layer.merge(
+        T3TeamWorkflowEngineRegistryLive,
+        Layer.merge(
+          OrchestrationProjectionSnapshotQueryLive.pipe(
+            Layer.provide(ThreadBackgroundLiveness.layer),
+            Layer.provide(ThreadPlanProgress.layer),
+            Layer.provide(RepositoryIdentityResolver.layer),
+            Layer.provideMerge(SqlitePersistenceMemory),
+            Layer.provideMerge(NodeServices.layer),
+          ),
+          WorkflowRunRepositoryLive.pipe(
+            Layer.provideMerge(SqlitePersistenceMemory),
+            Layer.provideMerge(NodeServices.layer),
+          ),
+        ),
+      ),
+    ),
+  ),
 );
 
 /** Poll an in-memory predicate (observe-only; never resolves an ask) until it holds or times out. */

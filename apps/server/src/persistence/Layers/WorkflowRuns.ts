@@ -19,6 +19,7 @@ import {
   SetWorkflowRunPendingInput,
   SetWorkflowRunSleepingInput,
   SetWorkflowRunStatusInput,
+  SetWorkflowRunTurnRetriesInput,
   UpdateWorkflowRunArgsInput,
   WorkflowRun,
   WorkflowRunIntent,
@@ -59,6 +60,10 @@ const WorkflowRunDbRow = WorkflowRun.mapFields(
 const makeWorkflowRunRepository = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
 
+  // The launch upsert (the only writer of `turn_retries` in this shape): it runs at
+  // `recordRunning`, when a run has no re-drives yet, so `turn_retries` inserts its NOT NULL
+  // default 0 — post-launch transitions use the targeted UPDATEs below, which leave the
+  // journaled budget untouched (migration 052).
   const upsertWorkflowRunRow = SqlSchema.void({
     Request: WorkflowRun,
     execute: (row) =>
@@ -84,6 +89,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           host_tool_grant,
           intent_json,
           wake_at,
+          turn_retries,
           created_at,
           updated_at
         )
@@ -108,6 +114,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           ${row.hostToolGrant ? JSON.stringify(row.hostToolGrant) : null},
           ${row.intent ? JSON.stringify(row.intent) : null},
           ${row.wakeAt},
+          ${row.turnRetries ?? 0},
           ${row.createdAt},
           ${row.updatedAt}
         )
@@ -132,6 +139,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           host_tool_grant = excluded.host_tool_grant,
           intent_json = excluded.intent_json,
           wake_at = excluded.wake_at,
+          turn_retries = excluded.turn_retries,
           created_at = excluded.created_at,
           updated_at = excluded.updated_at
       `,
@@ -163,6 +171,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           host_tool_grant AS "hostToolGrant",
           intent_json AS "intent",
           wake_at AS "wakeAt",
+          turn_retries AS "turnRetries",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM workflow_runs
@@ -196,6 +205,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           host_tool_grant AS "hostToolGrant",
           intent_json AS "intent",
           wake_at AS "wakeAt",
+          turn_retries AS "turnRetries",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM workflow_runs
@@ -232,6 +242,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           host_tool_grant AS "hostToolGrant",
           intent_json AS "intent",
           wake_at AS "wakeAt",
+          turn_retries AS "turnRetries",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM workflow_runs
@@ -335,6 +346,18 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       `,
   });
 
+  // Journal a re-drive attempt for the run's interrupted thread.turn step (migration 052).
+  // A targeted UPDATE — status and the pending ask stay untouched, the run stays `suspended`.
+  const setWorkflowRunTurnRetriesRow = SqlSchema.void({
+    Request: SetWorkflowRunTurnRetriesInput,
+    execute: ({ runId, turnRetries, updatedAt }) =>
+      sql`
+        UPDATE workflow_runs
+        SET turn_retries = ${turnRetries}, updated_at = ${updatedAt}
+        WHERE run_id = ${runId} AND status != 'cancelled'
+      `,
+  });
+
   // Input-contract repair (a same-run correction, never the launch path): rewrites args/hash
   // only, leaving status/pending/every other column untouched. Mirrors the shape of
   // `setWorkflowRunStatusRow` above — a narrow, single-purpose UPDATE rather than a full upsert.
@@ -401,6 +424,11 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.setSleeping:query")),
     );
 
+  const setTurnRetries: WorkflowRunRepositoryShape["setTurnRetries"] = (input) =>
+    setWorkflowRunTurnRetriesRow(input).pipe(
+      Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.setTurnRetries:query")),
+    );
+
   const updateArgs: WorkflowRunRepositoryShape["updateArgs"] = (input) =>
     updateWorkflowRunArgsRow(input).pipe(
       Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.updateArgs:query")),
@@ -417,6 +445,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
     setPending,
     clearPending,
     setSleeping,
+    setTurnRetries,
     updateArgs,
   } satisfies WorkflowRunRepositoryShape;
 });

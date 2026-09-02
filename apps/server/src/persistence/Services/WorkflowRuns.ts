@@ -106,6 +106,10 @@ export const WorkflowRun = Schema.Struct({
   /** The wall-clock instant a `sleeping` run is due (Epic 27) — the scheduler's index. Null
    * for a run not parked on a timer. */
   wakeAt: Schema.NullOr(IsoDateTime),
+  /** Re-drives the host has already scheduled for this run's interrupted `thread.turn` step
+   * (migration 052) — the cross-restart half of the bounded no-text retry budget. 0 for every
+   * pre-052 row and for every run that never had a step re-driven. */
+  turnRetries: Schema.optional(Schema.Number),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });
@@ -178,6 +182,16 @@ export const SetWorkflowRunSleepingInput = Schema.Struct({
   correlationId: Schema.String,
   updatedAt: IsoDateTime,
 });
+
+/** Journal a re-drive attempt for the run's interrupted `thread.turn` step (migration 052) —
+ * the counter the bounded no-text retry budget reads and writes, so a second restart does not
+ * reset it. */
+export const SetWorkflowRunTurnRetriesInput = Schema.Struct({
+  runId: Schema.String,
+  turnRetries: Schema.Number,
+  updatedAt: IsoDateTime,
+});
+export type SetWorkflowRunTurnRetriesInput = typeof SetWorkflowRunTurnRetriesInput.Type;
 export type SetWorkflowRunSleepingInput = typeof SetWorkflowRunSleepingInput.Type;
 
 /** Count runs of one origin still holding engine resources (running/suspended/sleeping/paused),
@@ -229,6 +243,10 @@ export interface WorkflowRunRepositoryShape {
   /** Flip to `sleeping` and record the wake deadline + `waitUntil` correlation (Epic 27). */
   readonly setSleeping: (
     input: SetWorkflowRunSleepingInput,
+  ) => Effect.Effect<void, ProjectionRepositoryError>;
+  /** Journal a re-drive attempt for the run's interrupted step (the cross-restart counter). */
+  readonly setTurnRetries: (
+    input: SetWorkflowRunTurnRetriesInput,
   ) => Effect.Effect<void, ProjectionRepositoryError>;
   /** Correct a run's persisted launch args after a same-run repair (input-contract fault). */
   readonly updateArgs: (
