@@ -1,5 +1,7 @@
-/* Continuation of t3team-DotColorVariants.css — the two "fancy" variants.
-   Story-only; see the main file for context and shared scaffolding. */
+/* Continuation of t3team-DotColorVariants.css — the "fancy" exploration
+   variant C (variant D, the porcelain orb, is PRODUCTION now and paints
+   through t3team-statusOrb.css instead of this file). Story-only; see the
+   main file for context and shared scaffolding. */
 /* C. Hue-drift subtle — one quiet oklch family (hue 238–282°, chroma ≤ 0.11),
    no halo; the existing motion + hue wander carries the state. */
 .sdv2-vC {
@@ -57,86 +59,14 @@
   transition: border-color 500ms ease-in-out;
 }
 
-/* D. Porcelain (recommended) — accent-anchored tokens, state-agnostic
-   specular bead on ::after, two-layer halo, spring ring, 420ms soft-out. */
-.dark .sdv2-vD {
-  --waiting: color-mix(in oklch, var(--muted-foreground) 84%, white 16%);
-}
-.sdv2-vD {
-  --thinking: color-mix(in oklch, var(--warning) 46%, var(--muted-foreground) 54%);
-  --writing: color-mix(in oklch, var(--primary) 62%, var(--muted-foreground) 38%);
-  --working: color-mix(in oklch, var(--primary) 90%, var(--warning) 10%);
-  --waiting: color-mix(in oklch, var(--muted-foreground) 55%, var(--background) 45%);
-  --settled: var(--muted-foreground);
-  --done: color-mix(in oklch, var(--success) 82%, var(--muted-foreground) 18%);
-  --error: var(--destructive);
-}
-
-.sdv2-vD .t3team-aci-cell[data-t3team-state="thinking"] {
-  --s: var(--thinking);
-}
-.sdv2-vD .t3team-aci-cell[data-t3team-state="writing"] {
-  --s: var(--writing);
-}
-.sdv2-vD .t3team-aci-cell[data-t3team-state="working"] {
-  --s: var(--working);
-}
-.sdv2-vD .t3team-aci-cell[data-t3team-state="waiting"] {
-  --s: var(--waiting);
-}
-.sdv2-vD .t3team-aci-cell:not([data-t3team-state]),
-.sdv2-vD .t3team-aci-cell[data-t3team-state="settled"] {
-  --s: var(--settled);
-}
-.sdv2-vD .t3team-aci-cell[data-t3team-state="done"] {
-  --s: var(--done);
-}
-.sdv2-vD .t3team-aci-cell[data-t3team-state="error"] {
-  --s: var(--error);
-}
-.sdv2-vD .sdv2-row .t3team-aci-cell .t3team-aci-dot {
-  position: relative;
-  background-color: var(--s);
-  box-shadow: 0 0 4px 0 color-mix(in oklch, var(--s) 22%, transparent);
-  transition:
-    background-color 420ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
-    box-shadow 420ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
-    opacity 420ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-.dark .sdv2-vD .sdv2-row .t3team-aci-cell .t3team-aci-dot {
-  filter: brightness(1.16) saturate(0.95);
-}
-/* Orb sheen: a soft blurred highlight drifting in position + opacity while
-   its color keeps transitioning with the state - the dot reads as a living
-   orb, not a lit bead. Very subtle on purpose. */
-.sdv2-vD .sdv2-row .t3team-aci-cell .t3team-aci-dot::after {
-  content: "";
-  position: absolute;
-  inset: 14% 30% 34% 18%;
-  border-radius: 9999px;
-  background-color: color-mix(in oklch, var(--s) 26%, white 74%);
-  filter: blur(0.6px);
-  transition: background-color 420ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  animation: t3team-sdv2-orb-drift 6s ease-in-out infinite;
-}
-
-@keyframes t3team-sdv2-orb-drift {
-  0%,
-  100% {
-    transform: translate(-0.5px, -0.35px) scale(1);
-    opacity: 0.38;
-  }
-  50% {
-    transform: translate(0.45px, 0.35px) scale(1.18);
-    opacity: 0.6;
-  }
-}
-
-/* Waiting: no hard ring border - the breathing keyframes now paint a soft, faint halo. */
-.sdv2-vD .sdv2-row .t3team-aci-cell[data-t3team-state="waiting"] > span::before {
-  border: 0;
-  box-shadow: 0 0 7px 2px color-mix(in oklch, var(--s) 18%, transparent);
-}
+/* D · PRODUCTION — the porcelain-orb direction chosen in this story now
+   ships: the palette, the 420ms soft-out color morph, the drifting sheen
+   and the waiting halo live in t3team/t3team-statusOrb.css (imported by the
+   story + the working-row / Agents-panel / sidebar seams). The D card in
+   the story stamps `t3team-orb` on its dots and renders that module — the
+   story-side copy was deleted on port so the story shows production, not a
+   fork. No D rules remain in this file.
+*/
 
 /* Shared story scaffolding (card layout only — no dot paint here). */
 .sdv2-row {

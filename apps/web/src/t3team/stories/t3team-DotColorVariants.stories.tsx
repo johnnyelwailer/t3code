@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 
 import type { CSSProperties } from "react";
 
+import "~/t3team/t3team-statusOrb.css";
+
 import "./t3team-DotColorVariants.css";
 import "./t3team-DotColorVariantsCD.css";
 
@@ -12,25 +14,17 @@ import "./t3team-DotColorVariantsCD.css";
  * subtle color shift animations, and a theme-oriented color palette…
  * more polished"). May land with 0.0.39.
  *
- * STORY-ONLY — no production behavior change. Every variant paints the
- * EXACT production dot DOM (`.t3team-aci-cell[data-t3team-state]` wrapping
- * the pulse span + `.t3team-aci-dot`, the same structure the working row and
- * Agents panel stamp), so:
- *   - the shared state keyframes (wave / snap / breathe / ring) run from
- *     t3team-index.css unchanged — motion carries the state;
- *   - the dots inherit the production centering (the GHE #201 alignment
- *     test's dx=dy=0 geometry) — variants change ONLY paint;
- *   - `prefers-reduced-motion` stills everything (media query in the
- *     variant CSS + the production block).
- *
- * The production gap these variants demonstrate: today the indicator
- * RE-MOUNTS the cell on state change (the .t3team-aci-shift keyed remount),
- * so the declared `background 0.9s` transition never fires and the color
- * snaps. Here the cells are persistent and only `data-t3team-state` flips,
- * which is what makes the crossfade visible. Productizing a direction =
- * moving its palette + transition into the shared CSS and keeping the
- * cell mounted across state changes (or accepting the one-shot shift as the
- * transition's trigger).
+ * A/B/C are STORY-ONLY explorations that paint the EXACT production dot DOM
+ * (`.t3team-aci-cell[data-t3team-state]` wrapping the pulse span +
+ * `.t3team-aci-dot`, the same structure the working row and Agents panel
+ * stamp) with their own scoped palettes. D — the porcelain orb, the chosen
+ * direction — is PRODUCTION: its card stamps `t3team-orb` and the paint +
+ * color-shift logic live in the shared production module
+ * t3team-statusOrb.css (imported above), so this card shows the shipping
+ * paint, not a copy. The state keyframes (wave / snap / breathe / ring)
+ * still run from t3team-index.css unchanged — motion carries the state;
+ * `prefers-reduced-motion` stills everything (module media query + the
+ * variant CSS + the production block).
  *
  * 8 states per variant: thinking · writing · working · waiting · settled ·
  * done · error · base (no state stamped — the resting dot).
@@ -60,15 +54,19 @@ const STATE_LABELS: Record<string, string> = {
   base: "base (no state)",
 };
 
-/** One dot — identical DOM to AgentsPanelStatusDot / the working-row cell. */
+/** One dot — identical DOM to AgentsPanelStatusDot / the working-row cell.
+ *  `production` stamps the shared orb class so the card renders the
+ *  PRODUCTION paint (t3team-statusOrb.css) instead of a story-side copy. */
 function Dot({
   state,
   index,
   className,
+  production = false,
 }: {
   state: string | null;
   index: number;
   className?: string;
+  production?: boolean;
 }) {
   const cellStyle = { "--t3team-aci-i": index } as CSSProperties;
   return (
@@ -79,7 +77,7 @@ function Dot({
       aria-hidden
     >
       <span className="relative inline-flex">
-        <span className="t3team-aci-dot" />
+        <span className={`t3team-aci-dot${production ? " t3team-orb" : ""}`} />
       </span>
     </span>
   );
@@ -87,12 +85,12 @@ function Dot({
 
 /** Static 8-state row — the "alignment-test story layout": one dot per state,
  *  state name underneath. */
-function StateRow({ scope }: { scope: string }) {
+function StateRow({ scope, production = false }: { scope: string; production?: boolean }) {
   return (
     <div className="sdv2-row">
       {STATES.map((state, i) => (
         <div key={state ?? "base"} className="sdv2-col">
-          <Dot state={state} index={i} className={scope} />
+          <Dot state={state} index={i} className={scope} production={production} />
           <span className="sdv2-state-label">{STATE_LABELS[state ?? "base"]}</span>
         </div>
       ))}
@@ -102,7 +100,15 @@ function StateRow({ scope }: { scope: string }) {
 
 /** Live flip demo: three persistent dots cycling working → thinking → waiting
  *  (≈2.4s per step) so the color crossfade between states is visible. */
-function FlipDemo({ scope, autoCycle }: { scope: string; autoCycle: boolean }) {
+function FlipDemo({
+  scope,
+  autoCycle,
+  production = false,
+}: {
+  scope: string;
+  autoCycle: boolean;
+  production?: boolean;
+}) {
   const PHASES: readonly string[] = ["working", "thinking", "waiting"];
   const [phase, setPhase] = useState(0);
   const scopeRef = useRef(scope);
@@ -120,7 +126,7 @@ function FlipDemo({ scope, autoCycle }: { scope: string; autoCycle: boolean }) {
     <div className="sdv2-row" data-sdv2-flip={scope}>
       {states.map((state, i) => (
         <div key={i} className="sdv2-col">
-          <Dot state={state} index={i + 4} className={scope} />
+          <Dot state={state} index={i + 4} className={scope} production={production} />
           <span className="sdv2-state-label">{state}</span>
         </div>
       ))}
@@ -136,6 +142,7 @@ function VariantCard({
   paletteNote,
   children,
   alsoInherits = "",
+  production = false,
 }: {
   scope: string;
   letter: string;
@@ -145,10 +152,15 @@ function VariantCard({
   children: React.ReactNode;
   /** Extra scope class(es) this card inherits paint from (B inherits A). */
   alsoInherits?: string;
+  /** Production card: no story-side scope — the dots paint through the
+   *  shared t3team-statusOrb.css module. */
+  production?: boolean;
 }) {
   return (
     <div
-      className={`w-[620px] rounded-xl border border-border/70 bg-card p-4 shadow-sm ${alsoInherits} ${scope}`}
+      className={`w-[620px] rounded-xl border border-border/70 bg-card p-4 shadow-sm ${
+        production ? "" : `${alsoInherits} ${scope}`
+      }`}
     >
       <div className="mb-1 flex items-baseline gap-2">
         <span className="text-xs font-semibold text-foreground">{`${letter}. ${name}`}</span>
@@ -180,6 +192,8 @@ type VariantConfig = {
   name: string;
   technique: string;
   paletteNote: string;
+  /** The chosen direction — rendered through the production module. */
+  production?: boolean;
 };
 
 const VARIANTS: readonly VariantConfig[] = [
@@ -198,7 +212,8 @@ const VARIANTS: readonly VariantConfig[] = [
     alsoInherits: "sdv2-vA",
     letter: "B",
     name: "Soft-glow blend",
-    technique: "A's palette + two-layer halo (tight 6px + wide 16px) blending on the same 380ms ease-in-out; ring border crossfades too",
+    technique:
+      "A's palette + two-layer halo (tight 6px + wide 16px) blending on the same 380ms ease-in-out; ring border crossfades too",
     paletteNote:
       "Same tokens as A — the difference is the light: two stacked glows whose COLOR transitions with the core, so a state change reads as the halo breathing into the new hue. No geometry change.",
   },
@@ -213,13 +228,14 @@ const VARIANTS: readonly VariantConfig[] = [
   },
   {
     id: "D",
-    scope: "sdv2-vD",
+    scope: "",
     letter: "D",
-    name: "Porcelain orb (recommended)",
+    name: "Porcelain orb (chosen — production)",
     technique:
-      "420ms soft-out color morph on everything · drifting orb sheen (position + opacity + color) · very subtle 4px halo · waiting = soft breathing halo (no hard ring)",
+      "SHIPPED in t3team-statusOrb.css — this card stamps `t3team-orb` and renders the shared production module, not a copy",
     paletteNote:
-      "Accent-anchored tokens, chroma nudged up slightly. The sheen is a blurred color-mix(state, white) highlight that slowly drifts position and opacity while its color follows the state transition - the dot behaves like a lit orb. The waiting state's old hard ring is gone (soft halo instead, no layout impact) and the flip-demo labels reserve width so state changes never reflow the row.",
+      "Accent-anchored theme tokens, chroma nudged up slightly. The sheen is a blurred color-mix(state, white) highlight that slowly drifts position and opacity while its color follows the state transition - the dot behaves like a lit orb. The waiting state's old hard ring is a soft halo (no layout impact) and the flip-demo labels reserve width so state changes never reflow the row.",
+    production: true,
   },
 ];
 
@@ -227,7 +243,7 @@ function DotColorVariants({ autoCycle, reducedMotion, focus, zoom }: DotColorVar
   return (
     <div className="flex w-full flex-col items-center gap-6 px-10 py-10 pb-16">
       {reducedMotion ? (
-        <style>{`[class*="sdv2-v"] .t3team-aci-cell, [class*="sdv2-v"] .t3team-aci-cell > span::before, [class*="sdv2-v"] .t3team-aci-dot { animation: none !important; transition: none !important; box-shadow: none !important; opacity: 0.55 !important; }`}</style>
+        <style>{`[class*="sdv2-v"] .t3team-aci-cell, [class*="sdv2-v"] .t3team-aci-cell > span::before, [class*="sdv2-v"] .t3team-aci-dot, .t3team-orb, .t3team-orb::after { animation: none !important; transition: none !important; box-shadow: none !important; } [class*="sdv2-v"] .t3team-aci-dot, .t3team-orb { opacity: 0.55 !important; }`}</style>
       ) : null}
 
       <div style={{ zoom }}>
@@ -235,22 +251,27 @@ function DotColorVariants({ autoCycle, reducedMotion, focus, zoom }: DotColorVar
           <VariantCard
             key={variant.id}
             scope={variant.scope}
-            alsoInherits={variant.alsoInherits}
+            alsoInherits={variant.alsoInherits ?? ""}
+            production={variant.production ?? false}
             letter={variant.letter}
             name={variant.name}
             technique={variant.technique}
             paletteNote={variant.paletteNote}
           >
-            <StateRow scope={variant.scope} />
-            <FlipDemo scope={variant.scope} autoCycle={autoCycle} />
+            <StateRow scope={variant.scope} production={variant.production ?? false} />
+            <FlipDemo
+              scope={variant.scope}
+              autoCycle={autoCycle}
+              production={variant.production ?? false}
+            />
           </VariantCard>
         ))}
       </div>
 
       <div className="text-[10px] text-muted-foreground/70">
-        All four variants paint the production dot DOM — shared keyframes, the waiting ring, and the
+        All four variants paint the production dot DOM — shared keyframes, the waiting halo, and the
         dead-center alignment from the GHE #201 alignment-test story are inherited untouched
-        (variants change paint only).{" "}
+        (variants change paint only). Card D renders the PRODUCTION paint (t3team-statusOrb.css).
         <code className="text-foreground/70">prefers-reduced-motion</code> stills every dot.
       </div>
     </div>
@@ -270,7 +291,8 @@ const meta = {
     focus: {
       control: "select",
       options: ["all", "A", "B", "C", "D"],
-      description: "Render a single variant's card so it can be studied up close (D = the porcelain orb).",
+      description:
+        "Render a single variant's card so it can be studied up close (D = the porcelain orb).",
     },
     zoom: {
       control: { type: "number", min: 0.5, max: 3, step: 0.25 },

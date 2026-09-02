@@ -5,10 +5,12 @@
  * The DOM mirrors the working-row indicator (T3TeamActiveAgentsIndicator) EXACTLY
  * — a `.t3team-aci-cell` stamped with `data-t3team-state` + `--t3team-aci-i`,
  * wrapping a pulse-wrapper `<span>` that holds the `.t3team-aci-dot` — so the
- * shared motion/hue/waiting-ring CSS in t3team-index.css textures each dot the
- * SAME WAY as the working row (no second, divergent style). The panel's
+ * shared motion/hue CSS in t3team-index.css textures each dot the SAME WAY as
+ * the working row (no second, divergent style). The PAINT (porcelain-orb
+ * palette + 420ms soft-out color shift + sheen) comes from the shared
+ * t3team-statusOrb.css module — each dot stamps `t3team-orb`. The panel's
  * `.t3team-agp` scope (set on the panel root by AgentsPanel.tsx) only adds the
- * two still RESULT states the roster needs (done/error) — see
+ * two still RESULT states' geometry (done/error) — see
  * t3team-agentsPanelDots.css.
  *
  * Each sub-run carries ITS OWN state: live agents animate (working/writing/
@@ -22,6 +24,7 @@ import type { CSSProperties } from "react";
 import type { RuntimeSubagent } from "@t3tools/client-runtime/state/subagentRuntime";
 
 import { cn } from "~/lib/utils";
+import "~/t3team/t3team-statusOrb.css";
 import { panelDotState } from "./t3team-agentsPanelDots.logic";
 
 import "./t3team-agentsPanelDots.css";
@@ -48,7 +51,7 @@ export function AgentsPanelStatusDot({
       aria-label={ariaLabel}
     >
       <span className="relative inline-flex">
-        <span className="t3team-aci-dot" />
+        <span className="t3team-orb t3team-aci-dot" />
       </span>
     </span>
   );

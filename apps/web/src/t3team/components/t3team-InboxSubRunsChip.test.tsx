@@ -124,8 +124,11 @@ describe("InboxSubRunsChip — 3-state, one handle", () => {
     const dot = chip!.querySelector("span[aria-hidden]");
     expect(dot).not.toBeNull();
     const classes = dot!.className;
-    // sky = "in motion" (same hue as the Working pill), not bg-primary.
-    expect(classes).toContain("bg-sky-500");
+    // The active dot paints through the shared porcelain-orb module —
+    // `working` is the working-row's 4-state in-motion color (see
+    // t3team-statusOrb.css), not the theme's primary accent.
+    expect(classes).toContain("t3team-orb");
+    expect(dot!.getAttribute("data-t3team-state")).toBe("working");
     expect(classes).not.toContain("bg-primary");
   });
 

@@ -23,6 +23,8 @@ import {
   activityPulseClass,
   resolveActivityPillDisplay,
 } from "~/t3team/t3team-activityStateDisplay";
+import { resolveStatusOrbState, STATUS_ORB_CLASS } from "~/t3team/t3team-statusOrb";
+import "~/t3team/t3team-statusOrb.css";
 import type { SidebarThreadSummary } from "../types";
 import { formatWorktreePathForDisplay } from "../worktreeCleanup";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
@@ -479,6 +481,13 @@ export function ThreadStatusLabel({
   // available, zero inference); the live LLM label is optional enrichment
   // appended as "{state} · {detail}". `label` stays the stable status key.
   const displayLabel = resolveActivityPillDisplay(status);
+  // GHE #201 follow-up: the dot paints through the shared porcelain-orb
+  // module (t3team-statusOrb.css) whenever the pill maps onto the orb
+  // vocabulary; unmapped pills keep their legacy tailwind dot class.
+  const orbState = resolveStatusOrbState(status);
+  const dotClass = orbState
+    ? STATUS_ORB_CLASS
+    : `transition-colors duration-200 ${status.dotClass}`;
   if (compact) {
     return (
       <Tooltip>
@@ -491,7 +500,8 @@ export function ThreadStatusLabel({
           }
         >
           <span
-            className={`size-[9px] rounded-full transition-colors duration-200 ${status.dotClass} ${activityPulseClass(status)}`}
+            data-t3team-state={orbState ?? undefined}
+            className={`size-[9px] rounded-full ${dotClass} ${activityPulseClass(status)}`}
           />
         </TooltipTrigger>
         <TooltipPopup side="top">{displayLabel}</TooltipPopup>
@@ -510,7 +520,8 @@ export function ThreadStatusLabel({
         }
       >
         <span
-          className={`h-1.5 w-1.5 rounded-full transition-colors duration-200 ${status.dotClass} ${activityPulseClass(status)}`}
+          data-t3team-state={orbState ?? undefined}
+          className={`h-1.5 w-1.5 rounded-full ${dotClass} ${activityPulseClass(status)}`}
         />
         {/* GHE #208: keyed so the soft fade (animate-label-fade) restarts on a label
             change — state-word transitions never hard-swap. */}
