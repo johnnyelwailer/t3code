@@ -42,7 +42,16 @@ export const make = Effect.gen(function* () {
     const snapshot = yield* snapshots.getShellSnapshot();
     const now = DateTime.formatIso(yield* DateTime.now);
     const projects = new Map(snapshot.projects.map((project) => [project.id, project]));
-    const candidates = snapshot.threads.filter((thread) => isAutoSettlementCandidate(thread, now));
+    // t3team child threads have their own settle path: the parent decides via the
+    // `children` tool's sweep op, with the child-settle sweeper as the post-terminal
+    // TTL backstop (GHE #304). Idle-days / merged-PR settlement is a root-thread
+    // rule and must not touch them (nexi-distribution#396).
+    const childThreadIds = new Set<string>(
+      (yield* snapshots.listParentChildRelations()).map((relation) => relation.childThreadId),
+    );
+    const candidates = snapshot.threads.filter(
+      (thread) => !childThreadIds.has(thread.id) && isAutoSettlementCandidate(thread, now),
+    );
     const lookupKey = (thread: (typeof candidates)[number]) => {
       if (thread.linkedPullRequest != null) {
         return JSON.stringify([
