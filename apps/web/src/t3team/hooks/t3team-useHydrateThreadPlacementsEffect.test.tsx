@@ -124,4 +124,51 @@ describe("useHydrateThreadPlacements effect scheduling", () => {
 
     rendered.unmount();
   });
+
+  it("does not re-request ids the server already answered with no placement (GHE #382)", async () => {
+    const otherThread = { ...LIVE_THREAD, id: "thread-other" } as Thread;
+    let liveThreads: ReadonlyArray<Thread> = [LIVE_THREAD];
+    const host = document.createElement("div");
+    let root: Root;
+    let setLive: (threads: ReadonlyArray<Thread>) => void = () => {};
+
+    function Probe() {
+      const [threads, setThreads] = useState(liveThreads);
+      setLive = setThreads;
+      useHydrateThreadPlacements({
+        threads: EMPTY_PROJECT_THREADS,
+        setThreads: NOOP_SET_THREADS,
+        storedProjects: EMPTY_STORED_PROJECTS,
+        liveProjects: EMPTY_PROJECTS,
+        liveThreads: threads,
+      });
+      return null;
+    }
+
+    act(() => {
+      root = createRoot(host);
+      root.render(createElement(Probe));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(listThreadPlacements).toHaveBeenCalledTimes(1);
+    expect(listThreadPlacements).toHaveBeenLastCalledWith({
+      threadIds: [ThreadId.make("thread-missing")],
+    });
+
+    // A new live thread changes the candidate set. The already-answered id
+    // must be dropped from the request; only the new id goes to the server.
+    liveThreads = [LIVE_THREAD, otherThread];
+    act(() => setLive(liveThreads));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(listThreadPlacements).toHaveBeenCalledTimes(2);
+    expect(listThreadPlacements).toHaveBeenLastCalledWith({
+      threadIds: [ThreadId.make("thread-other")],
+    });
+
+    act(() => root.unmount());
+  });
 });
