@@ -91,6 +91,7 @@ import Migration0060 from "./Migrations/t3team-052_ProjectionThreadActivitiesKin
 // rather than taking upstream's numbers, which this fork already uses — see the rule above.
 import Migration0061 from "./Migrations/043_ProjectionThreadsUnsettledAt.ts";
 import Migration0062 from "./Migrations/044_ClearAutomaticProjectModelDefaults.ts";
+import Migration0063 from "./Migrations/t3team-053_WorkflowTurnRetries.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -165,6 +166,7 @@ export const migrationEntries = [
   [60, "ProjectionThreadActivitiesKindIndex", Migration0060],
   [61, "ProjectionThreadsUnsettledAt", Migration0061],
   [62, "ClearAutomaticProjectModelDefaults", Migration0062],
+  [63, "WorkflowTurnRetries", Migration0063],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

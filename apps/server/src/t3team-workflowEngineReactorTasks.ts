@@ -9,7 +9,10 @@
  *     may still narrate, call tools, and answer afterwards (see t3team-workflowTurnResolution.ts).
  *   • the turn-end signal is a `thread.session-set` with no active turn; it ARMS the settle.
  *   • a `user.input` ask settles on the user's reply message, as it always has.
- *   • a settlement with no substantive text FAILS the run instead of resolving with "".
+ *   • a settlement with no substantive text: a LIVE (black-boxed) ask settles with "" so the
+ *     composition's own emptiness check fires; a durable ask whose turn was INTERRUPTED by a
+ *     host restart gets its bounded re-drive (t3team-workflowEngineTurnRetry.ts) instead of a
+ *     terminal failure; a durable ask set live this uptime fails the run.
  */
 
 import type { OrchestrationCommand, OrchestrationEvent } from "@t3tools/contracts";
@@ -26,28 +29,30 @@ import type {
   T3TeamWorkflowEngineRegistryShape,
   WorkflowPendingAsk,
 } from "./t3team-workflowEngineRegistry.ts";
+import { NO_TEXT_MESSAGE, type InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
 import type { WorkflowTurnTracker } from "./t3team-workflowTurnResolution.ts";
 
 export type ThreadMessageSentEvent = Extract<OrchestrationEvent, { type: "thread.message-sent" }>;
 export type ThreadSessionSetEvent = Extract<OrchestrationEvent, { type: "thread.session-set" }>;
 
-/** One unit of serialized reactor work: an event to fold in, or a due turn settlement. */
+/** One unit of serialized reactor work: an event to fold in, a due turn settlement, or a due
+ * re-drive of an interrupted step. */
 export type WorkflowReactorTask =
   | { readonly kind: "event"; readonly event: ThreadMessageSentEvent | ThreadSessionSetEvent }
-  | { readonly kind: "settle"; readonly threadId: string; readonly correlationId: string };
+  | { readonly kind: "settle"; readonly threadId: string; readonly correlationId: string }
+  | { readonly kind: "turn-retry"; readonly threadId: string; readonly correlationId: string };
 
 export interface WorkflowReactorTaskDeps {
   readonly registry: T3TeamWorkflowEngineRegistryShape;
   readonly tracker: WorkflowTurnTracker;
   /** Queue the settlement for a turn that just ended, after the straggler grace window. */
   readonly armSettle: (threadId: string, correlationId: string) => Effect.Effect<void>;
+  /** The bounded re-drive of an interrupted step (see t3team-workflowEngineTurnRetry.ts). */
+  readonly turnRetry: InterruptedTurnRetry;
   /** Dispatch a command — used ONLY to attribute a step's answer to the step (see
    * t3team-workflowAnswerAttribution.ts). Absent leaves answers unattributed. */
   readonly dispatch?: (command: OrchestrationCommand) => Effect.Effect<unknown>;
 }
-
-const NO_TEXT_MESSAGE =
-  "The agent turn ended without any reply text, so this step has no answer to return.";
 
 export function createWorkflowReactorTaskHandler(
   deps: WorkflowReactorTaskDeps,
@@ -173,13 +178,19 @@ export function createWorkflowReactorTaskHandler(
         correlationId: task.correlationId,
       });
       // A live (black-boxed) ask has no failure channel of its own: settle it with "" so the
-      // composition's own emptiness check fires. A durable ask fails the run.
+      // composition's own emptiness check fires. A durable ask whose turn was interrupted by a
+      // host restart (its pending carries the journaled `turnRetries` budget) gets its bounded
+      // re-drive instead; a durable ask set live this uptime still fails the run.
       if (pending.resolveLive !== undefined) {
         yield* Effect.promise(() => pending.resolveLive!(""));
         return;
       }
       const run = registry.getRun(pending.runId);
       if (run === undefined) return;
+      if (pending.turnRetries !== undefined) {
+        yield* deps.turnRetry.settleNoText(task.threadId, pending, run);
+        return;
+      }
       const error = new Error(NO_TEXT_MESSAGE);
       yield* Effect.promise(() =>
         run.fail === undefined ? run.resume(pending.correlationId, "") : run.fail(error),
@@ -188,6 +199,7 @@ export function createWorkflowReactorTaskHandler(
 
   return (task) => {
     if (task.kind === "settle") return processSettle(task);
+    if (task.kind === "turn-retry") return deps.turnRetry.processTurnRetry(task);
     return task.event.type === "thread.message-sent"
       ? processMessageSent(task.event)
       : processSessionSet(task.event);

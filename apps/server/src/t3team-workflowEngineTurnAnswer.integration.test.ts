@@ -45,6 +45,7 @@ import * as Stream from "effect/Stream";
 import { OrchestrationCommandReceiptRepositoryLive } from "./persistence/Layers/OrchestrationCommandReceipts.ts";
 import { OrchestrationEventStoreLive } from "./persistence/Layers/OrchestrationEventStore.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
 import { OrchestrationEngineLive } from "./orchestration/Layers/OrchestrationEngine.ts";
 import { OrchestrationProjectionPipelineLive } from "./orchestration/Layers/ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./orchestration/Layers/ProjectionSnapshotQuery.ts";
@@ -52,6 +53,7 @@ import * as ThreadBackgroundLiveness from "./orchestration/ThreadBackgroundLiven
 import * as ThreadPlanProgress from "./orchestration/ThreadPlanProgress.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
 import { ServerConfig } from "./config.ts";
 import { launchWorkflowRecipe } from "./t3team-workflowEngineLaunch.ts";
@@ -59,6 +61,7 @@ import { T3TeamWorkflowEngineReactorLive } from "./t3team-workflowEngineReactor.
 import {
   T3TeamWorkflowEngineRegistry,
   T3TeamWorkflowEngineRegistryLive,
+  type T3TeamWorkflowEngineRegistryShape,
 } from "./t3team-workflowEngineRegistry.ts";
 import { stubAgentTurnCommands } from "./t3team-workflowStubAgentTurn.ts";
 
@@ -68,6 +71,11 @@ const workflowPath = NodeURL.fileURLToPath(
 const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-turn-answer-"));
 afterAll(() => NodeFS.rmSync(runsRoot, { recursive: true, force: true }));
 
+// Shorten the interrupted-step re-drive backoff for the restart-recovery tests below (same
+// env-override pattern as the transient turn retry's e2e knob). Inert for the tests that never
+// enter the retry path (live asks with an author fail fast).
+process.env.T3TEAM_INTERRUPTED_TURN_RETRY_BACKOFF_MS = "25";
+
 const projectId = ProjectId.make("proj-turn-answer");
 const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
 const ISO = "2026-07-28T00:00:00.000Z";
@@ -76,42 +84,52 @@ const PREAMBLE =
   "Ich hole erst den Kontext zum Item: Parent, Kinder, Kommentare, Links. Dann schreibe ich nur die neue Beschreibung.";
 const ANSWER = "## Goal\nCheckout must round to two decimals.";
 
-/** A stub provider whose turn emits the given assistant messages, with a tool activity between. */
-const StubProviderLive = (messages: ReadonlyArray<ReadonlyArray<string>>) =>
+/** A stub provider whose Nth turn on a thread emits the Nth scripted message list (last
+ * script repeats), with a tool activity between the first two messages of multi-message turns. */
+const ScriptedStubProviderLive = (scripts: ReadonlyArray<ReadonlyArray<ReadonlyArray<string>>>) =>
   Layer.effectDiscard(
     Effect.gen(function* () {
       const orchestration = yield* OrchestrationEngineService;
+      const turnsByThread = new Map<string, number>();
       yield* Effect.forkScoped(
         Stream.runForEach(orchestration.streamDomainEvents, (event) => {
           if (event.type !== "thread.turn-start-requested") return Effect.void;
           const { threadId, messageId: turnMessageId } = event.payload;
-          const idPrefix = `stub:${turnMessageId}`;
+          const attempt = turnsByThread.get(threadId) ?? 0;
+          turnsByThread.set(threadId, attempt + 1);
+          // The attempt counter in the prefix keeps re-issued turns' command ids unique — a
+          // resume re-runs the SAME user message, so the raw message id would collide with the
+          // first turn's command ids and the receipt dedupe would drop the second turn.
+          const idPrefix = `stub:${turnMessageId}:${attempt}`;
+          const messages = scripts[Math.min(attempt, scripts.length - 1)] ?? [];
           const commands = stubAgentTurnCommands({ threadId, idPrefix, messages, createdAt: ISO });
-          // A tool call in the middle of the turn: the reactor must not read it as an answer, and
-          // must not settle the ask while the turn keeps working.
-          const toolActivity: OrchestrationCommand = {
-            type: "thread.activity.append",
-            commandId: CommandId.make(`${idPrefix}:tool`),
-            threadId,
-            activity: {
-              id: EventId.make(`${idPrefix}:tool-activity`),
-              tone: "tool",
-              kind: "tool.completed",
-              summary: "Read .t3team/context/work-items/t3-42.json",
-              payload: { itemType: "file_read" },
-              turnId: TurnId.make(`${idPrefix}:turn`),
+          // A tool call in the middle of the turn: the reactor must not read it as an answer,
+          // and must not settle the ask while the turn keeps working.
+          if (messages.length >= 2) {
+            const toolActivity: OrchestrationCommand = {
+              type: "thread.activity.append",
+              commandId: CommandId.make(`${idPrefix}:tool`),
+              threadId,
+              activity: {
+                id: EventId.make(`${idPrefix}:tool-activity`),
+                tone: "tool",
+                kind: "tool.completed",
+                summary: "Read .t3team/context/work-items/t3-42.json",
+                payload: { itemType: "file_read" },
+                turnId: TurnId.make(`${idPrefix}:turn`),
+                createdAt: ISO,
+              },
               createdAt: ISO,
-            },
-            createdAt: ISO,
-          };
-          // …dispatched after the first message completes, before the rest of the turn.
-          const insertAt = Math.min(3, commands.length - 1);
-          const script = [
-            ...commands.slice(0, insertAt),
-            toolActivity,
-            ...commands.slice(insertAt),
-          ];
-          return Effect.forEach(script, (command) => orchestration.dispatch(command), {
+            };
+            // …dispatched after the first message completes, before the rest of the turn.
+            const insertAt = 3;
+            return Effect.forEach(
+              [...commands.slice(0, insertAt), toolActivity, ...commands.slice(insertAt)],
+              (command) => orchestration.dispatch(command),
+              { concurrency: 1, discard: true },
+            ).pipe(Effect.orDie);
+          }
+          return Effect.forEach(commands, (command) => orchestration.dispatch(command), {
             concurrency: 1,
             discard: true,
           }).pipe(Effect.orDie);
@@ -120,6 +138,10 @@ const StubProviderLive = (messages: ReadonlyArray<ReadonlyArray<string>>) =>
     }),
   );
 
+// The reactor's read-side services (snapshot query + run repo) are provided INTO the engine
+// alongside its other stores, so they share the engine's own in-memory database: the re-drive
+// prompt lookup reads the projection the engine wrote, and the restart-recovery tests assert
+// the journaled re-drive counter against the same `workflow_runs` row the reactor wrote.
 const EngineLive = OrchestrationEngineLive.pipe(
   Layer.provide(ThreadBackgroundLiveness.layer),
   // `provideMerge` (not `provide`): the test body reads the PROJECTED thread detail — the same
@@ -141,9 +163,29 @@ const EngineLive = OrchestrationEngineLive.pipe(
   Layer.provideMerge(NodeServices.layer),
 );
 
-const testLayer = (messages: ReadonlyArray<ReadonlyArray<string>>) =>
-  Layer.mergeAll(T3TeamWorkflowEngineReactorLive, StubProviderLive(messages)).pipe(
-    Layer.provideMerge(Layer.merge(EngineLive, T3TeamWorkflowEngineRegistryLive)),
+const testLayer = (scripts: ReadonlyArray<ReadonlyArray<ReadonlyArray<string>>>) =>
+  Layer.mergeAll(T3TeamWorkflowEngineReactorLive, ScriptedStubProviderLive(scripts)).pipe(
+    Layer.provideMerge(
+      Layer.merge(
+        EngineLive,
+        Layer.merge(
+          T3TeamWorkflowEngineRegistryLive,
+          Layer.merge(
+            OrchestrationProjectionSnapshotQueryLive.pipe(
+              Layer.provide(ThreadBackgroundLiveness.layer),
+              Layer.provide(ThreadPlanProgress.layer),
+              Layer.provide(RepositoryIdentityResolver.layer),
+              Layer.provideMerge(SqlitePersistenceMemory),
+              Layer.provideMerge(NodeServices.layer),
+            ),
+            WorkflowRunRepositoryLive.pipe(
+              Layer.provideMerge(SqlitePersistenceMemory),
+              Layer.provideMerge(NodeServices.layer),
+            ),
+          ),
+        ),
+      ),
+    ),
   );
 
 /** Poll an in-memory predicate (observe-only; never resolves an ask) until it holds or times out. */
@@ -302,7 +344,7 @@ it.live("resolves askAgent with the turn's FINAL answer, not the preamble it ope
     const human = afterHuman.messages.find((message) => message.text === "thanks");
     assert.isDefined(human);
     assert.isUndefined(human?.t3teamExt?.author);
-  }).pipe(Effect.provide(testLayer([[PREAMBLE], ["Reading the work item…"], [ANSWER]]))),
+  }).pipe(Effect.provide(testLayer([[[PREAMBLE], ["Reading the work item…"], [ANSWER]]]))),
 );
 
 it.live("fails the run loudly when the turn ends without a word of reply text", () =>
@@ -331,5 +373,116 @@ it.live("fails the run loudly when the turn ends without a word of reply text", 
       ),
     );
     assert.isUndefined(run.registry.getRun("turn-empty-run"));
-  }).pipe(Effect.provide(testLayer([]))),
+  }).pipe(Effect.provide(testLayer([[]]))),
+);
+
+/**
+ * Replace the broker's live pending ask with what boot rehydration restores from the run row:
+ * same run + correlation, NO author (hot-index only), and the journaled re-drive budget. This
+ * is the observable difference between "this uptime's agent said nothing" and "the host
+ * restarted mid-step" — the retry path keys on it.
+ */
+const simulateRehydratedPendingAsk = (
+  registry: T3TeamWorkflowEngineRegistryShape,
+  runId: string,
+  threadId: string,
+  turnRetries = 0,
+) => {
+  registry.setPending(threadId, {
+    runId,
+    correlationId: `${runId}:1`,
+    kind: "thread.turn",
+    turnRetries,
+  });
+};
+
+/**
+ * The run row as the launch lifecycle would have written it (`recordRunning` +
+ * `recordSuspended`): this test's launch helper does not wire the DB lifecycle, so the row is
+ * seeded by the test — the reactor's re-drive journaling (the SUT) then updates it.
+ */
+const seedRunRow = (runId: string, launchThreadId: string) =>
+  Effect.gen(function* () {
+    const repo = yield* WorkflowRunRepository;
+    yield* repo.upsert({
+      runId,
+      workflowPath,
+      args: {},
+      argsHash: "test-hash",
+      launchThreadId,
+      projectId,
+      modelSelection,
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      status: "suspended",
+      origin: "recipe",
+      recipePath: null,
+      pendingThreadId: launchThreadId,
+      pendingCorrelationId: `${runId}:1`,
+      pendingKind: "thread.turn",
+      wakeAt: null,
+      createdAt: ISO,
+      updatedAt: ISO,
+    });
+  });
+
+it.live("re-drives an interrupted step after a host restart instead of failing the run", () =>
+  Effect.gen(function* () {
+    yield* Effect.sleep(Duration.millis(100));
+    const launchThreadId = "turn-restart-launch";
+    yield* seedProjectAndThread(launchThreadId);
+    const run = yield* launch({ runId: "turn-restart-run", launchThreadId });
+    assert.strictEqual(run.launched.status, "suspended");
+
+    // The step's FIRST drive is the interrupted one (the silent script); the re-drive answers.
+    yield* seedRunRow("turn-restart-run", launchThreadId);
+    simulateRehydratedPendingAsk(run.registry, "turn-restart-run", launchThreadId, 0);
+
+    yield* waitUntil(
+      () => run.completed.length > 0 || run.errors.length > 0,
+      "the interrupted writer run to settle",
+    );
+    // No failure at all: the re-driven turn's answer settled the SAME correlation and the run
+    // completed — the step was re-driven in place, not the run re-run from its prefix.
+    assert.deepStrictEqual(run.errors, []);
+    assert.deepStrictEqual(run.completed[0], { answer: ANSWER });
+    assert.isUndefined(run.registry.getRun("turn-restart-run"));
+
+    // The re-drive journaled its attempt ON THE RUN (migration 052): a second restart seeds the
+    // rehydrated pending ask with this value instead of a fresh 3-attempt budget.
+    const repo = yield* WorkflowRunRepository;
+    const row = Option.getOrUndefined(yield* repo.getById({ runId: "turn-restart-run" }));
+    assert.strictEqual(row?.turnRetries, 1);
+  }).pipe(Effect.provide(testLayer([[], [[ANSWER]]]))),
+);
+
+it.live("fails the run only after the bounded re-drive budget is exhausted", () =>
+  Effect.gen(function* () {
+    yield* Effect.sleep(Duration.millis(100));
+    const launchThreadId = "turn-exhausted-launch";
+    yield* seedProjectAndThread(launchThreadId);
+    const run = yield* launch({ runId: "turn-exhausted-run", launchThreadId });
+    assert.strictEqual(run.launched.status, "suspended");
+
+    // Every drive of this step — the interrupted one and all three re-drives — ends silent.
+    yield* seedRunRow("turn-exhausted-run", launchThreadId);
+    simulateRehydratedPendingAsk(run.registry, "turn-exhausted-run", launchThreadId, 0);
+
+    yield* waitUntil(
+      () => run.completed.length > 0 || run.errors.length > 0,
+      "the exhausted writer run to fail",
+    );
+    assert.deepStrictEqual(run.completed, []);
+    assert.strictEqual(run.errors.length, 1);
+    const reason = run.errors[0] instanceof Error ? run.errors[0].message : String(run.errors[0]);
+    // The EXISTING reason text — plus the step id, so the launching conversation learns WHERE.
+    assert.include(reason, "no answer to return");
+    assert.include(reason, "turn-exhausted-run:1");
+    assert.isUndefined(run.registry.getRun("turn-exhausted-run"));
+
+    const repo = yield* WorkflowRunRepository;
+    const row = Option.getOrUndefined(yield* repo.getById({ runId: "turn-exhausted-run" }));
+    // The budget is what ran out: three journaled re-drives on the run row.
+    assert.strictEqual(row?.turnRetries, 3);
+  }).pipe(Effect.provide(testLayer([[], [], []]))),
 );
