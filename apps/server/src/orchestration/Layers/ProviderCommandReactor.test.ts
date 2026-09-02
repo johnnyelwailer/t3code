@@ -3813,12 +3813,61 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.activeTurnId).toBeNull();
   });
 
-  effectIt.effect("stops a ready provider session after automatic settlement", () =>
+  effectIt.effect("stops a ready provider session after a user-initiated settle", () =>
     Effect.gen(function* () {
       const sessionStopped = yield* Deferred.make<void>();
       const harness = yield* Effect.promise(() =>
         createHarness({
           stopSessionEffect: () => Deferred.succeed(sessionStopped, undefined).pipe(Effect.asVoid),
+        }),
+      );
+      const now = "2026-01-01T00:00:00.000Z";
+
+      yield* harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-session-set-for-user-settle"),
+        threadId: ThreadId.make("thread-1"),
+        session: {
+          threadId: ThreadId.make("thread-1"),
+          status: "ready",
+          providerName: "codex",
+          providerInstanceId: ProviderInstanceId.make("codex_work"),
+          runtimeMode: "approval-required",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: now,
+        },
+        createdAt: now,
+      });
+
+      yield* harness.engine.dispatch({
+        type: "thread.settle",
+        commandId: CommandId.make("cmd-user-settle-with-session"),
+        threadId: ThreadId.make("thread-1"),
+      });
+
+      yield* Deferred.await(sessionStopped);
+      yield* Effect.promise(() => harness.drain());
+      const readModel = yield* Effect.promise(() => harness.readModel());
+      const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+      expect(thread?.settledOverride).toBe("settled");
+      expect(thread?.session?.status).toBe("stopped");
+      expect(thread?.session?.providerInstanceId).toBe(ProviderInstanceId.make("codex_work"));
+    }),
+  );
+
+  // nexi-distribution#396: server-originated settles (`server:auto-settle`, the
+  // t3team child-settle sweeper) are bookkeeping and must leave the provider
+  // session alone. On the 0.0.42 startup they stopped 12 live sessions at once.
+  effectIt.effect("keeps the provider session alive after an automated (server) settle", () =>
+    Effect.gen(function* () {
+      let stopSessionCalls = 0;
+      const harness = yield* Effect.promise(() =>
+        createHarness({
+          stopSessionEffect: () =>
+            Effect.sync(() => {
+              stopSessionCalls += 1;
+            }),
         }),
       );
       const now = "2026-01-01T00:00:00.000Z";
@@ -3843,18 +3892,17 @@ describe("ProviderCommandReactor", () => {
 
       yield* harness.engine.dispatch({
         type: "thread.auto-settle",
-        commandId: CommandId.make("cmd-auto-settle-with-session"),
+        commandId: CommandId.make("server:auto-settle:thread-1:test"),
         threadId: ThreadId.make("thread-1"),
         snapshotSequence: beforeSettlement.snapshotSequence,
       });
 
-      yield* Deferred.await(sessionStopped);
       yield* Effect.promise(() => harness.drain());
       const readModel = yield* Effect.promise(() => harness.readModel());
       const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
       expect(thread?.settledOverride).toBe("settled");
-      expect(thread?.session?.status).toBe("stopped");
-      expect(thread?.session?.providerInstanceId).toBe(ProviderInstanceId.make("codex_work"));
+      expect(thread?.session?.status).toBe("ready");
+      expect(stopSessionCalls).toBe(0);
     }),
   );
 });
