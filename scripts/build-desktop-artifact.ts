@@ -2416,8 +2416,10 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     // filters (the main matcher's trailing !**/*.d.ts plus the node-module
     // collector's extension list), which removes the packaged typechecker's
     // declaration closure. This hook re-injects it after packing, before signing.
-    // See scripts/desktop-asar-dts-afterpack.cjs.
-    afterPack: "./desktop-asar-dts-afterpack.cjs",
+    // See scripts/desktop-asar-dts-afterpack.cjs. Not set here: electron-builder
+    // resolves a relative afterPack path against the process CWD, not the project
+    // dir, so the caller always pins it to the absolute staged location instead
+    // (see the `stagePackageJson.build.afterPack` assignment in buildDesktopArtifact).
     directories: {
       buildResources: "apps/desktop/resources",
     },

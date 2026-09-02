@@ -544,12 +544,13 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.notProperty(mac, "asarUnpack");
       assert.notProperty(linux, "asarUnpack");
       assert.notProperty(win, "asarUnpack");
-      // electron-builder strips .d.ts from app.asar with hardcoded filters;
-      // the afterPack hook re-injects the typechecker's declaration closure
-      // after packing, before signing (scripts/desktop-asar-dts-afterpack.cjs).
-      assert.equal(mac.afterPack, "./desktop-asar-dts-afterpack.cjs");
-      assert.equal(linux.afterPack, "./desktop-asar-dts-afterpack.cjs");
-      assert.equal(win.afterPack, "./desktop-asar-dts-afterpack.cjs");
+      // createBuildConfig itself leaves afterPack unset: electron-builder resolves a
+      // relative afterPack path against the process CWD, not the project dir, so
+      // buildDesktopArtifact always pins it to the absolute staged location after
+      // calling createBuildConfig (scripts/desktop-asar-dts-afterpack.cjs).
+      assert.notProperty(mac, "afterPack");
+      assert.notProperty(linux, "afterPack");
+      assert.notProperty(win, "afterPack");
       assert.deepStrictEqual(win.extraResources, [
         {
           from: "apps/desktop/prod-resources/resource-monitor",

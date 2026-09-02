@@ -9,6 +9,7 @@
  * shared T3 home. `--tailscale` publishes the server over Tailscale Serve
  * HTTPS and pairs through the tailnet URL instead.
  */
+import { distributionBranding } from "@t3code/distribution";
 import {
   AuthStandardClientScopes,
   ExecutionEnvironmentDescriptor,
@@ -41,7 +42,6 @@ import {
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as ServerConfig from "../config.ts";
 import { resolveBaseDir } from "../os-jank.ts";
-import { distributionBranding } from "../t3team-distribution.ts";
 import {
   type PersistedServerRuntimeState,
   readPersistedServerRuntimeState,
