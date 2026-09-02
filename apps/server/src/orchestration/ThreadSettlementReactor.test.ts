@@ -163,6 +163,11 @@ interface HarnessOptions {
   readonly settings?: ServerSettings;
   readonly branchPullRequest?: GitManager["Service"]["branchPullRequest"];
   readonly pullRequestDetail?: PullRequestService["Service"]["detail"];
+  /** t3team parent→child relations; children are excluded from auto-settlement. */
+  readonly childRelations?: ReadonlyArray<{
+    readonly childThreadId: ThreadId;
+    readonly parentThreadId: ThreadId;
+  }>;
   readonly onDispatch?: (
     command: AutoSettleCommand,
   ) => Effect.Effect<void, OrchestrationCommandInvariantError>;
@@ -241,6 +246,7 @@ const makeHarness = Effect.fn("makeThreadSettlementHarness")(function* (options:
           Effect.tap((count) => Queue.offer(snapshotReads, count)),
           Effect.andThen(Ref.get(snapshots)),
         ),
+      listParentChildRelations: () => Effect.succeed(options.childRelations ?? []),
     }),
     Layer.mock(GitManager)({ branchPullRequest }),
     Layer.mock(PullRequestService)({ detail: pullRequestDetail }),
@@ -299,6 +305,10 @@ describe("ThreadSettlementReactor", () => {
             branch: "skip-snoozed",
             snoozedUntil: "2026-08-29T00:00:00.000Z",
           }),
+          // A t3team child: idle and on its own branch, so it would otherwise be
+          // a candidate and trigger a pull request lookup. Children settle via
+          // the parent's sweep / the child-settle TTL sweeper, never via this reactor.
+          makeThread("t3team-child", { branch: "child-feature" }),
         ];
         const fixture = yield* makeHarness({
           snapshot: makeSnapshot(
@@ -309,6 +319,12 @@ describe("ThreadSettlementReactor", () => {
             ],
             [makeProject(), makeProject(LINKED_PROJECT_ID, "/workspace/linked")],
           ),
+          childRelations: [
+            {
+              childThreadId: ThreadId.make("t3team-child"),
+              parentThreadId: ThreadId.make("inactive"),
+            },
+          ],
           branchPullRequest: () => Effect.succeed(null),
           pullRequestDetail: (input) =>
             Effect.succeed(makePullRequestDetail({ ...input, state: "closed" })),
