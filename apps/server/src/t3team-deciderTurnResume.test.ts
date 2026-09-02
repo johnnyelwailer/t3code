@@ -120,6 +120,9 @@ it.layer(NodeServices.layer)("thread turn resume", (it) => {
         }),
       );
       expect(error.message).toContain("does not end with unanswered user message");
+      // GHE #402: the rejection names the ACTUAL last user message so the
+      // client can re-target it instead of giving up.
+      expect(error.message).toContain("Last user message is 'turn-resume-user'");
     }),
   );
 
@@ -148,6 +151,65 @@ it.layer(NodeServices.layer)("thread turn resume", (it) => {
         }),
       );
       expect(error.message).toContain("does not end with unanswered user message");
+      expect(error.message).toContain("Last user message is 'turn-resume-last-user'");
+    }),
+  );
+
+  // GHE #402 incident shape: a mid-turn follow-up lands after the original
+  // ask, the turn dies (restart), and the client tries to resume the ORIGINAL
+  // message. The rejection must name the follow-up so the client can retry
+  // against it; resuming the follow-up directly must be accepted.
+  it.effect("names the mid-turn follow-up when the original ask is rejected", () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        decideOrchestrationCommand({
+          command: { ...command, messageId: MessageId.make("turn-resume-original-ask") },
+          readModel: withThread({
+            messages: [
+              message("turn-resume-original-ask", "user"),
+              message("turn-resume-follow-up", "user"),
+              message("turn-resume-partial", "assistant"),
+            ],
+            latestTurn: {
+              turnId: TurnId.make("dead-turn"),
+              state: "error" as const,
+              requestedAt: now,
+              startedAt: now,
+              completedAt: now,
+              assistantMessageId: null,
+            },
+          }),
+        }),
+      );
+      expect(error.message).toContain("does not end with unanswered user message");
+      expect(error.message).toContain("Last user message is 'turn-resume-follow-up'");
+    }),
+  );
+
+  it.effect("accepts resuming the mid-turn follow-up itself", () =>
+    Effect.gen(function* () {
+      const decided = yield* decideOrchestrationCommand({
+        command: { ...command, messageId: MessageId.make("turn-resume-follow-up") },
+        readModel: withThread({
+          messages: [
+            message("turn-resume-original-ask", "user"),
+            message("turn-resume-follow-up", "user"),
+            message("turn-resume-partial", "assistant"),
+          ],
+          latestTurn: {
+            turnId: TurnId.make("dead-turn"),
+            state: "error" as const,
+            requestedAt: now,
+            startedAt: now,
+            completedAt: now,
+            assistantMessageId: null,
+          },
+        }),
+      });
+      const events = Array.isArray(decided) ? decided : [decided];
+      expect(events.map((entry) => entry.type)).toEqual(["thread.turn-start-requested"]);
+      const payload = events[0]!.payload as { messageId: string };
+      expect(payload.messageId).toBe("turn-resume-follow-up");
     }),
   );
 
