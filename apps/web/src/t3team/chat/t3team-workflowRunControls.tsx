@@ -30,15 +30,23 @@ const ICON_BUTTON_CLASS_NAME =
 export function T3TeamWorkflowRunControlStatus({
   pending,
   error,
+  isRetry,
 }: {
   readonly pending: WorkflowRunControlAction | null;
   readonly error: string | null;
+  readonly isRetry?: boolean;
 }) {
   return (
     <>
       {pending !== null ? (
         <div className="mb-2 text-xs font-medium text-muted-foreground" role="status">
-          {pending === "pause" ? "Pausing…" : pending === "resume" ? "Resuming…" : "Stopping…"}
+          {pending === "pause"
+            ? "Pausing…"
+            : pending === "resume"
+              ? isRetry
+                ? "Retrying…"
+                : "Resuming…"
+              : "Stopping…"}
         </div>
       ) : null}
       {error ? (
@@ -60,6 +68,7 @@ export function T3TeamWorkflowRunControls({
   canPause,
   canResume,
   canStop,
+  isRetry,
   pending,
   className,
   onControl,
@@ -68,6 +77,9 @@ export function T3TeamWorkflowRunControls({
   readonly canPause: boolean;
   readonly canResume: boolean;
   readonly canStop: boolean;
+  /** The resume control is re-driving a failed run from its journal, not restoring a pause —
+   * label it "Retry run" instead of "Resume" (same action, same handler). */
+  readonly isRetry?: boolean;
   readonly pending: WorkflowRunControlAction | null;
   readonly className: string;
   readonly onControl?: (action: WorkflowRunControlAction) => void;
@@ -101,8 +113,8 @@ export function T3TeamWorkflowRunControls({
         <button
           type="button"
           disabled={pending !== null}
-          title="Resume orchestration"
-          aria-label="Resume orchestration"
+          title={isRetry ? "Retry run" : "Resume orchestration"}
+          aria-label={isRetry ? "Retry run" : "Resume orchestration"}
           className={ICON_BUTTON_CLASS_NAME}
           onClick={() => onControl?.("resume")}
         >

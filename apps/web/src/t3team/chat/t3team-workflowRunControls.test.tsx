@@ -110,6 +110,28 @@ describe("T3TeamWorkflowRunControls", () => {
     expect(onControl).toHaveBeenCalledWith("stop");
   });
 
+  it('labels the resume control "Retry run" for a failed, resumable run', async () => {
+    const onControl = vi.fn();
+    const container = await renderNode(
+      <T3TeamWorkflowRunControls
+        canPause={false}
+        canResume={true}
+        canStop={false}
+        isRetry={true}
+        pending={null}
+        className="controls"
+        onControl={onControl}
+      />,
+    );
+
+    const trigger = container.querySelector("[aria-label='Retry run']");
+    expect(trigger).toBeTruthy();
+    expect(container.querySelector("[aria-label='Resume orchestration']")).toBeNull();
+
+    await dispatchClick(trigger as Element);
+    expect(onControl).toHaveBeenCalledWith("resume");
+  });
+
   it("renders nothing when there are no capabilities, no controls, and no stop affordance", async () => {
     const container = await renderNode(
       <T3TeamWorkflowRunControls

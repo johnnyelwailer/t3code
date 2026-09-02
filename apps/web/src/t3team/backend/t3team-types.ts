@@ -71,7 +71,7 @@ export interface BackendApi {
     readonly action: "pause" | "resume" | "stop";
   }) => Promise<{
     readonly ok: boolean;
-    readonly status: "suspended" | "sleeping" | "paused" | "cancelled";
+    readonly status: "suspended" | "sleeping" | "paused" | "cancelled" | "running";
   }>;
   readonly listThreadPlacements: (input: {
     readonly threadIds?: ReadonlyArray<string>;

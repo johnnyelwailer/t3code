@@ -56,7 +56,7 @@ export function T3TeamWorkflowShapeLiveCard({
   onControlWorkflow?: (input: {
     workflowRunId: string;
     action: "pause" | "resume" | "stop";
-  }) => Promise<{ readonly status: "suspended" | "sleeping" | "paused" | "cancelled" }>;
+  }) => Promise<{ readonly status: "suspended" | "sleeping" | "paused" | "cancelled" | "running" }>;
   onOpenThread?: (input: { projectId: string; threadId: string }) => void;
   /** The thread this card is rendered in — a step that ran here is not a navigable child. */
   currentThreadId?: string | undefined;
@@ -76,6 +76,7 @@ export function T3TeamWorkflowShapeLiveCard({
     queued,
     canPause,
     canResume,
+    isRetry,
     canStop,
     control,
     controlPending,
@@ -96,7 +97,11 @@ export function T3TeamWorkflowShapeLiveCard({
           Queued · starts when capacity is free
         </div>
       ) : null}
-      <T3TeamWorkflowRunControlStatus pending={controlPending} error={controlError} />
+      <T3TeamWorkflowRunControlStatus
+        pending={controlPending}
+        error={controlError}
+        isRetry={isRetry}
+      />
       {/*
         Two rows, not one: the title, the slug, and the live status were all fighting for the
         same line — the title clamped to two lines and still truncated, the slug interrupted it,
@@ -139,6 +144,7 @@ export function T3TeamWorkflowShapeLiveCard({
           <T3TeamWorkflowRunControls
             canPause={canPause}
             canResume={canResume}
+            isRetry={isRetry}
             canStop={canStop}
             pending={controlPending}
             className="flex items-center gap-1"

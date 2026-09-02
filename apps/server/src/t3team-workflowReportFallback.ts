@@ -20,6 +20,7 @@
 import { renderWorkflowRecordAsDisplayText } from "@t3tools/shared/t3team-workflowOutputText";
 
 import type { WorkflowRunReport, WorkflowRunReportFacts } from "./t3team-workflowReportTypes.ts";
+import { userFacingFailureStep } from "./t3team-workflowFailureReason.ts";
 
 const TERMINAL_VERDICT: Record<string, string> = {
   completed: "Run completed.",
@@ -73,7 +74,7 @@ export function renderWorkflowReportFallback(facts: WorkflowRunReportFacts): Wor
     );
   }
   if (facts.failureStep != null && facts.failureStep.length > 0) {
-    sections.push(`**Failed at**\n${facts.failureStep}`);
+    sections.push(`**Failed at**\n${userFacingFailureStep(facts.failureStep)}`);
   }
   const output = renderWorkflowReportOutput(facts.output);
   if (output.length > 0) sections.push(`**Result**\n${output}`);

@@ -32,6 +32,15 @@ describe("workflow control route validation", () => {
     ).toBeNull();
   });
 
+  it("allows resume for a failed run too, mirroring t3team.orchestration.resume's failed-run branch (GHE #344)", () => {
+    expect(
+      workflowControlValidationError(run("failed"), { threadId: "thread-1", action: "resume" }),
+    ).toBeNull();
+    expect(
+      workflowControlValidationError(run("completed"), { threadId: "thread-1", action: "resume" }),
+    ).toBe("This workflow is not paused or failed.");
+  });
+
   it("allows stop for live runs but not terminal history", () => {
     expect(
       workflowControlValidationError(run("running"), { threadId: "thread-1", action: "stop" }),

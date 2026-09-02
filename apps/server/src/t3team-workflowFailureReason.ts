@@ -10,10 +10,24 @@
  *     frames dropped, absolute paths reduced to a basename, whitespace collapsed, length capped.
  *   • {@link workflowFailureStepText}   — WHERE it broke: the settle phase (`launch`, `resume`,
  *     `rehydration`, `scheduler-wake`) plus the primitive that was in flight, when known.
+ *   • {@link userFacingFailureStep}     — the same string with the leading phase token stripped,
+ *     for surfaces a human reads directly (GHE #344): `resume` is our internal settle-phase name,
+ *     not something a user asked about ever means.
  */
 
 /** Which funnel settled the failure — the coarse "phase" half of the failing-step label. */
 export type WorkflowFailurePhase = "launch" | "resume" | "rehydration" | "scheduler-wake";
+
+const PHASE_PREFIX = /^(?:launch|resume|rehydration|scheduler-wake):\s*/;
+
+/** Strip the leading internal settle-phase token from a `failure_step` string before showing it
+ * to a user (e.g. `resume: thread.turn (QA round 1)` → `thread.turn (QA round 1)`). The raw value
+ * — phase prefix included — stays in the DB row and in agent-facing surfaces (`t3team.orchestration
+ * .status` / `_resume`), which need the phase to reason about where a run parked. A string with no
+ * phase prefix passes through unchanged. */
+export function userFacingFailureStep(step: string): string {
+  return step.replace(PHASE_PREFIX, "");
+}
 
 const MAX_REASON_LENGTH = 240;
 
