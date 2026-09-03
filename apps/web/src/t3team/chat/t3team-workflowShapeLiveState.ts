@@ -21,6 +21,13 @@ import { reconcileT3TeamWorkflowShapeProgress } from "./t3team-workflowShapeProg
 import { foldAdjacentThreadTurnRows } from "./t3team-workflowShapeThreadTurnFold";
 
 const TERMINAL = new Set(["completed", "failed", "cancelled"]);
+// Stricter than TERMINAL: these two can never transition again, so the server always wins over a
+// stale optimistic value. "failed" is deliberately excluded — a retry's optimistic "running" must
+// survive until the server actually reports the re-drive, or the click would flash right back to
+// the failed card it was meant to leave. A NEW "failed" (the re-drive settling again) reconciles
+// instead via `controlBaselineUpdatedAt` below — status alone can't tell "still the pre-click
+// failure" from "the retry failed too", but the run's `updatedAt` can.
+const FORCE_SERVER_STATUS = new Set(["completed", "cancelled"]);
 
 export function workflowControlErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -37,10 +44,14 @@ export function useT3TeamWorkflowShapeLiveState(input: {
   onControlWorkflow?: (input: {
     workflowRunId: string;
     action: "pause" | "resume" | "stop";
-  }) => Promise<{ readonly status: "suspended" | "sleeping" | "paused" | "cancelled" }>;
+  }) => Promise<{ readonly status: "suspended" | "sleeping" | "paused" | "cancelled" | "running" }>;
 }) {
   const { shape, progress, workflowRunStatus, onControlWorkflow } = input;
   const [localStatus, setLocalStatus] = useState<OrchestrationWorkflowRunStatus["status"]>();
+  // The server run's `updatedAt` at the moment a control call was made — the discriminator that
+  // tells "the server hasn't caught up yet" apart from "the server settled again, to the same
+  // status". Cleared alongside `localStatus`.
+  const [controlBaselineUpdatedAt, setControlBaselineUpdatedAt] = useState<string>();
   const [controlPending, setControlPending] = useState<"pause" | "resume" | "stop" | null>(null);
   const [controlError, setControlError] = useState<string | null>(null);
 
@@ -75,16 +86,23 @@ export function useT3TeamWorkflowShapeLiveState(input: {
 
   useEffect(() => {
     if (localStatus === undefined || workflowRunStatus === undefined) return;
-    if (workflowRunStatus.status === localStatus || TERMINAL.has(workflowRunStatus.status)) {
+    if (
+      workflowRunStatus.status === localStatus ||
+      FORCE_SERVER_STATUS.has(workflowRunStatus.status) ||
+      // The server settled to a NEW run state since the click (e.g. the re-drive failed again) —
+      // whatever its status, it is fresher than the optimistic value, so let it win.
+      (controlBaselineUpdatedAt !== undefined &&
+        workflowRunStatus.updatedAt !== controlBaselineUpdatedAt)
+    ) {
       setLocalStatus(undefined);
+      setControlBaselineUpdatedAt(undefined);
     }
-  }, [localStatus, workflowRunStatus]);
+  }, [localStatus, workflowRunStatus, controlBaselineUpdatedAt]);
 
   const serverStatus = workflowRunStatus?.status;
-  const status =
-    serverStatus === "completed" || serverStatus === "failed" || serverStatus === "cancelled"
-      ? serverStatus
-      : (localStatus ?? serverStatus ?? inferredRunStatus(progress));
+  const status = FORCE_SERVER_STATUS.has(serverStatus ?? "")
+    ? (serverStatus as "completed" | "cancelled")
+    : (localStatus ?? serverStatus ?? inferredRunStatus(progress));
   // Repair entries are historical workflow activity. Once a run is terminal, they must not
   // keep a stale spinner/"Getting orchestration ready" strip visible after Stop succeeds.
   const repair = TERMINAL.has(status) ? null : repairStatus(progress.steps);
@@ -98,12 +116,17 @@ export function useT3TeamWorkflowShapeLiveState(input: {
           : liveRunLabel(progress.steps);
   const queued = status === "queued";
   const canPause = status === "suspended" || status === "sleeping";
-  const canResume = status === "paused";
+  // A failed run is resumable too (Epic 25 journal re-drive): the server is the source of truth on
+  // whether a given run can actually replay from its journal, and answers a non-resumable one with
+  // a control error surfaced via `controlError` — this just decides whether to show the button.
+  const canResume = status === "paused" || status === "failed";
+  const isRetry = status === "failed";
 
   const control = async (action: "pause" | "resume" | "stop") => {
     if (!onControlWorkflow || controlPending !== null) return;
     setControlError(null);
     setControlPending(action);
+    setControlBaselineUpdatedAt(workflowRunStatus?.updatedAt);
     try {
       const result = await onControlWorkflow({ workflowRunId: progress.runId, action });
       setLocalStatus(result.status);
@@ -124,7 +147,10 @@ export function useT3TeamWorkflowShapeLiveState(input: {
     queued,
     canPause,
     canResume,
-    canStop: queued || status === "running" || canPause || canResume,
+    isRetry,
+    // Not `canResume`: a failed run is resumable (Retry) but has no live controller to stop until
+    // that retry starts, at which point `status` is the optimistic "running" already covered below.
+    canStop: queued || status === "running" || canPause || status === "paused",
     control,
     controlPending,
     controlError,

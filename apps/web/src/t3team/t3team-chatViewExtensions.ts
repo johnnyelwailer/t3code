@@ -49,7 +49,7 @@ export type ChatViewT3TeamExtensionProps = {
   readonly onControlWorkflow?: (input: {
     readonly workflowRunId: string;
     readonly action: "pause" | "resume" | "stop";
-  }) => Promise<{ readonly status: "suspended" | "sleeping" | "paused" | "cancelled" }>;
+  }) => Promise<{ readonly status: "suspended" | "sleeping" | "paused" | "cancelled" | "running" }>;
   /**
    * Open a peer actor thread (same project) — wired to router navigation by the
    * host and threaded down to the actor-message timeline card. Kept as an

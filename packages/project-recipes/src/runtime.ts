@@ -284,7 +284,7 @@ export type ControlProjectRecipeWorkflowRequest = typeof ControlProjectRecipeWor
 
 export const ControlProjectRecipeWorkflowResponse = Schema.Struct({
   ok: Schema.Boolean,
-  status: Schema.Literals(["suspended", "sleeping", "paused", "cancelled"]),
+  status: Schema.Literals(["suspended", "sleeping", "paused", "cancelled", "running"]),
 });
 export type ControlProjectRecipeWorkflowResponse = typeof ControlProjectRecipeWorkflowResponse.Type;
 

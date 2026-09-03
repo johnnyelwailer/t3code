@@ -4,10 +4,14 @@ import {
   type ControlProjectRecipeWorkflowRequest,
 } from "@t3tools/project-recipes";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import { HttpRouter } from "effect/unstable/http";
 
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
+import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import {
   errorResponse,
@@ -17,6 +21,7 @@ import {
 } from "./t3team-atlassian-http.ts";
 import { toT3TeamError } from "./t3team-project-repository-utils.ts";
 import { nowIso } from "./t3team-thread-recipe-workflow-routes-resolve.ts";
+import { resumeFailedWorkflowRunControlAction } from "./t3team-thread-workflow-control-route-retry.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
@@ -31,7 +36,9 @@ export function workflowControlValidationError(
   if (input.action === "pause" && run.status !== "suspended" && run.status !== "sleeping") {
     return "Pause is available only while the workflow is waiting or scheduled.";
   }
-  if (input.action === "resume" && run.status !== "paused") return "This workflow is not paused.";
+  if (input.action === "resume" && run.status !== "paused" && run.status !== "failed") {
+    return "This workflow is not paused or failed.";
+  }
   if (input.action === "stop" && TERMINAL.has(run.status)) return "Workflow is already finished.";
   return null;
 }
@@ -53,6 +60,10 @@ export const t3teamThreadWorkflowControlRouteLayer = HttpRouter.add(
     const registry = yield* T3TeamWorkflowEngineRegistry;
     const scheduler = yield* T3TeamWorkflowScheduler;
     const orchestration = yield* OrchestrationEngineService;
+    const journalStore = yield* WorkflowJournalStore;
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
     const found = yield* repo.getById({ runId });
     if (Option.isNone(found)) {
       return yield* new T3TeamAtlassianError({
@@ -64,9 +75,27 @@ export const t3teamThreadWorkflowControlRouteLayer = HttpRouter.add(
     if (validationError !== null) {
       return yield* new T3TeamAtlassianError({ message: validationError });
     }
-    let status: "suspended" | "sleeping" | "paused" | "cancelled";
+    let status: "suspended" | "sleeping" | "paused" | "cancelled" | "running";
 
-    if (input.action === "pause") {
+    if (input.action === "resume" && run.status === "failed") {
+      // Retry: re-drive the failed run from its journal (GHE #344 — see
+      // t3team-thread-workflow-control-route-retry.ts for the journal-presence guard).
+      status = yield* resumeFailedWorkflowRunControlAction(
+        {
+          run,
+          threadId,
+          repo,
+          registry,
+          scheduler,
+          orchestration,
+          journalStore,
+          fileSystem,
+          path,
+          projectionSnapshotQuery,
+        },
+        runId,
+      );
+    } else if (input.action === "pause") {
       if (run.status === "suspended" && run.pendingThreadId !== null) {
         const pending = registry.peekPending(run.pendingThreadId);
         if (pending?.runId !== runId) {

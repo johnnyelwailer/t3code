@@ -55,6 +55,9 @@ const errorMessage = (error: unknown) => (error instanceof Error ? error.message
 const hintForStatus = (row: WorkflowRun): string => {
   switch (row.status) {
     case "failed":
+      // Agent-facing: keep the raw `failureStep` (phase prefix included) — an agent reasoning
+      // about where a run parked needs the settle phase, unlike a human-facing surface (see
+      // `userFacingFailureStep`'s doc comment in t3team-workflowFailureReason.ts).
       return row.failureReason
         ? `The run failed in ${row.failureStep ?? "an unknown step"}: ${row.failureReason} — fix that cause, then resume (keeps the executed prefix) or launch again.`
         : "The run failed — the failure reason was posted to the launching thread; fix the source and launch again.";

@@ -377,6 +377,17 @@ describe("live workflow step overlay on the plan card", () => {
     expect(pausedMarkup).toContain('aria-label="More orchestration actions"');
     expect(pausedMarkup).toContain("Run paused");
 
+    const failedMarkup = await renderTimeline(
+      [...waiting, runActivity("failed", "boom")],
+      undefined,
+      {
+        status: "failed",
+      },
+    );
+    expect(failedMarkup).toContain('aria-label="Retry run"');
+    expect(failedMarkup).not.toContain('aria-label="Resume orchestration"');
+    expect(failedMarkup).not.toContain('aria-label="Stop workflow"');
+
     const stoppedMarkup = await renderTimeline([...waiting, runActivity("cancelled")], undefined, {
       status: "cancelled",
     });
