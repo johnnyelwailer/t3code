@@ -58,6 +58,7 @@ export async function settleWorkflowRunFailure(input: {
     workflowRunId: input.runId,
     errorText,
     ...(input.hostOwnsSource !== undefined ? { hostOwnsSource: input.hostOwnsSource } : {}),
+    resumable: input.retainPendingStep === true,
     dispatch: input.dispatch,
     newId: input.newId,
     nowIso: input.nowIso,

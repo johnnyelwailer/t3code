@@ -25,8 +25,10 @@ type LiveState = ReturnType<typeof useT3TeamWorkflowShapeLiveState>;
 export const WORKFLOW_GROUP_VISIBLE_ROWS = 10;
 
 /**
- * The rows a collapsible group renders: the first {@link WORKFLOW_GROUP_VISIBLE_ROWS} until the
- * reader expands, then all of them. Pure so the cap can be asserted without rendering.
+ * The rows a collapsible group renders: the LAST {@link WORKFLOW_GROUP_VISIBLE_ROWS} until the
+ * reader expands, then all of them. The last rows are kept — not the first — because the newest
+ * row (the live/failed iteration in a loop) is always at the end, and it must stay visible rather
+ * than hiding behind "Show all N" (GHE #406). Pure so the cap can be asserted without rendering.
  */
 export function visibleGroupRows<Row>(
   rows: readonly Row[],
@@ -34,7 +36,7 @@ export function visibleGroupRows<Row>(
 ): { readonly visible: readonly Row[]; readonly hidden: number } {
   if (showAll || rows.length <= WORKFLOW_GROUP_VISIBLE_ROWS) return { visible: rows, hidden: 0 };
   return {
-    visible: rows.slice(0, WORKFLOW_GROUP_VISIBLE_ROWS),
+    visible: rows.slice(rows.length - WORKFLOW_GROUP_VISIBLE_ROWS),
     hidden: rows.length - WORKFLOW_GROUP_VISIBLE_ROWS,
   };
 }
@@ -70,6 +72,16 @@ export function T3TeamWorkflowShapeCollapsedGroup({
         </span>
       </summary>
       <div className="ml-7 mt-1 space-y-1.5 border-l border-border/60 pl-3">
+        {hidden > 0 ? (
+          <button
+            type="button"
+            data-step-group-show-all={rows.length}
+            className="rounded px-1 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+            onClick={() => setShowAll(true)}
+          >
+            Show all {rows.length}
+          </button>
+        ) : null}
         {visible.map((row) => (
           <T3TeamWorkflowStepDetails
             key={row.runtimeStep.stepId}
@@ -87,16 +99,6 @@ export function T3TeamWorkflowShapeCollapsedGroup({
             />
           </T3TeamWorkflowStepDetails>
         ))}
-        {hidden > 0 ? (
-          <button
-            type="button"
-            data-step-group-show-all={rows.length}
-            className="rounded px-1 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-            onClick={() => setShowAll(true)}
-          >
-            Show all {rows.length}
-          </button>
-        ) : null}
       </div>
     </details>
   );

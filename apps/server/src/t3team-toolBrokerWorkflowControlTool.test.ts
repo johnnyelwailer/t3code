@@ -21,6 +21,8 @@ import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { makeWorkflowControlToolHandlers } from "./t3team-toolBrokerWorkflowControlTool.ts";
 import { buildRunningWorkflowRunRow } from "./t3team-workflowEngineDurability.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import { controlWorkflowRun } from "./t3team-workflowRunControl.ts";
+import type { InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
 
 const projectId = ProjectId.make("proj-control-tool");
 const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
@@ -71,19 +73,30 @@ repoLayer("t3team.orchestration.pause / stop", (it) => {
         kind: "thread.turn",
       });
       const dispatched: OrchestrationCommand[] = [];
+      const redriven: Array<{ threadId: string; correlationId: string }> = [];
       let rearmed = 0;
-      const handlers = makeWorkflowControlToolHandlers({
+      const turnRedrive: InterruptedTurnRetry = {
+        settleNoText: () => Effect.void,
+        settleFailedTurn: () => Effect.void,
+        processTurnRetry: (input) => {
+          redriven.push(input);
+          return Effect.void;
+        },
+      };
+      const controlDeps = {
         repo,
         registry,
         rearmScheduler: () => {
           rearmed += 1;
           return Promise.resolve();
         },
-        dispatch: (command) => {
+        dispatch: (command: OrchestrationCommand) => {
           dispatched.push(command);
           return Effect.succeed({ sequence: dispatched.length });
         },
-      });
+        turnRedrive,
+      };
+      const handlers = makeWorkflowControlToolHandlers(controlDeps);
       return {
         repo,
         registry,
@@ -91,6 +104,8 @@ repoLayer("t3team.orchestration.pause / stop", (it) => {
         dispatched,
         wasCancelled: () => cancelled,
         rearmed: () => rearmed,
+        redriven,
+        controlDeps,
       };
     });
 
@@ -109,6 +124,34 @@ repoLayer("t3team.orchestration.pause / stop", (it) => {
       assert.ok(activity !== undefined && activity.type === "thread.activity.append");
       assert.strictEqual(activity.activity.summary, "Workflow paused");
       assert.strictEqual(String(activity.threadId), String(launchThreadId));
+    }),
+  );
+
+  it.effect("card resume restores and immediately re-drives a paused thread.turn step", () =>
+    Effect.gen(function* () {
+      const runId = "ctl-resume-turn";
+      const h = yield* seed(runId);
+      yield* h.repo.setTurnRetries({ runId, turnRetries: 2, updatedAt: nowIso() });
+      yield* h.handlers(launchThreadId).controlWorkflowRun("pause", { runId });
+      const paused = Option.getOrThrow(yield* h.repo.getById({ runId }));
+
+      const value = yield* controlWorkflowRun(
+        { ...h.controlDeps, nowIso, stopOrigin: "user" },
+        paused,
+        { threadId: String(launchThreadId), action: "resume" },
+      );
+
+      assert.strictEqual(value.status, "suspended");
+      assert.deepStrictEqual(h.registry.peekPending(`${runId}:child`), {
+        runId,
+        correlationId: `${runId}:2`,
+        kind: "thread.turn",
+        turnRetries: 2,
+        redriveArmed: true,
+      });
+      assert.deepStrictEqual(h.redriven, [
+        { threadId: `${runId}:child`, correlationId: `${runId}:2` },
+      ]);
     }),
   );
 

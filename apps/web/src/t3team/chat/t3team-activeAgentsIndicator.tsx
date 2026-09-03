@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { setActiveAgentHover, type ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
+import {
+  formatActiveAgentLabel,
+  setActiveAgentHover,
+  type ActiveAgentEntry,
+} from "~/t3team/chat/t3team-activeAgentsCore";
 import { createSBendPhysics, type SBendOut } from "~/t3team/chat/t3team-activeAgentsPhysics";
 
 /**
@@ -234,7 +238,7 @@ export function T3TeamActiveAgentsIndicator({
             <button
               key={entry.id}
               type="button"
-              aria-label={`${entry.title} — ${entry.statusLabel}`}
+              aria-label={formatActiveAgentLabel(entry.title, entry.statusLabel)}
               onClick={(event) => {
                 event.stopPropagation();
                 // GHE #201 follow-up: per-dot open — the clicked dot opens

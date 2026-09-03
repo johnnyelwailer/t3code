@@ -9,10 +9,12 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
+import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { makeWorkflowControlToolHandlers } from "./t3team-toolBrokerWorkflowControlTool.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
+import { makeWorkflowTurnRedriveLive } from "./t3team-workflowTurnRedriveLive.ts";
 
 /** Build the per-thread pause/stop handler factory, or `undefined` when the durable-engine
  * services are absent from the broker's environment. */
@@ -26,7 +28,8 @@ export const makeWorkflowControlToolsForThread = Effect.fn("makeWorkflowControlT
     const orchestration = Option.getOrUndefined(
       yield* Effect.serviceOption(OrchestrationEngineService),
     );
-    if (!registry || !repo || !scheduler || !orchestration) {
+    const threadQuery = Option.getOrUndefined(yield* Effect.serviceOption(ProjectionSnapshotQuery));
+    if (!registry || !repo || !scheduler || !orchestration || !threadQuery) {
       return undefined;
     }
     return makeWorkflowControlToolHandlers({
@@ -34,6 +37,12 @@ export const makeWorkflowControlToolsForThread = Effect.fn("makeWorkflowControlT
       registry,
       rearmScheduler: () => scheduler.rearm(),
       dispatch: (command) => orchestration.dispatch(command),
+      turnRedrive: makeWorkflowTurnRedriveLive({
+        registry,
+        runRepository: repo,
+        orchestration,
+        threadQuery,
+      }),
     });
   },
 );

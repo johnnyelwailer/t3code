@@ -4,6 +4,7 @@ import * as Option from "effect/Option";
 import { HttpRouter } from "effect/unstable/http";
 
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
+import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import {
   errorResponse,
@@ -16,6 +17,7 @@ import { nowIso } from "./t3team-thread-recipe-workflow-routes-resolve.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { controlWorkflowRun } from "./t3team-workflowRunControl.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
+import { makeWorkflowTurnRedriveLive } from "./t3team-workflowTurnRedriveLive.ts";
 
 // The control sequence itself lives in t3team-workflowRunControl.ts, shared with the agent's
 // `t3team.orchestration.pause` / `.stop` tools (GHE #403); this route is the card's transport.
@@ -38,6 +40,7 @@ export const t3teamThreadWorkflowControlRouteLayer = HttpRouter.add(
     const registry = yield* T3TeamWorkflowEngineRegistry;
     const scheduler = yield* T3TeamWorkflowScheduler;
     const orchestration = yield* OrchestrationEngineService;
+    const threadQuery = yield* ProjectionSnapshotQuery;
     const found = yield* repo.getById({ runId });
     if (Option.isNone(found)) {
       return yield* new T3TeamAtlassianError({
@@ -50,6 +53,12 @@ export const t3teamThreadWorkflowControlRouteLayer = HttpRouter.add(
         registry,
         rearmScheduler: () => scheduler.rearm(),
         dispatch: (command) => orchestration.dispatch(command),
+        turnRedrive: makeWorkflowTurnRedriveLive({
+          registry,
+          runRepository: repo,
+          orchestration,
+          threadQuery,
+        }),
         nowIso,
         // This route only runs off an authenticated user's explicit click on the workflow run
         // card — it IS user intent, so a stop is stamped like the composer's Stop button.

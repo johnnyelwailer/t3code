@@ -45,24 +45,24 @@ export function T3TeamWorkflowShapeStepRows({
   readonly onOpenThread?: (input: { projectId: string; threadId: string }) => void;
   readonly currentThreadId?: string | undefined;
 }) {
-  const units = groupDynamicRuntimeRows(rows);
   // Render each authored phase as exactly ONE group. `reconcileT3TeamWorkflowShapeProgress` places
   // a dynamic row at its nearest-prior-matched-plan-step anchor — that is display order — while
   // the phase it reports now comes from the server's `workflowPhase` stamp. The two can disagree:
   // a stamped 'Analyse' row can sit after the 'Summarise' plan rows, which made the 'Analyse'
   // header render a second time (observed live 2026-08-29 on `parallel(items.map(...))`). Bucket
-  // units by phase, keeping each phase's first-appearance order and each unit's order within it,
-  // so the `priorPlanPhase` walk below emits one header per phase.
+  // ROWS by phase first (keeping each phase's first-appearance order and each row's order within
+  // it), then group within each phase — so same-label repeats that the anchor placement scattered
+  // across the plan rows (a `parallel()` fan-out, GHE #407) still fold into one group, and the
+  // `priorPlanPhase` walk below emits one header per phase.
   const orderedUnits = (() => {
-    const byPhase = new Map<string, typeof units>();
-    for (const unit of units) {
-      const first = unit.kind === "row" ? unit.row : unit.rows[0]!;
-      const key = first.planStep?.phase ?? first.phase ?? "Current work";
+    const byPhase = new Map<string, LiveState["rows"][number][]>();
+    for (const row of rows) {
+      const key = row.planStep?.phase ?? row.phase ?? "Current work";
       const bucket = byPhase.get(key);
-      if (bucket) bucket.push(unit);
-      else byPhase.set(key, [unit]);
+      if (bucket) bucket.push(row);
+      else byPhase.set(key, [row]);
     }
-    return [...byPhase.values()].flat();
+    return [...byPhase.values()].flatMap((bucket) => groupDynamicRuntimeRows(bucket));
   })();
   // Phases that saw at least one dynamic (plan-unmatched) runtime row — evidence that SOME call
   // under this phase demonstrably fired, even though it didn't line up with a specific plan row

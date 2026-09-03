@@ -369,7 +369,7 @@ it.live("fails the run loudly when the turn ends without a word of reply text", 
       run.dispatched.some(
         (command) =>
           command.type === "thread.message.upsert" &&
-          command.message.text.toLowerCase().includes("failed"),
+          command.message.text.toLowerCase().includes("orchestration stopped"),
       ),
     );
     assert.isUndefined(run.registry.getRun("turn-empty-run"));

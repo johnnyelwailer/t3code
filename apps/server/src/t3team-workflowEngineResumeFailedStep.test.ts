@@ -93,6 +93,12 @@ repoLayer("resumeFailedTurnStep", (it) => {
         settleFailedTurn: () => Effect.void,
         processTurnRetry: (input) => {
           redriven.push(input);
+          const pending = registry.peekPending(input.threadId);
+          assert.strictEqual(pending?.redriveArmed, true);
+          if (pending !== undefined) {
+            const { redriveArmed: _armed, ...judging } = pending;
+            registry.setPending(input.threadId, judging);
+          }
           return Effect.void;
         },
       };
@@ -109,7 +115,6 @@ repoLayer("resumeFailedTurnStep", (it) => {
         correlationId: `${runId}:3`,
         kind: "thread.turn",
         turnRetries: 0,
-        redriveArmed: true,
       });
       assert.deepStrictEqual(redriven, [{ threadId: "child-thread", correlationId: `${runId}:3` }]);
 

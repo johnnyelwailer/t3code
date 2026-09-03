@@ -6,7 +6,6 @@
  * ./t3team-toolBrokerWorkflowRunLive.ts / ./t3team-toolBrokerWorkflowStatusLive.ts.
  */
 import { type OrchestrationCommand, ThreadId } from "@t3tools/contracts";
-import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
@@ -22,8 +21,8 @@ import {
   type T3TeamWorkflowResumeToolHandlers,
 } from "./t3team-toolBrokerWorkflowResumeTool.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
-import { makeInterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
+import { makeWorkflowTurnRedriveLive } from "./t3team-workflowTurnRedriveLive.ts";
 
 /** Build the per-thread `t3team.orchestration.resume` handler factory, or `undefined` when the
  * durable-engine services are absent from the broker's environment. */
@@ -54,18 +53,11 @@ export const makeWorkflowResumeToolsForThread = Effect.fn("makeWorkflowResumeToo
     const turnRedrive =
       orchestration === undefined || threadQuery === undefined
         ? undefined
-        : makeInterruptedTurnRetry({
+        : makeWorkflowTurnRedriveLive({
             registry,
-            readThread: (threadId) => threadQuery.getThreadDetailById(ThreadId.make(threadId)),
-            recordTurnRetries: (runId, turnRetries) =>
-              runRepository.setTurnRetries({
-                runId,
-                turnRetries,
-                updatedAt: DateTime.formatIso(DateTime.nowUnsafe()),
-              }),
-            // The tool re-drives immediately; only the reactor arms delayed re-drives.
-            armTurnRetry: () => Effect.void,
-            dispatch: (command) => orchestration.dispatch(command),
+            runRepository,
+            orchestration,
+            threadQuery,
           });
     return makeWorkflowResumeToolHandlers({
       fileSystem: deps.fileSystem,

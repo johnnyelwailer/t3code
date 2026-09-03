@@ -19,6 +19,8 @@ import type {
 } from "./persistence/Services/WorkflowRuns.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
+import type { InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
+import { pausedResumeBlocker, restorePausedPendingAsk } from "./t3team-workflowResumePausedTurn.ts";
 
 export type WorkflowRunControlAction = "pause" | "resume" | "stop";
 export type WorkflowRunControlStatus = "suspended" | "sleeping" | "paused" | "cancelled";
@@ -52,6 +54,7 @@ export interface WorkflowRunControlDeps {
    * automation and must not masquerade as the user.
    */
   readonly stopOrigin: "user" | "system";
+  readonly turnRedrive?: InterruptedTurnRetry;
 }
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -87,21 +90,14 @@ export const controlWorkflowRun = Effect.fn("controlWorkflowRun")(function* (
     if (run.pendingCorrelationId === null) {
       return yield* Effect.fail("This workflow is not paused.");
     }
-    if (registry.getRun(runId) === undefined) {
-      return yield* Effect.fail(
-        "Workflow controller is not ready. Restart the server and try again.",
-      );
-    }
+    const blocker = pausedResumeBlocker(deps, run);
+    if (blocker !== null) return yield* Effect.fail(blocker);
     yield* repo
       .resumePaused({ runId, updatedAt: deps.nowIso() })
       .pipe(Effect.mapError(errorMessage));
     workflowAdmissionQueue.resume(runId);
     if (run.pendingKind !== null && run.pendingThreadId !== null) {
-      registry.setPending(run.pendingThreadId, {
-        runId,
-        correlationId: run.pendingCorrelationId,
-        kind: run.pendingKind,
-      });
+      yield* restorePausedPendingAsk(deps, run);
       status = "suspended";
     } else if (run.wakeAt !== null) {
       yield* Effect.promise(() => deps.rearmScheduler());

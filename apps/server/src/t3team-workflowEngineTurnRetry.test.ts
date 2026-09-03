@@ -8,6 +8,7 @@ import type { OrchestrationCommand, OrchestrationThread } from "@t3tools/contrac
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
+import { OrchestrationCommandInvariantError } from "./orchestration/Errors.ts";
 import {
   makeWorkflowEngineRegistry,
   type WorkflowPendingAsk,
@@ -41,7 +42,10 @@ function threadWithPrompt(): OrchestrationThread {
   } as unknown as OrchestrationThread;
 }
 
-function harness(input: { readonly thread?: OrchestrationThread | undefined }) {
+function harness(input: {
+  readonly thread?: OrchestrationThread | undefined;
+  readonly dispatchInProgress?: boolean;
+}) {
   const registry = makeWorkflowEngineRegistry();
   const failed: unknown[] = [];
   const armed: Array<{ correlationId: string; delayMs: number }> = [];
@@ -70,6 +74,14 @@ function harness(input: { readonly thread?: OrchestrationThread | undefined }) {
     },
     dispatch: (command) => {
       dispatched.push(command);
+      if (input.dispatchInProgress === true) {
+        return Effect.fail(
+          new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: "turn in progress",
+          }),
+        );
+      }
       return Effect.succeed({ sequence: dispatched.length });
     },
     backoffOverrideMs: 1,
@@ -139,6 +151,35 @@ it.effect("processTurnRetry re-issues the SAME prompt through thread.turn.resume
     assert.ok(command.type === "thread.turn.resume");
     assert.strictEqual(String(command.threadId), THREAD);
     assert.strictEqual(String(command.messageId), "prompt-1");
+    assert.deepStrictEqual(h.failed, []);
+  }),
+);
+
+it.effect("processTurnRetry disarms the ask when the thread is already busy", () =>
+  Effect.gen(function* () {
+    const thread = {
+      ...threadWithPrompt(),
+      session: { status: "running", activeTurnId: "turn-live" },
+    } as OrchestrationThread;
+    const h = harness({ thread });
+    h.registry.setPending(THREAD, { ...liveAsk, turnRetries: 1, redriveArmed: true });
+
+    yield* h.retry.processTurnRetry({ threadId: THREAD, correlationId: STEP });
+
+    assert.strictEqual(h.dispatched.length, 0);
+    assert.strictEqual(h.registry.peekPending(THREAD)?.redriveArmed, undefined);
+  }),
+);
+
+it.effect("processTurnRetry disarms the ask when dispatch finds a turn in progress", () =>
+  Effect.gen(function* () {
+    const h = harness({ thread: threadWithPrompt(), dispatchInProgress: true });
+    h.registry.setPending(THREAD, { ...liveAsk, turnRetries: 1, redriveArmed: true });
+
+    yield* h.retry.processTurnRetry({ threadId: THREAD, correlationId: STEP });
+
+    assert.strictEqual(h.dispatched.length, 1);
+    assert.strictEqual(h.registry.peekPending(THREAD)?.redriveArmed, undefined);
     assert.deepStrictEqual(h.failed, []);
   }),
 );

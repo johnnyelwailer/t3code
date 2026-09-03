@@ -37,6 +37,11 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
 import type { OrchestrationDispatchError } from "./orchestration/Errors.ts";
+import {
+  findCompletedAnswer,
+  isAnsweredPromptInvariant,
+  promptIsLatestUserMessage,
+} from "./t3team-workflowTurnAnswerLookup.ts";
 import type { ProjectionRepositoryError } from "./persistence/Errors.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 
@@ -175,6 +180,41 @@ export function makeInterruptedTurnRetry(deps: InterruptedTurnRetryDeps): Interr
       Effect.catchCause(() => Effect.succeed(Option.none())),
     );
 
+  const disarmRedrive = (threadId: string, correlationId: string): void => {
+    const current = deps.registry.peekPending(threadId);
+    if (
+      current?.kind !== "thread.turn" ||
+      current.correlationId !== correlationId ||
+      current.redriveArmed !== true
+    )
+      return;
+    const { redriveArmed: _armed, ...judging } = current;
+    deps.registry.setPending(threadId, judging);
+  };
+
+  /**
+   * The child already answered this step (it finished while the run was paused, or between the
+   * failure and the resume): hand that reply to the run instead of stacking a second turn, which
+   * the decider would reject anyway (GHE #404).
+   */
+  const consumeExistingAnswer = (
+    threadId: string,
+    pending: WorkflowPendingAsk,
+    run: WorkflowRegisteredRun,
+    answer: { readonly messageId: string; readonly text: string },
+  ): Effect.Effect<void> =>
+    Effect.gen(function* () {
+      const taken = deps.registry.takePending(threadId);
+      if (taken?.correlationId !== pending.correlationId) return;
+      yield* Effect.logInfo("t3team workflow step re-drive consumed the existing reply", {
+        threadId,
+        runId: pending.runId,
+        stepId: pending.correlationId,
+        messageId: answer.messageId,
+      });
+      yield* Effect.promise(() => run.resume(pending.correlationId, answer.text));
+    });
+
   const promptFor = (threadId: string, pending: WorkflowPendingAsk) =>
     Effect.gen(function* () {
       const thread = Option.getOrUndefined(yield* readThreadSafe(threadId));
@@ -286,17 +326,41 @@ export function makeInterruptedTurnRetry(deps: InterruptedTurnRetryDeps): Interr
           ? null
           : findInterruptedStepPrompt(thread, pending.runId, correlationId);
       if (prompt === null) {
+        yield* Effect.logWarning("t3team workflow step re-drive: prompt not found on thread", {
+          threadId,
+          stepId: correlationId,
+          threadRead: thread !== undefined,
+          messages: thread?.messages.length ?? 0,
+        });
         yield* failRun(run, correlationId, new Error(PROMPT_LOST_ERROR));
         return;
       }
-      // A turn began while we waited (a human steer, another automation): its own settle
-      // decides this step — do not stack a second turn on top of it.
+      // The reply already exists (the child finished while the run was paused): consume it.
+      const answered = thread === undefined ? null : findCompletedAnswer(thread, prompt.messageId);
+      if (answered !== null) {
+        yield* consumeExistingAnswer(threadId, pending, run, answered);
+        return;
+      }
+      // A turn is in flight. If our prompt is still the thread's last user message, that turn IS
+      // the step (its own settle decides it — do not stack a second turn on top). Otherwise a
+      // human steer or another automation owns it: stay armed and look again after the backoff,
+      // rather than adopting a reply that answers a different prompt (GHE #405).
       const status = thread?.session?.status;
       if (status === "running" || status === "starting") {
+        const ours = thread !== undefined && promptIsLatestUserMessage(thread, prompt.messageId);
+        if (ours) disarmRedrive(threadId, correlationId);
+        else {
+          yield* deps.armTurnRetry(
+            threadId,
+            correlationId,
+            interruptedTurnRetryBackoffMs(MAX_INTERRUPTED_TURN_REDRIVES, deps.backoffOverrideMs),
+          );
+        }
         yield* Effect.logInfo("t3team workflow interrupted step re-drive skipped: thread busy", {
           threadId,
           stepId: correlationId,
           status,
+          ours,
         });
         return;
       }
@@ -315,9 +379,27 @@ export function makeInterruptedTurnRetry(deps: InterruptedTurnRetryDeps): Interr
             error._tag === "OrchestrationCommandInvariantError" &&
             error.detail.includes("turn in progress")
           ) {
+            disarmRedrive(threadId, correlationId);
             return Effect.logInfo(
               "t3team workflow interrupted step re-drive skipped: turn in progress",
               { threadId, stepId: correlationId },
+            );
+          }
+          // The thread already ends in a reply to our prompt (the projection we read was
+          // stale): consume it instead of failing the run.
+          if (
+            error._tag === "OrchestrationCommandInvariantError" &&
+            isAnsweredPromptInvariant(error.detail)
+          ) {
+            return readThreadSafe(threadId).pipe(
+              Effect.flatMap((fresh) => {
+                const thread = Option.getOrUndefined(fresh);
+                const late =
+                  thread === undefined ? null : findCompletedAnswer(thread, prompt.messageId);
+                return late === null
+                  ? failRun(run, correlationId, new Error(PROMPT_LOST_ERROR))
+                  : consumeExistingAnswer(threadId, pending, run, late);
+              }),
             );
           }
           // Any other dispatch failure cannot recover on its own (nothing else will settle

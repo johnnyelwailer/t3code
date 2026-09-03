@@ -24,6 +24,7 @@ import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 import type { InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
 import { replaceEphemeralWorkflowSourceAtomically } from "./t3team-workflowEphemeralSource.ts";
+import { pausedResumeBlocker, restorePausedPendingAsk } from "./t3team-workflowResumePausedTurn.ts";
 import { precheckWorkflowSource } from "./t3team-workflowSourcePrecheck.ts";
 
 export interface WorkflowResumeToolDeps<E = string> {
@@ -121,21 +122,16 @@ export const makeResumePausedRun =
       if (run.pendingCorrelationId === null) {
         return yield* Effect.fail("Paused workflow has no continuation to resume.");
       }
-      if (deps.registry.getRun(run.runId) === undefined) {
-        return yield* Effect.fail(
-          "Workflow controller is not ready. Restart the server and try again.",
-        );
-      }
+      const blocker = pausedResumeBlocker(deps, run);
+      if (blocker !== null) return yield* Effect.fail(blocker);
       yield* deps.runRepository
         .resumePaused({ runId: run.runId, updatedAt: nowIso() })
         .pipe(Effect.mapError(errorMessage));
       workflowAdmissionQueue.resume(run.runId);
       if (run.pendingKind !== null && run.pendingThreadId !== null) {
-        deps.registry.setPending(run.pendingThreadId, {
-          runId: run.runId,
-          correlationId: run.pendingCorrelationId,
-          kind: run.pendingKind,
-        });
+        // Same sequence as the card's Resume (GHE #404): re-register with the re-drive budget
+        // and re-drive a `thread.turn` at once, or the restored ask is never settled.
+        yield* restorePausedPendingAsk(deps, run);
         return {
           ok: true as const,
           runId: run.runId,
