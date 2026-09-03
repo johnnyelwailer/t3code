@@ -6,7 +6,7 @@ import {
   type T3TeamMessageAttachment,
   ThreadId,
 } from "@t3tools/contracts";
-import { renderWorkflowRecordAsDisplayText } from "@t3tools/shared/t3team-workflowOutputText";
+import { renderWorkflowValueAsDisplayText } from "@t3tools/shared/t3team-workflowOutputText";
 
 import { workflowCompletionDraftRef } from "./t3team-workflowCompletionDraftRef.ts";
 import { workflowStepDetailSnippet } from "./t3team-workflowEngineStepActivities.ts";
@@ -18,18 +18,9 @@ import { workflowStepDetailSnippet } from "./t3team-workflowEngineStepActivities
  * web client's `t3team-workflowCompletionDisplayText.ts` for re-rendering legacy raw-JSON text.
  */
 export function formatWorkflowOutput(output: unknown): string {
-  if (typeof output === "string") return output;
-  if (output === undefined) return "Workflow completed.";
-  if (output !== null && typeof output === "object" && !Array.isArray(output)) {
-    return renderWorkflowRecordAsDisplayText(output as Record<string, unknown>, {
-      emptyFallback: "Workflow completed.",
-    });
-  }
-  try {
-    return JSON.stringify(output, null, 2) ?? String(output);
-  } catch {
-    return String(output);
-  }
+  // Arrays and deep objects render as tables / nested bullets — a run's structured result never
+  // reaches the thread as raw JSON (GHE #418).
+  return renderWorkflowValueAsDisplayText(output, { emptyFallback: "Workflow completed." });
 }
 
 /**
