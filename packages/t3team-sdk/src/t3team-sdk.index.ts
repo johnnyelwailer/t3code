@@ -92,6 +92,19 @@ export {
 } from "./t3team-sdk.engineApi.ts";
 export { emit } from "./t3team-sdk.emit.ts";
 export { deriveWorkflowShape } from "./t3team-sdk.workflowShape.ts";
+export {
+  createWorkflowHostRegistry,
+  createWorkflowRunHost,
+  type CreateWorkflowRunHostConfig,
+  type WorkflowHostLifecycle,
+  type WorkflowHostPendingAsk,
+  type WorkflowHostRegisteredRun,
+  type WorkflowHostRegistry,
+  type WorkflowHostSleep,
+  type WorkflowHostSinks,
+  type WorkflowLaunchStatus,
+  type WorkflowRunHost,
+} from "./t3team-sdk.workflowHost.ts";
 export { extractMeta, prepareWorkflow } from "./t3team-sdk.loader.ts";
 // Load-time static audits (Epic 25 phase 25.5): determinism + capability, before any run.
 export { auditWorkflowSourceStatic, registryToolGroupResolver } from "./t3team-sdk.staticAudit.ts";
