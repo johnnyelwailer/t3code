@@ -26,6 +26,8 @@ export const T3TEAM_MCP_CANONICAL_TOOL_MAP = {
   t3team_orchestration_run: "t3team.orchestration.run",
   t3team_orchestration_status: "t3team.orchestration.status",
   t3team_orchestration_resume: "t3team.orchestration.resume",
+  t3team_orchestration_pause: "t3team.orchestration.pause",
+  t3team_orchestration_stop: "t3team.orchestration.stop",
   t3team_show_widget: "t3team.widget.show",
   t3team_recipe_list: "t3team.recipe.list",
   t3team_recipe_validate: "t3team.recipe.validate",
@@ -375,6 +377,35 @@ export const T3TeamOrchestrationResumeTool = Tool.make("t3team_orchestration_res
   dependencies,
 });
 
+// Agent-side pause / stop for a run this thread launched — the same controls the card's
+// buttons offer the user (GHE #403). Route to the t3team.orchestration.pause / .stop broker
+// tools. Stop a superseded run BEFORE launching its replacement, never beside it.
+const orchestrationControlParameters = Schema.Struct({ runId: Schema.String });
+
+export const T3TeamOrchestrationPauseTool = Tool.make("t3team_orchestration_pause", {
+  description:
+    "Pause one of your agent-orchestration runs at its current waiting point (a parked agent " +
+    "turn, user decision, or timer). Pass the `runId` from t3team_orchestration_run/" +
+    "t3team_orchestration_status. The run keeps its continuation; resume it with " +
+    "t3team_orchestration_resume. Returns {runId, status: 'paused', hint}.",
+  parameters: orchestrationControlParameters,
+  success: Schema.Unknown,
+  failure: T3TeamMcpToolError,
+  dependencies,
+});
+
+export const T3TeamOrchestrationStopTool = Tool.make("t3team_orchestration_stop", {
+  description:
+    "Stop one of your agent-orchestration runs for good: cancels it, interrupts its child agent " +
+    "turns, and frees its capacity. Use this on a superseded or stuck run BEFORE launching a " +
+    "replacement, so two runs never work the same queue. Pass the `runId`. Returns {runId, " +
+    "status: 'cancelled', hint}.",
+  parameters: orchestrationControlParameters,
+  success: Schema.Unknown,
+  failure: T3TeamMcpToolError,
+  dependencies,
+});
+
 // Deprecated aliases (see T3TEAM_MCP_DEPRECATED_TOOL_ALIASES): identical schemas,
 // same canonical broker target. Kept so existing pack configs and agent prompts
 // that name `t3team_workflow_*` do not silently lose the capability.
@@ -498,6 +529,8 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamOrchestrationRunTool,
   T3TeamOrchestrationStatusTool,
   T3TeamOrchestrationResumeTool,
+  T3TeamOrchestrationPauseTool,
+  T3TeamOrchestrationStopTool,
   T3TeamWorkflowRunTool,
   T3TeamWorkflowStatusTool,
   T3TeamWorkflowResumeTool,

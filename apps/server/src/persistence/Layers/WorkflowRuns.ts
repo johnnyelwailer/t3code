@@ -15,6 +15,7 @@ import {
   GetWorkflowRunInput,
   ListRecentWorkflowRunsInput,
   ListWorkflowRunsByStatusInput,
+  MarkWorkflowRunFailedInput,
   ResumePausedWorkflowRunInput,
   SetWorkflowRunPendingInput,
   SetWorkflowRunSleepingInput,
@@ -329,6 +330,22 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       `,
   });
 
+  // A host-detected step failure (GHE #403): terminal `failed` + the reason, but the pending
+  // ask stays so `t3team.orchestration.resume` can re-drive that step. `wake_at` is left alone
+  // too — a `thread.turn` park never has one.
+  const markWorkflowRunFailedRow = SqlSchema.void({
+    Request: MarkWorkflowRunFailedInput,
+    execute: ({ runId, updatedAt, failureReason, failureStep }) =>
+      sql`
+        UPDATE workflow_runs
+        SET status = 'failed',
+            failure_reason = ${failureReason},
+            failure_step = ${failureStep},
+            updated_at = ${updatedAt}
+        WHERE run_id = ${runId} AND status != 'cancelled'
+      `,
+  });
+
   // A timer park (Epic 27): record the wake deadline + the `waitUntil` correlation the
   // scheduler resolves on fire. A timer has no thread/kind, so those pending columns clear.
   const setWorkflowRunSleepingRow = SqlSchema.void({
@@ -419,6 +436,15 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.clearPending:query")),
     );
 
+  const markFailedRetainingPending: WorkflowRunRepositoryShape["markFailedRetainingPending"] = (
+    input,
+  ) =>
+    markWorkflowRunFailedRow(input).pipe(
+      Effect.mapError(
+        toPersistenceSqlError("WorkflowRunRepository.markFailedRetainingPending:query"),
+      ),
+    );
+
   const setSleeping: WorkflowRunRepositoryShape["setSleeping"] = (input) =>
     setWorkflowRunSleepingRow(input).pipe(
       Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.setSleeping:query")),
@@ -444,6 +470,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
     resumePaused,
     setPending,
     clearPending,
+    markFailedRetainingPending,
     setSleeping,
     setTurnRetries,
     updateArgs,

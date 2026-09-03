@@ -22,6 +22,7 @@ import type {
 } from "./t3team-toolBrokerWorkflowResumeTool.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
+import type { InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
 import { replaceEphemeralWorkflowSourceAtomically } from "./t3team-workflowEphemeralSource.ts";
 import { precheckWorkflowSource } from "./t3team-workflowSourcePrecheck.ts";
 
@@ -39,6 +40,9 @@ export interface WorkflowResumeToolDeps<E = string> {
     { readonly project: { readonly workspaceRoot: string | null | undefined } },
     E
   >;
+  /** Re-issues a failed run's retained `thread.turn` step (GHE #403). Absent when the broker's
+   * environment has no thread query / engine dispatch; the failed-step resume then reports so. */
+  readonly turnRedrive?: InterruptedTurnRetry | undefined;
 }
 
 export const nowIso = (): string => DateTime.formatIso(DateTime.nowUnsafe());

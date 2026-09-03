@@ -6,7 +6,10 @@
 
 import { describe, expect, it } from "vite-plus/test";
 
-import { createWorkflowTurnTracker } from "./t3team-workflowTurnResolution.ts";
+import {
+  createWorkflowTurnTracker,
+  UNKNOWN_TURN_FAILURE,
+} from "./t3team-workflowTurnResolution.ts";
 
 const THREAD = "thread-1";
 const ASK = "run-1:3";
@@ -69,9 +72,52 @@ describe("workflow turn tracker", () => {
     expect(tracker.take(THREAD, ASK)).toEqual({ kind: "empty" });
   });
 
-  it("ends the wait when the session dies without ever running the turn", () => {
+  it("ends the wait when the session dies without ever running the turn — as a failure", () => {
     const tracker = createWorkflowTurnTracker();
     expect(tracker.noteSession(THREAD, ASK, { status: "error", activeTurnId: null })).toBe("ended");
+    expect(tracker.take(THREAD, ASK)).toEqual({ kind: "failed", error: UNKNOWN_TURN_FAILURE });
+  });
+
+  it("settles a turn whose session died as failed with the provider's reason, never its preamble", () => {
+    // GHE #403: the driver's retry ladder exhausted after hours; the turn ended with `error`. The
+    // "I'll start by…" it streamed first is not the answer, and the reason must be the gateway's.
+    const tracker = createWorkflowTurnTracker();
+    tracker.noteSession(THREAD, ASK, running);
+    tracker.appendDelta(THREAD, ASK, "m1", "I'll pick the next task first.");
+    tracker.completeMessage(THREAD, ASK, "m1", "");
+    expect(
+      tracker.noteSession(THREAD, ASK, {
+        status: "error",
+        activeTurnId: null,
+        lastError: "Request timed out",
+      }),
+    ).toBe("ended");
+    expect(tracker.take(THREAD, ASK)).toEqual({ kind: "failed", error: "Request timed out" });
+  });
+
+  it("does not let a later session error discard an answer the turn already gave", () => {
+    const tracker = createWorkflowTurnTracker();
+    tracker.noteSession(THREAD, ASK, running);
+    tracker.appendDelta(THREAD, ASK, "m1", "done");
+    tracker.completeMessage(THREAD, ASK, "m1", "");
+    expect(tracker.noteSession(THREAD, ASK, idle)).toBe("ended");
+    // The session dies AFTER the turn ended and answered — settling, not a new verdict.
+    expect(
+      tracker.noteSession(THREAD, ASK, {
+        status: "error",
+        activeTurnId: null,
+        lastError: "connection reset",
+      }),
+    ).toBe("settling");
+    expect(tracker.take(THREAD, ASK)).toEqual({ kind: "answer", text: "done" });
+  });
+
+  it("treats a stopped session like before: no answer is empty, not failed", () => {
+    const tracker = createWorkflowTurnTracker();
+    tracker.noteSession(THREAD, ASK, running);
+    expect(tracker.noteSession(THREAD, ASK, { status: "stopped", activeTurnId: null })).toBe(
+      "ended",
+    );
     expect(tracker.take(THREAD, ASK)).toEqual({ kind: "empty" });
   });
 

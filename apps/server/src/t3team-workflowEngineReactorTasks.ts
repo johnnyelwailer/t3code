@@ -29,7 +29,8 @@ import type {
   T3TeamWorkflowEngineRegistryShape,
   WorkflowPendingAsk,
 } from "./t3team-workflowEngineRegistry.ts";
-import { NO_TEXT_MESSAGE, type InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
+import { settleUnansweredTurn } from "./t3team-workflowEngineReactorUnanswered.ts";
+import type { InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
 import type { WorkflowTurnTracker } from "./t3team-workflowTurnResolution.ts";
 
 export type ThreadMessageSentEvent = Extract<OrchestrationEvent, { type: "thread.message-sent" }>;
@@ -158,6 +159,7 @@ export function createWorkflowReactorTaskHandler(
       const note = tracker.noteSession(threadId, pending.correlationId, {
         status: session.status,
         activeTurnId: session.activeTurnId,
+        lastError: session.lastError,
       });
       if (note === "ended") yield* deps.armSettle(threadId, pending.correlationId);
     });
@@ -173,27 +175,11 @@ export function createWorkflowReactorTaskHandler(
         yield* settle(pending, settlement.text);
         return;
       }
-      yield* Effect.logWarning("t3team workflow agent turn produced no reply text", {
-        threadId: task.threadId,
-        correlationId: task.correlationId,
-      });
-      // A live (black-boxed) ask has no failure channel of its own: settle it with "" so the
-      // composition's own emptiness check fires. A durable ask whose turn was interrupted by a
-      // host restart (its pending carries the journaled `turnRetries` budget) gets its bounded
-      // re-drive instead; a durable ask set live this uptime still fails the run.
-      if (pending.resolveLive !== undefined) {
-        yield* Effect.promise(() => pending.resolveLive!(""));
-        return;
-      }
-      const run = registry.getRun(pending.runId);
-      if (run === undefined) return;
-      if (pending.turnRetries !== undefined) {
-        yield* deps.turnRetry.settleNoText(task.threadId, pending, run);
-        return;
-      }
-      const error = new Error(NO_TEXT_MESSAGE);
-      yield* Effect.promise(() =>
-        run.fail === undefined ? run.resume(pending.correlationId, "") : run.fail(error),
+      // No answer: the turn died or said nothing — see t3team-workflowEngineReactorUnanswered.ts
+      // for which of those re-drives the step, fails the run, or settles a composition ask.
+      yield* settleUnansweredTurn(
+        { registry, turnRetry: deps.turnRetry },
+        { threadId: task.threadId, pending, settlement },
       );
     });
 

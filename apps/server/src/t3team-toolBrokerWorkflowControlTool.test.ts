@@ -1,0 +1,179 @@
+/**
+ * `t3team.orchestration.pause` / `.stop` — the agent's controls over its own runs (GHE #403 §4):
+ * same choreography as the card's buttons (durable status, registry pending, child interrupts,
+ * the run-level activity), scoped to the calling thread.
+ */
+import { assert, it } from "@effect/vitest";
+import {
+  type OrchestrationCommand,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+} from "@t3tools/contracts";
+import { createModelSelection } from "@t3tools/shared/model";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+
+import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
+import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { makeWorkflowControlToolHandlers } from "./t3team-toolBrokerWorkflowControlTool.ts";
+import { buildRunningWorkflowRunRow } from "./t3team-workflowEngineDurability.ts";
+import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+
+const projectId = ProjectId.make("proj-control-tool");
+const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
+const launchThreadId = ThreadId.make("control-launch-thread");
+const otherThreadId = ThreadId.make("control-other-thread");
+const nowIso = (): string => "2026-09-03T06:00:00.000Z";
+
+const repoLayer = it.layer(
+  WorkflowRunRepositoryLive.pipe(Layer.provideMerge(SqlitePersistenceMemory)),
+);
+
+repoLayer("t3team.orchestration.pause / stop", (it) => {
+  const seed = (runId: string) =>
+    Effect.gen(function* () {
+      const repo = yield* WorkflowRunRepository;
+      yield* repo.upsert(
+        buildRunningWorkflowRunRow({
+          runId,
+          workflowPath: "/tmp/never-read.workflow.ts",
+          args: {},
+          launchThreadId: String(launchThreadId),
+          projectId,
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          nowIso: nowIso(),
+        }),
+      );
+      yield* repo.setPending({
+        runId,
+        pendingThreadId: `${runId}:child`,
+        pendingCorrelationId: `${runId}:2`,
+        pendingKind: "thread.turn",
+        updatedAt: nowIso(),
+      });
+      const registry = makeWorkflowEngineRegistry();
+      let cancelled = false;
+      registry.registerRun(runId, {
+        resume: () => Promise.resolve(),
+        cancel: () => {
+          cancelled = true;
+        },
+      });
+      registry.registerChildThread(runId, `${runId}:child`);
+      registry.setPending(`${runId}:child`, {
+        runId,
+        correlationId: `${runId}:2`,
+        kind: "thread.turn",
+      });
+      const dispatched: OrchestrationCommand[] = [];
+      let rearmed = 0;
+      const handlers = makeWorkflowControlToolHandlers({
+        repo,
+        registry,
+        rearmScheduler: () => {
+          rearmed += 1;
+          return Promise.resolve();
+        },
+        dispatch: (command) => {
+          dispatched.push(command);
+          return Effect.succeed({ sequence: dispatched.length });
+        },
+      });
+      return {
+        repo,
+        registry,
+        handlers,
+        dispatched,
+        wasCancelled: () => cancelled,
+        rearmed: () => rearmed,
+      };
+    });
+
+  it.effect("pause parks a suspended run, drops its registry ask, and posts the run activity", () =>
+    Effect.gen(function* () {
+      const runId = "ctl-pause";
+      const h = yield* seed(runId);
+      const value = yield* h.handlers(launchThreadId).controlWorkflowRun("pause", { runId });
+
+      assert.strictEqual(value.status, "paused");
+      assert.match(value.hint, /t3team\.orchestration\.resume/);
+      assert.strictEqual(Option.getOrThrow(yield* h.repo.getById({ runId })).status, "paused");
+      assert.strictEqual(h.registry.peekPending(`${runId}:child`), undefined);
+      assert.strictEqual(h.rearmed(), 1);
+      const activity = h.dispatched.find((command) => command.type === "thread.activity.append");
+      assert.ok(activity !== undefined && activity.type === "thread.activity.append");
+      assert.strictEqual(activity.activity.summary, "Workflow paused");
+      assert.strictEqual(String(activity.threadId), String(launchThreadId));
+    }),
+  );
+
+  it.effect("stop cancels the run and interrupts its child turns as automation, not the user", () =>
+    Effect.gen(function* () {
+      const runId = "ctl-stop";
+      const h = yield* seed(runId);
+      const value = yield* h.handlers(launchThreadId).controlWorkflowRun("stop", { runId });
+
+      assert.strictEqual(value.status, "cancelled");
+      assert.strictEqual(h.wasCancelled(), true);
+      const row = Option.getOrThrow(yield* h.repo.getById({ runId }));
+      assert.strictEqual(row.status, "cancelled");
+      assert.strictEqual(row.pendingCorrelationId, null);
+      const interrupt = h.dispatched.find((command) => command.type === "thread.turn.interrupt");
+      assert.ok(interrupt !== undefined && interrupt.type === "thread.turn.interrupt");
+      assert.strictEqual(String(interrupt.threadId), `${runId}:child`);
+      assert.strictEqual(interrupt.t3teamStopOrigin, "system");
+      const activity = h.dispatched.find((command) => command.type === "thread.activity.append");
+      assert.ok(activity !== undefined && activity.type === "thread.activity.append");
+      assert.strictEqual(activity.activity.summary, "Workflow stopped");
+    }),
+  );
+
+  it.effect("another thread's run and an unknown id answer identically", () =>
+    Effect.gen(function* () {
+      const runId = "ctl-scope";
+      const h = yield* seed(runId);
+      const foreign = yield* h
+        .handlers(otherThreadId)
+        .controlWorkflowRun("stop", { runId })
+        .pipe(Effect.flip);
+      const unknown = yield* h
+        .handlers(launchThreadId)
+        .controlWorkflowRun("stop", { runId: "ctl-nope" })
+        .pipe(Effect.flip);
+      assert.match(foreign, /No orchestration run found for runId 'ctl-scope'/);
+      assert.match(unknown, /No orchestration run found for runId 'ctl-nope'/);
+      // Nothing moved.
+      assert.strictEqual(Option.getOrThrow(yield* h.repo.getById({ runId })).status, "suspended");
+      assert.strictEqual(h.dispatched.length, 0);
+    }),
+  );
+
+  it.effect("pause refuses a run that is not at a parked boundary", () =>
+    Effect.gen(function* () {
+      const runId = "ctl-pause-running";
+      const h = yield* seed(runId);
+      yield* h.repo.setStatus({ runId, status: "running", updatedAt: nowIso() });
+      const error = yield* h
+        .handlers(launchThreadId)
+        .controlWorkflowRun("pause", { runId })
+        .pipe(Effect.flip);
+      assert.match(error, /only while the workflow is waiting or scheduled/);
+    }),
+  );
+
+  it.effect("requires a runId", () =>
+    Effect.gen(function* () {
+      const h = yield* seed("ctl-no-id");
+      const error = yield* h
+        .handlers(launchThreadId)
+        .controlWorkflowRun("pause", {})
+        .pipe(Effect.flip);
+      assert.match(error, /requires a runId/);
+    }),
+  );
+});

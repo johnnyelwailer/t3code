@@ -35,6 +35,10 @@ export async function settleWorkflowRunFailure(input: {
   /** `true` for an agent-authored ephemeral run, whose reader owns the source and can re-author it.
    * Omitted by funnels that cannot tell, which keeps the agent-authored wording. */
   readonly hostOwnsSource?: boolean;
+  /** `true` when the failure is the HOST's verdict on an unanswered ask (a turn that died or said
+   * nothing — see `WorkflowRegisteredRun.fail`): the durable row keeps its pending ask so
+   * `t3team.orchestration.resume` can re-drive that step (GHE #403). A thrown body error clears it. */
+  readonly retainPendingStep?: boolean;
 }): Promise<void> {
   input.registry.deleteRun(input.runId);
   // Captured BEFORE deleteRun's siblings can churn: the primitive in flight is the step label.
@@ -44,6 +48,7 @@ export async function settleWorkflowRunFailure(input: {
       input.phase ?? "launch",
       input.stepActivities.describePendingStep?.(),
     ),
+    ...(input.retainPendingStep === true ? { retainPending: true } : {}),
   };
   await input.lifecycle?.recordFailed(detail);
   const errorText = input.error instanceof Error ? input.error.message : String(input.error);

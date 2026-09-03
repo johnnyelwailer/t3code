@@ -5,12 +5,15 @@
  * services the tool simply reports "not enabled". Mirrors
  * ./t3team-toolBrokerWorkflowRunLive.ts / ./t3team-toolBrokerWorkflowStatusLive.ts.
  */
-import type { OrchestrationCommand, ThreadId } from "@t3tools/contracts";
+import { type OrchestrationCommand, ThreadId } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import type * as Path from "effect/Path";
 
+import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
+import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import type { WorkflowResumeToolDeps } from "./t3team-toolBrokerWorkflowResumeActions.ts";
@@ -19,6 +22,7 @@ import {
   type T3TeamWorkflowResumeToolHandlers,
 } from "./t3team-toolBrokerWorkflowResumeTool.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import { makeInterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 
 /** Build the per-thread `t3team.orchestration.resume` handler factory, or `undefined` when the
@@ -39,6 +43,30 @@ export const makeWorkflowResumeToolsForThread = Effect.fn("makeWorkflowResumeToo
     if (!registry || !runRepository || !journalStore || !scheduler) {
       return undefined;
     }
+    // Re-driving a failed run's retained agent step (GHE #403) re-issues the step's prompt turn
+    // — the SAME re-drive the reactor uses for an interrupted step, built over the same engine
+    // dispatch + thread query. Optional: without them the failed-step resume reports itself
+    // unavailable instead of silently replaying into a dead `sent` entry.
+    const orchestration = Option.getOrUndefined(
+      yield* Effect.serviceOption(OrchestrationEngineService),
+    );
+    const threadQuery = Option.getOrUndefined(yield* Effect.serviceOption(ProjectionSnapshotQuery));
+    const turnRedrive =
+      orchestration === undefined || threadQuery === undefined
+        ? undefined
+        : makeInterruptedTurnRetry({
+            registry,
+            readThread: (threadId) => threadQuery.getThreadDetailById(ThreadId.make(threadId)),
+            recordTurnRetries: (runId, turnRetries) =>
+              runRepository.setTurnRetries({
+                runId,
+                turnRetries,
+                updatedAt: DateTime.formatIso(DateTime.nowUnsafe()),
+              }),
+            // The tool re-drives immediately; only the reactor arms delayed re-drives.
+            armTurnRetry: () => Effect.void,
+            dispatch: (command) => orchestration.dispatch(command),
+          });
     return makeWorkflowResumeToolHandlers({
       fileSystem: deps.fileSystem,
       path: deps.path,
@@ -48,6 +76,7 @@ export const makeWorkflowResumeToolsForThread = Effect.fn("makeWorkflowResumeToo
       rearmScheduler: () => scheduler.rearm(),
       dispatch: deps.dispatch,
       loadThreadProject: deps.loadThreadProject,
+      ...(turnRedrive === undefined ? {} : { turnRedrive }),
     }) as (threadId: ThreadId) => T3TeamWorkflowResumeToolHandlers;
   },
 );

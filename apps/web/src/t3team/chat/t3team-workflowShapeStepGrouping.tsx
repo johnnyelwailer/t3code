@@ -8,20 +8,20 @@
  * the data alone; both fold by label here.
  *
  * Split out of `t3team-WorkflowShapeStepRows.tsx`, which owns row orchestration and phase
- * headers; this file owns the grouping decision, status aggregation, and the group row itself.
+ * headers; this file owns the grouping decision, status aggregation, and the small-group (retry
+ * badge) row. The collapsible form for four or more repeats — capped at ten visible rows with a
+ * "Show all N" expander (GHE #403 §5) — lives in `t3team-workflowShapeStepGroupCollapsed.tsx`.
  */
-import { ChevronRightIcon } from "lucide-react";
-
 import { T3TeamWorkflowStepDetails } from "~/t3team/chat/t3team-WorkflowStepDetails";
 import type { T3TeamWorkflowShapeProgressRow } from "~/t3team/chat/t3team-workflowShapeProgress";
 import {
   displayedStepStatus,
   fallbackRuntimeLabel,
-  RuntimeStepRow,
   StepStatusIcon,
   StepTrailing,
   type StepStatus,
 } from "~/t3team/chat/t3team-workflowRunStepRow";
+import { T3TeamWorkflowShapeCollapsedGroup } from "~/t3team/chat/t3team-workflowShapeStepGroupCollapsed";
 import type { useT3TeamWorkflowShapeLiveState } from "~/t3team/chat/t3team-workflowShapeLiveState";
 
 type LiveState = ReturnType<typeof useT3TeamWorkflowShapeLiveState>;
@@ -176,33 +176,15 @@ export function T3TeamWorkflowShapeDynamicGroupRow({
   }
 
   return (
-    <details className="group/step-group rounded-md open:bg-muted/25">
-      <summary className="flex cursor-pointer list-none items-center gap-2.5 rounded-md px-1 py-0.5 hover:bg-muted/35 [&::-webkit-details-marker]:hidden">
-        <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground/70 transition-transform group-open/step-group:rotate-90" />
-        <StepStatusIcon status={icon} />
-        <span className="min-w-0 flex-1 truncate text-sm text-foreground/90">
-          {label} · {completed}/{rows.length}
-        </span>
-      </summary>
-      <div className="ml-7 mt-1 space-y-1.5 border-l border-border/60 pl-3">
-        {rows.map((row) => (
-          <T3TeamWorkflowStepDetails
-            key={row.runtimeStep.stepId}
-            step={row.runtimeStep}
-            hideDetail={row.runtimeStep.detail === undefined}
-            redactDetail={row.runtimeStep.stepKind === "workflow.self-heal"}
-            {...(onOpenThread ? { onOpenThread } : {})}
-            {...(currentThreadId ? { currentThreadId } : {})}
-          >
-            <RuntimeStepRow
-              step={row.runtimeStep}
-              wakeAt={undefined}
-              runStatus={status}
-              childStatuses={childStatuses}
-            />
-          </T3TeamWorkflowStepDetails>
-        ))}
-      </div>
-    </details>
+    <T3TeamWorkflowShapeCollapsedGroup
+      label={label}
+      rows={rows}
+      icon={icon}
+      completed={completed}
+      status={status}
+      {...(childStatuses ? { childStatuses } : {})}
+      {...(onOpenThread ? { onOpenThread } : {})}
+      {...(currentThreadId ? { currentThreadId } : {})}
+    />
   );
 }

@@ -173,6 +173,18 @@ export const ClearWorkflowRunPendingInput = Schema.Struct({
 });
 export type ClearWorkflowRunPendingInput = typeof ClearWorkflowRunPendingInput.Type;
 
+/** Mark a run `failed` while KEEPING its pending ask (GHE #403). A host-detected step failure —
+ * an agent turn that died or never answered — leaves nothing wrong with the body, only an ask
+ * that was not answered; retaining `pending_*` lets `t3team.orchestration.resume` re-drive that
+ * exact step instead of replaying into a `sent` entry nobody will ever settle. */
+export const MarkWorkflowRunFailedInput = Schema.Struct({
+  runId: Schema.String,
+  updatedAt: IsoDateTime,
+  failureReason: Schema.String,
+  failureStep: Schema.String,
+});
+export type MarkWorkflowRunFailedInput = typeof MarkWorkflowRunFailedInput.Type;
+
 /** Flip a run to `sleeping` and record the timer it is parked on (Epic 27): the `wake_at`
  * deadline the scheduler arms, plus the `waitUntil` correlation the scheduler resolves on
  * fire. Clears the thread/kind pending columns (a timer park has no thread). */
@@ -234,6 +246,10 @@ export interface WorkflowRunRepositoryShape {
   /** Clear the pending ask and set the given status (on resume completion/failure). */
   readonly clearPending: (
     input: ClearWorkflowRunPendingInput,
+  ) => Effect.Effect<void, ProjectionRepositoryError>;
+  /** Mark `failed` but keep the pending ask — a host-detected step failure `resume` can re-drive. */
+  readonly markFailedRetainingPending: (
+    input: MarkWorkflowRunFailedInput,
   ) => Effect.Effect<void, ProjectionRepositoryError>;
   /** Count live (running/suspended/sleeping/paused) runs of one origin for one launching thread
    * — the per-thread ephemeral run-count cap. */
