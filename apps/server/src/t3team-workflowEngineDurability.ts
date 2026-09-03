@@ -13,14 +13,7 @@
  * controller invokes them — outside any surrounding fiber.
  */
 
-import {
-  type ModelSelection,
-  type OrchestrationCommand,
-  type ProjectId,
-  type ProviderInteractionMode,
-  type RuntimeMode,
-} from "@t3tools/contracts";
-import { hashArgs } from "@t3team/sdk";
+import type { OrchestrationCommand } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -34,50 +27,11 @@ import { makeOrphanIfSleeping } from "./t3team-workflowEngineDurabilityOrphan.ts
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
 import { createWorkflowRunShellPusher } from "./t3team-workflowRunShellPush.ts";
 
-export interface BuildRunningRowInput {
-  readonly runId: string;
-  readonly workflowPath: string;
-  readonly args: unknown;
-  readonly launchThreadId: string | undefined;
-  readonly projectId: ProjectId;
-  readonly modelSelection: ModelSelection;
-  readonly runtimeMode: RuntimeMode;
-  readonly interactionMode: ProviderInteractionMode;
-  /** Launch origin; defaults to `recipe` (the ephemeral tool path passes `ephemeral`). */
-  readonly origin?: WorkflowRun["origin"];
-  /** The launching recipe's directory (recipe launches with scripts); rehydration re-resolves
-   * the recipe's private `scripts.*` tree from it. Absent → NULL. */
-  readonly recipePath?: string | undefined;
-  /** The host-tool bridge this launch grants (migration 047). Absent → NULL, and rehydration
-   * will NOT hand the restored run one. */
-  readonly hostToolGrant?: WorkflowRun["hostToolGrant"];
-  readonly nowIso: string;
-}
-
-/** The initial `running` row recorded when a workflow launches. */
-export function buildRunningWorkflowRunRow(input: BuildRunningRowInput): WorkflowRun {
-  return {
-    runId: input.runId,
-    workflowPath: input.workflowPath,
-    args: input.args,
-    argsHash: hashArgs(input.args),
-    launchThreadId: input.launchThreadId ?? null,
-    projectId: input.projectId,
-    modelSelection: input.modelSelection,
-    runtimeMode: input.runtimeMode,
-    interactionMode: input.interactionMode,
-    status: "running",
-    origin: input.origin ?? "recipe",
-    recipePath: input.recipePath ?? null,
-    hostToolGrant: input.hostToolGrant ?? null,
-    pendingThreadId: null,
-    pendingCorrelationId: null,
-    pendingKind: null,
-    wakeAt: null,
-    createdAt: input.nowIso,
-    updatedAt: input.nowIso,
-  };
-}
+// The initial-row builder lives in its own module (LOC cap); re-exported so importers stay valid.
+export {
+  buildRunningWorkflowRunRow,
+  type BuildRunningRowInput,
+} from "./t3team-workflowEngineDurabilityRow.ts";
 
 /** Format an epoch-millis wake deadline as the ISO instant stored in `wake_at`. */
 function isoFromMillis(millis: number): string {
@@ -179,14 +133,21 @@ export function makeWorkflowRunLifecycle(opts: {
       }),
     recordFailed: (detail) =>
       Effect.runPromise(
-        repo.clearPending({
-          runId: row.runId,
-          status: "failed",
-          updatedAt: opts.nowIso(),
-          ...(detail === undefined
-            ? {}
-            : { failureReason: detail.reason, failureStep: detail.step }),
-        }),
+        detail?.retainPending === true
+          ? repo.markFailedRetainingPending({
+              runId: row.runId,
+              updatedAt: opts.nowIso(),
+              failureReason: detail.reason,
+              failureStep: detail.step,
+            })
+          : repo.clearPending({
+              runId: row.runId,
+              status: "failed",
+              updatedAt: opts.nowIso(),
+              ...(detail === undefined
+                ? {}
+                : { failureReason: detail.reason, failureStep: detail.step }),
+            }),
       ).then(() => {
         releaseAdmission();
         pushIfTransitioned("failed");

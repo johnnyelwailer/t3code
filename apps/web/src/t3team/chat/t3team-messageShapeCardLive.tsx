@@ -172,7 +172,19 @@ export function T3TeamWorkflowShapeLiveCard({
       )}
 
       {progress.run ? (
-        <RunStatusBanner run={progress.run} {...(outcomeSummary ? { outcomeSummary } : {})} />
+        <RunStatusBanner
+          run={progress.run}
+          {...(outcomeSummary ? { outcomeSummary } : {})}
+          // The durable row's `updatedAt` is the pause instant (nothing else writes a paused
+          // row); the pause activity's timestamp is the fallback for a card without run status.
+          pausedAt={
+            workflowRunStatus?.status === "paused"
+              ? workflowRunStatus.updatedAt
+              : progress.run.updatedAt
+          }
+          {...(canResume && onControlWorkflow ? { onResume: () => void control("resume") } : {})}
+          resumePending={controlPending === "resume"}
+        />
       ) : null}
     </div>
   );

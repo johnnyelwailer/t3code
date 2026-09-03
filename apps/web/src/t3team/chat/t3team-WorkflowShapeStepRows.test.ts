@@ -15,6 +15,7 @@ import {
 } from "~/t3team/chat/t3team-workflowShapeStepGrouping";
 import type { T3TeamWorkflowShapeProgressRow } from "~/t3team/chat/t3team-workflowShapeProgress";
 import type { T3TeamWorkflowStepEntry } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
+import type { ProjectRecipeWorkflowShapeStep } from "@t3tools/project-recipes";
 
 function dynamicRow(input: {
   stepId: string;
@@ -65,6 +66,57 @@ describe("groupDynamicRuntimeRows", () => {
     ];
 
     const units = groupDynamicRuntimeRows(rows);
+
+    expect(units).toHaveLength(2);
+    expect(units.every((unit) => unit.kind === "row")).toBe(true);
+  });
+
+  it("absorbs the leading plan-matched iteration into the dynamic group it belongs to (GHE #407)", () => {
+    // A single agent() call site inside a 12-iteration loop: one authored plan row matches only
+    // the FIRST runtime iteration; the other 11 are plan-unmatched dynamic rows with the same
+    // fallback label. Without absorption this rendered as a standalone "Count step" row beside a
+    // "Count step · 11/11" group instead of one "Count step · 12/12" group.
+    const planMatched: T3TeamWorkflowShapeProgressRow = {
+      planStep: { kind: "agent", label: "Count step" } as ProjectRecipeWorkflowShapeStep,
+      runtimeStep: {
+        stepId: "run:0",
+        seq: null,
+        stepKind: "thread.turn",
+        phase: "completed",
+        detail: "Count step",
+      },
+    };
+    const rows: T3TeamWorkflowShapeProgressRow[] = [
+      planMatched,
+      ...Array.from({ length: 11 }, (_, i) =>
+        dynamicRow({ stepId: `run:${i + 1}`, phase: "completed", detail: "Count step" }),
+      ),
+    ];
+
+    const units = groupDynamicRuntimeRows(rows);
+
+    expect(units).toHaveLength(1);
+    expect(units[0]).toMatchObject({ kind: "dynamic-group", label: "Count step" });
+    if (units[0]!.kind === "dynamic-group") {
+      expect(units[0]!.rows).toHaveLength(12);
+    }
+  });
+
+  it("leaves an unmatched plan row and a wait-until timer untouched by absorption", () => {
+    const unmatchedPlan: T3TeamWorkflowShapeProgressRow = {
+      planStep: { kind: "agent", label: "Unstarted step" } as ProjectRecipeWorkflowShapeStep,
+    };
+    const waitUntil: T3TeamWorkflowShapeProgressRow = {
+      planStep: { kind: "act", label: "Wait" } as ProjectRecipeWorkflowShapeStep,
+      runtimeStep: {
+        stepId: "run:wait",
+        seq: null,
+        stepKind: "workflow.wait-until",
+        phase: "completed",
+      },
+    };
+
+    const units = groupDynamicRuntimeRows([unmatchedPlan, waitUntil]);
 
     expect(units).toHaveLength(2);
     expect(units.every((unit) => unit.kind === "row")).toBe(true);

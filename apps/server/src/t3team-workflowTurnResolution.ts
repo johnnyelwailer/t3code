@@ -20,7 +20,11 @@
  *     completed assistant message — otherwise the `session.started` → `ready` write that lands
  *     right after the workflow dispatched its turn would resolve the ask before the agent spoke;
  *   • a dead session (`error` / `stopped`) always ends the wait: it can no longer answer, and
- *     parking the run forever would hide that.
+ *     parking the run forever would hide that. An `error` write that ends the wait settles the
+ *     ask as {@link WorkflowTurnSettlement} `"failed"` carrying the session's `lastError` — the
+ *     turn did not answer, it died — so the reactor can re-drive the step and, when the budget is
+ *     spent, fail the run with the PROVIDER's reason (GHE #403: a gateway outage that exhausted
+ *     the driver's retry ladder used to leave the run parked with nothing to say).
  *
  * ── Which message is the answer ─────────────────────────────────────────────
  * The LAST substantive message of the turn, not the concatenation. A turn's messages are a
@@ -43,12 +47,25 @@ export type WorkflowTurnSettlement =
   | { readonly kind: "answer"; readonly text: string }
   /** The turn ended without a single substantive assistant message. */
   | { readonly kind: "empty" }
+  /**
+   * The turn ended because the provider session DIED (`status: "error"` — a gateway outage, a
+   * timeout, an exhausted provider retry budget). Whatever the agent streamed before that was
+   * preamble, never the answer: taking it would hand the body a truncated result and report the
+   * step as done. `error` is the session's `lastError`, so the run's failure reason names the
+   * actual provider fault instead of a generic "no reply text".
+   */
+  | { readonly kind: "failed"; readonly error: string }
   /** The watch belongs to a different (or already settled) ask — do nothing. */
   | { readonly kind: "stale" };
+
+/** The reason recorded when an `error` session write carries no `lastError` of its own. */
+export const UNKNOWN_TURN_FAILURE = "The provider session reported an error.";
 
 export interface WorkflowTurnSessionInput {
   readonly status: string;
   readonly activeTurnId: string | null;
+  /** The provider's error text when `status` is `error`; ignored for every other status. */
+  readonly lastError?: string | null;
 }
 
 export interface WorkflowTurnTracker {
@@ -91,6 +108,8 @@ interface TurnWatch {
   readonly deltas: Map<string, string>;
   /** Finalized substantive assistant texts of this turn, in arrival order. */
   readonly candidates: string[];
+  /** Set when an `error` session write is what ended the wait — the turn failed. */
+  failure: string | undefined;
 }
 
 export function createWorkflowTurnTracker(): WorkflowTurnTracker {
@@ -107,6 +126,7 @@ export function createWorkflowTurnTracker(): WorkflowTurnTracker {
       ended: false,
       deltas: new Map(),
       candidates: [],
+      failure: undefined,
     };
     watches.set(threadId, watch);
     return watch;
@@ -133,7 +153,11 @@ export function createWorkflowTurnTracker(): WorkflowTurnTracker {
 
     noteSession: (threadId, correlationId, session) => {
       const watch = ensure(threadId, correlationId);
-      if (session.activeTurnId !== null) {
+      // A `runtime.error` write keeps the failed turn's id on the session
+      // (`ProviderRuntimeIngestion`'s runtime-error session-set); a session in `error` cannot
+      // still be answering, so that id is a tombstone, not a live turn — treating it as
+      // "running" is a stall with no exit.
+      if (session.activeTurnId !== null && session.status !== "error") {
         watch.sawActiveTurn = true;
         return "running";
       }
@@ -144,6 +168,11 @@ export function createWorkflowTurnTracker(): WorkflowTurnTracker {
       if (!endsTheWait) return "pending";
       if (watch.ended) return "settling";
       watch.ended = true;
+      // Only the write that ENDS the wait can mark the turn failed: a later `error` on an already
+      // ended watch (a session dying after it answered) must not retroactively discard the answer.
+      if (session.status === "error") {
+        watch.failure = session.lastError?.trim() || UNKNOWN_TURN_FAILURE;
+      }
       return "ended";
     },
 
@@ -151,6 +180,7 @@ export function createWorkflowTurnTracker(): WorkflowTurnTracker {
       const watch = watches.get(threadId);
       if (watch === undefined || watch.correlationId !== correlationId) return { kind: "stale" };
       watches.delete(threadId);
+      if (watch.failure !== undefined) return { kind: "failed", error: watch.failure };
       const answer = watch.candidates.at(-1);
       return answer === undefined ? { kind: "empty" } : { kind: "answer", text: answer };
     },

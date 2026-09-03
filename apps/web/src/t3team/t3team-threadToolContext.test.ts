@@ -108,8 +108,13 @@ describe("createT3TeamTurnToolContext", () => {
     expect(toolContext).toEqual({
       surface: "t3team",
       tools: [
-        // Catalog order: t3team.widget.show is the first defaultEnabled entry
-        // in IMPLEMENTED_T3TEAM_TOOL_CATALOG.
+        // Catalog order: t3team.runtime.models is the first defaultEnabled entry
+        // in IMPLEMENTED_T3TEAM_TOOL_CATALOG (GHE #339), then t3team.widget.show.
+        {
+          id: "t3team.runtime.models",
+          label: "List runtime models",
+          capabilities: ["read"],
+        },
         {
           id: "t3team.widget.show",
           label: "Show widget",
@@ -143,6 +148,16 @@ describe("createT3TeamTurnToolContext", () => {
         {
           id: "t3team.orchestration.resume",
           label: "Resume orchestration run",
+          capabilities: ["write"],
+        },
+        {
+          id: "t3team.orchestration.pause",
+          label: "Pause orchestration run",
+          capabilities: ["write"],
+        },
+        {
+          id: "t3team.orchestration.stop",
+          label: "Stop orchestration run",
           capabilities: ["write"],
         },
         {

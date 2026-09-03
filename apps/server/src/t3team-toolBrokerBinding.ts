@@ -17,6 +17,7 @@ import type { T3TeamRecipeToolHandlers } from "./t3team-toolBrokerBindingRecipes
 import type { T3TeamWorkflowRunToolHandlers } from "./t3team-toolBrokerWorkflowRunTools.ts";
 import type { T3TeamWorkflowStatusToolHandlers } from "./t3team-toolBrokerWorkflowStatusTool.ts";
 import type { T3TeamWorkflowResumeToolHandlers } from "./t3team-toolBrokerWorkflowResumeTool.ts";
+import type { T3TeamWorkflowControlToolHandlers } from "./t3team-toolBrokerWorkflowControlTool.ts";
 import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshService.ts";
 import type { T3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
 
@@ -44,6 +45,7 @@ type CreateBindingInput<
   readonly workflowRunTools?: T3TeamWorkflowRunToolHandlers;
   readonly workflowStatusTools?: T3TeamWorkflowStatusToolHandlers;
   readonly workflowResumeTools?: T3TeamWorkflowResumeToolHandlers;
+  readonly workflowControlTools?: T3TeamWorkflowControlToolHandlers;
   readonly showWidget?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   /** Search the full transcript of the thread this one was forked from. */
   readonly searchSourceThread?: (
@@ -116,6 +118,7 @@ function createToolSurface<TRenameError, TStartChildError, TReadError, TBacklogA
       ...(input.workflowRunTools ? { workflowRunTools: input.workflowRunTools } : {}),
       ...(input.workflowStatusTools ? { workflowStatusTools: input.workflowStatusTools } : {}),
       ...(input.workflowResumeTools ? { workflowResumeTools: input.workflowResumeTools } : {}),
+      ...(input.workflowControlTools ? { workflowControlTools: input.workflowControlTools } : {}),
       ...(input.showWidget ? { showWidget: input.showWidget } : {}),
       ...(input.searchSourceThread && input.threadId
         ? {

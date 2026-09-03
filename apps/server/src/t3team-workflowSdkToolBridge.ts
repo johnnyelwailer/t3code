@@ -106,6 +106,7 @@ export function executeWorkflowSdkWorkflowRunTool(input: {
     readonly workflowPath?: string;
     readonly args?: unknown;
     readonly intent: WorkflowRunIntent;
+    readonly replaceRunId?: string;
   }) => Effect.Effect<RunWorkflowToolResult, WorkflowSdkBridgeError>;
 }): Effect.Effect<RunWorkflowToolResult, WorkflowSdkBridgeError> {
   return Effect.tryPromise({

@@ -119,6 +119,9 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
             projection_thread_messages.t3team_ext_json
           ),
           is_streaming = excluded.is_streaming,
+          -- A row first written by the streaming path has no sequence yet; the final upsert is
+          -- its one chance to take the position the INSERT side computed (GHE #416).
+          sequence = COALESCE(projection_thread_messages.sequence, excluded.sequence),
           created_at = excluded.created_at,
           updated_at = excluded.updated_at
       `;
@@ -139,6 +142,7 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
           text,
           attachments_json,
           is_streaming,
+          sequence,
           created_at,
           updated_at
         )
@@ -150,6 +154,11 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
           ${row.text},
           ${nextAttachmentsJson},
           1,
+          (
+            SELECT COALESCE(MAX(sequence), -1) + 1
+            FROM projection_thread_messages
+            WHERE thread_id = ${row.threadId}
+          ),
           ${row.createdAt},
           ${row.updatedAt}
         )

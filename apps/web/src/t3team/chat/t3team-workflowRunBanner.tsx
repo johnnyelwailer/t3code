@@ -13,23 +13,40 @@ import {
   CircleDashedIcon,
   LoaderCircleIcon,
   PauseIcon,
+  PlayIcon,
   SquareIcon,
 } from "lucide-react";
 
 import { cn } from "~/lib/utils";
 import type { T3TeamWorkflowRunProgress } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
-import { repairStatus } from "~/t3team/chat/t3team-workflowRunLabels";
+import { relativeAge, repairStatus } from "~/t3team/chat/t3team-workflowRunLabels";
 import { canOpenStepThread } from "~/t3team/chat/t3team-workflowRunStepRow";
+
+/** "Paused 9h ago" — the age is what turns a quiet banner into a nudge (GHE #403 §2: a run
+ * paused at 21:40 sat unnoticed all night behind a bare "Run paused"). */
+export function pausedBannerLabel(pausedAt: string | undefined): string {
+  if (pausedAt === undefined) return "Run paused";
+  const age = relativeAge(pausedAt);
+  return age === "just now" ? "Paused just now" : `Paused ${age}`;
+}
 
 export function RunStatusBanner({
   run,
   outcomeSummary,
+  pausedAt,
+  onResume,
+  resumePending = false,
 }: {
   run: NonNullable<T3TeamWorkflowRunProgress["run"]>;
   /** A short, honest outcome line for this run (see `findT3TeamWorkflowRunOutcomeSummaries`) —
    * NEVER the full result. The full result renders in its own message body as markdown; this
    * banner stays a status line, at most a few plain words longer. */
   outcomeSummary?: string | undefined;
+  /** When the run was paused (the durable row's `updatedAt`, else the pause activity's). */
+  pausedAt?: string | undefined;
+  /** Present when the viewer can resume a paused run; renders the prominent Resume button. */
+  onResume?: (() => void) | undefined;
+  resumePending?: boolean;
 }) {
   if (run.phase === "started") return null;
   const failed = run.phase === "failed";
@@ -60,7 +77,7 @@ export function RunStatusBanner({
         {failed
           ? "Run failed"
           : paused
-            ? "Run paused"
+            ? pausedBannerLabel(pausedAt)
             : cancelled
               ? "Run stopped"
               : "Run completed"}
@@ -71,6 +88,18 @@ export function RunStatusBanner({
           </span>
         ) : null}
       </span>
+      {paused && onResume ? (
+        <button
+          type="button"
+          data-run-resume=""
+          disabled={resumePending}
+          className="flex shrink-0 items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/20 disabled:opacity-50"
+          onClick={onResume}
+        >
+          <PlayIcon className="size-3" />
+          {resumePending ? "Resuming…" : "Resume"}
+        </button>
+      ) : null}
     </div>
   );
 }
