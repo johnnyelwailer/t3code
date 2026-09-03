@@ -151,7 +151,9 @@ export const UpdateWorkflowRunArgsInput = Schema.Struct({
 });
 export type UpdateWorkflowRunArgsInput = typeof UpdateWorkflowRunArgsInput.Type;
 
-/** Flip a run to `suspended` and record the ask it is parked on, in one update. */
+/** Flip a run to `suspended` and record the ask it is parked on, in one update. Also clears the
+ * failure columns: a run parking on an ask is live again, so a reason recorded by an earlier
+ * failure (a re-driven step, a journal resume) must not be reported for it any more. */
 export const SetWorkflowRunPendingInput = Schema.Struct({
   runId: Schema.String,
   pendingThreadId: Schema.String,

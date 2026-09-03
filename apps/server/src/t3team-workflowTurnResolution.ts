@@ -153,7 +153,11 @@ export function createWorkflowTurnTracker(): WorkflowTurnTracker {
 
     noteSession: (threadId, correlationId, session) => {
       const watch = ensure(threadId, correlationId);
-      if (session.activeTurnId !== null) {
+      // A `runtime.error` write keeps the failed turn's id on the session
+      // (`ProviderRuntimeIngestion`'s runtime-error session-set); a session in `error` cannot
+      // still be answering, so that id is a tombstone, not a live turn — treating it as
+      // "running" is a stall with no exit.
+      if (session.activeTurnId !== null && session.status !== "error") {
         watch.sawActiveTurn = true;
         return "running";
       }

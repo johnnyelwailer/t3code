@@ -109,8 +109,19 @@ repoLayer("resumeFailedTurnStep", (it) => {
         correlationId: `${runId}:3`,
         kind: "thread.turn",
         turnRetries: 0,
+        redriveArmed: true,
       });
       assert.deepStrictEqual(redriven, [{ threadId: "child-thread", correlationId: `${runId}:3` }]);
+
+      // A second resume of the same failed run finds the controller already claimed.
+      const again = yield* resumeFailedTurnStep({
+        launch,
+        step: step!,
+        runRepository: repo,
+        turnRedrive,
+      }).pipe(Effect.flip);
+      assert.match(again, /already being resumed/);
+      assert.strictEqual(redriven.length, 1);
     }),
   );
 

@@ -306,6 +306,8 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
             pending_correlation_id = ${pendingCorrelationId},
             pending_kind = ${pendingKind},
             wake_at = NULL,
+            failure_reason = NULL,
+            failure_step = NULL,
             updated_at = ${updatedAt}
         WHERE run_id = ${runId} AND status != 'cancelled'
       `,

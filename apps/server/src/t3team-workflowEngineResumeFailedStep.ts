@@ -40,8 +40,15 @@ export const resumeFailedTurnStep = Effect.fn("resumeFailedTurnStep")(function* 
   readonly turnRedrive: InterruptedTurnRetry;
 }) {
   const { launch, step } = input;
-  // The controller is what the reactor calls `resume` on when the re-driven turn answers; the
-  // failed run's previous controller was deleted by the failure funnel.
+  // The claim: a failed run has NO controller (the failure funnel deleted it), so a registered
+  // one means another resume already took this run. Checked and registered in the same
+  // synchronous tick, so two concurrent resumes cannot both pass (single-instance host).
+  if (launch.registry.getRun(launch.runId) !== undefined) {
+    return yield* Effect.fail(
+      `Workflow run '${launch.runId}' is already being resumed; observe it via t3team.orchestration.status.`,
+    );
+  }
+  // The controller is what the reactor calls `resume` on when the re-driven turn answers.
   createWorkflowRunController(launch);
   // A resumed step earns a fresh re-drive budget: the operator (or agent) chose to retry after
   // seeing the reason, so the exhausted counter must not fail it again on the first no-text.
@@ -64,6 +71,9 @@ export const resumeFailedTurnStep = Effect.fn("resumeFailedTurnStep")(function* 
     correlationId: step.correlationId,
     kind: "thread.turn",
     turnRetries: 0,
+    // The dead session's tail writes must not count against the fresh budget before the
+    // re-driven turn starts (see `WorkflowPendingAsk.redriveArmed`).
+    redriveArmed: true,
   });
   yield* input.turnRedrive.processTurnRetry({
     threadId: step.threadId,

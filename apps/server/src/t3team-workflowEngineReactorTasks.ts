@@ -156,6 +156,15 @@ export function createWorkflowReactorTaskHandler(
       const { threadId, session } = event.payload;
       const pending = registry.peekPending(threadId);
       if (pending?.kind !== "thread.turn") return;
+      if (pending.redriveArmed === true) {
+        // A re-drive is armed but its turn has not started: idle/dead writes are the previous
+        // turn's tail (or the session-level retry's status note), not a verdict on this step.
+        // The first write with a LIVE turn is the re-driven turn starting — resume judging.
+        const turnStarted = session.activeTurnId !== null && session.status !== "error";
+        if (!turnStarted) return;
+        const { redriveArmed: _armed, ...judging } = pending;
+        registry.setPending(threadId, judging);
+      }
       const note = tracker.noteSession(threadId, pending.correlationId, {
         status: session.status,
         activeTurnId: session.activeTurnId,

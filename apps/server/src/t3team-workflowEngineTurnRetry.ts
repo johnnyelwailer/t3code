@@ -218,6 +218,8 @@ export function makeInterruptedTurnRetry(deps: InterruptedTurnRetryDeps): Interr
       ...pending,
       turnRetries: attempts + 1,
       author: prompt.author,
+      // Ignore the dead session's tail writes until the re-driven turn actually starts.
+      redriveArmed: true,
     });
     // Journaling the attempt on the run row is the cross-restart half of the budget; a
     // failed journal write means the next restart hands the step a fresh budget, so

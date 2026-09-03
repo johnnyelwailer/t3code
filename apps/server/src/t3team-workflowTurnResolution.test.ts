@@ -78,6 +78,21 @@ describe("workflow turn tracker", () => {
     expect(tracker.take(THREAD, ASK)).toEqual({ kind: "failed", error: UNKNOWN_TURN_FAILURE });
   });
 
+  it("ends the wait when a runtime error leaves the dead turn's id on the session", () => {
+    // `runtime.error` ingestion writes status `error` with `activeTurnId` still set; an errored
+    // session cannot be answering, so this is a failure, not a running turn.
+    const tracker = createWorkflowTurnTracker();
+    tracker.noteSession(THREAD, ASK, running);
+    expect(
+      tracker.noteSession(THREAD, ASK, {
+        status: "error",
+        activeTurnId: "turn-1",
+        lastError: "provider crashed",
+      }),
+    ).toBe("ended");
+    expect(tracker.take(THREAD, ASK)).toEqual({ kind: "failed", error: "provider crashed" });
+  });
+
   it("settles a turn whose session died as failed with the provider's reason, never its preamble", () => {
     // GHE #403: the driver's retry ladder exhausted after hours; the turn ended with `error`. The
     // "I'll start by…" it streamed first is not the answer, and the reason must be the gateway's.

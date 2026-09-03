@@ -112,6 +112,10 @@ repoLayer("workflow run failure — retained pending step", (it) => {
       const resumed = Option.getOrThrow(yield* repo.getById({ runId }));
       assert.strictEqual(resumed.status, "suspended");
       assert.strictEqual(resumed.pendingCorrelationId, `${runId}:4`);
+      // Parking on an ask again means the run is no longer failed: the old reason must not ride
+      // along into `t3team.orchestration.status` for a live run.
+      assert.strictEqual(resumed.failureReason ?? null, null);
+      assert.strictEqual(resumed.failureStep ?? null, null);
     }),
   );
 

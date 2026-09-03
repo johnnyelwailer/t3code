@@ -56,6 +56,15 @@ export interface WorkflowPendingAsk {
    * step that simply says nothing still fails the run.
    */
   readonly turnRetries?: number;
+  /**
+   * Set when the host has ARMED a re-drive of this step (t3team-workflowEngineTurnRetry.ts) and the
+   * re-driven turn has not started yet. Until a session write with a live turn lands, idle/dead
+   * session writes on the thread are the OLD turn's tail — the session-level transient retry
+   * (`t3team-threadTransientTurnRetry.ts`) re-writes the dead session with its "Retrying (n/N)"
+   * reason ~300 ms after the turn ends — and must not be read as another failed turn, or every
+   * such write would burn one re-drive of the budget (GHE #403 review). Hot-index only.
+   */
+  readonly redriveArmed?: boolean;
 }
 
 export interface WorkflowRegisteredRun {

@@ -102,6 +102,7 @@ it.effect("settleFailedTurn re-drives a LIVE ask whose turn failed, with a fresh
     assert.strictEqual(pending?.correlationId, STEP);
     assert.strictEqual(pending?.kind, "thread.turn");
     assert.strictEqual(pending?.turnRetries, 1);
+    assert.strictEqual(pending?.redriveArmed, true);
   }),
 );
 

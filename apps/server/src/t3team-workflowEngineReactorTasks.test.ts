@@ -183,6 +183,46 @@ it.effect("still fails the run outright when a live turn merely says nothing (un
   }),
 );
 
+it.effect(
+  "ignores the dead session's tail writes while a re-drive is armed, then judges the new turn",
+  () =>
+    Effect.gen(function* () {
+      const h = harness();
+      // What scheduleRedrive leaves behind: the same ask, budget spent once, re-drive armed.
+      h.registry.setPending(THREAD, { ...liveAsk, turnRetries: 1, redriveArmed: true });
+
+      // The session-level transient retry's "Retrying (1/3) — …" note: status still `error`,
+      // no live turn. Must NOT count as another failed turn.
+      yield* h.drive([
+        sessionSet({ status: "error", activeTurnId: null, lastError: "Retrying (1/3) — timeout" }),
+      ]);
+      assert.deepStrictEqual(h.redriven, []);
+      assert.strictEqual(h.registry.peekPending(THREAD)?.redriveArmed, true);
+
+      // The re-driven turn starts, then dies for real: THAT is the next verdict.
+      yield* h.drive([
+        sessionSet({ status: "running", activeTurnId: "turn-2" }),
+        sessionSet({ status: "error", activeTurnId: null, lastError: "Request timed out" }),
+      ]);
+      assert.deepStrictEqual(h.redriven, [{ kind: "failed", error: "Request timed out" }]);
+    }),
+);
+
+it.effect("a runtime error that keeps the dead turn's id on the session still fails the step", () =>
+  Effect.gen(function* () {
+    const h = harness();
+    h.registry.setPending(THREAD, liveAsk);
+
+    yield* h.drive([
+      sessionSet({ status: "running", activeTurnId: "turn-1" }),
+      sessionSet({ status: "error", activeTurnId: "turn-1", lastError: "provider crashed" }),
+    ]);
+
+    assert.deepStrictEqual(h.redriven, [{ kind: "failed", error: "provider crashed" }]);
+    assert.deepStrictEqual(h.failed, []);
+  }),
+);
+
 it.effect("re-drives a rehydrated ask that says nothing (unchanged)", () =>
   Effect.gen(function* () {
     const h = harness();
