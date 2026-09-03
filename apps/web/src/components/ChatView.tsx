@@ -335,7 +335,7 @@ import {
   threadChangeRequestSnapshotsAtom,
   useLinkedThreadPullRequest,
 } from "./ThreadStatusIndicators";
-import { ComposerBannerStack, type ComposerBannerStackItem } from "./chat/ComposerBannerStack";
+import type { ComposerBannerStackItem } from "./chat/ComposerBannerStack";
 import { ComposerSurface } from "./chat/ComposerSurface";
 import {
   hasAvailableClaudeCompactionProvider,
@@ -7793,14 +7793,13 @@ function ChatViewContent(props: ChatViewProps) {
                       </div>
                     </div>
                   ) : (
-                    <>
-                      <T3TeamActiveWorkflowDock
-                        items={activeWorkflowDockItems}
-                        className="mx-auto max-w-3xl rounded-t-[22px]"
-                        onOpen={openWorkflowCard}
-                      />
-                      <ComposerBannerStack className="relative z-0" items={composerBannerItems} />
-                    </>
+                    // Notices render ONCE, inside ChatComposer's banner dock (`bannerItems` below);
+                    // a second `ComposerBannerStack` here duplicated every notice (GHE #412).
+                    <T3TeamActiveWorkflowDock
+                      items={activeWorkflowDockItems}
+                      className="mx-auto max-w-3xl"
+                      onOpen={openWorkflowCard}
+                    />
                   )}
                   {composerContextAttachmentSlot}
                   <div
