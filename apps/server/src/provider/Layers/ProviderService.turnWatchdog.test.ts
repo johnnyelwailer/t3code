@@ -38,9 +38,14 @@ import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
-import { ProviderAdapterSessionNotFoundError, type ProviderAdapterError } from "../Errors.ts";
+import {
+  ProviderAdapterSessionNotFoundError,
+  ProviderUnsupportedError,
+  type ProviderAdapterError,
+} from "../Errors.ts";
 import type { ProviderAdapterShape } from "../Services/ProviderAdapter.ts";
 import * as ProviderAdapterRegistry from "../Services/ProviderAdapterRegistry.ts";
+import type { ProviderAdapterRegistryShape } from "../Services/ProviderAdapterRegistry.ts";
 import * as ProviderService from "../Services/ProviderService.ts";
 import * as ProviderSessionDirectory from "../Services/ProviderSessionDirectory.ts";
 import { makeProviderServiceLive } from "./ProviderService.ts";
@@ -72,7 +77,16 @@ type LegacyProviderRuntimeEvent = {
   readonly [key: string]: unknown;
 };
 
-function makeFakeAdapter(provider: ProviderDriverKind) {
+function makeFakeAdapter(
+  provider: ProviderDriverKind,
+  options?: {
+    /**
+     * When true, `interruptTurn` fails with `ProviderAdapterSessionNotFoundError`
+     * — simulates a dead provider session (GHE #297 Defect 1 test (a)).
+     */
+    readonly interruptTurnFails?: boolean;
+  },
+) {
   const sessions = new Map<ThreadId, ProviderSession>();
   const runtimeEventPubSub = Effect.runSync(PubSub.unbounded<ProviderRuntimeEvent>());
   // Distinct turn id per sendTurn so multi-turn scenarios (e.g. a superseded
@@ -134,7 +148,13 @@ function makeFakeAdapter(provider: ProviderDriverKind) {
   ): Effect.Effect<void, ProviderAdapterError> =>
     Effect.sync(() => {
       interruptTurnCalls.push([threadId, turnId]);
-    });
+    }).pipe(
+      Effect.andThen(
+        options?.interruptTurnFails
+          ? Effect.fail(new ProviderAdapterSessionNotFoundError({ provider, threadId }))
+          : Effect.void,
+      ),
+    );
 
   const respondToRequest = (
     _threadId: ThreadId,
@@ -227,9 +247,54 @@ const serverConfigTestLayer = ServerConfig.layerTest(process.cwd(), process.cwd(
   Layer.provide(NodeServices.layer),
 );
 
+/**
+ * Same wiring as `makeWatchdogHarness`, but takes a pre-built registry shape
+ * instead of building one from a driver-keyed adapter map — lets a fixture
+ * simulate `getByInstance` failing independently of session start/sendTurn
+ * (GHE #297 Codex finding: "no adapter" must settle the turn exactly like a
+ * failed interrupt does).
+ */
+function makeWatchdogHarnessWithRegistry(
+  registry: ProviderAdapterRegistryShape,
+  providerServiceOptions?: Parameters<typeof makeProviderServiceLive>[0],
+) {
+  const providerAdapterLayer = Layer.succeed(
+    ProviderAdapterRegistry.ProviderAdapterRegistry,
+    registry,
+  );
+  const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
+    Layer.provide(SqlitePersistenceMemory),
+  );
+  const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+
+  const layer = it.layer(
+    Layer.mergeAll(
+      makeProviderServiceLive(providerServiceOptions).pipe(
+        Layer.provide(providerAdapterLayer),
+        Layer.provide(directoryLayer),
+        Layer.provide(defaultServerSettingsLayer),
+        Layer.provide(serverConfigTestLayer),
+        Layer.provideMerge(AnalyticsService.layerTest),
+        Layer.provide(
+          Layer.succeed(
+            ProviderEventLoggers.ProviderEventLoggers,
+            ProviderEventLoggers.NoOpProviderEventLoggers,
+          ),
+        ),
+      ),
+      directoryLayer,
+      runtimeRepositoryLayer,
+      NodeServices.layer,
+    ),
+  );
+
+  return { layer };
+}
+
 function makeWatchdogHarness(
   adapters: Parameters<typeof makeAdapterRegistryMock>[0],
   options?: Parameters<typeof makeAdapterRegistryMock>[1],
+  providerServiceOptions?: Parameters<typeof makeProviderServiceLive>[0],
 ) {
   const registry = makeAdapterRegistryMock(adapters, options);
   const providerAdapterLayer = Layer.succeed(
@@ -243,7 +308,7 @@ function makeWatchdogHarness(
 
   const layer = it.layer(
     Layer.mergeAll(
-      makeProviderServiceLive().pipe(
+      makeProviderServiceLive(providerServiceOptions).pipe(
         Layer.provide(providerAdapterLayer),
         Layer.provide(directoryLayer),
         Layer.provide(defaultServerSettingsLayer),
@@ -305,6 +370,9 @@ const findInactivityWarning = (events: ReadonlyArray<ProviderRuntimeEvent>) =>
       event.type === "runtime.warning" &&
       (event.payload as { detail?: { code?: string } }).detail?.code === "turn.inactivity",
   );
+
+const findSessionExited = (events: ReadonlyArray<ProviderRuntimeEvent>) =>
+  events.find((event) => event.type === "session.exited");
 
 const codexStalled = makeFakeAdapter(CODEX_DRIVER);
 const stalledHarness = makeWatchdogHarness({ [CODEX_DRIVER]: codexStalled.adapter });
@@ -719,3 +787,353 @@ replaceHarness.layer("turn inactivity watchdog: session replacement (GHE #328)",
     }),
   );
 });
+
+// GHE #297 Defect 1: a dead provider session never emits the terminal event
+// that would normally settle a turn. `fireTurnWatchdog` must settle it
+// itself, from either failure shape of its own `interruptTurn` call.
+const codexDeadSession = makeFakeAdapter(CODEX_DRIVER, { interruptTurnFails: true });
+const deadSessionHarness = makeWatchdogHarness({ [CODEX_DRIVER]: codexDeadSession.adapter });
+
+deadSessionHarness.layer(
+  "turn inactivity watchdog: dead provider session (GHE #297 Defect 1)",
+  (it) => {
+    it.effect(
+      "publishes a synthetic session.exited when interruptTurn fails on a dead session",
+      () =>
+        Effect.gen(function* () {
+          const provider = yield* ProviderService.ProviderService;
+          const seen = yield* collectRuntimeEvents(provider);
+
+          yield* startCodexSession(provider, asThreadId("thread-dead"));
+          const turn = yield* provider.sendTurn({
+            threadId: asThreadId("thread-dead"),
+            input: "hello",
+            attachments: [],
+          });
+          yield* drainFibers;
+
+          // The 600s default budget expires; interruptTurn fails because the
+          // session is dead (ProviderAdapterSessionNotFoundError). The old
+          // code only logWarning-swallowed this, leaving the turn "running"
+          // forever with nothing left to ever emit a terminal event.
+          yield* advanceTestClock(600_000);
+          yield* drainFibers;
+
+          assert.equal(codexDeadSession.interruptTurnCalls.length, 1);
+          const exited = findSessionExited(yield* Ref.get(seen));
+          assert.ok(exited !== undefined, "expected a synthetic session.exited");
+          assert.equal(exited.threadId, asThreadId("thread-dead"));
+          assert.equal(exited.turnId, turn.turnId);
+          const payload = exited.payload as {
+            reason: string;
+            exitKind: string;
+            recoverable: boolean;
+          };
+          assert.equal(payload.exitKind, "error");
+          assert.equal(payload.recoverable, false);
+          assert.ok(
+            payload.reason.includes("no stream activity for 600 seconds"),
+            `unexpected reason: ${payload.reason}`,
+          );
+        }),
+    );
+  },
+);
+
+// A settle-grace window after a SUCCESSFUL watchdog interrupt: the provider
+// is expected to settle the turn itself, but if no terminal event lands
+// within the grace, the host synthesizes one. Uses a short grace override so
+// TestClock assertions stay fast.
+const codexSettleGrace = makeFakeAdapter(CODEX_DRIVER);
+const settleGraceHarness = makeWatchdogHarness(
+  { [CODEX_DRIVER]: codexSettleGrace.adapter },
+  undefined,
+  { turnWatchdogSettleGraceMs: 5_000 },
+);
+
+settleGraceHarness.layer(
+  "turn inactivity watchdog: settle grace after a successful interrupt (GHE #297 Defect 1)",
+  (it) => {
+    it.effect(
+      "synthesizes session.exited when interruptTurn succeeds but no terminal event follows",
+      () =>
+        Effect.gen(function* () {
+          const provider = yield* ProviderService.ProviderService;
+          const seen = yield* collectRuntimeEvents(provider);
+          codexSettleGrace.interruptTurnCalls.length = 0;
+
+          yield* startCodexSession(provider, asThreadId("thread-grace-timeout"));
+          const turn = yield* provider.sendTurn({
+            threadId: asThreadId("thread-grace-timeout"),
+            input: "hello",
+            attachments: [],
+          });
+          yield* drainFibers;
+
+          yield* advanceTestClock(600_000);
+          yield* drainFibers;
+          assert.equal(codexSettleGrace.interruptTurnCalls.length, 1);
+          // The interrupt succeeded but the provider has not (yet) settled
+          // the turn — no synthetic event before the grace elapses.
+          assert.equal(
+            findSessionExited(yield* Ref.get(seen)),
+            undefined,
+            "no synthetic session.exited before the grace window elapses",
+          );
+
+          yield* advanceTestClock(5_000);
+          yield* drainFibers;
+
+          const exited = findSessionExited(yield* Ref.get(seen));
+          assert.ok(
+            exited !== undefined,
+            "expected a synthetic session.exited after the grace window",
+          );
+          assert.equal(exited.threadId, asThreadId("thread-grace-timeout"));
+          assert.equal(exited.turnId, turn.turnId);
+        }),
+    );
+
+    it.effect(
+      "does not synthesize session.exited when the adapter settles the turn within the grace window",
+      () =>
+        Effect.gen(function* () {
+          const provider = yield* ProviderService.ProviderService;
+          const seen = yield* collectRuntimeEvents(provider);
+          codexSettleGrace.interruptTurnCalls.length = 0;
+
+          yield* startCodexSession(provider, asThreadId("thread-grace-recovers"));
+          const turn = yield* provider.sendTurn({
+            threadId: asThreadId("thread-grace-recovers"),
+            input: "hello",
+            attachments: [],
+          });
+          yield* drainFibers;
+
+          yield* advanceTestClock(600_000);
+          yield* drainFibers;
+          assert.equal(codexSettleGrace.interruptTurnCalls.length, 1);
+
+          // The provider recovers in time: it emits the turn's own
+          // turn.aborted before the grace window elapses.
+          codexSettleGrace.emit({
+            type: "turn.aborted",
+            eventId: asEventId("grace-recovers-aborted"),
+            provider: CODEX_DRIVER,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            threadId: asThreadId("thread-grace-recovers"),
+            turnId: turn.turnId,
+            payload: { reason: "interrupted by watchdog" },
+          });
+          yield* drainFibers;
+
+          yield* advanceTestClock(5_000);
+          yield* drainFibers;
+
+          assert.equal(
+            findSessionExited(yield* Ref.get(seen)),
+            undefined,
+            "the real terminal event must cancel the settle-grace fiber",
+          );
+        }),
+    );
+  },
+);
+
+// GHE #297 Codex finding (HIGH): a superseded turn's settle-grace fiber must
+// not kill the NEW turn that replaced it on the same thread.
+const codexSupersedeGrace = makeFakeAdapter(CODEX_DRIVER, { interruptTurnFails: false });
+const supersedeGraceHarness = makeWatchdogHarness(
+  { [CODEX_DRIVER]: codexSupersedeGrace.adapter },
+  undefined,
+  { turnWatchdogSettleGraceMs: 5_000 },
+);
+
+supersedeGraceHarness.layer(
+  "turn inactivity watchdog: superseded turn during settle grace (GHE #297 Codex finding)",
+  (it) => {
+    it.effect("does not kill a new turn B armed while turn A is still in its settle grace", () =>
+      Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        const seen = yield* collectRuntimeEvents(provider);
+        codexSupersedeGrace.interruptTurnCalls.length = 0;
+
+        yield* startCodexSession(provider, asThreadId("thread-supersede-grace"));
+        const turnA = yield* provider.sendTurn({
+          threadId: asThreadId("thread-supersede-grace"),
+          input: "stalls",
+          attachments: [],
+        });
+        yield* drainFibers;
+
+        // Turn A stalls: the watchdog interrupts it successfully and arms
+        // the settle-grace fiber (interruptTurnFails: false).
+        yield* advanceTestClock(600_000);
+        yield* drainFibers;
+        assert.equal(codexSupersedeGrace.interruptTurnCalls.length, 1);
+        assert.deepEqual(codexSupersedeGrace.interruptTurnCalls[0], [
+          asThreadId("thread-supersede-grace"),
+          turnA.turnId,
+        ]);
+
+        // The user sends a NEW message before A's grace elapses, and — the
+        // exact GHE #297 shape — the pack never emits a terminal event for
+        // A at all (that is the whole reason the settle grace exists). The
+        // host arms the watchdog for B via `sendTurn`, which must also
+        // clear A's stale thread-scoped awaiting-settle marker.
+        const turnB = yield* provider.sendTurn({
+          threadId: asThreadId("thread-supersede-grace"),
+          input: "fresh message",
+          attachments: [],
+        });
+        yield* drainFibers;
+
+        // Advance past A's original 5s grace window. Before the fix, A's
+        // grace fiber would still find its thread-scoped marker present
+        // (armTurnWatchdog never touched it) and publish a synthetic,
+        // thread-scoped session.exited — killing B even though B is
+        // healthy and never asked for a settle grace.
+        yield* advanceTestClock(5_000);
+        yield* drainFibers;
+        assert.equal(
+          findSessionExited(yield* Ref.get(seen)),
+          undefined,
+          "turn A's stale settle-grace fiber must not synthesize an exit for thread B",
+        );
+
+        // B's own watchdog still works: stalling it for the full budget
+        // fires its own interrupt.
+        yield* advanceTestClock(600_000);
+        yield* drainFibers;
+        assert.equal(codexSupersedeGrace.interruptTurnCalls.length, 2);
+        assert.deepEqual(codexSupersedeGrace.interruptTurnCalls[1], [
+          asThreadId("thread-supersede-grace"),
+          turnB.turnId,
+        ]);
+      }),
+    );
+  },
+);
+
+// GHE #297 Codex finding (HIGH): the watchdog fires with no adapter left to
+// even attempt an interrupt (instance removed/replaced concurrently). This
+// must settle the turn exactly like a failed interrupt does — not silently
+// leave it "running" forever.
+const codexNoAdapterUnderlying = makeFakeAdapter(CODEX_DRIVER);
+let noAdapterLookupFails = false;
+const noAdapterBaseRegistry = makeAdapterRegistryMock({
+  [CODEX_DRIVER]: codexNoAdapterUnderlying.adapter,
+});
+const noAdapterRegistry: ProviderAdapterRegistryShape = {
+  ...noAdapterBaseRegistry,
+  // Simulates the instance disappearing from the registry between arming
+  // the watchdog and it firing — `getByInstance` fails, so `fireTurnWatchdog`
+  // resolves `adapter` to `undefined` via its `orElseSucceed`.
+  getByInstance: (instanceId) =>
+    noAdapterLookupFails
+      ? Effect.fail(new ProviderUnsupportedError({ provider: ProviderDriverKind.make(instanceId) }))
+      : noAdapterBaseRegistry.getByInstance(instanceId),
+};
+const noAdapterHarness = makeWatchdogHarnessWithRegistry(noAdapterRegistry);
+
+noAdapterHarness.layer(
+  "turn inactivity watchdog: missing adapter (GHE #297 Codex finding)",
+  (it) => {
+    it.effect(
+      "publishes a synthetic session.exited immediately when the adapter lookup fails",
+      () =>
+        Effect.gen(function* () {
+          const provider = yield* ProviderService.ProviderService;
+          const seen = yield* collectRuntimeEvents(provider);
+          noAdapterLookupFails = false;
+
+          yield* startCodexSession(provider, asThreadId("thread-no-adapter"));
+          const turn = yield* provider.sendTurn({
+            threadId: asThreadId("thread-no-adapter"),
+            input: "hello",
+            attachments: [],
+          });
+          yield* drainFibers;
+
+          // The instance vanishes from the registry right before the watchdog
+          // fires — the OLD code silently skipped both the interrupt AND the
+          // synthetic exit in this case, leaving the turn "running" forever.
+          noAdapterLookupFails = true;
+          yield* advanceTestClock(600_000);
+          yield* drainFibers;
+
+          const exited = findSessionExited(yield* Ref.get(seen));
+          assert.ok(exited !== undefined, "expected a synthetic session.exited with no adapter");
+          assert.equal(exited.threadId, asThreadId("thread-no-adapter"));
+          assert.equal(exited.turnId, turn.turnId);
+          const payload = exited.payload as { exitKind: string; recoverable: boolean };
+          assert.equal(payload.exitKind, "error");
+          assert.equal(payload.recoverable, false);
+        }),
+    );
+  },
+);
+
+// GHE #297 Codex finding (MEDIUM): the "still awaited?" check and the marker
+// removal in the grace fiber must be one atomic operation, so a terminal
+// event landing right at grace expiry cannot race a separate check-then-clear
+// into a duplicate synthetic exit.
+const codexRaceGrace = makeFakeAdapter(CODEX_DRIVER);
+const raceGraceHarness = makeWatchdogHarness(
+  { [CODEX_DRIVER]: codexRaceGrace.adapter },
+  undefined,
+  { turnWatchdogSettleGraceMs: 5_000 },
+);
+
+raceGraceHarness.layer(
+  "turn inactivity watchdog: settle-grace race at expiry (GHE #297 Codex finding)",
+  (it) => {
+    it.effect(
+      "settles exactly once with zero synthetic exits when a terminal event lands right at grace expiry",
+      () =>
+        Effect.gen(function* () {
+          const provider = yield* ProviderService.ProviderService;
+          const seen = yield* collectRuntimeEvents(provider);
+          codexRaceGrace.interruptTurnCalls.length = 0;
+
+          yield* startCodexSession(provider, asThreadId("thread-race-grace"));
+          const turn = yield* provider.sendTurn({
+            threadId: asThreadId("thread-race-grace"),
+            input: "hello",
+            attachments: [],
+          });
+          yield* drainFibers;
+
+          yield* advanceTestClock(600_000);
+          yield* drainFibers;
+          assert.equal(codexRaceGrace.interruptTurnCalls.length, 1);
+
+          // Advance right up to (but not past) the grace boundary, then
+          // deliver the real terminal event at the last possible instant
+          // before the grace fiber's own check would run.
+          yield* advanceTestClock(4_999);
+          codexRaceGrace.emit({
+            type: "turn.aborted",
+            eventId: asEventId("race-grace-abort"),
+            provider: CODEX_DRIVER,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            threadId: asThreadId("thread-race-grace"),
+            turnId: turn.turnId,
+            payload: { reason: "interrupted by watchdog" },
+          });
+          yield* drainFibers;
+          yield* advanceTestClock(1);
+          yield* drainFibers;
+
+          const exitedEvents = (yield* Ref.get(seen)).filter(
+            (event) => event.type === "session.exited",
+          );
+          assert.equal(
+            exitedEvents.length,
+            0,
+            "exactly zero synthetic session.exited events — the real turn.aborted settled it",
+          );
+        }),
+    );
+  },
+);
