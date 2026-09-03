@@ -7792,15 +7792,11 @@ function ChatViewContent(props: ChatViewProps) {
                         />
                       </div>
                     </div>
-                  ) : (
-                    // Notices render ONCE, inside ChatComposer's banner dock (`bannerItems` below);
-                    // a second `ComposerBannerStack` here duplicated every notice (GHE #412).
-                    <T3TeamActiveWorkflowDock
-                      items={activeWorkflowDockItems}
-                      className="mx-auto max-w-3xl"
-                      onOpen={openWorkflowCard}
-                    />
-                  )}
+                  ) : // Notices and the orchestration dock render ONCE, inside ChatComposer's banner
+                  // column (`bannerItems` / `bannerLeading` below); a second `ComposerBannerStack`
+                  // here duplicated every notice, and a dock outside the form never matched the
+                  // notices' inset width (GHE #412).
+                  null}
                   {composerContextAttachmentSlot}
                   <div
                     className="relative"
@@ -7849,6 +7845,12 @@ function ChatViewContent(props: ChatViewProps) {
                             }
                             isPreparingWorktree={isPreparingWorktree}
                             bannerItems={composerBannerItems}
+                            bannerLeading={
+                              <T3TeamActiveWorkflowDock
+                                items={activeWorkflowDockItems}
+                                onOpen={openWorkflowCard}
+                              />
+                            }
                             environmentUnavailable={activeEnvironmentUnavailableState}
                             activePendingApproval={activePendingApproval}
                             pendingApprovals={pendingApprovals}
