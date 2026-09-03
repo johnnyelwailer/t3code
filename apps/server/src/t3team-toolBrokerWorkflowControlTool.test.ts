@@ -219,4 +219,62 @@ repoLayer("t3team.orchestration.pause / stop", (it) => {
       assert.match(error, /requires a runId/);
     }),
   );
+
+  // GHE #411 §2: a retried pause on an already-paused run must succeed, not error.
+  it.effect("pause is idempotent on an already-paused run", () =>
+    Effect.gen(function* () {
+      const runId = "ctl-pause-idempotent";
+      const h = yield* seed(runId);
+      yield* h.handlers(launchThreadId).controlWorkflowRun("pause", { runId });
+      const paused = Option.getOrThrow(yield* h.repo.getById({ runId }));
+
+      const value = yield* controlWorkflowRun(
+        { ...h.controlDeps, nowIso, stopOrigin: "system" },
+        paused,
+        { threadId: String(launchThreadId), action: "pause" },
+      );
+
+      assert.strictEqual(value.status, "paused");
+      assert.strictEqual(Option.getOrThrow(yield* h.repo.getById({ runId })).status, "paused");
+    }),
+  );
+
+  // GHE #411 §1 (TOCTOU): a stale `run` snapshot must not overwrite a row that already settled
+  // between the caller's read and `controlWorkflowRun`'s write.
+  it.effect("pause on a run that finished since it was read fails instead of overwriting it", () =>
+    Effect.gen(function* () {
+      const runId = "ctl-pause-toctou";
+      const h = yield* seed(runId);
+      const staleRun = Option.getOrThrow(yield* h.repo.getById({ runId }));
+      // The row completes behind the caller's back before the write lands.
+      yield* h.repo.clearPending({ runId, status: "completed", updatedAt: nowIso() });
+
+      const error = yield* controlWorkflowRun(
+        { ...h.controlDeps, nowIso, stopOrigin: "system" },
+        staleRun,
+        { threadId: String(launchThreadId), action: "pause" },
+      ).pipe(Effect.flip);
+
+      assert.match(error, /Workflow already finished \(completed\)/);
+      assert.strictEqual(Option.getOrThrow(yield* h.repo.getById({ runId })).status, "completed");
+    }),
+  );
+
+  it.effect("stop on a run that finished since it was read fails instead of overwriting it", () =>
+    Effect.gen(function* () {
+      const runId = "ctl-stop-toctou";
+      const h = yield* seed(runId);
+      const staleRun = Option.getOrThrow(yield* h.repo.getById({ runId }));
+      yield* h.repo.clearPending({ runId, status: "failed", updatedAt: nowIso() });
+
+      const error = yield* controlWorkflowRun(
+        { ...h.controlDeps, nowIso, stopOrigin: "system" },
+        staleRun,
+        { threadId: String(launchThreadId), action: "stop" },
+      ).pipe(Effect.flip);
+
+      assert.match(error, /Workflow already finished \(failed\)/);
+      assert.strictEqual(Option.getOrThrow(yield* h.repo.getById({ runId })).status, "failed");
+    }),
+  );
 });

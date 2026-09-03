@@ -27,6 +27,8 @@ export interface FailedTurnStep {
   readonly correlationId: string;
 }
 
+const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
 /**
  * Re-drive the retained `thread.turn` step of a failed run. Resolves once the re-drive has been
  * issued (or deliberately skipped because a turn is already in flight on the thread — that
@@ -49,6 +51,9 @@ export const resumeFailedTurnStep = Effect.fn("resumeFailedTurnStep")(function* 
     );
   }
   // The controller is what the reactor calls `resume` on when the re-driven turn answers.
+  // Registered BEFORE the durable write below, so a write failure must unregister it again — a
+  // controller left claimed with nothing durably parked would reject every later resume as
+  // "already being resumed" forever (GHE #411 §4).
   createWorkflowRunController(launch);
   // A resumed step earns a fresh re-drive budget: the operator (or agent) chose to retry after
   // seeing the reason, so the exhausted counter must not fail it again on the first no-text.
@@ -56,14 +61,17 @@ export const resumeFailedTurnStep = Effect.fn("resumeFailedTurnStep")(function* 
     .setTurnRetries({ runId: launch.runId, turnRetries: 0, updatedAt: launch.nowIso() })
     .pipe(Effect.catchCause(() => Effect.void));
   // Park the row on the same ask again (status back to `suspended`, pending columns unchanged).
-  yield* Effect.promise(
-    () =>
+  // A failed write must delete the just-registered controller before propagating, or the run is
+  // stuck neither durably parked nor resumable.
+  yield* Effect.tryPromise({
+    try: () =>
       launch.lifecycle?.recordSuspended({
         threadId: step.threadId,
         correlationId: step.correlationId,
         kind: "thread.turn",
       }) ?? Promise.resolve(),
-  );
+    catch: (error) => errorMessage(error),
+  }).pipe(Effect.tapCause(() => Effect.sync(() => launch.registry.deleteRun(launch.runId))));
   // `turnRetries: 0` (not undefined) marks the ask as re-drivable on a later no-text settle too —
   // the same shape boot rehydration hands a restored `thread.turn` ask.
   launch.registry.setPending(step.threadId, {

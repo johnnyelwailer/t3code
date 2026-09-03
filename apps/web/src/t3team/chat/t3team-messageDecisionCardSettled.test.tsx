@@ -28,7 +28,7 @@ import {
 import { PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION } from "@t3tools/project-recipes";
 import { type ReactNode, type Ref } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import type { LegendListRef } from "@legendapp/list/react";
 
 import { buildT3TeamMessagesTimelineTestProps } from "~/t3team/chat/t3team-messagesTimelineTestProps";
@@ -122,6 +122,12 @@ const countOccurrences = (markup: string, needle: string): number =>
   markup.split(needle).length - 1;
 
 describe("answered decision reply — the card settles, the value is stated once", () => {
+  // The first render pays for importing the whole MessagesTimeline module graph (~8 s on a
+  // loaded machine) — warm it here so no single test's 10 s budget absorbs module init.
+  beforeAll(async () => {
+    await import("~/components/chat/MessagesTimeline");
+  }, 60_000);
+
   function boolReply(text: string, value: boolean, correlationId = "run-1:1"): ChatMessage {
     return {
       id: MessageId.make(`message-reply-${text}`),

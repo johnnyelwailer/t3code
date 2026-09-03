@@ -5,6 +5,7 @@
  * `t3team-toolBrokerLive.ts` (already near the additive size budget) a single call site for the
  * cohesive "workflow tools" concern.
  */
+import type { ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import { makeWorkflowControlToolsForThread } from "./t3team-toolBrokerWorkflowControlLive.ts";
@@ -17,7 +18,20 @@ type WorkflowRunToolsDeps = Parameters<typeof makeWorkflowRunToolsForThread>[0];
 export const makeWorkflowToolsForThread = Effect.fn("makeWorkflowToolsForThread")(function* (
   deps: WorkflowRunToolsDeps,
 ) {
-  const workflowRunToolsForThread = yield* makeWorkflowRunToolsForThread(deps);
+  // Control tools first: the run tool's `replaceRunId` stops the previous run through the same
+  // sequence as the card's Stop and the agent's stop tool (GHE #415).
+  const workflowControlToolsForThread = yield* makeWorkflowControlToolsForThread();
+  const workflowRunToolsForThread = yield* makeWorkflowRunToolsForThread({
+    ...deps,
+    ...(workflowControlToolsForThread === undefined
+      ? {}
+      : {
+          stopRun: (threadId: ThreadId, runId: string) =>
+            workflowControlToolsForThread(threadId)
+              .controlWorkflowRun("stop", { runId })
+              .pipe(Effect.asVoid),
+        }),
+  });
   const workflowStatusToolsForThread = yield* makeWorkflowStatusToolsForThread();
   const workflowResumeToolsForThread = yield* makeWorkflowResumeToolsForThread({
     fileSystem: deps.fileSystem,
@@ -25,7 +39,6 @@ export const makeWorkflowToolsForThread = Effect.fn("makeWorkflowToolsForThread"
     dispatch: deps.dispatch,
     loadThreadProject: deps.loadThreadProject,
   });
-  const workflowControlToolsForThread = yield* makeWorkflowControlToolsForThread();
   return {
     workflowRunToolsForThread,
     workflowStatusToolsForThread,

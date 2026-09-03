@@ -27,5 +27,7 @@ On 'failed', read 'error' first:
 CONTROLLING A RUN YOU LAUNCHED
 t3team_orchestration_status(runId) observes it. t3team_orchestration_pause(runId) parks a waiting
 or scheduled run and keeps its continuation. t3team_orchestration_stop(runId) cancels it and
-interrupts its child agents. To replace a run, STOP the old one first — never launch a second
-copy beside it. Resume a paused or failed run with t3team_orchestration_resume(runId).`;
+interrupts its child agents. The host allows ONE launch per turn: while a run you launched is
+still active, another t3team_orchestration_run is refused. To replace it, call
+t3team_orchestration_run with replaceRunId: '<old runId>' — the old run is stopped, then the new
+one launches. Resume a paused or failed run with t3team_orchestration_resume(runId).`;

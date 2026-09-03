@@ -19,11 +19,13 @@
 
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import type * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 
 import type { T3TeamMessageWorkflowAuthor } from "@t3tools/contracts";
 
 import type { AskAffordance } from "@t3team/sdk";
+import { makeWorkflowTurnRetryFiberMap } from "./t3team-workflowTurnRetryFibers.ts";
 
 /** Which ask kind a thread is parked on — selects the event that resolves it. */
 export type WorkflowPendingKind = "thread.turn" | "user.input";
@@ -100,6 +102,15 @@ export interface T3TeamWorkflowEngineRegistryShape {
    * Lets `start_child` parent a session spawned from inside a workflow child thread under the
    * (visible) launching thread instead of a hidden ephemeral workflow thread. */
   readonly launchThreadForChildThread: (threadId: string) => string | undefined;
+  /** Record the fiber an armed re-drive is waiting on (GHE #411 §3) — interrupted by a pause or
+   * stop that clears the same step's pending ask before the fiber fires. */
+  readonly registerTurnRetryFiber: (
+    threadId: string,
+    correlationId: string,
+    fiber: Fiber.Fiber<unknown, unknown>,
+  ) => void;
+  /** Forget an armed re-drive's fiber without interrupting it (it started running on its own). */
+  readonly removeTurnRetryFiber: (threadId: string, correlationId: string) => void;
   readonly setPending: (threadId: string, pending: WorkflowPendingAsk) => void;
   /** Read and remove the pending ask for a thread (first matching reply wins). */
   readonly takePending: (threadId: string) => WorkflowPendingAsk | undefined;
@@ -123,6 +134,7 @@ export function makeWorkflowEngineRegistry(): T3TeamWorkflowEngineRegistryShape 
   const launchThreadByRun = new Map<string, string>();
   const childThreadsByRun = new Map<string, Set<string>>();
   const masterStopByRun = new Map<string, () => Promise<void>>();
+  const turnRetryFibers = makeWorkflowTurnRetryFiberMap();
 
   return {
     registerRun: (runId, run) => {
@@ -141,6 +153,7 @@ export function makeWorkflowEngineRegistry(): T3TeamWorkflowEngineRegistryShape 
       for (const [threadId, pending] of pendingByThread) {
         if (pending.runId === runId) {
           pendingByThread.delete(threadId);
+          turnRetryFibers.interruptAndRemove(threadId, pending.correlationId);
           pending.cancelLive?.();
         }
       }
@@ -149,9 +162,14 @@ export function makeWorkflowEngineRegistry(): T3TeamWorkflowEngineRegistryShape 
     },
     removePendingForRun: (runId) => {
       for (const [threadId, pending] of pendingByThread) {
-        if (pending.runId === runId) pendingByThread.delete(threadId);
+        if (pending.runId === runId) {
+          pendingByThread.delete(threadId);
+          turnRetryFibers.interruptAndRemove(threadId, pending.correlationId);
+        }
       }
     },
+    registerTurnRetryFiber: turnRetryFibers.register,
+    removeTurnRetryFiber: turnRetryFibers.remove,
     registerOwnership: (runId, launchThreadId) => {
       if (launchThreadId !== undefined) launchThreadByRun.set(runId, launchThreadId);
     },

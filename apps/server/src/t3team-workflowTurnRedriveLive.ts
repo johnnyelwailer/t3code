@@ -32,10 +32,18 @@ export function makeWorkflowTurnRedriveLive(deps: {
         turnRetries,
         updatedAt: DateTime.formatIso(DateTime.nowUnsafe()),
       }),
+    // Registers the forked fiber in the registry's turn-retry handle map (GHE #411 §3), so a
+    // pause/stop that clears this step's pending ask can interrupt it before it fires.
     armTurnRetry: (threadId, correlationId, delayMs) =>
-      Effect.suspend(() => self?.processTurnRetry({ threadId, correlationId }) ?? Effect.void).pipe(
+      Effect.suspend(() => {
+        deps.registry.removeTurnRetryFiber(threadId, correlationId);
+        return self?.processTurnRetry({ threadId, correlationId }) ?? Effect.void;
+      }).pipe(
         Effect.delay(Duration.millis(delayMs)),
         Effect.forkDetach,
+        Effect.tap((fiber) =>
+          Effect.sync(() => deps.registry.registerTurnRetryFiber(threadId, correlationId, fiber)),
+        ),
         Effect.asVoid,
       ),
     dispatch: (command) => deps.orchestration.dispatch(command),

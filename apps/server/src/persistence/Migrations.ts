@@ -92,6 +92,7 @@ import Migration0060 from "./Migrations/t3team-052_ProjectionThreadActivitiesKin
 import Migration0061 from "./Migrations/043_ProjectionThreadsUnsettledAt.ts";
 import Migration0062 from "./Migrations/044_ClearAutomaticProjectModelDefaults.ts";
 import Migration0063 from "./Migrations/t3team-053_WorkflowTurnRetries.ts";
+import Migration0064 from "./Migrations/t3team-054_ProjectionThreadMessageSequenceBackfill.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -167,6 +168,7 @@ export const migrationEntries = [
   [61, "ProjectionThreadsUnsettledAt", Migration0061],
   [62, "ClearAutomaticProjectModelDefaults", Migration0062],
   [63, "WorkflowTurnRetries", Migration0063],
+  [64, "ProjectionThreadMessageSequenceBackfill", Migration0064],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

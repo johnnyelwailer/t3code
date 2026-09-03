@@ -130,6 +130,79 @@ repoLayer("resumeFailedTurnStep", (it) => {
     }),
   );
 
+  // GHE #411 §4: the controller must not stay registered when the durable write it depends on
+  // fails — otherwise every later resume of this run is rejected as "already being resumed".
+  it.effect("deletes the just-registered controller when recordSuspended fails", () =>
+    Effect.gen(function* () {
+      const repo = yield* WorkflowRunRepository;
+      const runId = "resume-failed-step-write-fails";
+      const row = buildRunningWorkflowRunRow({
+        runId,
+        workflowPath: "/tmp/never-read.workflow.ts",
+        args: {},
+        launchThreadId: "launch-thread",
+        projectId,
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        nowIso: nowIso(),
+      });
+      yield* repo.upsert(row);
+      yield* repo.setPending({
+        runId,
+        pendingThreadId: "child-thread",
+        pendingCorrelationId: `${runId}:3`,
+        pendingKind: "thread.turn",
+        updatedAt: nowIso(),
+      });
+      yield* repo.markFailedRetainingPending({
+        runId,
+        updatedAt: nowIso(),
+        failureReason: "The agent turn failed: boom",
+        failureStep: "resume: thread.turn",
+      });
+
+      const registry = makeWorkflowEngineRegistry();
+      const launch: LaunchWorkflowRecipeInput = {
+        runId,
+        workflowPath: row.workflowPath,
+        args: {},
+        runsRoot: "/tmp/never-used",
+        launchThreadId: "launch-thread",
+        projectId,
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        registry,
+        dispatch: () => Promise.resolve(),
+        newId: () => "id",
+        nowIso,
+        lifecycle: {
+          recordSuspended: () => Promise.reject(new Error("durable write failed")),
+        } as unknown as NonNullable<LaunchWorkflowRecipeInput["lifecycle"]>,
+      };
+      const turnRedrive: InterruptedTurnRetry = {
+        settleNoText: () => Effect.void,
+        settleFailedTurn: () => Effect.void,
+        processTurnRetry: () => Effect.void,
+      };
+
+      const error = yield* resumeFailedTurnStep({
+        launch,
+        step: { threadId: "child-thread", correlationId: `${runId}:3` },
+        runRepository: repo,
+        turnRedrive,
+      }).pipe(Effect.flip);
+
+      assert.match(error, /durable write failed/);
+      assert.strictEqual(
+        registry.getRun(runId),
+        undefined,
+        "controller must be deleted, not left claimed",
+      );
+    }),
+  );
+
   it.effect("a body-thrown failure (pending cleared) is not a retained step", () =>
     Effect.gen(function* () {
       const repo = yield* WorkflowRunRepository;

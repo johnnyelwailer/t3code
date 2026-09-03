@@ -62,7 +62,14 @@ export function T3TeamWorkflowShapeStepRows({
       if (bucket) bucket.push(row);
       else byPhase.set(key, [row]);
     }
-    return [...byPhase.values()].flatMap((bucket) => groupDynamicRuntimeRows(bucket));
+    // `unit.index` must stay the row's position in the FULL list (the scheduled/pending walk
+    // below reads it), not its position inside the phase bucket.
+    const originalIndex = new Map(rows.map((row, index) => [row, index] as const));
+    return [...byPhase.values()].flatMap((bucket) =>
+      groupDynamicRuntimeRows(bucket).map((unit) =>
+        unit.kind === "row" ? { ...unit, index: originalIndex.get(unit.row) ?? unit.index } : unit,
+      ),
+    );
   })();
   // Phases that saw at least one dynamic (plan-unmatched) runtime row — evidence that SOME call
   // under this phase demonstrably fired, even though it didn't line up with a specific plan row

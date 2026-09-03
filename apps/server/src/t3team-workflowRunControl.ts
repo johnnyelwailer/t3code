@@ -20,6 +20,7 @@ import type {
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 import type { InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
+import { NON_TERMINAL_STATUSES, reportStaleWrite } from "./t3team-workflowRunControlCas.ts";
 import { pausedResumeBlocker, restorePausedPendingAsk } from "./t3team-workflowResumePausedTurn.ts";
 
 export type WorkflowRunControlAction = "pause" | "resume" | "stop";
@@ -32,7 +33,14 @@ export function workflowControlValidationError(
   input: { readonly threadId: string; readonly action: WorkflowRunControlAction },
 ): string | null {
   if (run.launchThreadId !== input.threadId) return "Workflow run not found for this thread.";
-  if (input.action === "pause" && run.status !== "suspended" && run.status !== "sleeping") {
+  if (
+    input.action === "pause" &&
+    run.status !== "suspended" &&
+    run.status !== "sleeping" &&
+    // Pause on an already-paused run is idempotent (GHE #411 §2): a retried tool call must
+    // succeed, not error, so `paused` passes validation here and short-circuits below.
+    run.status !== "paused"
+  ) {
     return "Pause is available only while the workflow is waiting or scheduled.";
   }
   if (input.action === "resume" && run.status !== "paused") return "This workflow is not paused.";
@@ -73,16 +81,30 @@ export const controlWorkflowRun = Effect.fn("controlWorkflowRun")(function* (
   let status: WorkflowRunControlStatus;
 
   if (input.action === "pause") {
+    // Idempotent retry (GHE #411 §2): pausing an already-paused run is a success, not an error —
+    // no write, no duplicate "Workflow paused" activity.
+    if (run.status === "paused") return { status: "paused" as const };
     if (run.status === "suspended" && run.pendingThreadId !== null) {
       const pending = registry.peekPending(run.pendingThreadId);
       if (pending?.runId !== runId) {
         return yield* Effect.fail("Workflow is already running its next step.");
       }
     }
-    workflowAdmissionQueue.pause(runId);
-    yield* repo
-      .setStatus({ runId, status: "paused", updatedAt: deps.nowIso() })
+    // Compare-and-set (GHE #411 §1): the write only lands while the row is still where `run` was
+    // read as being. A run that completed/failed between the read and here is reported, not
+    // silently flipped to `paused`.
+    const affected = yield* repo
+      .casSetStatus({
+        runId,
+        status: "paused",
+        updatedAt: deps.nowIso(),
+        expectedStatuses: ["suspended", "sleeping"],
+      })
       .pipe(Effect.mapError(errorMessage));
+    if (!affected) return yield* reportStaleWrite(repo, runId);
+    workflowAdmissionQueue.pause(runId);
+    // A pending re-drive fiber armed for this run's step must not survive the pause — see
+    // `removePendingForRun` (GHE #411 §3), which interrupts it before dropping the pending ask.
     registry.removePendingForRun(runId);
     yield* Effect.promise(() => deps.rearmScheduler());
     status = "paused";
@@ -106,13 +128,23 @@ export const controlWorkflowRun = Effect.fn("controlWorkflowRun")(function* (
       return yield* Effect.fail("Paused workflow has no continuation.");
     }
   } else {
-    // Synchronous first: an active detached controller can no longer publish completion.
+    // Synchronous first: an active detached controller can no longer publish completion. This
+    // also interrupts any re-drive fiber armed for the run's step (registry.cancelRun, GHE #411
+    // §3) before the compare-and-set write below.
     const childThreads = registry.childThreadsForRun(runId);
     registry.cancelRun(runId);
     workflowAdmissionQueue.cancel(runId);
-    yield* repo
-      .clearPending({ runId, status: "cancelled", updatedAt: deps.nowIso() })
+    // Compare-and-set (GHE #411 §1): only a still-non-terminal row is flipped to `cancelled` — a
+    // run that already completed/failed between the read and here is reported, not overwritten.
+    const affected = yield* repo
+      .casClearPending({
+        runId,
+        status: "cancelled",
+        updatedAt: deps.nowIso(),
+        expectedStatuses: NON_TERMINAL_STATUSES,
+      })
       .pipe(Effect.mapError(errorMessage));
+    if (!affected) return yield* reportStaleWrite(repo, runId);
     for (const childThreadId of childThreads) {
       yield* deps
         .dispatch({

@@ -313,6 +313,7 @@ const orchestrationRunParameters = Schema.Struct({
   source: Schema.optional(Schema.String),
   workflowPath: Schema.optional(Schema.String),
   args: Schema.optional(Schema.Unknown),
+  replaceRunId: Schema.optional(Schema.String),
   intent: Schema.Struct({
     goal: Schema.String,
     expectedOutcome: Schema.String,
@@ -326,7 +327,9 @@ const orchestrationRunDescription =
   "(an existing `.workflow.ts`), required `intent` ({goal, expectedOutcome, guardrails}), and " +
   "optional `args`. Returns {runId, status: accepted|completed|suspended|failed, " +
   "handoff: 'workflow-ui', output?, error?}. After a successful handoff, end the current turn " +
-  "with no assistant prose; the orchestration card owns progress and user decisions.";
+  "with no assistant prose; the orchestration card owns progress and user decisions. ONE launch " +
+  "per turn: while a run this thread launched is still active, a second call is refused — pass " +
+  "`replaceRunId` to stop that run and launch the replacement instead.";
 
 export const T3TeamOrchestrationRunTool = Tool.make("t3team_orchestration_run", {
   description: orchestrationRunDescription,

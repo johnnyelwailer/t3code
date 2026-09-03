@@ -10,6 +10,8 @@ import { ModelSelection } from "@t3tools/contracts";
 import { toPersistenceSqlError } from "../Errors.ts";
 import {
   WorkflowRunHostToolGrant,
+  CasClearWorkflowRunPendingInput,
+  CasSetWorkflowRunStatusInput,
   ClearWorkflowRunPendingInput,
   CountLiveWorkflowRunsByOriginInput,
   GetWorkflowRunInput,
@@ -281,6 +283,40 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       `,
   });
 
+  // Compare-and-set (GHE #411 §1): the UPDATE only fires when the row's CURRENT status is one of
+  // `expectedStatuses`, and `RETURNING run_id` reports whether it did — closing the TOCTOU window
+  // between a control action's read and its write (a run that settled in between is left alone).
+  const casSetWorkflowRunStatusRow = SqlSchema.findOneOption({
+    Request: CasSetWorkflowRunStatusInput,
+    Result: Schema.Struct({ runId: Schema.String }),
+    execute: ({ runId, status, updatedAt, expectedStatuses }) =>
+      sql`
+        UPDATE workflow_runs
+        SET status = ${status}, updated_at = ${updatedAt}
+        WHERE run_id = ${runId} AND ${sql.in("status", expectedStatuses)}
+        RETURNING run_id AS "runId"
+      `,
+  });
+
+  const casClearWorkflowRunPendingRow = SqlSchema.findOneOption({
+    Request: CasClearWorkflowRunPendingInput,
+    Result: Schema.Struct({ runId: Schema.String }),
+    execute: ({ runId, status, updatedAt, failureReason, failureStep, expectedStatuses }) =>
+      sql`
+        UPDATE workflow_runs
+        SET status = ${status},
+            pending_thread_id = NULL,
+            pending_correlation_id = NULL,
+            pending_kind = NULL,
+            failure_reason = ${failureReason ?? null},
+            failure_step = ${failureStep ?? null},
+            wake_at = NULL,
+            updated_at = ${updatedAt}
+        WHERE run_id = ${runId} AND ${sql.in("status", expectedStatuses)}
+        RETURNING run_id AS "runId"
+      `,
+  });
+
   const resumePausedWorkflowRunRow = SqlSchema.void({
     Request: ResumePausedWorkflowRunInput,
     execute: ({ runId, updatedAt }) =>
@@ -423,6 +459,12 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.setStatus:query")),
     );
 
+  const casSetStatus: WorkflowRunRepositoryShape["casSetStatus"] = (input) =>
+    casSetWorkflowRunStatusRow(input).pipe(
+      Effect.map(Option.isSome),
+      Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.casSetStatus:query")),
+    );
+
   const resumePaused: WorkflowRunRepositoryShape["resumePaused"] = (input) =>
     resumePausedWorkflowRunRow(input).pipe(
       Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.resumePaused:query")),
@@ -436,6 +478,12 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
   const clearPending: WorkflowRunRepositoryShape["clearPending"] = (input) =>
     clearWorkflowRunPendingRow(input).pipe(
       Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.clearPending:query")),
+    );
+
+  const casClearPending: WorkflowRunRepositoryShape["casClearPending"] = (input) =>
+    casClearWorkflowRunPendingRow(input).pipe(
+      Effect.map(Option.isSome),
+      Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.casClearPending:query")),
     );
 
   const markFailedRetainingPending: WorkflowRunRepositoryShape["markFailedRetainingPending"] = (
@@ -469,9 +517,11 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
     listRecent,
     countLiveByOrigin,
     setStatus,
+    casSetStatus,
     resumePaused,
     setPending,
     clearPending,
+    casClearPending,
     markFailedRetainingPending,
     setSleeping,
     setTurnRetries,
