@@ -146,7 +146,7 @@ export function T3TeamActiveWorkflowDock({
             </button>
           </ComposerBanner.Content>
           {items.length > 1 ? (
-            <ComposerBanner.Actions aria-label="Switch orchestration">
+            <ComposerBanner.Actions role="group" aria-label="Switch orchestration">
               <button
                 type="button"
                 className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
