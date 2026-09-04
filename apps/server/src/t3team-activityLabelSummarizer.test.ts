@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import { buildActivityLabelContext, parseActivityLabel } from "./t3team-activityLabelContext.ts";
 import {
+  ACTIVITY_LABEL_MAX_TRACKED_THREADS,
   ACTIVITY_LABEL_TTL_MS,
   createActivityLabelEventReactor,
   createActivityLabelSummarizer,
@@ -413,6 +414,34 @@ describe("activity label summarizer", () => {
     expect(persisted.length).toBe(2);
   });
 
+  it("GHE #202: clear() skips the meta.update unless a label was noted/pending", async () => {
+    const timers = makeTimers();
+    const persisted: Array<{ label: string | null }> = [];
+    const summarizer = createActivityLabelSummarizer({
+      generate: async () => "Reading contracts",
+      persist: async ({ label }) => {
+        persisted.push({ label });
+      },
+      isActive: () => true,
+      onError: () => undefined,
+      ...timers,
+    });
+    // No note() ever landed for "never-active" (flag was off, or the thread
+    // never had any activity) — clear() must not dispatch a meta.update
+    // clearing a label that was never set.
+    await summarizer.clear("never-active");
+    expect(persisted).toEqual([]);
+    // A thread that WAS noted still gets its null persisted on clear().
+    summarizer.note({
+      threadId: "t1",
+      modelSelection: model,
+      kind: "tool.started",
+      summary: "Reading contracts.ts",
+    });
+    await summarizer.clear("t1"); // idle before the debounce even fired
+    expect(persisted).toEqual([{ label: null }]);
+  });
+
   it("schedules no TTL timer when the flag is off", async () => {
     const timers = makeTimers();
     const persisted: Array<{ label: string | null }> = [];
@@ -483,6 +512,118 @@ describe("activity label summarizer", () => {
     expect(parseActivityLabel(42)).toBe(null);
   });
 
+  it("GHE #203: forget() drops tracked state without persisting anything", async () => {
+    const timers = makeTimers();
+    const persisted: Array<{ label: string | null }> = [];
+    const summarizer = createActivityLabelSummarizer({
+      generate: async () => "Reading contracts",
+      persist: async ({ label }) => {
+        persisted.push({ label });
+      },
+      isActive: () => true,
+      onError: () => undefined,
+      ...timers,
+    });
+    summarizer.note({
+      threadId: "t1",
+      modelSelection: model,
+      kind: "tool.started",
+      summary: "Reading contracts.ts",
+    });
+    summarizer.forget("t1"); // thread deleted mid-generation, never went idle
+    await timers.fire(0);
+    expect(persisted).toEqual([]);
+    // A subsequent clear() (defensive double-fire) also finds nothing to do.
+    await summarizer.clear("t1");
+    expect(persisted).toEqual([]);
+  });
+
+  it("GHE #341: FIFO eviction of a thread with a persisted label clears it (no stranded label)", async () => {
+    const timers = makeTimers();
+    const persisted: Array<{ threadId: string; label: string | null }> = [];
+    const summarizer = createActivityLabelSummarizer({
+      generate: async () => "Reading contracts",
+      persist: async ({ threadId, label }) => {
+        persisted.push({ threadId, label });
+      },
+      isActive: () => true,
+      onError: () => undefined,
+      ...timers,
+    });
+    summarizer.note({
+      threadId: "t1",
+      modelSelection: model,
+      kind: "tool.started",
+      summary: "Reading contracts.ts",
+    });
+    await timers.fire(0); // t1's label persists and is now tracked as "persisted"
+    expect(persisted).toEqual([{ threadId: "t1", label: "Reading contracts" }]);
+    // Push enough distinct threads to FIFO-evict t1 (the oldest tracked key)
+    // out of the bounded window — its `pending` entry (and TTL) are gone,
+    // but the label is still live server-side until something clears it.
+    for (let i = 0; i < ACTIVITY_LABEL_MAX_TRACKED_THREADS; i += 1) {
+      summarizer.note({
+        threadId: `other-${i}`,
+        modelSelection: model,
+        kind: "tool.started",
+        summary: "noise",
+      });
+    }
+    // Eviction fired a fire-and-forget null clear for t1's stranded label —
+    // it must not be left persisted forever just because `pending` is gone.
+    expect(persisted).toEqual([
+      { threadId: "t1", label: "Reading contracts" },
+      { threadId: "t1", label: null },
+    ]);
+    // GHE #202 still holds: idling a thread that was never noted (or already
+    // fully cleared) dispatches nothing.
+    await summarizer.clear("never-active");
+    expect(persisted).toHaveLength(2);
+  });
+
+  it("GHE #341: forget() during an in-flight persist() discards the result instead of resurrecting the thread", async () => {
+    const timers = makeTimers();
+    let releasePersist: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releasePersist = resolve;
+    });
+    const persisted: Array<{ label: string | null }> = [];
+    const summarizer = createActivityLabelSummarizer({
+      generate: async () => "Reading contracts",
+      persist: async ({ label }) => {
+        await gate; // hold the persist open so forget() can race it
+        persisted.push({ label });
+      },
+      isActive: () => true,
+      onError: () => undefined,
+      ...timers,
+    });
+    summarizer.note({
+      threadId: "t1",
+      modelSelection: model,
+      kind: "tool.started",
+      summary: "Reading contracts.ts",
+    });
+    timers.fire(0); // starts generate() -> persist(), without awaiting either
+    // Let generate() resolve and persist() begin (and gate) before forgetting.
+    await new Promise((resolve) => queueMicrotask(resolve));
+    await new Promise((resolve) => queueMicrotask(resolve));
+    summarizer.forget("t1"); // thread deleted while persist() is still in flight
+    releasePersist!();
+    // Let the stale generation's continuation after persist() finish. The
+    // already-fired persist() call itself cannot be un-sent (its label
+    // lands), but the discarded result must not resurrect t1 as "has a
+    // persisted label" — nothing after this should be written on its behalf.
+    await new Promise((resolve) => queueMicrotask(resolve));
+    await new Promise((resolve) => queueMicrotask(resolve));
+    expect(persisted).toEqual([{ label: "Reading contracts" }]);
+    // A later idle for the same threadId finds nothing pending (forget()
+    // already dropped it, and the discarded result did not re-mark it as
+    // persisted) and dispatches no extra meta.update.
+    await summarizer.clear("t1");
+    expect(persisted).toEqual([{ label: "Reading contracts" }]);
+  });
+
   it("runs a fake provider from an activity event and never writes chat/messages", async () => {
     const timers = makeTimers();
     const persisted: Array<{ threadId: string; label: string | null }> = [];
@@ -510,5 +651,25 @@ describe("activity label summarizer", () => {
       { threadId: "t1", label: "Fixing build" },
       { threadId: "t1", label: null },
     ]);
+  });
+
+  it("GHE #203: event reactor exposes forget() for thread-deleted pruning", async () => {
+    const timers = makeTimers();
+    const persisted: Array<{ threadId: string; label: string | null }> = [];
+    const reactor = createActivityLabelEventReactor({
+      loadThread: async (threadId) =>
+        threadId === "t1" ? { modelSelection: model, userGist: "fix the build" } : null,
+      generate: async () => "Fixing build",
+      persist: async ({ threadId, label }) => {
+        persisted.push({ threadId, label });
+      },
+      isActive: () => true,
+      onError: () => undefined,
+      ...timers,
+    });
+    await reactor.handle({ threadId: "t1", kind: "tool.started", summary: "npm run build" });
+    reactor.forget("t1"); // thread deleted mid-generation, never went idle
+    await timers.fire(0);
+    expect(persisted).toEqual([]);
   });
 });

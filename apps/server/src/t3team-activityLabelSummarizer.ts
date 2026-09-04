@@ -14,6 +14,15 @@ import type { ModelSelection } from "@t3tools/contracts";
  */
 export const ACTIVITY_LABEL_TTL_MS = 5_000;
 
+/**
+ * Bounded-size guard for the per-thread maps below (GHE #203): threads that
+ * never idle (killed process, crashed provider, a client that never sends a
+ * turn-end) would otherwise never be pruned. See `createBoundedThreadMap`
+ * for the insert-time eviction mechanism; the thread.deleted prune (reactor
+ * side) is still the normal, immediate path.
+ */
+export const ACTIVITY_LABEL_MAX_TRACKED_THREADS = 500;
+
 import {
   ACTIVITY_LABEL_WINDOW_SIZE,
   buildActivityLabelContext,
@@ -22,6 +31,8 @@ import {
   parseActivityLabel,
   type ActivityLabelGeneration,
 } from "./t3team-activityLabelContext.ts";
+import { createBoundedThreadMap } from "./t3team-boundedThreadMap.ts";
+import { createActivityLabelPersistTracker } from "./t3team-activityLabelPersistTracker.ts";
 
 /**
  * Out-of-band live-activity-label coordinator for active threads (GHE #40, extended
@@ -110,11 +121,41 @@ export function createActivityLabelSummarizer(input: {
   readonly activityLabelTtlMs?: number;
 }) {
   const pending = new Map<string, PendingLabel>();
-  const windowByThread = new Map<string, Array<{ kind: string; summary: string }>>();
   const minRegenerateMs = input.minRegenerateMs ?? 60_000;
   const now = input.now ?? Date.now;
   const setTimer = input.setTimer ?? setTimeout;
   const clearTimer = input.clearTimer ?? clearTimeout;
+  // GHE #341 race tracking lives in a sibling module (this file is already
+  // over the LOC cap): see `t3team-activityLabelPersistTracker.ts`.
+  const persistTracker = createActivityLabelPersistTracker();
+  /** Cancel `threadId`'s timers and drop it from `pending`; returns the state it had, if any. */
+  const clearPendingState = (threadId: string) => {
+    const state = pending.get(threadId);
+    if (state?.timer) clearTimer(state.timer);
+    if (state?.ttlTimer) clearTimer(state.ttlTimer);
+    pending.delete(threadId);
+    return state;
+  };
+  // GHE #203: windowByThread is the FIFO source of truth for eviction; its
+  // onEvict keeps `pending` (keyed the same way) from drifting out of sync
+  // when a never-idling thread gets evicted to make room for a new one.
+  // GHE #341: an evicted thread with a REAL persisted label needs that
+  // label cleared too, or it is stranded forever once `pending` is gone.
+  const windowByThread = createBoundedThreadMap<Array<{ kind: string; summary: string }>>(
+    ACTIVITY_LABEL_MAX_TRACKED_THREADS,
+    (evictedThreadId) => {
+      const state = clearPendingState(evictedThreadId);
+      if (persistTracker.clear(evictedThreadId)) {
+        void input
+          .persist({
+            threadId: evictedThreadId,
+            label: null,
+            generation: (state?.generation ?? 0) + 1,
+          })
+          .catch(input.onError);
+      }
+    },
+  );
 
   /**
    * Schedule the TTL clear for a label that was just persisted.
@@ -143,6 +184,7 @@ export function createActivityLabelSummarizer(input: {
     const state = pending.get(threadId);
     if (!state || state.generation !== generation || state.hash !== hash) return;
     if (!input.isActive()) return;
+    const epoch = persistTracker.epochOf(threadId);
     const rawLabel = await input.generate({
       modelSelection: state.model,
       context: state.context,
@@ -153,7 +195,13 @@ export function createActivityLabelSummarizer(input: {
     if (!label || !current || current.generation !== generation || current.hash !== hash) {
       return;
     }
+    // forget() raced generate(): thread is gone, don't persist onto it.
+    if (persistTracker.epochOf(threadId) !== epoch) return;
     await input.persist({ threadId, label, generation });
+    // GHE #341: forget() can also race the persist() await itself — recheck
+    // after it resolves and discard rather than resurrect the thread.
+    if (persistTracker.epochOf(threadId) !== epoch) return;
+    persistTracker.markPersisted(threadId);
     current.lastGeneratedHash = hash;
     current.lastGeneratedAt = now();
     // GHE #208 follow-up: give this label its minimum life, then let the
@@ -229,16 +277,27 @@ export function createActivityLabelSummarizer(input: {
     /** Idle/terminal: drop pending work and clear the stored label. */
     clear: async (threadId: string) => {
       windowByThread.delete(threadId);
-      const state = pending.get(threadId);
-      if (state?.timer) clearTimer(state.timer);
-      if (state?.ttlTimer) clearTimer(state.ttlTimer);
-      pending.delete(threadId);
+      const state = clearPendingState(threadId);
+      const hadPersistedLabel = persistTracker.clear(threadId);
+      // GHE #202: never noted, nothing to clear. GHE #341: a persisted label
+      // can outlive `pending` (FIFO-evicted) — check both before skipping.
+      if (!state && !hadPersistedLabel) return;
       // Bump the generation so any in-flight generation never persists after us.
       await input.persist({
         threadId,
         label: null,
         generation: (state?.generation ?? 0) + 1,
       });
+    },
+    /**
+     * GHE #203: the thread was deleted — drop its tracked state without
+     * persisting anything (there is nothing left to write a label onto).
+     * Unlike clear(), this never calls input.persist().
+     */
+    forget: (threadId: string) => {
+      windowByThread.delete(threadId);
+      clearPendingState(threadId);
+      persistTracker.forget(threadId);
     },
   };
 }
@@ -297,5 +356,7 @@ export function createActivityLabelEventReactor(input: {
     },
     /** The thread went idle or terminal: clear the label. */
     clear: (threadId: string) => summarizer.clear(threadId),
+    /** GHE #203: the thread was deleted — drop tracked state, no persist. */
+    forget: (threadId: string) => summarizer.forget(threadId),
   };
 }

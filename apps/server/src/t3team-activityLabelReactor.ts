@@ -15,9 +15,13 @@ import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnap
 import { TextGeneration } from "./textGeneration/TextGeneration.ts";
 import { resolveAuxTextGenerationModelSelection } from "./orchestration/Layers/ProviderCommandReactor.ts";
 import { ProviderService } from "./provider/Services/ProviderService.ts";
-import { createActivityLabelEventReactor } from "./t3team-activityLabelSummarizer.ts";
+import {
+  ACTIVITY_LABEL_MAX_TRACKED_THREADS,
+  createActivityLabelEventReactor,
+} from "./t3team-activityLabelSummarizer.ts";
 import { createActivityStateTracker } from "./t3team-activityState.ts";
 import { runtimeEventToActivityStateEvent } from "./t3team-activityStateEvent.ts";
+import { createBoundedThreadMap } from "./t3team-boundedThreadMap.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import { ServerSettingsService } from "./serverSettings.ts";
 
@@ -121,7 +125,9 @@ export const T3TeamActivityLabelReactorLive = Layer.effectDiscard(
 
     // 2. LLM enrichment (GHE #40): throttled, gated, fail-open.
     // One-line user-intent gist, captured from user messages (no thread read).
-    const userGistByThread = new Map<string, string>();
+    // GHE #203: bounded so a stream of never-idling threads cannot grow this
+    // unboundedly; the normal, immediate prune is thread.deleted below.
+    const userGistByThread = createBoundedThreadMap<string>(ACTIVITY_LABEL_MAX_TRACKED_THREADS);
 
     const reactor = createActivityLabelEventReactor({
       loadThread: async (threadId) => {
@@ -195,6 +201,17 @@ export const T3TeamActivityLabelReactorLive = Layer.effectDiscard(
         }
       });
 
+    // GHE #203: userGistByThread (here) and windowByThread (inside the
+    // summarizer) were only ever pruned on idle — a thread that is deleted
+    // without going idle first (killed process, crashed provider) leaked
+    // both forever. Prune eagerly on the thread-deleted domain event.
+    const onThreadDeleted = (event: OrchestrationEvent) =>
+      Effect.gen(function* () {
+        if (event.type !== "thread.deleted") return;
+        userGistByThread.delete(event.payload.threadId);
+        yield* Effect.sync(() => reactor.forget(event.payload.threadId));
+      });
+
     const onIdle = (event: OrchestrationEvent) =>
       Effect.gen(function* () {
         // Turn ended, the thread settled into the shelf, or the user stopped
@@ -245,6 +262,7 @@ export const T3TeamActivityLabelReactorLive = Layer.effectDiscard(
           yield* onUserMessage(event);
           yield* onIdle(event);
           yield* onActivity(event);
+          yield* onThreadDeleted(event);
         }).pipe(
           Effect.catchCause((cause) =>
             Cause.hasInterruptsOnly(cause)
