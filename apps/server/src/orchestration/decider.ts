@@ -1080,9 +1080,15 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         lastUserMessage?.id === command.messageId &&
         (lastMessage?.id === command.messageId || lastTurnIncomplete);
       if (targetThread.messages.length > 0 && !resumable) {
+        // Name the ACTUAL last user message: a mid-turn follow-up can land
+        // after the message the client tried to resume (GHE #402), and the
+        // client's timeline view of the thread can lag the read model. The
+        // web client parses this hint and retries once against it.
+        const lastUserHint =
+          lastUserMessage !== undefined ? ` Last user message is '${lastUserMessage.id}'.` : "";
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
-          detail: `Thread '${command.threadId}' does not end with unanswered user message '${command.messageId}'.`,
+          detail: `Thread '${command.threadId}' does not end with unanswered user message '${command.messageId}'.${lastUserHint}`,
         });
       }
       const resumeEvent: Omit<OrchestrationEvent, "sequence"> = {

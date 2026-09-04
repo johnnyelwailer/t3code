@@ -98,6 +98,7 @@ import {
   derivePendingUserInputs,
   derivePhase,
   deriveTimelineEntries,
+  deriveTurnResumeRetryTarget,
   deriveActiveWorkStartedAt,
   deriveActivePlanState,
   findLatestProposedPlan,
@@ -5239,17 +5240,46 @@ function ChatViewContent(props: ChatViewProps) {
     setIsResumingTurn(true);
     try {
       if (!unansweredMessageId) return;
-      await resumeThreadTurnCommand({
-        environmentId,
-        input: { threadId: activeThreadId, messageId: unansweredMessageId },
-      });
+      const attempt = (messageId: MessageId) =>
+        resumeThreadTurnCommand({
+          environmentId,
+          input: { threadId: activeThreadId, messageId },
+        });
+      let result = await attempt(unansweredMessageId);
+      // GHE #402: a mid-turn follow-up can land after the message we tried to
+      // resume, so the decider rejects the target. Re-target the thread's
+      // last user message (named in the rejection, or our own last one) and
+      // retry exactly once instead of leaving the user stuck.
+      if (result._tag === "Failure") {
+        const squashedFailure = squashAtomCommandFailure(result);
+        const failureMessage = squashedFailure instanceof Error ? squashedFailure.message : null;
+        const retryTarget = deriveTurnResumeRetryTarget({
+          requestedMessageId: unansweredMessageId,
+          failureMessage,
+          fallbackLastUserMessageId: lastUserThreadMessage?.id ?? null,
+        });
+        if (retryTarget !== null) {
+          result = await attempt(retryTarget);
+        }
+      }
+      if (result._tag === "Failure") {
+        // A rejected resume leaves the thread still unanswered: re-arm the
+        // latch so the button stops reading as "Retrying..." forever.
+        setIsResumingTurn(false);
+      }
       // Deliberately stay disabled on success: the banner disappears once the
       // turn events arrive, and re-enabling in that gap invites a second
       // dispatch the decider would only reject noisily.
     } catch {
       setIsResumingTurn(false);
     }
-  }, [activeThreadId, environmentId, resumeThreadTurnCommand, unansweredMessageId]);
+  }, [
+    activeThreadId,
+    environmentId,
+    resumeThreadTurnCommand,
+    unansweredMessageId,
+    lastUserThreadMessage,
+  ]);
   // Re-arm the resume latch whenever the unanswered state goes away.
   useEffect(() => {
     if (!lastMessageIsUnansweredUser) setIsResumingTurn(false);
