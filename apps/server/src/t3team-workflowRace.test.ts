@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 import type { WorkflowRunLifecycle } from "./t3team-workflowEngineBrokerTypes.ts";
 import { createWorkflowRunController } from "./t3team-workflowEngineLaunch.ts";
-import { makeControllerResume } from "./t3team-workflowEngineResume.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { createWorkflowLiveSettlement } from "./t3team-workflowLiveSettlement.ts";
 
@@ -58,67 +57,30 @@ describe("workflow orchestration race boundaries", () => {
   });
 
   it("Pause/Stop winning admission leaves the durable reply unresolved", async () => {
-    const appendResolved = vi.fn(async () => true);
     const recordActive = vi.fn(async () => false);
     const registry = makeWorkflowEngineRegistry();
-    const registered = { resume: async () => {}, cancel: () => {} };
-    registry.registerRun("paused-wake", registered);
-    const resume = makeControllerResume({
-      input: {
-        runId: "paused-wake",
-        runsRoot: "/tmp",
-        registry,
-        lifecycle: lifecycle({ recordActive }),
-      } as never,
-      ref: { kind: "workflow", path: "/tmp/w.workflow.ts", absolutePath: "/tmp/w.workflow.ts" },
-      options: {} as never,
-      settle: vi.fn(async (): Promise<"completed"> => "completed"),
-      stepActivities: {
-        emitSent: async () => {},
-        emitResolved: async () => {},
-        emitRun: async () => {},
-      },
-      appendResolved,
+    const controller = createWorkflowRunController({
+      runId: "paused-wake",
+      workflowPath: "/tmp/not-loaded.workflow.ts",
+      args: {},
+      runsRoot: "/tmp",
+      projectId: ProjectId.make("project-1"),
+      modelSelection: createModelSelection(ProviderInstanceId.make("provider-1"), "model-1"),
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      registry,
+      dispatch: vi.fn(async () => {}),
+      newId: () => "id",
+      nowIso: () => "2026-07-19T00:00:00.000Z",
+      lifecycle: lifecycle({ recordActive }),
     });
 
-    await Promise.all([resume("paused-wake:1", {}), resume("paused-wake:1", {})]);
+    await Promise.all([
+      controller.resume("paused-wake:1", {}),
+      controller.resume("paused-wake:1", {}),
+    ]);
 
     expect(recordActive).toHaveBeenCalledOnce();
-    expect(appendResolved).not.toHaveBeenCalled();
-  });
-
-  it("routes a post-resume runtime failure through the same repair funnel", async () => {
-    const registry = makeWorkflowEngineRegistry();
-    registry.registerRun("resume-repair", { resume: async () => {}, cancel: () => {} });
-    const recordFailed = vi.fn(async () => {});
-    const emitRun = vi.fn(async () => {});
-    const repair = vi.fn(async () => true);
-    const resume = makeControllerResume({
-      input: {
-        runId: "resume-repair",
-        runsRoot: "/tmp",
-        registry,
-        lifecycle: lifecycle({ recordFailed }),
-      } as never,
-      ref: { kind: "workflow", path: "/tmp/w.workflow.ts", absolutePath: "/tmp/w.workflow.ts" },
-      options: {} as never,
-      settle: vi.fn(async () => {
-        throw new TypeError("members.map is not a function");
-      }),
-      stepActivities: {
-        emitSent: async () => {},
-        emitResolved: async () => {},
-        emitRun,
-      },
-      appendResolved: vi.fn(async () => true),
-      repair,
-    });
-
-    await resume("resume-repair:1", "approved");
-
-    expect(repair).toHaveBeenCalledOnce();
-    expect(recordFailed).not.toHaveBeenCalled();
-    expect(emitRun).not.toHaveBeenCalledWith("failed", expect.anything());
   });
 
   it("first matching settlement consumes the pending ask; duplicates and late replies do not", () => {

@@ -1,19 +1,23 @@
 /**
- * Builds a run's broker + resume closure and registers it, WITHOUT starting it.
+ * Builds a run's broker + host and registers it, WITHOUT starting it.
  *
- * Its own module because it has two callers with opposite starting points — `launchWorkflowRecipe`
- * (which then calls `startWorkflow`) and boot rehydration (which restores the pending ask
- * instead) — and the whole point is that a fresh and a restored run drive forward through
- * identical code. Depends only downward, never back on the launch module.
+ * Its own module because it has two callers with opposite starting points —
+ * `launchWorkflowRecipe` (which then calls `start`) and boot rehydration
+ * (which restores the pending ask instead) — and the whole point is that a
+ * fresh and a restored run drive forward through identical code. The
+ * start/settle/resume/fail funnel itself is the shared, host-neutral
+ * `createWorkflowRunHost` from `@t3team/sdk`; this module owns only the
+ * t3team-specific pieces: the dispatch-based broker, the step-activity UX
+ * sinks, the agent self-repair funnel, and the terminal-failure sequence.
+ *
+ * Depends only downward, never back on the launch module.
  */
 // @effect-diagnostics globalConsole:off -- onComplete sink failure log in a plain Promise path, outside any Effect runtime.
 
 import {
-  type AbortedResult,
-  type SuspendedResult,
+  createWorkflowRunHost,
   type WorkflowRef,
   type WorkflowRunOptions,
-  type WorkflowRunResult,
 } from "@t3team/sdk";
 
 import { createWorkflowEngineBroker } from "./t3team-workflowEngineBroker.ts";
@@ -22,15 +26,15 @@ import {
   summarizeCompositionBranchFailures,
   type WorkflowCompositionBranchFailure,
 } from "./t3team-workflowEngineCompositionFailure.ts";
-import { makeControllerFail, makeControllerResume } from "./t3team-workflowEngineResume.ts";
 import { createWorkflowStepActivityEmitter } from "./t3team-workflowEngineStepActivities.ts";
 import { deliverWorkflowCompletion } from "./t3team-workflowCompletionMessage.ts";
 import { toWorkflowModelSelection } from "./t3team-workflowModelSelection.ts";
 import { t3teamWorkflowHostToolRunOptions } from "./t3team-workflowHostDraftTools.ts";
+import { settleWorkflowRunFailure } from "./t3team-workflowRunFailure.ts";
+import { tryWorkflowRepair } from "./t3team-workflowEngineRepair.ts";
 
 // Moved to the types module (LOC cap); re-exported so existing importers stay valid.
 export type { WorkflowRunLifecycle } from "./t3team-workflowEngineBrokerTypes.ts";
-import type { WorkflowLaunchStatus } from "./t3team-workflowEngineLaunchTypes.ts";
 
 import type {
   LaunchWorkflowRecipeInput,
@@ -40,7 +44,6 @@ import type {
 export function createWorkflowRunController(
   input: LaunchWorkflowRecipeInput,
 ): WorkflowRunController {
-  let cancelled = false;
   const ref: WorkflowRef = {
     kind: "workflow",
     path: input.workflowPath,
@@ -129,73 +132,86 @@ export function createWorkflowRunController(
     workflowVersionPolicy: input.workflowVersionPolicy ?? "allow-change",
   };
 
-  const settle = async (
-    result: WorkflowRunResult<unknown> | SuspendedResult | AbortedResult,
-  ): Promise<WorkflowLaunchStatus> => {
-    if (cancelled) return "suspended";
-    if ("suspended" in result) return "suspended"; // parked — the reactor resumes it later
-    if ("aborted" in result) {
-      // Aborted is a hard terminal distinct from completed: record it as failed so the
-      // durable row and the step activity never claim a completion that did not happen.
-      await input.lifecycle?.recordFailed({
-        reason: "Run aborted by host abort signal.",
-        step: "abort",
-      });
-      await stepActivities.emitRun("failed", "Run aborted.");
-      input.registry.deleteRun(input.runId);
-      return "failed";
-    }
-    await input.lifecycle?.recordCompleted();
-    if (cancelled) return "suspended";
-    // The run genuinely completed — `parallel`/`pipeline` never rethrow a branch's rejection —
-    // but a failed branch must keep this from reading as unqualifiedly green. `phase` stays
-    // "completed" (that is the truth); `error` carries a summary a viewer will see the same way
-    // they see any other run-level note, alongside the branch's own "failed" step row (the
-    // primary signal — see `onCompositionBranchFailed` above).
-    await stepActivities.emitRun(
-      "completed",
-      summarizeCompositionBranchFailures(compositionBranchFailures),
-    );
-    await deliverWorkflowCompletion({
-      launchThreadId: input.launchThreadId,
-      workflowRunId: input.runId,
-      output: result.result,
-      projectId: input.projectId,
-      dispatch: input.dispatch,
-      newId: input.newId,
-      nowIso: input.nowIso,
-    });
-    // The run itself completed — a throwing output sink must not flip it to
-    // "failed" after the completion message already posted (double-notify).
-    try {
-      await input.onComplete?.(result.result);
-    } catch (sinkError) {
-      console.warn(`[t3team-workflow] onComplete sink failed for run ${input.runId}:`, sinkError);
-    }
-    input.registry.deleteRun(input.runId);
-    return "completed";
-  };
+  // The per-run funnel itself — start/settle/resume/fail/cancel — is the shared, host-neutral
+  // SDK host. This controller supplies its t3team sinks and the optional agent self-repair.
+  const host = createWorkflowRunHost({
+    ref,
+    args: input.args,
+    runId: input.runId,
+    runOptions: options,
+    registry: input.registry,
+    ...(input.lifecycle === undefined ? {} : { lifecycle: input.lifecycle }),
+    sinks: {
+      onCompleted: async (result) => {
+        // The run itself completed — `parallel`/`pipeline` never rethrow a branch's rejection —
+        // but a failed branch must keep this from reading as unqualifiedly green. `phase` stays
+        // "completed" (that is the truth); `error` carries a summary a viewer sees the same way
+        // as any other run-level note (the branch's own "failed" step row is the primary signal).
+        await stepActivities.emitRun(
+          "completed",
+          summarizeCompositionBranchFailures(compositionBranchFailures),
+        );
+        await deliverWorkflowCompletion({
+          launchThreadId: input.launchThreadId,
+          workflowRunId: input.runId,
+          output: result.result,
+          projectId: input.projectId,
+          dispatch: input.dispatch,
+          newId: input.newId,
+          nowIso: input.nowIso,
+        });
+        // A throwing output sink must not flip the run to "failed" after the completion
+        // message already posted (double-notify).
+        try {
+          await input.onComplete?.(result.result);
+        } catch (sinkError) {
+          console.warn(`[t3team-workflow] onComplete sink failed for run ${input.runId}:`, sinkError);
+        }
+      },
+      onFailed: async ({ phase, error }) => {
+        await settleWorkflowRunFailure({
+          runId: input.runId,
+          launchThreadId: input.launchThreadId,
+          error,
+          registry: input.registry,
+          lifecycle: input.lifecycle,
+          stepActivities,
+          dispatch: input.dispatch,
+          newId: input.newId,
+          nowIso: input.nowIso,
+          onError: input.onError,
+          phase: phase === "host" ? "resume" : phase,
+          // Host-side fail (a step that can never be answered): the row KEEPS its pending ask so
+          // `t3team.orchestration.resume` re-drives exactly that step rather than replaying into a
+          // `sent` entry nobody settles (GHE #403).
+          ...(phase === "host" ? { retainPendingStep: true } : {}),
+        });
+      },
+      onAborted: async ({ reason }) => {
+        await stepActivities.emitRun("failed", reason);
+      },
+    },
+    // The awaited primitive resolved — flip its live step activity to `completed` (same id →
+    // in-place upsert) before the replay drives to the next suspension.
+    onReplyJournaled: async (correlationId) => {
+      await stepActivities.emitResolved(correlationId, "completed");
+    },
+    repair: () => (error) =>
+      tryWorkflowRepair(
+        input,
+        { ref, options, settle: host.settle, stepActivities, isCancelled: host.isCancelled },
+        error,
+      ),
+    lifecycleAlreadyRunning: input.lifecycleAlreadyRunning,
+  });
 
-  // The concurrency/crash-safe resume closure (see t3team-workflowEngineResume.ts). Extracted to
-  // keep this module under the prefixed-file LOC cap.
-  const resume = makeControllerResume({
-    input,
+  return {
     ref,
     options,
-    settle,
+    start: host.start,
+    settle: host.settle,
+    resume: host.resume,
     stepActivities,
-    isCancelled: () => cancelled,
-  });
-
-  input.registry.registerRun(input.runId, {
-    resume,
-    // Host-detected terminal failure — an ask that can never be answered (see
-    // `WorkflowRegisteredRun.fail`), routed through the ONE failure funnel.
-    fail: makeControllerFail({ input, stepActivities, isCancelled: () => cancelled }),
-    cancel: () => {
-      cancelled = true;
-    },
-  });
-  input.registry.registerOwnership(input.runId, input.launchThreadId);
-  return { ref, options, settle, resume, stepActivities, isCancelled: () => cancelled };
+    isCancelled: host.isCancelled,
+  };
 }
