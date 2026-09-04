@@ -130,6 +130,10 @@ export interface CreateWorkflowRunHostConfig {
     readonly correlationId: string;
     readonly reply: unknown;
   }) => Promise<boolean>;
+  /** A durable reply can already be present after a transient host interruption.
+   * Return true only when this host may replay that recorded reply; clock wakes
+   * can retain the default false and use their orphan policy instead. */
+  readonly retryResolvedReply?: (correlationId: string) => Promise<boolean> | boolean;
   /** The lifecycle's running row was already written by the caller. */
   readonly lifecycleAlreadyRunning?: boolean;
   /** Called once a reply is journaled, before the replay drives (host UX sink). */

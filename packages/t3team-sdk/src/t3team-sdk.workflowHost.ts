@@ -1,20 +1,8 @@
 /**
  * Host-neutral per-run workflow host.
  *
- * The reusable run loop, journaling, replay, and suspension primitives live
- * in `@runbook/core` and this package's engine (`startWorkflow`,
- * `resumeWorkflow`, `appendResolvedEntry`). This module is the single
- * per-run control surface any host builds on top of them — the t3team
- * server and the nexi portal both consume it — so the
- * launch → settle → resume → fail funnel is implemented exactly once,
- * host-neutrally:
- *
- *   - `start()`   records the run, launches it, settles the outcome
- *   - `resume()`  journales one ask reply and replays to the next suspension,
- *                 guarded against concurrent/duplicate drives and against a
- *                 reply that a dead process already journaled
- *   - `fail()`    host-detected terminal failure through the host's sinks
- *   - `cancel()`  detaches the controller so no later terminal result publishes
+ * Hosts inject their broker, durable lifecycle, and notification sinks; the
+ * launch → settle → resume → fail funnel remains shared and host-neutral.
  *
  * The funnel's contract lives in `t3team-sdk.workflowHostTypes.ts`;
  * everything host-specific (broker, durable lifecycle, sinks, repair) is
@@ -22,7 +10,8 @@
  */
 
 import { appendResolvedEntry } from "./t3team-sdk.broker.ts";
-import { startWorkflow, resumeWorkflow } from "./t3team-sdk.engine.ts";
+import { startWorkflow } from "./t3team-sdk.engine.ts";
+import { resumeWorkflowRunHost } from "./t3team-sdk.workflowHostResume.ts";
 import type { AbortedResult, SuspendedResult, WorkflowRunResult } from "@runbook/core/engineTypes";
 import type {
   CreateWorkflowRunHostConfig,
@@ -133,25 +122,23 @@ export function createWorkflowRunHost(config: CreateWorkflowRunHostConfig): Work
     if (resuming) return; // a concurrent resume is settling — never double-drive
     resuming = true;
     try {
-      // Claim capacity/state before consuming the durable reply. If a stop
-      // wins while this wake is queued, recordActive returns false and the
-      // unresolved continuation stays intact.
-      if ((await lifecycle?.recordActive()) === false) return;
-      const wrote = await appendReply({ runId, correlationId, reply });
-      if (!wrote) {
-        // A prior process journaled the reply then died before settling — the
-        // row is stuck. Fail it so the host stops re-arming it forever.
-        await lifecycle?.orphanIfSleeping(correlationId);
-        return;
-      }
-      await config.onReplyJournaled?.(correlationId);
-      await settle(await resumeWorkflow(runId, ref, args, runOptions));
-    } catch (error) {
-      if (registry.getRun(runId) === undefined) return;
-      if (await repairAttempt(error)) return;
-      if (cancelled) return;
-      if (registry.getRun(runId) === undefined) return;
-      await sinks.onFailed({ phase: "resume", error });
+      await resumeWorkflowRunHost({
+        runId,
+        correlationId,
+        reply,
+        ref,
+        args,
+        runOptions,
+        registry,
+        lifecycle,
+        appendReply,
+        retryResolvedReply: config.retryResolvedReply,
+        onReplyJournaled: config.onReplyJournaled,
+        settle,
+        repairAttempt,
+        isCancelled: () => cancelled,
+        onFailed: sinks.onFailed,
+      });
     } finally {
       resuming = false;
     }
