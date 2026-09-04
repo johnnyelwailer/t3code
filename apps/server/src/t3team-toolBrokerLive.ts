@@ -54,6 +54,8 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     "t3team.orchestration.run",
     "t3team.orchestration.status",
     "t3team.orchestration.resume",
+    "t3team.orchestration.pause",
+    "t3team.orchestration.stop",
     "t3team.widget.show",
     "t3team.recipe.list",
     "t3team.recipe.validate",
@@ -242,6 +244,9 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
           : {}),
         ...(workflowTools.workflowResumeToolsForThread
           ? { workflowResumeTools: workflowTools.workflowResumeToolsForThread(threadId) }
+          : {}),
+        ...(workflowTools.workflowControlToolsForThread
+          ? { workflowControlTools: workflowTools.workflowControlToolsForThread(threadId) }
           : {}),
       });
     });

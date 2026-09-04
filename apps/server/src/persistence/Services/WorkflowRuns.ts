@@ -132,6 +132,18 @@ export const SetWorkflowRunStatusInput = Schema.Struct({
 });
 export type SetWorkflowRunStatusInput = typeof SetWorkflowRunStatusInput.Type;
 
+/** Compare-and-set status transition (GHE #411 §1): the UPDATE only takes effect when the row's
+ * CURRENT status is one of `expectedStatuses` — closing the TOCTOU window between the control
+ * path's read and its write, where a run that settles (completes/fails) in between must not be
+ * silently flipped to `paused`/`cancelled` by a stale caller. */
+export const CasSetWorkflowRunStatusInput = Schema.Struct({
+  runId: Schema.String,
+  status: WorkflowRunStatus,
+  updatedAt: IsoDateTime,
+  expectedStatuses: Schema.Array(WorkflowRunStatus),
+});
+export type CasSetWorkflowRunStatusInput = typeof CasSetWorkflowRunStatusInput.Type;
+
 /** Resume a paused run to the parked state encoded by its retained pending columns. */
 export const ResumePausedWorkflowRunInput = Schema.Struct({
   runId: Schema.String,
@@ -151,7 +163,9 @@ export const UpdateWorkflowRunArgsInput = Schema.Struct({
 });
 export type UpdateWorkflowRunArgsInput = typeof UpdateWorkflowRunArgsInput.Type;
 
-/** Flip a run to `suspended` and record the ask it is parked on, in one update. */
+/** Flip a run to `suspended` and record the ask it is parked on, in one update. Also clears the
+ * failure columns: a run parking on an ask is live again, so a reason recorded by an earlier
+ * failure (a re-driven step, a journal resume) must not be reported for it any more. */
 export const SetWorkflowRunPendingInput = Schema.Struct({
   runId: Schema.String,
   pendingThreadId: Schema.String,
@@ -172,6 +186,32 @@ export const ClearWorkflowRunPendingInput = Schema.Struct({
   failureStep: Schema.optional(Schema.String),
 });
 export type ClearWorkflowRunPendingInput = typeof ClearWorkflowRunPendingInput.Type;
+
+/** Compare-and-set variant of {@link ClearWorkflowRunPendingInput} (GHE #411 §1): the stop path's
+ * CAS guard — the UPDATE only takes effect when the row's CURRENT status is one of
+ * `expectedStatuses` (a non-terminal status), so a run that finished between the control path's
+ * read and its write is not overwritten with `cancelled`. */
+export const CasClearWorkflowRunPendingInput = Schema.Struct({
+  runId: Schema.String,
+  status: WorkflowRunStatus,
+  updatedAt: IsoDateTime,
+  expectedStatuses: Schema.Array(WorkflowRunStatus),
+  failureReason: Schema.optional(Schema.String),
+  failureStep: Schema.optional(Schema.String),
+});
+export type CasClearWorkflowRunPendingInput = typeof CasClearWorkflowRunPendingInput.Type;
+
+/** Mark a run `failed` while KEEPING its pending ask (GHE #403). A host-detected step failure —
+ * an agent turn that died or never answered — leaves nothing wrong with the body, only an ask
+ * that was not answered; retaining `pending_*` lets `t3team.orchestration.resume` re-drive that
+ * exact step instead of replaying into a `sent` entry nobody will ever settle. */
+export const MarkWorkflowRunFailedInput = Schema.Struct({
+  runId: Schema.String,
+  updatedAt: IsoDateTime,
+  failureReason: Schema.String,
+  failureStep: Schema.String,
+});
+export type MarkWorkflowRunFailedInput = typeof MarkWorkflowRunFailedInput.Type;
 
 /** Flip a run to `sleeping` and record the timer it is parked on (Epic 27): the `wake_at`
  * deadline the scheduler arms, plus the `waitUntil` correlation the scheduler resolves on
@@ -223,6 +263,12 @@ export interface WorkflowRunRepositoryShape {
   readonly setStatus: (
     input: SetWorkflowRunStatusInput,
   ) => Effect.Effect<void, ProjectionRepositoryError>;
+  /** Compare-and-set status transition: writes only when the row's current status is one of
+   * `expectedStatuses`, and reports whether a row was actually affected. Callers whose write did
+   * not land must re-read the row to explain why (it likely already settled). */
+  readonly casSetStatus: (
+    input: CasSetWorkflowRunStatusInput,
+  ) => Effect.Effect<boolean, ProjectionRepositoryError>;
   /** Restore `paused` to `suspended` or `sleeping` without losing its parked continuation. */
   readonly resumePaused: (
     input: ResumePausedWorkflowRunInput,
@@ -234,6 +280,15 @@ export interface WorkflowRunRepositoryShape {
   /** Clear the pending ask and set the given status (on resume completion/failure). */
   readonly clearPending: (
     input: ClearWorkflowRunPendingInput,
+  ) => Effect.Effect<void, ProjectionRepositoryError>;
+  /** Compare-and-set variant of {@link clearPending}: writes only when the row's current status
+   * is one of `expectedStatuses`, and reports whether a row was actually affected. */
+  readonly casClearPending: (
+    input: CasClearWorkflowRunPendingInput,
+  ) => Effect.Effect<boolean, ProjectionRepositoryError>;
+  /** Mark `failed` but keep the pending ask — a host-detected step failure `resume` can re-drive. */
+  readonly markFailedRetainingPending: (
+    input: MarkWorkflowRunFailedInput,
   ) => Effect.Effect<void, ProjectionRepositoryError>;
   /** Count live (running/suspended/sleeping/paused) runs of one origin for one launching thread
    * — the per-thread ephemeral run-count cap. */

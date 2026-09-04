@@ -53,6 +53,7 @@
     "apps/server/src/orchestration/projector.ts",
     "apps/server/src/orchestration/runtimeLayer.ts",
     "apps/server/src/persistence/Layers/ProjectionThreadMessages.ts",
+    "apps/server/src/persistence/Layers/ProjectionThreadMessages.test.ts",
     "apps/server/src/persistence/Layers/ProjectionThreads.ts",
     "apps/server/src/persistence/Migrations.ts",
     "apps/server/src/persistence/Migrations/035_ProjectionThreadTitleRegeneration.test.ts",

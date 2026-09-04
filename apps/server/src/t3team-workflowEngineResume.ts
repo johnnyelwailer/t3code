@@ -30,7 +30,9 @@ import { tryWorkflowRepair } from "./t3team-workflowEngineRepair.ts";
  * `WorkflowRegisteredRun.fail`). The body cannot observe that condition, so the reactor reports it
  * here, through the SAME funnel a thrown body error takes: the launching conversation is told, the
  * durable row records the reason, and the step strip flips to failed. No repair attempt — nothing
- * about the body is broken, so re-running it would only reproduce the silence.
+ * about the body is broken, so re-running it would only reproduce the silence. For the same reason
+ * the row KEEPS its pending ask: `t3team.orchestration.resume` re-drives exactly that step (GHE
+ * #403) rather than replaying into a `sent` entry nobody settles.
  */
 export function makeControllerFail(deps: {
   readonly input: LaunchWorkflowRecipeInput;
@@ -53,6 +55,7 @@ export function makeControllerFail(deps: {
       nowIso: input.nowIso,
       onError: input.onError,
       phase: "resume",
+      retainPendingStep: true,
     });
   };
 }

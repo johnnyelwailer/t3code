@@ -320,6 +320,60 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       required: ["runId"],
     },
   },
+  "t3team.orchestration.pause": {
+    id: "t3team.orchestration.pause",
+    label: "Pause orchestration run",
+    title: "Pause an agent orchestration run at its current waiting point",
+    description:
+      "Pause a run launched via t3team.orchestration.run at its current waiting point (a parked " +
+      "agent turn, user decision, or timer) — the same control as the card's Pause button. The " +
+      "run keeps its continuation; resume it with t3team.orchestration.resume. Scoped to the " +
+      "calling thread's own runs. Returns {runId, status: 'paused', hint}.",
+    capabilities: ["write"],
+    kind: "thread",
+    surfaces: ["thread"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        runId: {
+          type: "string",
+          description: "Run id of the waiting or scheduled run to pause.",
+          minLength: 1,
+        },
+      },
+      required: ["runId"],
+    },
+  },
+  "t3team.orchestration.stop": {
+    id: "t3team.orchestration.stop",
+    label: "Stop orchestration run",
+    title: "Stop an agent orchestration run for good",
+    description:
+      "Stop a run launched via t3team.orchestration.run: cancels it, interrupts its child agent " +
+      "turns, and frees its capacity — the same control as the card's Stop action. Use it on a " +
+      "superseded or stuck run BEFORE launching a replacement, so two runs never work the same " +
+      "queue. Scoped to the calling thread's own runs. Returns {runId, status: 'cancelled', hint}.",
+    capabilities: ["write"],
+    kind: "thread",
+    surfaces: ["thread"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        runId: {
+          type: "string",
+          description: "Run id of the live run to stop.",
+          minLength: 1,
+        },
+      },
+      required: ["runId"],
+    },
+  },
   "t3team.thread.rename": {
     id: "t3team.thread.rename",
     label: "Rename thread",

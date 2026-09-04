@@ -84,10 +84,18 @@ export const T3TeamWorkflowEngineReactorLive = Layer.effectDiscard(
           turnRetries,
           updatedAt: DateTime.formatIso(DateTime.nowUnsafe()),
         }),
+      // Registers the forked fiber in the registry's turn-retry handle map (GHE #411 §3), so a
+      // pause/stop that clears this step's pending ask can interrupt it before it fires.
       armTurnRetry: (threadId, correlationId, delayMs) =>
-        Effect.suspend(() => enqueueTurnRetry({ threadId, correlationId })).pipe(
+        Effect.suspend(() => {
+          registry.removeTurnRetryFiber(threadId, correlationId);
+          return enqueueTurnRetry({ threadId, correlationId });
+        }).pipe(
           Effect.delay(Duration.millis(delayMs)),
           Effect.forkIn(reactorScope),
+          Effect.tap((fiber) =>
+            Effect.sync(() => registry.registerTurnRetryFiber(threadId, correlationId, fiber)),
+          ),
           Effect.asVoid,
         ),
       dispatch: (command: OrchestrationCommand) => orchestration.dispatch(command),

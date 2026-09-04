@@ -26,6 +26,7 @@
 // The timers topic is its own help entry (`t3team_help("timers")`) and its own module, so this
 // file stays the single orchestration manual rather than two manuals sharing a file.
 export { T3TEAM_TIMERS_MANUAL } from "./t3team-workflowManualTimers.ts";
+import { T3TEAM_WORKFLOW_MANUAL_RESULT } from "./t3team-workflowManualRecovery.ts";
 
 export const T3TEAM_WORKFLOW_TAGLINE =
   "Agent orchestration: run a structure that fans work out to several agents (parallel " +
@@ -105,7 +106,10 @@ THE ENGINE API (import the ones you use from "@t3team/sdk")
 - agent(prompt, opts)         one-shot agent on a fresh isolated thread; returns its text,
                               or a validated value with opts.schema. opts.model can pick a
                               different provider/model per call. Always pass a concise,
-                              human-facing opts.label describing the work.
+                              human-facing opts.label describing the work. For agent calls
+                              inside a loop, use a STABLE label without the iteration number
+                              ('Pick next task', not 'Pick next task (17)') so the card can
+                              group the iterations into one collapsible row.
                               opts.capabilities is REQUIRED: either 'inherit' to take this
                               workflow's own grant, or an explicit list such as
                               ['integration.read']. There is no default — a child that
@@ -116,7 +120,10 @@ THE ENGINE API (import the ones you use from "@t3team/sdk")
                               (hidden from the sidebar but inspectable inline). Set
                               retention: 'retained' only when it must remain sidebar-visible.
                               Then t.askAgent(prompt,opts?), t.notifyAgent(msg),
-                              t.askUser(question,opts?), t.notifyUser(msg).
+                              t.askUser(question,opts?), t.notifyUser(msg). notifyUser and
+                              notifyAgent are fire-and-forget: they post and return at once,
+                              never park the run. Only askAgent/agent (an agent turn) and
+                              askUser (a human reply) suspend it.
 - getThread()                 the chat this orchestration was launched from (undefined if
                               headless). Below, 'thread' means its result.
 - thread.showWidget({ title, widgetCode, format? }) renders sandboxed inline HTML/SVG through
@@ -211,16 +218,4 @@ RULES
 - Return the final result at the end, and prefer RETURNING a structured object over narrating one:
   the host renders it as clean labelled lines, while prose renders as typed. t3team_help("reporting").
 
-RESULT
-Returns { runId, status: 'accepted'|'completed'|'suspended'|'failed', handoff: 'workflow-ui', output?, error? }.
-accepted means the durable host owns the run. A successful workflow-ui handoff means end the
-current host turn immediately with no follow-up assistant prose. Do not launch it again or poll
-it; sleeping, user decisions, and other progress arrive through the existing orchestration UI.
-
-On 'failed', read 'error' first:
-- "Invalid inputs for workflow '<name>': ..." means the WORKFLOW is correct and YOUR launch
-  arguments were wrong. Call t3team_orchestration_resume with the same runId and corrected
-  'args' — never 'source', never t3team_orchestration_run again (that makes a duplicate card).
-- Any other failure is a genuine source defect: fix the source, then call
-  t3team_orchestration_resume with corrected 'source' (same-prefix replay). Only run again if no
-  runId is available to resume.`;
+${T3TEAM_WORKFLOW_MANUAL_RESULT}`;

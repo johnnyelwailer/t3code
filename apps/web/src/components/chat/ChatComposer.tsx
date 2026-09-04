@@ -661,6 +661,9 @@ export interface ChatComposerProps {
   sendDisabledReason: string | null;
   isPreparingWorktree: boolean;
   bannerItems: readonly ComposerBannerStackItem[];
+  /** Host-supplied attached strip rendered above the notices, inside the same banner column so it
+   * shares their inset width and outline (e.g. the t3team active-orchestration dock). */
+  bannerLeading?: ReactNode;
   environmentUnavailable: {
     readonly label: string;
     readonly connection: EnvironmentConnectionPresentation;
@@ -3348,6 +3351,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     >
       <ComposerBanner.Dock>
         <ComposerBanner.Column>
+          {props.bannerLeading}
           <ComposerBannerStack
             key={activeThreadId}
             className="relative z-0"

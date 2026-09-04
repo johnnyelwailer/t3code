@@ -90,7 +90,9 @@ export async function handleBrokerNotifyVerb(core: BrokerCore, s: BrokerSend): P
     );
     return;
   }
-  step(correlationId, kind, "completed", p.text, p.threadId);
+  // The notification itself is posted into the thread right below; repeating its clipped text
+  // as the step's label/detail only adds a truncated duplicate (GHE #417).
+  step(correlationId, kind, "completed", "Notified you", p.threadId);
   await runPrimitive(() =>
     enqueueOneWay(() =>
       deps.dispatch(

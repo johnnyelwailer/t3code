@@ -57,10 +57,13 @@ export interface WorkflowRunLifecycle {
   /** Mark the run `completed` and clear the pending ask. */
   readonly recordCompleted: () => Promise<void>;
   /** Mark the run `failed`, clear the pending ask, and persist the agent-facing failure detail
-   * (migration 044) so `status`/`resume` can report WHY without a journal read. */
+   * (migration 044) so `status`/`resume` can report WHY without a journal read. With
+   * `retainPending` the pending ask is KEPT (GHE #403): the failure is the host's verdict on an
+   * unanswered step, not a body fault, and `resume` re-drives that step from the retained ask. */
   readonly recordFailed: (detail?: {
     readonly reason: string;
     readonly step: string;
+    readonly retainPending?: boolean;
   }) => Promise<void>;
   /** Crash-recovery: if this correlation still owns a sleeping or newly-claimed active row and
    * its reply was already journaled, mark it failed. Correlation pinning protects newer work. */

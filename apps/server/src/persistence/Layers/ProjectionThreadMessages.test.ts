@@ -12,6 +12,53 @@ const layer = it.layer(
 );
 
 layer("ProjectionThreadMessageRepository", (it) => {
+  // GHE #416: a reply first written by the streaming path, then completed by upsert, must take a
+  // sequence AFTER its prompt — the list is `ORDER BY sequence`, and a NULL sorted it first.
+  it.effect("assigns a sequence to a streamed reply so it lists after its prompt", () =>
+    Effect.gen(function* () {
+      const repository = yield* ProjectionThreadMessageRepository;
+      const threadId = ThreadId.make("thread-sequence-streamed");
+      const prompt = MessageId.make("message-sequence-prompt");
+      const reply = MessageId.make("message-sequence-reply");
+      const base = {
+        threadId,
+        turnId: null,
+        createdAt: "2026-09-03T15:11:21.000Z",
+        updatedAt: "2026-09-03T15:11:21.000Z",
+      };
+      yield* repository.upsert({
+        ...base,
+        messageId: prompt,
+        role: "user",
+        text: "prompt",
+        isStreaming: false,
+      });
+      yield* repository.appendStreaming({
+        messageId: reply,
+        threadId,
+        turnId: null,
+        role: "assistant",
+        text: "the ",
+        createdAt: "2026-09-03T15:11:30.000Z",
+        updatedAt: "2026-09-03T15:11:30.000Z",
+      });
+      yield* repository.upsert({
+        ...base,
+        messageId: reply,
+        role: "assistant",
+        text: "the answer",
+        isStreaming: false,
+        createdAt: "2026-09-03T15:11:30.000Z",
+        updatedAt: "2026-09-03T15:11:53.000Z",
+      });
+      const listed = yield* repository.listByThreadId({ threadId });
+      assert.deepStrictEqual(
+        listed.map((row) => row.messageId),
+        [prompt, reply],
+      );
+    }),
+  );
+
   it.effect("appends streaming text and applies attachment updates", () =>
     Effect.gen(function* () {
       const repository = yield* ProjectionThreadMessageRepository;

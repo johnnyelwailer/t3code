@@ -119,6 +119,10 @@ export const PROJECT_RECIPE_TOOL_GROUP_BY_TOOL_ID = {
   // run -> observe -> fix -> resume recovery loop (see t3team-workflowManual.ts).
   "t3team.orchestration.status": PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP.id,
   "t3team.orchestration.resume": PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP.id,
+  // `pause` / `stop` only ever act on the caller's OWN runs (scoped by launch thread) and can
+  // execute nothing new — strictly less power than `run`, so the same group (GHE #403 §4).
+  "t3team.orchestration.pause": PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP.id,
+  "t3team.orchestration.stop": PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP.id,
   "t3team.recipe.validate": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.thread.read_current": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.thread.rename": PROJECT_RECIPE_VIEW_STATE_TOOL_GROUP.id,

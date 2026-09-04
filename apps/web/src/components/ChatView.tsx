@@ -335,7 +335,7 @@ import {
   threadChangeRequestSnapshotsAtom,
   useLinkedThreadPullRequest,
 } from "./ThreadStatusIndicators";
-import { ComposerBannerStack, type ComposerBannerStackItem } from "./chat/ComposerBannerStack";
+import type { ComposerBannerStackItem } from "./chat/ComposerBannerStack";
 import { ComposerSurface } from "./chat/ComposerSurface";
 import {
   hasAvailableClaudeCompactionProvider,
@@ -7792,16 +7792,11 @@ function ChatViewContent(props: ChatViewProps) {
                         />
                       </div>
                     </div>
-                  ) : (
-                    <>
-                      <T3TeamActiveWorkflowDock
-                        items={activeWorkflowDockItems}
-                        className="mx-auto max-w-3xl rounded-t-[22px]"
-                        onOpen={openWorkflowCard}
-                      />
-                      <ComposerBannerStack className="relative z-0" items={composerBannerItems} />
-                    </>
-                  )}
+                  ) : // Notices and the orchestration dock render ONCE, inside ChatComposer's banner
+                  // column (`bannerItems` / `bannerLeading` below); a second `ComposerBannerStack`
+                  // here duplicated every notice, and a dock outside the form never matched the
+                  // notices' inset width (GHE #412).
+                  null}
                   {composerContextAttachmentSlot}
                   <div
                     className="relative"
@@ -7850,6 +7845,12 @@ function ChatViewContent(props: ChatViewProps) {
                             }
                             isPreparingWorktree={isPreparingWorktree}
                             bannerItems={composerBannerItems}
+                            bannerLeading={
+                              <T3TeamActiveWorkflowDock
+                                items={activeWorkflowDockItems}
+                                onOpen={openWorkflowCard}
+                              />
+                            }
                             environmentUnavailable={activeEnvironmentUnavailableState}
                             activePendingApproval={activePendingApproval}
                             pendingApprovals={pendingApprovals}

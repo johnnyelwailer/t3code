@@ -9,7 +9,11 @@ import {
   type TurnId,
 } from "@t3tools/contracts";
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
-import { EMPTY_ACTIVE_AGENTS, type ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
+import {
+  EMPTY_ACTIVE_AGENTS,
+  formatActiveAgentLabel,
+  type ActiveAgentEntry,
+} from "~/t3team/chat/t3team-activeAgentsCore";
 import { T3TeamActiveAgentsIndicator } from "~/t3team/chat/t3team-activeAgentsIndicator";
 import { WorkingLeadText } from "~/t3team/chat/t3team-workingLeadText";
 import { T3TeamActiveAgentsStepLabel } from "~/t3team/chat/t3team-activeAgentsStepLabel";
@@ -1861,7 +1865,7 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
   const idleAgentSummary = (() => {
     if (isWorking || !hasActiveAgents) return null;
     const last = activeAgents[activeAgents.length - 1];
-    return last ? `${last.title} — ${last.statusLabel}` : null;
+    return last ? formatActiveAgentLabel(last.title, last.statusLabel) : null;
   })();
   // GHE #236/#208/#40: the shared resolver (same seam as the sidebar) picks
   // the lead word: the LLM activity label REPLACES the deterministic state
