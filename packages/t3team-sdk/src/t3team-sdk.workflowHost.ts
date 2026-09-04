@@ -161,6 +161,8 @@ export interface CreateWorkflowRunHostConfig {
   }) => Promise<boolean>;
   /** The lifecycle's running row was already written by the caller. */
   readonly lifecycleAlreadyRunning?: boolean;
+  /** Called once a reply is journaled, before the replay drives (host UX sink). */
+  readonly onReplyJournaled?: (correlationId: string) => Promise<void> | void;
 }
 
 /**
@@ -249,6 +251,7 @@ export function createWorkflowRunHost(config: CreateWorkflowRunHostConfig): Work
         await lifecycle?.orphanIfSleeping(correlationId);
         return;
       }
+      await config.onReplyJournaled?.(correlationId);
       await settle(await resumeWorkflow(runId, ref, args, runOptions));
     } catch (error) {
       if (registry.getRun(runId) === undefined) return;
