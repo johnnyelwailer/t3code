@@ -147,6 +147,29 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     defaultEnabled: true,
     inputSchema: EMPTY_OBJECT_INPUT_SCHEMA,
   },
+  "t3team.runtime.provider_usage": {
+    id: "t3team.runtime.provider_usage",
+    label: "Read provider usage limits",
+    title: "Sample live provider plan-limit windows",
+    description:
+      "Read the provider's LIVE rolling plan-limit windows (how much of the 5-hour / weekly quota is used, when it resets, and the severity verdict) by sampling each configured provider instance on demand. Call it when you need to know how close a provider is to a rate-limit wall before delegating long work to it, or when a provider start fails with a rate-limit error. Unsampleable instances are reported in `unavailable` with a reason instead of failing the call.",
+    capabilities: ["read"],
+    kind: "read",
+    surfaces: ["thread"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        provider_instance_id: {
+          type: "string",
+          description:
+            "Optional provider INSTANCE id to sample (as returned by t3team.runtime.models). Omit to sample all enabled instances with a live-limit source.",
+        },
+      },
+    },
+  },
   "t3team.widget.show": {
     id: "t3team.widget.show",
     label: "Show widget",

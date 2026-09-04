@@ -580,6 +580,7 @@ Useful tools:
 
 ```text
 t3team.runtime.models
+t3team.runtime.provider_usage
 t3team.view.read
 t3team.recipe.list
 t3team.recipe.validate
@@ -620,6 +621,13 @@ replacement.
 provider instance and model from the live `ProviderRegistry` snapshots. Agent authors call it
 before naming an exact provider/model in `start_child` or an orchestration; the SDK deliberately
 ships no curated model tree.
+
+`t3team.runtime.provider_usage` samples the provider's LIVE rolling plan-limit windows —
+complements the transcript-based consumption reporting: it asks each configured provider
+instance (Claude via the Anthropic OAuth usage endpoint, Codex via the app-server's
+`account/rateLimits/read`) how much of its 5-hour and weekly quota is used, when the window
+resets, and the severity verdict against the host thresholds. Instances that cannot be
+sampled come back in `unavailable` with a reason, so one bad provider never hides the rest.
 
 `t3team.thread.search` searches the transcript of the CURRENT thread (case-insensitive
 substring, optional `limit` and `role` filter), returning each match with its 1-based
