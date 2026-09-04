@@ -8,6 +8,7 @@
 import { afterAll, describe, expect, it, vi } from "vite-plus/test";
 
 import {
+  appendResolvedEntry,
   createWorkflowHostRegistry,
   createWorkflowRunHost,
   type WorkflowHostLifecycle,
@@ -122,6 +123,77 @@ describe("durable workflow engine — shared per-run host", () => {
     ]);
     expect(recordActive).toHaveBeenCalledOnce();
     expect(appendResolved).not.toHaveBeenCalled();
+  });
+
+  it("retries a transient reply-journal failure without losing the suspended ask", async () => {
+    const registry = createWorkflowHostRegistry();
+    const onCompleted = vi.fn(async () => {});
+    const onFailed = vi.fn(async () => {});
+    let appendAttempts = 0;
+    const host = createWorkflowRunHost({
+      ref: askResponseWorkflow,
+      args: { question: "ship it?" },
+      runId: "host-transient-append",
+      runOptions: {
+        runsRoot,
+        tools: [],
+        broker: createMockBroker(alwaysDefer),
+        launchThreadId: "launch-thread",
+      },
+      registry,
+      sinks: { onCompleted, onFailed },
+      appendResolved: async (opts) => {
+        appendAttempts += 1;
+        if (appendAttempts === 1) throw new Error("temporary journal outage");
+        return appendResolvedEntry({
+          ...(opts.runsRoot === undefined ? {} : { runsRoot: opts.runsRoot }),
+          runId: opts.runId,
+          correlationId: opts.correlationId,
+          reply: opts.reply,
+        });
+      },
+    });
+
+    expect(await host.start()).toBe("suspended");
+    await host.resume("host-transient-append:1", "yes");
+
+    expect(appendAttempts).toBe(2);
+    expect(onCompleted).toHaveBeenCalledOnce();
+    expect(onFailed).not.toHaveBeenCalled();
+  });
+
+  it("replays an already-journaled ask reply when the host declares it retry-safe", async () => {
+    const registry = createWorkflowHostRegistry();
+    const onCompleted = vi.fn(async () => {});
+    const orphanIfSleeping = vi.fn(async () => {});
+    const host = createWorkflowRunHost({
+      ref: askResponseWorkflow,
+      args: { question: "ship it?" },
+      runId: "host-journaled-ask",
+      runOptions: {
+        runsRoot,
+        tools: [],
+        broker: createMockBroker(alwaysDefer),
+        launchThreadId: "launch-thread",
+      },
+      registry,
+      lifecycle: lifecycle({ orphanIfSleeping }),
+      sinks: { onCompleted, onFailed: vi.fn(async () => {}) },
+      retryResolvedReply: () => true,
+    });
+
+    expect(await host.start()).toBe("suspended");
+    await appendResolvedEntry({
+      runsRoot,
+      runId: "host-journaled-ask",
+      correlationId: "host-journaled-ask:1",
+      reply: "yes",
+    });
+    await host.resume("host-journaled-ask:1", "yes");
+
+    expect(onCompleted).toHaveBeenCalledOnce();
+    expect(orphanIfSleeping).not.toHaveBeenCalled();
+    expect(registry.getRun("host-journaled-ask")).toBeUndefined();
   });
 
   it("a post-resume replay failure takes the bounded repair funnel before the failure sink", async () => {
