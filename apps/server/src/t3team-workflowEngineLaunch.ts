@@ -1,17 +1,18 @@
 /** Durable workflow launch and the per-run resume controller. */
 
 import {
-  createWorkflowRunController,
   type LaunchWorkflowRecipeInput,
   type LaunchWorkflowRecipeResult,
   type WorkflowLaunchStatus,
 } from "./t3team-workflowEngineLaunchTypes.ts";
+import { createWorkflowRunController } from "./t3team-workflowEngineController.ts";
 
 export { createWorkflowRunController } from "./t3team-workflowEngineController.ts";
 export type {
   LaunchWorkflowRecipeInput,
   LaunchWorkflowRecipeResult,
   WorkflowLaunchStatus,
+  WorkflowRunController,
 } from "./t3team-workflowEngineLaunchTypes.ts";
 export type { WorkflowRunLifecycle } from "./t3team-workflowEngineBrokerTypes.ts";
 export {

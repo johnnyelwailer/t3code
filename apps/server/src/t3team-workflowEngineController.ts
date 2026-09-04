@@ -199,10 +199,20 @@ export function createWorkflowRunController(
     repair: () => (error) =>
       tryWorkflowRepair(
         input,
-        { ref, options, settle: host.settle, stepActivities, isCancelled: host.isCancelled },
+        {
+          ref,
+          options,
+          start: host.start,
+          settle: host.settle,
+          resume: host.resume,
+          stepActivities,
+          isCancelled: host.isCancelled,
+        },
         error,
       ),
-    lifecycleAlreadyRunning: input.lifecycleAlreadyRunning,
+    ...(input.lifecycleAlreadyRunning === undefined
+      ? {}
+      : { lifecycleAlreadyRunning: input.lifecycleAlreadyRunning }),
   });
 
   return {

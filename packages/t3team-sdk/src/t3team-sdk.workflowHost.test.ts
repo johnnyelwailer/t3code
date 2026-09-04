@@ -16,6 +16,7 @@ import {
   askResponseWorkflow,
   cleanupRunsRoot,
   demoTools,
+  runsRoot,
   voidResultWorkflow,
 } from "./t3team-sdk.engineFixtures.ts";
 import { createMockBroker } from "./t3team-sdk.broker.ts";
@@ -47,7 +48,7 @@ describe("durable workflow engine — shared per-run host", () => {
       ref: voidResultWorkflow,
       args: { note: "host" },
       runId: "host-start",
-      runOptions: { runsRoot: "unused", tools: demoTools },
+      runOptions: { runsRoot, tools: demoTools },
       registry,
       lifecycle: lifecycle({
         recordRunning: async () => {
@@ -77,7 +78,7 @@ describe("durable workflow engine — shared per-run host", () => {
       args: { question: "ship it?" },
       runId: "host-ask",
       runOptions: {
-        runsRoot: "unused",
+        runsRoot,
         tools: [],
         broker: createMockBroker(alwaysDefer),
         launchThreadId: "launch-thread",
@@ -105,7 +106,7 @@ describe("durable workflow engine — shared per-run host", () => {
       args: { question: "ship it?" },
       runId: "host-admission",
       runOptions: {
-        runsRoot: "unused",
+        runsRoot,
         tools: [],
         broker: createMockBroker(alwaysDefer),
         launchThreadId: "launch-thread",
@@ -138,7 +139,7 @@ describe("durable workflow engine — shared per-run host", () => {
       },
       args: {},
       runId: "host-repair",
-      runOptions: { runsRoot: "unused", tools: [] },
+      runOptions: { runsRoot, tools: [] },
       registry,
       lifecycle: lifecycle({
         recordFailed: async () => {
@@ -166,7 +167,7 @@ describe("durable workflow engine — shared per-run host", () => {
       ref: voidResultWorkflow,
       args: { note: "x" },
       runId: "host-stop",
-      runOptions: { runsRoot: "unused", tools: demoTools },
+      runOptions: { runsRoot, tools: demoTools },
       registry,
       lifecycle: lifecycle({ recordCompleted: () => completedGate }),
       sinks: { onCompleted, onFailed: vi.fn(async () => {}) },
