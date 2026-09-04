@@ -64,6 +64,7 @@ describe("workflow orchestration race boundaries", () => {
       workflowPath: "/tmp/not-loaded.workflow.ts",
       args: {},
       runsRoot: "/tmp",
+      launchThreadId: undefined,
       projectId: ProjectId.make("project-1"),
       modelSelection: createModelSelection(ProviderInstanceId.make("provider-1"), "model-1"),
       runtimeMode: "full-access",

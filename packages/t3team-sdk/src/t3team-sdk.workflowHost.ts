@@ -53,14 +53,16 @@ export interface WorkflowHostLifecycle {
   readonly recordActive: () => Promise<boolean>;
   /** Yield after one live primitive so another run may take the next turn. */
   readonly releaseActive: () => void;
-  /** Flip to suspended + record the ask the run parked on. */
-  readonly recordSuspended: (pending: WorkflowHostPendingAsk) => Promise<void>;
-  /** Flip to sleeping + record the wake deadline the run parked on. */
-  readonly recordSleeping: (sleep: WorkflowHostSleep) => Promise<void>;
   /** Mark the run completed and clear the pending ask. */
   readonly recordCompleted: () => Promise<void>;
   /** Mark the run failed, clear the pending ask, persist the reason. */
-  readonly recordFailed: (detail: { readonly reason: string; readonly step?: string }) => Promise<void>;
+  readonly recordFailed: (
+    detail: {
+      readonly reason: string;
+      readonly step: string;
+      readonly retainPending?: boolean;
+    },
+  ) => Promise<void>;
   /** A reply was journaled but no live resume exists: fail the stuck sleeping
    * row so a scheduler stops re-arming it. */
   readonly orphanIfSleeping: (correlationId: string) => Promise<void>;
