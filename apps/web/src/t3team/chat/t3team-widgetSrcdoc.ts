@@ -9,6 +9,7 @@
 
 import { buildT3TeamWidgetIconSprite, T3TEAM_WIDGET_ICON_CSS } from "./t3team-widgetIconSprite.ts";
 import { normalizeT3TeamWidgetHtml, T3TEAM_WIDGET_HOST_CSS } from "./t3team-widgetHtmlStyle.ts";
+import { T3TEAM_WIDGET_MAX_HEIGHT } from "./t3team-widgetBridgeClient.ts";
 import { DEFAULT_SANS_FONT_STACK } from "~/appearanceFonts";
 
 /**
@@ -89,6 +90,7 @@ const BRIDGE_SCRIPT = `
     }
     post({ type: "t3team-widget:send-prompt", nonce: nonce, text: String(text) });
   };
+  var maxWidgetHeight = ${T3TEAM_WIDGET_MAX_HEIGHT};
   window.host = {
     callTool: function (name, args) {
       callSeq += 1;
@@ -112,7 +114,13 @@ const BRIDGE_SCRIPT = `
     else entry.reject(new Error(typeof data.error === "string" ? data.error : "Tool call failed."));
   });
   function reportHeight() {
-    var height = Math.ceil(document.documentElement.scrollHeight);
+    var root = document.documentElement;
+    var height = Math.ceil(root.scrollHeight);
+    var hasHorizontalOverflow = root.clientWidth > 0 && root.scrollWidth > root.clientWidth;
+    if (document.body) {
+      document.body.dataset.t3teamWidgetOverflow =
+        height > maxWidgetHeight || hasHorizontalOverflow ? "true" : "false";
+    }
     post({ type: "t3team-widget:resize", nonce: nonce, height: height });
   }
   if (typeof ResizeObserver === "function") {

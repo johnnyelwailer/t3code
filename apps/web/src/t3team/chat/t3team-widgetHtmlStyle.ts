@@ -26,6 +26,9 @@ const LIGHT_SURFACE_COLORS: Readonly<Record<string, string>> = {
 };
 
 const DEFAULT_TEXT_COLORS: Readonly<Record<string, string>> = {
+  "#666": `var(--muted-foreground, ${FOREGROUND})`,
+  "#666666": `var(--muted-foreground, ${FOREGROUND})`,
+  "rgb(102,102,102)": `var(--muted-foreground, ${FOREGROUND})`,
   "#1f2328": FOREGROUND,
   "#24292f": FOREGROUND,
   "#212529": FOREGROUND,
@@ -42,7 +45,8 @@ const DEFAULT_TEXT_COLORS: Readonly<Record<string, string>> = {
 /** Host CSS keeps the common table path fluid while retaining scrolling as an overflow escape hatch. */
 export const T3TEAM_WIDGET_HOST_CSS = [
   "html, body { min-width: 0; max-width: 100%; }",
-  `body { color: ${FOREGROUND} !important; background: transparent !important; overflow: auto; }`,
+  `body { color: ${FOREGROUND} !important; background: transparent !important; overflow: hidden; }`,
+  'body[data-t3team-widget-overflow="true"] { overflow: auto; }',
   "table { width: 100% !important; max-width: 100% !important; table-layout: fixed !important; border-collapse: collapse; }",
   "table th, table td { min-width: 0; max-width: 100%; overflow-wrap: anywhere; word-break: break-word; white-space: normal !important; }",
   "pre { max-width: 100%; overflow-x: auto; }",

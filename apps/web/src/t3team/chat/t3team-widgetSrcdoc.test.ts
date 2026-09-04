@@ -30,6 +30,7 @@ describe("buildT3TeamWidgetSrcdoc", () => {
     const srcdoc = buildT3TeamWidgetSrcdoc({
       html: [
         "<style>body { color: #1f2328; } table { background: #f5f5f5; } th { background-color: #f0f0f0; }</style>",
+        '<p style="color:#666">Default copy</p>',
         '<table style="width:100%"><tr><th style="color: green">Status</th><td style="color: orange">Ready</td></tr></table>',
       ].join(""),
       nonce: "test-nonce",
@@ -39,6 +40,8 @@ describe("buildT3TeamWidgetSrcdoc", () => {
     expect(srcdoc).not.toContain("background: #f5f5f5");
     expect(srcdoc).not.toContain("background-color: #f0f0f0");
     expect(srcdoc).not.toContain("color: #1f2328");
+    expect(srcdoc).not.toContain("color:#666");
+    expect(srcdoc).toContain("color:var(--muted-foreground");
     expect(srcdoc).toContain("color: green");
     expect(srcdoc).toContain("color: orange");
     expect(srcdoc).toContain(
@@ -47,7 +50,7 @@ describe("buildT3TeamWidgetSrcdoc", () => {
     expect(srcdoc).toContain(
       "overflow-wrap: anywhere; word-break: break-word; white-space: normal !important;",
     );
-    expect(srcdoc).toContain("overflow: auto;");
+    expect(srcdoc).toContain('body[data-t3team-widget-overflow="true"] { overflow: auto; }');
     expect(srcdoc.indexOf("</table>")).toBeLessThan(srcdoc.lastIndexOf("data-t3team-widget-host"));
   });
 });

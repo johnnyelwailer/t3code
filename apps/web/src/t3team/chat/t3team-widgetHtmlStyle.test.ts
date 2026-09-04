@@ -5,13 +5,15 @@ import { normalizeT3TeamWidgetHtml, T3TEAM_WIDGET_HOST_CSS } from "./t3team-widg
 describe("normalizeT3TeamWidgetHtml", () => {
   it("maps common neutral surfaces and default text while preserving semantic colours", () => {
     const html = [
-      "<style>body { color: #1f2328; background: #f5f5f5; } .header { background-color: rgb(240, 240, 240); color: orange; }</style>",
+      "<style>body { color: #1f2328; background: #f5f5f5; } .summary { color:#666; } .muted { COLOR: RGB(102, 102, 102); } .header { background-color: rgb(240, 240, 240); color: orange; }</style>",
       '<table style="width:100%;background:#ffffff"><tr><td style="color:green;background: #f0f0f0">Ready</td></tr></table>',
     ].join("");
 
     const normalized = normalizeT3TeamWidgetHtml(html);
 
     expect(normalized).toContain("color: var(--foreground, inherit)");
+    expect(normalized).toContain("color:var(--muted-foreground");
+    expect(normalized).toContain("COLOR: var(--muted-foreground");
     expect(normalized).toContain("background: var(--muted");
     expect(normalized).toContain("background-color: var(--muted");
     expect(normalized).toContain("background:var(--card");
@@ -32,7 +34,10 @@ describe("normalizeT3TeamWidgetHtml", () => {
 
 describe("T3TEAM_WIDGET_HOST_CSS", () => {
   it("fits ordinary tables before falling back to scrolling for oversized content", () => {
-    expect(T3TEAM_WIDGET_HOST_CSS).toContain("overflow: auto;");
+    expect(T3TEAM_WIDGET_HOST_CSS).toContain("overflow: hidden;");
+    expect(T3TEAM_WIDGET_HOST_CSS).toContain(
+      'body[data-t3team-widget-overflow="true"] { overflow: auto; }',
+    );
     expect(T3TEAM_WIDGET_HOST_CSS).toContain(
       "table { width: 100% !important; max-width: 100% !important; table-layout: fixed !important;",
     );
