@@ -2022,12 +2022,9 @@ function ThreadErrorTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "th
 
 function ThinkingTimelineRow() {
   const { isPreparingWorktree } = use(TimelineRowActivityCtx);
-  // Reserve the activity row during setup so the handoff keeps the same height.
-  return (
-    <div className="min-h-7">
-      {isPreparingWorktree ? null : <LiveActivityRow label="Thinking" iconName="brain" />}
-    </div>
-  );
+  // GHE #397: suppressed — our working row already shows "Thinking for Xs".
+  // Re-enable if upstream enriches this row with new content beyond the label.
+  return <div className="min-h-0" />;
 }
 
 // ---------------------------------------------------------------------------
