@@ -86,6 +86,18 @@ const isModelSelection = Schema.is(ModelSelection);
 const DEFAULT_TURN_INACTIVITY_TIMEOUT_MS = 600_000;
 
 /**
+ * How many times the host inactivity watchdog may RE-ARM (self-heal) a stalled
+ * turn before it falls back to a hard interrupt (GHE #113 self-heal). Each
+ * re-arm gives the provider a fresh full inactivity window to recover on its
+ * own: a self-healing driver (the Nexpore Pi driver's own watchdog re-sends
+ * the in-flight context on its retry episode) gets first crack, and any stream
+ * activity from the recovery resets the counter (recordTurnActivity re-arms
+ * with attempts = 0). Bounded, so a genuinely-wedged turn still cannot hang
+ * indefinitely.
+ */
+const MAX_TURN_INACTIVITY_SELFHEAL_ATTEMPTS = 2;
+
+/**
  * Announced-retry backoff budgeting (GHE #306 addendum).
  *
  * Drivers that retry transient gateway errors announce each backoff sleep
@@ -124,6 +136,13 @@ interface TurnWatchdogEntry {
   readonly provider: ProviderDriverKind;
   readonly timeoutMs: number;
   readonly timerFiber: Fiber.Fiber<unknown, never>;
+  /**
+   * How many self-heal re-arms this turn has used. Reset to 0 on any stream
+   * activity (recordTurnActivity) and on a new turn (sendTurn); carried
+   * forward across re-arms so the host can bound how long a stalled turn is
+   * given before the hard backstop.
+   */
+  readonly selfHealAttempts: number;
 }
 
 /**
@@ -392,23 +411,77 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     instanceId: ProviderInstanceId,
     provider: ProviderDriverKind,
     timeoutMs: number,
+    selfHealAttempts = 0,
   ) {
     // Only fire if this exact entry is still armed — a newer turn, a
     // reset, or a settled turn replaced it in the meantime.
     const current = yield* Ref.get(turnWatchdogs);
     if (current.get(threadId)?.turnId !== turnId) return;
-    yield* clearTurnWatchdog(threadId);
     const inactivitySeconds = Math.round(timeoutMs / 1000);
-    yield* Effect.logWarning("provider.turn.inactivity-watchdog", {
+    // Self-heal first (GHE #113): a stalled stream is usually a transient
+    // gateway flap, not a dead turn. Instead of a hard interrupt, give the
+    // provider a fresh full window to recover on its own — a self-healing
+    // driver (the Nexpore Pi driver's own watchdog re-sends the in-flight
+    // context on its retry episode) gets first crack, and any stream activity
+    // from the recovery resets the counter via recordTurnActivity. Bounded, so
+    // a genuinely-wedged turn still cannot hang indefinitely.
+    if (selfHealAttempts < MAX_TURN_INACTIVITY_SELFHEAL_ATTEMPTS) {
+      // Self-heal: clear the window and re-arm a fresh inactivity window,
+      // carrying the attempt count forward. Any stream activity during the new
+      // window resets the counter (recordTurnActivity re-arms at 0).
+      // armTurnWatchdog is explicitly typed (R = never) so this fire -> arm
+      // call does not form a recursive Effect.fn type.
+      yield* clearTurnWatchdog(threadId);
+      yield* Effect.logWarning("provider.turn.inactivity-selfheal", {
+        threadId: String(threadId),
+        turnId: String(turnId),
+        providerInstanceId: String(instanceId),
+        inactivitySeconds,
+        selfHealAttempt: selfHealAttempts + 1,
+        maxSelfHealAttempts: MAX_TURN_INACTIVITY_SELFHEAL_ATTEMPTS,
+      });
+      yield* publishRuntimeEvent({
+        eventId: EventId.make(nodeRandomUUID()),
+        provider,
+        providerInstanceId: instanceId,
+        threadId,
+        createdAt: yield* nowIso,
+        turnId,
+        type: "runtime.warning",
+        payload: {
+          message: `Turn stalled: no provider stream activity for ${inactivitySeconds} seconds (self-heal ${selfHealAttempts + 1}/${MAX_TURN_INACTIVITY_SELFHEAL_ATTEMPTS})`,
+          detail: {
+            code: "turn.inactivity",
+            inactivitySeconds,
+            selfHealAttempt: selfHealAttempts + 1,
+            maxSelfHealAttempts: MAX_TURN_INACTIVITY_SELFHEAL_ATTEMPTS,
+            turnId: String(turnId),
+          },
+        },
+      });
+      // Re-arm a full inactivity window, carrying the attempt count forward.
+      yield* armTurnWatchdog(
+        threadId,
+        turnId,
+        instanceId,
+        provider,
+        undefined,
+        selfHealAttempts + 1,
+      );
+      return;
+    }
+    // Self-heal budget exhausted — the hard backstop. A runtime.warning with
+    // detail.code "turn.inactivity.exhausted" and the live turnId is the
+    // observable surface a consumer uses to tell a self-heal-exhausted abort
+    // apart from a user interrupt.
+    yield* clearTurnWatchdog(threadId);
+    yield* Effect.logWarning("provider.turn.inactivity-exhausted", {
       threadId: String(threadId),
       turnId: String(turnId),
       providerInstanceId: String(instanceId),
       inactivitySeconds,
+      selfHealAttempts,
     });
-    // Same observable surface as the pack-level watchdog: a
-    // runtime.warning carrying detail.code "turn.inactivity" and the live
-    // turnId, so host consumers can tell a watchdog abort apart from a
-    // user interrupt.
     yield* publishRuntimeEvent({
       eventId: EventId.make(nodeRandomUUID()),
       provider,
@@ -418,18 +491,15 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       turnId,
       type: "runtime.warning",
       payload: {
-        message: `Turn stalled: no provider stream activity for ${inactivitySeconds} seconds`,
+        message: `Turn stalled: no provider stream activity for ${inactivitySeconds} seconds after ${selfHealAttempts} self-heal attempt(s)`,
         detail: {
-          code: "turn.inactivity",
+          code: "turn.inactivity.exhausted",
           inactivitySeconds,
+          selfHealAttempts,
           turnId: String(turnId),
         },
       },
     });
-    // Abort through the provider-agnostic interrupt path — whatever the
-    // provider does on interrupt (turn.aborted event, session error, ...)
-    // is its own concern; the host guarantee is that the turn cannot hang
-    // past the budget.
     const adapter = yield* registry
       .getByInstance(instanceId)
       .pipe(Effect.orElseSucceed(() => undefined));
@@ -447,12 +517,24 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     }
   });
 
-  const armTurnWatchdog = Effect.fn("ProviderService.turnWatchdog.arm")(function* (
+  // Explicitly typed (R = never) to break the fire -> arm -> fire recursion
+  // from a mutual Effect.fn reference: the expensive Clock/Logger work is
+  // inside the forked timer fiber (its requirements are captured in the
+  // Fiber, not this effect's R), so this arming effect itself needs nothing.
+  const armTurnWatchdog: (
     threadId: ThreadId,
     turnId: TurnId,
     instanceId: ProviderInstanceId,
     provider: ProviderDriverKind,
     announcedBudgetMs?: number,
+    selfHealAttempts?: number,
+  ) => Effect.Effect<void, never, never> = Effect.fn("ProviderService.turnWatchdog.arm")(function* (
+    threadId: ThreadId,
+    turnId: TurnId,
+    instanceId: ProviderInstanceId,
+    provider: ProviderDriverKind,
+    announcedBudgetMs?: number,
+    selfHealAttempts = 0,
   ) {
     const baseMs = yield* resolveTurnInactivityTimeoutMs(instanceId);
     const timeoutMs =
@@ -464,7 +546,9 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       yield* Fiber.interrupt(previousEntry.timerFiber).pipe(Effect.ignore);
     }
     const timerFiber = yield* Effect.sleep(Duration.millis(timeoutMs)).pipe(
-      Effect.andThen(fireTurnWatchdog(threadId, turnId, instanceId, provider, timeoutMs)),
+      Effect.andThen(
+        fireTurnWatchdog(threadId, turnId, instanceId, provider, timeoutMs, selfHealAttempts),
+      ),
       Effect.forkScoped,
       // Detach the R requirement: the caller (sendTurn / recordTurnActivity)
       // runs without a Scope in its context, so attach the timer to the
@@ -478,6 +562,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         provider,
         timeoutMs,
         timerFiber,
+        selfHealAttempts,
       }),
     );
   });
@@ -516,7 +601,9 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         }
         // An announced retry backoff (driver detail "provider.retry")
         // extends the budget to cover the sleep; every other event
-        // re-arms the plain budget.
+        // re-arms the plain budget. Any event (including a recovered turn's
+        // first activity) re-arms at attempt 0, which is how a self-healed
+        // turn gets a fresh full budget once it shows signs of life.
         return armTurnWatchdog(
           event.threadId,
           entry.turnId,

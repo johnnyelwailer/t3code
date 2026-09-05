@@ -306,11 +306,22 @@ const findInactivityWarning = (events: ReadonlyArray<ProviderRuntimeEvent>) =>
       (event.payload as { detail?: { code?: string } }).detail?.code === "turn.inactivity",
   );
 
+const findInactivityWarningFor = (
+  events: ReadonlyArray<ProviderRuntimeEvent>,
+  threadId: ThreadId,
+) =>
+  events.find(
+    (event) =>
+      event.type === "runtime.warning" &&
+      event.threadId === threadId &&
+      (event.payload as { detail?: { code?: string } }).detail?.code === "turn.inactivity",
+  );
+
 const codexStalled = makeFakeAdapter(CODEX_DRIVER);
 const stalledHarness = makeWatchdogHarness({ [CODEX_DRIVER]: codexStalled.adapter });
 
 stalledHarness.layer("turn inactivity watchdog: stalled turn", (it) => {
-  it.effect("aborts a turn that produces no stream activity for the default budget", () =>
+  it.effect("self-heals a stalled turn (re-arms) before falling back to the hard interrupt", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;
       const seen = yield* collectRuntimeEvents(provider);
@@ -325,19 +336,38 @@ stalledHarness.layer("turn inactivity watchdog: stalled turn", (it) => {
       // registered before the clock advances.
       yield* drainFibers;
 
-      // No stream events at all: advance past the 600s host default.
+      // First 600s budget with no stream events: the host SELF-HEALS — it
+      // re-arms a fresh window instead of interrupting, and emits a
+      // turn.inactivity warning carrying the self-heal attempt.
       yield* advanceTestClock(600_000);
       yield* drainFibers;
+      assert.equal(
+        codexStalled.interruptTurnCalls.length,
+        0,
+        "no hard interrupt on the first stalled budget (self-heal)",
+      );
+      const heal1 = findInactivityWarningFor(yield* Ref.get(seen), asThreadId("thread-stall"));
+      assert.ok(heal1 !== undefined, "expected a turn.inactivity self-heal warning");
+      assert.equal(heal1.turnId, turn.turnId);
 
+      // Second budget: still self-healing (attempt 2), still no interrupt.
+      yield* advanceTestClock(600_000);
+      yield* drainFibers;
+      assert.equal(
+        codexStalled.interruptTurnCalls.length,
+        0,
+        "no hard interrupt on the second stalled budget (self-heal)",
+      );
+
+      // Third budget: the self-heal budget (2 attempts) is exhausted, so
+      // the hard backstop finally fires.
+      yield* advanceTestClock(600_000);
+      yield* drainFibers;
       assert.equal(codexStalled.interruptTurnCalls.length, 1);
       assert.deepEqual(codexStalled.interruptTurnCalls[0], [
         asThreadId("thread-stall"),
         turn.turnId,
       ]);
-      const warning = findInactivityWarning(yield* Ref.get(seen));
-      assert.ok(warning !== undefined, "expected a turn.inactivity runtime.warning");
-      assert.equal(warning.threadId, asThreadId("thread-stall"));
-      assert.equal(warning.turnId, turn.turnId);
     }),
   );
 
@@ -402,8 +432,14 @@ stalledHarness.layer("turn inactivity watchdog: stalled turn", (it) => {
         });
         yield* drainFibers;
 
-        // The new turn is still armed: advancing past the budget fires the
-        // watchdog for the CURRENT turn, not for the superseded one.
+        // The new turn is still armed: walking through the two self-heal
+        // windows and the backstop fires the interrupt for the CURRENT turn,
+        // not for the superseded one.
+        yield* advanceTestClock(600_000);
+        yield* drainFibers;
+        yield* advanceTestClock(600_000);
+        yield* drainFibers;
+        assert.equal(codexStalled.interruptTurnCalls.length, 0);
         yield* advanceTestClock(600_000);
         yield* drainFibers;
         assert.equal(
@@ -533,20 +569,23 @@ announcedHarness.layer("turn inactivity watchdog: announced retry backoff (GHE #
           "no interrupt inside the announced window",
         );
 
-        // Crossing the extended budget still fires the backstop.
+        // Crossing the extended budget now SELF-HEALS (re-arms) instead of
+        // interrupting: the driver announced a retry, so it gets first crack
+        // at recovery. The hard backstop fires only after MAX re-arms.
         yield* advanceTestClock(5_000);
         yield* drainFibers;
-        assert.equal(codexAnnounced.interruptTurnCalls.length, 1);
-        assert.deepEqual(codexAnnounced.interruptTurnCalls[0], [
-          asThreadId("thread-announced"),
-          turn.turnId,
-        ]);
+        assert.equal(
+          codexAnnounced.interruptTurnCalls.length,
+          0,
+          "crossing the announced window self-heals, does not interrupt",
+        );
       }),
   );
 
   it.effect("a warning without the provider.retry detail re-arms the plain budget", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;
+      const seen = yield* collectRuntimeEvents(provider);
       codexAnnounced.interruptTurnCalls.length = 0;
 
       yield* startCodexSession(provider, asThreadId("thread-other-warning"));
@@ -574,14 +613,27 @@ announcedHarness.layer("turn inactivity watchdog: announced retry backoff (GHE #
 
       yield* advanceTestClock(600_000);
       yield* drainFibers;
-      assert.equal(codexAnnounced.interruptTurnCalls.length, 1);
+      // Fired on the plain 600s budget (not the 10000s the warning tried to
+      // set), and self-healed rather than interrupted.
+      assert.equal(codexAnnounced.interruptTurnCalls.length, 0);
+      assert.ok(
+        findInactivityWarningFor(yield* Ref.get(seen), asThreadId("thread-other-warning")) !==
+          undefined,
+        "expected a turn.inactivity self-heal warning at the plain budget",
+      );
     }),
   );
+});
 
+const codexHuge = makeFakeAdapter(CODEX_DRIVER);
+const hugeHarness = makeWatchdogHarness({ [CODEX_DRIVER]: codexHuge.adapter });
+
+hugeHarness.layer("turn inactivity watchdog: 24h cap on huge announcement (GHE #306)", (it) => {
   it.effect("a buggy huge announcement cannot disable the backstop (24h cap)", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;
-      codexAnnounced.interruptTurnCalls.length = 0;
+      const seen = yield* collectRuntimeEvents(provider);
+      codexHuge.interruptTurnCalls.length = 0;
 
       yield* startCodexSession(provider, asThreadId("thread-huge"));
       const turn = yield* provider.sendTurn({
@@ -592,7 +644,7 @@ announcedHarness.layer("turn inactivity watchdog: announced retry backoff (GHE #
       yield* drainFibers;
 
       // 100 days announced: the budget caps at 24h, it does not vanish.
-      codexAnnounced.emit(
+      codexHuge.emit(
         retryAnnouncementWarning(
           asThreadId("thread-huge"),
           turn.turnId,
@@ -604,10 +656,16 @@ announcedHarness.layer("turn inactivity watchdog: announced retry backoff (GHE #
 
       yield* advanceTestClock(24 * 60 * 60 * 1000 - 1_000);
       yield* drainFibers;
-      assert.equal(codexAnnounced.interruptTurnCalls.length, 0);
+      assert.equal(codexHuge.interruptTurnCalls.length, 0);
+      // At the 24h cap the watchdog fires — now as a self-heal (not an
+      // interrupt), proving the cap still bounds the turn.
       yield* advanceTestClock(2_000);
       yield* drainFibers;
-      assert.equal(codexAnnounced.interruptTurnCalls.length, 1);
+      assert.equal(codexHuge.interruptTurnCalls.length, 0);
+      assert.ok(
+        findInactivityWarningFor(yield* Ref.get(seen), asThreadId("thread-huge")) !== undefined,
+        "expected a turn.inactivity self-heal warning at the 24h cap",
+      );
     }),
   );
 });
@@ -629,6 +687,7 @@ perProviderHarness.layer("turn inactivity watchdog: per-provider timeout", (it) 
   it.effect("respects each provider's configured timeout independently", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;
+      const seen = yield* collectRuntimeEvents(provider);
 
       yield* startCodexSession(provider, asThreadId("thread-codex"));
       yield* startClaudeSession(provider, asThreadId("thread-claude"));
@@ -644,26 +703,27 @@ perProviderHarness.layer("turn inactivity watchdog: per-provider timeout", (it) 
       });
       yield* drainFibers;
 
-      // 31s: past codex's 30s budget, well inside claude's 120s.
+      // 31s: past codex's 30s budget, well inside claude's 120s. The
+      // per-provider budget is honored by the SELF-HEAL firing for codex only.
       yield* advanceTestClock(31_000);
       yield* drainFibers;
-      assert.equal(codexFast.interruptTurnCalls.length, 1);
-      assert.deepEqual(codexFast.interruptTurnCalls[0], [
-        asThreadId("thread-codex"),
-        asTurnId("turn-thread-codex"),
-      ]);
-      assert.equal(claudeSlow.interruptTurnCalls.length, 0);
+      assert.ok(
+        findInactivityWarningFor(yield* Ref.get(seen), asThreadId("thread-codex")) !== undefined,
+        "codex self-heals at its 30s budget",
+      );
+      assert.equal(
+        findInactivityWarningFor(yield* Ref.get(seen), asThreadId("thread-claude")),
+        undefined,
+        "claude not yet at its 120s budget",
+      );
 
       // 121s total: now past claude's 120s budget as well.
       yield* advanceTestClock(90_000);
       yield* drainFibers;
-      assert.equal(claudeSlow.interruptTurnCalls.length, 1);
-      assert.deepEqual(claudeSlow.interruptTurnCalls[0], [
-        asThreadId("thread-claude"),
-        asTurnId("turn-thread-claude"),
-      ]);
-      // And codex's watchdog does not fire a second time.
-      assert.equal(codexFast.interruptTurnCalls.length, 1);
+      assert.ok(
+        findInactivityWarningFor(yield* Ref.get(seen), asThreadId("thread-claude")) !== undefined,
+        "claude self-heals at its 120s budget",
+      );
     }),
   );
 });
@@ -702,13 +762,20 @@ replaceHarness.layer("turn inactivity watchdog: session replacement (GHE #328)",
       );
 
       // The replacement session's own turn is still covered: sendTurn
-      // re-arms the watchdog and it fires for the new turn when it stalls.
+      // re-arms the watchdog; walking through the self-heal windows and the
+      // backstop interrupts the NEW turn when it stalls.
       const freshTurn = yield* provider.sendTurn({
         threadId: asThreadId("thread-replace"),
         input: "again",
         attachments: [],
       });
       yield* drainFibers;
+      yield* advanceTestClock(600_000);
+      yield* drainFibers;
+      assert.equal(codexReplace.interruptTurnCalls.length, 0);
+      yield* advanceTestClock(600_000);
+      yield* drainFibers;
+      assert.equal(codexReplace.interruptTurnCalls.length, 0);
       yield* advanceTestClock(600_000);
       yield* drainFibers;
       assert.equal(codexReplace.interruptTurnCalls.length, 1);
