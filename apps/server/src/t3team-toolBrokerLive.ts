@@ -32,10 +32,12 @@ import { bindChildProviderCatalog } from "./t3team-childProviderCatalog.ts";
 import { makeRecipeToolHandlers } from "./t3team-toolBrokerRecipeTools.ts";
 import { makeWorkflowToolsForThread } from "./t3team-toolBrokerWorkflowToolsWiring.ts";
 import { T3TeamContextRefreshService } from "./t3team-contextRefreshService.ts";
+import { makeReadProviderUsage } from "./t3team-toolBrokerProviderUsage.ts";
 import { makeT3TeamWidgetShowBinder } from "./t3team-toolBrokerWidgetShow.ts";
 import { makeT3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
 import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
 import { buildRuntimeModelCatalog } from "./t3team-runtimeModelCatalog.ts";
+import { ServerSettingsService } from "./serverSettings.ts";
 
 const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () {
   // Host tools every provider may call without an explicit `surface:"t3team"`
@@ -45,6 +47,7 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
   // inspecting/validating saved or inline recipe orchestrations.
   const genericThreadToolIds = [
     "t3team.runtime.models",
+    "t3team.runtime.provider_usage",
     "t3team.thread.rename",
     "t3team.thread.start_child",
     "t3team.thread.children",
@@ -74,6 +77,7 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     yield* Effect.serviceOption(ProjectSetupScriptRunner),
   );
   const providerRegistry = Option.getOrUndefined(yield* Effect.serviceOption(ProviderRegistry));
+  const serverSettings = Option.getOrUndefined(yield* Effect.serviceOption(ServerSettingsService));
   const workflowRegistry = Option.getOrUndefined(
     yield* Effect.serviceOption(T3TeamWorkflowEngineRegistry),
   );
@@ -190,6 +194,7 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
               ),
             ),
           ),
+        readProviderUsage: (toolArgs) => makeReadProviderUsage({ serverSettings })(toolArgs),
         setBacklogAssigneeFilter: (mode) =>
           setBacklogAssigneeFilterForContext(resolvedToolContext, mode),
         refreshContextBundle: contextRefresh,

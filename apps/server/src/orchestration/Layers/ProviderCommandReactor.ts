@@ -54,6 +54,7 @@ import {
 import { getConfiguredTextGenerationModelSelection } from "../../t3team-configuredDefaultModelSelection.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
+import { ProviderUsageWatcher } from "../../t3team-providerUsageWatcher.ts";
 const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
 const isProviderDriverKind = Schema.is(ProviderDriverKind);
 
@@ -408,6 +409,7 @@ const make = Effect.gen(function* () {
   const vcsStatusBroadcaster = yield* VcsStatusBroadcaster;
   const textGeneration = yield* TextGeneration;
   const serverSettingsService = yield* ServerSettingsService;
+  const providerUsageWatcher = yield* ProviderUsageWatcher;
   const serverCommandId = (tag: string) =>
     crypto.randomUUIDv4.pipe(Effect.map((uuid) => CommandId.make(`server:${tag}:${uuid}`)));
   const serverEventId = () => crypto.randomUUIDv4.pipe(Effect.map(EventId.make));
@@ -1293,6 +1295,33 @@ const make = Effect.gen(function* () {
         detail: `User message '${event.payload.messageId}' was not found for turn start request.`,
         turnId: null,
         createdAt: event.payload.createdAt,
+      });
+      return;
+    }
+
+    // Provider usage hold gate (GHE #421, auto-resume layer): when this
+    // thread's provider rolling window is exhausted, do NOT start the turn —
+    // record it in the thread's hold row and let the watcher's auto-resume
+    // path re-dispatch `thread.turn.resume` when the window recovers. This
+    // covers every entry into this handler: user messages
+    // (`thread.turn.start`) AND the Continue button and the #403 bounded
+    // re-drive (`thread.turn.resume`), so a closed window neither burns the
+    // provider's quota-error path nor the re-drive's bounded budget.
+    const hold = yield* providerUsageWatcher
+      .checkThreadHeld({
+        threadId: thread.id,
+        providerInstanceId: thread.modelSelection.instanceId ?? null,
+        sessionProviderName: thread.session?.providerName ?? null,
+      })
+      .pipe(Effect.map(Option.getOrUndefined));
+    if (hold !== undefined) {
+      yield* providerUsageWatcher.recordDeferredTurn({
+        threadId: thread.id,
+        messageId: event.payload.messageId,
+        driver: hold.driver,
+        providerInstanceId: thread.modelSelection.instanceId ?? null,
+        resetsAt: hold.resetsAt,
+        now: event.payload.createdAt,
       });
       return;
     }

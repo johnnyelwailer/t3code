@@ -17,6 +17,7 @@ const dependencies = [McpInvocationContext.McpInvocationContext, T3TeamToolBroke
  * in the explicit policy-exclusion set. */
 export const T3TEAM_MCP_CANONICAL_TOOL_MAP = {
   t3team_models: "t3team.runtime.models",
+  t3team_provider_usage: "t3team.runtime.provider_usage",
   t3team_rename_thread: "t3team.thread.rename",
   t3team_search_thread: "t3team.thread.search",
   t3team_search_source: "t3team.thread.search_source",
@@ -92,6 +93,20 @@ export const T3TeamModelsTool = Tool.make("t3team_models", {
     "Read the current thread's true model selection and the live provider instances/models " +
     "available to this runtime. Call before setting an exact provider or model; never guess " +
     "from examples or static SDK constants.",
+  success: Schema.Unknown,
+  failure: T3TeamMcpToolError,
+  dependencies,
+});
+
+export const T3TeamProviderUsageTool = Tool.make("t3team_provider_usage", {
+  description:
+    "Sample the live provider plan-limit windows (5-hour / weekly quota: percent used, reset time, severity) for the configured provider instances on demand. Call it to check how close a provider is to a rate-limit wall before delegating long work to it. Optional provider_instance_id filters to one instance; omit to sample all enabled instances with a live-limit source. Unsampleable instances are reported in unavailable with a reason.",
+  parameters: Schema.Struct({
+    provider_instance_id: Schema.optional(Schema.String).annotate({
+      description:
+        "Optional provider INSTANCE id to sample (as returned by t3team_models). Omit to sample all enabled instances with a live-limit source.",
+    }),
+  }),
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
   dependencies,
@@ -522,6 +537,7 @@ export const T3TeamRecipeValidateTool = Tool.make("t3team_recipe_validate", {
 
 export const T3TeamToolkit = Toolkit.make(
   T3TeamModelsTool,
+  T3TeamProviderUsageTool,
   T3TeamRenameThreadTool,
   T3TeamSearchThreadTool,
   T3TeamSearchSourceTool,
