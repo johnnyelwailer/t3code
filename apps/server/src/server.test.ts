@@ -90,6 +90,8 @@ const decodeTransferShellSnapshot = Schema.decodeUnknownEffect(
 
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as ServerConfig from "./config.ts";
+import { ProviderUsageDevError, ProviderUsageWatcher } from "./t3team-providerUsageWatcher.ts";
+import { ProviderUsageHoldRepository } from "./persistence/Services/ProviderUsageHolds.ts";
 import { makeRoutesLayer, PullRequestServiceLive, HTTP_ROUTER_CONFIG } from "./server.ts";
 import { PullRequestProviderRegistry } from "./pullRequest/PullRequestProviderRegistry.ts";
 import { ProviderSessionDirectoryLive } from "./provider/Layers/ProviderSessionDirectory.ts";
@@ -791,6 +793,26 @@ const buildAppUnderTest = (options?: {
             setProviderMaintenanceActionState: () => Effect.succeed([]),
             streamChanges: Stream.empty,
             ...options?.layers?.providerRegistry,
+          }),
+          // The provider-usage hold routes need these two services. Fakes keep the
+          // watcher's sweep loop (a real forked fiber sampling live plan limits) out
+          // of the test runtime; the route tests exercise the HTTP surface only.
+          Layer.succeed(ProviderUsageWatcher, {
+            sweep: () => Effect.void,
+            checkThreadHeld: () => Effect.succeed(Option.none()),
+            recordDeferredTurn: () => Effect.void,
+            forceExhaust: () => Effect.fail(new ProviderUsageDevError({ message: "not available in this test" })),
+            forceRecover: () => Effect.fail(new ProviderUsageDevError({ message: "not available in this test" })),
+            getDevState: () => Effect.succeed({ held: [], holds: [], lastSampledAt: null }),
+          }),
+          Layer.succeed(ProviderUsageHoldRepository, {
+            upsertActiveHold: () => Effect.void,
+            setPendingTurn: () => Effect.succeed(Option.none()),
+            setAutoResume: () => Effect.succeed(Option.none()),
+            getByThreadId: () => Effect.succeed(Option.none()),
+            listActive: () => Effect.succeed([]),
+            markReleased: () => Effect.succeed(Option.none()),
+            listActiveSessionThreadsForDriver: () => Effect.succeed([]),
           }),
           Layer.mock(ProviderService.ProviderService)({
             uploadFeedback: () => Effect.die("Provider feedback is not stubbed in this test"),

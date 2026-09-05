@@ -67,6 +67,8 @@ import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts"
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Clock from "effect/Clock";
 import { ServerSettingsService } from "../../serverSettings.ts";
+import { ProviderUsageDevError, ProviderUsageWatcher } from "../../t3team-providerUsageWatcher.ts";
+import * as Option from "effect/Option";
 import { ServerActivation } from "../../serverActivation.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import * as GitWorkflowService from "../../git/GitWorkflowService.ts";
@@ -449,6 +451,16 @@ describe("ProviderCommandReactor", () => {
         }),
       ),
       Layer.provideMerge(ServerSettingsService.layerTest()),
+      Layer.provideMerge(
+        Layer.succeed(ProviderUsageWatcher, {
+          sweep: () => Effect.void,
+          checkThreadHeld: () => Effect.succeed(Option.none()),
+          recordDeferredTurn: () => Effect.void,
+          forceExhaust: () => Effect.fail(new ProviderUsageDevError({ message: "not available" })),
+          forceRecover: () => Effect.fail(new ProviderUsageDevError({ message: "not available" })),
+          getDevState: () => Effect.succeed({ held: [], holds: [], lastSampledAt: null }),
+        }),
+      ),
       Layer.provideMerge(ServerConfig.layerTest(process.cwd(), baseDir)),
       Layer.provideMerge(NodeServices.layer),
     );

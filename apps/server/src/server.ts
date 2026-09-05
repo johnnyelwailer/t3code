@@ -157,6 +157,13 @@ import {
 import { t3teamThreadDraftMutationStatusRouteLayer } from "./t3team-thread-draftMutation-status-route.ts";
 import { t3teamThreadWorkflowControlRouteLayer } from "./t3team-thread-workflow-control-route.ts";
 import {
+  t3teamProviderUsageDevRouteLayer,
+  t3teamProviderUsageDevStateRouteLayer,
+  t3teamThreadProviderHoldControlRouteLayer,
+} from "./t3team-thread-provider-hold-route.ts";
+import { T3TeamProviderUsageWatcherLive } from "./t3team-providerUsageWatcher.ts";
+import { ProviderUsageHoldRepositoryLive } from "./persistence/Layers/ProviderUsageHolds.ts";
+import {
   t3teamGitHubAssetRouteLayer,
   t3teamGitHubInboxRouteLayer,
   t3teamGitHubPullRequestContextRouteLayer,
@@ -326,6 +333,9 @@ const ReactorLayerLive = Layer.empty.pipe(
   Layer.provideMerge(OrchestrationReactorLive),
   Layer.provideMerge(ProviderRuntimeIngestionLive),
   Layer.provideMerge(ProviderCommandReactorLive),
+  // The turn-start gate (GHE #421) runs inside the provider command reactor, so the
+  // watcher's in-memory held set + hold rows must satisfy ITS requirements.
+  Layer.provideMerge(T3TeamProviderUsageWatcherLive),
   Layer.provideMerge(CheckpointReactorLive),
   Layer.provideMerge(ThreadDeletionReactorLive),
   Layer.provideMerge(T3TeamThreadToolContextEvictionReactorLive),
@@ -654,6 +664,14 @@ export const makeRoutesLayer = Layer.mergeAll(
     t3teamThreadWorkflowResolveInputRouteLayer,
     t3teamThreadToolContextRouteLayer,
     t3teamWidgetToolCallRouteLayer,
+    Layer.mergeAll(
+      t3teamThreadProviderHoldControlRouteLayer,
+      t3teamProviderUsageDevRouteLayer,
+      t3teamProviderUsageDevStateRouteLayer,
+    ).pipe(
+      Layer.provideMerge(T3TeamProviderUsageWatcherLive),
+      Layer.provideMerge(ProviderUsageHoldRepositoryLive),
+    ),
   ),
   McpHttpServer.layer.pipe(Layer.provide(McpSessionRegistry.layer)),
 ).pipe(

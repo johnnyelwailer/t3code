@@ -286,7 +286,7 @@ import {
 } from "@t3tools/client-runtime/state/threads";
 import { resolveProviderSkillsForCwd } from "@t3tools/client-runtime/providerSkills";
 import { vcsEnvironment } from "../state/vcs";
-import { useEnvironments, usePrimaryEnvironment } from "../state/environments";
+import { useEnvironments, useEnvironmentHttpBaseUrl, usePrimaryEnvironment } from "../state/environments";
 import {
   useProject,
   useProjects,
@@ -321,6 +321,11 @@ import {
   ProviderStatusBanner,
   shouldShowProviderStatusBanner,
 } from "./chat/ProviderStatusBanner";
+import {
+  describeHoldReset,
+  deriveProviderUsageHoldBanner,
+  ProviderUsageHoldToggle,
+} from "./chat/ProviderUsageHoldBanner";
 import { shouldSuppressT3TeamProviderStatus } from "~/t3team/chat/t3team-providerStatusSeverity";
 import {
   dismissThreadErrorBannerForSession,
@@ -2347,8 +2352,63 @@ function ChatViewContent(props: ChatViewProps) {
   const serverUpdateFailureDismissed =
     serverUpdateState === dismissedServerUpdateState ||
     isServerUpdateFailureDismissed(serverUpdateState);
+  // Provider usage-hold banner (GHE #421): derived from the thread's
+  // provider.usage-hold.* activity trail so it survives reloads and shows on
+  // every connected client. The toggle flips optimistically until the server
+  // echoes the auto-resume-set activity back.
+  const providerUsageHold = useMemo(
+    () => deriveProviderUsageHoldBanner(activeThread?.activities ?? EMPTY_ACTIVITIES),
+    [activeThread?.activities],
+  );
+  const [providerUsageHoldAutoResumeOverride, setProviderUsageHoldAutoResumeOverride] = useState<
+    boolean | null
+  >(null);
+  useEffect(() => {
+    if (
+      providerUsageHoldAutoResumeOverride !== null &&
+      providerUsageHold !== null &&
+      providerUsageHold.autoResume === providerUsageHoldAutoResumeOverride
+    ) {
+      setProviderUsageHoldAutoResumeOverride(null);
+    }
+  }, [providerUsageHold?.autoResume, providerUsageHold, providerUsageHoldAutoResumeOverride]);
+  const providerUsageHoldHttpBaseUrl = useEnvironmentHttpBaseUrl(environmentId);
+
   const systemComposerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
     const items: ComposerBannerStackItem[] = [];
+    // Provider usage-hold banner (GHE #421): while the watcher has held this
+    // thread's provider window, turns on it are paused server-side. The banner
+    // sits below the latest message with the per-thread auto-resume toggle.
+    if (providerUsageHold !== null && activeThreadId !== null) {
+      const holdAutoResume =
+        providerUsageHoldAutoResumeOverride ?? providerUsageHold.autoResume;
+      items.push({
+        id: "provider-usage-hold",
+        variant: "warning",
+        priority: "urgent",
+        icon: (
+          <span
+            className="size-1.5 animate-status-pulse rounded-full bg-amber-500"
+            aria-hidden="true"
+          />
+        ),
+        title: `Provider usage limit reached${
+          providerUsageHold.driver !== null ? ` — ${providerUsageHold.driver} window exhausted` : ""
+        }`,
+        description:
+          providerUsageHold.resetsAt !== null
+            ? `Turns paused · ${describeHoldReset(providerUsageHold.resetsAt, Date.now())}`
+            : "Turns paused until the provider window recovers",
+        actions: providerUsageHoldHttpBaseUrl !== null ? (
+          <ProviderUsageHoldToggle
+            threadId={activeThreadId}
+            httpBaseUrl={providerUsageHoldHttpBaseUrl}
+            autoResume={holdAutoResume}
+            onFlipped={(next) => setProviderUsageHoldAutoResumeOverride(next)}
+          />
+        ) : undefined,
+      });
+    }
     const updateRunning = serverUpdateState.status === "running";
     const unavailableConnection = activeEnvironmentUnavailableState?.connection ?? null;
     const environmentReconnecting =
@@ -2496,6 +2556,10 @@ function ChatViewContent(props: ChatViewProps) {
     return items;
   }, [
     activeEnvironmentUnavailableState,
+    activeThreadId,
+    providerUsageHold,
+    providerUsageHoldAutoResumeOverride,
+    providerUsageHoldHttpBaseUrl,
     reconnectWarningGraceElapsed,
     handleReconnectActiveEnvironment,
     navigate,
