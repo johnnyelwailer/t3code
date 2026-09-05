@@ -3,7 +3,7 @@
  *
  * The instructions are NOT a second set of rules. `T3TEAM_REPORTING_MANUAL`
  * (`t3team-workflowManualReporting.ts`) is the contract this repo already publishes for whoever
- * writes a run's report — surfaced to authoring agents as `t3team_help("reporting")`. The composer
+ * writes a run's report — surfaced to authoring agents as `help("reporting")`. The composer
  * is simply the specialist that contract was written for, so it is quoted verbatim and then
  * re-addressed by a short preamble. Writing a divergent set here is how the two would drift, and
  * the manual is the one PJ actually reviewed.

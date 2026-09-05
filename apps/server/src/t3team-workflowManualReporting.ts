@@ -1,7 +1,7 @@
 /**
  * How an orchestration should report back to the human.
  *
- * Its own module, and its own `t3team_help("reporting")` entry, for the same reason the timers
+ * Its own module, and its own `help("reporting")` entry, for the same reason the timers
  * manual is: the orchestration manual is loaded into context every turn and is two lines under the
  * additive guard's hard 200-line ceiling, so on-demand topics live beside it rather than inside it.
  *
@@ -20,7 +20,7 @@
  */
 
 /**
- * The reporting contract, surfaced as `t3team_help("reporting")` and pointed at from the RULES
+ * The reporting contract, surfaced as `help("reporting")` and pointed at from the RULES
  * section of the main manual.
  */
 export const T3TEAM_REPORTING_MANUAL = `REPORTING — what the human actually reads.
@@ -36,7 +36,7 @@ garnish, and text is what you fall back to when there is genuinely nothing to sh
   await getThread().showWidget({ title: 'QA verdict', widgetCode: html, format: 'html' })
 
 Requires capabilities: ['user']. The authoring contract — host theme variables, the icon sprite, no
-hard-coded colours, works in light and dark — is t3team_help("widget-guidance"). Follow it; a
+hard-coded colours, works in light and dark — is help("widget-guidance"). Follow it; a
 widget that ignores the theme looks broken in half the app.
 
 Reach for a widget whenever the report contains:

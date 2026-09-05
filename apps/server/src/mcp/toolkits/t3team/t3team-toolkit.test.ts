@@ -74,7 +74,7 @@ it.effect("routes MCP wrappers through the bound broker callTool dispatch", () =
   return Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
     const result = yield* server.callTool({
-      name: "t3team_show_widget",
+      name: "show_widget",
       arguments: {
         title: "MCP widget",
         widget_code: "<button>Continue</button>",
@@ -103,22 +103,26 @@ it.effect("routes MCP wrappers through the bound broker callTool dispatch", () =
   );
 });
 
-// The agent-orchestration rename kept the old MCP names as deprecated aliases:
-// pack configs, agent prompts, and live transcripts still say t3team_workflow_*,
-// and a hard break would silently strip the capability from running agents.
+// Legacy agent-facing names (t3team_* prefix, t3team_workflow_* aliases) are NOT registered
+// tools anymore: they stay callable only through the HTTP transport's legacy-name
+// normalization (apps/server/src/mcp/t3team-legacyToolNames.ts), which rewrites the request
+// name BEFORE the MCP dispatcher sees it. Pack configs, agent prompts, and live transcripts
+// still say the old names, and a hard break would silently strip the capability from running
+// agents — so the alias registry is the single removable seam, covered end-to-end by
+// t3team-mcpHttp.test.ts.
 const orchestrationAliasCases = [
   {
     deprecated: "t3team_workflow_run",
-    current: "t3team_orchestration_run",
+    current: "orchestration_run",
     args: {
       source: "export const meta = { name: 'x' };",
       intent: { goal: "g", expectedOutcome: "o", guardrails: ["none"] },
     },
   },
-  { deprecated: "t3team_workflow_status", current: "t3team_orchestration_status", args: {} },
+  { deprecated: "t3team_workflow_status", current: "orchestration_status", args: {} },
   {
     deprecated: "t3team_workflow_resume",
-    current: "t3team_orchestration_resume",
+    current: "orchestration_resume",
     args: { runId: "run-1" },
   },
 ] as const;
@@ -129,49 +133,46 @@ it("declares every deprecated orchestration alias with a mapped replacement", ()
   );
 });
 
-for (const { deprecated, current, args } of orchestrationAliasCases) {
-  it.effect(`dispatches ${deprecated} and ${current} to the same broker tool`, () => {
-    const calls: Array<string> = [];
-    const binding: T3TeamToolBinding = {
-      threadId,
-      listServers: () => [],
-      readResource: ({ uri }) => Effect.succeed({ contents: [{ uri, text: "{}" }] }),
-      callTool: ({ tool }) => {
-        calls.push(tool);
-        return Effect.succeed({
-          content: [{ type: "text" as const, text: "ok" }],
-          structuredContent: { ok: true },
-        });
-      },
-    };
-    const broker = T3TeamToolBroker.of({
-      sendMessage: () => Effect.succeed(undefined),
-      bindSession: ({ threadId: boundThreadId }) =>
-        Effect.succeed(boundThreadId === threadId ? binding : undefined),
-      bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
-    });
-    const TestLayer = T3TeamToolkitRegistrationLive.pipe(
-      Layer.provideMerge(McpServer.McpServer.layer),
-      Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
-    );
-
-    return Effect.gen(function* () {
-      const server = yield* McpServer.McpServer;
-      yield* server.callTool({ name: current, arguments: args });
-      yield* server.callTool({ name: deprecated, arguments: args });
-
-      expect(calls).toHaveLength(2);
-      expect(calls[0]).toBe(T3TEAM_MCP_CANONICAL_TOOL_MAP[current]);
-      expect(calls[1]).toBe(calls[0]);
-    }).pipe(
-      Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
-      Effect.provideService(McpSchema.McpServerClient, client),
-      Effect.provide(TestLayer),
-    );
+it.effect("keeps every legacy name out of the advertised toolkit", () => {
+  const calls: Array<string> = [];
+  const binding: T3TeamToolBinding = {
+    threadId,
+    listServers: () => [],
+    readResource: ({ uri }) => Effect.succeed({ contents: [{ uri, text: "{}" }] }),
+    callTool: ({ tool }) => {
+      calls.push(tool);
+      return Effect.succeed({
+        content: [{ type: "text" as const, text: "ok" }],
+        structuredContent: { ok: true },
+      });
+    },
+  };
+  const broker = T3TeamToolBroker.of({
+    sendMessage: () => Effect.succeed(undefined),
+    bindSession: ({ threadId: boundThreadId }) =>
+      Effect.succeed(boundThreadId === threadId ? binding : undefined),
+    bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
   });
-}
+  const TestLayer = T3TeamToolkitRegistrationLive.pipe(
+    Layer.provideMerge(McpServer.McpServer.layer),
+    Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
+  );
 
-it.effect("routes t3team_recipe_list through the bound broker callTool dispatch", () => {
+  return Effect.gen(function* () {
+    const server = yield* McpServer.McpServer;
+    const names = server.tools.map(({ tool }) => tool.name);
+    expect(names).not.toContain("t3team_workflow_run");
+    expect(names.some((name) => name.startsWith("t3team_"))).toBe(false);
+    yield* server.callTool({ name: "orchestration_status", arguments: {} });
+    expect(calls).toEqual([T3TEAM_MCP_CANONICAL_TOOL_MAP.orchestration_status]);
+  }).pipe(
+    Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+    Effect.provideService(McpSchema.McpServerClient, client),
+    Effect.provide(TestLayer),
+  );
+});
+
+it.effect("routes recipe_list through the bound broker callTool dispatch", () => {
   const calls: Array<{
     readonly threadId: ThreadId;
     readonly tool: string;
@@ -203,7 +204,7 @@ it.effect("routes t3team_recipe_list through the bound broker callTool dispatch"
   return Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
     const result = yield* server.callTool({
-      name: "t3team_recipe_list",
+      name: "recipe_list",
       arguments: {},
     });
 
@@ -221,7 +222,7 @@ it.effect("routes t3team_recipe_list through the bound broker callTool dispatch"
   );
 });
 
-it.effect("routes t3team_recipe_validate through the bound broker callTool dispatch", () => {
+it.effect("routes recipe_validate through the bound broker callTool dispatch", () => {
   const calls: Array<{
     readonly threadId: ThreadId;
     readonly tool: string;
@@ -253,7 +254,7 @@ it.effect("routes t3team_recipe_validate through the bound broker callTool dispa
   return Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
     const result = yield* server.callTool({
-      name: "t3team_recipe_validate",
+      name: "recipe_validate",
       arguments: { source: "export const meta = { name: 'x' };" },
     });
 

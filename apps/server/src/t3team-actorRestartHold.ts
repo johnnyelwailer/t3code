@@ -118,7 +118,7 @@ export const loadInterruptedChildThreads = (
 /**
  * Build the restart-hold summary: plain text, one line per held message (each
  * body summarized with its message id via the #154 delivery summarizer, which
- * carries the `t3team_read_message` pull marker for over-long bodies) and one
+ * carries the `read_message` pull marker for over-long bodies) and one
  * line per interrupted child. Never empty — callers only build it when at
  * least one section has content.
  */
@@ -157,7 +157,7 @@ export function buildActorRestartHoldSummary(input: {
   lines.push(
     "This is a restart summary, not a new request. Pull detail or resume the " +
       "interrupted child threads as you see fit; to read a held message in full, " +
-      "call t3team_read_message with its message id.",
+      "call read_message with its message id.",
   );
   return lines.join("\n");
 }

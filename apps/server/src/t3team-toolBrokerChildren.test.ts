@@ -158,7 +158,7 @@ describe("children tool — list", () => {
     const out = await run(deps, { op: "list" });
     expect(out.isError).toBeFalsy();
     expect(out.structured.count).toBe(0);
-    expect(out.structured.hint).toContain("t3team_start_child");
+    expect(out.structured.hint).toContain("start_child");
   });
 
   it("lists children from the parent/child relation even when the caller has no handoff.started activity (GHE #178)", async () => {

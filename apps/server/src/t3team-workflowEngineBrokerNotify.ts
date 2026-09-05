@@ -117,7 +117,7 @@ export async function handleBrokerNotifyVerb(core: BrokerCore, s: BrokerSend): P
                 //
                 // The cost is prompt weight when a workflow notifies often. That is the right
                 // trade: a chatty run makes the context longer, a hidden report makes the agent
-                // wrong. Brevity belongs to the author — see t3team_help("reporting").
+                // wrong. Brevity belongs to the author — see help("reporting").
                 //
                 // The WIDGET branches above stay false on purpose: their payload is HTML the
                 // agent itself authored, so re-injecting it is cost without information.

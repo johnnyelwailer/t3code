@@ -1,10 +1,10 @@
 /**
- * On-demand help registry — one generic `t3team_help(topic)` tool instead of a
+ * On-demand help registry — one generic `help(topic)` tool instead of a
  * tool (or a giant description) per topic. An agent discovers reference material
  * proactively, without failing first and without bloating every turn's context.
  *
  * Add a topic by registering a `{ slug, title, summary, body }` entry. Keep tool
- * descriptions lean and point at `t3team_help("<slug>")` for the detail.
+ * descriptions lean and point at `help("<slug>")` for the detail.
  *
  * @module t3team-help
  */
@@ -26,9 +26,9 @@ export interface T3TeamHelpTopic {
 const TOPICS: ReadonlyArray<T3TeamHelpTopic> = [
   {
     slug: "agent-orchestration",
-    title: "Agent orchestration (t3team_orchestration_run)",
+    title: "Agent orchestration (orchestration_run)",
     summary:
-      "How to author t3team_orchestration_run bodies — fan-out, sequencing, durable timers/routines, injected globals, and meta.",
+      "How to author orchestration_run bodies — fan-out, sequencing, durable timers/routines, injected globals, and meta.",
     body: T3TEAM_WORKFLOW_MANUAL,
   },
   {
@@ -48,7 +48,7 @@ const TOPICS: ReadonlyArray<T3TeamHelpTopic> = [
     slug: "model-selection",
     title: "Exact provider/model selection for start_child and orchestration agents",
     summary:
-      "Read live provider instances and model slugs via t3team_models before naming an exact target; never copy ids from examples or a static list.",
+      "Read live provider instances and model slugs via models before naming an exact target; never copy ids from examples or a static list.",
     body: T3TEAM_MODEL_SELECTION_MANUAL,
   },
   {
@@ -80,7 +80,7 @@ const ALIASES: Readonly<Record<string, string>> = {
 };
 
 const indexText = (): string =>
-  ["Available t3team_help topics (call t3team_help with one of these slugs):", ""]
+  ["Available help topics (call help with one of these slugs):", ""]
     .concat(TOPICS.map((t) => `- ${t.slug} — ${t.summary}`))
     .join("\n");
 

@@ -1,5 +1,5 @@
 /**
- * The durable-timers help topic (`t3team_help("timers")`), split out of
+ * The durable-timers help topic (`help("timers")`), split out of
  * {@link ./t3team-workflowManual.ts} so each file carries one manual.
  *
  * Examples use the module body shape — imports plus a default-exported async function — because

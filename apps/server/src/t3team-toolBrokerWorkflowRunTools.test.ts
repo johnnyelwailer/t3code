@@ -443,7 +443,7 @@ describe("recentActiveLaunchBlocker", () => {
     if (verdict.kind === "refuse") {
       assert.include(verdict.message, "run-a");
       assert.include(verdict.message, "replaceRunId");
-      assert.include(verdict.message, "t3team_orchestration_status");
+      assert.include(verdict.message, "orchestration_status");
     }
   });
 

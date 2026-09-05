@@ -60,7 +60,7 @@ describe("cleanup nudge — stats & digest", () => {
     expect(text).toContain("1. 'child c24' (completed, 27d)");
     expect(text).toContain("20. 'child c5' (completed, 8d)");
     expect(text).not.toContain("21.");
-    expect(text).toContain('t3team_children({ op: "sweep" })');
+    expect(text).toContain('children({ op: "sweep" })');
   });
 
   it("surfaces failed/aborted breakdowns and the oldest age", () => {

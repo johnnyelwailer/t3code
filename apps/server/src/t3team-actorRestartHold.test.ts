@@ -220,7 +220,7 @@ describe("buildActorRestartHoldSummary", () => {
     expect(text).toContain("2 inter-agent message(s) were pending");
     expect(text).toContain("- [m1] from «Sender m1» (thread sender-m1): body m1");
     expect(text).toContain("- [m2] from «Sender m2» (thread sender-m2): body m2");
-    expect(text).toContain("t3team_read_message");
+    expect(text).toContain("read_message");
   });
 
   it("summarizes over-long held bodies with the pull marker instead of the raw body", () => {

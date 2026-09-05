@@ -61,7 +61,7 @@ describe("summarizeActorMessageForDelivery", () => {
     // Auto-summary cuts at the last sentence boundary inside the 300-char window.
     expect(out.startsWith("Status: " + "w ".repeat(140) + "all green…")).toBe(true);
     expect(out).toContain("…[summarized — " + body.length + " chars total; message id msg-42");
-    expect(out).toContain("call t3team_read_message with this message id to read the full text]");
+    expect(out).toContain("call read_message with this message id to read the full text]");
     // The raw body is NOT inlined — only the summary and the marker.
     expect(out).not.toContain("z".repeat(100));
   });
@@ -134,7 +134,7 @@ describe("summarizeActorMessageForDelivery", () => {
         " chars total; message id msg-9",
     );
     expect(input).toContain(
-      "long bodies are summarized on delivery and the recipient retrieves the full text with t3team_read_message",
+      "long bodies are summarized on delivery and the recipient retrieves the full text with read_message",
     );
   });
 
@@ -407,7 +407,7 @@ describe("buildActorReactionHeaderSingleInput / buildActorReactionHeaderInput", 
     expect(out).toContain("Message from peer agent «Sender» · thread sender · urgency normal");
     expect(out).toContain("Patch ready");
     expect(out).toContain("body NOT loaded");
-    expect(out).toContain("t3team_read_message");
+    expect(out).toContain("read_message");
     expect(out).toContain("delivery-a");
     expect(out).not.toContain("first"); // the body
   });
@@ -446,12 +446,12 @@ describe("buildActorReactionHeaderSingleInput / buildActorReactionHeaderInput", 
 });
 
 describe("buildActorReactionCompressedInput", () => {
-  it("lists senders with thread ids and message ids, points at t3team_read_message", () => {
+  it("lists senders with thread ids and message ids, points at read_message", () => {
     const out = buildActorReactionCompressedInput([entry]);
     expect(out).toContain("queued while the user was engaged");
     expect(out).toContain("the user's message comes FIRST");
     expect(out).toContain("1 message from «Sender» (thread sender): delivery-a");
-    expect(out).toContain("t3team_read_message");
+    expect(out).toContain("read_message");
     expect(out).not.toContain("first"); // the body
   });
 

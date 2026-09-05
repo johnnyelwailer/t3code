@@ -15,19 +15,19 @@ it; sleeping, user decisions, and other progress arrive through the existing orc
 
 On 'failed', read 'error' first:
 - "Invalid inputs for workflow '<name>': ..." means the WORKFLOW is correct and YOUR launch
-  arguments were wrong. Call t3team_orchestration_resume with the same runId and corrected
-  'args' — never 'source', never t3team_orchestration_run again (that makes a duplicate card).
+  arguments were wrong. Call orchestration_resume with the same runId and corrected
+  'args' — never 'source', never orchestration_run again (that makes a duplicate card).
 - "The agent turn failed: ..." means a STEP's provider turn died (gateway outage, timeout) and
   the host's bounded re-drives were exhausted. The source is fine. Call
-  t3team_orchestration_resume with the same runId: it re-drives exactly that step.
+  orchestration_resume with the same runId: it re-drives exactly that step.
 - Any other failure is a genuine source defect: fix the source, then call
-  t3team_orchestration_resume with corrected 'source' (same-prefix replay). Only run again if no
+  orchestration_resume with corrected 'source' (same-prefix replay). Only run again if no
   runId is available to resume.
 
 CONTROLLING A RUN YOU LAUNCHED
-t3team_orchestration_status(runId) observes it. t3team_orchestration_pause(runId) parks a waiting
-or scheduled run and keeps its continuation. t3team_orchestration_stop(runId) cancels it and
+orchestration_status(runId) observes it. orchestration_pause(runId) parks a waiting
+or scheduled run and keeps its continuation. orchestration_stop(runId) cancels it and
 interrupts its child agents. The host allows ONE launch per turn: while a run you launched is
-still active, another t3team_orchestration_run is refused. To replace it, call
-t3team_orchestration_run with replaceRunId: '<old runId>' — the old run is stopped, then the new
-one launches. Resume a paused or failed run with t3team_orchestration_resume(runId).`;
+still active, another orchestration_run is refused. To replace it, call
+orchestration_run with replaceRunId: '<old runId>' — the old run is stopped, then the new
+one launches. Resume a paused or failed run with orchestration_resume(runId).`;
