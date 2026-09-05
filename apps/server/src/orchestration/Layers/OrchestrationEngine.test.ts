@@ -18,6 +18,7 @@ import * as Metric from "effect/Metric";
 import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import * as Stream from "effect/Stream";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { TestClock } from "effect/testing";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -65,7 +66,7 @@ function makeOrchestrationLayer() {
     Layer.provide(OrchestrationEventStoreLive),
     Layer.provideMerge(OrchestrationCommandReceiptRepositoryLive),
     Layer.provide(RepositoryIdentityResolver.layer),
-    Layer.provide(SqlitePersistenceMemory),
+    Layer.provideMerge(SqlitePersistenceMemory),
     Layer.provideMerge(ServerConfigLayer),
     Layer.provideMerge(NodeServices.layer),
   );
@@ -212,6 +213,9 @@ describe("OrchestrationEngine", () => {
           getFirstActiveThreadIdByProjectId: () => Effect.succeed(Option.none()),
           listChildThreadIdsByParent: () => Effect.die("unused"),
           listParentChildRelations: () => Effect.die("unused"),
+          hasNonTerminalWorkflowRun: () => Effect.succeed(false),
+          hasLiveChild: () => Effect.succeed(false),
+          hasPendingParentWait: () => Effect.succeed(false),
           getThreadCheckpointContext: () => Effect.succeed(Option.none()),
           getFullThreadDiffContext: () => Effect.succeed(Option.none()),
           getThreadShellById: () => Effect.succeed(Option.none()),
@@ -326,6 +330,79 @@ describe("OrchestrationEngine", () => {
       });
       expect(yield* engine.latestSequence).toBe(sequence);
     }).pipe(Effect.provide(makeOrchestrationLayer())),
+  );
+
+  effectIt.effect(
+    "refuses to settle a thread that is still live (own workflow / live child / parent wait)",
+    () =>
+      Effect.gen(function* () {
+        const engine = yield* OrchestrationEngineService;
+        const snapshots = yield* ProjectionSnapshotQuery;
+        const sql = yield* SqlClient.SqlClient;
+        const projectId = ProjectId.make("project-live-settle-guard");
+        const liveThreadId = ThreadId.make("thread-live-settle-guard-live");
+        const freeThreadId = ThreadId.make("thread-live-settle-guard-free");
+
+        yield* engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("cmd-live-guard-project"),
+          projectId,
+          title: "Project",
+          workspaceRoot: "/tmp/project-live-settle-guard",
+          createdAt: now(),
+        });
+        for (const threadId of [liveThreadId, freeThreadId]) {
+          yield* engine.dispatch({
+            type: "thread.create",
+            commandId: CommandId.make(`cmd-live-guard-create-${threadId}`),
+            threadId,
+            projectId,
+            title: "Thread",
+            modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5-codex" },
+            interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+            runtimeMode: "full-access",
+            branch: null,
+            worktreePath: null,
+            createdAt: now(),
+          });
+        }
+
+        // Give the live thread a non-terminal workflow run.
+        yield* sql`
+          INSERT INTO workflow_runs (
+            run_id, workflow_path, args_json, args_hash, launch_thread_id, project_id, model_json,
+            runtime_mode, interaction_mode, status, pending_thread_id, pending_correlation_id,
+            pending_kind, created_at, updated_at, wake_at, origin, recipe_path, failure_reason,
+            failure_step, host_tool_grant, intent_json, turn_retries
+          ) VALUES (
+            'run-live-guard', '/w', '{}', 'h', ${liveThreadId}, ${projectId}, '{}',
+            'full-access', 'default', 'running', NULL, NULL, NULL,
+            ${now()}, ${now()}, NULL, 'recipe', NULL, NULL, NULL, NULL, NULL, 0
+          )
+        `;
+
+        const blocked = yield* engine
+          .dispatch({
+            type: "thread.settle",
+            commandId: CommandId.make("cmd-live-guard-settle-live"),
+            threadId: liveThreadId,
+          })
+          .pipe(Effect.flip);
+        expect(blocked._tag).toBe("OrchestrationCommandInvariantError");
+        expect((blocked as { detail?: string }).detail).toContain("still live");
+
+        // Control: a thread with no live relation settles normally.
+        yield* engine.dispatch({
+          type: "thread.settle",
+          commandId: CommandId.make("cmd-live-guard-settle-free"),
+          threadId: freeThreadId,
+        });
+        const settled = yield* snapshots.getSnapshot();
+        expect(settled.threads.find((t) => t.id === freeThreadId)?.settledOverride).toBe("settled");
+        expect(settled.threads.find((t) => t.id === liveThreadId)?.settledOverride).not.toBe(
+          "settled",
+        );
+      }).pipe(Effect.provide(makeOrchestrationLayer())),
   );
 
   effectIt.effect(
