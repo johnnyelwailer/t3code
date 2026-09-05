@@ -18,6 +18,7 @@ import {
   repairStatus,
 } from "~/t3team/chat/t3team-workflowRunLabels";
 import { reconcileT3TeamWorkflowShapeProgress } from "./t3team-workflowShapeProgress";
+import { foldAdjacentThreadTurnRows } from "./t3team-workflowShapeThreadTurnFold";
 
 const TERMINAL = new Set(["completed", "failed", "cancelled"]);
 
@@ -48,7 +49,14 @@ export function useT3TeamWorkflowShapeLiveState(input: {
   const planRuntimeSteps = progress.steps.filter((step) => step.stepKind !== "workflow.self-heal");
   const visiblePlanSteps = shape.steps.filter((step) => step.label !== "Scheduled work");
   const runtimeStepsForRows = planRuntimeSteps.filter((step) => step.stepKind !== "wait.until");
-  const { rows } = reconcileT3TeamWorkflowShapeProgress(visiblePlanSteps, runtimeStepsForRows);
+  const { rows: reconciledRows } = reconcileT3TeamWorkflowShapeProgress(
+    visiblePlanSteps,
+    runtimeStepsForRows,
+  );
+  // Row identity for a delegated step is the child thread, not the individual turn — fold before
+  // anything downstream (the dynamic by-label grouping, the scheduled-wait row lookup just below)
+  // computes a position against these rows. See `t3team-workflowShapeThreadTurnFold.ts`.
+  const rows = foldAdjacentThreadTurnRows(reconciledRows);
   const activeWait = [...planRuntimeSteps]
     .reverse()
     .find(

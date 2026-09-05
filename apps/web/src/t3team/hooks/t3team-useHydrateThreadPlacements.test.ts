@@ -7,9 +7,47 @@ import type { Project, Thread } from "~/types";
 import type { ProjectThread } from "~/t3team/t3team-types";
 
 import {
+  filterUnresolvedThreadPlacementIds,
   mergeFetchedThreadPlacements,
   readMissingThreadPlacementIds,
 } from "./t3team-useHydrateThreadPlacements";
+
+describe("filterUnresolvedThreadPlacementIds (GHE #382)", () => {
+  const liveThreads = [
+    { id: ThreadId.make("a"), updatedAt: "2026-09-01T00:00:00.000Z" },
+    { id: ThreadId.make("b"), updatedAt: "2026-09-01T00:00:05.000Z" },
+  ];
+
+  it("passes everything through when nothing has been answered yet", () => {
+    expect(
+      filterUnresolvedThreadPlacementIds({
+        threadIds: ["a", "b"],
+        liveThreads,
+        resolvedEmpty: new Map(),
+      }),
+    ).toEqual(["a", "b"]);
+  });
+
+  it("drops ids whose empty answer matches the thread's current updatedAt", () => {
+    expect(
+      filterUnresolvedThreadPlacementIds({
+        threadIds: ["a", "b"],
+        liveThreads,
+        resolvedEmpty: new Map([["a", "2026-09-01T00:00:00.000Z"]]),
+      }),
+    ).toEqual(["b"]);
+  });
+
+  it("re-requests an id once the thread has been updated since the empty answer", () => {
+    expect(
+      filterUnresolvedThreadPlacementIds({
+        threadIds: ["a", "b"],
+        liveThreads,
+        resolvedEmpty: new Map([["b", "2026-09-01T00:00:01.000Z"]]),
+      }),
+    ).toEqual(["a", "b"]);
+  });
+});
 
 function makeLiveProject(overrides: Partial<Project> = {}): Project {
   return {

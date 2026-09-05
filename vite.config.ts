@@ -16,6 +16,15 @@ export default defineConfig({
       "**/dist/**",
       "**/dist-electron/**",
       "**/.{idea,git,cache,output,temp}/**",
+      // Agent worktrees are checkouts of THIS repo nested inside it, so every test file appears
+      // once per worktree. The copies fail at import (`Cannot find package '@t3tools/contracts'`)
+      // because they have no node_modules of their own, and the run then reports hundreds of
+      // failed FILES beside a fully green test count — e.g. "579 failed | 289 passed (868)" for a
+      // run whose 272 tests all passed. That is worse than noise: it trains everyone reading the
+      // output to wave failures away, which is exactly how a real one gets missed. Same reason
+      // `.repos/**` is excluded above.
+      "**/worktrees/**",
+      "**/.worktrees/**",
     ],
     hookTimeout: 60_000,
     testTimeout: 60_000,
@@ -37,7 +46,6 @@ export default defineConfig({
       "**/routeTree.gen.ts",
       "apps/mobile/android/**",
       "apps/mobile/ios/**",
-      "apps/web/public/mockServiceWorker.js",
       "apps/web/src/lib/vendor/qrcodegen.ts",
       "apps/mobile/uniwind-types.d.ts",
       "*.icon/**",
@@ -120,6 +128,7 @@ export default defineConfig({
       "t3code/no-global-process-runtime": "error",
       "t3code/no-inline-schema-compile": "warn",
       "t3code/no-manual-effect-runtime-in-tests": "error",
+      "t3code/no-mobile-uniwind-theme-escape-hatches": "error",
       "t3code/no-native-title-tooltip": "error",
       "t3code/namespace-node-imports": "error",
     },

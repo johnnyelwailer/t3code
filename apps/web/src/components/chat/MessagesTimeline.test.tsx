@@ -5,7 +5,9 @@ import {
   TurnId,
   type OrchestrationThreadActivity,
 } from "@t3tools/contracts";
+// @effect-diagnostics nodeBuiltinImport:off - Regression coverage asserts the narrow-panel clamp rules in t3team-index.css.
 import { codexFeedbackMessage } from "@t3tools/client-runtime/state/threads";
+import * as NodeFS from "node:fs";
 import { createRef, type ReactNode, type Ref } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
@@ -22,12 +24,7 @@ vi.mock("@legendapp/list/react", async () => {
     ListFooterComponent?: ReactNode;
     anchoredEndSpace?: {
       anchorIndex: number;
-      anchorMaxSize?: number;
-      anchorOffset?: number;
-      onReady?: (info: { anchorIndex: number }) => void;
     };
-    contentInsetEndAdjustment?: number;
-    className?: string;
     maintainScrollAtEnd?:
       | boolean
       | {
@@ -38,27 +35,12 @@ vi.mock("@legendapp/list/react", async () => {
             layout?: boolean;
           };
         };
-    maintainVisibleContentPosition?:
-      | boolean
-      | {
-          data?: boolean;
-          size?: boolean;
-          shouldRestorePosition?: (item: { id: string }) => boolean;
-        };
     ref?: Ref<LegendListRef>;
   }) => {
-    if (props.anchoredEndSpace) {
-      props.anchoredEndSpace.onReady?.({ anchorIndex: props.anchoredEndSpace.anchorIndex });
-    }
     return (
       <div
         data-testid={legendListTestId}
         data-anchor-index={props.anchoredEndSpace?.anchorIndex}
-        data-anchor-max-size={props.anchoredEndSpace?.anchorMaxSize}
-        data-anchor-offset={props.anchoredEndSpace?.anchorOffset}
-        data-anchor-on-ready={Boolean(props.anchoredEndSpace?.onReady)}
-        data-content-inset-end={props.contentInsetEndAdjustment}
-        data-class-name={props.className}
         data-maintain-scroll-at-end={props.maintainScrollAtEnd ? "enabled" : undefined}
         data-maintain-scroll-at-end-animated={
           typeof props.maintainScrollAtEnd === "object"
@@ -78,26 +60,6 @@ vi.mock("@legendapp/list/react", async () => {
         data-maintain-scroll-at-end-layout={
           typeof props.maintainScrollAtEnd === "object"
             ? props.maintainScrollAtEnd.on?.layout
-            : undefined
-        }
-        data-maintain-visible-content-position={
-          typeof props.maintainVisibleContentPosition === "object"
-            ? "object"
-            : props.maintainVisibleContentPosition
-        }
-        data-maintain-visible-content-position-data={
-          typeof props.maintainVisibleContentPosition === "object"
-            ? props.maintainVisibleContentPosition.data
-            : undefined
-        }
-        data-maintain-visible-content-position-size={
-          typeof props.maintainVisibleContentPosition === "object"
-            ? props.maintainVisibleContentPosition.size
-            : undefined
-        }
-        data-maintain-visible-content-position-restore={
-          typeof props.maintainVisibleContentPosition === "object"
-            ? Boolean(props.maintainVisibleContentPosition.shouldRestorePosition)
             : undefined
         }
       >
@@ -131,6 +93,14 @@ function MockFileDiff(props: {
 vi.mock("@pierre/diffs/react", () => {
   return { FileDiff: MockFileDiff };
 });
+
+// The real step label runs a hover useSyncExternalStore, which SSR
+// (renderToStaticMarkup) cannot run; the working-row tests only need its
+// slot to exist, not its debounce/FLIP behavior.
+vi.mock("~/t3team/chat/t3team-activeAgentsStepLabel", () => ({
+  T3TeamActiveAgentsStepLabel: ({ label }: { label: string | null }) =>
+    label ? <span data-testid="active-agents-step-label">{label}</span> : null,
+}));
 
 function matchMedia() {
   return {
@@ -193,6 +163,7 @@ function buildProps() {
     revertTurnCountByUserMessageId: new Map(),
     onRevertUserMessage: () => {},
     isRevertingCheckpoint: false,
+    openingVideoAttachmentId: null,
     onImageExpand: () => {},
     activeThreadEnvironmentId: ACTIVE_THREAD_ENVIRONMENT_ID,
     markdownCwd: undefined,
@@ -315,7 +286,7 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain("codex-thread-1");
   });
 
-  it("renders the worked-for row at assistant response text size", () => {
+  it("renders elapsed time for a completed turn", () => {
     const turnId = TurnId.make("turn-with-fold");
     const assistantEntry = buildAssistantTimelineEntry("Done.");
     const markup = renderToStaticMarkup(
@@ -552,72 +523,151 @@ describe("MessagesTimeline", () => {
     expect(resolveTimelineMinimapInteractiveWidth(40, true)).toBe("22rem");
   });
 
-  it("anchors the first user message using its measured height", () => {
-    const onAnchorReady = vi.fn();
-    const firstEntry = {
-      ...buildUserTimelineEntry("First prompt."),
+  it("renders generic attachments as download links instead of image previews", () => {
+    const entry = {
+      ...buildUserTimelineEntry("Read the report."),
       message: {
-        ...buildUserTimelineEntry("First prompt.").message,
+        ...buildUserTimelineEntry("Read the report.").message,
         attachments: [
           {
-            type: "image" as const,
-            id: "attachment-1",
-            name: "screenshot.png",
-            mimeType: "image/png",
-            sizeBytes: 1,
-            previewUrl: "data:image/png;base64,iVBORw0KGgo=",
+            type: "file" as const,
+            id: "attachment-report-pdf",
+            name: "report.pdf",
+            mimeType: "application/pdf",
+            sizeBytes: 42,
+            previewUrl: "https://environment.test/api/assets/report.pdf",
           },
         ],
       },
     };
+
     const markup = renderToStaticMarkup(
-      <MessagesTimeline
-        {...buildProps()}
-        anchorMessageId={firstEntry.message.id}
-        onAnchorReady={onAnchorReady}
-        contentInsetEndAdjustment={144}
-        timelineEntries={[firstEntry]}
-      />,
+      <MessagesTimeline {...buildProps()} timelineEntries={[entry]} />,
     );
 
-    expect(markup).toContain('data-anchor-index="0"');
-    expect(markup).toContain('data-anchor-offset="16"');
-    expect(markup).toContain('data-anchor-on-ready="true"');
-    expect(markup).not.toContain("data-anchor-max-size=");
-    expect(markup).toContain('data-content-inset-end="144"');
-    expect(markup).toContain("[overflow-anchor:none]");
-    expect(markup).not.toContain('data-maintain-scroll-at-end="enabled"');
-    expect(markup).toContain('data-maintain-visible-content-position="object"');
-    expect(markup).toContain('data-maintain-visible-content-position-data="true"');
-    expect(markup).toContain('data-maintain-visible-content-position-size="true"');
-    expect(markup).toContain('data-maintain-visible-content-position-restore="true"');
-    expect(onAnchorReady).toHaveBeenCalledOnce();
-    expect(onAnchorReady).toHaveBeenCalledWith(firstEntry.message.id, 0);
+    expect(markup).toContain(
+      '<a href="https://environment.test/api/assets/report.pdf" download="report.pdf" class="flex min-w-0 items-center gap-2 rounded-md py-1 text-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70">',
+    );
+    expect(markup).not.toContain('alt="report.pdf"');
   });
 
-  it("does not reserve end space for a follow-up user message", () => {
-    const onAnchorReady = vi.fn();
-    const firstEntry = buildUserTimelineEntry("First prompt.");
-    const secondEntry = {
-      ...buildUserTimelineEntry("Newest prompt."),
-      id: "entry-2",
+  it("renders video attachments as play buttons", () => {
+    const entry = {
+      ...buildUserTimelineEntry("Watch the demo."),
       message: {
-        ...buildUserTimelineEntry("Newest prompt.").message,
-        id: MessageId.make("message-2"),
+        ...buildUserTimelineEntry("Watch the demo.").message,
+        attachments: [
+          {
+            type: "file" as const,
+            id: "attachment-demo-mp4",
+            name: "demo.mp4",
+            mimeType: "video/mp4",
+            sizeBytes: 42,
+          },
+        ],
       },
     };
+
     const markup = renderToStaticMarkup(
+      <MessagesTimeline {...buildProps()} timelineEntries={[entry]} />,
+    );
+    const busyMarkup = renderToStaticMarkup(
       <MessagesTimeline
         {...buildProps()}
-        anchorMessageId={secondEntry.message.id}
-        onAnchorReady={onAnchorReady}
-        timelineEntries={[firstEntry, secondEntry]}
+        timelineEntries={[entry]}
+        openingVideoAttachmentId="attachment-demo-mp4"
       />,
     );
 
-    expect(markup).not.toContain("data-anchor-index=");
-    expect(markup).toContain('data-maintain-scroll-at-end="enabled"');
-    expect(onAnchorReady).not.toHaveBeenCalled();
+    expect(markup).toContain('aria-label="Play demo.mp4"');
+    expect(markup).toContain("min-h-[72px]");
+    expect(markup).toContain(">demo.mp4</span>");
+    expect(markup).not.toContain('aria-label="Download demo.mp4"');
+    expect(busyMarkup).toContain('aria-busy="true"');
+    expect(busyMarkup).toContain('aria-disabled="true"');
+    expect(busyMarkup).not.toContain('disabled=""');
+    expect(busyMarkup).toContain(">Loading…</span>");
+  });
+  it("renders a file download button without creating its URL in advance", () => {
+    const entry = {
+      ...buildUserTimelineEntry("Read the report."),
+      message: {
+        ...buildUserTimelineEntry("Read the report.").message,
+        attachments: [
+          {
+            type: "file" as const,
+            id: "attachment-report-pdf",
+            name: "report.pdf",
+            mimeType: "application/pdf",
+            sizeBytes: 42,
+          },
+        ],
+      },
+    };
+
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline {...buildProps()} timelineEntries={[entry]} />,
+    );
+
+    expect(markup).toContain(
+      '<button type="button" aria-label="Download report.pdf" class="flex min-w-0 cursor-pointer items-center gap-2 rounded-md py-1 text-left text-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70">',
+    );
+    expect(markup).not.toContain("href=");
+  });
+
+  it("does not download an optimistic file before the server supplies its attachment ID", () => {
+    const entry = {
+      ...buildUserTimelineEntry("Read the report."),
+      message: {
+        ...buildUserTimelineEntry("Read the report.").message,
+        attachments: [
+          {
+            type: "file" as const,
+            id: "composer-local-report",
+            name: "report.pdf",
+            mimeType: "application/pdf",
+            sizeBytes: 42,
+            downloadable: false,
+          },
+        ],
+      },
+    };
+
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline {...buildProps()} timelineEntries={[entry]} />,
+    );
+
+    expect(markup).toContain("report.pdf");
+    expect(markup).not.toContain('aria-label="Download report.pdf"');
+  });
+
+  it("renders unknown attachment types as inert rows instead of crashing", () => {
+    const entry = {
+      ...buildUserTimelineEntry("Play the recording."),
+      message: {
+        ...buildUserTimelineEntry("Play the recording.").message,
+        attachments: [
+          {
+            // A newer server can introduce attachment types this build does
+            // not know. They ride the open contract member.
+            type: "recording",
+            id: "attachment-voice-memo",
+            name: "voice-memo.ogg",
+            mimeType: "audio/ogg",
+            sizeBytes: 42,
+          },
+        ],
+      },
+    };
+
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline {...buildProps()} timelineEntries={[entry]} />,
+    );
+
+    expect(markup).toContain("voice-memo.ogg");
+    expect(markup).not.toContain('aria-label="Download voice-memo.ogg"');
+    expect(markup).not.toContain('alt="voice-memo.ogg"');
+    expect(markup).not.toContain("href=");
   });
 
   it("keeps reserved end space when tool work starts while reading history", () => {
@@ -967,7 +1017,6 @@ describe("MessagesTimeline", () => {
     );
 
     expect(markup).toContain("Context compacted");
-    expect(markup).toContain("Work Log");
   });
 
   it("renders system messages as first-class timeline rows", () => {
@@ -1137,7 +1186,7 @@ describe("MessagesTimeline", () => {
       />,
     );
 
-    expect(markup).toContain("+2 previous log entries");
+    expect(markup).toContain("Ran 2 commands and received 1 update");
     expect(markup).not.toContain('aria-label="Hidden work includes a failure"');
   });
 
@@ -1178,7 +1227,8 @@ describe("MessagesTimeline", () => {
 
     // The lead is split (state word / " for " / timer as separate pieces,
     // GHE #201 follow-up) — check the split state word, not the joined string.
-    expect(markup).toContain(">Working</span>");
+    // Active turn with no live state yet → the spec's pre-activity word.
+    expect(markup).toContain(">Thinking</span>");
     expect(markup).toContain(" for ");
     expect(markup).toContain("Running pnpm");
     expect(markup).toContain("live-activity-focus");
@@ -1239,7 +1289,30 @@ describe("MessagesTimeline", () => {
     expect(markup).not.toContain("tool call failed");
   });
 
-  it("keeps terminal command copy live while the parent turn is active", () => {
+  it("renders initial thinking as the shared live activity row", () => {
+    const turnId = TurnId.make("turn-live");
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        latestTurn={{
+          turnId,
+          state: "running",
+          startedAt: MESSAGE_CREATED_AT,
+          completedAt: null,
+        }}
+        runningTurnId={turnId}
+        timelineEntries={[]}
+      />,
+    );
+
+    expect(markup).toContain("Thinking");
+    expect(markup).toContain("lucide-brain");
+    expect(markup).toContain('data-timeline-row-id="live-activity-row"');
+  });
+
+  it("keeps the completed command in the shared activity row with a past-tense label", () => {
     const turnId = TurnId.make("turn-live");
     const markup = renderToStaticMarkup(
       <MessagesTimeline
@@ -1255,19 +1328,19 @@ describe("MessagesTimeline", () => {
         runningTurnId={turnId}
         timelineEntries={[
           {
-            id: "entry-failed",
+            id: "entry-completed",
             kind: "work",
             createdAt: MESSAGE_CREATED_AT,
             entry: {
-              id: "work-failed",
+              id: "work-completed",
               createdAt: MESSAGE_CREATED_AT,
               turnId,
-              toolCallId: "call-failed",
+              toolCallId: "call-completed",
               label: "Run lint",
               tone: "tool",
               itemType: "command_execution",
               command: "pnpm lint",
-              toolLifecycleStatus: "failed",
+              toolLifecycleStatus: "completed",
             },
           },
         ]}
@@ -1299,7 +1372,7 @@ describe("MessagesTimeline", () => {
     expect(markup).not.toContain("gap-1.5 py-0.5 px-1");
   });
 
-  it("falls back to the 'Working' base word when no activity state is available", () => {
+  it("falls back to 'Thinking' for an ACTIVE turn with no activity state yet (a turn starts thinking)", () => {
     const markup = renderToStaticMarkup(
       <MessagesTimeline
         {...buildProps()}
@@ -1309,9 +1382,297 @@ describe("MessagesTimeline", () => {
       />,
     );
 
-    expect(markup).toContain(">Working</span>");
+    expect(markup).toContain(">Thinking</span>");
     // No second live row of any kind.
     expect(markup).not.toContain("live-activity-focus");
+  });
+
+  it("keeps the live working row's lead text in the blue shimmer, not muted grey (regression)", () => {
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        timelineEntries={[]}
+      />,
+    );
+
+    // The lead text rides the .t3team-label-shimmer defaults (the bluish sky
+    // gradient). The muted-foreground override made the word read as
+    // "grey on grey" in light and "dark grey on dark grey" in dark.
+    // P0: the class must sit on the LEAF text spans, not on a wrapper around
+    // the animated flip spans (background-clip: text cannot reach into their
+    // compositing layers — that is what left the glyphs transparent).
+    expect(markup).toContain(
+      '<span class="t3team-label-shimmer t3team-aci-lead-word">Thinking</span>',
+    );
+    expect(markup).not.toContain("shimmer-base:var(--muted-foreground)");
+  });
+
+  it("renders NO leading dot pulses on the working row — the status text alone leads (regression)", () => {
+    const solo = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        timelineEntries={[]}
+      />,
+    );
+    // GHE #236 follow-up: the three "..." pulses are gone entirely — the
+    // status text (state word + timer) leads the row on its own, in both
+    // the solo case and with agent dots on the row.
+    expect(solo).not.toContain("dark:bg-[#38bdf8]/60");
+    expect(solo).not.toContain("bg-[#0369a1]/60");
+    expect(solo).not.toContain("animate-pulse");
+    expect(solo).not.toContain("gap-[3px]");
+    // The status text still leads: the state word renders.
+    expect(solo).toContain("Thinking");
+
+    const withAgents = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        activeAgents={[
+          {
+            id: "agent-dot-qa",
+            source: "child",
+            title: "Dot QA",
+            statusLabel: "Working",
+            activityKey: "k1",
+            dotState: "working",
+          },
+        ]}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        timelineEntries={[]}
+      />,
+    );
+    // The child-agent living dots on the right stay…
+    expect(withAgents).toContain('data-t3team-state="working"');
+    // …and no leading pulse dots either.
+    expect(withAgents).not.toContain("dark:bg-[#38bdf8]/60");
+    expect(withAgents).not.toContain("animate-pulse");
+  });
+
+  it("centers the status text and the agent dots on one line — no baseline-era nudge (regression)", () => {
+    const withAgents = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        activeAgents={[
+          {
+            id: "agent-dot-align",
+            source: "child",
+            title: "Align QA",
+            statusLabel: "Working",
+            activityKey: "k1",
+            dotState: "working",
+          },
+        ]}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        timelineEntries={[]}
+      />,
+    );
+    // GHE #236 follow-up: the row centers its children. The lead's clamp is
+    // overflow-hidden (no text baseline by spec), so items-baseline left the
+    // status text riding above the dots with dead space below. items-center
+    // puts glyph centers and dot centers on the same line — and the old
+    // -translate-y-[3px] nudge on the dot group (tuned to the baseline row)
+    // is gone.
+    expect(withAgents).toContain("flex items-center px-1");
+    expect(withAgents).not.toContain("items-baseline");
+    expect(withAgents).not.toContain("-translate-y-[3px]");
+  });
+
+  it("gives the state timer a last-resort ellipsis on narrow panels instead of a hard clip (GHE #208 follow-up)", () => {
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        threadActivityState="thinking"
+        timelineEntries={[]}
+      />,
+    );
+
+    // The lead span is the LAST-RESORT shrink point: it must be shrinkable
+    // (min-w-0), not shrink-0 — that was the hard clip at the row
+    // wrapper's overflow-x-clip when the panel went narrower than the
+    // timer. The row stays one line: the timer ellipsizes instead of
+    // wrapping to a second line.
+    expect(markup).toContain('class="flex min-w-0 items-center"');
+    // GHE #236 follow-up: the "..." pulses are gone — nothing sits before
+    // the clamp wrapper anymore, so the lead takes the full row width.
+    expect(markup).not.toContain("bg-[#0369a1]/60");
+    expect(markup).not.toContain("animate-pulse");
+    // …and the clamp wrapper is a FLEX row: as a block it would lay the
+    // inline-block slot out in a line box whose strut overhangs the slot
+    // baseline, inflating the row and riding the text ~3px above the dots.
+    // The SLOT (.t3team-aci-lead) owns overflow + ellipsis itself.
+    expect(markup).toContain('class="flex min-w-0 items-center overflow-hidden"');
+    expect(markup).toContain("t3team-label-shimmer");
+  });
+
+  it("paints the working-row shimmer on LEAF text spans, never on a wrapper around the flip spans (P0: invisible text)", () => {
+    // background-clip: text only reaches the glyphs of the element that
+    // directly holds them. The flip spans animate (transform) and get their
+    // own compositing layers in Chromium, so a wrapper's clipped background
+    // never reaches them — the inherited transparent fill leaves the glyphs
+    // invisible (white on white / black on black). The paint must sit on
+    // the leaf.
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        threadActivityState="thinking"
+        timelineEntries={[]}
+      />,
+    );
+    const LEAF_RE = /<span[^>]*class="[^"]*t3team-label-shimmer[^"]*"[^>]*>([^<]*)<\/span>/g;
+    const leaves = [...markup.matchAll(LEAF_RE)].map((m) => m[1]);
+    expect(leaves).toContain("Thinking");
+    expect(leaves).toContain(" for ");
+    const wrapper =
+      /class="[^"]*t3team-label-shimmer[^"]*"[^>]*>\s*<span[^>]*t3team-aci-flip/.exec(markup) ??
+      null;
+    expect(wrapper).toBeNull();
+
+    // Fallback path (no start time): the bare "..." string is its own leaf.
+    const fallback = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        threadActivityState="thinking"
+        timelineEntries={[]}
+      />,
+    );
+    expect(fallback).toContain('class="t3team-label-shimmer">Thinking...');
+  });
+
+  it("resolves the working-row lead word through the shared resolver: LLM label replaces the state word; active turn reads Thinking", () => {
+    // GHE #40 seam: the conversation row must agree with the sidebar — the
+    // LLM activity label REPLACES the state word (never appended), the state
+    // word replaces the base word, and an active turn with no live state yet
+    // reads "Thinking", not "Working".
+    const withLabel = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        threadActivityState="working"
+        threadActivityLabel="Editing the retry test"
+        timelineEntries={[]}
+      />,
+    );
+    const LEAF_RE = /<span[^>]*class="[^"]*t3team-label-shimmer[^"]*"[^>]*>([^<]*)<\/span>/g;
+    const leaves = [...withLabel.matchAll(LEAF_RE)].map((m) => m[1]);
+    expect(leaves).toContain("Editing the retry test");
+    expect(withLabel).not.toContain(">Working</span>");
+
+    const bare = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        timelineEntries={[]}
+      />,
+    );
+    expect(bare).toContain(">Thinking</span>");
+
+    const stateOnly = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        threadActivityState="writing"
+        timelineEntries={[]}
+      />,
+    );
+    expect(stateOnly).toContain(">Writing</span>");
+  });
+
+  it("keeps the lead slot's clamp + per-piece ellipsis in .t3team-aci-lead (GHE #208 follow-up)", () => {
+    const css = NodeFS.readFileSync(
+      new URL("../../t3team/t3team-index.css", import.meta.url),
+      "utf8",
+    );
+    const rule = css.match(/\.t3team-aci-lead\s*\{[^}]*\}/)?.[0] ?? "";
+    // The slot is the clamp: the flex row shrinks it (min-width comes from
+    // the parent's min-w-0), it clips, and stays one line (no 2nd-line wrap
+    // regression). text-overflow is dead CSS on a flex container — the
+    // PIECES carry the ellipsis (below).
+    expect(rule).toContain("display: inline-flex");
+    expect(rule).toContain("overflow: hidden");
+    expect(rule).toContain("white-space: nowrap");
+    expect(rule).toContain("transition: width 480ms");
+    // No percentage max-width declaration: the lead sits inside an
+    // auto-basis flex item, so one resolves circular and corrupts the
+    // sizing even at wide widths (regression guard). Comments stripped so
+    // the prose above can't trip the check.
+    expect(rule.replace(/\/\*[\s\S]*?\*\//g, "")).not.toContain("max-width:");
+    // No JS-measured px width either: the sizer/pin that read the flex
+    // allocation back into slot.style.width trapped the slot at the
+    // clamped value when the panel grew (0.0.39 "Writing for …"). The
+    // clamp must stay owned by the CSS rules below.
+    expect(css).not.toContain("t3team-aci-lead-sizer");
+    const wordRule = css.match(/\.t3team-aci-lead-word\s*\{[^}]*\}/)?.[0] ?? "";
+    const timerRule = css.match(/\.t3team-aci-lead-timer\s*\{[^}]*\}/)?.[0] ?? "";
+    const joinRule = css.match(/\.t3team-aci-lead-join\s*\{[^}]*\}/)?.[0] ?? "";
+    // The duration must survive truncation: the word is the ONLY shrink
+    // point and carries the ellipsis; the joiner and the timer never
+    // shrink.
+    expect(wordRule).toContain("min-width: 0");
+    expect(wordRule).toContain("text-overflow: ellipsis");
+    expect(timerRule).toContain("flex-shrink: 0");
+    expect(joinRule).toContain("flex-shrink: 0");
+  });
+
+  it("emphasizes the live 'working' state word so it doesn't read like the no-state fallback (GHE #208 follow-up)", () => {
+    const live = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        threadActivityState="working"
+        timelineEntries={[]}
+      />,
+    );
+    // Same letters as the fallback, one cue apart: the deterministic state
+    // word carries the live emphasis (font-medium), the fallback does not.
+    // (The state-word leaf also carries the shimmer paint — P0 leaf-only.
+    //)
+    expect(live).toContain(
+      '<span class="t3team-label-shimmer font-medium t3team-aci-lead-word">Working</span>',
+    );
+
+    const fallback = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        timelineEntries={[]}
+      />,
+    );
+    // Active turn + no live state → "Thinking" (a turn starts thinking),
+    // at the regular weight.
+    expect(fallback).toContain(
+      '<span class="t3team-label-shimmer t3team-aci-lead-word">Thinking</span>',
+    );
+    expect(fallback).not.toContain("font-medium");
+
+    // Every live state word is emphasized, not just "working".
+    const thinking = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        threadActivityState="thinking"
+        timelineEntries={[]}
+      />,
+    );
+    expect(thinking).toContain(
+      '<span class="t3team-label-shimmer font-medium t3team-aci-lead-word">Thinking</span>',
+    );
   });
 
   it("pins the live working row to the bottom, after content the turn already streamed (GHE #236)", () => {
@@ -1339,10 +1700,10 @@ describe("MessagesTimeline", () => {
     );
 
     const messageIndex = markup.indexOf("Part of the answer.");
-    const workingIndex = markup.indexOf(">Working</span>");
+    const workingIndex = markup.indexOf(">Thinking</span>");
     expect(workingIndex).toBeGreaterThan(messageIndex);
     // Still exactly one live status element.
-    expect(markup.split(">Working</span>").length - 1).toBe(1);
+    expect(markup.split(">Thinking</span>").length - 1).toBe(1);
   });
 
   it("renders review comment contexts as structured cards instead of raw tags", () => {
@@ -1422,7 +1783,7 @@ describe("MessagesTimeline", () => {
     expect(markup).not.toContain('data-testid="file-diff"');
   });
 
-  it("renders a muted failure marker for failed tool lifecycle entries", () => {
+  it("keeps failed lifecycle entries discoverable in mixed activity summaries", () => {
     const markup = renderToStaticMarkup(
       <MessagesTimeline
         {...buildProps()}
@@ -1455,8 +1816,7 @@ describe("MessagesTimeline", () => {
       />,
     );
 
-    expect(markup).toContain("lucide-x");
-    expect(markup).toContain('aria-label="Tool call failed"');
+    expect(markup).toContain('aria-label="Received 1 update and used 1 tool, tool call failed"');
     // Ordinary tool failures render muted, not red.
     expect(markup).not.toContain("text-destructive");
   });
@@ -1493,7 +1853,7 @@ describe("MessagesTimeline", () => {
       />,
     );
 
-    expect(markup).toContain("lucide-x");
+    expect(markup).toContain("lucide-circle-alert");
     expect(markup).toContain("text-destructive");
   });
 

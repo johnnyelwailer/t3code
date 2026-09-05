@@ -54,6 +54,7 @@ const sendMessage = Effect.fn("T3TeamMcpToolkit.sendMessage")(function* (input: 
 });
 
 export const T3TeamToolkitHandlersLive = T3TeamToolkit.toLayer({
+  t3team_models: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_models, input),
   t3team_rename_thread: (input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_rename_thread, input),
   t3team_search_thread: (input) =>
@@ -72,6 +73,10 @@ export const T3TeamToolkitHandlersLive = T3TeamToolkit.toLayer({
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_orchestration_status, input),
   t3team_orchestration_resume: (input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_orchestration_resume, input),
+  t3team_orchestration_pause: (input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_orchestration_pause, input),
+  t3team_orchestration_stop: (input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_orchestration_stop, input),
   // Deprecated aliases — routed to the SAME canonical targets as the
   // t3team_orchestration_* handlers above, so agents already calling the
   // workflow-era ids keep working.

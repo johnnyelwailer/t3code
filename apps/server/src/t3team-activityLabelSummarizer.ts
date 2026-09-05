@@ -1,4 +1,19 @@
 import type { ModelSelection } from "@t3tools/contracts";
+
+/**
+ * Minimum lifetime of a persisted LLM activity label (GHE #208 follow-up,
+ * PJ's design decision): an LLM-generated status text is given a minimum
+ * time to live (~5s) so it does not flicker in and out on every state
+ * transition — but once it expires, EITHER a new LLM label OR the live
+ * deterministic state word may take over. The label is cleared and the
+ * display falls back to the `activityState` word via the existing
+ * precedence. Each new label generation reschedules this timer (every label
+ * gets its own minimum life); the turn-end clear() cancels it. The GHE #40
+ * generation throttle (debounce + 60s cadence) is untouched — only the
+ * label's DISPLAY LIFE changes.
+ */
+export const ACTIVITY_LABEL_TTL_MS = 5_000;
+
 import {
   ACTIVITY_LABEL_WINDOW_SIZE,
   buildActivityLabelContext,
@@ -28,6 +43,11 @@ import {
  *   by deferring into the remaining window instead of bursting.
  * - SKIPPED when the recent-activity window is unchanged since the last
  *   generation; CLEARED on idle/terminal.
+ * - TIME-BOXED: a persisted label lives for `ACTIVITY_LABEL_TTL_MS` (5s,
+ *   GHE #208 follow-up) before it is cleared so the live deterministic state
+ *   word takes over; a newer label reschedules the timer, and the turn-end
+ *   clear() cancels it. Only the display life is bounded — the generation
+ *   throttle above is unchanged.
  *
  * The settings flag now governs the enrichment only: off = no LLM calls, and
  * the UI shows just the state word. Fail-open: on any error, nothing is
@@ -52,6 +72,12 @@ interface PendingLabel {
    *  only immediate-regeneration trigger (GHE #208). */
   lastState?: string | null;
   timer?: ReturnType<typeof setTimeout>;
+  /** The handle of the pending TTL clear for the currently persisted label.
+   *  Carried across state replacements in note() so the clear still fires for
+   *  the label it was scheduled for; a new persist replaces the handle, and
+   *  the handle identity is the race guard (never clear a label that
+   *  rescheduled its own timer). */
+  ttlTimer?: ReturnType<typeof setTimeout>;
 }
 
 export function createActivityLabelSummarizer(input: {
@@ -75,6 +101,13 @@ export function createActivityLabelSummarizer(input: {
   readonly now?: () => number;
   readonly setTimer?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
   readonly clearTimer?: (timer: ReturnType<typeof setTimeout>) => void;
+  /**
+   * Minimum life of a persisted label before it may be overridden by the
+   * deterministic state word (GHE #208 follow-up). Defaults to
+   * `ACTIVITY_LABEL_TTL_MS` (5s); 0 disables the timer (label lives until
+   * the next generation or the turn-end clear).
+   */
+  readonly activityLabelTtlMs?: number;
 }) {
   const pending = new Map<string, PendingLabel>();
   const windowByThread = new Map<string, Array<{ kind: string; summary: string }>>();
@@ -82,6 +115,29 @@ export function createActivityLabelSummarizer(input: {
   const now = input.now ?? Date.now;
   const setTimer = input.setTimer ?? setTimeout;
   const clearTimer = input.clearTimer ?? clearTimeout;
+
+  /**
+   * Schedule the TTL clear for a label that was just persisted.
+   * Replaces any pending TTL timer: each label owns exactly one timer for
+   * its own minimum life. The callback is guarded on the timer handle —
+   * if this exact handle is no longer the one on the thread's state, either
+   * a newer label rescheduled (cancel replaced it) or a turn-end clear() ran
+   * (the entry was deleted), and this late fire must not clear anything.
+   */
+  const scheduleLabelTtl = (threadId: string) => {
+    const state = pending.get(threadId);
+    if (!state) return;
+    if (state.ttlTimer) clearTimer(state.ttlTimer);
+    const ttlMs = input.activityLabelTtlMs ?? ACTIVITY_LABEL_TTL_MS;
+    if (ttlMs <= 0) return;
+    state.ttlTimer = setTimer(() => {
+      const latest = pending.get(threadId);
+      if (!latest || latest.ttlTimer !== state.ttlTimer) return;
+      void input
+        .persist({ threadId, label: null, generation: latest.generation })
+        .catch(input.onError);
+    }, ttlMs);
+  };
 
   const run = async (threadId: string, generation: number, hash: string) => {
     const state = pending.get(threadId);
@@ -100,6 +156,9 @@ export function createActivityLabelSummarizer(input: {
     await input.persist({ threadId, label, generation });
     current.lastGeneratedHash = hash;
     current.lastGeneratedAt = now();
+    // GHE #208 follow-up: give this label its minimum life, then let the
+    // live state word (or the next LLM label) take over.
+    scheduleLabelTtl(threadId);
   };
 
   return {
@@ -146,6 +205,10 @@ export function createActivityLabelSummarizer(input: {
         lastGeneratedHash: prior?.lastGeneratedHash ?? null,
         lastState: input_.activityState ?? prior?.lastState ?? null,
         ...(prior?.lastGeneratedAt !== undefined ? { lastGeneratedAt: prior.lastGeneratedAt } : {}),
+        // The pending TTL for the currently persisted label survives a note()
+        // (a note only defers the NEXT generation — it does not extend the
+        // current label's minimum life).
+        ...(prior?.ttlTimer !== undefined ? { ttlTimer: prior.ttlTimer } : {}),
       };
       pending.set(input_.threadId, next);
       // Regenerate only when the recent activity actually changed since the last
@@ -168,6 +231,7 @@ export function createActivityLabelSummarizer(input: {
       windowByThread.delete(threadId);
       const state = pending.get(threadId);
       if (state?.timer) clearTimer(state.timer);
+      if (state?.ttlTimer) clearTimer(state.ttlTimer);
       pending.delete(threadId);
       // Bump the generation so any in-flight generation never persists after us.
       await input.persist({
@@ -194,6 +258,7 @@ export function createActivityLabelEventReactor(input: {
   readonly minRegenerateMs?: number;
   readonly setTimer?: Parameters<typeof createActivityLabelSummarizer>[0]["setTimer"];
   readonly clearTimer?: Parameters<typeof createActivityLabelSummarizer>[0]["clearTimer"];
+  readonly activityLabelTtlMs?: number;
 }) {
   const summarizer = createActivityLabelSummarizer({
     generate: input.generate,
@@ -204,6 +269,9 @@ export function createActivityLabelEventReactor(input: {
     ...(input.minRegenerateMs === undefined ? {} : { minRegenerateMs: input.minRegenerateMs }),
     ...(input.setTimer === undefined ? {} : { setTimer: input.setTimer }),
     ...(input.clearTimer === undefined ? {} : { clearTimer: input.clearTimer }),
+    ...(input.activityLabelTtlMs === undefined
+      ? {}
+      : { activityLabelTtlMs: input.activityLabelTtlMs }),
   });
 
   return {

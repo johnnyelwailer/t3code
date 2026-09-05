@@ -9,6 +9,7 @@
 // @effect-diagnostics globalConsole:off -- onComplete sink failure log in a plain Promise path, outside any Effect runtime.
 
 import {
+  type AbortedResult,
   type SuspendedResult,
   type WorkflowRef,
   type WorkflowRunOptions,
@@ -16,6 +17,11 @@ import {
 } from "@t3team/sdk";
 
 import { createWorkflowEngineBroker } from "./t3team-workflowEngineBroker.ts";
+import {
+  createCompositionBranchFailureHandler,
+  summarizeCompositionBranchFailures,
+  type WorkflowCompositionBranchFailure,
+} from "./t3team-workflowEngineCompositionFailure.ts";
 import { makeControllerFail, makeControllerResume } from "./t3team-workflowEngineResume.ts";
 import { createWorkflowStepActivityEmitter } from "./t3team-workflowEngineStepActivities.ts";
 import { deliverWorkflowCompletion } from "./t3team-workflowCompletionMessage.ts";
@@ -40,6 +46,16 @@ export function createWorkflowRunController(
     path: input.workflowPath,
     absolutePath: input.workflowPath,
   };
+  // The authored `phase()` group the body is currently inside — updated live by `onPhase` below,
+  // read live by the broker's `step()`. Reconstructed correctly on every resume because the SDK
+  // replays the WHOLE body from the top each time (fast-forwarding through already-recorded
+  // primitives), so every `phase()` call before the live continuation point re-fires in the same
+  // order before any NEW step activity can be emitted — see `WorkflowEngineBrokerDeps.currentPhase`.
+  let currentWorkflowPhase: string | undefined;
+  // Parallel/pipeline branches that rejected during this run (UX slice: a swallowed rejection
+  // must never look like an unqualified success) — see `options.onCompositionBranchFailed` below
+  // and `settle`'s use of this count to annotate the run's own terminal activity.
+  const compositionBranchFailures: WorkflowCompositionBranchFailure[] = [];
   // The live step-status emitter (UX slice 1). Terminal run activities are emitted HERE — in
   // settle (completed) and the launch/resume catch (failed) — not in the durability lifecycle:
   // this controller is the single funnel BOTH the live launch and boot rehydration drive
@@ -55,6 +71,7 @@ export function createWorkflowRunController(
   });
   const broker = createWorkflowEngineBroker({
     stepActivities,
+    currentPhase: () => currentWorkflowPhase,
     runId: input.runId,
     ...(input.launchThreadId === undefined ? {} : { launchThreadId: input.launchThreadId }),
     projectId: input.projectId,
@@ -77,6 +94,21 @@ export function createWorkflowRunController(
   const options: WorkflowRunOptions = {
     runsRoot: input.runsRoot,
     broker,
+    // Feeds the SAME cell `currentPhase` (above) reads — see its comment for why a plain
+    // in-memory cell is replay-safe here despite the SDK re-running the whole body on resume.
+    onPhase: (title) => {
+      currentWorkflowPhase = title;
+    },
+    // Live step-status pip for a swallowed `parallel()`/`pipeline()` rejection (see the
+    // defect this closes: a failed branch previously left NO activity anywhere) — see
+    // `t3team-workflowEngineCompositionFailure.ts`.
+    onCompositionBranchFailed: createCompositionBranchFailureHandler({
+      stepActivities,
+      runId: input.runId,
+      newId: input.newId,
+      getWorkflowPhase: () => currentWorkflowPhase,
+      onFailure: (failure) => compositionBranchFailures.push(failure),
+    }),
     ...t3teamWorkflowHostToolRunOptions(input.hostToolClient),
     scripts: input.scripts ?? {},
     defaultModel: toWorkflowModelSelection(
@@ -90,6 +122,7 @@ export function createWorkflowRunController(
         }),
     ...(input.store === undefined ? {} : { store: input.store }),
     ...(input.launchThreadId === undefined ? {} : { launchThreadId: input.launchThreadId }),
+    ...(input.abortSignal === undefined ? {} : { abortSignal: input.abortSignal }),
     // Preserve T3Team's pre-extraction behavior for every controller-driven resume (pending
     // replies, timers, and boot rehydration): use the current source on disk unless a host caller
     // explicitly requests strict checking. The reusable core remains strict by default.
@@ -97,13 +130,32 @@ export function createWorkflowRunController(
   };
 
   const settle = async (
-    result: WorkflowRunResult<unknown> | SuspendedResult,
+    result: WorkflowRunResult<unknown> | SuspendedResult | AbortedResult,
   ): Promise<WorkflowLaunchStatus> => {
     if (cancelled) return "suspended";
     if ("suspended" in result) return "suspended"; // parked — the reactor resumes it later
+    if ("aborted" in result) {
+      // Aborted is a hard terminal distinct from completed: record it as failed so the
+      // durable row and the step activity never claim a completion that did not happen.
+      await input.lifecycle?.recordFailed({
+        reason: "Run aborted by host abort signal.",
+        step: "abort",
+      });
+      await stepActivities.emitRun("failed", "Run aborted.");
+      input.registry.deleteRun(input.runId);
+      return "failed";
+    }
     await input.lifecycle?.recordCompleted();
     if (cancelled) return "suspended";
-    await stepActivities.emitRun("completed");
+    // The run genuinely completed — `parallel`/`pipeline` never rethrow a branch's rejection —
+    // but a failed branch must keep this from reading as unqualifiedly green. `phase` stays
+    // "completed" (that is the truth); `error` carries a summary a viewer will see the same way
+    // they see any other run-level note, alongside the branch's own "failed" step row (the
+    // primary signal — see `onCompositionBranchFailed` above).
+    await stepActivities.emitRun(
+      "completed",
+      summarizeCompositionBranchFailures(compositionBranchFailures),
+    );
     await deliverWorkflowCompletion({
       launchThreadId: input.launchThreadId,
       workflowRunId: input.runId,

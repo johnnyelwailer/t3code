@@ -28,6 +28,7 @@ import {
   type ProviderSession,
 } from "@t3tools/contracts";
 import { randomUUID as nodeRandomUUID } from "node:crypto";
+import { expandAssistantCitationsForProvider } from "@t3tools/shared/assistantCitations";
 import { causeErrorTag } from "@t3tools/shared/observability";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -83,6 +84,39 @@ const isModelSelection = Schema.is(ModelSelection);
  * matches the pack-level watchdog default (600s).
  */
 const DEFAULT_TURN_INACTIVITY_TIMEOUT_MS = 600_000;
+
+/**
+ * Announced-retry backoff budgeting (GHE #306 addendum).
+ *
+ * Drivers that retry transient gateway errors announce each backoff sleep
+ * as a `runtime.warning` with `detail { code: "provider.retry", delayMs }`
+ * (the Nexplore Pi driver does this for its ~9h 14-attempt exponential
+ * episode). The host re-arms the PLAIN budget from that announcement today,
+ * which fires mid-sleep once a backoff wait outgrows the budget (Pi's
+ * attempt 11 waits 1024s > the 600s default) and kills a legitimately
+ * running retry episode — the GHE #306 incident. Arm
+ * `max(normal budget, announced delay + slack)` instead: the sleep plus the
+ * next request's own runtime. Capped, so a buggy announcement cannot
+ * disable the backstop indefinitely.
+ */
+const RETRY_ANNOUNCE_SLACK_MS = 120_000;
+const MAX_RETRY_ANNOUNCE_BUDGET_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The effective watchdog budget when the event is an announced retry
+ * backoff; undefined for every other event (plain re-arm).
+ */
+const announcedRetryBudgetMs = (event: ProviderRuntimeEvent): number | undefined => {
+  if (event.type !== "runtime.warning") return undefined;
+  const detail = (event.payload as { detail?: unknown } | null | undefined)?.detail;
+  const announced = detail as { code?: unknown; delayMs?: unknown } | null | undefined;
+  if (announced?.code !== "provider.retry") return undefined;
+  const delayMs = announced.delayMs;
+  if (typeof delayMs === "number" && Number.isFinite(delayMs) && delayMs > 0) {
+    return Math.min(delayMs + RETRY_ANNOUNCE_SLACK_MS, MAX_RETRY_ANNOUNCE_BUDGET_MS);
+  }
+  return undefined;
+};
 
 interface TurnWatchdogEntry {
   readonly turnId: TurnId;
@@ -418,8 +452,11 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     turnId: TurnId,
     instanceId: ProviderInstanceId,
     provider: ProviderDriverKind,
+    announcedBudgetMs?: number,
   ) {
-    const timeoutMs = yield* resolveTurnInactivityTimeoutMs(instanceId);
+    const baseMs = yield* resolveTurnInactivityTimeoutMs(instanceId);
+    const timeoutMs =
+      announcedBudgetMs !== undefined ? Math.max(baseMs, announcedBudgetMs) : baseMs;
     const previousEntry = yield* Ref.get(turnWatchdogs).pipe(
       Effect.map((map) => map.get(threadId)),
     );
@@ -477,7 +514,16 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           }
           return clearTurnWatchdog(event.threadId);
         }
-        return armTurnWatchdog(event.threadId, entry.turnId, entry.instanceId, entry.provider);
+        // An announced retry backoff (driver detail "provider.retry")
+        // extends the budget to cover the sleep; every other event
+        // re-arms the plain budget.
+        return armTurnWatchdog(
+          event.threadId,
+          entry.turnId,
+          entry.instanceId,
+          entry.provider,
+          announcedRetryBudgetMs(event),
+        );
       }),
     );
 
@@ -861,6 +907,13 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           "provider.cwd.effective": effectiveCwd ?? "",
         });
         const adapter = yield* registry.getByInstance(resolvedInstanceId);
+        // Starting a session replaces the thread's runtime, so any armed
+        // inactivity watchdog belongs to the previous session's turn. Leave it
+        // armed and its timer fires into the REPLACEMENT session — with an
+        // adapter that ignores the (stale) turn id, that closes a live session
+        // for no apparent reason (GHE #328). Disarm it up front; the new
+        // session's own sendTurn re-arms the watchdog when it needs one.
+        yield* clearTurnWatchdog(threadId);
         yield* prepareMcpSession(threadId, resolvedInstanceId);
         const session = yield* adapter
           .startSession({
@@ -941,6 +994,16 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       );
     }
 
+    const inputTextWithCitations =
+      parsed.input === undefined ? undefined : expandAssistantCitationsForProvider(parsed.input);
+    if (inputTextWithCitations !== parsed.input) {
+      yield* decodeInputOrValidationError({
+        operation: "ProviderService.sendTurn",
+        schema: ProviderSendTurnInput.fields.input,
+        payload: inputTextWithCitations,
+      });
+    }
+
     // Every attachment gets an on-disk path in the prompt so the model's tools
     // can dereference the actual file. All attachments then go to the adapter,
     // and each adapter decides what its provider ingests natively: OpenCode
@@ -958,8 +1021,8 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     });
     const inputTextWithAttachmentPaths =
       attachmentPathLines.length === 0
-        ? parsed.input
-        : [parsed.input, attachmentPathLines.join("\n")]
+        ? inputTextWithCitations
+        : [inputTextWithCitations, attachmentPathLines.join("\n")]
             .filter((part): part is string => typeof part === "string" && part.length > 0)
             .join("\n\n");
 
@@ -1221,21 +1284,21 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         ),
       );
       const activeSessions = sessionsByProvider.flatMap((sessions) => sessions);
-      const persistedBindings = yield* directory.listThreadIds().pipe(
-        Effect.flatMap((threadIds) =>
-          Effect.forEach(
-            threadIds,
-            (threadId) =>
-              directory
-                .getBinding(threadId)
-                .pipe(
-                  Effect.orElseSucceed(() =>
-                    Option.none<ProviderSessionDirectory.ProviderRuntimeBinding>(),
-                  ),
-                ),
-            { concurrency: "unbounded" },
-          ),
-        ),
+      // Only live adapter sessions appear in this response. Resolving every
+      // historical binding here makes each call scale with the full thread
+      // history instead of the active session set.
+      const persistedBindings = yield* Effect.forEach(
+        [...new Set(activeSessions.map((session) => session.threadId))],
+        (threadId) =>
+          directory
+            .getBinding(threadId)
+            .pipe(
+              Effect.orElseSucceed(() =>
+                Option.none<ProviderSessionDirectory.ProviderRuntimeBinding>(),
+              ),
+            ),
+        { concurrency: "unbounded" },
+      ).pipe(
         Effect.orElseSucceed(
           () => [] as Array<Option.Option<ProviderSessionDirectory.ProviderRuntimeBinding>>,
         ),

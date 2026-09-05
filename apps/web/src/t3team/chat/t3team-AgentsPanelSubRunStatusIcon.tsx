@@ -11,27 +11,36 @@
  */
 import { CircleAlertIcon, CircleCheckIcon } from "lucide-react";
 
+import { cn } from "~/lib/utils";
 import { ThreadActivityMorphIcon } from "~/components/ThreadActivityStatus";
 import type { ProjectThread } from "~/t3team/t3team-types";
 
-export function SubRunStatusIcon({ status }: { status: ProjectThread["status"] }) {
+export function SubRunStatusIcon({
+  status,
+  className,
+}: {
+  status: ProjectThread["status"];
+  /** Optional size override (the fold list renders smaller glyphs). */
+  className?: string;
+}) {
+  const iconClass = className ?? "size-3";
   if (status === "running") {
     return (
-      <span className="shrink-0 text-sky-600 dark:text-sky-400">
+      <span className={cn("shrink-0 text-sky-600 dark:text-sky-400", className)}>
         <ThreadActivityMorphIcon solid={false} size="sm" pulse />
       </span>
     );
   }
   if (status === "completed") {
-    return <CircleCheckIcon aria-hidden className="size-3 shrink-0 text-success" />;
+    return <CircleCheckIcon aria-hidden className={cn("shrink-0 text-success", iconClass)} />;
   }
   if (status === "error") {
-    return <CircleAlertIcon aria-hidden className="size-3 shrink-0 text-destructive" />;
+    return <CircleAlertIcon aria-hidden className={cn("shrink-0 text-destructive", iconClass)} />;
   }
   // GHE #254: idle keeps the SAME ring, faded + static, so every state reads
   // at the ring's size instead of a shrunk dot.
   return (
-    <span className="shrink-0 text-muted-foreground/40">
+    <span className={cn("shrink-0 text-muted-foreground/40", className)}>
       <ThreadActivityMorphIcon solid={false} size="sm" />
     </span>
   );

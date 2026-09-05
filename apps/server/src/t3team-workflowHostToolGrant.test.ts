@@ -107,6 +107,7 @@ const brokerEngineMock: OrchestrationEngineShape = {
     return Effect.succeed({ sequence: brokerDispatched.length });
   },
   streamDomainEvents: Stream.empty,
+  subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
   latestSequence: Effect.succeed(0),
 };
 
@@ -114,6 +115,7 @@ const stubEngine: OrchestrationEngineShape = {
   readEvents: () => Stream.empty,
   dispatch: () => Effect.succeed({ sequence: 0 }),
   streamDomainEvents: Stream.never,
+  subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
   latestSequence: Effect.succeed(0),
 };
 

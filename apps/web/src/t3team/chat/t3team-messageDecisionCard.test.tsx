@@ -13,6 +13,7 @@ import {
   EnvironmentId,
   EventId,
   MessageId,
+  ThreadId,
   type OrchestrationThreadActivity,
   type OrchestrationWorkflowRunStatus,
 } from "@t3tools/contracts";
@@ -315,57 +316,10 @@ describe("workflow decision card in the timeline", () => {
   }, 10000);
 });
 
-describe("answered decision reply — single render", () => {
-  it("renders the chosen answer only in the card chip, not a second bare user bubble", async () => {
-    const ask = decisionMessage("message-decision-1");
-    const reply: ChatMessage = {
-      id: MessageId.make("message-reply-1"),
-      role: "user",
-      text: "hold",
-      streaming: false,
-      createdAt: "2026-06-09T00:00:01.000Z",
-      updatedAt: "2026-06-09T00:00:01.000Z",
-      turnId: null,
-      t3teamExt: { workflowReply: { value: "hold", correlationId: "run-1:1" } },
-    };
-
-    const markup = await renderTimeline([ask, reply]);
-
-    expect(markup).toContain('data-workflow-decision-status="answered"');
-    // The reply must not also render as its own bare user bubble (`UserTimelineRow`'s
-    // "bg-message" bubble class) — only the card's inline answered chip.
-    expect(markup).not.toContain("bg-message");
-  }, 10000);
-
-  it("does not swallow an interleaved system notification as the answer", async () => {
-    const ask = decisionMessage("message-decision-1");
-    const notification: ChatMessage = {
-      id: MessageId.make("message-notify-1"),
-      role: "system",
-      text: "Preparing release notes",
-      streaming: false,
-      createdAt: "2026-06-09T00:00:00.500Z",
-      updatedAt: "2026-06-09T00:00:00.500Z",
-      turnId: null,
-    };
-    const reply: ChatMessage = {
-      id: MessageId.make("message-reply-1"),
-      role: "user",
-      text: "hold",
-      streaming: false,
-      createdAt: "2026-06-09T00:00:01.000Z",
-      updatedAt: "2026-06-09T00:00:01.000Z",
-      turnId: null,
-      t3teamExt: { workflowReply: { value: "hold", correlationId: "run-1:1" } },
-    };
-
-    const markup = await renderTimeline([ask, notification, reply]);
-
-    expect(markup).toContain("Preparing release notes");
-    expect(markup).toContain('data-workflow-decision-status="answered"');
-    expect(markup).not.toContain("bg-message");
-  }, 10000);
-});
+// The settled-decision-card tests (GHE: regression on the Defect 2 fix — a decision's card must
+// settle once answered, and the value must be stated exactly once) live in
+// `t3team-messageDecisionCardSettled.test.tsx`, split out once this file outgrew the test-file
+// LOC ceiling.
 
 describe("findActiveWorkflowInputMessageId", () => {
   const entry = (message: ChatMessage) => ({ kind: "message" as const, message });
@@ -539,6 +493,48 @@ describe("T3TeamWorkflowDecisionCard clicks", () => {
       value: { severity: "high", note: "rounding bug", urgent: true },
       correlationId: "run-6:1",
     });
+  });
+
+  it("posts a fresh message id for the reply, never the ask's own id", async () => {
+    // GHE (Defect 2): a decision-card click used to send `messageId: message.id` — the ASK's own
+    // id — to the resolve-input route. The projector never changes an existing message's `role`
+    // on a subsequent upsert (see `orchestration/projector.ts`), so upserting the reply IN PLACE
+    // over the ask left the reply's text sitting on a message still `role: "system"`, and wiped
+    // the ask's `t3teamExt.attachments` so it no longer rendered as a decision card either — it
+    // fell through to the generic system-notice fallback (the `<p>System</p>` bubble). The fix is
+    // to always mint a fresh id for the reply, since there is no optimistic bubble to reconcile
+    // with here (unlike the composer path).
+    const { T3TeamSystemTimelineDecisionRow } =
+      await import("~/t3team/chat/t3team-SystemTimelineDecisionRow");
+    const ask = decisionMessage("message-decision-1");
+    const dispatchWorkflowDecision = vi.fn(async (_decision: { readonly messageId: string }) => {});
+    const threadRef = {
+      environmentId: EnvironmentId.make("environment-local"),
+      threadId: ThreadId.make("thread-1"),
+    };
+
+    const container = await renderNode(
+      <T3TeamSystemTimelineDecisionRow
+        message={ask}
+        threadRef={threadRef}
+        workflowDecision={{
+          question: QUESTION,
+          affordance: { kind: "choice", options: ["ship-now", "hold", "rollback"] },
+          correlationId: "run-1:1",
+          workflowRunId: "run-1",
+        }}
+        activeWorkflowInputMessageId={ask.id}
+        decisionUnavailableMessage={undefined}
+        dispatchWorkflowDecision={dispatchWorkflowDecision}
+      />,
+    );
+
+    await clickButton(container, "hold");
+
+    expect(dispatchWorkflowDecision).toHaveBeenCalledTimes(1);
+    const call = dispatchWorkflowDecision.mock.calls[0]?.[0];
+    expect(call?.messageId).not.toBe(ask.id);
+    expect(call?.messageId.length).toBeGreaterThan(0);
   });
 
   it("renders no buttons for a text affordance — the composer is the reply path", async () => {

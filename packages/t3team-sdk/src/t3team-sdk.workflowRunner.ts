@@ -89,18 +89,24 @@ export async function executeWorkflowBody(
     nowIso,
     runId: opts.runId,
     resolved: opts.journal.byCorrelation,
+    // Share the run boundary's suspension latch: the runtime arms it, the boundary refuses to
+    // report `completed` while it is armed (a body that caught the signal cannot fake a result).
+    suspension: opts.suspension,
     ...(opts.options.beforePrimitive === undefined
       ? {}
       : { beforePrimitive: opts.options.beforePrimitive }),
     ...(opts.options.afterPrimitive === undefined
       ? {}
       : { afterPrimitive: opts.options.afterPrimitive }),
+    ...(opts.events === undefined ? {} : { events: opts.events }),
+    ...(opts.abortSignal === undefined ? {} : { abortSignal: opts.abortSignal }),
   });
   const { primitives, captureCapabilities } = buildWorkflowPrimitives({
     runtime,
     options: opts.options,
     toolRefs,
     scripts,
+    nowIso,
   });
   return await runPreparedBody({
     runtime,

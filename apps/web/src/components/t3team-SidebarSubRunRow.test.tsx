@@ -107,7 +107,7 @@ describe("SidebarSubRunRow status treatment", () => {
     expect(container!.querySelector("button .size-1\\.5")).toBeNull();
   });
 
-  it("shows the live status summary the parent row shows: state word · detail (flag on)", () => {
+  it("shows the live status summary the parent row shows: LLM label replaces the state word (flag on)", () => {
     render(
       createThread({
         status: "running",
@@ -116,7 +116,10 @@ describe("SidebarSubRunRow status treatment", () => {
       }),
     );
     const text = button().textContent ?? "";
-    expect(text).toContain("Thinking · Reading contracts");
+    expect(text).toContain("Reading contracts");
+    // replace, never append: the state word does not render next to the label
+    expect(text).not.toContain("Thinking");
+    expect(text).not.toContain("·");
     // the summary shimmers, same as the parent's live label
     expect(container!.querySelector("span.t3team-label-shimmer")).not.toBeNull();
   });

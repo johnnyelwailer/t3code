@@ -2,7 +2,10 @@
  * The failed-run branch of `t3team.orchestration.resume`, split from
  * {@link ./t3team-toolBrokerWorkflowResumeActions.ts} for the additive size budget:
  * re-resolve recipe scripts exactly as boot rehydration does, rebuild the durable lifecycle
- * over the persisted row, and re-drive {@link resumeWorkflowRunFromJournal} detached.
+ * over the persisted row, then either
+ *   • re-drive the run's RETAINED `thread.turn` step ({@link resumeFailedTurnStep}) when the
+ *     failure was the host's verdict on an unanswered agent turn (GHE #403), or
+ *   • re-drive {@link resumeWorkflowRunFromJournal} detached for a body-thrown failure.
  */
 import type { ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -18,8 +21,24 @@ import {
 import type { WorkflowResumeToolValue } from "./t3team-toolBrokerWorkflowResumeTool.ts";
 import { resolveWorkflowAgentModel } from "./t3team-workflowAgentModelPolicy.ts";
 import { makeWorkflowRunLifecycle } from "./t3team-workflowEngineDurability.ts";
+import type { LaunchWorkflowRecipeInput } from "./t3team-workflowEngineLaunchTypes.ts";
+import { resumeFailedTurnStep } from "./t3team-workflowEngineResumeFailedStep.ts";
 import { resumeWorkflowRunFromJournal } from "./t3team-workflowEngineResumeFromJournal.ts";
 import { resolveRehydratedWorkflowScripts } from "./t3team-workflowRehydrateScripts.ts";
+
+/** The retained `thread.turn` ask of a host-failed run, or `null` for a body-thrown failure. */
+export function retainedFailedTurnStep(
+  run: WorkflowRun,
+): { readonly threadId: string; readonly correlationId: string } | null {
+  if (
+    run.pendingKind !== "thread.turn" ||
+    run.pendingThreadId === null ||
+    run.pendingCorrelationId === null
+  ) {
+    return null;
+  }
+  return { threadId: run.pendingThreadId, correlationId: run.pendingCorrelationId };
+}
 
 /** Re-drive a failed run from its journal, detached (a resume can park again for hours).
  *
@@ -62,28 +81,58 @@ export const makeResumeFailedRun =
         dispatch: deps.dispatch,
         newId,
       });
-      yield* Effect.promise(() =>
-        resumeWorkflowRunFromJournal({
+      const launch: LaunchWorkflowRecipeInput = {
+        runId: run.runId,
+        workflowPath: run.workflowPath,
+        args: run.args,
+        ...(Object.keys(scripts).length === 0 ? {} : { scripts }),
+        runsRoot: deps.path!.join(workspaceRoot, ".t3team-runs"),
+        launchThreadId: run.launchThreadId ?? undefined,
+        projectId: run.projectId,
+        modelSelection: run.modelSelection,
+        defaultAgentModelSelection: resolveWorkflowAgentModel(run.modelSelection),
+        runtimeMode: run.runtimeMode,
+        interactionMode: run.interactionMode,
+        registry: deps.registry,
+        dispatch: deps.dispatch,
+        newId,
+        nowIso,
+        store: deps.journalStore,
+        lifecycle,
+        workflowVersionPolicy,
+      };
+      const failure = {
+        ...(run.failureReason ? { failureReason: run.failureReason } : {}),
+        ...(run.failureStep ? { failureStep: run.failureStep } : {}),
+      };
+      // A host-detected step failure (the agent turn died or said nothing) keeps its pending
+      // ask on the row; re-drive THAT step. A journal replay would park on its `sent` entry.
+      const retained = retainedFailedTurnStep(run);
+      if (retained !== null) {
+        if (deps.turnRedrive === undefined) {
+          return yield* Effect.fail(
+            "Re-driving a failed agent step is not available in this runtime (no thread query / dispatch).",
+          );
+        }
+        yield* resumeFailedTurnStep({
+          launch,
+          step: retained,
+          runRepository: deps.runRepository,
+          turnRedrive: deps.turnRedrive,
+        });
+        return {
+          ok: true as const,
           runId: run.runId,
-          workflowPath: run.workflowPath,
-          args: run.args,
-          ...(Object.keys(scripts).length === 0 ? {} : { scripts }),
-          runsRoot: deps.path!.join(workspaceRoot, ".t3team-runs"),
-          launchThreadId: run.launchThreadId ?? undefined,
-          projectId: run.projectId,
-          modelSelection: run.modelSelection,
-          defaultAgentModelSelection: resolveWorkflowAgentModel(run.modelSelection),
-          runtimeMode: run.runtimeMode,
-          interactionMode: run.interactionMode,
-          registry: deps.registry,
-          dispatch: deps.dispatch,
-          newId,
-          nowIso,
-          store: deps.journalStore,
-          lifecycle,
-          workflowVersionPolicy,
-        }),
-      ).pipe(Effect.forkDetach({ startImmediately: true }));
+          status: "suspended" as const,
+          ...failure,
+          hint: run.failureReason
+            ? `Re-driving the failed agent step after: ${run.failureReason} — the run resumes automatically when the step answers; observe progress via t3team.orchestration.status.`
+            : "Re-driving the failed agent step; the run resumes automatically when it answers — observe progress via t3team.orchestration.status.",
+        };
+      }
+      yield* Effect.promise(() => resumeWorkflowRunFromJournal(launch)).pipe(
+        Effect.forkDetach({ startImmediately: true }),
+      );
       // Echo the recorded cause of the PREVIOUS failure: the resume replays the executed prefix
       // and runs live past it, so an agent that did not first call `status` still learns what
       // broke and can judge whether resuming without a fix can possibly succeed.
@@ -91,8 +140,7 @@ export const makeResumeFailedRun =
         ok: true as const,
         runId: run.runId,
         status: "accepted" as const,
-        ...(run.failureReason ? { failureReason: run.failureReason } : {}),
-        ...(run.failureStep ? { failureStep: run.failureStep } : {}),
+        ...failure,
         hint: run.failureReason
           ? `Resuming from the journal (same-prefix replay) after: ${run.failureReason} — observe progress via t3team.orchestration.status.`
           : "Resuming from the journal (same-prefix replay); observe progress via t3team.orchestration.status.",

@@ -10,7 +10,16 @@
  */
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+
+const settingsState = vi.hoisted(() => ({
+  activityLabelsEnabled: true,
+}));
+
+vi.mock("~/hooks/useSettings", () => ({
+  usePrimarySettings: (selector?: (settings: Record<string, unknown>) => unknown) =>
+    selector ? selector({ t3teamActivityLabelsEnabled: settingsState.activityLabelsEnabled }) : {},
+}));
 
 import type { ProjectThread } from "~/t3team/t3team-types";
 import type { SubRunNode } from "./t3team-AgentsPanelForkSection.logic";
@@ -87,33 +96,86 @@ describe("T3TeamAgentsPanelSubRunTree status language (GHE #254)", () => {
     expect(container!.querySelector(".size-1\\.5")).toBeNull();
   });
 
-  it("an idle sub-run (inside the disclosure) keeps the ring at size-3, faded + static", () => {
+  it("a non-running sub-run folds into the 'Settled (N)' row; expanded, idle keeps the ring faded + static", () => {
     render([node(createThread({ id: "idle-1", status: "idle" }))]);
-    // idle threads collapse into the "1 idle · expand" disclosure — open it
+    // GHE #304: non-running sub-runs collapse into the dim "Settled (1)" fold row — open it
     const disclosure = Array.from(container!.querySelectorAll("button")).find((b) =>
-      (b.textContent ?? "").includes("idle"),
+      (b.textContent ?? "").includes("Settled (1)"),
     )!;
-    expect(disclosure, "idle disclosure row present").toBeTruthy();
+    expect(disclosure, "settled fold row present").toBeTruthy();
     act(() => disclosure.click());
     const svg = ringSvg();
     expect(svg, "idle keeps the dashed ring icon").toBeTruthy();
     expect(svg!.className.baseVal).toContain("size-3");
     expect(svg!.className.baseVal).not.toContain("t3team-icon-pulse");
+    // the fold row's compact treatment: size-2.5 wrapper + faded idle ring
     const wrapper = svg!.parentElement;
+    expect(wrapper!.className).toContain("size-2.5");
     expect(wrapper!.className).toContain("text-muted-foreground/40");
     expect(container!.querySelector(".size-1\\.5")).toBeNull();
   });
 
-  it("a completed sub-run keeps the check mark; an errored one renders the alert icon at size-3", () => {
+  it("completed/error sub-runs fold; expanded, the check mark and alert icon carry the fold's size-2.5 glyphs", () => {
     render([
       node(createThread({ id: "done-1", status: "completed" })),
       node(createThread({ id: "err-1", status: "error" })),
     ]);
+    // Both are terminal → hidden behind the fold until expanded
+    expect(container!.textContent).toContain("Settled (2)");
+    const disclosure = Array.from(container!.querySelectorAll("button")).find((b) =>
+      (b.textContent ?? "").includes("Settled (2)"),
+    )!;
+    act(() => disclosure.click());
     expect(ringSvg(), "settled rows carry no ring").toBeNull();
     const alert = alertSvg();
     expect(alert, "CircleAlertIcon svg present").toBeTruthy();
-    expect(alert!.className.baseVal).toContain("size-3");
+    expect(alert!.className.baseVal).toContain("size-2.5");
     expect(alert!.className.baseVal).toContain("text-destructive");
+    const check = (Array.from(container!.querySelectorAll("button svg")) as SVGSVGElement[]).find(
+      (svg) => svg.querySelector("circle") && !svg.querySelector("line"),
+    );
+    expect(check, "CircleCheckIcon svg present").toBeTruthy();
+    expect(check!.className.baseVal).toContain("size-2.5");
+    expect(check!.className.baseVal).toContain("text-success");
     expect(container!.querySelector(".size-1\\.5")).toBeNull();
+  });
+});
+
+describe("T3TeamAgentsPanelSubRunTree live status text (GHE #208 seam)", () => {
+  const statusText = () => container!.querySelector("button .font-mono")?.textContent ?? "";
+
+  it("a running sub-run with an LLM label shows the label (shared resolution, flag on)", () => {
+    render([
+      node(
+        createThread({
+          status: "running",
+          activityState: "writing",
+          activityLabel: "Editing the router",
+        }),
+      ),
+    ]);
+    expect(statusText()).toBe("Editing the router");
+  });
+
+  it("a running sub-run with only a state word shows the word (flag off drops the label)", () => {
+    settingsState.activityLabelsEnabled = false;
+    render([
+      node(
+        createThread({
+          status: "running",
+          activityState: "writing",
+          activityLabel: "Editing the router",
+        }),
+      ),
+    ]);
+    expect(statusText()).toBe("Writing");
+    settingsState.activityLabelsEnabled = true;
+  });
+
+  it("a running sub-run with neither falls back to the stable label; dots are untouched", () => {
+    render([node(createThread({ status: "running" }))]);
+    expect(statusText()).toBe("Running");
+    // the running dot/icon language from GHE #254 is unchanged
+    expect(ringSvg(), "running sub-run still carries the pulsing ring").toBeTruthy();
   });
 });

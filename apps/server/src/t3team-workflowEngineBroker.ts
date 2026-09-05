@@ -76,12 +76,14 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
     detail?: string,
     threadId?: string,
   ): void => {
+    const workflowPhase = deps.currentPhase?.();
     void deps.stepActivities?.emitSent({
       correlationId,
       stepKind: kind,
       phase,
       ...(detail === undefined ? {} : { detail: workflowStepDetailSnippet(detail) }),
       ...(threadId === undefined ? {} : { threadId }),
+      ...(workflowPhase === undefined ? {} : { workflowPhase }),
     });
   };
 

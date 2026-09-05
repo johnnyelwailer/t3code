@@ -96,11 +96,14 @@ const projectionQueryMock: ProjectionSnapshotQueryShape = {
     ),
   getFirstActiveThreadIdByProjectId: () => Effect.die("unused"),
   listChildThreadIdsByParent: () => Effect.die("unused"),
+  listParentChildRelations: () => Effect.die("unused"),
   getThreadCheckpointContext: () => Effect.die("unused"),
   getThreadDetailSnapshot: () => Effect.die("unused"),
   getFullThreadDiffContext: () => Effect.die("unused"),
   getThreadShellById: () => Effect.die("unused"),
   threadExists: () => Effect.die("unused"),
+  getEventReplayStats: () => Effect.die("unused"),
+  hasPendingTurnStart: () => Effect.die("unused"),
   searchThreads: () => Effect.succeed({ matches: [] }),
   getThreadDetailById: () =>
     Effect.succeed(

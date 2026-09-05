@@ -1,0 +1,90 @@
+/* ===========================================================================
+ * "Living status dots" polish — STORY-ONLY exploration of smooth,
+ * theme-oriented dot color shifts (4 directions, may land w/ 0.0.39).
+ *
+ * Production re-mounts the cell on state change (.t3team-aci-shift keyed
+ * remount), so the declared `background 0.9s` transition never fires and
+ * colors snap. These variants paint the EXACT production dot DOM with
+ * PERSISTENT cells — only `data-t3team-state` flips — so the crossfade is
+ * visible. The .sdv2-vA/B/C/D scopes override ONLY paint; geometry,
+ * keyframes and the GHE #201 dead-center alignment inherit from
+ * t3team-index.css untouched. Palettes are built from the app's theme role
+ * tokens via color-mix(in oklch, …) — never raw saturated primaries in both
+ * themes. Each card's per-state rule sets --s on the cell; one paint rule
+ * per variant consumes it. B also carries A's scope class (its palette IS
+ * A's; B only adds the blending halo).
+ * ========================================================================= */
+
+/* Shared A/B palette (light set). */
+.sdv2-vA,
+.sdv2-vB {
+  --thinking: color-mix(in oklch, var(--warning) 42%, var(--muted-foreground) 58%);
+  --writing: color-mix(in oklch, var(--primary) 58%, var(--muted-foreground) 42%);
+  --working: var(--primary);
+  --waiting: color-mix(in oklch, var(--muted-foreground) 62%, var(--background) 38%);
+  --settled: var(--muted-foreground);
+  --done: color-mix(in oklch, var(--success) 78%, var(--muted-foreground) 22%);
+  --error: var(--destructive);
+}
+/* Dark set: each state lifts ~15% toward white. */
+.dark .sdv2-vA,
+.dark .sdv2-vB {
+  --thinking: color-mix(in oklch, var(--warning) 38%, var(--muted-foreground) 62%);
+  --writing: color-mix(in oklch, var(--primary) 80%, white 20%);
+  --working: color-mix(in oklch, var(--primary) 85%, white 15%);
+  --waiting: color-mix(in oklch, var(--muted-foreground) 85%, white 15%);
+  --settled: color-mix(in oklch, var(--muted-foreground) 90%, white 10%);
+  --done: color-mix(in oklch, var(--success) 85%, white 15%);
+  --error: color-mix(in oklch, var(--destructive) 85%, white 15%);
+}
+
+/* A. Smooth crossfade — 380ms ease-in-out on background/box-shadow/opacity. */
+
+.sdv2-vA .t3team-aci-cell[data-t3team-state="thinking"] {
+  --s: var(--thinking);
+}
+.sdv2-vA .t3team-aci-cell[data-t3team-state="writing"] {
+  --s: var(--writing);
+}
+.sdv2-vA .t3team-aci-cell[data-t3team-state="working"] {
+  --s: var(--working);
+}
+.sdv2-vA .t3team-aci-cell[data-t3team-state="waiting"] {
+  --s: var(--waiting);
+}
+.sdv2-vA .t3team-aci-cell:not([data-t3team-state]),
+.sdv2-vA .t3team-aci-cell[data-t3team-state="settled"] {
+  --s: var(--settled);
+}
+.sdv2-vA .t3team-aci-cell[data-t3team-state="done"] {
+  --s: var(--done);
+}
+.sdv2-vA .t3team-aci-cell[data-t3team-state="error"] {
+  --s: var(--error);
+}
+.sdv2-vA .sdv2-row .t3team-aci-cell .t3team-aci-dot {
+  background-color: var(--s);
+  box-shadow: 0 0 5px 0 color-mix(in oklch, var(--s) 38%, transparent);
+  transition:
+    background-color 380ms ease-in-out,
+    box-shadow 380ms ease-in-out,
+    opacity 380ms ease-in-out;
+}
+.sdv2-vA .sdv2-row .t3team-aci-cell[data-t3team-state="waiting"] > span::before {
+  border-color: var(--s);
+  box-shadow: 0 0 5px 1px color-mix(in oklch, var(--s) 30%, transparent);
+  transition:
+    border-color 380ms ease-in-out,
+    box-shadow 380ms ease-in-out;
+}
+
+/* B. Soft-glow blend — A's paint + a two-layer halo that blends on the same
+   380ms ease-in-out; the waiting ring widens its glow. */
+.sdv2-vB .sdv2-row .t3team-aci-cell .t3team-aci-dot {
+  box-shadow:
+    0 0 6px 1px color-mix(in oklch, var(--s) 48%, transparent),
+    0 0 16px 6px color-mix(in oklch, var(--s) 20%, transparent);
+}
+.sdv2-vB .sdv2-row .t3team-aci-cell[data-t3team-state="waiting"] > span::before {
+  box-shadow: 0 0 6px 1px color-mix(in oklch, var(--s) 30%, transparent);
+}

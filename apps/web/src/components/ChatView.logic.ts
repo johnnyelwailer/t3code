@@ -1,9 +1,13 @@
 import {
+  type AssetCreateUrlInput,
+  type AssetCreateUrlResult,
+  type ChatFileAttachment,
   type EnvironmentId,
   isProviderDriverKind,
   ProjectId,
   type MessageId,
   type ModelSelection,
+  type ProviderInteractionMode,
   type ProviderDriverKind,
   type ServerProvider,
   type ScopedProjectRef,
@@ -11,8 +15,29 @@ import {
   type ThreadId,
   type TurnId,
 } from "@t3tools/contracts";
-import { type ChatMessage, type SessionPhase, type Thread, type ThreadShell } from "../types";
-import { type ComposerAttachment, type DraftThreadState } from "../composerDraftStore";
+import {
+  type ChatMessage,
+  isImageAttachment,
+  type SessionPhase,
+  type Thread,
+  type ThreadShell,
+} from "../types";
+import {
+  type ComposerAttachment,
+  type ComposerImageAttachment,
+  type DraftThreadState,
+} from "../composerDraftStore";
+import { resolveAssetUrl } from "@t3tools/client-runtime/state/assets";
+import {
+  squashAtomCommandFailure,
+  type AtomCommandResult,
+} from "@t3tools/client-runtime/state/runtime";
+import { videoMimeType } from "@t3tools/shared/video";
+import {
+  appendCodexArtifactTemplateUsePrompt,
+  codexArtifactTemplateUsePrompt,
+  type CodexArtifactTemplate,
+} from "@t3tools/client-runtime/codex-artifact-templates";
 import * as Schema from "effect/Schema";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { environmentThreadDetails } from "../state/threads";
@@ -31,6 +56,15 @@ export const MAX_HIDDEN_MOUNTED_PREVIEW_THREADS = 3;
 export const ENVIRONMENT_RECONNECT_WARNING_GRACE_MS = 2_000;
 
 export const LastInvokedScriptByProjectSchema = Schema.Record(ProjectId, Schema.String);
+
+export function codexArtifactTemplatePromptToAppend(
+  currentDraft: string,
+  template: CodexArtifactTemplate,
+): string | null {
+  return appendCodexArtifactTemplateUsePrompt(currentDraft, template) === currentDraft
+    ? null
+    : codexArtifactTemplateUsePrompt(template);
+}
 
 export function shouldDockDraftHeroForSubmission(input: {
   isDraftHeroState: boolean;
@@ -69,6 +103,22 @@ export function shouldReleaseTimelineAnchorForToolActivity(input: {
   });
 }
 
+export function toolGroupConsumesUpwardNavigation(target: EventTarget | null): boolean {
+  const elementTarget = target instanceof Element ? target : null;
+  const group = elementTarget?.closest<HTMLElement>("[data-tool-group-scroll]");
+  if (!group) return false;
+
+  // A nested result or the group itself can consume an upward scroll.
+  for (let element = elementTarget; element; element = element.parentElement) {
+    if (element.scrollTop > 0) {
+      const overflowY = getComputedStyle(element).overflowY;
+      if (overflowY === "auto" || overflowY === "scroll") return true;
+    }
+    if (element === group) break;
+  }
+  return false;
+}
+
 export function resolveDraftHeroState(input: {
   isLocalDraftThread: boolean;
   hasTimelineEntries: boolean;
@@ -89,13 +139,19 @@ export function resolveDraftHeroState(input: {
 
 export function resolveDraftPromotionNavigationTarget(input: {
   serverThreadRef: ScopedThreadRef | null;
-  serverThreadStarted: boolean;
+  serverThread: Pick<Thread, "latestTurn" | "session"> | null | undefined;
   backgroundSubmissionPending: boolean;
 }): ScopedThreadRef | null {
   if (input.backgroundSubmissionPending) {
     return null;
   }
-  return input.serverThreadStarted ? input.serverThreadRef : null;
+  const sessionStatus = input.serverThread?.session?.status;
+  const turnStarted = input.serverThread?.latestTurn?.startedAt != null;
+  const startupStopped =
+    sessionStatus === "error" || sessionStatus === "stopped" || sessionStatus === "interrupted";
+  // Keep local preparation feedback mounted until the server can render the
+  // running turn or its startup error on the canonical thread route.
+  return turnStarted || startupStopped ? input.serverThreadRef : null;
 }
 
 export function scheduleEnvironmentReconnectWarning(showWarning: () => void): () => void {
@@ -277,12 +333,49 @@ export function revokeBlobPreviewUrl(previewUrl: string | undefined): void {
   URL.revokeObjectURL(previewUrl);
 }
 
+/** Signs an attachment URL without reading its bytes, so video playback can request byte ranges. */
+export async function resolveFileAttachmentUrl(input: {
+  attachment: ChatFileAttachment;
+  environmentId: EnvironmentId;
+  httpBaseUrl: string;
+  createAssetUrl: (input: {
+    environmentId: EnvironmentId;
+    input: AssetCreateUrlInput;
+  }) => Promise<AtomCommandResult<AssetCreateUrlResult, unknown>>;
+}): Promise<string> {
+  const { attachment } = input;
+  const result = await input.createAssetUrl({
+    environmentId: input.environmentId,
+    input: {
+      resource: {
+        _tag: "attachment",
+        attachmentId: attachment.id,
+        fileName: attachment.name,
+        mimeType: videoMimeType(attachment) ?? attachment.mimeType,
+      },
+    },
+  });
+  if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+  const url = resolveAssetUrl(input.httpBaseUrl, result.value.relativeUrl);
+  if (url === null) throw new Error("The environment returned an invalid attachment URL.");
+  return url;
+}
+
+export function isVideoPreviewRequestCurrent(
+  requestThreadKey: string,
+  currentThreadKey: string,
+  requestId: number,
+  currentRequestId: number,
+): boolean {
+  return requestThreadKey === currentThreadKey && requestId === currentRequestId;
+}
+
 export function revokeUserMessagePreviewUrls(message: ChatMessage): void {
   if (message.role !== "user" || !message.attachments) {
     return;
   }
   for (const attachment of message.attachments) {
-    if (attachment.type !== "image") {
+    if (!isImageAttachment(attachment)) {
       continue;
     }
     revokeBlobPreviewUrl(attachment.previewUrl);
@@ -295,7 +388,7 @@ export function collectUserMessageBlobPreviewUrls(message: ChatMessage): string[
   }
   const previewUrls: string[] = [];
   for (const attachment of message.attachments) {
-    if (attachment.type !== "image") continue;
+    if (!isImageAttachment(attachment)) continue;
     if (!attachment.previewUrl || !attachment.previewUrl.startsWith("blob:")) continue;
     previewUrls.push(attachment.previewUrl);
   }
@@ -349,7 +442,9 @@ export function resolveBackgroundDraftWorkspaceOptions(input: {
   };
 }
 
-export function cloneComposerImageForRetry(image: ComposerAttachment): ComposerAttachment {
+export function cloneComposerImageForRetry(
+  image: ComposerImageAttachment,
+): ComposerImageAttachment {
   if (typeof URL === "undefined" || !image.previewUrl.startsWith("blob:")) {
     return image;
   }
@@ -440,6 +535,22 @@ export function shouldShowBranchMismatchBanner(input: {
     return false;
   }
   return input.composerHasContent || input.wasShownForCurrentMismatch;
+}
+
+export function shouldShowPlanFollowUpPrompt(input: {
+  pendingUserInputCount: number;
+  interactionMode: ProviderInteractionMode;
+  latestTurnSettled: boolean;
+  hasActionableProposedPlan: boolean;
+  hasComposerAttachments: boolean;
+}): boolean {
+  return (
+    input.pendingUserInputCount === 0 &&
+    input.interactionMode === "plan" &&
+    input.latestTurnSettled &&
+    input.hasActionableProposedPlan &&
+    !input.hasComposerAttachments
+  );
 }
 
 // Session-scoped (module-level so it survives ChatView remounts, e.g. route
@@ -667,4 +778,79 @@ export function hasServerAcknowledgedLocalDispatch(input: {
     input.localDispatch.sessionStatus !== (session?.status ?? null) ||
     input.localDispatch.sessionUpdatedAt !== (session?.updatedAt ?? null)
   );
+}
+
+/**
+ * Stuck-busy backstop window (GHE #301). A local dispatch the server never
+ * acknowledged (no turn change, no session status/updatedAt edge, no pending
+ * approval or input, no thread error) is stuck until a thread re-mount
+ * re-derives it — the send button spins and Enter stays blocked until then.
+ * This happens when a turn dies on the provider side and no terminal event
+ * ever lands: the acknowledgement above is a pure state comparison with no
+ * time-based release, so dead ends stay dead forever. If NONE of the
+ * server-visible fields this dispatch watches has changed for this long,
+ * treat the dispatch as dead and clear the busy state. The window is
+ * deliberately longer than every legitimate "no server activity" stretch
+ * before a turn starts: session adoption has its own 2-minute grace
+ * (QUEUED_TURN_START_GRACE_MS in client-runtime threadSettled.ts), and
+ * provider start + gateway handshake is seconds on top of that. A
+ * genuinely running turn is unaffected: once the provider is alive, the
+ * composer stays blocked by the running session phase (and the stop
+ * button), not by this flag.
+ */
+export const LOCAL_DISPATCH_STUCK_BACKSTOP_MS = 5 * 60 * 1_000;
+
+/**
+ * True when a still-unacknowledged local dispatch should be abandoned:
+ * the dispatch is not in local worktree preparation, no approval/input
+ * request or thread error is pending (those clear the busy state on their
+ * own), and no server-visible activity the dispatch watches has been seen
+ * for LOCAL_DISPATCH_STUCK_BACKSTOP_MS. The send itself floors the window:
+ * even a server that emits no timestamps at all cannot hold the busy state
+ * past the backstop.
+ */
+export function hasLocalDispatchGoneStuck(input: {
+  localDispatch: LocalDispatchSnapshot | null;
+  latestTurn: Thread["latestTurn"] | null;
+  latestUserMessageCreatedAt: string | null;
+  session: Thread["session"] | null;
+  hasPendingApproval: boolean;
+  hasPendingUserInput: boolean;
+  threadError: string | null | undefined;
+  preparingWorktree: boolean;
+  now: string;
+}): boolean {
+  const localDispatch = input.localDispatch;
+  if (!localDispatch) {
+    return false;
+  }
+  if (input.preparingWorktree) {
+    // Local worktree preparation legitimately produces no server activity
+    // (and can run for minutes): do not time it out from here.
+    return false;
+  }
+  if (input.hasPendingApproval || input.hasPendingUserInput || Boolean(input.threadError)) {
+    return false;
+  }
+  const nowMs = Date.parse(input.now);
+  const startedMs = Date.parse(localDispatch.startedAt);
+  if (!Number.isFinite(nowMs) || !Number.isFinite(startedMs)) {
+    // Never abandon on unparseable clocks.
+    return false;
+  }
+  let lastActivityMs = startedMs;
+  for (const candidate of [
+    input.session?.updatedAt ?? null,
+    input.latestTurn?.requestedAt ?? null,
+    input.latestTurn?.startedAt ?? null,
+    input.latestTurn?.completedAt ?? null,
+    input.latestUserMessageCreatedAt,
+  ]) {
+    if (candidate === null || candidate === undefined) continue;
+    const timestamp = Date.parse(candidate);
+    if (Number.isFinite(timestamp) && timestamp > lastActivityMs) {
+      lastActivityMs = timestamp;
+    }
+  }
+  return nowMs - lastActivityMs >= LOCAL_DISPATCH_STUCK_BACKSTOP_MS;
 }

@@ -22,6 +22,7 @@ export {
   TargetMissingError,
   TimeoutError,
   WorkflowError,
+  WorkflowInputDecodeError,
   WorkflowLoadError,
   WorkflowRunNotFoundError,
 } from "./t3team-sdk.errors.ts";
@@ -89,6 +90,7 @@ export {
   withBodyApi,
   workflow,
 } from "./t3team-sdk.engineApi.ts";
+export { emit } from "./t3team-sdk.emit.ts";
 export { deriveWorkflowShape } from "./t3team-sdk.workflowShape.ts";
 export { extractMeta, prepareWorkflow } from "./t3team-sdk.loader.ts";
 // Load-time static audits (Epic 25 phase 25.5): determinism + capability, before any run.
@@ -108,6 +110,7 @@ export type {
 } from "./t3team-sdk.broker.ts";
 export type { BuiltinToolsTree } from "./t3team-sdk.builtins.ts";
 export type {
+  AbortedResult,
   DurableWorkflowRuntime,
   StartWorkflowOptions,
   SuspendedResult,

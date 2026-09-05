@@ -1,6 +1,6 @@
 import * as Schema from "effect/Schema";
 
-import type { WorkflowVersionPolicy } from "@runbook/core/engine";
+import type { WorkflowVersionPolicy } from "@runbook/core/engineTypes";
 
 import type { ToolRef as GenericToolRef } from "@runbook/tools";
 import type { ScriptRef as GenericScriptRef } from "@runbook/scripts";
@@ -81,6 +81,7 @@ export interface T3TeamToolHandlerClient {
     readonly workflowPath?: string;
     readonly args?: unknown;
     readonly intent: WorkflowRunIntent;
+    readonly replaceRunId?: string;
   }) => Promise<unknown>;
   /** Dispatch a broker-owned host tool by id. Present only on a thread-bound run; the HOST decides
    * which ids it will accept, so this is a transport, not a widening of the tool surface. */
@@ -172,6 +173,15 @@ export interface WorkflowRunOptions {
   readonly budget?: number;
   readonly onPhase?: (title: string) => void;
   readonly onLog?: (message: string) => void;
+  /**
+   * Live observation of a `parallel()`/`pipeline()` branch that rejected — see
+   * `@runbook/core/composition`'s `CompositionBranchFailure`. The branch itself still resolves
+   * to `null` for the body regardless of whether this is wired; it exists purely so a host can
+   * make an otherwise-silent swallowed rejection visible (e.g. as a failed step activity).
+   */
+  readonly onCompositionBranchFailed?: (
+    failure: import("@runbook/core/composition").CompositionBranchFailure,
+  ) => void | Promise<void>;
   // Thread-model wiring: thread verbs fire through `broker` into the host. `launchThreadId` is
   // the chat the user launched from (the `thread` global binds to it; absent → headless).
   // `defaultModel` backs agent/askAgent calls that omit a per-call model.
@@ -184,4 +194,15 @@ export interface WorkflowRunOptions {
   /** Host fairness hooks around live tool/script primitives. Replayed entries do not call them. */
   readonly beforePrimitive?: () => Promise<boolean>;
   readonly afterPrimitive?: () => void;
+  /**
+   * Live lifecycle observations (see `@runbook/core/events`): the engine emits the run-level
+   * events and the durable runtime emits `primitive.started`/`primitive.completed` into this sink.
+   */
+  readonly events?: import("@runbook/core/events").WorkflowEventSink;
+  /**
+   * First-class abort: checked by the engine before the body starts and handed to the body
+   * executor; a host broker that observes it throws `WorkflowAborted` to settle the run as
+   * aborted rather than failed.
+   */
+  readonly abortSignal?: AbortSignal;
 }

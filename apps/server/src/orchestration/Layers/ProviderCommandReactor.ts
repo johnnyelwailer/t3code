@@ -13,17 +13,20 @@ import {
   type RuntimeMode,
   type TurnId,
 } from "@t3tools/contracts";
+import { assistantCitationsToPlainText } from "@t3tools/shared/assistantCitations";
 import { isTemporaryWorktreeBranch, WORKTREE_BRANCH_PREFIX } from "@t3tools/shared/git";
 
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
+import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Schedule from "effect/Schedule";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
@@ -91,7 +94,8 @@ type ProviderIntentEvent = Extract<
       | "thread.turn-interrupt-requested"
       | "thread.approval-response-requested"
       | "thread.user-input-response-requested"
-      | "thread.session-stop-requested";
+      | "thread.session-stop-requested"
+      | "thread.settled";
   }
 >;
 
@@ -137,13 +141,26 @@ type ThreadTitleMessage = {
   readonly attachments?: ReadonlyArray<ChatAttachment> | undefined;
 };
 
-function formatThreadTitleSection(message: ThreadTitleMessage): string | undefined {
-  // Neither system prompts nor actor-to-actor coordination messages are user-facing prose,
-  // so neither should steer a generated thread title.
+/**
+ * Section formatting for a title-generation context. GHE #308: thread titles
+ * are generated from the agent's own work only, so the thread-title path passes
+ * `includeUser: false` and user prose can never steer a title. The fork
+ * transcript bootstrap keeps the full conversation (`includeUser: true`) because
+ * a child agent needs the user's original instructions.
+ */
+function formatThreadMessageSection(
+  message: ThreadTitleMessage,
+  includeUser: boolean,
+): string | undefined {
+  // Neither system prompts nor actor-to-actor coordination messages are user-facing
+  // prose, so neither should steer a generated title or a fork transcript.
   if (message.role === "system" || message.role === "actor") {
     return undefined;
   }
-  const text = message.text.trim();
+  if (!includeUser && message.role === "user") {
+    return undefined;
+  }
+  const text = assistantCitationsToPlainText(message.text).trim();
   const attachmentSummary = (message.attachments ?? [])
     .map((attachment) => attachment.name)
     .join(", ");
@@ -167,6 +184,7 @@ function limitFirstUserSection(section: string): string {
 function collectRecentThreadTitleContext(
   messages: ReadonlyArray<ThreadTitleMessage>,
   maxChars: number,
+  includeUser: boolean,
 ): {
   readonly context: string;
   readonly attachments: ReadonlyArray<ChatAttachment>;
@@ -177,7 +195,7 @@ function collectRecentThreadTitleContext(
   const retainedAttachments: Array<ChatAttachment> = [];
 
   for (const message of messages.toReversed()) {
-    const section = formatThreadTitleSection(message);
+    const section = formatThreadMessageSection(message, includeUser);
     if (section === undefined) {
       continue;
     }
@@ -203,7 +221,30 @@ function formatThreadTitleContext(messages: ReadonlyArray<ThreadTitleMessage>): 
   readonly message: string;
   readonly attachments: ReadonlyArray<ChatAttachment>;
 } {
-  const recent = collectRecentThreadTitleContext(messages, MAX_THREAD_TITLE_CONTEXT_CHARS);
+  // Agent-side content only: when the context does not fit the budget, the
+  // oldest sections are simply dropped behind the truncation marker — user
+  // messages are never pinned, because user prose must not steer a title.
+  const recent = collectRecentThreadTitleContext(messages, MAX_THREAD_TITLE_CONTEXT_CHARS, false);
+  return {
+    message: recent.truncated
+      ? `${THREAD_TITLE_CONTEXT_TRUNCATION_MARKER}${recent.context}`
+      : recent.context,
+    attachments: recent.attachments.slice(-MAX_REGENERATION_ATTACHMENTS),
+  };
+}
+
+/**
+ * Fork-transcript context: the full conversation (user + assistant), with the
+ * first user message pinned when the budget truncates — a child agent needs
+ * the original instructions even when only recent turns fit. This is the only
+ * remaining caller of the first-user pinning budget; thread titles use
+ * `formatThreadTitleContext` instead (agent-side content only, GHE #308).
+ */
+function formatForkTranscriptContext(messages: ReadonlyArray<ThreadTitleMessage>): {
+  readonly message: string;
+  readonly attachments: ReadonlyArray<ChatAttachment>;
+} {
+  const recent = collectRecentThreadTitleContext(messages, MAX_THREAD_TITLE_CONTEXT_CHARS, true);
   if (!recent.truncated) {
     return {
       message: recent.context,
@@ -212,10 +253,10 @@ function formatThreadTitleContext(messages: ReadonlyArray<ThreadTitleMessage>): 
   }
 
   const firstUserMessage = messages.find(
-    (message) => message.role === "user" && formatThreadTitleSection(message),
+    (message) => message.role === "user" && formatThreadMessageSection(message, true),
   );
   const firstUserSection = firstUserMessage
-    ? formatThreadTitleSection(firstUserMessage)
+    ? formatThreadMessageSection(firstUserMessage, true)
     : undefined;
   if (!firstUserMessage || !firstUserSection) {
     return {
@@ -230,7 +271,7 @@ function formatThreadTitleContext(messages: ReadonlyArray<ThreadTitleMessage>): 
     pinnedSection.length -
     "\n\n".length -
     THREAD_TITLE_CONTEXT_TRUNCATION_MARKER.length;
-  const retainedRecent = collectRecentThreadTitleContext(messages, recentContextBudget);
+  const retainedRecent = collectRecentThreadTitleContext(messages, recentContextBudget, true);
   const pinnedAttachment = firstUserMessage.attachments?.[0];
   const recentAttachments = retainedRecent.attachments.filter(
     (attachment) => attachment.id !== pinnedAttachment?.id,
@@ -259,7 +300,7 @@ function buildForkTranscriptBootstrapInput(input: {
     historyCandidates.splice(index, 1);
     break;
   }
-  const history = formatThreadTitleContext(historyCandidates).message.trim();
+  const history = formatForkTranscriptContext(historyCandidates).message.trim();
   if (history.length === 0) {
     return input.latestUserInput;
   }
@@ -535,7 +576,7 @@ const make = Effect.gen(function* () {
 
   const resolveThread = Effect.fnUntraced(function* (threadId: ThreadId) {
     return yield* projectionSnapshotQuery
-      .getThreadDetailById(threadId)
+      .getThreadDetailById(threadId, { activityKinds: [] })
       .pipe(Effect.map(Option.getOrUndefined));
   });
 
@@ -723,21 +764,28 @@ const make = Effect.gen(function* () {
       thread,
       projects: project ? [project] : [],
     });
+    const refreshWorkspaceSnapshot = effectiveCwd
+      ? providerRegistry
+          .refreshWorkspaceSnapshot({ instanceId: desiredInstanceId, cwd: effectiveCwd })
+          .pipe(Effect.forkDetach)
+      : Effect.void;
 
     const startProviderSession = (input?: {
       readonly resumeCursor?: unknown;
       readonly provider?: ProviderDriverKind;
     }) =>
-      providerService.startSession(threadId, {
-        threadId,
-        ...(preferredProvider ? { provider: preferredProvider } : {}),
-        providerInstanceId: desiredInstanceId,
-        ...(effectiveCwd ? { cwd: effectiveCwd } : {}),
-        ...(thread.title ? { title: thread.title } : {}),
-        modelSelection: desiredModelSelection,
-        ...(input?.resumeCursor !== undefined ? { resumeCursor: input.resumeCursor } : {}),
-        runtimeMode: desiredRuntimeMode,
-      });
+      providerService
+        .startSession(threadId, {
+          threadId,
+          ...(preferredProvider ? { provider: preferredProvider } : {}),
+          providerInstanceId: desiredInstanceId,
+          ...(effectiveCwd ? { cwd: effectiveCwd } : {}),
+          ...(thread.title ? { title: thread.title } : {}),
+          modelSelection: desiredModelSelection,
+          ...(input?.resumeCursor !== undefined ? { resumeCursor: input.resumeCursor } : {}),
+          runtimeMode: desiredRuntimeMode,
+        })
+        .pipe(Effect.tap(() => refreshWorkspaceSnapshot));
 
     const bindSessionToThread = (session: ProviderSession) =>
       Effect.gen(function* () {
@@ -795,6 +843,7 @@ const make = Effect.gen(function* () {
         !shouldRestartForModelChange &&
         !shouldRestartForModelSelectionChange
       ) {
+        yield* refreshWorkspaceSnapshot;
         return existingSessionThreadId;
       }
 
@@ -1005,12 +1054,19 @@ const make = Effect.gen(function* () {
           thread.modelSelection,
         );
 
-        const generated = yield* textGeneration.generateThreadTitle({
-          cwd: input.cwd,
-          message: input.messageText,
-          ...(attachments.length > 0 ? { attachments } : {}),
-          modelSelection,
-        });
+        const generated = yield* textGeneration
+          .generateThreadTitle({
+            cwd: input.cwd,
+            message: input.messageText,
+            ...(attachments.length > 0 ? { attachments } : {}),
+            modelSelection,
+          })
+          .pipe(
+            Effect.retry({
+              times: 2,
+              schedule: Schedule.exponential("2 seconds"),
+            }),
+          );
         if (!generated) return;
 
         const latestThread = yield* resolveThread(input.threadId);
@@ -1253,7 +1309,9 @@ const make = Effect.gen(function* () {
           projects: project ? [project] : [],
         }) ?? process.cwd();
       const generationInput = {
-        messageText: message.t3teamExt?.displayText?.trim() || message.text,
+        messageText: assistantCitationsToPlainText(
+          message.t3teamExt?.displayText?.trim() || message.text,
+        ),
         ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
         ...(event.payload.titleSeed !== undefined ? { titleSeed: event.payload.titleSeed } : {}),
       };
@@ -1435,9 +1493,67 @@ const make = Effect.gen(function* () {
     // session, settles it with the failure detail, and records a failure
     // activity — covering the "adapter session gone after restart" case the
     // fork fix targeted, without clobbering lastError on the success path.
+    // Pass the turn id through so a pack whose in-memory session is gone
+    // (restart, reaped instance) can still emit a turn.aborted targeted at
+    // the host's active turn — without it the pack's fallback branch is
+    // dead code and the interrupt is a silent no-op that leaves the thread
+    // session "running" forever (residual stuck-stop, GHE #256 family).
     yield* providerService
-      .interruptTurn({ threadId: event.payload.threadId })
+      .interruptTurn({
+        threadId: event.payload.threadId,
+        ...(event.payload.turnId !== undefined ? { turnId: event.payload.turnId } : {}),
+      })
       .pipe(Effect.catchCause(recoverInterruptFailure));
+
+    // Residual stuck-stop backstop: the interrupt above asks the provider to
+    // abort the turn and the provider is expected to settle it with a
+    // terminal event (turn.aborted / turn.completed) that
+    // ProviderRuntimeIngestion applies. If that event never arrives — the
+    // provider lost its in-memory session, a run that ignored the abort
+    // signal, a broken event stream — the thread must not sit "running"
+    // with a Stop button that does nothing: force-settle the session once
+    // the exact turn we asked to stop is still active after the grace
+    // window. (The provider emits turn.aborted synchronously during the
+    // interrupt, so this only fires when the terminal event was lost.)
+    yield* Effect.sleep(Duration.seconds(30)).pipe(
+      Effect.andThen(
+        Effect.gen(function* () {
+          const latest = yield* resolveThread(event.payload.threadId);
+          const session = latest?.session;
+          if (
+            session?.status !== "running" ||
+            session.activeTurnId === null ||
+            (event.payload.turnId !== undefined && session.activeTurnId !== event.payload.turnId)
+          ) {
+            return; // settled by the provider, or a different turn is now active
+          }
+          yield* Effect.logWarning("provider.turn.interrupt-no-terminal-event", {
+            threadId: event.payload.threadId,
+            turnId: event.payload.turnId ?? null,
+            graceSeconds: 30,
+          });
+          const nowIso = DateTime.formatIso(yield* DateTime.now);
+          yield* setThreadSession({
+            threadId: event.payload.threadId,
+            session: {
+              ...session,
+              status: "ready",
+              activeTurnId: null,
+              updatedAt: nowIso,
+            },
+            createdAt: nowIso,
+          });
+        }).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning("provider.turn.interrupt-backstop-failed", {
+              threadId: event.payload.threadId,
+              cause: Cause.pretty(cause),
+            }),
+          ),
+        ),
+      ),
+      Effect.forkScoped,
+    );
   });
 
   const processApprovalResponseRequested = Effect.fn("processApprovalResponseRequested")(function* (
@@ -1602,6 +1718,32 @@ const make = Effect.gen(function* () {
       case "thread.session-stop-requested":
         yield* processSessionStopRequested(event);
         return;
+      case "thread.settled": {
+        // Only a user-initiated settle tears the provider session down. Automated
+        // settles (`server:auto-settle`, the t3team child-settle sweeper) are
+        // bookkeeping, and on 0.0.42 startup they stopped 12 live sessions across
+        // 133 threads at once (nexi-distribution#396). `server:` is the
+        // command-id convention the event store uses for actor kind "server".
+        if (event.commandId !== null && event.commandId.startsWith("server:")) {
+          return;
+        }
+        const thread = yield* projectionSnapshotQuery.getThreadShellById(event.payload.threadId);
+        if (
+          Option.isNone(thread) ||
+          thread.value.session == null ||
+          thread.value.session.status === "stopped"
+        ) {
+          return;
+        }
+        yield* orchestrationEngine.dispatch({
+          type: "thread.session.stop",
+          commandId: CommandId.make(`session-stop-for-settle:${event.commandId ?? event.eventId}`),
+          threadId: event.payload.threadId,
+          createdAt: event.occurredAt,
+          onlyIfSettled: true,
+        });
+        return;
+      }
     }
   });
 
@@ -1640,13 +1782,16 @@ const make = Effect.gen(function* () {
         event.type === "thread.turn-interrupt-requested" ||
         event.type === "thread.approval-response-requested" ||
         event.type === "thread.user-input-response-requested" ||
-        event.type === "thread.session-stop-requested"
+        event.type === "thread.session-stop-requested" ||
+        event.type === "thread.settled"
       ) {
         return yield* worker.enqueue(event);
       }
     });
 
-    yield* forkParked(Stream.runForEach(orchestrationEngine.streamDomainEvents, processEvent));
+    // Subscribe before returning, even while event handling waits for server activation.
+    const domainEvents = yield* orchestrationEngine.subscribeDomainEvents;
+    yield* forkParked(Stream.runForEach(domainEvents, processEvent));
 
     // The domain event stream is hot, so work pending before this reactor
     // starts cannot be resumed. Correlated completions only clear the request

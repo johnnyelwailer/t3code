@@ -1,7 +1,7 @@
 import * as NodeOS from "node:os";
 import { assert, it } from "vite-plus/test";
 
-import { hydratePosixHome } from "./os-jank.ts";
+import { hydratePosixHome, hydratePosixPath } from "./os-jank.ts";
 
 it("hydrates HOME for minimal service environments from the user account", () => {
   const env: NodeJS.ProcessEnv = {};
@@ -37,4 +37,65 @@ it("preserves an explicitly configured HOME", () => {
   });
 
   assert.equal(env.HOME, "/custom/home");
+});
+
+it("appends existing per-user CLI directories without changing inherited precedence", () => {
+  const env: NodeJS.ProcessEnv = {
+    HOME: "/Users/test",
+    PATH: "/usr/bin:/bin",
+    SHELL: "/bin/test-shell",
+  };
+
+  hydratePosixPath(env, "darwin", {
+    readLoginShellPath: () => "/opt/homebrew/bin:/usr/bin",
+    isDirectory: (path) => path === "/Users/test/.local/bin",
+  });
+
+  assert.equal(env.PATH, "/opt/homebrew/bin:/usr/bin:/bin:/Users/test/.local/bin");
+});
+
+it("uses configured tool homes and ignores missing directories", () => {
+  const env: NodeJS.ProcessEnv = {
+    HOME: "/Users/test",
+    PATH: "/usr/bin",
+    SHELL: "/bin/test-shell",
+    BUN_INSTALL: "/opt/bun",
+    PNPM_HOME: "/opt/pnpm",
+  };
+
+  hydratePosixPath(env, "linux", {
+    readLoginShellPath: () => undefined,
+    isDirectory: (path) => path === "/opt/bun/bin" || path === "/opt/pnpm",
+  });
+
+  assert.equal(env.PATH, "/usr/bin:/opt/bun/bin:/opt/pnpm");
+});
+
+it("keeps configured tool homes when HOME is unavailable", () => {
+  const env: NodeJS.ProcessEnv = {
+    PATH: "/usr/bin",
+    BUN_INSTALL: "/opt/bun",
+  };
+
+  hydratePosixPath(env, "linux", {
+    readLoginShellPath: () => undefined,
+    isDirectory: (path) => path === "/opt/bun/bin",
+  });
+
+  assert.equal(env.PATH, "/usr/bin:/opt/bun/bin");
+});
+
+it("rejects relative environment roots", () => {
+  const env: NodeJS.ProcessEnv = {
+    HOME: ".",
+    PATH: "/usr/bin",
+    BUN_INSTALL: "tools",
+  };
+
+  hydratePosixPath(env, "linux", {
+    readLoginShellPath: () => undefined,
+    isDirectory: () => true,
+  });
+
+  assert.equal(env.PATH, "/usr/bin");
 });

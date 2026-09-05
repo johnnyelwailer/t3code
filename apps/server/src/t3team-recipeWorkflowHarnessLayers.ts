@@ -47,7 +47,18 @@ export function makeT3TeamRecipeHarnessEngineLayer(prefix: string) {
   return Layer.mergeAll(
     engine,
     T3TeamWorkflowEngineRegistryLive,
-    WorkflowRunRepositoryLive.pipe(Layer.provideMerge(persistence)),
+    // The resume reactor additionally reads the projected thread detail (the re-drive prompt
+    // lookup) and journals re-drive attempts on the run row: both wired to the SAME
+    // in-memory database the engine writes to (the identical `persistence` layer reference
+    // memoizes to one SqlClient), so the reactor sees the engine's projections.
+    OrchestrationProjectionSnapshotQueryLive.pipe(
+      Layer.provide(ThreadBackgroundLiveness.layer),
+      Layer.provide(ThreadPlanProgress.layer),
+      Layer.provide(RepositoryIdentityResolver.layer),
+      Layer.provideMerge(persistence),
+      Layer.provideMerge(nodeLayer),
+    ),
+    WorkflowRunRepositoryLive.pipe(Layer.provideMerge(persistence), Layer.provideMerge(nodeLayer)),
     WorkflowJournalStoreLive.pipe(Layer.provideMerge(persistence)),
     WorkspacePaths.layer.pipe(Layer.provide(nodeLayer)),
     persistence,

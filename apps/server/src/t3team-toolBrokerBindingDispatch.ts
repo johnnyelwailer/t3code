@@ -43,6 +43,11 @@ import {
   T3TEAM_WORKFLOW_RESUME_TOOL_ID,
 } from "./t3team-toolBrokerBindingWorkflowResume.ts";
 import type { T3TeamWorkflowResumeToolHandlers } from "./t3team-toolBrokerWorkflowResumeTool.ts";
+import {
+  callT3TeamWorkflowControlTool,
+  isT3TeamWorkflowControlTool,
+} from "./t3team-toolBrokerBindingWorkflowControl.ts";
+import type { T3TeamWorkflowControlToolHandlers } from "./t3team-toolBrokerWorkflowControlTool.ts";
 import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshService.ts";
 import type { T3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
 import { resolveT3TeamCanonicalToolId } from "./t3team-toolBrokerLegacyToolIds.ts";
@@ -65,6 +70,7 @@ export function dispatchT3TeamToolCall(input: {
   workflowRunTools?: T3TeamWorkflowRunToolHandlers;
   workflowStatusTools?: T3TeamWorkflowStatusToolHandlers;
   workflowResumeTools?: T3TeamWorkflowResumeToolHandlers;
+  workflowControlTools?: T3TeamWorkflowControlToolHandlers;
   showWidget?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   searchSourceThread?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   searchThread?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
@@ -73,6 +79,7 @@ export function dispatchT3TeamToolCall(input: {
     toolArgs: unknown,
     callerThreadId: ThreadId,
   ) => Effect.Effect<T3TeamToolCallResult>;
+  readRuntimeModels?: () => Effect.Effect<T3TeamToolCallResult>;
   publishDraft?: T3TeamDraftMutationPublisher;
 }): ReturnType<T3TeamToolBinding["callTool"]> {
   const { server, toolArgs, state } = input;
@@ -126,6 +133,14 @@ export function dispatchT3TeamToolCall(input: {
       ...(input.workflowResumeTools ? { workflowResumeTools: input.workflowResumeTools } : {}),
     });
   }
+  if (isT3TeamWorkflowControlTool(tool)) {
+    return callT3TeamWorkflowControlTool({
+      tool,
+      scopeLabel: input.scopeLabel,
+      toolArgs,
+      ...(input.workflowControlTools ? { workflowControlTools: input.workflowControlTools } : {}),
+    });
+  }
   if (tool === "t3team.thread.start_child") {
     if (!input.startChild) {
       return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${input.scopeLabel}.`));
@@ -177,6 +192,12 @@ export function dispatchT3TeamToolCall(input: {
       return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${input.scopeLabel}.`));
     }
     return input.manageChildren(toolArgs, input.threadId);
+  }
+  if (tool === "t3team.runtime.models") {
+    if (!input.readRuntimeModels) {
+      return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${input.scopeLabel}.`));
+    }
+    return input.readRuntimeModels();
   }
   if (isT3TeamDraftMutationTool(tool)) {
     return callT3TeamDraftMutationToolEffect({

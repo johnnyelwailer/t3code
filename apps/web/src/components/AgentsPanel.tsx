@@ -33,34 +33,31 @@ import { cn } from "~/lib/utils";
 import { orchestrationEnvironment } from "~/state/orchestration";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { Button } from "~/components/ui/button";
+import { AgentsPanelStatusDot } from "~/t3team/chat/t3team-agentsPanelStatusDot";
 
 /**
- * In-flight states all present as Working (one steady state, per the
- * monitoring-pill design: detail belongs in the activity sub-line, and a
- * stalled/waiting/queued subagent is still the fleet doing its job, not a
- * user problem). Only settled states differentiate.
+ * In-flight states all read "Working" in the text slot (one steady state, per
+ * the monitoring-pill design: detail belongs in the activity sub-line, and a
+ * stalled/waiting/queued subagent is still the fleet doing its job, not a user
+ * problem). The DOT itself carries far more nuance than the label: each
+ * sub-run dot reuses the state-motion language (GHE #201 follow-up) and animates
+ * per its OWN runtime status — a running member pulses warm, a waiting one
+ * breathes + rings, a pending one waves cool, and a settled one reads a still
+ * result (done = green, error = red). Only the human-facing label stays coarse;
+ * the motion is the fine signal.
  */
-const STATUS_VISUALS: Record<RuntimeSubagent["status"], { dotClass: string; label: string }> = {
-  pending: { dotClass: "bg-info", label: "Working" },
-  running: { dotClass: "bg-info", label: "Working" },
-  waiting: { dotClass: "bg-info", label: "Working" },
+const STATUS_LABEL: Record<RuntimeSubagent["status"], string> = {
+  pending: "Working",
+  running: "Working",
+  waiting: "Working",
   // Idle reads as settled (muted, not sky): a resting Codex child looks done
   // unless resumed — live-test: sky idle dots read as stuck in-progress.
-  idle: { dotClass: "bg-muted-foreground/50", label: "Idle · resumable" },
-  completed: { dotClass: "bg-success", label: "Completed" },
-  failed: { dotClass: "bg-destructive", label: "Failed" },
-  cancelled: { dotClass: "bg-muted-foreground/60", label: "Stopped" },
-  interrupted: { dotClass: "bg-muted-foreground/60", label: "Stopped" },
+  idle: "Idle · resumable",
+  completed: "Completed",
+  failed: "Failed",
+  cancelled: "Stopped",
+  interrupted: "Stopped",
 };
-
-function StatusDot({ status }: { status: RuntimeSubagent["status"] }) {
-  return (
-    <span
-      aria-hidden
-      className={cn("size-1.5 shrink-0 rounded-full", STATUS_VISUALS[status].dotClass)}
-    />
-  );
-}
 
 function formatElapsedSeconds(totalSeconds: number): string {
   const seconds = Math.max(0, Math.floor(totalSeconds));
@@ -142,8 +139,8 @@ function agentActivityText(agent: RuntimeSubagent): string | null {
 }
 
 /** Flat, non-interactive agent status line. No unfold. */
-function AgentRow({ agent }: { agent: RuntimeSubagent }) {
-  const visuals = STATUS_VISUALS[agent.status];
+function AgentRow({ agent, index = 0 }: { agent: RuntimeSubagent; index?: number }) {
+  const label = STATUS_LABEL[agent.status];
   const activity = agentActivityText(agent);
   const modelLabel = formatSubagentModelLabel(agent.model, agent.effort);
   const role =
@@ -158,9 +155,9 @@ function AgentRow({ agent }: { agent: RuntimeSubagent }) {
   ].filter((value): value is string => value !== null);
 
   return (
-    <div className="grid h-[3.875rem] grid-cols-[0.375rem_minmax(0,1fr)_auto] grid-rows-[1.25rem_1.125rem_1rem] items-center gap-x-2 rounded-md px-1.5 py-1">
+    <div className="grid h-[3.875rem] grid-cols-[1.25rem_minmax(0,1fr)_auto] grid-rows-[1.25rem_1.125rem_1rem] items-center gap-x-2 rounded-md px-1.5 py-1">
       <span className="col-start-1 row-start-1 flex items-center">
-        <StatusDot status={agent.status} />
+        <AgentsPanelStatusDot agent={agent} index={index} className="size-3" />
       </span>
       <span className="col-start-2 row-start-1 flex min-w-0 items-baseline gap-2">
         <span className="min-w-0 truncate text-sm font-medium">{agent.title}</span>
@@ -184,12 +181,12 @@ function AgentRow({ agent }: { agent: RuntimeSubagent }) {
           agent.status === "failed" ? "text-destructive-foreground" : "text-muted-foreground",
         )}
       >
-        {activity ?? visuals.label}
+        {activity ?? label}
       </span>
       <span className="col-start-2 col-end-4 row-start-3 truncate font-mono text-[.7rem] tabular-nums text-muted-foreground/70">
         {metadata.join(" · ")}
       </span>
-      <span className="sr-only">{visuals.label}</span>
+      <span className="sr-only">{label}</span>
     </div>
   );
 }
@@ -252,7 +249,14 @@ function PhaseRail({ group }: { group: AgentPanelWorkflowGroup }) {
               {phase.members.length === 0 ? (
                 <span className="font-mono text-[.6rem] text-muted-foreground/50">–</span>
               ) : (
-                phase.members.map((member) => <StatusDot key={member.id} status={member.status} />)
+                phase.members.map((member, i) => (
+                  <AgentsPanelStatusDot
+                    key={member.id}
+                    agent={member}
+                    index={i}
+                    className="size-2"
+                  />
+                ))
               )}
             </span>
           </div>
@@ -366,13 +370,15 @@ function PhaseSection({
         </span>
         {!open && phase.members.length > 0 ? (
           <span className="ml-auto flex items-center gap-0.5">
-            {phase.members.map((member) => (
-              <StatusDot key={member.id} status={member.status} />
+            {phase.members.map((member, i) => (
+              <AgentsPanelStatusDot key={member.id} agent={member} index={i} className="size-2" />
             ))}
           </span>
         ) : null}
       </button>
-      {open ? phase.members.map((member) => <AgentRow key={member.id} agent={member} />) : null}
+      {open
+        ? phase.members.map((member, i) => <AgentRow key={member.id} agent={member} index={i} />)
+        : null}
     </div>
   );
 }
@@ -403,7 +409,7 @@ function ExpandedWorkflowSection({
   return (
     <section className="rounded-lg border border-border/50 bg-card/30 p-1.5">
       <div className="flex items-center gap-2 px-1.5 pt-0.5 text-[.65rem] font-medium uppercase tracking-wider text-muted-foreground">
-        <StatusDot status={group.workflow.status} />
+        <AgentsPanelStatusDot agent={group.workflow} ariaLabel="Workflow" className="size-3" />
         <span className="min-w-0 truncate">
           {group.workflow.workflowName ?? group.workflow.title}
         </span>
@@ -444,8 +450,8 @@ function ExpandedWorkflowSection({
       {group.phases.map((phase) => (
         <PhaseSection key={phase.index} phase={phase} defaultOpen={!workflowIsLive(group)} />
       ))}
-      {group.unphasedMembers.map((member) => (
-        <AgentRow key={member.id} agent={member} />
+      {group.unphasedMembers.map((member, i) => (
+        <AgentRow key={member.id} agent={member} index={i} />
       ))}
       {group.phases.length === 0 && group.unphasedMembers.length === 0 ? (
         <AgentRow agent={group.workflow} />
@@ -485,7 +491,11 @@ function CollapsedWorkflowSection({
         className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-accent/40"
         aria-expanded={false}
       >
-        <StatusDot status={failed > 0 ? "failed" : group.workflow.status} />
+        <AgentsPanelStatusDot
+          agent={failed > 0 ? { ...group.workflow, status: "failed" } : group.workflow}
+          ariaLabel="Workflow"
+          className="size-3"
+        />
         <span className="truncate text-sm">
           {group.workflow.workflowName ?? group.workflow.title}
         </span>
@@ -557,7 +567,7 @@ export function AgentsPanel({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="t3team-agp flex h-full min-h-0 flex-col">
       <ScrollArea className="min-h-0 flex-1">
         {model.hasAgents ? (
           <div className="flex flex-col gap-2 p-2">
@@ -574,8 +584,8 @@ export function AgentsPanel({
                 <div className="px-1.5 pt-1 text-[.65rem] font-medium uppercase tracking-wider text-muted-foreground">
                   Direct spawns
                 </div>
-                {model.directAgents.map((agent) => (
-                  <AgentRow key={agent.id} agent={agent} />
+                {model.directAgents.map((agent, i) => (
+                  <AgentRow key={agent.id} agent={agent} index={i} />
                 ))}
               </section>
             ) : null}

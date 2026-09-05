@@ -73,6 +73,12 @@ beforeAll(() => {
 });
 
 describe("MessagesTimeline recipe cards", () => {
+  // The first render pays for importing the whole MessagesTimeline module graph — warm it here so
+  // no single test's 10 s budget absorbs module init when the directory runs concurrently.
+  beforeAll(async () => {
+    await import("~/components/chat/MessagesTimeline");
+  }, 60_000);
+
   it("renders an empty timeline shell", async () => {
     const { MessagesTimeline } = await import("~/components/chat/MessagesTimeline");
     const markup = renderToStaticMarkup(

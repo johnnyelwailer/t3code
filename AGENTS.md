@@ -44,6 +44,18 @@ This repository is a VERY EARLY WIP. Proposing sweeping changes that improve lon
 
 If a tradeoff is required, choose correctness and robustness over short-term convenience.
 
+## Multi-Host Reuse
+
+This code is used across multiple hosts, consumers, and runtime environments, including Nexi Work,
+Nexi Portal, and external automation hosts. Before changing a shared contract, runtime, capability,
+provider, or workflow, check which hosts consume it and preserve their compatibility. Prefer small,
+host-neutral contracts with host-specific adapters over copying concrete implementations. Build new
+features so their behavior, persistence, and failure modes can be reused outside the first surface
+where they are needed. Verify each affected host or explicitly document why a host does not apply.
+For event-driven or recurring behavior, treat the event-source and trigger design in GHE issue #332
+as foundational prior art; reuse its source registration, durable delivery, and resume model rather
+than inventing a parallel trigger mechanism.
+
 ## Maintainability
 
 ### ALWAYS check whether the functionality already exists — before writing it
@@ -249,6 +261,7 @@ An empty database is a bad test. Seed your worktree's `.t3` with a copy of real 
 ## Verifying
 
 - Smallest proof that the change works. `vp test run <files>` for the tests you touched, targeted lint and typecheck for the scope you changed.
+- Test meaningful logic or observable behavior. Do not render components to static markup to assert props or attributes, or add tests that merely assert callback wiring or mirror the implementation.
 - **Do not run repo-wide checks.** No `vp check`, no `vp run -r test`, no `vp run -r typecheck` unless I ask. CI owns the full suite.
 - Backend behavior changes ship with focused tests for that behavior.
 - The server is event-sourced and its async flows emit typed receipts. Wait on receipts and worker drains, never on sleeps or polling. A test that needs a timeout to pass is wrong.

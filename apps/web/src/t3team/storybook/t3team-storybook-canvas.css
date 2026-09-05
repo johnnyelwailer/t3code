@@ -55,12 +55,11 @@ body {
  */
 
 /*
- * Shimmer for LIVE status texts: a soft highlight band sweeps through the
- * glyphs once every cycle, then rests (background-clip: text; the band
- * travels 18%→58% of a 5.5s clock, so the sweep itself takes ~2.2s and
- * stays off-screen the rest of the time). Theme-aware via custom props —
- * light defaults, .dark overrides. The element's own `color` is replaced
- * by the gradient, so set the surrounding text color where needed.
+ * Shimmer for LIVE status texts (mirror of apps/web/src/index.css): a soft
+ * highlight band sweeps through the glyphs once every 5.5s, then rests.
+ * Theme-aware via custom props. Leaf-only + safety net: the class goes on
+ * the element that directly holds the text, and a solid base-color color
+ * fallback covers browsers that cannot clip a background to text.
  */
 @keyframes t3team-label-shimmer {
   0%,
@@ -76,19 +75,25 @@ body {
 .t3team-label-shimmer {
   --shimmer-base: #0369a1; /* sky-700 */
   --shimmer-glow: #7dd3fc; /* sky-300 */
-  background-image: linear-gradient(
-    100deg,
-    var(--shimmer-base) 42%,
-    var(--shimmer-glow) 50%,
-    var(--shimmer-base) 58%
-  );
-  background-size: 250% 100%;
-  background-repeat: no-repeat;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  animation: t3team-label-shimmer 5.5s ease-in-out infinite;
+  color: var(--shimmer-base);
+}
+
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .t3team-label-shimmer {
+    background-image: linear-gradient(
+      100deg,
+      var(--shimmer-base) 42%,
+      var(--shimmer-glow) 50%,
+      var(--shimmer-base) 58%
+    );
+    background-size: 250% 100%;
+    background-repeat: no-repeat;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    animation: t3team-label-shimmer 5.5s ease-in-out infinite;
+  }
 }
 
 .dark .t3team-label-shimmer {

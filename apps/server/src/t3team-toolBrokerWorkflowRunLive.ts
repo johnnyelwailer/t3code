@@ -45,6 +45,9 @@ export const makeWorkflowRunToolsForThread = Effect.fn("makeWorkflowRunToolsForT
     readonly path?: Path.Path | undefined;
     readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
     readonly loadThreadProject: LoadThreadProjectLike;
+    readonly stopRun?:
+      | ((threadId: ThreadId, runId: string) => Effect.Effect<void, string>)
+      | undefined;
   }) {
     const registry = Option.getOrUndefined(
       yield* Effect.serviceOption(T3TeamWorkflowEngineRegistry),
@@ -60,6 +63,7 @@ export const makeWorkflowRunToolsForThread = Effect.fn("makeWorkflowRunToolsForT
       fileSystem: deps.fileSystem,
       path: deps.path,
       loadThreadProject: deps.loadThreadProject,
+      ...(deps.stopRun === undefined ? {} : { stopRun: deps.stopRun }),
       launch: {
         registry,
         runRepository,

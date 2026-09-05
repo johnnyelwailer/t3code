@@ -19,6 +19,7 @@ import {
   resumeWorkflow,
   startWorkflow,
   WorkflowError,
+  WorkflowInputDecodeError,
   WorkflowRunNotFoundError,
 } from "./t3team-sdk.index.ts";
 import { journalFilePath } from "./t3team-sdk.journal.ts";
@@ -116,5 +117,18 @@ describe("durable workflow engine — core", () => {
     expect(error).toBeInstanceOf(WorkflowRunNotFoundError);
     expect((error as WorkflowRunNotFoundError).journalPath).toBe(missingPath);
     expect((error as WorkflowRunNotFoundError).message).toContain(missingPath);
+  });
+
+  it("raises WorkflowInputDecodeError — not a generic error — when launch args fail meta.inputs", async () => {
+    // The workflow SOURCE is fine (twoTools/journalTwoTools declares `inputs: { prId: string }`);
+    // the CALLER omitted `prId`. This must be distinguishable by type, not by message, so a
+    // host-side repair funnel can route it to an ARGS correction instead of rewriting the body.
+    const error = await startWorkflow(twoTools, {}, { runsRoot, tools: demoTools }).catch(
+      (e: unknown) => e,
+    );
+    expect(error).toBeInstanceOf(WorkflowInputDecodeError);
+    expect((error as WorkflowInputDecodeError).message).toContain(
+      "Invalid inputs for workflow 'fixtures.journal-two-tools'",
+    );
   });
 });

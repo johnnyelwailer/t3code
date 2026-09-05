@@ -16,21 +16,21 @@ describe("activity state display (GHE #208)", () => {
     });
   });
 
-  it("state + enrichment renders '{state} · {detail}'", () => {
+  it("the LLM label REPLACES the state word when present (never both)", () => {
     expect(
       resolveActivityPillDisplay({
         label: "Working",
         activityState: "working",
         activityLabel: "editing the retry test",
       }),
-    ).toBe("Working · editing the retry test");
+    ).toBe("editing the retry test");
     expect(
       resolveActivityPillDisplay({
         label: "Working",
         activityState: "thinking",
         activityLabel: "tracing the error",
       }),
-    ).toBe("Thinking · tracing the error");
+    ).toBe("tracing the error");
   });
 
   it("flag off / LLM failure: the state word stands alone", () => {

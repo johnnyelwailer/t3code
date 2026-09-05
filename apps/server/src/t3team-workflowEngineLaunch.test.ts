@@ -196,7 +196,7 @@ describe("launchWorkflowRecipe — real launch path", () => {
       threadId: launchThreadId,
       message: {
         role: "assistant",
-        text: expect.stringContaining("Workflow run failed"),
+        text: expect.stringContaining("The orchestration stopped"),
       },
     });
   });

@@ -6,8 +6,43 @@
  * broken up.
  */
 
+import { formatDuration } from "~/session-logic";
 import type { T3TeamWorkflowStepEntry } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
 import { formatWorkflowStepDue } from "~/t3team/chat/t3team-workflowRunLabels";
+
+/** Below this, a step's duration is noise — a "3ms" tag on every trivial step would bury the
+ * slow step this feature exists to surface. */
+const STEP_DURATION_DISPLAY_THRESHOLD_MS = 1_000;
+
+/** The step's resolved duration, formatted the same way as a turn's "Worked for …" trailing
+ * label (`formatDuration` in `~/session-logic`) — omitted below the noise threshold and when the
+ * server never captured one (see `T3TeamWorkflowStepEntry.durationMs`). */
+export function StepDuration({ step }: { step: T3TeamWorkflowStepEntry | undefined }) {
+  if (step?.durationMs === undefined || step.durationMs < STEP_DURATION_DISPLAY_THRESHOLD_MS) {
+    return null;
+  }
+  return (
+    <span data-step-duration className="shrink-0 text-[11px] text-muted-foreground/70">
+      {formatDuration(step.durationMs)}
+    </span>
+  );
+}
+
+/** The badge for a step row folded from more than one `thread.turn` on the same child thread —
+ * see `t3team-workflowShapeThreadTurnFold.ts`. Makes the repeat VISIBLE rather than silently
+ * collapsing it into something indistinguishable from a single turn. Renders nothing when the
+ * step was not folded (including a genuinely single-turn step). */
+export function TurnCountBadge({ step }: { step: T3TeamWorkflowStepEntry | undefined }) {
+  if (step?.turnCount === undefined) return null;
+  return (
+    <span
+      data-step-turn-count={step.turnCount}
+      className="shrink-0 rounded-full border border-border/55 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground/80"
+    >
+      {step.turnCount} turns
+    </span>
+  );
+}
 
 export function StepDue({
   step,
@@ -49,7 +84,12 @@ export function StepTrailing({
       </span>
     );
   }
-  return <StepDue step={step} wakeAt={wakeAt} />;
+  return (
+    <>
+      <StepDuration step={step} />
+      <StepDue step={step} wakeAt={wakeAt} />
+    </>
+  );
 }
 
 /** An executed step the authored plan has no row for (loop iteration, parallel branch, ...). */

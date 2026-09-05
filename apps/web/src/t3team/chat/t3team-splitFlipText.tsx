@@ -29,7 +29,8 @@ export function SplitFlipText({
   readonly ms?: number;
   /** Return false to swap without the roll. */
   readonly shouldFlip?: (prev: string, next: string) => boolean;
-  readonly className?: string;
+  /** extra class on the leaf span (e.g. the shimmer) — leaf-only by design */
+  readonly className?: string | undefined;
   /** Observes the roll phases ("out" -> swapping, "in" -> new text mounted). */
   readonly onPhaseChange?: (phase: "idle" | "out" | "in") => void;
 }) {

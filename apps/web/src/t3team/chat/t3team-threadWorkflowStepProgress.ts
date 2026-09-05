@@ -31,14 +31,32 @@ export interface T3TeamWorkflowStepEntry {
   readonly error?: string;
   readonly projectId?: string;
   readonly threadId?: string;
+  /** The authored `phase()` group active when this step was sent, stamped by the server — see
+   * `reconcileT3TeamWorkflowShapeProgress`. Absent for older runs / activities. */
+  readonly workflowPhase?: string;
+  /** Milliseconds the step took to resolve, stamped by the server only on its terminal
+   * (completed/failed) activity. Absent for a still-running step, for a post-restart resolve
+   * (the server has no remembered start time), and for older activities — see
+   * `ProjectRecipeWorkflowStepActivityPayload.durationMs`. */
+  readonly durationMs?: number;
+  /** Client-side aggregate, never stamped by the server: how many `thread.turn` activities were
+   * folded into this row because they ran on the SAME child thread, adjacent, with the same
+   * displayed label — see `t3team-workflowShapeThreadTurnFold.ts`. Absent for a step that was not
+   * folded, including a genuinely single-turn step. */
+  readonly turnCount?: number;
 }
 
 export interface T3TeamWorkflowRunProgress {
   readonly runId: string;
   /** Executed step entries in journal-seq order (run-level entry excluded). */
   readonly steps: ReadonlyArray<T3TeamWorkflowStepEntry>;
-  /** The run-level terminal status (stepId `run:<runId>`), when emitted. */
-  readonly run: { readonly phase: ProjectRecipeWorkflowStepPhase; readonly error?: string } | null;
+  /** The run-level terminal status (stepId `run:<runId>`), when emitted. `updatedAt` is when
+   * that status was emitted — for a `paused` run, when it was paused (GHE #403 §2). */
+  readonly run: {
+    readonly phase: ProjectRecipeWorkflowStepPhase;
+    readonly error?: string;
+    readonly updatedAt?: string;
+  } | null;
 }
 
 /** Parse the numeric journal seq from a stepId of the form `<runId>:<seq>`. */
@@ -53,7 +71,7 @@ function parseStepSeq(stepId: string): number | null {
 interface MutableRunProgress {
   runId: string;
   stepsById: Map<string, T3TeamWorkflowStepEntry>;
-  run: { phase: ProjectRecipeWorkflowStepPhase; error?: string } | null;
+  run: { phase: ProjectRecipeWorkflowStepPhase; error?: string; updatedAt?: string } | null;
 }
 
 /** Derive per-run live step progress from a thread's activities. */
@@ -81,6 +99,7 @@ export function deriveT3TeamWorkflowStepRuns(
       run.run = {
         phase: payload.phase,
         ...(payload.error === undefined ? {} : { error: payload.error }),
+        ...(activity.createdAt === undefined ? {} : { updatedAt: activity.createdAt }),
       };
       continue;
     }
@@ -96,6 +115,8 @@ export function deriveT3TeamWorkflowStepRuns(
       ...(payload.error === undefined ? {} : { error: payload.error }),
       ...(payload.projectId === undefined ? {} : { projectId: payload.projectId }),
       ...(payload.threadId === undefined ? {} : { threadId: payload.threadId }),
+      ...(payload.workflowPhase === undefined ? {} : { workflowPhase: payload.workflowPhase }),
+      ...(payload.durationMs === undefined ? {} : { durationMs: payload.durationMs }),
     });
   }
 

@@ -8,7 +8,7 @@
  */
 import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { useMemo } from "react";
-import { useProject, useThreadShell } from "~/state/entities";
+import { useProject, useThread } from "~/state/entities";
 import { ThreadChatView } from "~/t3team/chat/t3team-ThreadChatView";
 
 export function T3TeamThreadRightPanelSurface({
@@ -22,16 +22,22 @@ export function T3TeamThreadRightPanelSurface({
     () => ({ environmentId: EnvironmentId.make(environmentId), threadId: ThreadId.make(threadId) }),
     [environmentId, threadId],
   );
-  const shell = useThreadShell(ref);
+  // `useThread` merges the shell (when one exists) with the independently-fetched thread
+  // detail; it does not wait on a shell to resolve. Workflow child threads are `ephemeral`
+  // on purpose (they must stay out of the sidebar) and so never get a shell projection at
+  // all — a shell-only lookup here would spin on "Loading thread…" forever for those. The
+  // detail endpoint serves ephemeral threads fine, so this renders as soon as it arrives.
+  const thread = useThread(ref);
   const project = useProject(
-    shell === null
+    thread === null
       ? null
-      : { environmentId: ref.environmentId, projectId: ProjectId.make(shell.projectId) },
+      : { environmentId: ref.environmentId, projectId: ProjectId.make(thread.projectId) },
   );
 
-  if (shell === null) {
-    // A peer thread can be opened before its shell projection arrives; the tab title falls back
-    // to "Thread" in RightPanelTabs and this re-renders as soon as the shell lands.
+  if (thread === null) {
+    // Genuinely still loading: neither the shell nor the detail fetch has resolved yet. The
+    // tab title falls back to "Thread" in RightPanelTabs (shell-sourced titles only) and this
+    // re-renders as soon as either one lands.
     return (
       <div className="flex h-full min-h-0 flex-1 items-center justify-center bg-background text-sm text-muted-foreground">
         Loading thread…
@@ -42,13 +48,13 @@ export function T3TeamThreadRightPanelSurface({
   return (
     <ThreadChatView
       threadId={threadId}
-      projectId={shell.projectId}
-      projectTitle={project?.title ?? shell.projectId}
+      projectId={thread.projectId}
+      projectTitle={project?.title ?? thread.projectId}
       {...(project?.source?.provider
         ? { projectSource: { provider: project.source.provider } }
         : {})}
       {...(project?.workspaceRoot ? { projectWorkspaceRoot: project.workspaceRoot } : {})}
-      title={shell.title}
+      title={thread.title}
       hideHeader
       embeddedMode
     />

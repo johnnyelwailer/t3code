@@ -8,6 +8,10 @@
  *
  * @module t3team-help
  */
+import { T3TEAM_WIDGET_AUTHORING_GUIDANCE } from "@t3tools/project-context/t3teamWidgetGuidance";
+
+import { T3TEAM_REPORTING_MANUAL } from "./t3team-workflowManualReporting.ts";
+import { T3TEAM_MODEL_SELECTION_MANUAL } from "./t3team-workflowManualModelSelection.ts";
 import { T3TEAM_TIMERS_MANUAL, T3TEAM_WORKFLOW_MANUAL } from "./t3team-workflowManual.ts";
 
 export interface T3TeamHelpTopic {
@@ -33,6 +37,27 @@ const TOPICS: ReadonlyArray<T3TeamHelpTopic> = [
     summary: "Exact waitUntil/now syntax for one-shot waits and recurring durable routines.",
     body: T3TEAM_TIMERS_MANUAL,
   },
+  {
+    slug: "reporting",
+    title: "Reporting an orchestration's outcome to the human",
+    summary:
+      "Return structured results instead of prose, lead with the verdict, put numbers in a table, and never forward a sub-agent's raw output.",
+    body: T3TEAM_REPORTING_MANUAL,
+  },
+  {
+    slug: "model-selection",
+    title: "Exact provider/model selection for start_child and orchestration agents",
+    summary:
+      "Read live provider instances and model slugs via t3team_models before naming an exact target; never copy ids from examples or a static list.",
+    body: T3TEAM_MODEL_SELECTION_MANUAL,
+  },
+  {
+    slug: "widget-guidance",
+    title: "Widget authoring guidance (thread.showWidget / t3team.widget.show)",
+    summary:
+      "Theme CSS variables, the icon sprite, layout/CSP rules for any widget body — same contract thread.showWidget and the t3team.widget.show tool both use.",
+    body: T3TEAM_WIDGET_AUTHORING_GUIDANCE,
+  },
 ];
 
 /** Aliases → canonical slug, so common phrasings resolve to the right topic. */
@@ -47,6 +72,11 @@ const ALIASES: Readonly<Record<string, string>> = {
   timer: "timers",
   schedule: "timers",
   scheduling: "timers",
+  widget: "widget-guidance",
+  widgets: "widget-guidance",
+  showwidget: "widget-guidance",
+  model: "model-selection",
+  models: "model-selection",
 };
 
 const indexText = (): string =>

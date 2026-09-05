@@ -579,10 +579,15 @@ Context-bound chat and standalone chat share thread tools.
 Useful tools:
 
 ```text
+t3team.runtime.models
 t3team.view.read
 t3team.recipe.list
 t3team.recipe.validate
 t3team.orchestration.run
+t3team.orchestration.status
+t3team.orchestration.resume
+t3team.orchestration.pause
+t3team.orchestration.stop
 t3team.widget.show
 t3team.thread.rename
 t3team.thread.search
@@ -598,11 +603,23 @@ t3team.thread.attach_context
 t3team.thread.open_full_page
 ```
 
-`t3team.view.read`, `t3team.thread.rename`, `t3team.thread.search`,
-`t3team.thread.search_source`, `t3team.thread.read_message`, `t3team.thread.start_child`, and
-`t3team.thread.children` are the
-current live runtime slice used by the broker implementation. The rest of this section
+`t3team.runtime.models`, `t3team.view.read`, `t3team.thread.rename`, `t3team.thread.search`,
+`t3team.thread.search_source`, `t3team.thread.read_message`, `t3team.thread.start_child`,
+`t3team.thread.children`, `t3team.orchestration.run`, `t3team.orchestration.status`,
+`t3team.orchestration.resume`, `t3team.orchestration.pause`, and `t3team.orchestration.stop` are
+the current live runtime slice used by the broker implementation. The rest of this section
 remains planned catalog scope.
+
+`t3team.orchestration.pause` / `t3team.orchestration.stop` give the agent the same controls the
+run card gives the user, scoped to the runs its own thread launched (GHE #403): pause parks a
+waiting or scheduled run and keeps its continuation for `resume`; stop cancels the run and
+interrupts its child agent turns — the way to retire a superseded run before launching its
+replacement.
+
+`t3team.runtime.models` reads the current thread's true `ModelSelection` plus every configured
+provider instance and model from the live `ProviderRegistry` snapshots. Agent authors call it
+before naming an exact provider/model in `start_child` or an orchestration; the SDK deliberately
+ships no curated model tree.
 
 `t3team.thread.search` searches the transcript of the CURRENT thread (case-insensitive
 substring, optional `limit` and `role` filter), returning each match with its 1-based

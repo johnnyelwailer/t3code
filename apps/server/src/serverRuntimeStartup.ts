@@ -202,26 +202,34 @@ export const resolveAutoBootstrapWelcomeTargets = Effect.gen(function* () {
         serverConfig.cwd,
       );
       let nextProjectId: ProjectId;
-      let nextProjectDefaultModelSelection: ModelSelection;
+      let nextThreadModelSelection: ModelSelection;
 
       if (Option.isNone(existingProject)) {
         const createdAt = DateTime.formatIso(yield* DateTime.now);
         nextProjectId = ProjectId.make(yield* randomUUID);
         const bootstrapProjectTitle = path.basename(serverConfig.cwd) || "project";
-        nextProjectDefaultModelSelection = getAutoBootstrapDefaultModelSelection();
+        nextThreadModelSelection = getAutoBootstrapDefaultModelSelection();
+        yield* Effect.logInfo("auto-bootstrap: creating project for cwd", {
+          cwd: serverConfig.cwd,
+          projectId: nextProjectId,
+          title: bootstrapProjectTitle,
+        });
         yield* orchestrationEngine.dispatch({
           type: "project.create",
           commandId: CommandId.make(yield* randomUUID),
           projectId: nextProjectId,
           title: bootstrapProjectTitle,
           workspaceRoot: serverConfig.cwd,
-          defaultModelSelection: nextProjectDefaultModelSelection,
           createdAt,
         });
       } else {
         nextProjectId = existingProject.value.id;
-        nextProjectDefaultModelSelection =
+        nextThreadModelSelection =
           existingProject.value.defaultModelSelection ?? getAutoBootstrapDefaultModelSelection();
+        yield* Effect.logInfo("auto-bootstrap: reusing existing project for cwd", {
+          cwd: serverConfig.cwd,
+          projectId: nextProjectId,
+        });
       }
 
       const existingThreadId =
@@ -235,7 +243,7 @@ export const resolveAutoBootstrapWelcomeTargets = Effect.gen(function* () {
           threadId: createdThreadId,
           projectId: nextProjectId,
           title: "New thread",
-          modelSelection: nextProjectDefaultModelSelection,
+          modelSelection: nextThreadModelSelection,
           interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
           runtimeMode: "full-access",
           branch: null,

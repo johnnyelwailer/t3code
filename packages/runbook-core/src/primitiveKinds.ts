@@ -16,6 +16,8 @@ export const PRIMITIVE_KINDS = [
   "pipeline",
   "workflow",
   "wait.until",
+  "artifact",
+  "usage",
 ] as const;
 
 /** Open primitive-kind vocabulary for adapter and catalog extensions. */

@@ -24,6 +24,16 @@
  * as idle, short enough that a genuinely stalled turn says so within ~30s
  * instead of spinning the "Working" word forever.
  *
+ * `ACTIVITY_STATE_MIN_TRANSITION_MS` (4s): a debounce on the ACTIVE states
+ * (thinking / writing / working). A turn's tool calls and reasoning/assistant
+ * deltas can fire in rapid succession (a dozen tool boundaries in a few
+ * seconds); persisting every boundary makes the word flicker Working→Thinking
+ *→Writing. So once a state is shown, the next DIFFERENT state is only applied
+ * after this interval. The first state of a turn (fresh entry, no prior change)
+ * and the idle `waiting` promotion are not gated — resuming from waiting shows
+ * the live state promptly. null clears (turn ended / user decision) are never
+ * gated either.
+ *
  * Persist discipline: the tracker persists only on a STATE TRANSITION (plus
  * the null clear on idle/terminal) — never per delta. The deterministic word
  * updates instantly on the transition; the throttled LLM detail catches up
@@ -41,6 +51,15 @@ import type { ActivityStateEvent } from "./t3team-activityStateEvent.ts";
 
 export const ACTIVITY_STATE_IDLE_GAP_MS = 30_000;
 
+/**
+ * Debounce on the active state word (thinking / writing / working): a new,
+ * DIFFERENT active state is not applied until this much time has passed since
+ * the last active-state change. See the module doc. 4s sits in the 3-5s band
+ * requested — stable enough to stop the flicker, responsive enough that a
+ * genuinely different phase still shows up within seconds.
+ */
+export const ACTIVITY_STATE_MIN_TRANSITION_MS = 4_000;
+
 export type ThreadActivityState = "thinking" | "writing" | "working" | "waiting";
 
 interface TrackedThread {
@@ -49,6 +68,13 @@ interface TrackedThread {
   inFlightTools: number;
   /** Last instant any output arrived (deltas, tool results, tool streams). */
   lastOutputAt: number;
+  /**
+   * Last instant the ACTIVE state word actually changed (0 until the first
+   * transition of a turn). Gates the thinking/writing/working debounce. Not
+   * touched by the idle `waiting` promotion or null clears, so resuming from
+   * waiting (or after an idle gap) shows the live state promptly.
+   */
+  lastActiveChangeAt: number;
   timer: ReturnType<typeof setTimeout> | undefined;
 }
 
@@ -63,11 +89,14 @@ export function createActivityStateTracker(input: {
     readonly state: ThreadActivityState | null;
   }) => Promise<void>;
   readonly idleGapMs?: number;
+  /** Debounce interval between active-state (thinking/writing/working) changes. */
+  readonly minTransitionMs?: number;
   readonly now?: () => number;
   readonly setTimer?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
   readonly clearTimer?: (timer: ReturnType<typeof setTimeout>) => void;
 }) {
   const idleGapMs = input.idleGapMs ?? ACTIVITY_STATE_IDLE_GAP_MS;
+  const minTransitionMs = input.minTransitionMs ?? ACTIVITY_STATE_MIN_TRANSITION_MS;
   const now = input.now ?? Date.now;
   const setTimer = input.setTimer ?? setTimeout;
   const clearTimer = input.clearTimer ?? clearTimeout;
@@ -80,6 +109,7 @@ export function createActivityStateTracker(input: {
         state: null,
         inFlightTools: 0,
         lastOutputAt: 0,
+        lastActiveChangeAt: 0,
         timer: undefined,
       };
       threads.set(threadId, tracked);
@@ -156,8 +186,17 @@ export function createActivityStateTracker(input: {
     }
 
     if (target !== null && target !== tracked.state) {
-      tracked.state = target;
-      void input.persist({ threadId: event.threadId, state: target }).catch(() => undefined);
+      // Debounce the active-state word: only apply a DIFFERENT active state
+      // once enough time has passed since the last change. When there is no
+      // active state yet (fresh turn / just after a user-input block) the first
+      // state applies immediately, so the word never stays on the "Working"
+      // fallback when a turn begins.
+      const elapsed = now() - tracked.lastActiveChangeAt;
+      if (tracked.state === null || elapsed >= minTransitionMs) {
+        tracked.state = target;
+        tracked.lastActiveChangeAt = now();
+        void input.persist({ threadId: event.threadId, state: target }).catch(() => undefined);
+      }
     }
     // Re-arm the idle-gap timer from the latest observation. The timer itself
     // only promotes to `waiting` when no tool is in flight.

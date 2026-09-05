@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { setActiveAgentHover, type ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
+import {
+  formatActiveAgentLabel,
+  setActiveAgentHover,
+  type ActiveAgentEntry,
+} from "~/t3team/chat/t3team-activeAgentsCore";
 import { createSBendPhysics, type SBendOut } from "~/t3team/chat/t3team-activeAgentsPhysics";
 
 /**
@@ -137,7 +141,11 @@ export function T3TeamActiveAgentsIndicator({
       }
       // Reads batched (one reflow), writes after.
       const srect = scope.getBoundingClientRect();
-      const cursor = { x: pointer.x - srect.left, y: pointer.y - srect.top, active: pointer.active };
+      const cursor = {
+        x: pointer.x - srect.left,
+        y: pointer.y - srect.top,
+        active: pointer.active,
+      };
       const homes = dots.map((dot, i) => {
         const dr = dot.getBoundingClientRect();
         const prevX = out.poses[i]?.x ?? 0;
@@ -215,7 +223,12 @@ export function T3TeamActiveAgentsIndicator({
           onOpenAgents();
         }
       }}
-      className="ml-2 inline-flex h-[1em] shrink-0 -translate-y-[3px] items-center rounded-sm align-middle outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      // GHE #236 follow-up: no vertical nudge — the working row centers its
+      // children (items-center), so the 14px group (dot centered in it)
+      // already shares the status text's optical center. The old
+      // -translate-y-[3px] + align-middle was tuned to the pre-GHE #238
+      // baseline-aligned row and now double-compensates.
+      className="ml-2 inline-flex h-[1em] shrink-0 items-center rounded-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
     >
       <span className="inline-flex h-full items-center gap-1">
         {visible.map((entry, i) => {
@@ -225,7 +238,7 @@ export function T3TeamActiveAgentsIndicator({
             <button
               key={entry.id}
               type="button"
-              aria-label={`${entry.title} — ${entry.statusLabel}`}
+              aria-label={formatActiveAgentLabel(entry.title, entry.statusLabel)}
               onClick={(event) => {
                 event.stopPropagation();
                 // GHE #201 follow-up: per-dot open — the clicked dot opens

@@ -7,6 +7,7 @@
  */
 import type { ProjectThread } from "~/t3team/t3team-types";
 import { compareSubRunThreads } from "~/t3team/components/t3team-projectSidebarThreadTree";
+import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay";
 
 export type SubRunOpenCallback = (input: {
   readonly projectId: string;
@@ -49,4 +50,39 @@ export function buildSubRunTree(
  */
 export function sortSubRunNodes(nodes: ReadonlyArray<SubRunNode>): SubRunNode[] {
   return nodes.toSorted((a, b) => compareSubRunThreads(a.thread, b.thread));
+}
+
+/**
+ * The stable status labels of the panel sub-run rows (pre-live-state, kept as the
+ * resolver's fallback tier).
+ */
+export const SUB_RUN_STATUS_LABEL: Record<ProjectThread["status"], string> = {
+  idle: "Idle",
+  running: "Running",
+  completed: "Completed",
+  error: "Error",
+};
+
+/**
+ * The live status TEXT of a panel sub-run/agent row — the SAME shared resolution the
+ * sidebar sub-run rows use (`resolveActivityPillDisplay` over the same
+ * `activityLabel`/`activityState` fields, so the panel and the sidebar never
+ * disagree at this seam): the LLM activity label REPLACES the state word when it
+ * flows (only while the `t3teamActivityLabelsEnabled` flag is on — the caller gates
+ * the flag here, mirroring t3team-SidebarSubRunRow), the deterministic state word
+ * (Thinking/Writing/Working/Waiting) stands alone when there is no label, and the
+ * stable status label is the fallback for settled states and old servers. Dots are
+ * unaffected (they carry the 4-state + settled visuals).
+ */
+export function resolveSubRunStatusLabel(
+  thread: Pick<ProjectThread, "status" | "activityLabel" | "activityState">,
+  options: { readonly activityLabelsEnabled: boolean },
+): string {
+  const label = SUB_RUN_STATUS_LABEL[thread.status];
+  if (thread.status !== "running") return label;
+  return resolveActivityPillDisplay({
+    label,
+    activityState: thread.activityState ?? null,
+    activityLabel: options.activityLabelsEnabled ? (thread.activityLabel ?? null) : null,
+  });
 }

@@ -31,12 +31,17 @@ function readDocumentedToolIds(): ReadonlyArray<string> {
 describe("t3teamToolCatalog", () => {
   it("lists the implemented tools in catalog order", () => {
     expect(listImplementedT3TeamToolCatalogEntries().map((tool) => tool.id)).toEqual([
+      "t3team.runtime.models",
       "t3team.widget.show",
       "t3team.backlog.set_assignee_filter",
       "t3team.view.read",
       "t3team.recipe.list",
       "t3team.recipe.validate",
       "t3team.orchestration.run",
+      "t3team.orchestration.status",
+      "t3team.orchestration.resume",
+      "t3team.orchestration.pause",
+      "t3team.orchestration.stop",
       "t3team.thread.rename",
       "t3team.thread.search",
       "t3team.thread.search_source",
@@ -61,11 +66,16 @@ describe("t3teamToolCatalog", () => {
 
   it("defaults thread tool selection from the catalog", () => {
     expect(DEFAULT_T3TEAM_THREAD_TOOL_IDS).toEqual([
+      "t3team.runtime.models",
       "t3team.widget.show",
       "t3team.view.read",
       "t3team.recipe.list",
       "t3team.recipe.validate",
       "t3team.orchestration.run",
+      "t3team.orchestration.status",
+      "t3team.orchestration.resume",
+      "t3team.orchestration.pause",
+      "t3team.orchestration.stop",
       "t3team.thread.rename",
       "t3team.thread.search",
       "t3team.thread.search_source",
@@ -74,6 +84,17 @@ describe("t3teamToolCatalog", () => {
       "t3team.thread.children",
       "t3team.work_item.refresh_context_bundle",
     ]);
+  });
+
+  it("enables t3team.orchestration.status by default wherever t3team.orchestration.run is enabled", () => {
+    // Regression: a run launched via t3team.orchestration.run is fire-and-forget
+    // (`status: "accepted"`) and can fail asynchronously afterwards. An agent that can launch a
+    // run must also be able to observe it, or it is blind to that failure — see
+    // apps/server/src/t3team-workflowManual.ts's "on 'failed', read 'error' ... " advice, which
+    // is unreachable without this tool.
+    const runEnabled = DEFAULT_T3TEAM_THREAD_TOOL_IDS.includes("t3team.orchestration.run");
+    expect(runEnabled).toBe(true);
+    expect(DEFAULT_T3TEAM_THREAD_TOOL_IDS).toContain("t3team.orchestration.status");
   });
 
   it("keeps documented planned tools in the catalog without enabling them by default", () => {

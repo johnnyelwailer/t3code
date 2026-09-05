@@ -21,7 +21,7 @@ export function T3TeamLocalProviderSessionsSetting() {
   return (
     <SettingsRow
       title="Local provider sessions"
-      description="Watch the official Codex and Claude profile folders. Matching sessions appear in the project worktree they belong to and resume from the original native session — read-only here while that tool still owns them."
+      description="Watch the official Codex and Claude profile folders. Matching sessions appear in the project worktree they belong to and resume from the original native session — read-only here while that tool still owns them. Turning this off stops new adoption and hides already-adopted sessions from the thread lists; nothing is deleted, and turning it back on brings them back."
       control={
         <Switch
           checked={showLocalProviderSessions ?? false}

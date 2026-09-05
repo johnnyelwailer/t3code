@@ -39,15 +39,24 @@ export function opList(
   args: ChildrenArgs,
 ): Effect.Effect<T3TeamToolCallResult> {
   const all = args.all === true;
+  const includeSettled = args.include_settled === true;
   if (all) {
     return deps.listProjectThreadShells(deps.callerProjectId).pipe(
       Effect.map((shells: ReadonlyArray<ChildThreadShell>) => {
-        const limited = shells.slice(0, LIST_ALL_THREAD_CAP);
+        const unsettled = includeSettled
+          ? shells
+          : shells.filter((shell) => shell.settledOverride !== "settled");
+        const limited = unsettled.slice(0, LIST_ALL_THREAD_CAP);
         return okResult({
           ok: true,
           scope: "project",
           count: limited.length,
-          ...(shells.length > limited.length ? { truncated: true, total: shells.length } : {}),
+          ...(unsettled.length > limited.length
+            ? { truncated: true, total: unsettled.length }
+            : {}),
+          ...(unsettled.length !== shells.length
+            ? ({ settledExcluded: shells.length - unsettled.length } as { settledExcluded: number })
+            : {}),
           threads: limited.map((shell) => childStatusFromShell(shell)),
         });
       }),
@@ -71,31 +80,55 @@ export function opList(
       return deps.listChildThreadIds(deps.callerThreadId, deps.callerProjectId).pipe(
         Effect.flatMap((childIds) =>
           Effect.forEach(childIds, (threadId) =>
-            deps.loadThreadShell(ThreadId.make(threadId)).pipe(
-              Effect.map((shell) =>
-                shell
+            deps.loadThreadShell(ThreadId.make(threadId)),
+          ).pipe(
+            Effect.map((shells) => {
+              // Settled children drop out of the default roster view (GHE #304):
+              // transcripts stay reachable (status op, include_settled, the UI
+              // fold); only the running + terminal-unsettled set is listed.
+              // Bind threadId BEFORE filtering so the mapping stays aligned.
+              const settledCount = includeSettled
+                ? 0
+                : shells.filter(
+                    (shell) => shell !== undefined && shell.settledOverride === "settled",
+                  ).length;
+              const visibleShells = childIds
+                .map((threadId, index) => ({ threadId, shell: shells[index] }))
+                .filter(
+                  (entry) =>
+                    includeSettled ||
+                    entry.shell === undefined ||
+                    entry.shell.settledOverride !== "settled",
+                );
+              const visible = visibleShells.map(({ threadId, shell }) => {
+                return shell
                   ? { threadId, ...childStatusFromShell(shell) }
                   : {
                       threadId,
                       state: "unknown" as const,
                       note: "Child thread is no longer available.",
-                    },
-              ),
+                    };
+              });
+              return okResult({
+                ok: true,
+                scope: "children",
+                count: visible.length,
+                threads: visible,
+                ...(settledCount > 0 ? { settledExcluded: settledCount } : {}),
+                ...(visible.length === 0
+                  ? {
+                      hint:
+                        settledCount > 0
+                          ? `All ${settledCount} child session(s) are settled; list with include_settled:true to see them.`
+                          : `No child sessions started from this thread yet. Use t3team_start_child to spawn one.`,
+                    }
+                  : {}),
+              });
+            }),
+            Effect.catch((error) =>
+              Effect.succeed(errorResult(`Failed to list child threads: ${error}`)),
             ),
           ),
-        ),
-        Effect.map((rows) =>
-          okResult({
-            ok: true,
-            scope: "children",
-            count: rows.length,
-            threads: rows,
-            ...(rows.length === 0
-              ? {
-                  hint: `No child sessions started from this thread yet. Use t3team_start_child to spawn one.`,
-                }
-              : {}),
-          }),
         ),
         Effect.catch((error) =>
           Effect.succeed(errorResult(`Failed to list child threads: ${error}`)),

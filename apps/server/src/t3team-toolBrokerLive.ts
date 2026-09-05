@@ -34,6 +34,8 @@ import { makeWorkflowToolsForThread } from "./t3team-toolBrokerWorkflowToolsWiri
 import { T3TeamContextRefreshService } from "./t3team-contextRefreshService.ts";
 import { makeT3TeamWidgetShowBinder } from "./t3team-toolBrokerWidgetShow.ts";
 import { makeT3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
+import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
+import { buildRuntimeModelCatalog } from "./t3team-runtimeModelCatalog.ts";
 
 const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () {
   // Host tools every provider may call without an explicit `surface:"t3team"`
@@ -42,6 +44,7 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
   // read_message — all read-only), running an ephemeral agent orchestration, and
   // inspecting/validating saved or inline recipe orchestrations.
   const genericThreadToolIds = [
+    "t3team.runtime.models",
     "t3team.thread.rename",
     "t3team.thread.start_child",
     "t3team.thread.children",
@@ -51,6 +54,8 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     "t3team.orchestration.run",
     "t3team.orchestration.status",
     "t3team.orchestration.resume",
+    "t3team.orchestration.pause",
+    "t3team.orchestration.stop",
     "t3team.widget.show",
     "t3team.recipe.list",
     "t3team.recipe.validate",
@@ -170,6 +175,21 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
         renameThreadResult: (title) => ({ ok: true, threadId, title }),
         startChild: (toolArgs) => startChildThread(threadId, toolArgs),
         manageChildren: (toolArgs, callerThreadId) => manageChildren(toolArgs, callerThreadId),
+        readRuntimeModels: () =>
+          Effect.gen(function* () {
+            const thread = Option.getOrUndefined(yield* query.getThreadDetailById(threadId));
+            if (!thread) return errorResult("Current t3team thread was not found.");
+            const providers = providerRegistry ? yield* providerRegistry.getProviders : [];
+            return okResult(buildRuntimeModelCatalog(thread.modelSelection, providers));
+          }).pipe(
+            Effect.catch((error) =>
+              Effect.succeed(
+                errorResult(
+                  `Failed to read runtime providers and models: ${error instanceof Error ? error.message : String(error)}`,
+                ),
+              ),
+            ),
+          ),
         setBacklogAssigneeFilter: (mode) =>
           setBacklogAssigneeFilterForContext(resolvedToolContext, mode),
         refreshContextBundle: contextRefresh,
@@ -224,6 +244,9 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
           : {}),
         ...(workflowTools.workflowResumeToolsForThread
           ? { workflowResumeTools: workflowTools.workflowResumeToolsForThread(threadId) }
+          : {}),
+        ...(workflowTools.workflowControlToolsForThread
+          ? { workflowControlTools: workflowTools.workflowControlToolsForThread(threadId) }
           : {}),
       });
     });

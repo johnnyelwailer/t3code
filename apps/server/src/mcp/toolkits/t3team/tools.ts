@@ -16,6 +16,7 @@ const dependencies = [McpInvocationContext.McpInvocationContext, T3TeamToolBroke
  * the toolkit; the parity test requires every implemented catalog tool to be mapped or named
  * in the explicit policy-exclusion set. */
 export const T3TEAM_MCP_CANONICAL_TOOL_MAP = {
+  t3team_models: "t3team.runtime.models",
   t3team_rename_thread: "t3team.thread.rename",
   t3team_search_thread: "t3team.thread.search",
   t3team_search_source: "t3team.thread.search_source",
@@ -25,6 +26,8 @@ export const T3TEAM_MCP_CANONICAL_TOOL_MAP = {
   t3team_orchestration_run: "t3team.orchestration.run",
   t3team_orchestration_status: "t3team.orchestration.status",
   t3team_orchestration_resume: "t3team.orchestration.resume",
+  t3team_orchestration_pause: "t3team.orchestration.pause",
+  t3team_orchestration_stop: "t3team.orchestration.stop",
   t3team_show_widget: "t3team.widget.show",
   t3team_recipe_list: "t3team.recipe.list",
   t3team_recipe_validate: "t3team.recipe.validate",
@@ -84,9 +87,19 @@ export const T3TeamRenameThreadTool = Tool.make("t3team_rename_thread", {
   dependencies,
 });
 
+export const T3TeamModelsTool = Tool.make("t3team_models", {
+  description:
+    "Read the current thread's true model selection and the live provider instances/models " +
+    "available to this runtime. Call before setting an exact provider or model; never guess " +
+    "from examples or static SDK constants.",
+  success: Schema.Unknown,
+  failure: T3TeamMcpToolError,
+  dependencies,
+});
+
 export const T3TeamStartChildTool = Tool.make("t3team_start_child", {
   description:
-    "Create a child t3team session from the current thread. `isolation` is required and decides where the child works: 'shared' runs it in the project's shared checkout (no new branch), 'own-worktree' gives it a dedicated branch + worktree — of the linked repo named by `repo_full_name` when the project has linked repos, or of the local repository when it does not. Use `effort` " +
+    "Create a child t3team session from the current thread. `isolation` is required and decides where the child works: 'shared' runs it in the project's shared checkout (no new branch), 'own-worktree' gives it a dedicated branch + worktree — of the linked repo named by `repo_full_name`, or of the project's own repository when the project workspace IS a git repository (monorepo-as-metarepo) or a plain local workspace. Use `effort` " +
     "('light' | 'standard' | 'high') to ask for a thinking tier WITHOUT naming a provider or " +
     "model — it is mapped onto whatever reasoning control the resolved provider exposes, and " +
     "on providers that expose none it falls back to the model tier when the model slugs form " +
@@ -100,7 +113,7 @@ export const T3TeamStartChildTool = Tool.make("t3team_start_child", {
     }),
     isolation: Schema.Literals(["shared", "own-worktree"]).annotate({
       description:
-        "Required. Where the child works: 'shared' = the project's shared checkout, no new branch or worktree (planning, triage, synthesis, read-only review); 'own-worktree' = a dedicated branch + worktree (implementation, debugging, tests, PR work). With 'own-worktree', pass 'repo_full_name' when the project has linked repos; in a local workspace omit it to isolate in the local repository.",
+        "Required. Where the child works: 'shared' = the project's shared checkout, no new branch or worktree (planning, triage, synthesis, read-only review); 'own-worktree' = a dedicated branch + worktree (implementation, debugging, tests, PR work). With 'own-worktree', pass 'repo_full_name' to pick a linked repo; omit it to isolate in the project's own repository (a monorepo used as the meta-repo, or a local workspace without linked repos).",
     }),
     ticket_id: Schema.optional(Schema.String).annotate({
       description:
@@ -119,11 +132,11 @@ export const T3TeamStartChildTool = Tool.make("t3team_start_child", {
     // provider's models.
     provider: Schema.optional(Schema.String).annotate({
       description:
-        "Optional provider instance id to run the child on a DIFFERENT provider than the parent (e.g. spawn a Codex child from a Claude parent for cross-provider review). Omit to inherit the parent's provider; `model` must be one of that provider's models.",
+        "Optional provider INSTANCE id to run the child on a different provider. Read it from t3team_models immediately before the call; omit it to inherit the parent provider.",
     }),
     model: Schema.optional(Schema.String).annotate({
       description:
-        "Optional canonical model slug override for the child session. Prefer omitting this to inherit the current thread model; if you set it, use a provider-specific canonical slug such as 'gpt-5.4' or 'gpt-5.3-codex', not a generic alias like 'gpt-5'.",
+        "Optional exact model slug override for the child session. Prefer inheriting; otherwise read the slug from t3team_models for the selected provider instance.",
     }),
     reasoning_effort: Schema.optional(Schema.Literals(["low", "medium", "high"])).annotate({
       description:
@@ -138,7 +151,7 @@ export const T3TeamStartChildTool = Tool.make("t3team_start_child", {
     }),
     repo_full_name: Schema.optional(Schema.String).annotate({
       description:
-        "Optional, only with isolation='own-worktree'. Linked repository to open in a fresh scoped worktree, for example 'owner/repo' or 'github.com/owner/repo'. Required in projects that have linked repos; omit it in a local workspace (no linked repos) to isolate the child in a worktree of the local repository instead.",
+        "Optional, only with isolation='own-worktree'. Linked repository to open in a fresh scoped worktree, for example 'owner/repo' or 'github.com/owner/repo'. Required in legacy projects that wrap linked repos. In a monorepo project (workspace is itself a git repository used as the meta-repo) you may pass the meta-repo's own URL to isolate there explicitly, or omit it; in a local workspace (no linked repos) omit it to isolate in the local repository.",
     }),
     repo_ref: Schema.optional(Schema.String).annotate({
       description:
@@ -151,7 +164,7 @@ export const T3TeamStartChildTool = Tool.make("t3team_start_child", {
 });
 
 // Child-thread management: ONE meta tool with an `op` discriminator (list /
-// status / wait / watch / unwatch / stop / close / help) instead of a tool
+// status / wait / watch / unwatch / stop / close / sweep / help) instead of a tool
 // per operation, so the context cost stays one compact description no matter
 // how many ops exist. Per-op detail is discovered on demand via `help` or
 // carried in a malformed call's error message. Routes to the t3team.thread.
@@ -160,7 +173,8 @@ export const T3TeamStartChildTool = Tool.make("t3team_start_child", {
 const CHILDREN_TOOL_DESCRIPTION =
   "Manage this thread's child sessions (STATE, not content — use send_message to talk to a " +
   "child). One tool; `op` selects the operation:\n" +
-  "- list: this thread's children with live state (all:true = whole project)\n" +
+  "- list: this thread's children with live state (all:true = whole project; " +
+  "include_settled:true lists settled children too — they are excluded by default)\n" +
   "- status: one thread's current turn state, in-progress work, elapsed\n" +
   "- wait: durably resume this turn when a child reaches a terminal state (on: " +
   "terminal|completed|failed; timeout in ms)\n" +
@@ -171,16 +185,33 @@ const CHILDREN_TOOL_DESCRIPTION =
   "- unwatch: cancel all silence watches on the target\n" +
   "- stop: halt a child's running turn\n" +
   "- close: mark a child done from this side\n" +
+  "- sweep: settle terminal (completed/failed/aborted) threads in bulk — given thread ids " +
+  "and/or all of this thread's terminal children older than N hours. Cleanup protocol: verify " +
+  "each state first (final result / discarded work / unpushed work in worktrees), then sweep; " +
+  "settled threads keep their transcripts and drop out of the active rosters\n" +
   "- help: exact schema for one op (op_name)";
 
 export const T3TeamChildrenTool = Tool.make("t3team_children", {
   description: CHILDREN_TOOL_DESCRIPTION,
   parameters: Schema.Struct({
-    op: Schema.Literals(["list", "status", "wait", "watch", "unwatch", "stop", "close", "help"]),
+    op: Schema.Literals([
+      "list",
+      "status",
+      "wait",
+      "watch",
+      "unwatch",
+      "stop",
+      "close",
+      "sweep",
+      "help",
+    ]),
     thread_id: Schema.optional(Schema.String),
+    thread_ids: Schema.optional(Schema.Array(Schema.String)),
     on: Schema.optional(Schema.Literals(["terminal", "completed", "failed"])),
     timeout: Schema.optional(Schema.Number),
     all: Schema.optional(Schema.Boolean),
+    all_older_than_hours: Schema.optional(Schema.Number),
+    include_settled: Schema.optional(Schema.Boolean),
     reason: Schema.optional(Schema.String),
     op_name: Schema.optional(Schema.String),
   }),
@@ -282,6 +313,7 @@ const orchestrationRunParameters = Schema.Struct({
   source: Schema.optional(Schema.String),
   workflowPath: Schema.optional(Schema.String),
   args: Schema.optional(Schema.Unknown),
+  replaceRunId: Schema.optional(Schema.String),
   intent: Schema.Struct({
     goal: Schema.String,
     expectedOutcome: Schema.String,
@@ -295,7 +327,9 @@ const orchestrationRunDescription =
   "(an existing `.workflow.ts`), required `intent` ({goal, expectedOutcome, guardrails}), and " +
   "optional `args`. Returns {runId, status: accepted|completed|suspended|failed, " +
   "handoff: 'workflow-ui', output?, error?}. After a successful handoff, end the current turn " +
-  "with no assistant prose; the orchestration card owns progress and user decisions.";
+  "with no assistant prose; the orchestration card owns progress and user decisions. ONE launch " +
+  "per turn: while a run this thread launched is still active, a second call is refused — pass " +
+  "`replaceRunId` to stop that run and launch the replacement instead.";
 
 export const T3TeamOrchestrationRunTool = Tool.make("t3team_orchestration_run", {
   description: orchestrationRunDescription,
@@ -341,6 +375,35 @@ const orchestrationResumeParameters = Schema.Struct({
 export const T3TeamOrchestrationResumeTool = Tool.make("t3team_orchestration_resume", {
   description: orchestrationResumeDescription,
   parameters: orchestrationResumeParameters,
+  success: Schema.Unknown,
+  failure: T3TeamMcpToolError,
+  dependencies,
+});
+
+// Agent-side pause / stop for a run this thread launched — the same controls the card's
+// buttons offer the user (GHE #403). Route to the t3team.orchestration.pause / .stop broker
+// tools. Stop a superseded run BEFORE launching its replacement, never beside it.
+const orchestrationControlParameters = Schema.Struct({ runId: Schema.String });
+
+export const T3TeamOrchestrationPauseTool = Tool.make("t3team_orchestration_pause", {
+  description:
+    "Pause one of your agent-orchestration runs at its current waiting point (a parked agent " +
+    "turn, user decision, or timer). Pass the `runId` from t3team_orchestration_run/" +
+    "t3team_orchestration_status. The run keeps its continuation; resume it with " +
+    "t3team_orchestration_resume. Returns {runId, status: 'paused', hint}.",
+  parameters: orchestrationControlParameters,
+  success: Schema.Unknown,
+  failure: T3TeamMcpToolError,
+  dependencies,
+});
+
+export const T3TeamOrchestrationStopTool = Tool.make("t3team_orchestration_stop", {
+  description:
+    "Stop one of your agent-orchestration runs for good: cancels it, interrupts its child agent " +
+    "turns, and frees its capacity. Use this on a superseded or stuck run BEFORE launching a " +
+    "replacement, so two runs never work the same queue. Pass the `runId`. Returns {runId, " +
+    "status: 'cancelled', hint}.",
+  parameters: orchestrationControlParameters,
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
   dependencies,
@@ -458,6 +521,7 @@ export const T3TeamRecipeValidateTool = Tool.make("t3team_recipe_validate", {
 });
 
 export const T3TeamToolkit = Toolkit.make(
+  T3TeamModelsTool,
   T3TeamRenameThreadTool,
   T3TeamSearchThreadTool,
   T3TeamSearchSourceTool,
@@ -468,6 +532,8 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamOrchestrationRunTool,
   T3TeamOrchestrationStatusTool,
   T3TeamOrchestrationResumeTool,
+  T3TeamOrchestrationPauseTool,
+  T3TeamOrchestrationStopTool,
   T3TeamWorkflowRunTool,
   T3TeamWorkflowStatusTool,
   T3TeamWorkflowResumeTool,

@@ -104,6 +104,57 @@ describe("deriveWorkflowShape", () => {
     ]);
   });
 
+  it("shows a workflow() sub-orchestration call site instead of dropping it from the preview", () => {
+    // Matches the shipped `review-pipeline` recipe's real shape: a type argument on
+    // `defineWorkflow` (`<typeof Scope>`) between the callee and its path-literal argument.
+    const shape = deriveWorkflowShape({
+      absolutePath: "/virtual/sub-workflow.workflow.ts",
+      sourceText: [
+        `export const meta = { name: "x.sub-workflow" } as const;`,
+        `phase("Umfang");`,
+        `await workflow(defineWorkflow<typeof Scope>("./orchestrations/scope.ts"), {});`,
+        `phase("Kontext");`,
+        `await workflow(defineWorkflow<typeof Requirements>("./orchestrations/requirements.ts"), {});`,
+      ].join("\n"),
+    });
+
+    expect(shape.steps).toEqual([
+      { phase: "Umfang", kind: "act", label: "scope.ts" },
+      { phase: "Kontext", kind: "act", label: "requirements.ts" },
+    ]);
+  });
+
+  it("falls back to a generic label for a workflow() ref bound to a variable earlier in the body", () => {
+    const shape = deriveWorkflowShape({
+      absolutePath: "/virtual/sub-workflow-ref.workflow.ts",
+      sourceText: [
+        `export const meta = { name: "x.sub-workflow-ref" } as const;`,
+        `const scopeRef = defineWorkflow("./orchestrations/scope.ts");`,
+        `phase("Umfang");`,
+        `await workflow(scopeRef, {});`,
+      ].join("\n"),
+    });
+
+    expect(shape.steps).toEqual([{ phase: "Umfang", kind: "act", label: "Run sub-workflow" }]);
+  });
+
+  it("shows durable wait()/waitUntil() calls so the runtime's wait.until step has a plan row to match", () => {
+    const shape = deriveWorkflowShape({
+      absolutePath: "/virtual/wait.workflow.ts",
+      sourceText: [
+        `export const meta = { name: "x.wait" } as const;`,
+        `phase("Timer");`,
+        `await wait(60_000);`,
+        `await waitUntil(now() + 2 * 60 * 1000);`,
+      ].join("\n"),
+    });
+
+    expect(shape.steps).toEqual([
+      { phase: "Timer", kind: "act", label: "Pause" },
+      { phase: "Timer", kind: "act", label: "Wait for scheduled time" },
+    ]);
+  });
+
   it("normalizes meta.capabilities for the pre-execution permission surface", () => {
     const shape = deriveWorkflowShape({
       absolutePath: "/virtual/capabilities.workflow.ts",

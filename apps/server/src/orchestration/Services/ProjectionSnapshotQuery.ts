@@ -37,6 +37,11 @@ export interface ProjectionSnapshotSequence {
   readonly snapshotSequence: number;
 }
 
+export interface ProjectionEventReplayStats {
+  readonly eventCount: number;
+  readonly payloadBytes: number;
+}
+
 export interface ProjectionThreadCheckpointContext {
   readonly threadId: ThreadId;
   readonly projectId: ProjectId;
@@ -52,6 +57,15 @@ export interface ProjectionFullThreadDiffContext {
   readonly worktreePath: string | null;
   readonly latestCheckpointTurnCount: number;
   readonly toCheckpointRef: CheckpointRef | null;
+}
+
+export interface ProjectionThreadDetailQuery {
+  /**
+   * Limit activities before SQLite returns and decodes their payloads.
+   * Any explicit filter omits pinned-request reads. An empty list also skips
+   * the activity query. Omit this option to preserve the full detail response.
+   */
+  readonly activityKinds?: ReadonlyArray<string>;
 }
 
 /**
@@ -120,6 +134,14 @@ export interface ProjectionSnapshotQueryShape {
   readonly getCounts: () => Effect.Effect<ProjectionSnapshotCounts, ProjectionRepositoryError>;
 
   /**
+   * Measure a persisted event range without decoding its payload bodies.
+   */
+  readonly getEventReplayStats: (input: {
+    readonly fromSequenceExclusive: number;
+    readonly toSequenceInclusive: number;
+  }) => Effect.Effect<ProjectionEventReplayStats, ProjectionRepositoryError>;
+
+  /**
    * Read the active project for an exact workspace root match.
    */
   readonly getActiveProjectByWorkspaceRoot: (
@@ -155,6 +177,19 @@ export interface ProjectionSnapshotQueryShape {
   ) => Effect.Effect<ReadonlyArray<ThreadId>, ProjectionRepositoryError>;
 
   /**
+   * Every durable parent/child relation in the store: a child's own
+   * t3team.handoff.created parentThreadId, or the parent's t3team.handoff.started
+   * childThreadId. Deduped per child with the newest handoff winning. Workflow-
+   * owned children never appear (their handoff payload carries workflowRunId
+   * instead of a parent). Global (all projects) — used by the server-side
+   * child-settle sweep, which must see every project in one scan.
+   */
+  readonly listParentChildRelations: () => Effect.Effect<
+    ReadonlyArray<{ readonly childThreadId: ThreadId; readonly parentThreadId: ThreadId }>,
+    ProjectionRepositoryError
+  >;
+
+  /**
    * Read the checkpoint context needed to resolve a single thread diff.
    */
   readonly getThreadCheckpointContext: (
@@ -182,6 +217,7 @@ export interface ProjectionSnapshotQueryShape {
    */
   readonly getThreadDetailById: (
     threadId: ThreadId,
+    query?: ProjectionThreadDetailQuery,
   ) => Effect.Effect<Option.Option<OrchestrationThread>, ProjectionRepositoryError>;
 
   /**
@@ -195,6 +231,10 @@ export interface ProjectionSnapshotQueryShape {
    * response carries `page` metadata (see `OrchestrationThreadDetailWindow`).
    * Without a window the full thread is returned with no `page` field —
    * pagination is strictly opt-in.
+   *
+   * Activity payloads are projected for clients as they are read in small
+   * sequential batches. Callers still apply the full snapshot projector for
+   * collection-level activity pruning.
    */
   readonly getThreadDetailSnapshot: (
     threadId: ThreadId,
@@ -211,6 +251,23 @@ export interface ProjectionSnapshotQueryShape {
    * reads.
    */
   readonly threadExists: (threadId: ThreadId) => Effect.Effect<boolean, ProjectionRepositoryError>;
+
+  /**
+   * Cheaply check whether a turn has been requested on an active
+   * (non-deleted) thread but has not yet started in the provider.
+   *
+   * The pending turn-start marker (a `projection_turns` row with
+   * `turn_id IS NULL`) is written when a user message is posted
+   * (`thread.turn-start-requested`) and removed once the provider starts
+   * the turn — or the session settles error/stopped/interrupted. In that
+   * requested-but-unstarted window `activeTurnId` is still null, so callers
+   * that may stop the thread's provider session must consult this probe
+   * first (GHE #343: the reaper disposed a session while a workflow retry
+   * turn was queued, and the run failed with "no reply text").
+   */
+  readonly hasPendingTurnStart: (
+    threadId: ThreadId,
+  ) => Effect.Effect<boolean, ProjectionRepositoryError>;
 }
 
 /**

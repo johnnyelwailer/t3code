@@ -13,7 +13,6 @@ import type { SidebarThreadSummary, Thread } from "../types";
 import type { ThreadRouteTarget } from "../threadRoutes";
 import { cn } from "../lib/utils";
 import { isLatestTurnSettled } from "../session-logic";
-import { resolveServerBackedAppStageLabel } from "../branding.logic";
 
 export const THREAD_SELECTION_SAFE_SELECTOR = "[data-thread-item], [data-thread-selection-safe]";
 export const THREAD_JUMP_HINT_SHOW_DELAY_MS = 200;
@@ -24,6 +23,57 @@ export const THREAD_JUMP_HINT_SHOW_DELAY_MS = 200;
 // so this limit is a direct renderer-heap and server-load multiplier — keep
 // it small; cold opens still render instantly from the cached snapshot.
 export const SIDEBAR_THREAD_PREWARM_LIMIT = 3;
+// A small buffer keeps the next few rows warm without leasing every row that
+// content-visibility leaves mounted below the scroll viewport.
+export const SIDEBAR_ROW_SUBSCRIPTION_OVERSCAN_PX = 160;
+
+export function useSidebarRowSubscriptionLease(isActive: boolean): {
+  readonly leaseLiveStatus: boolean;
+  readonly rowRef: React.Dispatch<React.SetStateAction<HTMLElement | null>>;
+} {
+  const [row, setRow] = React.useState<HTMLElement | null>(null);
+  const [isNearViewport, setIsNearViewport] = React.useState(isActive);
+
+  React.useEffect(() => {
+    if (isActive) {
+      setIsNearViewport(true);
+      return;
+    }
+    if (row === null) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setIsNearViewport(true);
+      return;
+    }
+
+    const scrollRoot = row.closest<HTMLElement>('[data-slot="scroll-area-viewport"]');
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsNearViewport(entry?.isIntersecting === true),
+      {
+        root: scrollRoot,
+        rootMargin: `${SIDEBAR_ROW_SUBSCRIPTION_OVERSCAN_PX}px 0px`,
+      },
+    );
+    observer.observe(row);
+    return () => observer.disconnect();
+  }, [isActive, row]);
+
+  return {
+    leaseLiveStatus: isActive || isNearViewport,
+    rowRef: setRow,
+  };
+}
+
+// A row keeps the last live value it rendered so a released lease never
+// blanks its badge. The value is bound to `key`, so a different worktree or
+// linked pull request cannot reuse the previous one.
+export function useRetainedValue<T>(key: string | null, value: T | null): T | null {
+  const retained = React.useRef<{ readonly key: string; readonly value: T } | null>(null);
+  if (key !== null && value !== null) {
+    retained.current = { key, value };
+  }
+  if (value !== null) return value;
+  return key !== null && retained.current?.key === key ? retained.current.value : null;
+}
 
 // The list already reaches its destination through sortable transforms while
 // the pointer is down. dnd-kit's default also animates the committed DOM order
@@ -137,8 +187,9 @@ export interface ThreadStatusPill {
   /** GHE #40: live LLM-generated "working on" phrase. Rendered instead of `label`
    *  while the thread is active; `label` stays the stable status key. */
   activityLabel?: string;
-  /** GHE #208: deterministic 4-state base word; rendered as the label word, with
-   *  `activityLabel` (if any) appended as " · {detail}". */
+  /** GHE #208: deterministic 4-state base word. Rendered as the pill word when
+   *  there is no `activityLabel`; the `activityLabel` REPLACES it when present
+   *  (never both). */
   activityState?: import("~/t3team/t3team-activityStateDisplay").ActivityState;
   colorClass: string;
   dotClass: string;
@@ -176,6 +227,8 @@ type ThreadStatusInput = Pick<
   | "backgroundLiveness"
   | "activityLabel"
   | "activityState"
+  | "workflowRunStatus"
+  | "sleepingUntil"
 > & {
   lastVisitedAt?: string | undefined;
 };
@@ -183,13 +236,6 @@ type ThreadStatusInput = Pick<
 export interface ThreadJumpHintVisibilityController {
   sync: (shouldShow: boolean) => void;
   dispose: () => void;
-}
-
-export function resolveSidebarStageBadgeLabel(input: {
-  primaryServerVersion: string | null | undefined;
-  fallbackStageLabel: string;
-}): string {
-  return resolveServerBackedAppStageLabel(input);
 }
 
 export function createThreadJumpHintVisibilityController(input: {
@@ -490,16 +536,93 @@ export type SidebarThreadStatus =
   | "failed"
   | "ready";
 
+type WorkflowRunLivenessInput = Pick<SidebarThreadSummary, "workflowRunStatus" | "sleepingUntil">;
+
+// A durable orchestration run (`t3team.orchestration.run` / a recipe launch) executes on an
+// EPHEMERAL CHILD thread, never on the launch thread's own provider session — so a launch thread
+// that only ever sees its own session status has no idea the run is alive. `workflowRunStatus` is
+// already computed server-side (ProjectionSnapshotQuery.ts joins `workflow_runs` by
+// `launch_thread_id`) and already shipped to the client on every thread shell; it was simply never
+// read here. Folding it into the SAME "working"/"monitoring"/"input" vocabulary this file already
+// has — rather than inventing a new visual state — is the reuse the codebase asks for.
+//
+// `workflowRunStatus` keeps reporting the run's LAST status forever (the query picks the
+// most-recently-updated run for the thread, regardless of status) — there is no separate "run
+// ended" event to clear it. Every other consumer of this field already treats terminal statuses
+// as inert for this reason (see TERMINAL_WORKFLOW_STATUSES in t3team-workflowDecisionAvailability.ts),
+// so this resolver does the same rather than adding a clearing mechanism of its own.
+const WORKFLOW_RUN_INERT_STATUSES: ReadonlySet<string> = new Set([
+  // Deliberately halted (the workflow-control route's Pause button, or restart bookkeeping the
+  // engine resolves on its own): the user asked for this, or will get no new information from it.
+  // Like a terminal run, it must not read as live work.
+  "paused",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+
+/** True while a workflow run launched from this thread is parked on an `askUser` reply — the one
+ *  case where the user, not the engine, must act next. */
+export function hasWorkflowRunPendingUserInput(thread: WorkflowRunLivenessInput): boolean {
+  const run = thread.workflowRunStatus;
+  return run !== undefined && run.status === "suspended" && run.pendingKind === "user.input";
+}
+
+/**
+ * Background liveness contributed by a durable workflow run, in the same two-state vocabulary as
+ * `backgroundLiveness` ("working" | "monitoring" | null).
+ *
+ * `queued` and `running` are the engine actively moving the run forward with no user action
+ * needed — same shape as a session's own "starting"/"running" status, so both read as "working".
+ * `suspended` with `pendingKind: "thread.turn"` is a child thread's turn in flight — also
+ * "working". `suspended` with `pendingKind: "user.input"` is surfaced as `input`, not liveness
+ * (see `hasWorkflowRunPendingUserInput`), so it contributes nothing here.
+ *
+ * `sleeping` (parked on a durable `waitUntil` timer) maps to "monitoring", not "working": nothing
+ * is actively executing and only the scheduler is watching the clock until `wakeAt` — the same
+ * shape as a watch-loop task, which is exactly what "monitoring" is reserved for. Reading it as
+ * "ready" instead would recreate the bug this fix is for: a thread that looks idle while it still
+ * has a scheduled continuation, inviting a "continue" message into a run that will resume on its
+ * own (the originating incident, nexi-distribution#317).
+ */
+export function resolveWorkflowRunBackgroundLiveness(
+  thread: WorkflowRunLivenessInput,
+): "working" | "monitoring" | null {
+  const run = thread.workflowRunStatus;
+  if (run !== undefined && !WORKFLOW_RUN_INERT_STATUSES.has(run.status)) {
+    if (run.status === "sleeping") {
+      return "monitoring";
+    }
+    if (run.status === "suspended" && run.pendingKind === "user.input") {
+      return null;
+    }
+    return "working";
+  }
+  // A thread can launch several runs; the most-recently-updated one (workflowRunStatus above) may
+  // already be terminal while a DIFFERENT run on the same thread is still sleeping. `sleepingUntil`
+  // (the soonest `wake_at` across every sleeping run for this thread) is the same fallback the
+  // richer project-sidebar pill already uses for this gap (t3team-projectSidebarStatusPills.ts).
+  if (thread.sleepingUntil !== undefined) {
+    return "monitoring";
+  }
+  return null;
+}
+
 type SidebarThreadStatusInput = Pick<
   SidebarThreadSummary,
-  "hasPendingApprovals" | "hasPendingUserInput" | "session" | "backgroundLiveness"
+  | "hasPendingApprovals"
+  | "hasPendingUserInput"
+  | "session"
+  | "backgroundLiveness"
+  | "workflowRunStatus"
+  | "sleepingUntil"
 >;
 
 export function resolveSidebarThreadStatus(thread: SidebarThreadStatusInput): SidebarThreadStatus {
   if (thread.hasPendingApprovals) {
     return "approval";
   }
-  if (thread.hasPendingUserInput) {
+  if (thread.hasPendingUserInput || hasWorkflowRunPendingUserInput(thread)) {
     return "input";
   }
   if (thread.session?.status === "running" || thread.session?.status === "starting") {
@@ -512,10 +635,11 @@ export function resolveSidebarThreadStatus(thread: SidebarThreadStatusInput): Si
   }
   // Background work outlives the turn: fleets read as working; monitoring
   // only when watch loops are the sole live work.
-  if (thread.backgroundLiveness === "working") {
+  const workflowRunLiveness = resolveWorkflowRunBackgroundLiveness(thread);
+  if (thread.backgroundLiveness === "working" || workflowRunLiveness === "working") {
     return "working";
   }
-  if (thread.backgroundLiveness === "monitoring") {
+  if (thread.backgroundLiveness === "monitoring" || workflowRunLiveness === "monitoring") {
     return "monitoring";
   }
   return "ready";
@@ -598,16 +722,51 @@ export function searchSidebarThreadsByTitle<T extends { readonly title: string }
   return threads.filter((thread) => thread.title.toLowerCase().includes(normalizedQuery));
 }
 
+export function filterSidebarProjectScopeItems<TItem extends { readonly value: string }>(input: {
+  items: readonly TItem[];
+  activeScopeKey: string | null;
+  query: string;
+  matches: (item: TItem, query: string) => boolean;
+}): readonly TItem[] {
+  const projectItems = input.items.filter((item) => item.value !== "all");
+  const query = input.query.trim();
+  if (query.length > 0) {
+    return projectItems.filter((item) => input.matches(item, query));
+  }
+  return input.activeScopeKey === null ? projectItems : input.items;
+}
+
+export interface SidebarProjectScopeMenuState {
+  readonly open: boolean;
+  readonly query: string;
+}
+
+export type SidebarProjectScopeMenuAction =
+  | { readonly type: "query-changed"; readonly query: string }
+  | { readonly type: "open-changed"; readonly open: boolean }
+  | { readonly type: "project-settings-opened" };
+
+export function reduceSidebarProjectScopeMenuState(
+  state: SidebarProjectScopeMenuState,
+  action: SidebarProjectScopeMenuAction,
+): SidebarProjectScopeMenuState {
+  switch (action.type) {
+    case "query-changed":
+      return { ...state, query: action.query };
+    case "open-changed":
+      return { open: action.open, query: "" };
+    case "project-settings-opened":
+      return { open: false, query: "" };
+  }
+}
+
 type SettledTimestampInput = Pick<
   SidebarThreadSummary,
   "settledAt" | "latestUserMessageAt" | "latestTurn" | "updatedAt"
 >;
 
-/** The timestamp a settled row sorts and labels by: settledAt when stamped
-    (explicit settles), otherwise last activity — the same candidates
-    threadLastActivityAt feeds the auto-settle window (user message plus all
-    latestTurn stamps), so a thread whose last activity was a turn completion
-    doesn't sort by an older message time. updatedAt is the final net. */
+/** The timestamp a settled row sorts and labels by: settledAt when stamped,
+    otherwise the latest message or turn stamp. updatedAt is the final net. */
 export function resolveSettledTimestamp(thread: SettledTimestampInput): string | null {
   const settledAt = firstValidTimestamp(thread.settledAt);
   if (settledAt !== null) return settledAt;
@@ -705,7 +864,7 @@ export function resolveThreadStatusPill(input: {
     };
   }
 
-  if (thread.hasPendingUserInput) {
+  if (thread.hasPendingUserInput || hasWorkflowRunPendingUserInput(thread)) {
     return {
       label: "Awaiting Input",
       colorClass: "text-indigo-600 dark:text-indigo-300/90",
@@ -752,7 +911,13 @@ export function resolveThreadStatusPill(input: {
   // workflow fleets read as plain Working; Monitoring is reserved for watch
   // loops (a parent agent babysitting a PR, tailing checks) with no other
   // live work. Same recede treatment as Working per inbox-zero.
-  if (thread.backgroundLiveness === "working") {
+  //
+  // A durable orchestration run (launched on an ephemeral child thread, never this thread's own
+  // session) folds into the same working/monitoring signal `backgroundLiveness` already reports —
+  // see `resolveWorkflowRunBackgroundLiveness` for the run-status mapping and why `sleeping` reads
+  // as Monitoring rather than nothing.
+  const workflowRunLiveness = resolveWorkflowRunBackgroundLiveness(thread);
+  if (thread.backgroundLiveness === "working" || workflowRunLiveness === "working") {
     return {
       label: "Working",
       ...(activityLabel ? { activityLabel } : {}),
@@ -761,7 +926,7 @@ export function resolveThreadStatusPill(input: {
     };
   }
 
-  if (thread.backgroundLiveness === "monitoring") {
+  if (thread.backgroundLiveness === "monitoring" || workflowRunLiveness === "monitoring") {
     return {
       label: "Monitoring",
       colorClass: "text-sky-600 dark:text-sky-300/80",

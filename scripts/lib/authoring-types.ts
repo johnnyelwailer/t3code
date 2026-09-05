@@ -1,3 +1,4 @@
+// @effect-diagnostics preferSchemaOverJson:off -- authoring-file JSON is an on-disk boundary, not a domain payload.
 /**
  * Staging of the authoring-type closure into the desktop build's staged
  * node_modules.

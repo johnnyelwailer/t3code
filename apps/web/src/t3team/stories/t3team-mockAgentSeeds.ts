@@ -64,16 +64,51 @@ export type SeedAgent = {
 };
 
 export const CHILD_SEEDS: readonly SeedAgent[] = [
-  { title: "Fix the flaky retry test", statusLabel: "Editing tests", source: "child", dotState: "writing" },
-  { title: "Draft the release notes", statusLabel: "Reading contracts", source: "child", dotState: "thinking" },
-  { title: "Review the provider registry diff", statusLabel: "Working", source: "child", dotState: "working" },
-  { title: "Scrape the docs site", statusLabel: "Running build", source: "child", dotState: "working" },
-  { title: "Split the billing service", statusLabel: "Planning steps", source: "child", dotState: "thinking" },
+  {
+    title: "Fix the flaky retry test",
+    statusLabel: "Editing tests",
+    source: "child",
+    dotState: "writing",
+  },
+  {
+    title: "Draft the release notes",
+    statusLabel: "Reading contracts",
+    source: "child",
+    dotState: "thinking",
+  },
+  {
+    title: "Review the provider registry diff",
+    statusLabel: "Working",
+    source: "child",
+    dotState: "working",
+  },
+  {
+    title: "Scrape the docs site",
+    statusLabel: "Running build",
+    source: "child",
+    dotState: "working",
+  },
+  {
+    title: "Split the billing service",
+    statusLabel: "Planning steps",
+    source: "child",
+    dotState: "thinking",
+  },
 ];
 
 export const SUBAGENT_SEEDS: readonly SeedAgent[] = [
-  { title: "Review release risks", statusLabel: "Checking API compatibility", source: "subagent", dotState: "thinking" },
-  { title: "Assess rollout risk", statusLabel: "Reading migration plan", source: "subagent", dotState: "thinking" },
+  {
+    title: "Review release risks",
+    statusLabel: "Checking API compatibility",
+    source: "subagent",
+    dotState: "thinking",
+  },
+  {
+    title: "Assess rollout risk",
+    statusLabel: "Reading migration plan",
+    source: "subagent",
+    dotState: "thinking",
+  },
 ];
 
 /** One entry per active agent; `activityKey` mutates on every simulated event. */

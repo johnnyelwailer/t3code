@@ -17,6 +17,7 @@ import {
   counters,
   demoScripts,
   demoTools,
+  emitArtifactWorkflow,
   parallelWorkflow,
   pipelineWorkflow,
   resetCounters,
@@ -117,6 +118,21 @@ describe("durable workflow engine — composition primitives", () => {
     expect(result).toEqual({ total: 100, spent: 0, remaining: 100 });
     const resumed = completed(await resumeWorkflow(runId, budgetWorkflow, {}, opts));
     expect(resumed.result).toEqual(result);
+  });
+
+  it("emit journals a typed artifact and replays the same record on resume", async () => {
+    const { runId, result } = completed(await startWorkflow(emitArtifactWorkflow, {}, base));
+    expect(result).toEqual({ id: expect.stringMatching(/^[0-9a-f-]{36}$/), type: "report" });
+    const journal = readJournal(journalFilePath(runsRoot, runId));
+    const artifact = [...journal.values()].find((entry) => entry.kind === "artifact");
+    const artifactResult = artifact?.result as
+      | { id?: string; type?: string; title?: string }
+      | undefined;
+    expect(artifactResult?.id).toBe(result.id);
+    expect(artifactResult?.type).toBe("report");
+    expect(artifactResult?.title).toBe("Q3");
+    const resumed = completed(await resumeWorkflow(runId, emitArtifactWorkflow, {}, base));
+    expect(resumed.result).toEqual(result); // same artifact id, not a freshly minted one
   });
 
   it("wait records a deadline, sleeps once on the original run, and replays instantly", async () => {

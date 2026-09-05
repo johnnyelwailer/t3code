@@ -16,7 +16,7 @@
  * CSS classes from the app stylesheet).
  */
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { CircleCheckIcon } from "lucide-react";
 
 import { ThreadActivityMorphIcon } from "~/components/ThreadActivityStatus";
@@ -28,7 +28,7 @@ const INSET_VARS = {
   "--sidebar-row-content-inset": "0.625rem",
 } as unknown as CSSProperties;
 
-function SectionTitle({ children }: { children: string }) {
+function SectionTitle({ children }: { children: ReactNode }) {
   return (
     <div className="mb-1.5 flex items-center gap-2 px-0.5">
       <span className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">▸</span>

@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - regression guard reads component source from disk.
 /**
  * Static regression guard: per-row sidebar slots must NOT subscribe to
  * `useProjectStore` (directly or through the hooks that wrap it).

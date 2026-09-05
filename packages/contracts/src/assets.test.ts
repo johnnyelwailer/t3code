@@ -38,6 +38,14 @@ describe("AttachmentCreateUploadUrlInput", () => {
     expect(
       isUploadInput({ ...uploadInput, sizeBytes: PROVIDER_SEND_TURN_MAX_IMAGE_BYTES + 1 }),
     ).toBe(true);
+    expect(
+      isUploadInput({
+        type: "file",
+        name: "archive.zip",
+        mimeType: "application/zip",
+        sizeBytes: PROVIDER_SEND_TURN_MAX_FILE_BYTES + 1,
+      }),
+    ).toBe(false);
   });
 
   it("accepts arbitrary files with a generic mime type", () => {

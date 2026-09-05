@@ -6,9 +6,11 @@ import {
   buildBulkTitleRegenerationContextMenuItem,
   buildMultiSelectThreadContextMenuItems,
   createThreadJumpHintVisibilityController,
+  filterSidebarProjectScopeItems,
   getSidebarThreadIdsToPrewarm,
   getVisibleSidebarThreadIds,
   resolveAdjacentThreadId,
+  reduceSidebarProjectScopeMenuState,
   getFallbackThreadIdAfterDelete,
   getVisibleThreadsForProject,
   getProjectSortTimestamp,
@@ -18,7 +20,6 @@ import {
   isTrailingDoubleClick,
   orderItemsByPreferredIds,
   resolveProjectStatusIndicator,
-  resolveSidebarStageBadgeLabel,
   resolveThreadRowClassName,
   resolveSidebarThreadStatus,
   resolveThreadStatusPill,
@@ -231,44 +232,6 @@ describe("buildMultiSelectThreadContextMenuItems", () => {
     expect(
       buildMultiSelectThreadContextMenuItems({ count: 2, hasRunningThread: true }),
     ).toContainEqual({ id: "archive", label: "Archive (2)", disabled: true });
-  });
-});
-
-describe("resolveSidebarStageBadgeLabel", () => {
-  it("returns Nightly for nightly primary server versions", () => {
-    expect(
-      resolveSidebarStageBadgeLabel({
-        primaryServerVersion: "0.0.28-nightly.20260616.12",
-        fallbackStageLabel: "Alpha",
-      }),
-    ).toBe("Nightly");
-  });
-
-  it("returns the fallback label for stable primary server versions", () => {
-    expect(
-      resolveSidebarStageBadgeLabel({
-        primaryServerVersion: "0.0.27",
-        fallbackStageLabel: "Alpha",
-      }),
-    ).toBe("Alpha");
-  });
-
-  it("returns the fallback label when the primary server version is missing", () => {
-    expect(
-      resolveSidebarStageBadgeLabel({
-        primaryServerVersion: null,
-        fallbackStageLabel: "Dev",
-      }),
-    ).toBe("Dev");
-  });
-
-  it("returns the fallback label for malformed nightly prerelease versions", () => {
-    expect(
-      resolveSidebarStageBadgeLabel({
-        primaryServerVersion: "0.0.28-nightly.20260616",
-        fallbackStageLabel: "Alpha",
-      }),
-    ).toBe("Alpha");
   });
 });
 
@@ -761,6 +724,138 @@ describe("resolveSidebarThreadStatus", () => {
   it("defaults to ready with no session", () => {
     expect(resolveSidebarThreadStatus({ ...idle, session: null })).toBe("ready");
   });
+
+  describe("durable workflow run liveness (launch thread has no session of its own)", () => {
+    const workflowRunStatus = (
+      overrides: Partial<{
+        status:
+          | "queued"
+          | "running"
+          | "suspended"
+          | "sleeping"
+          | "paused"
+          | "completed"
+          | "failed"
+          | "cancelled";
+        pendingKind: "thread.turn" | "user.input" | null;
+      }>,
+    ) => ({
+      runId: "run-1",
+      status: "running" as const,
+      pendingKind: null,
+      wakeAt: null,
+      updatedAt: "2026-03-09T10:00:00.000Z",
+      ...overrides,
+    });
+
+    it("reports working while the run is actively executing", () => {
+      expect(
+        resolveSidebarThreadStatus({
+          ...idle,
+          session: null,
+          workflowRunStatus: workflowRunStatus({ status: "running" }),
+        }),
+      ).toBe("working");
+    });
+
+    it("reports working while queued for engine capacity", () => {
+      expect(
+        resolveSidebarThreadStatus({
+          ...idle,
+          session: null,
+          workflowRunStatus: workflowRunStatus({ status: "queued" }),
+        }),
+      ).toBe("working");
+    });
+
+    it("reports working while a spawned child thread's turn is in flight", () => {
+      expect(
+        resolveSidebarThreadStatus({
+          ...idle,
+          session: null,
+          workflowRunStatus: workflowRunStatus({
+            status: "suspended",
+            pendingKind: "thread.turn",
+          }),
+        }),
+      ).toBe("working");
+    });
+
+    it("reports input while the run is parked on an askUser reply", () => {
+      expect(
+        resolveSidebarThreadStatus({
+          ...idle,
+          session: null,
+          workflowRunStatus: workflowRunStatus({
+            status: "suspended",
+            pendingKind: "user.input",
+          }),
+        }),
+      ).toBe("input");
+    });
+
+    it("reports monitoring while sleeping on a durable waitUntil timer", () => {
+      expect(
+        resolveSidebarThreadStatus({
+          ...idle,
+          session: null,
+          workflowRunStatus: workflowRunStatus({ status: "sleeping" }),
+        }),
+      ).toBe("monitoring");
+    });
+
+    it("falls back to sleepingUntil when the most recent run isn't the sleeping one", () => {
+      expect(
+        resolveSidebarThreadStatus({
+          ...idle,
+          session: null,
+          workflowRunStatus: workflowRunStatus({ status: "completed" }),
+          sleepingUntil: "2026-03-09T12:00:00.000Z",
+        }),
+      ).toBe("monitoring");
+    });
+
+    it.each(["completed", "failed", "cancelled", "paused"] as const)(
+      "contributes nothing for a %s run — row settles back to ready",
+      (status) => {
+        expect(
+          resolveSidebarThreadStatus({
+            ...idle,
+            session: null,
+            workflowRunStatus: workflowRunStatus({ status }),
+          }),
+        ).toBe("ready");
+      },
+    );
+
+    it("does not affect a thread that never launched an orchestration", () => {
+      expect(resolveSidebarThreadStatus({ ...idle, session: null })).toBe("ready");
+    });
+
+    it("still lets a failed session outrank a live workflow run", () => {
+      expect(
+        resolveSidebarThreadStatus({
+          ...idle,
+          session: { ...session, status: "error" as const, lastError: "boom" },
+          workflowRunStatus: workflowRunStatus({ status: "running" }),
+        }),
+      ).toBe("failed");
+    });
+
+    it("still lets pending approval outrank a run awaiting the user's answer", () => {
+      expect(
+        resolveSidebarThreadStatus({
+          ...idle,
+          hasPendingApprovals: true,
+          session: null,
+          workflowRunStatus: workflowRunStatus({
+            status: "suspended",
+            pendingKind: "user.input",
+          }),
+        }),
+      ).toBe("approval");
+    });
+  });
 });
 
 describe("searchSidebarThreadsByTitle", () => {
@@ -780,6 +875,69 @@ describe("searchSidebarThreadsByTitle", () => {
 
   it("returns no results for an empty query", () => {
     expect(searchSidebarThreadsByTitle(threads, "   ")).toEqual([]);
+  });
+});
+
+describe("filterSidebarProjectScopeItems", () => {
+  const items = [
+    { value: "all", label: "All projects" },
+    { value: "alpha", label: "Alpha workspace" },
+    { value: "beta", label: "Beta tools" },
+  ] as const;
+  const filter = (activeScopeKey: string | null, query: string) =>
+    filterSidebarProjectScopeItems({
+      items,
+      activeScopeKey,
+      query,
+      matches: (item, candidate) =>
+        item.label.toLocaleLowerCase().includes(candidate.toLocaleLowerCase()),
+    });
+
+  it("omits the reset row when the sidebar is already unscoped", () => {
+    expect(filter(null, "")).toEqual(items.slice(1));
+  });
+
+  it("shows the reset row first while a project scope is active", () => {
+    expect(filter("alpha", "")).toEqual(items);
+  });
+
+  it("hides the reset row while filtering an active scope", () => {
+    expect(filter("alpha", "all")).toEqual([]);
+  });
+
+  it("returns matching projects in source order and supports no-match results", () => {
+    expect(filter(null, "WORK")).toEqual([items[1]]);
+    expect(filter(null, "missing")).toEqual([]);
+  });
+});
+
+describe("reduceSidebarProjectScopeMenuState", () => {
+  const queriedOpenState = { open: true, query: "alpha" };
+
+  it("clears the query when the combobox closes through onOpenChange", () => {
+    expect(
+      reduceSidebarProjectScopeMenuState(queriedOpenState, {
+        type: "open-changed",
+        open: false,
+      }),
+    ).toEqual({ open: false, query: "" });
+  });
+
+  it("clears the query when project settings closes the combobox", () => {
+    expect(
+      reduceSidebarProjectScopeMenuState(queriedOpenState, {
+        type: "project-settings-opened",
+      }),
+    ).toEqual({ open: false, query: "" });
+  });
+
+  it("keeps the popup open while the query changes", () => {
+    expect(
+      reduceSidebarProjectScopeMenuState(
+        { open: true, query: "" },
+        { type: "query-changed", query: "beta" },
+      ),
+    ).toEqual({ open: true, query: "beta" });
   });
 });
 
@@ -1218,6 +1376,81 @@ describe("resolveThreadStatusPill", () => {
         },
       }),
     ).toMatchObject({ label: "Completed", pulse: false });
+  });
+
+  describe("durable workflow run liveness", () => {
+    const workflowRunStatus = (
+      overrides: Partial<{
+        status:
+          | "queued"
+          | "running"
+          | "suspended"
+          | "sleeping"
+          | "paused"
+          | "completed"
+          | "failed"
+          | "cancelled";
+        pendingKind: "thread.turn" | "user.input" | null;
+      }>,
+    ) => ({
+      runId: "run-1",
+      status: "running" as const,
+      pendingKind: null,
+      wakeAt: null,
+      updatedAt: "2026-03-09T10:00:00.000Z",
+      ...overrides,
+    });
+
+    it("shows Working for a launch thread with no session of its own while the run executes", () => {
+      expect(
+        resolveThreadStatusPill({
+          thread: {
+            ...baseThread,
+            session: null,
+            workflowRunStatus: workflowRunStatus({ status: "running" }),
+          },
+        }),
+      ).toMatchObject({ label: "Working", pulse: true });
+    });
+
+    it("shows Awaiting Input when the run is parked on an askUser reply", () => {
+      expect(
+        resolveThreadStatusPill({
+          thread: {
+            ...baseThread,
+            session: null,
+            workflowRunStatus: workflowRunStatus({
+              status: "suspended",
+              pendingKind: "user.input",
+            }),
+          },
+        }),
+      ).toMatchObject({ label: "Awaiting Input", pulse: false });
+    });
+
+    it("shows Monitoring while sleeping on a durable waitUntil timer", () => {
+      expect(
+        resolveThreadStatusPill({
+          thread: {
+            ...baseThread,
+            session: null,
+            workflowRunStatus: workflowRunStatus({ status: "sleeping" }),
+          },
+        }),
+      ).toMatchObject({ label: "Monitoring", pulse: false });
+    });
+
+    it("shows nothing for a terminal run on a thread with no other activity", () => {
+      expect(
+        resolveThreadStatusPill({
+          thread: {
+            ...baseThread,
+            session: null,
+            workflowRunStatus: workflowRunStatus({ status: "completed" }),
+          },
+        }),
+      ).toBeNull();
+    });
   });
 });
 

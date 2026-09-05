@@ -1,5 +1,6 @@
 import { canonicalJsonError, hashArgs } from "./canonicalJson.ts";
-import { JournalSchemaError, JournalSerializeError } from "./errors.ts";
+import { JournalSchemaError, JournalSerializeError, WorkflowAborted } from "./errors.ts";
+import { emitSafe, type WorkflowEvent } from "./events.ts";
 import { assertJournalMatch, gapDrift } from "./replayDrift.ts";
 import type { DurablePrimitiveSeat, PrimitiveCall } from "./runtimeTypes.ts";
 
@@ -24,8 +25,35 @@ export function createDurableCallPrimitive(seat: DurablePrimitiveSeat) {
     }
   };
 
+  // Live-path observations only: a replayed call returns the recorded result without emitting,
+  // so a subscriber sees each real transition exactly once per process lifetime. Emission is
+  // guarded: a throwing observer must not fail the primitive call itself.
+  const emit = (
+    type: "primitive.started" | "primitive.completed",
+    seq: number,
+    kind: string,
+    refId: string,
+  ): void => {
+    if (seat.runId === undefined) return;
+    const event: WorkflowEvent = {
+      type,
+      runId: seat.runId,
+      seq,
+      kind,
+      refId,
+      at: seat.nowIso(),
+    };
+    emitSafe(seat.events, event);
+  };
+
   return async <R>(call: PrimitiveCall<R>): Promise<R> => {
-    if (seat.isBlackBoxed()) return await call.exec();
+    // Sticky suspension, checked before takeSeq so a swallowing body consumes no sequence number.
+    seat.suspension.assertNotSuspended();
+    if (seat.isBlackBoxed()) {
+      const nested = await call.exec();
+      seat.suspension.assertNotSuspended();
+      return nested;
+    }
     const currentSeq = seat.takeSeq();
     const argsHash = hashArgs(call.args);
     const isNever = call.replay === "never";
@@ -40,7 +68,15 @@ export function createDurableCallPrimitive(seat: DurablePrimitiveSeat) {
     if (currentSeq <= seat.maxRecordedSeq)
       gapDrift(currentSeq, call.kind, call.refId, seat.filePath);
 
+    // First-class abort: live path only — a replayed call returns the recorded result above.
+    if (seat.abortSignal?.aborted === true) throw new WorkflowAborted();
+
+    emit("primitive.started", currentSeq, call.kind, call.refId);
     const result = await call.exec();
+    // `exec` is where `parallel()`/`pipeline()` run their thunks, and their per-branch handlers
+    // catch everything a branch throws. If a branch suspended, this result is fabricated (nulls
+    // for the suspended branches) — refuse to journal it and let the signal reach the boundary.
+    seat.suspension.assertNotSuspended();
     const startedAt = seat.nowIso();
     const endedAt = seat.nowIso();
     const callId = `${currentSeq}:${call.kind}:${call.refId}`;
@@ -48,6 +84,8 @@ export function createDurableCallPrimitive(seat: DurablePrimitiveSeat) {
 
     if (isNever) {
       seat.writer.append({ ...baseEntry, kind: "script-never", result: undefined });
+      // Correlate with primitive.started by the call's kind, not the journal kind.
+      emit("primitive.completed", currentSeq, call.kind, call.refId);
       return result;
     }
 
@@ -61,12 +99,14 @@ export function createDurableCallPrimitive(seat: DurablePrimitiveSeat) {
       });
     }
     seat.writer.append({ ...baseEntry, kind: call.kind, result });
+    emit("primitive.completed", currentSeq, call.kind, call.refId);
     return result;
   };
 }
 
 export function createDurableCallDeterministic(seat: DurablePrimitiveSeat) {
   return <R extends number | string>(kind: "now" | "random" | "uuid", exec: () => R): R => {
+    seat.suspension.assertNotSuspended(); // a parked run journals no further entropy
     if (seat.isBlackBoxed()) return exec();
     const at = seat.takeSeq();
     const argsHash = hashArgs(null);

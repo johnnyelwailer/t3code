@@ -93,10 +93,10 @@ export function ComposerVoiceInput({
 }: ComposerVoiceInputProps) {
   const voice = useVoiceInput({
     onTranscript,
-    onPartialTranscript,
-    onAutoSubmit,
-    onStateChange,
-    onLevel,
+    ...(onPartialTranscript !== undefined ? { onPartialTranscript } : {}),
+    ...(onAutoSubmit !== undefined ? { onAutoSubmit } : {}),
+    ...(onStateChange !== undefined ? { onStateChange } : {}),
+    ...(onLevel !== undefined ? { onLevel } : {}),
     initialLanguage,
   });
 

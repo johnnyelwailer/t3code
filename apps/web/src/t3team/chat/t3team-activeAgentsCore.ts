@@ -129,3 +129,15 @@ export function useActiveAgentHover(): ActiveAgentEntry | null {
     () => hoveredEntry,
   );
 }
+
+/**
+ * GHE #410 — an `agent()` child's title and live status label are often the SAME text (e.g.
+ * "Story step"), so the naive `${title} — ${statusLabel}` join reads as "Story step — Story
+ * step". Drop the redundant half instead: just the title when the two agree once case and
+ * surrounding whitespace are normalized away.
+ */
+export function formatActiveAgentLabel(title: string, statusLabel: string): string {
+  return title.trim().toLowerCase() === statusLabel.trim().toLowerCase()
+    ? title
+    : `${title} — ${statusLabel}`;
+}

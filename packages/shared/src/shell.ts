@@ -237,6 +237,34 @@ export function mergePathEntries(
   return merged.length > 0 ? merged.join(delimiter) : undefined;
 }
 
+/** Common per-user CLI locations that GUI and service launches often omit. */
+export function resolveKnownPosixCliDirs(env: NodeJS.ProcessEnv): ReadonlyArray<string> {
+  const absolute = (value: string | undefined): string | undefined => {
+    const trimmed = value?.trim();
+    return trimmed && NodePath.posix.isAbsolute(trimmed) ? trimmed : undefined;
+  };
+  const home = absolute(env.HOME);
+  const configuredBin = (value: string | undefined, suffix = "/bin") => {
+    const root = absolute(value);
+    return root ? NodePath.posix.join(root, suffix.slice(1)) : undefined;
+  };
+  const homePath = (suffix: string) => (home ? NodePath.posix.join(home, suffix) : undefined);
+
+  return [
+    ...[homePath(".local/bin"), homePath("bin")].filter(
+      (path): path is string => path !== undefined,
+    ),
+    configuredBin(env.BUN_INSTALL) ?? homePath(".bun/bin"),
+    configuredBin(env.NPM_CONFIG_PREFIX) ?? homePath(".npm-global/bin"),
+    configuredBin(env.CARGO_HOME) ?? homePath(".cargo/bin"),
+    absolute(env.PNPM_HOME),
+    configuredBin(env.VOLTA_HOME),
+    configuredBin(env.ASDF_DATA_DIR, "/shims") ?? homePath(".asdf/shims"),
+    configuredBin(env.DENO_INSTALL) ?? homePath(".deno/bin"),
+    homePath(".dotnet/tools"),
+  ].filter((path): path is string => path !== undefined);
+}
+
 function envCaptureStart(name: string): string {
   return `__T3CODE_ENV_${name}_START__`;
 }
@@ -426,6 +454,10 @@ function normalizePathEntryForComparison(entry: string, platform: NodeJS.Platfor
   return platform === "win32" ? normalized.toLowerCase() : normalized;
 }
 
+function sanitizePathEntry(entry: string, platform: NodeJS.Platform): string {
+  return platform === "win32" ? entry.replaceAll('"', "") : entry;
+}
+
 export function mergePathValues(
   preferredPath: string | undefined,
   inheritedPath: string | undefined,
@@ -439,14 +471,14 @@ export function mergePathValues(
     if (!rawValue) continue;
 
     for (const entry of rawValue.split(delimiter)) {
-      const trimmed = entry.trim();
-      if (trimmed.length === 0) continue;
+      const sanitized = sanitizePathEntry(entry.trim(), platform);
+      if (sanitized.length === 0) continue;
 
-      const normalized = normalizePathEntryForComparison(trimmed, platform);
+      const normalized = normalizePathEntryForComparison(sanitized, platform);
       if (normalized.length === 0 || seen.has(normalized)) continue;
 
       seen.add(normalized);
-      merged.push(trimmed);
+      merged.push(sanitized);
     }
   }
 
@@ -736,7 +768,9 @@ export const resolveWindowsEnvironment = Effect.fn("shell.resolveWindowsEnvironm
   }).PATH;
   const mergedPath = mergePathValues(shellPath, inheritedPath, "win32");
   const knownCliPath = resolveKnownWindowsCliDirs(env).join(WINDOWS_PATH_DELIMITER);
-  const baselinePath = mergePathValues(knownCliPath, mergedPath, "win32");
+  // Preserve the order a user's shell uses. These directories fill gaps when
+  // desktop apps launch without the full interactive-shell PATH.
+  const baselinePath = mergePathValues(mergedPath, knownCliPath, "win32");
   const baselinePatch: Partial<NodeJS.ProcessEnv> = baselinePath ? { PATH: baselinePath } : {};
   const baselineEnv = mergeWindowsEnv(env, baselinePatch);
 

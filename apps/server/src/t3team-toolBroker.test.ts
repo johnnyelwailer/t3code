@@ -29,6 +29,7 @@ const makeOrchestrationMock = (
   readEvents: () => Stream.empty,
   dispatch,
   streamDomainEvents: Stream.empty,
+  subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
   latestSequence: Effect.succeed(0),
 });
 
@@ -173,6 +174,7 @@ describe("T3TeamToolBrokerLive", () => {
     );
 
     expect(binding?.listServers()[0]?.tools).toEqual({
+      "t3team.runtime.models": expect.objectContaining({ name: "t3team.runtime.models" }),
       "t3team.thread.rename": expect.objectContaining({ name: "t3team.thread.rename" }),
       "t3team.thread.start_child": expect.objectContaining({
         name: "t3team.thread.start_child",

@@ -8,20 +8,22 @@
  * the data alone; both fold by label here.
  *
  * Split out of `t3team-WorkflowShapeStepRows.tsx`, which owns row orchestration and phase
- * headers; this file owns the grouping decision, status aggregation, and the group row itself.
+ * headers; this file owns the grouping decision and status aggregation. Every group of two or
+ * more renders through the same collapsible form — capped at ten visible rows with a "Show all N"
+ * expander (GHE #403 §5) — in `t3team-workflowShapeStepGroupCollapsed.tsx`. There is no separate
+ * "retry" presentation (GHE #414): loop iterations and genuine re-drives of one step are both
+ * journaled as independent activities with no shared step identity, and the client shape
+ * (`T3TeamWorkflowStepEntry` in `t3team-threadWorkflowStepProgress.ts`) stamps no re-drive marker
+ * that would let us tell them apart — so a distinct "Attempt N" treatment would be a label-based
+ * guess, not a fact.
  */
-import { ChevronRightIcon } from "lucide-react";
-
-import { T3TeamWorkflowStepDetails } from "~/t3team/chat/t3team-WorkflowStepDetails";
 import type { T3TeamWorkflowShapeProgressRow } from "~/t3team/chat/t3team-workflowShapeProgress";
 import {
   displayedStepStatus,
   fallbackRuntimeLabel,
-  RuntimeStepRow,
-  StepStatusIcon,
-  StepTrailing,
   type StepStatus,
 } from "~/t3team/chat/t3team-workflowRunStepRow";
+import { T3TeamWorkflowShapeCollapsedGroup } from "~/t3team/chat/t3team-workflowShapeStepGroupCollapsed";
 import type { useT3TeamWorkflowShapeLiveState } from "~/t3team/chat/t3team-workflowShapeLiveState";
 
 type LiveState = ReturnType<typeof useT3TeamWorkflowShapeLiveState>;
@@ -45,14 +47,30 @@ export type RenderUnit =
  * Only dynamic rows are eligible: authored plan rows carry positional meaning (`scheduledPlanRow`,
  * wait-until timers) that grouping would have to thread through, and the reported duplication is
  * entirely dynamic agent-call rows anyway.
+ *
+ * One exception (GHE #407): a single-agent-call-site loop has exactly one authored plan row, and
+ * `reconcileT3TeamWorkflowShapeProgress` matches it to the FIRST runtime iteration (`findIndex` +
+ * `used`), leaving every later iteration plan-unmatched. That leaves one plan-matched row directly
+ * ahead of the dynamic group it actually belongs to — rendered standalone as "Count step 2.6s"
+ * beside "Count step · 11/11" instead of one "Count step · 12/12" group. When a plan-matched row's
+ * runtime step shares its fallback label with the dynamic rows immediately following it, it is
+ * absorbed into that group instead of rendered on its own.
  */
 export function groupDynamicRuntimeRows(rows: LiveState["rows"]): RenderUnit[] {
   const units: RenderUnit[] = [];
   let index = 0;
   while (index < rows.length) {
     const row = rows[index]!;
-    if (row.planStep === undefined && row.runtimeStep !== undefined) {
-      const label = fallbackRuntimeLabel(row.runtimeStep);
+    const isDynamic = row.planStep === undefined && row.runtimeStep !== undefined;
+    const isAbsorbablePlanMatch =
+      !isDynamic &&
+      row.planStep !== undefined &&
+      row.runtimeStep !== undefined &&
+      rows[index + 1]?.planStep === undefined &&
+      rows[index + 1]?.runtimeStep !== undefined &&
+      fallbackRuntimeLabel(rows[index + 1]!.runtimeStep!) === fallbackRuntimeLabel(row.runtimeStep);
+    if (isDynamic || isAbsorbablePlanMatch) {
+      const label = fallbackRuntimeLabel(row.runtimeStep!);
       const startIndex = index;
       const group: DynamicRow[] = [row as DynamicRow];
       let next = index + 1;
@@ -69,7 +87,8 @@ export function groupDynamicRuntimeRows(rows: LiveState["rows"]): RenderUnit[] {
         next += 1;
       }
       // A lone dynamic row is not a repeat of anything — render it as a plain row so it
-      // doesn't pick up a bogus "↻1" attempt badge.
+      // doesn't pick up a bogus "↻1" attempt badge. (An absorbable plan-match row is never
+      // lone: its absorption condition requires at least one matching dynamic row to follow.)
       if (group.length === 1) {
         units.push({ kind: "row", row, index: startIndex });
       } else {
@@ -123,86 +142,19 @@ export function T3TeamWorkflowShapeDynamicGroupRow({
 }) {
   const { icon, completed } = aggregateGroupStatus(rows, status);
 
-  // Two or three same-label repeats read as retries of one step more often than as distinct
-  // work — fold them into a single row with an attempt badge instead of duplicate rows. Above
-  // that, a loop body is the more likely explanation, so keep it collapsible with per-attempt
-  // detail (and thread links) still reachable.
-  if (rows.length <= 3) {
-    const last = rows.at(-1)!;
-    return (
-      <div className="space-y-1">
-        <T3TeamWorkflowStepDetails
-          step={last.runtimeStep}
-          hideDetail={last.runtimeStep.detail === undefined}
-          redactDetail={last.runtimeStep.stepKind === "workflow.self-heal"}
-          {...(onOpenThread ? { onOpenThread } : {})}
-          {...(currentThreadId ? { currentThreadId } : {})}
-        >
-          <div className="flex items-center gap-2.5" data-step-runtime="unknown">
-            <StepStatusIcon status={icon} />
-            <span className="min-w-0 flex-1 truncate text-sm text-foreground/90">{label}</span>
-            {rows.length > 1 ? (
-              <span className="shrink-0 rounded-full border border-border/55 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground/80">
-                ↻{rows.length}
-              </span>
-            ) : null}
-            <StepTrailing
-              step={last.runtimeStep}
-              wakeAt={undefined}
-              childStatuses={childStatuses}
-            />
-          </div>
-        </T3TeamWorkflowStepDetails>
-        {rows.length > 1 ? (
-          <div className="ml-7 space-y-0.5">
-            {rows.map((row, attemptIndex) => (
-              <T3TeamWorkflowStepDetails
-                key={row.runtimeStep.stepId}
-                step={row.runtimeStep}
-                hideDetail={row.runtimeStep.detail === undefined}
-                redactDetail={row.runtimeStep.stepKind === "workflow.self-heal"}
-                {...(onOpenThread ? { onOpenThread } : {})}
-                {...(currentThreadId ? { currentThreadId } : {})}
-              >
-                <span className="text-[11px] text-muted-foreground/70">
-                  Attempt {attemptIndex + 1}
-                </span>
-              </T3TeamWorkflowStepDetails>
-            ))}
-          </div>
-        ) : null}
-      </div>
-    );
-  }
-
+  // Same-label repeats are loop iterations, not retries of one step — the client shape carries
+  // no re-drive marker to tell the two apart (see module doc), so every group of two or more
+  // renders through the same collapsible form regardless of size (GHE #414).
   return (
-    <details className="group/step-group rounded-md open:bg-muted/25">
-      <summary className="flex cursor-pointer list-none items-center gap-2.5 rounded-md px-1 py-0.5 hover:bg-muted/35 [&::-webkit-details-marker]:hidden">
-        <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground/70 transition-transform group-open/step-group:rotate-90" />
-        <StepStatusIcon status={icon} />
-        <span className="min-w-0 flex-1 truncate text-sm text-foreground/90">
-          {label} · {completed}/{rows.length}
-        </span>
-      </summary>
-      <div className="ml-7 mt-1 space-y-1.5 border-l border-border/60 pl-3">
-        {rows.map((row) => (
-          <T3TeamWorkflowStepDetails
-            key={row.runtimeStep.stepId}
-            step={row.runtimeStep}
-            hideDetail={row.runtimeStep.detail === undefined}
-            redactDetail={row.runtimeStep.stepKind === "workflow.self-heal"}
-            {...(onOpenThread ? { onOpenThread } : {})}
-            {...(currentThreadId ? { currentThreadId } : {})}
-          >
-            <RuntimeStepRow
-              step={row.runtimeStep}
-              wakeAt={undefined}
-              runStatus={status}
-              childStatuses={childStatuses}
-            />
-          </T3TeamWorkflowStepDetails>
-        ))}
-      </div>
-    </details>
+    <T3TeamWorkflowShapeCollapsedGroup
+      label={label}
+      rows={rows}
+      icon={icon}
+      completed={completed}
+      status={status}
+      {...(childStatuses ? { childStatuses } : {})}
+      {...(onOpenThread ? { onOpenThread } : {})}
+      {...(currentThreadId ? { currentThreadId } : {})}
+    />
   );
 }

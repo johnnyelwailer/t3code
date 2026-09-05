@@ -32,6 +32,13 @@ export interface WorkflowStepSentInput {
   readonly error?: string;
   /** Thread this primitive operates on; lets the plan card navigate to child work. */
   readonly threadId?: string;
+  /**
+   * The AUTHORED `phase()` group active in the workflow body right now, if the host tracks one
+   * (see `t3team-workflowEngineController.ts`). Stamped onto the activity payload so the client
+   * can bucket a plan-unmatched (dynamic) runtime step under its REAL phase instead of guessing
+   * from the nearest matched plan row — see `reconcileT3TeamWorkflowShapeProgress`.
+   */
+  readonly workflowPhase?: string;
 }
 
 export interface WorkflowStepActivityEmitter {
@@ -65,6 +72,10 @@ interface SentStepRecord {
   readonly detail: string | undefined;
   readonly createdAt: string;
   readonly threadId: string | undefined;
+  /** Remembered so `emitResolved` re-stamps the SAME authored phase the step was sent under,
+   * rather than reading a live tracker that (by the time a reply resolves) may belong to a
+   * different point in the replayed body — see `WorkflowStepSentInput.workflowPhase`. */
+  readonly workflowPhase: string | undefined;
 }
 
 export function createWorkflowStepActivityEmitter(opts: {
@@ -115,6 +126,7 @@ export function createWorkflowStepActivityEmitter(opts: {
         detail: input.detail,
         createdAt,
         threadId: input.threadId,
+        workflowPhase: input.workflowPhase,
       });
       return append(
         input.correlationId,
@@ -127,6 +139,7 @@ export function createWorkflowStepActivityEmitter(opts: {
           ...(input.error === undefined ? {} : { error: input.error }),
           projectId: opts.projectId,
           ...(input.threadId === undefined ? {} : { threadId: input.threadId }),
+          ...(input.workflowPhase === undefined ? {} : { workflowPhase: input.workflowPhase }),
         },
         input.detail ?? "Workflow activity",
         createdAt,
@@ -135,6 +148,12 @@ export function createWorkflowStepActivityEmitter(opts: {
     emitResolved: (correlationId, phase, error) => {
       const sent = sentByCorrelation.get(correlationId);
       sentByCorrelation.delete(correlationId);
+      // Only computable when the step's start survived in-process (`sentByCorrelation` is empty
+      // after a restart — see the field's doc on `SentStepRecord` above and on
+      // `ProjectRecipeWorkflowStepActivityPayload.durationMs`). A guessed or zero duration is
+      // worse than none, so omit rather than fabricate.
+      const durationMs =
+        sent === undefined ? undefined : Date.parse(opts.nowIso()) - Date.parse(sent.createdAt);
       return append(
         correlationId,
         {
@@ -146,6 +165,13 @@ export function createWorkflowStepActivityEmitter(opts: {
           ...(error === undefined ? {} : { error }),
           projectId: opts.projectId,
           ...(sent?.threadId === undefined ? {} : { threadId: sent.threadId }),
+          // Re-stamp the SAME phase the step was SENT under (see `SentStepRecord.workflowPhase`)
+          // rather than reading a live tracker here: `emitResolved` fires as soon as a reply is
+          // durably journaled, BEFORE the body replay that would advance it — see
+          // `t3team-workflowEngineResume.ts`'s `makeControllerResume`. Absent after a process
+          // restart (the in-memory map is empty), same as `detail`/`stepKind` above.
+          ...(sent?.workflowPhase === undefined ? {} : { workflowPhase: sent.workflowPhase }),
+          ...(durationMs === undefined ? {} : { durationMs }),
         },
         `Workflow step ${phase}: ${sent?.detail ?? sent?.stepKind ?? correlationId}`,
         sent?.createdAt ?? opts.nowIso(),

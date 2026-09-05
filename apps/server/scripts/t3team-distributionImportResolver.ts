@@ -11,14 +11,14 @@
  * plugin already relies on.)
  */
 import * as NodePath from "node:path";
-import * as NodeUrl from "node:url";
+import * as NodeURL from "node:url";
 
 import { isExternalCliDependency } from "../../../scripts/lib/cli-external-packages.ts";
 
 export const isBareSpecifier = (source: string): boolean =>
+  !NodePath.isAbsolute(source) &&
+  !NodePath.win32.isAbsolute(source) &&
   !source.startsWith(".") &&
-  !source.startsWith("/") &&
-  !source.startsWith("\\") &&
   !source.startsWith("node:") &&
   !source.includes("?");
 
@@ -30,13 +30,13 @@ export const createDistributionImportResolver = (): ((
   // (`import.meta.resolve`, "import" condition) is required: workspace packages like
   // @t3team/pack-api export ESM-only (`exports.import -> ./src/index.ts`), which `require.resolve`
   // cannot load. Resolution is decided by what THIS bundle inlines, not by the machine's layout.
-  const parentURL = NodeUrl.pathToFileURL(NodePath.join(process.cwd(), "package.json")).href;
+  const parentURL = NodeURL.pathToFileURL(NodePath.join(process.cwd(), "package.json")).href;
   return (source, importer) => {
     // Packages the CLI deliberately keeps out of the bundle (native addons and their loaders) are
     // staged next to the artifact instead; keep them on the default path.
     if (isExternalCliDependency(source)) return null;
     try {
-      return NodeUrl.fileURLToPath(import.meta.resolve(source, parentURL));
+      return NodeURL.fileURLToPath(import.meta.resolve(source, parentURL));
     } catch {
       // A pack module compiled into the bundle can only be self-contained if its bare imports
       // resolve in THIS workspace; an ancestor node_modules at boot is not part of the contract

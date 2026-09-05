@@ -245,7 +245,7 @@ const initialSnapshot: OrchestrationShellSnapshot = {
 } as unknown as OrchestrationShellSnapshot;
 
 describe("live status summary reaches the rows (GHE #208/#40)", () => {
-  it("a thread with activityState='thinking' renders 'Thinking …', not 'Working' (stale detail cached)", () => {
+  it("a thread with activityState='thinking' renders the LLM label, not 'Working' (stale detail cached)", () => {
     const probe = mountProbe(initialSnapshot);
     // The classifier persisted a state transition + the LLM enrichment landed:
     // the live shell now carries both. The cached detail has neither.
@@ -269,10 +269,12 @@ describe("live status summary reaches the rows (GHE #208/#40)", () => {
 
     // The sub-run row's live summary — the reported surface.
     const rowText = renderRow(thread!, childRef);
-    expect(rowText).toContain("Thinking · Reading contracts");
+    expect(rowText).toContain("Reading contracts");
+    // replace, never append: no "Thinking · …" residue
+    expect(rowText).not.toContain("Thinking");
 
     // The parent card's verbatim derivation — same answer, no disagreement.
-    expect(parentCardSummary(thread!)).toBe("Thinking · Reading contracts");
+    expect(parentCardSummary(thread!)).toBe("Reading contracts");
 
     probe.unmount();
   });

@@ -1,7 +1,11 @@
 /**
  * Native-provider subagent observability: a tolerant fold over persisted
  * task.* / tool.* thread activities into orchestration-v2-shaped subagent
- * state, plus the source-neutral panel model every client renders.
+ * state, plus the source-neutral panel model every client renders. Also
+ * folds project-recipe workflow runs (t3team.recipe.workflow.step, an
+ * entirely different payload shape — see foldWorkflowStepActivity) into the
+ * SAME roster, so an ephemeral recipe-orchestrated workflow's child threads
+ * show up as a workflow group exactly like a native provider's.
  *
  * This module is deliberately legacy-bridge code. When orchestration-v2's
  * subagent projection is available for a thread, deriveAgentPanelModel
@@ -268,6 +272,44 @@ function kindFromPayload(
   return "subagent";
 }
 
+/**
+ * Bare agent record shared by every creation path (task.* payload fill,
+ * recipe-workflow-step fold). Kept separate from getOrCreate so the
+ * workflow-step fold — whose payload has no taskId/title/role/model shape at
+ * all — can create a record without forcing task-shaped fields through it.
+ */
+function createBlankAgent(id: string, kind: MutableAgent["kind"], at: string): MutableAgent {
+  return {
+    id,
+    kind,
+    title: id,
+    role: null,
+    model: null,
+    effort: null,
+    status: "pending",
+    activationCount: 0,
+    usage: null,
+    progress: null,
+    lastToolName: null,
+    result: null,
+    error: null,
+    outputFile: null,
+    parentAgentId: null,
+    agentIndex: null,
+    phaseIndex: null,
+    phaseTitle: null,
+    attempt: null,
+    workflowName: null,
+    phases: [],
+    runHandles: null,
+    recentActivity: [],
+    firstSeenAt: at,
+    startedAt: null,
+    completedAt: null,
+    updatedAt: at,
+  };
+}
+
 /** Completion can create an agent (its start may have aged out of retention). */
 function getOrCreate(
   agents: Map<string, MutableAgent>,
@@ -279,35 +321,17 @@ function getOrCreate(
   if (existing) {
     return existing;
   }
-  const created: MutableAgent = {
-    id,
-    kind: kindFromPayload(payload, id),
-    title: asString(payload.title) ?? asString(payload.detail) ?? id,
-    role: asString(payload.role) ?? null,
-    model: asString(payload.model) ?? null,
-    effort: asString(payload.effort) ?? null,
-    status: "pending",
-    activationCount: 0,
-    usage: null,
-    progress: null,
-    lastToolName: null,
-    result: null,
-    error: null,
-    outputFile: null,
-    parentAgentId: asString(payload.parentAgentId) ?? null,
-    agentIndex: asCount(payload.agentIndex) ?? null,
-    phaseIndex: asCount(payload.phaseIndex) ?? null,
-    phaseTitle: asString(payload.phaseTitle) ?? null,
-    attempt: asCount(payload.attempt) ?? null,
-    workflowName: asString(payload.workflowName) ?? null,
-    phases: [],
-    runHandles: null,
-    recentActivity: [],
-    firstSeenAt: at,
-    startedAt: null,
-    completedAt: null,
-    updatedAt: at,
-  };
+  const created = createBlankAgent(id, kindFromPayload(payload, id), at);
+  created.title = asString(payload.title) ?? asString(payload.detail) ?? id;
+  created.role = asString(payload.role) ?? null;
+  created.model = asString(payload.model) ?? null;
+  created.effort = asString(payload.effort) ?? null;
+  created.parentAgentId = asString(payload.parentAgentId) ?? null;
+  created.agentIndex = asCount(payload.agentIndex) ?? null;
+  created.phaseIndex = asCount(payload.phaseIndex) ?? null;
+  created.phaseTitle = asString(payload.phaseTitle) ?? null;
+  created.attempt = asCount(payload.attempt) ?? null;
+  created.workflowName = asString(payload.workflowName) ?? null;
   agents.set(id, created);
   return created;
 }
@@ -445,6 +469,159 @@ function asRuntimeStatus(value: unknown): RuntimeSubagentStatus | undefined {
     : undefined;
 }
 
+// Kept as a literal (not imported from @t3tools/project-recipes) the same
+// way every other activity kind in this file is: this module treats
+// OrchestrationThreadActivity.kind as its own opaque string domain and
+// stays payload-shape-tolerant rather than schema-coupled, and
+// client-runtime does not otherwise depend on project-recipes.
+const RECIPE_WORKFLOW_STEP_KIND = "t3team.recipe.workflow.step";
+
+// The step's OWN lifecycle phase (apps/server/src/t3team-workflowEngineStepActivities.ts /
+// packages/project-recipes/src/runtime.ts ProjectRecipeWorkflowStepPhase), mapped onto the
+// roster's status vocabulary. "paused" reads as idle (resumable), matching how a resumable
+// Codex child is represented elsewhere in this fold.
+const WORKFLOW_STEP_PHASE_TO_STATUS: ReadonlyMap<string, RuntimeSubagentStatus> = new Map([
+  ["started", "running"],
+  ["completed", "completed"],
+  ["waiting", "waiting"],
+  ["paused", "idle"],
+  ["failed", "failed"],
+  ["cancelled", "cancelled"],
+]);
+
+/**
+ * Assigns a stable per-workflow ordinal to a `workflowPhase` NAME the first time it is seen, so
+ * repeat occurrences of the same name land on the same index. `workflowPhase` (the authored
+ * `phase()` group, e.g. "Draft" / "Review") is a free-form string — unlike native provider tasks,
+ * which stamp a numeric `phaseIndex` directly — but deriveAgentPanelModel's phase grouping is
+ * index-based, so this is the seam that lets recipe-workflow members use the same grouping
+ * machinery without deriveAgentPanelModel knowing phases can be named.
+ */
+function workflowPhaseOrdinal(
+  ordinalsByWorkflow: Map<string, Map<string, number>>,
+  workflowRunId: string,
+  phaseName: string,
+): number {
+  let ordinals = ordinalsByWorkflow.get(workflowRunId);
+  if (!ordinals) {
+    ordinals = new Map();
+    ordinalsByWorkflow.set(workflowRunId, ordinals);
+  }
+  let index = ordinals.get(phaseName);
+  if (index === undefined) {
+    index = ordinals.size;
+    ordinals.set(phaseName, index);
+  }
+  return index;
+}
+
+/**
+ * Folds one `t3team.recipe.workflow.step` activity — a project-recipe workflow's own primitive
+ * log (thread.create / thread.turn / thread.message / user.input / wait.until / run), NOT a
+ * native-provider task — into the same roster shape `task.*` rows build. Kept as a dedicated
+ * function rather than routed through getOrCreate/fillMetadata because the payload has an
+ * entirely different shape (no taskId, no agentKind, no title/role/model — see
+ * ProjectRecipeWorkflowStepActivityPayload in packages/project-recipes/src/runtime.ts):
+ *
+ *  - The coordinator (`kind: "workflow"`) is keyed by `workflowRunId`, not a taskId. Its only
+ *    terminal signal is the `run:<runId>` step — `emitRun` in
+ *    apps/server/src/t3team-workflowEngineStepActivities.ts never sends a "started" phase — so it
+ *    is created lazily on the run's FIRST step and defaults to "running" until that row lands.
+ *  - A member (`kind: "workflow_agent"`) is a real child thread. Only a `thread.create` step's OWN
+ *    `threadId` introduces a new member (by the emitter's id scheme, that threadId IS the child
+ *    thread it just created); every other step kind merely operates ON an already-known member's
+ *    thread via `payload.threadId` — which is also how `user.input`/`thread.message` steps report
+ *    the LAUNCH thread's own id. Requiring the id to already be a tracked member (with this
+ *    workflow as its parent) is what keeps the launch thread out of the roster, exactly as the
+ *    "ephemeral child threads never enter the sidebar" invariant requires it to stay out of a
+ *    different UI surface.
+ *  - A `thread.create` step completing only means the thread now exists, not that the member's
+ *    work is done — so it lands the member on "running" rather than letting its own "completed"
+ *    phase read as the member finishing; the `thread.turn` step that follows carries the member's
+ *    real outcome.
+ */
+function foldWorkflowStepActivity(
+  agents: Map<string, MutableAgent>,
+  workflowPhaseOrdinals: Map<string, Map<string, number>>,
+  payload: Record<string, unknown>,
+  at: string,
+): void {
+  const workflowRunId = asString(payload.workflowRunId);
+  const stepId = asString(payload.stepId);
+  if (!workflowRunId || !stepId) return;
+
+  let workflow = agents.get(workflowRunId);
+  if (!workflow) {
+    workflow = createBlankAgent(workflowRunId, "workflow", at);
+    agents.set(workflowRunId, workflow);
+  }
+  if (workflow.activationCount === 0) workflow.activationCount = 1;
+
+  const stepPhase = asString(payload.phase);
+  const status = stepPhase ? WORKFLOW_STEP_PHASE_TO_STATUS.get(stepPhase) : undefined;
+  const errorText = asString(payload.error);
+
+  if (stepId === `run:${workflowRunId}`) {
+    // The run-level terminal row — see the doc comment above: this is the ONLY place the
+    // coordinator's own status is reported.
+    if (status) applyStatus(workflow, status, at);
+    if (errorText) workflow.error = bounded(errorText);
+    workflow.updatedAt = at;
+    return;
+  }
+
+  // Any non-terminal step means the run is under way. Guarded on "pending" so a late/out-of-order
+  // step arriving after the coordinator already settled cannot reopen it (order-robustness, same
+  // invariant task.* rows observe elsewhere in this fold).
+  if (workflow.status === "pending") workflow.status = "running";
+  if (workflow.startedAt === null) workflow.startedAt = at;
+  workflow.updatedAt = at;
+
+  const stepKind = asString(payload.stepKind) ?? "step";
+  const detail = asString(payload.detail);
+  const memberThreadId = asString(payload.threadId);
+  const workflowPhaseName = asString(payload.workflowPhase);
+
+  let member: MutableAgent | undefined;
+  if (stepKind === "thread.create") {
+    if (!memberThreadId) return;
+    member = agents.get(memberThreadId);
+    if (!member) {
+      member = createBlankAgent(memberThreadId, "workflow_agent", at);
+      member.parentAgentId = workflow.id;
+      agents.set(memberThreadId, member);
+    }
+    if (member.activationCount === 0) member.activationCount = 1;
+    if (detail) member.title = detail;
+  } else {
+    if (!memberThreadId) return;
+    const candidate = agents.get(memberThreadId);
+    if (!candidate || candidate.parentAgentId !== workflow.id) return;
+    member = candidate;
+  }
+
+  const phaseIndex = workflowPhaseName
+    ? workflowPhaseOrdinal(workflowPhaseOrdinals, workflowRunId, workflowPhaseName)
+    : null;
+  if (phaseIndex !== null) {
+    member.phaseIndex = phaseIndex;
+    member.phaseTitle = workflowPhaseName ?? member.phaseTitle;
+  }
+  if (detail) {
+    member.progress = bounded(detail);
+    member.recentActivity = appendActivity(member.recentActivity, at, detail);
+  }
+  if (status) {
+    applyStatus(
+      member,
+      stepKind === "thread.create" && status === "completed" ? "running" : status,
+      at,
+    );
+  }
+  if (errorText) member.error = bounded(errorText);
+  member.updatedAt = at;
+}
+
 /**
  * Folds a thread's persisted activities into subagent state. Tolerant by
  * construction: malformed rows are skipped individually; unknown kinds are
@@ -461,6 +638,9 @@ export function foldSubagentActivities(
   options?: { readonly sessionLive?: boolean },
 ): ReadonlyArray<RuntimeSubagent> {
   const agents = new Map<string, MutableAgent>();
+  // Recipe-workflow phase names are free-form strings, scoped per workflowRunId —
+  // see foldWorkflowStepActivity / workflowPhaseOrdinal.
+  const workflowPhaseOrdinals = new Map<string, Map<string, number>>();
 
   for (const activity of activities) {
     if (typeof activity.payload !== "object" || activity.payload === null) {
@@ -470,6 +650,10 @@ export function foldSubagentActivities(
     const at = activity.createdAt;
 
     switch (activity.kind) {
+      case RECIPE_WORKFLOW_STEP_KIND: {
+        foldWorkflowStepActivity(agents, workflowPhaseOrdinals, payload, at);
+        break;
+      }
       case "task.started": {
         const taskId = asString(payload.taskId);
         if (!taskId) break;
@@ -879,14 +1063,21 @@ export function workflowCardMembers(
   };
 }
 
-/** Kinds the timeline should not render as generic rows (fold input only). */
+/**
+ * Kinds the timeline should not render as generic rows (fold input only).
+ * NOTE: unused outside this file/its tests as of this writing (verified by
+ * grep) — the fold's own switch in foldSubagentActivities is what actually
+ * gates which kinds populate the Agents surface. Kept in sync anyway since
+ * its doc comment promises exactly this classification.
+ */
 export function isSubagentActivityKind(kind: string): boolean {
   return (
     kind === "task.started" ||
     kind === "task.progress" ||
     kind === "task.updated" ||
     kind === "task.completed" ||
-    kind === "tool.progress"
+    kind === "tool.progress" ||
+    kind === RECIPE_WORKFLOW_STEP_KIND
   );
 }
 
