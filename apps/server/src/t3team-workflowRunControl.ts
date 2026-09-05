@@ -21,10 +21,19 @@ import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 import type { InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
 import { NON_TERMINAL_STATUSES, reportStaleWrite } from "./t3team-workflowRunControlCas.ts";
+import {
+  retryFailedWorkflowRun,
+  type WorkflowRunControlRetryDeps,
+} from "./t3team-workflowRunControlRetry.ts";
 import { pausedResumeBlocker, restorePausedPendingAsk } from "./t3team-workflowResumePausedTurn.ts";
 
 export type WorkflowRunControlAction = "pause" | "resume" | "stop";
-export type WorkflowRunControlStatus = "suspended" | "sleeping" | "paused" | "cancelled";
+export type WorkflowRunControlStatus =
+  | "suspended"
+  | "sleeping"
+  | "paused"
+  | "cancelled"
+  | "running";
 
 const TERMINAL = new Set(["completed", "failed", "cancelled"]);
 
@@ -43,7 +52,13 @@ export function workflowControlValidationError(
   ) {
     return "Pause is available only while the workflow is waiting or scheduled.";
   }
-  if (input.action === "resume" && run.status !== "paused") return "This workflow is not paused.";
+  if (
+    input.action === "resume" &&
+    run.status !== "paused" &&
+    run.status !== "failed" // GHE #344: retry re-drives a terminal-failed run from its journal.
+  ) {
+    return "This workflow is not paused or failed.";
+  }
   if (input.action === "stop" && TERMINAL.has(run.status)) return "Workflow is already finished.";
   return null;
 }
@@ -63,6 +78,8 @@ export interface WorkflowRunControlDeps {
    */
   readonly stopOrigin: "user" | "system";
   readonly turnRedrive?: InterruptedTurnRetry;
+  /** GHE #344: failed-run retry deps; absent where no durable journal (agent pause/stop tools). */
+  readonly retryFailed?: WorkflowRunControlRetryDeps;
 }
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -109,6 +126,10 @@ export const controlWorkflowRun = Effect.fn("controlWorkflowRun")(function* (
     yield* Effect.promise(() => deps.rearmScheduler());
     status = "paused";
   } else if (input.action === "resume") {
+    if (run.status === "failed") {
+      // GHE #344: retry — journal re-drive, shared with the `t3team.orchestration.resume` tool.
+      return yield* retryFailedWorkflowRun(deps, run, input.threadId);
+    }
     if (run.pendingCorrelationId === null) {
       return yield* Effect.fail("This workflow is not paused.");
     }

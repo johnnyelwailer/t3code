@@ -381,6 +381,19 @@ describe("live workflow step overlay on the plan card", () => {
     expect(pausedMarkup).toMatch(/Paused (just now|\d+[mhd] ago)/);
     expect(pausedMarkup).toContain("data-run-resume");
 
+    // GHE #344: a terminal failed card offers Retry (journal re-drive), labelled as a retry,
+    // not a pause-resume — and the failed banner carries the same affordance.
+    const failedRetryMarkup = await renderTimeline(
+      [...waiting, runActivity("failed", "boom")],
+      undefined,
+      { status: "failed" },
+    );
+    expect(failedRetryMarkup).toContain('aria-label="Retry run"');
+    expect(failedRetryMarkup).not.toContain('aria-label="Resume orchestration"');
+    expect(failedRetryMarkup).not.toContain('aria-label="Stop workflow"');
+    expect(failedRetryMarkup).toContain("data-run-resume");
+    expect(failedRetryMarkup).toContain(">Retry<");
+
     const stoppedMarkup = await renderTimeline([...waiting, runActivity("cancelled")], undefined, {
       status: "cancelled",
     });

@@ -55,6 +55,7 @@ import {
   T3TeamWorkflowEngineRegistryLive,
 } from "./t3team-workflowEngineRegistry.ts";
 import {
+  userFacingFailureStep,
   workflowFailureReasonText,
   workflowFailureStepText,
 } from "./t3team-workflowFailureReason.ts";
@@ -246,4 +247,25 @@ describe("workflowFailureReasonText / workflowFailureStepText", () => {
       );
     },
   );
+});
+
+describe("userFacingFailureStep (GHE #344)", () => {
+  vitestIt("strips the leading internal settle-phase token for a human-facing string", () => {
+    expect(userFacingFailureStep("resume: thread.turn (QA round 1)")).toBe(
+      "thread.turn (QA round 1)",
+    );
+  });
+
+  vitestIt("leaves a string with no phase prefix unchanged", () => {
+    expect(userFacingFailureStep("thread.turn (QA round 1)")).toBe("thread.turn (QA round 1)");
+  });
+
+  vitestIt("falls back to a generic label for a bare phase token instead of leaking it", () => {
+    expect(userFacingFailureStep("rehydration")).toBe("an unknown step");
+    expect(userFacingFailureStep("resume")).toBe("an unknown step");
+  });
+
+  vitestIt("leaves an unrelated string unchanged", () => {
+    expect(userFacingFailureStep("apply migration")).toBe("apply migration");
+  });
 });
