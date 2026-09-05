@@ -286,7 +286,11 @@ import {
 } from "@t3tools/client-runtime/state/threads";
 import { resolveProviderSkillsForCwd } from "@t3tools/client-runtime/providerSkills";
 import { vcsEnvironment } from "../state/vcs";
-import { useEnvironments, useEnvironmentHttpBaseUrl, usePrimaryEnvironment } from "../state/environments";
+import {
+  useEnvironments,
+  useEnvironmentHttpBaseUrl,
+  usePrimaryEnvironment,
+} from "../state/environments";
 import {
   useProject,
   useProjects,
@@ -2380,33 +2384,25 @@ function ChatViewContent(props: ChatViewProps) {
     // thread's provider window, turns on it are paused server-side. The banner
     // sits below the latest message with the per-thread auto-resume toggle.
     if (providerUsageHold !== null && activeThreadId !== null) {
-      const holdAutoResume =
-        providerUsageHoldAutoResumeOverride ?? providerUsageHold.autoResume;
+      const holdAutoResume = providerUsageHoldAutoResumeOverride ?? providerUsageHold.autoResume;
       items.push({
         id: "provider-usage-hold",
         variant: "warning",
         priority: "urgent",
-        icon: (
-          <span
-            className="size-1.5 animate-status-pulse rounded-full bg-amber-500"
-            aria-hidden="true"
-          />
-        ),
-        title: `Provider usage limit reached${
-          providerUsageHold.driver !== null ? ` — ${providerUsageHold.driver} window exhausted` : ""
-        }`,
-        description:
+        icon: <span className="size-1.5 rounded-full bg-amber-500" aria-hidden="true" />,
+        title:
           providerUsageHold.resetsAt !== null
-            ? `Turns paused · ${describeHoldReset(providerUsageHold.resetsAt, Date.now())}`
-            : "Turns paused until the provider window recovers",
-        actions: providerUsageHoldHttpBaseUrl !== null ? (
-          <ProviderUsageHoldToggle
-            threadId={activeThreadId}
-            httpBaseUrl={providerUsageHoldHttpBaseUrl}
-            autoResume={holdAutoResume}
-            onFlipped={(next) => setProviderUsageHoldAutoResumeOverride(next)}
-          />
-        ) : undefined,
+            ? `Usage limit · ${describeHoldReset(providerUsageHold.resetsAt, Date.now())}`
+            : "Usage limit",
+        actions:
+          providerUsageHoldHttpBaseUrl !== null ? (
+            <ProviderUsageHoldToggle
+              threadId={activeThreadId}
+              httpBaseUrl={providerUsageHoldHttpBaseUrl}
+              autoResume={holdAutoResume}
+              onFlipped={(next) => setProviderUsageHoldAutoResumeOverride(next)}
+            />
+          ) : undefined,
       });
     }
     const updateRunning = serverUpdateState.status === "running";

@@ -36,7 +36,9 @@ type HoldActivity = {
 
 function holdPayload(activity: HoldActivity): Record<string, unknown> | null {
   const payload = activity.payload;
-  return payload !== null && typeof payload === "object" ? (payload as Record<string, unknown>) : null;
+  return payload !== null && typeof payload === "object"
+    ? (payload as Record<string, unknown>)
+    : null;
 }
 
 /**
@@ -77,13 +79,11 @@ export function describeHoldReset(resetsAt: string, nowMs: number): string {
   const deltaMs = targetMs - nowMs;
   if (deltaMs <= 0) return "window should have reset";
   const minutes = Math.round(deltaMs / 60_000);
-  if (minutes < 1) return "window resets shortly";
-  if (minutes < 60) return `window resets in ~${minutes}m`;
+  if (minutes < 1) return "resets shortly";
+  if (minutes < 60) return `resets in ~${minutes}m`;
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
-  return rest === 0
-    ? `window resets in ~${hours}h`
-    : `window resets in ~${hours}h ${rest}m`;
+  return rest === 0 ? `resets in ~${hours}h` : `resets in ~${hours}h ${rest}m`;
 }
 
 export function ProviderUsageHoldToggle(props: {
@@ -119,11 +119,11 @@ export function ProviderUsageHoldToggle(props: {
     <button
       type="button"
       disabled={pending}
-      aria-label={props.autoResume ? "Disable auto-resume for this thread" : "Enable auto-resume for this thread"}
+      aria-label={props.autoResume ? "Disable auto-resume" : "Enable auto-resume"}
       title={
         props.autoResume
-          ? "Auto-resume is ON — this thread resumes automatically when the provider window resets"
-          : "Auto-resume is OFF — this thread stays paused until you resume it manually"
+          ? "Off: stay on usage limit after the window resets"
+          : "On: resume when the window resets"
       }
       onClick={() => void flip(!props.autoResume)}
       className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground transition-opacity disabled:opacity-50"
@@ -140,7 +140,7 @@ export function ProviderUsageHoldToggle(props: {
           }`}
         />
       </span>
-      Auto-resume {props.autoResume ? "on" : "off"}
+      <span className="text-[10px] text-muted-foreground">auto-resume</span>
     </button>
   );
 }

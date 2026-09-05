@@ -17,7 +17,11 @@ import * as Option from "effect/Option";
 
 import { toPersistenceSqlError } from "../Errors.ts";
 
-import { ProviderUsageHold, ProviderUsageHoldRepository, type ProviderUsageHoldRepositoryShape } from "../Services/ProviderUsageHolds.ts";
+import {
+  ProviderUsageHold,
+  ProviderUsageHoldRepository,
+  type ProviderUsageHoldRepositoryShape,
+} from "../Services/ProviderUsageHolds.ts";
 
 /** SQLite row shape (camelCase aliases; `auto_resume` is a 0/1 integer). */
 const ProviderUsageHoldDbRow = Schema.Struct({
@@ -33,19 +37,6 @@ const ProviderUsageHoldDbRow = Schema.Struct({
   updatedAt: Schema.String,
 });
 type ProviderUsageHoldDbRowValue = typeof ProviderUsageHoldDbRow.Type;
-
-const HOLD_SELECT = `
-        thread_id AS "threadId",
-        provider,
-        provider_instance_id AS "providerInstanceId",
-        since,
-        resets_at AS "resetsAt",
-        auto_resume AS "autoResume",
-        pending_turn_message_id AS "pendingTurnMessageId",
-        released_at AS "releasedAt",
-        release_reason AS "releaseReason",
-        updated_at AS "updatedAt"
-`;
 
 const rowToHold = (row: ProviderUsageHoldDbRowValue): ProviderUsageHold => ({
   threadId: ThreadId.make(row.threadId),
@@ -120,7 +111,16 @@ const makeProviderUsageHoldRepository = Effect.gen(function* () {
     execute: ({ threadId }) =>
       sql`
         SELECT
-${HOLD_SELECT}
+          thread_id AS "threadId",
+          provider,
+          provider_instance_id AS "providerInstanceId",
+          since,
+          resets_at AS "resetsAt",
+          auto_resume AS "autoResume",
+          pending_turn_message_id AS "pendingTurnMessageId",
+          released_at AS "releasedAt",
+          release_reason AS "releaseReason",
+          updated_at AS "updatedAt"
       FROM provider_usage_holds
       WHERE thread_id = ${threadId}
       `,
@@ -132,7 +132,16 @@ ${HOLD_SELECT}
     execute: () =>
       sql`
         SELECT
-${HOLD_SELECT}
+          thread_id AS "threadId",
+          provider,
+          provider_instance_id AS "providerInstanceId",
+          since,
+          resets_at AS "resetsAt",
+          auto_resume AS "autoResume",
+          pending_turn_message_id AS "pendingTurnMessageId",
+          released_at AS "releasedAt",
+          release_reason AS "releaseReason",
+          updated_at AS "updatedAt"
       FROM provider_usage_holds
       WHERE released_at IS NULL
       ORDER BY since ASC
@@ -157,42 +166,64 @@ ${HOLD_SELECT}
       Effect.mapError(toPersistenceSqlError("ProviderUsageHoldRepository.upsertActiveHold:query")),
     );
 
+  const setPendingTurnRow = SqlSchema.void({
+    Request: Schema.Struct({
+      threadId: Schema.String,
+      messageId: Schema.String,
+      now: Schema.String,
+    }),
+    execute: ({ threadId, messageId, now }) =>
+      sql`
+        UPDATE provider_usage_holds
+        SET pending_turn_message_id = ${messageId},
+            updated_at = ${now}
+        WHERE thread_id = ${threadId}
+          AND released_at IS NULL
+      `,
+  });
+
   const setPendingTurn: ProviderUsageHoldRepositoryShape["setPendingTurn"] = (input) =>
-    sql`
-      UPDATE provider_usage_holds
-      SET pending_turn_message_id = ${input.messageId},
-          updated_at = ${input.now}
-      WHERE thread_id = ${input.threadId}
-        AND released_at IS NULL
-    `.pipe(
+    setPendingTurnRow({
+      threadId: input.threadId,
+      messageId: input.messageId,
+      now: input.now,
+    }).pipe(
       Effect.andThen(() => getHoldRow({ threadId: input.threadId })),
       Effect.map((option) => toHoldOption(option)),
-      Effect.mapError(
-        toPersistenceSqlError("ProviderUsageHoldRepository.setPendingTurn:query"),
-      ),
+      Effect.mapError(toPersistenceSqlError("ProviderUsageHoldRepository.setPendingTurn:query")),
     );
 
+  const setAutoResumeRow = SqlSchema.void({
+    Request: Schema.Struct({
+      threadId: Schema.String,
+      autoResume: Schema.Number,
+      now: Schema.String,
+    }),
+    execute: ({ threadId, autoResume, now }) =>
+      sql`
+        UPDATE provider_usage_holds
+        SET auto_resume = ${autoResume},
+            updated_at = ${now}
+        WHERE thread_id = ${threadId}
+          AND released_at IS NULL
+      `,
+  });
+
   const setAutoResume: ProviderUsageHoldRepositoryShape["setAutoResume"] = (input) =>
-    sql`
-      UPDATE provider_usage_holds
-      SET auto_resume = ${input.autoResume ? 1 : 0},
-          updated_at = ${input.now}
-      WHERE thread_id = ${input.threadId}
-        AND released_at IS NULL
-    `.pipe(
+    setAutoResumeRow({
+      threadId: input.threadId,
+      autoResume: input.autoResume ? 1 : 0,
+      now: input.now,
+    }).pipe(
       Effect.andThen(() => getHoldRow({ threadId: input.threadId })),
       Effect.map((option) => toHoldOption(option)),
-      Effect.mapError(
-        toPersistenceSqlError("ProviderUsageHoldRepository.setAutoResume:query"),
-      ),
+      Effect.mapError(toPersistenceSqlError("ProviderUsageHoldRepository.setAutoResume:query")),
     );
 
   const getByThreadId: ProviderUsageHoldRepositoryShape["getByThreadId"] = (input) =>
     getHoldRow({ threadId: input.threadId }).pipe(
       Effect.map((option) => toHoldOption(option)),
-      Effect.mapError(
-        toPersistenceSqlError("ProviderUsageHoldRepository.getByThreadId:query"),
-      ),
+      Effect.mapError(toPersistenceSqlError("ProviderUsageHoldRepository.getByThreadId:query")),
     );
 
   const listActive: ProviderUsageHoldRepositoryShape["listActive"] = () =>
@@ -201,15 +232,29 @@ ${HOLD_SELECT}
       Effect.mapError(toPersistenceSqlError("ProviderUsageHoldRepository.listActive:query")),
     );
 
+  const markReleasedRow = SqlSchema.void({
+    Request: Schema.Struct({
+      threadId: Schema.String,
+      reason: Schema.String,
+      now: Schema.String,
+    }),
+    execute: ({ threadId, reason, now }) =>
+      sql`
+        UPDATE provider_usage_holds
+        SET released_at = ${now},
+            release_reason = ${reason},
+            updated_at = ${now}
+        WHERE thread_id = ${threadId}
+          AND released_at IS NULL
+      `,
+  });
+
   const markReleased: ProviderUsageHoldRepositoryShape["markReleased"] = (input) =>
-    sql`
-      UPDATE provider_usage_holds
-      SET released_at = ${input.now},
-          release_reason = ${input.reason},
-          updated_at = ${input.now}
-      WHERE thread_id = ${input.threadId}
-        AND released_at IS NULL
-    `.pipe(
+    markReleasedRow({
+      threadId: input.threadId,
+      reason: input.reason,
+      now: input.now,
+    }).pipe(
       Effect.andThen(() => getHoldRow({ threadId: input.threadId })),
       Effect.map((option) => toHoldOption(option)),
       Effect.mapError(toPersistenceSqlError("ProviderUsageHoldRepository.markReleased:query")),
