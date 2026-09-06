@@ -1,12 +1,10 @@
 /**
  * Pause / resume / stop a durable workflow run — the ONE control sequence behind both the card's
  * buttons (`t3team-thread-workflow-control-route.ts`) and the agent's
- * `t3team.orchestration.pause` / `t3team.orchestration.stop` tools (GHE #403 §4: the orchestrator
- * had no way to stop its own overnight run, so it launched a duplicate beside it). Same validation,
- * same registry / repo / scheduler choreography, same run-level activity — the card and the tool
- * can never disagree about what "paused" or "stopped" means.
- *
- * Fails with a plain, agent-readable string; callers wrap it for their transport.
+ * `t3team.orchestration.pause` / `t3team.orchestration.stop` tools (the orchestrator had no way to
+ * stop its own overnight run, GHE #403 §4). Same validation, registry / repo / scheduler
+ * choreography, and run-level activity: the card and the tool can never disagree about what
+ * "paused" or "stopped" means. Fails with a plain, agent-readable string; callers wrap it.
  */
 import { CommandId, EventId, ThreadId, type OrchestrationCommand } from "@t3tools/contracts";
 import { PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP } from "@t3tools/project-recipes";
@@ -72,9 +70,8 @@ export interface WorkflowRunControlDeps {
   ) => Effect.Effect<unknown, OrchestrationDispatchError>;
   readonly nowIso: () => string;
   /**
-   * Who is stopping. The card's Stop is the user's own click and is stamped like the composer's
-   * Stop button (see t3team-actorMessageReactor.ts for what that suppresses); the agent's tool is
-   * automation and must not masquerade as the user.
+   * Who is stopping. The card's Stop is the user's own click, stamped like the composer's Stop button
+   * (t3team-actorMessageReactor.ts); the agent's tool is automation and must not masquerade as the user.
    */
   readonly stopOrigin: "user" | "system";
   readonly turnRedrive?: InterruptedTurnRetry;
@@ -98,8 +95,7 @@ export const controlWorkflowRun = Effect.fn("controlWorkflowRun")(function* (
   let status: WorkflowRunControlStatus;
 
   if (input.action === "pause") {
-    // Idempotent retry (GHE #411 §2): pausing an already-paused run is a success, not an error —
-    // no write, no duplicate "Workflow paused" activity.
+    // Idempotent retry (GHE #411 §2): pausing an already-paused run is a success — no write, no duplicate activity.
     if (run.status === "paused") return { status: "paused" as const };
     if (run.status === "suspended" && run.pendingThreadId !== null) {
       const pending = registry.peekPending(run.pendingThreadId);
@@ -107,9 +103,7 @@ export const controlWorkflowRun = Effect.fn("controlWorkflowRun")(function* (
         return yield* Effect.fail("Workflow is already running its next step.");
       }
     }
-    // Compare-and-set (GHE #411 §1): the write only lands while the row is still where `run` was
-    // read as being. A run that completed/failed between the read and here is reported, not
-    // silently flipped to `paused`.
+    // CAS (GHE #411 §1): lands only while the row is still where read — a run that settled in between is reported, not flipped.
     const affected = yield* repo
       .casSetStatus({
         runId,
@@ -149,14 +143,13 @@ export const controlWorkflowRun = Effect.fn("controlWorkflowRun")(function* (
       return yield* Effect.fail("Paused workflow has no continuation.");
     }
   } else {
-    // Synchronous first: an active detached controller can no longer publish completion. This
-    // also interrupts any re-drive fiber armed for the run's step (registry.cancelRun, GHE #411
-    // §3) before the compare-and-set write below.
+    // Synchronous first: an active detached controller can no longer publish completion, and the cancel
+    // interrupts any re-drive fiber armed for the run's step (registry.cancelRun, GHE #411 §3).
     const childThreads = registry.childThreadsForRun(runId);
     registry.cancelRun(runId);
     workflowAdmissionQueue.cancel(runId);
-    // Compare-and-set (GHE #411 §1): only a still-non-terminal row is flipped to `cancelled` — a
-    // run that already completed/failed between the read and here is reported, not overwritten.
+    // Compare-and-set (GHE #411 §1): only a still-non-terminal row is flipped to `cancelled` — a run
+    // that already completed/failed in between is reported, not overwritten.
     const affected = yield* repo
       .casClearPending({
         runId,
@@ -181,8 +174,7 @@ export const controlWorkflowRun = Effect.fn("controlWorkflowRun")(function* (
     status = "cancelled";
   }
 
-  // The run-level activity is what the card's banner reads ("Workflow paused" + when) — emitted
-  // for the tool exactly as for the button, so an agent-side pause is as visible as a click.
+  // Run-level activity: what the card's banner reads ("Workflow paused" + when); the tool emits it exactly as the button.
   const phase = status === "cancelled" ? "cancelled" : status === "paused" ? "paused" : "started";
   yield* deps
     .dispatch({

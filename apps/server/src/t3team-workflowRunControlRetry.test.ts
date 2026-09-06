@@ -184,6 +184,130 @@ it.effect(
     }),
 );
 
+it.effect(
+  "a concurrent stop that wins while the re-drive fails survives the rollback (GHE #344 review)",
+  () =>
+    Effect.gen(function* () {
+      // State-machine CAS repo: a write applies only when the row is still in the expected state.
+      // Deterministic interleaving — the moment the admission CAS claims "running", the user's
+      // Stop CAS lands and wins (exactly the race the blind setStatus(failed) rollback would
+      // clobber by overwriting the terminal "cancelled").
+      const writes: Array<string> = [];
+      let status = "failed";
+      const applyCas = (input: { status: string; expectedStatuses: readonly string[] }) => {
+        if (!input.expectedStatuses.includes(status)) return false;
+        status = input.status;
+        writes.push(input.status);
+        if (input.status === "running") {
+          status = "cancelled"; // the concurrent stop, right after admission
+          writes.push("cancelled (concurrent stop)");
+        }
+        return true;
+      };
+      const repo = {
+        casSetStatus: (input: { status: string; expectedStatuses: readonly string[] }) =>
+          Effect.succeed(applyCas(input)),
+        setStatus: () => Effect.fail("the rollback must not be a blind write"),
+        setTurnRetries: () => Effect.void,
+        getById: () => Effect.succeed(Option.some(fakeRow({ status: "cancelled" }))),
+      };
+      const error = yield* retryFailedWorkflowRun(
+        fakeControlDeps({
+          repo: repo as never,
+          registry: {
+            getRun: () => undefined,
+            registerRun: () => undefined,
+            registerOwnership: () => undefined,
+            deleteRun: () => undefined,
+            setPending: () => undefined,
+            peekPending: () => undefined,
+          } as never,
+          retryFailed: {
+            journalStore: { hasRun: async () => true } as never,
+            path: {
+              resolve: (p: string) => p,
+              join: (...parts: string[]) => parts.join("/"),
+            } as never,
+            // Drive dies AFTER admission, while the row is already "cancelled" — the re-drive
+            // never gets to park anything or detach a replay.
+            loadThreadProject: () => Effect.fail("project lookup exploded"),
+          },
+        }),
+        fakeRow({ status: "failed" }),
+        "thread-1",
+      ).pipe(Effect.flip);
+      assert.strictEqual(error, "project lookup exploded");
+      // The terminal stop survived: the rollback saw the row was no longer "running", wrote
+      // nothing, and the real settle is intact.
+      assert.strictEqual(status, "cancelled");
+      assert.deepStrictEqual(writes, ["running", "cancelled (concurrent stop)"]);
+    }),
+);
+
+it.effect(
+  "a retained re-issue that dies after parking leaves the row suspended, never a blind overwrite",
+  () =>
+    Effect.gen(function* () {
+      const writes: Array<string> = [];
+      let status = "failed";
+      const repo = {
+        casSetStatus: (input: { status: string; expectedStatuses: readonly string[] }) =>
+          Effect.sync(() => {
+            if (!input.expectedStatuses.includes(status)) return false;
+            status = input.status;
+            writes.push(input.status);
+            return true;
+          }),
+        setStatus: () => Effect.fail("the rollback must not be a blind write"),
+        setTurnRetries: () => Effect.void,
+        setPending: () =>
+          Effect.sync(() => {
+            status = "suspended";
+            writes.push("suspended (parked)");
+          }),
+        getById: () => Effect.succeed(Option.some(fakeRow({ status: "suspended" }))),
+      };
+      const error = yield* retryFailedWorkflowRun(
+        fakeControlDeps({
+          repo: repo as never,
+          registry: {
+            getRun: () => undefined,
+            registerRun: () => undefined,
+            registerOwnership: () => undefined,
+            deleteRun: () => undefined,
+            setPending: () => undefined,
+            peekPending: () => undefined,
+          } as never,
+          turnRedrive: {
+            processTurnRetry: () => Effect.fail("turn re-issue lost the race"),
+            settleNoText: () => Effect.void,
+            settleFailedTurn: () => Effect.void,
+          } as never,
+          retryFailed: {
+            journalStore: { hasRun: async () => true } as never,
+            path: {
+              resolve: (p: string) => p,
+              join: (...parts: string[]) => parts.join("/"),
+            } as never,
+            loadThreadProject: () => Effect.succeed({ project: { workspaceRoot: cwd } }),
+          },
+        }),
+        fakeRow({
+          status: "failed",
+          pendingKind: "thread.turn",
+          pendingThreadId: "thread-1",
+          pendingCorrelationId: "corr-1",
+        }),
+        "thread-1",
+      ).pipe(Effect.flip);
+      assert.strictEqual(error, "turn re-issue lost the race");
+      // The re-issue parked the ask first; the rollback's CAS (expected "running") misses the
+      // "suspended" row and leaves the parked affordance intact — no overwrite, no phantom.
+      assert.strictEqual(status, "suspended");
+      assert.deepStrictEqual(writes, ["running", "suspended (parked)"]);
+    }),
+);
+
 // ---------------------------------------------------------------------------
 // Integration tests — real engine + real SQLite journal (mirrors
 // t3team-toolBrokerWorkflowResumeTool.test.ts).

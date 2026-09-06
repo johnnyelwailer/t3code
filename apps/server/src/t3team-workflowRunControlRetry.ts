@@ -10,7 +10,10 @@
  */
 import { ThreadId } from "@t3tools/contracts";
 import type { JournalStore } from "@t3team/sdk";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Option from "effect/Option";
 import type * as FileSystem from "effect/FileSystem";
 import type * as Path from "effect/Path";
 
@@ -92,20 +95,34 @@ export const retryFailedWorkflowRun = (
       ThreadId.make(threadId),
       t3teamRandomUUID,
     )(run);
-    const outcome = yield* drive.pipe(
-      Effect.match({
-        onFailure: (message) => ({ ok: false as const, message }),
-        onSuccess: (value) => ({ ok: true as const, value }),
-      }),
-    );
-    if (!outcome.ok) {
-      // The re-drive died before it claimed the run — hand the card its retry affordance back.
-      yield* deps.repo
-        .setStatus({ runId: run.runId, status: "failed", updatedAt: deps.nowIso() })
-        .pipe(Effect.mapError(errorMessage));
-      return yield* Effect.fail(outcome.message);
+    // Catch every failure shape — typed error, defect, interruption — not just the typed E
+    // channel (GHE #344 review): a defect or a request abort mid re-drive must not leave the
+    // admitted "running" row behind as a phantom.
+    const exit = yield* drive.pipe(Effect.exit);
+    if (Exit.isSuccess(exit)) {
+      return {
+        status: exit.value.status === "suspended" ? "suspended" : "running",
+      };
     }
-    return {
-      status: outcome.value.status === "suspended" ? "suspended" : "running",
-    };
+    // Reclaim the retry affordance ONLY while we still own the "running" claim. A concurrent
+    // stop/completion that won between our admission and this failure owns the row now (terminal
+    // cancelled/completed) — the CAS misses and the real settle must survive, so no write.
+    // Likewise a parked "suspended" (the re-issued agent ask was recorded, then the re-issue died)
+    // is left as-is: it keeps its pending-step affordance and can retry again. One accepted edge:
+    // an interruption landing AFTER the detached replay has already re-asserted the row "running"
+    // briefly flaps it to "failed" until the replay's next lifecycle write; a terminal state is
+    // never touched either way.
+    yield* deps.repo
+      .casSetStatus({
+        runId: run.runId,
+        status: "failed",
+        updatedAt: deps.nowIso(),
+        expectedStatuses: ["running"],
+      })
+      .pipe(Effect.mapError(errorMessage));
+    // Typed string failures keep their exact message; a defect or an interruption lands here
+    // too and is reported in the human rendering instead of a squashed unknown.
+    return yield* Effect.fail(
+      Option.getOrElse(Cause.findErrorOption(exit.cause), () => Cause.pretty(exit.cause)),
+    );
   });
