@@ -20,12 +20,22 @@ const KIND_STARTED = "provider.usage-hold.started";
 const KIND_DEFERRED = "provider.usage-hold.deferred";
 const KIND_RELEASED = "provider.usage-hold.released";
 const KIND_AUTO_RESUME_SET = "provider.usage-hold.auto-resume-set";
+const KIND_WARNING = "provider.usage.warning";
+const KIND_WARNING_CLEARED = "provider.usage.warning-cleared";
 
 export interface ProviderUsageHoldBannerState {
   readonly driver: string | null;
   readonly since: string;
   readonly resetsAt: string | null;
   readonly autoResume: boolean;
+}
+
+/** Lightweight warning state (no hold, no toggle). */
+export interface ProviderUsageWarningBannerState {
+  readonly driver: string | null;
+  readonly percentUsed: number;
+  readonly resetsAt: string | null;
+  readonly since: string;
 }
 
 type HoldActivity = {
@@ -70,6 +80,37 @@ export function deriveProviderUsageHoldBanner(
     }
   }
   return hold;
+}
+
+/**
+ * Walk the activity trail for warning events. `warning` sets the state;
+ * `warning-cleared` or a `hold.started` clears it (critical supersedes).
+ */
+export function deriveProviderUsageWarningBanner(
+  activities: ReadonlyArray<HoldActivity>,
+): ProviderUsageWarningBannerState | null {
+  let warning: ProviderUsageWarningBannerState | null = null;
+  for (const activity of activities) {
+    const payload = holdPayload(activity);
+    if (activity.kind === KIND_WARNING) {
+      warning = {
+        driver: typeof payload?.driver === "string" ? payload.driver : null,
+        percentUsed: typeof payload?.percentUsed === "number" ? payload.percentUsed : 0,
+        resetsAt: typeof payload?.resetsAt === "string" ? payload.resetsAt : null,
+        since: activity.createdAt,
+      };
+    } else if (activity.kind === KIND_WARNING_CLEARED) {
+      warning = null;
+    } else if (activity.kind === KIND_STARTED || activity.kind === KIND_DEFERRED) {
+      // Critical hold supersedes the warning.
+      warning = null;
+    } else if (activity.kind === KIND_RELEASED) {
+      // Hold released — the warning may reappear on the next sweep, but we
+      // don't re-emit it here (the watcher will).
+      warning = null;
+    }
+  }
+  return warning;
 }
 
 /** Human reset moment: "in 43m" while it is in the future, else the clock time. */
