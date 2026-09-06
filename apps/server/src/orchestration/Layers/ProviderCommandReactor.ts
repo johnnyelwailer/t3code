@@ -1300,13 +1300,11 @@ const make = Effect.gen(function* () {
     }
 
     // Provider usage hold gate (GHE #421, auto-resume layer): when this
-    // thread's provider rolling window is exhausted, do NOT start the turn —
-    // record it in the thread's hold row and let the watcher's auto-resume
-    // path re-dispatch `thread.turn.resume` when the window recovers. This
-    // covers every entry into this handler: user messages
-    // (`thread.turn.start`) AND the Continue button and the #403 bounded
-    // re-drive (`thread.turn.resume`), so a closed window neither burns the
-    // provider's quota-error path nor the re-drive's bounded budget.
+    // thread's provider rolling window is exhausted, record the deferral so
+    // the watcher's auto-resume path can re-dispatch `thread.turn.resume`
+    // when the window recovers. This is ADVISORY — the turn still proceeds;
+    // the provider itself will 429 if actually rate-limited. The banner is
+    // informational, not a barrier.
     const hold = yield* providerUsageWatcher
       .checkThreadHeld({
         threadId: thread.id,
@@ -1323,7 +1321,6 @@ const make = Effect.gen(function* () {
         resetsAt: hold.resetsAt,
         now: event.payload.createdAt,
       });
-      return;
     }
 
     yield* ensureThreadWorktree(thread);
