@@ -77,7 +77,7 @@ export function describeHoldReset(resetsAt: string, nowMs: number): string {
   const targetMs = Date.parse(resetsAt);
   if (Number.isNaN(targetMs)) return "reset time unknown";
   const deltaMs = targetMs - nowMs;
-  if (deltaMs <= 0) return "window should have reset";
+  if (deltaMs <= 0) return "resuming…";
   const minutes = Math.round(deltaMs / 60_000);
   if (minutes < 1) return "resets shortly";
   if (minutes < 60) return `resets in ~${minutes}m`;
