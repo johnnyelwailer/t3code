@@ -328,6 +328,7 @@ import {
 import {
   describeHoldReset,
   deriveProviderUsageHoldBanner,
+  deriveProviderUsageWarningBanner,
   ProviderUsageHoldToggle,
 } from "./chat/ProviderUsageHoldBanner";
 import { shouldSuppressT3TeamProviderStatus } from "~/t3team/chat/t3team-providerStatusSeverity";
@@ -2364,6 +2365,10 @@ function ChatViewContent(props: ChatViewProps) {
     () => deriveProviderUsageHoldBanner(activeThread?.activities ?? EMPTY_ACTIVITIES),
     [activeThread?.activities],
   );
+  const providerUsageWarning = useMemo(
+    () => deriveProviderUsageWarningBanner(activeThread?.activities ?? EMPTY_ACTIVITIES),
+    [activeThread?.activities],
+  );
   const [providerUsageHoldAutoResumeOverride, setProviderUsageHoldAutoResumeOverride] = useState<
     boolean | null
   >(null);
@@ -2411,6 +2416,20 @@ function ChatViewContent(props: ChatViewProps) {
             ) : undefined,
         });
       }
+    }
+    // Provider usage warning banner (GHE #421): informational, no pause, no toggle.
+    // Shows when the sampler reports ≥80% but below critical.
+    if (providerUsageWarning !== null && providerUsageHold === null) {
+      items.push({
+        id: "provider-usage-warning",
+        variant: "info",
+        priority: "notice",
+        icon: <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />,
+        title:
+          providerUsageWarning.resetsAt !== null
+            ? `Usage ${Math.round(providerUsageWarning.percentUsed)}% · ${describeHoldReset(providerUsageWarning.resetsAt, Date.now())}`
+            : `Usage ${Math.round(providerUsageWarning.percentUsed)}%`,
+      });
     }
     const updateRunning = serverUpdateState.status === "running";
     const unavailableConnection = activeEnvironmentUnavailableState?.connection ?? null;
