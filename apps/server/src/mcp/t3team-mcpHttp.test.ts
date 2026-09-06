@@ -20,7 +20,11 @@ import * as McpHttpServer from "./McpHttpServer.ts";
 import * as McpSessionRegistry from "./McpSessionRegistry.ts";
 import { T3TeamToolkitRegistrationLive } from "./McpHttpServer.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
-import { T3TeamToolBroker, type T3TeamToolBinding, type T3TeamToolBrokerShape } from "../t3team-toolBroker.ts";
+import {
+  T3TeamToolBroker,
+  type T3TeamToolBinding,
+  type T3TeamToolBrokerShape,
+} from "../t3team-toolBroker.ts";
 
 const threadId = ThreadId.make("thread-mcp-http-test");
 const providerInstanceId = ProviderInstanceId.make("pack-mcp-http-test");
@@ -60,10 +64,11 @@ const environmentLayer = Layer.succeed(ServerEnvironment.ServerEnvironment, {
   getDescriptor: Effect.die("not used in the MCP HTTP test"),
 });
 
-const serverLayer = NodeHttpServer.layer(
-  () => NodeHttp.createServer(),
-  { host: "127.0.0.1", port: 0, gracefulShutdownTimeout: "1 second" },
-);
+const serverLayer = NodeHttpServer.layer(() => NodeHttp.createServer(), {
+  host: "127.0.0.1",
+  port: 0,
+  gracefulShutdownTimeout: "1 second",
+});
 
 const buildLayer = (broker: T3TeamToolBrokerShape) =>
   HttpRouter.serve(
@@ -104,9 +109,7 @@ const postRpc = async (
     try {
       body = JSON.parse(text);
     } catch {
-      const dataLine = text
-        .split("\n")
-        .find((line) => line.startsWith("data:")) ?? "";
+      const dataLine = text.split("\n").find((line) => line.startsWith("data:")) ?? "";
       body = dataLine ? JSON.parse(dataLine.slice("data:".length).trim()) : text;
     }
   }
@@ -164,14 +167,13 @@ const sessionHeaders = (session: { auth: string; sessionId: string }) => ({
   "mcp-session-id": session.sessionId,
 });
 
-const callTool = (session: { auth: string; port: number; sessionId: string }, name: string, args: unknown) =>
+const callTool = (
+  session: { auth: string; port: number; sessionId: string },
+  name: string,
+  args: unknown,
+) =>
   Effect.promise(() =>
-    postRpc(
-      session.port,
-      sessionHeaders(session),
-      "tools/call",
-      { name, arguments: args },
-    ),
+    postRpc(session.port, sessionHeaders(session), "tools/call", { name, arguments: args }),
   );
 
 const isErrorResponse = (body: unknown): boolean => {
@@ -240,12 +242,7 @@ it.effect("advertises only the canonical tool names in tools/list", () => {
       const credential = yield* live.registry.issue({ threadId, providerInstanceId });
       const session = yield* openSession(live, credential.config.authorizationHeader);
       const listed = yield* Effect.promise(() =>
-        postRpc(
-          session.port,
-          sessionHeaders(session),
-          "tools/list",
-          {},
-        ),
+        postRpc(session.port, sessionHeaders(session), "tools/list", {}),
       );
       expect(listed.status).toBe(200);
       const tools = (listed.body as { result: { tools: Array<{ name: string }> } }).result.tools;

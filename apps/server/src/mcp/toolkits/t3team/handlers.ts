@@ -55,22 +55,15 @@ const sendMessage = Effect.fn("T3TeamMcpToolkit.sendMessage")(function* (input: 
 
 export const T3TeamToolkitHandlersLive = T3TeamToolkit.toLayer({
   models: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.models, input),
-  provider_usage: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.provider_usage, input),
-  rename_thread: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.rename_thread, input),
-  search_thread: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.search_thread, input),
-  search_source: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.search_source, input),
-  read_message: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.read_message, input),
-  start_child: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.start_child, input),
+  provider_usage: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.provider_usage, input),
+  rename_thread: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.rename_thread, input),
+  search_thread: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.search_thread, input),
+  search_source: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.search_source, input),
+  read_message: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.read_message, input),
+  start_child: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.start_child, input),
   children: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.children, input),
   send_message: (input) => sendMessage(input),
-  orchestration_run: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.orchestration_run, input),
+  orchestration_run: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.orchestration_run, input),
   orchestration_status: (input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.orchestration_status, input),
   orchestration_resume: (input) =>
@@ -79,11 +72,8 @@ export const T3TeamToolkitHandlersLive = T3TeamToolkit.toLayer({
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.orchestration_pause, input),
   orchestration_stop: (input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.orchestration_stop, input),
-  show_widget: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.show_widget, input),
+  show_widget: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.show_widget, input),
   help: (input) => Effect.succeed(t3teamHelp(input.topic)),
-  recipe_list: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.recipe_list, input),
-  recipe_validate: (input) =>
-    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.recipe_validate, input),
+  recipe_list: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.recipe_list, input),
+  recipe_validate: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.recipe_validate, input),
 });
