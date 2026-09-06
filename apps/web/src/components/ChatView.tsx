@@ -2384,26 +2384,33 @@ function ChatViewContent(props: ChatViewProps) {
     // thread's provider window, turns on it are paused server-side. The banner
     // sits below the latest message with the per-thread auto-resume toggle.
     if (providerUsageHold !== null && activeThreadId !== null) {
-      const holdAutoResume = providerUsageHoldAutoResumeOverride ?? providerUsageHold.autoResume;
-      items.push({
-        id: "provider-usage-hold",
-        variant: "warning",
-        priority: "urgent",
-        icon: <span className="size-1.5 rounded-full bg-amber-500" aria-hidden="true" />,
-        title:
-          providerUsageHold.resetsAt !== null
-            ? `Usage limit · ${describeHoldReset(providerUsageHold.resetsAt, Date.now())}`
-            : "Usage limit",
-        actions:
-          providerUsageHoldHttpBaseUrl !== null ? (
-            <ProviderUsageHoldToggle
-              threadId={activeThreadId}
-              httpBaseUrl={providerUsageHoldHttpBaseUrl}
-              autoResume={holdAutoResume}
-              onFlipped={(next) => setProviderUsageHoldAutoResumeOverride(next)}
-            />
-          ) : undefined,
-      });
+      // If the reset moment has already passed, the watcher will release
+      // within one sweep (60s) and the `released` activity clears the hold.
+      // Don't flash a transient "resuming" state at the user.
+      const resetPassed =
+        providerUsageHold.resetsAt !== null && Date.parse(providerUsageHold.resetsAt) < Date.now();
+      if (!resetPassed) {
+        const holdAutoResume = providerUsageHoldAutoResumeOverride ?? providerUsageHold.autoResume;
+        items.push({
+          id: "provider-usage-hold",
+          variant: "warning",
+          priority: "urgent",
+          icon: <span className="size-1.5 rounded-full bg-amber-500" aria-hidden="true" />,
+          title:
+            providerUsageHold.resetsAt !== null
+              ? `Usage limit · ${describeHoldReset(providerUsageHold.resetsAt, Date.now())}`
+              : "Usage limit",
+          actions:
+            providerUsageHoldHttpBaseUrl !== null ? (
+              <ProviderUsageHoldToggle
+                threadId={activeThreadId}
+                httpBaseUrl={providerUsageHoldHttpBaseUrl}
+                autoResume={holdAutoResume}
+                onFlipped={(next) => setProviderUsageHoldAutoResumeOverride(next)}
+              />
+            ) : undefined,
+        });
+      }
     }
     const updateRunning = serverUpdateState.status === "running";
     const unavailableConnection = activeEnvironmentUnavailableState?.connection ?? null;
