@@ -54,6 +54,13 @@ export const sampleCodexUsage = Effect.fn("providerUsageSampler.sampleCodexUsage
         Scope.close(scope, Exit.void),
       );
       const environment: NodeJS.ProcessEnv = { ...process.env };
+      // Electron apps have a minimal PATH; add common binary locations.
+      const extraPaths = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"];
+      const existingPath = environment.PATH ?? "";
+      environment.PATH = [
+        ...extraPaths.filter((p) => !existingPath.includes(p)),
+        existingPath,
+      ].join(":");
       const homePath = input.homePath?.trim();
       if (homePath !== "" && homePath !== undefined) {
         environment.CODEX_HOME = expandHomePath(homePath);
