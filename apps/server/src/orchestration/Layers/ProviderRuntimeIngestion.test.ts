@@ -453,6 +453,44 @@ describe("ProviderRuntimeIngestion", () => {
     expect(thread.session?.activeTurnId).toBe(null);
   });
 
+  it("settles the session to stopped when session.exited arrives during an active turn (GHE #297)", async () => {
+    // A dead provider session never emits turn.completed/turn.aborted for the
+    // turn it was running — the watchdog synthesizes session.exited instead
+    // (ProviderService.ts fireTurnWatchdog). This proves the ingestion mapper
+    // settles that turn generically, the same as a clean exit.
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-turn-started-session-exited"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      createdAt: now,
+      turnId: asTurnId("turn-1"),
+    });
+
+    await waitForThread(
+      harness.readModel,
+      (thread) => thread.session?.status === "running" && thread.session?.activeTurnId === "turn-1",
+    );
+
+    harness.emit({
+      type: "session.exited",
+      eventId: asEventId("evt-session-exited-during-turn"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      createdAt: "2026-01-01T00:00:01.000Z",
+    });
+
+    const thread = await waitForThread(
+      harness.readModel,
+      (entry) => entry.session?.status === "stopped" && entry.session?.activeTurnId === null,
+    );
+    expect(thread.session?.status).toBe("stopped");
+    expect(thread.session?.activeTurnId).toBe(null);
+  });
+
   it("ignores a late turn.aborted from a superseded turn so the new active turn keeps its session", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
