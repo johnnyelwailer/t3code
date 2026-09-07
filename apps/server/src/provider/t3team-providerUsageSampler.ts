@@ -21,7 +21,6 @@ import {
   ProviderUsageUnavailable,
   type ServerSettings,
   ClaudeSettings,
-  CodexSettings,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -131,19 +130,10 @@ const sampleOneInstance = (
       ),
     );
   }
-  const codexSettings = Schema.decodeUnknownEffect(CodexSettings)(rawConfig).pipe(
-    Effect.orElseSucceed(() => Schema.decodeSync(CodexSettings)({})),
-  );
-  return codexSettings.pipe(
-    Effect.flatMap((decoded) =>
-      sampleCodexUsage({
-        binaryPath: decoded.binaryPath,
-        ...(decoded.homePath !== undefined ? { homePath: decoded.homePath } : {}),
-        providerInstanceId: instanceRef,
-        ...(thresholds !== undefined ? { thresholds } : {}),
-      }),
-    ),
-  );
+  return sampleCodexUsage({
+    providerInstanceId: instanceRef,
+    ...(thresholds !== undefined ? { thresholds } : {}),
+  });
 };
 
 /**
