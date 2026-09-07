@@ -68,6 +68,102 @@ export interface CodexRateLimitsBody {
   readonly rateLimits?: CodexRateLimitsSnapshot | null;
 }
 
+/** Source label for header-based sampling (vs. the app-server JSON-RPC). */
+export const CODEX_HEADERS_USAGE_SOURCE = "gateway-response-headers";
+
+/**
+ * Maps rate-limit headers from a gateway model response onto a
+ * `ProviderUsageReport`. Handles common OpenAI-compatible patterns:
+ * - `x-ratelimit-remaining-requests` / `x-ratelimit-limit-requests`
+ * - `x-ratelimit-reset-requests` (epoch seconds or ISO)
+ * - `x-ratelimit-remaining-tokens` / `x-ratelimit-limit-tokens`
+ * - `x-ratelimit-reset-tokens`
+ *
+ * Returns `null` when no recognizable rate-limit data is present.
+ */
+export const mapCodexRateLimitHeaders = (
+  headers: Record<string, string>,
+  input: {
+    readonly provider: ProviderDriverKind;
+    readonly providerInstanceId?: ProviderInstanceId;
+    readonly thresholds?: ProviderUsageThresholds;
+    readonly sampledAt: string;
+  },
+): ProviderUsageReport | null => {
+  const thresholds = input.thresholds ?? DEFAULT_PROVIDER_USAGE_THRESHOLDS;
+  const primary = extractWindowFromHeaders(headers, "requests");
+  const secondary = extractWindowFromHeaders(headers, "tokens");
+  if (primary === null && secondary === null) return null;
+
+  const windows: ProviderUsageSample[] = [];
+  if (primary !== null) {
+    windows.push({
+      provider: input.provider,
+      window: "primary",
+      percentUsed: primary.percentUsed,
+      resetsAt: primary.resetsAt,
+      severity: severityForPercent(primary.percentUsed, thresholds),
+      source: CODEX_HEADERS_USAGE_SOURCE,
+      sampledAt: input.sampledAt,
+    });
+  }
+  if (secondary !== null) {
+    windows.push({
+      provider: input.provider,
+      window: "secondary",
+      percentUsed: secondary.percentUsed,
+      resetsAt: secondary.resetsAt,
+      severity: severityForPercent(secondary.percentUsed, thresholds),
+      source: CODEX_HEADERS_USAGE_SOURCE,
+      sampledAt: input.sampledAt,
+    });
+  }
+  return {
+    provider: input.provider,
+    ...(input.providerInstanceId !== undefined
+      ? { providerInstanceId: input.providerInstanceId }
+      : {}),
+    windows,
+  };
+};
+
+type HeaderWindow = {
+  readonly percentUsed: number;
+  readonly resetsAt: string | null;
+};
+
+const extractWindowFromHeaders = (
+  headers: Record<string, string>,
+  suffix: string,
+): HeaderWindow | null => {
+  const limitKey = `x-ratelimit-limit-${suffix}`;
+  const remainingKey = `x-ratelimit-remaining-${suffix}`;
+  const resetKey = `x-ratelimit-reset-${suffix}`;
+  const limitRaw = headers[limitKey];
+  const remainingRaw = headers[remainingKey];
+  if (limitRaw === undefined || remainingRaw === undefined) return null;
+  const limit = Number(limitRaw);
+  const remaining = Number(remainingRaw);
+  if (!Number.isFinite(limit) || !Number.isFinite(remaining) || limit <= 0) {
+    return null;
+  }
+  const percentUsed = clampPercent(((limit - remaining) / limit) * 100);
+  let resetsAt: string | null = null;
+  const resetRaw = headers[resetKey];
+  if (resetRaw !== undefined) {
+    const asNumber = Number(resetRaw);
+    if (Number.isFinite(asNumber) && asNumber > 1_000_000_000) {
+      resetsAt = DateTime.formatIso(DateTime.fromEpochSeconds(asNumber));
+    } else {
+      const parsed = Date.parse(resetRaw);
+      if (!Number.isNaN(parsed)) {
+        resetsAt = DateTime.formatIso(DateTime.fromEpochSeconds(Math.floor(parsed / 1000)));
+      }
+    }
+  }
+  return { percentUsed, resetsAt };
+};
+
 const isFinitePercent = (value: number | null | undefined): value is number =>
   typeof value === "number" && Number.isFinite(value);
 
