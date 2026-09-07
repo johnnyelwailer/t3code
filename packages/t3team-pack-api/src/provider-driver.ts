@@ -47,6 +47,16 @@ export type PackProviderSnapshot = {
   readonly showInteractionModeToggle?: boolean;
 };
 
+/**
+ * What the host can do for a driver whose MCP credential stopped working.
+ *
+ * `ok: false` is terminal and `reason` is written for the agent to read: it
+ * says why no credential could be established, not just that one was refused.
+ */
+export type PackMcpReestablishResult =
+  | { readonly ok: true; readonly endpoint: string; readonly authorizationHeader: string }
+  | { readonly ok: false; readonly reason: string };
+
 export type PackSessionStartInput = {
   readonly threadId: string;
   readonly runtimeMode: string;
@@ -54,6 +64,21 @@ export type PackSessionStartInput = {
   readonly mcp?: {
     readonly endpoint: string;
     readonly authorizationHeader: string;
+    /**
+     * Ask the host for this thread's current credential after `/mcp` rejected
+     * the one in hand, and reconnect with what comes back.
+     *
+     * A driver holds its bearer for the whole life of its session and the host
+     * has no way to push a replacement into it, so a credential that dies
+     * mid-session — superseded, expired, revoked — would otherwise take the
+     * toolkit down with it. Call this at most once per turn: the host either
+     * hands over a working credential or explains why there isn't one, and a
+     * second call cannot produce a different answer within the same turn.
+     *
+     * Bound to one thread and callable only by the driver the host handed it
+     * to; it is not a way to obtain credentials for anything else.
+     */
+    readonly reestablish?: () => Promise<PackMcpReestablishResult>;
   };
   readonly cwd?: string;
   readonly resumeCursor?: PackResumeCursor;

@@ -24,20 +24,7 @@ import {
 } from "./toolkits/preview/tools.ts";
 import { T3TeamToolkitHandlersLive } from "./toolkits/t3team/handlers.ts";
 import { T3TeamToolkit } from "./toolkits/t3team/tools.ts";
-
-const unauthorized = HttpServerResponse.jsonUnsafe(
-  {
-    error: "invalid_mcp_credential",
-    message: "A valid provider-scoped MCP bearer credential is required.",
-  },
-  {
-    status: 401,
-    headers: {
-      "cache-control": "no-store",
-      "www-authenticate": "Bearer",
-    },
-  },
-);
+import { mcpUnauthorizedResponse } from "../t3team-mcp-unauthorizedResponse.ts";
 
 type AuthenticatedHttpEffect = Effect.Effect<
   HttpServerResponse.HttpServerResponse,
@@ -80,10 +67,9 @@ const makeMcpAuthMiddleware = McpSessionRegistry.McpSessionRegistry.pipe(
           // Without this the only symptom of a dead credential is the agent
           // quietly losing the whole `t3-code` toolkit for the rest of its
           // session, with nothing on the server to explain why.
-          yield* Effect.logWarning("rejected MCP request with an unusable credential", {
-            reason: token.length === 0 ? "missing_bearer_token" : "unknown_or_expired_token",
-          });
-          return unauthorized;
+          const reason = token.length === 0 ? "missing_bearer_token" : "unknown_or_expired_token";
+          yield* Effect.logWarning("rejected MCP request with an unusable credential", { reason });
+          return mcpUnauthorizedResponse(reason);
         }
         return yield* httpEffect.pipe(
           Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
