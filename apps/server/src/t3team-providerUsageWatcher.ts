@@ -383,7 +383,9 @@ const makeProviderUsageWatcher = (input: {
           const nowMs = DateTime.nowUnsafe().epochMilliseconds;
           const settings = yield* settingsService.getSettings.pipe(Effect.orDie);
 
-          const instanceIds = yield* activeSessionInstanceIds;
+          const instanceIds = yield* activeSessionInstanceIds.pipe(
+            Effect.catchCause(() => Effect.succeed(new Set<string>())),
+          );
           const sample =
             instanceIds.size > 0
               ? yield* Effect.scoped(
