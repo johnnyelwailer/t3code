@@ -67,7 +67,12 @@ export function deriveProviderUsageHoldBanner(
         driver: typeof payload?.driver === "string" ? payload.driver : null,
         since: activity.createdAt,
         resetsAt: typeof payload?.resetsAt === "string" ? payload.resetsAt : null,
-        autoResume: payload?.autoResume !== false,
+        // Refresh/deferred activities may omit the toggle. Preserve the
+        // user's existing choice instead of silently restoring the default.
+        autoResume:
+          typeof payload?.autoResume === "boolean"
+            ? payload.autoResume
+            : (hold?.autoResume ?? true),
       };
     } else if (activity.kind === KIND_RELEASED) {
       hold = null;
