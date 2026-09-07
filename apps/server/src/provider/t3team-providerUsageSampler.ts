@@ -169,6 +169,23 @@ export const sampleProviderInstancesUsage = Effect.fn(
     if (requested !== undefined && !requested.has(instanceId)) continue;
     candidates.push({ instanceId, driver: instance.driver });
   }
+  // Also include requested instances not present in settings (built-in providers
+  // like Codex that don't need an explicit instance entry). The driver is
+  // inferred from the instance id when it matches a known driver name.
+  if (requested !== undefined) {
+    for (const instanceId of requested) {
+      if (settings.providerInstances[ProviderInstanceId.make(instanceId)] !== undefined) continue;
+      const driver =
+        instanceId === "codex"
+          ? PROVIDER_USAGE_CODEX_DRIVER
+          : instanceId === "claudeAgent"
+            ? PROVIDER_USAGE_CLAUDE_DRIVER
+            : undefined;
+      if (driver !== undefined && isKnownUsageDriver(driver)) {
+        candidates.push({ instanceId, driver });
+      }
+    }
+  }
 
   const results = yield* Effect.all(
     candidates.map((candidate) =>
