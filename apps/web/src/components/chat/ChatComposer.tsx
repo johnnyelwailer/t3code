@@ -4137,12 +4137,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     />
                   )}
 
-                  <ComposerVoiceInput
-                    onTranscript={(text) => insertComposerTextAtEnd(text)}
-                    disabled={isConnecting || isComposerApprovalState || projectSelectionRequired}
-                    available={!isElectron}
-                  />
-
                   {isComposerFooterCompact ? (
                     <CompactComposerControlsMenu
                       interactionMode={interactionMode}
@@ -4215,6 +4209,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                         </TooltipTrigger>
                         <TooltipPopup>Attach files</TooltipPopup>
                       </Tooltip>
+                      <ComposerVoiceInput
+                        onTranscript={(text) => insertComposerTextAtEnd(text)}
+                        disabled={
+                          isConnecting || isComposerApprovalState || projectSelectionRequired
+                        }
+                        available={!isElectron}
+                      />
                     </>
                   ) : null}
                   <ComposerFooterPrimaryActions

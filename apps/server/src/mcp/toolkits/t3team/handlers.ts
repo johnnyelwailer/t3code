@@ -55,6 +55,8 @@ const sendMessage = Effect.fn("T3TeamMcpToolkit.sendMessage")(function* (input: 
 
 export const T3TeamToolkitHandlersLive = T3TeamToolkit.toLayer({
   t3team_models: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_models, input),
+  t3team_provider_usage: (input) =>
+    callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_provider_usage, input),
   t3team_rename_thread: (input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_rename_thread, input),
   t3team_search_thread: (input) =>

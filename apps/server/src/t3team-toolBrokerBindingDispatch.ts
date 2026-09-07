@@ -80,6 +80,8 @@ export function dispatchT3TeamToolCall(input: {
     callerThreadId: ThreadId,
   ) => Effect.Effect<T3TeamToolCallResult>;
   readRuntimeModels?: () => Effect.Effect<T3TeamToolCallResult>;
+  /** Live plan-limit samples for the configured provider instances. */
+  readProviderUsage?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   publishDraft?: T3TeamDraftMutationPublisher;
 }): ReturnType<T3TeamToolBinding["callTool"]> {
   const { server, toolArgs, state } = input;
@@ -198,6 +200,12 @@ export function dispatchT3TeamToolCall(input: {
       return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${input.scopeLabel}.`));
     }
     return input.readRuntimeModels();
+  }
+  if (tool === "t3team.runtime.provider_usage") {
+    if (!input.readProviderUsage) {
+      return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${input.scopeLabel}.`));
+    }
+    return input.readProviderUsage(toolArgs);
   }
   if (isT3TeamDraftMutationTool(tool)) {
     return callT3TeamDraftMutationToolEffect({

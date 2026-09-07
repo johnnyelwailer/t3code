@@ -39,6 +39,7 @@ import { ProviderAdapterRegistry } from "../src/provider/Services/ProviderAdapte
 import { makeProviderRegistryLayer } from "../src/provider/testUtils/providerRegistryMock.ts";
 import { ProviderSessionDirectoryLive } from "../src/provider/Layers/ProviderSessionDirectory.ts";
 import { ServerSettingsService } from "../src/serverSettings.ts";
+import { ProviderUsageDevError, ProviderUsageWatcher } from "../src/t3team-providerUsageWatcher.ts";
 import { makeProviderServiceLive } from "../src/provider/Layers/ProviderService.ts";
 import { makeCodexAdapter } from "../src/provider/Layers/CodexAdapter.ts";
 import {
@@ -402,6 +403,18 @@ export const makeOrchestrationIntegrationHarness = (
       Layer.provide(persistenceLayer),
       Layer.provideMerge(RepositoryIdentityResolver.layer),
       Layer.provideMerge(ServerSettingsService.layerTest()),
+      Layer.provideMerge(
+        Layer.succeed(ProviderUsageWatcher, {
+          sweep: () => Effect.void,
+          checkThreadHeld: () => Effect.succeed(Option.none()),
+          recordDeferredTurn: () => Effect.void,
+          forceExhaust: () =>
+            Effect.fail(new ProviderUsageDevError({ message: "not available in this harness" })),
+          forceRecover: () =>
+            Effect.fail(new ProviderUsageDevError({ message: "not available in this harness" })),
+          getDevState: () => Effect.succeed({ held: [], holds: [], lastSampledAt: null }),
+        }),
+      ),
       Layer.provideMerge(ServerConfig.layerTest(workspaceDir, rootDir)),
       Layer.provideMerge(NodeServices.layer),
       Layer.provideMerge(
