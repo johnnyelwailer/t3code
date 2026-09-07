@@ -1131,6 +1131,7 @@ export const DESKTOP_FILE_EXCLUSIONS = [
   // from app.asar (and its config) live at the staged app root; keep them out
   // of the asar itself.
   "!desktop-asar-dts-afterpack.cjs",
+  "!desktop-asar-dts-afterpack-utils.cjs",
   "!desktop-asar-dts-afterpack.json",
   "!apps/desktop/prod-resources/wsl-runtime.tar.gz",
   "!apps/desktop/prod-resources/wsl-runtime.tar.gz.sha256",
@@ -4387,6 +4388,12 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   yield* fs.copyFile(
     path.join(repoRoot, "scripts", "t3team-desktop-asar-dts-afterpack.cjs"),
     path.join(stageAppDir, "desktop-asar-dts-afterpack.cjs"),
+  );
+  // The hook's helper module (guard LOC split) must ship beside it: the hook
+  // requires its sibling at runtime from the staged directory.
+  yield* fs.copyFile(
+    path.join(repoRoot, "scripts", "t3team-desktop-asar-dts-afterpack-utils.cjs"),
+    path.join(stageAppDir, "desktop-asar-dts-afterpack-utils.cjs"),
   );
   // The hook is data-driven: it re-injects exactly the closure lists written
   // here (TYPECHECKER_DTS_DIRECTORIES / TYPECHECKER_DTS_FILES), so the closure

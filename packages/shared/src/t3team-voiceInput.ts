@@ -10,62 +10,21 @@
 // Types
 // ---------------------------------------------------------------------------
 
-export type VoiceInputState = "idle" | "recording" | "processing" | "error" | "unsupported";
+// Shared types (state machine + SpeechRecognition browser globals) moved to
 
-export interface VoiceInputError {
-  code: string;
-  message: string;
-}
+// t3team-voiceInputTypes.ts (guard LOC ceiling); re-exported for importers.
 
-export interface VoiceInputCallbacks {
-  onStateChange?: (state: VoiceInputState) => void;
-  onPartialTranscript?: (text: string) => void;
-  onFinalTranscript?: (text: string) => void;
-  onError?: (error: VoiceInputError) => void;
-}
+export * from "./t3team-voiceInputTypes.ts";
+import type {
+  SpeechRecognitionErrorEvent,
+  SpeechRecognitionEvent,
+  SpeechRecognitionLike,
+  VoiceInputCallbacks,
+  VoiceInputError,
+  VoiceInputOptions,
+  VoiceInputState,
+} from "./t3team-voiceInputTypes.ts";
 
-export interface VoiceInputOptions {
-  /** Language for recognition, e.g. "en-US". Defaults to browser locale. */
-  lang?: string;
-  /** If true, recognition stops after one utterance. Default false. */
-  singleUtterance?: boolean;
-}
-
-// ---------------------------------------------------------------------------
-// Browser globals (typed loosely to avoid needing a DOM lib in shared)
-// ---------------------------------------------------------------------------
-
-export interface SpeechRecognitionAlternative {
-  transcript: string;
-  confidence: number;
-}
-export interface SpeechRecognitionResult {
-  isFinal: boolean;
-  0: SpeechRecognitionAlternative;
-}
-export interface SpeechRecognitionEvent extends Event {
-  resultIndex: number;
-  results: {
-    [index: number]: SpeechRecognitionResult;
-    length: number;
-  };
-}
-export interface SpeechRecognitionErrorEvent extends Event {
-  error: string;
-}
-export interface SpeechRecognitionLike {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  maxAlternatives: number;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
-  onend: (() => void) | null;
-  onstart: (() => void) | null;
-  start(): void;
-  stop(): void;
-  abort(): void;
-}
 
 // ---------------------------------------------------------------------------
 // Controller

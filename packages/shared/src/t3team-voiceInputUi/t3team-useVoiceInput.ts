@@ -1,47 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+
 import { startVoiceBars } from "./t3team-audioLevel.ts";
 import { frameFromClock } from "./t3team-waveform.ts";
 import { VoiceRecognitionSession } from "./t3team-recognition.ts";
 import { SilenceAutoStop } from "./t3team-autoSend.ts";
-import { BAR_COUNT, type StopMode, type VoiceState } from "./t3team-types.ts";
+import {
+  BAR_COUNT,
+  type StopMode,
+  type VoiceState,
+  type VoiceInput,
+  type VoiceInputOptions,
+} from "./t3team-types.ts";
+import { useVoiceInputControls } from "./t3team-useVoiceInputControls.ts";
 
-export interface VoiceInputOptions {
-  onTranscript: (text: string) => void;
-  onPartialTranscript?: (text: string) => void;
-  onAutoSubmit?: () => void;
-  /** Observes every state transition (used for app-side UI, e.g. clearing live text). */
-  onStateChange?: (state: VoiceState) => void;
-  /**
-   * Per-frame voice level 0..1 while recording (0 on idle).
-   * Fires every animation frame — the app must handle it without
-   * re-rendering (e.g. writing a CSS variable or shadow).
-   */
-  onLevel?: (level: number) => void;
-  initialLanguage: string;
-}
+export type { VoiceInput, VoiceInputOptions } from "./t3team-types.ts";
 
-export interface VoiceInput {
-  supported: boolean;
-  state: VoiceState;
-  currentLang: string;
-  stopMode: StopMode;
-  pickStopMode: (mode: StopMode) => void;
-  toggle: () => void;
-  /**
-   * Stop the recording, commit the transcript and exit voice mode WITHOUT
-   * the auto-resume that auto-sends trigger (used by normal typed sends).
-   * Returns the committed text ("" when idle).
-   */
-  stop: () => string;
-  switchLang: (code: string) => void;
-  /** Ref callback for the i-th waveform bar element. */
-  setBarEl: (index: number, el: HTMLSpanElement | null) => void;
-}
-
-/**
- * All state and side effects of the composer voice input, separated from the
- * rendering so the component files stay thin and the logic stays testable.
- */
 export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
   const {
     onTranscript,
@@ -206,63 +179,29 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
   }, [currentLang, onLevel, onPartialTranscript, stopMode, stopRecording, transition]);
   startRecordingRef.current = startRecording;
 
-  // Support detection + full teardown on unmount.
+  // Support detection.
   useEffect(() => {
     setSupported(VoiceRecognitionSession.isSupported());
-    return () => {
-      autoResumeRef.current = false;
-      window.clearInterval(silenceTimerRef.current);
-      sessionRef.current?.stop();
-      sessionRef.current = null;
-      barsStopRef.current?.();
-      barsStopRef.current = null;
-      if (audioCtxRef.current) {
-        audioCtxRef.current.close().catch(() => {});
-        audioCtxRef.current = null;
-      }
-    };
   }, []);
 
-  // Language switch while recording (restarts the recognition stream).
-  const switchLang = useCallback(
-    (code: string) => {
-      setCurrentLang(code);
-      if (state !== "recording" || !sessionRef.current) return;
-      sessionRef.current.switchLanguage(code);
+  // switchLang / pickStopMode / toggle / stop + Esc handling + unmount
+  // teardown live in useVoiceInputControls (guard LOC ceiling).
+  const { switchLang, pickStopMode, toggle, stop } = useVoiceInputControls(
+    {
+      state,
+      stateRef,
+      sessionRef,
+      autoStopRef,
+      barsStopRef,
+      audioCtxRef,
+      accumulatedRef,
+      autoResumeRef,
+      startRecording,
+      stopRecording,
     },
-    [state],
+    setStopMode,
+    setCurrentLang,
   );
-
-  // Esc cancels (discards the transcript).
-  useEffect(() => {
-    if (state !== "recording") return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") stopRecording(true);
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [state, stopRecording]);
-
-  // Pick a stop mode: UI state + the live silence detector.
-  const pickStopMode = useCallback((mode: StopMode) => {
-    setStopMode(mode);
-    autoStopRef.current?.setMode(mode);
-  }, []);
-
-  const toggle = useCallback(() => {
-    if (state === "recording") stopRecording(false);
-    else startRecording();
-  }, [state, startRecording, stopRecording]);
-
-  // Public stop: commits the transcript and exits voice mode WITHOUT the
-  // auto-resume that auto-sends trigger (a manual send ends voice mode).
-  // Returns the committed text ("" when idle) so callers can send it in
-  // the same tick without waiting for the state round-trip.
-  const stop = useCallback((): string => {
-    const text = stateRef.current === "idle" ? "" : accumulatedRef.current;
-    stopRecording(false);
-    return text;
-  }, [stopRecording]);
 
   return {
     supported,

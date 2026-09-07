@@ -620,6 +620,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       "!apps/desktop/prod-resources/windows-server",
       "!apps/desktop/prod-resources/windows-server/**/*",
       "!desktop-asar-dts-afterpack.cjs",
+      "!desktop-asar-dts-afterpack-utils.cjs",
       "!desktop-asar-dts-afterpack.json",
       "!apps/desktop/prod-resources/wsl-runtime.tar.gz",
       "!apps/desktop/prod-resources/wsl-runtime.tar.gz.sha256",

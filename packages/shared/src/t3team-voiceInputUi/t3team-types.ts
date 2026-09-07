@@ -55,3 +55,38 @@ export const AUTO_SEND_PAUSE_MS: Record<Extract<StopMode, "auto">, number> = {
 
 /** Delay between aborting and restarting recognition on a language switch. */
 export const LANGUAGE_SWITCH_DELAY_MS = 150;
+
+// -- useVoiceInput hook contract (moved from t3team-useVoiceInput.ts for the guard LOC ceiling)
+
+export interface VoiceInputOptions {
+  onTranscript: (text: string) => void;
+  onPartialTranscript?: (text: string) => void;
+  onAutoSubmit?: () => void;
+  /** Observes every state transition (used for app-side UI, e.g. clearing live text). */
+  onStateChange?: (state: VoiceState) => void;
+  /**
+   * Per-frame voice level 0..1 while recording (0 on idle).
+   * Fires every animation frame — the app must handle it without
+   * re-rendering (e.g. writing a CSS variable or shadow).
+   */
+  onLevel?: (level: number) => void;
+  initialLanguage: string;
+}
+
+export interface VoiceInput {
+  supported: boolean;
+  state: VoiceState;
+  currentLang: string;
+  stopMode: StopMode;
+  pickStopMode: (mode: StopMode) => void;
+  toggle: () => void;
+  /**
+   * Stop the recording, commit the transcript and exit voice mode WITHOUT
+   * the auto-resume that auto-sends trigger (used by normal typed sends).
+   * Returns the committed text ("" when idle).
+   */
+  stop: () => string;
+  switchLang: (code: string) => void;
+  /** Ref callback for the i-th waveform bar element. */
+  setBarEl: (index: number, el: HTMLSpanElement | null) => void;
+}

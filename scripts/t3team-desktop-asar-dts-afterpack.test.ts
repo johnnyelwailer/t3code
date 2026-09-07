@@ -124,6 +124,11 @@ const runAfterPackHook = Effect.fn("runAfterPackHook")(function* (inputAsar: str
   const hookSource = path.join(import.meta.dirname, "t3team-desktop-asar-dts-afterpack.cjs");
   const stagedHook = path.join(hookDir, "desktop-asar-dts-afterpack.cjs");
   yield* fs.copyFile(hookSource, stagedHook);
+  // The hook requires its helper sibling (guard LOC split) from its own dir.
+  yield* fs.copyFile(
+    path.join(import.meta.dirname, "t3team-desktop-asar-dts-afterpack-utils.cjs"),
+    path.join(hookDir, "desktop-asar-dts-afterpack-utils.cjs"),
+  );
   yield* fs.copyFile(inputAsar, path.join(resourcesDir, "app.asar"));
   const inputUnpacked = `${inputAsar}.unpacked`;
   if (NodeFS.existsSync(inputUnpacked)) {

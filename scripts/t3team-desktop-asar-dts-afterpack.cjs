@@ -39,30 +39,20 @@
 const NodeFS = require("node:fs");
 const NodeModule = require("node:module");
 const NodePath = require("node:path");
-const NodeStream = require("node:stream");
-
 const CONFIG_PATH = NodePath.join(__dirname, "desktop-asar-dts-afterpack.json");
 
-const fail = (message) => {
-  // Throwing fails the electron-builder build (before signing), which is the
-  // only acceptable outcome for a typechecker closure that is incomplete.
-  console.error(`[desktop-asar-dts] ${message}`);
-  throw new Error(message);
-};
+const { fail, collectDtsFiles, buildExistingEntryStreams } = (() => {
+  // The hook ships as a staged copy under the name desktop-asar-dts-afterpack.cjs
+  // (repo files carry the t3team- prefix; the staged name is what electron-builder
+  // and the round-trip test use). Resolve the sibling helper under whichever name
+  // it currently lives under.
+  try {
+    return require("./desktop-asar-dts-afterpack-utils.cjs");
+  } catch {
+    return require("./t3team-desktop-asar-dts-afterpack-utils.cjs");
+  }
+})();
 
-/** All `.d.ts` files under a directory, as absolute paths. */
-function collectDtsFiles(rootDir) {
-  const out = [];
-  const walk = (dir) => {
-    for (const entry of NodeFS.readdirSync(dir, { withFileTypes: true })) {
-      const full = NodePath.join(dir, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (entry.isFile() && entry.name.endsWith(".d.ts")) out.push(full);
-    }
-  };
-  walk(rootDir);
-  return out;
-}
 
 module.exports = async function desktopAsarDtsAfterPack(context) {
   // electron-builder 26's afterPack context: { appOutDir, outDir, arch,
@@ -110,63 +100,9 @@ module.exports = async function desktopAsarDtsAfterPack(context) {
   const asar = NodeModule.createRequire(repoScriptsPackageJson)("@electron/asar");
   const { header, headerSize } = asar.getRawHeader(asarPath);
 
-  // 1. Re-stream every existing entry, in header order, preserving unpacked
-  //    flags and executable bits. Packed bodies are read at their recorded
-  //    offset (body starts at 8 + headerSize, matching @electron/asar's own
-  //    readFileSync); unpacked bodies come from the .unpacked sibling.
-  const streams = [];
-  const existingFiles = new Set();
-  const walkHeader = (files, prefix) => {
-    for (const [name, entry] of Object.entries(files)) {
-      const rel = prefix === "" ? name : `${prefix}/${name}`;
-      if (entry.files !== undefined) {
-        streams.push({ path: rel, type: "directory", unpacked: entry.unpacked === true });
-        walkHeader(entry.files, rel);
-      } else if (entry.link !== undefined) {
-        // `entry.link` is root-relative (from the asar header), but
-        // `createPackageFromStreams` resolves `symlink` relative to the
-        // link entry's own directory (see `@electron/asar`'s
-        // `disk/filesystem.js` `Filesystem#insertLink`). Re-relativize it
-        // against `rel`'s directory or a nested symlink resolves to the
-        // wrong target on repack.
-        streams.push({
-          path: rel,
-          type: "link",
-          unpacked: entry.unpacked === true,
-          symlink: NodePath.relative(NodePath.dirname(rel), entry.link),
-          stat: { size: 0, mode: 0o644 },
-        });
-      } else {
-        const unpacked = entry.unpacked === true;
-        const size = entry.size ?? 0;
-        existingFiles.add(rel);
-        const offset = Number(entry.offset);
-        streams.push({
-          path: rel,
-          type: "file",
-          unpacked,
-          stat: {
-            size,
-            mode: entry.executable ? 0o755 : 0o644,
-            uid: 0,
-            gid: 0,
-            mtime: 0,
-            atime: 0,
-          },
-          streamGenerator: () =>
-            unpacked
-              ? NodeFS.createReadStream(NodePath.join(`${asarPath}.unpacked`, rel))
-              : size === 0
-                ? NodeStream.Readable.from(Buffer.alloc(0))
-                : NodeFS.createReadStream(asarPath, {
-                    start: 8 + headerSize + offset,
-                    end: 8 + headerSize + offset + size - 1,
-                  }),
-        });
-      }
-    }
-  };
-  walkHeader(header.files, "");
+  // 1. Re-stream every existing entry (see buildExistingEntryStreams in
+  //    t3team-desktop-asar-dts-afterpack-utils.cjs).
+  const { streams, existingFiles } = buildExistingEntryStreams({ asarPath, header, headerSize });
 
   // 2. The .d.ts files electron-builder stripped, sourced from the staged
   //    tree (which still has them — the strips happen during asar packing).
