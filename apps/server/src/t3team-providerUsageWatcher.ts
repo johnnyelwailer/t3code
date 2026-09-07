@@ -399,7 +399,37 @@ const makeProviderUsageWatcher = (input: {
             for (const report of sample.reports) {
               const primary = report.windows.find((window) => window.window === "primary");
               if (primary === undefined || primary.severity !== "critical") continue;
-              if (heldDrivers.has(report.provider)) continue;
+              if (heldDrivers.has(report.provider)) {
+                // Already held: refresh resetsAt with the live value so the
+                // banner shows the correct reset time (the original may be stale).
+                const existing = heldDrivers.get(report.provider)!;
+                if (existing.resetsAt !== primary.resetsAt && primary.resetsAt !== null) {
+                  heldDrivers.set(report.provider, {
+                    ...existing,
+                    resetsAt: primary.resetsAt,
+                    percentUsed: primary.percentUsed,
+                  });
+                  // Emit a fresh started activity so the banner updates.
+                  const threadIds = yield* holds
+                    .listActiveSessionThreadsForDriver({
+                      provider: ProviderDriverKind.make(report.provider),
+                    })
+                    .pipe(Effect.orDie);
+                  for (const row of threadIds) {
+                    yield* appendActivity(
+                      row.threadId,
+                      PROVIDER_USAGE_HOLD_ACTIVITY_KINDS.started,
+                      `Usage limit · ${report.provider} window exhausted`,
+                      {
+                        driver: report.provider,
+                        percentUsed: primary.percentUsed,
+                        resetsAt: primary.resetsAt,
+                      },
+                    );
+                  }
+                }
+                continue;
+              }
               const hold: ProviderUsageInstanceHold = {
                 driver: report.provider,
                 since: nowIso(),
