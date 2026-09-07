@@ -50,6 +50,7 @@ import {
   preflightLinuxDesktopBuild,
   preflightMacDesktopBuild,
   preflightWindowsDesktopBuild,
+  windowsVswherePrerequisiteScript,
   renderMacPasskeyEntitlements,
   renderChangelog,
   resolveDistroRoot,
@@ -1265,6 +1266,18 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       }),
     ),
   );
+
+  it("detects Spectre libraries from the installed MSVC toolset instead of a version-specific component ID", () => {
+    const x64Script = windowsVswherePrerequisiteScript("x64");
+    const arm64Script = windowsVswherePrerequisiteScript("arm64");
+
+    assert.include(x64Script, "Microsoft.VisualStudio.Component.VC.Tools.x86.x64");
+    assert.include(x64Script, "lib\\spectre\\x64");
+    assert.notInclude(x64Script, "VC.Tools.x86.x64.Spectre");
+    assert.include(arm64Script, "Microsoft.VisualStudio.Component.VC.Tools.ARM64");
+    assert.include(arm64Script, "lib\\spectre\\arm64");
+    assert.notInclude(arm64Script, "VC.Tools.ARM64.Spectre");
+  });
 
   it.effect("rejects a PATH-discovered Python executable that is not Python 3", () =>
     Effect.scoped(
