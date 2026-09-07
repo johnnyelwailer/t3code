@@ -706,6 +706,22 @@ const makeProviderUsageWatcher = (input: {
         instanceIds: existing?.instanceIds ?? [],
         percentUsed: 100,
       });
+      // Emit a started activity so the banner shows immediately on boot,
+      // even before the first successful sample refreshes the resetsAt.
+      // Wrapped in catchCause so a failure here cannot kill the watcher.
+      yield* Effect.gen(function* () {
+        const threadIds = yield* holds
+          .listActiveSessionThreadsForDriver({ provider: row.provider })
+          .pipe(Effect.orDie);
+        for (const t of threadIds) {
+          yield* appendActivity(
+            t.threadId,
+            PROVIDER_USAGE_HOLD_ACTIVITY_KINDS.started,
+            `Usage limit · ${row.provider} window exhausted`,
+            { driver: row.provider, percentUsed: 100, resetsAt: row.resetsAt },
+          );
+        }
+      }).pipe(Effect.catchCause(() => Effect.void));
     }
 
     // ── The sweep loop: first pass 5s after boot, then every interval ─────
