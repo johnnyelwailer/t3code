@@ -195,6 +195,31 @@ const makeOrchestrationEngine = Effect.gen(function* () {
           });
         }
 
+        // Hard invariant: a thread must not settle while it (or its parent/child
+        // relation) is still live. Enforced at this single dispatch choke point so
+        // every settle path is covered (thread.settle + thread.auto-settle). A thread
+        // is refused when any of:
+        //   - it owns a non-finished workflow run,
+        //   - it has a child that is live (working or running a workflow — one concept), or
+        //   - a parent has a durable, unresolved wait on it.
+        if (
+          envelope.command.type === "thread.settle" ||
+          envelope.command.type === "thread.auto-settle"
+        ) {
+          const threadId = envelope.command.threadId;
+          const [ownWorkflow, liveChild, parentWait] = yield* Effect.all([
+            projectionSnapshotQuery.hasNonTerminalWorkflowRun(threadId),
+            projectionSnapshotQuery.hasLiveChild(threadId),
+            projectionSnapshotQuery.hasPendingParentWait(threadId),
+          ]);
+          if (ownWorkflow || liveChild || parentWait) {
+            return yield* new OrchestrationCommandInvariantError({
+              commandType: envelope.command.type,
+              detail: `thread ${threadId} is still live (workflow=${ownWorkflow} liveChild=${liveChild} parentWait=${parentWait}); refusing to settle`,
+            });
+          }
+        }
+
         const eventBase = yield* decideOrchestrationCommand({
           command: envelope.command,
           readModel: commandReadModel,

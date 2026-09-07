@@ -190,6 +190,36 @@ export interface ProjectionSnapshotQueryShape {
   >;
 
   /**
+   * True if the thread currently owns a non-terminal workflow run
+   * (queued/running/suspended/sleeping/paused). A paused or clock-parked run is
+   * still "running" from the thread's point of view: it can wake and drive work.
+   * Used to refuse settling a thread that still has a live workflow orchestration.
+   */
+  readonly hasNonTerminalWorkflowRun: (
+    threadId: ThreadId,
+  ) => Effect.Effect<boolean, ProjectionRepositoryError>;
+
+  /**
+   * True if the thread has a direct child that is live: the child owns a
+   * non-terminal workflow run, or its session is actively running/starting.
+   * "Working" and "running a workflow" are the same concept here — one child
+   * that is active keeps the parent from settling. Used to refuse settling a
+   * parent while one of its sub-threads is still working.
+   */
+  readonly hasLiveChild: (threadId: ThreadId) => Effect.Effect<boolean, ProjectionRepositoryError>;
+
+  /**
+   * True if some parent has a durable, unresolved `t3team.child_wait` on this
+   * thread — i.e. a parent deterministically still needs this child's result.
+   * A registered `t3team.child_wait.registered` activity with no matching
+   * `t3team.child_wait.resolved` for the same waitId. Used to refuse settling a
+   * child while a parent has an outstanding wait on it.
+   */
+  readonly hasPendingParentWait: (
+    threadId: ThreadId,
+  ) => Effect.Effect<boolean, ProjectionRepositoryError>;
+
+  /**
    * Read the checkpoint context needed to resolve a single thread diff.
    */
   readonly getThreadCheckpointContext: (

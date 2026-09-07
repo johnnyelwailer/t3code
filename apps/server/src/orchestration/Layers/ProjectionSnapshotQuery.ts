@@ -3699,6 +3699,120 @@ pending_approval_requests AS (
       Effect.map(Option.isSome),
     );
 
+  const NON_TERMINAL_WORKFLOW_RUN_STATUSES = new Set([
+    "queued",
+    "running",
+    "suspended",
+    "sleeping",
+    "paused",
+  ]);
+
+  const hasNonTerminalWorkflowRun: ProjectionSnapshotQueryShape["hasNonTerminalWorkflowRun"] =
+    Effect.fn("ProjectionSnapshotQuery.hasNonTerminalWorkflowRun")(function* (threadId: ThreadId) {
+      const run = yield* getWorkflowRunStatusByThread({ threadId }).pipe(
+        Effect.mapError(
+          toPersistenceSqlOrDecodeError(
+            "ProjectionSnapshotQuery.hasNonTerminalWorkflowRun:query",
+            "ProjectionSnapshotQuery.hasNonTerminalWorkflowRun:decodeRow",
+          ),
+        ),
+      );
+      if (Option.isNone(run)) return false;
+      return NON_TERMINAL_WORKFLOW_RUN_STATUSES.has(run.value.status);
+    });
+
+  const SettleGuardHitRowSchema = Schema.Struct({ hit: Schema.Number });
+
+  // A direct child that is live: owns a non-terminal workflow run, or its
+  // session is actively running/starting. "Working" and "running a workflow" are
+  // the same concept — one live child keeps the parent from settling.
+  const hasLiveChildQuery = SqlSchema.findOneOption({
+    Request: ThreadIdLookupInput,
+    Result: SettleGuardHitRowSchema,
+    execute: ({ threadId }) =>
+      sql`
+        SELECT 1 AS "hit"
+        FROM projection_threads AS c
+        WHERE c.deleted_at IS NULL
+          AND (
+            EXISTS (
+              SELECT 1 FROM projection_thread_activities AS a
+              WHERE a.thread_id = c.thread_id
+                AND a.kind = 't3team.handoff.created'
+                AND json_extract(a.payload_json, '$.parentThreadId') = ${threadId}
+            )
+            OR EXISTS (
+              SELECT 1 FROM projection_thread_activities AS a
+              WHERE a.thread_id = ${threadId}
+                AND a.kind = 't3team.handoff.started'
+                AND json_extract(a.payload_json, '$.childThreadId') = c.thread_id
+            )
+          )
+          AND (
+            EXISTS (
+              SELECT 1 FROM projection_thread_sessions AS s
+              WHERE s.thread_id = c.thread_id
+                AND s.status IN ('starting', 'running')
+            )
+            OR EXISTS (
+              SELECT 1 FROM workflow_runs AS w
+              WHERE w.launch_thread_id = c.thread_id
+                AND w.status IN ('queued', 'running', 'suspended', 'sleeping', 'paused')
+            )
+          )
+        LIMIT 1
+      `,
+  });
+
+  // A durable, unresolved t3team.child_wait registered on this child: a parent
+  // deterministically still needs its result. Registered with no matching
+  // resolved for the same waitId.
+  const hasPendingParentWaitQuery = SqlSchema.findOneOption({
+    Request: ThreadIdLookupInput,
+    Result: SettleGuardHitRowSchema,
+    execute: ({ threadId }) =>
+      sql`
+        SELECT 1 AS "hit"
+        FROM projection_thread_activities AS r
+        WHERE r.kind = 't3team.child_wait.registered'
+          AND json_extract(r.payload_json, '$.childThreadId') = ${threadId}
+          AND NOT EXISTS (
+            SELECT 1 FROM projection_thread_activities AS res
+            WHERE res.kind = 't3team.child_wait.resolved'
+              AND json_extract(res.payload_json, '$.waitId') = json_extract(r.payload_json, '$.waitId')
+          )
+        LIMIT 1
+      `,
+  });
+
+  const hasLiveChild: ProjectionSnapshotQueryShape["hasLiveChild"] = Effect.fn(
+    "ProjectionSnapshotQuery.hasLiveChild",
+  )(function* (threadId: ThreadId) {
+    const row = yield* hasLiveChildQuery({ threadId }).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.hasLiveChild:query",
+          "ProjectionSnapshotQuery.hasLiveChild:decodeRow",
+        ),
+      ),
+    );
+    return Option.isSome(row);
+  });
+
+  const hasPendingParentWait: ProjectionSnapshotQueryShape["hasPendingParentWait"] = Effect.fn(
+    "ProjectionSnapshotQuery.hasPendingParentWait",
+  )(function* (threadId: ThreadId) {
+    const row = yield* hasPendingParentWaitQuery({ threadId }).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.hasPendingParentWait:query",
+          "ProjectionSnapshotQuery.hasPendingParentWait:decodeRow",
+        ),
+      ),
+    );
+    return Option.isSome(row);
+  });
+
   return {
     getCommandReadModel,
     getSnapshot,
@@ -3713,6 +3827,9 @@ pending_approval_requests AS (
     getFirstActiveThreadIdByProjectId,
     listChildThreadIdsByParent,
     listParentChildRelations,
+    hasNonTerminalWorkflowRun,
+    hasLiveChild,
+    hasPendingParentWait,
     getThreadCheckpointContext,
     getFullThreadDiffContext,
     getThreadShellById,
