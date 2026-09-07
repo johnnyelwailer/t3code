@@ -347,6 +347,7 @@ import {
 import {
   describeHoldReset,
   deriveProviderUsageHoldBanner,
+  deriveProviderUsageWarningBanner,
   ProviderUsageHoldToggle,
 } from "./chat/ProviderUsageHoldBanner";
 import { shouldSuppressT3TeamProviderStatus } from "~/t3team/chat/t3team-providerStatusSeverity";
@@ -2481,6 +2482,10 @@ export default function ChatView(props: ChatViewProps) {
     () => deriveProviderUsageHoldBanner(activeThread?.activities ?? EMPTY_ACTIVITIES),
     [activeThread?.activities],
   );
+  const providerUsageWarning = useMemo(
+    () => deriveProviderUsageWarningBanner(activeThread?.activities ?? EMPTY_ACTIVITIES),
+    [activeThread?.activities],
+  );
   const [providerUsageHoldAutoResumeOverride, setProviderUsageHoldAutoResumeOverride] = useState<
     boolean | null
   >(null);
@@ -2501,25 +2506,46 @@ export default function ChatView(props: ChatViewProps) {
     // thread's provider window, turns on it are paused server-side. The banner
     // sits below the latest message with the per-thread auto-resume toggle.
     if (providerUsageHold !== null && activeThreadId !== null) {
-      const holdAutoResume = providerUsageHoldAutoResumeOverride ?? providerUsageHold.autoResume;
+      // If the reset moment has already passed, the watcher will release
+      // within one sweep (60s) and the `released` activity clears the hold.
+      // Don't flash a transient "resuming" state at the user.
+      const resetPassed =
+        providerUsageHold.resetsAt !== null && Date.parse(providerUsageHold.resetsAt) < Date.now();
+      if (!resetPassed) {
+        const holdAutoResume = providerUsageHoldAutoResumeOverride ?? providerUsageHold.autoResume;
+        items.push({
+          id: "provider-usage-hold",
+          variant: "warning",
+          priority: "urgent",
+          icon: <span className="size-1.5 rounded-full bg-amber-500" aria-hidden="true" />,
+          title:
+            providerUsageHold.resetsAt !== null
+              ? `Usage limit · ${describeHoldReset(providerUsageHold.resetsAt, Date.now())}`
+              : "Usage limit",
+          actions:
+            providerUsageHoldHttpBaseUrl !== null ? (
+              <ProviderUsageHoldToggle
+                threadId={activeThreadId}
+                httpBaseUrl={providerUsageHoldHttpBaseUrl}
+                autoResume={holdAutoResume}
+                onFlipped={(next) => setProviderUsageHoldAutoResumeOverride(next)}
+              />
+            ) : undefined,
+        });
+      }
+    }
+    // Provider usage warning banner (GHE #421): informational, no pause, no toggle.
+    // Shows when the sampler reports ≥80% but below critical.
+    if (providerUsageWarning !== null && providerUsageHold === null) {
       items.push({
-        id: "provider-usage-hold",
-        variant: "warning",
-        priority: "urgent",
-        icon: <span className="size-1.5 rounded-full bg-amber-500" aria-hidden="true" />,
+        id: "provider-usage-warning",
+        variant: "info",
+        priority: "notice",
+        icon: <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />,
         title:
-          providerUsageHold.resetsAt !== null
-            ? `Usage limit · ${describeHoldReset(providerUsageHold.resetsAt, Date.now())}`
-            : "Usage limit",
-        actions:
-          providerUsageHoldHttpBaseUrl !== null ? (
-            <ProviderUsageHoldToggle
-              threadId={activeThreadId}
-              httpBaseUrl={providerUsageHoldHttpBaseUrl}
-              autoResume={holdAutoResume}
-              onFlipped={(next) => setProviderUsageHoldAutoResumeOverride(next)}
-            />
-          ) : undefined,
+          providerUsageWarning.resetsAt !== null
+            ? `Usage ${Math.round(providerUsageWarning.percentUsed)}% · ${describeHoldReset(providerUsageWarning.resetsAt, Date.now())}`
+            : `Usage ${Math.round(providerUsageWarning.percentUsed)}%`,
       });
     }
     const updateRunning = serverUpdateState.status === "running";

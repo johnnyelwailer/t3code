@@ -21,7 +21,6 @@ import {
   ProviderUsageUnavailable,
   type ServerSettings,
   ClaudeSettings,
-  CodexSettings,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -131,19 +130,10 @@ const sampleOneInstance = (
       ),
     );
   }
-  const codexSettings = Schema.decodeUnknownEffect(CodexSettings)(rawConfig).pipe(
-    Effect.orElseSucceed(() => Schema.decodeSync(CodexSettings)({})),
-  );
-  return codexSettings.pipe(
-    Effect.flatMap((decoded) =>
-      sampleCodexUsage({
-        binaryPath: decoded.binaryPath,
-        ...(decoded.homePath !== undefined ? { homePath: decoded.homePath } : {}),
-        providerInstanceId: instanceRef,
-        ...(thresholds !== undefined ? { thresholds } : {}),
-      }),
-    ),
-  );
+  return sampleCodexUsage({
+    providerInstanceId: instanceRef,
+    ...(thresholds !== undefined ? { thresholds } : {}),
+  });
 };
 
 /**
@@ -168,6 +158,23 @@ export const sampleProviderInstancesUsage = Effect.fn(
     if (!isKnownUsageDriver(instance.driver)) continue;
     if (requested !== undefined && !requested.has(instanceId)) continue;
     candidates.push({ instanceId, driver: instance.driver });
+  }
+  // Also include requested instances not present in settings (built-in providers
+  // like Codex that don't need an explicit instance entry). The driver is
+  // inferred from the instance id when it matches a known driver name.
+  if (requested !== undefined) {
+    for (const instanceId of requested) {
+      if (settings.providerInstances[ProviderInstanceId.make(instanceId)] !== undefined) continue;
+      const driver =
+        instanceId === "codex"
+          ? PROVIDER_USAGE_CODEX_DRIVER
+          : instanceId === "claudeAgent"
+            ? PROVIDER_USAGE_CLAUDE_DRIVER
+            : undefined;
+      if (driver !== undefined && isKnownUsageDriver(driver)) {
+        candidates.push({ instanceId, driver });
+      }
+    }
   }
 
   const results = yield* Effect.all(

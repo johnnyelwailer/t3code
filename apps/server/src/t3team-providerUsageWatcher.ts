@@ -38,9 +38,7 @@
  *
  * @module t3team-providerUsageWatcher
  */
-import {
-  OrchestrationEngineService,
-} from "./orchestration/Services/OrchestrationEngine.ts";
+import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import {
   ProviderUsageHoldRepository,
   type ProviderUsageHold,
@@ -90,6 +88,8 @@ export const PROVIDER_USAGE_HOLD_ACTIVITY_KINDS = {
   deferred: "provider.usage-hold.deferred",
   released: "provider.usage-hold.released",
   autoResumeSet: "provider.usage-hold.auto-resume-set",
+  warning: "provider.usage.warning",
+  warningCleared: "provider.usage.warning-cleared",
 } as const;
 
 export type ProviderUsageHoldActivityKind =
@@ -155,7 +155,10 @@ export interface ProviderUsageWatcherShape {
     readonly resetsInMs?: number;
     /** Target one specific thread instead of the driver's session threads (demo). */
     readonly threadId?: string;
-  }) => Effect.Effect<{ readonly holdsCreated: number; readonly resetsAt: string }, ProviderUsageDevError>;
+  }) => Effect.Effect<
+    { readonly holdsCreated: number; readonly resetsAt: string },
+    ProviderUsageDevError
+  >;
   /** Dev hook: force-recover every held driver (runs the real release path). */
   readonly forceRecover: () => Effect.Effect<{ readonly released: number }, ProviderUsageDevError>;
   /** Dev hook: current held state + persisted rows. */
@@ -174,10 +177,14 @@ export class ProviderUsageWatcher extends Context.Service<
  */
 const driverForThread = (
   settings: ServerSettings,
-  input: { readonly providerInstanceId: string | null; readonly sessionProviderName: string | null },
+  input: {
+    readonly providerInstanceId: string | null;
+    readonly sessionProviderName: string | null;
+  },
 ): string | null => {
   const byInstance = input.providerInstanceId
-    ? (settings.providerInstances[ProviderInstanceId.make(input.providerInstanceId)]?.driver ?? null)
+    ? (settings.providerInstances[ProviderInstanceId.make(input.providerInstanceId)]?.driver ??
+      null)
     : null;
   if (byInstance !== null) return byInstance;
   return input.sessionProviderName ?? null;
@@ -196,6 +203,11 @@ const makeProviderUsageWatcher = (input: {
 
     /** In-memory held set, keyed by driver kind. Rehydrated from the rows. */
     const heldDrivers = new Map<string, ProviderUsageInstanceHold>();
+    /** In-memory warning set, keyed by driver kind. Not persisted. */
+    const warningDrivers = new Map<
+      string,
+      { readonly percentUsed: number; readonly resetsAt: string | null }
+    >();
     let lastSampledAt: string | null = null;
     let sweepInFlight = false;
 
@@ -257,7 +269,10 @@ const makeProviderUsageWatcher = (input: {
           .upsertActiveHold({
             threadId: ThreadId.make(row.threadId),
             provider: ProviderDriverKind.make(hold.driver),
-            providerInstanceId: hold.instanceIds[0] !== undefined ? ProviderInstanceId.make(hold.instanceIds[0]!) : null,
+            providerInstanceId:
+              hold.instanceIds[0] !== undefined
+                ? ProviderInstanceId.make(hold.instanceIds[0]!)
+                : null,
             since: hold.since,
             resetsAt: hold.resetsAt,
             autoResume: true,
@@ -313,14 +328,18 @@ const makeProviderUsageWatcher = (input: {
               messageId: row.pendingTurnMessageId!,
               createdAt: nowIso(),
             })
-            .pipe(Effect.catchCause((cause) =>
-              Effect.logWarning("provider usage watcher: pending turn replay rejected", {
-                threadId: row.threadId,
-                cause: Cause.pretty(cause),
-              }),
-            ));
+            .pipe(
+              Effect.catchCause((cause) =>
+                Effect.logWarning("provider usage watcher: pending turn replay rejected", {
+                  threadId: row.threadId,
+                  cause: Cause.pretty(cause),
+                }),
+              ),
+            );
         }
-        yield* holds.markReleased({ threadId: row.threadId, reason, now: nowIso() }).pipe(Effect.orDie);
+        yield* holds
+          .markReleased({ threadId: row.threadId, reason, now: nowIso() })
+          .pipe(Effect.orDie);
         released += 1;
         yield* appendActivity(
           row.threadId,
@@ -364,7 +383,9 @@ const makeProviderUsageWatcher = (input: {
           const nowMs = DateTime.nowUnsafe().epochMilliseconds;
           const settings = yield* settingsService.getSettings.pipe(Effect.orDie);
 
-          const instanceIds = yield* activeSessionInstanceIds;
+          const instanceIds = yield* activeSessionInstanceIds.pipe(
+            Effect.catchCause(() => Effect.succeed(new Set<string>())),
+          );
           const sample =
             instanceIds.size > 0
               ? yield* Effect.scoped(
@@ -380,7 +401,37 @@ const makeProviderUsageWatcher = (input: {
             for (const report of sample.reports) {
               const primary = report.windows.find((window) => window.window === "primary");
               if (primary === undefined || primary.severity !== "critical") continue;
-              if (heldDrivers.has(report.provider)) continue;
+              if (heldDrivers.has(report.provider)) {
+                // Already held: refresh resetsAt with the live value so the
+                // banner shows the correct reset time (the original may be stale).
+                const existing = heldDrivers.get(report.provider)!;
+                if (existing.resetsAt !== primary.resetsAt && primary.resetsAt !== null) {
+                  heldDrivers.set(report.provider, {
+                    ...existing,
+                    resetsAt: primary.resetsAt,
+                    percentUsed: primary.percentUsed,
+                  });
+                  // Emit a fresh started activity so the banner updates.
+                  const threadIds = yield* holds
+                    .listActiveSessionThreadsForDriver({
+                      provider: ProviderDriverKind.make(report.provider),
+                    })
+                    .pipe(Effect.orDie);
+                  for (const row of threadIds) {
+                    yield* appendActivity(
+                      row.threadId,
+                      PROVIDER_USAGE_HOLD_ACTIVITY_KINDS.started,
+                      `Usage limit · ${report.provider} window exhausted`,
+                      {
+                        driver: report.provider,
+                        percentUsed: primary.percentUsed,
+                        resetsAt: primary.resetsAt,
+                      },
+                    );
+                  }
+                }
+                continue;
+              }
               const hold: ProviderUsageInstanceHold = {
                 driver: report.provider,
                 since: nowIso(),
@@ -391,15 +442,60 @@ const makeProviderUsageWatcher = (input: {
               heldDrivers.set(report.provider, hold);
               yield* actForDriver(hold);
             }
+
+            // ── Warn: drivers approaching the limit (≥80%, not yet critical) ─
+            for (const report of sample.reports) {
+              const primary = report.windows.find((window) => window.window === "primary");
+              if (primary === undefined) continue;
+              const driver = report.provider;
+              if (primary.severity === "warning") {
+                if (warningDrivers.has(driver) || heldDrivers.has(driver)) continue;
+                warningDrivers.set(driver, {
+                  percentUsed: primary.percentUsed,
+                  resetsAt: primary.resetsAt,
+                });
+                const threadIds = yield* holds
+                  .listActiveSessionThreadsForDriver({ provider: ProviderDriverKind.make(driver) })
+                  .pipe(Effect.orDie);
+                for (const row of threadIds) {
+                  yield* appendActivity(
+                    row.threadId,
+                    PROVIDER_USAGE_HOLD_ACTIVITY_KINDS.warning,
+                    `Usage ${Math.round(primary.percentUsed)}% · resets in ${primary.resetsAt !== null ? "~" + Math.max(1, Math.round((Date.parse(primary.resetsAt) - nowMs) / 60000)) + "m" : "unknown"}`,
+                    { driver, percentUsed: primary.percentUsed, resetsAt: primary.resetsAt },
+                  );
+                }
+              } else if (primary.severity === "normal") {
+                if (warningDrivers.has(driver)) {
+                  warningDrivers.delete(driver);
+                  const threadIds = yield* holds
+                    .listActiveSessionThreadsForDriver({
+                      provider: ProviderDriverKind.make(driver),
+                    })
+                    .pipe(Effect.orDie);
+                  for (const row of threadIds) {
+                    yield* appendActivity(
+                      row.threadId,
+                      PROVIDER_USAGE_HOLD_ACTIVITY_KINDS.warningCleared,
+                      `Usage back to normal (${Math.round(primary.percentUsed)}%)`,
+                      { driver, percentUsed: primary.percentUsed },
+                    );
+                  }
+                }
+              } else if (primary.severity === "critical") {
+                // Transitioning to critical: clear the warning (the hold banner takes over).
+                if (warningDrivers.has(driver)) warningDrivers.delete(driver);
+              }
+            }
           }
 
           // ── Release: held drivers whose window has recovered ────────────
           for (const driver of Array.from(heldDrivers.keys())) {
             const hold = heldDrivers.get(driver)!;
             const primary =
-              sample?.reports.find((report) => report.provider === driver)?.windows.find(
-                (window) => window.window === "primary",
-              ) ?? null;
+              sample?.reports
+                .find((report) => report.provider === driver)
+                ?.windows.find((window) => window.window === "primary") ?? null;
             const sampleInfo =
               primary !== null
                 ? { percentUsed: primary.percentUsed, severity: primary.severity }
@@ -469,7 +565,9 @@ const makeProviderUsageWatcher = (input: {
             threadId: ThreadId.make(input.threadId),
             provider: ProviderDriverKind.make(input.driver),
             providerInstanceId:
-              input.providerInstanceId === null ? null : ProviderInstanceId.make(input.providerInstanceId),
+              input.providerInstanceId === null
+                ? null
+                : ProviderInstanceId.make(input.providerInstanceId),
             since: input.now,
             resetsAt: input.resetsAt,
             autoResume: true,
@@ -482,9 +580,14 @@ const makeProviderUsageWatcher = (input: {
       }
       yield* appendActivity(
         input.threadId,
-        PROVIDER_USAGE_HOLD_ACTIVITY_KINDS.deferred,
-        `Turn deferred — ${input.driver} usage window exhausted`,
-        { messageId: input.messageId, resetsAt: input.resetsAt },
+        PROVIDER_USAGE_HOLD_ACTIVITY_KINDS.started,
+        `Usage limit · ${input.driver} window exhausted`,
+        {
+          messageId: input.messageId,
+          resetsAt: input.resetsAt,
+          driver: input.driver,
+          percentUsed: 100,
+        },
       );
     });
 
@@ -494,7 +597,8 @@ const makeProviderUsageWatcher = (input: {
       if (!devForceEnabled) {
         return yield* Effect.fail(
           new ProviderUsageDevError({
-            message: "Dev force hooks are disabled (set T3TEAM_PROVIDER_USAGE_DEV_FORCE=1 to enable).",
+            message:
+              "Dev force hooks are disabled (set T3TEAM_PROVIDER_USAGE_DEV_FORCE=1 to enable).",
           }),
         );
       }
@@ -503,7 +607,8 @@ const makeProviderUsageWatcher = (input: {
         devInput.provider !== undefined && isUsageDriver(devInput.provider)
           ? devInput.provider
           : devInput.providerInstanceId !== undefined
-            ? settings.providerInstances[ProviderInstanceId.make(devInput.providerInstanceId)]?.driver
+            ? settings.providerInstances[ProviderInstanceId.make(devInput.providerInstanceId)]
+                ?.driver
             : undefined;
       if (driver === undefined || driver === null) {
         return yield* Effect.fail(
@@ -564,7 +669,8 @@ const makeProviderUsageWatcher = (input: {
       if (!devForceEnabled) {
         return yield* Effect.fail(
           new ProviderUsageDevError({
-            message: "Dev force hooks are disabled (set T3TEAM_PROVIDER_USAGE_DEV_FORCE=1 to enable).",
+            message:
+              "Dev force hooks are disabled (set T3TEAM_PROVIDER_USAGE_DEV_FORCE=1 to enable).",
           }),
         );
       }
