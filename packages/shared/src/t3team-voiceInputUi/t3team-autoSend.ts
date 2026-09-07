@@ -1,4 +1,4 @@
-import { AUTO_SEND_PAUSE_MS, SILENCE_ENERGY_THRESHOLD, type StopMode } from "./types.ts";
+import { AUTO_SEND_PAUSE_MS, SILENCE_ENERGY_THRESHOLD, type StopMode } from "./t3team-types.ts";
 
 /**
  * Decides when a silence pause is long enough to auto-send.

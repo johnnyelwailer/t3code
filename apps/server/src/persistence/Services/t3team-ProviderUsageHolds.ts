@@ -117,4 +117,4 @@ export interface ProviderUsageHoldRepositoryShape {
 export class ProviderUsageHoldRepository extends Context.Service<
   ProviderUsageHoldRepository,
   ProviderUsageHoldRepositoryShape
->()("t3/persistence/Services/ProviderUsageHolds/ProviderUsageHoldRepository") {}
+>()("t3/persistence/Services/t3team-ProviderUsageHolds/ProviderUsageHoldRepository") {}

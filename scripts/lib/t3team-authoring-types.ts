@@ -7,7 +7,7 @@
  * node_modules; this module curates the real-file copies that end up there
  * (and fails the build when the curation is incomplete). Consumed by
  * scripts/build-desktop-artifact.ts (mac/linux app.asar + the Windows server
- * sidecar) and asserted against by scripts/check-orchestration-bundle.ts.
+ * sidecar) and asserted against by scripts/t3team-check-orchestration-bundle.ts.
  */
 
 import * as NodeModule from "node:module";

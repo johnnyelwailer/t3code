@@ -268,12 +268,12 @@
       "import": "./src/usageFormat.ts"
     },
     "./voiceInput": {
-      "types": "./src/voiceInput.ts",
-      "import": "./src/voiceInput.ts"
+      "types": "./src/t3team-voiceInput.ts",
+      "import": "./src/t3team-voiceInput.ts"
     },
     "./voiceInputUi": {
-      "types": "./src/voiceInputUi.tsx",
-      "import": "./src/voiceInputUi.tsx"
+      "types": "./src/t3team-voiceInputUi.tsx",
+      "import": "./src/t3team-voiceInputUi.tsx"
     },
     "./usageLimits": {
       "types": "./src/usageLimits.ts",

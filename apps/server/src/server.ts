@@ -174,7 +174,7 @@ import {
   t3teamThreadProviderHoldControlRouteLayer,
 } from "./t3team-thread-provider-hold-route.ts";
 import { T3TeamProviderUsageWatcherLive } from "./t3team-providerUsageWatcher.ts";
-import { ProviderUsageHoldRepositoryLive } from "./persistence/Layers/ProviderUsageHolds.ts";
+import { ProviderUsageHoldRepositoryLive } from "./persistence/Layers/t3team-ProviderUsageHolds.ts";
 import {
   t3teamGitHubAssetRouteLayer,
   t3teamGitHubInboxRouteLayer,

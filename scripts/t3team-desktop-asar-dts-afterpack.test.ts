@@ -121,7 +121,7 @@ const runAfterPackHook = Effect.fn("runAfterPackHook")(function* (inputAsar: str
   yield* fs.makeDirectory(hookDir, { recursive: true });
   yield* fs.makeDirectory(resourcesDir, { recursive: true });
 
-  const hookSource = path.join(import.meta.dirname, "desktop-asar-dts-afterpack.cjs");
+  const hookSource = path.join(import.meta.dirname, "t3team-desktop-asar-dts-afterpack.cjs");
   const stagedHook = path.join(hookDir, "desktop-asar-dts-afterpack.cjs");
   yield* fs.copyFile(hookSource, stagedHook);
   yield* fs.copyFile(inputAsar, path.join(resourcesDir, "app.asar"));

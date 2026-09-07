@@ -1,4 +1,4 @@
-import type { VoiceLanguageOption } from "./types.ts";
+import type { VoiceLanguageOption } from "./t3team-types.ts";
 
 export interface LanguageChipsProps {
   languages: readonly VoiceLanguageOption[];

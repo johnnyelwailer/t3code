@@ -10,7 +10,7 @@ import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import { memo, useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { ChevronRightIcon, SearchIcon } from "lucide-react";
 import { ModelListRow } from "./ModelListRow";
-import { isModelPickerNewModel } from "./modelPickerModelHighlights";
+import { isModelPickerNewModel } from "./t3team-modelPickerModelHighlights";
 import { ModelPickerProviderConnectPanel } from "./t3team-ModelPickerProviderConnectPanel";
 import { ModelPickerSidebar } from "./ModelPickerSidebar";
 import { getProviderStatusMessage, hasProviderSetup } from "./ProviderStatusBanner";

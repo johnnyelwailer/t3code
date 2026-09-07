@@ -21,7 +21,7 @@ import {
   ProviderUsageHold,
   ProviderUsageHoldRepository,
   type ProviderUsageHoldRepositoryShape,
-} from "../Services/ProviderUsageHolds.ts";
+} from "../Services/t3team-ProviderUsageHolds.ts";
 
 /** SQLite row shape (camelCase aliases; `auto_resume` is a 0/1 integer). */
 const ProviderUsageHoldDbRow = Schema.Struct({

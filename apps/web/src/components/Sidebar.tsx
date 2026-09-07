@@ -134,7 +134,7 @@ import {
 import { formatRelativeTimeLabel, parseTimestampDate } from "../timestampFormat";
 import type { SidebarThreadSummary } from "../types";
 import { compactSidebarTimeLabel, SidebarSubRunRow } from "./t3team-SidebarSubRunRow";
-import { ThreadActivityStatus } from "./ThreadActivityStatus";
+import { ThreadActivityStatus } from "./t3team-ThreadActivityStatus";
 import { cn } from "~/lib/utils";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { buildThreadActionMenuItems } from "./threadActionMenu.logic";

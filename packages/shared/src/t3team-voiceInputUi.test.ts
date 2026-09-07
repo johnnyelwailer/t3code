@@ -11,10 +11,10 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 
-import { ComposerVoiceInput } from "./voiceInputUi.tsx";
-import { useVoiceInput, type VoiceInput } from "./voiceInputUi/useVoiceInput.ts";
+import { ComposerVoiceInput } from "./t3team-voiceInputUi.tsx";
+import { useVoiceInput, type VoiceInput } from "./t3team-voiceInputUi/t3team-useVoiceInput.ts";
 
-vi.mock("./voiceInputUi/useVoiceInput.ts");
+vi.mock("./t3team-voiceInputUi/t3team-useVoiceInput.ts");
 
 function mockVoice(overrides: Partial<VoiceInput> = {}): void {
   vi.mocked(useVoiceInput).mockImplementation(() => ({

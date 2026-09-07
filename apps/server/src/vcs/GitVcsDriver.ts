@@ -35,7 +35,7 @@ import {
   PATCH_RENDER_PREFIX_ARGS,
   splitNullSeparatedGitStdoutPaths,
 } from "./GitVcsDriverCore.ts";
-import { indexCheckpointPaths } from "./GitVcsDriverCheckpointIndex.ts";
+import { indexCheckpointPaths } from "./t3team-GitVcsDriverCheckpointIndex.ts";
 import * as VcsDriver from "./VcsDriver.ts";
 import * as VcsProcess from "./VcsProcess.ts";
 

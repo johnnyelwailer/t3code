@@ -89,7 +89,7 @@ import { vi } from "vite-plus/test";
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as ServerConfig from "./config.ts";
 import { ProviderUsageDevError, ProviderUsageWatcher } from "./t3team-providerUsageWatcher.ts";
-import { ProviderUsageHoldRepository } from "./persistence/Services/ProviderUsageHolds.ts";
+import { ProviderUsageHoldRepository } from "./persistence/Services/t3team-ProviderUsageHolds.ts";
 import { makeRoutesLayer, PullRequestServiceLive, HTTP_ROUTER_CONFIG } from "./server.ts";
 import { PullRequestProviderRegistry } from "./pullRequest/PullRequestProviderRegistry.ts";
 import { ProviderSessionDirectoryLive } from "./provider/Layers/ProviderSessionDirectory.ts";

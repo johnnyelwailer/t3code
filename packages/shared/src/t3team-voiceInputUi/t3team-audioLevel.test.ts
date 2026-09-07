@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { startVoiceBars } from "./audioLevel.ts";
-import { frameFromClock } from "./waveform.ts";
+import { startVoiceBars } from "./t3team-audioLevel.ts";
+import { frameFromClock } from "./t3team-waveform.ts";
 
 function stubRaf(steps: number): { raf: () => void; cancelCount: () => number } {
   let queue: Array<() => void> = [];

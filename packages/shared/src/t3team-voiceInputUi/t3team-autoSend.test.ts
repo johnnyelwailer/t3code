@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { SilenceAutoStop } from "./autoSend.ts";
+import { SilenceAutoStop } from "./t3team-autoSend.ts";
 
 describe("SilenceAutoStop", () => {
   it("never fires in manual mode", () => {

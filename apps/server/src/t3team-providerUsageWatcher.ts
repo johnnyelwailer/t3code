@@ -42,8 +42,8 @@ import { OrchestrationEngineService } from "./orchestration/Services/Orchestrati
 import {
   ProviderUsageHoldRepository,
   type ProviderUsageHold,
-} from "./persistence/Services/ProviderUsageHolds.ts";
-import { ProviderUsageHoldRepositoryLive } from "./persistence/Layers/ProviderUsageHolds.ts";
+} from "./persistence/Services/t3team-ProviderUsageHolds.ts";
+import { ProviderUsageHoldRepositoryLive } from "./persistence/Layers/t3team-ProviderUsageHolds.ts";
 import {
   PROVIDER_USAGE_CLAUDE_DRIVER,
   PROVIDER_USAGE_CODEX_DRIVER,

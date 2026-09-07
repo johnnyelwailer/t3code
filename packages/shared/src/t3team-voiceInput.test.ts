@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { VoiceInputController, type VoiceInputState } from "./voiceInput.ts";
+import { VoiceInputController, type VoiceInputState } from "./t3team-voiceInput.ts";
 
 class FakeRecognition {
   static instances: FakeRecognition[] = [];

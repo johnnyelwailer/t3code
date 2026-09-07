@@ -12,7 +12,7 @@
 import { CircleAlertIcon, CircleCheckIcon } from "lucide-react";
 
 import { cn } from "~/lib/utils";
-import { ThreadActivityMorphIcon } from "~/components/ThreadActivityStatus";
+import { ThreadActivityMorphIcon } from "~/components/t3team-ThreadActivityStatus";
 import type { ProjectThread } from "~/t3team/t3team-types";
 
 export function SubRunStatusIcon({

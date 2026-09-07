@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { STOP_MODES, type StopMode, type VoiceState } from "./types.ts";
+import { STOP_MODES, type StopMode, type VoiceState } from "./t3team-types.ts";
 
 /**
  * The record/stop control as ONE connected element (approved lab variant

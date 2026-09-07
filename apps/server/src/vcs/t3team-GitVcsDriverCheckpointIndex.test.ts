@@ -14,7 +14,7 @@ import { assert, describe, it } from "@effect/vitest";
 
 import * as GitVcsDriver from "./GitVcsDriver.ts";
 import * as VcsDriver from "./VcsDriver.ts";
-import { isUnindexableHostPath } from "./GitVcsDriverCheckpointIndex.ts";
+import { isUnindexableHostPath } from "./t3team-GitVcsDriverCheckpointIndex.ts";
 import * as VcsProcess from "./VcsProcess.ts";
 import * as ServerConfig from "../config.ts";
 

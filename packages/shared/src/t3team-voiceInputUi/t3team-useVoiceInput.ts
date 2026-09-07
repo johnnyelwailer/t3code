@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { startVoiceBars } from "./audioLevel.ts";
-import { frameFromClock } from "./waveform.ts";
-import { VoiceRecognitionSession } from "./recognition.ts";
-import { SilenceAutoStop } from "./autoSend.ts";
-import { BAR_COUNT, type StopMode, type VoiceState } from "./types.ts";
+import { startVoiceBars } from "./t3team-audioLevel.ts";
+import { frameFromClock } from "./t3team-waveform.ts";
+import { VoiceRecognitionSession } from "./t3team-recognition.ts";
+import { SilenceAutoStop } from "./t3team-autoSend.ts";
+import { BAR_COUNT, type StopMode, type VoiceState } from "./t3team-types.ts";
 
 export interface VoiceInputOptions {
   onTranscript: (text: string) => void;

@@ -30,7 +30,7 @@ import {
   resolveWebAssetBrandForChannel,
   type WebAssetBrand,
 } from "./lib/brand-assets.ts";
-import { readAuthoringTypeDependencySpecs, stageAuthoringTypes } from "./lib/authoring-types.ts";
+import { readAuthoringTypeDependencySpecs, stageAuthoringTypes } from "./lib/t3team-authoring-types.ts";
 import { getDefaultBuildArch } from "./lib/build-target-arch.ts";
 import {
   findInlinedExternalPackages,
@@ -2939,7 +2939,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     // filters (the main matcher's trailing !**/*.d.ts plus the node-module
     // collector's extension list), which removes the packaged typechecker's
     // declaration closure. This hook re-injects it after packing, before signing.
-    // See scripts/desktop-asar-dts-afterpack.cjs. Not set here: electron-builder
+    // See scripts/t3team-desktop-asar-dts-afterpack.cjs. Not set here: electron-builder
     // resolves a relative afterPack path against the process CWD, not the project
     // dir, so the caller always pins it to the absolute staged location instead
     // (see the `stagePackageJson.build.afterPack` assignment in buildDesktopArtifact).
@@ -3127,7 +3127,7 @@ const assertPlatformBuildResources = Effect.fn("assertPlatformBuildResources")(f
 // (scripts/desktop-asar-dts-afterpack.cjs) re-injects from the staged tree.
 // SINGLE SOURCE OF TRUTH for that closure: the build script writes these lists
 // into desktop-asar-dts-afterpack.json (the hook is data-driven), and the
-// orchestration bundle probe (check-orchestration-bundle.ts) asserts the same
+// orchestration bundle probe (t3team-check-orchestration-bundle.ts) asserts the same
 // paths in its staging tree and the emitted asar. A miss in any copy = silent
 // "typecheck-unavailable" on every workflow.
 //
@@ -4385,7 +4385,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   // root together with its config (the staged tree still holds every .d.ts the
   // asar packing strips; the hook re-injects them from there).
   yield* fs.copyFile(
-    path.join(repoRoot, "scripts", "desktop-asar-dts-afterpack.cjs"),
+    path.join(repoRoot, "scripts", "t3team-desktop-asar-dts-afterpack.cjs"),
     path.join(stageAppDir, "desktop-asar-dts-afterpack.cjs"),
   );
   // The hook is data-driven: it re-injects exactly the closure lists written

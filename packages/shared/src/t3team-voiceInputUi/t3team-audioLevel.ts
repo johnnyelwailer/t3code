@@ -3,8 +3,8 @@ import {
   attachAudioLevel,
   type WaveformBars,
   type WaveformFrame,
-} from "./waveform.ts";
-import { BAR_COUNT } from "./types.ts";
+} from "./t3team-waveform.ts";
+import { BAR_COUNT } from "./t3team-types.ts";
 
 export interface VoiceBarsOptions {
   /** Null selects the CSS fallback animation directly. */

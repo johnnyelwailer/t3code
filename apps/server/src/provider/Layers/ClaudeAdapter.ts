@@ -25,7 +25,7 @@ import {
   gatewayRetrySteerMessage,
   isTransientGatewayErrorText,
   transientGatewayRetryDelayMs,
-} from "./claude-gateway-retry.ts";
+} from "./t3team-claude-gateway-retry.ts";
 import { parseCliArgs } from "@t3tools/shared/cliArgs";
 import { isWorkspaceImagePreviewPath } from "@t3tools/shared/filePreview";
 import { type ClaudeScopedLimitNames, claudeRateLimitEventToUpdate } from "./claudeUsageLimits.ts";

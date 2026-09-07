@@ -54,7 +54,7 @@ import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnap
 import {
   isTransientGatewayErrorText,
   retryDirectiveSeconds,
-} from "./provider/Layers/claude-gateway-retry.ts";
+} from "./provider/Layers/t3team-claude-gateway-retry.ts";
 import { ProviderService } from "./provider/Services/ProviderService.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 

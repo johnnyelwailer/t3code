@@ -1,4 +1,4 @@
-import { BAR_COUNT } from "./types.ts";
+import { BAR_COUNT } from "./t3team-types.ts";
 
 /**
  * The six live bars of the recording pill. Heights are driven by the

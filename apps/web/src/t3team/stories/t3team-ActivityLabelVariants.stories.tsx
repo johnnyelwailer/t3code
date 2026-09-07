@@ -50,7 +50,7 @@ import type { CSSProperties, ReactNode, Ref, RefObject } from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CircleCheckIcon } from "lucide-react";
 
-import { ThreadActivityStatus } from "~/components/ThreadActivityStatus";
+import { ThreadActivityStatus } from "~/components/t3team-ThreadActivityStatus";
 import { cn } from "~/lib/utils";
 import { ProjectFavicon } from "~/components/ProjectFavicon";
 import { ProviderInstanceIcon } from "~/components/chat/ProviderInstanceIcon";

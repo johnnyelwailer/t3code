@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { installRecognition, FakeRecognition } from "./fakeRecognition.ts";
-import { VoiceRecognitionSession } from "./recognition.ts";
+import { installRecognition, FakeRecognition } from "./t3team-fakeRecognition.ts";
+import { VoiceRecognitionSession } from "./t3team-recognition.ts";
 
 describe("VoiceRecognitionSession language switching", () => {
   beforeEach(() => {

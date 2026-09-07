@@ -349,7 +349,7 @@ import {
   deriveProviderUsageHoldBanner,
   deriveProviderUsageWarningBanner,
   ProviderUsageHoldToggle,
-} from "./chat/ProviderUsageHoldBanner";
+} from "./chat/t3team-ProviderUsageHoldBanner";
 import { shouldSuppressT3TeamProviderStatus } from "~/t3team/chat/t3team-providerStatusSeverity";
 import {
   dismissThreadErrorBannerForSession,

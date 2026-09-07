@@ -3,8 +3,8 @@ import type {
   SpeechRecognitionEvent,
   SpeechRecognitionLike,
   SpeechRecognitionWindow,
-} from "../voiceInput.ts";
-import { LANGUAGE_SWITCH_DELAY_MS } from "./types.ts";
+} from "../t3team-voiceInput.ts";
+import { LANGUAGE_SWITCH_DELAY_MS } from "./t3team-types.ts";
 
 export interface VoiceRecognitionCallbacks {
   /** A final transcript chunk landed (interim results are ignored). */

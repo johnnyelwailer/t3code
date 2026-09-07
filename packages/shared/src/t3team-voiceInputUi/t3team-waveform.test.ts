@@ -6,7 +6,7 @@ import {
   frameFromClock,
   resetBars,
   type WaveformBars,
-} from "./waveform.ts";
+} from "./t3team-waveform.ts";
 
 function makeBars(count: number): WaveformBars {
   const entries: Array<[number, HTMLSpanElement]> = Array.from({ length: count }, (_, i) => [

@@ -26,16 +26,16 @@
  *   types.ts            - shared types + tuning constants
  */
 import { useImperativeHandle, type Ref } from "react";
-import { LanguageChips } from "./voiceInputUi/LanguageChips.tsx";
-import { RecordingPill } from "./voiceInputUi/RecordingPill.tsx";
-import { VoiceBars } from "./voiceInputUi/VoiceBars.tsx";
-import { useVoiceInput } from "./voiceInputUi/useVoiceInput.ts";
+import { LanguageChips } from "./t3team-voiceInputUi/t3team-LanguageChips.tsx";
+import { RecordingPill } from "./t3team-voiceInputUi/t3team-RecordingPill.tsx";
+import { VoiceBars } from "./t3team-voiceInputUi/t3team-VoiceBars.tsx";
+import { useVoiceInput } from "./t3team-voiceInputUi/t3team-useVoiceInput.ts";
 import {
   DEFAULT_LANGUAGE_CODE,
   DEFAULT_VOICE_LANGUAGES,
   type VoiceLanguageOption,
   type VoiceState,
-} from "./voiceInputUi/types.ts";
+} from "./t3team-voiceInputUi/t3team-types.ts";
 
 export interface ComposerVoiceInputHandle {
   /**

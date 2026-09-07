@@ -5,7 +5,7 @@ import {
   gatewayRetrySteerMessage,
   isTransientGatewayErrorText,
   transientGatewayRetryDelayMs,
-} from "./claude-gateway-retry.ts";
+} from "./t3team-claude-gateway-retry.ts";
 
 describe("claude-gateway-retry", () => {
   it("classifies gateway capacity reservations and rate limits as transient", () => {

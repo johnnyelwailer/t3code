@@ -172,7 +172,7 @@ import { measureRestingComposerControls } from "./restingComposerControlsMeasure
 import { observeResponsiveBreakpointFade, usePanelAnimationSettings } from "../../panelAnimations";
 import { type ComposerPromptEditorHandle, ComposerPromptEditor } from "../ComposerPromptEditor";
 import { ProviderModelPicker } from "./ProviderModelPicker";
-import { ComposerVoiceInput } from "./ComposerVoiceInput";
+import { ComposerVoiceInput } from "./t3team-ComposerVoiceInput";
 import { isElectron } from "../../env";
 import { type ComposerCommandItem, ComposerCommandMenu } from "./ComposerCommandMenu";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
