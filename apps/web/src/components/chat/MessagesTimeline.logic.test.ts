@@ -15,6 +15,7 @@ import {
   shouldPreserveAssistantLineBreaks,
   type MessagesTimelineRow,
   workEntryDisplayLabel,
+  workEntryIsVisibleInGroup,
 } from "./MessagesTimeline.logic";
 import {
   EMPTY_ACTIVE_AGENTS,
@@ -2341,5 +2342,21 @@ describe("mergeActiveAgentsAndChildren (GHE #201)", () => {
     })[0];
     expect(base && updated).toBeTruthy();
     expect(updated!.activityKey).not.toBe(base!.activityKey);
+  });
+});
+
+describe("workEntryIsVisibleInGroup", () => {
+  it("reveals interrupted commands when their tool group is expanded", () => {
+    const stoppedCommand = {
+      id: "stopped-command",
+      createdAt: "2026-01-01T00:00:00Z",
+      label: "Stopped rg",
+      command: "rg toolCall",
+      requestKind: "command" as const,
+      tone: "tool" as const,
+      toolLifecycleStatus: "stopped" as const,
+    };
+    expect(workEntryIsVisibleInGroup(stoppedCommand, false)).toBe(false);
+    expect(workEntryIsVisibleInGroup(stoppedCommand, true)).toBe(true);
   });
 });

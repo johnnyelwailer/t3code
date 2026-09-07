@@ -86,7 +86,8 @@ export function workEntryIsVisibleInGroup(
   return (
     (expandedToolGroupEntry &&
       (entry.toolLifecycleStatus === "inProgress" ||
-        entry.sourceActivityKind === "task.progress")) ||
+        entry.sourceActivityKind === "task.progress" ||
+        entry.toolLifecycleStatus === "stopped")) ||
     !workEntryIndicatesToolNeutralStatus(entry)
   );
 }
