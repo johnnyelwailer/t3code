@@ -133,6 +133,12 @@ function waitForDevServer() {
   });
 }
 
+NodeChildProcess.execFileSync(
+  process.execPath,
+  [NodePath.join(desktopDir, "scripts/build-browser-secret.mjs")],
+  { stdio: "inherit" },
+);
+
 await acquireSupervisorLock();
 await waitForDevServer();
 

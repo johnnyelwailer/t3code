@@ -472,6 +472,7 @@ function ThreadCard({
           <ProjectFavicon
             environmentId={EnvironmentId.make("env-1")}
             cwd="/tmp/build-40"
+            projectName="build-40"
             className="size-4 shrink-0"
           />
           <span className="min-w-0 flex-1 truncate text-secondary-label text-xs font-medium">
@@ -645,6 +646,7 @@ function DoneCard() {
           <ProjectFavicon
             environmentId={EnvironmentId.make("env-1")}
             cwd="/tmp/build-40"
+            projectName="build-40"
             className="size-4 shrink-0 opacity-40 grayscale"
           />
           <span className="min-w-0 flex-1 truncate text-secondary-label text-xs font-normal">
@@ -751,6 +753,7 @@ function StateCycleCard() {
           <ProjectFavicon
             environmentId={EnvironmentId.make("env-1")}
             cwd="/tmp/build-40"
+            projectName="build-40"
             className="size-4 shrink-0"
           />
           <span
@@ -1049,6 +1052,7 @@ function ProdFrame({
           <ProjectFavicon
             environmentId={EnvironmentId.make("env-1")}
             cwd="/tmp/build-40"
+            projectName="build-40"
             className="size-4 shrink-0"
           />
           <span className="min-w-0 flex-1 truncate text-secondary-label text-xs font-medium">

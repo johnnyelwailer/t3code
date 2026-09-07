@@ -46,18 +46,6 @@ import { AgentsPanelStatusDot } from "~/t3team/chat/t3team-agentsPanelStatusDot"
  * result (done = green, error = red). Only the human-facing label stays coarse;
  * the motion is the fine signal.
  */
-const STATUS_LABEL: Record<RuntimeSubagent["status"], string> = {
-  pending: "Working",
-  running: "Working",
-  waiting: "Working",
-  // Idle reads as settled (muted, not sky): a resting Codex child looks done
-  // unless resumed — live-test: sky idle dots read as stuck in-progress.
-  idle: "Idle · resumable",
-  completed: "Completed",
-  failed: "Failed",
-  cancelled: "Stopped",
-  interrupted: "Stopped",
-};
 
 function formatElapsedSeconds(totalSeconds: number): string {
   const seconds = Math.max(0, Math.floor(totalSeconds));
@@ -138,9 +126,24 @@ function agentActivityText(agent: RuntimeSubagent): string | null {
   );
 }
 
+const STATUS_VISUALS: Record<RuntimeSubagent["status"], { dotClass: string; label: string }> = {
+  pending: { dotClass: "bg-info", label: "Working" },
+  running: { dotClass: "bg-info", label: "Working" },
+  waiting: { dotClass: "bg-info", label: "Working" },
+  // Idle reads as settled (muted, not sky): a resting Codex child looks done
+  // unless resumed — live-test: sky idle dots read as stuck in-progress.
+  idle: { dotClass: "bg-muted-foreground/50", label: "Idle · resumable" },
+  completed: { dotClass: "bg-success", label: "Completed" },
+  failed: { dotClass: "bg-destructive", label: "Failed" },
+  cancelled: { dotClass: "bg-muted-foreground/60", label: "Stopped" },
+  interrupted: { dotClass: "bg-muted-foreground/60", label: "Stopped" },
+};
+
 /** Flat, non-interactive agent status line. No unfold. */
 function AgentRow({ agent, index = 0 }: { agent: RuntimeSubagent; index?: number }) {
-  const label = STATUS_LABEL[agent.status];
+  const visuals = STATUS_VISUALS[agent.status];
+  const statusLabel =
+    agent.kind === "subagent_batch" && agent.status === "idle" ? "Idle" : visuals.label;
   const activity = agentActivityText(agent);
   const modelLabel = formatSubagentModelLabel(agent.model, agent.effort);
   const role =
@@ -181,12 +184,12 @@ function AgentRow({ agent, index = 0 }: { agent: RuntimeSubagent; index?: number
           agent.status === "failed" ? "text-destructive-foreground" : "text-muted-foreground",
         )}
       >
-        {activity ?? label}
+        {activity ?? statusLabel}
       </span>
       <span className="col-start-2 col-end-4 row-start-3 truncate font-mono text-[.7rem] tabular-nums text-muted-foreground/70">
         {metadata.join(" · ")}
       </span>
-      <span className="sr-only">{label}</span>
+      <span className="sr-only">{statusLabel}</span>
     </div>
   );
 }

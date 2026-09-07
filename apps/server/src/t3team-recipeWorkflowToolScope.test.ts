@@ -105,6 +105,8 @@ const TestLayer = NodeServices.layer;
 const brokerDispatched: OrchestrationCommand[] = [];
 const brokerEngineMock: OrchestrationEngineShape = {
   readEvents: () => Stream.empty,
+  readThreadEvents: () => Stream.empty,
+  getThreadReplayStats: () => Effect.die("unused"),
   dispatch: (command) => {
     brokerDispatched.push(command);
     return Effect.succeed({ sequence: brokerDispatched.length });

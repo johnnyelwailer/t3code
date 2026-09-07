@@ -94,6 +94,11 @@ import Migration0062 from "./Migrations/044_ClearAutomaticProjectModelDefaults.t
 import Migration0063 from "./Migrations/t3team-053_WorkflowTurnRetries.ts";
 import Migration0064 from "./Migrations/t3team-054_ProjectionThreadMessageSequenceBackfill.ts";
 import Migration0065 from "./Migrations/t3team-055_ProviderUsageHold.ts";
+// New from the 2026-09-06 upstream sync (upstream 045/046/047). Appended above the fork's maximum id
+// rather than taking upstream's numbers, which this fork already uses — see the rule above.
+import Migration0066 from "./Migrations/045_ProjectionProjectsAutoPull.ts";
+import Migration0067 from "./Migrations/046_RepairAutomaticSettlementTimestamps.ts";
+import Migration0068 from "./Migrations/047_ProjectionProjectIcon.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -171,6 +176,9 @@ export const migrationEntries = [
   [63, "WorkflowTurnRetries", Migration0063],
   [64, "ProjectionThreadMessageSequenceBackfill", Migration0064],
   [65, "ProviderUsageHold", Migration0065],
+  [66, "ProjectionProjectsAutoPull", Migration0066],
+  [67, "RepairAutomaticSettlementTimestamps", Migration0067],
+  [68, "ProjectionProjectIcon", Migration0068],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

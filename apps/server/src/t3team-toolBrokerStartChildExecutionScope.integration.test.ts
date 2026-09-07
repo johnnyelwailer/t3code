@@ -196,6 +196,8 @@ function createEvalHarness(variant: EvalVariant = linkedVariant) {
 
   const orchestrationMock: OrchestrationEngineShape = {
     readEvents: () => Stream.empty,
+    readThreadEvents: () => Stream.empty,
+    getThreadReplayStats: () => Effect.die("unused"),
     streamDomainEvents: Stream.empty,
     subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
     latestSequence: Effect.sync(() => sequence),
@@ -227,6 +229,9 @@ function createEvalHarness(variant: EvalVariant = linkedVariant) {
 
   const projectionQueryMock: ProjectionSnapshotQueryShape = {
     getCommandReadModel: () => Effect.die("unused"),
+    getUserInputActivity: () => Effect.die("unused"),
+    getImportedAgentSessionSources: () => Effect.succeed([]),
+    getThreadRuntimeContext: () => Effect.succeed(Option.none()),
     getSnapshot: () => Effect.die("unused"),
     getShellSnapshot: () => Effect.die("unused"),
     getArchivedShellSnapshot: () => Effect.die("unused"),

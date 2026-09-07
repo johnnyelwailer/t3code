@@ -99,6 +99,8 @@ const makeQueryMock = (parentThread: OrchestrationThread | undefined) => {
 const makeOrchestrationMock = (commands: OrchestrationCommand[]) => {
   const orchestration: OrchestrationEngineShape = {
     readEvents: () => Stream.empty,
+    readThreadEvents: () => Stream.empty,
+    getThreadReplayStats: () => Effect.die("unused"),
     dispatch: (command) =>
       Effect.succeed({ sequence: 1 }).pipe(
         Effect.tap(

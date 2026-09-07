@@ -64,6 +64,9 @@
     "typecheck": "vp run --concurrency-limit 2 --filter '!@t3tools/mobile' --filter '!@t3tools/monorepo' typecheck && NODE_OPTIONS='--max-old-space-size=8192' vp run --filter @t3tools/mobile typecheck",
     "tc": "vp run -r --concurrency-limit 2 --filter '!@t3tools/mobile' typecheck && NODE_OPTIONS='--max-old-space-size=8192' vp run --filter @t3tools/mobile typecheck",
     "lint": "vp lint --report-unused-disable-directives",
+    "knip": "knip --preprocessor ./scripts/knip-schemas.ts",
+    "knip:check": "knip --include files,dependencies --no-config-hints && knip --workspace apps/web --workspace packages/client-runtime --workspace packages/contracts --workspace packages/effect-acp --workspace packages/effect-codex-app-server --workspace packages/shared --workspace packages/ssh --workspace packages/tailscale --exports --preprocessor ./scripts/knip-schemas.ts --no-config-hints",
+    "knip:production": "knip --production --preprocessor ./scripts/knip-schemas.ts",
     "lint:mobile": "node scripts/mobile-native-static-check.ts",
     "lint:t3team:additive": "node t3team-additive-guard.mjs",
     "test": "vp run -r test",
@@ -90,11 +93,10 @@
     "sync:repos": "node scripts/sync-reference-repos.ts"
   },
   "devDependencies": {
-    "@babel/plugin-transform-react-jsx": "7.28.6",
     "@effect/tsgo": "catalog:",
-    "@oxlint/plugins": "^1.63.0",
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
+    "knip": "6.34.0",
     "vite-plus": "catalog:"
   },
   "overrides": {

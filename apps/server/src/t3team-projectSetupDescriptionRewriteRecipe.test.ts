@@ -70,6 +70,8 @@ async function makeBrokerWithSeededThread(): Promise<{
   const brokerDispatched: OrchestrationCommand[] = [];
   const orchestrationMock: OrchestrationEngineShape = {
     readEvents: () => Stream.empty,
+    readThreadEvents: () => Stream.empty,
+    getThreadReplayStats: () => Effect.die("unused"),
     dispatch: (command) => {
       brokerDispatched.push(command);
       return Effect.succeed({ sequence: brokerDispatched.length });

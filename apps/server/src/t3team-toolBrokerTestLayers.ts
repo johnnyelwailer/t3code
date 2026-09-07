@@ -75,6 +75,9 @@ const stubStartChildServices = Layer.mergeAll(
 
 const projectionQueryMock: ProjectionSnapshotQueryShape = {
   getCommandReadModel: () => Effect.die("unused"),
+  getUserInputActivity: () => Effect.die("unused"),
+  getImportedAgentSessionSources: () => Effect.succeed([]),
+  getThreadRuntimeContext: () => Effect.succeed(Option.none()),
   getSnapshot: () => Effect.die("unused"),
   getShellSnapshot: () => Effect.die("unused"),
   getArchivedShellSnapshot: () => Effect.die("unused"),
