@@ -548,9 +548,14 @@ const makeProviderUsageWatcher = (input: {
       }
       yield* appendActivity(
         input.threadId,
-        PROVIDER_USAGE_HOLD_ACTIVITY_KINDS.deferred,
-        `Turn deferred — ${input.driver} usage window exhausted`,
-        { messageId: input.messageId, resetsAt: input.resetsAt },
+        PROVIDER_USAGE_HOLD_ACTIVITY_KINDS.started,
+        `Usage limit · ${input.driver} window exhausted`,
+        {
+          messageId: input.messageId,
+          resetsAt: input.resetsAt,
+          driver: input.driver,
+          percentUsed: 100,
+        },
       );
     });
 
