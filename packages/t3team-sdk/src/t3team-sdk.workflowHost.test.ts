@@ -22,11 +22,9 @@ import {
 } from "./t3team-sdk.engineFixtures.ts";
 import { createMockBroker } from "./t3team-sdk.broker.ts";
 
-const alwaysDefer = () => ({ kind: "defer" } as const);
+const alwaysDefer = () => ({ kind: "defer" }) as const;
 
-const lifecycle = (
-  overrides: Partial<WorkflowHostLifecycle> = {},
-): WorkflowHostLifecycle => ({
+const lifecycle = (overrides: Partial<WorkflowHostLifecycle> = {}): WorkflowHostLifecycle => ({
   recordRunning: async () => {},
   recordActive: async () => true,
   releaseActive: () => {},
@@ -117,10 +115,7 @@ describe("durable workflow engine — shared per-run host", () => {
       sinks: { onFailed: vi.fn(async () => {}) },
       appendResolved,
     });
-    await Promise.all([
-      host.resume("host-admission:1", {}),
-      host.resume("host-admission:1", {}),
-    ]);
+    await Promise.all([host.resume("host-admission:1", {}), host.resume("host-admission:1", {})]);
     expect(recordActive).toHaveBeenCalledOnce();
     expect(appendResolved).not.toHaveBeenCalled();
   });
@@ -145,8 +140,12 @@ describe("durable workflow engine — shared per-run host", () => {
       appendResolved: async (opts) => {
         appendAttempts += 1;
         if (appendAttempts === 1) throw new Error("temporary journal outage");
+        // The resume funnel hands appendReply only {runId, correlationId,
+        // reply}. A host-provided appendResolved captures the run's journal
+        // root from its own config (as the default appendReply does) so the
+        // retried write lands where the suspended run actually lives.
         return appendResolvedEntry({
-          ...(opts.runsRoot === undefined ? {} : { runsRoot: opts.runsRoot }),
+          runsRoot,
           runId: opts.runId,
           correlationId: opts.correlationId,
           reply: opts.reply,
