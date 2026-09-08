@@ -59,6 +59,7 @@ export function additiveGuardCacheKey({
 
 export function additiveGuardConfigCacheKey(config) {
   return JSON.stringify({
+    forkBaselineRef: config.forkBaselineRef,
     requiredPrefixes: config.requiredPrefixes,
     locWarnThreshold: config.locWarnThreshold,
     locFailThreshold: config.locFailThreshold,

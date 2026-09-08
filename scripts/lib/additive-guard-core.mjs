@@ -103,6 +103,75 @@ export function enforceCanonicalBaseRef(configBaseRef) {
   return UPSTREAM_BASE_REF;
 }
 
+/**
+ * Environment variable that forces the guard onto the canonical upstream base, bypassing any
+ * configured fork baseline. It is reserved for the informational upstream-drift step in
+ * `.github/workflows/t3team-additive-guard.yml`, which must keep measuring against live
+ * upstream even while the blocking base is the frozen fork baseline. Only `upstream/main` is
+ * accepted, so the variable can never repoint the blocking gate at a weaker ref.
+ */
+export const ADDITIVE_GUARD_BASE_ENV = "T3TEAM_ADDITIVE_GUARD_BASE";
+
+/** Fork-baseline tags live in this namespace; the guard refuses any other base ref. */
+const FORK_BASELINE_REF_PATTERN = /^t3team\/fork-baseline-[0-9][0-9A-Za-z.-]*$/;
+
+export function enforceForkBaselineRef(configForkBaselineRef) {
+  if (!configForkBaselineRef) return undefined;
+  if (typeof configForkBaselineRef !== "string" || !FORK_BASELINE_REF_PATTERN.test(configForkBaselineRef)) {
+    throw new Error(
+      `Invalid .t3team-additive-guard.json forkBaselineRef '${configForkBaselineRef}'. ` +
+        `It must be a frozen fork-baseline tag of the form 't3team/fork-baseline-<date>' ` +
+        `(created at a fork main commit, e.g. git tag -a t3team/fork-baseline-YYYYMMDD <commit>).`,
+    );
+  }
+  return configForkBaselineRef;
+}
+
+/**
+ * Resolves the guard's BLOCKING base ref.
+ *
+ * `baseRef` stays `upstream/main` — that is what the guard measures against when no fork
+ * baseline is configured (upstream checkouts, pre-fork history). Once this fork became a full
+ * product fork, measuring against upstream — pinned to any sync point or live — fails on the
+ * fork's own debt (~2.8k files differ from upstream; 1,373 violations on main alone). The
+ * blocking base is therefore a frozen fork-baseline tag: the fork tree at that tag is the
+ * grandfathered debt, and every new unwhitelisted upstream-file edit, new unprefixed file, or
+ * LOC growth on top of it still fails the guard exactly as before.
+ *
+ * The tag is namespaced to `t3team/fork-baseline-*` and shape-checked by
+ * `enforceForkBaselineRef` so the config cannot quietly repoint the guard at an arbitrary ref.
+ * A configured tag that does not resolve in this checkout fails loudly instead of falling back
+ * to `upstream/main` — on this fork that fallback would compare main against itself, or
+ * against live upstream, and either pass vacuously or fail on grandfathered debt.
+ */
+export function resolveBlockingBaseRef(config) {
+  const override = process.env[ADDITIVE_GUARD_BASE_ENV];
+  if (override !== undefined) {
+    if (override !== UPSTREAM_BASE_REF) {
+      throw new Error(
+        `Invalid ${ADDITIVE_GUARD_BASE_ENV}='${override}'. Only '${UPSTREAM_BASE_REF}' is accepted; ` +
+          `it forces the canonical upstream base for informational drift measurement.`,
+      );
+    }
+    return assertBaseRef(override);
+  }
+
+  if (config.forkBaselineRef) {
+    const resolved = maybeRunGit(["rev-parse", "--verify", "--quiet", `${config.forkBaselineRef}^{commit}`]);
+    if (!resolved) {
+      throw new Error(
+        `forkBaselineRef '${config.forkBaselineRef}' does not resolve to a commit in this checkout. ` +
+          `Fetch it first: git fetch origin "${config.forkBaselineRef}^{commit}"` +
+          ` (the tag must exist on origin; if it has not been pushed yet: git push origin "${config.forkBaselineRef}"). ` +
+          `The guard refuses to fall back to ${UPSTREAM_BASE_REF} — on this fork that would fail on grandfathered debt.`,
+      );
+    }
+    return config.forkBaselineRef;
+  }
+
+  return assertBaseRef(config.baseRef);
+}
+
 export function fileExistsInRef(ref, filePath) {
   const listed = maybeRunGit(["ls-tree", "-r", "--name-only", ref, "--", filePath]);
   return listed?.split("\n").includes(filePath) ?? false;
