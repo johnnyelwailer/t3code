@@ -3,17 +3,17 @@
  *
  * Row typing follows the persistence-layer convention: each read goes through
  * a `SqlSchema` helper with an explicit result schema (camelCase aliases),
- * then maps to the branded `ProviderUsageHold` value.
+ * then maps to the branded `ProviderUsageHold` value. Row schemas and the
+ * "list" reads live in the sibling `t3team-ProviderUsageHoldsRow` and
+ * `t3team-ProviderUsageHoldsActiveReads` modules.
  *
  * @module t3team.persistence.Layers.ProviderUsageHolds
  */
-import { MessageId, ProviderDriverKind, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as SqlSchema from "effect/unstable/sql/SqlSchema";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 
 import { toPersistenceSqlError } from "../Errors.ts";
 
@@ -23,45 +23,16 @@ import {
   type ProviderUsageHoldRepositoryShape,
 } from "../Services/t3team-ProviderUsageHolds.ts";
 
-/** SQLite row shape (camelCase aliases; `auto_resume` is a 0/1 integer). */
-const ProviderUsageHoldDbRow = Schema.Struct({
-  threadId: Schema.String,
-  provider: Schema.String,
-  providerInstanceId: Schema.NullOr(Schema.String),
-  since: Schema.String,
-  resetsAt: Schema.NullOr(Schema.String),
-  autoResume: Schema.Number,
-  pendingTurnMessageId: Schema.NullOr(Schema.String),
-  releasedAt: Schema.NullOr(Schema.String),
-  releaseReason: Schema.NullOr(Schema.String),
-  updatedAt: Schema.String,
-});
-type ProviderUsageHoldDbRowValue = typeof ProviderUsageHoldDbRow.Type;
-
-const rowToHold = (row: ProviderUsageHoldDbRowValue): ProviderUsageHold => ({
-  threadId: ThreadId.make(row.threadId),
-  provider: ProviderDriverKind.make(row.provider),
-  providerInstanceId:
-    row.providerInstanceId === null ? null : ProviderInstanceId.make(row.providerInstanceId),
-  since: row.since,
-  resetsAt: row.resetsAt,
-  autoResume: row.autoResume === 1,
-  pendingTurnMessageId:
-    row.pendingTurnMessageId === null ? null : MessageId.make(row.pendingTurnMessageId),
-  releasedAt: row.releasedAt,
-  releaseReason: row.releaseReason,
-  updatedAt: row.updatedAt,
-});
-
-const toHoldOption = (option: Option.Option<ProviderUsageHoldDbRowValue>) =>
-  Option.map(rowToHold)(option);
-
-const ByThreadIdRequest = Schema.Struct({ threadId: Schema.String });
-
-const EmptyRequest = Schema.Struct({});
+import {
+  ByThreadIdRequest,
+  ProviderUsageHoldDbRow,
+  toHoldOption,
+} from "./t3team-ProviderUsageHoldsRow.ts";
+import { makeProviderUsageHoldActiveReads } from "./t3team-ProviderUsageHoldsActiveReads.ts";
 
 const makeProviderUsageHoldRepository = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+  const activeReads = makeProviderUsageHoldActiveReads(sql);
 
   // Re-arming an existing (or released) row must preserve the user-owned
   // fields: the auto-resume toggle, the pending turn, and the original
@@ -123,41 +94,6 @@ const makeProviderUsageHoldRepository = Effect.gen(function* () {
           updated_at AS "updatedAt"
       FROM provider_usage_holds
       WHERE thread_id = ${threadId}
-      `,
-  });
-
-  const listActiveRows = SqlSchema.findAll({
-    Request: EmptyRequest,
-    Result: ProviderUsageHoldDbRow,
-    execute: () =>
-      sql`
-        SELECT
-          thread_id AS "threadId",
-          provider,
-          provider_instance_id AS "providerInstanceId",
-          since,
-          resets_at AS "resetsAt",
-          auto_resume AS "autoResume",
-          pending_turn_message_id AS "pendingTurnMessageId",
-          released_at AS "releasedAt",
-          release_reason AS "releaseReason",
-          updated_at AS "updatedAt"
-      FROM provider_usage_holds
-      WHERE released_at IS NULL
-      ORDER BY since ASC
-      `,
-  });
-
-  const activeSessionThreadsForDriver = SqlSchema.findAll({
-    Request: Schema.Struct({ provider: Schema.String }),
-    Result: Schema.Struct({ threadId: Schema.String }),
-    execute: ({ provider }) =>
-      sql`
-        SELECT DISTINCT s.thread_id AS "threadId"
-        FROM projection_thread_sessions s
-        WHERE s.provider_name = ${provider}
-          AND s.status != 'stopped'
-        ORDER BY s.updated_at DESC
       `,
   });
 
@@ -226,12 +162,6 @@ const makeProviderUsageHoldRepository = Effect.gen(function* () {
       Effect.mapError(toPersistenceSqlError("ProviderUsageHoldRepository.getByThreadId:query")),
     );
 
-  const listActive: ProviderUsageHoldRepositoryShape["listActive"] = () =>
-    listActiveRows({}).pipe(
-      Effect.map((rows) => rows.map(rowToHold)),
-      Effect.mapError(toPersistenceSqlError("ProviderUsageHoldRepository.listActive:query")),
-    );
-
   const markReleasedRow = SqlSchema.void({
     Request: Schema.Struct({
       threadId: Schema.String,
@@ -260,24 +190,14 @@ const makeProviderUsageHoldRepository = Effect.gen(function* () {
       Effect.mapError(toPersistenceSqlError("ProviderUsageHoldRepository.markReleased:query")),
     );
 
-  const listActiveSessionThreadsForDriver: ProviderUsageHoldRepositoryShape["listActiveSessionThreadsForDriver"] =
-    (input) =>
-      activeSessionThreadsForDriver({ provider: input.provider }).pipe(
-        Effect.mapError(
-          toPersistenceSqlError(
-            "ProviderUsageHoldRepository.listActiveSessionThreadsForDriver:query",
-          ),
-        ),
-      );
-
   return {
     upsertActiveHold: upsert,
     setPendingTurn,
     setAutoResume,
     getByThreadId,
-    listActive,
+    listActive: activeReads.listActive,
     markReleased,
-    listActiveSessionThreadsForDriver,
+    listActiveSessionThreadsForDriver: activeReads.listActiveSessionThreadsForDriver,
   } satisfies ProviderUsageHoldRepositoryShape;
 });
 

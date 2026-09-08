@@ -1,6 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
+import {
+  CHROME_ICON_W,
+  HIDDEN_SIZER_CLS,
+  SLIDE_MIN_W,
+} from "~/components/t3team-ThreadActivityStatus-shared";
+import { SlideCycleLabel } from "~/components/t3team-ThreadActivityStatus-slideLabel";
+import { ThreadActivityMorphIcon } from "~/components/t3team-ThreadActivityStatus-morphIcon";
+import { RollLabel } from "~/components/t3team-ThreadActivityStatus-rollLabel";
+
+export { ThreadActivityMorphIcon } from "~/components/t3team-ThreadActivityStatus-morphIcon";
 
 /*
  * GHE #40 — live activity label motion language (approved in the Storybook
@@ -24,92 +34,8 @@ import { cn } from "~/lib/utils";
  */
 
 /** Production status icon size: size-4 = 16px (matches the card's icon). */
-const CHROME_ICON_W = 16;
 /** Fit-gate: the slide window never gets narrower than this. */
-const SLIDE_MIN_W = 120;
 /** Fit-gate: the slide window never gets narrower than this. */
-
-const HIDDEN_SIZER_CLS = "pointer-events-none absolute left-0 top-0 h-px overflow-hidden opacity-0";
-
-/**
- * The status icon as ONE persistent SVG so its shape can MORPH instead of
- * swapping or rolling:
- *   - ring: dashes (running) ↔ solid (done) — the dasharray animates, so
- *     the dashes stretch and merge into a full circle (and back)
- *   - check: stroke-dashoffset draw-on / draw-off, slightly after the ring
- *     settles
- * Idle life: a slow fade pulse. The one-shot springy spin on activity
- * change runs through the Web Animations API (no remount, so the morph
- * survives).
- */
-export function ThreadActivityMorphIcon({
-  solid,
-  pulse = false,
-  spinTick = 0,
-  spin = false,
-  instant = false,
-  size = "md",
-}: {
-  solid: boolean;
-  pulse?: boolean;
-  spinTick?: number;
-  spin?: boolean;
-  /** true = spin now (label just landed); false = wait for the move to finish */
-  instant?: boolean;
-  /** "md" (size-4) matches the card's icon; "sm" (size-3) for the denser
-   *  sub-run rows, which render the SAME ring so child and parent read as
-   *  one status language. */
-  size?: "md" | "sm";
-}) {
-  const ref = useRef<SVGSVGElement | null>(null);
-  useEffect(() => {
-    if (!spin || spinTick === 0) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    ref.current?.animate(
-      [
-        { transform: "rotate(0deg)" },
-        { transform: "rotate(378deg)", offset: 0.7 },
-        { transform: "rotate(360deg)" },
-      ],
-      {
-        duration: 600,
-        delay: instant ? 0 : 1150, // delayed: after width glide (0.82s) + roll-in (1.10s)
-        easing: "cubic-bezier(0.34, 1.4, 0.44, 1)",
-      },
-    );
-  }, [spinTick, spin, instant]);
-  return (
-    <svg
-      ref={ref}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      className={cn(size === "sm" ? "size-3" : "size-4", "shrink-0", pulse && "t3team-icon-pulse")}
-    >
-      <circle
-        cx="12"
-        cy="12"
-        r="10"
-        style={{
-          strokeDasharray: solid ? "62.83 0.01" : "7 3.44",
-          transition: "stroke-dasharray 0.5s ease",
-        }}
-      />
-      <path
-        d="M8.4 12.6l2.6 2.6 4.9-5.4"
-        style={{
-          strokeDasharray: 11.5,
-          strokeDashoffset: solid ? 0 : 11.5,
-          transition: "stroke-dashoffset 0.35s ease 0.15s",
-        }}
-      />
-    </svg>
-  );
-}
 
 /**
  * DYNAMIC WIDTH container: no reserved space. A hidden sizer measures the
@@ -167,187 +93,6 @@ function StatusWidth({
       </span>
       {/* visible unit: icon left, label middle, timer right */}
       <span className="flex items-center gap-1">{children}</span>
-    </span>
-  );
-}
-
-/**
- * Slide-mode label (fit-gated, GHE #40): on first appearance the label
- * slides in from the left edge to its start position; then, periodically,
- * it rests, slides to the left just far enough that the RIGHT END of the
- * text docks at the window's right edge, stays there for a while, and
- * slides straight back to the start — repeating. One element, one slow
- * eased pass each way, no text swap, no off-screen phase — the window
- * shows text the whole way.
- */
-const LOOP_DWELL = 4000; // ms held at the start position before sliding
-const FAR_DWELL = 4000; // ms held at the far (right-docked) end before sliding back
-const LOOP_SPEED = 30; // px per second — the slow cadence
-const ENTER_DURATION = 700; // ms for the first-appearance slide-in
-
-function SlideCycleLabel({
-  text,
-  slideW,
-  onLand,
-}: {
-  text: string;
-  slideW: number;
-  /** called when the label lands back at its start position */
-  onLand?: () => void;
-}) {
-  const [reduced] = useState(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-
-  // natural width of the full label = the scroll-out distance
-  const sizerRef = useRef<HTMLSpanElement>(null);
-  const [textW, setTextW] = useState<number | undefined>(undefined);
-  useLayoutEffect(() => {
-    const el = sizerRef.current;
-    if (el) setTextW(el.getBoundingClientRect().width);
-  }, [text]);
-
-  const labelRef = useRef<HTMLSpanElement>(null);
-  const animRef = useRef<Animation | null>(null);
-  const onLandRef = useRef(onLand);
-  onLandRef.current = onLand;
-  useEffect(() => {
-    const el = labelRef.current;
-    if (!el || reduced || slideW <= 0 || textW === undefined || textW <= 0) return;
-    let loop: Animation | null = null;
-    let landT1 = 0;
-    let landInt = 0;
-    let loopStartT = 0;
-    const fireLand = () => onLandRef.current?.();
-    const startLoop = () => {
-      // travel, measured from the live geometry (label at rest): exactly how
-      // far the right end of the text must move to dock at the window's
-      // right edge — sub-pixel exact, no rounding drift
-      const labelEl = labelRef.current;
-      const winEl = labelEl?.parentElement;
-      const travel = Math.max(
-        4,
-        labelEl
-          ? labelEl.getBoundingClientRect().right - (winEl?.getBoundingClientRect().right ?? 0)
-          : 0,
-      );
-      const leg = Math.round((travel / LOOP_SPEED) * 1000); // px / (px/s) * 1000 = ms
-      // the label never leaves the window: rest at start → slide left →
-      // hold at the far end → straight back to the start → rest → repeat
-      const total = leg * 2 + LOOP_DWELL * 2 + FAR_DWELL;
-      loop = el.animate(
-        [
-          { transform: "translateX(0px)", offset: 0 },
-          { transform: "translateX(0px)", offset: LOOP_DWELL / total, easing: "ease-in-out" },
-          {
-            transform: `translateX(${-travel}px)`,
-            offset: (LOOP_DWELL + leg) / total,
-            easing: "ease-in-out",
-          },
-          {
-            transform: `translateX(${-travel}px)`,
-            offset: (LOOP_DWELL + leg + FAR_DWELL) / total,
-            easing: "ease-in-out",
-          },
-          {
-            transform: "translateX(0px)",
-            offset: (LOOP_DWELL + leg * 2 + FAR_DWELL) / total,
-            easing: "ease-in-out",
-          },
-          { transform: "translateX(0px)" },
-        ],
-        { duration: total, iterations: Infinity },
-      );
-      animRef.current = loop;
-      // each return to the start position is a "landing" → one icon spin
-      landT1 = window.setTimeout(fireLand, total - LOOP_DWELL);
-      landInt = window.setInterval(fireLand, total);
-    };
-    const enter = el.animate(
-      [{ transform: `translateX(${-slideW}px)` }, { transform: "translateX(0px)" }],
-      {
-        duration: ENTER_DURATION,
-        easing: "cubic-bezier(0.22, 1, 0.36, 1)",
-        fill: "both",
-      },
-    );
-    animRef.current = enter;
-    enter.onfinish = () => {
-      if (animRef.current !== enter) return;
-      // start the loop only after the container's width glide has settled
-      // (it ends at 0.82s), so the dock distance is measured against the
-      // FINAL window width — the label rests at 0 until then
-      loopStartT = window.setTimeout(startLoop, 250);
-    };
-    return () => {
-      enter.onfinish = null;
-      enter.cancel();
-      loop?.cancel();
-      window.clearTimeout(landT1);
-      window.clearInterval(landInt);
-      window.clearTimeout(loopStartT);
-      animRef.current = null;
-    };
-  }, [slideW, reduced, text, textW]);
-
-  return (
-    <span
-      className="relative block h-4 w-full overflow-hidden"
-      title={text}
-      onMouseEnter={() => animRef.current?.pause()}
-      onMouseLeave={() => animRef.current?.play()}
-    >
-      {/* natural width of the full label, same classes as the visible text */}
-      <span ref={sizerRef} aria-hidden className={HIDDEN_SIZER_CLS}>
-        <span className="inline-block whitespace-nowrap">{text}</span>
-      </span>
-      <span
-        ref={labelRef}
-        role="status"
-        className="t3team-label-shimmer relative inline-block whitespace-nowrap will-change-transform"
-      >
-        {text}
-      </span>
-    </span>
-  );
-}
-
-/**
- * Short-label roll: the outgoing label flips away, the incoming one flips
- * in (CSS choreography in index.css; out finishes before in starts).
- */
-function RollLabel({ text, shimmer }: { text: string; shimmer: boolean }) {
-  const prevRef = useRef(text);
-  const [previous, setPrevious] = useState<string | undefined>(undefined);
-  const [rolling, setRolling] = useState(false);
-  useEffect(() => {
-    if (prevRef.current === text) return;
-    const prev = prevRef.current;
-    prevRef.current = text;
-    setPrevious(prev);
-    setRolling(true);
-    const t = window.setTimeout(() => setRolling(false), 1100); // out + in
-    return () => window.clearTimeout(t);
-  }, [text]);
-  return (
-    <span className="t3team-roll-stage relative block">
-      {rolling && previous ? (
-        <span
-          aria-hidden
-          key={previous}
-          className="t3team-status-roll-out absolute inset-x-0 top-0"
-        >
-          <span className={shimmer ? "t3team-label-shimmer" : ""}>{previous}</span>
-        </span>
-      ) : null}
-      <span
-        key={text}
-        role="status"
-        className={cn(
-          shimmer ? "t3team-label-shimmer" : "",
-          rolling ? "t3team-status-roll-in" : "",
-        )}
-      >
-        {text}
-      </span>
     </span>
   );
 }

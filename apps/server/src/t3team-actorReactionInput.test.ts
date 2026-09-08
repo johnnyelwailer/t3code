@@ -2,16 +2,18 @@ import type { OrchestrationEvent } from "@t3tools/contracts";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import {
-  autoSummarizeActorMessage,
   buildActorReactionBatchInput,
   buildActorReactionInput,
-  capActorMessageSummary,
   collectPendingActorDeliveries,
+} from "./t3team-actorReactionInput.ts";
+import {
+  autoSummarizeActorMessage,
+  capActorMessageSummary,
   resolveActorMessageDeliveryMaxChars,
   summarizeActorMessageForDelivery,
   T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS,
   T3TEAM_ACTOR_MESSAGE_DELIVERY_SUMMARY_MAX_CHARS,
-} from "./t3team-actorReactionInput.ts";
+} from "./t3team-actorReactionInputSummarize.ts";
 import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
 
 const ENV_KEY = "T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS";
