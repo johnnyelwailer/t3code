@@ -119,7 +119,11 @@ export const buildActorReactionInput = (entry: T3TeamActorMailboxEntry): string 
       "the sender ONLY when its content explicitly asks you a question, requests your " +
       "decision, or asks for an answer or artifact from you — otherwise do the work it hands " +
       "you and continue your own task. Solve simple blockers yourself; escalate only for " +
-      "genuine blockers (a user decision, a cross-lane change, or access you lack). Report " +
+      "genuine blockers (a user decision, a cross-lane change, or access you lack). No peer " +
+      "chat: if you are a child thread, address ONLY the parent thread that spawned you — " +
+      "never start or continue a conversation with sibling threads; act on a sibling's " +
+      "message silently only when it is directly useful to your task, otherwise route it " +
+      "through the parent. Report " +
       "progress at most once, when you are completely done — no incremental status pings. To " +
       "reply to the sender, use your send-message tool addressed to thread " +
       `${entry.fromThreadId}. Keep inter-agent messages short (telegram style: state, ` +
@@ -161,7 +165,11 @@ export const buildActorReactionBatchInput = (
       "a sender ONLY when its content explicitly asks you a question, requests your " +
       "decision, or asks for an answer or artifact from you — otherwise do the work it hands " +
       "you and continue your own task. Solve simple blockers yourself; escalate only for " +
-      "genuine blockers (a user decision, a cross-lane change, or access you lack). Report " +
+      "genuine blockers (a user decision, a cross-lane change, or access you lack). No peer " +
+      "chat: if you are a child thread, address ONLY the parent thread that spawned you — " +
+      "never start or continue a conversation with sibling threads; act on a sibling's " +
+      "message silently only when it is directly useful to your task, otherwise route it " +
+      "through the parent. Report " +
       "progress at most once, when you are completely done — no incremental status pings. To " +
       "reply to a sender, use your send-message tool addressed to that sender's thread. Keep " +
       "inter-agent messages short (telegram style: state, decision, request). Put details " +
