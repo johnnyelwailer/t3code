@@ -15,6 +15,7 @@ import {
   derivePendingApprovals,
   derivePendingUserInputs,
   deriveTimelineEntries,
+  deriveTurnResumeRetryTarget,
   deriveWorkLogEntries,
   findLatestProposedPlan,
   hasActionableProposedPlan,
@@ -2487,5 +2488,90 @@ describe("session activity performance", () => {
       command: "git diff",
       toolLifecycleStatus: "completed",
     });
+  });
+});
+
+describe("deriveTurnResumeRetryTarget (GHE #402)", () => {
+  const requested = MessageId.make("original-ask");
+  const followUp = MessageId.make("mid-turn-follow-up");
+  const rejection = (messageId: string, hint: string | null) =>
+    `Orchestration command invariant failed (thread.turn.resume): Thread 't1' does not end with unanswered user message '${messageId}'.${hint ?? ""}`;
+
+  it("re-targets the last user message named in the decider rejection", () => {
+    expect(
+      deriveTurnResumeRetryTarget({
+        requestedMessageId: requested,
+        failureMessage: rejection(
+          String(requested),
+          ` Last user message is '${String(followUp)}'.`,
+        ),
+        fallbackLastUserMessageId: null,
+      }),
+    ).toBe(followUp);
+  });
+
+  it("falls back to the client's own last user message when the server predates the hint", () => {
+    expect(
+      deriveTurnResumeRetryTarget({
+        requestedMessageId: requested,
+        failureMessage: rejection(String(requested), null),
+        fallbackLastUserMessageId: followUp,
+      }),
+    ).toBe(followUp);
+  });
+
+  it("prefers the server hint over the client fallback", () => {
+    const staleView = MessageId.make("stale-client-view");
+    expect(
+      deriveTurnResumeRetryTarget({
+        requestedMessageId: requested,
+        failureMessage: rejection(
+          String(requested),
+          ` Last user message is '${String(followUp)}'.`,
+        ),
+        fallbackLastUserMessageId: staleView,
+      }),
+    ).toBe(followUp);
+  });
+
+  it("does not retry when the rejection names the same message we already tried", () => {
+    expect(
+      deriveTurnResumeRetryTarget({
+        requestedMessageId: requested,
+        failureMessage: rejection(
+          String(requested),
+          ` Last user message is '${String(requested)}'.`,
+        ),
+        fallbackLastUserMessageId: requested,
+      }),
+    ).toBeNull();
+  });
+
+  it("does not retry unrelated failures", () => {
+    expect(
+      deriveTurnResumeRetryTarget({
+        requestedMessageId: requested,
+        failureMessage:
+          "Orchestration command invariant failed (thread.turn.resume): Thread 't1' already has a turn in progress.",
+        fallbackLastUserMessageId: followUp,
+      }),
+    ).toBeNull();
+  });
+
+  it("does not retry without a failure message or a requested id", () => {
+    expect(
+      deriveTurnResumeRetryTarget({
+        requestedMessageId: null,
+        failureMessage: rejection("x", null),
+        fallbackLastUserMessageId: followUp,
+      }),
+    ).toBeNull();
+    expect(
+      deriveTurnResumeRetryTarget({
+        requestedMessageId: requested,
+        failureMessage: null,
+        fallbackLastUserMessageId: followUp,
+      }),
+    ).toBeNull();
   });
 });

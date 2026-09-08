@@ -21,6 +21,7 @@ import {
   type UserInputQuestion,
   type ThreadId,
   type TurnId,
+  type MessageId,
 } from "@t3tools/contracts";
 
 import type {
@@ -1765,6 +1766,33 @@ function compareActivityLifecycleRank(kind: string): number {
     return 2;
   }
   return 1;
+}
+
+/**
+ * GHE #402: a mid-turn follow-up can land after the message the client tried
+ * to resume, so the decider rejects `thread.turn.resume` with
+ * "does not end with unanswered user message". Instead of giving up, the
+ * client re-targets the thread's LAST user message. The decider names that
+ * message in the rejection ("Last user message is '<id>'"); when the server
+ * predates the hint, fall back to the client's own last user message.
+ *
+ * Returns the retry target id, or null when no retry is warranted (unrelated
+ * failure, or the retry target would be the same message already rejected).
+ */
+export function deriveTurnResumeRetryTarget(input: {
+  requestedMessageId: MessageId | null;
+  failureMessage: string | null;
+  fallbackLastUserMessageId: MessageId | null;
+}): MessageId | null {
+  const { requestedMessageId, failureMessage, fallbackLastUserMessageId } = input;
+  if (requestedMessageId === null || failureMessage === null) return null;
+  if (!failureMessage.includes("does not end with unanswered user message")) return null;
+  const hint = /Last user message is '([^']+)'/.exec(failureMessage);
+  // The hint is the server's own MessageId serialized into the rejection text.
+  const target = (hint?.[1] as MessageId | undefined) ?? fallbackLastUserMessageId;
+  if (target === null || target === undefined) return null;
+  if (target === requestedMessageId) return null;
+  return target;
 }
 
 export function deriveTimelineEntries(
