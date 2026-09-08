@@ -71,6 +71,8 @@ export function createDurableCallPrimitive(seat: DurablePrimitiveSeat) {
     // First-class abort: live path only — a replayed call returns the recorded result above.
     if (seat.abortSignal?.aborted === true) throw new WorkflowAborted();
 
+    await seat.writer.flush();
+
     emit("primitive.started", currentSeq, call.kind, call.refId);
     const result = await call.exec();
     // `exec` is where `parallel()`/`pipeline()` run their thunks, and their per-branch handlers
@@ -84,6 +86,7 @@ export function createDurableCallPrimitive(seat: DurablePrimitiveSeat) {
 
     if (isNever) {
       seat.writer.append({ ...baseEntry, kind: "script-never", result: undefined });
+      await seat.writer.flush();
       // Correlate with primitive.started by the call's kind, not the journal kind.
       emit("primitive.completed", currentSeq, call.kind, call.refId);
       return result;
@@ -99,6 +102,7 @@ export function createDurableCallPrimitive(seat: DurablePrimitiveSeat) {
       });
     }
     seat.writer.append({ ...baseEntry, kind: call.kind, result });
+    await seat.writer.flush();
     emit("primitive.completed", currentSeq, call.kind, call.refId);
     return result;
   };

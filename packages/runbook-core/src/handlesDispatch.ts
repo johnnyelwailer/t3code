@@ -120,7 +120,13 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
       startedAt: ts,
       endedAt: ts,
     });
+    // Admission must be durable before the broker fires. A store may refuse the
+    // intent because another host has already cancelled this run.
+    await seat.writer.flush();
     await call.fire(correlationId, makeResolver(correlationId, call.kind, call.refId));
+    // Do not release a model reply to subsequent workflow steps until the store
+    // accepts it. Its terminal fence may have changed while the model was running.
+    await seat.writer.flush();
     // A broker may itself have driven a nested body that suspended (an intercepting broker does);
     // refuse to hand this correlationId back once the run is parked.
     seat.suspension.assertNotSuspended();
