@@ -20,7 +20,11 @@
 import type { OrchestrationMessage } from "@t3tools/contracts";
 
 import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
-import { buildActorReactionBatchInput } from "./t3team-actorReactionInput.ts";
+import {
+  buildActorReactionBatchInput,
+  buildActorReactionCompressedInput,
+  buildActorReactionHeaderInput,
+} from "./t3team-actorReactionInput.ts";
 
 /**
  * A message the user actually sees and can react to: a human-typed user
@@ -108,12 +112,15 @@ export function detectUserFacingOpenState(
  * the earlier user-facing content rather than assume the user still has it.
  */
 export const ACTOR_REACTION_USER_RETURN_INSTRUCTION =
-  "[Return to the user before anything else. Messages from other threads arrived — do not " +
-  "prioritize them. FIRST make sure the user has read your message and responded to any open " +
-  "points. You may still act on the agent messages, but your LAST action must be to respond to " +
-  "the user and summarize the recent conversation. Because inter-agent messages arrived in " +
-  "between, RE-STATE / RE-EXPLAIN your earlier user-facing content (the question you posed, the " +
-  "decision you made, the status you gave) — do NOT assume the user still has it.]";
+  "[Return to the user before anything else. USER MESSAGES ALWAYS TAKE PRIORITY: if a user " +
+  "message or question is still unanswered, fully respond to it FIRST — before acting on any " +
+  "inter-agent message; agent messages are queued and safe to handle afterwards. Inter-agent " +
+  "messages arrived — do not prioritize them over the user. FIRST make sure the user has read " +
+  "your message and responded to any open points. You may still act on the agent messages, but " +
+  "your LAST action must be to respond to the user and summarize the recent conversation. " +
+  "Because inter-agent messages arrived in between, RE-STATE / RE-EXPLAIN your earlier " +
+  "user-facing content (the question you posed, the decision you made, the status you gave) — " +
+  "do NOT assume the user still has it.]";
 
 /**
  * The instruction to append to a reaction turn's framed input, or `""` when the
@@ -147,6 +154,21 @@ export function appendActorReactionUserReturnInstruction(
 export function buildActorReactionTurnInput(
   entries: ReadonlyArray<T3TeamActorMailboxEntry>,
   context: ActorReactionUserContext,
+  userInterjected = false,
+  firstDelivery = true,
 ): string {
-  return appendActorReactionUserReturnInstruction(buildActorReactionBatchInput(entries), context);
+  // Three tiers:
+  // 1. The user stepped in while the batch was queueing: compressed framing
+  //    ("do not act by default, the user's message comes first").
+  // 2. The thread's FIRST inter-agent delivery (the kickoff/handoff): full
+  //    bodies — the recipient must be able to act without a fetch.
+  // 3. Every later delivery: header-only; bodies stay fetchable via
+  //    t3team_read_message so bursts do not inflate the recipient's context.
+  const base =
+    userInterjected && context.kind === "open"
+      ? buildActorReactionCompressedInput(entries)
+      : firstDelivery
+        ? buildActorReactionBatchInput(entries)
+        : buildActorReactionHeaderInput(entries);
+  return appendActorReactionUserReturnInstruction(base, context);
 }

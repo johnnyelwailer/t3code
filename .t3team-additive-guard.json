@@ -11,6 +11,7 @@
     ".gitignore",
     ".t3team-additive-guard.json",
     "AGENTS.md",
+    "apps/server/src/mcp/toolkits/t3team/tools.ts",
     "CLAUDE.md",
     "README.md",
     "apps/desktop/package.json",
