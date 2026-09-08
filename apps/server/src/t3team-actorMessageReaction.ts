@@ -18,6 +18,10 @@ import * as Effect from "effect/Effect";
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import type { T3TeamActorMailboxEntry, T3TeamActorMailboxShape } from "./t3team-actorMailbox.ts";
 import {
+  hasPriorInterAgentMessages,
+  userInterjectedDuringQueueing,
+} from "./t3team-actorReactionInput.ts";
+import {
   appendActorReactionUserReturnInstruction,
   buildActorReactionTurnInput,
   detectUserFacingOpenState,
@@ -82,7 +86,12 @@ export function startActorReaction(input: {
           role: "user",
           // GHE #156 + #209: user-return + human-steering SUFFIXES; rehydrate prefix-matching kept.
           text: appendHumanSteeringInstruction(
-            buildActorReactionTurnInput(entries, detectUserFacingOpenState(thread.messages)),
+            buildActorReactionTurnInput(
+              entries,
+              detectUserFacingOpenState(thread.messages),
+              userInterjectedDuringQueueing(entries, thread.messages),
+              !hasPriorInterAgentMessages(thread.messages),
+            ),
             humanSteeringInstructionForThread(thread, DateTime.toEpochMillis(now)),
           ),
           attachments: [],

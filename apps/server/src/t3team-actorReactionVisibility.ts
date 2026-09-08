@@ -20,7 +20,11 @@
 import type { OrchestrationMessage } from "@t3tools/contracts";
 
 import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
-import { buildActorReactionBatchInput } from "./t3team-actorReactionInput.ts";
+import {
+  buildActorReactionBatchInput,
+  buildActorReactionCompressedInput,
+  buildActorReactionHeaderInput,
+} from "./t3team-actorReactionInput.ts";
 
 /**
  * A message the user actually sees and can react to: a human-typed user
@@ -150,6 +154,21 @@ export function appendActorReactionUserReturnInstruction(
 export function buildActorReactionTurnInput(
   entries: ReadonlyArray<T3TeamActorMailboxEntry>,
   context: ActorReactionUserContext,
+  userInterjected = false,
+  firstDelivery = true,
 ): string {
-  return appendActorReactionUserReturnInstruction(buildActorReactionBatchInput(entries), context);
+  // Three tiers:
+  // 1. The user stepped in while the batch was queueing: compressed framing
+  //    ("do not act by default, the user's message comes first").
+  // 2. The thread's FIRST inter-agent delivery (the kickoff/handoff): full
+  //    bodies — the recipient must be able to act without a fetch.
+  // 3. Every later delivery: header-only; bodies stay fetchable via
+  //    t3team_read_message so bursts do not inflate the recipient's context.
+  const base =
+    userInterjected && context.kind === "open"
+      ? buildActorReactionCompressedInput(entries)
+      : firstDelivery
+        ? buildActorReactionBatchInput(entries)
+        : buildActorReactionHeaderInput(entries);
+  return appendActorReactionUserReturnInstruction(base, context);
 }
