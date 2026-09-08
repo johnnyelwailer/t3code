@@ -24,7 +24,7 @@ import * as Option from "effect/Option";
 import { HttpRouter } from "effect/unstable/http";
 
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
-import { ProviderUsageHoldRepository } from "./persistence/Services/ProviderUsageHolds.ts";
+import { ProviderUsageHoldRepository } from "./persistence/Services/t3team-ProviderUsageHolds.ts";
 import {
   PROVIDER_USAGE_HOLD_ACTIVITY_KINDS,
   ProviderUsageWatcher,

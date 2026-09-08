@@ -5,6 +5,12 @@ import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts";
 import { getProjectDashboardModeStorageKey } from "~/t3team/t3team-projectDashboardModeState";
 import type { ProjectThread } from "~/t3team/t3team-types";
 
+// Upstream keeps this key private in clientPersistenceStorage.ts (the additive
+// guard forbids fork-only exports there); the fork tests pin the constant so
+// they can assert against raw localStorage writes. Keep in sync if upstream
+// bumps the key version.
+const CLIENT_SETTINGS_STORAGE_KEY = "t3code:client-settings:v1";
+
 function createMemoryStorage(): Storage {
   const entries = new Map<string, string>();
   return {
@@ -40,12 +46,10 @@ function makeStoredThread(overrides: Partial<ProjectThread> = {}): ProjectThread
 }
 
 async function loadPersistenceModules() {
-  const [{ CLIENT_SETTINGS_STORAGE_KEY }, { __resetLocalApiForTests }, persistence] =
-    await Promise.all([
-      import("~/clientPersistenceStorage"),
-      import("~/localApi"),
-      import("./t3team-projectThreadPersistence"),
-    ]);
+  const [{ __resetLocalApiForTests }, persistence] = await Promise.all([
+    import("~/localApi"),
+    import("./t3team-projectThreadPersistence"),
+  ]);
 
   return {
     CLIENT_SETTINGS_STORAGE_KEY,

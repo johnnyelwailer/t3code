@@ -13,7 +13,7 @@ import { formatRelativeTimeLabel } from "../timestampFormat";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay";
 import { usePrimarySettings } from "~/hooks/useSettings";
-import { ThreadActivityMorphIcon } from "./ThreadActivityStatus";
+import { ThreadActivityMorphIcon } from "./t3team-ThreadActivityStatus";
 import { cn } from "~/lib/utils";
 
 /**

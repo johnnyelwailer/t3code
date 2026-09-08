@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { useMergedThreads } from "~/t3team/t3team-mergedThreads";
 import { useProjects } from "~/state/entities";
@@ -16,12 +16,8 @@ import {
   loadStoredProjects,
   reconcileStoredProjectsWithLive,
 } from "./t3team-projectStoreUtils";
-import { persistStoredThreads } from "./t3team-projectThreadPersistence";
-import {
-  remapProjectThreadToStoredProject,
-  resolveStoredProjectId,
-  syncLiveThreadMetadataToLocalState,
-} from "./t3team-threadBridge";
+import { useProjectStoreSyncEffects } from "./t3team-useProjectStore-syncEffects";
+import { resolveStoredProjectId } from "./t3team-threadBridge";
 
 export function useProjectStore() {
   const [storedProjects, setStoredProjects] = useState<ProjectShellProject[]>(loadStoredProjects);
@@ -49,47 +45,14 @@ export function useProjectStore() {
     liveProjects,
     liveThreads,
   });
-
-  useEffect(() => {
-    if (!threadsHydrated) {
-      return;
-    }
-
-    persistStoredThreads(threads);
-  }, [threads, threadsHydrated]);
-
-  useEffect(() => {
-    setThreads((currentThreads) => {
-      let changed = false;
-      const nextThreads = currentThreads.map((thread) => {
-        const normalizedThread = remapProjectThreadToStoredProject(
-          thread,
-          storedProjects,
-          liveProjects,
-        );
-        if (normalizedThread !== thread) {
-          changed = true;
-        }
-        return normalizedThread;
-      });
-      return changed ? nextThreads : currentThreads;
-    });
-  }, [liveProjects, storedProjects]);
-
-  useEffect(() => {
-    if (liveThreads.length === 0) {
-      return;
-    }
-
-    setThreads((currentThreads) =>
-      syncLiveThreadMetadataToLocalState({
-        threads: currentThreads,
-        storedProjects,
-        liveProjects,
-        liveThreads,
-      }),
-    );
-  }, [liveProjects, liveThreads, storedProjects]);
+  useProjectStoreSyncEffects({
+    threads,
+    threadsHydrated,
+    storedProjects,
+    liveProjects,
+    liveThreads,
+    setThreads,
+  });
 
   const reconciledStoredProjects = useMemo(
     () => reconcileStoredProjectsWithLive(storedProjects, liveProjects),

@@ -144,7 +144,7 @@ export function LocalWorkspaceSidebarRow({
           )}
 
           {environmentId && workspaceRoot ? (
-            <ProjectFavicon environmentId={environmentId} cwd={workspaceRoot} />
+            <ProjectFavicon environmentId={environmentId} cwd={workspaceRoot} projectName={project.title} />
           ) : (
             <FolderIcon className="size-3.5 shrink-0 text-muted-foreground/50" />
           )}

@@ -2,21 +2,23 @@ import type { OrchestrationEvent, OrchestrationMessage } from "@t3tools/contract
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import {
-  autoSummarizeActorMessage,
   buildActorReactionBatchInput,
   buildActorReactionCompressedInput,
   buildActorReactionHeaderInput,
   buildActorReactionHeaderSingleInput,
   buildActorReactionInput,
-  capActorMessageSummary,
   collectPendingActorDeliveries,
   hasPriorInterAgentMessages,
+  userInterjectedDuringQueueing,
+} from "./t3team-actorReactionInput.ts";
+import {
+  autoSummarizeActorMessage,
+  capActorMessageSummary,
   resolveActorMessageDeliveryMaxChars,
   summarizeActorMessageForDelivery,
   T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS,
   T3TEAM_ACTOR_MESSAGE_DELIVERY_SUMMARY_MAX_CHARS,
-  userInterjectedDuringQueueing,
-} from "./t3team-actorReactionInput.ts";
+} from "./t3team-actorReactionInputSummarize.ts";
 import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
 
 const ENV_KEY = "T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS";

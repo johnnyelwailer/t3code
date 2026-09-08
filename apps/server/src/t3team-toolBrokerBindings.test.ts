@@ -15,6 +15,8 @@ import {
 
 const orchestrationMock: OrchestrationEngineShape = {
   readEvents: () => Stream.empty,
+  readThreadEvents: () => Stream.empty,
+  getThreadReplayStats: () => Effect.die("unused"),
   dispatch: () => Effect.succeed({ sequence: 1 }),
   streamDomainEvents: Stream.empty,
   subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),

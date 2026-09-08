@@ -70,6 +70,8 @@ function RealWorkingRow({
     <TimelineRowActivityCtx.Provider
       value={{
         isWorking: true,
+        isPreparingWorktree: false,
+        isCompacting: false,
         isRevertingCheckpoint: false,
         latestTurnId: "turn-design-pass" as TurnId,
         workingStepLabel,

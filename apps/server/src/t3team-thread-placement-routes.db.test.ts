@@ -1,11 +1,13 @@
 import { assert, it } from "@effect/vitest";
+import { Schema } from "effect";
+const JsonString = Schema.fromJsonString(Schema.Unknown);
 import { ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { runMigrations } from "./persistence/Migrations.ts";
-import * as NodeSqliteClient from "./persistence/NodeSqliteClient.ts";
+import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import { loadT3TeamThreadPlacements } from "./t3team-thread-placement-routes.ts";
 import {
   T3TeamThreadToolContextStore,
@@ -39,12 +41,13 @@ function insertActivity(input: {
 }) {
   return Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+    const payloadJson = yield* Schema.encodeUnknownEffect(JsonString)(input.payload);
     yield* sql`
       INSERT INTO projection_thread_activities (
         activity_id, thread_id, turn_id, tone, kind, summary, payload_json, created_at
       ) VALUES (
         ${input.activityId}, ${input.threadId}, NULL, 'info', ${input.kind}, ${input.kind},
-        ${JSON.stringify(input.payload)}, ${input.createdAt}
+        ${payloadJson}, ${input.createdAt}
       )
     `;
   });
@@ -130,9 +133,10 @@ layer("loadT3TeamThreadPlacements (GHE #382)", (it) => {
         EXPLAIN QUERY PLAN
         SELECT thread_id FROM projection_thread_activities WHERE kind = 't3team.handoff.started'
       `;
+      const planJson = yield* Schema.encodeUnknownEffect(JsonString)(plan);
       assert.ok(
         plan.some((row) => row.detail.includes("idx_projection_thread_activities_kind_created")),
-        JSON.stringify(plan),
+        planJson,
       );
     }),
   );

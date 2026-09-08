@@ -155,6 +155,8 @@ function PanelDemo({ threadId, label }: { threadId: string; label: string }) {
           <RightPanelTabs
             mode="inline"
             surfaces={state.surfaces}
+            environmentId={null}
+            onAddBrowserInProfile={() => undefined}
             activeSurfaceId={activeSurface?.id ?? null}
             pendingSurfaceIds={new Set()}
             previewSessions={{}}

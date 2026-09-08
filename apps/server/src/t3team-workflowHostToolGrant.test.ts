@@ -102,6 +102,8 @@ const nowIso = (): string => "2026-07-27T00:00:00.000Z";
 const brokerDispatched: OrchestrationCommand[] = [];
 const brokerEngineMock: OrchestrationEngineShape = {
   readEvents: () => Stream.empty,
+  readThreadEvents: () => Stream.empty,
+  getThreadReplayStats: () => Effect.die("unused"),
   dispatch: (command) => {
     brokerDispatched.push(command);
     return Effect.succeed({ sequence: brokerDispatched.length });
@@ -113,6 +115,8 @@ const brokerEngineMock: OrchestrationEngineShape = {
 
 const stubEngine: OrchestrationEngineShape = {
   readEvents: () => Stream.empty,
+  readThreadEvents: () => Stream.empty,
+  getThreadReplayStats: () => Effect.die("unused"),
   dispatch: () => Effect.succeed({ sequence: 0 }),
   streamDomainEvents: Stream.never,
   subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
