@@ -50,7 +50,6 @@
     "apps/server/src/httpCors.ts",
     "apps/server/src/mcp/McpHttpServer.ts",
     "apps/server/src/mcp/toolkits/t3team/handlers.ts",
-    "apps/server/src/mcp/toolkits/t3team/tools.ts",
     "apps/server/src/orchestration/Layers/CheckpointReactor.ts",
     "apps/server/src/orchestration/Layers/OrchestrationEngine.test.ts",
     "apps/server/src/orchestration/Layers/ProjectionPipeline.test.ts",
