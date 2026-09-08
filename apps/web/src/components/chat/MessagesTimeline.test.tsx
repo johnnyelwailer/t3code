@@ -1289,7 +1289,7 @@ describe("MessagesTimeline", () => {
     expect(markup).not.toContain("tool call failed");
   });
 
-  it("renders initial thinking as the shared live activity row", () => {
+  it("renders initial thinking in the single working row", () => {
     const turnId = TurnId.make("turn-live");
     const markup = renderToStaticMarkup(
       <MessagesTimeline
@@ -1308,8 +1308,9 @@ describe("MessagesTimeline", () => {
     );
 
     expect(markup).toContain("Thinking");
-    expect(markup).toContain("lucide-brain");
-    expect(markup).toContain('data-timeline-row-id="live-activity-row"');
+    expect(markup).toContain('data-timeline-row-id="working-indicator-row"');
+    expect(markup.match(/data-timeline-row-kind=/g)).toHaveLength(1);
+    expect(markup).not.toContain('data-timeline-row-kind="thinking"');
   });
 
   it("keeps the completed command in the shared activity row with a past-tense label", () => {

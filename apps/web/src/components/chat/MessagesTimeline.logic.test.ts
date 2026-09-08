@@ -1103,11 +1103,10 @@ describe("deriveMessagesTimelineRows", () => {
       "assistant-final-entry",
       "user-followup-entry",
       "working-indicator-row",
-      "live-activity-row",
     ]);
     const finalRow = rows.find((row) => row.id === "assistant-final-entry");
     expect(finalRow?.kind === "message" && finalRow.showAssistantMeta).toBe(true);
-    expect(rows.at(-1)).toMatchObject({ kind: "thinking" });
+    expect(rows.at(-1)).toMatchObject({ kind: "working" });
   });
 
   it("does not fold the active in-progress turn", () => {
@@ -1668,7 +1667,7 @@ describe("deriveMessagesTimelineRows", () => {
 
     expect(assistantRow?.showAssistantMeta).toBe(false);
     expect(assistantRow?.showAssistantCopyButton).toBe(false);
-    expect(rows.at(-1)).toMatchObject({ kind: "thinking" });
+    expect(rows.at(-1)).toMatchObject({ kind: "working" });
   });
 
   it.each([
@@ -1883,7 +1882,19 @@ describe("deriveMessagesTimelineRows", () => {
 });
 
 describe("computeStableMessagesTimelineRows", () => {
-  it.each(["", " \n"])("keeps Thinking after assistant content grows from %j", (text) => {
+  it("uses only the working row for an empty active turn", () => {
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries: [],
+      runningTurnId: TurnId.make("empty-active-turn"),
+      isWorking: true,
+      activeTurnStartedAt: "2026-01-01T00:00:00Z",
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+    });
+    expect(rows.map((row) => row.kind)).toEqual(["working"]);
+  });
+
+  it.each(["", " \n"])("keeps the working row after assistant content grows from %j", (text) => {
     const startedAt = "2026-01-01T00:00:00Z";
     const turnId = TurnId.make("turn-1");
     const input = {
@@ -1924,11 +1935,11 @@ describe("computeStableMessagesTimelineRows", () => {
       initial,
     );
 
-    const initialThinking = initial.byId.get("live-activity-row");
-    const updatedThinking = updated.byId.get("live-activity-row");
-    expect(initialThinking).toMatchObject({ kind: "thinking" });
-    expect(updatedThinking).toBe(initialThinking);
-    expect(updated.result.at(-1)).toBe(updatedThinking);
+    const initialWorking = initial.byId.get("working-indicator-row");
+    const updatedWorking = updated.byId.get("working-indicator-row");
+    expect(initialWorking).toMatchObject({ kind: "working" });
+    expect(updatedWorking).toBe(initialWorking);
+    expect(updated.result.at(-1)).toBe(updatedWorking);
   });
 
   it("returns the previous result when row order and content are unchanged", () => {

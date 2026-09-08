@@ -789,11 +789,9 @@ export function deriveMessagesTimelineRows(input: {
       createdAt: input.activeTurnStartedAt,
     });
   };
-  let hasActivityRow = false;
   const appendActiveWorkRows = () => {
     if (activeWorkRow === null) return;
     nextRows.push(activeWorkRow);
-    hasActivityRow ||= activeWorkRow.active;
     if (!activeWorkRow.expanded) return;
     nextRows.push(
       expandedWorkGroupRow(
@@ -893,7 +891,6 @@ export function deriveMessagesTimelineRows(input: {
             expanded,
             active: true,
           });
-          hasActivityRow = true;
           if (expanded) {
             nextRows.push(
               expandedWorkGroupRow(groupId, timelineEntry.createdAt, visibleGroupedEntries),
@@ -1000,13 +997,6 @@ export function deriveMessagesTimelineRows(input: {
       kind: "working",
       id: "working-indicator-row",
       createdAt: null,
-    });
-  }
-  if (input.isWorking && (!hasActivityRow || latestToolFailed)) {
-    nextRows.push({
-      kind: "thinking",
-      id: LIVE_ACTIVITY_ROW_ID,
-      createdAt: input.activeTurnStartedAt,
     });
   }
 
