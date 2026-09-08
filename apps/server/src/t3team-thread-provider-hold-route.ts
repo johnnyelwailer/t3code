@@ -47,7 +47,10 @@ export const t3teamThreadProviderHoldControlRouteLayer = HttpRouter.add(
   "POST",
   "/api/t3team/thread/provider-hold/control",
   Effect.gen(function* () {
-    const input = yield* readJsonBody<{ readonly threadId?: string; readonly autoResume?: boolean }>();
+    const input = yield* readJsonBody<{
+      readonly threadId?: string;
+      readonly autoResume?: boolean;
+    }>();
     const threadId = input.threadId?.trim() ?? "";
     if (!threadId || typeof input.autoResume !== "boolean") {
       return yield* new T3TeamAtlassianError({
@@ -108,9 +111,9 @@ export const t3teamProviderUsageDevRouteLayer = HttpRouter.add(
     const input = yield* readJsonBody<DevForceInput>();
     const watcher = yield* ProviderUsageWatcher;
     if (input.mode === "recover") {
-      const result = yield* watcher.forceRecover().pipe(
-        Effect.mapError((error) => new T3TeamAtlassianError({ message: error.message })),
-      );
+      const result = yield* watcher
+        .forceRecover()
+        .pipe(Effect.mapError((error) => new T3TeamAtlassianError({ message: error.message })));
       return okJson({ ok: true, ...result });
     }
     const result = yield* watcher
