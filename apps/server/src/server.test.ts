@@ -801,8 +801,10 @@ const buildAppUnderTest = (options?: {
             sweep: () => Effect.void,
             checkThreadHeld: () => Effect.succeed(Option.none()),
             recordDeferredTurn: () => Effect.void,
-            forceExhaust: () => Effect.fail(new ProviderUsageDevError({ message: "not available in this test" })),
-            forceRecover: () => Effect.fail(new ProviderUsageDevError({ message: "not available in this test" })),
+            forceExhaust: () =>
+              Effect.fail(new ProviderUsageDevError({ message: "not available in this test" })),
+            forceRecover: () =>
+              Effect.fail(new ProviderUsageDevError({ message: "not available in this test" })),
             getDevState: () => Effect.succeed({ held: [], holds: [], lastSampledAt: null }),
           }),
           Layer.succeed(ProviderUsageHoldRepository, {

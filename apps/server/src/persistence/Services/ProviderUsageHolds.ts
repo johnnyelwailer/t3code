@@ -63,7 +63,9 @@ export interface ProviderUsageHoldRepositoryShape {
    * refreshed from the new sample. A released row is re-armed as a fresh
    * hold (`releasedAt` / `releaseReason` cleared).
    */
-  readonly upsertActiveHold: (row: ProviderUsageHold) => Effect.Effect<void, ProjectionRepositoryError>;
+  readonly upsertActiveHold: (
+    row: ProviderUsageHold,
+  ) => Effect.Effect<void, ProjectionRepositoryError>;
 
   /**
    * Point the row's pending turn at `messageId` (latest wins). No-op when the
