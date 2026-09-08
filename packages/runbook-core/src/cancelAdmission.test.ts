@@ -2,10 +2,49 @@ import { describe, expect, it } from "vite-plus/test";
 import { createDurableRuntime } from "./durableRuntime.ts";
 import { WorkflowAborted } from "./errors.ts";
 import type { JournalSink } from "./journalStore.ts";
+import type { ReplyResolver } from "./handles.ts";
 
 const source = { now: () => 0, random: () => 0.5, uuid: () => "uuid" };
 
 describe("durable result admission", () => {
+  it("fences a reply resolved after the broker returned before decoding it", async () => {
+    let resolver: ReplyResolver | undefined;
+    let replyQueued = false;
+    let decoded = false;
+    const writer: JournalSink = {
+      append: () => {},
+      appendResolved: () => {
+        replyQueued = true;
+      },
+      flush: async () => {
+        if (replyQueued) throw new WorkflowAborted();
+      },
+      dispose: () => {},
+    };
+    const runtime = createDurableRuntime({
+      journal: new Map(),
+      writer,
+      source,
+      runId: "late-resolver",
+    });
+    const id = await runtime.handles.send({
+      kind: "thread.turn",
+      refId: "model",
+      args: {},
+      fire: async (_id, reply) => {
+        resolver = reply;
+      },
+    });
+    if (!resolver) throw new Error("broker did not receive a resolver");
+    resolver.resolve({ answer: "late" });
+    await expect(
+      runtime.handles.awaitResolution(id, async () => {
+        decoded = true;
+        return "decoded";
+      }),
+    ).rejects.toBeInstanceOf(WorkflowAborted);
+    expect(decoded).toBe(false);
+  });
   it("does not fire a broker when its dispatch intent was refused by the store", async () => {
     let fired = 0;
     const writer: JournalSink = {

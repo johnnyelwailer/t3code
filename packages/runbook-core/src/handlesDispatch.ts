@@ -211,6 +211,9 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
     // what makes catching it worthless. `isBlackBoxed` rides along because a suspension inside
     // parallel()/pipeline() has no journaled `sent` entry and can never be resumed.
     if (resolved === undefined) throw seat.suspension.arm(correlationId, seat.isBlackBoxed());
+    // A resolver can arrive after its broker returned; that reply must cross
+    // the same durability barrier as a reply resolved inline during send().
+    await seat.writer.flush();
     if (resolved.dismissed) {
       throw new CancelledError(
         `Handle '${correlationId}' was dismissed; its response will never settle.`,
