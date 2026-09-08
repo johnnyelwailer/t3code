@@ -130,4 +130,4 @@ export const resolveLinkedRepositoryWorktree = (input: {
       branch: worktree.worktree.refName,
       worktreePath: worktree.worktree.path,
     };
-  });
+  }).pipe(Effect.mapError((error) => (error instanceof Error ? error.message : String(error))));

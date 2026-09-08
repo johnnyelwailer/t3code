@@ -6,10 +6,7 @@
  *
  * @module t3team-threadTransientTurnRetryDecisionExecution
  */
-import {
-  type OrchestrationSession,
-  type OrchestrationThread,
-} from "@t3tools/contracts";
+import { type OrchestrationSession, type OrchestrationThread } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -21,17 +18,18 @@ import {
   type TransientTurnRetryDecision,
   type TransientTurnRetryState,
 } from "./t3team-threadTransientTurnRetryDecision.ts";
+import type { OrchestrationDispatchError } from "./orchestration/Errors.ts";
 
 export interface DecisionExecutionDeps {
   readonly loadThread: (threadId: string) => Effect.Effect<Option.Option<OrchestrationThread>>;
   readonly dispatchSessionSet: (
     threadId: string,
     session: OrchestrationSession,
-  ) => Effect.Effect<unknown, unknown>;
+  ) => Effect.Effect<unknown, OrchestrationDispatchError>;
   readonly dispatchResume: (
     threadId: string,
     messageId: string,
-  ) => Effect.Effect<unknown, unknown>;
+  ) => Effect.Effect<unknown, OrchestrationDispatchError>;
   readonly trackerState: Map<string, TransientTurnRetryState>;
 }
 

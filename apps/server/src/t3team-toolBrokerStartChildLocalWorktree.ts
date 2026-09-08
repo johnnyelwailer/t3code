@@ -50,9 +50,7 @@ export const resolveLocalRepositoryWorktree = (input: {
       .pipe(
         Effect.mapError(
           () =>
-            new Error(
-              `Project workspace '${workspaceRoot}' is not a git repository (or submodule), so a local worktree cannot be created. Use isolation='shared' to run the child in the shared checkout.`,
-            ),
+            `Project workspace '${workspaceRoot}' is not a git repository (or submodule), so a local worktree cannot be created. Use isolation='shared' to run the child in the shared checkout.`,
         ),
       );
 
@@ -114,4 +112,4 @@ export const resolveLocalRepositoryWorktree = (input: {
       branch: worktree.worktree.refName,
       worktreePath: worktree.worktree.path,
     };
-  });
+  }).pipe(Effect.mapError((error) => (error instanceof Error ? error.message : String(error))));

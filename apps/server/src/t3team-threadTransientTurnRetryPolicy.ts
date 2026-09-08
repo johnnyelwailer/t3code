@@ -37,60 +37,66 @@ const MAX_DIRECTIVE_DELAY_SECONDS = 60;
  * e2e tests.
  */
 export function transientTurnRetryBackoffMs(attempt: number, overrideMs?: number): number {
-  if (overrideMs !== undefined && Number.isFinite(overrideMs) && overrideMs >= 0) {
-    return Math.min(overrideMs, MAX_RETRY_BACKOFF_OVERRIDE_MS);
+  if (overrideMs !== undefined) {
+    if (Number.isFinite(overrideMs) && overrideMs > 0) {
+      return Math.min(Math.round(overrideMs), MAX_RETRY_BACKOFF_OVERRIDE_MS);
+    }
   }
-  const index = Math.max(0, attempt - 1);
-  return DEFAULT_RETRY_BACKOFF_MS[Math.min(index, DEFAULT_RETRY_BACKOFF_MS.length - 1)];
+  const index = Math.max(0, Math.min(attempt - 1, DEFAULT_RETRY_BACKOFF_MS.length - 1));
+  return DEFAULT_RETRY_BACKOFF_MS[index]!;
 }
 
 /**
- * Directive-aware delay: a reservation error carrying `retry_after_seconds`
- * waits until that expiry (capped); anything else takes the backoff ladder.
+ * When a reservation error carries the gateway's own `retry_after_seconds`
+ * directive, the session-level retry is scheduled AT that expiry (+5–15%
+ * cushion so we do not race the reservation) instead of the blind backoff
+ * ladder. The directive is capped at 60s — the same cap the in-turn gateway
+ * retry honors — so a bogus 1-hour directive cannot stall the thread for an
+ * hour (the wait is then surfaced in the stop reason instead).
  */
 export function transientTurnRetryDelayMs(
   attempt: number,
   directiveSeconds: number | null,
   overrideMs?: number,
+  random: () => number = Math.random,
 ): number {
-  if (directiveSeconds !== null && directiveSeconds > 0) {
-    return Math.min(directiveSeconds, MAX_DIRECTIVE_DELAY_SECONDS) * 1000;
+  const override = transientTurnRetryBackoffMs(attempt, overrideMs);
+  if (overrideMs !== undefined && Number.isFinite(overrideMs) && overrideMs > 0) return override;
+  if (directiveSeconds !== null) {
+    const ms = Math.min(directiveSeconds, MAX_DIRECTIVE_DELAY_SECONDS) * 1000;
+    return Math.round(ms * (1.05 + 0.1 * random()));
   }
-  return transientTurnRetryBackoffMs(attempt, overrideMs);
+  return override;
 }
 
 const STOP_REASON_MAX_CHARS = 300;
 
 /** Trim a provider-supplied reason to something the UI can render on one row. */
 export function truncateStopReason(reason: string): string {
-  const trimmed = reason.trim();
-  return trimmed.length > STOP_REASON_MAX_CHARS
-    ? `${trimmed.slice(0, STOP_REASON_MAX_CHARS - 1)}…`
-    : trimmed;
+  const flat = reason.replace(/\s+/g, " ").trim();
+  if (flat.length <= STOP_REASON_MAX_CHARS) return flat;
+  return `${flat.slice(0, STOP_REASON_MAX_CHARS - 1)}…`;
 }
 
 /** The stall reason text for a host watchdog fire (the transient trigger). */
 export function watchdogStallReason(inactivitySeconds: number): string {
-  return `Host watchdog: no provider stream activity for ${inactivitySeconds}s`;
+  return `Provider stream stalled (no activity for ${Math.round(inactivitySeconds)}s)`;
 }
 
 /** "Retrying (n/N) — reason" — the live stop reason while a retry is queued. */
 export function transientRetryInFlightText(
   attempt: number,
   reason: string,
-  directiveMs?: number,
+  delayMs?: number,
 ): string {
-  const base = `Retrying (${attempt}/${MAX_SESSION_TRANSIENT_RETRIES}) — ${truncateStopReason(reason)}`;
-  if (directiveMs !== undefined) {
-    const seconds = Math.round(directiveMs / 1000);
-    return `${base} (next attempt in ~${seconds}s)`;
-  }
-  return base;
+  const head = `Retrying (${attempt}/${MAX_SESSION_TRANSIENT_RETRIES}) — ${reason}`;
+  if (delayMs === undefined) return head;
+  return `${head}, next attempt in ~${Math.max(1, Math.round(delayMs / 1000))}s`;
 }
 
 /** The terminal stop reason once the session-level budget is spent. */
 export function transientRetryExhaustedText(reason: string): string {
-  return `Retried ${MAX_SESSION_TRANSIENT_RETRIES}× — ${truncateStopReason(reason)}`;
+  return `${reason} — automatic retries exhausted (${MAX_SESSION_TRANSIENT_RETRIES} attempts)`;
 }
 
 type RuntimeWarningLike = {
@@ -121,7 +127,7 @@ type TurnCompletedLike = {
 
 /** 423 / gpu-reservation class, per the shared classifier vocabulary. */
 const RESERVATION_CLASS =
-  /423|gpu[-_]?reservation|capacity/i;
+  /\b(gpu_reserved|reservation_error|reservation owner is)\b|(?<!\S)423(?=[:\s]|$)/i;
 
 /**
  * A turn result is transient when it failed AND its error/stop text matches
@@ -134,19 +140,21 @@ export function classifyTransientTurnFailure(
 ): { readonly reason: string; readonly directiveSeconds: number | null } | null {
   if (payload.state !== "failed") return null;
   const text = [payload.errorMessage, payload.stopReason]
-    .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+    .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
     .join(" ");
-  if (text.length === 0) return null;
+  if (text.trim().length === 0) return null;
   if (!isTransientGatewayErrorText(text)) return null;
-  const directive = retryDirectiveSeconds(text);
-  const isReservation = RESERVATION_CLASS.test(text);
-  return {
-    reason: isReservation ? "gateway capacity/reservation" : "transient gateway error",
-    directiveSeconds: directive,
-  };
+  // The directive is read from the RAW text: the summarized reason drops it.
+  return { reason: transientTurnReasonText(text), directiveSeconds: retryDirectiveSeconds(text) };
 }
 
-/** Human-readable reason text for a transient failure (used in log lines). */
+/**
+ * The reservation-error class carries structured detail ("423: Reservation
+ * owner is currently using the GPU; retry shortly", often with
+ * `retry_after_seconds`). Surface it as a compact, deterministic reason
+ * instead of the raw error body; every other transient keeps its raw text.
+ */
 export function transientTurnReasonText(reason: string): string {
-  return reason;
+  if (!RESERVATION_CLASS.test(reason)) return truncateStopReason(reason);
+  return "423 — GPU reserved by current owner";
 }
