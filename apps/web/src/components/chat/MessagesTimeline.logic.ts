@@ -86,7 +86,8 @@ export function workEntryIsVisibleInGroup(
   return (
     (expandedToolGroupEntry &&
       (entry.toolLifecycleStatus === "inProgress" ||
-        entry.sourceActivityKind === "task.progress")) ||
+        entry.sourceActivityKind === "task.progress" ||
+        entry.toolLifecycleStatus === "stopped")) ||
     !workEntryIndicatesToolNeutralStatus(entry)
   );
 }
@@ -297,6 +298,7 @@ export type MessagesTimelineRow =
       summary: string;
       summaryKind: ToolGroupSummaryKind;
       hasFailure: boolean;
+      onlyToolEntries: boolean;
     }
   | {
       kind: "turn-fold";
@@ -787,11 +789,9 @@ export function deriveMessagesTimelineRows(input: {
       createdAt: input.activeTurnStartedAt,
     });
   };
-  let hasActivityRow = false;
   const appendActiveWorkRows = () => {
     if (activeWorkRow === null) return;
     nextRows.push(activeWorkRow);
-    hasActivityRow ||= activeWorkRow.active;
     if (!activeWorkRow.expanded) return;
     nextRows.push(
       expandedWorkGroupRow(
@@ -891,7 +891,6 @@ export function deriveMessagesTimelineRows(input: {
             expanded,
             active: true,
           });
-          hasActivityRow = true;
           if (expanded) {
             nextRows.push(
               expandedWorkGroupRow(groupId, timelineEntry.createdAt, visibleGroupedEntries),
@@ -915,6 +914,7 @@ export function deriveMessagesTimelineRows(input: {
                 ? visibleGroupedEntries[0]!.label
                 : summarizeToolGroup(visibleGroupedEntries),
             summaryKind,
+            onlyToolEntries: visibleGroupedEntries.every(workLogEntryIsToolLike),
             hasFailure:
               latestToolEntry !== undefined &&
               workEntryDisplayIndicatesToolFailure(latestToolEntry),
@@ -997,13 +997,6 @@ export function deriveMessagesTimelineRows(input: {
       kind: "working",
       id: "working-indicator-row",
       createdAt: null,
-    });
-  }
-  if (input.isWorking && (!hasActivityRow || latestToolFailed)) {
-    nextRows.push({
-      kind: "thinking",
-      id: LIVE_ACTIVITY_ROW_ID,
-      createdAt: input.activeTurnStartedAt,
     });
   }
 
@@ -1117,6 +1110,7 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
         a.expanded === bw.expanded &&
         a.summary === bw.summary &&
         a.summaryKind === bw.summaryKind &&
+        a.onlyToolEntries === bw.onlyToolEntries &&
         a.hasFailure === bw.hasFailure
       );
     }

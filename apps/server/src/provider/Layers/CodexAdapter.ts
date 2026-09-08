@@ -537,16 +537,12 @@ function mapCollabAgentEvent(
   // finding: progress rows renamed math_one to its UUID).
   const knownName = nickname ?? pathLeaf;
   const title = knownName ?? agentThreadId;
-  const model = typeof payload.model === "string" ? payload.model.trim() : "";
-  const effort = typeof payload.effort === "string" ? payload.effort.trim() : "";
   // Identity repeated on every status patch so rows are self-describing when
   // the start row ages out of activity retention (review finding: a
   // reconstructed agent had a UUID name and no role/path).
-  const linkage = {
+  const statusLinkage = {
     role,
     ...(knownName ? { title: knownName } : {}),
-    ...(model ? { model } : {}),
-    ...(effort ? { effort } : {}),
     ...(agentPath ? { agentPath } : {}),
     timelineBypass: true,
   } as const;
@@ -561,19 +557,13 @@ function mapCollabAgentEvent(
             taskId,
             description: title,
             title,
-            ...linkage,
+            role,
+            ...(agentPath ? { agentPath } : {}),
             ...(typeof payload.parentThreadId === "string"
               ? { parentAgentId: payload.parentThreadId }
               : {}),
+            timelineBypass: true,
           },
-        },
-      ];
-    case "collabAgent/metadataUpdated":
-      return [
-        {
-          ...base,
-          type: "task.updated",
-          payload: { taskId, ...linkage },
         },
       ];
     case "collabAgent/activity": {
@@ -583,7 +573,7 @@ function mapCollabAgentEvent(
           {
             ...base,
             type: "task.updated",
-            payload: { taskId, status: "interrupted", ...linkage },
+            payload: { taskId, status: "interrupted", ...statusLinkage },
           },
         ];
       }
@@ -600,7 +590,9 @@ function mapCollabAgentEvent(
               taskId,
               description: title,
               title,
-              ...linkage,
+              role,
+              ...(agentPath ? { agentPath } : {}),
+              timelineBypass: true,
             },
           },
         ];
@@ -614,7 +606,7 @@ function mapCollabAgentEvent(
         {
           ...base,
           type: "task.updated",
-          payload: { taskId, status: "running", ...linkage },
+          payload: { taskId, status: "running", ...statusLinkage },
         },
       ];
     case "collabAgent/turnCompleted": {
@@ -634,7 +626,7 @@ function mapCollabAgentEvent(
         {
           ...base,
           type: "task.updated",
-          payload: { taskId, status, ...linkage },
+          payload: { taskId, status, ...statusLinkage },
         },
       ];
     }
@@ -650,7 +642,7 @@ function mapCollabAgentEvent(
           {
             ...base,
             type: "task.updated",
-            payload: { taskId, status: "failed", ...linkage },
+            payload: { taskId, status: "failed", ...statusLinkage },
           },
         ];
       }
@@ -663,7 +655,7 @@ function mapCollabAgentEvent(
           {
             ...base,
             type: "task.updated",
-            payload: { taskId, status: waiting ? "waiting" : "running", ...linkage },
+            payload: { taskId, status: waiting ? "waiting" : "running", ...statusLinkage },
           },
         ];
       }
@@ -672,7 +664,7 @@ function mapCollabAgentEvent(
           {
             ...base,
             type: "task.updated",
-            payload: { taskId, status: "idle", ...linkage },
+            payload: { taskId, status: "idle", ...statusLinkage },
           },
         ];
       }
@@ -719,8 +711,9 @@ function mapCollabAgentEvent(
           payload: {
             taskId,
             description: title,
-            ...linkage,
+            ...(knownName ? { title: knownName } : {}),
             typedUsage,
+            timelineBypass: true,
           },
         },
       ];
@@ -750,8 +743,9 @@ function mapCollabAgentEvent(
           payload: {
             taskId,
             description: title,
-            ...linkage,
+            ...(knownName ? { title: knownName } : {}),
             summary,
+            timelineBypass: true,
           },
         },
       ];
@@ -761,7 +755,7 @@ function mapCollabAgentEvent(
         {
           ...base,
           type: "task.updated",
-          payload: { taskId, status: "interrupted", ...linkage },
+          payload: { taskId, status: "interrupted", ...statusLinkage },
         },
       ];
     default:

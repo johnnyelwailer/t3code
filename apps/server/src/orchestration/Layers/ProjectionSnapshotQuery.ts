@@ -2450,6 +2450,7 @@ pending_approval_requests AS (
                     archivedAt: row.archivedAt,
                     settledOverride: row.settledOverride,
                     settledAt: row.settledAt,
+                    unsettledAt: row.unsettledAt,
                     snoozedUntil: row.snoozedUntil,
                     snoozedAt: row.snoozedAt,
                     pinnedAt: row.pinnedAt,

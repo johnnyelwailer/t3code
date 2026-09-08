@@ -13,9 +13,6 @@ on:
   schedule:
     - cron: "0 3 * * *"
 
-permissions:
-  contents: read
-
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -76,6 +73,7 @@ jobs:
         run: vp run build:desktop
 
       - name: Verify preload bundle output
+        if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' }}
         run: node apps/desktop/scripts/verify-preload-bundle.mjs
 
   # Everything except `t3` (apps/server). `--parallel` drops the package

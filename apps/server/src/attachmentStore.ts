@@ -110,8 +110,12 @@ export function attachmentRelativePath(attachment: ChatAttachment): string | nul
       });
       return `${attachment.id}${extension}`;
     }
-    case "file":
-      return `${attachment.id}${attachmentFileExtension(attachment.name)}`;
+    case "file": {
+      // Older clients stored suffixless file IDs as .bin. New IDs carry their
+      // storage extension so renaming an attachment cannot change its path.
+      const extension = parseAttachmentFileExtension(attachment.id) ?? "bin";
+      return `${attachment.id}.${extension}`;
+    }
     default:
       return null;
   }

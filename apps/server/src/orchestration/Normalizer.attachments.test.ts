@@ -13,6 +13,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
+import { resolveAttachmentPathById } from "../attachmentStore.ts";
 import * as ServerConfig from "../config.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 import { cleanupFailedUploadedAttachments, normalizeDispatchCommand } from "./Normalizer.ts";
@@ -343,7 +344,7 @@ describe("normalizeDispatchCommand attachments", () => {
     }).pipe(Effect.provide(testLayer)),
   );
 
-  it.effect("stores inline file attachments under a fixed .bin extension", () =>
+  it.effect("stores inline file attachments with their extension and resolves them by id", () =>
     Effect.gen(function* () {
       const config = yield* ServerConfig.ServerConfig;
       const normalized = yield* normalizeDispatchCommand(
@@ -356,12 +357,14 @@ describe("normalizeDispatchCommand attachments", () => {
       const attachment = normalized.message.attachments[0]!;
       expect(attachment.id.startsWith("thread-1-")).toBe(true);
       expect(attachment).toMatchObject({ type: "file", name: "notes.txt", mimeType: "text/plain" });
+      const storedPath = NodePath.join(config.attachmentsDir, `${attachment.id}.txt`);
+      expect(NodeFS.readFileSync(storedPath)).toEqual(Buffer.from("abc"));
       expect(
-        NodeFS.readFileSync(NodePath.join(config.attachmentsDir, `${attachment.id}.bin`)),
-      ).toEqual(Buffer.from("abc"));
-      expect(
-        NodeFS.readdirSync(config.attachmentsDir).filter((entry) => entry.endsWith(".txt")),
-      ).toEqual([]);
+        resolveAttachmentPathById({
+          attachmentsDir: config.attachmentsDir,
+          attachmentId: attachment.id,
+        }),
+      ).toBe(storedPath);
     }).pipe(Effect.provide(testLayer)),
   );
 

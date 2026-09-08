@@ -286,17 +286,6 @@ export function workEntryDisplayIndicatesToolFailure(entry: WorkLogEntry): boole
   return workEntryIndicatesToolFailureFromOutput(entry, false);
 }
 
-/** Severe failures keep the red treatment ordinary tool failures lost: runtime
- *  errors and orchestration `*.failed` activities (provider.turn.start.failed,
- *  checkpoint.capture.failed, ...) mean the turn or a core side effect broke,
- *  not that a command exited nonzero. */
-export function workEntrySignalsSevereFailure(entry: WorkLogEntry): boolean {
-  return (
-    entry.sourceActivityKind === "runtime.error" ||
-    entry.sourceActivityKind?.endsWith(".failed") === true
-  );
-}
-
 /** Tool/command row completed without failure (blue check affordance). */
 export function workEntryIndicatesToolSuccess(entry: WorkLogEntry): boolean {
   if (!workLogEntryIsToolLike(entry)) {

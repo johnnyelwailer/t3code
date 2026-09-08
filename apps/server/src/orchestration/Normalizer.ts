@@ -12,6 +12,7 @@ import {
 } from "@t3tools/contracts";
 
 import {
+  attachmentFileExtension,
   createAttachmentId,
   planAttachmentClaim,
   PENDING_ATTACHMENT_THREAD_SEGMENT,
@@ -235,7 +236,10 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
             });
           }
 
-          const attachmentId = createAttachmentId(canonicalCommand.threadId);
+          const attachmentId = createAttachmentId(
+            canonicalCommand.threadId,
+            attachment.type === "file" ? attachmentFileExtension(attachment.name) : undefined,
+          );
           if (!attachmentId) {
             return yield* new OrchestrationDispatchCommandError({
               message: "Failed to create a safe attachment id.",

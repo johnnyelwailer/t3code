@@ -24,21 +24,21 @@ describe("attachmentStore", () => {
     expect(
       attachmentRelativePath({
         type: "file",
-        id: attachmentId,
+        id: `${attachmentId}-txt`,
         name: "notes.txt",
         mimeType: "text/plain",
         sizeBytes: 6,
       }),
-    ).toBe(`${attachmentId}.txt`);
+    ).toBe(`${attachmentId}-txt.txt`);
     expect(
       attachmentRelativePath({
         type: "file",
-        id: attachmentId,
+        id: `${attachmentId}-pdf`,
         name: "spec.pdf",
         mimeType: "application/pdf",
         sizeBytes: 6,
       }),
-    ).toBe(`${attachmentId}.pdf`);
+    ).toBe(`${attachmentId}-pdf.pdf`);
     expect(
       attachmentRelativePath({
         type: "image",
@@ -48,6 +48,20 @@ describe("attachmentStore", () => {
         sizeBytes: 6,
       }),
     ).toBe(`${attachmentId}.png`);
+  });
+
+  it("preserves legacy file paths and uses encoded extensions after renames", () => {
+    const attachmentId = "thread-abc-00000000-0000-4000-8000-000000000001";
+    const metadata = {
+      type: "file" as const,
+      name: "renamed.txt",
+      mimeType: "text/plain",
+      sizeBytes: 6,
+    };
+    expect(attachmentRelativePath({ ...metadata, id: attachmentId })).toBe(`${attachmentId}.bin`);
+    expect(attachmentRelativePath({ ...metadata, id: `${attachmentId}-pdf` })).toBe(
+      `${attachmentId}-pdf.pdf`,
+    );
   });
 
   it("sanitizes thread ids when creating attachment ids", () => {
