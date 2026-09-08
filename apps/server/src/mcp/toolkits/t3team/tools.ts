@@ -306,12 +306,15 @@ export const T3TeamSendMessageTool = Tool.make("t3team_send_message", {
     "completely done. Solve simple blockers yourself first; escalate only when truly stuck. " +
     "If your reply would not change what the recipient does, do not send it. The recipient " +
     "reacts to every message automatically, so an ack triggers another turn on the other " +
-    "side. Address it with the target thread id. Keep the " +
+    "side. Delivery: 'summary' is a VERY SHORT header (a few words) — it is all the " +
+    "recipient sees up front; the body is NOT loaded into the recipient's context and is " +
+    "retrieved with t3team_read_message(message_id) only when genuinely needed. Exception: " +
+    "the FIRST message delivered to a thread is read in full (it is that thread's kickoff). " +
+    "Address it with the target thread id. Keep the " +
     "body short (telegram " +
-    "style: state, decision, request). For long bodies, provide a short 'summary' " +
-    "(the recipient's reaction input shows the summary, not a raw cut); without " +
-    "one, a summary is auto-generated from the body's opening. The recipient " +
-    "retrieves the full text with t3team_read_message.",
+    "style: state, decision, request). Provide a short 'summary' " +
+    "header (a few words); without " +
+    "one, a header is auto-generated from the body's opening.",
   parameters: Schema.Struct({
     to_thread_id: Schema.String,
     text: Schema.String,
