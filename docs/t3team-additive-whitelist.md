@@ -22,7 +22,11 @@ Whitelisting ~1,000 files individually is not viable and would defeat the guard'
 The blocking base is therefore a **frozen fork-baseline tag**, recorded in
 `.t3team-additive-guard.json` as `forkBaselineRef`:
 
-- Current: `t3team/fork-baseline-20260908` → fork main commit `06c2bc30f0`.
+- Current: `t3team/fork-baseline-20260908-postsync` → fork commit `046a181c46` (the
+  post-merge-main tree after PR #188 absorbed the 2026-09-06/07 upstream sync plus the
+  guard rebaseline). Grandfathered: the sync content the first baseline had to red on.
+- Previous: `t3team/fork-baseline-20260908` → fork main commit `06c2bc30f0` (2026-09-08,
+  cut before the sync was merged into main; kept for history — see "Move record" below).
 - Everything inside the tree the tag points at is **grandfathered debt**. It is not re-checked.
 - Everything a change adds **on top of** that baseline is checked with the full original
   strictness: new files need a `t3team-`/`t3team.` prefix (or a specific allow pattern),
@@ -57,6 +61,13 @@ git tag -a t3team/fork-baseline-YYYYMMDD <fork-main-commit> \
 git push origin t3team/fork-baseline-YYYYMMDD
 # then: point forkBaselineRef at the new tag in .t3team-additive-guard.json (controlled migration commit)
 ```
+
+### Move record
+
+| date | from | to | reason |
+|---|---|---|---|
+| 2026-09-08 | — | `t3team/fork-baseline-20260908` (`06c2bc30f0`) | First baseline; grandfathers the pre-existing fork debt that red the guard on every CI run since 2026-09-06. |
+| 2026-09-08 | `t3team/fork-baseline-20260908` | `t3team/fork-baseline-20260908-postsync` (`046a181c46`) | PR #188 absorbed the 2026-09-06/07 upstream sync into main; the post-merge main tree (== the `046a181c46` tree) is grandfathered so main and every PR forked off it measure only their own additions. |
 
 Until the new tag is pushed, the guard fails loudly on CI (missing tag), never silently.
 
