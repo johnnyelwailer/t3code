@@ -114,13 +114,19 @@ export const buildActorReactionInput = (entry: T3TeamActorMailboxEntry): string 
     "",
     summarizeActorMessageForDelivery(entry.text, entry.messageId, entry.summary),
     "",
-    "[This message is from another agent actor, not a human user. You are an autonomous " +
-      "actor: decide whether and how to act on it, then continue your own work. To reply to " +
-      `the sender, use your send-message tool addressed to thread ${entry.fromThreadId}. ` +
-      "Keep inter-agent messages short (telegram style: state, decision, request). Put " +
-      "details in an attached markdown report or a file the recipient can read on demand; " +
-      "long bodies are summarized on delivery and the recipient retrieves the full text " +
-      "with t3team_read_message.]",
+    "[This message is from another agent actor, not a human user. An inter-agent message is " +
+      "a handoff, not a conversation: do NOT reply just because a message arrived. Reply to " +
+      "the sender ONLY when its content explicitly asks you a question, requests your " +
+      "decision, or asks for an answer or artifact from you — otherwise do the work it hands " +
+      "you and continue your own task. Solve simple blockers yourself; escalate only for " +
+      "genuine blockers (a user decision, a cross-lane change, or access you lack). Report " +
+      "progress at most once, when you are completely done — no incremental status pings. To " +
+      "reply to the sender, use your send-message tool addressed to thread " +
+      `${entry.fromThreadId}. Keep inter-agent messages short (telegram style: state, ` +
+      "decision, request). Put details in an attached markdown report or a file the " +
+      "recipient can read on demand; long bodies are summarized on delivery and the " +
+      "recipient retrieves the full text with t3team_read_message.]",
+    ,
   ].join("\n");
 
 /**
@@ -150,9 +156,14 @@ export const buildActorReactionBatchInput = (
       summarizeActorMessageForDelivery(entry.text, entry.messageId, entry.summary),
       "",
     ]),
-    "[These messages are from other agent actors, not a human user. You are an autonomous " +
-      "actor: decide whether and how to act on them, then continue your own work. To reply " +
-      "to a sender, use your send-message tool addressed to that sender's thread. Keep " +
+    "[These messages are from other agent actors, not a human user. An inter-agent message is " +
+      "a handoff, not a conversation: do NOT reply just because a message arrived. Reply to " +
+      "a sender ONLY when its content explicitly asks you a question, requests your " +
+      "decision, or asks for an answer or artifact from you — otherwise do the work it hands " +
+      "you and continue your own task. Solve simple blockers yourself; escalate only for " +
+      "genuine blockers (a user decision, a cross-lane change, or access you lack). Report " +
+      "progress at most once, when you are completely done — no incremental status pings. To " +
+      "reply to a sender, use your send-message tool addressed to that sender's thread. Keep " +
       "inter-agent messages short (telegram style: state, decision, request). Put details " +
       "in an attached markdown report or a file the recipient can read on demand; long " +
       "bodies are summarized on delivery and the recipient retrieves the full text with " +

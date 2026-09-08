@@ -297,13 +297,16 @@ export const T3TeamReadMessageTool = Tool.make("t3team_read_message", {
 // thread; the recipient reacts and can reply back the same way.
 export const T3TeamSendMessageTool = Tool.make("t3team_send_message", {
   description:
-    "Send a message to another agent's thread. Use ONLY when you have content the " +
-    "recipient does not already have and can act on: a final result for your parent, " +
-    "a follow-up task or handoff for a child, or a question/command directed at the " +
-    "recipient. NEVER send acknowledgment, thanks, status-only, or 'noted/received' " +
-    "messages — if your reply would not change what the recipient does, do not send " +
-    "it. The recipient reacts to every message automatically, so an ack triggers " +
-    "another turn on the other side. Address it with the target thread id. Keep the " +
+    "Send a message to another agent's thread. This is a one-shot handoff: use it ONLY when " +
+    "you have content the recipient does not already have and can act on. Allowed messages: " +
+    "a final result for your parent, a follow-up task or handoff for a child, an answer to a " +
+    "question the recipient explicitly asked, or a genuine blocker that needs the " +
+    "recipient's decision. NEVER send acknowledgment, thanks, status-only, or 'noted/received' " +
+    "messages, and NEVER send incremental progress pings — report ONCE, when you are " +
+    "completely done. Solve simple blockers yourself first; escalate only when truly stuck. " +
+    "If your reply would not change what the recipient does, do not send it. The recipient " +
+    "reacts to every message automatically, so an ack triggers another turn on the other " +
+    "side. Address it with the target thread id. Keep the " +
     "body short (telegram " +
     "style: state, decision, request). For long bodies, provide a short 'summary' " +
     "(the recipient's reaction input shows the summary, not a raw cut); without " +
