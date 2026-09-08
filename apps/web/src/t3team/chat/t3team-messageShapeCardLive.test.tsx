@@ -2,7 +2,7 @@
 import { EventId, type OrchestrationThreadActivity } from "@t3tools/contracts";
 import { PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP } from "@t3tools/project-recipes";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vite-plus/test";
+import { beforeAll, describe, expect, it } from "vite-plus/test";
 import { buildT3TeamMessagesTimelineTestProps } from "~/t3team/chat/t3team-messagesTimelineTestProps";
 import { deriveT3TeamWorkflowStepRuns } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
 import type { ChatMessage } from "~/types";
@@ -20,6 +20,14 @@ import {
   stepActivity,
   TEST_WORKFLOW_SHAPE,
 } from "~/t3team/chat/t3team-messageShapeCardLive.testSupport";
+
+// Prewarm the MessagesTimeline module graph once, outside the per-test 15s budget:
+// the first dynamic import inside renderTimeline() transforms the whole graph and
+// exceeds the unit project's testTimeout on its own (same pattern as
+// MessagesTimeline.test.tsx's beforeAll import).
+beforeAll(async () => {
+  await import("~/components/chat/MessagesTimeline");
+}, 60_000);
 
 describe("deriveT3TeamWorkflowStepRuns", () => {
   it("groups by run, orders by journal seq, keeps the latest phase, and splits the run row", () => {
