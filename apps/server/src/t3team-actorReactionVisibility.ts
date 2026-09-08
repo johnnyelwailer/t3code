@@ -108,12 +108,15 @@ export function detectUserFacingOpenState(
  * the earlier user-facing content rather than assume the user still has it.
  */
 export const ACTOR_REACTION_USER_RETURN_INSTRUCTION =
-  "[Return to the user before anything else. Messages from other threads arrived — do not " +
-  "prioritize them. FIRST make sure the user has read your message and responded to any open " +
-  "points. You may still act on the agent messages, but your LAST action must be to respond to " +
-  "the user and summarize the recent conversation. Because inter-agent messages arrived in " +
-  "between, RE-STATE / RE-EXPLAIN your earlier user-facing content (the question you posed, the " +
-  "decision you made, the status you gave) — do NOT assume the user still has it.]";
+  "[Return to the user before anything else. USER MESSAGES ALWAYS TAKE PRIORITY: if a user " +
+  "message or question is still unanswered, fully respond to it FIRST — before acting on any " +
+  "inter-agent message; agent messages are queued and safe to handle afterwards. Inter-agent " +
+  "messages arrived — do not prioritize them over the user. FIRST make sure the user has read " +
+  "your message and responded to any open points. You may still act on the agent messages, but " +
+  "your LAST action must be to respond to the user and summarize the recent conversation. " +
+  "Because inter-agent messages arrived in between, RE-STATE / RE-EXPLAIN your earlier " +
+  "user-facing content (the question you posed, the decision you made, the status you gave) — " +
+  "do NOT assume the user still has it.]";
 
 /**
  * The instruction to append to a reaction turn's framed input, or `""` when the
