@@ -20,7 +20,6 @@ import type {
   SpeechRecognitionEvent,
   SpeechRecognitionLike,
   VoiceInputCallbacks,
-  VoiceInputError,
   VoiceInputOptions,
   VoiceInputState,
 } from "./t3team-voiceInputTypes.ts";
