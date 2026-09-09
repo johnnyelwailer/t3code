@@ -68,7 +68,10 @@ export function createWorkflowRunController(
         try {
           await input.onComplete?.(result.result);
         } catch (sinkError) {
-          console.warn(`[t3team-workflow] onComplete sink failed for run ${input.runId}:`, sinkError);
+          console.warn(
+            `[t3team-workflow] onComplete sink failed for run ${input.runId}:`,
+            sinkError,
+          );
         }
       },
       onFailed: async ({ phase, error }) => {

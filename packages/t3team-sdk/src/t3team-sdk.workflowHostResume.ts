@@ -25,10 +25,15 @@ export async function resumeWorkflowRunHost(input: {
   }) => Promise<boolean>;
   readonly retryResolvedReply: ((correlationId: string) => Promise<boolean> | boolean) | undefined;
   readonly onReplyJournaled: ((correlationId: string) => Promise<void> | void) | undefined;
-  readonly settle: (result: Awaited<ReturnType<typeof resumeWorkflow>>) => Promise<WorkflowLaunchStatus>;
+  readonly settle: (
+    result: Awaited<ReturnType<typeof resumeWorkflow>>,
+  ) => Promise<WorkflowLaunchStatus>;
   readonly repairAttempt: (error: unknown) => Promise<boolean>;
   readonly isCancelled: () => boolean;
-  readonly onFailed: (detail: { readonly phase: "resume"; readonly error: unknown }) => Promise<void>;
+  readonly onFailed: (detail: {
+    readonly phase: "resume";
+    readonly error: unknown;
+  }) => Promise<void>;
 }): Promise<void> {
   const {
     runId,

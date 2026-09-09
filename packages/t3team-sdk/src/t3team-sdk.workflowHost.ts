@@ -60,14 +60,16 @@ export function createWorkflowHostRegistry(): WorkflowHostRegistry {
  */
 export function createWorkflowRunHost(config: CreateWorkflowRunHostConfig): WorkflowRunHost {
   const { ref, args, runId, runOptions, registry, lifecycle, sinks } = config;
-  const appendReply = config.appendResolved ?? ((opts) =>
-    appendResolvedEntry({
-      ...(runOptions.store === undefined ? {} : { store: runOptions.store }),
-      ...(runOptions.runsRoot === undefined ? {} : { runsRoot: runOptions.runsRoot }),
-      runId: opts.runId,
-      correlationId: opts.correlationId,
-      reply: opts.reply,
-    }));
+  const appendReply =
+    config.appendResolved ??
+    ((opts) =>
+      appendResolvedEntry({
+        ...(runOptions.store === undefined ? {} : { store: runOptions.store }),
+        ...(runOptions.runsRoot === undefined ? {} : { runsRoot: runOptions.runsRoot }),
+        runId: opts.runId,
+        correlationId: opts.correlationId,
+        reply: opts.reply,
+      }));
 
   let cancelled = false;
   let resuming = false;
