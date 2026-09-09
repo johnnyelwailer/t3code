@@ -2,9 +2,7 @@ import type { OrchestrationEvent, OrchestrationMessage } from "@t3tools/contract
 
 import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
 
-import {
-  summarizeActorMessageForDelivery,
-} from "./t3team-actorReactionInputSummarize.ts";
+import { summarizeActorMessageForDelivery } from "./t3team-actorReactionInputSummarize.ts";
 
 /**
  * True when the user sent a message at any point while (or after) this batch

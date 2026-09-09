@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Shared test fixtures for the durable-execution engine test suite. Keeps the per-test
  * counters and the SDK tool/script/workflow definitions in one file so the test files

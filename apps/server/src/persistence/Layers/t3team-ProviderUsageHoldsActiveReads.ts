@@ -13,9 +13,7 @@ import * as Effect from "effect/Effect";
 
 import { toPersistenceSqlError } from "../Errors.ts";
 
-import {
-  type ProviderUsageHoldRepositoryShape,
-} from "../Services/t3team-ProviderUsageHolds.ts";
+import { type ProviderUsageHoldRepositoryShape } from "../Services/t3team-ProviderUsageHolds.ts";
 
 import { EmptyRequest, ProviderUsageHoldDbRow, rowToHold } from "./t3team-ProviderUsageHoldsRow.ts";
 

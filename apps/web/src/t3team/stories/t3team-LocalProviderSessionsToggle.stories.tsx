@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-native-title-tooltip -- Mirrors the sidebar rows' native provider-icon title. */
 /**
  * "Local provider sessions" setting toggle — the display-side contract.
  *

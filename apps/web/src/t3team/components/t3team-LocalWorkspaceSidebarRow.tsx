@@ -1,5 +1,4 @@
 /* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay";
 import type { EnvironmentId } from "@t3tools/contracts";
@@ -144,7 +143,11 @@ export function LocalWorkspaceSidebarRow({
           )}
 
           {environmentId && workspaceRoot ? (
-            <ProjectFavicon environmentId={environmentId} cwd={workspaceRoot} projectName={project.title} />
+            <ProjectFavicon
+              environmentId={environmentId}
+              cwd={workspaceRoot}
+              projectName={project.title}
+            />
           ) : (
             <FolderIcon className="size-3.5 shrink-0 text-muted-foreground/50" />
           )}

@@ -64,9 +64,9 @@ git push origin t3team/fork-baseline-YYYYMMDD
 
 ### Move record
 
-| date | from | to | reason |
-|---|---|---|---|
-| 2026-09-08 | — | `t3team/fork-baseline-20260908` (`06c2bc30f0`) | First baseline; grandfathers the pre-existing fork debt that red the guard on every CI run since 2026-09-06. |
+| date       | from                            | to                                                      | reason                                                                                                                                                                                                |
+| ---------- | ------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-08 | —                               | `t3team/fork-baseline-20260908` (`06c2bc30f0`)          | First baseline; grandfathers the pre-existing fork debt that red the guard on every CI run since 2026-09-06.                                                                                          |
 | 2026-09-08 | `t3team/fork-baseline-20260908` | `t3team/fork-baseline-20260908-postsync` (`046a181c46`) | PR #188 absorbed the 2026-09-06/07 upstream sync into main; the post-merge main tree (== the `046a181c46` tree) is grandfathered so main and every PR forked off it measure only their own additions. |
 
 Until the new tag is pushed, the guard fails loudly on CI (missing tag), never silently.
@@ -74,6 +74,7 @@ Until the new tag is pushed, the guard fails loudly on CI (missing tag), never s
 ## Allowed Modified Upstream Files
 
 ### Rebaseline 2026-09-08 (guard machinery)
+
 - `.github/workflows/t3team-additive-guard.yml`
   - The guard's own CI workflow; rebaselines its blocking step onto the fork-baseline tag and keeps the live-upstream drift step informational via `T3TEAM_ADDITIVE_GUARD_BASE`.
 - `scripts/lib/additive-guard-config.mjs`

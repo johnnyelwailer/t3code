@@ -11,16 +11,11 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
 import { makeT3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
-import {
-  callT3TeamReadMessageTool,
-} from "./t3team-toolBrokerBindingReadMessage.ts";
+import { callT3TeamReadMessageTool } from "./t3team-toolBrokerBindingReadMessage.ts";
 import { callT3TeamSearchSourceTool } from "./t3team-toolBrokerBindingSearchSource.ts";
 import { callT3TeamSearchThreadTool } from "./t3team-toolBrokerBindingSearchThread.ts";
 import { createT3TeamThreadToolBinding } from "./t3team-toolBrokerBinding.ts";
-import {
-  type T3TeamToolBrokerShape,
-  type T3TeamTurnToolContext,
-} from "./t3team-toolBroker.ts";
+import { type T3TeamToolBrokerShape, type T3TeamTurnToolContext } from "./t3team-toolBroker.ts";
 import { setBacklogAssigneeFilterForContext } from "./t3team-toolBrokerBacklogFilter.ts";
 import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
 import { buildRuntimeModelCatalog } from "./t3team-runtimeModelCatalog.ts";

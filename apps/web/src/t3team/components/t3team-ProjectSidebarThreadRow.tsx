@@ -168,4 +168,3 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
 });
 
 export { ProjectSidebarThreadRowItem } from "./t3team-ProjectSidebarThreadRow-rowItem";
-

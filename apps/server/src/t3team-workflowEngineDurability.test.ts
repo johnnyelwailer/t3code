@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 // @effect-diagnostics nodeBuiltinImport:off - durability test reads a workflow fixture + temp dir.
 /**
  * Durability acceptance (Epic 25 §Open question 2). The whole point: a run parked on a

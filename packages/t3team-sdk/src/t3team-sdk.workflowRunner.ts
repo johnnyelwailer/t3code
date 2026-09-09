@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * T3Code's body-execution adapter. The reusable run loop, suspension funnel, and journal
  * durability barrier live in @runbook/core; this module retains registries, contexts, and the

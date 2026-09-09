@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Bridges the launch API once, like its siblings. */
 // @effect-diagnostics nodeBuiltinImport:off - writes real recipe modules into a temp workspace.
 /**
  * The host-tool scope must come from the RECIPE, not from the launch request.

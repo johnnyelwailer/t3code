@@ -8,13 +8,11 @@ import { CircleCheckIcon } from "lucide-react";
 
 import { ProjectFavicon } from "~/components/ProjectFavicon";
 import { ProviderInstanceIcon } from "~/components/chat/ProviderInstanceIcon";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 
 import { EnvironmentId, ProviderDriverKind } from "@t3tools/contracts";
 
-import {
-  MorphIcon,
-  PROJECT_TITLE,
-} from "./t3team-ActivityLabelVariants-motions-primitives";
+import { MorphIcon, PROJECT_TITLE } from "./t3team-ActivityLabelVariants-motions-primitives";
 
 /**
  * Faithful copy of SidebarSubRunRow (Sidebar.tsx ~line 1825): one-line child
@@ -54,20 +52,31 @@ export function SubRunRow({
         )}
         {flipLabel ? (
           /* title flips to the status text (roll in production) */
-          <span
-            className="min-w-0 flex-1 truncate font-medium text-sky-600 dark:text-sky-400"
-            title={title}
-          >
-            <span className="t3team-label-shimmer">{flipLabel}</span>
-          </span>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span className="min-w-0 flex-1 truncate font-medium text-sky-600 dark:text-sky-400">
+                  <span className="t3team-label-shimmer">{flipLabel}</span>
+                </span>
+              }
+            />
+            <TooltipPopup side="top">{title}</TooltipPopup>
+          </Tooltip>
         ) : (
           <span className="min-w-0 flex-1 truncate">{title}</span>
         )}
         {dockLabel ? (
           /* fits → docked to the right, static, no overlap */
-          <span className="shrink-0 font-medium text-sky-600 dark:text-sky-400" title={title}>
-            <span className="t3team-label-shimmer">{dockLabel}</span>
-          </span>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span className="shrink-0 font-medium text-sky-600 dark:text-sky-400">
+                  <span className="t3team-label-shimmer">{dockLabel}</span>
+                </span>
+              }
+            />
+            <TooltipPopup side="top">{title}</TooltipPopup>
+          </Tooltip>
         ) : null}
         <span className="shrink-0 text-[0.6875rem] text-muted-foreground/55 tabular-nums">
           {time}
@@ -121,4 +130,3 @@ export function DoneCard() {
     </div>
   );
 }
-

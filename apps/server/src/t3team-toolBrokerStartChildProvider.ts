@@ -1,8 +1,4 @@
-import {
-  ProviderInstanceId,
-  type ModelSelection,
-  type ServerProvider,
-} from "@t3tools/contracts";
+import { ProviderInstanceId, type ModelSelection, type ServerProvider } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import type { AgentEffort } from "@t3team/sdk";

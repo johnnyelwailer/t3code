@@ -21,9 +21,7 @@ export default async ({ defineAgentProvider, resolveAssetDataUrl }) => {
     iconDataUrl: await resolveAssetDataUrl("assets/nexplore-mark.png", "image/png"),
     configuration: {
       kind: "upstream-provider",
-      provider: {
-        /* ... */
-      },
+      provider: {/* ... */},
     },
   });
 };
@@ -46,9 +44,7 @@ export default async ({ defineProviderDriver }) => {
     async create({ instanceId, config, environment, host }) {
       // Compose and decorate the reviewed host OpenCode harness…
       const harness = await host.createOpenCodeHarness({
-        provider: {
-          /* same upstream-provider shape as defineAgentProvider */
-        },
+        provider: {/* same upstream-provider shape as defineAgentProvider */},
         defaultModel: "qwen3.6-35b-a3b-q6-192k:nothink",
         credentialEnv: "NEXPLORE_API_KEY",
       });

@@ -60,7 +60,7 @@ import {
   toggleViewedFile,
   type DiffExplorerFile,
   type DiffExplorerNode,
-} from "./prDiffExplorer.logic";
+} from "./t3team-prDiffExplorer.logic";
 
 type ExplorerMode = "focus" | "list";
 type ExplorerLayout = "stacked" | "split";
@@ -198,15 +198,21 @@ function TreeLevel({
                 onClick={(event) => event.stopPropagation()}
                 className="size-3.5 sm:size-3.5"
               />
-              <span
-                className={cn(
-                  "min-w-0 flex-1 truncate",
-                  isViewed ? "text-muted-foreground" : "text-foreground",
-                )}
-                title={file.path}
-              >
-                {name}
-              </span>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span
+                      className={cn(
+                        "min-w-0 flex-1 truncate",
+                        isViewed ? "text-muted-foreground" : "text-foreground",
+                      )}
+                    >
+                      {name}
+                    </span>
+                  }
+                />
+                <TooltipPopup side="top">{file.path}</TooltipPopup>
+              </Tooltip>
               <DiffStat additions={file.additions} deletions={file.deletions} />
             </div>
           </li>
@@ -356,14 +362,20 @@ export function PullRequestDiffExplorer({
                 <TooltipPopup side="bottom">Next file</TooltipPopup>
               </Tooltip>
             </div>
-            <span
-              className="min-w-0 flex-1 truncate font-medium text-foreground"
-              title={selectedFile?.path ?? undefined}
-            >
-              {selectedFile
-                ? (selectedFile.path.split("/").at(-1) ?? selectedFile.path)
-                : "No file"}
-            </span>
+            {selectedFile ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+                      {selectedFile.path.split("/").at(-1) ?? selectedFile.path}
+                    </span>
+                  }
+                />
+                <TooltipPopup side="top">{selectedFile.path}</TooltipPopup>
+              </Tooltip>
+            ) : (
+              <span className="min-w-0 flex-1 truncate font-medium text-foreground">No file</span>
+            )}
           </>
         ) : (
           <>

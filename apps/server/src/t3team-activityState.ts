@@ -64,6 +64,4 @@ export type ThreadActivityState = "thinking" | "writing" | "working" | "waiting"
 // The per-thread tracker (TrackedThread + createActivityStateTracker) moved to
 // `t3team-activityStateTracker.ts`.
 
-export {
-  createActivityStateTracker,
-} from "./t3team-activityStateTracker.ts";
+export { createActivityStateTracker } from "./t3team-activityStateTracker.ts";

@@ -35,6 +35,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { orchestrationEnvironment } from "~/state/orchestration";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { Button } from "~/components/ui/button";
@@ -213,11 +214,8 @@ function SimpleAgentRow({ agent, index = 0 }: { agent: RuntimeSubagent; index?: 
   if (activity) parts.push(activity);
   const tooltip = parts.join(" · ");
 
-  return (
-    <div
-      className="group flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1.5 transition-colors hover:bg-muted/35"
-      title={tooltip || undefined}
-    >
+  const row = (
+    <div className="group flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1.5 transition-colors hover:bg-muted/35">
       <AgentsPanelStatusDot agent={agent} index={index} className="size-3 shrink-0" />
       <span className="min-w-0 flex-1 truncate text-sm font-medium">{agent.title}</span>
       <span className="shrink-0 text-xs text-muted-foreground">{label}</span>
@@ -229,6 +227,15 @@ function SimpleAgentRow({ agent, index = 0 }: { agent: RuntimeSubagent; index?: 
         <AgentElapsed agent={agent} />
       </span>
     </div>
+  );
+
+  return tooltip ? (
+    <Tooltip>
+      <TooltipTrigger render={row} />
+      <TooltipPopup side="top">{tooltip}</TooltipPopup>
+    </Tooltip>
+  ) : (
+    row
   );
 }
 

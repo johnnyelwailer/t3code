@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Legacy async tests intentionally bridge Effect runtimes; tracked cleanup is separate from upstream green gate. */
 // @effect-diagnostics nodeBuiltinImport:off - integration test writes an ephemeral workflow source + temp dir.
 /**
  * `t3team.orchestration.resume` — the broker tool surfacing the engine's journal resume:
