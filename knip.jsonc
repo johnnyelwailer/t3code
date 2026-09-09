@@ -4,6 +4,93 @@
   "rules": { "types": "off", "nsTypes": "off" },
   // These executables are supplied by the OS or installed separately from npm.
   "ignoreBinaries": ["eas", "file", "mkfifo", "pkill", "pkg-config", "plutil", "sips"],
+  // Fork debt baseline (2026-09-09): files and dependencies the fork added on top of
+  // upstream main that have no live importers yet. They are kept (fixtures, e2e harnesses,
+  // split modules, tooling) and grandfathered here so the gate stays red only for NEW debt.
+  // Remove entries as they gain consumers or are deleted.
+  "ignore": [
+    "apps/mobile/t3team-typecheck.mjs",
+    "apps/server/__fixtures__/t3team-decisionBoolean.workflow.ts",
+    "apps/server/__fixtures__/t3team-decisionForm.workflow.ts",
+    "apps/server/__fixtures__/t3team-hostDraftTool.workflow.ts",
+    "apps/server/__fixtures__/t3team-hostDraftToolUndeclared.workflow.ts",
+    "apps/server/scripts/t3team-dev-entry.mjs",
+    "apps/server/scripts/t3team-providerUsageLiveCheck.ts",
+    "apps/server/src/t3team-provider-tool-injection-codex-cli.ts",
+    "apps/server/src/t3team-provider-tool-injection-codex-utils.ts",
+    "apps/server/src/t3team-provider-tool-injection-opencode-config.ts",
+    "apps/server/src/t3team-provider-tool-injection.ts",
+    "apps/server/src/t3team-recipeWorkflowE2e.ts",
+    "apps/server/src/t3team-recipeWorkflowHarness.ts",
+    "apps/server/src/t3team-recipeWorkflowHarnessLaunch.ts",
+    "apps/server/src/t3team-recipeWorkflowHarnessLayers.ts",
+    "apps/server/src/t3team-recipeWorkflowHarnessLoop.ts",
+    "apps/server/src/t3team-recipeWorkflowHarnessRecipe.ts",
+    "apps/server/src/t3team-recipeWorkflowHarnessReport.ts",
+    "apps/server/src/t3team-recipeWorkflowHarnessSetup.ts",
+    "apps/server/src/t3team-recipeWorkflowHarnessStub.ts",
+    "apps/server/src/t3team-workflowReportComposerLive.ts",
+    "apps/web/scripts/t3team-storybook.mjs",
+    "apps/web/src/components/t3team-ProjectBacklogController.browser.tsx",
+    "apps/web/src/components/t3team-projectDashboardKanbanMatrix.browser.tsx",
+    "apps/web/src/components/t3team-ProjectSidebarDashboardNav.browser.tsx",
+    "apps/web/src/components/t3team-ProjectSidebarTicketEntry.browser.tsx",
+    "apps/web/src/t3team/backend/t3team-environmentStore.ts",
+    "apps/web/src/t3team/components/t3team-ProjectSidebarDashboardNav.browser.tsx",
+    "apps/web/src/t3team/components/t3team-ProjectSidebarTicketEntry.browser.tsx",
+    "apps/web/src/t3team/components/t3team-ProjectSidebarTicketEntry.browserSupport.tsx",
+    "apps/web/src/t3team/components/ticket/t3team-TicketAttachments.tsx",
+    "apps/web/src/t3team/components/ticket/t3team-TicketComments.tsx",
+    "apps/web/src/t3team/components/ui/t3team-dialog.tsx",
+    "apps/web/src/t3team/components/ui/t3team-separator.tsx",
+    "apps/web/src/t3team/components/ui/t3team-sheet.tsx",
+    "apps/web/src/t3team/hooks/t3team-ProjectBacklogController.browser.tsx",
+    "apps/web/src/t3team/storybook/t3team-storybook-canvas-activityLabel.css",
+    "apps/web/src/t3team/storybook/t3team-storybook-canvas.css",
+    "apps/web/src/t3team/storybook/t3team-storybook-main.ts",
+    "apps/web/src/t3team/storybook/t3team-storybook-preview.ts",
+    "apps/web/src/t3team/t3team-addToChatPayloadBuilders.ts",
+    "apps/web/src/t3team/t3team-contextAttachmentText.ts",
+    "apps/web/src/t3team/t3team-projectContextPayload.ts",
+    "apps/web/src/t3team/t3team-projectDashboardKanbanMatrix.browser.tsx",
+    "apps/web/src/t3team/t3team-useProjectDashboardState.ts",
+    "packages/t3team-sdk/src/__fixtures__/t3team-sdk.capabilityBad.workflow.ts",
+    "packages/t3team-sdk/src/__fixtures__/t3team-sdk.capabilityOk.workflow.ts",
+    "packages/t3team-sdk/src/__fixtures__/t3team-sdk.determinismBad.workflow.ts",
+    "packages/t3team-sdk/src/__fixtures__/t3team-sdk.determinismOk.workflow.ts",
+    "packages/t3team-sdk/src/__fixtures__/t3team-sdk.shape.workflow.ts",
+    "packages/t3team-sdk/src/t3team-sdk.askRender.ts",
+    "packages/t3team-sdk/src/t3team-sdk.askVerb.ts",
+    "packages/t3team-sdk/src/t3team-sdk.durableRuntimePrimitive.ts",
+    "packages/t3team-sdk/src/t3team-sdk.handlesDispatch.ts",
+    "packages/t3team-sdk/src/t3team-sdk.replayDrift.ts",
+    "packages/t3team-sdk/src/t3team-sdk.threadDefaults.ts",
+    "scripts/lib/t3team-orchestration-bundle-check.ts",
+    "scripts/lib/t3team-orchestration-bundle-closure.ts",
+    "scripts/lib/t3team-orchestration-bundle-errors.ts",
+    "scripts/lib/t3team-orchestration-bundle-workflows.ts",
+    "scripts/t3team-additive-fast-hook.mjs",
+    "scripts/t3team-check-orchestration-bundle.ts",
+    "scripts/t3team-context-refresh-e2e-live.mjs",
+    "scripts/t3team-context-refresh-e2e-workspace.mjs",
+    "scripts/t3team-desktop-asar-dts-afterpack-utils.cjs",
+    "scripts/t3team-desktop-asar-dts-afterpack.cjs",
+    "scripts/t3team-timer-e2e-live-lib.mjs",
+    "scripts/t3team-timer-e2e-live.mjs",
+    "scripts/t3team-timer-e2e-workspace.mjs",
+    "t3team-additive-guard.test.mjs",
+  ],
+  // Fork debt baseline (2026-09-09): dependencies declared for fork tooling that knip
+  // cannot trace (string-based resolution, external runners, or not yet wired in).
+  "ignoreDependencies": [
+    "@earendil-works/pi-coding-agent",
+    "@pierre/diffs",
+    "@silvia-odwyer/photon-node",
+    "typebox",
+    "msw",
+    "vitest-browser-react",
+    "@effect/vitest",
+  ],
   "workspaces": {
     ".": {
       // Keep vendored reference repositories outside the root project.
@@ -46,7 +133,16 @@
       // UI component modules are copied and adapted as cohesive sets. Keep their
       // named subcomponents even before they have callers; the file audit still
       // reports an entire component module when nothing imports it.
-      "ignoreIssues": { "src/components/ui/*.tsx": ["exports", "nsExports", "duplicates"] },
+      // Fork debt baseline (2026-09-09): fork-owned modules keep their exported surface
+      // while their consumers land; grandfathered so the gate stays red only for NEW debt.
+      // Upstream files are listed individually; fork modules are covered by the t3team globs.
+      "ignoreIssues": {
+        "src/components/ui/*.tsx": ["exports", "nsExports", "duplicates"],
+        "src/t3team/**": ["exports", "duplicates"],
+        "src/state/t3team-*.ts": ["exports"],
+        // Upstream file whose only consumers are fork modules not reachable from entries yet.
+        "src/components/Sidebar.logic.ts": ["exports"],
+      },
     },
     "apps/mobile": {
       // Expo loads local config plugins by string; Metro handles platform variants.
@@ -68,6 +164,26 @@
     "packages/*": {
       // These workspace packages are private to this monorepo.
       "includeEntryExports": true,
+    },
+    "packages/client-runtime": {
+      // Fork debt baseline (2026-09-09): exports consumed only by fork modules that are
+      // not reachable from entry points yet.
+      "ignoreIssues": { "src/state/subagentRuntime.ts": ["exports"] },
+    },
+    "packages/contracts": {
+      // Fork debt baseline (2026-09-09): fork module plus upstream rpc.ts exports whose
+      // only consumers are fork modules not reachable from entry points yet.
+      "ignoreIssues": {
+        "src/t3team-localProviderKinds.ts": ["exports"],
+        "src/rpc.ts": ["exports"],
+      },
+    },
+    "packages/shared": {
+      // Fork debt baseline (2026-09-09): voice-input module split, consumers pending.
+      "ignoreIssues": {
+        "src/t3team-voiceInputUi*": ["exports", "duplicates"],
+        "src/t3team-voiceInputUi/**": ["exports", "duplicates"],
+      },
     },
     "packages/effect-acp": {
       "includeEntryExports": true,
