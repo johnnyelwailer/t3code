@@ -29,6 +29,7 @@
     "apps/desktop/src/backend/DesktopBackendConfiguration.ts",
     "apps/desktop/src/window/DesktopWindow.test.ts",
     "apps/desktop/src/window/DesktopWindow.ts",
+    "apps/desktop/tsconfig.json",
     "apps/desktop/vite.config.ts",
     "apps/server/integration/OrchestrationEngineHarness.integration.ts",
     "apps/server/integration/orphanedProviderSessionStartup.integration.test.ts",
