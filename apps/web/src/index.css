@@ -2887,23 +2887,24 @@ button:hover .stage-nexplore-compact .stage-nexplore-orbs {
  * sending, connecting, reverting, compacting) and disappears the moment work stops, which is why
  * it may breathe where the stage strip must not.
  */
+/*
+ * OPACITY ONLY — deliberately no `transform: scale()`.
+ *
+ * The bloom is absolutely positioned with negative insets, and a transformed element still
+ * contributes to its scroll container's scrollable overflow. Scaling it therefore pushed the
+ * overflow past the right edge on every cycle, toggling a horizontal scrollbar and shifting the
+ * whole layout back and forth in time with the animation. A glow does not need to change size.
+ */
 @keyframes t3team-nx-glow-breathe {
   0%,
   100% {
     opacity: 0.55;
-    transform: scale(1);
   }
   50% {
     opacity: 1;
-    transform: scale(1.035);
   }
 }
 
-/*
- * Composer: bloom behind the glass, bleeding past the rounded edge. `Shell` is `isolate` and its
- * glass is `before:z-0` with Host/Main at `z-10`, so `z-0` here sits under the composer content
- * and reads as light escaping from behind it.
- */
 /*
  * Composer: bloom behind the glass and behind the composer's own content.
  *
@@ -2911,11 +2912,16 @@ button:hover .stage-nexplore-compact .stage-nexplore-orbs {
  * `before:z-0` glass, so `0` painted the bloom ON TOP of the glass and on top of the
  * `relative z-0` branch-toolbar wrapper — washing the toolbar orange for the whole turn. `Shell`
  * is `isolate`, so `-1` cannot escape behind the app background.
+ *
+ * Horizontal inset is 0: any horizontal overhang feeds the scroll container's overflow and can
+ * raise a horizontal scrollbar, which shifts the whole layout sideways. The bloom only needs to
+ * escape vertically to read as light from behind the composer, and `blur(14px)` already softens
+ * the left and right ends well inside the edge.
  */
 html[data-theme-id="t3team-pack-nexplore"] [data-composer-working]::after {
   content: "";
   position: absolute;
-  inset: -14px -10px -18px;
+  inset: -14px 0 -18px;
   z-index: -1;
   pointer-events: none;
   border-radius: 32px;
@@ -2926,8 +2932,7 @@ html[data-theme-id="t3team-pack-nexplore"] [data-composer-working]::after {
     transparent 75%
   );
   filter: blur(14px);
-  transform: translateZ(0);
-  will-change: transform, opacity;
+  will-change: opacity;
   animation: t3team-nx-glow-breathe 3.2s ease-in-out infinite;
 }
 
