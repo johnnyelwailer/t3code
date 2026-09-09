@@ -203,4 +203,3 @@ export function ProjectSizer({ refHost }: { refHost: Ref<HTMLSpanElement> }) {
     </span>
   );
 }
-

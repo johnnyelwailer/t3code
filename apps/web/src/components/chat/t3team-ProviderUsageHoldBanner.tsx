@@ -16,6 +16,8 @@
  */
 import * as React from "react";
 
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
+
 const KIND_STARTED = "provider.usage-hold.started";
 const KIND_DEFERRED = "provider.usage-hold.deferred";
 const KIND_RELEASED = "provider.usage-hold.released";
@@ -156,32 +158,38 @@ export function ProviderUsageHoldToggle(props: {
     [props.httpBaseUrl, props.threadId, props.onFlipped],
   );
 
+  const autoResumeTooltip = props.autoResume
+    ? "Off: stay on usage limit after the window resets"
+    : "On: resume when the window resets";
+
   return (
-    <button
-      type="button"
-      disabled={pending}
-      aria-label={props.autoResume ? "Disable auto-resume" : "Enable auto-resume"}
-      title={
-        props.autoResume
-          ? "Off: stay on usage limit after the window resets"
-          : "On: resume when the window resets"
-      }
-      onClick={() => void flip(!props.autoResume)}
-      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground transition-opacity disabled:opacity-50"
-    >
-      <span
-        className={`relative inline-flex h-3.5 w-6 shrink-0 items-center rounded-full transition-colors ${
-          props.autoResume ? "bg-emerald-500/80" : "bg-muted-foreground/30"
-        }`}
-        aria-hidden="true"
-      >
-        <span
-          className={`inline-block h-2.5 w-2.5 transform rounded-full bg-background transition-transform ${
-            props.autoResume ? "translate-x-3" : "translate-x-0.5"
-          }`}
-        />
-      </span>
-      <span className="text-[10px] text-muted-foreground">auto-resume</span>
-    </button>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            disabled={pending}
+            aria-label={props.autoResume ? "Disable auto-resume" : "Enable auto-resume"}
+            onClick={() => void flip(!props.autoResume)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground transition-opacity disabled:opacity-50"
+          >
+            <span
+              className={`relative inline-flex h-3.5 w-6 shrink-0 items-center rounded-full transition-colors ${
+                props.autoResume ? "bg-emerald-500/80" : "bg-muted-foreground/30"
+              }`}
+              aria-hidden="true"
+            >
+              <span
+                className={`inline-block h-2.5 w-2.5 transform rounded-full bg-background transition-transform ${
+                  props.autoResume ? "translate-x-3" : "translate-x-0.5"
+                }`}
+              />
+            </span>
+            <span className="text-[10px] text-muted-foreground">auto-resume</span>
+          </button>
+        }
+      />
+      <TooltipPopup side="top">{autoResumeTooltip}</TooltipPopup>
+    </Tooltip>
   );
 }

@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-native-title-tooltip -- shared package has no Tooltip primitive; importing the web app's would create a shared->web dependency. */
 import { useState, type ReactNode } from "react";
 import { STOP_MODES, type StopMode, type VoiceState } from "./t3team-types.ts";
 

@@ -12,6 +12,7 @@
  * Timers use the Effect Clock, so `TestClock` drives them in tests — the
  * same approach the pack-level watchdog tests use.
  */
+/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Legacy async tests bridge Effect runtimes manually; tracked cleanup is separate from the green gate. */
 import type {
   ProviderApprovalDecision,
   ProviderRuntimeEvent,
@@ -261,9 +262,7 @@ function makeWatchdogHarness(
       ),
       directoryLayer,
       runtimeRepositoryLayer,
-    ).pipe(
-      Layer.provideMerge(NodeServices.layer),
-    ),
+    ).pipe(Layer.provideMerge(NodeServices.layer)),
   );
 
   return { layer };

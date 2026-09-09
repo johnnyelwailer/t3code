@@ -191,7 +191,6 @@ export function useHydrateThreadPlacements(input: {
     // candidate ids changes. `candidateThreadIdsKey` is the stable,
     // content-based dependency; the effect body still reads the up-to-date
     // `candidateThreadIds` value via closure.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     backend,
     backendState.connectionStatus,

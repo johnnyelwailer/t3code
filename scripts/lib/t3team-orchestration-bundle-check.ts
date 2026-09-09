@@ -19,11 +19,19 @@ import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/ho
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import serverPackageJson from "../../apps/server/package.json" with { type: "json" };
 
-import { OrchestrationBundleDistMissingError, OrchestrationBundleProbeError } from "./t3team-orchestration-bundle-errors.ts";
+import {
+  OrchestrationBundleDistMissingError,
+  OrchestrationBundleProbeError,
+} from "./t3team-orchestration-bundle-errors.ts";
 import { selectCliRuntimeExternalDependencies } from "./cli-external-packages.ts";
 import { resolveCatalogDependencies } from "./resolve-catalog.ts";
 import { PROBE_SOURCE } from "./t3team-orchestration-bundle-workflows.ts";
-import { assertAsarClosure, assertStagingTreeClosure, runCommand, spawnAndCollect } from "./t3team-orchestration-bundle-closure.ts";
+import {
+  assertAsarClosure,
+  assertStagingTreeClosure,
+  runCommand,
+  spawnAndCollect,
+} from "./t3team-orchestration-bundle-closure.ts";
 import {
   readWorkspaceConfig,
   resolveFffNativeDependencies,
@@ -31,7 +39,6 @@ import {
   type BuildPlatform,
 } from "../build-desktop-artifact.ts";
 import { stageAuthoringTypes } from "./t3team-authoring-types.ts";
-
 
 interface CheckCliInput {
   readonly distDir: Option.Option<string>;
@@ -179,4 +186,3 @@ export const checkOrchestrationBundle = Effect.fn("checkOrchestrationBundle")(fu
     if (!keepDir) NodeFS.rmSync(stagingDir, { recursive: true, force: true });
   }
 });
-

@@ -4,7 +4,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import type * as React from "react";
 
 import { PullRequestDiffExplorer } from "~/components/pullRequest/PullRequestDiffExplorer";
-import { generateSamplePatch, sampleFileContents } from "./t3team-PrDiffExplorer.sample";
+import { generateSamplePatch, sampleFileContents } from "./t3team-PrDiffExplorer.fixtures";
 
 const parsedFiles = parsePatchFiles(generateSamplePatch(), "t3team-pr-diff-explorer-story").flatMap(
   (patch) => patch.files,

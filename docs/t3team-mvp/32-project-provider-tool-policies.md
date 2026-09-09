@@ -155,11 +155,7 @@ type T3TeamPolicyRequest = {
   projectId: string;
   providerId: string; // e.g. "codex", "claude-code"
   action:
-    | "start_session"
-    | "resolve_workspace"
-    | "attach_context"
-    | "inject_tool_group"
-    | "execute_tool";
+    "start_session" | "resolve_workspace" | "attach_context" | "inject_tool_group" | "execute_tool";
   toolGroupId?: string; // e.g. "jira.read", "jira.write", "github.pr.write"
   connectorId?: string; // e.g. "atlassian", "github"
   resourceKinds?: ReadonlyArray<string>; // e.g. ["jira.issue", "confluence.page"]

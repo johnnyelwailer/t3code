@@ -5,7 +5,6 @@
  * for the additive LOC budget). Reuses that file's temp-dir eval harness;
  * the harness's `afterAll` cleanup runs with the imported module.
  */
-/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Integration eval bridges Effect runtimes with real git worktrees. */
 // @effect-diagnostics nodeBuiltinImport:off - temp eval harness uses node git setup helpers.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";

@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- test workflow sources run in the SDK VM. */
 // @effect-diagnostics nodeBuiltinImport:off -- integration harness owns a temporary workflow tree.
 // @effect-diagnostics globalTimers:off -- polling observes an async repair-child handoff.
 // @effect-diagnostics cryptoRandomUUID:off -- test command ids only need uniqueness.

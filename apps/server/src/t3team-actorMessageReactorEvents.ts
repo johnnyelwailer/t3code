@@ -19,7 +19,9 @@ import { T3TEAM_ACTOR_MESSAGE_HOP_CAP } from "./t3team-actorMessageReactorLimits
 export function createActorMessageEventHandler(input: {
   readonly mailbox: T3TeamActorMailboxShape;
   readonly tryDrain: (threadId: string) => Effect.Effect<void, never, SqlClient.SqlClient>;
-  readonly surfaceHoldSummary: (threadId: string) => Effect.Effect<void, never, SqlClient.SqlClient>;
+  readonly surfaceHoldSummary: (
+    threadId: string,
+  ) => Effect.Effect<void, never, SqlClient.SqlClient>;
 }) {
   const { mailbox, tryDrain, surfaceHoldSummary } = input;
 

@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import tailwindcss from "@tailwindcss/vite";
 import babel from "@rolldown/plugin-babel";
 import { reactCompilerPreset } from "@vitejs/plugin-react";

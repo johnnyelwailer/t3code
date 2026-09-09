@@ -315,6 +315,8 @@ it.effect(
 
 const stubEngine: OrchestrationEngineShape = {
   readEvents: () => Stream.empty,
+  readThreadEvents: () => Stream.empty,
+  getThreadReplayStats: () => Effect.never,
   dispatch: () => Effect.succeed({ sequence: 0 }),
   streamDomainEvents: Stream.never,
   subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),

@@ -20,8 +20,6 @@ export * from "./t3team-message-attachment-ext.ts";
 
 import { T3TeamMessageAttachment } from "./t3team-message-attachment-ext.ts";
 
-
-
 export const T3TeamActorMessageUrgency = Schema.Literals(["normal", "urgent"]);
 export type T3TeamActorMessageUrgency = typeof T3TeamActorMessageUrgency.Type;
 

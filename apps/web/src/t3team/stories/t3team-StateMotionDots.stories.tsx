@@ -282,7 +282,6 @@ function StateMotionDots({
       3200,
     );
     return () => window.clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveStream]);
 
   // Per-dot clicks now go through the PRODUCTION onOpenAgent seam (the

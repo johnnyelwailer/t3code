@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-expressions -- Existing merged lint debt; keep green while preserving behavior. */
 import { useCallback, useRef } from "react";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { useThreadActions } from "~/hooks/useThreadActions";

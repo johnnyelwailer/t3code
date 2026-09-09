@@ -11,7 +11,10 @@ import { TextGeneration } from "./textGeneration/TextGeneration.ts";
 import { resolveAuxTextGenerationModelSelection } from "./orchestration/Layers/ProviderCommandReactor.ts";
 import { ProviderService } from "./provider/Services/ProviderService.ts";
 import { createActivityLabelEventReactor } from "./t3team-activityLabelSummarizer.ts";
-import { parseActivityLabelTtlMs, persistThreadMeta } from "./t3team-activityLabelReactorSupport.ts";
+import {
+  parseActivityLabelTtlMs,
+  persistThreadMeta,
+} from "./t3team-activityLabelReactorSupport.ts";
 import { createActivityStateTracker } from "./t3team-activityState.ts";
 import { runtimeEventToActivityStateEvent } from "./t3team-activityStateEvent.ts";
 import { ServerSettingsService } from "./serverSettings.ts";
