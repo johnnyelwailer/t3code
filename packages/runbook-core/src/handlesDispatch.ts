@@ -120,7 +120,13 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
       startedAt: ts,
       endedAt: ts,
     });
+    // Admission must be durable before the broker fires. A store may refuse the
+    // intent because another host has already cancelled this run.
+    await seat.writer.flush();
     await call.fire(correlationId, makeResolver(correlationId, call.kind, call.refId));
+    // Do not release a model reply to subsequent workflow steps until the store
+    // accepts it. Its terminal fence may have changed while the model was running.
+    await seat.writer.flush();
     // A broker may itself have driven a nested body that suspended (an intercepting broker does);
     // refuse to hand this correlationId back once the run is parked.
     seat.suspension.assertNotSuspended();
@@ -205,6 +211,9 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
     // what makes catching it worthless. `isBlackBoxed` rides along because a suspension inside
     // parallel()/pipeline() has no journaled `sent` entry and can never be resumed.
     if (resolved === undefined) throw seat.suspension.arm(correlationId, seat.isBlackBoxed());
+    // A resolver can arrive after its broker returned; that reply must cross
+    // the same durability barrier as a reply resolved inline during send().
+    await seat.writer.flush();
     if (resolved.dismissed) {
       throw new CancelledError(
         `Handle '${correlationId}' was dismissed; its response will never settle.`,

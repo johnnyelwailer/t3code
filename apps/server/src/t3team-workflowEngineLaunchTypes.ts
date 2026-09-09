@@ -105,6 +105,8 @@ export interface LaunchWorkflowRecipeResult {
 export interface WorkflowRunController {
   readonly ref: WorkflowRef;
   readonly options: WorkflowRunOptions;
+  /** Launch through the shared host funnel (running row → start → settle → repair). */
+  readonly start: () => Promise<WorkflowLaunchStatus>;
   readonly settle: (
     result: WorkflowRunResult<unknown> | SuspendedResult | AbortedResult,
   ) => Promise<WorkflowLaunchStatus>;
