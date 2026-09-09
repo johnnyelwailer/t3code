@@ -192,6 +192,7 @@
     "apps/web/src/components/Sidebar.logic.test.ts",
     "apps/web/src/components/Sidebar.logic.ts",
     "apps/web/src/components/Sidebar.tsx",
+    "apps/web/src/components/SidebarStageBackdrop.tsx",
     "apps/web/src/components/ThreadStatusIndicators.tsx",
     "apps/web/src/components/chat/ChatComposer.tsx",
     "apps/web/src/components/chat/ComposerCommandMenu.tsx",
