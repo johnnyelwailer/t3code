@@ -31,6 +31,18 @@ vi.mock("@legendapp/list/react", async () => {
   return { LegendList };
 });
 
+// The timeline pulls in the diff worker pool; the worker module references `self`, a Web Worker
+// global the Node test environment does not provide. These tests render no diffs, so stub no-op
+// workers in place of the real one.
+vi.mock("@pierre/diffs/worker/worker.js?worker", () => ({
+  default: class {
+    postMessage() {}
+    addEventListener() {}
+    removeEventListener() {}
+    terminate() {}
+  },
+}));
+
 beforeAll(() => {
   vi.stubGlobal("window", {
     matchMedia: () => ({
