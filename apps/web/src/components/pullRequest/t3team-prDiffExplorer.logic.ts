@@ -1,7 +1,12 @@
-/**
- * Pure logic for the PR diff explorer: one file at a time, navigated from a file tree with
- * per-file "viewed" checkboxes.
- */
+import type { FileDiffMetadata } from "@pierre/diffs";
+
+import {
+  buildFileDiffRenderKey,
+  resolveFileDiffPath,
+  resolveFileDiffPreviousPath,
+} from "~/lib/diffRendering";
+
+/** Pure logic for the PR diff explorer: one file at a time, with a viewed-checkbox file tree. */
 
 export interface DiffExplorerFile {
   readonly key: string;
@@ -29,10 +34,26 @@ interface MutableNode {
   readonly children: MutableNode[];
 }
 
-/**
- * Group the flat, ordered file list into a directory tree. Files keep the diff's own order;
- * directories appear at the position of their first entry.
- */
+/** A parsed diff file's stable key, both paths, and summed add/remove counts. */
+export function diffExplorerFileInfo(file: FileDiffMetadata): DiffExplorerFile {
+  let additions = 0;
+  let deletions = 0;
+  for (const hunk of file.hunks) {
+    additions += hunk.additionLines;
+    deletions += hunk.deletionLines;
+  }
+  const path = resolveFileDiffPath(file);
+  const oldPath = resolveFileDiffPreviousPath(file);
+  return {
+    key: buildFileDiffRenderKey(file),
+    path,
+    oldPath: oldPath === path ? null : oldPath,
+    additions,
+    deletions,
+  };
+}
+
+/** Group the ordered file list into a directory tree, preserving diff order. */
 export function buildDiffExplorerTree(
   files: readonly DiffExplorerFile[],
 ): readonly DiffExplorerNode[] {
@@ -94,14 +115,7 @@ export function buildDiffExplorerTree(
   return roots.map(freeze);
 }
 
-/**
- * Collapse "lone corridor" directories: when a directory has exactly one
- * child, which is itself a directory, merge them into a single
- * `parent/child` row (GitHub-style condensed paths). Repeats down the
- * chain, so `packages` → `contracts` → `src` becomes one
- * `packages/contracts/src` row. Leaf file paths keep their full path, so
- * checked/selection state is unaffected.
- */
+/** Collapse lone directory chains into a single `a/b/c` row; leaf file paths are kept intact. */
 export function compactDiffExplorerTree(
   nodes: readonly DiffExplorerNode[],
 ): readonly DiffExplorerNode[] {
@@ -165,10 +179,6 @@ export function toggleViewedFile(
 
 export function markAllFilesViewed(files: readonly DiffExplorerFile[]): ReadonlySet<string> {
   return new Set(files.map((file) => file.key));
-}
-
-export function clearViewedFiles(): ReadonlySet<string> {
-  return new Set<string>();
 }
 
 export function countViewedFiles(

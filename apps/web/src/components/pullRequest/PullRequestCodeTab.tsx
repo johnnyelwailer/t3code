@@ -12,14 +12,13 @@ import type {
 } from "@t3tools/contracts";
 import {
   ChevronDownIcon,
+  ChevronLeftIcon,
   ChevronRightIcon,
-  ChevronsDownUpIcon,
-  ChevronsUpDownIcon,
-  Columns2Icon,
-  FolderTreeIcon,
+  EllipsisIcon,
   MessageSquareIcon,
   MessageSquareOffIcon,
-  Rows3Icon,
+  PanelRightCloseIcon,
+  PanelRightIcon,
   TextWrapIcon,
   TriangleAlertIcon,
   XIcon,
@@ -31,7 +30,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings";
 import { useTheme } from "~/hooks/useTheme";
-import { areAllDiffFilesCollapsed } from "~/lib/diffCollapse";
 import { pullRequestFindingKey, type PullRequestFinding } from "./pullRequestDetail.logic";
 import { canEditPullRequestComment } from "./pullRequestEditing.logic";
 import { orderDiffFiles } from "./pullRequestFileOrder.logic";
@@ -59,9 +57,7 @@ import { useAtomCommand } from "~/state/use-atom-command";
 
 import { DiffPanelLoadingState } from "../DiffPanelShell";
 import { DiffCommentAnnotation } from "../diffs/DiffCommentAnnotation";
-import { DiffFileTree } from "../diffs/DiffFileTree";
 import { useCodeViewFileReveal } from "../diffs/useCodeViewFileReveal";
-import { diffFileTreeEntries } from "../diffs/diffFileTree.logic";
 import { StyledDiffCodeView } from "../diffs/StyledDiffCodeView";
 import { Button } from "../ui/button";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
@@ -70,9 +66,15 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuRadioItemIndicator,
+  MenuSeparator,
 } from "../ui/menu";
 import { toastManager } from "../ui/toast";
-import { Toggle, ToggleGroup } from "../ui/toggle-group";
+import { Toggle } from "../ui/toggle-group";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { PendingReviewCommentCard, ReviewThreadCard } from "./PullRequestReviewAnnotation";
 import { PullRequestReviewBar } from "./PullRequestReviewBar";
@@ -82,6 +84,14 @@ import {
   type DiffFoldOverride,
 } from "./pullRequestDiff.logic";
 import { PullRequestDiffStat, PullRequestMetaLine } from "./pullRequestPresentation";
+import { DiffExplorerFileTree } from "./t3team-DiffExplorerFileTree";
+import {
+  diffExplorerFileInfo,
+  markAllFilesViewed,
+  nextDiffExplorerFile,
+  previousDiffExplorerFile,
+  toggleViewedFile,
+} from "./t3team-prDiffExplorer.logic";
 import {
   nextPendingReviewCommentId,
   pullRequestReviewKey,
@@ -103,6 +113,11 @@ type ReviewAnnotation = DiffLineAnnotation<ReviewAnnotationGroup>;
 const COMMIT_PAGE_SIZE = 10;
 
 const PULL_REQUEST_FILE_TREE_STORAGE_KEY = "t3code.pullRequestFileTreeOpen";
+
+// Stable codec identities, so the local-storage hooks below keep a referentially stable schema
+// across renders (an inline codec would churn the storage hook's memo on every render).
+const DIFF_MODE_SCHEMA = Schema.Literals(["focus", "all"]);
+const VIEWED_KEYS_SCHEMA = Schema.Array(Schema.String);
 
 /** One answer from the host: a whole number of files, and where the next one carries on. */
 interface DiffSlice {
@@ -227,9 +242,11 @@ function PullRequestCodeTab({
   const diffLayout = settings.diffLayout;
   const updateClientSettings = useUpdateClientSettings();
   const [wordWrap, setWordWrap] = useState(settings.wordWrap);
+  // The file tree is the diff explorer's primary navigation, so it starts open: a reader lands
+  // here to pick which changed file to look at first.
   const [fileTreeOpen, setFileTreeOpen] = useLocalStorage(
     PULL_REQUEST_FILE_TREE_STORAGE_KEY,
-    false,
+    true,
     Schema.Boolean,
   );
   const [selectedLines, setSelectedLines] = useState<{
@@ -257,6 +274,26 @@ function PullRequestCodeTab({
   // One commit's own changes and the whole change are two different diffs, paged separately, so
   // everything below is keyed by both.
   const scopeKey = commit === null ? referenceKey : `${referenceKey}@${commit}`;
+  // How the diff is shown. These are per-reader viewing preferences (like the tree toggle), so
+  // they live in local storage rather than the shared client settings. The viewed set is
+  // keyed by the diff's own scope so each pull request and commit scopes its own marks.
+  const [diffMode, setDiffMode] = useLocalStorage<"focus" | "all", "focus" | "all">(
+    "t3code.pullRequestDiffMode",
+    "focus",
+    DIFF_MODE_SCHEMA,
+  );
+  const [fullFile, setFullFile] = useLocalStorage(
+    "t3code.pullRequestDiffFullFile",
+    true,
+    Schema.Boolean,
+  );
+  const [viewedKeys, setViewedKeys] = useLocalStorage<readonly string[], readonly string[]>(
+    `t3code.pullRequestDiffViewed:${scopeKey}`,
+    [],
+    VIEWED_KEYS_SCHEMA,
+  );
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const viewed = useMemo(() => new Set(viewedKeys), [viewedKeys]);
   // The panel keeps this mounted across pull requests, so an open composer would otherwise
   // survive the switch and attach its comment to whichever one is on screen when it is sent.
   useEffect(() => {
@@ -266,6 +303,7 @@ function PullRequestCodeTab({
     setFoldOverride(null);
     setVisibleCommitCount(COMMIT_PAGE_SIZE);
     setOrphansOpen(false);
+    setSelectedKey(null);
     setSliceState({ key: scopeKey, cursor: null, slices: NO_SLICES });
     parseCache.current.clear();
   }, [scopeKey]);
@@ -551,13 +589,23 @@ function PullRequestCodeTab({
       ),
     [loadedSlices],
   );
-  const fileKeys = useMemo(() => items.map((item) => item.id), [items]);
-  const collapsedFileKeys = useMemo(
-    () => new Set(items.filter((item) => item.collapsed === true).map((item) => item.id)),
-    [items],
-  );
-  const allFilesCollapsed = areAllDiffFilesCollapsed(fileKeys, collapsedFileKeys);
-  const fileTreeEntries = useMemo(() => diffFileTreeEntries(files), [files]);
+  // The explorer's read of the files: the checkbox tree and the focus navigation both work in
+  // this shape rather than against the raw diff metadata.
+  const explorerFiles = useMemo(() => files.map(diffExplorerFileInfo), [files]);
+  // The focused file, kept valid: when the last-clicked file leaves the diff (a refresh, a
+  // force-push, a slice replacing itself) it falls back to the first file rather than pointing
+  // the tree and the pane at a row that no longer exists.
+  const activeKey =
+    selectedKey !== null && explorerFiles.some((file) => file.key === selectedKey)
+      ? selectedKey
+      : (explorerFiles[0]?.key ?? null);
+  // Focus mode shows a single file to the viewer; the focused file is forced open, since
+  // collapsing the one file on screen would just leave a blank pane.
+  const focusedItems = useMemo(() => {
+    if (diffMode !== "focus") return items;
+    const single = activeKey === null ? undefined : items.find((item) => item.id === activeKey);
+    return single === undefined ? [] : [{ ...single, collapsed: false }];
+  }, [items, diffMode, activeKey]);
 
   // A failed slice must not be asked for again on its own. The files already loaded keep the
   // sentinel on screen, so re-arming it after a failure would request the same slice forever.
@@ -604,23 +652,37 @@ function PullRequestCodeTab({
   );
 
   const requestTreeReveal = useCodeViewFileReveal(viewer, scopeKey);
-  const revealFile = useCallback(
-    (path: string) => {
-      const item = items.find((candidate) => resolveFileDiffPath(candidate.fileDiff) === path);
-      if (item === undefined) return;
-      if (item.collapsed === true) toggleFile(item.id);
-      requestTreeReveal(item.id);
+  // A tree click focuses the file; in "all files" it also scrolls the stacked diff to it.
+  const handleTreeSelect = useCallback(
+    (key: string) => {
+      setSelectedKey(key);
+      if (diffMode === "all") {
+        const item = items.find((candidate) => candidate.id === key);
+        if (item !== undefined && item.collapsed === true) toggleFile(key);
+        requestTreeReveal(key);
+      }
     },
-    [items, requestTreeReveal, toggleFile],
+    [diffMode, items, requestTreeReveal, toggleFile],
   );
-
-  const toggleAllFiles = () => {
-    // Held as an override of the default rather than as the file keys on screen: a diff that is
-    // still paging would otherwise bring its next slice in folded, moments after the reader
-    // asked for everything to be open.
-    setFoldOverride(areAllDiffFilesCollapsed(fileKeys, collapsedFileKeys) ? "expanded" : "folded");
-    setToggledFiles(new Set());
-  };
+  const toggleViewed = useCallback(
+    (key: string) => setViewedKeys((current) => [...toggleViewedFile(new Set(current), key)]),
+    [setViewedKeys],
+  );
+  const markAllViewed = useCallback(
+    () => setViewedKeys([...markAllFilesViewed(explorerFiles)]),
+    [explorerFiles, setViewedKeys],
+  );
+  const stepFile = useCallback(
+    (direction: "previous" | "next") => {
+      if (activeKey === null) return;
+      const target =
+        direction === "next"
+          ? nextDiffExplorerFile(explorerFiles, activeKey)
+          : previousDiffExplorerFile(explorerFiles, activeKey);
+      if (target !== null) setSelectedKey(target.key);
+    },
+    [activeKey, explorerFiles],
+  );
 
   // Newest first: the last commit is the one a reader coming back to a change is looking for.
   const orderedCommits = useMemo(
@@ -714,6 +776,9 @@ function PullRequestCodeTab({
 
   const renderHeaderPrefix = useCallback(
     (item: CodeViewItem<ReviewAnnotationGroup>) => {
+      // Focus mode shows one file; collapsing it would just blank the pane, so there is no
+      // per-file chevron there.
+      if (diffMode === "focus") return null;
       // The item the viewer is drawing already carries the state the memo settled on, so the
       // chevron follows it rather than recomputing the default here.
       const collapsed = item.collapsed === true;
@@ -737,7 +802,7 @@ function PullRequestCodeTab({
         </Button>
       );
     },
-    [toggleFile],
+    [diffMode, toggleFile],
   );
 
   const renderHeaderMetadata = useCallback(
@@ -773,6 +838,7 @@ function PullRequestCodeTab({
       preferredHighlighter: PREFERRED_HIGHLIGHTER,
       themeType: resolvedTheme,
       stickyHeaders: true,
+      expandUnchanged: fullFile,
       loadDiffFiles,
       enableGutterUtility: canCommentOnLines && draft === null,
       enableLineSelection: canCommentOnLines && draft === null,
@@ -783,7 +849,16 @@ function PullRequestCodeTab({
       onGutterUtilityClick: beginComment,
       onLineSelectionEnd: beginComment,
     }),
-    [diffLayout, wordWrap, resolvedTheme, loadDiffFiles, canCommentOnLines, draft, beginComment],
+    [
+      diffLayout,
+      wordWrap,
+      resolvedTheme,
+      loadDiffFiles,
+      canCommentOnLines,
+      draft,
+      beginComment,
+      fullFile,
+    ],
   );
 
   const runThreadCommand = useCallback(
@@ -1108,54 +1183,47 @@ function PullRequestCodeTab({
         </PullRequestMetaLine>
       </div>
       <div className="flex shrink-0 items-center gap-1">
+        {diffMode === "focus" ? (
+          <div className="flex items-center gap-0.5">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label="Previous file"
+                    onClick={() => stepFile("previous")}
+                  />
+                }
+              >
+                <ChevronLeftIcon className="size-3.5" />
+              </TooltipTrigger>
+              <TooltipPopup side="top">Previous file</TooltipPopup>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label="Next file"
+                    onClick={() => stepFile("next")}
+                  />
+                }
+              >
+                <ChevronRightIcon className="size-3.5" />
+              </TooltipTrigger>
+              <TooltipPopup side="top">Next file</TooltipPopup>
+            </Tooltip>
+          </div>
+        ) : null}
         <PullRequestDiffStat
           additions={lineStat.additions}
           deletions={lineStat.deletions}
           className="mr-1"
         />
-        {fileKeys.length > 0 ? (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label={allFilesCollapsed ? "Expand all files" : "Collapse all files"}
-                  onClick={toggleAllFiles}
-                />
-              }
-            >
-              {allFilesCollapsed ? (
-                <ChevronsUpDownIcon className="size-3.5" />
-              ) : (
-                <ChevronsDownUpIcon className="size-3.5" />
-              )}
-            </TooltipTrigger>
-            <TooltipPopup side="top">
-              {allFilesCollapsed ? "Expand all files" : "Collapse all files"}
-            </TooltipPopup>
-          </Tooltip>
-        ) : null}
-        <ToggleGroup
-          aria-label="Diff layout"
-          className="shrink-0"
-          variant="segmented"
-          value={[diffLayout]}
-          onValueChange={(value) => {
-            const next = value[0];
-            if (next === "stacked" || next === "split") {
-              updateClientSettings({ diffLayout: next });
-            }
-          }}
-        >
-          <Toggle aria-label="Stacked diff view" value="stacked">
-            <Rows3Icon className="size-3.5" />
-          </Toggle>
-          <Toggle aria-label="Split diff view" value="split">
-            <Columns2Icon className="size-3.5" />
-          </Toggle>
-        </ToggleGroup>
         <Tooltip>
           <TooltipTrigger
             render={
@@ -1176,7 +1244,7 @@ function PullRequestCodeTab({
             {wordWrap ? "Disable line wrapping" : "Enable line wrapping"}
           </TooltipPopup>
         </Tooltip>
-        {fileKeys.length > 0 ? (
+        {explorerFiles.length > 0 ? (
           <Tooltip>
             <TooltipTrigger
               render={
@@ -1189,13 +1257,96 @@ function PullRequestCodeTab({
                 />
               }
             >
-              <FolderTreeIcon className="size-3.5" />
+              {fileTreeOpen ? (
+                <PanelRightCloseIcon className="size-3.5" />
+              ) : (
+                <PanelRightIcon className="size-3.5" />
+              )}
             </TooltipTrigger>
             <TooltipPopup side="top">
               {fileTreeOpen ? "Hide file tree" : "Show file tree"}
             </TooltipPopup>
           </Tooltip>
         ) : null}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button type="button" variant="ghost" size="icon-sm" aria-label="View options" />
+            }
+          >
+            <EllipsisIcon className="size-3.5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <MenuGroup>
+              <MenuGroupLabel>View</MenuGroupLabel>
+              <MenuRadioGroup
+                value={diffMode}
+                onValueChange={(next) => {
+                  if (next === "focus" || next === "all") setDiffMode(next);
+                }}
+              >
+                <MenuRadioItem value="focus">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="min-w-0 flex-1">One file at a time</span>
+                    <MenuRadioItemIndicator />
+                  </span>
+                </MenuRadioItem>
+                <MenuRadioItem value="all">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="min-w-0 flex-1">All files</span>
+                    <MenuRadioItemIndicator />
+                  </span>
+                </MenuRadioItem>
+              </MenuRadioGroup>
+            </MenuGroup>
+            <MenuSeparator />
+            <MenuGroup>
+              <MenuGroupLabel>Layout</MenuGroupLabel>
+              <MenuRadioGroup
+                value={diffLayout}
+                onValueChange={(next) => {
+                  if (next === "stacked" || next === "split") {
+                    updateClientSettings({ diffLayout: next });
+                  }
+                }}
+              >
+                <MenuRadioItem value="stacked">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="min-w-0 flex-1">Stacked</span>
+                    <MenuRadioItemIndicator />
+                  </span>
+                </MenuRadioItem>
+                <MenuRadioItem value="split">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="min-w-0 flex-1">Side by side</span>
+                    <MenuRadioItemIndicator />
+                  </span>
+                </MenuRadioItem>
+              </MenuRadioGroup>
+            </MenuGroup>
+            <MenuSeparator />
+            <MenuGroup>
+              <MenuGroupLabel>Context</MenuGroupLabel>
+              <MenuRadioGroup
+                value={fullFile ? "full-file" : "hunks"}
+                onValueChange={(next) => setFullFile(next === "full-file")}
+              >
+                <MenuRadioItem value="hunks">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="min-w-0 flex-1">Changes only</span>
+                    <MenuRadioItemIndicator />
+                  </span>
+                </MenuRadioItem>
+                <MenuRadioItem value="full-file">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="min-w-0 flex-1">Full file</span>
+                    <MenuRadioItemIndicator />
+                  </span>
+                </MenuRadioItem>
+              </MenuRadioGroup>
+            </MenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );
@@ -1357,6 +1508,9 @@ function PullRequestCodeTab({
           // actually aims for. The header lives in the viewer's shadow tree, so the capture
           // listener walks `composedPath` — the only way to see through the shadow boundary.
           onClickCapture={(event) => {
+            // Focus mode has one file on screen; the header click is the all-files gesture, so it
+            // must not collapse the focused file.
+            if (diffMode === "focus") return;
             const composedPath = event.nativeEvent.composedPath?.() ?? [];
             for (const node of composedPath) {
               if (!(node instanceof HTMLElement)) continue;
@@ -1388,7 +1542,7 @@ function PullRequestCodeTab({
             // indicators on its actual controls.
             className="h-full overflow-auto [scrollbar-gutter:stable]"
             viewerRef={setViewer}
-            items={items}
+            items={focusedItems}
             selectedLines={selectedLines}
             onSelectedLinesChange={setSelectedLines}
             options={diffViewOptions}
@@ -1404,11 +1558,15 @@ function PullRequestCodeTab({
           {reviewOverlay}
         </div>
         {fileTreeOpen ? (
-          <aside className="flex w-[min(20rem,40%)] min-w-48 shrink-0 border-l border-border/60">
-            <DiffFileTree
+          <div className="flex min-h-0 w-[min(20rem,40%)] min-w-56 shrink-0">
+            <DiffExplorerFileTree
+              files={explorerFiles}
+              selectedKey={activeKey}
+              viewed={viewed}
+              onSelectFile={handleTreeSelect}
+              onToggleViewed={toggleViewed}
+              onMarkAllViewed={markAllViewed}
               ariaLabel={`Pull request #${detail.number} files`}
-              entries={fileTreeEntries}
-              onSelectFile={revealFile}
               // The tree lists only what has arrived; a footer says so while the diff is still
               // paging, and lets the reader pull the rest in without scrolling for it.
               footer={
@@ -1432,7 +1590,7 @@ function PullRequestCodeTab({
                 )
               }
             />
-          </aside>
+          </div>
         ) : null}
       </div>
       {unstructured}
