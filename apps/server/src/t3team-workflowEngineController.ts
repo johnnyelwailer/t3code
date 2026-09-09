@@ -87,6 +87,10 @@ export function createWorkflowRunController(
           nowIso: input.nowIso,
           onError: input.onError,
           phase: phase === "host" ? "resume" : phase,
+          // Only an ephemeral, agent-authored run carries a repair intent, and only its reader
+          // owns the source. Bundled and project recipes are launched by a human who cannot edit
+          // them; preserve that distinction through the shared host funnel.
+          hostOwnsSource: input.repairIntent !== undefined,
           // Host-side fail (a step that can never be answered): the row KEEPS its pending ask so
           // `t3team.orchestration.resume` re-drives exactly that step rather than replaying into a
           // `sent` entry nobody settles (GHE #403).

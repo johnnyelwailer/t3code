@@ -198,5 +198,7 @@ describe("launchWorkflowRecipe — real launch path", () => {
         text: expect.stringContaining("The orchestration stopped"),
       },
     });
+    expect((failureMessage?.type === "thread.message.upsert" && failureMessage.message.text) || "")
+      .toContain("nothing was saved");
   });
 });
