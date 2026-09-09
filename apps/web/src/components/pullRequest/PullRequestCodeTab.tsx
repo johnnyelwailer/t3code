@@ -10,11 +10,14 @@ import type {
   PullRequestReviewThread,
   PullRequestThreadCommentsResult,
 } from "@t3tools/contracts";
+import { setPairingTokenOnUrl } from "@t3tools/shared/remote";
 import {
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   EllipsisIcon,
+  ExternalLinkIcon,
+  LinkIcon,
   MessageSquareIcon,
   MessageSquareOffIcon,
   PanelRightCloseIcon,
@@ -27,9 +30,12 @@ import { useAtomRefresh } from "@effect/atom-react";
 import * as Schema from "effect/Schema";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
+import { createServerPairingCredential } from "~/environments/primary/auth";
+import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings";
 import { useTheme } from "~/hooks/useTheme";
+import { readLocalApi } from "~/localApi";
 import { pullRequestFindingKey, type PullRequestFinding } from "./pullRequestDetail.logic";
 import { canEditPullRequestComment } from "./pullRequestEditing.logic";
 import { orderDiffFiles } from "./pullRequestFileOrder.logic";
@@ -214,6 +220,8 @@ function PullRequestCodeTab({
   onAddToAgentSelection,
   onRefresh,
   refreshToken = 0,
+  initialFile,
+  onActiveFileChange,
 }: {
   environmentId: EnvironmentId;
   reference: PullRequestRef;
@@ -230,6 +238,14 @@ function PullRequestCodeTab({
   onRefresh: () => void;
   /** Bumped by the panel's refresh button: drop the accumulated pages and re-read the diff. */
   refreshToken?: number;
+  /**
+   * The file a link into this view asked for, by path. Consumed once, when the diff's files
+   * have first arrived: the explorer is empty on mount, and re-reading a prop after the reader
+   * has started navigating would teleport them away from where they chose to be.
+   */
+  initialFile?: string;
+  /** Reports the file the explorer has focused, by path, so the page can keep the link honest. */
+  onActiveFileChange?: (path: string | null) => void;
 }) {
   const { resolvedTheme } = useTheme();
   const settings = useClientSettings();
@@ -599,6 +615,45 @@ function PullRequestCodeTab({
     selectedKey !== null && explorerFiles.some((file) => file.key === selectedKey)
       ? selectedKey
       : (explorerFiles[0]?.key ?? null);
+  // A link into this view names its file by path: the one thing a reader can check against the
+  // host. It lands as soon as the diff has files to match against; a path no file carries is
+  // dropped silently, and the explorer falls back to its first file like any stale selection.
+  const seededInitialFile = useRef(false);
+  useEffect(() => {
+    if (seededInitialFile.current || initialFile === undefined) return;
+    if (explorerFiles.length === 0) return;
+    seededInitialFile.current = true;
+    const match = explorerFiles.find((file) => file.path === initialFile);
+    if (match !== undefined) setSelectedKey(match.key);
+  }, [explorerFiles, initialFile]);
+  // The page writes this file into the URL, so a copied link or a second tab lands on the file
+  // the reader is looking at rather than on the change's first file.
+  const activePath =
+    activeKey === null
+      ? null
+      : (explorerFiles.find((file) => file.key === activeKey)?.path ?? null);
+  useEffect(() => {
+    onActiveFileChange?.(activePath);
+  }, [activePath, onActiveFileChange]);
+  // Hand the current view to another window. Inside the desktop shell the system browser keeps
+  // its own cookie jar, so the URL carries a short-lived pairing credential that the app
+  // exchanges on load (the same bootstrap flow as device pairing) and then strips from the
+  // address bar; the handoff arrives logged in. A plain tab shares the same-origin session, so
+  // it just opens the current URL as-is.
+  const openInNewWindow = async () => {
+    const currentUrl = window.location.href;
+    try {
+      if (window.desktopBridge) {
+        const credential = await createServerPairingCredential({ label: "Diff viewer" });
+        const url = setPairingTokenOnUrl(new URL(currentUrl), credential.credential).toString();
+        await readLocalApi()?.shell.openExternal(url);
+      } else {
+        void readLocalApi()?.shell.openExternal(currentUrl);
+      }
+    } catch {
+      toastManager.add({ type: "error", title: "Could not open the link" });
+    }
+  };
   // Focus mode shows a single file to the viewer; the focused file is forced open, since
   // collapsing the one file on screen would just leave a blank pane.
   const focusedItems = useMemo(() => {
@@ -1344,6 +1399,38 @@ function PullRequestCodeTab({
                   </span>
                 </MenuRadioItem>
               </MenuRadioGroup>
+            </MenuGroup>
+            <MenuSeparator />
+            <MenuGroup>
+              <MenuGroupLabel>Share</MenuGroupLabel>
+              {/* The page keeps the URL in step with the tab and the focused file, so the page's
+                  own link already says where this reader is — copying it needs no address bar. */}
+              <DropdownMenuItem
+                onClick={() => {
+                  void writeTextToClipboard(window.location.href, "link")
+                    .then(() => {
+                      toastManager.add({ type: "success", title: "Copied the link to this view" });
+                    })
+                    .catch(() => {
+                      toastManager.add({ type: "error", title: "Could not copy the link" });
+                    });
+                }}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <LinkIcon aria-hidden className="size-3.5 shrink-0" />
+                  <span className="min-w-0 flex-1">Copy link</span>
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  void openInNewWindow();
+                }}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <ExternalLinkIcon aria-hidden className="size-3.5 shrink-0" />
+                  <span className="min-w-0 flex-1">Open in new tab</span>
+                </span>
+              </DropdownMenuItem>
             </MenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -135,6 +135,10 @@ import {
   writePullRequestDetailSnapshot,
 } from "./pullRequestDetail.logic";
 import { canEditPullRequestChangeRequest } from "./pullRequestEditing.logic";
+import type {
+  PullRequestDetailTab,
+  PullRequestDetailViewState,
+} from "./t3team-prDetailViewState.logic";
 import {
   resolvePickableEnvironments,
   type PickableEnvironment,
@@ -151,7 +155,7 @@ import {
   summarizePullRequestChecks,
 } from "./pullRequestPresentation";
 
-type DetailTab = "summary" | "timeline" | "code";
+type DetailTab = PullRequestDetailTab;
 
 const ACTION_SUCCESS_LABELS: Record<PullRequestAction, string> = {
   merge: "Pull request merged",
@@ -457,6 +461,8 @@ export function PullRequestDetailPanel({
   onStateChange,
   context = "page",
   composerDraftTarget,
+  initialView,
+  onViewChange,
 }: {
   environmentId: EnvironmentId;
   /**
@@ -495,6 +501,16 @@ export function PullRequestDetailPanel({
    * land here instead of opening a new thread — the branch is already under the reader's feet.
    */
   composerDraftTarget?: ScopedThreadRef | DraftId;
+  /**
+   * The view the link this panel arrived on asked for: the tab to open and the file to focus
+   * once the diff has loaded. Read on mount only — what the reader does afterwards is theirs.
+   */
+  initialView?: PullRequestDetailViewState | null;
+  /**
+   * Reports the live view — the open tab and, on it, the file the diff explorer focuses — so
+   * the page can keep the URL in step and a copied link can land on this exact view.
+   */
+  onViewChange?: (view: PullRequestDetailViewState) => void;
 }) {
   const pullRequestKey = `${reference.projectId}:${reference.repository}#${reference.number}`;
   const matchingListEntry =
@@ -503,7 +519,14 @@ export function PullRequestDetailPanel({
     listEntry.number === reference.number
       ? listEntry
       : null;
-  const [tab, setTab] = useState<DetailTab>("summary");
+  const [tab, setTab] = useState<DetailTab>(() => initialView?.tab ?? "summary");
+  // The file a link asked for, and the file the Code tab currently shows: both are read on the
+  // panel's own mount, so a later URL change pointing elsewhere cannot steer this panel.
+  const [initialFile] = useState(() => initialView?.file ?? null);
+  const [activeFile, setActiveFile] = useState<string | null>(null);
+  useEffect(() => {
+    onViewChange?.({ tab, file: tab === "code" ? activeFile : null });
+  }, [tab, activeFile, onViewChange]);
   const [timelineOrder, setTimelineOrder] = useState<"newest" | "oldest">("newest");
   const [codeCommitScope, setCodeCommitScope] = useState<{
     readonly pullRequestKey: string;
@@ -526,7 +549,7 @@ export function PullRequestDetailPanel({
   const tabScopeKey = `${environmentId}:${pullRequestKey}`;
   const [tabMountState, setTabMountState] = useState(() => ({
     key: tabScopeKey,
-    tabs: new Set<DetailTab>(["summary"]),
+    tabs: new Set<DetailTab>([tab]),
   }));
   // A previously visited Code tab must not fetch diffs for every later PR while hidden.
   const mountedTabs =
@@ -2397,6 +2420,8 @@ export function PullRequestDetailPanel({
                     onFixFinding={startFixFinding}
                     onRefresh={refreshDetail}
                     refreshToken={codeRefreshToken}
+                    {...(initialFile !== null ? { initialFile } : {})}
+                    onActiveFileChange={setActiveFile}
                   />
                 </Suspense>
               </div>

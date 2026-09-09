@@ -90,6 +90,13 @@ import { pullRequestFilterProjects } from "../components/pullRequest/pullRequest
 import { environmentMachineIcon } from "../components/EnvironmentMachineIcon";
 import { PullRequestDetailPanel } from "../components/pullRequest/PullRequestDetailPanel";
 import {
+  pullRequestDetailViewStateMatches,
+  pullRequestDetailViewStateSearchFields,
+  pullRequestDetailViewStateSearchPatch,
+  type PullRequestDetailTab,
+  type PullRequestDetailViewState,
+} from "../components/pullRequest/t3team-prDetailViewState.logic";
+import {
   PullRequestFiltersMenu,
   PullRequestFilterOptionIcon,
   PullRequestSearchInput,
@@ -166,6 +173,16 @@ export interface PullRequestsSearch extends PullRequestListPreferences {
    * link without it still opens, resolved by project id alone where that is unambiguous.
    */
   readonly selectedEnvironmentId?: EnvironmentId;
+  /**
+   * The tab the detail panel should open. Absent means Summary — the page's own default — so a
+   * link written before this carried one still reads as the pull request, not as its code.
+   */
+  readonly tab?: PullRequestDetailTab;
+  /**
+   * The file the diff explorer should focus on the Code tab, by path. A path no file in the
+   * change carries is dropped without a word: the explorer falls back to its first file.
+   */
+  readonly file?: string;
 }
 
 // The state filters wear the same glyphs the rows do, so the two read as one vocabulary.
@@ -284,6 +301,7 @@ export const Route = createFileRoute("/_chat/pull-requests")({
     ...(typeof raw.author === "string" && raw.author.trim()
       ? { author: raw.author.trim().slice(0, 200) }
       : {}),
+    ...pullRequestDetailViewStateSearchFields(raw),
     ...pullRequestSearchLabels(raw.labels),
   }),
   component: PullRequestsRouteView,
@@ -492,6 +510,8 @@ function PullRequestsRouteView() {
             ...(next.review ? { review: next.review } : {}),
             ...(next.checks ? { checks: next.checks } : {}),
             ...(next.author ? { author: next.author } : {}),
+            ...(next.tab ? { tab: next.tab } : {}),
+            ...(next.file ? { file: next.file } : {}),
             ...(next.labels && next.labels.length > 0 ? { labels: next.labels } : {}),
           };
         },
@@ -500,11 +520,47 @@ function PullRequestsRouteView() {
     [navigate],
   );
 
+  // The view each open surface is actually showing — its tab and, on the Code tab, its focused
+  // file — as that panel reports it. This is what the URL below describes: the surface that is
+  // on screen, not the one it replaced.
+  const [viewBySurface, setViewBySurface] = useState<
+    Readonly<Record<string, PullRequestDetailViewState>>
+  >({});
+  const activeSurfaceId = renderedPullRequestSurface?.id;
+  const handlePanelViewChange = useCallback(
+    (view: PullRequestDetailViewState) => {
+      if (activeSurfaceId === undefined) return;
+      setViewBySurface((previous) => {
+        const current = previous[activeSurfaceId];
+        if (current?.tab === view.tab && current?.file === view.file) return previous;
+        return { ...previous, [activeSurfaceId]: view };
+      });
+    },
+    [activeSurfaceId],
+  );
+  const activeSurfaceView =
+    activeSurfaceId !== undefined ? viewBySurface[activeSurfaceId] : undefined;
+  // The URL keeps the active panel's view, so a copied link lands on the tab and file the
+  // reader is reading. Until the panel reports, the URL keeps what it says: the tab a surface
+  // opens on is the one the URL already names, and the file is dropped the moment the panel
+  // confirms it is not showing one.
+  useEffect(() => {
+    const view: PullRequestDetailViewState = activeSurfaceView ?? {
+      tab: search.tab ?? "summary",
+      file: search.file ?? null,
+    };
+    if (pullRequestDetailViewStateMatches(search, view)) return;
+    updateSearch(pullRequestDetailViewStateSearchPatch(view));
+  }, [activeSurfaceView, search, updateSearch]);
+
   const clearedSelection = {
     repository: undefined,
     number: undefined,
     selectedProjectId: undefined,
     selectedEnvironmentId: undefined,
+    // A closed panel shows no view, so a link must not name one it would not show either.
+    tab: undefined,
+    file: undefined,
   };
   // List controls change the rows behind the detail, not the independent selected surface. The
   // reader can keep working in that panel while narrowing, sorting, or switching projects.
@@ -1943,6 +1999,13 @@ function PullRequestsRouteView() {
               onActed={() => {
                 void refreshFromHost(false);
               }}
+              initialView={
+                activeSurfaceView ?? {
+                  tab: search.tab ?? "summary",
+                  file: search.file ?? null,
+                }
+              }
+              onViewChange={handlePanelViewChange}
             />
           </RightPanelTabs>
         ) : null}
