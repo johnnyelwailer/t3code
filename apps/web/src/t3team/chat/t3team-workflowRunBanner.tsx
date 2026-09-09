@@ -44,7 +44,8 @@ export function RunStatusBanner({
   outcomeSummary?: string | undefined;
   /** When the run was paused (the durable row's `updatedAt`, else the pause activity's). */
   pausedAt?: string | undefined;
-  /** Present when the viewer can resume a paused run; renders the prominent Resume button. */
+  /** Present when the viewer can resume a paused run OR retry a failed one (GHE #344); renders
+   * the prominent Resume / Retry button. */
   onResume?: (() => void) | undefined;
   resumePending?: boolean;
 }) {
@@ -88,7 +89,7 @@ export function RunStatusBanner({
           </span>
         ) : null}
       </span>
-      {paused && onResume ? (
+      {(paused || failed) && onResume ? (
         <button
           type="button"
           data-run-resume=""
@@ -97,7 +98,7 @@ export function RunStatusBanner({
           onClick={onResume}
         >
           <PlayIcon className="size-3" />
-          {resumePending ? "Resuming…" : "Resume"}
+          {resumePending ? (failed ? "Retrying…" : "Resuming…") : failed ? "Retry" : "Resume"}
         </button>
       ) : null}
     </div>
