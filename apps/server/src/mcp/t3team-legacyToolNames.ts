@@ -1,3 +1,4 @@
+// @effect-diagnostics preferSchemaOverJson:off - the JSON-RPC body is opaque to this seam: it is parsed only to rewrite tools/call names and re-serialized verbatim; invalid JSON intentionally falls through to the original request.
 import * as Effect from "effect/Effect";
 import { HttpServerRequest } from "effect/unstable/http";
 

@@ -1,3 +1,5 @@
+// @effect-diagnostics nodeBuiltinImport:off - this test mounts the REAL node HTTP transport to prove the production auth + normalization path.
+// @effect-diagnostics globalFetch:off - the test drives raw fetch JSON-RPC, exactly what a provider agent experiences.
 /**
  * Integration coverage for the /mcp streamable-HTTP transport: a REAL listening node HTTP
  * server carrying the production bearer-auth middleware + legacy-name normalization

@@ -1,3 +1,4 @@
+// @effect-diagnostics preferSchemaOverJson:off - test fixtures build raw JSON-RPC request bodies.
 /**
  * Focused regressions for the legacy-name seam's fall-through semantics
  * (t3team-legacyToolNames.ts): the fallback must fire ONLY on the typed

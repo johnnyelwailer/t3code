@@ -150,7 +150,7 @@ export const buildActorReactionInput = (entry: T3TeamActorMailboxEntry): string 
       `${entry.fromThreadId}. Keep inter-agent messages short (telegram style: state, ` +
       "decision, request). Put details in an attached markdown report or a file the " +
       "recipient can read on demand; long bodies are summarized on delivery and the " +
-      "recipient retrieves the full text with read_message.]"
+      "recipient retrieves the full text with read_message.]",
   ].join("\n");
 
 /**
