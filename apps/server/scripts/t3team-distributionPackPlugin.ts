@@ -65,6 +65,7 @@ const readManifest = (dir: string): DistributionManifest => {
   } catch (cause) {
     throw new Error(
       `[t3code/distribution] cannot read ${manifestPath}: ${cause instanceof Error ? cause.message : String(cause)}`,
+      { cause: cause },
     );
   }
   try {
@@ -72,6 +73,7 @@ const readManifest = (dir: string): DistributionManifest => {
   } catch (cause) {
     throw new Error(
       `[t3code/distribution] ${manifestPath} is not valid JSON: ${cause instanceof Error ? cause.message : String(cause)}`,
+      { cause: cause },
     );
   }
 };

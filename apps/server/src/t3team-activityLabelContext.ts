@@ -32,9 +32,9 @@ export const parseActivityLabel = (value: unknown): string | null => {
     .trim()
     .split(/\r?\n/g)[0]
     ?.trim()
-    .replace(/^["'`\[>+]+|["'`\]][\s\S]*$/g, "")
+    .replace(/^["'`[>+]+|["'`\]][\s\S]*$/g, "")
     .trim()
-    .replace(/[\.,;:!?]+$/g, "")
+    .replace(/[.,;:!?]+$/g, "")
     .replace(/\s+/g, " ");
   if (!normalized || !/^[\p{L}\p{N}\p{M}][\p{L}\p{N}\p{M} &+./-]*$/u.test(normalized)) {
     return null;

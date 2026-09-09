@@ -27,42 +27,42 @@ const decodeReferenceManifestLinkedRepositories = Schema.decodeEffect(
   Schema.fromJsonString(ReferenceManifestLinkedRepositoriesJson),
 );
 
-export const syncLinkedRepositoriesForBootstrap = Effect.fn(
-  "syncLinkedRepositoriesForBootstrap",
-)(function* (input: {
-  readonly workspaceRoot: string;
-  readonly referencesRoot: string;
-  readonly urls: ReadonlyArray<string>;
-}) {
-  const fileSystem = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const linkedRepositories: LinkedRepositoryBootstrapResult[] = [];
-  for (const [index, url] of input.urls.entries()) {
-    const result = yield* syncLinkedRepository({
-      workspaceRoot: input.workspaceRoot,
-      referencesRoot: input.referencesRoot,
-      url,
-      index,
-    }).pipe(
-      Effect.catch((error) =>
-        Effect.succeed({
-          url,
-          localPath: path.join(
-            input.referencesRoot,
-            `${String(index + 1).padStart(2, "0")}-${deriveReferenceDirectoryName(url)}`,
-          ),
-          status: "failed",
-          error:
-            error instanceof T3TeamAtlassianError
-              ? error.message
-              : "Failed to sync linked repository reference.",
-        } satisfies LinkedRepositoryBootstrapResult),
-      ),
-    );
-    linkedRepositories.push(result);
-  }
-  return linkedRepositories;
-});
+export const syncLinkedRepositoriesForBootstrap = Effect.fn("syncLinkedRepositoriesForBootstrap")(
+  function* (input: {
+    readonly workspaceRoot: string;
+    readonly referencesRoot: string;
+    readonly urls: ReadonlyArray<string>;
+  }) {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const linkedRepositories: LinkedRepositoryBootstrapResult[] = [];
+    for (const [index, url] of input.urls.entries()) {
+      const result = yield* syncLinkedRepository({
+        workspaceRoot: input.workspaceRoot,
+        referencesRoot: input.referencesRoot,
+        url,
+        index,
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.succeed({
+            url,
+            localPath: path.join(
+              input.referencesRoot,
+              `${String(index + 1).padStart(2, "0")}-${deriveReferenceDirectoryName(url)}`,
+            ),
+            status: "failed",
+            error:
+              error instanceof T3TeamAtlassianError
+                ? error.message
+                : "Failed to sync linked repository reference.",
+          } satisfies LinkedRepositoryBootstrapResult),
+        ),
+      );
+      linkedRepositories.push(result);
+    }
+    return linkedRepositories;
+  },
+);
 
 export const readPreservedLinkedRepositories = Effect.fn("readPreservedLinkedRepositories")(
   function* (preservedManifestPath: string) {
@@ -77,7 +77,6 @@ export const readPreservedLinkedRepositories = Effect.fn("readPreservedLinkedRep
     const preserved = yield* decodeReferenceManifestLinkedRepositories(preservedRaw).pipe(
       Effect.orElseSucceed(() => ({ linkedRepositories: [] })),
     );
-    return (preserved.linkedRepositories ??
-      []) as ReadonlyArray<LinkedRepositoryBootstrapResult>;
+    return (preserved.linkedRepositories ?? []) as ReadonlyArray<LinkedRepositoryBootstrapResult>;
   },
 );

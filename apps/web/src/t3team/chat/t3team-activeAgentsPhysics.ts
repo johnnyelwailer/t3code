@@ -34,7 +34,11 @@
  * no forces, no velocity terms, nothing that can bounce or overshoot.
  */
 
-import { defaultSBendConfig, type SBendConfig, type Point } from "./t3team-activeAgentsPhysics-config";
+import {
+  defaultSBendConfig,
+  type SBendConfig,
+  type Point,
+} from "./t3team-activeAgentsPhysics-config";
 
 export interface SBendInput {
   /** Cursor in row space; `active` false when the pointer is away. */

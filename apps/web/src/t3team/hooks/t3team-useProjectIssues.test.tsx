@@ -120,12 +120,10 @@ describe("useProjectIssues", () => {
    */
   it("loads on mount even when the tab is hidden, so the poller's visibility gate cannot starve first paint", async () => {
     restoreVisibility = setVisibility("hidden");
-    const listProjectIssues = vi.fn(
-      async (): Promise<T3TeamProjectIssuesResult> => ({
-        page: createResourcePage(["NXAI-6", "NXAI-8"]),
-        source: "mirror",
-      }),
-    );
+    const listProjectIssues = vi.fn(async (): Promise<T3TeamProjectIssuesResult> => ({
+      page: createResourcePage(["NXAI-6", "NXAI-8"]),
+      source: "mirror",
+    }));
 
     const latest = await mount(createBackend(listProjectIssues));
 

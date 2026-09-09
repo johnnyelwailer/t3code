@@ -26,7 +26,6 @@
  * `vp run build:desktop` or the server's pack task).
  */
 
-
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";

@@ -99,11 +99,16 @@ const THREAD_DETAIL_ACTIVITY_LIMIT = 500;
  * corrupt value as null (fail-open: the state word is simply absent) instead
  * of failing the whole snapshot decode.
  */
-const READABLE_ACTIVITY_STATES: readonly string[] = ["thinking", "writing", "working", "waiting"];
+const READABLE_ACTIVITY_STATES: readonly string[] = new Set([
+  "thinking",
+  "writing",
+  "working",
+  "waiting",
+]);
 const readableActivityState = (
   value: string | null | undefined,
 ): OrchestrationThreadActivityState | undefined =>
-  value !== null && value !== undefined && READABLE_ACTIVITY_STATES.includes(value)
+  value !== null && value !== undefined && READABLE_ACTIVITY_STATES.has(value)
     ? (value as OrchestrationThreadActivityState)
     : undefined;
 // Snapshot payloads are decoded and projected in small sequential batches so

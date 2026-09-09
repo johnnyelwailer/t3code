@@ -17,7 +17,10 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
-import { OrchestrationBundleClosureError, OrchestrationBundleProbeError } from "./t3team-orchestration-bundle-errors.ts";
+import {
+  OrchestrationBundleClosureError,
+  OrchestrationBundleProbeError,
+} from "./t3team-orchestration-bundle-errors.ts";
 import { AUTHORING_TYPE_PACKAGES } from "./t3team-authoring-types.ts";
 import { TYPECHECKER_DTS_SPOT_CHECK_FILES } from "../build-desktop-artifact.ts";
 
@@ -117,11 +120,13 @@ export function assertAsarClosure(asarPath: string): void {
     throw new OrchestrationBundleClosureError({ detail: `asar not found: ${asarPath}` });
   }
   // listPackage prefixes every path with "/"; normalize to asar-relative.
-  const listing = Asar.listPackage(asarPath, { isPack: false }).map((entry) =>
-    entry.startsWith("/") ? entry.slice(1) : entry,
+  const listing = new Set(
+    Asar.listPackage(asarPath, { isPack: false }).map((entry) =>
+      entry.startsWith("/") ? entry.slice(1) : entry,
+    ),
   );
   const required = [SDK_SOURCE_ENTRY, ...TYPECHECKER_DTS_SPOT_CHECK_FILES];
-  const missing = required.filter((file) => !listing.includes(file));
+  const missing = required.filter((file) => !listing.has(file));
   if (missing.length > 0) {
     throw new OrchestrationBundleClosureError({
       detail: `asar is missing the typechecker closure files: ${missing.join(", ")}`,
@@ -132,7 +137,7 @@ export function assertAsarClosure(asarPath: string): void {
   // @t3team/sdk manifest's pnpm-protocol specs (workspace: and catalog:) are
   // expected and harmless; see ASAR_AUTHORING_TYPE_PACKAGES.
   const missingPackages = ASAR_AUTHORING_TYPE_PACKAGES.filter(
-    (name) => !listing.includes(`node_modules/${name}/package.json`),
+    (name) => !listing.has(`node_modules/${name}/package.json`),
   );
   if (missingPackages.length > 0) {
     throw new OrchestrationBundleClosureError({
@@ -144,7 +149,9 @@ export function assertAsarClosure(asarPath: string): void {
 const collectStreamAsString = <E>(stream: Stream.Stream<Uint8Array, E>): Effect.Effect<string, E> =>
   Stream.runCollect(stream).pipe(Effect.map((chunks) => Buffer.concat(chunks).toString("utf8")));
 
-export const spawnAndCollect = Effect.fn("spawnAndCollect")(function* (command: ChildProcess.Command) {
+export const spawnAndCollect = Effect.fn("spawnAndCollect")(function* (
+  command: ChildProcess.Command,
+) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const child = yield* spawner.spawn(command);
   const [stdout, stderr, exitCode] = yield* Effect.all(

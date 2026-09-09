@@ -91,7 +91,6 @@ function RailLabel({
   );
 }
 
-
 /* ── story ──────────────────────────────────────────────────────────────── */
 
 export default {
@@ -199,4 +198,3 @@ export const PlacementVariants: Story = {
     </div>
   ),
 };
-

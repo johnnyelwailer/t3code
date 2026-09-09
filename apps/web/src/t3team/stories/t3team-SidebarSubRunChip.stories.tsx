@@ -200,11 +200,9 @@ export const SettledOnlyParent: Story = {
   name: "(b) settled-only parent (189 settled) → muted 'Settled 189' chip, live toggle",
   render: () => {
     useEffect(() => {
-      seedChildren([
-        ...Array.from({ length: 189 }, (_, i) =>
-          makeThread(`c-set-${i}`, "idle", `Child ${i + 1}`),
-        ),
-      ]);
+      seedChildren(
+        Array.from({ length: 189 }, (_, i) => makeThread(`c-set-${i}`, "idle", `Child ${i + 1}`)),
+      );
       // Collapsed by default — the fold row must NOT sit under a collapsed row.
       useExpandedSubRunsStore.setState({ expandedParentIds: new Set() });
       return () => {

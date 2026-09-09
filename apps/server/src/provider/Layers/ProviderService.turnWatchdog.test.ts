@@ -261,9 +261,7 @@ function makeWatchdogHarness(
       ),
       directoryLayer,
       runtimeRepositoryLayer,
-    ).pipe(
-      Layer.provideMerge(NodeServices.layer),
-    ),
+    ).pipe(Layer.provideMerge(NodeServices.layer)),
   );
 
   return { layer };

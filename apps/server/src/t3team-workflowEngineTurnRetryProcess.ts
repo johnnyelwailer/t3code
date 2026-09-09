@@ -23,10 +23,7 @@ import {
   promptIsLatestUserMessage,
 } from "./t3team-workflowTurnAnswerLookup.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
-import type {
-  WorkflowPendingAsk,
-  WorkflowRegisteredRun,
-} from "./t3team-workflowEngineRegistry.ts";
+import type { WorkflowPendingAsk, WorkflowRegisteredRun } from "./t3team-workflowEngineRegistry.ts";
 import {
   findInterruptedStepPrompt,
   interruptedTurnRetryBackoffMs,
@@ -80,9 +77,7 @@ export function makeProcessTurnRetry(ctx: ProcessTurnRetryContext) {
 
     const thread = Option.getOrUndefined(yield* readThreadSafe(threadId));
     const prompt =
-      thread === undefined
-        ? null
-        : findInterruptedStepPrompt(thread, pending.runId, correlationId);
+      thread === undefined ? null : findInterruptedStepPrompt(thread, pending.runId, correlationId);
     if (prompt === null) {
       yield* Effect.logWarning("t3team workflow step re-drive: prompt not found on thread", {
         threadId,

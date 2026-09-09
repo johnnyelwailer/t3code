@@ -48,11 +48,10 @@ describe("sub-workflow effect interception", () => {
     // The parent only declares a handler for "wait.until", which the child never fires: its
     // thread.create + thread.turn must travel to THIS broker exactly as they would with no
     // opts argument at all.
-    const broker = createMockBroker(
-      (envelope): MockBrokerOutcome =>
-        envelope.kind === "thread.turn"
-          ? { kind: "resolve", reply: "real host summary" }
-          : { kind: "resolve", reply: undefined },
+    const broker = createMockBroker((envelope): MockBrokerOutcome =>
+      envelope.kind === "thread.turn"
+        ? { kind: "resolve", reply: "real host summary" }
+        : { kind: "resolve", reply: undefined },
     );
     const { result } = (await startWorkflow(
       passthroughParent,

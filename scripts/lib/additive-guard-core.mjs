@@ -117,7 +117,10 @@ const FORK_BASELINE_REF_PATTERN = /^t3team\/fork-baseline-[0-9][0-9A-Za-z.-]*$/;
 
 export function enforceForkBaselineRef(configForkBaselineRef) {
   if (!configForkBaselineRef) return undefined;
-  if (typeof configForkBaselineRef !== "string" || !FORK_BASELINE_REF_PATTERN.test(configForkBaselineRef)) {
+  if (
+    typeof configForkBaselineRef !== "string" ||
+    !FORK_BASELINE_REF_PATTERN.test(configForkBaselineRef)
+  ) {
     throw new Error(
       `Invalid .t3team-additive-guard.json forkBaselineRef '${configForkBaselineRef}'. ` +
         `It must be a frozen fork-baseline tag of the form 't3team/fork-baseline-<date>' ` +
@@ -157,7 +160,12 @@ export function resolveBlockingBaseRef(config) {
   }
 
   if (config.forkBaselineRef) {
-    const resolved = maybeRunGit(["rev-parse", "--verify", "--quiet", `${config.forkBaselineRef}^{commit}`]);
+    const resolved = maybeRunGit([
+      "rev-parse",
+      "--verify",
+      "--quiet",
+      `${config.forkBaselineRef}^{commit}`,
+    ]);
     if (!resolved) {
       throw new Error(
         `forkBaselineRef '${config.forkBaselineRef}' does not resolve to a commit in this checkout. ` +

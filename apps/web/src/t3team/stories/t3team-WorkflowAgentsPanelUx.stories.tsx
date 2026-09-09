@@ -212,17 +212,15 @@ export const CardLoopGrouping: Story = {
     shape,
     progress: {
       runId: "run-triage-1",
-      steps: [
-        ...Array.from({ length: 15 }, (_, i) =>
-          step({
-            stepKind: "thread.turn",
-            phase: i === 14 ? "started" : "completed",
-            detail: "Hourly GHE triage cycle",
-            workflowPhase: "Hourly cycle",
-            ...(i === 14 ? {} : { durationMs: 38_000 }),
-          }),
-        ),
-      ],
+      steps: Array.from({ length: 15 }, (_, i) =>
+        step({
+          stepKind: "thread.turn",
+          phase: i === 14 ? "started" : "completed",
+          detail: "Hourly GHE triage cycle",
+          workflowPhase: "Hourly cycle",
+          ...(i === 14 ? {} : { durationMs: 38_000 }),
+        }),
+      ),
       run: null,
     },
   },

@@ -103,11 +103,7 @@ export function useThreadChatComposerState(input: {
       return;
     }
 
-    await syncThreadToolContextCached(
-      input.backend,
-      input.threadId,
-      input.turnToolContext ?? null,
-    );
+    await syncThreadToolContextCached(input.backend, input.threadId, input.turnToolContext ?? null);
   }, [input.backend, input.threadId, input.turnToolContext]);
 
   // A decision-card click: ChatView renders the optimistic reply bubble (reusing the message id

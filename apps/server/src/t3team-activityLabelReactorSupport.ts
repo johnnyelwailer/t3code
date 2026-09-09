@@ -41,11 +41,7 @@
  * static "Working", never an error state, never a hanging spinner.
  */
 
-import {
-  CommandId,
-  ThreadId,
-  type OrchestrationThreadActivityState,
-} from "@t3tools/contracts";
+import { CommandId, ThreadId, type OrchestrationThreadActivityState } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";

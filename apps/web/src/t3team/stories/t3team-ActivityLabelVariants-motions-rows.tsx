@@ -11,10 +11,7 @@ import { ProviderInstanceIcon } from "~/components/chat/ProviderInstanceIcon";
 
 import { EnvironmentId, ProviderDriverKind } from "@t3tools/contracts";
 
-import {
-  MorphIcon,
-  PROJECT_TITLE,
-} from "./t3team-ActivityLabelVariants-motions-primitives";
+import { MorphIcon, PROJECT_TITLE } from "./t3team-ActivityLabelVariants-motions-primitives";
 
 /**
  * Faithful copy of SidebarSubRunRow (Sidebar.tsx ~line 1825): one-line child
@@ -121,4 +118,3 @@ export function DoneCard() {
     </div>
   );
 }
-

@@ -11,7 +11,10 @@ import {
   readStartChildArgs,
 } from "./t3team-toolBrokerStartChildArgs.ts";
 import { resolveChildModel } from "./t3team-toolBrokerStartChildProvider.ts";
-import { resolveStartChildSetupScript, type T3TeamStartChildServices } from "./t3team-toolBrokerStartChildContext.ts";
+import {
+  resolveStartChildSetupScript,
+  type T3TeamStartChildServices,
+} from "./t3team-toolBrokerStartChildContext.ts";
 import { resolveStartChildWorktree } from "./t3team-toolBrokerStartChildWorktree.ts";
 import {
   appendStartChildHandoffActivities,
