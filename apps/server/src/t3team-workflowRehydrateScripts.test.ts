@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Legacy async tests intentionally bridge Effect runtimes; tracked cleanup is separate from upstream green gate. */
 // @effect-diagnostics nodeBuiltinImport:off - test harness writes a recipe fixture workspace + temp dir.
 /**
  * Rehydration of recipe-private workflow scripts (Epic 25 §Scripts + §Open question 2).

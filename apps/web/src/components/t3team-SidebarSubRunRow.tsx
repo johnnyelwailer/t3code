@@ -15,6 +15,7 @@ import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay
 import { usePrimarySettings } from "~/hooks/useSettings";
 import { ThreadActivityMorphIcon } from "./t3team-ThreadActivityStatus";
 import { cn } from "~/lib/utils";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 
 /**
  * Compact time label for the dense sidebar rows: "just now" → "now",
@@ -125,16 +126,20 @@ export const SidebarSubRunRow = memo(function SidebarSubRunRow(props: {
         )}
       >
         {statusIcon}
-        <span
-          className="min-w-0 flex-1 truncate"
-          title={childLabelMode === "flip" ? child.title : undefined}
-        >
-          {childLabelMode === "flip" ? (
-            <span className="t3team-label-shimmer">{childLabel}</span>
-          ) : (
-            child.title
-          )}
-        </span>
+        {childLabelMode === "flip" ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span className="min-w-0 flex-1 truncate">
+                  <span className="t3team-label-shimmer">{childLabel}</span>
+                </span>
+              }
+            />
+            <TooltipPopup side="top">{child.title}</TooltipPopup>
+          </Tooltip>
+        ) : (
+          <span className="min-w-0 flex-1 truncate">{child.title}</span>
+        )}
         {childLabelMode === "dock" ? (
           <span className="shrink-0 text-sky-600 dark:text-sky-400">
             <span className="t3team-label-shimmer">{childLabel}</span>

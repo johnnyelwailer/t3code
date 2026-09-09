@@ -107,9 +107,7 @@ export function tryDispatchThreadScopedToolCall(input: {
   const { tool, scopeLabel, toolArgs } = input;
   if (tool === "t3team.thread.start_child") {
     if (!input.startChild) {
-      return Effect.succeed(
-        errorResult(`Tool '${tool}' is not enabled ${scopeLabel}.`),
-      );
+      return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${scopeLabel}.`));
     }
     return foldResult(input.startChild(toolArgs), okResult, (message) =>
       errorResult(`Failed to start child session: ${message}`),
@@ -117,9 +115,7 @@ export function tryDispatchThreadScopedToolCall(input: {
   }
   if (tool === "t3team.backlog.set_assignee_filter") {
     if (!input.setBacklogAssigneeFilter) {
-      return Effect.succeed(
-        errorResult(`Tool '${tool}' is not enabled ${scopeLabel}.`),
-      );
+      return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${scopeLabel}.`));
     }
     const mode = readBacklogAssigneeFilterMode(toolArgs);
     if (!mode) {

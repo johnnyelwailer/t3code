@@ -1,5 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
-/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Legacy async tests intentionally bridge Effect runtimes; tracked cleanup is separate from upstream green gate. */
 // @effect-diagnostics nodeBuiltinImport:off - integration test reads a workflow fixture + temp dir.
 /**
  * Real-path proof for {@link rehydrateSuspendedWorkflowRuns} — the boot rehydration this test

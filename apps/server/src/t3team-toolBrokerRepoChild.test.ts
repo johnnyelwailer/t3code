@@ -2,6 +2,7 @@
  * Repo-scoped child-session tests for the live t3team tool broker (split out
  * of `t3team-toolBroker.test.ts` for the additive LOC budget).
  */
+/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Legacy async tests bridge Effect runtimes manually; tracked cleanup is separate from the green gate. */
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import * as Effect from "effect/Effect";

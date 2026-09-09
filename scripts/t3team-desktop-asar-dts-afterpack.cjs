@@ -53,7 +53,6 @@ const { fail, collectDtsFiles, buildExistingEntryStreams } = (() => {
   }
 })();
 
-
 module.exports = async function desktopAsarDtsAfterPack(context) {
   // electron-builder 26's afterPack context: { appOutDir, outDir, arch,
   // targets, packager, electronPlatformName } — there is no appPath/platform.

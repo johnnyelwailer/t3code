@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- mirrors t3team-toolBrokerWorkflowResumeTool.test.ts: a real-engine integration test bridging the Effect runtime. */
 // @effect-diagnostics nodeBuiltinImport:off - integration test writes an ephemeral workflow source + temp dir.
 /**
  * A failed run must say WHY — round trip, real engine + real SQLite.

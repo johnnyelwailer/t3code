@@ -30,7 +30,6 @@ function collectDtsFiles(rootDir) {
   return out;
 }
 
-
 /**
  * Re-stream entry list for every existing asar entry, in header order,
  * preserving unpacked flags and executable bits.

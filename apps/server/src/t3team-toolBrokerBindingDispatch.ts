@@ -7,11 +7,7 @@ import {
   type T3TeamToolCallResult,
   type T3TeamTurnToolContext,
 } from "./t3team-toolBroker.ts";
-import {
-  errorResult,
-  foldResult,
-  okResult,
-} from "./t3team-toolBrokerHelpers.ts";
+import { errorResult, foldResult, okResult } from "./t3team-toolBrokerHelpers.ts";
 import { type BindingState, permissionMessage } from "./t3team-toolBrokerBindingPermissions.ts";
 import {
   callT3TeamDraftMutationToolEffect,

@@ -128,8 +128,13 @@
       "ignoreDependencies": ["playwright-core", "electron-builder"],
     },
     "apps/web": {
-      // Worktree setup invokes this directly from t3.json.
-      "entry": ["scripts/warm-dep-cache.ts"],
+      // Worktree setup invokes this directly from t3.json. Story entries: knip's storybook
+      // plugin replaces its default `**/*.stories.*` entry glob once .storybook/main.ts is
+      // detected (added in b57bebc5bc, PR diff explorer). The bridge config re-exports from
+      // src/t3team/storybook, which knip cannot read `stories` from, so every story file (and
+      // everything only stories import) reads as unused. Keep the stories as explicit entries
+      // so the gate measures real reachability again.
+      "entry": ["scripts/warm-dep-cache.ts", "src/**/*.stories.tsx"],
       // UI component modules are copied and adapted as cohesive sets. Keep their
       // named subcomponents even before they have callers; the file audit still
       // reports an entire component module when nothing imports it.
@@ -142,6 +147,10 @@
         "src/state/t3team-*.ts": ["exports"],
         // Upstream file whose only consumers are fork modules not reachable from entries yet.
         "src/components/Sidebar.logic.ts": ["exports"],
+        // PR diff explorer prototype (b57bebc5bc): component and its logic module are not
+        // wired into a route yet; their story is the only consumer.
+        "src/components/pullRequest/PullRequestDiffExplorer.tsx": ["exports", "duplicates"],
+        "src/components/pullRequest/t3team-prDiffExplorer.logic.ts": ["exports"],
       },
     },
     "apps/mobile": {

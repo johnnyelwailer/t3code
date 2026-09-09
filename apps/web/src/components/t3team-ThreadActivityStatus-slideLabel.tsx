@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
+
 import {
   ENTER_DURATION,
   FAR_DWELL,
@@ -121,23 +123,29 @@ export function SlideCycleLabel({
   }, [slideW, reduced, text, textW]);
 
   return (
-    <span
-      className="relative block h-4 w-full overflow-hidden"
-      title={text}
-      onMouseEnter={() => animRef.current?.pause()}
-      onMouseLeave={() => animRef.current?.play()}
-    >
-      {/* natural width of the full label, same classes as the visible text */}
-      <span ref={sizerRef} aria-hidden className={HIDDEN_SIZER_CLS}>
-        <span className="inline-block whitespace-nowrap">{text}</span>
-      </span>
-      <span
-        ref={labelRef}
-        role="status"
-        className="t3team-label-shimmer relative inline-block whitespace-nowrap will-change-transform"
-      >
-        {text}
-      </span>
-    </span>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            className="relative block h-4 w-full overflow-hidden"
+            onMouseEnter={() => animRef.current?.pause()}
+            onMouseLeave={() => animRef.current?.play()}
+          >
+            {/* natural width of the full label, same classes as the visible text */}
+            <span ref={sizerRef} aria-hidden className={HIDDEN_SIZER_CLS}>
+              <span className="inline-block whitespace-nowrap">{text}</span>
+            </span>
+            <span
+              ref={labelRef}
+              role="status"
+              className="t3team-label-shimmer relative inline-block whitespace-nowrap will-change-transform"
+            >
+              {text}
+            </span>
+          </span>
+        }
+      />
+      <TooltipPopup side="top">{text}</TooltipPopup>
+    </Tooltip>
   );
 }

@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Recipe-module discovery (Epic 16 §Plugin Modules): load a project-local `recipe.ts` — a typed
  * `defineRecipe(...)` plugin module — and map it onto the SAME {@link ProjectRecipeDiscovered}

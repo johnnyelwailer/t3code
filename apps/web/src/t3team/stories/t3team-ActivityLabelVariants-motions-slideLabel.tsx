@@ -6,6 +6,8 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
+
 /**
  * The long-label cycle (fit-gate slide mode). The label DEFAULTS to a
  * plain static, truncated label; a while in (not immediately) it starts
@@ -114,26 +116,32 @@ export function SlideCycleLabel({
   }, [slideW, reduced, text, textW]);
 
   return (
-    <span
-      className="relative block h-4 w-full overflow-hidden"
-      title={text}
-      onMouseEnter={() => animRef.current?.pause()}
-      onMouseLeave={() => animRef.current?.play()}
-    >
-      <span
-        ref={sizerRef}
-        aria-hidden
-        className="pointer-events-none absolute left-0 top-0 h-px overflow-hidden opacity-0"
-      >
-        <span className="inline-block whitespace-nowrap">{text}</span>
-      </span>
-      <span
-        ref={labelRef}
-        role="status"
-        className="t3team-label-shimmer relative inline-block whitespace-nowrap will-change-transform"
-      >
-        {text}
-      </span>
-    </span>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            className="relative block h-4 w-full overflow-hidden"
+            onMouseEnter={() => animRef.current?.pause()}
+            onMouseLeave={() => animRef.current?.play()}
+          >
+            <span
+              ref={sizerRef}
+              aria-hidden
+              className="pointer-events-none absolute left-0 top-0 h-px overflow-hidden opacity-0"
+            >
+              <span className="inline-block whitespace-nowrap">{text}</span>
+            </span>
+            <span
+              ref={labelRef}
+              role="status"
+              className="t3team-label-shimmer relative inline-block whitespace-nowrap will-change-transform"
+            >
+              {text}
+            </span>
+          </span>
+        }
+      />
+      <TooltipPopup side="top">{text}</TooltipPopup>
+    </Tooltip>
   );
 }

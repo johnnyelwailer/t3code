@@ -50,3 +50,27 @@ body {
 .animate-status-pulse {
   animation: status-pulse 2s infinite;
 }
+
+/*
+ * The main app's `dropdown-glass` utility (src/index.css) gives portaled
+ * menus/popovers/selects their glass surface. The Storybook preview only loads
+ * the t3team build's stylesheet (`t3team-index.css`), which does not define
+ * the utility, so app Base-UI `Menu`/`Popover`/`Select` popups render with a
+ * fully transparent background. Mirror the app utility here; `--popover` and
+ * the `--glass-*` variables already come from the t3team stylesheet.
+ * Storybook-only — the app stylesheet keeps its own definition.
+ */
+.dropdown-glass {
+  background: color-mix(
+    in srgb,
+    var(--popover) 18%,
+    color-mix(in srgb, var(--popover) var(--glass-opacity), transparent)
+  );
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  border: 1px solid var(--border);
+
+  @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    background: var(--popover);
+  }
+}

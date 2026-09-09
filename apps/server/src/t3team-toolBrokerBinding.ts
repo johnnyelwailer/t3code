@@ -6,10 +6,7 @@ import type {
   T3TeamToolBinding,
   T3TeamTurnToolContext,
 } from "./t3team-toolBroker.ts";
-import {
-  createToolSurface,
-  type CreateBindingInput,
-} from "./t3team-toolBrokerBindingSurface.ts";
+import { createToolSurface, type CreateBindingInput } from "./t3team-toolBrokerBindingSurface.ts";
 
 export type { CreateBindingInput } from "./t3team-toolBrokerBindingSurface.ts";
 

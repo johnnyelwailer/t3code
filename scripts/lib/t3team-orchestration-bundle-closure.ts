@@ -17,7 +17,10 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
-import { OrchestrationBundleClosureError, OrchestrationBundleProbeError } from "./t3team-orchestration-bundle-errors.ts";
+import {
+  OrchestrationBundleClosureError,
+  OrchestrationBundleProbeError,
+} from "./t3team-orchestration-bundle-errors.ts";
 import { AUTHORING_TYPE_PACKAGES } from "./t3team-authoring-types.ts";
 import { TYPECHECKER_DTS_SPOT_CHECK_FILES } from "../build-desktop-artifact.ts";
 
@@ -144,7 +147,9 @@ export function assertAsarClosure(asarPath: string): void {
 const collectStreamAsString = <E>(stream: Stream.Stream<Uint8Array, E>): Effect.Effect<string, E> =>
   Stream.runCollect(stream).pipe(Effect.map((chunks) => Buffer.concat(chunks).toString("utf8")));
 
-export const spawnAndCollect = Effect.fn("spawnAndCollect")(function* (command: ChildProcess.Command) {
+export const spawnAndCollect = Effect.fn("spawnAndCollect")(function* (
+  command: ChildProcess.Command,
+) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const child = yield* spawner.spawn(command);
   const [stdout, stderr, exitCode] = yield* Effect.all(

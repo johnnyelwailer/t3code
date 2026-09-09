@@ -9,7 +9,10 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { AgentInstructionsInput, AgentInstructionsSettingRow } from "./t3team-AgentInstructionsSetting";
+import {
+  AgentInstructionsInput,
+  AgentInstructionsSettingRow,
+} from "./t3team-AgentInstructionsSetting";
 
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;

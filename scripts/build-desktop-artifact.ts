@@ -30,7 +30,10 @@ import {
   resolveWebAssetBrandForChannel,
   type WebAssetBrand,
 } from "./lib/brand-assets.ts";
-import { readAuthoringTypeDependencySpecs, stageAuthoringTypes } from "./lib/t3team-authoring-types.ts";
+import {
+  readAuthoringTypeDependencySpecs,
+  stageAuthoringTypes,
+} from "./lib/t3team-authoring-types.ts";
 import { getDefaultBuildArch } from "./lib/build-target-arch.ts";
 import {
   findInlinedExternalPackages,

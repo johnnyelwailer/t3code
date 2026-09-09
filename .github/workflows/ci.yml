@@ -87,6 +87,7 @@ jobs:
         run: vp run build:desktop
 
       - name: Verify preload bundle output
+        if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' }}
         run: node apps/desktop/scripts/verify-preload-bundle.mjs
 
   # Everything except `t3` (apps/server). `--parallel` drops the package

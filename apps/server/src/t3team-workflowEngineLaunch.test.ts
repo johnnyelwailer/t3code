@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 // @effect-diagnostics nodeBuiltinImport:off - test harness reads a workflow fixture + temp dir.
 /**
  * Proves a recipe's `.workflow.ts` runs end-to-end through the REAL launch path

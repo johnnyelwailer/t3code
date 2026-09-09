@@ -45,7 +45,7 @@ export function useThreadChatForkHandlers({
         },
       });
     } catch (error) {
-      throw new Error(normalizeForkError(error));
+      throw new Error(normalizeForkError(error), { cause: error });
     }
   }, [backend, environmentId, navigate, projectId, serverThread, threadId]);
 

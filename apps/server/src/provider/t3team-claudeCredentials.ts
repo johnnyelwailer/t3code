@@ -10,6 +10,7 @@
  */
 import * as NodeOS from "node:os";
 
+import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
@@ -104,7 +105,8 @@ const readClaudeCredentialsFromKeychain = Effect.fn(
 export const readClaudeOauthCredentials = Effect.fn(
   "providerUsageSampler.readClaudeOauthCredentials",
 )(function* (homePath?: string) {
-  if (NodeOS.platform() === "darwin") {
+  const platform = yield* HostProcessPlatform;
+  if (platform === "darwin") {
     const fromKeychain = yield* readClaudeCredentialsFromKeychain();
     if (fromKeychain !== undefined) return fromKeychain;
   }

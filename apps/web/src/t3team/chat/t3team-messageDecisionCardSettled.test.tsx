@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 // @vitest-environment jsdom
 /**
  * Split out of `t3team-messageDecisionCard.test.tsx` (which outgrew the test-file LOC ceiling)
