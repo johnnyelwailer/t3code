@@ -102,6 +102,11 @@ const idleThread = {
   modelSelection: null,
   runtimeMode: null,
   interactionMode: null,
+  // The reaction dispatch reads these (GHE #156 user-return + GHE #209
+  // human-steering suffixes); empty arrays keep both suffixes no-ops so the
+  // exact-text assertions below stay valid.
+  messages: [],
+  activities: [],
 } as unknown as OrchestrationThread;
 
 const stoppedChildShell = {
