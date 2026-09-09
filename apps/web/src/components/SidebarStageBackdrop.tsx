@@ -22,20 +22,31 @@ function asStageArtVariant(value: string | null): SidebarStageBackdropVariant | 
   return value === "nexplore" || value === "dev" || value === "nightly" ? value : null;
 }
 
-function readStageArtOverride(): SidebarStageBackdropVariant | null {
-  if (typeof window === "undefined") return null;
-  // Persisted because the router drops unknown query params on the first navigation, which would
-  // otherwise make the override survive exactly one render.
-  const requested = asStageArtVariant(new URLSearchParams(window.location.search).get("stageArt"));
+/**
+ * Persistence runs at module scope, not inside the resolver, because the resolver is called during
+ * render: writing there made rendering externally observable, including for renders React discards.
+ * `?stageArt=auto` (or `off`/`clear`) removes the override, since the query param is dropped by the
+ * router on the first navigation and there would otherwise be no way back to automatic selection.
+ */
+let stageArtOverride: SidebarStageBackdropVariant | null = null;
+
+if (typeof window !== "undefined") {
+  const raw = new URLSearchParams(window.location.search).get("stageArt");
+  const requested = asStageArtVariant(raw);
+  const isReset = raw === "auto" || raw === "off" || raw === "clear";
   try {
-    if (requested) {
-      window.localStorage.setItem(STAGE_ART_OVERRIDE_KEY, requested);
-      return requested;
-    }
-    return asStageArtVariant(window.localStorage.getItem(STAGE_ART_OVERRIDE_KEY));
+    if (requested) window.localStorage.setItem(STAGE_ART_OVERRIDE_KEY, requested);
+    else if (isReset) window.localStorage.removeItem(STAGE_ART_OVERRIDE_KEY);
+    stageArtOverride =
+      requested ??
+      (isReset ? null : asStageArtVariant(window.localStorage.getItem(STAGE_ART_OVERRIDE_KEY)));
   } catch {
-    return requested;
+    stageArtOverride = requested;
   }
+}
+
+function readStageArtOverride(): SidebarStageBackdropVariant | null {
+  return stageArtOverride;
 }
 
 // A wide viewBox keeps the 96-unit art height at a fixed scale while sidebar resizing reveals

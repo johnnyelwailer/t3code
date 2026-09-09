@@ -9,6 +9,7 @@ import {
 import { T3TeamLeftSidebarHeaderToggle } from "~/t3team/t3team-LeftSidebarHeaderToggle";
 import { SidebarHeader, SidebarTrigger } from "~/t3team/components/ui/t3team-sidebar";
 import { T3TeamNexiWordmark } from "~/t3team/t3team-NexiWordmark";
+import { T3TeamPackBrandImage } from "~/t3team/t3team-PackBrandImage";
 
 type ProjectSidebarHeaderProps = {
   appearance: EnvironmentAppearance | undefined;
@@ -45,9 +46,13 @@ function brandSuffixLabel(appName: string): string {
   return remainder.length > 0 ? remainder : appName;
 }
 
+/** The nexi wordmark is nexplore's own asset, so only that distribution may replace the mark. */
+const NEXPLORE_THEME_ID = "nexplore";
+
 export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHeaderProps) {
   const backdropVariant = useSidebarStageBackdropVariant();
   const onBackdrop = backdropVariant !== null;
+  const isNexploreDistribution = appearance?.themeId === NEXPLORE_THEME_ID;
   const brandInsetClass = resolveProjectSidebarBrandInset({
     isMac: isMacPlatform(navigator.platform),
     isDesktop: isElectron,
@@ -97,10 +102,22 @@ export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHead
           label sitting too high. Nudging the wordmark up instead of the label down keeps the text
           on its own baseline.
         */}
-        <T3TeamNexiWordmark className="h-[0.85rem] w-auto shrink-0 -translate-y-px" />
-        {/* The wordmark already reads "nexi", so the label carries only the remainder of the
-            product name ("Nexi Work" -> "Work"). Both inherit the wrapper's text color. */}
-        <span className="truncate text-sm font-semibold">{brandSuffixLabel(appName)}</span>
+        {isNexploreDistribution ? (
+          <T3TeamNexiWordmark className="h-[0.85rem] w-auto shrink-0 -translate-y-px" />
+        ) : (
+          <T3TeamPackBrandImage
+            brand={appearance?.brand}
+            kind="mark"
+            className="size-5 shrink-0"
+            onBackdrop={onBackdrop}
+          />
+        )}
+        {/* Under nexplore the wordmark already reads "nexi", so the label carries only the
+            remainder ("Nexi Work" -> "Work"). Any other distribution keeps its own mark and its
+            full configured name. Both inherit the wrapper's text color. */}
+        <span className="truncate text-sm font-semibold">
+          {isNexploreDistribution ? brandSuffixLabel(appName) : appName}
+        </span>
       </div>
       {/* `pr-2` matches the icon column's right inset below the header
           (e.g. `SidebarGroup` content, project-row hover actions), since the

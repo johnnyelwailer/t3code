@@ -34,10 +34,16 @@ export function T3TeamPackBrandImage({
   }
   // Over stage art the ground is inverted relative to the page, so swap which asset each mode gets.
   const [inLightMode, inDarkMode] = onBackdrop ? [dark, light] : [light, dark];
+  // Each side stays conditional: the contract allows a dark-only brand (`wordmarkDark` with no
+  // `wordmark`), and rendering `<img src={undefined}>` would occupy layout and show a broken image.
   return (
     <>
-      <img src={inLightMode} alt={alt} className={`dark:hidden ${className ?? ""}`} />
-      <img src={inDarkMode} alt={alt} className={`hidden dark:block ${className ?? ""}`} />
+      {inLightMode ? (
+        <img src={inLightMode} alt={alt} className={`dark:hidden ${className ?? ""}`} />
+      ) : null}
+      {inDarkMode ? (
+        <img src={inDarkMode} alt={alt} className={`hidden dark:block ${className ?? ""}`} />
+      ) : null}
     </>
   );
 }
