@@ -4,6 +4,7 @@ import { useId } from "react";
 import { APP_STAGE_LABEL } from "../branding";
 import { resolveServerBackedAppStageLabel } from "../branding.logic";
 import { primaryServerConfigAtom } from "../state/server";
+import { useT3TeamPackAppearance } from "../t3team/t3team-packAppearance";
 import { T3TeamNexploreStageArt } from "../t3team/t3team-NexploreStageArt";
 
 export type SidebarStageBackdropVariant = "nightly" | "dev" | "nexplore";
@@ -53,13 +54,28 @@ function readStageArtOverride(): SidebarStageBackdropVariant | null {
 // more horizontal canvas instead of zooming the scene.
 const STAGE_BACKDROP_VIEW_BOX = "0 0 8192 96";
 
+/**
+ * Pack themes that ship their own stage art, keyed by `EnvironmentAppearance.themeId`.
+ *
+ * A distribution's stage label is its release CHANNEL ("Alpha", "Latest", …), never a variant
+ * name, so selecting art from the stage label alone means a packaged distribution renders no art
+ * at all — only dev and nightly builds ever matched. A pack therefore selects its own art here.
+ */
+const PACK_THEME_STAGE_ART: Readonly<Record<string, SidebarStageBackdropVariant>> = {
+  nexplore: "nexplore",
+};
+
 export function resolveSidebarStageBackdropVariant(
   stageLabel: string,
   enabled = true,
+  packThemeId?: string,
 ): SidebarStageBackdropVariant | null {
+  // `enabled` carries the user's environment-identification setting, so it still vetoes pack art.
   if (!enabled) return null;
   const override = readStageArtOverride();
   if (override) return override;
+  const packVariant = packThemeId ? PACK_THEME_STAGE_ART[packThemeId] : undefined;
+  if (packVariant) return packVariant;
   const normalized = stageLabel.trim().toLowerCase();
   if (normalized === "nightly") return "nightly";
   if (normalized === "dev") return "dev";
@@ -95,7 +111,9 @@ export function useEnvironmentStageLabel(): string {
 }
 
 export function useSidebarStageBackdropVariant(enabled = true): SidebarStageBackdropVariant | null {
-  return resolveSidebarStageBackdropVariant(useEnvironmentStageLabel(), enabled);
+  const stageLabel = useEnvironmentStageLabel();
+  const packThemeId = useT3TeamPackAppearance()?.themeId;
+  return resolveSidebarStageBackdropVariant(stageLabel, enabled, packThemeId);
 }
 
 /** Stage-channel header art; palettes mirror the per-channel app icons in `assets/`. */

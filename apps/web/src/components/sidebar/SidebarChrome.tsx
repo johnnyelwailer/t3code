@@ -14,6 +14,7 @@ import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { cn, isMacPlatform } from "../../lib/utils";
 import { useEnvironments } from "../../state/environments";
 import { T3Wordmark } from "../T3Wordmark";
+import { useT3TeamPackAppearance } from "~/t3team/t3team-packAppearance";
 import {
   resolveEnvironmentIdentificationPillLabel,
   resolveSidebarStageBackdropVariant,
@@ -44,10 +45,14 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron: boolean;
 }) {
   const stageLabel = useEnvironmentStageLabel();
+  const packAppearance = useT3TeamPackAppearance();
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
   const backdropVariant = resolveSidebarStageBackdropVariant(
     stageLabel,
     environmentIdentificationMode === "artwork",
+    // A packaged distribution's stage label is its channel ("Alpha"), so pack art is selected by
+    // theme id — without this the nexplore art only ever appeared in dev/nightly builds.
+    packAppearance?.themeId,
   );
   const pillLabel =
     environmentIdentificationMode === "pill"
