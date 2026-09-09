@@ -408,6 +408,7 @@ export class GitHubPullRequestCli extends Context.Service<
   {
     readonly getViewerLogin: (input: {
       readonly cwd: string;
+      readonly host: string;
     }) => Effect.Effect<string, GitHubPullRequestCliError>;
 
     readonly listPullRequests: (input: {
@@ -1461,14 +1462,24 @@ export const make = Effect.gen(function* () {
 
   return GitHubPullRequestCli.of({
     getViewerLogin: (input) =>
-      github.execute({ cwd: input.cwd, args: ["api", "user", "--jq", ".login"] }).pipe(
-        Effect.flatMap((result) => {
-          const login = result.stdout.trim();
-          return login.length > 0
-            ? Effect.succeed(login)
-            : Effect.fail(new GitHubViewerLoginUnavailableError({ command: "gh", cwd: input.cwd }));
-        }),
-      ),
+      // `gh api` without a host reads the default host, so the login this answers is the
+      // one of that host, not of the one the listing is about — and that login is what the
+      // involvement filters compare against. Naming the host keeps each account's own rows on.
+      github
+        .execute({
+          cwd: input.cwd,
+          args: ["api", "user", "--hostname", input.host, "--jq", ".login"],
+        })
+        .pipe(
+          Effect.flatMap((result) => {
+            const login = result.stdout.trim();
+            return login.length > 0
+              ? Effect.succeed(login)
+              : Effect.fail(
+                  new GitHubViewerLoginUnavailableError({ command: "gh", cwd: input.cwd }),
+                );
+          }),
+        ),
 
     listPullRequests: (input) => {
       const fallbackMaxRows = Math.max(input.limit + 1, PULL_REQUEST_FALLBACK_MAX_ROWS);

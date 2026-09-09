@@ -724,6 +724,46 @@ it.effect("lists every host that has an implementation", () =>
   }),
 );
 
+it.effect("asks each GitHub host for its own viewer, not the default host's", () =>
+  Effect.gen(function* () {
+    const viewers: Array<string> = [];
+    const service = yield* makeService({
+      projects: [
+        project({ id: "p1", title: "t3code", workspaceRoot: "/a", repository: "pingdotgg/t3code" }),
+        project({
+          id: "p2",
+          title: "enterprise",
+          workspaceRoot: "/b",
+          repository: "acme/web",
+          host: "ghe.example.com",
+        }),
+      ],
+      providers: [
+        fakeProvider("github", {
+          getViewer: (input) => {
+            viewers.push(input.host);
+            return Effect.succeed("bilal");
+          },
+          listChangeRequests: (input) =>
+            Effect.succeed({
+              items:
+                input.host === "ghe.example.com" ? [changeRequest(2, "2026-07-05T00:00:00Z")] : [],
+              truncated: false,
+              continues: true,
+            }),
+        }),
+      ],
+    });
+
+    yield* service.list({ state: "open", involvement: "authored" });
+
+    // The login every involvement filter compares against has to be the host's own: an
+    // Enterprise reader and the default host are different accounts, and a listing that
+    // asked the wrong one hides the other's rows.
+    assert.deepStrictEqual(viewers.sort(), ["ghe.example.com", "github.com"]);
+  }),
+);
+
 it.effect("narrows the listing to one host when asked", () =>
   Effect.gen(function* () {
     const service = yield* makeService({

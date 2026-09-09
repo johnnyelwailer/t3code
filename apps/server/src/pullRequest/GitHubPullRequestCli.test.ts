@@ -2081,9 +2081,24 @@ layer("GitHubPullRequestCli.layer", (it) => {
       mockedExecute.mockReturnValueOnce(Effect.succeed(output("  ")));
       const cli = yield* GitHubPullRequestCli.GitHubPullRequestCli;
 
-      const error = yield* Effect.flip(cli.getViewerLogin({ cwd: "/w" }));
+      const error = yield* Effect.flip(cli.getViewerLogin({ cwd: "/w", host: "github.com" }));
 
       assert.strictEqual(error._tag, "GitHubViewerLoginUnavailableError");
+    }),
+  );
+
+  it.effect("reads the viewer's login from the host asked for, not the default host", () =>
+    Effect.gen(function* () {
+      mockedExecute.mockReturnValueOnce(Effect.succeed(output("pj")));
+      const cli = yield* GitHubPullRequestCli.GitHubPullRequestCli;
+
+      const login = yield* cli.getViewerLogin({ cwd: "/w", host: "nexplore.ghe.com" });
+
+      assert.strictEqual(login, "pj");
+      // The login an involvement filter compares against has to be the one of the host being
+      // read: two installs of GitHub are two accounts, and the default host's login is not the
+      // answer the Enterprise install asked for.
+      expect(callAt(0).args.slice(0, 4)).toEqual(["api", "user", "--hostname", "nexplore.ghe.com"]);
     }),
   );
 
