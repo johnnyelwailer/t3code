@@ -257,6 +257,8 @@
     "docs/t3team-additive-whitelist.md",
     "docs/t3team-mvp/02-additive-architecture.md",
     "docs/t3team-mvp/21-context-tool-catalog.md",
+    "docs/t3team-mvp/24-tiered-message-composition.md",
+    "docs/t3team-mvp/25-workflow-engine.md",
     "package.json",
     "packages/client-runtime/package.json",
     "packages/client-runtime/src/operations/commands.ts",

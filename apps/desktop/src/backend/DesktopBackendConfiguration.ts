@@ -430,7 +430,10 @@ const runWslPreflight = Effect.fn("desktop.backendConfiguration.wslPreflight")(f
     if (!serverTree.ok) {
       return { ok: false, reason: serverTree.reason, fatal: serverTree.fatal } as const;
     }
-    const windowsEntryPath = environment.path.join(serverTree.root, "apps/server/dist/t3team-bin.mjs");
+    const windowsEntryPath = environment.path.join(
+      serverTree.root,
+      "apps/server/dist/t3team-bin.mjs",
+    );
     const entryExists = yield* fileSystem
       .exists(windowsEntryPath)
       .pipe(Effect.orElseSucceed(() => false));

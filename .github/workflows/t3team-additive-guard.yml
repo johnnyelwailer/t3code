@@ -79,7 +79,7 @@ jobs:
       # upstream/main or origin/main, so a missing tag cannot silently weaken the gate.
       - name: Additive guard (this branch vs the fork baseline)
         run: |
-          FORK_BASELINE="$(node -p 'const c = JSON.parse(require("fs").readFileSync(".t3team-additive-guard.json", "utf8")); c.forkBaselineRef ?? "")')"
+          FORK_BASELINE="$(node -p 'const c = JSON.parse(require("fs").readFileSync(".t3team-additive-guard.json", "utf8")); c.forkBaselineRef ?? ""')"
           if [ -n "$FORK_BASELINE" ]; then
             echo "Blocking base: fork baseline $FORK_BASELINE"
             git fetch --no-tags origin "+refs/tags/$FORK_BASELINE:refs/tags/$FORK_BASELINE"
