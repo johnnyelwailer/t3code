@@ -2874,10 +2874,14 @@ button:hover .stage-nexplore-compact .stage-nexplore-orbs {
 /*
  * In-progress glow.
  *
- * Scoped to `html[data-theme-id^="t3team-pack-"]` so it ships with the nexplore distribution and
- * never leaks into upstream themes. It is a PROGRESS SIGNAL, not decoration: it appears only while
- * `isWorking` is true (running, sending, connecting, reverting, compacting) and disappears the
- * moment work stops, which is why it may breathe where the stage strip must not.
+ * Gated on `html[data-t3team-theme="nexplore"]` — the per-pack theme id that
+ * `applyT3TeamPackAppearance` writes — NOT on a `t3team-pack-` prefix match. The prefix would have
+ * matched every pack distribution while `--glow-nx` holds nexplore's own hexes, so an unrelated
+ * distribution would have glowed nexplore orange.
+ *
+ * It is a PROGRESS SIGNAL, not decoration: it appears only while `isWorking` is true (running,
+ * sending, connecting, reverting, compacting) and disappears the moment work stops, which is why
+ * it may breathe where the stage strip must not.
  */
 @keyframes t3team-nx-glow-breathe {
   0%,
@@ -2896,11 +2900,19 @@ button:hover .stage-nexplore-compact .stage-nexplore-orbs {
  * glass is `before:z-0` with Host/Main at `z-10`, so `z-0` here sits under the composer content
  * and reads as light escaping from behind it.
  */
-html[data-theme-id^="t3team-pack-"] [data-composer-working]::after {
+/*
+ * Composer: bloom behind the glass and behind the composer's own content.
+ *
+ * `z-index: -1`, not `0`. At equal z-index this `::after` is later in tree order than the Shell's
+ * `before:z-0` glass, so `0` painted the bloom ON TOP of the glass and on top of the
+ * `relative z-0` branch-toolbar wrapper — washing the toolbar orange for the whole turn. `Shell`
+ * is `isolate`, so `-1` cannot escape behind the app background.
+ */
+html[data-t3team-theme="nexplore"] [data-composer-working]::after {
   content: "";
   position: absolute;
   inset: -14px -10px -18px;
-  z-index: 0;
+  z-index: -1;
   pointer-events: none;
   border-radius: 32px;
   background: radial-gradient(
@@ -2910,30 +2922,40 @@ html[data-theme-id^="t3team-pack-"] [data-composer-working]::after {
     transparent 75%
   );
   filter: blur(14px);
+  transform: translateZ(0);
+  will-change: transform, opacity;
   animation: t3team-nx-glow-breathe 3.2s ease-in-out infinite;
 }
 
-/* Send button: the same bloom, over the blurred orbs, tied to the attribute the art already sets. */
-html[data-theme-id^="t3team-pack-"] [data-stage-busy="true"]::after {
+/*
+ * Send button: an INNER bloom over the blurred orbs, `inset: 0`.
+ *
+ * It cannot be an outer halo: the button is `overflow-hidden rounded-full`, so a negative inset is
+ * clipped away entirely and rendered nothing. The art wrapper is `-z-10`, which makes it a
+ * stacking context, so this stays under the arrow and spinner regardless of z-index.
+ */
+html[data-t3team-theme="nexplore"] [data-stage-busy="true"]::after {
   content: "";
   position: absolute;
-  inset: -7px;
+  inset: 0;
   z-index: 1;
   pointer-events: none;
   border-radius: 9999px;
   background: radial-gradient(
-    circle at 50% 50%,
-    color-mix(in srgb, var(--glow-nx) 55%, transparent) 0%,
-    transparent 70%
+    circle at 50% 120%,
+    color-mix(in srgb, var(--glow-nx) 70%, transparent) 0%,
+    transparent 72%
   );
-  filter: blur(6px);
+  filter: blur(4px);
+  transform: translateZ(0);
+  will-change: transform, opacity;
   animation: t3team-nx-glow-breathe 1.8s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
   /* The bloom still reports "working"; only the breathing stops. */
-  html[data-theme-id^="t3team-pack-"] [data-composer-working]::after,
-  html[data-theme-id^="t3team-pack-"] [data-stage-busy="true"]::after {
+  html[data-t3team-theme="nexplore"] [data-composer-working]::after,
+  html[data-t3team-theme="nexplore"] [data-stage-busy="true"]::after {
     animation: none;
     opacity: 0.8;
   }
