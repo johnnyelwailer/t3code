@@ -1478,7 +1478,7 @@ describe("deriveMessagesTimelineRows", () => {
     [undefined, true],
     ["inProgress", true],
     ["completed", false],
-    ["failed", null],
+    ["failed", false],
     ["declined", false],
     ["stopped", false],
   ] as const)(
@@ -1514,11 +1514,20 @@ describe("deriveMessagesTimelineRows", () => {
         revertTurnCountByUserMessageId: new Map(),
       });
 
-      expect(rows.map((row) => row.kind)).toEqual(["work-live", "working"]);
-      expect(rows.find((row) => row.kind === "work-live")).toMatchObject({
-        entry: { id: "latest-command" },
-        groupedEntries: [{ id: "latest-command" }],
-      });
+      expect(rows.map((row) => row.kind)).toEqual(
+        toolLifecycleStatus === "failed" ? ["work", "working"] : ["work-live", "working"],
+      );
+      if (toolLifecycleStatus === "failed") {
+        expect(rows.find((row) => row.kind === "work")).toMatchObject({
+          groupedEntries: [{ id: "task-progress", toolLifecycleStatus: "failed" }],
+        });
+      } else {
+        expect(rows.find((row) => row.kind === "work-live")).toMatchObject({
+          entry: { id: "task-progress" },
+          groupedEntries: [{ id: "task-progress" }],
+          active,
+        });
+      }
     },
   );
 
