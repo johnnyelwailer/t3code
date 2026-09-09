@@ -642,14 +642,21 @@ function PullRequestCodeTab({
   // it just opens the current URL as-is.
   const openInNewWindow = async () => {
     const currentUrl = window.location.href;
-    try {
-      if (window.desktopBridge) {
+    let url = currentUrl;
+    if (window.desktopBridge) {
+      // The system browser keeps its own cookie jar. Best effort: carry a short-lived pairing
+      // credential, so the app can exchange it on load and arrive logged in. When one cannot be
+      // minted (the backend is busy, or the session lacks the scope for it), the plain URL still
+      // opens — the browser simply shows the app's own sign-in instead.
+      try {
         const credential = await createServerPairingCredential({ label: "Diff viewer" });
-        const url = setPairingTokenOnUrl(new URL(currentUrl), credential.credential).toString();
-        await readLocalApi()?.shell.openExternal(url);
-      } else {
-        void readLocalApi()?.shell.openExternal(currentUrl);
+        url = setPairingTokenOnUrl(new URL(currentUrl), credential.credential).toString();
+      } catch {
+        // Opening unauthenticated is a working fallback; no error needed here.
       }
+    }
+    try {
+      await readLocalApi()?.shell.openExternal(url);
     } catch {
       toastManager.add({ type: "error", title: "Could not open the link" });
     }
