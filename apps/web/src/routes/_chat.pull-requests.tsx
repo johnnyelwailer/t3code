@@ -553,7 +553,12 @@ function PullRequestsRouteView() {
       file: search.file ?? null,
     };
     if (pullRequestDetailViewStateMatches(search, view)) return;
-    updateSearch(pullRequestDetailViewStateSearchPatch(view));
+    // Push a history entry when the reader first leaves the default Summary
+    // tab (the tab param appears in the URL for the first time), so Back
+    // closes the panel instead of skipping past the page. Subsequent file
+    // selections within the same tab replace to avoid history spam.
+    const isFirstTab = search.tab === undefined && view.tab !== "summary";
+    updateSearch(pullRequestDetailViewStateSearchPatch(view), !isFirstTab);
   }, [activeSurfaceView, search, updateSearch]);
 
   const clearedSelection = {
@@ -1514,10 +1519,6 @@ function PullRequestsRouteView() {
               ? {}
               : { selectedEnvironmentId: surface.environmentId as EnvironmentId }),
           },
-      // Opening a PR pushes a history entry so the browser's "Back" closes
-      // the panel rather than skipping past the whole page. Closing uses the
-      // default replace so it doesn't leave a dead entry behind.
-      surface !== null,
     );
 
   const toggleRightPanel = () => {
