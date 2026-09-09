@@ -16,6 +16,7 @@
     "apps/server/src/mcp/toolkits/t3team/tools.ts",
     "CLAUDE.md",
     "README.md",
+    "knip.jsonc",
     "apps/desktop/package.json",
     "apps/desktop/scripts/dev-electron.mjs",
     "apps/desktop/scripts/electron-launcher.mjs",
