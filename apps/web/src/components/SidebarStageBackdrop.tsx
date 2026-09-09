@@ -61,9 +61,9 @@ const STAGE_BACKDROP_VIEW_BOX = "0 0 8192 96";
  * name, so selecting art from the stage label alone means a packaged distribution renders no art
  * at all — only dev and nightly builds ever matched. A pack therefore selects its own art here.
  */
-const PACK_THEME_STAGE_ART: Readonly<Record<string, SidebarStageBackdropVariant>> = {
-  nexplore: "nexplore",
-};
+const PACK_THEME_STAGE_ART = new Map<string, SidebarStageBackdropVariant>([
+  ["nexplore", "nexplore"],
+]);
 
 export function resolveSidebarStageBackdropVariant(
   stageLabel: string,
@@ -74,13 +74,14 @@ export function resolveSidebarStageBackdropVariant(
   if (!enabled) return null;
   const override = readStageArtOverride();
   if (override) return override;
-  const packVariant = packThemeId ? PACK_THEME_STAGE_ART[packThemeId] : undefined;
-  if (packVariant) return packVariant;
+  // Channel art is checked FIRST: `dev` and `nightly` art is a build-channel warning, and a dev
+  // build talking to a nexplore server must keep looking like a dev build rather than a release.
+  // A Map (not an object literal) so a pack id like `constructor` cannot resolve to a function.
   const normalized = stageLabel.trim().toLowerCase();
   if (normalized === "nightly") return "nightly";
   if (normalized === "dev") return "dev";
   if (normalized === "nexplore") return "nexplore";
-  return null;
+  return (packThemeId ? PACK_THEME_STAGE_ART.get(packThemeId) : undefined) ?? null;
 }
 
 export function resolveSidebarStageFocusRingOffsetClass(

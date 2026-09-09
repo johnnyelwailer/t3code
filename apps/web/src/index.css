@@ -2874,10 +2874,14 @@ button:hover .stage-nexplore-compact .stage-nexplore-orbs {
 /*
  * In-progress glow.
  *
- * Gated on `html[data-t3team-theme="nexplore"]` — the per-pack theme id that
- * `applyT3TeamPackAppearance` writes — NOT on a `t3team-pack-` prefix match. The prefix would have
- * matched every pack distribution while `--glow-nx` holds nexplore's own hexes, so an unrelated
- * distribution would have glowed nexplore orange.
+ * Gated on `html[data-theme-id="t3team-pack-nexplore"]` — the ACTIVE theme.
+ *
+ * Not a `t3team-pack-` prefix match, which would have matched every pack distribution while
+ * `--glow-nx` holds nexplore's own hexes. And not `data-t3team-theme`, which records the pack that
+ * is LOADED rather than the theme that is SELECTED: a pack theme is an ordinary entry in the theme
+ * library, so a user who switches to T3 Chat repaints the app purple while that attribute still
+ * says nexplore, leaving an orange bloom on a purple composer. `applyT3TeamPackAppearance` also
+ * never clears that attribute when appearance goes away, so it can be stale outright.
  *
  * It is a PROGRESS SIGNAL, not decoration: it appears only while `isWorking` is true (running,
  * sending, connecting, reverting, compacting) and disappears the moment work stops, which is why
@@ -2908,7 +2912,7 @@ button:hover .stage-nexplore-compact .stage-nexplore-orbs {
  * `relative z-0` branch-toolbar wrapper — washing the toolbar orange for the whole turn. `Shell`
  * is `isolate`, so `-1` cannot escape behind the app background.
  */
-html[data-t3team-theme="nexplore"] [data-composer-working]::after {
+html[data-theme-id="t3team-pack-nexplore"] [data-composer-working]::after {
   content: "";
   position: absolute;
   inset: -14px -10px -18px;
@@ -2928,34 +2932,19 @@ html[data-t3team-theme="nexplore"] [data-composer-working]::after {
 }
 
 /*
- * Send button: an INNER bloom over the blurred orbs, `inset: 0`.
+ * There is deliberately NO send-button glow.
  *
- * It cannot be an outer halo: the button is `overflow-hidden rounded-full`, so a negative inset is
- * clipped away entirely and rendered nothing. The art wrapper is `-z-10`, which makes it a
- * stacking context, so this stays under the arrow and spinner regardless of z-index.
+ * `data-stage-busy` is `isConnecting || isSendBusy`, which is a strict subset of the button's own
+ * `disabled` expression, and the button carries `disabled:opacity-30`. Opacity on an element dims
+ * its pseudo-elements too, so any bloom drawn there is at 30% exactly when it is supposed to
+ * appear — invisible by construction, whether inset inside the `overflow-hidden rounded-full`
+ * clip or hung outside it. The button already reports progress with its spinner, and the composer
+ * bloom below surrounds the button anyway. Reinstating this needs a wrapper OUTSIDE the button.
  */
-html[data-t3team-theme="nexplore"] [data-stage-busy="true"]::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  border-radius: 9999px;
-  background: radial-gradient(
-    circle at 50% 120%,
-    color-mix(in srgb, var(--glow-nx) 70%, transparent) 0%,
-    transparent 72%
-  );
-  filter: blur(4px);
-  transform: translateZ(0);
-  will-change: transform, opacity;
-  animation: t3team-nx-glow-breathe 1.8s ease-in-out infinite;
-}
 
 @media (prefers-reduced-motion: reduce) {
   /* The bloom still reports "working"; only the breathing stops. */
-  html[data-t3team-theme="nexplore"] [data-composer-working]::after,
-  html[data-t3team-theme="nexplore"] [data-stage-busy="true"]::after {
+  html[data-theme-id="t3team-pack-nexplore"] [data-composer-working]::after {
     animation: none;
     opacity: 0.8;
   }
