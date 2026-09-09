@@ -5,13 +5,19 @@ import { cn } from "~/lib/utils";
 /** One glass backdrop until a top attachment needs the composer to cover its overlap. */
 function Shell({
   contextStrip = false,
+  working = false,
   className,
   ...props
-}: ComponentProps<"div"> & { contextStrip?: boolean }) {
+}: ComponentProps<"div"> & { contextStrip?: boolean; working?: boolean }) {
   return (
     <div
       data-slot="composer-shell"
       data-with-context={contextStrip || undefined}
+      // Drives the in-progress glow (`.stage-nexplore` themes only, see index.css). The Shell is
+      // the glow host because it is the outermost `relative isolate` box and — unlike `Host` and
+      // `Main` — its `::after` is still free, so the bloom can bleed past the composer's rounded
+      // edge without a new DOM node.
+      data-composer-working={working || undefined}
       className={cn(
         "@container/composer-surface group/composer-surface relative isolate mx-auto w-full max-w-3xl",
         "[--chat-composer-drawer-inset:1.375rem] [--chat-composer-glass-surface:var(--card)] [--chat-composer-outline:rgb(0_0_0/8%)]",
