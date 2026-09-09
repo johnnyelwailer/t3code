@@ -4,9 +4,39 @@ import { useId } from "react";
 import { APP_STAGE_LABEL } from "../branding";
 import { resolveServerBackedAppStageLabel } from "../branding.logic";
 import { primaryServerConfigAtom } from "../state/server";
+import { T3TeamNexploreStageArt } from "../t3team/t3team-NexploreStageArt";
 
-export type SidebarStageBackdropVariant = "nightly" | "dev";
+export type SidebarStageBackdropVariant = "nightly" | "dev" | "nexplore";
 export type EnvironmentIdentificationPillLabel = "Dev" | "Nightly";
+
+/**
+ * Design override for stage art, e.g. `?stageArt=nexplore`.
+ *
+ * The stage label picks the variant in normal use, which means a packaged distribution (label
+ * "Alpha") can never render any art — so there is otherwise no way to see a candidate variant in
+ * the real UI. Reading it from the query string keeps that reviewable without a rebuild.
+ */
+const STAGE_ART_OVERRIDE_KEY = "t3team-stage-art-override";
+
+function asStageArtVariant(value: string | null): SidebarStageBackdropVariant | null {
+  return value === "nexplore" || value === "dev" || value === "nightly" ? value : null;
+}
+
+function readStageArtOverride(): SidebarStageBackdropVariant | null {
+  if (typeof window === "undefined") return null;
+  // Persisted because the router drops unknown query params on the first navigation, which would
+  // otherwise make the override survive exactly one render.
+  const requested = asStageArtVariant(new URLSearchParams(window.location.search).get("stageArt"));
+  try {
+    if (requested) {
+      window.localStorage.setItem(STAGE_ART_OVERRIDE_KEY, requested);
+      return requested;
+    }
+    return asStageArtVariant(window.localStorage.getItem(STAGE_ART_OVERRIDE_KEY));
+  } catch {
+    return requested;
+  }
+}
 
 // A wide viewBox keeps the 96-unit art height at a fixed scale while sidebar resizing reveals
 // more horizontal canvas instead of zooming the scene.
@@ -17,18 +47,21 @@ export function resolveSidebarStageBackdropVariant(
   enabled = true,
 ): SidebarStageBackdropVariant | null {
   if (!enabled) return null;
+  const override = readStageArtOverride();
+  if (override) return override;
   const normalized = stageLabel.trim().toLowerCase();
   if (normalized === "nightly") return "nightly";
   if (normalized === "dev") return "dev";
+  if (normalized === "nexplore") return "nexplore";
   return null;
 }
 
 export function resolveSidebarStageFocusRingOffsetClass(
   variant: SidebarStageBackdropVariant,
 ): string {
-  return variant === "nightly"
-    ? "focus-visible:ring-offset-(--stage-night-bottom)"
-    : "focus-visible:ring-offset-(--stage-art-bottom)";
+  if (variant === "nightly") return "focus-visible:ring-offset-(--stage-night-bottom)";
+  if (variant === "nexplore") return "focus-visible:ring-offset-(--stage-nx-ground)";
+  return "focus-visible:ring-offset-(--stage-art-bottom)";
 }
 
 export function resolveEnvironmentIdentificationPillLabel(
@@ -67,10 +100,12 @@ export function SidebarStageBackdrop({ variant }: { variant: SidebarStageBackdro
 }
 
 export function StageBackdropArt({ variant }: { variant: SidebarStageBackdropVariant }) {
+  if (variant === "nexplore") return <T3TeamNexploreStageArt />;
   return variant === "nightly" ? <NightlySkyArt /> : <DevBlueprintArt />;
 }
 
 export function StageBackdropButtonArt({ variant }: { variant: SidebarStageBackdropVariant }) {
+  if (variant === "nexplore") return <T3TeamNexploreStageArt compact />;
   return variant === "nightly" ? <NightlySkyArt compact /> : <DevBlueprintArt compact />;
 }
 

@@ -2802,3 +2802,65 @@ code {
     animation: none;
   }
 }
+
+/*
+ * Nexplore stage art ("2FORM"): flat ground + hard-cropped orbs, per the brand-refresh plates.
+ * Day is Orange ground / Rosa orbs, night is Blau ground / Lila + Dunkelblau orbs — both grounds
+ * are saturated enough for the white `sidebar-brand` label that `onBackdrop` switches to.
+ */
+:root {
+  --stage-nx-ground: #f05a0a;
+  --stage-nx-orb: #f7cbed;
+  --stage-nx-orb-alt: #f7cbed;
+  /* Label sits on the ground, so it ships with the ground rather than in the component. */
+  --stage-nx-label: #ffffff;
+}
+
+.dark {
+  --stage-nx-ground: #4c3cf6;
+  --stage-nx-orb: #e5e0ff;
+  --stage-nx-orb-alt: #1c1772;
+  --stage-nx-label: #ffffff;
+}
+
+/*
+ * Send button: the duo as blurred colour, not hard shapes. A 32px button cannot carry a crisp arc
+ * (see t3team-NexploreStageArt.tsx), so the orbs are blurred into a soft field that the crisp send
+ * arrow sits on. `transform: translateZ(0)` keeps the blur on the compositor.
+ */
+.stage-nexplore-compact .stage-nexplore-orbs {
+  filter: blur(5px);
+  transform: translateZ(0);
+}
+
+/*
+ * Motion is reserved for state, not decoration: the sidebar strip is permanent chrome and never
+ * animates. The button drifts on hover (intent) and faster while a send is in flight (progress),
+ * which is the same thing its spinner already reports.
+ */
+@keyframes t3team-nx-orb-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-2.5px, 1.5px, 0) scale(1.06);
+  }
+}
+
+button:hover .stage-nexplore-compact .stage-nexplore-orbs {
+  animation: t3team-nx-orb-drift 5s ease-in-out infinite;
+  will-change: transform;
+}
+
+[data-stage-busy="true"] .stage-nexplore-compact .stage-nexplore-orbs {
+  animation: t3team-nx-orb-drift 1.8s ease-in-out infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:hover .stage-nexplore-compact .stage-nexplore-orbs,
+  [data-stage-busy="true"] .stage-nexplore-compact .stage-nexplore-orbs {
+    animation: none;
+  }
+}

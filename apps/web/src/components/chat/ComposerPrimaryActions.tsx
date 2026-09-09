@@ -303,7 +303,12 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
       }
     >
       {stageBackdropVariant ? (
-        <span className="absolute inset-0 -z-10" aria-hidden="true">
+        <span
+          className="absolute inset-0 -z-10"
+          aria-hidden="true"
+          // Lets stage art react to send state in CSS; only `nexplore` uses it today.
+          data-stage-busy={isConnecting || isSendBusy ? "true" : undefined}
+        >
           <StageBackdropButtonArt variant={stageBackdropVariant} />
         </span>
       ) : null}

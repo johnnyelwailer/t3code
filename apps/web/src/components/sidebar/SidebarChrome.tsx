@@ -19,6 +19,7 @@ import {
   resolveSidebarStageBackdropVariant,
   resolveSidebarStageFocusRingOffsetClass,
   SidebarStageBackdrop,
+  type SidebarStageBackdropVariant,
   useEnvironmentStageLabel,
 } from "../SidebarStageBackdrop";
 import { Badge } from "../ui/badge";
@@ -69,7 +70,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
           backdropVariant && resolveSidebarStageFocusRingOffsetClass(backdropVariant),
         )}
       />
-      <SidebarBrand isElectron={isElectron} onBackdrop={backdropVariant !== null} />
+      <SidebarBrand isElectron={isElectron} backdropVariant={backdropVariant} />
       {pillLabel ? (
         <Badge
           className="relative z-10 ml-1 hidden rounded-full px-1.5 text-muted-foreground @[15rem]/sidebar-header:inline-flex"
@@ -84,7 +85,23 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   );
 });
 
-function SidebarBrand({ isElectron, onBackdrop }: { isElectron: boolean; onBackdrop: boolean }) {
+function SidebarBrand({
+  isElectron,
+  backdropVariant,
+}: {
+  isElectron: boolean;
+  backdropVariant: SidebarStageBackdropVariant | null;
+}) {
+  const onBackdrop = backdropVariant !== null;
+  /**
+   * `dev` and `nightly` art are dark in both modes, so white always reads over them. The nexplore
+   * grounds are palette-driven (Orange in day, Blau in night), so its label colour ships with the
+   * ground as `--stage-nx-label` — changing that palette must not mean editing this component.
+   */
+  const backdropLabelClass =
+    backdropVariant === "nexplore" ? "text-(--stage-nx-label)" : "text-white";
+  const backdropMutedLabelClass =
+    backdropVariant === "nexplore" ? "text-(--stage-nx-label) opacity-70" : "text-white/70";
   const shouldInsetTitlebarBrand =
     isMacPlatform(navigator.platform) &&
     (isElectron || document.documentElement.classList.contains("wco"));
@@ -102,7 +119,7 @@ function SidebarBrand({ isElectron, onBackdrop }: { isElectron: boolean; onBackd
         shouldInsetTitlebarBrand
           ? "ml-[var(--workspace-titlebar-content-left)]"
           : "md:ml-[calc(var(--sidebar-content-inset)+var(--sidebar-row-content-inset))]",
-        onBackdrop ? "text-white" : "text-foreground",
+        onBackdrop ? backdropLabelClass : "text-foreground",
       )}
       to="/"
     >
@@ -111,7 +128,7 @@ function SidebarBrand({ isElectron, onBackdrop }: { isElectron: boolean; onBackd
         <span
           className={cn(
             "truncate text-sm font-medium tracking-tight",
-            onBackdrop ? "text-white/70" : "text-muted-foreground",
+            onBackdrop ? backdropMutedLabelClass : "text-muted-foreground",
           )}
         >
           Code
