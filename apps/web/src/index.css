@@ -2814,6 +2814,9 @@ code {
   --stage-nx-orb-alt: #f7cbed;
   /* Label sits on the ground, so it ships with the ground rather than in the component. */
   --stage-nx-label: #ffffff;
+  /* In-progress glow: the duo's accent, soft. Ships with the palette, not the component. */
+  --glow-nx: #f05a0a;
+  --glow-nx-strength: 34%;
 }
 
 .dark {
@@ -2821,6 +2824,9 @@ code {
   --stage-nx-orb: #e5e0ff;
   --stage-nx-orb-alt: #1c1772;
   --stage-nx-label: #ffffff;
+  /* Blau reads as the working colour at night; orange would fight the dark ground. */
+  --glow-nx: #6b78e6;
+  --glow-nx-strength: 42%;
 }
 
 /*
@@ -2862,5 +2868,73 @@ button:hover .stage-nexplore-compact .stage-nexplore-orbs {
   button:hover .stage-nexplore-compact .stage-nexplore-orbs,
   [data-stage-busy="true"] .stage-nexplore-compact .stage-nexplore-orbs {
     animation: none;
+  }
+}
+
+/*
+ * In-progress glow.
+ *
+ * Scoped to `html[data-theme-id^="t3team-pack-"]` so it ships with the nexplore distribution and
+ * never leaks into upstream themes. It is a PROGRESS SIGNAL, not decoration: it appears only while
+ * `isWorking` is true (running, sending, connecting, reverting, compacting) and disappears the
+ * moment work stops, which is why it may breathe where the stage strip must not.
+ */
+@keyframes t3team-nx-glow-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.035);
+  }
+}
+
+/*
+ * Composer: bloom behind the glass, bleeding past the rounded edge. `Shell` is `isolate` and its
+ * glass is `before:z-0` with Host/Main at `z-10`, so `z-0` here sits under the composer content
+ * and reads as light escaping from behind it.
+ */
+html[data-theme-id^="t3team-pack-"] [data-composer-working]::after {
+  content: "";
+  position: absolute;
+  inset: -14px -10px -18px;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 32px;
+  background: radial-gradient(
+    ellipse 70% 120% at 50% 100%,
+    color-mix(in srgb, var(--glow-nx) var(--glow-nx-strength), transparent) 0%,
+    color-mix(in srgb, var(--glow-nx) calc(var(--glow-nx-strength) / 3), transparent) 45%,
+    transparent 75%
+  );
+  filter: blur(14px);
+  animation: t3team-nx-glow-breathe 3.2s ease-in-out infinite;
+}
+
+/* Send button: the same bloom, over the blurred orbs, tied to the attribute the art already sets. */
+html[data-theme-id^="t3team-pack-"] [data-stage-busy="true"]::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in srgb, var(--glow-nx) 55%, transparent) 0%,
+    transparent 70%
+  );
+  filter: blur(6px);
+  animation: t3team-nx-glow-breathe 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The bloom still reports "working"; only the breathing stops. */
+  html[data-theme-id^="t3team-pack-"] [data-composer-working]::after,
+  html[data-theme-id^="t3team-pack-"] [data-stage-busy="true"]::after {
+    animation: none;
+    opacity: 0.8;
   }
 }

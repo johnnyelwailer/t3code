@@ -8744,7 +8744,10 @@ export default function ChatView(props: ChatViewProps) {
                         : undefined
                     }
                   >
-                    <ComposerSurface.Shell contextStrip={showComposerContextStrip}>
+                    <ComposerSurface.Shell
+                      contextStrip={showComposerContextStrip}
+                      working={isWorking}
+                    >
                       <ComposerSurface.Host>
                         <div ref={attachDraftHeroComposerAnchorRef} className="relative z-10">
                           <ChatComposer
