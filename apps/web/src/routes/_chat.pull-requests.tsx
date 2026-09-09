@@ -484,9 +484,12 @@ function PullRequestsRouteView() {
     selectedProject?.environmentId ??
     null;
   const updateSearch = useCallback(
-    (patch: {
-      [Key in keyof PullRequestsSearch]?: PullRequestsSearch[Key] | undefined;
-    }) =>
+    (
+      patch: {
+        [Key in keyof PullRequestsSearch]?: PullRequestsSearch[Key] | undefined;
+      },
+      replace = true,
+    ) =>
       void navigate({
         // Rebuilt rather than spread so a cleared field leaves the URL instead of
         // lingering as an explicit `undefined`.
@@ -515,7 +518,7 @@ function PullRequestsRouteView() {
             ...(next.labels && next.labels.length > 0 ? { labels: next.labels } : {}),
           };
         },
-        replace: true,
+        replace,
       }),
     [navigate],
   );
@@ -1511,6 +1514,10 @@ function PullRequestsRouteView() {
               ? {}
               : { selectedEnvironmentId: surface.environmentId as EnvironmentId }),
           },
+      // Opening a PR pushes a history entry so the browser's "Back" closes
+      // the panel rather than skipping past the whole page. Closing uses the
+      // default replace so it doesn't leave a dead entry behind.
+      surface !== null,
     );
 
   const toggleRightPanel = () => {

@@ -119,12 +119,6 @@ export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHead
           {isNexploreDistribution ? brandSuffixLabel(appName) : appName}
         </span>
       </div>
-      {/* `pr-2` matches the icon column's right inset below the header
-          (e.g. `SidebarGroup` content, project-row hover actions), since the
-          header itself drops horizontal padding at `md:px-0`. */}
-      <div className="relative z-10 ml-auto flex items-center pr-2">
-        <T3TeamLeftSidebarHeaderToggle surface="banner" />
-      </div>
     </SidebarHeader>
   );
 }
