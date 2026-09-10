@@ -530,9 +530,19 @@ function PullRequestsRouteView() {
     Readonly<Record<string, PullRequestDetailViewState>>
   >({});
   const activeSurfaceId = renderedPullRequestSurface?.id;
+  // Track how many times the URL's tab/file has changed. When the panel
+  // reports its view, we stamp the counter. If the counter moves since
+  // that stamp (Back/Forward), the mismatch is external and the view sync
+  // must not re-push the panel's stale report.
+  const searchChangeCounterRef = useRef(0);
+  const reportedAtCounterRef = useRef(0);
+  useEffect(() => {
+    searchChangeCounterRef.current++;
+  }, [search.tab, search.file]);
   const handlePanelViewChange = useCallback(
     (view: PullRequestDetailViewState) => {
       if (activeSurfaceId === undefined) return;
+      reportedAtCounterRef.current = searchChangeCounterRef.current;
       setViewBySurface((previous) => {
         const current = previous[activeSurfaceId];
         if (current?.tab === view.tab && current?.file === view.file) return previous;
@@ -553,6 +563,10 @@ function PullRequestsRouteView() {
       file: search.file ?? null,
     };
     if (pullRequestDetailViewStateMatches(search, view)) return;
+    // If the URL changed since the panel last reported (Back/Forward), the
+    // mismatch is external — let the panel sync from the URL instead of
+    // re-pushing its stale report.
+    if (reportedAtCounterRef.current !== searchChangeCounterRef.current) return;
     // Push a history entry when the reader first leaves the default Summary
     // tab (the tab param appears in the URL for the first time), so Back
     // closes the panel instead of skipping past the page. Subsequent file
