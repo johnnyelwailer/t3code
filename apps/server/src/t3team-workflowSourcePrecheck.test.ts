@@ -20,6 +20,19 @@ steps:
     prompt: "Review this pull request"
 `;
 
+// Live incident shape: the meta head is clean, but an UNESCAPED backtick in plain position
+// inside a template literal corrupts the BODY (`...the `inner` changes...` — the second
+// backtick closes the template early). Only V8's compile of the transpiled body rejects
+// this — ts.createSourceFile / ts.transpileModule both recover silently, so a precheck
+// that stops at a TS parse cannot see it.
+const BACKTICK_BODY_SOURCE = [
+  `export const meta = { name: "probe", description: "x" } as const;`,
+  `export default async function run() {`,
+  "  const prompt = `Review the `inner` changes`;",
+  `  return prompt;`,
+  `}`,
+].join("\n");
+
 describe("precheckWorkflowSource", () => {
   it("rejects YAML with a message naming the missing entry contract and the full manual", () => {
     const error = precheckWorkflowSource(YAML_SOURCE);
@@ -30,5 +43,21 @@ describe("precheckWorkflowSource", () => {
 
   it("accepts a real workflow TypeScript module", () => {
     expect(precheckWorkflowSource(VALID_WORKFLOW_SOURCE)).toBeNull();
+  });
+
+  it("rejects a body-level syntax error (unescaped backtick) with the compile reason", () => {
+    const error = precheckWorkflowSource(BACKTICK_BODY_SOURCE);
+    expect(error).not.toBeNull();
+    expect(error).toContain("unparseable workflow TypeScript");
+    expect(error).toContain("AGENT-ORCHESTRATION MANUAL");
+  });
+
+  it("rejects a missing default-exported run function", () => {
+    const error = precheckWorkflowSource(
+      `export const meta = { name: "no-body", description: "x" } as const;\nconst notAWorkflow = 1;\n`,
+    );
+    // No default export at all is legal for the loader (zero-arg legacy bodies exist);
+    // what must NOT be accepted is a default export the engine cannot call.
+    expect(error).toBeNull();
   });
 });
