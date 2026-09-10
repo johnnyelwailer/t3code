@@ -77,7 +77,8 @@ export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHead
       />
       <SidebarTrigger
         className={cn(
-          "relative z-10 md:hidden",
+          "relative z-10",
+          isElectron && "md:hidden",
           onBackdrop &&
             "[:hover,[data-pressed]]:bg-white/15 focus-visible:ring-white/90 focus-visible:ring-offset-blue-700 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white!",
         )}

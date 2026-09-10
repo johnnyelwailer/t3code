@@ -100,6 +100,10 @@ function SidebarControl() {
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [keybindings, toggleSidebar]);
 
+  // On web the toggle lives in the sidebar header; only show the fixed
+  // button when the sidebar is closed (so there is a way to reopen it).
+  if (!isElectron && isSidebarVisible) return null;
+
   return (
     // The right-side layout controls carry mr-px (border compensation inside
     // the panel), so the trigger mirrors it: both clusters sit one extra pixel

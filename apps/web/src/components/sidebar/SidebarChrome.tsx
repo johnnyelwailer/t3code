@@ -69,7 +69,8 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
       {backdropVariant ? <SidebarStageBackdrop variant={backdropVariant} /> : null}
       <SidebarTrigger
         className={cn(
-          "relative z-10 md:hidden",
+          "relative z-10",
+          isElectron && "md:hidden",
           backdropVariant &&
             "focus-visible:ring-white/90 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white! [:hover,[data-pressed]]:bg-white/15",
           backdropVariant && resolveSidebarStageFocusRingOffsetClass(backdropVariant),
