@@ -9,6 +9,8 @@ import * as Stream from "effect/Stream";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/unstable/http";
 import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
 
+import { activateCompiledInDistribution } from "./t3team-distribution-bootstrap.ts";
+
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as HostPowerMonitor from "./background/HostPowerMonitor.ts";
 import * as ServerConfig from "./config.ts";
@@ -762,6 +764,21 @@ export const makeServerLayer = Layer.unwrap(
     const launcherLayer = ServiceLauncherClient.layer;
 
     yield* fixPath();
+
+    // Activate the compiled-in distribution before any layers are built so the
+    // appearance, branding, and provider overlays are available to
+    // ServerEnvironment and every other service. The t3team binary does this
+    // in t3team-server.ts; the standard start/serve path needs it too.
+    yield* Effect.tryPromise({
+      try: () => activateCompiledInDistribution(),
+      catch: (cause) => new Error(`Compiled-in distribution activation failed: ${String(cause)}`),
+    }).pipe(
+      Effect.catch((cause) =>
+        Effect.logWarning("Compiled-in distribution activation failed; continuing without it", {
+          cause,
+        }),
+      ),
+    );
 
     const httpListeningLayer = Layer.effectDiscard(
       Effect.gen(function* () {
