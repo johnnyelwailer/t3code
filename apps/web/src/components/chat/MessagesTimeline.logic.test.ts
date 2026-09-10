@@ -1485,18 +1485,18 @@ describe("deriveMessagesTimelineRows", () => {
     "respects the %s lifecycle of trailing task progress",
     (toolLifecycleStatus, active) => {
       const turnId = TurnId.make("turn-task-progress");
-      const rows = deriveMessagesTimelineRows({
+      const input = {
         timelineEntries: [
           {
             id: "task-progress-entry",
-            kind: "work",
+            kind: "work" as const,
             createdAt: "2026-01-01T00:00:05Z",
             entry: {
               id: "task-progress",
               createdAt: "2026-01-01T00:00:05Z",
               turnId,
               label: "Task progress",
-              tone: "thinking",
+              tone: "thinking" as const,
               sourceActivityKind: "task.progress",
               ...(toolLifecycleStatus ? { toolLifecycleStatus } : {}),
             },
@@ -1504,7 +1504,7 @@ describe("deriveMessagesTimelineRows", () => {
         ],
         latestTurn: {
           turnId,
-          state: "running",
+          state: "running" as const,
           startedAt: "2026-01-01T00:00:00Z",
           completedAt: null,
         },
@@ -1512,13 +1512,26 @@ describe("deriveMessagesTimelineRows", () => {
         activeTurnStartedAt: "2026-01-01T00:00:00Z",
         turnDiffSummaryByAssistantMessageId: new Map(),
         revertTurnCountByUserMessageId: new Map(),
-      });
+      };
+      const rows = deriveMessagesTimelineRows(input);
 
       expect(rows.map((row) => row.kind)).toEqual(
-        toolLifecycleStatus === "failed" ? ["work", "working"] : ["work-live", "working"],
+        toolLifecycleStatus === "failed" ? ["work-toggle", "working"] : ["work-live", "working"],
       );
       if (toolLifecycleStatus === "failed") {
-        expect(rows.find((row) => row.kind === "work")).toMatchObject({
+        expect(rows.find((row) => row.kind === "work-toggle")).toMatchObject({
+          hiddenCount: 1,
+          summary: "Used 1 tool",
+          hasFailure: true,
+          expanded: false,
+        });
+        const expandedRows = deriveMessagesTimelineRows({
+          ...input,
+          expandedWorkGroupIds: new Set(["work-group:task-progress-entry"]),
+        });
+        expect(expandedRows.map((row) => row.kind)).toEqual(["work-toggle", "work", "working"]);
+        expect(expandedRows.find((row) => row.kind === "work")).toMatchObject({
+          isExpandedToolGroup: true,
           groupedEntries: [{ id: "task-progress", toolLifecycleStatus: "failed" }],
         });
       } else {
@@ -1818,18 +1831,31 @@ describe("deriveMessagesTimelineRows", () => {
       },
     }));
 
-    const rows = deriveMessagesTimelineRows({
-      timelineEntries,
-      isWorking: false,
-      activeTurnStartedAt: null,
-      turnDiffSummaryByAssistantMessageId: new Map(),
-      revertTurnCountByUserMessageId: new Map(),
-    });
+    for (const isWorking of hasFailure ? [false, true] : [false]) {
+      const input = {
+        timelineEntries,
+        isWorking,
+        activeTurnStartedAt: null,
+        turnDiffSummaryByAssistantMessageId: new Map(),
+        revertTurnCountByUserMessageId: new Map(),
+      };
+      const rows = deriveMessagesTimelineRows(input);
 
-    expect(rows.find((row) => row.kind === "work-toggle")).toMatchObject({
-      hiddenCount: 2,
-      hasFailure,
-    });
+      expect(rows.find((row) => row.kind === "work-toggle")).toMatchObject({
+        hiddenCount: 2,
+        hasFailure,
+      });
+      const group = rows.find((row) => row.kind === "work-toggle");
+      if (group?.kind === "work-toggle") {
+        const expanded = deriveMessagesTimelineRows({
+          ...input,
+          expandedWorkGroupIds: new Set([group.groupId]),
+        });
+        expect(
+          expanded.find((row) => row.kind === "work")?.groupedEntries.map((entry) => entry.id),
+        ).toEqual(["work-0", "work-1"]);
+      }
+    }
   });
 
   it.each([
