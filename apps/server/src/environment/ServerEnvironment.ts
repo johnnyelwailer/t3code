@@ -191,8 +191,6 @@ export const make = Effect.gen(function* () {
   const environmentId = yield* identity.getEnvironmentId;
   const cwdBaseName = path.basename(serverConfig.cwd).trim();
   const label = yield* resolveServerEnvironmentLabel({ cwdBaseName });
-  const appearance = getPackAppearanceOverlay();
-  const setupProfiles = getPackSetupProfileDescriptors();
   const machine = yield* detectServerEnvironmentMachineKind();
   const launcher = yield* resolveServiceLauncherMode();
   const serverSelfUpdate = resolveServerSelfUpdateCapability({
@@ -242,20 +240,26 @@ export const make = Effect.gen(function* () {
         : {}),
       ...(desktopAppUpdate ? { desktopAppUpdate: true } : {}),
     },
-    ...(appearance ? { appearance } : {}),
-    ...(setupProfiles ? { setupProfiles } : {}),
   };
 
   return ServerEnvironment.of({
     getEnvironmentId: Effect.succeed(environmentId),
     // The publish opt-in and relay link change at runtime (`t3 connect
     // publish`, the client settings toggle), so the capability is read per
-    // descriptor request rather than baked in at startup.
+    // descriptor request rather than baked in at startup. Appearance and
+    // setup profiles are also read live because the distribution bootstrap
+    // runs after layer creation.
     getDescriptor: readAgentActivityPublishingActive(secrets).pipe(
-      Effect.map((agentActivityPublishing) => ({
-        ...descriptor,
-        capabilities: { ...descriptor.capabilities, agentActivityPublishing },
-      })),
+      Effect.map((agentActivityPublishing) => {
+        const liveAppearance = getPackAppearanceOverlay();
+        const liveSetupProfiles = getPackSetupProfileDescriptors();
+        return {
+          ...descriptor,
+          ...(liveAppearance ? { appearance: liveAppearance } : {}),
+          ...(liveSetupProfiles ? { setupProfiles: liveSetupProfiles } : {}),
+          capabilities: { ...descriptor.capabilities, agentActivityPublishing },
+        };
+      }),
     ),
   });
 });

@@ -81,7 +81,7 @@ const resolveThemeBrand = (
 };
 
 export const activateCompiledInDistribution = async (): Promise<void> => {
-  if (!activateDistribution) return;
+  if (!activateDistribution && !distributionTheme) return;
 
   const providers: AgentProviderDefinition[] = [];
   const drivers: PackApiProviderDriverDefinition[] = [];
@@ -90,67 +90,69 @@ export const activateCompiledInDistribution = async (): Promise<void> => {
   let agentModelPolicy: WorkflowAgentModelPolicyDefinition | undefined;
   let ephemeralPolicy: WorkflowEphemeralConcurrencyPolicyDefinition | undefined;
 
-  const context: PackActivationContext = {
-    pack: { id: "distribution", directory: "" },
-    defineAgentProvider: (definition) => {
-      providers.push(definition);
-    },
-    defineProviderDriver: (definition) => {
-      drivers.push(definition);
-    },
-    // The distribution ships its theme as a JSON file (inlined as `distributionTheme`), not via an
-    // executable `defineTheme`. Failing loudly keeps a distribution that calls it from shipping
-    // silently without a theme.
-    defineTheme: () => {
-      throw new Error(
-        "Compiled-in distributions ship their theme via distribution.json; defineTheme is not supported",
-      );
-    },
-    defineSetupProfile: (definition) => {
-      profiles.push(definition);
-    },
-    defineWorkflowRepairPolicy: (definition) => {
-      repairPolicy = definition;
-    },
-    defineWorkflowAgentModelPolicy: (definition) => {
-      agentModelPolicy = definition;
-    },
-    defineWorkflowEphemeralConcurrencyPolicy: (definition) => {
-      ephemeralPolicy = definition;
-    },
-    resolveAssetDataUrl: async (relativePath) => {
-      const inlined = distributionAssets[relativePath];
-      if (inlined) return inlined;
-      throw new Error(`Compiled-in distribution asset not found: ${relativePath}`);
-    },
-  };
+  if (activateDistribution) {
+    const context: PackActivationContext = {
+      pack: { id: "distribution", directory: "" },
+      defineAgentProvider: (definition) => {
+        providers.push(definition);
+      },
+      defineProviderDriver: (definition) => {
+        drivers.push(definition);
+      },
+      // The distribution ships its theme as a JSON file (inlined as `distributionTheme`), not via an
+      // executable `defineTheme`. Failing loudly keeps a distribution that calls it from shipping
+      // silently without a theme.
+      defineTheme: () => {
+        throw new Error(
+          "Compiled-in distributions ship their theme via distribution.json; defineTheme is not supported",
+        );
+      },
+      defineSetupProfile: (definition) => {
+        profiles.push(definition);
+      },
+      defineWorkflowRepairPolicy: (definition) => {
+        repairPolicy = definition;
+      },
+      defineWorkflowAgentModelPolicy: (definition) => {
+        agentModelPolicy = definition;
+      },
+      defineWorkflowEphemeralConcurrencyPolicy: (definition) => {
+        ephemeralPolicy = definition;
+      },
+      resolveAssetDataUrl: async (relativePath) => {
+        const inlined = distributionAssets[relativePath];
+        if (inlined) return inlined;
+        throw new Error(`Compiled-in distribution asset not found: ${relativePath}`);
+      },
+    };
 
-  await activateDistribution(context);
+    await activateDistribution(context);
 
-  // The same checks the runtime pack loaders perform (t3team-pack-workflow*Policy.ts), so a
-  // malformed compiled-in distribution fails at activation, not later at workflow launch.
-  const selection = repairPolicy?.modelSelection;
-  if (selection !== undefined && selection !== "inherit") {
-    if (!selection.instanceId.trim() || !selection.model.trim()) {
-      throw new Error("Workflow repair policy model selection needs an instanceId and model");
+    // The same checks the runtime pack loaders perform (t3team-pack-workflow*Policy.ts), so a
+    // malformed compiled-in distribution fails at activation, not later at workflow launch.
+    const selection = repairPolicy?.modelSelection;
+    if (selection !== undefined && selection !== "inherit") {
+      if (!selection.instanceId.trim() || !selection.model.trim()) {
+        throw new Error("Workflow repair policy model selection needs an instanceId and model");
+      }
     }
-  }
-  const agentSelection = agentModelPolicy?.modelSelection;
-  if (
-    agentSelection !== undefined &&
-    agentSelection !== "inherit" &&
-    (!agentSelection.instanceId.trim() || !agentSelection.model.trim())
-  ) {
-    throw new Error("Workflow agent model policy needs an instanceId and model");
-  }
-  if (
-    ephemeralPolicy !== undefined &&
-    ephemeralPolicy.maxActiveSteps !== "unlimited" &&
-    (!Number.isInteger(ephemeralPolicy.maxActiveSteps) || ephemeralPolicy.maxActiveSteps < 1)
-  ) {
-    throw new Error(
-      "Ephemeral workflow concurrency maxActiveSteps must be a positive integer or unlimited",
-    );
+    const agentSelection = agentModelPolicy?.modelSelection;
+    if (
+      agentSelection !== undefined &&
+      agentSelection !== "inherit" &&
+      (!agentSelection.instanceId.trim() || !agentSelection.model.trim())
+    ) {
+      throw new Error("Workflow agent model policy needs an instanceId and model");
+    }
+    if (
+      ephemeralPolicy !== undefined &&
+      ephemeralPolicy.maxActiveSteps !== "unlimited" &&
+      (!Number.isInteger(ephemeralPolicy.maxActiveSteps) || ephemeralPolicy.maxActiveSteps < 1)
+    ) {
+      throw new Error(
+        "Ephemeral workflow concurrency maxActiveSteps must be a positive integer or unlimited",
+      );
+    }
   }
 
   if (providers.length > 0 || drivers.length > 0) {
