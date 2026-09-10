@@ -21,7 +21,7 @@ export function resolveProjectSidebarBrandInset(input: {
   isDesktop: boolean;
   isWindowControlsOverlay: boolean;
 }): string {
-  if (input.isMac && input.isDesktop) return "ml-[var(--workspace-controls-left)]";
+  if (input.isMac && input.isDesktop) return "ml-[var(--workspace-titlebar-content-left)]";
   if (input.isMac && input.isWindowControlsOverlay) {
     return "ml-[var(--workspace-titlebar-content-left)]";
   }
