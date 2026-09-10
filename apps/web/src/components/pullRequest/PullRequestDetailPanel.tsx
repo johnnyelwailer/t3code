@@ -520,13 +520,23 @@ export function PullRequestDetailPanel({
       ? listEntry
       : null;
   const [tab, setTab] = useState<DetailTab>(() => initialView?.tab ?? "summary");
-  // The file a link asked for, and the file the Code tab currently shows: both are read on the
-  // panel's own mount, so a later URL change pointing elsewhere cannot steer this panel.
+  // The file a link asked for: read on the panel's own mount so a later URL change
+  // pointing elsewhere cannot steer the focused file away from what the reader selected.
   const [initialFile] = useState(() => initialView?.file ?? null);
   const [activeFile, setActiveFile] = useState<string | null>(null);
   useEffect(() => {
     onViewChange?.({ tab, file: tab === "code" ? activeFile : null });
   }, [tab, activeFile, onViewChange]);
+  // Sync the tab when the URL changes (e.g., Back/Forward). The panel's own tab
+  // changes are already reflected in the URL, so this only fires for external
+  // navigation that the URL drives.
+  useEffect(() => {
+    const urlTab = initialView?.tab;
+    if (urlTab && urlTab !== tab) {
+      setTab(urlTab);
+      if (urlTab !== "code") setActiveFile(null);
+    }
+  }, [initialView?.tab]);
   const [timelineOrder, setTimelineOrder] = useState<"newest" | "oldest">("newest");
   const [codeCommitScope, setCodeCommitScope] = useState<{
     readonly pullRequestKey: string;

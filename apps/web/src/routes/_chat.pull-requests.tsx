@@ -2007,12 +2007,10 @@ function PullRequestsRouteView() {
               onActed={() => {
                 void refreshFromHost(false);
               }}
-              initialView={
-                activeSurfaceView ?? {
-                  tab: search.tab ?? "summary",
-                  file: search.file ?? null,
-                }
-              }
+              initialView={{
+                tab: search.tab ?? "summary",
+                file: search.file ?? null,
+              }}
               onViewChange={handlePanelViewChange}
             />
           </RightPanelTabs>
