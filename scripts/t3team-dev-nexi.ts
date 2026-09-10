@@ -3,8 +3,8 @@
  * dev-nexi — start the dev stack with the full Nexi distribution.
  *
  * Usage:
- *   node scripts/dev-nexi.ts                    # default worktree (cwd)
- *   node scripts/dev-nexi.ts /path/to/worktree  # custom t3code worktree
+ *   pnpm dev:nexi                      # default worktree (cwd)
+ *   pnpm dev:nexi /path/to/worktree    # custom t3code worktree
  *
  * The distribution path is read from T3CODE_DISTRIBUTION, defaulting to
  * the well-known Nexi global pack. Override with:

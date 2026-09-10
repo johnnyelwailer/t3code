@@ -91,7 +91,7 @@
     "sync:upstream:current": "node scripts/t3team-sync-upstream-fork.mjs rebase-current",
     "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/*/dist apps/*/dist-electron packages/*/dist .vite-plus apps/*/.vite-plus packages/*/.vite-plus",
     "sync:repos": "node scripts/sync-reference-repos.ts",
-    "dev:nexi": "node scripts/dev-nexi.ts"
+    "dev:nexi": "node scripts/t3team-dev-nexi.ts"
   },
   "devDependencies": {
     "@effect/tsgo": "catalog:",
