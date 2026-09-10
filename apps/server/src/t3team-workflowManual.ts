@@ -23,7 +23,7 @@
  * context every turn. The exact syntax is discovered on demand (it rides the
  * failure result via {@link T3TEAM_WORKFLOW_MANUAL}).
  */
-// The timers topic is its own help entry (`t3team_help("timers")`) and its own module, so this
+// The timers topic is its own help entry (`help("timers")`) and its own module, so this
 // file stays the single orchestration manual rather than two manuals sharing a file.
 export { T3TEAM_TIMERS_MANUAL } from "./t3team-workflowManualTimers.ts";
 import { T3TEAM_WORKFLOW_MANUAL_RESULT } from "./t3team-workflowManualRecovery.ts";
@@ -33,7 +33,7 @@ export const T3TEAM_WORKFLOW_TAGLINE =
   "or in sequence), enforces result contracts, and offloads trivial/known/repeatable steps " +
   "to scripts and tools so agents don't burn tokens on them. Use for complex or long work; " +
   "for a simple single-agent task, just do it directly — do not write one of these. For the " +
-  'authoring syntax, call t3team_help("agent-orchestration") first.';
+  'authoring syntax, call help("agent-orchestration") first.';
 
 /**
  * The full manual. Kept compact but complete enough that a small model can
@@ -134,7 +134,7 @@ THE ENGINE API (import the ones you use from "@t3team/sdk")
                               var(--success), var(--warning), var(--info), ...), never hard-code
                               hex colors, and render icons from the host sprite (t3w-icon)
                               instead of emoji — the same markup must work in light and dark.
-                              Full authoring contract: t3team_help("widget-guidance").
+                              Full authoring contract: help("widget-guidance").
 - parallel(thunks)            run () => ...  thunks concurrently (barrier). A failed thunk -> null.
 - pipeline(items, ...stages)  per-item fan-out through stages, no barrier between them.
 - phase(title)                start a progress group (title should match a meta.phases title).
@@ -148,10 +148,10 @@ THE ENGINE API (import the ones you use from "@t3team/sdk")
 - getArgs()                   the orchestration input (validated against meta.inputs if
                               declared).
 
-For exact provider/model selection, call t3team_help("model-selection").
+For exact provider/model selection, call help("model-selection").
 
 DURABLE TIMERS AND ROUTINES
-For the focused timer reference and copyable examples, call t3team_help("timers").
+For the focused timer reference and copyable examples, call help("timers").
 Use waitUntil(now() + durationMs) for seconds, minutes, hours, or days. Do not poll, call a
 shell sleep command, use setTimeout, or rely on external cron. waitUntil parks the run without
 holding an agent turn; the host scheduler owns the wake-up.
@@ -216,6 +216,6 @@ RULES
     }
   An arbitrary options array is not supported; use a Schema so the UI can render controls.
 - Return the final result at the end, and prefer RETURNING a structured object over narrating one:
-  the host renders it as clean labelled lines, while prose renders as typed. t3team_help("reporting").
+  the host renders it as clean labelled lines, while prose renders as typed. help("reporting").
 
 ${T3TEAM_WORKFLOW_MANUAL_RESULT}`;

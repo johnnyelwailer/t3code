@@ -32,7 +32,7 @@ export function userInterjectedDuringQueueing(
  * Compressed reaction framing for the user-interjected case: the batch is
  * reduced to pointers (sender, thread, message ids) instead of full bodies.
  * The bodies remain first-class actor messages in the transcript, so nothing
- * is lost — the agent retrieves any of them with t3team_read_message when it
+ * is lost — the agent retrieves any of them with read_message when it
  * actually needs one. Single and multi-entry batches share one format.
  */
 export const buildActorReactionCompressedInput = (
@@ -57,7 +57,7 @@ export const buildActorReactionCompressedInput = (
     ...lines,
     "",
     "[Do not act on these by default. Retrieve a full body with " +
-      "t3team_read_message(message_id) ONLY when you genuinely need it to unblock or " +
+      "read_message(message_id) ONLY when you genuinely need it to unblock or " +
       "change your plan — otherwise just note that it arrived. When your turn ends, " +
       "return to the user and the user's message.]",
   ].join("\n");
@@ -83,7 +83,7 @@ export function hasPriorInterAgentMessages(
  * a very short header (the sender's summary, or an auto-generated one) and the
  * message id — but NOT the body. The bodies remain first-class actor messages
  * in the transcript; the recipient retrieves any of them with
- * t3team_read_message(message_id) when it genuinely needs one. Keeping bodies
+ * read_message(message_id) when it genuinely needs one. Keeping bodies
  * out of the reaction input is what stops message bursts from inflating the
  * recipient's context.
  */
@@ -95,12 +95,12 @@ export const buildActorReactionHeaderSingleInput = (entry: T3TeamActorMailboxEnt
     `[Message from peer agent «${entry.fromTitle}» · thread ${entry.fromThreadId} · ` +
       `urgency ${entry.urgency}]`,
     "",
-    `${header}\n…[body NOT loaded into your context — call t3team_read_message ` +
+    `${header}\n…[body NOT loaded into your context — call read_message ` +
       `with message id ${entry.messageId} to read the full text when you need it]`,
     "",
     "[Handoff, not conversation: do NOT reply just because a message arrived. Reply ONLY " +
       "when the header explicitly asks you a question, requests your decision, or asks for " +
-      "an answer or artifact — otherwise act on it (fetching bodies with t3team_read_message " +
+      "an answer or artifact — otherwise act on it (fetching bodies with read_message " +
       "as needed) and continue your own task. Report progress at most once, when you are " +
       "completely done. No peer chat: if you are a child thread, address only the parent " +
       "that spawned you.]",
@@ -150,8 +150,7 @@ export const buildActorReactionInput = (entry: T3TeamActorMailboxEntry): string 
       `${entry.fromThreadId}. Keep inter-agent messages short (telegram style: state, ` +
       "decision, request). Put details in an attached markdown report or a file the " +
       "recipient can read on demand; long bodies are summarized on delivery and the " +
-      "recipient retrieves the full text with t3team_read_message.]",
-    ,
+      "recipient retrieves the full text with read_message.]",
   ].join("\n");
 
 /**
@@ -196,7 +195,7 @@ export const buildActorReactionBatchInput = (
       "inter-agent messages short (telegram style: state, decision, request). Put details " +
       "in an attached markdown report or a file the recipient can read on demand; long " +
       "bodies are summarized on delivery and the recipient retrieves the full text with " +
-      "t3team_read_message.]",
+      "read_message.]",
   ].join("\n");
 };
 

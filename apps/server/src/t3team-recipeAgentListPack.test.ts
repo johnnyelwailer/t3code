@@ -3,8 +3,8 @@
  * The agent-facing recipe tools must see PACK-SHIPPED recipes, not just `.t3team/recipes/*`.
  *
  * The library the system prompt tells the model to prefer ("run a fitting saved recipe by `path`
- * rather than re-authoring it") ships as pack content, so a `t3team_recipe_list` that enumerated
- * only project-local recipes made that advice unactionable — and `t3team_recipe_validate` rejected
+ * rather than re-authoring it") ships as pack content, so a `recipe_list` that enumerated
+ * only project-local recipes made that advice unactionable — and `recipe_validate` rejected
  * the pack paths outright, because containment was checked against the workspace root alone.
  */
 import * as NodeURL from "node:url";

@@ -2,7 +2,7 @@
  * Unconditional abnormal-stop notification to a child's parent (GHE #157).
  *
  * A child that stops abnormally (session `error`/`interrupted`/`stopped`) must
- * tell its parent even when the parent never registered a `t3team_children`
+ * tell its parent even when the parent never registered a `children`
  * wait. The wait-resolution path (t3team-childWaitResolve.ts) only fires for a
  * registered wait; with none, a dead child was silent. This module owns the
  * standalone notification: it finds the child's parent from the start-child

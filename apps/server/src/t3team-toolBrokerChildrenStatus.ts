@@ -120,7 +120,7 @@ export function opList(
                       hint:
                         settledCount > 0
                           ? `All ${settledCount} child session(s) are settled; list with include_settled:true to see them.`
-                          : `No child sessions started from this thread yet. Use t3team_start_child to spawn one.`,
+                          : `No child sessions started from this thread yet. Use start_child to spawn one.`,
                     }
                   : {}),
               });

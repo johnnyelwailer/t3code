@@ -125,7 +125,7 @@ export function buildCleanupNudgeText(stats: CleanupNudgeStats): string {
     `oldest ${digestAge(stats.oldestAgeMs)} ago). Top ${stats.top.length} by age: ${top}. ` +
     `Consider delegating a cleanup pass: verify each state (final result / discarded work / ` +
     `unpushed work in worktrees), then settle them in bulk with ` +
-    `t3team_children({ op: "sweep" }).`
+    `children({ op: "sweep" }).`
   );
 }
 

@@ -163,7 +163,7 @@ export function buildActorReactionTurnInput(
   // 2. The thread's FIRST inter-agent delivery (the kickoff/handoff): full
   //    bodies — the recipient must be able to act without a fetch.
   // 3. Every later delivery: header-only; bodies stay fetchable via
-  //    t3team_read_message so bursts do not inflate the recipient's context.
+  //    read_message so bursts do not inflate the recipient's context.
   const base =
     userInterjected && context.kind === "open"
       ? buildActorReactionCompressedInput(entries)

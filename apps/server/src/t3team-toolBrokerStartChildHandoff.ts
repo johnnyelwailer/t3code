@@ -15,7 +15,7 @@ import { appendThreadActivity } from "./t3team-toolBrokerStartChildActivity.ts";
 /**
  * Frame a child session's kickoff input with its parent's identity so the child
  * agent immediately knows who delegated it and where to report back. The *how*
- * (use t3team_send_message, don't wait to be polled) belongs in the agent's
+ * (use send_message, don't wait to be polled) belongs in the agent's
  * system prompt; only the parent's per-instance identity is attached here. This
  * applies to every provider — for input-only drivers (e.g. Pi) this framing is
  * the sole channel through which the child ever learns its parent thread id.
@@ -26,7 +26,7 @@ export function buildChildKickoffText(
 ): string {
   return (
     `[Delegated by parent thread «${parentThread.title}» (thread ${parentThread.id}). ` +
-    `Report progress and results back to it with t3team_send_message.]\n\n${kickoffPrompt}`
+    `Report progress and results back to it with send_message.]\n\n${kickoffPrompt}`
   );
 }
 

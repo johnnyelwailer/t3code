@@ -9,6 +9,8 @@ import type * as Types from "effect/Types";
 import { McpProtocol, McpSchema, McpServer, Tool } from "effect/unstable/ai";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
 
+import { normalizeLegacyToolRequest } from "./t3team-legacyToolNames.ts";
+
 import packageJson from "../../package.json" with { type: "json" };
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as McpSessionRegistry from "./McpSessionRegistry.ts";
@@ -84,7 +86,9 @@ const makeMcpAuthMiddleware = McpSessionRegistry.McpSessionRegistry.pipe(
         });
         return unauthorized;
       }
+      const normalizedRequest = yield* normalizeLegacyToolRequest(request);
       return yield* httpEffect.pipe(
+        Effect.provideService(HttpServerRequest.HttpServerRequest, normalizedRequest),
         Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
         Effect.map(normalizeMcpHttpResponse),
       );
@@ -221,7 +225,12 @@ export const T3TeamToolkitRegistrationLive = McpServer.toolkit(T3TeamToolkit).pi
   Layer.provide(T3TeamToolkitHandlersLive),
 );
 
-const McpTransportLive = McpServer.layerHttp({
+/**
+ * The streamable-HTTP MCP transport (path /mcp) behind the bearer-auth middleware.
+ * Exported so tests can mount the REAL auth + legacy-name normalization path next to a
+ * toolkit registration instead of the production `layer` (which also registers the
+ * preview toolkits). */
+export const McpTransportLive = McpServer.layerHttp({
   name: "T3 Code",
   version: packageJson.version,
   path: "/mcp",

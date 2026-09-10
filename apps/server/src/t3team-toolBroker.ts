@@ -101,7 +101,7 @@ export interface T3TeamToolBrokerShape {
      * Optional short summary of `text` for delivery. When the body exceeds the
      * delivery cap, the recipient's reaction input carries this summary (or an
      * auto-generated one when absent) plus the message id; the full body stays
-     * retrievable with t3team_read_message.
+     * retrievable with read_message.
      */
     readonly summary?: string;
   }) => Effect.Effect<unknown, string>;

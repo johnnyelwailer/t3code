@@ -5,7 +5,7 @@
  * not an object when they read `tools/list`, and that drops the WHOLE toolkit for that client. So a
  * single malformed schema silently removes every t3team tool from the agent's reach.
  *
- * It regressed exactly once already. `t3team_recipe_list` takes no arguments and was declared with
+ * It regressed exactly once already. `recipe_list` takes no arguments and was declared with
  * `parameters: Schema.Struct({})`; an empty TS object type means "any non-null", which effect
  * renders as `{anyOf:[{type:"object"},{type:"array"}]}`. Omitting `parameters` instead picks up
  * `Tool.EmptyParams`, which renders as `{type:"object",additionalProperties:false}`.

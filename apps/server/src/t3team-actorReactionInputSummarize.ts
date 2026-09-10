@@ -7,7 +7,7 @@
  * Inter-agent delivery summarization: a delivered body longer than this many
  * characters reaches the recipient as a SHORT SUMMARY plus a marker carrying
  * the message id; the full body stays persisted on the actor-role message and
- * is retrievable with `t3team_read_message`. Distribution-tunable via the
+ * is retrievable with `read_message`. Distribution-tunable via the
  * `T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS` environment variable.
  */
 export const T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS = 1500;
@@ -85,7 +85,7 @@ export function autoSummarizeActorMessage(
  * head-of-body cut: the sender-provided summary when present (capped at the
  * summary budget), otherwise an auto-generated one, plus a marker line naming
  * the message id so the recipient can retrieve the full text with
- * `t3team_read_message`. Bodies at or under the cap pass through verbatim —
+ * `read_message`. Bodies at or under the cap pass through verbatim —
  * no behavior change for short messages.
  */
 export function summarizeActorMessageForDelivery(
@@ -104,6 +104,6 @@ export function summarizeActorMessageForDelivery(
       : autoSummarizeActorMessage(text);
   return (
     `${head}\n…[summarized — ${text.length} chars total; message id ${messageId} — ` +
-    "call t3team_read_message with this message id to read the full text]"
+    "call read_message with this message id to read the full text]"
   );
 }

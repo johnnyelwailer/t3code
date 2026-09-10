@@ -20,7 +20,7 @@ describe("agent-orchestration help contract", () => {
 
   it("advertises a focused timers topic with copyable durable examples", () => {
     expect(t3teamHelp()).toContain("timers — Exact waitUntil/now syntax");
-    expect(t3teamHelp("agent-orchestration")).toContain('t3team_help("timers")');
+    expect(t3teamHelp("agent-orchestration")).toContain('help("timers")');
     const timers = t3teamHelp("timers");
     expect(timers).toContain("waitUntil(now() + 30 * SECOND)");
     expect(timers).toContain("capabilities: ['schedule', 'user']");

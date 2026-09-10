@@ -2,7 +2,7 @@
 /**
  * A failed run must say WHY — round trip, real engine + real SQLite.
  *
- * `t3team_orchestration_status` / `_resume` used to return a bare status, so an agent (or the
+ * `orchestration_status` / `_resume` used to return a bare status, so an agent (or the
  * self-heal path) had to read the journal to learn the cause. The reason is now written by the
  * ONE terminal-failure funnel into `workflow_runs.failure_reason` / `.failure_step`
  * (migration 044) and echoed by both tools.

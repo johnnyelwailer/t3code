@@ -42,7 +42,7 @@ export function makeActorSendMessage(input: {
     /**
      * Optional short summary of the body for delivery. Over-long bodies reach
      * the recipient as a summary plus the message id (full body retrievable
-     * with t3team_read_message); when absent, one is auto-generated from the
+     * with read_message); when absent, one is auto-generated from the
      * body at delivery time. Capped at the summary budget here so a long
      * sender-supplied summary is never persisted verbatim.
      */
