@@ -70,6 +70,9 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
       <SidebarTrigger
         className={cn(
           "relative z-10",
+          // Browser: align with sidebar content; Electron desktop: hidden (titlebar button instead).
+          !isElectron &&
+            "md:ml-[calc(var(--sidebar-content-inset)+var(--sidebar-row-content-inset))]",
           isElectron && "md:hidden",
           backdropVariant &&
             "focus-visible:ring-white/90 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white! [:hover,[data-pressed]]:bg-white/15",
