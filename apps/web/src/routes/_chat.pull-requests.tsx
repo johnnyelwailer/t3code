@@ -567,12 +567,11 @@ function PullRequestsRouteView() {
     // mismatch is external — let the panel sync from the URL instead of
     // re-pushing its stale report.
     if (reportedAtCounterRef.current !== searchChangeCounterRef.current) return;
-    // Push a history entry when the reader first leaves the default Summary
-    // tab (the tab param appears in the URL for the first time), so Back
-    // closes the panel instead of skipping past the page. Subsequent file
-    // selections within the same tab replace to avoid history spam.
-    const isFirstTab = search.tab === undefined && view.tab !== "summary";
-    updateSearch(pullRequestDetailViewStateSearchPatch(view), !isFirstTab);
+    // Always replace: tab and file changes are view state, not navigation.
+    // Back should close the PR panel (undo the selection), not step through
+    // tabs. Pushing here would make Back undo the tab click instead of the
+    // PR open, which is the opposite of what the reader expects.
+    updateSearch(pullRequestDetailViewStateSearchPatch(view));
   }, [activeSurfaceView, search, updateSearch]);
 
   const clearedSelection = {
@@ -1533,6 +1532,9 @@ function PullRequestsRouteView() {
               ? {}
               : { selectedEnvironmentId: surface.environmentId as EnvironmentId }),
           },
+      // Push when opening a PR so Back closes the panel; replace when closing
+      // so Back doesn't reopen it.
+      surface !== null,
     );
 
   const toggleRightPanel = () => {
