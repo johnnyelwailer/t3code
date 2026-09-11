@@ -315,8 +315,8 @@ export const T3TeamSendMessageTool = Tool.make("t3team_send_message", {
     "style: state, decision, request). Provide a short 'summary' " +
     "header (a few words); without " +
     "one, a header is auto-generated from the body's opening. Set `urgent: true` ONLY " +
-    "for a hard blocker or a question that unblocks the recipient — urgent messages wake " +
-    "an idle recipient immediately; everything else waits in the coalescing window.",
+    "for a hard blocker or a question that unblocks the recipient — urgent messages " +
+    "are prioritized in the recipient's delivery queue.",
   parameters: Schema.Struct({
     to_thread_id: Schema.String,
     text: Schema.String,
