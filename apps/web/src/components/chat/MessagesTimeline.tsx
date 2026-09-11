@@ -74,7 +74,16 @@ import {
   workEntryDisplayIndicatesToolFailure,
   workEntrySignalsSevereFailure,
   workLogEntryIsToolLike,
+  type TimelineEntry,
 } from "../../session-logic";
+import {
+  foldBackgroundJobs,
+  type BackgroundJobState,
+} from "@t3tools/client-runtime/work-log/background-jobs";
+import {
+  BackgroundJobRunningBadge,
+  BackgroundJobsRunningIndicator,
+} from "./BackgroundJobsIndicator";
 import {
   type ChatMessage,
   type ChatFileAttachment,
@@ -294,6 +303,13 @@ interface TimelineRowSharedState {
    * Null when activities are unavailable (nothing to resolve).
    */
   actorOutboundRelations: ActorOutboundRelations | null;
+  /**
+   * Background bash jobs (transcript fold of the "background job: job_xxx"
+   * tool-result markers), keyed by the work-row id that yielded the job. A
+   * row whose job is still running gets a "running in background" tag
+   * instead of reading as a finished call.
+   */
+  backgroundJobStarters: ReadonlyMap<string, BackgroundJobState>;
 }
 
 interface TimelineRowActivityState {
@@ -381,11 +397,20 @@ function TimelineLoadEarlierHeader({
     </div>
   );
 }
-function TimelineListFooter({ composerInset }: { readonly composerInset: number }) {
+function TimelineListFooter({
+  composerInset,
+  children,
+}: {
+  readonly composerInset: number;
+  readonly children?: ReactNode;
+}) {
   return (
-    <div aria-hidden>
-      <div style={{ height: composerInset }} />
-      <div className="h-3 sm:h-4" />
+    <div>
+      {children}
+      <div aria-hidden>
+        <div style={{ height: composerInset }} />
+        <div className="h-3 sm:h-4" />
+      </div>
     </div>
   );
 }
@@ -758,6 +783,24 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       isVisibleMessagesTimelineRow(row, cardAnsweredWorkflowReplyMessageIds),
     ),
   );
+  // Background bash jobs: no provider event marks job start/settle, so the
+  // fold is transcript-driven — the "background job: job_xxx" marker in a
+  // tool result opens the job, later process-tool results (list / peek /
+  // kill) settle it, and the marker's hard deadline keeps stale threads
+  // quiet. See @t3tools/client-runtime/work-log/background-jobs.
+  const backgroundJobFold = useMemo(() => {
+    const foldEntries = timelineEntries
+      .filter((entry): entry is Extract<TimelineEntry, { kind: "work" }> => entry.kind === "work")
+      .map((entry) => ({ id: entry.id, createdAt: entry.createdAt, detail: entry.entry.detail }));
+    const jobs = foldBackgroundJobs(foldEntries, Date.now());
+    const starters = new Map<string, BackgroundJobState>();
+    for (const job of jobs) {
+      if (job.state === "running" && job.startedEntryId !== undefined) {
+        starters.set(job.startedEntryId, job);
+      }
+    }
+    return { jobs, starters };
+  }, [timelineEntries]);
   useEffect(() => {
     if (!workflowCardNavigationRequest) return;
     const rowIndex = rows.findIndex(
@@ -812,8 +855,12 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     return config ? { ...config, onReady: handleAnchorReady } : undefined;
   }, [anchorMessageId, handleAnchorReady, rows]);
   const timelineListFooter = useMemo(
-    () => <TimelineListFooter composerInset={anchoredEndSpace ? 0 : contentInsetEndAdjustment} />,
-    [anchoredEndSpace, contentInsetEndAdjustment],
+    () => (
+      <TimelineListFooter composerInset={anchoredEndSpace ? 0 : contentInsetEndAdjustment}>
+        <BackgroundJobsRunningIndicator jobs={backgroundJobFold.jobs} />
+      </TimelineListFooter>
+    ),
+    [anchoredEndSpace, backgroundJobFold.jobs, contentInsetEndAdjustment],
   );
 
   const measureContentOverflow = useCallback(
@@ -992,6 +1039,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onOpenAgents,
       reactionTurnIds,
       actorOutboundRelations,
+      backgroundJobStarters: backgroundJobFold.starters,
     }),
     [
       readyCitationRequest,
@@ -1032,6 +1080,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onOpenAgents,
       reactionTurnIds,
       actorOutboundRelations,
+      backgroundJobFold,
     ],
   );
   // GHE #201 follow-up: per-dot open default. A child dot opens its own
@@ -3715,6 +3764,7 @@ const PlainWorkEntryRow = memo(function PlainWorkEntryRow(props: {
   const ctx = use(TimelineRowCtx);
   const currentThreadShell = useThreadShell(ctx.threadRef);
   const { threadRef, onImageExpand } = use(TimelineRowCtx);
+  const backgroundJob = ctx.backgroundJobStarters.get(workEntry.id) ?? null;
   const groupView = use(WorkGroupViewCtx);
   const [expanded, setExpanded] = useState(
     () => groupView?.state.expandedEntries.has(workEntry.id) ?? false,
@@ -3890,6 +3940,7 @@ const PlainWorkEntryRow = memo(function PlainWorkEntryRow(props: {
           !toolIconAcceptsTint(entryIconName, entryToolIcon) ? (
             <XIcon aria-hidden className={cn("size-3 shrink-0", failedToolIconClassName)} />
           ) : null}
+          {backgroundJob !== null ? <BackgroundJobRunningBadge job={backgroundJob} /> : null}
           <span
             className={cn(
               "flex size-4 shrink-0 items-center justify-center",
