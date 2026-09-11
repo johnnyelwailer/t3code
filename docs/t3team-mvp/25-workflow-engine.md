@@ -388,18 +388,18 @@ The author's LLM surface is the **Thread model** (see [§The thread model](#the-
 there is **no** separate `agent.task` (deleted — "structured compute, no chat" is just
 `await agent("…", { schema })`). The composition primitives below are unchanged.
 
-| Import | Returns | Notes |
+| Import                   | Returns                       | Notes                                                                                                                                                                                                                                                                                               |
 | ------------------------ | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
-| `getThread()` | `Thread \| undefined` | The chat the user launched from; `undefined` when headless (cron/automation). An accessor, not a binding — see [§How an imported verb finds its run](#how-an-imported-verb-finds-its-run). | |
-| `spawnThread(opts?)` | `Thread` | Create a new isolated thread; returns a `Thread` bound to it. |
-| `agent(prompt, opts?)` | `Promise<string \| T>` | One-shot shortcut for `spawnThread(opts).askAgent(prompt, opts)`. With `schema: Schema<T>`, returns a validated `T`; the thread is not retained. |
-| `parallel(thunks)` | `Promise<R[]>` | Concurrent fanout with a barrier. Failing thunks resolve to `null`. |
-| `pipeline(items, …stgs)` | `Promise<R[]>` | Per-item pipelined fanout — no barrier between stages. |
-| `workflow(ref, args?)` | `Promise<O>` | Run another orchestration inline as a sub-step, in this run's own journal sequence. `ref` must be a typed `WorkflowRef` (no string form — declare refs via `defineWorkflow`). Any depth; recursion refused by name. See [§Sub-orchestrations are first class](#sub-orchestrations-are-first-class). |
-| `phase(title)` | `void` | Start a progress group. `title` is typed as the union of `meta.phases[].title` literals when `meta.phases` is declared `as const` (recommended). Calling with a title outside that union is a compile-time error. |
-| `log(message)` | `void` | Emit a narrator line above the progress tree. |
-| `args` | `unknown` | The orchestration's input; validated against `meta.inputs` before the body runs. |
-| `budget` | `{ total, spent, remaining }` | Token accumulator. Thread-turn token rollup is deferred (§Out of scope), so `spent()` currently reads 0. |
+| `getThread()`            | `Thread \| undefined`         | The chat the user launched from; `undefined` when headless (cron/automation). An accessor, not a binding — see [§How an imported verb finds its run](#how-an-imported-verb-finds-its-run).                                                                                                          |     |
+| `spawnThread(opts?)`     | `Thread`                      | Create a new isolated thread; returns a `Thread` bound to it.                                                                                                                                                                                                                                       |
+| `agent(prompt, opts?)`   | `Promise<string \| T>`        | One-shot shortcut for `spawnThread(opts).askAgent(prompt, opts)`. With `schema: Schema<T>`, returns a validated `T`; the thread is not retained.                                                                                                                                                    |
+| `parallel(thunks)`       | `Promise<R[]>`                | Concurrent fanout with a barrier. Failing thunks resolve to `null`.                                                                                                                                                                                                                                 |
+| `pipeline(items, …stgs)` | `Promise<R[]>`                | Per-item pipelined fanout — no barrier between stages.                                                                                                                                                                                                                                              |
+| `workflow(ref, args?)`   | `Promise<O>`                  | Run another orchestration inline as a sub-step, in this run's own journal sequence. `ref` must be a typed `WorkflowRef` (no string form — declare refs via `defineWorkflow`). Any depth; recursion refused by name. See [§Sub-orchestrations are first class](#sub-orchestrations-are-first-class). |
+| `phase(title)`           | `void`                        | Start a progress group. `title` is typed as the union of `meta.phases[].title` literals when `meta.phases` is declared `as const` (recommended). Calling with a title outside that union is a compile-time error.                                                                                   |
+| `log(message)`           | `void`                        | Emit a narrator line above the progress tree.                                                                                                                                                                                                                                                       |
+| `args`                   | `unknown`                     | The orchestration's input; validated against `meta.inputs` before the body runs.                                                                                                                                                                                                                    |
+| `budget`                 | `{ total, spent, remaining }` | Token accumulator. Thread-turn token rollup is deferred (§Out of scope), so `spent()` currently reads 0.                                                                                                                                                                                            |
 
 > **Black-box journaling boundary.** `parallel` and `pipeline` are each journaled as **one**
 > entry; primitive calls made inside their thunks/stages are **not** individually journaled —
@@ -1070,11 +1070,17 @@ export const requestChanges = defineWorkflow<typeof RequestChanges>(
 
 export default defineRecipe({
   id: "pr-review",
-  applicability: {/* … */},
+  applicability: {
+    /* … */
+  },
   surfaces: ["project.dashboard.myWork", "thread.context"],
   defaultAction: startReview, // typed binding
-  sidecarSection: defineSidecarSection({/* … */}),
-  conversationCard: defineConversationCard({/* … */}),
+  sidecarSection: defineSidecarSection({
+    /* … */
+  }),
+  conversationCard: defineConversationCard({
+    /* … */
+  }),
 });
 ```
 

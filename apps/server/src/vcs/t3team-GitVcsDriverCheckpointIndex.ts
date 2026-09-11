@@ -131,7 +131,14 @@ export const indexCheckpointPaths = (deps: {
     // length limit; a pathspec file does not).
     const [tracked, untracked] = yield* Effect.all([
       listPaths(execute, operation, cwd, ["ls-files", "-z"], env, timeoutMs),
-      listPaths(execute, operation, cwd, ["ls-files", "--others", "--exclude-standard", "-z"], env, timeoutMs),
+      listPaths(
+        execute,
+        operation,
+        cwd,
+        ["ls-files", "--others", "--exclude-standard", "-z"],
+        env,
+        timeoutMs,
+      ),
     ]);
     const candidatePaths = [...untracked, ...tracked];
     if (candidatePaths.length === 0) {

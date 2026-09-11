@@ -2,9 +2,11 @@
  * Inter-agent coalescing (GHE #153): a burst of delivered actor messages for
  * one thread must drain into ONE reaction turn, not one turn per message.
  *
- * `it.effect` installs the test clock, so the 50ms debounce window (pinned via
- * env) is driven with `TestClock.adjust` — no real waiting, and the settle
- * checks prove no extra turn follows the expected one.
+ * `it.effect` installs the test clock. This module pins a 50ms window via env
+ * (a stand-in for the 45s idle default — same clock-driven pattern) so the
+ * tests can prove window/coalescing behavior in virtual time, and one test
+ * unsets the pin to prove the real default is 45s. No real waiting anywhere;
+ * the settle checks prove no extra turn follows the expected one.
  */
 import type {
   OrchestrationCommand,
@@ -12,7 +14,7 @@ import type {
   OrchestrationThread,
 } from "@t3tools/contracts";
 import { ThreadId } from "@t3tools/contracts";
-import { afterEach, describe, expect, it } from "@effect/vitest";
+import { afterEach, beforeEach, describe, expect, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -32,13 +34,25 @@ import {
 import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
 import { T3TeamActorMessageReactorLive } from "./t3team-actorMessageReactor.ts";
 import {
+  resolveActorMessageDebounceMs,
+  T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS,
+} from "./t3team-actorMessageReactorLimits.ts";
+import {
   buildActorReactionBatchInput,
   buildActorReactionInput,
 } from "./t3team-actorReactionInput.ts";
 
 const DEBOUNCE_ENV = "T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS";
 const ORIGINAL_DEBOUNCE = process.env[DEBOUNCE_ENV];
-process.env[DEBOUNCE_ENV] = "50";
+
+// Pin a 50ms window for the clock-driven tests in THIS FILE (the real default
+// is the 45s idle window, proven by its own dedicated test). Re-pinned before
+// EVERY test: the afterEach below restores the caller's env, so without this
+// the later tests would run against the 45s default and the virtual clock
+// (10s horizon) would never reach the claim.
+beforeEach(() => {
+  process.env[DEBOUNCE_ENV] = "50";
+});
 
 afterEach(() => {
   if (ORIGINAL_DEBOUNCE === undefined) delete process.env[DEBOUNCE_ENV];
@@ -59,23 +73,26 @@ const idleThread = {
   activities: [],
 } as unknown as OrchestrationThread;
 
-const entryFor = (messageId: string): T3TeamActorMailboxEntry => ({
+const entryFor = (
+  messageId: string,
+  urgency: "normal" | "urgent" = "normal",
+): T3TeamActorMailboxEntry => ({
   messageId,
   fromThreadId: `sender-${messageId}`,
   fromTitle: `Sender ${messageId}`,
   fromProjectId: "project",
   text: `body ${messageId}`,
-  urgency: "normal",
+  urgency,
   hopCount: 1,
   rootThreadId: "root",
   createdAt: "2026-07-19T08:00:00.000Z",
   dispatchAttempts: 0,
 });
 
-const delivery = (messageId: string): OrchestrationEvent =>
+const delivery = (messageId: string, urgency: "normal" | "urgent" = "normal"): OrchestrationEvent =>
   ({
     type: "thread.actor-message-delivered",
-    payload: { threadId: "target", ...entryFor(messageId) },
+    payload: { threadId: "target", ...entryFor(messageId, urgency) },
   }) as unknown as OrchestrationEvent;
 
 const sessionSet = (status: string): OrchestrationEvent =>
@@ -239,6 +256,73 @@ describe("T3TeamActorMessageReactorLive (coalescing)", () => {
       expect(turnAt(dispatches, 1).message.text).toBe(buildActorReactionInput(entryFor("m2")));
       expect(turnAt(dispatches, 0).message.t3teamExt?.actor?.messageIds).toBeUndefined();
       expect(turnAt(dispatches, 1).message.t3teamExt?.actor?.messageIds).toBeUndefined();
+    }),
+  );
+
+  it.effect("uses the 45s default idle window when no env override is set", () =>
+    Effect.gen(function* () {
+      const saved = process.env[DEBOUNCE_ENV];
+      delete process.env[DEBOUNCE_ENV];
+      try {
+        expect(T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS).toBe(45_000);
+        expect(resolveActorMessageDebounceMs()).toBe(45_000);
+
+        const dispatches: TurnStart[] = [];
+        const engine = makeEngine(Stream.fromIterable([delivery("m1")]), dispatches);
+        yield* Effect.scoped(
+          Effect.gen(function* () {
+            yield* Layer.build(makeLayer(engine));
+            // Walk the whole default idle window in virtual 50ms steps: a
+            // quiet single delivery must NOT wake the thread early.
+            for (let i = 0; i < 898; i += 1) {
+              yield* TestClock.adjust("50 millis"); // 44_900ms total
+              yield* Effect.yieldNow;
+            }
+            expect(dispatches).toHaveLength(0);
+            yield* TestClock.adjust("100 millis"); // 45_000ms — the claim
+            yield* Effect.yieldNow;
+            expect(dispatches).toHaveLength(1);
+            yield* settle(dispatches);
+          }),
+        );
+      } finally {
+        if (saved === undefined) delete process.env[DEBOUNCE_ENV];
+        else process.env[DEBOUNCE_ENV] = saved;
+      }
+    }),
+  );
+
+  it.effect("an urgent pending delivery claims the batch immediately (window 0)", () =>
+    Effect.gen(function* () {
+      const dispatches: TurnStart[] = [];
+      const release = yield* Deferred.make<void>();
+      // m1 (normal) lands first; the urgent m2 is released once m1's drain is
+      // mid-window — it must claim m1 + m2 NOW, not after the 50ms window.
+      const eventStream = Stream.concat(
+        Stream.fromIterable([delivery("m1")]),
+        Stream.fromEffect(Deferred.await(release)).pipe(
+          Stream.flatMap(() => Stream.fromIterable([delivery("m2", "urgent")])),
+        ),
+      );
+      const engine = makeEngine(eventStream, dispatches);
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* Layer.build(makeLayer(engine));
+          yield* TestClock.adjust("10 millis"); // m1's drain is mid-window
+          expect(dispatches).toHaveLength(0);
+          yield* Deferred.succeed(release, undefined);
+          yield* TestClock.adjust("1 millis");
+          yield* Effect.yieldNow;
+          expect(dispatches).toHaveLength(1);
+          // The urgent drain claimed the WHOLE pending batch.
+          expect(dispatches[0]?.message.text).toBe(
+            buildActorReactionBatchInput([entryFor("m1"), entryFor("m2", "urgent")]),
+          );
+          expect(dispatches[0]?.message.t3teamExt?.actor?.urgency).toBe("urgent");
+          yield* settle(dispatches);
+        }),
+      );
     }),
   );
 });

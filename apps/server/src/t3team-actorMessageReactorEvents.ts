@@ -22,8 +22,14 @@ export function createActorMessageEventHandler(input: {
   readonly surfaceHoldSummary: (
     threadId: string,
   ) => Effect.Effect<void, never, SqlClient.SqlClient>;
+  /**
+   * Idle-aware wake policy: an `urgent` delivery notes its id in the
+   * per-thread urgent-pending mirror so the next drain claims it with a
+   * zero window instead of the idle debounce.
+   */
+  readonly noteUrgentDelivery: (threadId: string, messageId: string) => void;
 }) {
-  const { mailbox, tryDrain, surfaceHoldSummary } = input;
+  const { mailbox, tryDrain, surfaceHoldSummary, noteUrgentDelivery } = input;
 
   const onDelivered = (
     payload: Extract<OrchestrationEvent, { type: "thread.actor-message-delivered" }>["payload"],
@@ -36,6 +42,9 @@ export function createActorMessageEventHandler(input: {
           hopCount: payload.hopCount,
         });
         return;
+      }
+      if (payload.urgency === "urgent") {
+        noteUrgentDelivery(payload.threadId, payload.messageId);
       }
       yield* mailbox.enqueue(payload.threadId, {
         messageId: payload.messageId,

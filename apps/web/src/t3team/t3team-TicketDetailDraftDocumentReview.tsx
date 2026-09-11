@@ -31,10 +31,11 @@ export function TicketDetailDraftDocumentReview({
   const discardDraft = useT3TeamDraftMutationStore((state) => state.discardDraft);
   const setDraftStatus = useT3TeamDraftMutationStore((state) => state.setDraftStatus);
   const canApplyComments = Boolean(backend && accountId && onReload);
-  const enrichedDrafts = drafts.map((draft): T3TeamDocumentDraftMutation =>
-    canApplyComments
-      ? draft
-      : { ...draft, applyUnavailableReason: "Connect Atlassian to post this comment." },
+  const enrichedDrafts = drafts.map(
+    (draft): T3TeamDocumentDraftMutation =>
+      canApplyComments
+        ? draft
+        : { ...draft, applyUnavailableReason: "Connect Atlassian to post this comment." },
   );
 
   async function applyDraft(draft: T3TeamDocumentDraftMutation) {

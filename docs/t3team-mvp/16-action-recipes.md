@@ -96,7 +96,9 @@ export default defineRecipe({
 
   // The workflow. May be inlined or referenced from ./workflow.ts.
   workflow: defineWorkflow({
-    steps: [/* ... */],
+    steps: [
+      /* ... */
+    ],
   }),
 
   // Capability scope for everything this recipe runs — agent, scripts, and views.
@@ -405,7 +407,8 @@ loading state to the UI:
 
 ```ts
 type VisibilityResult =
-  boolean | { visible: boolean; pending?: boolean; rank?: number; reason?: string };
+  | boolean
+  | { visible: boolean; pending?: boolean; rank?: number; reason?: string };
 ```
 
 `pending: true` lets the action list show a skeleton or a faint indicator instead of
@@ -1412,7 +1415,9 @@ export default defineRecipe({
       {
         kind: "collect-input",
         id: "ask-surface",
-        request: {/* "which surface should this recipe appear on?" */},
+        request: {
+          /* "which surface should this recipe appear on?" */
+        },
       },
       {
         kind: "script",
@@ -1435,12 +1440,16 @@ export default defineRecipe({
       {
         kind: "present-message",
         id: "preview",
-        message: {/* shows the draft + diff; carries a "Save" view */},
+        message: {
+          /* shows the draft + diff; carries a "Save" view */
+        },
       },
       {
         kind: "collect-input",
         id: "confirm-save",
-        request: {/* awaits the Save view action */},
+        request: {
+          /* awaits the Save view action */
+        },
       },
       {
         kind: "script",

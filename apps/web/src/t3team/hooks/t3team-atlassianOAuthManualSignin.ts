@@ -93,8 +93,9 @@ export async function awaitManualAtlassianSignin(input: {
     baselineAccountIds: input.baselineAccountIds,
     deadlineMs,
     isCancelled,
-  }).then((found): ManualAtlassianSigninOutcome =>
-    found ? { kind: "server_connected" } : { kind: "timed_out" },
+  }).then(
+    (found): ManualAtlassianSigninOutcome =>
+      found ? { kind: "server_connected" } : { kind: "timed_out" },
   );
 
   // The most direct signal: it asks the server about this exact flow instead of waiting for one to

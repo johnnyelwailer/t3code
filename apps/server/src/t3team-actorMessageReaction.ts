@@ -42,6 +42,13 @@ export function startActorReaction(input: {
   readonly threadId: string;
   readonly loadThread: (threadId: string) => Effect.Effect<OrchestrationThread | undefined>;
   readonly entries: ReadonlyArray<T3TeamActorMailboxEntry>;
+  /**
+   * Re-note the claimed entries' urgent ids when a failed dispatch requeues
+   * them (m1: forgetClaimedUrgent already ran at claim, so without this a
+   * requeued urgent delivery loses its immediate-wake and waits the idle
+   * window). Only invoked when the entries actually stay pending (willRetry).
+   */
+  readonly onRequeueUrgent?: (entries: ReadonlyArray<T3TeamActorMailboxEntry>) => void;
 }) {
   return Effect.gen(function* () {
     const { engine, mailbox, threadId, entries } = input;
@@ -90,7 +97,14 @@ export function startActorReaction(input: {
               entries,
               detectUserFacingOpenState(thread.messages),
               userInterjectedDuringQueueing(entries, thread.messages),
-              !hasPriorInterAgentMessages(thread.messages),
+              // M1: exclude THIS batch's own persisted actor messages — each
+              // delivery is persisted into the transcript before the drain
+              // claims it, so without this the full-body first-delivery tier
+              // would be unreachable in production.
+              !hasPriorInterAgentMessages(
+                thread.messages,
+                entries.map((entry) => entry.messageId),
+              ),
             ),
             humanSteeringInstructionForThread(thread, DateTime.toEpochMillis(now)),
           ),
@@ -107,18 +121,22 @@ export function startActorReaction(input: {
       })
       .pipe(
         Effect.catch((error) =>
-          mailbox.requeueFailed(threadId, entries).pipe(
-            Effect.flatMap((willRetry) =>
-              Effect.logWarning("actor-message reaction turn failed to start", {
-                threadId,
-                fromThreadId: first.fromThreadId,
-                batchSize: entries.length,
-                dispatchAttempts: first.dispatchAttempts + 1,
-                willRetry,
-                error,
-              }),
-            ),
-          ),
+          Effect.gen(function* () {
+            const willRetry = yield* mailbox.requeueFailed(threadId, entries);
+            if (willRetry) {
+              yield* Effect.sync(() => {
+                input.onRequeueUrgent?.(entries);
+              });
+            }
+            yield* Effect.logWarning("actor-message reaction turn failed to start", {
+              threadId,
+              fromThreadId: first.fromThreadId,
+              batchSize: entries.length,
+              dispatchAttempts: first.dispatchAttempts + 1,
+              willRetry,
+              error,
+            });
+          }),
         ),
       );
   });
@@ -139,6 +157,8 @@ export function startActorRestartHoldSummary(input: {
   readonly loadThread: (threadId: string) => Effect.Effect<OrchestrationThread | undefined>;
   readonly entries: ReadonlyArray<T3TeamActorMailboxEntry>;
   readonly interruptedChildren: ReadonlyArray<InterruptedChildThread>;
+  /** Re-note urgent ids when a failed dispatch requeues the held batch (see startActorReaction). */
+  readonly onRequeueUrgent?: (entries: ReadonlyArray<T3TeamActorMailboxEntry>) => void;
 }): Effect.Effect<void> {
   return Effect.gen(function* () {
     const { engine, mailbox, threadId, entries, interruptedChildren } = input;
@@ -195,17 +215,21 @@ export function startActorRestartHoldSummary(input: {
       })
       .pipe(
         Effect.catch((error) =>
-          mailbox.requeueFailed(threadId, entries).pipe(
-            Effect.flatMap((willRetry) =>
-              Effect.logWarning("restart-hold summary turn failed to start", {
-                threadId,
-                batchSize: entries.length,
-                interruptedChildren: interruptedChildren.length,
-                willRetry,
-                error,
-              }),
-            ),
-          ),
+          Effect.gen(function* () {
+            const willRetry = yield* mailbox.requeueFailed(threadId, entries);
+            if (willRetry) {
+              yield* Effect.sync(() => {
+                input.onRequeueUrgent?.(entries);
+              });
+            }
+            yield* Effect.logWarning("restart-hold summary turn failed to start", {
+              threadId,
+              batchSize: entries.length,
+              interruptedChildren: interruptedChildren.length,
+              willRetry,
+              error,
+            });
+          }),
         ),
       );
   });

@@ -133,7 +133,9 @@ const atlassian = defineConnector({
   id: "atlassian", // open slug; unique per project
   label: "Atlassian",
   domains: ["jira-issue", "confluence-page"], // product family
-  auth: oauthSite({/* platform-managed */}),
+  auth: oauthSite({
+    /* platform-managed */
+  }),
   listProjects, // back-end-specific reads...
   listResources,
   getResource,

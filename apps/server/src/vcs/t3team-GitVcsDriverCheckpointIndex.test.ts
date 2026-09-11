@@ -374,8 +374,12 @@ it.live(
         addTimeoutObservations[0]!.indexFile,
         addTimeoutObservations[1]!.indexFile,
       ];
-      assert.ok(typeof firstIndexFile === "string" && firstIndexFile.includes("t3-checkpoint-index-"));
-      assert.ok(typeof secondIndexFile === "string" && secondIndexFile.includes("t3-checkpoint-index-"));
+      assert.ok(
+        typeof firstIndexFile === "string" && firstIndexFile.includes("t3-checkpoint-index-"),
+      );
+      assert.ok(
+        typeof secondIndexFile === "string" && secondIndexFile.includes("t3-checkpoint-index-"),
+      );
       assert.notStrictEqual(firstIndexFile, secondIndexFile);
     }).pipe(
       Effect.provide(DriverLayerAddTimeout),

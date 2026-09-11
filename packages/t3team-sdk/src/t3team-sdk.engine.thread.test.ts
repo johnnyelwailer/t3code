@@ -269,8 +269,9 @@ describe("durable workflow engine — Thread model", () => {
 
   it("re-asks then throws SchemaExhaustedError when a reply never satisfies the schema", async () => {
     // Every thread.turn resolves with JSON that is missing the required `summary` field.
-    const broker = createMockBroker((envelope: MessageEnvelope): MockBrokerOutcome =>
-      envelope.kind === "thread.turn" ? { kind: "resolve", reply: "{}" } : { kind: "defer" },
+    const broker = createMockBroker(
+      (envelope: MessageEnvelope): MockBrokerOutcome =>
+        envelope.kind === "thread.turn" ? { kind: "resolve", reply: "{}" } : { kind: "defer" },
     );
     const base = { runsRoot, tools: [], broker } as const;
     const error = await startWorkflow(childSpawnWorkflow, {}, base).catch((e: unknown) => e);

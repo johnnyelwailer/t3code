@@ -215,10 +215,11 @@ function buildModel(tick: number): AgentPanelModel {
       phase.index === 1
         ? {
             ...phase,
-            members: phase.members.map((m): RuntimeSubagent =>
-              m.id === "wf-refactor-b"
-                ? { ...m, progress: runningProgress, updatedAt: ISO(30 + tick) }
-                : m,
+            members: phase.members.map(
+              (m): RuntimeSubagent =>
+                m.id === "wf-refactor-b"
+                  ? { ...m, progress: runningProgress, updatedAt: ISO(30 + tick) }
+                  : m,
             ),
           }
         : phase,

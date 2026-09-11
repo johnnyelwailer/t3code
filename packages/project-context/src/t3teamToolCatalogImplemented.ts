@@ -131,6 +131,33 @@ const WIDGET_SHOW_INPUT_SCHEMA = {
   required: ["title", "widget_code"],
 } as const;
 
+const ASK_USER_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    question: {
+      type: "string",
+      description: "The question to ask the user, shown verbatim in the composer.",
+      minLength: 1,
+    },
+    options: {
+      type: "array",
+      description:
+        "Optional answer choices offered to the user as buttons. The user can also type a free-form answer.",
+      items: { type: "string" },
+    },
+    multiSelect: {
+      type: "boolean",
+      description: "When true (with options), the user may pick several options.",
+    },
+    allowFreeText: {
+      type: "boolean",
+      description: "When false, the user may only pick from the listed options (requires options).",
+    },
+  },
+  required: ["question"],
+} as const;
+
 export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
   "t3team.runtime.models": {
     id: "t3team.runtime.models",
@@ -506,6 +533,19 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       },
       required: ["message_id"],
     },
+  },
+  "t3team.thread.ask_user": {
+    id: "t3team.thread.ask_user",
+    label: "Ask user a question",
+    title: "Ask the user a structured question",
+    description:
+      "Ask the user a structured question and suspend this thread's turn until they answer; the answer (option picks or free text) is returned to the agent as the tool result. The question is surfaced through the thread's pending user-input panel (user-input.requested/resolved activities), the same channel the provider adapters' AskUserQuestion uses — so it works for harnesses whose model ships no native question tool.",
+    capabilities: ["write"],
+    kind: "thread",
+    surfaces: ["thread"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: ASK_USER_INPUT_SCHEMA,
   },
   "t3team.thread.start_child": {
     id: "t3team.thread.start_child",

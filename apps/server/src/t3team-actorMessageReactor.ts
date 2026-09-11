@@ -37,12 +37,35 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
     const mailbox = yield* makeT3TeamActorMailbox;
     const debounceMs = resolveActorMessageDebounceMs();
     const batchMax = resolveActorMessageBatchMax();
-    // The restart-held set (GHE #155): captured from rehydrate below; declared
+    // Restart-held set (GHE #155): captured from rehydrate below; declared
     // first so surfaceHoldSummary's closure binds it without a use-before-
     // declaration. Mutable: a thread is consumed (deleted) the first time its
     // hold is surfaced, so a later clean settle drains normally instead of
     // re-surfacing a summary (e.g. repeatedly listing a still-stopped child).
     let heldAtRehydrate: Set<string> = new Set();
+
+    // Idle-aware wake policy: a per-thread mirror of the URGENT ids currently
+    // pending in the mailbox. An urgent entry makes the next drain claim with
+    // a zero window ("wake now"); claimed ids are forgotten at claim time and
+    // re-noted on requeue (onRequeueUrgent), so a failed dispatch cannot
+    // silently downgrade an urgent delivery to the idle window.
+    const urgentPending = new Map<string, Set<string>>();
+    const noteUrgentDelivery = (threadId: string, messageId: string) => {
+      const ids = urgentPending.get(threadId) ?? new Set<string>();
+      ids.add(messageId);
+      urgentPending.set(threadId, ids);
+    };
+    const forgetClaimedUrgent = (
+      threadId: string,
+      batch: ReadonlyArray<{ readonly messageId: string }>,
+    ) => {
+      const ids = urgentPending.get(threadId);
+      if (ids === undefined) return;
+      for (const entry of batch) ids.delete(entry.messageId);
+      if (ids.size === 0) urgentPending.delete(threadId);
+    };
+    const drainWindowMs = (threadId: string) =>
+      (urgentPending.get(threadId)?.size ?? 0) > 0 ? 0 : debounceMs;
 
     const loadThread = (threadId: string) =>
       query.getThreadDetailById(ThreadId.make(threadId)).pipe(
@@ -67,7 +90,8 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
           return;
         }
         // Coalescing window: deliveries enqueued while we wait join this batch.
-        yield* Effect.sleep(Duration.millis(debounceMs));
+        // Zero window when an urgent delivery is pending ("wake now").
+        yield* Effect.sleep(Duration.millis(drainWindowMs(threadId)));
         // Re-check after the window: a user turn may have started while we
         // waited. If so, abort — the turn-settle drain picks the queue up.
         const settled = yield* loadThread(threadId);
@@ -75,10 +99,25 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
           return;
         }
         const batch = yield* mailbox.takeNextForDispatch(threadId, batchMax);
+        forgetClaimedUrgent(threadId, batch);
         if (batch.length === 0) {
           return;
         }
-        yield* startActorReaction({ engine, mailbox, threadId, loadThread, entries: batch });
+        yield* startActorReaction({
+          engine,
+          mailbox,
+          threadId,
+          loadThread,
+          entries: batch,
+          // Re-note claimed-then-requeued urgent entries: forgetClaimedUrgent
+          // already ran at claim, so a failed dispatch must not silently
+          // downgrade them to the idle window.
+          onRequeueUrgent: (requeued) => {
+            for (const entry of requeued) {
+              if (entry.urgency === "urgent") noteUrgentDelivery(threadId, entry.messageId);
+            }
+          },
+        });
       }).pipe(
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
@@ -131,6 +170,11 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
           loadThread,
           entries: batch,
           interruptedChildren: interrupted,
+          onRequeueUrgent: (requeued) => {
+            for (const entry of requeued) {
+              if (entry.urgency === "urgent") noteUrgentDelivery(threadId, entry.messageId);
+            }
+          },
         });
       }).pipe(
         Effect.catchCause((cause) =>
@@ -148,6 +192,7 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
       mailbox,
       tryDrain,
       surfaceHoldSummary,
+      noteUrgentDelivery,
     });
 
     yield* Effect.forkScoped(Stream.runForEach(engine.streamDomainEvents, handleSafely));

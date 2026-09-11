@@ -14,11 +14,13 @@ export const T3TEAM_ACTOR_MESSAGE_HOP_CAP = 6;
 
 /**
  * Inter-agent coalescing: how long a drain waits before claiming the pending
- * batch, so deliveries arriving within the window group into ONE reaction
- * turn. Distribution-tunable via `T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS` (0 disables
- * the window — claims happen immediately, still batched).
+ * batch while the thread is idle, so quiet threads are not woken into heavy
+ * reaction turns by low-stakes coordinated chatter. Distribution-tunable via
+ * `T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS` (0 disables the window — claims happen
+ * immediately, still batched). An `urgent` entry in the pending batch
+ * bypasses the window (claims immediately, see the reactor's drain).
  */
-export const T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS = 2000;
+export const T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS = 45_000;
 const T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS_ENV = "T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS";
 
 /** Resolve the coalescing debounce window, honoring the env override. */

@@ -1,12 +1,13 @@
 /**
  * Inter-agent delivery visibility (GHE #156, part d of the #152 umbrella):
  * guarantee the user-facing response is not buried under an inter-agent
- * reaction turn. Even coalesced / summarized / held, a reaction turn can
- * still "swallow" the user's answer, so when the thread has an OPEN
- * user-facing exchange we wrap the inter-agent delivery with a harness
- * instruction that (a) tells the agent to return to the user and confirm they
- * read + reacted to its own message, and (b) requires it to RE-STATE its
- * earlier user-facing content rather than assume the user still has it.
+ * reaction turn. The strength of the appended instruction depends on WHY the
+ * user-facing exchange is open:
+ *   - the user's own message is still UNANSWERED → strong answer-first rule;
+ *   - the user has not yet reacted to an agent REPLY → quiet rule: act on the
+ *     agent messages only if they change the situation, no re-stating earlier
+ *     user-facing content, no re-acknowledging standing instructions, and no
+ *     status recap when nothing is new (chatter fix, follow-up to GHE #156).
  *
  * The trigger is detected CHEAPLY from turn/message origin — never by scanning
  * transcript text. A message's origin is its `t3teamExt`:
@@ -111,23 +112,36 @@ export function detectUserFacingOpenState(
  * do not let the inter-agent message bury the user's response, and re-state
  * the earlier user-facing content rather than assume the user still has it.
  */
-export const ACTOR_REACTION_USER_RETURN_INSTRUCTION =
-  "[Return to the user before anything else. USER MESSAGES ALWAYS TAKE PRIORITY: if a user " +
-  "message or question is still unanswered, fully respond to it FIRST — before acting on any " +
-  "inter-agent message; agent messages are queued and safe to handle afterwards. Inter-agent " +
-  "messages arrived — do not prioritize them over the user. FIRST make sure the user has read " +
-  "your message and responded to any open points. You may still act on the agent messages, but " +
-  "your LAST action must be to respond to the user and summarize the recent conversation. " +
-  "Because inter-agent messages arrived in between, RE-STATE / RE-EXPLAIN your earlier " +
-  "user-facing content (the question you posed, the decision you made, the status you gave) — " +
-  "do NOT assume the user still has it.]";
+export const ACTOR_REACTION_UNANSWERED_INSTRUCTION =
+  "[Return to the user before anything else. The user's most recent message is still " +
+  "unanswered: fully respond to it FIRST — before acting on any inter-agent message. " +
+  "Mention the agent messages only if they change your answer.]";
+
+/**
+ * The quiet rule for reaction turns where the user merely has not yet reacted
+ * to an agent reply (almost every queued inter-agent delivery): the turn must
+ * not manufacture user-facing content — no re-stating, no re-acknowledging,
+ * no status recap — unless the agent messages actually change the situation.
+ */
+export const ACTOR_REACTION_QUIET_INSTRUCTION =
+  "[Inter-agent messages arrived. Act on them only if they change your situation. Do NOT " +
+  "re-state or re-explain earlier user-facing content, and do NOT re-acknowledge standing " +
+  "instructions. If there is nothing new for the user, keep your user-facing reply to one " +
+  "short line — no status recap, no re-capping of work in flight. A hard blocker or " +
+  "failure reported in the incoming messages is an exception: surface it directly, " +
+  "concisely, even in quiet mode.]";
 
 /**
  * The instruction to append to a reaction turn's framed input, or `""` when the
  * thread has no open user-facing exchange (nothing to return to).
+ * Unanswered user message → strong answer-first rule; unreacted response →
+ * quiet rule (no manufactured user-facing content).
  */
 export function buildActorReactionUserReturnInstruction(context: ActorReactionUserContext): string {
-  return context.kind === "open" ? ACTOR_REACTION_USER_RETURN_INSTRUCTION : "";
+  if (context.kind === "closed") return "";
+  return context.reason === "unanswered-user-message"
+    ? ACTOR_REACTION_UNANSWERED_INSTRUCTION
+    : ACTOR_REACTION_QUIET_INSTRUCTION;
 }
 
 /**
