@@ -17,6 +17,7 @@ import * as VcsDriver from "./VcsDriver.ts";
 import { isUnindexableHostPath } from "./t3team-GitVcsDriverCheckpointIndex.ts";
 import * as VcsProcess from "./VcsProcess.ts";
 import * as ServerConfig from "../config.ts";
+import { VcsProcessExitError, VcsProcessTimeoutError } from "@t3tools/contracts";
 
 describe("isUnindexableHostPath", () => {
   it("classifies Windows-reserved device names case-insensitively", () => {
@@ -243,6 +244,111 @@ it.effect(
       Effect.provide(DriverLayerAllUnindexable),
       Effect.ensuring(
         Effect.sync(() => {
+          try {
+            NodeFS.rmSync(repoDir, { recursive: true, force: true });
+          } catch {
+            // best-effort cleanup
+          }
+        }),
+      ),
+    );
+  },
+);
+
+// Live incident: in a large repo the whole-worktree `git add` outlives the
+// generic 30s VcsProcess deadline and the capture failed with a user-visible
+// "Checkpoint capture failed" activity on every turn. The index step now gets
+// its own deadline, and a timed-out capture attempt is retried from scratch
+// (fresh temp index, idempotent update-ref) instead of surfacing the error.
+const addTimeoutObservations: Array<{ readonly attempt: number; readonly timeoutMs: number }> = [];
+
+const DriverLayerAddTimeout = Layer.mergeAll(GitVcsDriver.vcsLayer, GitVcsDriver.layer).pipe(
+  Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-git-ckpt-addto-" })),
+  Layer.provideMerge(
+    Layer.succeed(VcsProcess.VcsProcess, {
+      run: (input) => {
+        const args = input.args.slice(input.args[0] === "-C" ? 2 : 0);
+        if (args[0] === "rev-parse" && args[1] === "--git-common-dir") {
+          return Effect.succeed(ok(".git\n"));
+        }
+        if (args[0] === "rev-parse" && args[1] === "--verify") {
+          return Effect.succeed(ok("head-oid\n"));
+        }
+        if (args[0] === "add" && args.includes("-A") && args.includes("--") && args.includes(".")) {
+          const attempt = addTimeoutObservations.length + 1;
+          addTimeoutObservations.push({ attempt, timeoutMs: input.timeoutMs ?? 0 });
+          // First attempt times out; the retry succeeds.
+          return attempt === 1
+            ? Effect.fail(
+                new VcsProcessTimeoutError({
+                  operation: "GitVcsDriver.checkpoints.captureCheckpoint",
+                  command: "git",
+                  cwd: input.cwd,
+                  timeoutMs: input.timeoutMs ?? 30_000,
+                }),
+              )
+            : Effect.succeed(ok());
+        }
+        if (args[0] === "read-tree") {
+          return Effect.succeed(ok());
+        }
+        if (args[0] === "write-tree") {
+          return Effect.succeed(ok("tree-oid\n"));
+        }
+        if (args[0] === "commit-tree") {
+          return Effect.succeed(ok("commit-oid\n"));
+        }
+        if (args[0] === "update-ref") {
+          return Effect.succeed(ok());
+        }
+        return Effect.fail(
+          new VcsProcessExitError({
+            operation: "GitVcsDriver.checkpoints.captureCheckpoint",
+            command: "git",
+            cwd: input.cwd,
+            exitCode: 128,
+            detail: `unexpected git args: ${args.join(" ")}`,
+          }),
+        );
+      },
+    }),
+  ),
+  Layer.provideMerge(NodeServices.layer),
+);
+
+// `it.live` (real clock) so the 5s backoff between capture attempts actually
+// elapses; under the default TestClock the sleep would never tick.
+it.live(
+  "self-heals a timed-out whole-worktree git add by retrying the capture with a fresh temp index",
+  () => {
+    const repoDir = NodePath.join(NodeOS.tmpdir(), `t3-ckpt-addto-test-${Date.now()}`);
+
+    return Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const driver = yield* VcsDriver.VcsDriver;
+
+      yield* fileSystem.makeDirectory(path.join(repoDir, ".git"), { recursive: true });
+
+      assert.isNotNull(driver.checkpoints);
+      // Would fail without the bounded retry: the first add times out, the
+      // capture is re-attempted from a fresh temp index and succeeds (after
+      // the 5s first ladder step of CHECKPOINT_TIMEOUT_RETRY_BACKOFF_MS).
+      yield* driver.checkpoints!.captureCheckpoint({
+        cwd: repoDir,
+        checkpointRef: "refs/t3/checkpoints/addto-1" as never,
+      });
+
+      // Exactly one retry: the timed-out attempt plus the successful one.
+      assert.strictEqual(addTimeoutObservations.length, 2);
+      // Both index steps ran with the dedicated checkpoint deadline, not the
+      // generic 30s VcsProcess default.
+      assert.ok(addTimeoutObservations.every((obs) => obs.timeoutMs > 30_000));
+    }).pipe(
+      Effect.provide(DriverLayerAddTimeout),
+      Effect.ensuring(
+        Effect.sync(() => {
+          addTimeoutObservations.length = 0;
           try {
             NodeFS.rmSync(repoDir, { recursive: true, force: true });
           } catch {
