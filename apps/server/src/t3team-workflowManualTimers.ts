@@ -35,6 +35,35 @@ Recurring pattern (the orchestration loop is the schedule):
     await thread.notifyUser(result)
   }
 
+KEEPING THE LAUNCH THREAD WORKING (a thread that continues on its own)
+The pattern above reports to the HUMAN. It does not give the launching thread anything to do,
+so that thread still stops after its current turn and waits for a person. To make a thread keep
+working on its own, the routine must drive a TURN on the thread that launched it, with
+thread.askAgent — the same launch-thread verb the describe-rewrite workflow uses. Each wake
+becomes a turn in that thread, so the thread is both the worker and the log:
+
+  export const meta = {
+    name: 'keep-working',
+    capabilities: ['schedule'],
+  } as const
+  const MINUTES = 60 * 1000
+  while (true) {
+    await waitUntil(now() + 20 * MINUTES)
+    await thread.askAgent(
+      'Continue the standing goal. Check t3team.task.list for the plan, do the next item, ' +
+      'update it, and stop when there is nothing left to do.',
+      { label: 'Heartbeat' },
+    )
+  }
+
+thread.askAgent targets the LAUNCH thread — never agent() or spawnThread(), which run the work
+somewhere else and leave the launch thread idle. That distinction is the whole difference between
+a routine that reports and a thread that keeps going.
+
+Give the turn a durable place to read its plan from (the thread's task journal, an issue, a file);
+a wake that only says "continue" has no memory of what continue means once the context window has
+been compacted. End the loop on a real condition rather than running forever with nothing to do.
+
 waitUntil persists the run as sleeping with its wake deadline. It releases active agent work,
 survives server restarts, and resumes immediately during restart recovery when the deadline is
 already overdue. now() is journaled, so replay derives the same deadline. Seconds, minutes,

@@ -311,14 +311,23 @@ export const T3TeamSearchThreadTool = Tool.make("t3team_search_thread", {
     "(a message role such as user/assistant/actor, or an activity kind such as bash). " +
     "Each match carries its 1-based position within its own stream, a snippet, and either " +
     "message_id (pass to t3team_read_message for the full body) or activity_id. Note that " +
-    "an activity records only the first 500 characters of a tool result.",
+    "an activity records only the first 500 characters of a tool result. " +
+    "Optionally pass 'question' to get a direct answer ('why did the deploy fail?', " +
+    "'what did we decide about retries?') instead of only locations: the matched " +
+    "entries and their immediate neighbours are read by a fast model, and the result " +
+    "adds answer, citations and spanUsed. Combine 'question' with 'query' for the " +
+    "cheap default, or with 'fromPosition'/'toPosition' to ask about an explicit span. " +
+    "If the model is unavailable the search results still come back, with answerError.",
   parameters: Schema.Struct({
-    query: Schema.String,
+    query: Schema.optional(Schema.String),
     limit: Schema.optional(Schema.Number),
     offset: Schema.optional(Schema.Number),
     scope: Schema.optional(Schema.Literals(["all", "messages", "activities"])),
     order: Schema.optional(Schema.Literals(["recent", "oldest"])),
     role: Schema.optional(Schema.String),
+    question: Schema.optional(Schema.String),
+    fromPosition: Schema.optional(Schema.Number),
+    toPosition: Schema.optional(Schema.Number),
   }),
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
@@ -600,10 +609,20 @@ export const T3TeamShowWidgetTool = Tool.make("t3team_show_widget", {
 
 // On-demand reference docs — one generic tool for any topic (see t3team-help.ts),
 // so tool descriptions stay lean and agents discover detail proactively.
+// Every slug is named here on purpose. This description previously offered
+// "agent-orchestration" as its single example, and in a 31-hour orchestration run
+// the agent called this tool twice, asked for that exact slug both times, and never
+// discovered the others — including `timers`, which documents the durable routine
+// loop it needed. One named example reads as the whole menu. Keep this list in sync
+// with TOPICS in t3team-help.ts.
 export const T3TeamHelpTool = Tool.make("t3team_help", {
   description:
-    'Get t3team reference docs on demand. Pass a topic slug (e.g. "agent-orchestration" for ' +
-    "how to author a t3team_orchestration_run body); omit `topic` to list available topics.",
+    "Get t3team reference docs on demand. Omit `topic` to list available topics, or pass a " +
+    "slug: 'agent-orchestration' (authoring a t3team_orchestration_run body), 'timers' " +
+    "(durable waits and recurring routines — how to make a run wake itself on a schedule " +
+    "instead of ending), 'reporting' (how to report an outcome to the human), " +
+    "'model-selection' (choosing a provider/model for start_child and orchestration agents), " +
+    "'widget-guidance' (rendering a widget).",
   parameters: Schema.Struct({ topic: Schema.optional(Schema.String) }),
   success: Schema.String,
   failure: T3TeamMcpToolError,
