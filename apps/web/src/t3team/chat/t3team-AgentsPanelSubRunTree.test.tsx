@@ -65,13 +65,6 @@ function ringSvg(): SVGSVGElement | null {
   );
 }
 
-function alertSvg(): SVGSVGElement | null {
-  // CircleAlertIcon = bare circle + exclamation <line>; CircleCheckIcon is
-  // circle + check <path> only, so the line is the discriminator
-  const svgs = Array.from(container!.querySelectorAll("button svg")) as SVGSVGElement[];
-  return svgs.find((svg) => svg.querySelector("circle") && svg.querySelector("line")) ?? null;
-}
-
 afterEach(() => {
   if (root) {
     act(() => root!.unmount());
@@ -96,47 +89,62 @@ describe("T3TeamAgentsPanelSubRunTree status language (GHE #254)", () => {
     expect(container!.querySelector(".size-1\\.5")).toBeNull();
   });
 
-  it("a non-running sub-run folds into the 'Settled (N)' row; expanded, idle keeps the ring faded + static", () => {
-    render([node(createThread({ id: "idle-1", status: "idle" }))]);
-    // GHE #304: non-running sub-runs collapse into the dim "Settled (1)" fold row — open it
+  it("a terminal-but-not-settled sub-run stays VISIBLE (no fold); an actually-settled one folds into 'Settled (N)'", () => {
+    render([
+      node(createThread({ id: "idle-1", title: "Fresh idle", status: "idle" })),
+      node(createThread({ id: "set-1", title: "Settled idle", status: "idle", settled: true })),
+    ]);
+    // The fresh idle child keeps its own visible row + dashed ring; the settled
+    // one is hidden inside the single "Settled (1)" fold
+    expect(container!.textContent).toContain("Fresh idle");
+    expect(container!.textContent).not.toContain("Settled idle");
+    expect(ringSvg(), "fresh idle row carries the ring").toBeTruthy();
     const disclosure = Array.from(container!.querySelectorAll("button")).find((b) =>
       (b.textContent ?? "").includes("Settled (1)"),
     )!;
     expect(disclosure, "settled fold row present").toBeTruthy();
     act(() => disclosure.click());
-    const svg = ringSvg();
-    expect(svg, "idle keeps the dashed ring icon").toBeTruthy();
-    expect(svg!.className.baseVal).toContain("size-3");
-    expect(svg!.className.baseVal).not.toContain("t3team-icon-pulse");
     // the fold row's compact treatment: size-2.5 wrapper + faded idle ring
-    const wrapper = svg!.parentElement;
-    expect(wrapper!.className).toContain("size-2.5");
-    expect(wrapper!.className).toContain("text-muted-foreground/40");
+    // (idle renders the ring inside a wrapper span; the size classes sit on the span)
+    const foldArea = container!.querySelector("[data-t3team-settled-fold]")!;
+    const foldedIcon = foldArea.querySelector(".size-2\\.5");
+    expect(foldedIcon, "folded idle row carries the compact icon wrapper").toBeTruthy();
+    expect(foldedIcon!.className).toContain("text-muted-foreground/40");
+    expect(foldedIcon!.querySelector("svg circle"), "idle keeps the ring glyph").toBeTruthy();
     expect(container!.querySelector(".size-1\\.5")).toBeNull();
   });
 
-  it("completed/error sub-runs fold; expanded, the check mark and alert icon carry the fold's size-2.5 glyphs", () => {
+  it("completed/error sub-runs that have NOT settled stay visible with their glyphs; settled terminal ones fold with size-2.5 glyphs", () => {
     render([
       node(createThread({ id: "done-1", status: "completed" })),
       node(createThread({ id: "err-1", status: "error" })),
+      node(createThread({ id: "set-done", status: "completed", settled: true })),
+      node(createThread({ id: "set-err", status: "error", settled: true })),
     ]);
-    // Both are terminal → hidden behind the fold until expanded
+    // Fresh terminal children: visible rows, full-size glyphs — NO fold for them
+    const allSvgs = () => Array.from(container!.querySelectorAll("button svg")) as SVGSVGElement[];
+    const alert = (svgs: SVGSVGElement[]) =>
+      svgs.find((svg) => svg.querySelector("circle") && svg.querySelector("line"))!;
+    const check = (svgs: SVGSVGElement[]) =>
+      svgs.find((svg) => svg.querySelector("circle") && !svg.querySelector("line"))!;
+    expect(check(allSvgs()), "visible completed child carries the check").toBeTruthy();
+    expect(alert(allSvgs()), "visible error child carries the alert").toBeTruthy();
+    // The two actually-settled threads fold together
     expect(container!.textContent).toContain("Settled (2)");
     const disclosure = Array.from(container!.querySelectorAll("button")).find((b) =>
       (b.textContent ?? "").includes("Settled (2)"),
     )!;
     act(() => disclosure.click());
-    expect(ringSvg(), "settled rows carry no ring").toBeNull();
-    const alert = alertSvg();
-    expect(alert, "CircleAlertIcon svg present").toBeTruthy();
-    expect(alert!.className.baseVal).toContain("size-2.5");
-    expect(alert!.className.baseVal).toContain("text-destructive");
-    const check = (Array.from(container!.querySelectorAll("button svg")) as SVGSVGElement[]).find(
-      (svg) => svg.querySelector("circle") && !svg.querySelector("line"),
-    );
-    expect(check, "CircleCheckIcon svg present").toBeTruthy();
-    expect(check!.className.baseVal).toContain("size-2.5");
-    expect(check!.className.baseVal).toContain("text-success");
+    // Inside the fold only: compact size-2.5 glyphs, both states
+    // (completed/error render the class ON the svg; the fold's chevron is size-3, so the
+    // selector picks exactly the two status glyphs)
+    const foldArea = container!.querySelector("[data-t3team-settled-fold]")!;
+    const foldSvgs = Array.from(foldArea.querySelectorAll("svg.size-2\\.5")) as SVGSVGElement[];
+    expect(foldSvgs.length).toBe(2);
+    expect(alert(foldSvgs)!.className.baseVal).toContain("size-2.5");
+    expect(alert(foldSvgs)!.className.baseVal).toContain("text-destructive");
+    expect(check(foldSvgs)!.className.baseVal).toContain("size-2.5");
+    expect(check(foldSvgs)!.className.baseVal).toContain("text-success");
     expect(container!.querySelector(".size-1\\.5")).toBeNull();
   });
 });

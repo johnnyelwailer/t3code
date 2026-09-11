@@ -74,6 +74,10 @@ export function mapLiveThreadToProjectThread(
               }) === "running"
             ? "running"
             : "idle",
+    // GHE #304 follow-up: the REAL settle state (thread.settled event fired).
+    // The sub-run rosters' "Settled (N)" fold must key off this, never off
+    // `status !== "running"` — a fresh terminal child is not settled.
+    settled: thread.settledOverride === "settled",
     ...(thread.retention !== undefined ? { retention: thread.retention } : {}),
     // A clock-parked routine (Epic 27): carry the server-computed wake instant so the sidebar
     // pill reads "Sleeping until <time>". Absent when no run on this thread is sleeping.

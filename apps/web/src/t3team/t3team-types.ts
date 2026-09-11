@@ -51,6 +51,15 @@ export type ProjectThread = {
   selectedToolIds?: ReadonlyArray<T3TeamThreadToolId>;
   kickoffWorkflow?: T3TeamKickoffWorkflow;
   status: "idle" | "running" | "completed" | "error";
+  /**
+   * GHE #304 follow-up: the thread's REAL settle state — shell
+   * `settledOverride === "settled"` (a `thread.settled` event fired: user
+   * settle, auto-settle, or the child-settle TTL sweep). Distinct from
+   * `status`: a terminal or idle sub-run is NOT settled until that happens,
+   * and the sub-run rosters' "Settled (N)" fold may only contain threads
+   * where this is true.
+   */
+  settled?: boolean;
   /** Workflow repair/one-shot child threads may be opened directly but are never navigation. */
   retention?: "ephemeral" | "retained";
   /** ISO instant a scheduled-workflow run on this thread is sleeping until (Epic 27), or

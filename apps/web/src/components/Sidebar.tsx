@@ -4411,11 +4411,16 @@ export default function Sidebar() {
                     if (!expandedSubRunParentIds.has(parentThread.id)) return [];
                     const allChildren = childThreadsByParentId.get(parentThread.id);
                     if (!allChildren || allChildren.length === 0) return [];
-                    // GHE #304: the visible list shows ONLY running sub-runs — a
-                    // terminal thread is roster noise, not "active". Every
-                    // non-running sub-run collapses into ONE dim "Settled (N)"
-                    // fold row (replacing the old "Show N more" disclosure),
-                    // expandable into the same compact rows, oldest first.
+                    // GHE #304 (state-accurate fold): the visible list shows every
+                    // sub-run that has NOT actually settled — running children with
+                    // their live label AND terminal-but-not-yet-settled children
+                    // with their true terminal status (a fresh completed/failed/
+                    // stopped child is roster content, not "settled"). ONLY
+                    // threads whose shell carries settledOverride === "settled"
+                    // (real thread.settled event: user/auto settle or the 48h
+                    // child-settle TTL sweep) collapse into the ONE dim
+                    // "Settled (N)" fold row, expandable into the same compact
+                    // rows, oldest first.
                     const { running, folded } = partitionSubRunThreads(allChildren);
                     const foldOpen = foldedSubRunParentIds.has(parentThread.id);
                     const foldedThreads = foldOpen ? sortFoldedSubRunThreads(folded) : [];
