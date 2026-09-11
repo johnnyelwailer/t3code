@@ -27,9 +27,17 @@ export function normalizeAskPosition(value: unknown): number | undefined {
  * this reads back the model's own citations rather than inventing them; an
  * answer that cites nothing yields an empty array.
  */
+/**
+ * Citations are parsed from an explicit `[[cite:N]]` marker, never from the
+ * prose. Matching `position N` instead read citations out of QUOTED transcript
+ * content: a slice containing `SyntaxError: Unexpected token u in JSON at
+ * position 4` produced a confident citation of entry 4 whenever the model
+ * quoted that line — a wrong citation, which is worse than none. The bracket
+ * form does not occur in transcript text.
+ */
 function citationsFromAnswer(answer: string, entries: ReadonlyArray<ThreadSearchEntry>) {
   const cited = new Set<number>();
-  for (const match of answer.matchAll(/\bposition\s+(\d+)\b/gi)) {
+  for (const match of answer.matchAll(/\[\[cite:\s*(\d+)\s*\]\]/gi)) {
     const parsed = Number(match[1]);
     if (Number.isFinite(parsed)) cited.add(parsed);
   }

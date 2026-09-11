@@ -30,7 +30,9 @@ export const T3TEAM_ASK_SYSTEM_PROMPT = [
   "  and never guess.",
   "- If the slice does not contain the answer, say so plainly and say what the",
   "  slice does cover, so the caller can widen the span.",
-  "- Cite the entries you used by writing `position N` for each one.",
+  "- Cite the entries you used by writing `[[cite:N]]` for each one, where N is",
+  "  the position number. Use that exact bracket form and nothing else — the",
+  "  words `position N` appear inside transcript text and are not citations.",
   "- Be brief and concrete. Prefer quoting the decisive line over paraphrasing.",
 ].join("\n");
 

@@ -19,9 +19,30 @@ export const T3TEAM_ASK_DEFAULT_SPAN_TOKENS = 8_000;
 export const T3TEAM_ASK_MAX_SPAN_BYTES = 768_000;
 export const T3TEAM_ASK_NEIGHBOURHOOD_ENTRIES = 2;
 
-/** Characters ÷ 4. Deliberately an ESTIMATE for budgeting, not a tokenizer. */
+/**
+ * Cap on the rendered text of ONE entry. Activity payloads are already capped
+ * upstream, but message text is not — a single pasted build log can be
+ * megabytes. Without a per-entry cap, an explicit one-entry span sails past
+ * every budget below, because narrowing can only drop whole entries and must
+ * leave at least one.
+ */
+export const T3TEAM_ASK_MAX_ENTRY_CHARS = 40_000;
+
+/**
+ * Budgeting estimate, deliberately NOT a tokenizer — but it must never
+ * UNDERSHOOT, or the request is rejected by the gateway with a 400 after we
+ * have already paid to build it. ASCII runs at roughly 4 characters per token;
+ * CJK, emoji and other non-Latin text run closer to one token per character,
+ * so counting those at ÷4 underestimates by about 4×. Count them at 1.
+ */
 export function estimateAskTokens(text: string): number {
-  return Math.ceil(text.length / 4);
+  let ascii = 0;
+  let wide = 0;
+  for (const char of text) {
+    if (char.codePointAt(0)! < 128) ascii += 1;
+    else wide += 1;
+  }
+  return Math.ceil(ascii / 4) + wide;
 }
 
 /**
@@ -30,7 +51,14 @@ export function estimateAskTokens(text: string): number {
  * wall-clock, no elapsed time, no run ids in here.
  */
 export function renderAskEntry(entry: ThreadSearchEntry): string {
-  return `[position ${entry.position} | ${entry.source} | ${entry.label}]\n${entry.text}`;
+  const head = `[position ${entry.position} | ${entry.source} | ${entry.label}]\n`;
+  if (entry.text.length <= T3TEAM_ASK_MAX_ENTRY_CHARS) return head + entry.text;
+  // Keep both ends: a long log states its verdict at the end, so a head-only
+  // cut keeps the banner and drops the failure. Deterministic, so the prompt
+  // cache still sees identical bytes for an identical entry.
+  const keep = Math.floor(T3TEAM_ASK_MAX_ENTRY_CHARS / 2);
+  const dropped = entry.text.length - T3TEAM_ASK_MAX_ENTRY_CHARS;
+  return `${head}${entry.text.slice(0, keep)}\n… [${dropped} characters elided from the middle] …\n${entry.text.slice(-keep)}`;
 }
 
 export type ThreadAskSpanMatch = {
@@ -88,18 +116,22 @@ function narrowToBudget(
 ): { entries: ThreadSearchEntry[]; truncated: boolean } {
   const rendered = selected.map(renderAskEntry);
   const bytes = rendered.map((text) => Buffer.byteLength(text, "utf8") + 2);
+  const tokens = rendered.map((text) => estimateAskTokens(text) + 1);
   let start = 0;
-  let totalChars = rendered.reduce((sum, text) => sum + text.length + 2, 0);
+  let totalTokens = tokens.reduce((sum, value) => sum + value, 0);
   let totalBytes = bytes.reduce((sum, value) => sum + value, 0);
-  while (
-    start < selected.length - 1 &&
-    (Math.ceil(totalChars / 4) > budgetTokens || totalBytes > T3TEAM_ASK_MAX_SPAN_BYTES)
-  ) {
-    totalChars -= rendered[start]!.length + 2;
+  const overBudget = () => totalTokens > budgetTokens || totalBytes > T3TEAM_ASK_MAX_SPAN_BYTES;
+  while (start < selected.length - 1 && overBudget()) {
+    totalTokens -= tokens[start]!;
     totalBytes -= bytes[start]!;
     start += 1;
   }
-  return { entries: selected.slice(start), truncated: start > 0 };
+  // Narrowing can only drop WHOLE entries and must leave one, so a single
+  // outsized entry would otherwise sail past the budget and be reported as
+  // untruncated. Per-entry capping in renderAskEntry bounds that case; report
+  // it as truncated so the caller is never told it saw the whole span.
+  const cappedEntry = overBudget();
+  return { entries: selected.slice(start), truncated: start > 0 || cappedEntry };
 }
 
 export function selectThreadAskSpan(input: {
