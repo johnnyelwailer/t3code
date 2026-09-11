@@ -60,6 +60,12 @@ export type CreateBindingInput<
     toolArgs: unknown,
     threadId: ThreadId,
   ) => Effect.Effect<T3TeamToolCallResult>;
+  /** Read/write this thread's durable task journal (survives compaction). */
+  readonly taskJournal?: (
+    tool: string,
+    toolArgs: unknown,
+    threadId: ThreadId,
+  ) => Effect.Effect<T3TeamToolCallResult>;
   /** Read the full body of a previously delivered inter-agent message. */
   readonly readMessageThread?: (
     toolArgs: unknown,
@@ -135,6 +141,12 @@ export function createToolSurface<
       ...(input.searchThread && input.threadId
         ? {
             searchThread: (toolArgs: unknown) => input.searchThread!(toolArgs, input.threadId!),
+          }
+        : {}),
+      ...(input.taskJournal && input.threadId
+        ? {
+            taskJournal: (tool: string, toolArgs: unknown) =>
+              input.taskJournal!(tool, toolArgs, input.threadId!),
           }
         : {}),
       ...(input.readMessageThread && input.threadId

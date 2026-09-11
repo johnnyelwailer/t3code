@@ -57,6 +57,8 @@ export function dispatchT3TeamToolCall(input: {
   showWidget?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   searchSourceThread?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   searchThread?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
+  /** Durable per-thread task journal (`t3team.task.write` / `t3team.task.list`). */
+  taskJournal?: (tool: string, toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   readMessageThread?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   manageChildren?: (
     toolArgs: unknown,
@@ -121,6 +123,7 @@ export function dispatchT3TeamToolCall(input: {
     ...(input.showWidget ? { showWidget: input.showWidget } : {}),
     ...(input.searchSourceThread ? { searchSourceThread: input.searchSourceThread } : {}),
     ...(input.searchThread ? { searchThread: input.searchThread } : {}),
+    ...(input.taskJournal ? { taskJournal: input.taskJournal } : {}),
     ...(input.readMessageThread ? { readMessageThread: input.readMessageThread } : {}),
     ...(input.manageChildren ? { manageChildren: input.manageChildren } : {}),
     ...(input.readRuntimeModels ? { readRuntimeModels: input.readRuntimeModels } : {}),

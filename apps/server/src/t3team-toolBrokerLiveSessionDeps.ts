@@ -22,6 +22,7 @@ import type { ServerSettingsService } from "./serverSettings.ts";
 import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshService.ts";
 import type { T3TeamThreadToolContextStoreShape } from "./t3team-threadToolContextStore.ts";
 import type { T3TeamRecipeToolHandlers } from "./t3team-toolBrokerBindingRecipes.ts";
+import type { TaskJournalStore } from "./t3team-toolBrokerBindingTaskJournal.ts";
 import { type makeStartChildThread } from "./t3team-toolBrokerStartChild.ts";
 import { type makeManageChildrenHandler } from "./t3team-toolBrokerChildrenLive.ts";
 import { type T3TeamToolBrokerShape, type T3TeamTurnToolContext } from "./t3team-toolBroker.ts";
@@ -55,6 +56,14 @@ export interface BindSessionDeps {
   ) => Effect.Effect<unknown, OrchestrationDispatchError>;
   readonly startChildThread: ReturnType<typeof makeStartChildThread>;
   readonly manageChildren: ReturnType<typeof makeManageChildrenHandler>;
+  /**
+   * Durable task-journal store. OPTIONAL, and absent means the two task tools
+   * report "not enabled" rather than failing: a host that composes the broker
+   * without the persistence layer (test harnesses, the prelaunch surface) must
+   * still bind successfully — the same treatment `providerRegistry` and
+   * `serverSettings` already get.
+   */
+  readonly taskJournalStore: TaskJournalStore | undefined;
   readonly recipeToolsForThread: (threadId: ThreadIdType) => T3TeamRecipeToolHandlers;
   readonly workflowTools: {
     readonly workflowRunToolsForThread?:

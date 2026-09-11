@@ -72,6 +72,8 @@ export const T3TeamToolkitHandlersLive = T3TeamToolkit.toLayer({
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_provider_usage, input),
   t3team_rename_thread: (input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_rename_thread, input),
+  t3team_task_write: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_task_write, input),
+  t3team_task_list: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_task_list, input),
   t3team_search_thread: (input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_search_thread, input),
   t3team_search_source: (input) =>

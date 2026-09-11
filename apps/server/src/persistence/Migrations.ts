@@ -99,6 +99,7 @@ import Migration0065 from "./Migrations/t3team-055_ProviderUsageHold.ts";
 import Migration0066 from "./Migrations/045_ProjectionProjectsAutoPull.ts";
 import Migration0067 from "./Migrations/046_RepairAutomaticSettlementTimestamps.ts";
 import Migration0068 from "./Migrations/047_ProjectionProjectIcon.ts";
+import Migration0069 from "./Migrations/t3team-056_ThreadTaskRecords.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -179,6 +180,7 @@ export const migrationEntries = [
   [66, "ProjectionProjectsAutoPull", Migration0066],
   [67, "RepairAutomaticSettlementTimestamps", Migration0067],
   [68, "ProjectionProjectIcon", Migration0068],
+  [69, "ThreadTaskRecords", Migration0069],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

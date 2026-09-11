@@ -447,12 +447,82 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       required: ["title"],
     },
   },
+  // The durable per-thread task journal. These are `implemented` — they have a
+  // real handler (`apps/server/src/t3team-toolBrokerBindingTaskJournal.ts`) and
+  // a real table (`thread_task_records`, migration t3team-056).
+  "t3team.task.write": {
+    id: "t3team.task.write",
+    label: "Write task list",
+    title: "Write this thread's task list",
+    description:
+      "Record this thread's plan as a task list that SURVIVES CONTEXT COMPACTION — it is stored outside the context window, so it is the one reliable place to keep what you are doing. This REPLACES the whole list every time: always send every task you still care about, not just the one that changed. Keep the list current — write it at the start, and rewrite it whenever a task's status changes. Mark exactly ONE task 'in_progress' at a time, so the list always says what you are doing right now. When something fails, do NOT drop the task: keep it and put the reason in its 'note' — that detail is exactly what compaction destroys. Order is the array order.",
+    capabilities: ["write"],
+    kind: "thread",
+    surfaces: ["thread"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        tasks: {
+          type: "array",
+          description:
+            "The COMPLETE task list, in order. Replaces whatever was stored before; omitting a task deletes it.",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              subject: {
+                type: "string",
+                description: "Imperative form of the task, e.g. 'Add the migration'.",
+                minLength: 1,
+              },
+              status: {
+                type: "string",
+                description:
+                  "Task state. Defaults to 'pending'. Keep exactly one task 'in_progress'. Use 'cancelled' (not deletion) when you decide not to do it.",
+                enum: ["pending", "in_progress", "completed", "cancelled"],
+              },
+              active_form: {
+                type: "string",
+                description:
+                  "Optional present-participle form shown while the task runs, e.g. 'Adding the migration'.",
+                minLength: 1,
+              },
+              note: {
+                type: "string",
+                description:
+                  "Optional free text — record WHY a task failed, what you already ruled out, or what a child reported back. Keep failures here rather than dropping the task.",
+                minLength: 1,
+              },
+            },
+            required: ["subject"],
+          },
+        },
+      },
+      required: ["tasks"],
+    },
+  },
+  "t3team.task.list": {
+    id: "t3team.task.list",
+    label: "Read task list",
+    title: "Read this thread's task list",
+    description:
+      "Read back this thread's durable task list — your own plan, stored outside the context window. Call this after a compaction, or any time you are unsure what you were doing or what is left, INSTEAD of re-deriving it from the transcript or by polling your children. Takes no arguments. Returns each task with its 1-based position, subject, status, and any note.",
+    capabilities: ["read"],
+    kind: "thread",
+    surfaces: ["thread"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: EMPTY_OBJECT_INPUT_SCHEMA,
+  },
   "t3team.thread.search": {
     id: "t3team.thread.search",
     label: "Search this thread",
     title: "Search this thread's transcript",
     description:
-      "Search the messages of the CURRENT thread (its own transcript) — e.g. to recover a prior decision or context that scrolled out of the context window. Pass a case-insensitive 'query' substring, an optional 'limit' (default 10, max 25), and an optional 'role' filter ('user' | 'assistant' | 'actor'). Returns each matching message with its 1-based position, role, a snippet around the match, and message_id (pass message_id to t3team.thread.read_message for the full body).",
+      "Search the CURRENT thread — its messages AND its tool activity (commands and their output, file reads, tool calls) — e.g. to recover a decision, a requirement or a result that scrolled out of the context window. Compacted and truncated spans stay searchable. Pass a case-insensitive 'query' substring; a multi-word query that matches nothing verbatim is retried requiring every word (reported as matchMode). Newest matches come first unless 'order' is 'oldest'. Page with 'offset' when the result reports hasMore. Narrow with 'scope' or 'role'. Each match carries its 1-based position within its own stream, a snippet around the match, and either message_id (pass to t3team.thread.read_message for the full body) or activity_id. An activity records only the first 500 characters of a tool result.",
     capabilities: ["read"],
     kind: "thread",
     surfaces: ["thread"],
@@ -464,18 +534,33 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       properties: {
         query: {
           type: "string",
-          description: "Case-insensitive substring to search for in this thread's messages.",
+          description: "Case-insensitive substring to search for in this thread's transcript.",
           minLength: 1,
         },
         limit: {
           type: "number",
           description: "Maximum number of matches to return (default 10, max 25).",
         },
+        offset: {
+          type: "number",
+          description:
+            "Skip this many matches before returning, in the requested order. Use the offset the previous result's hint reports when hasMore is true.",
+        },
+        scope: {
+          type: "string",
+          description:
+            "Restrict the search to one stream: 'messages', 'activities' (tool calls and command output), or 'all' (default).",
+          enum: ["all", "messages", "activities"],
+        },
+        order: {
+          type: "string",
+          description: "'recent' (default) returns the newest matches first; 'oldest' reverses it.",
+          enum: ["recent", "oldest"],
+        },
         role: {
           type: "string",
           description:
-            "Optional role filter: only return messages from this role ('user', 'assistant', or 'actor').",
-          enum: ["user", "assistant", "actor"],
+            "Optional filter on a message role ('user', 'assistant', 'actor') or an activity kind (e.g. 'bash'). An unknown value returns no matches.",
         },
       },
       required: ["query"],
@@ -486,7 +571,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     label: "Search fork source thread",
     title: "Search the fork source thread",
     description:
-      "Search the FULL transcript of the thread this thread was forked from — including the middle messages a truncated fork omitted. Only works in a forked thread. Pass a case-insensitive 'query' substring and an optional 'limit' (default 10, max 25). Returns each matching message with its 1-based position, role, and a snippet around the match.",
+      "Search the FULL transcript of the thread this thread was forked from — its messages and its tool activity — including the middle a truncated fork omitted. Only works in a forked thread. Pass a case-insensitive 'query' substring; a multi-word query that matches nothing verbatim is retried requiring every word (reported as matchMode). Newest matches come first unless 'order' is 'oldest'. Page with 'offset' when the result reports hasMore. Narrow with 'scope'. Each match carries its 1-based position within its own stream, a snippet around the match, and either message_id or activity_id.",
     capabilities: ["read"],
     kind: "thread",
     surfaces: ["thread"],
@@ -499,12 +584,28 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
         query: {
           type: "string",
           description:
-            "Case-insensitive substring to search for in the original thread's messages.",
+            "Case-insensitive substring to search for in the original thread's transcript.",
           minLength: 1,
         },
         limit: {
           type: "number",
           description: "Maximum number of matches to return (default 10, max 25).",
+        },
+        offset: {
+          type: "number",
+          description:
+            "Skip this many matches before returning, in the requested order. Use the offset the previous result's hint reports when hasMore is true.",
+        },
+        scope: {
+          type: "string",
+          description:
+            "Restrict the search to one stream: 'messages', 'activities' (tool calls and command output), or 'all' (default).",
+          enum: ["all", "messages", "activities"],
+        },
+        order: {
+          type: "string",
+          description: "'recent' (default) returns the newest matches first; 'oldest' reverses it.",
+          enum: ["recent", "oldest"],
         },
       },
       required: ["query"],
