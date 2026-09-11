@@ -180,6 +180,9 @@ describe("harness instruction trigger (GHE #156)", () => {
     expect(ACTOR_REACTION_QUIET_INSTRUCTION).toContain("do NOT re-acknowledge standing");
     expect(ACTOR_REACTION_QUIET_INSTRUCTION).toContain("no status recap");
     expect(ACTOR_REACTION_QUIET_INSTRUCTION).toContain("one short line");
+    // Blocker carve-out: hard failures must surface even in quiet mode.
+    expect(ACTOR_REACTION_QUIET_INSTRUCTION).toContain("hard blocker");
+    expect(ACTOR_REACTION_QUIET_INSTRUCTION).toContain("surface it directly");
   });
 
   it("the strong rule makes answering the user the FIRST action", () => {

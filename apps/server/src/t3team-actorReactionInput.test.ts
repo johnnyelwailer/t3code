@@ -444,6 +444,35 @@ describe("userInterjectedDuringQueueing", () => {
       ),
     ).toBe(true);
   });
+
+  it("excludes inter-agent reaction inputs and automated senders (M2: bursts are not user interjections)", () => {
+    const reactionInput = {
+      role: "user",
+      text: "queued delivery framing",
+      createdAt: "2026-07-19T08:00:01.000Z",
+      t3teamExt: {
+        visibleToUser: false,
+        actor: { senderThreadId: "sibling", urgency: "normal", hopCount: 1, rootThreadId: "root" },
+      },
+    } as unknown as OrchestrationMessage;
+    const automated = {
+      role: "user",
+      text: "system note",
+      createdAt: "2026-07-19T08:00:01.000Z",
+      t3teamExt: { author: { source: "system" } },
+    } as unknown as OrchestrationMessage;
+    // A sibling's own reaction input in the transcript must NOT flip this
+    // batch into the compressed tier — the whole point of the quiet rule.
+    expect(userInterjectedDuringQueueing([entry], [reactionInput])).toBe(false);
+    expect(userInterjectedDuringQueueing([entry], [automated])).toBe(false);
+    // A real human message still wins, even alongside agent inputs.
+    expect(
+      userInterjectedDuringQueueing(
+        [entry],
+        [reactionInput, userMessage("2026-07-19T08:00:01.000Z")],
+      ),
+    ).toBe(true);
+  });
 });
 
 describe("hasPriorInterAgentMessages", () => {
@@ -469,6 +498,30 @@ describe("hasPriorInterAgentMessages", () => {
         } as unknown as OrchestrationMessage,
       ]),
     ).toBe(true);
+  });
+
+  it("excludes the current batch's own persisted deliveries (M1: first-delivery tier reachable)", () => {
+    const actorMessage = (id: string) =>
+      ({
+        role: "user",
+        text: "x",
+        id,
+        t3teamExt: { visibleToUser: false, actor: { senderThreadId: "s" } },
+      }) as unknown as OrchestrationMessage;
+    // Without the exclusion every delivery would look "prior" because each
+    // delivery is persisted into the transcript BEFORE the drain claims it.
+    expect(hasPriorInterAgentMessages([actorMessage("delivery-a")], ["delivery-a"])).toBe(false);
+    // A genuinely earlier actor message still makes this a follow-up delivery.
+    expect(
+      hasPriorInterAgentMessages(
+        [actorMessage("delivery-a"), actorMessage("delivery-earlier")],
+        ["delivery-a"],
+      ),
+    ).toBe(true);
+    // Batch exclusion: none of the batch's own ids count.
+    expect(hasPriorInterAgentMessages([actorMessage("a"), actorMessage("b")], ["a", "b"])).toBe(
+      false,
+    );
   });
 });
 

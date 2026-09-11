@@ -191,7 +191,21 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
         if (batch.length === 0) {
           return;
         }
-        yield* startActorReaction({ engine, mailbox, threadId, loadThread, entries: batch });
+        yield* startActorReaction({
+          engine,
+          mailbox,
+          threadId,
+          loadThread,
+          entries: batch,
+          // Re-note claimed-then-requeued urgent entries: forgetClaimedUrgent
+          // already ran at claim, so a failed dispatch must not silently
+          // downgrade them to the idle window.
+          onRequeueUrgent: (requeued) => {
+            for (const entry of requeued) {
+              if (entry.urgency === "urgent") noteUrgentDelivery(threadId, entry.messageId);
+            }
+          },
+        });
       }).pipe(
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
@@ -245,6 +259,11 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
           loadThread,
           entries: batch,
           interruptedChildren: interrupted,
+          onRequeueUrgent: (requeued) => {
+            for (const entry of requeued) {
+              if (entry.urgency === "urgent") noteUrgentDelivery(threadId, entry.messageId);
+            }
+          },
         });
       }).pipe(
         Effect.catchCause((cause) =>

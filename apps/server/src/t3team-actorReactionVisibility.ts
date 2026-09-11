@@ -123,7 +123,9 @@ export const ACTOR_REACTION_QUIET_INSTRUCTION =
   "[Inter-agent messages arrived. Act on them only if they change your situation. Do NOT " +
   "re-state or re-explain earlier user-facing content, and do NOT re-acknowledge standing " +
   "instructions. If there is nothing new for the user, keep your user-facing reply to one " +
-  "short line — no status recap, no re-capping of work in flight.]";
+  "short line — no status recap, no re-capping of work in flight. A hard blocker or " +
+  "failure reported in the incoming messages is an exception: surface it directly, " +
+  "concisely, even in quiet mode.]";
 
 /**
  * The instruction to append to a reaction turn's framed input, or `""` when the
