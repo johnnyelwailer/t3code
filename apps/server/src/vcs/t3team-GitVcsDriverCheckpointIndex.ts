@@ -40,6 +40,7 @@ type ExecuteGit = (input: {
   readonly args: readonly string[];
   readonly env: NodeJS.ProcessEnv;
   readonly allowNonZeroExit?: boolean;
+  readonly timeoutMs?: number;
 }) => Effect.Effect<
   { readonly exitCode: number | null; readonly stdout: string; readonly stderr: string },
   VcsError
@@ -74,8 +75,16 @@ const listPaths = (
   cwd: string,
   args: readonly string[],
   env: NodeJS.ProcessEnv,
+  timeoutMs?: number,
 ) =>
-  execute({ operation, cwd, args, env, allowNonZeroExit: true }).pipe(
+  execute({
+    operation,
+    cwd,
+    args,
+    env,
+    allowNonZeroExit: true,
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+  }).pipe(
     Effect.flatMap((result) =>
       result.exitCode === 0
         ? Effect.succeed(result.stdout.split("\0").filter((part) => part.length > 0))
@@ -97,11 +106,20 @@ export const indexCheckpointPaths = (deps: {
   readonly execute: ExecuteGit;
   readonly fileSystem: FileSystem.FileSystem;
   readonly path: Path.Path;
+  /** Deadline for the whole-worktree `git add` / `ls-files` enumeration steps. */
+  readonly timeoutMs?: number;
 }): Effect.Effect<void, VcsError> =>
   Effect.gen(function* () {
-    const { operation, cwd, gitCommonDir, env, execute, fileSystem, path } = deps;
+    const { operation, cwd, gitCommonDir, env, execute, fileSystem, path, timeoutMs } = deps;
     const run = (args: readonly string[]) =>
-      execute({ operation, cwd, args, env, allowNonZeroExit: true });
+      execute({
+        operation,
+        cwd,
+        args,
+        env,
+        allowNonZeroExit: true,
+        ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+      });
 
     // Fast path: index everything.
     const broadAdd = yield* run(["add", "-A", "--", "."]);
@@ -112,8 +130,8 @@ export const indexCheckpointPaths = (deps: {
     // Fallback: add an explicit NUL-separated pathspec file (argv has a
     // length limit; a pathspec file does not).
     const [tracked, untracked] = yield* Effect.all([
-      listPaths(execute, operation, cwd, ["ls-files", "-z"], env),
-      listPaths(execute, operation, cwd, ["ls-files", "--others", "--exclude-standard", "-z"], env),
+      listPaths(execute, operation, cwd, ["ls-files", "-z"], env, timeoutMs),
+      listPaths(execute, operation, cwd, ["ls-files", "--others", "--exclude-standard", "-z"], env, timeoutMs),
     ]);
     const candidatePaths = [...untracked, ...tracked];
     if (candidatePaths.length === 0) {
