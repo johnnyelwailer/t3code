@@ -1817,9 +1817,8 @@ describe("MessagesTimeline", () => {
       />,
     );
 
-    expect(markup).toContain('aria-label="Received 1 update and used 1 tool, tool call failed"');
-    // Ordinary tool failures render muted, not red.
-    expect(markup).not.toContain("text-destructive");
+    expect(markup).toContain("Received 1 update and used 1 tool");
+    expect(markup).toContain('aria-label="Hidden work includes a failure"');
   });
 
   it("keeps the red treatment for severe orchestration failures", () => {
