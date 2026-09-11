@@ -75,8 +75,16 @@ const listPaths = (
   cwd: string,
   args: readonly string[],
   env: NodeJS.ProcessEnv,
+  timeoutMs?: number,
 ) =>
-  execute({ operation, cwd, args, env, allowNonZeroExit: true }).pipe(
+  execute({
+    operation,
+    cwd,
+    args,
+    env,
+    allowNonZeroExit: true,
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+  }).pipe(
     Effect.flatMap((result) =>
       result.exitCode === 0
         ? Effect.succeed(result.stdout.split("\0").filter((part) => part.length > 0))
@@ -122,8 +130,8 @@ export const indexCheckpointPaths = (deps: {
     // Fallback: add an explicit NUL-separated pathspec file (argv has a
     // length limit; a pathspec file does not).
     const [tracked, untracked] = yield* Effect.all([
-      listPaths(execute, operation, cwd, ["ls-files", "-z"], env),
-      listPaths(execute, operation, cwd, ["ls-files", "--others", "--exclude-standard", "-z"], env),
+      listPaths(execute, operation, cwd, ["ls-files", "-z"], env, timeoutMs),
+      listPaths(execute, operation, cwd, ["ls-files", "--others", "--exclude-standard", "-z"], env, timeoutMs),
     ]);
     const candidatePaths = [...untracked, ...tracked];
     if (candidatePaths.length === 0) {

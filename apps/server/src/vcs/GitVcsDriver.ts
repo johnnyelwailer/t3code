@@ -1,6 +1,7 @@
 import * as NodeCrypto from "node:crypto";
 
 import * as Context from "effect/Context";
+import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -731,12 +732,24 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
   const CHECKPOINT_TIMEOUT_RETRY_BACKOFF_MS = [5_000, 30_000] as const;
   /** Total capture attempts before a timed-out capture surfaces to the caller. */
   const CHECKPOINT_MAX_CAPTURE_ATTEMPTS = CHECKPOINT_TIMEOUT_RETRY_BACKOFF_MS.length + 1;
+  /**
+   * Total wall-clock budget for the whole self-heal. The per-step and
+   * per-attempt caps above bound each attempt, but 3 attempts + backoff can
+   * still block the single serial checkpoint worker for many minutes. This
+   * gate stops scheduling further retries once the capture has already spent
+   * this much real time, so the worst case is bounded to this budget plus one
+   * in-flight attempt. Sized well above a healthy (slow) capture — the 120s
+   * index deadline plus the fast steps — so a legitimate slow capture still
+   * gets its retries.
+   */
+  const CHECKPOINT_TOTAL_WALLCLOCK_BUDGET_MS = 180_000;
   const isVcsProcessTimeoutError = Schema.is(VcsProcessTimeoutError);
 
   const checkpoints: VcsDriver.VcsCheckpointOps = {
     captureCheckpoint: Effect.fn("GitVcsDriver.checkpoints.captureCheckpoint")(function* (input) {
       const operation = "GitVcsDriver.checkpoints.captureCheckpoint";
       const gitCommonDir = yield* resolveGitCommonDir(input.cwd);
+      const captureStartMs = yield* Clock.currentTimeMillis;
 
       // One attempt is fully isolated: a fresh temp index file, seeded from
       // HEAD, and an idempotent update-ref — so retrying a timed-out attempt
@@ -841,6 +854,16 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
             (error) => isVcsProcessTimeoutError(error),
             (error) =>
               Effect.gen(function* () {
+                const elapsedMs = (yield* Clock.currentTimeMillis) - captureStartMs;
+                if (elapsedMs >= CHECKPOINT_TOTAL_WALLCLOCK_BUDGET_MS) {
+                  yield* Effect.logWarning("checkpoint.capture.timeout-budget", {
+                    detail: `checkpoint capture exceeded its ${CHECKPOINT_TOTAL_WALLCLOCK_BUDGET_MS}ms wall-clock budget in ${input.cwd}; stopping further retries`,
+                    cwd: input.cwd,
+                    attemptNumber,
+                    elapsedMs,
+                  });
+                  return yield* error;
+                }
                 yield* Effect.logWarning("checkpoint.capture.timeout-retry", {
                   detail: `checkpoint capture timed out in ${input.cwd}; retrying in ${backoffMs}ms (attempt ${attemptNumber} of ${CHECKPOINT_MAX_CAPTURE_ATTEMPTS})`,
                   cwd: input.cwd,
