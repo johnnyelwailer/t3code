@@ -4,13 +4,28 @@
  * dispatch/catalog once, then adding only a small static Tool.make wrapper here.
  */
 import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
 import { Tool, Toolkit } from "effect/unstable/ai";
 
+import { OrchestrationEngineService } from "../../../orchestration/Services/OrchestrationEngine.ts";
 import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
 import { T3TEAM_WORKFLOW_TAGLINE } from "../../../t3team-workflowManual.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
 const dependencies = [McpInvocationContext.McpInvocationContext, T3TeamToolBroker];
+
+// t3team_ask_user does not route through the t3team broker: the handler
+// appends user-input activities to the orchestration thread directly and
+// suspends on the durable answer event, so its handler needs the
+// OrchestrationEngine instead of the broker binding. `Scope.Scope` is listed
+// because the handler registers a cancellation finalizer (Effect.addFinalizer
+// widens R with the ambient Scope); the toolkit's toLayer provides the ambient
+// scope and excludes it from the layer's public requirements.
+const askUserDependencies = [
+  McpInvocationContext.McpInvocationContext,
+  OrchestrationEngineService,
+  Scope.Scope,
+];
 
 /** Canonical broker tools exposed through provider-safe MCP names. Keep this registry beside
  * the toolkit; the parity test requires every implemented catalog tool to be mapped or named
@@ -22,6 +37,7 @@ export const T3TEAM_MCP_CANONICAL_TOOL_MAP = {
   t3team_search_thread: "t3team.thread.search",
   t3team_search_source: "t3team.thread.search_source",
   t3team_read_message: "t3team.thread.read_message",
+  t3team_ask_user: "t3team.thread.ask_user",
   t3team_start_child: "t3team.thread.start_child",
   t3team_children: "t3team.thread.children",
   t3team_orchestration_run: "t3team.orchestration.run",
@@ -457,6 +473,41 @@ export const T3TeamWorkflowResumeTool = Tool.make("t3team_workflow_resume", {
 // Render an inline, sandboxed HTML/SVG widget in the calling thread. This is a
 // current-thread operation: the handler deliberately goes through the bound
 // broker surface, so normal thread resolution and tool-group policy still apply.
+// Structured user question: ask the user a question, suspend this turn until
+// they answer, and return the answer as the tool result. Works for any
+// agent thread — in particular for harnesses whose model ships no native
+// question tool. The question is surfaced through the thread's pending
+// user-input panel (user-input.requested activity) and the answer comes back
+// through the same path the provider adapters' AskUserQuestion uses.
+export const T3TeamAskUserTool = Tool.make("t3team_ask_user", {
+  description:
+    "Ask the user a structured question and suspend this turn until they answer. " +
+    "The question is shown in the thread's composer (options become answer buttons); " +
+    "the user's answer is returned as the tool result. Use it when you are blocked on " +
+    "a decision or piece of information only the user can provide. Keep the question " +
+    "short and answerable in one composer submission. If the turn is interrupted " +
+    "before the user answers, the question is discarded and no result is returned.",
+  parameters: Schema.Struct({
+    question: Schema.String.annotate({
+      description: "The question to ask the user, shown verbatim in the composer.",
+    }),
+    options: Schema.optional(Schema.Array(Schema.String)).annotate({
+      description:
+        "Optional answer choices offered to the user as buttons. The user can also " +
+        "type a free-form answer.",
+    }),
+    multiSelect: Schema.optional(Schema.Boolean).annotate({
+      description: "When true (with options), the user may pick several options.",
+    }),
+    allowFreeText: Schema.optional(Schema.Boolean).annotate({
+      description: "When false, the user may only pick from the listed options (requires options).",
+    }),
+  }),
+  success: Schema.Unknown,
+  failure: T3TeamMcpToolError,
+  dependencies: askUserDependencies,
+});
+
 export const T3TeamShowWidgetTool = Tool.make("t3team_show_widget", {
   description:
     "Show an inline widget in the current t3team thread. Use a small HTML or SVG fragment " +
@@ -542,6 +593,7 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamSearchThreadTool,
   T3TeamSearchSourceTool,
   T3TeamReadMessageTool,
+  T3TeamAskUserTool,
   T3TeamStartChildTool,
   T3TeamChildrenTool,
   T3TeamSendMessageTool,

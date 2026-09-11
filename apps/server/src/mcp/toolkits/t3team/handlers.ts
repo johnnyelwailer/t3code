@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import { t3teamHelp } from "../../../t3team-help.ts";
 import { T3TEAM_MCP_SERVER_NAME, T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
+import { t3TeamAskUser } from "./askUser.ts";
 import { T3TEAM_MCP_CANONICAL_TOOL_MAP, T3TeamMcpToolError, T3TeamToolkit } from "./tools.ts";
 
 const callBroker = Effect.fn("T3TeamMcpToolkit.callBroker")(function* (
@@ -53,6 +54,16 @@ const sendMessage = Effect.fn("T3TeamMcpToolkit.sendMessage")(function* (input: 
     .pipe(Effect.mapError((message) => new T3TeamMcpToolError({ message })));
 });
 
+const askUser = Effect.fn("T3TeamMcpToolkit.askUser")(function* (input: {
+  readonly question: string;
+  readonly options?: readonly string[] | undefined;
+  readonly multiSelect?: boolean | undefined;
+  readonly allowFreeText?: boolean | undefined;
+}) {
+  const invocation = yield* McpInvocationContext.McpInvocationContext;
+  return yield* t3TeamAskUser(input, invocation.threadId);
+});
+
 export const T3TeamToolkitHandlersLive = T3TeamToolkit.toLayer({
   t3team_models: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_models, input),
   t3team_provider_usage: (input) =>
@@ -65,6 +76,7 @@ export const T3TeamToolkitHandlersLive = T3TeamToolkit.toLayer({
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_search_source, input),
   t3team_read_message: (input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_read_message, input),
+  t3team_ask_user: (input) => askUser(input),
   t3team_start_child: (input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_start_child, input),
   t3team_children: (input) => callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_children, input),
