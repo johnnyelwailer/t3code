@@ -4,7 +4,8 @@ import { describe, expect, it } from "vite-plus/test";
 import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
 import { buildActorReactionInput } from "./t3team-actorReactionInput.ts";
 import {
-  ACTOR_REACTION_USER_RETURN_INSTRUCTION,
+  ACTOR_REACTION_QUIET_INSTRUCTION,
+  ACTOR_REACTION_UNANSWERED_INSTRUCTION,
   appendActorReactionUserReturnInstruction,
   buildActorReactionTurnInput,
   detectUserFacingOpenState,
@@ -139,24 +140,26 @@ describe("detectUserFacingOpenState", () => {
 });
 
 describe("harness instruction trigger (GHE #156)", () => {
-  it("injects the instruction when inter-agent msgs + unanswered user msg", () => {
+  it("injects the strong answer-first rule when inter-agent msgs + unanswered user msg", () => {
     const context = detectUserFacingOpenState([message({ role: "user", text: "do X" })]);
     const input = buildActorReactionTurnInput([entry], context);
-    expect(input).toContain(ACTOR_REACTION_USER_RETURN_INSTRUCTION);
+    expect(input).toContain(ACTOR_REACTION_UNANSWERED_INSTRUCTION);
     // The stable base framing is still present (prefix).
     expect(input.startsWith(buildActorReactionInput(entry))).toBe(true);
   });
 
-  it("injects the instruction when inter-agent msgs + unreacted response", () => {
+  it("injects the quiet rule when inter-agent msgs + unreacted response", () => {
     const context = detectUserFacingOpenState([
       message({ role: "user", text: "hi" }),
       message({ role: "assistant", text: "done" }),
     ]);
     const input = buildActorReactionTurnInput([entry], context);
-    expect(input).toContain(ACTOR_REACTION_USER_RETURN_INSTRUCTION);
+    expect(input).toContain(ACTOR_REACTION_QUIET_INSTRUCTION);
+    // The strong rule must NOT leak into the quiet case.
+    expect(input).not.toContain(ACTOR_REACTION_UNANSWERED_INSTRUCTION);
   });
 
-  it("does NOT inject the instruction when there is no open user-facing exchange", () => {
+  it("does NOT inject any instruction when there is no open user-facing exchange", () => {
     const context = detectUserFacingOpenState([
       message({
         role: "user",
@@ -166,19 +169,23 @@ describe("harness instruction trigger (GHE #156)", () => {
       }),
     ]);
     const input = buildActorReactionTurnInput([entry], context);
-    expect(input).not.toContain(ACTOR_REACTION_USER_RETURN_INSTRUCTION);
+    expect(input).not.toContain(ACTOR_REACTION_UNANSWERED_INSTRUCTION);
+    expect(input).not.toContain(ACTOR_REACTION_QUIET_INSTRUCTION);
     // Falls back to the exact base framing.
     expect(input).toBe(buildActorReactionInput(entry));
   });
 
-  it("requires the agent to RE-STATE earlier user-facing content", () => {
-    expect(ACTOR_REACTION_USER_RETURN_INSTRUCTION).toContain("RE-STATE");
-    expect(ACTOR_REACTION_USER_RETURN_INSTRUCTION).toContain("do NOT assume the user still has it");
+  it("the quiet rule forbids re-stating, re-acknowledging, and status recaps", () => {
+    expect(ACTOR_REACTION_QUIET_INSTRUCTION).toContain("Do NOT re-state or re-explain");
+    expect(ACTOR_REACTION_QUIET_INSTRUCTION).toContain("do NOT re-acknowledge standing");
+    expect(ACTOR_REACTION_QUIET_INSTRUCTION).toContain("no status recap");
+    expect(ACTOR_REACTION_QUIET_INSTRUCTION).toContain("one short line");
   });
 
-  it("requires the LAST action to be responding to the user", () => {
-    expect(ACTOR_REACTION_USER_RETURN_INSTRUCTION).toContain(
-      "your LAST action must be to respond to the user",
+  it("the strong rule makes answering the user the FIRST action", () => {
+    expect(ACTOR_REACTION_UNANSWERED_INSTRUCTION).toContain("fully respond to it FIRST");
+    expect(ACTOR_REACTION_UNANSWERED_INSTRUCTION).toContain(
+      "Mention the agent messages only if they change your answer",
     );
   });
 
