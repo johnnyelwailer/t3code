@@ -19,7 +19,7 @@ import * as Option from "effect/Option";
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import type { ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { deriveActorReplyContext } from "./t3team-actorReactionContext.ts";
-import { capActorMessageSummary } from "./t3team-actorReactionInput.ts";
+import { capActorMessageSummary } from "./t3team-actorReactionInputSummarize.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 
 const normalizeError = (error: unknown): string =>

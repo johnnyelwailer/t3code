@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 // @vitest-environment jsdom
 /**
  * A workflow's plain-text `thread.notifyUser(...)` report (see `t3team-workflowEngineBrokerNotify.ts`)

@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off - bootstrap env loading runs at module load, before any Effect runtime exists.
-import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
@@ -23,9 +23,9 @@ import {
 // Load runtime env vars written by the desktop installer (~/.t3/.env).
 // These are not available in the Electron-spawned process environment.
 {
-  const runtimeEnvPath = join(homedir(), ".t3", ".env");
-  if (existsSync(runtimeEnvPath)) {
-    for (const line of readFileSync(runtimeEnvPath, "utf8").split("\n")) {
+  const runtimeEnvPath = NodePath.join(NodeOS.homedir(), ".t3", ".env");
+  if (NodeFS.existsSync(runtimeEnvPath)) {
+    for (const line of NodeFS.readFileSync(runtimeEnvPath, "utf8").split("\n")) {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith("#")) continue;
       const eq = trimmed.indexOf("=");
@@ -51,7 +51,7 @@ export const cli = Command.make("t3team", { ...sharedServerCommandFlags }).pipe(
   ]),
 );
 
-// Packaged-bundle smoke surface: scripts/check-orchestration-bundle.ts imports
+// Packaged-bundle smoke surface: scripts/t3team-check-orchestration-bundle.ts imports
 // these from the emitted dist to prove the inlined TypeScript compiler and the
 // staged authoring types work from the asar context, where no workspace
 // node_modules is reachable.

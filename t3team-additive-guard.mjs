@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
@@ -11,10 +10,10 @@ import {
 } from "./t3team-additive-guard-lib.mjs";
 import { maybeCheckWhitelistedAutoMerge } from "./t3team-additive-guard-merge.mjs";
 import {
-  assertBaseRef,
   assertCanonicalUpstreamRemote,
   collectCandidatePaths,
   listFilesInRef,
+  resolveBlockingBaseRef,
   runGit,
 } from "./scripts/lib/additive-guard-core.mjs";
 import {
@@ -37,7 +36,7 @@ function main() {
   const cwd = process.cwd();
   assertCanonicalUpstreamRemote();
   const config = loadAdditiveGuardConfig(cwd);
-  const baseRef = assertBaseRef(config.baseRef);
+  const baseRef = resolveBlockingBaseRef(config);
   const baseCommit = runGit(["rev-parse", baseRef]);
   const mergeBase = runGit(["merge-base", "HEAD", baseRef]);
   const candidates = collectCandidatePaths(mergeBase);
@@ -54,33 +53,45 @@ function main() {
     const fingerprint = NodeFS.existsSync(filePath) ? fileFingerprint(filePath) : "missing";
 
     if (isExisting) {
-      const allowedExact = config.allowedModifiedFiles.includes(filePath);
-      const allowedByGlob = matchesAnyGlob(filePath, config.allowedModifiedFileGlobs);
-      if (!allowedExact && !allowedByGlob) {
-        violations.push(
-          `Modified upstream file not in whitelist: ${filePath}. Add it to allowedModifiedFiles only if absolutely required.`,
-        );
-      } else {
-        const cacheKey = additiveGuardCacheKey({
-          kind: "auto-merge",
-          baseCommit,
-          mergeBase,
-          filePath,
-          fingerprint,
-          configKey,
-        });
-        const cached = entries[cacheKey];
-        const autoMergeViolation =
-          cached && "message" in cached
-            ? cached.message
-            : maybeCheckWhitelistedAutoMerge({
-                baseRef,
-                mergeBase,
-                filePath,
-              });
-        nextCacheEntries[cacheKey] = { message: autoMergeViolation ?? null };
-        if (autoMergeViolation) {
-          violations.push(autoMergeViolation);
+      const baseName = NodePath.basename(filePath);
+      // Files in the fork's own namespace (t3team- / t3team.) are fork-owned even though they
+      // exist in the (fork) baseline tree: the prefix exists precisely because upstream never
+      // creates such files, so the whitelist — which protects UPSTREAM files — does not apply
+      // to them. This is what keeps every-day fork development green on the fork baseline: a
+      // PR that edits an existing t3team-* module does not need a whitelist entry. The LOC
+      // ceiling below still applies to them, unchanged.
+      const forkOwnedByPrefix = config.requiredPrefixes.some((prefix) =>
+        baseName.startsWith(prefix),
+      );
+      if (!forkOwnedByPrefix) {
+        const allowedExact = config.allowedModifiedFiles.includes(filePath);
+        const allowedByGlob = matchesAnyGlob(filePath, config.allowedModifiedFileGlobs);
+        if (!allowedExact && !allowedByGlob) {
+          violations.push(
+            `Modified upstream file not in whitelist: ${filePath}. Add it to allowedModifiedFiles only if absolutely required.`,
+          );
+        } else {
+          const cacheKey = additiveGuardCacheKey({
+            kind: "auto-merge",
+            baseCommit,
+            mergeBase,
+            filePath,
+            fingerprint,
+            configKey,
+          });
+          const cached = entries[cacheKey];
+          const autoMergeViolation =
+            cached && "message" in cached
+              ? cached.message
+              : maybeCheckWhitelistedAutoMerge({
+                  baseRef,
+                  mergeBase,
+                  filePath,
+                });
+          nextCacheEntries[cacheKey] = { message: autoMergeViolation ?? null };
+          if (autoMergeViolation) {
+            violations.push(autoMergeViolation);
+          }
         }
       }
       continue;

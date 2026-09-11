@@ -2,20 +2,8 @@
  * Turns one claimed mailbox BATCH of entries into a single `thread.turn.start`
  * reaction turn (framed `actor` input, `visibleToUser: false`) — see
  * t3team-actorMessageReactor.ts, which owns claim/drain and calls this once a
- * thread is confirmed idle and unsuppressed.
- *
- * Delivery tiers (anti-chatter: bursts must not inflate the recipient's
- * context):
- *   1. The user stepped in while the batch was queueing — COMPRESSED framing:
- *      pointers only, "do not act by default, the user's message comes first".
- *   2. The thread's FIRST inter-agent delivery (the kickoff/handoff) — FULL
- *      bodies: the recipient must be able to act on it without a fetch.
- *   3. EVERY later delivery — HEADER-ONLY: one compact line per message
- *      (sender, ~1-line summary, message id, urgency) with the instruction
- *      that full bodies are fetchable via t3team_read_message(id).
- * A one-entry batch reuses the exact single-entry format of its tier, so the
- * restart-rehydrate prefix-matching (which rebuilds single-entry bases)
- * keeps working.
+ * thread is confirmed idle and unsuppressed. A one-entry batch is framed
+ * exactly like the historical single-message delivery.
  *
  * Also owns the restart-hold summary dispatch (GHE #155,
  * startActorRestartHoldSummary): the ONE turn that surfaces a held thread's
@@ -30,14 +18,12 @@ import * as Effect from "effect/Effect";
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import type { T3TeamActorMailboxEntry, T3TeamActorMailboxShape } from "./t3team-actorMailbox.ts";
 import {
-  buildActorReactionBatchInput,
-  buildActorReactionCompressedInput,
-  buildActorReactionHeaderInput,
   hasPriorInterAgentMessages,
   userInterjectedDuringQueueing,
 } from "./t3team-actorReactionInput.ts";
 import {
   appendActorReactionUserReturnInstruction,
+  buildActorReactionTurnInput,
   detectUserFacingOpenState,
 } from "./t3team-actorReactionVisibility.ts";
 import {
@@ -95,25 +81,6 @@ export function startActorReaction(input: {
       rootThreadId: first.rootThreadId,
       ...(entries.length > 1 ? { messageIds: entries.map((entry) => entry.messageId) } : {}),
     };
-    // Delivery tier (see module doc): the user-interjected case compresses to
-    // pointers; the thread's first inter-agent delivery carries full bodies;
-    // every later delivery is header-only (bodies fetchable via
-    // t3team_read_message). Each tier keeps the stable single-entry format,
-    // so restart-rehydrate prefix-matching keeps working.
-    const context = detectUserFacingOpenState(thread.messages);
-    const base =
-      userInterjectedDuringQueueing(entries, thread.messages) && context.kind === "open"
-        ? buildActorReactionCompressedInput(entries)
-        : hasPriorInterAgentMessages(
-              thread.messages,
-              // Exclude THIS batch's own persisted actor messages: each delivery
-              // is persisted into the transcript before the drain claims it, so
-              // without the exclusion every delivery would look "prior" and the
-              // full-body first-delivery tier would be unreachable in production.
-              entries.map((entry) => entry.messageId),
-            )
-          ? buildActorReactionHeaderInput(entries)
-          : buildActorReactionBatchInput(entries);
     const now = yield* DateTime.now;
     const createdAt = DateTime.formatIso(now);
     yield* engine
@@ -126,7 +93,19 @@ export function startActorReaction(input: {
           role: "user",
           // GHE #156 + #209: user-return + human-steering SUFFIXES; rehydrate prefix-matching kept.
           text: appendHumanSteeringInstruction(
-            appendActorReactionUserReturnInstruction(base, context),
+            buildActorReactionTurnInput(
+              entries,
+              detectUserFacingOpenState(thread.messages),
+              userInterjectedDuringQueueing(entries, thread.messages),
+              // M1: exclude THIS batch's own persisted actor messages — each
+              // delivery is persisted into the transcript before the drain
+              // claims it, so without this the full-body first-delivery tier
+              // would be unreachable in production.
+              !hasPriorInterAgentMessages(
+                thread.messages,
+                entries.map((entry) => entry.messageId),
+              ),
+            ),
             humanSteeringInstructionForThread(thread, DateTime.toEpochMillis(now)),
           ),
           attachments: [],

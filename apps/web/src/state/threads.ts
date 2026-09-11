@@ -17,7 +17,10 @@ import { environmentSnapshotAtom } from "./shell";
 
 export const threadEnvironment: ReturnType<typeof createThreadEnvironmentAtoms> =
   createThreadEnvironmentAtoms(connectionAtomRuntime);
-export const environmentThreads = createEnvironmentThreadStateAtoms(connectionAtomRuntime);
+// Upstream made environmentThreads module-internal (consumers use
+// environmentThreadDetails); the explicit threadEnvironment typing is the fork
+// addition.
+const environmentThreads = createEnvironmentThreadStateAtoms(connectionAtomRuntime);
 export const environmentThreadDetails = createEnvironmentThreadDetailAtoms(
   environmentThreads.stateAtom,
 );

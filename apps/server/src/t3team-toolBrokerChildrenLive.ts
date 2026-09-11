@@ -69,7 +69,12 @@ export function makeManageChildrenHandler(input: {
         type: "thread.turn.interrupt",
         commandId: CommandId.make(`server:t3team:children:stop:${t3teamRandomUUID()}`),
         threadId,
-        t3teamStopOrigin: "system",
+        // A stop issued through the children tool is a deliberate stop issued on the
+        // user's behalf — not internal automation. It must carry "user" origin so the
+        // downstream byUser suppression applies: without it, the thread's queued
+        // inter-agent messages drain on settle and re-open the turn the stop just
+        // ended, making the stop momentary.
+        t3teamStopOrigin: "user",
         createdAt: nowIso(),
       })
       .pipe(Effect.asVoid, Effect.mapError(normalizeError));

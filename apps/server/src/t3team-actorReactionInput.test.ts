@@ -2,21 +2,23 @@ import type { OrchestrationEvent, OrchestrationMessage } from "@t3tools/contract
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import {
-  autoSummarizeActorMessage,
   buildActorReactionBatchInput,
   buildActorReactionCompressedInput,
   buildActorReactionHeaderInput,
   buildActorReactionHeaderSingleInput,
   buildActorReactionInput,
-  capActorMessageSummary,
   collectPendingActorDeliveries,
   hasPriorInterAgentMessages,
+  userInterjectedDuringQueueing,
+} from "./t3team-actorReactionInput.ts";
+import {
+  autoSummarizeActorMessage,
+  capActorMessageSummary,
   resolveActorMessageDeliveryMaxChars,
   summarizeActorMessageForDelivery,
   T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS,
   T3TEAM_ACTOR_MESSAGE_DELIVERY_SUMMARY_MAX_CHARS,
-  userInterjectedDuringQueueing,
-} from "./t3team-actorReactionInput.ts";
+} from "./t3team-actorReactionInputSummarize.ts";
 import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
 
 const ENV_KEY = "T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS";
@@ -591,5 +593,190 @@ describe("buildActorReactionHeaderInput", () => {
     const input = buildActorReactionHeaderSingleInput({ ...entry, text: longBody() });
     expect(input).toContain("head sentence");
     expect(input).not.toContain("z".repeat(100));
+  });
+});
+
+describe("userInterjectedDuringQueueing", () => {
+  const userMessage = (createdAt: string): OrchestrationMessage =>
+    ({ role: "user", text: "hi", createdAt }) as unknown as OrchestrationMessage;
+
+  it("is true when a user message landed at or after the earliest entry", () => {
+    expect(userInterjectedDuringQueueing([entry], [userMessage("2026-07-19T08:00:00.000Z")])).toBe(
+      true,
+    );
+    expect(userInterjectedDuringQueueing([entry], [userMessage("2026-07-19T09:00:00.000Z")])).toBe(
+      true,
+    );
+  });
+
+  it("is false when the user spoke before queueing, no user message, or null", () => {
+    expect(userInterjectedDuringQueueing([entry], [userMessage("2026-07-19T07:59:00.000Z")])).toBe(
+      false,
+    );
+    expect(
+      userInterjectedDuringQueueing(
+        [entry],
+        [
+          {
+            role: "assistant",
+            text: "x",
+            createdAt: "2026-07-19T09:00:00.000Z",
+          } as unknown as OrchestrationMessage,
+        ],
+      ),
+    ).toBe(false);
+    expect(userInterjectedDuringQueueing([entry], null)).toBe(false);
+    expect(userInterjectedDuringQueueing([], [userMessage("2026-07-19T09:00:00.000Z")])).toBe(
+      false,
+    );
+  });
+});
+
+describe("hasPriorInterAgentMessages", () => {
+  it("is true only when the transcript carries an actor-ext message", () => {
+    expect(hasPriorInterAgentMessages(null)).toBe(false);
+    expect(
+      hasPriorInterAgentMessages([{ role: "user", text: "hi" } as unknown as OrchestrationMessage]),
+    ).toBe(false);
+    expect(
+      hasPriorInterAgentMessages([
+        {
+          role: "user",
+          text: "x",
+          t3teamExt: {
+            actor: { senderThreadId: "s", urgency: "normal", hopCount: 1, rootThreadId: "r" },
+          },
+        } as unknown as OrchestrationMessage,
+      ]),
+    ).toBe(true);
+  });
+});
+
+describe("buildActorReactionHeaderSingleInput / buildActorReactionHeaderInput", () => {
+  it("delivers header + fetch marker, NOT the body", () => {
+    const out = buildActorReactionHeaderSingleInput({ ...entry, summary: "Patch ready" });
+    expect(out).toContain("Message from peer agent «Sender» · thread sender · urgency normal");
+    expect(out).toContain("Patch ready");
+    expect(out).toContain("body NOT loaded");
+    expect(out).toContain("t3team_read_message");
+    expect(out).toContain("delivery-a");
+    expect(out).not.toContain("first"); // the body
+  });
+
+  it("auto-generates a header when no summary is provided", () => {
+    const long = {
+      ...entry,
+      text:
+        "The patch is ready on the branch. All 42 targeted tests pass and typecheck is " +
+        "clean, so the branch is pushed to the fork and the PR is opened for review. " +
+        "Remaining follow-ups: documentation pass, changelog entry, a final read-through of " +
+        "the diff before the morning sync, and a short note in the shared channel so the " +
+        "other maintainers know what to expect when they pull the branch this afternoon. " +
+        "Nothing else is pending on this workstream at the moment.",
+    };
+    const out = buildActorReactionHeaderSingleInput(long);
+    expect(out).toContain(autoSummarizeActorMessage(long.text));
+    expect(out).not.toContain("morning sync with the team");
+  });
+
+  it("groups a multi-entry batch under a follow-up header", () => {
+    const longA = { ...entry, messageId: "delivery-a", text: "Alpha body. " + "w".repeat(400) };
+    const longB = { ...entry, messageId: "delivery-b", text: "Beta body. " + "x".repeat(400) };
+    const out = buildActorReactionHeaderInput([longA, longB]);
+    expect(out).toContain("[Inter-agent messages (follow-up delivery — bodies not loaded)]");
+    expect(out).toContain("delivery-a");
+    expect(out).toContain("delivery-b");
+    expect(out).not.toContain("w".repeat(50)); // long tails stay out of context
+    expect(out).not.toContain("x".repeat(50));
+  });
+
+  it("single-entry batch reuses the exact single-entry format (rehydrate prefix)", () => {
+    const long = { ...entry, text: "Long body. " + "q".repeat(400) };
+    expect(buildActorReactionHeaderInput([long])).toBe(buildActorReactionHeaderSingleInput(long));
+  });
+});
+
+describe("buildActorReactionCompressedInput", () => {
+  it("lists senders with thread ids and message ids, points at t3team_read_message", () => {
+    const out = buildActorReactionCompressedInput([entry]);
+    expect(out).toContain("queued while the user was engaged");
+    expect(out).toContain("the user's message comes FIRST");
+    expect(out).toContain("1 message from «Sender» (thread sender): delivery-a");
+    expect(out).toContain("t3team_read_message");
+    expect(out).not.toContain("first"); // the body
+  });
+
+  it("groups multiple messages from the same sender", () => {
+    const b = { ...entry, messageId: "delivery-b" };
+    const c = { ...entry, messageId: "delivery-c", fromThreadId: "other", fromTitle: "Other" };
+    const out = buildActorReactionCompressedInput([entry, b, c]);
+    expect(out).toContain("2 messages from «Sender» (thread sender): delivery-a, delivery-b");
+    expect(out).toContain("1 message from «Other» (thread other): delivery-c");
+  });
+});
+
+describe("collectPendingActorDeliveries (header + compressed framings)", () => {
+  it("marks a delivery reacted when the admitted input used the HEADER framing", () => {
+    const reactedEntry = { ...entry, messageId: "delivery-a", text: "first" };
+    const events = [
+      delivered("delivery-a", "first"),
+      delivered("delivery-b", "second"),
+      {
+        type: "thread.message-sent",
+        payload: {
+          threadId: "target",
+          role: "user",
+          text: buildActorReactionHeaderSingleInput(reactedEntry) + "\n[user-return suffix]",
+          t3teamExt: {
+            visibleToUser: false,
+            actor: {
+              senderThreadId: "sender",
+              urgency: "normal",
+              hopCount: 3,
+              rootThreadId: "root",
+            },
+          },
+        },
+      } as unknown as OrchestrationEvent,
+    ];
+
+    expect(collectPendingActorDeliveries(events, 6)).toEqual([
+      expect.objectContaining({
+        threadId: "target",
+        entry: expect.objectContaining({ messageId: "delivery-b", text: "second" }),
+      }),
+    ]);
+  });
+
+  it("marks a delivery reacted when the admitted input used the COMPRESSED framing", () => {
+    const reactedEntry = { ...entry, messageId: "delivery-a", text: "first" };
+    const events = [
+      delivered("delivery-a", "first"),
+      delivered("delivery-b", "second"),
+      {
+        type: "thread.message-sent",
+        payload: {
+          threadId: "target",
+          role: "user",
+          text: buildActorReactionCompressedInput([reactedEntry]) + "\n[user-return suffix]",
+          t3teamExt: {
+            visibleToUser: false,
+            actor: {
+              senderThreadId: "sender",
+              urgency: "normal",
+              hopCount: 3,
+              rootThreadId: "root",
+            },
+          },
+        },
+      } as unknown as OrchestrationEvent,
+    ];
+
+    expect(collectPendingActorDeliveries(events, 6)).toEqual([
+      expect.objectContaining({
+        threadId: "target",
+        entry: expect.objectContaining({ messageId: "delivery-b", text: "second" }),
+      }),
+    ]);
   });
 });

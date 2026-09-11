@@ -12,7 +12,6 @@ import {
   ProviderInstanceId,
   ProviderUsageReport,
   ProviderUsageSample,
-  ProviderUsageSeverity,
   ProviderUsageWindowKind,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
@@ -22,33 +21,20 @@ import {
   severityForPercent,
   type ProviderUsageThresholds,
 } from "./t3team-providerUsageSampler.ts";
+import { clampPercent, isFinitePercent } from "./t3team-providerUsageMappersHelpers.ts";
+
+// The Claude OAuth mapper moved to `t3team-providerUsageMappersClaude.ts`;
+// re-exported here so existing importers keep their import path.
+export {
+  CLAUDE_USAGE_SOURCE,
+  mapClaudeUsage,
+  type ClaudeUsageBody,
+  type ClaudeUsageLimitBody,
+  type ClaudeUsageWindowBody,
+} from "./t3team-providerUsageMappersClaude.ts";
 
 /** Source labels reported in `ProviderUsageSample.source`. */
-export const CLAUDE_USAGE_SOURCE = "anthropic-oauth-usage";
 export const CODX_USAGE_SOURCE = "codex-app-server:account/rateLimits/read";
-
-/** One rolling window as Anthropic's OAuth usage endpoint reports it. */
-export interface ClaudeUsageWindowBody {
-  readonly utilization?: number | null;
-  readonly resets_at?: string | null;
-  readonly [key: string]: unknown;
-}
-
-/** One entry of the pre-digested `limits[]` array. */
-export interface ClaudeUsageLimitBody {
-  readonly kind?: string;
-  readonly percent?: number | null;
-  readonly severity?: "normal" | "warning" | "critical";
-  readonly resets_at?: string | null;
-  readonly [key: string]: unknown;
-}
-
-export interface ClaudeUsageBody {
-  readonly five_hour?: ClaudeUsageWindowBody | null;
-  readonly seven_day?: ClaudeUsageWindowBody | null;
-  readonly limits?: ReadonlyArray<ClaudeUsageLimitBody | null> | null;
-  readonly [key: string]: unknown;
-}
 
 /** `primary`/`secondary` windows as `account/rateLimits/read` reports them. */
 export interface CodexRateLimitWindowBody {
@@ -161,75 +147,6 @@ const extractWindowFromHeaders = (
     }
   }
   return { percentUsed, resetsAt };
-};
-
-const isFinitePercent = (value: number | null | undefined): value is number =>
-  typeof value === "number" && Number.isFinite(value);
-
-const clampPercent = (value: number) => Math.min(100, Math.max(0, value));
-
-const claudeLimitsForWindow = (
-  limits: ClaudeUsageBody["limits"],
-  kind: string,
-): ClaudeUsageLimitBody | undefined =>
-  limits
-    ?.filter((entry): entry is ClaudeUsageLimitBody => entry !== null)
-    .find((entry) => entry.kind === kind);
-
-/**
- * Maps Anthropic's OAuth usage body onto a `ProviderUsageReport`.
- *
- * Severity prefers the API's own pre-digested verdict (`limits[]`,
- * `session` → primary, `weekly_all` → secondary) and falls back to the host
- * thresholds on `utilization` when the entry is missing.
- */
-export const mapClaudeUsage = (
-  body: ClaudeUsageBody,
-  input: {
-    readonly provider: ProviderDriverKind;
-    readonly providerInstanceId?: ProviderInstanceId;
-    readonly plan?: string;
-    readonly thresholds?: ProviderUsageThresholds;
-    readonly sampledAt: string;
-  },
-): ProviderUsageReport => {
-  const thresholds = input.thresholds ?? DEFAULT_PROVIDER_USAGE_THRESHOLDS;
-  const windows: ProviderUsageSample[] = [];
-  const mapWindow = (
-    source: ClaudeUsageWindowBody | null | undefined,
-    limitKind: string,
-    window: ProviderUsageWindowKind,
-  ) => {
-    if (!source || !isFinitePercent(source.utilization)) return;
-    const percentUsed = clampPercent(source.utilization);
-    const limit = claudeLimitsForWindow(body.limits, limitKind);
-    const severity: ProviderUsageSeverity =
-      limit?.severity ??
-      severityForPercent(
-        isFinitePercent(limit?.percent) ? (limit?.percent as number) : percentUsed,
-        thresholds,
-      );
-    windows.push({
-      provider: input.provider,
-      window,
-      percentUsed,
-      resetsAt: source.resets_at ?? null,
-      severity,
-      source: CLAUDE_USAGE_SOURCE,
-      sampledAt: input.sampledAt,
-    });
-  };
-  mapWindow(body.five_hour, "session", "primary");
-  mapWindow(body.seven_day, "weekly_all", "secondary");
-  const plan = input.plan;
-  return {
-    provider: input.provider,
-    ...(input.providerInstanceId !== undefined
-      ? { providerInstanceId: input.providerInstanceId }
-      : {}),
-    ...(plan !== undefined ? { plan } : {}),
-    windows,
-  };
 };
 
 /**

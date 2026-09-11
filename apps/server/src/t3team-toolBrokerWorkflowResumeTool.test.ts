@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Legacy async tests intentionally bridge Effect runtimes; tracked cleanup is separate from upstream green gate. */
 // @effect-diagnostics nodeBuiltinImport:off - integration test writes an ephemeral workflow source + temp dir.
 /**
  * `t3team.orchestration.resume` — the broker tool surfacing the engine's journal resume:
@@ -65,6 +64,8 @@ const nowIso = (): string => "2026-07-20T00:00:00.000Z";
 
 const stubEngine: OrchestrationEngineShape = {
   readEvents: () => Stream.empty,
+  readThreadEvents: () => Stream.empty,
+  getThreadReplayStats: () => Effect.die("unused"),
   dispatch: () => Effect.succeed({ sequence: 0 }),
   streamDomainEvents: Stream.never,
   subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),

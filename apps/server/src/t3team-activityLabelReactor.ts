@@ -1,9 +1,4 @@
-import {
-  CommandId,
-  ThreadId,
-  type OrchestrationEvent,
-  type OrchestrationThreadActivityState,
-} from "@t3tools/contracts";
+import { ThreadId, type OrchestrationEvent } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -16,51 +11,17 @@ import { TextGeneration } from "./textGeneration/TextGeneration.ts";
 import { resolveAuxTextGenerationModelSelection } from "./orchestration/Layers/ProviderCommandReactor.ts";
 import { ProviderService } from "./provider/Services/ProviderService.ts";
 import { createActivityLabelEventReactor } from "./t3team-activityLabelSummarizer.ts";
+import {
+  parseActivityLabelTtlMs,
+  persistThreadMeta,
+} from "./t3team-activityLabelReactorSupport.ts";
 import { createActivityStateTracker } from "./t3team-activityState.ts";
 import { runtimeEventToActivityStateEvent } from "./t3team-activityStateEvent.ts";
-import { t3teamRandomUUID } from "./t3team-random.ts";
 import { ServerSettingsService } from "./serverSettings.ts";
 
 /**
  * Live "working on" label reactor for active threads (GHE #40, extended by GHE #208).
- *
- * Two independent writers on the same channel, both fail-open:
- *
- * 1. DETERMINISTIC 4-state base word (GHE #208, always on, zero inference):
- *    a per-thread state machine over the provider runtime event stream
- *    (thinking / writing / working / waiting), persisted as `activityState`
- *    on thread meta on every STATE TRANSITION only — the word updates
- *    instantly. `waiting` fires after `ACTIVITY_STATE_IDLE_GAP_MS` (30s) of
- *    silence with no tool in flight.
- * 2. OPTIONAL LLM free-text enrichment (GHE #40, throttled): a separate, tiny
- *    text-generation request — never a chat message, activity, or provider
- *    turn. Light-inference guarantees (enforced in
- *    `t3team-activityLabelSummarizer.ts` + the `generateActivityLabel` op):
- *    - TINY payload: only the last 5 meaningful activities (kind + short
- *      summary) plus a one-line user-intent gist, hard-capped to ~400 chars.
- *    - NON-thinking: the aux model selection is option-stripped and the op
- *      asks the driver for no reasoning effort / thinking budget.
- *    - THROTTLED SLOWLY: debounced ~20s after the last activity AND at most
- *      once per ~60s (minRegenerateMs); the only immediate trigger is a
- *      coarse state change, which defers into the remaining 60s window.
- *      The deterministic word updates instantly; the detail catches up lazily.
- *    - SKIPPED when the recent-activity window is unchanged since the last
- *      generation; CLEARED on idle/terminal.
- *    - TIME-BOXED (GHE #208 follow-up): a persisted label gets a minimum
- *      life of `ACTIVITY_LABEL_TTL_MS` (5s — PJ's decision: give an LLM
- *      status text a minimum time to live, then let either new LLM text or
- *      the live deterministic state word override it). The clear is
- *      scheduled inside `createActivityLabelSummarizer` after each persist;
- *      a newer label reschedules it, the turn-end clear cancels it, and a
- *      late fire is no-oped by the timer-handle guard. After expiry the
- *      display falls back to the live `activityState` word automatically via
- *      the existing pill precedence. The throttle above (light inference,
- *      slow generation) is untouched.
- *    - Gated by the `t3teamActivityLabelsEnabled` settings flag: off = no LLM
- *      calls, the UI shows just the state word.
- *
- * FAIL-OPEN end to end: on any error the state word stands alone — never a
- * static "Working", never an error state, never a hanging spinner.
+ * Design notes: `t3team-activityLabelReactorDesign.ts`.
  */
 export const T3TeamActivityLabelReactorLive = Layer.effectDiscard(
   Effect.gen(function* () {
@@ -70,26 +31,11 @@ export const T3TeamActivityLabelReactorLive = Layer.effectDiscard(
     const serverSettingsService = yield* ServerSettingsService;
     const providerService = yield* ProviderService;
 
-    const persistThreadMeta = (
-      threadId: string,
-      meta:
-        | { activityLabel?: string | null }
-        | { activityState?: OrchestrationThreadActivityState | null },
-    ) =>
-      Effect.runPromise(
-        engine.dispatch({
-          type: "thread.meta.update",
-          commandId: CommandId.make(`server:t3team:activity:${t3teamRandomUUID()}`),
-          threadId: ThreadId.make(threadId),
-          ...meta,
-        }),
-      ).catch(() => undefined);
-
     // 1. Deterministic state tracker (GHE #208): always on, persisted on
     //    transitions + the idle-gap promotion only.
     const tracker = createActivityStateTracker({
       persist: async ({ threadId, state }) => {
-        await persistThreadMeta(threadId, { activityState: state });
+        await persistThreadMeta(engine, threadId, { activityState: state });
       },
     });
 
@@ -99,11 +45,9 @@ export const T3TeamActivityLabelReactorLive = Layer.effectDiscard(
     let activityLabelsEnabled = (yield* serverSettingsService.getSettings)
       .t3teamActivityLabelsEnabled;
     // GHE #208 follow-up: optional env override for the LLM label TTL (the
-    // 5s minimum life). Only positive finite ints are honored; anything else
-    // falls back to the ACTIVITY_LABEL_TTL_MS default.
-    const rawTtl = process.env.T3TEAM_ACTIVITY_LABEL_TTL_MS;
-    const parsedTtl = rawTtl === undefined ? NaN : Number.parseInt(rawTtl, 10);
-    const activityLabelTtlMs = Number.isFinite(parsedTtl) && parsedTtl >= 0 ? parsedTtl : undefined;
+    // 5s minimum life). Only non-negative finite ints are honored; anything
+    // else falls back to the ACTIVITY_LABEL_TTL_MS default.
+    const activityLabelTtlMs = parseActivityLabelTtlMs(process.env.T3TEAM_ACTIVITY_LABEL_TTL_MS);
     // The settings stream is a live, never-ending PubSub stream. It MUST be
     // forked into the layer scope, not `yield*`ed inline: `yield*` on a stream
     // that never completes would block this reactor effect forever, so the two
@@ -153,7 +97,7 @@ export const T3TeamActivityLabelReactorLive = Layer.effectDiscard(
         return result.label;
       },
       persist: async ({ threadId, label }) => {
-        await persistThreadMeta(threadId, { activityLabel: label });
+        await persistThreadMeta(engine, threadId, { activityLabel: label });
       },
       isActive: () => activityLabelsEnabled === true,
       onError: (cause) => {

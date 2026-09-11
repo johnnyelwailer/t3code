@@ -24,12 +24,16 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3
  */
 export function T3TeamWorkflowNameChip({ name }: { name: string }) {
   return (
-    <span
-      className="min-w-0 max-w-[24ch] truncate font-mono text-[10px] text-muted-foreground/70"
-      title={name}
-    >
-      {name}
-    </span>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span className="min-w-0 max-w-[24ch] truncate font-mono text-[10px] text-muted-foreground/70" />
+        }
+      >
+        {name}
+      </TooltipTrigger>
+      <TooltipPopup side="top">{name}</TooltipPopup>
+    </Tooltip>
   );
 }
 

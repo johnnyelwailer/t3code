@@ -12,15 +12,10 @@ import {
 } from "./t3team-toolBrokerStartChildArgs.ts";
 import { resolveChildModel } from "./t3team-toolBrokerStartChildProvider.ts";
 import {
-  hasLinkedRepositoryStartChildServices,
-  linkedRepositoryManifestExists,
-  readMetaRepositoryFromWorkspace,
-  resolveLinkedRepositoryWorktree,
-  resolveLocalRepositoryWorktree,
   resolveStartChildSetupScript,
   type T3TeamStartChildServices,
 } from "./t3team-toolBrokerStartChildContext.ts";
-import { repositoryLookupCandidates } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
+import { resolveStartChildWorktree } from "./t3team-toolBrokerStartChildWorktree.ts";
 import {
   appendStartChildHandoffActivities,
   buildChildKickoffText,
@@ -75,89 +70,12 @@ export function makeStartChildThread(input: {
       const createdAt = DateTime.formatIso(yield* DateTime.now),
         requestedKickoffMode = args.kickoffMode ?? (args.kickoffPrompt ? "interactive" : undefined);
 
-      let repoFullName: string | null = null,
-        repoRef: string | null = null,
-        branch: string | null = null,
-        worktreePath: string | null = null;
-
-      if (args.isolation === "own-worktree") {
-        if (!hasLinkedRepositoryStartChildServices(input.services)) {
-          return yield* Effect.fail(
-            "t3team.thread.start_child worktree isolation is unavailable in this runtime.",
-          );
-        }
-
-        const manifestExists = yield* linkedRepositoryManifestExists({
-          services: input.services,
-          projectWorkspaceRoot: project.workspaceRoot,
-        });
-
-        // Adopted meta-repo (monorepo project, GHE #42): the manifest carries a `metaRepository`
-        // entry — sub-work happens in worktrees of the workspace repository itself. Legacy
-        // wrapped projects have no such entry and keep the linked-repo-only behavior.
-        const metaRepository = manifestExists
-          ? yield* readMetaRepositoryFromWorkspace({
-              services: input.services,
-              projectWorkspaceRoot: project.workspaceRoot,
-            })
-          : undefined;
-        const requestedRepoIsMetaRepository =
-          metaRepository?.url !== undefined &&
-          args.repoFullName !== undefined &&
-          repositoryLookupCandidates(metaRepository.url).some((candidate) =>
-            repositoryLookupCandidates(args.repoFullName as string).includes(candidate),
-          );
-
-        if (args.repoFullName) {
-          if (!manifestExists) {
-            return yield* Effect.fail(
-              `This project workspace has no linked repositories, so 'repo_full_name' cannot be used. Omit 'repo_full_name' to isolate the child in a worktree of the local repository, or use isolation='shared' for the shared checkout.`,
-            );
-          }
-
-          if (requestedRepoIsMetaRepository) {
-            const resolvedMetaRepository = yield* resolveLocalRepositoryWorktree({
-              services: input.services,
-              projectWorkspaceRoot: project.workspaceRoot,
-              ...(args.repoRef ? { repoRef: args.repoRef } : {}),
-              sessionName: args.name,
-              childThreadId,
-            });
-            ({ repoFullName, repoRef, branch, worktreePath } = {
-              repoFullName: metaRepository?.url ?? args.repoFullName,
-              ...resolvedMetaRepository,
-            });
-          } else {
-            const resolvedRepository = yield* resolveLinkedRepositoryWorktree({
-              services: input.services,
-              projectWorkspaceRoot: project.workspaceRoot,
-              repoFullName: args.repoFullName,
-              ...(args.repoRef ? { repoRef: args.repoRef } : {}),
-              sessionName: args.name,
-              childThreadId,
-            });
-            ({ repoFullName, repoRef, branch, worktreePath } = resolvedRepository);
-          }
-        } else {
-          if (manifestExists && !metaRepository) {
-            return yield* Effect.fail(
-              `This project has linked repositories; pass 'repo_full_name' to choose which one the child isolates in a worktree, or use isolation='shared' to run it in the shared project workspace.`,
-            );
-          }
-
-          const resolvedLocalRepository = yield* resolveLocalRepositoryWorktree({
-            services: input.services,
-            projectWorkspaceRoot: project.workspaceRoot,
-            ...(args.repoRef ? { repoRef: args.repoRef } : {}),
-            sessionName: args.name,
-            childThreadId,
-          });
-          ({ repoRef, branch, worktreePath } = resolvedLocalRepository);
-          if (metaRepository) {
-            repoFullName = metaRepository.url ?? null;
-          }
-        }
-      }
+      const { repoFullName, repoRef, branch, worktreePath } = yield* resolveStartChildWorktree({
+        services: input.services,
+        projectWorkspaceRoot: project.workspaceRoot,
+        args,
+        childThreadId,
+      });
 
       const childToolContext = createChildThreadToolContext({
         parentToolContext,

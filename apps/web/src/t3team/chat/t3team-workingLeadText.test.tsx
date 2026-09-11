@@ -1,6 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off - the CSS contract test reads index.css from disk
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import * as NodeFS from "node:fs";
+import * as NodeURL from "node:url";
 
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
@@ -54,7 +54,10 @@ describe("WorkingLeadText", () => {
 });
 
 describe("t3team-label-shimmer CSS contract (apps/web/src/index.css)", () => {
-  const indexCss = readFileSync(fileURLToPath(new URL("../../index.css", import.meta.url)), "utf8");
+  const indexCss = NodeFS.readFileSync(
+    NodeURL.fileURLToPath(new URL("../../index.css", import.meta.url)),
+    "utf8",
+  );
 
   const supportsIdx = indexCss.indexOf(
     "@supports ((-webkit-background-clip: text) or (background-clip: text))",

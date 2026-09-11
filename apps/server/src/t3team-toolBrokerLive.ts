@@ -12,31 +12,21 @@ import { ProjectSetupScriptRunner } from "./project/ProjectSetupScriptRunner.ts"
 import { ProviderRegistry } from "./provider/Services/ProviderRegistry.ts";
 import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
 import { T3TeamToolBroker, type T3TeamToolBrokerShape } from "./t3team-toolBroker.ts";
-import {
-  createT3TeamPrelaunchToolBinding,
-  createT3TeamThreadToolBinding,
-} from "./t3team-toolBrokerBinding.ts";
+import { createT3TeamPrelaunchToolBinding } from "./t3team-toolBrokerBinding.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import { makeActorSendMessage } from "./t3team-actorSendMessage.ts";
-import { callT3TeamSearchSourceTool } from "./t3team-toolBrokerBindingSearchSource.ts";
-import { callT3TeamSearchThreadTool } from "./t3team-toolBrokerBindingSearchThread.ts";
-import { callT3TeamReadMessageTool } from "./t3team-toolBrokerBindingReadMessage.ts";
 import { makeManageChildrenHandler } from "./t3team-toolBrokerChildrenLive.ts";
 import { buildPrelaunchView } from "./t3team-toolBrokerPrelaunchView.ts";
 import { makeStartChildThread } from "./t3team-toolBrokerStartChild.ts";
 import { T3TeamThreadToolContextStore } from "./t3team-threadToolContextStore.ts";
 import { makeLoadThreadView } from "./t3team-toolBrokerViewWorkspace.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
-import { setBacklogAssigneeFilterForContext } from "./t3team-toolBrokerBacklogFilter.ts";
 import { bindChildProviderCatalog } from "./t3team-childProviderCatalog.ts";
 import { makeRecipeToolHandlers } from "./t3team-toolBrokerRecipeTools.ts";
 import { makeWorkflowToolsForThread } from "./t3team-toolBrokerWorkflowToolsWiring.ts";
 import { T3TeamContextRefreshService } from "./t3team-contextRefreshService.ts";
-import { makeReadProviderUsage } from "./t3team-toolBrokerProviderUsage.ts";
 import { makeT3TeamWidgetShowBinder } from "./t3team-toolBrokerWidgetShow.ts";
-import { makeT3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
-import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
-import { buildRuntimeModelCatalog } from "./t3team-runtimeModelCatalog.ts";
+import { makeBindSession } from "./t3team-toolBrokerLiveSession.ts";
 import { ServerSettingsService } from "./serverSettings.ts";
 
 const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () {
@@ -135,126 +125,24 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
   });
   const manageChildren = makeManageChildrenHandler({ query, orchestration });
 
-  const bindSession: T3TeamToolBrokerShape["bindSession"] = ({
-    threadId,
-    toolContext,
-    allowedToolGroups,
-  }) =>
-    Effect.gen(function* () {
-      if (toolContext !== undefined) {
-        yield* contextStore.put({ threadId, toolContext });
-      }
-
-      const storedToolContext = toolContext ?? (yield* contextStore.get(threadId));
-      const resolvedToolContext =
-        storedToolContext?.surface === "t3team"
-          ? storedToolContext
-          : {
-              surface: "t3team",
-              state: null,
-              tools: genericThreadToolIds.map((id) => ({
-                id,
-                capabilities: ["write" as const],
-              })),
-            };
-
-      const toolIds = Array.from(new Set(resolvedToolContext.tools.map((tool) => tool.id)));
-      if (toolIds.length === 0) {
-        return undefined;
-      }
-
-      return createT3TeamThreadToolBinding({
-        showWidget: bindShowWidget({
-          threadId,
-          loadThreadProject: () => loadThreadProject(threadId),
-          dispatch: dispatchCommand,
-        }),
-        publishDraft: makeT3TeamDraftMutationPublisher({ threadId, dispatch: dispatchCommand }),
-        threadId,
-        toolContext: resolvedToolContext,
-        availableToolIds: toolIds,
-        allowedToolGroups,
-        readView: () => loadThreadView(threadId, resolvedToolContext),
-        renameThread: (title) => renameThread(threadId, title),
-        renameThreadResult: (title) => ({ ok: true, threadId, title }),
-        startChild: (toolArgs) => startChildThread(threadId, toolArgs),
-        manageChildren: (toolArgs, callerThreadId) => manageChildren(toolArgs, callerThreadId),
-        readRuntimeModels: () =>
-          Effect.gen(function* () {
-            const thread = Option.getOrUndefined(yield* query.getThreadDetailById(threadId));
-            if (!thread) return errorResult("Current t3team thread was not found.");
-            const providers = providerRegistry ? yield* providerRegistry.getProviders : [];
-            return okResult(buildRuntimeModelCatalog(thread.modelSelection, providers));
-          }).pipe(
-            Effect.catch((error) =>
-              Effect.succeed(
-                errorResult(
-                  `Failed to read runtime providers and models: ${error instanceof Error ? error.message : String(error)}`,
-                ),
-              ),
-            ),
-          ),
-        readProviderUsage: (toolArgs) => makeReadProviderUsage({ serverSettings })(toolArgs),
-        setBacklogAssigneeFilter: (mode) =>
-          setBacklogAssigneeFilterForContext(resolvedToolContext, mode),
-        refreshContextBundle: contextRefresh,
-        searchSourceThread: (toolArgs, bindingThreadId) =>
-          callT3TeamSearchSourceTool({
-            tool: "t3team.thread.search_source",
-            scopeLabel: "for this thread.",
-            toolArgs,
-            threadId: bindingThreadId,
-            loadThreadDetail: (id) =>
-              query.getThreadDetailById(id).pipe(
-                Effect.map(Option.getOrUndefined),
-                Effect.mapError((error) =>
-                  error instanceof Error ? error.message : String(error),
-                ),
-              ),
-          }),
-        readMessageThread: (toolArgs, bindingThreadId) =>
-          callT3TeamReadMessageTool({
-            tool: "t3team.thread.read_message",
-            scopeLabel: "for this thread.",
-            toolArgs,
-            threadId: bindingThreadId,
-            loadThreadDetail: (id) =>
-              query.getThreadDetailById(id).pipe(
-                Effect.map(Option.getOrUndefined),
-                Effect.mapError((error) =>
-                  error instanceof Error ? error.message : String(error),
-                ),
-              ),
-          }),
-        searchThread: (toolArgs, bindingThreadId) =>
-          callT3TeamSearchThreadTool({
-            tool: "t3team.thread.search",
-            scopeLabel: "for this thread.",
-            toolArgs,
-            threadId: bindingThreadId,
-            loadThreadDetail: (id) =>
-              query.getThreadDetailById(id).pipe(
-                Effect.map(Option.getOrUndefined),
-                Effect.mapError((error) =>
-                  error instanceof Error ? error.message : String(error),
-                ),
-              ),
-          }),
-        recipeTools: recipeToolsForThread(threadId),
-        ...(workflowTools.workflowRunToolsForThread
-          ? { workflowRunTools: workflowTools.workflowRunToolsForThread(threadId) }
-          : {}),
-        ...(workflowTools.workflowStatusToolsForThread
-          ? { workflowStatusTools: workflowTools.workflowStatusToolsForThread(threadId) }
-          : {}),
-        ...(workflowTools.workflowResumeToolsForThread
-          ? { workflowResumeTools: workflowTools.workflowResumeToolsForThread(threadId) }
-          : {}),
-        ...(workflowTools.workflowControlToolsForThread
-          ? { workflowControlTools: workflowTools.workflowControlToolsForThread(threadId) }
-          : {}),
-      });
-    });
+  // Extracted to t3team-toolBrokerLiveSession.ts (additive LOC budget) — behavior unchanged.
+  const bindSession = makeBindSession({
+    contextStore,
+    genericThreadToolIds,
+    query,
+    providerRegistry,
+    serverSettings,
+    contextRefresh,
+    dispatchCommand,
+    bindShowWidget,
+    loadThreadView,
+    renameThread,
+    startChildThread,
+    manageChildren,
+    recipeToolsForThread,
+    workflowTools,
+    loadThreadProject,
+  });
 
   const bindReadOnly: T3TeamToolBrokerShape["bindReadOnly"] = ({
     workspaceRoot,

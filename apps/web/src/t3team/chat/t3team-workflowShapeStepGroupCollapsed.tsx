@@ -10,6 +10,7 @@
 import { ChevronRightIcon } from "lucide-react";
 import { useState } from "react";
 
+import { formatDuration } from "~/session-logic";
 import { T3TeamWorkflowStepDetails } from "~/t3team/chat/t3team-WorkflowStepDetails";
 import {
   RuntimeStepRow,
@@ -62,6 +63,10 @@ export function T3TeamWorkflowShapeCollapsedGroup({
 }) {
   const [showAll, setShowAll] = useState(false);
   const { visible, hidden } = visibleGroupRows(rows, showAll);
+  // The group's TOTAL duration is the signal (how long this loop has been running); the
+  // per-row durations inside it are Σ-noise, so member rows render without one.
+  const totalDurationMs = rows.reduce((sum, row) => sum + (row.runtimeStep.durationMs ?? 0), 0);
+  const totalLabel = totalDurationMs >= 1000 ? formatDuration(totalDurationMs) : null;
   return (
     <details className="group/step-group rounded-md open:bg-muted/25">
       <summary className="flex cursor-pointer list-none items-center gap-2.5 rounded-md px-1 py-0.5 hover:bg-muted/35 [&::-webkit-details-marker]:hidden">
@@ -69,6 +74,9 @@ export function T3TeamWorkflowShapeCollapsedGroup({
         <StepStatusIcon status={icon} />
         <span className="min-w-0 flex-1 truncate text-sm text-foreground/90">
           {label} · {completed}/{rows.length}
+          {totalLabel ? (
+            <span className="text-[11px] text-muted-foreground/70"> · {totalLabel}</span>
+          ) : null}
         </span>
       </summary>
       <div className="ml-7 mt-1 space-y-1.5 border-l border-border/60 pl-3">
@@ -96,6 +104,7 @@ export function T3TeamWorkflowShapeCollapsedGroup({
               wakeAt={undefined}
               runStatus={status}
               childStatuses={childStatuses}
+              hideDuration
             />
           </T3TeamWorkflowStepDetails>
         ))}

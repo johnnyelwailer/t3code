@@ -147,7 +147,10 @@ allowlist and reason log is [`docs/t3team-additive-whitelist.md`](../t3team-addi
 The guard enforces three things: new files must use the `t3team-` or `t3team.` prefix
 (unless they live in a whitelisted unprefixed path like `packages/project-recipes/**`);
 upstream files may only be modified if they appear in `allowedModifiedFiles` _and_
-auto-merge cleanly against `upstream/main`; and each new file caps at 200 LOC.
+auto-merge cleanly against the guard's blocking base (`upstream/main`, or the frozen
+`forkBaselineRef` tag on this fork — see
+[`docs/t3team-additive-whitelist.md`](../t3team-additive-whitelist.md), “Fork baseline”);
+and each new file caps at 200 LOC.
 
 ### The rule
 

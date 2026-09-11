@@ -43,6 +43,8 @@ function Row({
     <TimelineRowActivityCtx.Provider
       value={{
         isWorking: true,
+        isPreparingWorktree: false,
+        isCompacting: false,
         isRevertingCheckpoint: false,
         latestTurnId: "turn-working-state-word" as TurnId,
         workingStepLabel,

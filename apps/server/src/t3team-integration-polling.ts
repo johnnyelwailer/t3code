@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import * as NodeCrypto from "node:crypto";
 
 export type T3TeamPollEnvelope = {

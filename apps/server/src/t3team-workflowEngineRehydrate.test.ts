@@ -1,5 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
-/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Legacy async tests intentionally bridge Effect runtimes; tracked cleanup is separate from upstream green gate. */
 // @effect-diagnostics nodeBuiltinImport:off - integration test reads a workflow fixture + temp dir.
 /**
  * Real-path proof for {@link rehydrateSuspendedWorkflowRuns} — the boot rehydration this test
@@ -75,6 +73,8 @@ const nowIso = (): string => "2026-06-08T00:00:00.000Z";
 // succeeds and `streamDomainEvents` is never subscribed.
 const stubEngine: OrchestrationEngineShape = {
   readEvents: () => Stream.empty,
+  readThreadEvents: () => Stream.empty,
+  getThreadReplayStats: () => Effect.die("unused"),
   dispatch: () => Effect.succeed({ sequence: 0 }),
   streamDomainEvents: Stream.never,
   subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),

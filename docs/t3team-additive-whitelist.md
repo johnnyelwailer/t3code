@@ -8,8 +8,81 @@ Prefix policy:
 
 - New additive files may use either `t3team-` or `t3team.` prefixes.
 - Route files use dot-separated TanStack route names and are valid additive files.
+- The 2026-09-07 sync remediation's 57 new `allowedModifiedFiles` entries live in
+  `docs/t3team-additive-whitelist-sync-2026-09.md` (one-line reason each; all await human approval).
+
+## Fork baseline (2026-09-08)
+
+The fork is a full product fork: main differs from upstream `pingdotgg/t3code` on ~2.8k files.
+Measuring the guard against upstream — pinned to any sync point, or live — therefore fails on
+the fork's own debt (1,373 violations on main: 1,019 unwhitelisted modified files + 352
+unprefixed new files), which is why the guard has been red on every CI run since 2026-09-06.
+Whitelisting ~1,000 files individually is not viable and would defeat the guard's purpose.
+
+The blocking base is therefore a **frozen fork-baseline tag**, recorded in
+`.t3team-additive-guard.json` as `forkBaselineRef`:
+
+- Current: `t3team/fork-baseline-20260908-postsync` → fork commit `046a181c46` (the
+  post-merge-main tree after PR #188 absorbed the 2026-09-06/07 upstream sync plus the
+  guard rebaseline). Grandfathered: the sync content the first baseline had to red on.
+- Previous: `t3team/fork-baseline-20260908` → fork main commit `06c2bc30f0` (2026-09-08,
+  cut before the sync was merged into main; kept for history — see "Move record" below).
+- Everything inside the tree the tag points at is **grandfathered debt**. It is not re-checked.
+- Everything a change adds **on top of** that baseline is checked with the full original
+  strictness: new files need a `t3team-`/`t3team.` prefix (or a specific allow pattern),
+  edits to upstream files need an `allowedModifiedFiles` entry (plus the clean auto-merge
+  check), and LOC thresholds apply to prefixed files exactly as before. A prefixed file that
+  grew past its grandfathered size still fails — the thresholds are absolute, so growth
+  beyond the baseline level is caught without any per-file debt tracking.
+- **Fork-owned files are exempt from the modified-file whitelist.** Against a fork baseline,
+  every file in main — including all `t3team-*`/`t3team.*` modules — "exists in the baseline".
+  The whitelist protects upstream's files; the prefix exists precisely because upstream never
+  creates `t3team-*` files, so an edit to an existing prefixed file is fork-owned work and
+  needs no whitelist entry. This is what keeps every-day fork PRs green on the fork baseline
+  (a PR touching `apps/server/src/t3team-toolBroker.ts` must not need a new allow entry).
+  Unprefixed files, even long-lived fork files, are NOT exempt: they still need
+  `allowedModifiedFiles` entries, exactly as before.
+- The tag is namespaced to `t3team/fork-baseline-*` and shape-checked by the guard
+  (`enforceForkBaselineRef`): the config cannot repoint the blocking gate at an arbitrary ref.
+  A configured tag that does not resolve in the checkout **fails loudly** — the guard never
+  falls back to `upstream/main` or `origin/main` when a baseline is configured.
+- The informational "Upstream drift" CI step keeps measuring against **live upstream** via the
+  `T3TEAM_ADDITIVE_GUARD_BASE=upstream/main` override (the guard accepts only that value for
+  the override, so the variable cannot weaken the blocking gate). It is `continue-on-error`
+  and only answers "how far has upstream drifted from files we also edit" — a sync-planning
+  signal, not a merge gate.
+
+**Moving the baseline** is a deliberate, reviewed change and must always go with a merge
+review of what the new tree absorbs:
+
+```sh
+git tag -a t3team/fork-baseline-YYYYMMDD <fork-main-commit> \
+  -m "Fork baseline: <date>, fork main <short-sha>; grandfathered debt per docs/t3team-additive-whitelist.md"
+git push origin t3team/fork-baseline-YYYYMMDD
+# then: point forkBaselineRef at the new tag in .t3team-additive-guard.json (controlled migration commit)
+```
+
+### Move record
+
+| date       | from                            | to                                                      | reason                                                                                                                                                                                                |
+| ---------- | ------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-08 | —                               | `t3team/fork-baseline-20260908` (`06c2bc30f0`)          | First baseline; grandfathers the pre-existing fork debt that red the guard on every CI run since 2026-09-06.                                                                                          |
+| 2026-09-08 | `t3team/fork-baseline-20260908` | `t3team/fork-baseline-20260908-postsync` (`046a181c46`) | PR #188 absorbed the 2026-09-06/07 upstream sync into main; the post-merge main tree (== the `046a181c46` tree) is grandfathered so main and every PR forked off it measure only their own additions. |
+
+Until the new tag is pushed, the guard fails loudly on CI (missing tag), never silently.
 
 ## Allowed Modified Upstream Files
+
+### Rebaseline 2026-09-08 (guard machinery)
+
+- `.github/workflows/t3team-additive-guard.yml`
+  - The guard's own CI workflow; rebaselines its blocking step onto the fork-baseline tag and keeps the live-upstream drift step informational via `T3TEAM_ADDITIVE_GUARD_BASE`.
+- `scripts/lib/additive-guard-config.mjs`
+  - Reads the new `forkBaselineRef` field through `enforceForkBaselineRef`.
+- `scripts/lib/additive-guard-cache.mjs`
+  - Includes `forkBaselineRef` in the cache-key config hash so a baseline move invalidates cached checks.
+- `docs/t3team-mvp/02-additive-architecture.md`
+  - One-paragraph pointer from the guard description to the fork-baseline mechanism in this document.
 
 - `README.md`
   - Describe this repository as the t3team fork (fork premise, pack model, current state) instead of the upstream one-line intro.
@@ -170,7 +243,13 @@ existing `docs/t3team-mvp/**` and `.claude/**` entries.
 
 - Keep this list minimal.
 - Any new entry requires a one-line reason in this document.
-- Any changed file listed in `allowedModifiedFiles` must auto-merge cleanly against `baseRef` (`upstream/main` by default). If auto-merge is not possible, additive guard fails and prints a diff; user/agent must manually merge.
+- The blocking base is the `forkBaselineRef` tag when configured (see "Fork baseline" above);
+  otherwise `upstream/main` (pre-fork / upstream checkouts).
+- Any changed file listed in `allowedModifiedFiles` must auto-merge cleanly against the
+  blocking base. If auto-merge is not possible, additive guard fails and prints a diff;
+  user/agent must manually merge.
+- Moving the fork baseline is not a routine whitelist change: new tag + new `forkBaselineRef`
+  value in a controlled migration commit, with the absorbed tree reviewed.
 - Prefer additive `t3team-*` or `t3team.*` files over editing upstream files.
 - Additive `.test`, `.browser`, `.stories`, and `*Fixtures` files use a higher LOC ceiling because they are validation/demo artifacts rather than shipped runtime surfaces.
 - Remove entries when no longer needed.

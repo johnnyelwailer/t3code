@@ -83,10 +83,10 @@ describe("workflow card headline — description leads, slug demoted", () => {
 
     expect(markup).toContain(description);
     expect(markup).toContain("qa-nested-result");
-    // the slug stays visible, copyable, and in its `title` — but as a demoted chip, not the
+    // the slug stays visible, copyable, and in a tooltip — but as a demoted chip, not the
     // bold headline (the chip carries a distinct monospace class the old headline never had).
     expect(markup).toContain("font-mono");
-    expect(markup).toContain('title="qa-nested-result"');
+    expect(markup).toContain('data-slot="tooltip-trigger">qa-nested-result<');
     // the chip is plain muted monospace text — no bordered/filled box giving it button-like
     // weight (PJ: "just a muted text without card bg would be fine").
     expect(markup).not.toContain("border-border/60");

@@ -109,7 +109,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --workspace-controls-left: calc(env(safe-area-inset-left) + 0.75rem);
   --workspace-controls-right: calc(env(safe-area-inset-right) + 0.75rem);
   --workspace-native-controls-inset: 0px;
-  --workspace-titlebar-control-size: 1.75rem;
+  --workspace-titlebar-control-size: 2rem;
   --workspace-titlebar-control-gap: 0.75rem;
   --workspace-titlebar-scroll-fade-height: 1.5rem;
 
@@ -145,7 +145,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
 
 @theme inline {
   --color-zinc-25: oklch(99.2% 0 0);
-  --animate-skeleton: skeleton 2s infinite linear;
+  --animate-skeleton: skeleton 2.4s infinite;
   /* Duty-cycled indicator animations: long holds with stepped ramps, so the
      compositor updates discrete frames instead of every vsync. */
   --animate-status-pulse: status-pulse 2s infinite;
@@ -156,12 +156,12 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
      transitions never hard-swap. One-shot (not infinite), duty-cycle style
      matching the indicator animations above. */
   --animate-label-fade: label-fade 240ms;
-  --animate-ghost-pulse: ghost-pulse 2.4s infinite;
   --animate-status-ping: status-ping 2s infinite;
   --color-warning-foreground: var(--warning-foreground);
   --color-warning: var(--warning);
   --color-warning-surface: var(--warning-surface);
   --color-error-foreground: var(--error-foreground);
+  --color-tool-error-icon: var(--tool-error-icon);
   --color-error: var(--error);
   --color-error-surface: var(--error-surface);
   --color-update-foreground: var(--update-foreground);
@@ -214,20 +214,10 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   @keyframes skeleton {
-    /* Transform-only so the highlight sweep stays on the compositor, then a
-       long hold with the band parked off-screen instead of a constant shimmer. */
-    0% {
-      transform: translateX(-100%);
-    }
-    60%,
-    100% {
-      transform: translateX(100%);
-    }
-  }
-  @keyframes ghost-pulse {
-    /* The loading ghosts' breath. Stepped like the status indicators, so however many bars a
-       ghost holds, the compositor draws a handful of discrete frames per cycle rather than one
-       per vsync — which on a 120Hz display is the difference between ~14 and ~288 updates. */
+    /* The single loading-bar breath used by every skeleton: one opacity pulse
+       per container, stepped so however many bars sit under it, the compositor
+       draws a handful of discrete frames per cycle rather than one per vsync —
+       which on a 120Hz display is the difference between ~14 and ~288 updates. */
     0%,
     42% {
       opacity: 1;
@@ -468,20 +458,55 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   }
 }
 
+@keyframes live-tool-shine {
+  from {
+    background-position:
+      -4.5rem 0,
+      0 0;
+  }
+  to {
+    background-position:
+      calc(100% + 4.5rem) 0,
+      0 0;
+  }
+}
+
+@utility live-tool-shine {
+  @media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+    color: transparent;
+    background-image:
+      linear-gradient(to right, transparent, var(--contrast-foreground), transparent),
+      linear-gradient(var(--contrast-secondary-label), var(--contrast-secondary-label));
+    background-size:
+      4.5rem 100%,
+      100% 100%;
+    background-repeat: no-repeat;
+    background-clip: text;
+    animation: live-tool-shine 2.2s steps(30) infinite;
+    animation-play-state: var(--visible-animation-state, paused);
+  }
+}
+
+@utility visible-animate-spin {
+  animation: var(--animate-spin);
+  animation-play-state: var(--visible-animation-state, paused);
+  will-change: var(--visible-animation-will-change, auto);
+}
+
 @keyframes live-activity-focus {
-  0% {
+  from {
     transform: translateX(0);
   }
-  100% {
+  to {
     transform: translateX(100%);
   }
 }
 
 @keyframes live-activity-focus-counter {
-  0% {
+  from {
     transform: translateX(0);
   }
-  100% {
+  to {
     transform: translateX(-100%);
   }
 }
@@ -517,9 +542,10 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   );
   mask-repeat: no-repeat;
   animation: live-activity-focus 2.2s linear infinite;
-  will-change: transform;
+  animation-play-state: var(--visible-animation-state, paused);
+  will-change: var(--visible-animation-will-change, auto);
 
-  @media (prefers-reduced-motion: reduce) {
+  @media (prefers-reduced-motion: reduce), (forced-colors: active) {
     animation: none;
     opacity: 0;
     will-change: auto;
@@ -529,9 +555,10 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
 @utility live-activity-focus-counter {
   width: 100%;
   animation: live-activity-focus-counter 2.2s linear infinite;
-  will-change: transform;
+  animation-play-state: var(--visible-animation-state, paused);
+  will-change: var(--visible-animation-will-change, auto);
 
-  @media (prefers-reduced-motion: reduce) {
+  @media (prefers-reduced-motion: reduce), (forced-colors: active) {
     animation: none;
     will-change: auto;
   }
@@ -1510,6 +1537,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   --accent-foreground: var(--color-zinc-900);
   --error: var(--color-red-500);
   --error-foreground: var(--color-red-700);
+  --tool-error-icon: var(--error);
   --error-surface: color-mix(in srgb, var(--error) 8%, transparent);
   --destructive: var(--error);
   --border: var(--color-zinc-200);
@@ -1564,6 +1592,7 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     --accent-foreground: var(--color-neutral-100);
     --error: color-mix(in srgb, var(--color-red-500) 90%, var(--color-white));
     --error-foreground: var(--color-red-400);
+    --tool-error-icon: #fca5a5;
     --error-surface: color-mix(in srgb, var(--error) 16%, transparent);
     --border: --alpha(var(--color-white) / 6%);
     --input: --alpha(var(--color-white) / 8%);
@@ -1676,6 +1705,7 @@ html[data-theme-id]:not([data-theme-id=""]) {
   --message-action-hover: var(--app-theme-message-action-hover);
   --error: var(--app-theme-error);
   --error-foreground: var(--app-theme-error-foreground);
+  --tool-error-icon: var(--error-foreground);
   --error-surface: var(--app-theme-error-surface);
   --destructive: var(--error);
   --destructive-foreground: var(--error-foreground);
@@ -1703,6 +1733,39 @@ html[data-theme-id]:not([data-theme-id=""]) {
   --terminal-foreground: var(--app-theme-terminal-foreground);
   --terminal-cursor: var(--app-theme-terminal-cursor);
   --terminal-selection-background: var(--app-theme-terminal-selection-background);
+}
+
+/* The first-run flow owns the whole document so portaled menus and tooltips
+   use the same fixed palette as the wizard. This follows the theme mapping so
+   saved custom themes cannot override it while onboarding is mounted. */
+html[data-onboarding-surface]:root {
+  color-scheme: dark;
+  --accent: #262626;
+  --accent-foreground: #fff;
+  --appearance-contrast-target: #fff;
+  --app-chrome-background: #000;
+  --background: #000;
+  --border: #262626;
+  --card: #000;
+  --card-foreground: #fff;
+  --destructive: var(--color-red-400);
+  --foreground: #fff;
+  --icon-muted: #a1a1aa;
+  --input: #262626;
+  --muted: #171717;
+  --muted-foreground: #a1a1aa;
+  --placeholder: #71717a;
+  --popover: #171717;
+  --popover-foreground: #fff;
+  --ring: #737373;
+  --secondary: #171717;
+  --secondary-foreground: #fff;
+  --secondary-label: #a1a1aa;
+  --success-foreground: var(--color-emerald-400);
+  --terminal-background: #000;
+  --terminal-cursor: #fff;
+  --terminal-foreground: #fff;
+  --terminal-selection-background: rgb(255 255 255 / 20%);
 }
 
 /* Theme-token dependency probes are restored synchronously, before paint. Keep
@@ -1906,11 +1969,10 @@ html[data-theme-id="t3-chat"] [data-app-sidebar] {
   }
 }
 
-/* Contrast stays in ordinary custom properties so both Tailwind utilities and
-   global/imperative chrome styles resolve the same adjusted role. Redeclare on
-   the sidebar because it owns a local semantic palette. */
+/* Recompute contrast wherever a subtree owns its own semantic color palette. */
 :root,
-[data-app-sidebar] {
+[data-app-sidebar],
+[data-onboarding-surface] {
   --contrast-toolbar-foreground: color-mix(
     in oklab,
     color-mix(
@@ -2217,8 +2279,8 @@ code {
 }
 
 .chat-markdown ul {
-  /* Reset for nested uls under a widened ol — --list-gutter is an inherited
-     custom property, so without this a task-list under a 3+ digit ordered
+  /* Reset for nested uls under a widened ol. --list-gutter is an inherited
+     custom property, so without this a task-list under a multi-digit ordered
      list would inherit the outer gutter instead of its own default. */
   --list-gutter: 1.25rem;
   padding-left: 1.25rem;
@@ -2227,7 +2289,7 @@ code {
 
 /* --list-gutter defaults to the same 1.25rem as .chat-markdown ul, but
    ChatMarkdown's `ol` renderer widens it (via inline style) for lists whose
-   widest marker is 3+ characters, so item 100+ isn't clipped by list-style-position:
+   widest marker has multiple characters so it isn't clipped by list-style-position:
    outside painting the marker past the padding box. Reset it here too so a
    nested ol without its own widened marker doesn't inherit the outer one. */
 .chat-markdown ol {
@@ -2487,24 +2549,6 @@ code {
   color: var(--code-foreground) !important;
 }
 
-@keyframes ultrathink-rainbow {
-  0% {
-    background-position: 0% 50%;
-  }
-  100% {
-    background-position: 200% 50%;
-  }
-}
-
-@keyframes ultrathink-chroma-shift {
-  0% {
-    filter: hue-rotate(0deg) saturate(1.2);
-  }
-  100% {
-    filter: hue-rotate(360deg) saturate(1.2);
-  }
-}
-
 .ultrathink-frame {
   --ultrathink-spectrum: linear-gradient(
     120deg,
@@ -2527,6 +2571,7 @@ code {
   padding: 2px;
   background-image: var(--ultrathink-spectrum);
   background-size: 220% 220%;
+  background-position: 0% 50%;
   pointer-events: none;
   filter: saturate(0.82) brightness(0.92);
   -webkit-mask:
@@ -2537,7 +2582,6 @@ code {
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   mask-composite: exclude;
-  animation: ultrathink-rainbow 10s linear infinite;
 }
 
 .ultrathink-frame > * {
@@ -2545,7 +2589,7 @@ code {
 }
 
 .ultrathink-chroma {
-  animation: ultrathink-chroma-shift 10s linear infinite;
+  filter: saturate(1.2);
 }
 
 /*
@@ -2756,5 +2800,157 @@ code {
   .animate-label-fade,
   .animate-pulse {
     animation: none;
+  }
+}
+
+/*
+ * Nexplore stage art ("2FORM"): flat ground + hard-cropped orbs, per the brand-refresh plates.
+ * Day is Orange ground / Rosa orbs, night is Blau ground / Lila + Dunkelblau orbs — both grounds
+ * are saturated enough for the white `sidebar-brand` label that `onBackdrop` switches to.
+ */
+:root {
+  --stage-nx-ground: #f05a0a;
+  --stage-nx-orb: #f7cbed;
+  --stage-nx-orb-alt: #f7cbed;
+  /* Label sits on the ground, so it ships with the ground rather than in the component. */
+  --stage-nx-label: #ffffff;
+  /* In-progress glow: the duo's accent, soft. Ships with the palette, not the component. */
+  --glow-nx: #f05a0a;
+  --glow-nx-strength: 34%;
+}
+
+.dark {
+  --stage-nx-ground: #4c3cf6;
+  --stage-nx-orb: #e5e0ff;
+  --stage-nx-orb-alt: #1c1772;
+  --stage-nx-label: #ffffff;
+  /* Blau reads as the working colour at night; orange would fight the dark ground. */
+  --glow-nx: #6b78e6;
+  --glow-nx-strength: 42%;
+}
+
+/*
+ * Send button: the duo as blurred colour, not hard shapes. A 32px button cannot carry a crisp arc
+ * (see t3team-NexploreStageArt.tsx), so the orbs are blurred into a soft field that the crisp send
+ * arrow sits on. `transform: translateZ(0)` keeps the blur on the compositor.
+ */
+.stage-nexplore-compact .stage-nexplore-orbs {
+  filter: blur(5px);
+  transform: translateZ(0);
+}
+
+/*
+ * Motion is reserved for state, not decoration: the sidebar strip is permanent chrome and never
+ * animates. The button drifts on hover (intent) and faster while a send is in flight (progress),
+ * which is the same thing its spinner already reports.
+ */
+@keyframes t3team-nx-orb-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-2.5px, 1.5px, 0) scale(1.06);
+  }
+}
+
+button:hover .stage-nexplore-compact .stage-nexplore-orbs {
+  animation: t3team-nx-orb-drift 5s ease-in-out infinite;
+  will-change: transform;
+}
+
+[data-stage-busy="true"] .stage-nexplore-compact .stage-nexplore-orbs {
+  animation: t3team-nx-orb-drift 1.8s ease-in-out infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:hover .stage-nexplore-compact .stage-nexplore-orbs,
+  [data-stage-busy="true"] .stage-nexplore-compact .stage-nexplore-orbs {
+    animation: none;
+  }
+}
+
+/*
+ * In-progress glow.
+ *
+ * Gated on `html[data-theme-id="t3team-pack-nexplore"]` — the ACTIVE theme.
+ *
+ * Not a `t3team-pack-` prefix match, which would have matched every pack distribution while
+ * `--glow-nx` holds nexplore's own hexes. And not `data-t3team-theme`, which records the pack that
+ * is LOADED rather than the theme that is SELECTED: a pack theme is an ordinary entry in the theme
+ * library, so a user who switches to T3 Chat repaints the app purple while that attribute still
+ * says nexplore, leaving an orange bloom on a purple composer. `applyT3TeamPackAppearance` also
+ * never clears that attribute when appearance goes away, so it can be stale outright.
+ *
+ * It is a PROGRESS SIGNAL, not decoration: it appears only while `isWorking` is true (running,
+ * sending, connecting, reverting, compacting) and disappears the moment work stops, which is why
+ * it may breathe where the stage strip must not.
+ */
+/*
+ * OPACITY ONLY — deliberately no `transform: scale()`.
+ *
+ * The bloom is absolutely positioned with negative insets, and a transformed element still
+ * contributes to its scroll container's scrollable overflow. Scaling it therefore pushed the
+ * overflow past the right edge on every cycle, toggling a horizontal scrollbar and shifting the
+ * whole layout back and forth in time with the animation. A glow does not need to change size.
+ */
+@keyframes t3team-nx-glow-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/*
+ * Composer: bloom behind the glass and behind the composer's own content.
+ *
+ * `z-index: -1`, not `0`. At equal z-index this `::after` is later in tree order than the Shell's
+ * `before:z-0` glass, so `0` painted the bloom ON TOP of the glass and on top of the
+ * `relative z-0` branch-toolbar wrapper — washing the toolbar orange for the whole turn. `Shell`
+ * is `isolate`, so `-1` cannot escape behind the app background.
+ *
+ * Horizontal inset is 0: any horizontal overhang feeds the scroll container's overflow and can
+ * raise a horizontal scrollbar, which shifts the whole layout sideways. The bloom only needs to
+ * escape vertically to read as light from behind the composer, and `blur(14px)` already softens
+ * the left and right ends well inside the edge.
+ */
+html[data-theme-id="t3team-pack-nexplore"] [data-composer-working]::after {
+  content: "";
+  position: absolute;
+  inset: -14px 0 -18px;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 32px;
+  background: radial-gradient(
+    ellipse 70% 120% at 50% 100%,
+    color-mix(in srgb, var(--glow-nx) var(--glow-nx-strength), transparent) 0%,
+    color-mix(in srgb, var(--glow-nx) calc(var(--glow-nx-strength) / 3), transparent) 45%,
+    transparent 75%
+  );
+  filter: blur(14px);
+  will-change: opacity;
+  animation: t3team-nx-glow-breathe 3.2s ease-in-out infinite;
+}
+
+/*
+ * There is deliberately NO send-button glow.
+ *
+ * `data-stage-busy` is `isConnecting || isSendBusy`, which is a strict subset of the button's own
+ * `disabled` expression, and the button carries `disabled:opacity-30`. Opacity on an element dims
+ * its pseudo-elements too, so any bloom drawn there is at 30% exactly when it is supposed to
+ * appear — invisible by construction, whether inset inside the `overflow-hidden rounded-full`
+ * clip or hung outside it. The button already reports progress with its spinner, and the composer
+ * bloom below surrounds the button anyway. Reinstating this needs a wrapper OUTSIDE the button.
+ */
+
+@media (prefers-reduced-motion: reduce) {
+  /* The bloom still reports "working"; only the breathing stops. */
+  html[data-theme-id="t3team-pack-nexplore"] [data-composer-working]::after {
+    animation: none;
+    opacity: 0.8;
   }
 }

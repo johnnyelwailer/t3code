@@ -70,6 +70,8 @@ function RealWorkingRow({
     <TimelineRowActivityCtx.Provider
       value={{
         isWorking: true,
+        isPreparingWorktree: false,
+        isCompacting: false,
         isRevertingCheckpoint: false,
         latestTurnId: "turn-design-pass" as TurnId,
         workingStepLabel,
@@ -280,7 +282,6 @@ function StateMotionDots({
       3200,
     );
     return () => window.clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveStream]);
 
   // Per-dot clicks now go through the PRODUCTION onOpenAgent seam (the

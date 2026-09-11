@@ -1,0 +1,497 @@
+// @effect-diagnostics nodeBuiltinImport:off - the mock git runner inspects the
+// pathspec files the driver writes on disk.
+// @effect-diagnostics globalDate:off - temp directory naming only.
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
+import { ChildProcessSpawner } from "effect/unstable/process";
+import { assert, describe, it } from "@effect/vitest";
+
+import * as GitVcsDriver from "./GitVcsDriver.ts";
+import * as VcsDriver from "./VcsDriver.ts";
+import { isUnindexableHostPath } from "./t3team-GitVcsDriverCheckpointIndex.ts";
+import * as VcsProcess from "./VcsProcess.ts";
+import * as ServerConfig from "../config.ts";
+import { VcsProcessExitError, VcsProcessTimeoutError } from "@t3tools/contracts";
+
+describe("isUnindexableHostPath", () => {
+  it("classifies Windows-reserved device names case-insensitively", () => {
+    assert.strictEqual(isUnindexableHostPath("nul"), true);
+    assert.strictEqual(isUnindexableHostPath("NUL"), true);
+    assert.strictEqual(isUnindexableHostPath("src\\Nul"), true);
+    assert.strictEqual(isUnindexableHostPath("com1"), true);
+    assert.strictEqual(isUnindexableHostPath("lpt9"), true);
+    assert.strictEqual(isUnindexableHostPath("con.txt"), false);
+    assert.strictEqual(isUnindexableHostPath("nuls"), false);
+    assert.strictEqual(isUnindexableHostPath("src/nul.ts"), false);
+    assert.strictEqual(isUnindexableHostPath("README.md"), false);
+  });
+});
+
+const ok = (stdout = "", stderr = ""): VcsProcess.VcsProcessOutput => ({
+  exitCode: ChildProcessSpawner.ExitCode(0),
+  stdout,
+  stderr,
+  stdoutTruncated: false,
+  stderrTruncated: false,
+});
+
+const failed = (exitCode: number, stderr: string): VcsProcess.VcsProcessOutput => ({
+  exitCode: ChildProcessSpawner.ExitCode(exitCode),
+  stdout: "",
+  stderr,
+  stdoutTruncated: false,
+  stderrTruncated: false,
+});
+
+/** Contents of each pathspec file the mocked `git add` sees. */
+const pathspecReads: string[] = [];
+
+const DriverLayer = Layer.mergeAll(GitVcsDriver.vcsLayer, GitVcsDriver.layer).pipe(
+  Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-git-ckpt-index-" })),
+  Layer.provideMerge(
+    Layer.succeed(VcsProcess.VcsProcess, {
+      run: (input) =>
+        Effect.sync(() => {
+          // The service-level execute prepends `-C <cwd>`; strip it.
+          const args = input.args.slice(input.args[0] === "-C" ? 2 : 0);
+          if (args[0] === "rev-parse" && args[1] === "--git-common-dir") {
+            return ok(".git\n");
+          }
+          if (args[0] === "rev-parse" && args[1] === "--verify") {
+            return ok("head-oid\n");
+          }
+          if (
+            args[0] === "add" &&
+            args.includes("-A") &&
+            args.includes("--") &&
+            args.includes(".")
+          ) {
+            // The live incident: a reserved-name file kills the broad add.
+            return failed(
+              128,
+              "fatal: short read while indexing nul\nfatal: unable to index 'nul'\n",
+            );
+          }
+          if (args[0] === "ls-files" && args.includes("--others")) {
+            return ok("nul\0src/a.ts\0");
+          }
+          if (args[0] === "ls-files") {
+            return ok("src/b.ts\0");
+          }
+          if (args[0] === "add" && args.includes("--pathspec-from-file")) {
+            const pathspecFile = args[args.indexOf("--pathspec-from-file") + 1];
+            const contents = NodeFS.readFileSync(pathspecFile!, "utf8");
+            pathspecReads.push(contents);
+            // The unfiltered pathspec still fails; the filtered one succeeds.
+            return contents.split("\0").includes("nul")
+              ? failed(128, "fatal: unable to index 'nul'\n")
+              : ok();
+          }
+          if (args[0] === "read-tree") {
+            return ok();
+          }
+          if (args[0] === "write-tree") {
+            return ok("tree-oid\n");
+          }
+          if (args[0] === "commit-tree") {
+            return ok("commit-oid\n");
+          }
+          if (args[0] === "update-ref") {
+            return ok();
+          }
+          return failed(128, `unexpected git args: ${args.join(" ")}\n`);
+        }),
+    }),
+  ),
+  Layer.provideMerge(NodeServices.layer),
+);
+
+it.effect("captureCheckpoint skips an unindexable reserved-name file instead of failing", () => {
+  const repoDir = NodePath.join(NodeOS.tmpdir(), `t3-ckpt-index-test-${Date.now()}`);
+
+  return Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const driver = yield* VcsDriver.VcsDriver;
+
+    yield* fileSystem.makeDirectory(path.join(repoDir, ".git"), { recursive: true });
+
+    assert.isNotNull(driver.checkpoints);
+    const checkpointRef = "refs/t3/checkpoints/test-1";
+    yield* driver.checkpoints!.captureCheckpoint({
+      cwd: repoDir,
+      checkpointRef: checkpointRef as never,
+    });
+
+    // The broad add failed; two pathspec adds ran. The second (filtered)
+    // pathspec must not contain the reserved-name file.
+    assert.strictEqual(pathspecReads.length, 2);
+    const firstPathspec = pathspecReads[0]!;
+    const secondPathspec = pathspecReads[1]!;
+    assert.ok(firstPathspec.split("\0").includes("nul"));
+    assert.ok(!secondPathspec.split("\0").includes("nul"));
+    assert.ok(secondPathspec.includes("src/a.ts"));
+    assert.ok(secondPathspec.includes("src/b.ts"));
+    // The temp pathspec file is cleaned up.
+    const leftovers = NodeFS.readdirSync(path.join(repoDir, ".git")).filter((name) =>
+      name.startsWith("t3-checkpoint-pathspec-"),
+    );
+    assert.strictEqual(leftovers.length, 0);
+  }).pipe(
+    Effect.provide(DriverLayer),
+    Effect.ensuring(
+      Effect.sync(() => {
+        try {
+          NodeFS.rmSync(repoDir, { recursive: true, force: true });
+        } catch {
+          // best-effort cleanup
+        }
+      }),
+    ),
+  );
+});
+
+/** Driver layer for a repo where EVERY candidate path is a reserved name. */
+const DriverLayerAllUnindexable = Layer.mergeAll(GitVcsDriver.vcsLayer, GitVcsDriver.layer).pipe(
+  Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-git-ckpt-index-unidx-" })),
+  Layer.provideMerge(
+    Layer.succeed(VcsProcess.VcsProcess, {
+      run: (input) =>
+        Effect.sync(() => {
+          const args = input.args.slice(input.args[0] === "-C" ? 2 : 0);
+          if (args[0] === "rev-parse" && args[1] === "--git-common-dir") {
+            return ok(".git\n");
+          }
+          if (args[0] === "rev-parse" && args[1] === "--verify") {
+            return ok("head-oid\n");
+          }
+          if (
+            args[0] === "add" &&
+            args.includes("-A") &&
+            args.includes("--") &&
+            args.includes(".")
+          ) {
+            return failed(
+              128,
+              "fatal: short read while indexing nul\nfatal: unable to index 'nul'\n",
+            );
+          }
+          if (args[0] === "ls-files" && args.includes("--others")) {
+            return ok("nul\0");
+          }
+          if (args[0] === "ls-files") {
+            return ok("com1\0");
+          }
+          if (args[0] === "add" && args.includes("--pathspec-from-file")) {
+            const pathspecFile = args[args.indexOf("--pathspec-from-file") + 1];
+            NodeFS.readFileSync(pathspecFile!, "utf8");
+            return failed(128, "fatal: unable to index 'nul'\n");
+          }
+          return failed(128, `unexpected git args: ${args.join(" ")}\n`);
+        }),
+    }),
+  ),
+  Layer.provideMerge(NodeServices.layer),
+);
+
+it.effect(
+  "fails when every candidate path is unindexable and removes the temp pathspec file",
+  () => {
+    const repoDir = NodePath.join(NodeOS.tmpdir(), `t3-ckpt-index-unidx-test-${Date.now()}`);
+
+    return Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const driver = yield* VcsDriver.VcsDriver;
+
+      yield* fileSystem.makeDirectory(path.join(repoDir, ".git"), { recursive: true });
+
+      assert.isNotNull(driver.checkpoints);
+      const result = yield* driver
+        .checkpoints!.captureCheckpoint({
+          cwd: repoDir,
+          checkpointRef: "refs/t3/checkpoints/test-unidx" as never,
+        })
+        .pipe(
+          Effect.match({
+            onSuccess: () => "succeeded" as const,
+            onFailure: (error) => error,
+          }),
+        );
+
+      if (result === "succeeded") {
+        assert.fail("expected the capture to fail when every candidate path is unindexable");
+      }
+      if (result._tag !== "VcsProcessExitError") {
+        assert.fail(`expected VcsProcessExitError, got ${result._tag}`);
+      }
+      assert.ok(
+        result.detail.includes("every candidate path is unindexable"),
+        `unexpected detail: ${result.detail}`,
+      );
+      // The temp pathspec file must be gone even on this failure branch.
+      const leftovers = NodeFS.readdirSync(path.join(repoDir, ".git")).filter((name) =>
+        name.startsWith("t3-checkpoint-pathspec-"),
+      );
+      assert.strictEqual(leftovers.length, 0);
+    }).pipe(
+      Effect.provide(DriverLayerAllUnindexable),
+      Effect.ensuring(
+        Effect.sync(() => {
+          try {
+            NodeFS.rmSync(repoDir, { recursive: true, force: true });
+          } catch {
+            // best-effort cleanup
+          }
+        }),
+      ),
+    );
+  },
+);
+
+// Live incident: in a large repo the whole-worktree `git add` outlives the
+// generic 30s VcsProcess deadline and the capture failed with a user-visible
+// "Checkpoint capture failed" activity on every turn. The index step now gets
+// its own deadline, and a timed-out capture attempt is retried from scratch
+// (fresh temp index, idempotent update-ref) instead of surfacing the error.
+const addTimeoutObservations: Array<{
+  readonly attempt: number;
+  readonly timeoutMs: number;
+  readonly indexFile: string | undefined;
+}> = [];
+
+type AddBehavior = "timeout-once" | "always-timeout" | "exit-error-once";
+let addBehavior: AddBehavior = "timeout-once";
+
+const makeAddTimeout = (input: { cwd: string; readonly timeoutMs?: number }) =>
+  new VcsProcessTimeoutError({
+    operation: "GitVcsDriver.checkpoints.captureCheckpoint",
+    command: "git",
+    cwd: input.cwd,
+    timeoutMs: input.timeoutMs ?? 30_000,
+  });
+
+const makeAddExitError = (input: { cwd: string }) =>
+  new VcsProcessExitError({
+    operation: "GitVcsDriver.checkpoints.captureCheckpoint",
+    command: "git",
+    cwd: input.cwd,
+    exitCode: 128,
+    detail: "fatal: unable to index 'nul'",
+  });
+
+const DriverLayerAddTimeout = Layer.mergeAll(GitVcsDriver.vcsLayer, GitVcsDriver.layer).pipe(
+  Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-git-ckpt-addto-" })),
+  Layer.provideMerge(
+    Layer.succeed(VcsProcess.VcsProcess, {
+      run: (input) => {
+        const args = input.args.slice(input.args[0] === "-C" ? 2 : 0);
+        if (args[0] === "rev-parse" && args[1] === "--git-common-dir") {
+          return Effect.succeed(ok(".git\n"));
+        }
+        if (args[0] === "rev-parse" && args[1] === "--verify") {
+          return Effect.succeed(ok("head-oid\n"));
+        }
+        if (args[0] === "add" && args.includes("-A") && args.includes("--") && args.includes(".")) {
+          const attempt = addTimeoutObservations.length + 1;
+          addTimeoutObservations.push({
+            attempt,
+            timeoutMs: input.timeoutMs ?? 0,
+            indexFile: input.env?.GIT_INDEX_FILE,
+          });
+          if (addBehavior === "always-timeout") {
+            return Effect.fail(makeAddTimeout(input));
+          }
+          if (addBehavior === "exit-error-once") {
+            return attempt === 1 ? Effect.fail(makeAddExitError(input)) : Effect.succeed(ok());
+          }
+          // Default ("timeout-once"): first attempt times out; the retry succeeds.
+          return attempt === 1 ? Effect.fail(makeAddTimeout(input)) : Effect.succeed(ok());
+        }
+        if (args[0] === "read-tree") {
+          return Effect.succeed(ok());
+        }
+        if (args[0] === "write-tree") {
+          return Effect.succeed(ok("tree-oid\n"));
+        }
+        if (args[0] === "commit-tree") {
+          return Effect.succeed(ok("commit-oid\n"));
+        }
+        if (args[0] === "update-ref") {
+          return Effect.succeed(ok());
+        }
+        return Effect.fail(
+          new VcsProcessExitError({
+            operation: "GitVcsDriver.checkpoints.captureCheckpoint",
+            command: "git",
+            cwd: input.cwd,
+            exitCode: 128,
+            detail: `unexpected git args: ${args.join(" ")}`,
+          }),
+        );
+      },
+    }),
+  ),
+  Layer.provideMerge(NodeServices.layer),
+);
+
+// `it.live` (real clock) so the 5s backoff between capture attempts actually
+// elapses; under the default TestClock the sleep would never tick.
+it.live(
+  "self-heals a timed-out whole-worktree git add by retrying the capture with a fresh temp index",
+  () => {
+    const repoDir = NodePath.join(NodeOS.tmpdir(), `t3-ckpt-addto-test-${Date.now()}`);
+
+    return Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const driver = yield* VcsDriver.VcsDriver;
+
+      yield* fileSystem.makeDirectory(path.join(repoDir, ".git"), { recursive: true });
+
+      assert.isNotNull(driver.checkpoints);
+      // Would fail without the bounded retry: the first add times out, the
+      // capture is re-attempted from a fresh temp index and succeeds (after
+      // the 5s first ladder step of CHECKPOINT_TIMEOUT_RETRY_BACKOFF_MS).
+      yield* driver.checkpoints!.captureCheckpoint({
+        cwd: repoDir,
+        checkpointRef: "refs/t3/checkpoints/addto-1" as never,
+      });
+
+      // Exactly one retry: the timed-out attempt plus the successful one.
+      assert.strictEqual(addTimeoutObservations.length, 2);
+      // Both index steps ran with the dedicated checkpoint deadline, not the
+      // generic 30s VcsProcess default.
+      assert.ok(addTimeoutObservations.every((obs) => obs.timeoutMs > 30_000));
+      // The retry ran on a FRESH temp index, not the timed-out attempt's.
+      const [firstIndexFile, secondIndexFile] = [
+        addTimeoutObservations[0]!.indexFile,
+        addTimeoutObservations[1]!.indexFile,
+      ];
+      assert.ok(
+        typeof firstIndexFile === "string" && firstIndexFile.includes("t3-checkpoint-index-"),
+      );
+      assert.ok(
+        typeof secondIndexFile === "string" && secondIndexFile.includes("t3-checkpoint-index-"),
+      );
+      assert.notStrictEqual(firstIndexFile, secondIndexFile);
+    }).pipe(
+      Effect.provide(DriverLayerAddTimeout),
+      Effect.ensuring(
+        Effect.sync(() => {
+          addTimeoutObservations.length = 0;
+          addBehavior = "timeout-once";
+          try {
+            NodeFS.rmSync(repoDir, { recursive: true, force: true });
+          } catch {
+            // best-effort cleanup
+          }
+        }),
+      ),
+    );
+  },
+);
+
+it.effect("does not retry a non-timeout capture failure", () => {
+  addBehavior = "exit-error-once";
+  const repoDir = NodePath.join(NodeOS.tmpdir(), `t3-ckpt-exit-err-test-${Date.now()}`);
+
+  return Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const driver = yield* VcsDriver.VcsDriver;
+
+    yield* fileSystem.makeDirectory(path.join(repoDir, ".git"), { recursive: true });
+
+    assert.isNotNull(driver.checkpoints);
+    const result = yield* driver
+      .checkpoints!.captureCheckpoint({
+        cwd: repoDir,
+        checkpointRef: "refs/t3/checkpoints/exit-err" as never,
+      })
+      .pipe(
+        Effect.match({
+          onSuccess: () => "succeeded" as const,
+          onFailure: (error) => error,
+        }),
+      );
+
+    if (result === "succeeded") {
+      assert.fail("expected the capture to fail with a non-timeout error");
+    }
+    if (result._tag !== "VcsProcessExitError") {
+      assert.fail(`expected VcsProcessExitError, got ${result._tag}`);
+    }
+    // No retry: the timed-out-attempt ladder must not fire for non-timeout errors.
+    assert.strictEqual(addTimeoutObservations.length, 1);
+  }).pipe(
+    Effect.provide(DriverLayerAddTimeout),
+    Effect.ensuring(
+      Effect.sync(() => {
+        addTimeoutObservations.length = 0;
+        addBehavior = "timeout-once";
+        try {
+          NodeFS.rmSync(repoDir, { recursive: true, force: true });
+        } catch {
+          // best-effort cleanup
+        }
+      }),
+    ),
+  );
+});
+
+// `it.live`: the boundary case sleeps the full 5s + 30s backoff ladder between
+// the three attempts, so it needs the real clock (~35s wall time).
+it.live("propagates the timeout after the final (third) attempt", () => {
+  addBehavior = "always-timeout";
+  const repoDir = NodePath.join(NodeOS.tmpdir(), `t3-ckpt-all-timeout-test-${Date.now()}`);
+
+  return Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const driver = yield* VcsDriver.VcsDriver;
+
+    yield* fileSystem.makeDirectory(path.join(repoDir, ".git"), { recursive: true });
+
+    assert.isNotNull(driver.checkpoints);
+    const result = yield* driver
+      .checkpoints!.captureCheckpoint({
+        cwd: repoDir,
+        checkpointRef: "refs/t3/checkpoints/all-timeout" as never,
+      })
+      .pipe(
+        Effect.match({
+          onSuccess: () => "succeeded" as const,
+          onFailure: (error) => error,
+        }),
+      );
+
+    if (result === "succeeded") {
+      assert.fail("expected the capture to fail after exhausting all attempts");
+    }
+    if (result._tag !== "VcsProcessTimeoutError") {
+      assert.fail(`expected VcsProcessTimeoutError, got ${result._tag}`);
+    }
+    // Exactly CHECKPOINT_MAX_CAPTURE_ATTEMPTS attempts — no fourth, no off-by-one.
+    assert.strictEqual(addTimeoutObservations.length, 3);
+  }).pipe(
+    Effect.provide(DriverLayerAddTimeout),
+    Effect.ensuring(
+      Effect.sync(() => {
+        addTimeoutObservations.length = 0;
+        addBehavior = "timeout-once";
+        try {
+          NodeFS.rmSync(repoDir, { recursive: true, force: true });
+        } catch {
+          // best-effort cleanup
+        }
+      }),
+    ),
+  );
+});

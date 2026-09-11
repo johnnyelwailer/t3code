@@ -1,8 +1,7 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
-import { enforceCanonicalBaseRef } from "./additive-guard-core.mjs";
+import { enforceCanonicalBaseRef, enforceForkBaselineRef } from "./additive-guard-core.mjs";
 
 const LOC_WARN_THRESHOLD = 150;
 const LOC_FAIL_THRESHOLD = 200;
@@ -26,6 +25,7 @@ export function loadAdditiveGuardConfig(cwd) {
 
   return {
     baseRef: enforceCanonicalBaseRef(parsed.baseRef),
+    forkBaselineRef: enforceForkBaselineRef(parsed.forkBaselineRef),
     requiredPrefixes: parsed.requiredPrefixes ?? [parsed.requiredPrefix ?? "t3team-"],
     locWarnThreshold: parsed.locWarnThreshold ?? LOC_WARN_THRESHOLD,
     locFailThreshold: parsed.locFailThreshold ?? LOC_FAIL_THRESHOLD,

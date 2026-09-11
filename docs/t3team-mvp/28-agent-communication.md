@@ -197,7 +197,7 @@ Use the project context files internally before asking the user to restate anyth
 - Use one child-session tool, `t3team.thread.start_child`, and always pass `isolation`.
 - Decision table:
   | Work | `isolation` | Repository fields |
-  | --- | --- | --- |
+  | ------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
   | Planning, triage, synthesis, project status | `shared` | Do not pass `repo_full_name` or `repo_ref` |
   | Implementation, debugging, tests, review, PR work | `own-worktree` | Pass `repo_full_name` for a linked repo (omit it in a local workspace to isolate in the local repository); pass `repo_ref` when the base matters |
 - For work that means digging through a repo, changing code, debugging, or reviewing,

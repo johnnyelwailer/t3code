@@ -34,8 +34,11 @@ jobs:
           fetch-depth: 0
 
       - name: Fetch upstream
-        # baseRef is `upstream/main` and the guard REFUSES any other value (enforceCanonicalBaseRef
-        # throws), so the remote must exist. Without it the guard silently falls back to origin/main,
+        # baseRef is still `upstream/main` (enforceCanonicalBaseRef refuses any other value), and the
+        # blocking base — the forkBaselineRef tag recorded in .t3team-additive-guard.json — is fetched
+        # from ORIGIN in the step below, so the upstream remote is no longer needed for the blocking
+        # gate. It is still needed for the informational drift step (T3TEAM_ADDITIVE_GUARD_BASE), so
+        # the remote must exist. Without it the guard silently falls back to origin/main,
         # which on this fork compares main against itself and passes vacuously.
         # Full, not shallow: a grafted shallow boundary can yield the wrong merge-base, which changes
         # what counts as "changed" instead of failing loudly.
@@ -62,23 +65,43 @@ jobs:
           echo "SYNC_POINT=$SYNC_POINT" >> "$GITHUB_ENV"
 
       # ── Blocking ────────────────────────────────────────────────────────────────────────────────
-      # Pins upstream/main to the commit this branch is SYNCED TO, so the guard measures our own
-      # additive discipline — prefixes, unwhitelisted edits to upstream files, LOC ceilings — all of
-      # which the author controls. Left pointing at live upstream, every run would also fail the
-      # "whitelisted file has upstream changes" check the moment upstream touches any of our ~130
-      # whitelisted files, turning main red for reasons no PR can fix. That drift is real and worth
-      # knowing about, which is what the next step is for — it just must not gate merges.
-      - name: Additive guard (this branch vs its upstream base)
+      # The blocking base is the frozen FORK baseline — a tag recorded in `.t3team-additive-guard.json`
+      # (forkBaselineRef), not upstream/main. Since this fork became a full product fork, main differs
+      # from upstream on ~2.8k files; measuring against upstream (pinned to any sync point, or live)
+      # fails on the fork's own debt — 1,373 violations on main alone, red on every run since 2026-09-06.
+      # The baseline tag freezes the fork tree it points at: everything inside it is grandfathered debt,
+      # and every new unwhitelisted upstream-file edit, new unprefixed file, or LOC growth on top of it
+      # still fails the guard exactly as before. Moving the baseline is a deliberate, reviewed config
+      # change (new tag + new forkBaselineRef value) — see docs/t3team-additive-whitelist.md.
+      # The tag must exist on ORIGIN (this step fetches it by name; actions/checkout fetches tags too,
+      # but the explicit fetch keeps the gate independent of checkout defaults). The guard itself
+      # resolves and validates the tag and fails loudly when it is missing — it never falls back to
+      # upstream/main or origin/main, so a missing tag cannot silently weaken the gate.
+      - name: Additive guard (this branch vs the fork baseline)
         run: |
-          git update-ref refs/remotes/upstream/main "$SYNC_POINT"
+          FORK_BASELINE="$(node -p 'const c = JSON.parse(require("fs").readFileSync(".t3team-additive-guard.json", "utf8")); c.forkBaselineRef ?? ""')"
+          if [ -n "$FORK_BASELINE" ]; then
+            echo "Blocking base: fork baseline $FORK_BASELINE"
+            git fetch --no-tags origin "+refs/tags/$FORK_BASELINE:refs/tags/$FORK_BASELINE"
+          else
+            # Pre-fork checkouts have no forkBaselineRef; keep the historical behavior of blocking
+            # against the upstream sync point this branch is based on.
+            echo "No forkBaselineRef configured; blocking against upstream sync point $SYNC_POINT."
+            git update-ref refs/remotes/upstream/main "$SYNC_POINT"
+          fi
           node t3team-additive-guard.mjs
 
       # ── Informational ───────────────────────────────────────────────────────────────────────────
+      # Measures against LIVE upstream on purpose: the question here is "how far ahead has upstream
+      # drifted from what this fork also edits" — a sync-planning signal, not a gate. Because the
+      # configured fork baseline would otherwise take over the blocking base, the step forces the
+      # canonical upstream base via T3TEAM_ADDITIVE_GUARD_BASE (the guard accepts only
+      # upstream/main there, so this variable can never weaken the blocking gate).
       - name: Upstream drift (informational)
         continue-on-error: true
         run: |
           git update-ref refs/remotes/upstream/main "$UPSTREAM_HEAD"
           echo "Synced to $SYNC_POINT; upstream/main is $UPSTREAM_HEAD."
           echo "Upstream commits since sync: $(git rev-list --count "$SYNC_POINT..upstream/main")"
-          node t3team-additive-guard.mjs || true
+          T3TEAM_ADDITIVE_GUARD_BASE=upstream/main node t3team-additive-guard.mjs || true
           echo "A failure here means upstream changed files this fork also changed — run a sync."

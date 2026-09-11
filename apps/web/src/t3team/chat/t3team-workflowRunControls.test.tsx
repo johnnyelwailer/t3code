@@ -4,7 +4,10 @@ import { act, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { T3TeamWorkflowRunControls } from "~/t3team/chat/t3team-workflowRunControls";
+import {
+  T3TeamWorkflowRunControlStatus,
+  T3TeamWorkflowRunControls,
+} from "~/t3team/chat/t3team-workflowRunControls";
 
 const mountedRoots: Array<{ root: ReturnType<typeof createRoot>; container: HTMLElement }> = [];
 
@@ -108,6 +111,43 @@ describe("T3TeamWorkflowRunControls", () => {
     await dispatchClick(items[stopIndex] as Element);
 
     expect(onControl).toHaveBeenCalledWith("stop");
+  });
+
+  it('labels the resume control "Retry run" for a failed, retryable run (GHE #344)', async () => {
+    const onControl = vi.fn();
+    const container = await renderNode(
+      <T3TeamWorkflowRunControls
+        canPause={false}
+        canResume={true}
+        canStop={false}
+        isRetry={true}
+        pending={null}
+        className="controls"
+        onControl={onControl}
+      />,
+    );
+
+    const trigger = container.querySelector("[aria-label='Retry run']");
+    expect(trigger).toBeTruthy();
+    expect(container.querySelector("[aria-label='Resume orchestration']")).toBeNull();
+
+    await dispatchClick(trigger as Element);
+    expect(onControl).toHaveBeenCalledWith("resume");
+  });
+
+  it('says "Retrying…" while the retry control is in flight', async () => {
+    const container = await renderNode(
+      <T3TeamWorkflowRunControlStatus pending="resume" error={null} isRetry />,
+    );
+    expect(container.textContent).toContain("Retrying…");
+    expect(container.textContent).not.toContain("Resuming…");
+  });
+
+  it('says "Resuming…" while a plain resume is in flight', async () => {
+    const container = await renderNode(
+      <T3TeamWorkflowRunControlStatus pending="resume" error={null} />,
+    );
+    expect(container.textContent).toContain("Resuming…");
   });
 
   it("renders nothing when there are no capabilities, no controls, and no stop affordance", async () => {

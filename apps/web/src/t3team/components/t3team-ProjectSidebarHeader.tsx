@@ -8,6 +8,7 @@ import {
 } from "~/components/SidebarStageBackdrop";
 import { T3TeamLeftSidebarHeaderToggle } from "~/t3team/t3team-LeftSidebarHeaderToggle";
 import { SidebarHeader, SidebarTrigger } from "~/t3team/components/ui/t3team-sidebar";
+import { T3TeamNexiWordmark } from "~/t3team/t3team-NexiWordmark";
 import { T3TeamPackBrandImage } from "~/t3team/t3team-PackBrandImage";
 
 type ProjectSidebarHeaderProps = {
@@ -20,7 +21,7 @@ export function resolveProjectSidebarBrandInset(input: {
   isDesktop: boolean;
   isWindowControlsOverlay: boolean;
 }): string {
-  if (input.isMac && input.isDesktop) return "ml-[var(--workspace-controls-left)]";
+  if (input.isMac && input.isDesktop) return "ml-[var(--workspace-titlebar-content-left)]";
   if (input.isMac && input.isWindowControlsOverlay) {
     return "ml-[var(--workspace-titlebar-content-left)]";
   }
@@ -35,9 +36,23 @@ export function resolveProjectSidebarBrandInset(input: {
  * pack-configurable background layer that sits above the nightly/dev stage
  * backdrop so a pack's own background always wins when both are present.
  */
+/**
+ * Drops a leading "Nexi" from the app name, because the wordmark beside it already says it —
+ * "Nexi Work" reads as `nexi Work`, not `nexi Nexi Work`. Derived rather than hardcoded so a
+ * differently-named distribution still shows its full name instead of losing its first word.
+ */
+function brandSuffixLabel(appName: string): string {
+  const remainder = appName.replace(/^nexi\s+/i, "").trim();
+  return remainder.length > 0 ? remainder : appName;
+}
+
+/** The nexi wordmark is nexplore's own asset, so only that distribution may replace the mark. */
+const NEXPLORE_THEME_ID = "nexplore";
+
 export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHeaderProps) {
   const backdropVariant = useSidebarStageBackdropVariant();
   const onBackdrop = backdropVariant !== null;
+  const isNexploreDistribution = appearance?.themeId === NEXPLORE_THEME_ID;
   const brandInsetClass = resolveProjectSidebarBrandInset({
     isMac: isMacPlatform(navigator.platform),
     isDesktop: isElectron,
@@ -62,7 +77,9 @@ export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHead
       />
       <SidebarTrigger
         className={cn(
-          "relative z-10 md:hidden",
+          "relative z-10",
+          !isElectron && "md:ml-[var(--sidebar-content-inset)]",
+          isElectron && "md:hidden",
           onBackdrop &&
             "[:hover,[data-pressed]]:bg-white/15 focus-visible:ring-white/90 focus-visible:ring-offset-blue-700 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white!",
         )}
@@ -77,17 +94,32 @@ export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHead
           onBackdrop ? "text-white" : "text-sidebar-foreground",
         )}
       >
-        <T3TeamPackBrandImage brand={appearance?.brand} kind="mark" className="size-5 shrink-0" />
-        {/* Inherits the wrapper's text color (white on backdrop, sidebar-foreground
-            otherwise) — the app name is the Team header's primary label, unlike
-            upstream's secondary "Code" caption next to a standalone wordmark. */}
-        <span className="truncate text-sm font-semibold">{appName}</span>
-      </div>
-      {/* `pr-2` matches the icon column's right inset below the header
-          (e.g. `SidebarGroup` content, project-row hover actions), since the
-          header itself drops horizontal padding at `md:px-0`. */}
-      <div className="relative z-10 ml-auto flex items-center pr-2">
-        <T3TeamLeftSidebarHeaderToggle surface="banner" />
+        {/*
+          Aspect from the asset's 59.334x21.029 viewBox, so the wordmark never distorts.
+
+          `-translate-y-px` optically centres it against the label. The row is already
+          `items-center`, but that centres the wordmark's BOX while its letterforms are not
+          centred inside it: the lowercase mass spans y 4.57-20.85 of a 21.029 box, so its visual
+          centre sits ~2.2 units (~1.4px at this size) below the box centre, which reads as the
+          label sitting too high. Nudging the wordmark up instead of the label down keeps the text
+          on its own baseline.
+        */}
+        {isNexploreDistribution ? (
+          <T3TeamNexiWordmark className="h-[0.85rem] w-auto shrink-0 -translate-y-px" />
+        ) : (
+          <T3TeamPackBrandImage
+            brand={appearance?.brand}
+            kind="mark"
+            className="size-5 shrink-0"
+            onBackdrop={onBackdrop}
+          />
+        )}
+        {/* Under nexplore the wordmark already reads "nexi", so the label carries only the
+            remainder ("Nexi Work" -> "Work"). Any other distribution keeps its own mark and its
+            full configured name. Both inherit the wrapper's text color. */}
+        <span className="truncate text-sm font-semibold">
+          {isNexploreDistribution ? brandSuffixLabel(appName) : appName}
+        </span>
       </div>
     </SidebarHeader>
   );

@@ -345,7 +345,7 @@ const WSL_RUNTIME_ARCHIVE_NAME = "wsl-runtime.tar.gz";
 const WSL_RUNTIME_ARCHIVE_HASH_NAME = `${WSL_RUNTIME_ARCHIVE_NAME}.sha256`;
 const SHA256_HEX_PATTERN = /^[0-9a-f]{64}$/i;
 
-export const parseWslRuntimeArchiveHash = (value: string): string | null => {
+const parseWslRuntimeArchiveHash = (value: string): string | null => {
   const trimmed = value.trim();
   return SHA256_HEX_PATTERN.test(trimmed) ? trimmed.toLowerCase() : null;
 };
@@ -430,7 +430,10 @@ const runWslPreflight = Effect.fn("desktop.backendConfiguration.wslPreflight")(f
     if (!serverTree.ok) {
       return { ok: false, reason: serverTree.reason, fatal: serverTree.fatal } as const;
     }
-    const windowsEntryPath = environment.path.join(serverTree.root, "apps/server/dist/t3team-bin.mjs");
+    const windowsEntryPath = environment.path.join(
+      serverTree.root,
+      "apps/server/dist/t3team-bin.mjs",
+    );
     const entryExists = yield* fileSystem
       .exists(windowsEntryPath)
       .pipe(Effect.orElseSucceed(() => false));

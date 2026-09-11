@@ -44,13 +44,11 @@ export interface WorkflowHostLifecycle {
   /** Mark the run completed and clear the pending ask. */
   readonly recordCompleted: () => Promise<void>;
   /** Mark the run failed, clear the pending ask, persist the reason. */
-  readonly recordFailed: (
-    detail: {
-      readonly reason: string;
-      readonly step: string;
-      readonly retainPending?: boolean;
-    },
-  ) => Promise<void>;
+  readonly recordFailed: (detail: {
+    readonly reason: string;
+    readonly step: string;
+    readonly retainPending?: boolean;
+  }) => Promise<void>;
   /** A reply was journaled but no live resume exists: fail the stuck sleeping
    * row so a scheduler stops re-arming it. */
   readonly orphanIfSleeping: (correlationId: string) => Promise<void>;

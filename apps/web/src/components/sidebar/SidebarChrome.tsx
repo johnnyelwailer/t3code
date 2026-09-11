@@ -14,11 +14,13 @@ import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { cn, isMacPlatform } from "../../lib/utils";
 import { useEnvironments } from "../../state/environments";
 import { T3Wordmark } from "../T3Wordmark";
+import { useT3TeamPackAppearance } from "~/t3team/t3team-packAppearance";
 import {
   resolveEnvironmentIdentificationPillLabel,
   resolveSidebarStageBackdropVariant,
   resolveSidebarStageFocusRingOffsetClass,
   SidebarStageBackdrop,
+  type SidebarStageBackdropVariant,
   useEnvironmentStageLabel,
 } from "../SidebarStageBackdrop";
 import { Badge } from "../ui/badge";
@@ -32,6 +34,7 @@ import {
   useSidebar,
 } from "../ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { readPullRequestListPreferences } from "../pullRequest/pullRequestListPreferences";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
@@ -42,10 +45,14 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron: boolean;
 }) {
   const stageLabel = useEnvironmentStageLabel();
+  const packAppearance = useT3TeamPackAppearance();
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
   const backdropVariant = resolveSidebarStageBackdropVariant(
     stageLabel,
     environmentIdentificationMode === "artwork",
+    // A packaged distribution's stage label is its channel ("Alpha"), so pack art is selected by
+    // theme id — without this the nexplore art only ever appeared in dev/nightly builds.
+    packAppearance?.themeId,
   );
   const pillLabel =
     environmentIdentificationMode === "pill"
@@ -62,13 +69,16 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
       {backdropVariant ? <SidebarStageBackdrop variant={backdropVariant} /> : null}
       <SidebarTrigger
         className={cn(
-          "relative z-10 md:hidden",
+          "relative z-10",
+          // Browser: align with sidebar content; Electron desktop: hidden (titlebar button instead).
+          !isElectron && "md:ml-[var(--sidebar-content-inset)]",
+          isElectron && "md:hidden",
           backdropVariant &&
             "focus-visible:ring-white/90 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white! [:hover,[data-pressed]]:bg-white/15",
           backdropVariant && resolveSidebarStageFocusRingOffsetClass(backdropVariant),
         )}
       />
-      <SidebarBrand isElectron={isElectron} onBackdrop={backdropVariant !== null} />
+      <SidebarBrand isElectron={isElectron} backdropVariant={backdropVariant} />
       {pillLabel ? (
         <Badge
           className="relative z-10 ml-1 hidden rounded-full px-1.5 text-muted-foreground @[15rem]/sidebar-header:inline-flex"
@@ -83,7 +93,23 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   );
 });
 
-function SidebarBrand({ isElectron, onBackdrop }: { isElectron: boolean; onBackdrop: boolean }) {
+function SidebarBrand({
+  isElectron,
+  backdropVariant,
+}: {
+  isElectron: boolean;
+  backdropVariant: SidebarStageBackdropVariant | null;
+}) {
+  const onBackdrop = backdropVariant !== null;
+  /**
+   * `dev` and `nightly` art are dark in both modes, so white always reads over them. The nexplore
+   * grounds are palette-driven (Orange in day, Blau in night), so its label colour ships with the
+   * ground as `--stage-nx-label` — changing that palette must not mean editing this component.
+   */
+  const backdropLabelClass =
+    backdropVariant === "nexplore" ? "text-(--stage-nx-label)" : "text-white";
+  const backdropMutedLabelClass =
+    backdropVariant === "nexplore" ? "text-(--stage-nx-label) opacity-70" : "text-white/70";
   const shouldInsetTitlebarBrand =
     isMacPlatform(navigator.platform) &&
     (isElectron || document.documentElement.classList.contains("wco"));
@@ -92,7 +118,7 @@ function SidebarBrand({ isElectron, onBackdrop }: { isElectron: boolean; onBackd
     <Link
       aria-label="Go to threads"
       className={cn(
-        "sidebar-brand relative z-10 h-7 w-fit min-w-0 shrink-0 items-center gap-1 overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2",
+        "sidebar-brand relative z-10 hidden h-7 w-fit min-w-0 shrink-0 items-center gap-1 overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2 md:flex",
         // Titlebar inset only where native window buttons exist — on the web the brand docks
         // left, flush with the sidebar items below it, instead of reserving phantom control
         // space (see the same rule in `t3team-ProjectSidebarHeader.tsx`). Electron always has
@@ -101,18 +127,20 @@ function SidebarBrand({ isElectron, onBackdrop }: { isElectron: boolean; onBackd
         shouldInsetTitlebarBrand
           ? "ml-[var(--workspace-titlebar-content-left)]"
           : "md:ml-[calc(var(--sidebar-content-inset)+var(--sidebar-row-content-inset))]",
-        onBackdrop ? "text-white" : "text-foreground",
+        onBackdrop ? backdropLabelClass : "text-foreground",
       )}
       to="/"
     >
-      <T3Wordmark aria-label="T3" className="h-2.5 w-auto shrink-0" />
-      <span
-        className={cn(
-          "-translate-y-px truncate text-sm font-medium tracking-tight",
-          onBackdrop ? "text-white/70" : "text-muted-foreground",
-        )}
-      >
-        Code
+      <span className="inline-flex min-w-0 items-baseline gap-1">
+        <T3Wordmark aria-label="T3" className="h-2.5 w-auto shrink-0" />
+        <span
+          className={cn(
+            "truncate text-sm font-medium tracking-tight",
+            onBackdrop ? backdropMutedLabelClass : "text-muted-foreground",
+          )}
+        >
+          Code
+        </span>
       </span>
     </Link>
   );
@@ -172,7 +200,10 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   }, [isMobile, setOpenMobile]);
   const handlePullRequestsClick = useCallback(() => {
     closeMobileSidebar();
-    void navigate({ to: "/pull-requests", search: { involvement: "all", state: "open" } });
+    void navigate({
+      to: "/pull-requests",
+      search: readPullRequestListPreferences(),
+    });
   }, [closeMobileSidebar, navigate]);
   const handleSettingsClick = useCallback(() => {
     closeMobileSidebar();
