@@ -102,6 +102,11 @@ const idleThread = {
   modelSelection: null,
   runtimeMode: null,
   interactionMode: null,
+  // The restart-hold summary path reads the steering context off the thread
+  // (humanSteeringInstructionForThread -> findHandoffParentThreadId), so the
+  // fixture needs both collections even for an idle thread.
+  messages: [],
+  activities: [],
 } as unknown as OrchestrationThread;
 
 const stoppedChildShell = {
