@@ -9,10 +9,14 @@ import {
 } from "./t3team-actorReactionInputSummarize.ts";
 
 /**
- * True when the user sent a message at any point while (or after) this batch
- * was queueing — i.e. the user stepped in and the pending agent messages must
- * not bury their message in the next reaction turn. Keyed on the EARLIEST
- * batch entry: any user message from that point on counts.
+ * True when the user (a human) sent a message at any point while (or after)
+ * this batch was queueing — i.e. the user stepped in and the pending agent
+ * messages must not bury their message in the next reaction turn. Keyed on
+ * the EARLIEST batch entry: any user message from that point on counts.
+ * Inter-agent reaction inputs (`t3teamExt.actor`) and automated senders
+ * (`t3teamExt.author`) are NOT user interjections — mirroring the
+ * isRealUserMessage tests elsewhere, a burst of sibling deliveries must not
+ * flip its own batches into the compressed tier.
  */
 export function userInterjectedDuringQueueing(
   entries: ReadonlyArray<T3TeamActorMailboxEntry>,
@@ -23,6 +27,8 @@ export function userInterjectedDuringQueueing(
   const firstAtMs = Date.parse(first.createdAt);
   for (const message of messages) {
     if (message.role !== "user") continue;
+    if (message.t3teamExt?.actor !== undefined) continue;
+    if (message.t3teamExt?.author !== undefined) continue;
     if (Date.parse(message.createdAt) >= firstAtMs) return true;
   }
   return false;
@@ -65,16 +71,30 @@ export const buildActorReactionCompressedInput = (
 
 /**
  * True when the thread transcript already contains at least one inter-agent
- * (actor) message — i.e. this is NOT the thread's first inter-agent delivery.
- * The first delivery carries the full bodies (it is the thread's kickoff / handoff
- * and the recipient must be able to act on it without a fetch); every later
- * delivery is delivered header-only.
+ * (actor) message OTHER THAN the excluded ids — i.e. this is NOT the thread's
+ * first inter-agent delivery. The first delivery carries the full bodies (it
+ * is the thread's kickoff / handoff and the recipient must be able to act on
+ * it without a fetch); every later delivery is delivered header-only.
+ *
+ * The excluded ids matter: each delivery is persisted as a first-class actor
+ * message in the recipient's transcript BEFORE the drain claims the batch, so
+ * without the exclusion every delivery would look "prior" and the full-body
+ * first-delivery tier would be unreachable in production.
  */
 export function hasPriorInterAgentMessages(
   messages: ReadonlyArray<OrchestrationMessage> | null | undefined,
+  excludeMessageIds?: ReadonlyArray<string>,
 ): boolean {
   if (messages === null || messages === undefined) return false;
-  return messages.some((message) => message.t3teamExt?.actor !== undefined);
+  const excluded =
+    excludeMessageIds !== undefined && excludeMessageIds.length > 0
+      ? new Set(excludeMessageIds)
+      : undefined;
+  return messages.some(
+    (message) =>
+      message.t3teamExt?.actor !== undefined &&
+      (excluded === undefined || !excluded.has(message.id)),
+  );
 }
 
 /**
@@ -251,17 +271,19 @@ export function collectPendingActorDeliveries(
     }
     const index = pending.findIndex(
       ({ threadId, entry }) =>
-        (threadId === event.payload.threadId &&
-          entry.fromThreadId === actor.senderThreadId &&
-          entry.hopCount === actor.hopCount &&
-          entry.rootThreadId === actor.rootThreadId &&
-          // GHE #156: the admitted input may carry the user-return instruction as a
-          // SUFFIX after the stable framing, so match the base framing as a PREFIX.
-          // The user-interjected case admits a COMPRESSED framing instead (same
-          // prefix-matching semantics, different base).
-          event.payload.text.startsWith(buildActorReactionInput(entry))) ||
-        event.payload.text.startsWith(buildActorReactionCompressedInput([entry])) ||
-        event.payload.text.startsWith(buildActorReactionHeaderSingleInput(entry)),
+        // Identity guards apply to EVERY tier base (full / compressed / header),
+        // not just the full-body one: a prefix match alone is safe only because
+        // the bases embed message ids — keep the explicit invariants too. The
+        // admitted input may carry the user-return instruction as a SUFFIX after
+        // the stable framing, so the base framing is matched as a PREFIX (same
+        // semantics for the compressed and header bases).
+        threadId === event.payload.threadId &&
+        entry.fromThreadId === actor.senderThreadId &&
+        entry.hopCount === actor.hopCount &&
+        entry.rootThreadId === actor.rootThreadId &&
+        (event.payload.text.startsWith(buildActorReactionInput(entry)) ||
+          event.payload.text.startsWith(buildActorReactionCompressedInput([entry])) ||
+          event.payload.text.startsWith(buildActorReactionHeaderSingleInput(entry))),
     );
     if (index >= 0) pending.splice(index, 1);
   }

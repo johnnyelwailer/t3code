@@ -129,7 +129,9 @@ export const makeChildAbnormalStopNotifier =
           fromTitle: child.title,
           fromProjectId: child.projectId,
           text,
-          urgency: "normal",
+          // M3: an abnormal child stop is exactly the kind of event the parent
+          // must hear about without the idle coalescing delay.
+          urgency: "urgent",
           hopCount: NonNegativeInt.make(0),
           rootThreadId: ThreadId.make(parentThreadId),
           createdAt: nowIso,

@@ -35,6 +35,7 @@ export function makeActorSendMessage(input: {
     fromThreadId,
     text,
     summary,
+    urgent,
   }: {
     readonly toThreadId: string;
     readonly fromThreadId: string;
@@ -47,6 +48,12 @@ export function makeActorSendMessage(input: {
      * sender-supplied summary is never persisted verbatim.
      */
     readonly summary?: string;
+    /**
+     * Wake-now marker. Urgent deliveries bypass the recipient's idle
+     * coalescing window; use only for hard blockers or questions that
+     * unblock the recipient. Everything else stays queued and coalesces.
+     */
+    readonly urgent?: boolean;
   }) =>
     Effect.gen(function* () {
       const body = typeof text === "string" ? text.trim() : "";
@@ -93,7 +100,7 @@ export function makeActorSendMessage(input: {
         fromProjectId: source.projectId,
         text: body,
         ...(senderSummary !== "" ? { summary: senderSummary } : {}),
-        urgency: "normal",
+        urgency: urgent === true ? "urgent" : "normal",
         hopCount: NonNegativeInt.make(hopCount),
         rootThreadId: ThreadId.make(rootThreadId),
         createdAt,
@@ -103,7 +110,7 @@ export function makeActorSendMessage(input: {
         toThreadId: target.id,
         fromThreadId,
         delivered: true,
-        urgency: "normal" as const,
+        urgency: (urgent === true ? "urgent" : "normal") as const,
         hopCount,
       };
     }).pipe(Effect.mapError(normalizeError));

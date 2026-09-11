@@ -90,7 +90,13 @@ export function startActorReaction(input: {
               entries,
               detectUserFacingOpenState(thread.messages),
               userInterjectedDuringQueueing(entries, thread.messages),
-              !hasPriorInterAgentMessages(thread.messages),
+              // M1: exclude THIS batch' own persisted actor messages — each
+              // delivery is persisted before the drain claims it, so without
+              // this the first-delivery full-body tier would be unreachable.
+              !hasPriorInterAgentMessages(
+                thread.messages,
+                entries.map((entry) => entry.messageId),
+              ),
             ),
             humanSteeringInstructionForThread(thread, DateTime.toEpochMillis(now)),
           ),

@@ -40,6 +40,7 @@ const sendMessage = Effect.fn("T3TeamMcpToolkit.sendMessage")(function* (input: 
   readonly to_thread_id: string;
   readonly text: string;
   readonly summary?: string | undefined;
+  readonly urgent?: boolean | undefined;
 }) {
   const invocation = yield* McpInvocationContext.McpInvocationContext;
   const broker = yield* T3TeamToolBroker;
@@ -49,6 +50,7 @@ const sendMessage = Effect.fn("T3TeamMcpToolkit.sendMessage")(function* (input: 
       fromThreadId: invocation.threadId,
       text: input.text,
       ...(input.summary !== undefined ? { summary: input.summary } : {}),
+      ...(input.urgent !== undefined ? { urgent: input.urgent } : {}),
     })
     .pipe(Effect.mapError((message) => new T3TeamMcpToolError({ message })));
 });
