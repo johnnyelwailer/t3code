@@ -3,6 +3,8 @@ import * as Effect from "effect/Effect";
 
 import { type T3TeamToolCallResult } from "./t3team-toolBroker.ts";
 import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
+import { buildThreadAskFields, normalizeAskPosition } from "./t3team-threadAskFields.ts";
+import { askThreadQuestion, type ThreadAskFn } from "./t3team-threadAskModel.ts";
 import {
   buildThreadSearchEntries,
   normalizeThreadSearchLimit,
@@ -24,6 +26,15 @@ import {
 
 const SEARCH_THREAD_TOOL_ID = "t3team.thread.search";
 
+/** Question-only calls run no search, so they report an empty result set. */
+const EMPTY_SEARCH = {
+  totalMatches: 0,
+  returnedMatches: 0,
+  matches: [] as ReturnType<typeof searchThreadEntries>["matches"],
+  matchMode: "verbatim" as const,
+  hasMore: false,
+};
+
 export type SearchThreadDetail = {
   readonly title?: string | undefined;
   readonly messages: ReadonlyArray<ThreadMessageSearchableMessage>;
@@ -37,6 +48,9 @@ type SearchThreadArgs = {
   readonly scope?: unknown;
   readonly order?: unknown;
   readonly role?: unknown;
+  readonly question?: unknown;
+  readonly fromPosition?: unknown;
+  readonly toPosition?: unknown;
 };
 
 export function callT3TeamSearchThreadTool(input: {
@@ -47,6 +61,7 @@ export function callT3TeamSearchThreadTool(input: {
   readonly loadThreadDetail?: (
     threadId: ThreadId,
   ) => Effect.Effect<SearchThreadDetail | undefined, string>;
+  readonly ask?: ThreadAskFn;
 }): Effect.Effect<T3TeamToolCallResult, never> {
   const { tool, toolArgs, threadId, loadThreadDetail } = input;
   if (!threadId || !loadThreadDetail) {
@@ -55,9 +70,10 @@ export function callT3TeamSearchThreadTool(input: {
 
   const args = (toolArgs ?? {}) as SearchThreadArgs;
   const query = typeof args.query === "string" ? args.query.trim() : "";
-  if (query.length === 0) {
+  const question = typeof args.question === "string" ? args.question.trim() : "";
+  if (query.length === 0 && question.length === 0) {
     return Effect.succeed(
-      errorResult(`${SEARCH_THREAD_TOOL_ID} requires a non-empty 'query' string.`),
+      errorResult(`${SEARCH_THREAD_TOOL_ID} requires a non-empty 'query' or 'question' string.`),
     );
   }
   const limit = normalizeThreadSearchLimit(args.limit);
@@ -65,6 +81,8 @@ export function callT3TeamSearchThreadTool(input: {
   const scope = normalizeThreadSearchScope(args.scope);
   const order = normalizeThreadSearchOrder(args.order);
   const role = typeof args.role === "string" && args.role.length > 0 ? args.role : undefined;
+  const fromPosition = normalizeAskPosition(args.fromPosition);
+  const toPosition = normalizeAskPosition(args.toPosition);
 
   return Effect.gen(function* () {
     const threadRead = yield* loadThreadDetail(threadId).pipe(Effect.result);
@@ -81,13 +99,28 @@ export function callT3TeamSearchThreadTool(input: {
       activities: thread.activities,
       scope,
     });
-    const search = searchThreadEntries(entries, {
-      query,
-      limit,
-      offset,
-      order,
-      ...(role ? { label: role } : {}),
-    });
+    const search = query
+      ? searchThreadEntries(entries, {
+          query,
+          limit,
+          offset,
+          order,
+          ...(role ? { label: role } : {}),
+        })
+      : EMPTY_SEARCH;
+
+    // Question mode is opt-in and additive: without `question` the result
+    // below is byte-identical to what this tool has always returned.
+    const askFields = question
+      ? yield* buildThreadAskFields({
+          entries,
+          ...(query ? { matches: search.matches } : {}),
+          question,
+          ...(fromPosition !== undefined ? { fromPosition } : {}),
+          ...(toPosition !== undefined ? { toPosition } : {}),
+          ask: input.ask ?? askThreadQuestion,
+        })
+      : {};
 
     return okResult({
       ok: true,
@@ -117,7 +150,8 @@ export function callT3TeamSearchThreadTool(input: {
               `${search.totalMatches}. Pass offset: ${offset + search.returnedMatches} for the next page.`,
           }
         : {}),
-      ...(search.totalMatches === 0
+      ...askFields,
+      ...(query && search.totalMatches === 0
         ? {
             hint:
               `Nothing in this thread contains "${query}"` +

@@ -522,7 +522,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     label: "Search this thread",
     title: "Search this thread's transcript",
     description:
-      "Search the CURRENT thread — its messages AND its tool activity (commands and their output, file reads, tool calls) — e.g. to recover a decision, a requirement or a result that scrolled out of the context window. Compacted and truncated spans stay searchable. Pass a case-insensitive 'query' substring; a multi-word query that matches nothing verbatim is retried requiring every word (reported as matchMode). Newest matches come first unless 'order' is 'oldest'. Page with 'offset' when the result reports hasMore. Narrow with 'scope' or 'role'. Each match carries its 1-based position within its own stream, a snippet around the match, and either message_id (pass to t3team.thread.read_message for the full body) or activity_id. An activity records only the first 500 characters of a tool result.",
+      "Search the CURRENT thread — its messages AND its tool activity (commands and their output, file reads, tool calls) — e.g. to recover a decision, a requirement or a result that scrolled out of the context window. Compacted and truncated spans stay searchable. Pass a case-insensitive 'query' substring; a multi-word query that matches nothing verbatim is retried requiring every word (reported as matchMode). Newest matches come first unless 'order' is 'oldest'. Page with 'offset' when the result reports hasMore. Narrow with 'scope' or 'role'. Each match carries its 1-based position within its own stream, a snippet around the match, and either message_id (pass to t3team.thread.read_message for the full body) or activity_id. An activity records only the first 500 characters of a tool result. Optionally pass 'question' to get a direct answer ('why did that fail?', 'what did we decide about X?') instead of only locations: a bounded slice of the transcript is read by a fast model and the result adds 'answer', 'citations' and 'spanUsed'. Combine 'question' with 'query' (cheap default: the matches plus their immediate neighbours) or with 'fromPosition'/'toPosition' for an explicit span. If the model is unavailable the search results still come back, with 'answerError'.",
     capabilities: ["read"],
     kind: "thread",
     surfaces: ["thread"],
@@ -536,6 +536,22 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
           type: "string",
           description: "Case-insensitive substring to search for in this thread's transcript.",
           minLength: 1,
+        },
+        question: {
+          type: "string",
+          description:
+            "Ask a question about this thread and get a direct answer instead of only match locations. Answered strictly from the selected transcript span.",
+          minLength: 1,
+        },
+        fromPosition: {
+          type: "number",
+          description:
+            "With 'question': start of an explicit transcript span (inclusive, 1-based position). An explicit span unlocks a much larger budget than the default.",
+        },
+        toPosition: {
+          type: "number",
+          description:
+            "With 'question': end of an explicit transcript span (inclusive, 1-based position).",
         },
         limit: {
           type: "number",
@@ -563,7 +579,9 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
             "Optional filter on a message role ('user', 'assistant', 'actor') or an activity kind (e.g. 'bash'). An unknown value returns no matches.",
         },
       },
-      required: ["query"],
+      // Either 'query' or 'question' is required; the handler enforces it,
+      // because JSON Schema `required` cannot express the choice here.
+      required: [],
     },
   },
   "t3team.thread.search_source": {
