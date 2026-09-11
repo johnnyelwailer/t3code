@@ -415,6 +415,108 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain("codex-thread-1");
   });
 
+  describe("background bash jobs", () => {
+    const bgNow = () => new Date().toISOString();
+    const startDetail =
+      "Command still running after 10s \u2014 it is now a background job: job_a1b2c3d4 (pid 4242). " +
+      "It keeps running under a 600s hard deadline owned by this thread; you do not have to wait for it. " +
+      'Completion notifies you automatically \u2014 do not start a duplicate. Inspect with process({action: "peek", id: "job_a1b2c3d4"}).';
+
+    it("shows the running-job line and tags the originating tool row", () => {
+      const createdAt = bgNow();
+      const markup = renderToStaticMarkup(
+        <MessagesTimeline
+          {...buildProps()}
+          timelineEntries={[
+            {
+              id: "bg-start-entry",
+              kind: "work",
+              createdAt,
+              entry: {
+                id: "bg-start-entry",
+                createdAt,
+                label: "Run command",
+                tone: "tool",
+                toolLifecycleStatus: "completed",
+                detail: startDetail,
+              },
+            },
+          ]}
+        />,
+      );
+      // Thread-level indicator (list footer) + the tool-row anchor tag.
+      // The per-second age is aria-hidden (own span), so assert the stable
+      // text and the age separately rather than as one contiguous string.
+      expect(markup).toMatch(/1 background job running<\/span>/);
+      expect(markup).toMatch(/aria-hidden="true"[^>]*> · 1[01]s<\/span>/);
+      expect(markup).toContain("<span>running in background</span>");
+    });
+
+    it("hides the indicator once a process result settles the job", () => {
+      const markup = renderToStaticMarkup(
+        <MessagesTimeline
+          {...buildProps()}
+          timelineEntries={[
+            {
+              id: "bg-start-entry",
+              kind: "work",
+              createdAt: bgNow(),
+              entry: {
+                id: "bg-start-entry",
+                createdAt: bgNow(),
+                label: "Run command",
+                tone: "tool",
+                toolLifecycleStatus: "completed",
+                detail: startDetail,
+              },
+            },
+            {
+              id: "bg-settle-entry",
+              kind: "work",
+              createdAt: bgNow(),
+              entry: {
+                id: "bg-settle-entry",
+                createdAt: bgNow(),
+                label: "Process tool",
+                tone: "tool",
+                toolLifecycleStatus: "completed",
+                detail: "output\u2026\n[job job_a1b2c3d4 finished]",
+              },
+            },
+          ]}
+        />,
+      );
+      expect(markup).not.toContain("background job running");
+      expect(markup).not.toContain("running in background");
+    });
+
+    it("stays quiet for a backgrounded job long past its hard deadline", () => {
+      const stale = new Date(Date.now() - 700_000).toISOString();
+      const markup = renderToStaticMarkup(
+        <MessagesTimeline
+          {...buildProps()}
+          timelineEntries={[
+            {
+              id: "bg-stale-entry",
+              kind: "work",
+              createdAt: stale,
+              entry: {
+                id: "bg-stale-entry",
+                createdAt: stale,
+                label: "Run command",
+                tone: "tool",
+                toolLifecycleStatus: "completed",
+                detail: startDetail,
+              },
+            },
+          ]}
+        />,
+      );
+      expect(markup).not.toContain("background job running");
+      expect(markup).not.toContain("running in background");
+    });
+  });
+
   it("renders elapsed time for a completed turn", () => {
     const turnId = TurnId.make("turn-with-fold");
     const assistantEntry = buildAssistantTimelineEntry("Done.");
