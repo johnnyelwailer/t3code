@@ -89,4 +89,29 @@ describe("makeActorSendMessage summary", () => {
       }
     }),
   );
+
+  it.effect("M3: urgent flips the command and result urgency, normal by default", () =>
+    Effect.gen(function* () {
+      const dispatches: unknown[] = [];
+      const send = make(dispatches);
+      const normalResult = yield* send({
+        toThreadId: "target",
+        fromThreadId: "sender",
+        text: "body",
+      });
+      expect((dispatches[0] as { urgency: string }).urgency).toBe("normal");
+      expect(normalResult.urgency).toBe("normal");
+
+      const urgentDispatches: unknown[] = [];
+      const sendUrgent = make(urgentDispatches);
+      const urgentResult = yield* sendUrgent({
+        toThreadId: "target",
+        fromThreadId: "sender",
+        text: "body",
+        urgent: true,
+      });
+      expect((urgentDispatches[0] as { urgency: string }).urgency).toBe("urgent");
+      expect(urgentResult.urgency).toBe("urgent");
+    }),
+  );
 });

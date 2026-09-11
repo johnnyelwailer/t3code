@@ -324,11 +324,15 @@ export const T3TeamSendMessageTool = Tool.make("t3team_send_message", {
     "style: state, decision, request). For long bodies, provide a short 'summary' " +
     "(the recipient's reaction input shows the summary, not a raw cut); without " +
     "one, a summary is auto-generated from the body's opening. The recipient " +
-    "retrieves the full text with t3team_read_message.",
+    "retrieves the full text with t3team_read_message. Set `urgent: true` ONLY " +
+    "for a hard blocker or a question that unblocks the recipient — urgent " +
+    "messages wake an idle recipient immediately; everything else waits in the " +
+    "coalescing window and arrives as one digest.",
   parameters: Schema.Struct({
     to_thread_id: Schema.String,
     text: Schema.String,
     summary: Schema.optional(Schema.String),
+    urgent: Schema.optional(Schema.Boolean),
   }),
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
