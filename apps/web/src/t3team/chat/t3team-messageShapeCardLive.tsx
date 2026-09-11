@@ -118,9 +118,24 @@ export function T3TeamWorkflowShapeLiveCard({
       */}
       <div className="mb-2 flex min-w-0 flex-col items-start gap-1 @sm/workflow-live-card:flex-row @sm/workflow-live-card:items-center @sm/workflow-live-card:justify-between">
         <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-          {shape.description && shape.name ? <T3TeamWorkflowNameChip name={shape.name} /> : null}
+          {/*
+            Below the narrow-container breakpoint the row stacks instead of a squeezed single
+            line, and the slug + status were what overflowed past the card's own edge. There the
+            machine slug is dropped (hidden, not deleted — the tooltip and the wide layout keep
+            it) so only the live status shows; at >=sm the card is wide enough for both on one
+            row and the slug reappears. The "·" separator hides with it so a lone dot never dangles.
+          */}
+          {shape.description && shape.name ? (
+            <T3TeamWorkflowNameChip
+              name={shape.name}
+              className="hidden @sm/workflow-live-card:inline"
+            />
+          ) : null}
           {shape.description && shape.name && showLiveStatus ? (
-            <span aria-hidden className="shrink-0 text-muted-foreground/50">
+            <span
+              aria-hidden
+              className="hidden shrink-0 text-muted-foreground/50 @sm/workflow-live-card:inline"
+            >
               ·
             </span>
           ) : null}
