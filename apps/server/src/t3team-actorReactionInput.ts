@@ -8,10 +8,6 @@ import {
   summarizeActorMessageForDelivery,
 } from "./t3team-actorReactionInputSummarize.ts";
 
-/**
-  );
-};
-
 export const buildActorReactionInput = (entry: T3TeamActorMailboxEntry): string =>
   [
     `[Message from peer agent «${entry.fromTitle}» · thread ${entry.fromThreadId} · ` +

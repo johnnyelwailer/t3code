@@ -32,11 +32,11 @@ import {
   type ProjectionSnapshotQueryShape,
 } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
+import { T3TeamActorMessageReactorLive } from "./t3team-actorMessageReactor.ts";
 import {
   resolveActorMessageDebounceMs,
   T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS,
-  T3TeamActorMessageReactorLive,
-} from "./t3team-actorMessageReactor.ts";
+} from "./t3team-actorMessageReactorLimits.ts";
 import {
   buildActorReactionBatchInput,
   buildActorReactionInput,
