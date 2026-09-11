@@ -13,14 +13,18 @@
  *
  * F2 — the shared decider admission guard plus this mailbox serialize turns.
  * Delivered messages enqueue; turn-settle events clear and drain the mailbox.
- * Phase 1 is `normal` urgency only; `urgent` interrupt + per-pair rate cap are
- * Phase 2 (the seams are already in place).
+ * `urgent` deliveries bypass the coalescing window (their drain claims
+ * immediately); a per-pair rate cap is Phase 2.
  *
  * Coalescing — a burst of inter-agent deliveries is NOT one reaction turn per
  * message. Every drain first waits a short, configurable debounce window, then
  * claims the thread's WHOLE pending batch and dispatches it as a single
  * reaction turn (one framed input listing every delivery). A delivery that
  * lands after the claim triggers its own drain and flushes the next batch.
+ * Idle-awareness: the default window is long (45s) so quiet threads are not
+ * woken every few seconds by coordinated child chatter; but if ANY entry in
+ * the pending batch carries urgency `urgent`, the drain claims it immediately
+ * (window 0) — urgent means "wake now".
  * The drain is forked (never blocks the domain-event stream) and the
  * per-thread `reacting` flag + hop cap still bound everything: exactly one
  * reaction turn per thread in flight, no run-away chains.
@@ -58,11 +62,13 @@ export const T3TEAM_ACTOR_MESSAGE_HOP_CAP = 6;
 
 /**
  * Inter-agent coalescing: how long a drain waits before claiming the pending
- * batch, so deliveries arriving within the window group into ONE reaction
- * turn. Distribution-tunable via `T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS` (0 disables
- * the window — claims happen immediately, still batched).
+ * batch while the thread is idle, so quiet threads are not woken into heavy
+ * reaction turns by low-stakes coordinated chatter. Distribution-tunable via
+ * `T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS` (0 disables the window — claims happen
+ * immediately, still batched). An `urgent` entry in the pending batch
+ * bypasses the window (claims immediately, see the reactor's drain).
  */
-export const T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS = 2000;
+export const T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS = 45_000;
 const T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS_ENV = "T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS";
 
 /** Resolve the coalescing debounce window, honoring the env override. */
@@ -111,6 +117,32 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
     // hold is surfaced, so a later clean settle drains normally instead of
     // re-surfacing a summary (e.g. repeatedly listing a still-stopped child).
     let heldAtRehydrate: Set<string> = new Set();
+    // Pending URGENT deliveries per thread (messageId set). The mailbox
+    // deliberately exposes no peek API, so the drain's urgent bypass keys off
+    // this mirror: onDelivered adds a fresh urgent delivery, and each claim
+    // removes what it claimed. A stale entry can only ever SHORTEN a window
+    // to 0 (the claim then no-ops on an empty batch), never lengthen one.
+    const urgentPending = new Map<string, Set<string>>();
+
+    const noteUrgentDelivery = (threadId: string, messageId: string) => {
+      const set = urgentPending.get(threadId) ?? new Set<string>();
+      set.add(messageId);
+      urgentPending.set(threadId, set);
+    };
+
+    const forgetClaimedUrgent = (
+      threadId: string,
+      entries: ReadonlyArray<{ readonly messageId: string }>,
+    ) => {
+      const set = urgentPending.get(threadId);
+      if (set === undefined) return;
+      for (const { messageId } of entries) set.delete(messageId);
+      if (set.size === 0) urgentPending.delete(threadId);
+    };
+
+    /** The drain's coalescing window: 0 while ANY urgent delivery is pending. */
+    const drainWindowMs = (threadId: string) =>
+      (urgentPending.get(threadId)?.size ?? 0) > 0 ? 0 : debounceMs;
 
     const loadThread = (threadId: string) =>
       query.getThreadDetailById(ThreadId.make(threadId)).pipe(
@@ -146,7 +178,8 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
           return;
         }
         // Coalescing window: deliveries enqueued while we wait join this batch.
-        yield* Effect.sleep(Duration.millis(debounceMs));
+        // Idle-aware: long by default; 0 while an urgent delivery is pending.
+        yield* Effect.sleep(Duration.millis(drainWindowMs(threadId)));
         // Re-check after the window: a user turn may have started while we
         // waited. If so, abort — the turn-settle drain picks the queue up.
         const settled = yield* loadThread(threadId);
@@ -154,6 +187,7 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
           return;
         }
         const batch = yield* mailbox.takeNextForDispatch(threadId, batchMax);
+        forgetClaimedUrgent(threadId, batch);
         if (batch.length === 0) {
           return;
         }
@@ -196,6 +230,7 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
         const batch = yield* mailbox
           .clearSuppression(threadId)
           .pipe(Effect.andThen(() => mailbox.takeNextForDispatch(threadId)));
+        forgetClaimedUrgent(threadId, batch);
         if (batch.length === 0 && interrupted.length === 0) {
           // Nothing held: the hold is lifted and the thread behaves normally.
           return;
@@ -235,7 +270,7 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
           });
           return;
         }
-        yield* mailbox.enqueue(payload.threadId, {
+        const fresh = yield* mailbox.enqueue(payload.threadId, {
           messageId: payload.messageId,
           fromThreadId: payload.fromThreadId,
           fromTitle: payload.fromTitle,
@@ -248,6 +283,9 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
           createdAt: payload.createdAt,
           dispatchAttempts: 0,
         });
+        if (fresh && payload.urgency === "urgent") {
+          noteUrgentDelivery(payload.threadId, payload.messageId);
+        }
         yield* tryDrain(payload.threadId);
       });
 
