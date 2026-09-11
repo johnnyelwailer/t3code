@@ -13,7 +13,6 @@ vi.setSystemTime(NOW);
 const job = (
   overrides: Partial<BackgroundJobState> & Pick<BackgroundJobState, "jobId">,
 ): BackgroundJobState => ({
-  jobId: overrides.jobId,
   startedAtMs: NOW - 45_000,
   deadlineMs: NOW + 555_000,
   state: "running",
@@ -25,7 +24,8 @@ describe("BackgroundJobsRunningIndicator", () => {
     const markup = renderToStaticMarkup(
       <BackgroundJobsRunningIndicator jobs={[job({ jobId: "job_a" })]} />,
     );
-    expect(markup).toContain("1 background job running · 45s");
+    expect(markup).toContain("1 background job running</span>");
+    expect(markup).toContain('aria-hidden="true" class="truncate"> · 45s</span>');
     expect(markup).toContain('role="status"');
   });
 
@@ -38,7 +38,8 @@ describe("BackgroundJobsRunningIndicator", () => {
         ]}
       />,
     );
-    expect(markup).toContain("2 background jobs running · 1m 10s");
+    expect(markup).toContain("2 background jobs running</span>");
+    expect(markup).toContain('aria-hidden="true" class="truncate"> · 1m 10s</span>');
   });
 
   it("renders nothing for finished jobs", () => {
@@ -65,7 +66,8 @@ describe("BackgroundJobRunningBadge", () => {
     const markup = renderToStaticMarkup(
       <BackgroundJobRunningBadge job={job({ jobId: "job_a" })} />,
     );
-    expect(markup).toContain("running in background · 45s");
+    expect(markup).toContain("<span>running in background</span>");
+    expect(markup).toContain(">· 45s</span>");
   });
 
   it("un-tags the row once the job settles", () => {

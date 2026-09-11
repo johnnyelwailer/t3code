@@ -445,8 +445,11 @@ describe("MessagesTimeline", () => {
         />,
       );
       // Thread-level indicator (list footer) + the tool-row anchor tag.
-      expect(markup).toMatch(/1 background job running \u00b7 1[01]s/);
-      expect(markup).toContain("running in background \u00b7 1");
+      // The per-second age is aria-hidden (own span), so assert the stable
+      // text and the age separately rather than as one contiguous string.
+      expect(markup).toMatch(/1 background job running<\/span>/);
+      expect(markup).toMatch(/aria-hidden="true"[^>]*> · 1[01]s<\/span>/);
+      expect(markup).toContain("<span>running in background</span>");
     });
 
     it("hides the indicator once a process result settles the job", () => {

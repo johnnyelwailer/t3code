@@ -97,6 +97,14 @@ describe("backgroundJobFinishSignals", () => {
     ).toEqual(new Map([["job_a1b2c3d4", "finished"]]));
   });
 
+  it("settles from the live-delivery notice shape (no command, 'finished')", () => {
+    expect(
+      backgroundJobFinishSignals(
+        "Background job job_a1b2c3d4 finished. Use the process tool for output; do not re-run the command.",
+      ),
+    ).toEqual(new Map([["job_a1b2c3d4", "finished"]]));
+  });
+
   it("ignores plain command text that merely contains the prefix", () => {
     expect(backgroundJobFinishSignals("echo 'job_a1b2c3d4 running' && true")).toEqual(new Map());
   });

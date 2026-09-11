@@ -46,13 +46,24 @@ export function BackgroundJobsRunningIndicator({
     [jobs, now],
   );
   if (label === null) return null;
+  // The live region announces changes to the stable part (count) only; the
+  // per-second age is aria-hidden so screen readers do not announce every
+  // tick ("…45s", "…46s", …).
+  const splitAt = label.lastIndexOf(" · ");
+  const stable = splitAt > 0 ? label.slice(0, splitAt) : label;
+  const agePart = splitAt > 0 ? label.slice(splitAt) : null;
   return (
     <div
       className="flex items-center gap-1.5 px-0.5 py-1 text-sm leading-relaxed text-muted-foreground tabular-nums"
       role="status"
     >
       <span aria-hidden className="size-1.5 shrink-0 animate-pulse rounded-full bg-info" />
-      <span className="min-w-0 truncate">{label}</span>
+      <span className="min-w-0 truncate">{stable}</span>
+      {agePart !== null ? (
+        <span aria-hidden className="truncate">
+          {agePart}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -73,7 +84,8 @@ export function BackgroundJobRunningBadge({ job }: { readonly job: BackgroundJob
       role="status"
     >
       <span aria-hidden className="size-1 shrink-0 animate-pulse rounded-full bg-info" />
-      running in background · {age}
+      <span>running in background</span>
+      <span aria-hidden>· {age}</span>
     </span>
   );
 }

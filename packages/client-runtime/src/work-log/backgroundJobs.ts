@@ -88,13 +88,14 @@ const LIST_CANCELLED_RE = new RegExp(String.raw`(^|\n)(${JOB_ID})\s+cancelled\b`
 /** kill: "Kill requested for job_xxx; it will be reported as cancelled." */
 const KILL_REQUESTED_RE = new RegExp(String.raw`Kill requested for (${JOB_ID})`, "g");
 /**
- * The completion notice body: "Background job job_xxx (cmd) is completed (…)".
- * Only the registry's settled state words count — the start marker also says
- * "background job: job_xxx" and must not read as terminal.
+ * The completion notice body, in either observed shape:
+ * "Background job job_xxx (cmd) is completed (…)" or the live-delivery form
+ * "background job job_xxx finished. Use the process tool…". The start marker
+ * says "background job: job_xxx" (colon), so it cannot match here.
  */
 const NOTICE_SETTLED_RE = new RegExp(
-  String.raw`Background job (${JOB_ID})\s+\(.*?\)\s+is\s+(?:completed|failed|killed|cancelled)\b`,
-  "g",
+  String.raw`background job\s+(${JOB_ID})(?:\s+\(.*?\))?\s+(?:is\s+)?(?:completed|failed|killed|cancelled|finished)\b`,
+  "gi",
 );
 
 function toFiniteMs(iso: string): number {
