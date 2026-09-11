@@ -11,10 +11,7 @@ import { cn } from "~/lib/utils";
 import { usePrimarySettings } from "~/hooks/useSettings";
 import { formatRelativeTime } from "~/t3team/components/t3team-projectSidebarTimeLabels";
 import type { ProjectThread } from "~/t3team/t3team-types";
-import {
-  partitionSubRunThreads,
-  sortFoldedSubRunThreads,
-} from "~/t3team/components/t3team-projectSidebarThreadTree";
+import { sortFoldedSubRunThreads } from "~/t3team/components/t3team-projectSidebarThreadTree";
 import {
   resolveSubRunStatusLabel,
   sortSubRunNodes,
@@ -108,13 +105,13 @@ function SubRunNodeView({ node, onOpen }: { node: SubRunNode; onOpen: SubRunOpen
 }
 
 /**
- * GHE #304 — one level of the sub-run roster: the visible list shows ONLY
- * running sub-runs (the "Active" area — a terminal thread from hours or days
- * ago is roster noise, and the settled override settles it out of rosters
- * for good); every non-running sub-run collapses into ONE dim fold row,
- * replacing the old "N idle · expand" disclosure. Expanding lists the
- * folded sub-runs with their terminal-state glyph + age — no per-thread
- * chrome — in oldest-first order (the server cleanup-nudge digest order).
+ * GHE #304 — one level of the sub-run roster: the visible list shows every
+ * sub-run that has NOT actually settled — running sub-runs in the "Active"
+ * area, plus terminal-but-not-yet-settled children with their terminal-state
+ * glyph + age. ONLY threads whose shell carries settledOverride === "settled"
+ * (a real thread.settled event) collapse into the ONE dim "Settled (N)"
+ * fold row, so the fold matches the auto-settle lifecycle instead of
+ * claiming settlement the moment a child stops running.
  */
 function SubRunChildrenGroup({
   nodes,
@@ -124,8 +121,8 @@ function SubRunChildrenGroup({
   onOpen: SubRunOpenCallback;
 }) {
   const sorted = sortSubRunNodes(nodes);
-  const runningNodes = sorted.filter((node) => node.thread.status === "running");
-  const foldedNodes = sorted.filter((node) => node.thread.status !== "running");
+  const runningNodes = sorted.filter((node) => !node.thread.settled);
+  const foldedNodes = sorted.filter((node) => node.thread.settled);
   return (
     <div className="flex flex-col">
       {runningNodes.map((node) => (
