@@ -126,6 +126,11 @@ export const PROJECT_RECIPE_TOOL_GROUP_BY_TOOL_ID = {
   "t3team.recipe.validate": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.thread.read_current": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.thread.rename": PROJECT_RECIPE_VIEW_STATE_TOOL_GROUP.id,
+  // The durable task journal. `write` is grouped with `thread.rename` rather than with the
+  // draft mutations: it changes only this thread's own local state, commits nothing outward,
+  // and needs no user approval step.
+  "t3team.task.write": PROJECT_RECIPE_VIEW_STATE_TOOL_GROUP.id,
+  "t3team.task.list": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.thread.search": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.thread.search_source": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.thread.read_message": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,

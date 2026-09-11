@@ -34,6 +34,8 @@ export const T3TEAM_MCP_CANONICAL_TOOL_MAP = {
   t3team_models: "t3team.runtime.models",
   t3team_provider_usage: "t3team.runtime.provider_usage",
   t3team_rename_thread: "t3team.thread.rename",
+  t3team_task_write: "t3team.task.write",
+  t3team_task_list: "t3team.task.list",
   t3team_search_thread: "t3team.thread.search",
   t3team_search_source: "t3team.thread.search_source",
   t3team_read_message: "t3team.thread.read_message",
@@ -251,20 +253,72 @@ export const T3TeamChildrenTool = Tool.make("t3team_children", {
   dependencies,
 });
 
+// The durable per-thread task journal. These descriptions ARE the UX: the
+// primary caller is a weak local model, and every behavioural rule it must
+// follow (whole-list replace, one in_progress, failures go in `note`) has to be
+// stated here, because nothing else will tell it.
+export const T3TeamTaskWriteTool = Tool.make("t3team_task_write", {
+  description:
+    "Record this thread's plan as a task list that SURVIVES CONTEXT COMPACTION. It is stored " +
+    "outside the context window, so it is the one reliable place to keep what you are doing. " +
+    "This REPLACES the whole list every time: always send EVERY task you still care about, not " +
+    "just the one that changed — anything you omit is deleted. Keep the list current: write it " +
+    "at the start of the work, and rewrite it whenever a task's status changes. Mark exactly " +
+    "ONE task 'in_progress' at a time, so the list always says what you are doing right now. " +
+    "When something fails, do NOT drop the task — keep it and put the reason in its 'note'. " +
+    "That reason is exactly the detail compaction destroys first. Order is the array order.",
+  parameters: Schema.Struct({
+    tasks: Schema.Array(
+      Schema.Struct({
+        subject: Schema.String,
+        status: Schema.optional(
+          Schema.Literals(["pending", "in_progress", "completed", "cancelled"]),
+        ),
+        active_form: Schema.optional(Schema.String),
+        note: Schema.optional(Schema.String),
+      }),
+    ),
+  }),
+  success: Schema.Unknown,
+  failure: T3TeamMcpToolError,
+  dependencies,
+});
+
+export const T3TeamTaskListTool = Tool.make("t3team_task_list", {
+  description:
+    "Read back this thread's durable task list — your own plan, stored outside the context " +
+    "window. Call this after a compaction, or any time you are unsure what you were doing or " +
+    "what is left, INSTEAD of re-deriving it from the transcript or by polling your children. " +
+    "Takes no arguments. Returns each task with its 1-based position, subject, status, and note.",
+  parameters: Schema.Struct({}),
+  success: Schema.Unknown,
+  failure: T3TeamMcpToolError,
+  dependencies,
+});
+
 // Search the CURRENT thread's transcript (case-insensitive substring). Read-only;
 // routes to the t3team.thread.search broker tool. Complements t3team_search_source
 // (fork source) and t3team_read_message (full body by message id).
 export const T3TeamSearchThreadTool = Tool.make("t3team_search_thread", {
   description:
-    "Search the messages of the CURRENT thread (its own transcript) — e.g. to recover a " +
-    "prior decision or context that scrolled out of the context window. Pass a " +
-    "case-insensitive 'query' substring and an optional 'limit' (default 10, max 25). " +
-    "Returns matching messages with their 1-based position, role, a snippet, and message_id " +
-    "(pass message_id to t3team_read_message to fetch the full body).",
+    "Search the CURRENT thread — its messages AND its tool activity (commands and their " +
+    "output, file reads, tool calls) — e.g. to recover a decision, a requirement or a " +
+    "result that scrolled out of the context window. Compacted and truncated spans stay " +
+    "searchable here. Pass a case-insensitive 'query' substring; a multi-word query that " +
+    "matches nothing verbatim is retried requiring every word (reported as matchMode). " +
+    "Newest matches come first unless order is 'oldest'. Page with 'offset' when the " +
+    "result reports hasMore. Narrow with scope ('messages' or 'activities') or 'role' " +
+    "(a message role such as user/assistant/actor, or an activity kind such as bash). " +
+    "Each match carries its 1-based position within its own stream, a snippet, and either " +
+    "message_id (pass to t3team_read_message for the full body) or activity_id. Note that " +
+    "an activity records only the first 500 characters of a tool result.",
   parameters: Schema.Struct({
     query: Schema.String,
     limit: Schema.optional(Schema.Number),
-    role: Schema.optional(Schema.Literals(["user", "assistant", "actor"])),
+    offset: Schema.optional(Schema.Number),
+    scope: Schema.optional(Schema.Literals(["all", "messages", "activities"])),
+    order: Schema.optional(Schema.Literals(["recent", "oldest"])),
+    role: Schema.optional(Schema.String),
   }),
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
@@ -276,13 +330,20 @@ export const T3TeamSearchThreadTool = Tool.make("t3team_search_thread", {
 // t3team.thread.search_source broker tool.
 export const T3TeamSearchSourceTool = Tool.make("t3team_search_source", {
   description:
-    "Search the FULL transcript of the thread this thread was forked from, including the " +
-    "middle messages a truncated fork omitted. Only works in a forked thread. Pass a " +
-    "case-insensitive 'query' substring and an optional 'limit' (default 10, max 25). " +
-    "Returns matching messages with their 1-based position, role, and a snippet.",
+    "Search the FULL transcript of the thread this thread was forked from — its messages " +
+    "and its tool activity — including the middle a truncated fork omitted. Only works in " +
+    "a forked thread. Pass a case-insensitive 'query' substring; a multi-word query that " +
+    "matches nothing verbatim is retried requiring every word (reported as matchMode). " +
+    "Newest matches come first unless order is 'oldest'. Page with 'offset' when the " +
+    "result reports hasMore. Narrow with scope ('messages' or 'activities'). Each match " +
+    "carries its 1-based position within its own stream, a snippet, and either message_id " +
+    "or activity_id.",
   parameters: Schema.Struct({
     query: Schema.String,
     limit: Schema.optional(Schema.Number),
+    offset: Schema.optional(Schema.Number),
+    scope: Schema.optional(Schema.Literals(["all", "messages", "activities"])),
+    order: Schema.optional(Schema.Literals(["recent", "oldest"])),
   }),
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
@@ -600,6 +661,8 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamModelsTool,
   T3TeamProviderUsageTool,
   T3TeamRenameThreadTool,
+  T3TeamTaskWriteTool,
+  T3TeamTaskListTool,
   T3TeamSearchThreadTool,
   T3TeamSearchSourceTool,
   T3TeamReadMessageTool,
