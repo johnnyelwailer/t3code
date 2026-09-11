@@ -10,6 +10,11 @@ import {
   type ThreadAskRequest,
 } from "./t3team-threadAskModel.ts";
 import {
+  estimateAskTokens,
+  renderAskEntry,
+  T3TEAM_ASK_MAX_ENTRY_CHARS,
+} from "./t3team-threadAskSpan.ts";
+import {
   callT3TeamSearchThreadTool,
   type SearchThreadDetail,
 } from "./t3team-toolBrokerBindingSearchThread.ts";
@@ -73,11 +78,11 @@ describe("t3team.thread.search question mode", () => {
   });
 
   it("answers from the matched entries and their neighbourhood, with citations", async () => {
-    const { ask, seen } = recordingAsk("The migration step failed, see position 4.");
+    const { ask, seen } = recordingAsk("The migration step failed [[cite:4]].");
     const body = structured(await run({ query: "NEEDLE", question: "why did it fail?" }, { ask }));
 
     expect(body.totalMatches).toBe(1);
-    expect(body.answer).toBe("The migration step failed, see position 4.");
+    expect(body.answer).toBe("The migration step failed [[cite:4]].");
     expect(body.citations).toEqual([{ position: 4, source: "message", id: "m4" }]);
     // Two entries either side of the single match at position 4.
     expect(body.spanUsed).toEqual({ fromPosition: 2, toPosition: 6, entryCount: 5 });
@@ -171,5 +176,38 @@ describe("thread ask prompt shape (gateway prompt-cache prefix)", () => {
     const again = buildThreadAskMessages({ question: "different", transcript: "other" });
     expect(again[0]?.content).toBe(messages[0]?.content);
     expect(T3TEAM_ASK_SYSTEM_PROMPT).not.toMatch(/\d{4}-\d{2}-\d{2}|thread-|\bid\b/i);
+  });
+});
+
+describe("thread ask — budget and citation hardening", () => {
+  it("does not read a citation out of quoted transcript text", async () => {
+    // The model quotes a line that contains the words "position 4". Parsing
+    // prose produced a confident, wrong citation of entry 4.
+    const { ask } = recordingAsk(
+      "It threw `SyntaxError: Unexpected token u in JSON at position 4` [[cite:2]].",
+    );
+    const body = structured(await run({ query: "NEEDLE", question: "what threw?" }, { ask }));
+    expect(body.citations).toEqual([{ position: 2, source: "message", id: "m2" }]);
+  });
+
+  it("counts non-ASCII text at about one token per character", () => {
+    // chars/4 undercounts CJK by ~4x, which overshoots the real model limit.
+    expect(estimateAskTokens("abcd".repeat(100))).toBe(100);
+    expect(estimateAskTokens("日本語テキスト")).toBe(7);
+  });
+
+  it("caps a single outsized entry and reports the span as truncated", () => {
+    const huge = "x".repeat(T3TEAM_ASK_MAX_ENTRY_CHARS * 3);
+    const rendered = renderAskEntry({
+      id: "m1",
+      source: "message",
+      label: "user",
+      text: huge,
+      position: 1,
+    });
+    expect(rendered.length).toBeLessThan(huge.length);
+    expect(rendered).toContain("characters elided from the middle");
+    // Both ends survive, so a verdict printed at the end is still readable.
+    expect(rendered.endsWith("x")).toBe(true);
   });
 });
