@@ -22,12 +22,38 @@ export const T3TEAM_CHILD_OPS = [
   "stop",
   "close",
   "sweep",
+  "drain",
   "help",
 ] as const;
 export type T3TeamChildOp = (typeof T3TEAM_CHILD_OPS)[number];
 
 export const T3TEAM_CHILD_WAIT_OUTCOMES = ["terminal", "completed", "failed"] as const;
 export type T3TeamChildWaitOutcome = (typeof T3TEAM_CHILD_WAIT_OUTCOMES)[number];
+
+/**
+ * Outcome of the `drain` op: the caller's OWN inter-agent mailbox, claimed
+ * now instead of waiting for the boundary drain. One of the three states:
+ * dispatched (idle → digest turn started now), queued (busy → arrives when
+ * the turn ends), or held (suppressed → visible in the timeline only).
+ */
+export type ChildrenDrainOutcome =
+  | {
+      readonly state: "dispatched";
+      readonly delivered: number;
+      readonly subjects: ReadonlyArray<string>;
+    }
+  | {
+      readonly state: "queued";
+      readonly queued: number;
+      readonly subjects: ReadonlyArray<string>;
+      readonly note: string;
+    }
+  | {
+      readonly state: "held";
+      readonly held: number;
+      readonly subjects: ReadonlyArray<string>;
+      readonly note: string;
+    };
 
 // ── Structural input shapes (decoupled from the full projection types) ─────
 
@@ -88,6 +114,13 @@ export interface T3TeamChildrenToolDeps {
    * blocked-on-user work refuse the settle and surface as sweep errors.
    */
   readonly settleThread: (threadId: ThreadIdType) => Effect.Effect<void, string>;
+  /**
+   * The `drain` op: claim the CALLER's own inter-agent mailbox now — idle →
+   * dispatch the digest immediately; busy → report it is queued; suppressed
+   * → report it is held. No target thread: it always drains the calling
+   * thread's own inbox (the inter-agent messages this thread is owed).
+   */
+  readonly drainOwnMailbox: () => Effect.Effect<ChildrenDrainOutcome, string>;
   readonly nowIso: () => string;
   readonly newId: () => string;
 }

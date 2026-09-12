@@ -16,6 +16,7 @@ import { createT3TeamPrelaunchToolBinding } from "./t3team-toolBrokerBinding.ts"
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import { makeActorSendMessage } from "./t3team-actorSendMessage.ts";
 import { makeManageChildrenHandler } from "./t3team-toolBrokerChildrenLive.ts";
+import { T3TeamActorMailbox } from "./t3team-actorMailbox.ts";
 import { buildPrelaunchView } from "./t3team-toolBrokerPrelaunchView.ts";
 import { makeStartChildThread } from "./t3team-toolBrokerStartChild.ts";
 import { T3TeamThreadToolContextStore } from "./t3team-threadToolContextStore.ts";
@@ -96,6 +97,10 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
             .pipe(Effect.mapError((error) => error.message)),
       }
     : undefined;
+  // Shared inter-agent mailbox: the `drain` op claims the caller's own mailbox through the
+  // SAME shared service the reactor uses (absent in hosts without the reactor, in which
+  // case `drain` reports the mailbox is unavailable).
+  const mailbox = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamActorMailbox));
 
   const loadThreadProject = (threadId: ThreadIdType) =>
     Effect.gen(function* () {
@@ -146,7 +151,11 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
         : {}),
     },
   });
-  const manageChildren = makeManageChildrenHandler({ query, orchestration });
+  const manageChildren = makeManageChildrenHandler({
+    query,
+    orchestration,
+    ...(mailbox !== undefined ? { mailbox } : {}),
+  });
 
   // Extracted to t3team-toolBrokerLiveSession.ts (additive LOC budget) — behavior unchanged.
   const bindSession = makeBindSession({

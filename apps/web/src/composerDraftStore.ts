@@ -56,6 +56,7 @@ import { create } from "zustand";
 import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
 import { createDeferredStorage, createMemoryStorage } from "./lib/storage";
+import { reportThreadComposing } from "./t3team/chat/t3team-threadComposingSignal";
 import { getDefaultServerModel } from "./providerModels";
 import { UnifiedSettings } from "@t3tools/contracts/settings";
 import { ReviewCommentContextSchema, type ReviewCommentContext } from "./reviewCommentContext";
@@ -3009,6 +3010,13 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
           if (threadKey.length === 0) {
             return;
           }
+          // Composing heartbeat (inter-agent drain back-off): prompt mutation
+          // in a REAL thread's composer marks that thread actively-typed, so
+          // inter-agent digests hold there until the heartbeat lapses. Draft-
+          // only targets have no server thread (null) and are skipped. The
+          // signal is fire-and-forget and per-thread — it can never block this
+          // write or affect another thread.
+          reportThreadComposing(resolveComposerThreadId(get(), threadRef));
           set((state) => {
             const existing = state.draftsByThreadKey[threadKey] ?? createEmptyThreadDraft();
             const nextDraft: ComposerThreadDraftState = {

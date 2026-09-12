@@ -34,6 +34,13 @@ export const T3TeamActorMessageInfo = Schema.Struct({
   hopCount: Schema.Number,
   rootThreadId: Schema.String,
   /**
+   * The message SUBJECT: the sender-provided short summary (or an auto-generated
+   * one derived from the body at delivery). Display-only — it titles the card and
+   * the digest one-liner, and must never gate delivery, ordering, urgency or
+   * batching. Optional so rows persisted before it existed keep decoding.
+   */
+  summary: Schema.optional(Schema.String),
+  /**
    * Present when one reaction turn coalesces SEVERAL delivered messages into a
    * single batched input (inter-agent coalescing): every message id in the
    * batch, so a restart rehydrate can mark the whole batch as already reacted

@@ -97,7 +97,9 @@ export function createActorMessageEventHandler(input: {
           ? mailbox.suppress(event.payload.threadId)
           : Effect.void;
       // The user re-engaging (not an actor reaction/system message wearing
-      // the "user" role) lifts suppression and drains anything queued.
+      // the "user" role) lifts suppression and drains anything queued. NOTE:
+      // a sent user message does NOT mark the thread engaged — only the
+      // per-thread composing heartbeat does (see t3team-threadEngagement).
       case "thread.message-sent":
         return isRealUserMessage(event.payload)
           ? clearSuppressionForThreadTree({

@@ -222,6 +222,10 @@ const CHILDREN_TOOL_DESCRIPTION =
   "and/or all of this thread's terminal children older than N hours. Cleanup protocol: verify " +
   "each state first (final result / discarded work / unpushed work in worktrees), then sweep; " +
   "settled threads keep their transcripts and drop out of the active rosters\n" +
+  "- drain: claim THIS thread's own pending inter-agent mailbox now, instead of waiting for " +
+  "the boundary drain — takes no arguments; returns dispatched (idle → digest started now), " +
+  "queued (mid-turn → arrives when the turn ends), or held (suppressed → stays in the " +
+  "timeline until the user re-engages)\n" +
   "- help: exact schema for one op (op_name)";
 
 export const T3TeamChildrenTool = Tool.make("t3team_children", {
@@ -236,6 +240,7 @@ export const T3TeamChildrenTool = Tool.make("t3team_children", {
       "stop",
       "close",
       "sweep",
+      "drain",
       "help",
     ]),
     thread_id: Schema.optional(Schema.String),
@@ -396,15 +401,13 @@ export const T3TeamSendMessageTool = Tool.make("t3team_send_message", {
     "completely done. Solve simple blockers yourself first; escalate only when truly stuck. " +
     "If your reply would not change what the recipient does, do not send it. The recipient " +
     "reacts to every message automatically, so an ack triggers another turn on the other " +
-    "side. Delivery: 'summary' is a VERY SHORT header (a few words) — it is all the " +
-    "recipient sees up front; the body is NOT loaded into the recipient's context and is " +
-    "retrieved with t3team_read_message(message_id) only when genuinely needed. Exception: " +
-    "the FIRST message delivered to a thread is read in full (it is that thread's kickoff). " +
-    "Address it with the target thread id. Keep the " +
+    "side. Delivery: 'summary' is the SUBJECT of the message — a very short line (a few " +
+    "words) that titles the card and the digest one-liner. Keep the " +
     "body short (telegram " +
     "style: state, decision, request). Provide a short 'summary' " +
-    "header (a few words); without " +
-    "one, a header is auto-generated from the body's opening. Set `urgent: true` ONLY " +
+    "subject; without " +
+    "one, a subject is derived from the body's opening at delivery. Address it with the " +
+    "target thread id. Set `urgent: true` ONLY " +
     "for a hard blocker or a question that unblocks the recipient — urgent messages wake " +
     "an idle recipient immediately; everything else waits in the coalescing window and " +
     "arrives as one digest.",

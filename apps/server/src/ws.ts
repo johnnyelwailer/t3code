@@ -96,6 +96,7 @@ import {
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionReactor.ts";
+import { T3TeamThreadEngagement } from "./t3team-threadEngagement.ts";
 import {
   observeRpcEffect as instrumentRpcEffect,
   observeRpcStream as instrumentRpcStream,
@@ -501,6 +502,13 @@ const makeWsRpcLayer = (
       const crypto = yield* Crypto.Crypto;
       const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
       const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
+      // Per-thread composing heartbeat (optional): notes that the user is
+      // actively typing in a thread's composer, which backs off inter-agent
+      // drains for that thread until the heartbeat lapses. serviceOption so
+      // host/test layers without the engagement service keep working.
+      const threadEngagement = Option.getOrUndefined(
+        yield* Effect.serviceOption(T3TeamThreadEngagement),
+      );
       const threadDeletionReactor = yield* ThreadDeletionReactor;
       const analytics = yield* AnalyticsService.AnalyticsService;
       // Every command dispatched on this connection carries the connecting
@@ -1827,6 +1835,21 @@ const makeWsRpcLayer = (
                 afterSnapshot,
               );
             }),
+            { "rpc.aggregate": "orchestration" },
+          ),
+        [ORCHESTRATION_WS_METHODS.noteComposing]: (input) =>
+          observeRpcEffect(
+            ORCHESTRATION_WS_METHODS.noteComposing,
+            // Per-thread composing heartbeat: the user is actively typing in
+            // THIS thread's composer right now. While the signal is fresh
+            // (typing-lapse window) inter-agent drains back off; it lapses on
+            // its own, so no hard cap exists. Viewing a thread is NOT an
+            // engagement signal — an open thread must not starve its queue.
+            threadEngagement === undefined
+              ? Effect.succeed({ ok: true as const })
+              : threadEngagement.noteTyping(input.threadId).pipe(
+                  Effect.as({ ok: true as const }),
+                ),
             { "rpc.aggregate": "orchestration" },
           ),
         [WS_METHODS.serverProbe]: (_input) =>

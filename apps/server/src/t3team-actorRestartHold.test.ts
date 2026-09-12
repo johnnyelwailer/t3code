@@ -32,7 +32,10 @@ import {
   type ProjectionSnapshotQueryShape,
 } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
+import { T3TeamActorMailboxLive } from "./t3team-actorMailbox.ts";
 import { T3TeamActorMessageReactorLive } from "./t3team-actorMessageReactor.ts";
+import { ACTOR_STANDING_INSTRUCTION } from "./t3team-actorReactionInput.ts";
+import { T3TeamThreadEngagementLive } from "./t3team-threadEngagement.ts";
 import {
   buildActorRestartHoldSummary,
   collectStaleSessionThreadIdsAtRehydrate,
@@ -159,6 +162,8 @@ const makeLayer = (engine: OrchestrationEngineShape, sql: unknown) =>
       } as unknown as ProjectionSnapshotQueryShape),
     ),
     Layer.provideMerge(Layer.succeed(SqlClient.SqlClient, sql as never)),
+    Layer.provideMerge(T3TeamActorMailboxLive),
+    Layer.provideMerge(T3TeamThreadEngagementLive),
   );
 
 /** Advance the test clock until `count` dispatches landed (or virtual time runs out). */
@@ -233,7 +238,7 @@ describe("buildActorRestartHoldSummary", () => {
     const entry: T3TeamActorMailboxEntry = { ...entryFor("m1"), text: longBody };
     const text = buildActorRestartHoldSummary({ entries: [entry], interruptedChildren: [] });
     expect(text).not.toContain(longBody);
-    expect(text).toContain("…[summarized — 4000 chars total; message id m1");
+    expect(text).toContain("…[body NOT loaded — 4000 chars total; message id m1");
   });
 
   it("omits empty sections instead of emitting an empty summary", () => {
@@ -307,7 +312,10 @@ describe("T3TeamActorMessageReactorLive (restart hold)", () => {
                     lastState: "Running: writing the parser",
                   },
                 ],
-              }),
+              }) +
+                // First inter-agent turn of the session → the once-per-session
+                // standing protocol is appended as the well-known suffix.
+                `\n\n${ACTOR_STANDING_INSTRUCTION}`,
             );
             expect(turn.message.t3teamExt?.visibleToUser).toBe(false);
             expect(turn.message.t3teamExt?.actor?.messageIds).toEqual(["m1", "m2", "m3"]);

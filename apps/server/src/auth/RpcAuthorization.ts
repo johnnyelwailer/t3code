@@ -29,6 +29,15 @@ export const RPC_REQUIRED_SCOPES = {
   [ORCHESTRATION_WS_METHODS.subscribeShell]: AuthOrchestrationReadScope,
   [ORCHESTRATION_WS_METHODS.getArchivedShellSnapshot]: AuthOrchestrationReadScope,
   [ORCHESTRATION_WS_METHODS.subscribeThread]: AuthOrchestrationReadScope,
+  // Per-thread composing heartbeat: mutates the server's engagement state
+  // (the inter-agent drain back-off), so it operates rather than reads. Every
+  // standard client session already carries orchestration:operate — it is the
+  // same scope every t3team thread command (turn.start, archive, …) flows
+  // through, so the caller is authenticated exactly like any other act on a
+  // thread in this environment. The signal is per-thread and self-clearing
+  // (typing-lapse window), so the scope is the full authorization: it is
+  // strictly weaker than starting a turn on the same thread.
+  [ORCHESTRATION_WS_METHODS.noteComposing]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverProbe]: AuthOrchestrationReadScope,
   [WS_METHODS.serverGetConfig]: AuthOrchestrationReadScope,
   [WS_METHODS.serverRefreshProviders]: AuthOrchestrationOperateScope,

@@ -92,4 +92,35 @@ describe("makeT3TeamActorMailbox", () => {
       expect(claimed.map(({ messageId }) => messageId)).toEqual(["same"]);
     }),
   );
+
+  it.effect("peekPending reports the queue WITHOUT claiming or touching flags", () =>
+    Effect.gen(function* () {
+      const mailbox = yield* makeT3TeamActorMailbox;
+      expect(yield* mailbox.peekPending("target")).toEqual([]);
+      yield* mailbox.enqueue("target", entry("a"));
+      yield* mailbox.enqueue("target", entry("b"));
+      const peeked = yield* mailbox.peekPending("target");
+      expect(peeked.map(({ messageId }) => messageId)).toEqual(["a", "b"]);
+      // The peek did NOT flip reacting: the queue is still claimable in full.
+      expect(yield* mailbox.isReacting("target")).toBe(false);
+      expect((yield* mailbox.takeNextForDispatch("target")).map(({ messageId }) => messageId)).toEqual([
+        "a",
+        "b",
+      ]);
+    }),
+  );
+
+  it.effect("the once-per-session briefing flag stays set until marked exactly once", () =>
+    Effect.gen(function* () {
+      const mailbox = yield* makeT3TeamActorMailbox;
+      expect(yield* mailbox.isBriefed("target")).toBe(false);
+      yield* mailbox.markBriefed("target");
+      expect(yield* mailbox.isBriefed("target")).toBe(true);
+      // Idempotent: a second mark changes nothing and does not error.
+      yield* mailbox.markBriefed("target");
+      expect(yield* mailbox.isBriefed("target")).toBe(true);
+      // Scoped per thread.
+      expect(yield* mailbox.isBriefed("other")).toBe(false);
+    }),
+  );
 });
