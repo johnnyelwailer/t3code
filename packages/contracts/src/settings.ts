@@ -927,6 +927,21 @@ export const ServerSettings = Schema.Struct({
   t3teamActivityLabelsEnabled: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(true)),
   ),
+  /**
+   * Whether the server ingests a bound work source's project avatar (Jira)
+   * as the project's `faviconPath` at bind/creation time — see
+   * `apps/server/src/t3team-projectSourceIconIngest.ts`. Server-authoritative
+   * like `t3teamActivityLabelsEnabled`: the ingest happens at command
+   * dispatch time, so every client attached to the server sees the same
+   * result.
+   *
+   * ON by default for this distribution: it is fail-open — when off, or on
+   * any fetch/store failure, the command passes through untouched and the
+   * project simply keeps the auto-selected fallback icon, exactly as before.
+   */
+  t3teamProjectSourceIconIngestEnabled: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(true)),
+  ),
   projectAgentBrowserAccessOverrides: Schema.Record(ProjectId, Schema.Boolean).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),

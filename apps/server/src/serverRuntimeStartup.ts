@@ -30,6 +30,7 @@ import * as ServerConfig from "./config.ts";
 import * as Keybindings from "./keybindings.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
+import { T3TeamProjectSourceIconReactor } from "./t3team-projectSourceIconReactor.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as OrchestrationReactor from "./orchestration/Services/OrchestrationReactor.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
@@ -825,6 +826,7 @@ export const make = (options?: StartupOptions) =>
     const orchestrationReactor = yield* OrchestrationReactor.OrchestrationReactor;
     const providerSessionReaper = yield* ProviderSessionReaper.ProviderSessionReaper;
     const threadToolContextEvictionReactor = yield* T3TeamThreadToolContextEvictionReactor;
+    const projectSourceIconReactor = yield* T3TeamProjectSourceIconReactor;
     const lifecycleEvents = yield* ServerLifecycleEvents.ServerLifecycleEvents;
     const serverSettings = yield* ServerSettings.ServerSettingsService;
     const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
@@ -888,6 +890,11 @@ export const make = (options?: StartupOptions) =>
           yield* orchestrationReactor.start().pipe(Scope.provide(reactorScope));
           yield* providerSessionReaper.start().pipe(Scope.provide(reactorScope));
           yield* threadToolContextEvictionReactor.start().pipe(Scope.provide(reactorScope));
+          // t3team: source-icon reactor — initial sync of work-source avatars
+          // for source-bound projects without an icon, plus live reaction to
+          // new bindings. Downloads run on its worker, never in the
+          // command-decide path. Failures are logged, never fatal.
+          yield* projectSourceIconReactor.start().pipe(Scope.provide(reactorScope));
         }),
       );
 
