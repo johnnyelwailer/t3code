@@ -1019,6 +1019,25 @@ const ThreadSettleCommand = Schema.Struct({
   type: Schema.Literal("thread.settle"),
   commandId: CommandId,
   threadId: ThreadId,
+  /**
+   * Optional decide-time precondition (server-driven sweeps only): reject
+   * this settle unless `requireSettledParentThreadId` is settled in the very
+   * read model the command is decided against. The sweep's snapshot can go
+   * stale between read and decide; the parent's settlement is the
+   * authoritative signal the child's work is over, and it must still hold at
+   * decide time, or the child may have live work again.
+   */
+  requireSettledParentThreadId: Schema.optional(ThreadId),
+  /**
+   * Opt-in decide-time liveness gate (server-driven sweeps only): when true,
+   * the engine refuses the settle if the thread's LIVE background liveness
+   * registry reports work at decide time — after this command has sat in the
+   * queue. No observation is carried: a snapshot can never be fresh at
+   * decide time, so the gate re-checks the registry itself. The stranded
+   * escape hatch lives at the liveness source (#475): registry entries
+   * expire after a silence TTL.
+   */
+  requireNoLiveBackgroundLiveness: Schema.optional(Schema.Boolean),
 });
 
 const ThreadAutoSettleCommand = Schema.Struct({

@@ -37,6 +37,7 @@ import {
   OrchestrationCommandIdConflictError,
   OrchestrationCommandInvariantError,
   OrchestrationCommandPreviouslyRejectedError,
+  OrchestrationThreadSettleBlockedError,
   type OrchestrationDispatchError,
   type OrchestrationProjectorDecodeError,
 } from "../Errors.ts";
@@ -185,13 +186,30 @@ const makeOrchestrationEngine = Effect.gen(function* () {
           });
         }
 
+        // Decide-time background-liveness gate. Automatic settlement and
+        // opted-in settlement (server-driven sweeps stamp
+        // requireNoLiveBackgroundLiveness on every thread.settle they
+        // dispatch) must not settle a thread that has live background work
+        // AT DECIDE TIME: the command may have sat in the queue while new
+        // work started, so no earlier observation could have caught it.
+        // Stranded registry entries cannot pin a settle forever — the
+        // liveness source bounds them (ThreadBackgroundLiveness, #475).
+        const livenessGatedSettle =
+          envelope.command.type === "thread.auto-settle" ||
+          (envelope.command.type === "thread.settle" &&
+            envelope.command.requireNoLiveBackgroundLiveness === true);
         if (
-          envelope.command.type === "thread.auto-settle" &&
+          livenessGatedSettle &&
           threadBackgroundLiveness.getThreadBackgroundLiveness(envelope.command.threadId) !== null
         ) {
-          return yield* new OrchestrationCommandInvariantError({
-            commandType: envelope.command.type,
-            detail: `thread ${envelope.command.threadId} has live background work`,
+          if (envelope.command.type === "thread.auto-settle") {
+            return yield* new OrchestrationCommandInvariantError({
+              commandType: envelope.command.type,
+              detail: `thread ${envelope.command.threadId} has live background work`,
+            });
+          }
+          return yield* new OrchestrationThreadSettleBlockedError({
+            threadId: envelope.command.threadId,
           });
         }
 

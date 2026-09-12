@@ -458,6 +458,19 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      // Server-driven child settles may carry a parent-settle precondition:
+      // the sweep's snapshot can be stale, so re-verify the parent's CURRENT
+      // settled state against this read model (commands are decided serially
+      // against it, which closes the snapshot→dispatch race). A parent that
+      // un-settled since the sweep may have live work again — refuse.
+      if (
+        command.type === "thread.settle" &&
+        command.requireSettledParentThreadId !== undefined &&
+        readModel.threads.find((candidate) => candidate.id === command.requireSettledParentThreadId)
+          ?.settledOverride !== "settled"
+      ) {
+        return yield* new OrchestrationThreadSettleBlockedError({ threadId: command.threadId });
+      }
       if (command.type === "thread.auto-settle" && thread.settledOverride !== null) {
         return yield* Effect.fail(
           new OrchestrationCommandInvariantError({
