@@ -444,12 +444,18 @@ describe("MessagesTimeline", () => {
           ]}
         />,
       );
-      // Thread-level indicator (list footer) + the tool-row anchor tag.
-      // The per-second age is aria-hidden (own span), so assert the stable
-      // text and the age separately rather than as one contiguous string.
+      // Thread-level indicator + the tool-row anchor tag. The per-second age
+      // is aria-hidden (own span), so assert the stable text and the age
+      // separately rather than as one contiguous string.
       expect(markup).toMatch(/1 background job running<\/span>/);
       expect(markup).toMatch(/aria-hidden="true"[^>]*> · 1[01]s<\/span>/);
       expect(markup).toContain("<span>running in background</span>");
+      // Regression, thread fbdb583b: the line must sit in the WORKING-ROW
+      // slot. `isWorking` is false here — the turn that backgrounded the
+      // command has already settled — and in the list footer, where this
+      // used to render, it was below the end of the conversation and the
+      // thread read as idle for eleven minutes.
+      expect(markup).toContain("data-t3team-working-row");
     });
 
     it("hides the indicator once a process result settles the job", () => {
@@ -488,6 +494,8 @@ describe("MessagesTimeline", () => {
       );
       expect(markup).not.toContain("background job running");
       expect(markup).not.toContain("running in background");
+      // The row the job kept alive goes with it — no bare separator left over.
+      expect(markup).not.toContain("data-t3team-working-row");
     });
 
     it("stays quiet for a backgrounded job long past its hard deadline", () => {

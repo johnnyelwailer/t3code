@@ -41,6 +41,21 @@ describe("detectBackgroundJobStart", () => {
     });
   });
 
+  // Verbatim from thread fbdb583b (2026-09-12T16:11:49.981Z), as the server
+  // persisted it: the ingestion cap truncates `detail` to 180 chars + "...",
+  // and a job yielded at once reports "after 0s". Both shapes must still fold.
+  it("parses the truncated, zero-elapsed marker the host actually stores", () => {
+    const persisted =
+      "Command still running after 0s — it is now a background job: job_8865dcbe (pid 84712). " +
+      "It keeps running under a 1800s hard deadline owned by this thread; you do not have to wait...";
+    const observedAtMs = Date.parse("2026-09-12T16:11:49.981Z");
+    expect(detectBackgroundJobStart(persisted, observedAtMs)).toEqual({
+      jobId: "job_8865dcbe",
+      startedAtMs: observedAtMs,
+      deadlineMs: observedAtMs + 1_800_000,
+    });
+  });
+
   it("returns null for ordinary tool results", () => {
     expect(detectBackgroundJobStart("total 0\n(empty)", T0)).toBeNull();
     expect(detectBackgroundJobStart("", T0)).toBeNull();
@@ -111,6 +126,15 @@ describe("backgroundJobFinishSignals", () => {
 
   it("never treats the start marker itself as a settle", () => {
     expect(backgroundJobFinishSignals(startDetail)).toEqual(new Map());
+  });
+
+  // Verbatim peek result from thread fbdb583b while job_8865dcbe was alive.
+  it("treats the still-running peek tail as no signal", () => {
+    expect(
+      backgroundJobFinishSignals(
+        "(no output yet)\n[job job_8865dcbe still running — completion will notify you; do not poll]",
+      ),
+    ).toEqual(new Map());
   });
 });
 

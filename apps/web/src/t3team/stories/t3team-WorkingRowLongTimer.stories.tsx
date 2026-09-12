@@ -39,6 +39,7 @@ function Row({
         latestTurnId: "turn-long-timer" as TurnId,
         workingStepLabel,
         activeAgents: [],
+        backgroundJobs: [],
         onOpenAgents: () => {},
         threadActivityState,
       }}

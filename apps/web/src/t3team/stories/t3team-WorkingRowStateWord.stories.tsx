@@ -49,6 +49,7 @@ function Row({
         latestTurnId: "turn-working-state-word" as TurnId,
         workingStepLabel,
         activeAgents: [],
+        backgroundJobs: [],
         onOpenAgents: () => {},
         threadActivityState,
       }}

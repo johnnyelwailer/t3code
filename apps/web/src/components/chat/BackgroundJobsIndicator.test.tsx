@@ -59,6 +59,36 @@ describe("BackgroundJobsRunningIndicator", () => {
     );
     expect(markup).not.toContain("background job");
   });
+
+  // The working-row slot passes its own chrome (the row's border and padding).
+  // An empty render must take that chrome with it, or an idle thread keeps a
+  // bare separator line after the last job settles.
+  it("carries the caller's row chrome, and drops it along with the line", () => {
+    const chrome = "border-b border-border/60 px-1 pb-2 pt-1";
+    expect(
+      renderToStaticMarkup(
+        <BackgroundJobsRunningIndicator jobs={[job({ jobId: "job_a" })]} className={chrome} />,
+      ),
+    ).toContain("border-b");
+    expect(
+      renderToStaticMarkup(
+        <BackgroundJobsRunningIndicator
+          jobs={[job({ jobId: "job_a", state: "finished" })]}
+          className={chrome}
+        />,
+      ),
+    ).toBe("");
+  });
+
+  // A job runs for minutes, so its dot must not repaint behind a scrolled-away
+  // viewport or a hidden tab (repo rule: no continuously repainting animation).
+  it("pauses its live dot when off-screen", () => {
+    const markup = renderToStaticMarkup(
+      <BackgroundJobsRunningIndicator jobs={[job({ jobId: "job_a" })]} />,
+    );
+    expect(markup).toContain("motion-safe:visible-animate-pulse");
+    expect(markup).not.toContain("animate-pulse rounded-full");
+  });
 });
 
 describe("BackgroundJobRunningBadge", () => {

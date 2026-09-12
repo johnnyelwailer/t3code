@@ -311,6 +311,8 @@ export type MessagesTimelineRow =
       toolIcon?: WorkLogEntry["toolIcon"];
       summaryToolIcon?: "browser" | "t3-code";
       hasFailure: boolean;
+      /** Grouped entries that started a background job, for the summary-row tag. */
+      backgroundJobEntryIds?: readonly string[];
     }
   | {
       kind: "turn-fold";
@@ -397,6 +399,20 @@ function workGroupIdentity(timelineEntryId: string, entry: WorkLogEntry): string
 
 function workGroupId(timelineEntryId: string, entry: WorkLogEntry): string {
   return `work-group:${workGroupIdentity(timelineEntryId, entry)}`;
+}
+
+/**
+ * The grouped entries that opened a background job, as an optional row field —
+ * absent (not an empty array) when there are none, so `useStableRows`' shallow
+ * compare keeps the row identity it had before the fold existed.
+ */
+function backgroundJobEntryIdsOf(
+  groupedEntries: ReadonlyArray<WorkLogEntry>,
+  startEntryIds: ReadonlySet<string> | undefined,
+): { backgroundJobEntryIds?: readonly string[] } {
+  if (startEntryIds === undefined || startEntryIds.size === 0) return {};
+  const ids = groupedEntries.filter((entry) => startEntryIds.has(entry.id)).map((entry) => entry.id);
+  return ids.length > 0 ? { backgroundJobEntryIds: ids } : {};
 }
 
 function expandedWorkGroupRow(
@@ -848,6 +864,19 @@ export function deriveMessagesTimelineRows(input: {
    * active-agents indicator even without a "Working..." prefix.
    */
   idleActiveAgentsPresent?: boolean;
+  /**
+   * The main turn is idle but a backgrounded bash job is still running. Same
+   * slot and same reason as `idleActiveAgentsPresent`: the turn has settled,
+   * so without this the thread reads as finished while real work is in flight.
+   */
+  idleBackgroundJobsPresent?: boolean;
+  /**
+   * Work-entry ids whose tool result yielded a background job handle. A
+   * collapsed tool group carries its own, because the per-entry row that owns
+   * the "running in background" tag does not render until the group is
+   * expanded — and a collapsed group is the default.
+   */
+  backgroundJobStartEntryIds?: ReadonlySet<string>;
 }): MessagesTimelineRow[] {
   const nextRows: MessagesTimelineRow[] = [];
   const durationStartByMessageId = computeMessageDurationStart(
@@ -1150,6 +1179,7 @@ export function deriveMessagesTimelineRows(input: {
             hasFailure:
               latestToolEntry !== undefined &&
               workEntryDisplayIndicatesToolFailure(latestToolEntry),
+            ...backgroundJobEntryIdsOf(visibleGroupedEntries, input.backgroundJobStartEntryIds),
           });
           if (expanded) {
             nextRows.push(
@@ -1223,9 +1253,12 @@ export function deriveMessagesTimelineRows(input: {
     // Unanswered last user message: offer Continue exactly where "Working"
     // would have appeared.
     nextRows.push({ kind: "resume", id: "resume-offer-row" });
-  } else if (input.idleActiveAgentsPresent === true) {
+  } else if (input.idleActiveAgentsPresent === true || input.idleBackgroundJobsPresent === true) {
     // GHE #201: main turn idle but agents are active — the active-agents
     // indicator still renders, in the working-row slot, without a timer.
+    // Same for a still-running background bash job: the turn settles the
+    // moment the command is handed to the job registry, and the working-row
+    // slot is the one place a reader looks for "is anything happening".
     nextRows.push({
       kind: "working",
       id: "working-indicator-row",
