@@ -804,6 +804,56 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 
+  it.effect("derives the artifact base name from the resolved product name", () =>
+    Effect.gen(function* () {
+      // No override: the default product name ("T3 Code (Alpha)" / "T3 Code
+      // (Nightly)") keeps the historical T3-Code-* artifact shape on both
+      // channels — the parenthetical is display-only and never lands in file
+      // names.
+      for (const version of ["1.2.3", "1.2.3-nightly.20260912.7"]) {
+        const config = yield* createBuildConfig({
+          platform: "mac",
+          target: "dmg",
+          version,
+          signed: false,
+          mockUpdates: false,
+        });
+        assert.equal(config.artifactName, "T3-Code-${version}-${arch}.${ext}");
+      }
+
+      // Branded build: the artifact takes the resolved product name with its
+      // casing (what install-desktop.mjs passes from distribution.json).
+      const branded = yield* createBuildConfig({
+        platform: "mac",
+        target: "dmg",
+        version: "1.2.3",
+        signed: false,
+        mockUpdates: false,
+        productNameOverride: "Nexi Work",
+      });
+      assert.equal(branded.productName, "Nexi Work");
+      assert.equal(branded.artifactName, "Nexi-Work-${version}-${arch}.${ext}");
+
+      // Same via the environment variable the desktop build script reads when
+      // no explicit override is passed.
+      const previous = process.env.T3CODE_DESKTOP_PRODUCT_NAME;
+      process.env.T3CODE_DESKTOP_PRODUCT_NAME = "Nexi Work";
+      try {
+        const envBranded = yield* createBuildConfig({
+          platform: "mac",
+          target: "dmg",
+          version: "1.2.3",
+          signed: false,
+          mockUpdates: false,
+        });
+        assert.equal(envBranded.artifactName, "Nexi-Work-${version}-${arch}.${ext}");
+      } finally {
+        if (previous !== undefined) process.env.T3CODE_DESKTOP_PRODUCT_NAME = previous;
+        else delete process.env.T3CODE_DESKTOP_PRODUCT_NAME;
+      }
+    }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
+  );
+
   it("formats the per-build artifact timestamp as local yyyyMMdd-HHmm", () => {
     // A fixed instant (09:05 UTC); the expected value is derived from ICU's
     // local rendering of that instant, so the assertion holds in any timezone
