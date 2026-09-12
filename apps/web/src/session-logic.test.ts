@@ -928,6 +928,59 @@ describe("workEntryIndicatesToolFailure", () => {
 });
 
 describe("deriveWorkLogEntries", () => {
+  // Regression, thread fbdb583b: a `command_execution` completion that does
+  // not name its command makes `extractToolCommand` fall back to reading the
+  // result AS the command, and `extractToolDetail` then drops the result as a
+  // duplicate of it. The bash output never reached the timeline, rows were
+  // labelled with their own output, and the background-job indicator — which
+  // folds over `entry.detail` — had nothing to fold. The provider side of the
+  // contract is `shared/packs/nexplore-global/pi-events.ts` (`openToolItem`).
+  const bashResult =
+    "Command still running after 0s — it is now a background job: job_8865dcbe (pid 84712). " +
+    "It keeps running under a 1800s hard deadline owned by this thread; you do not have to wait...";
+
+  it("keeps a command_execution result as detail when the payload names its command", () => {
+    const [entry] = deriveWorkLogEntries([
+      makeActivity({
+        id: "bash-1",
+        kind: "tool.completed",
+        summary: "bash",
+        payload: {
+          itemType: "command_execution",
+          toolCallId: "call_1",
+          status: "completed",
+          title: "bash",
+          detail: bashResult,
+          data: { command: "node scripts/quality-gate.mjs" },
+        },
+      }),
+    ]);
+    expect(entry?.command).toBe("node scripts/quality-gate.mjs");
+    expect(entry?.detail).toBe(bashResult);
+  });
+
+  it("loses the result when a command_execution names no command", () => {
+    // Documents the fallback the fix routes around: the result becomes the
+    // command and `detail` is dropped. If this ever stops being true, the
+    // provider-side workaround can be revisited.
+    const [entry] = deriveWorkLogEntries([
+      makeActivity({
+        id: "bash-1",
+        kind: "tool.completed",
+        summary: "bash",
+        payload: {
+          itemType: "command_execution",
+          toolCallId: "call_1",
+          status: "completed",
+          title: "bash",
+          detail: bashResult,
+        },
+      }),
+    ]);
+    expect(entry?.detail).toBeUndefined();
+    expect(entry?.command).toContain("it is now a background job");
+  });
+
   it("keeps workflow-owned step activities out of the generic work log", () => {
     const entries = deriveWorkLogEntries([
       makeActivity({

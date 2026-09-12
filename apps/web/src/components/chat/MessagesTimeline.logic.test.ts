@@ -975,6 +975,70 @@ describe("resolveAssistantMessageCopyState", () => {
 });
 
 describe("deriveMessagesTimelineRows", () => {
+  // Regression, thread fbdb583b: a bash call that yields a job handle settles
+  // its turn immediately, so `isWorking` goes false while the job runs on for
+  // minutes. Without the working-row slot the thread rendered no live row at
+  // all, and the only trace of the job was a hidden row inside a collapsed
+  // tool group.
+  describe("a running background job", () => {
+    const toolEntry = (id: string, label: string, at: string) => ({
+      id: `${id}-entry`,
+      kind: "work" as const,
+      createdAt: at,
+      entry: {
+        id,
+        createdAt: at,
+        label,
+        tone: "tool" as const,
+        itemType: "command_execution" as const,
+        command: label,
+      },
+    });
+    const timelineEntries = [
+      toolEntry("bash-1", "node scripts/quality-gate.mjs", "2026-01-01T00:00:00Z"),
+      toolEntry("bash-2", "ps -p 84712 -o state=", "2026-01-01T00:00:04Z"),
+    ];
+    const base = {
+      timelineEntries,
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+    };
+
+    it("leaves the thread with no live row when nothing says a job is running", () => {
+      expect(deriveMessagesTimelineRows(base).some((row) => row.kind === "working")).toBe(false);
+    });
+
+    it("keeps the working-row slot alive on a settled turn", () => {
+      const rows = deriveMessagesTimelineRows({ ...base, idleBackgroundJobsPresent: true });
+      expect(rows.at(-1)).toEqual({
+        kind: "working",
+        id: "working-indicator-row",
+        createdAt: null,
+      });
+    });
+
+    it("tags the collapsed tool group that hides the row which started the job", () => {
+      const rows = deriveMessagesTimelineRows({
+        ...base,
+        backgroundJobStartEntryIds: new Set(["bash-1"]),
+      });
+      const toggle = rows.find((row) => row.kind === "work-toggle");
+      expect(toggle).toMatchObject({ expanded: false, backgroundJobEntryIds: ["bash-1"] });
+    });
+
+    it("leaves an untouched group's identity alone", () => {
+      const rows = deriveMessagesTimelineRows({
+        ...base,
+        backgroundJobStartEntryIds: new Set(["some-other-entry"]),
+      });
+      expect(rows.find((row) => row.kind === "work-toggle")).not.toHaveProperty(
+        "backgroundJobEntryIds",
+      );
+    });
+  });
+
   it("keeps context compaction visible outside folded work", () => {
     const rows = deriveMessagesTimelineRows({
       timelineEntries: [

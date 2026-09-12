@@ -328,6 +328,12 @@ interface TimelineRowActivityState {
   workingStepLabel: string | null;
   /** GHE #201: active agents (running child threads + live subagents). */
   activeAgents: readonly ActiveAgentEntry[];
+  /**
+   * Background bash jobs folded from this thread's transcript. The working
+   * row renders the running ones, so a settled turn with live work still
+   * shows a live line instead of reading as idle.
+   */
+  backgroundJobs: readonly BackgroundJobState[];
   /** GHE #201: opens the Agents panel from the working-row indicator. */
   onOpenAgents: () => void;
   /**
@@ -733,6 +739,28 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     return ids;
   }, [workflowDecisionAnswers]);
 
+  // Background bash jobs: no provider event marks job start/settle, so the
+  // fold is transcript-driven — the "background job: job_xxx" marker in a
+  // tool result opens the job, later process-tool results (list / peek /
+  // kill) settle it, and the marker's hard deadline keeps stale threads
+  // quiet. See @t3tools/client-runtime/work-log/background-jobs.
+  //
+  // It runs BEFORE the row derivation because the rows need it: a running job
+  // keeps the working-row slot alive after the turn settles, and a collapsed
+  // tool group needs to know one of its hidden rows started a job.
+  const backgroundJobFold = useMemo(() => {
+    const foldEntries = timelineEntries
+      .filter((entry): entry is Extract<TimelineEntry, { kind: "work" }> => entry.kind === "work")
+      .map((entry) => ({ id: entry.id, createdAt: entry.createdAt, detail: entry.entry.detail }));
+    const jobs = foldBackgroundJobs(foldEntries, Date.now());
+    const starters = new Map<string, BackgroundJobState>();
+    for (const job of jobs) {
+      if (job.state === "running" && job.startedEntryId !== undefined) {
+        starters.set(job.startedEntryId, job);
+      }
+    }
+    return { jobs, starters, startEntryIds: new Set(starters.keys()) };
+  }, [timelineEntries]);
   const rowsProjectionRef = useRef<{
     threadKey: string;
     workspaceRoot: string | undefined;
@@ -750,6 +778,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         isWorking,
         activeTurnStartedAt,
         idleActiveAgentsPresent: activeAgents.length > 0,
+        idleBackgroundJobsPresent: backgroundJobFold.startEntryIds.size > 0,
+        backgroundJobStartEntryIds: backgroundJobFold.startEntryIds,
         turnDiffSummaryByAssistantMessageId,
         revertTurnCountByUserMessageId,
         resumeOffer: resumeMessageId !== null,
@@ -772,6 +802,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     expandedWorkGroupIds,
     isWorking,
     activeTurnStartedAt,
+    backgroundJobFold,
     turnDiffSummaryByAssistantMessageId,
     revertTurnCountByUserMessageId,
   ]);
@@ -783,24 +814,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       isVisibleMessagesTimelineRow(row, cardAnsweredWorkflowReplyMessageIds),
     ),
   );
-  // Background bash jobs: no provider event marks job start/settle, so the
-  // fold is transcript-driven — the "background job: job_xxx" marker in a
-  // tool result opens the job, later process-tool results (list / peek /
-  // kill) settle it, and the marker's hard deadline keeps stale threads
-  // quiet. See @t3tools/client-runtime/work-log/background-jobs.
-  const backgroundJobFold = useMemo(() => {
-    const foldEntries = timelineEntries
-      .filter((entry): entry is Extract<TimelineEntry, { kind: "work" }> => entry.kind === "work")
-      .map((entry) => ({ id: entry.id, createdAt: entry.createdAt, detail: entry.entry.detail }));
-    const jobs = foldBackgroundJobs(foldEntries, Date.now());
-    const starters = new Map<string, BackgroundJobState>();
-    for (const job of jobs) {
-      if (job.state === "running" && job.startedEntryId !== undefined) {
-        starters.set(job.startedEntryId, job);
-      }
-    }
-    return { jobs, starters };
-  }, [timelineEntries]);
   useEffect(() => {
     if (!workflowCardNavigationRequest) return;
     const rowIndex = rows.findIndex(
@@ -855,12 +868,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     return config ? { ...config, onReady: handleAnchorReady } : undefined;
   }, [anchorMessageId, handleAnchorReady, rows]);
   const timelineListFooter = useMemo(
-    () => (
-      <TimelineListFooter composerInset={anchoredEndSpace ? 0 : contentInsetEndAdjustment}>
-        <BackgroundJobsRunningIndicator jobs={backgroundJobFold.jobs} />
-      </TimelineListFooter>
-    ),
-    [anchoredEndSpace, backgroundJobFold.jobs, contentInsetEndAdjustment],
+    () => <TimelineListFooter composerInset={anchoredEndSpace ? 0 : contentInsetEndAdjustment} />,
+    [anchoredEndSpace, contentInsetEndAdjustment],
   );
 
   const measureContentOverflow = useCallback(
@@ -1114,6 +1123,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       latestTurnId: latestTurn?.turnId ?? null,
       workingStepLabel,
       activeAgents,
+      backgroundJobs: backgroundJobFold.jobs,
       onOpenAgents,
       onOpenAgent: onOpenAgent ?? onOpenAgentDefault,
       threadActivityState,
@@ -1121,6 +1131,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     }),
     [
       activeAgents,
+      backgroundJobFold.jobs,
       isCompacting,
       isPreparingWorktree,
       isRevertingCheckpoint,
@@ -2177,6 +2188,7 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
     isPreparingWorktree,
     workingStepLabel,
     activeAgents,
+    backgroundJobs,
     onOpenAgents,
     onOpenAgent,
     threadActivityState,
@@ -2210,6 +2222,22 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
     );
   }
   const hasActiveAgents = activeAgents.length > 0;
+  // A backgrounded bash job outlives its turn, so the row can be here for
+  // the job alone. Then the status line has nothing true to say — there is
+  // no active turn and no agent — and the job line IS the row. Rendering it
+  // alone (not as a second line under a stale "Working") also means the row
+  // disappears cleanly: the indicator returns null once the last job settles
+  // or passes its hard deadline, and it takes the whole row with it.
+  if (!isWorking && !hasActiveAgents) {
+    return (
+      <div data-t3team-working-row>
+        <BackgroundJobsRunningIndicator
+          jobs={backgroundJobs}
+          className="border-b border-border/60 px-1 pb-2 pt-1"
+        />
+      </div>
+    );
+  }
   // GHE #201: main turn idle but agents active — the row leads with the
   // count instead of a (nonexistent) timer, and the label defaults to the
   // most recent agent's live status.
@@ -2318,6 +2346,10 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
             </span>
           ) : null}
         </div>
+        {/* A job started in an earlier turn keeps running through this one, so
+            the job line sits under the status line rather than replacing it.
+            It renders nothing when no job is running. */}
+        <BackgroundJobsRunningIndicator jobs={backgroundJobs} className="px-1" />
       </div>
     </div>
   );
@@ -2779,6 +2811,13 @@ function WorkGroupToggleTimelineRow({
   row: Extract<TimelineRow, { kind: "work-toggle" }>;
 }) {
   const ctx = use(TimelineRowCtx);
+  // A collapsed group hides the bash row that started a job, and collapsed is
+  // the default — so the summary row carries the tag instead. First running
+  // job only: the thread-level line above already carries the count.
+  const backgroundJob =
+    row.backgroundJobEntryIds
+      ?.map((entryId) => ctx.backgroundJobStarters.get(entryId))
+      .find((job) => job !== undefined) ?? null;
   return (
     <button
       type="button"
@@ -2798,6 +2837,7 @@ function WorkGroupToggleTimelineRow({
         />
       </span>
       <span className="min-w-0 flex-1 truncate text-secondary-label">{row.summary}</span>
+      {backgroundJob !== null ? <BackgroundJobRunningBadge job={backgroundJob} /> : null}
     </button>
   );
 }

@@ -493,6 +493,16 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   will-change: var(--visible-animation-will-change, auto);
 }
 
+/* `animate-pulse` that stops when off-screen or the tab is hidden. A live dot
+   sits in the timeline for as long as a background job runs — minutes — so it
+   must not repaint behind a scrolled-away viewport. Pair with
+   `ref={observeVisibleAnimation}`. */
+@utility visible-animate-pulse {
+  animation: var(--animate-pulse);
+  animation-play-state: var(--visible-animation-state, paused);
+  will-change: var(--visible-animation-will-change, auto);
+}
+
 @keyframes live-activity-focus {
   from {
     transform: translateX(0);

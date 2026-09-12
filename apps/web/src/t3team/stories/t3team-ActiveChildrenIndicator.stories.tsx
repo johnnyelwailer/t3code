@@ -147,6 +147,7 @@ function RealWorkingRow({
         latestTurnId: "turn-design-pass" as TurnId,
         workingStepLabel,
         activeAgents,
+        backgroundJobs: [],
         onOpenAgents,
       }}
     >
