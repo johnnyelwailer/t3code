@@ -458,6 +458,42 @@ describe("MessagesTimeline", () => {
       expect(markup).toContain("data-t3team-working-row");
     });
 
+    // Thread fbdb583b, activity be171876, verbatim as deriveWorkLogEntries
+    // renders it: the marker in `command`, no `detail` at all. The runtime
+    // sent no structured command, so the host adopted the RESULT as the
+    // command and dropped the detail. 3016 of 3029 start markers in live
+    // history look like this, and no payload fix can reach any of them.
+    it("shows the line for a row persisted before the runtime named its commands", () => {
+      const createdAt = bgNow();
+      const markup = renderToStaticMarkup(
+        <MessagesTimeline
+          {...buildProps()}
+          timelineEntries={[
+            {
+              id: "bg-legacy-entry",
+              kind: "work",
+              createdAt,
+              entry: {
+                id: "bg-legacy-entry",
+                createdAt,
+                label: "bash",
+                tone: "tool",
+                itemType: "command_execution",
+                toolLifecycleStatus: "completed",
+                command:
+                  "Command still running after 0s — it is now a background job: job_8865dcbe " +
+                  "(pid 84712). It keeps running under a 1800s hard deadline owned by this " +
+                  "thread; you do not have to wait...",
+              },
+            },
+          ]}
+        />,
+      );
+      expect(markup).toMatch(/1 background job running<\/span>/);
+      expect(markup).toContain("data-t3team-working-row");
+      expect(markup).toContain("<span>running in background</span>");
+    });
+
     it("hides the indicator once a process result settles the job", () => {
       const markup = renderToStaticMarkup(
         <MessagesTimeline

@@ -751,7 +751,16 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   const backgroundJobFold = useMemo(() => {
     const foldEntries = timelineEntries
       .filter((entry): entry is Extract<TimelineEntry, { kind: "work" }> => entry.kind === "work")
-      .map((entry) => ({ id: entry.id, createdAt: entry.createdAt, detail: entry.entry.detail }));
+      .map((entry) => ({
+        id: entry.id,
+        createdAt: entry.createdAt,
+        detail: entry.entry.detail,
+        // Rows persisted before the pack named its commands carry the result
+        // text here instead, with `detail` empty — see the fold's
+        // BackgroundJobFoldEntry.command. Without it, every existing thread
+        // stays blank no matter what the runtime sends from now on.
+        command: entry.entry.command,
+      }));
     const jobs = foldBackgroundJobs(foldEntries, Date.now());
     const starters = new Map<string, BackgroundJobState>();
     for (const job of jobs) {

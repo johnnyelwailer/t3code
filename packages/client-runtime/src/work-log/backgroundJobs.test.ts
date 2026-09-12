@@ -138,6 +138,77 @@ describe("backgroundJobFinishSignals", () => {
   });
 });
 
+describe("foldBackgroundJobs over transposed history", () => {
+  // Verbatim from the live DB: thread fbdb583b, activity
+  // be171876-d516-49e1-959b-1e483fc875f6, as `deriveWorkLogEntries` renders
+  // it today. The marker is in `command` and there is NO `detail` key at all —
+  // the runtime sent no structured command, so the host adopted the RESULT as
+  // the command and dropped the detail as a duplicate of it.
+  //
+  // 3016 of 3029 start markers across 85 threads of live history have this
+  // shape. Fixing the payload at source does nothing for any of them.
+  const persistedRow = {
+    id: "be171876-d516-49e1-959b-1e483fc875f6",
+    createdAt: "2026-09-12T16:11:49.981Z",
+    command:
+      "Command still running after 0s — it is now a background job: job_8865dcbe (pid 84712). " +
+      "It keeps running under a 1800s hard deadline owned by this thread; you do not have to wait...",
+  } satisfies BackgroundJobFoldEntry;
+  const observedAtMs = Date.parse(persistedRow.createdAt);
+
+  it("opens the job from `command` when the row has no detail", () => {
+    const jobs = foldBackgroundJobs([persistedRow], observedAtMs + 60_000);
+    expect(jobs).toEqual([
+      {
+        jobId: "job_8865dcbe",
+        startedAtMs: observedAtMs,
+        deadlineMs: observedAtMs + 1_800_000,
+        state: "running",
+        startedEntryId: persistedRow.id,
+        lastSeenEntryId: persistedRow.id,
+      },
+    ]);
+    const running = runningBackgroundJobs(jobs, observedAtMs + 190_000);
+    expect(backgroundJobsSummaryLabel(running, observedAtMs + 190_000)).toBe(
+      "1 background job running · 3m 10s",
+    );
+  });
+
+  it("still settles that job from a later process result", () => {
+    const jobs = foldBackgroundJobs(
+      [
+        persistedRow,
+        entry({
+          id: "peek",
+          createdAt: "2026-09-12T16:23:19.016Z",
+          detail: "quality-gate: PASSED\n[job job_8865dcbe finished]",
+        }),
+      ],
+      observedAtMs + 800_000,
+    );
+    expect(jobs[0]).toMatchObject({ state: "finished", finishedReason: "finished" });
+  });
+
+  // `detail` wins so a command that merely NAMES a job cannot open one. The
+  // shapes never coexist in real history (0 of 3029), and once the runtime
+  // sends a real command this is the only thing keeping it inert.
+  it("prefers detail, so a command that mentions a job id opens nothing", () => {
+    expect(
+      foldBackgroundJobs(
+        [
+          {
+            id: "grep",
+            createdAt: T0_ISO,
+            detail: "3 matches",
+            command: 'rg "it is now a background job: job_deadbeef" .',
+          },
+        ],
+        T0 + 60_000,
+      ),
+    ).toEqual([]);
+  });
+});
+
 describe("foldBackgroundJobs", () => {
   it("opens a job on the start marker and settles it on a later process result", () => {
     const entries = [
