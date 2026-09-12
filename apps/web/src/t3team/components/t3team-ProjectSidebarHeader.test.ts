@@ -3,14 +3,14 @@ import { describe, expect, it } from "vite-plus/test";
 import { resolveProjectSidebarBrandInset } from "./t3team-ProjectSidebarHeader";
 
 describe("resolveProjectSidebarBrandInset", () => {
-  it("uses only the traffic-light clearance on macOS desktop", () => {
+  it("uses the titlebar content clearance on macOS desktop", () => {
     expect(
       resolveProjectSidebarBrandInset({
         isMac: true,
         isDesktop: true,
         isWindowControlsOverlay: false,
       }),
-    ).toBe("ml-[var(--workspace-controls-left)]");
+    ).toBe("ml-[var(--workspace-titlebar-content-left)]");
   });
 
   it("keeps the titlebar control clearance for macOS web WCO", () => {
