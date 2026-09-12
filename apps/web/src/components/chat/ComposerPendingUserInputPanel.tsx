@@ -9,6 +9,7 @@ import { CheckIcon } from "lucide-react";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
 import { cn } from "~/lib/utils";
 import { ComposerBanner } from "./ComposerBanner";
+import { T3TeamPendingQuestionMarkdown } from "./t3team-pendingQuestionMarkdown";
 
 interface PendingUserInputPanelProps {
   pendingUserInputs: PendingUserInput[];
@@ -202,7 +203,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
       </CollapsibleTrigger>
       <CollapsiblePanel>
         <ComposerBanner.Body className="pe-1 pb-1">
-          <p className="text-sm text-foreground/85">{activeQuestion.question}</p>
+          <T3TeamPendingQuestionMarkdown text={activeQuestion.question} />
           {activeQuestion.multiSelect ? (
             <p className="mt-1 text-secondary-label text-xs">Select one or more options.</p>
           ) : null}
@@ -229,7 +230,10 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
                   <div className="min-w-0 flex-1 flex flex-col gap-0.5">
                     <span className="text-sm font-medium">{option.label}</span>
                     {option.description && option.description !== option.label ? (
-                      <span className="text-secondary-label text-[11px]">{option.description}</span>
+                      <T3TeamPendingQuestionMarkdown
+                        text={option.description}
+                        className="text-secondary-label text-[11px]"
+                      />
                     ) : null}
                   </div>
                   {isSelected ? (

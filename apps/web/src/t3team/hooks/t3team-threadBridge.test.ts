@@ -316,6 +316,28 @@ describe("remapProjectThreadToStoredProject", () => {
     expect(mapped.activityStateUpdatedAt).toBe("2026-05-22T10:00:01.000Z");
   });
 
+  it("carries the shell's pending-question flag onto ProjectThread (parent-side indicator)", () => {
+    const base = {
+      id: "thread-pending-question",
+      projectId: ProjectId.make("live-saved"),
+      title: "Child waiting on the user",
+      messages: [],
+      createdAt: "2026-05-22T09:00:00.000Z",
+      updatedAt: "2026-05-22T10:00:00.000Z",
+      environmentId: "env-local" as EnvironmentId,
+      defaultModelSelection: null,
+    };
+    expect(
+      mapLiveThreadToProjectThread({ ...base, hasPendingUserInput: true } as never).pendingUserInput,
+    ).toBe(true);
+    expect(
+      mapLiveThreadToProjectThread({ ...base, hasPendingUserInput: false } as never).pendingUserInput,
+    ).toBe(false);
+    expect(
+      mapLiveThreadToProjectThread(base as never).pendingUserInput,
+    ).toBeUndefined();
+  });
+
   describe("thread status: error is current state, not history", () => {
     const baseThread = (session: unknown) =>
       ({
@@ -496,6 +518,140 @@ describe("remapProjectThreadToStoredProject", () => {
         ticketId: "PROJ-123",
       }),
     ]);
+  });
+
+  it("marks a settled parent as waiting while its t3team child is live", () => {
+    const storedProjects = [
+      makeStoredProject({
+        workspace: {
+          rootPath: "/workspace/saved",
+          createdAt: "2026-05-01T00:00:00.000Z",
+        },
+      }),
+    ];
+    const liveProjects = [
+      makeLiveProject({ id: ProjectId.make("live-saved"), workspaceRoot: "/workspace/saved" }),
+    ];
+    const out = syncLiveThreadMetadataToLocalState({
+      threads: [],
+      storedProjects,
+      liveProjects,
+      liveThreads: [
+        {
+          id: "thread-parent",
+          projectId: ProjectId.make("live-saved"),
+          title: "Parent thread",
+          messages: [],
+          activities: [],
+          latestTurn: { state: "completed" } as never,
+          archivedAt: null,
+          error: null,
+          session: { status: "idle" } as never,
+          createdAt: "2026-05-22T08:00:00.000Z",
+          updatedAt: "2026-05-22T08:30:00.000Z",
+          environmentId: "env-local" as EnvironmentId,
+          defaultModelSelection: null,
+        } as never,
+        {
+          id: "thread-child",
+          projectId: ProjectId.make("live-saved"),
+          title: "Investigate regression",
+          messages: [],
+          activities: [
+            {
+              id: "activity-handoff-1",
+              tone: "info",
+              kind: "t3team.handoff.created",
+              summary: "Created from Parent thread",
+              payload: {
+                parentThreadId: ThreadId.make("thread-parent"),
+                childThreadId: ThreadId.make("thread-child"),
+              },
+              turnId: null,
+              createdAt: "2026-05-22T09:00:00.000Z",
+            },
+          ],
+          latestTurn: { state: "running" } as never,
+          archivedAt: null,
+          error: null,
+          session: { status: "running" } as never,
+          createdAt: "2026-05-22T09:00:00.000Z",
+          updatedAt: "2026-05-22T09:30:00.000Z",
+          environmentId: "env-local" as EnvironmentId,
+          defaultModelSelection: null,
+        } as never,
+      ],
+    });
+    const parent = out.find((thread) => thread.id === "thread-parent");
+    const child = out.find((thread) => thread.id === "thread-child");
+    expect(parent?.waitingOnChildren).toBe(true);
+    expect(child?.waitingOnChildren).toBe(false);
+  });
+
+  it("clears the waiting fact once the child's run state settles", () => {
+    const storedProjects = [
+      makeStoredProject({
+        workspace: {
+          rootPath: "/workspace/saved",
+          createdAt: "2026-05-01T00:00:00.000Z",
+        },
+      }),
+    ];
+    const liveProjects = [
+      makeLiveProject({ id: ProjectId.make("live-saved"), workspaceRoot: "/workspace/saved" }),
+    ];
+    const out = syncLiveThreadMetadataToLocalState({
+      threads: [],
+      storedProjects,
+      liveProjects,
+      liveThreads: [
+        {
+          id: "thread-parent",
+          projectId: ProjectId.make("live-saved"),
+          title: "Parent thread",
+          messages: [],
+          activities: [],
+          latestTurn: { state: "completed" } as never,
+          archivedAt: null,
+          error: null,
+          session: { status: "idle" } as never,
+          createdAt: "2026-05-22T08:00:00.000Z",
+          updatedAt: "2026-05-22T08:30:00.000Z",
+          environmentId: "env-local" as EnvironmentId,
+          defaultModelSelection: null,
+        } as never,
+        {
+          id: "thread-child",
+          projectId: ProjectId.make("live-saved"),
+          title: "Investigate regression",
+          messages: [],
+          activities: [
+            {
+              id: "activity-handoff-1",
+              tone: "info",
+              kind: "t3team.handoff.created",
+              summary: "Created from Parent thread",
+              payload: {
+                parentThreadId: ThreadId.make("thread-parent"),
+                childThreadId: ThreadId.make("thread-child"),
+              },
+              turnId: null,
+              createdAt: "2026-05-22T09:00:00.000Z",
+            },
+          ],
+          latestTurn: { state: "completed" } as never,
+          archivedAt: null,
+          error: null,
+          session: { status: "idle" } as never,
+          createdAt: "2026-05-22T09:00:00.000Z",
+          updatedAt: "2026-05-22T09:30:00.000Z",
+          environmentId: "env-local" as EnvironmentId,
+          defaultModelSelection: null,
+        } as never,
+      ],
+    });
+    const parent = out.find((thread) => thread.id === "thread-parent");
+    expect(parent?.waitingOnChildren).toBe(false);
   });
 
   it("preserves remembered local display mode while syncing live child metadata", () => {

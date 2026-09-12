@@ -1236,13 +1236,25 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         const replies: string[] = [];
         for (const question of payload.value.questions) {
           const answer = command.answers[question.id];
-          if (typeof answer !== "string" || answer.trim().length === 0) {
+          // A single-select answer is a string; a multi-select answer is the
+          // array of selected option values. Join with a bullet so option
+          // labels containing commas stay unambiguous in the reply text.
+          const answerText = Array.isArray(answer)
+            ? answer
+                .filter((entry): entry is string => typeof entry === "string")
+                .map((entry) => entry.trim())
+                .filter((entry) => entry.length > 0)
+                .join(" \u2022 ")
+            : typeof answer === "string"
+              ? answer.trim()
+              : "";
+          if (answerText.length === 0) {
             return yield* new OrchestrationCommandInvariantError({
               commandType: command.type,
               detail: "Answer each question before sending.",
             });
           }
-          replies.push(`${question.question}\n${answer.trim()}`);
+          replies.push(`${question.question}\n${answerText}`);
         }
         // Commit the answer and its message together. The normal turn path
         // steers a running agent or resumes an idle session.

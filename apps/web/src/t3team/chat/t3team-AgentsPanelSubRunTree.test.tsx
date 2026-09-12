@@ -75,6 +75,17 @@ afterEach(() => {
 });
 
 describe("T3TeamAgentsPanelSubRunTree status language (GHE #254)", () => {
+  it("a child with a pending question shows the amber question mark and the awaiting label", () => {
+    render([node(createThread({ status: "running", pendingUserInput: true }))]);
+    // The awaiting label replaces the live state word in the row text…
+    expect(container!.textContent).toContain("Question awaiting answer");
+    // …and the amber question-mark glyph outranks the lifecycle icon.
+    const svgs = Array.from(container!.querySelectorAll("button svg")) as SVGSVGElement[];
+    const questionSvg = svgs.find((svg) => svg.className.baseVal.includes("text-amber-600"));
+    expect(questionSvg, "amber question-mark icon present").toBeTruthy();
+    expect(questionSvg!.className.baseVal).toContain("size-3");
+  });
+
   it("a running sub-run renders the parent's dashed ring icon (sm), not the old plain dot", () => {
     render([node(createThread({ status: "running" }))]);
     const svg = ringSvg();

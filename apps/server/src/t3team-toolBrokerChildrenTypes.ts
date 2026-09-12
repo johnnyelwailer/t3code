@@ -52,6 +52,11 @@ export interface ChildThreadDetail extends ThreadRunStatusInput {
   readonly messages: ReadonlyArray<ChildThreadMessage>;
 }
 
+export type ParentChildRelation = {
+  readonly childThreadId: string;
+  readonly parentThreadId: string;
+};
+
 export interface T3TeamChildrenToolDeps {
   readonly callerThreadId: ThreadIdType;
   readonly callerProjectId: ProjectId;
@@ -75,6 +80,17 @@ export interface T3TeamChildrenToolDeps {
     parentThreadId: ThreadIdType,
     projectId: ProjectId,
   ) => Effect.Effect<ReadonlyArray<string>, string>;
+  /**
+   * ALL durable parent/child relations in the store, one query — the canonical
+   * handoff.created / handoff.started source (same query the child-settle
+   * sweeper reads; the legacy `parent:N` sub-run scheme never emits handoff
+   * events and so never appears). Store-wide by design; the op scopes it to
+   * its project by matching parents against its own thread ids.
+   */
+  readonly listParentChildRelations: () => Effect.Effect<
+    ReadonlyArray<ParentChildRelation>,
+    string
+  >;
   /** Append a durable activity to a thread (wait registration, close marker). */
   readonly appendActivity: (
     threadId: ThreadIdType,

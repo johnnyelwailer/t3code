@@ -105,6 +105,9 @@ export function mergeEnvironmentThread(
     ...(shell.workflowRunStatus !== undefined
       ? { workflowRunStatus: shell.workflowRunStatus }
       : {}),
+    ...(shell.hasPendingUserInput !== undefined
+      ? { hasPendingUserInput: shell.hasPendingUserInput }
+      : {}),
   };
 }
 

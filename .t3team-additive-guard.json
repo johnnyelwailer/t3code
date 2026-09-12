@@ -205,6 +205,8 @@
     "apps/web/src/components/ThreadStatusIndicators.tsx",
     "apps/web/src/components/chat/ChatComposer.tsx",
     "apps/web/src/components/chat/ComposerCommandMenu.tsx",
+    "apps/web/src/components/chat/ComposerPendingUserInputPanel.test.tsx",
+    "apps/web/src/components/chat/ComposerPendingUserInputPanel.tsx",
     "apps/web/src/components/chat/ComposerPrimaryActions.tsx",
     "apps/web/src/components/chat/ComposerSurface.tsx",
     "apps/web/src/components/chat/MessagesTimeline.logic.test.ts",

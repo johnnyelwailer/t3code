@@ -71,6 +71,7 @@ function makeDeps(overrides: Partial<T3TeamChildrenToolDeps> = {}): TestDeps {
       Effect.succeed(id === CALLER ? childShell : id === CHILD ? childShell : undefined),
     listProjectThreadShells: () => Effect.succeed([childShell]),
     listChildThreadIds: () => Effect.succeed([CHILD]),
+    listParentChildRelations: () => Effect.succeed([]),
     appendActivity: (threadId, input) =>
       Effect.sync(() => {
         appended.push({ threadId, kind: input.kind, payload: input.payload });
@@ -193,6 +194,113 @@ describe("children tool — list", () => {
     expect(rows[0]!.state).toBe("unknown");
     expect(rows[0]!.note).toContain("no longer available");
   });
+
+  it("flags a child with a question docked in its composer (shell hasPendingUserInput)", async () => {
+    const pendingShell: ChildThreadShell = { ...childShell, hasPendingUserInput: true };
+    const deps = makeDeps({
+      listProjectThreadShells: () => Effect.succeed([pendingShell]),
+      loadThreadShell: () => Effect.succeed(pendingShell),
+    });
+    const out = await run(deps, { op: "list" });
+    expect(out.isError).toBeFalsy();
+    const rows = out.structured.threads as Array<Record<string, unknown>>;
+    expect(rows[0]!.awaitingUserInput).toBe(true);
+  });
+});
+
+describe("children tool — waiting state (parent with live t3team children)", () => {
+  const runningShell: ChildThreadShell = {
+    ...childShell,
+    session: { status: "running" } as never,
+    latestTurn: { state: "running", startedAt: "2026-01-01T00:05:00.000Z" } as never,
+  };
+  const relations = [
+    { childThreadId: "child-thread", parentThreadId: "caller-thread" },
+  ];
+
+  it("status: parent settled + running child → waiting", async () => {
+    const deps = makeDeps({
+      listParentChildRelations: () => Effect.succeed(relations),
+      loadThreadShell: (id) =>
+        Effect.succeed(id === CHILD ? runningShell : id === CALLER ? childShell : undefined),
+    });
+    const out = await run(deps, { op: "status", thread_id: "caller-thread" });
+    expect(out.isError).toBeFalsy();
+    expect(out.structured.state).toBe("waiting");
+  });
+
+  it("status: parent settled + all children terminal → completed", async () => {
+    const deps = makeDeps({
+      listParentChildRelations: () => Effect.succeed(relations),
+      // child-thread's shell is the settled `childShell` (turn completed).
+    });
+    const out = await run(deps, { op: "status", thread_id: "caller-thread" });
+    expect(out.isError).toBeFalsy();
+    expect(out.structured.state).toBe("completed");
+  });
+
+  it("status: a settled child does not keep the parent waiting", async () => {
+    const settledRunning: ChildThreadShell = { ...runningShell, settledOverride: "settled" };
+    const deps = makeDeps({
+      listParentChildRelations: () => Effect.succeed(relations),
+      loadThreadShell: (id) =>
+        Effect.succeed(id === CHILD ? settledRunning : id === CALLER ? childShell : undefined),
+    });
+    const out = await run(deps, { op: "status", thread_id: "caller-thread" });
+    expect(out.isError).toBeFalsy();
+    expect(out.structured.state).toBe("completed");
+  });
+
+  it("status: legacy parent:N sub-runs (no handoff relation) do not trigger waiting", async () => {
+    // The caller's `caller:1` sub-run exists as a thread but has NO t3team
+    // handoff relation — the default relations list is empty, so no child is
+    // ever probed and the parent stays completed.
+    const out = await run(makeDeps(), { op: "status", thread_id: "caller-thread" });
+    expect(out.isError).toBeFalsy();
+    expect(out.structured.state).toBe("completed");
+  });
+
+  it("list: a row's own running work outranks its live children (stays running)", async () => {
+    const deps = makeDeps({
+      loadThreadShell: (id) =>
+        Effect.succeed(id === CHILD ? runningShell : id === CALLER ? childShell : runningShell),
+      listParentChildRelations: () =>
+        Effect.succeed([{ childThreadId: "grand-child", parentThreadId: "child-thread" }]),
+    });
+    const out = await run(deps, { op: "list" });
+    expect(out.isError).toBeFalsy();
+    const rows = out.structured.threads as Array<Record<string, unknown>>;
+    expect(rows[0]!.state).toBe("running");
+  });
+
+  it("list: a settled row with a running grandchild reads waiting", async () => {
+    const deps = makeDeps({
+      loadThreadShell: (id) =>
+        Effect.succeed(id === CHILD ? childShell : id === CALLER ? childShell : runningShell),
+      listParentChildRelations: () =>
+        Effect.succeed([{ childThreadId: "grand-child", parentThreadId: "child-thread" }]),
+    });
+    const out = await run(deps, { op: "list" });
+    expect(out.isError).toBeFalsy();
+    const rows = out.structured.threads as Array<Record<string, unknown>>;
+    expect(rows[0]!.state).toBe("waiting");
+  });
+
+  it("list all:true: waiting resolves in memory from the project snapshot", async () => {
+    // The grandchild lives in the same project snapshot as its parent row,
+    // exactly as handoff-created children do — no shell loads needed.
+    const grandShell: ChildThreadShell = { ...runningShell, id: "grand-child" as never };
+    const deps = makeDeps({
+      listProjectThreadShells: () => Effect.succeed([childShell, grandShell]),
+      listParentChildRelations: () =>
+        Effect.succeed([{ childThreadId: "grand-child", parentThreadId: "child-thread" }]),
+    });
+    const out = await run(deps, { op: "list", all: true });
+    expect(out.isError).toBeFalsy();
+    const rows = out.structured.threads as Array<Record<string, unknown>>;
+    expect(rows[0]!.threadId).toBe(CHILD);
+    expect(rows[0]!.state).toBe("waiting");
+  });
 });
 
 describe("children tool — status", () => {
@@ -218,6 +326,48 @@ describe("children tool — status", () => {
     const out = await run(deps, { op: "status", thread_id: CHILD });
     expect(out.isError).toBe(true);
     expect(out.text).toContain("different project");
+  });
+
+  it("flags awaitingUserInput when the detail carries an open question", async () => {
+    const pendingDetail: ChildThreadDetail = {
+      ...childDetail,
+      activities: [
+        {
+          kind: "user-input.requested",
+          summary: "User input requested",
+          createdAt: "2026-01-01T00:11:00.000Z",
+          payload: { requestId: "req-1", questions: [], responseMode: "message" },
+        },
+      ],
+    };
+    const deps = makeDeps({
+      loadThreadDetail: (id) =>
+        Effect.succeed(id === CALLER ? callerDetail : id === CHILD ? pendingDetail : undefined),
+    });
+    const out = await run(deps, { op: "status", thread_id: CHILD });
+    expect(out.isError).toBeFalsy();
+    expect(out.structured.awaitingUserInput).toBe(true);
+    // A resolved question clears the flag.
+    const answeredDetail: ChildThreadDetail = {
+      ...pendingDetail,
+      activities: [
+        ...pendingDetail.activities,
+        {
+          kind: "user-input.resolved",
+          summary: "User input submitted",
+          createdAt: "2026-01-01T00:12:00.000Z",
+          payload: { requestId: "req-1", answers: {} },
+        },
+      ],
+    };
+    const answered = await run(
+      makeDeps({
+        loadThreadDetail: (id) =>
+          Effect.succeed(id === CALLER ? callerDetail : id === CHILD ? answeredDetail : undefined),
+      }),
+      { op: "status", thread_id: CHILD },
+    );
+    expect(answered.structured.awaitingUserInput).toBeUndefined();
   });
 });
 
