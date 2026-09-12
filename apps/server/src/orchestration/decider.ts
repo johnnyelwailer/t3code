@@ -35,6 +35,10 @@ import {
 } from "./commandInvariants.ts";
 import { projectEvent } from "./projector.ts";
 import { admitsTurnStart, isThreadTurnBusy } from "../t3team-deciderTurnAdmission.ts";
+import {
+  autoSummarizeActorMessage,
+  capActorMessageSummary,
+} from "../t3team-actorReactionInputSummarize.ts";
 import { requireProjectSourceBindingUnclaimed } from "./t3team-projectSourceInvariants.ts";
 import { threadHasQueuedTurnStart } from "./ThreadSettlementPolicy.ts";
 
@@ -1517,6 +1521,14 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
               urgency: command.urgency,
               hopCount: command.hopCount,
               rootThreadId: command.rootThreadId,
+              // The SUBJECT (display-only): the sender's summary when supplied,
+              // else a first-sentence derivation from the body. Purely for
+              // titling the card and the digest one-liner — it never gates
+              // delivery, ordering, urgency or batching.
+              summary:
+                command.summary !== undefined && command.summary.trim().length > 0
+                  ? capActorMessageSummary(command.summary)
+                  : autoSummarizeActorMessage(command.text),
             },
           },
           turnId: null,

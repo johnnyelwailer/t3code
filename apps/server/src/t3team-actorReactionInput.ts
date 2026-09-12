@@ -1,4 +1,39 @@
-import type { OrchestrationEvent, OrchestrationMessage } from "@t3tools/contracts";
+/**
+ * Inter-agent ("actor") reaction inputs: the SINGLE digest framing plus the
+ * restart-rehydrate matcher.
+ *
+ * Delivery model (inter-agent messaging overhaul): actor messages no longer
+ * drive individual turns. They accumulate in the mailbox and are delivered as
+ * ONE consolidated digest at a boundary (the thread is idle and the user is
+ * not actively engaged — see t3team-actorMessageReactor.ts). The digest is the
+ * ONLY framing:
+ *
+ *   - one line per delivery: sender, thread id, message id, urgency;
+ *   - bodies at or under the inline cap are inlined verbatim;
+ *   - bodies above it arrive as the SUBJECT plus a t3team_read_message pointer.
+ *
+ * The standing inter-agent protocol (handoff-not-conversation, report-once,
+ * user-priority, no peer chat) is delivered ONCE per session, not per
+ * message: it is appended to the FIRST digest a thread receives since process
+ * start ({@link ACTOR_STANDING_INSTRUCTION}, gated by the mailbox's
+ * `isBriefed`/`markBriefed`). It is a well-known SUFFIX so the restart
+ * rehydrate's prefix-matching of the digest base keeps working.
+ *
+ * `collectPendingActorDeliveries` is the B4 invariant: after a restart, a
+ * delivery whose reaction was already admitted must NOT be re-queued —
+ * otherwise the thread double-reacts. Matching is:
+ *   1. PRIMARY: the admitted reaction turn's `t3teamExt.actor.messageIds`
+ *      names every coalesced delivery (startActorReaction always sets it,
+ *      including single entries) — format-independent.
+ *   2. LEGACY: admitted inputs WITHOUT messageIds (single-entry turns admitted
+ *      before messageIds became universal, i.e. pre-overhaul logs) are
+ *      recognized by prefix-matching the stored text against the single-entry
+ *      bases of the digest framing AND the historical framings (full-body,
+ *      header-only, compressed) that may still exist in persisted logs.
+ *
+ * @module t3team-actorReactionInput
+ */
+import type { OrchestrationEvent } from "@t3tools/contracts";
 
 import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
 
@@ -6,14 +41,73 @@ import {
   autoSummarizeActorMessage,
   capActorMessageSummary,
   summarizeActorMessageForDelivery,
+  summarizeActorMessageForDeliveryLegacy,
 } from "./t3team-actorReactionInputSummarize.ts";
 
+/**
+ * The standing inter-agent protocol, appended to a thread's FIRST digest since
+ * process start (once per session/provider-context lifetime). Everything the
+ * old per-envelope boilerplate enforced now lives here, plus the reporting
+ * rule: a completion report is a verdict line plus an evidence path, not the
+ * report body.
+ */
+export const ACTOR_STANDING_INSTRUCTION =
+  "[Standing rules for inter-agent messages (delivered once per session): " +
+  "these messages are handoffs from other agents, not a conversation with a " +
+  "human. Do the work a message hands you; do NOT reply just because a " +
+  "message arrived. Reply to a sender ONLY when it explicitly asks you a " +
+  "question, requests your decision, or needs an answer or artifact — via " +
+  "send_message to that sender's thread id. Report progress at most once, " +
+  "when you are completely done — no incremental status pings. A completion " +
+  "report is a verdict line plus an evidence path, not the report body: if " +
+  "the detail is already on disk, cite the path instead of re-sending it. The " +
+  "user's messages always take priority: answer an open user question before " +
+  "acting on agent messages, then return to the user. No peer chat: if you " +
+  "are a child thread, address only the parent that spawned you — act on a " +
+  "sibling's message silently only when it is directly useful, otherwise " +
+  "route it through the parent.]";
+
+/**
+ * The SINGLE digest framing for a CLAIMED BATCH of deliveries: one reaction
+ * turn per batch instead of one turn per message. Deterministic for a given
+ * batch — including the single-entry shape — which is what the restart
+ * rehydrate prefix-matching relies on.
+ */
+export const buildActorReactionDigestInput = (
+  entries: ReadonlyArray<T3TeamActorMailboxEntry>,
+): string =>
+  [
+    `[Inter-agent digest: ${entries.length} message(s)]`,
+    "",
+    ...entries.flatMap((entry) => [
+      `[from «${entry.fromTitle}» · thread ${entry.fromThreadId} · id ${entry.messageId} · ` +
+        `urgency ${entry.urgency}]`,
+      "",
+      summarizeActorMessageForDelivery(entry.text, entry.messageId, entry.summary),
+      "",
+    ]),
+  ].join("\n");
+
+// --- Legacy single-entry bases (rehydrate matching only) ---------------------
+//
+// Admitted reaction inputs persisted BEFORE the digest framing used one of
+// these bases. A restart replays the full event log, so collectPending
+// ActorDeliveries must still recognize them as already reacted — otherwise
+// every old single-entry delivery is re-queued and the thread double-reacts
+// to work it already handled. NEVER used for NEW turns.
+
+/**
+ * LEGACY (pre-overhaul): full-body single-message delivery framing.
+ * Byte-faithful to the historical tier — including the legacy 1500-char
+ * inline cap and `…[summarized —` marker — so old admitted inputs keep
+ * prefix-matching on restart. NEVER used for NEW turns.
+ */
 export const buildActorReactionInput = (entry: T3TeamActorMailboxEntry): string =>
   [
     `[Message from peer agent «${entry.fromTitle}» · thread ${entry.fromThreadId} · ` +
       `urgency ${entry.urgency}]`,
     "",
-    summarizeActorMessageForDelivery(entry.text, entry.messageId, entry.summary),
+    summarizeActorMessageForDeliveryLegacy(entry.text, entry.messageId, entry.summary),
     "",
     "[This message is from another agent actor, not a human user. An inter-agent message is " +
       "a handoff, not a conversation: do NOT reply just because a message arrived. Reply to " +
@@ -35,112 +129,31 @@ export const buildActorReactionInput = (entry: T3TeamActorMailboxEntry): string 
   ].join("\n");
 
 /**
- * Reaction input for a CLAIMED BATCH of deliveries (inter-agent coalescing):
- * one reaction turn per batch instead of one turn per message.
- *
- * A single-entry batch formats EXACTLY like {@link buildActorReactionInput} —
- * single-message delivery semantics are unchanged, and the restart-rehydrate
- * matching (which compares admitted inputs against the single-entry format)
- * keeps working. Multiple entries get a batch header and one sender-framed
- * section per delivery, each body summarized with its own message id.
+ * LEGACY (GHE #154): header-only single-delivery framing (follow-ups). The
+ * subject line is the capped sender summary when present, else the auto-
+ * derivation — exactly as the historical tier produced it.
  */
-export const buildActorReactionBatchInput = (
-  entries: ReadonlyArray<T3TeamActorMailboxEntry>,
-): string => {
-  const [single] = entries;
-  if (entries.length === 1 && single !== undefined) {
-    return buildActorReactionInput(single);
-  }
-  return [
-    `[${entries.length} messages from peer agents]`,
+export const buildActorReactionHeaderSingleInput = (entry: T3TeamActorMailboxEntry): string =>
+  [
+    `[Message from peer agent «${entry.fromTitle}» · thread ${entry.fromThreadId} · ` +
+      `urgency ${entry.urgency}]`,
     "",
-    ...entries.flatMap((entry) => [
-      `[Message from peer agent «${entry.fromTitle}» · thread ${entry.fromThreadId} · ` +
-        `urgency ${entry.urgency}]`,
-      "",
-      summarizeActorMessageForDelivery(entry.text, entry.messageId, entry.summary),
-      "",
-    ]),
-    "[These messages are from other agent actors, not a human user. An inter-agent message is " +
-      "a handoff, not a conversation: do NOT reply just because a message arrived. Reply to " +
-      "a sender ONLY when its content explicitly asks you a question, requests your " +
-      "decision, or asks for an answer or artifact from you — otherwise do the work it hands " +
-      "you and continue your own task. Solve simple blockers yourself; escalate only for " +
-      "genuine blockers (a user decision, a cross-lane change, or access you lack). No peer " +
-      "chat: if you are a child thread, address ONLY the parent thread that spawned you — " +
-      "never start or continue a conversation with sibling threads; act on a sibling's " +
-      "message silently only when it is directly useful to your task, otherwise route it " +
-      "through the parent. Report " +
-      "progress at most once, when you are completely done — no incremental status pings. To " +
-      "reply to a sender, use your send-message tool addressed to that sender's thread. Keep " +
-      "inter-agent messages short (telegram style: state, decision, request). Put details " +
-      "in an attached markdown report or a file the recipient can read on demand; long " +
-      "bodies are summarized on delivery and the recipient retrieves the full text with " +
-      "t3team_read_message.]",
+    `${
+      entry.summary?.trim()
+        ? capActorMessageSummary(entry.summary)
+        : autoSummarizeActorMessage(entry.text)
+    }\n…[body NOT loaded into your context — call t3team_read_message ` +
+      `with message id ${entry.messageId} to read the full text when you need it]`,
+    "",
+    "[Handoff, not conversation: do NOT reply just because a message arrived. Reply ONLY " +
+      "when the header explicitly asks you a question, requests your decision, or asks for " +
+      "an answer or artifact — otherwise act on it (fetching bodies with t3team_read_message " +
+      "as needed) and continue your own task. Report progress at most once, when you are " +
+      "completely done. No peer chat: if you are a child thread, address only the parent " +
+      "that spawned you.]",
   ].join("\n");
-};
 
-/**
- * True when the user (a human) sent a message at any point while (or after)
- * this batch was queueing — i.e. the user stepped in and the pending agent
- * messages must not bury their message in the next reaction turn. Keyed on
- * the EARLIEST batch entry: any user message from that point on counts.
- * Inter-agent reaction inputs (`t3teamExt.actor`) and automated senders
- * (`t3teamExt.author`) are NOT user interjections — mirroring the
- * isRealUserMessage tests elsewhere, a burst of sibling deliveries must not
- * flip its own batches into the compressed tier.
- */
-export function userInterjectedDuringQueueing(
-  entries: ReadonlyArray<T3TeamActorMailboxEntry>,
-  messages: ReadonlyArray<OrchestrationMessage> | null | undefined,
-): boolean {
-  const first = entries[0];
-  if (first === undefined || messages === null || messages === undefined) return false;
-  const firstAtMs = Date.parse(first.createdAt);
-  for (const message of messages) {
-    if (message.role !== "user") continue;
-    if (message.t3teamExt?.actor !== undefined) continue;
-    if (message.t3teamExt?.author !== undefined) continue;
-    if (Date.parse(message.createdAt) >= firstAtMs) return true;
-  }
-  return false;
-}
-
-/**
- * True when the thread transcript already contains at least one inter-agent
- * (actor) message OTHER THAN the excluded ids — i.e. this is NOT the thread's
- * first inter-agent delivery. The first delivery carries the full bodies (it
- * is the thread's kickoff / handoff and the recipient must be able to act on
- * it without a fetch); every later delivery is delivered header-only.
- *
- * The excluded ids matter: each delivery is persisted as a first-class actor
- * message in the recipient's transcript BEFORE the drain claims the batch, so
- * without the exclusion every delivery would look "prior" and the full-body
- * first-delivery tier would be unreachable in production.
- */
-export function hasPriorInterAgentMessages(
-  messages: ReadonlyArray<OrchestrationMessage> | null | undefined,
-  excludeMessageIds?: ReadonlyArray<string>,
-): boolean {
-  if (messages === null || messages === undefined) return false;
-  const excluded =
-    excludeMessageIds !== undefined && excludeMessageIds.length > 0
-      ? new Set(excludeMessageIds)
-      : undefined;
-  return messages.some(
-    (message) =>
-      message.t3teamExt?.actor !== undefined &&
-      (excluded === undefined || !excluded.has(message.id)),
-  );
-}
-
-/**
- * Compressed reaction framing for the user-interjected case: the batch is
- * reduced to pointers (sender, thread, message ids) instead of full bodies.
- * The bodies remain first-class actor messages in the transcript, so nothing
- * is lost — the agent retrieves any of them with t3team_read_message when it
- * actually needs one. Single and multi-entry batches share one format.
- */
+/** LEGACY (GHE #156): compressed pointer-only framing (user interjected). */
 export const buildActorReactionCompressedInput = (
   entries: ReadonlyArray<T3TeamActorMailboxEntry>,
 ): string => {
@@ -169,56 +182,7 @@ export const buildActorReactionCompressedInput = (
   ].join("\n");
 };
 
-/**
- * Header-only reaction framing for a FOLLOW-UP inter-agent delivery (any
- * delivery after the thread's first): the entry's sender, urgency, a ~1-line
- * header (the sender's summary, or an auto-generated one) and the message id
- * — but NOT the body. The bodies remain first-class actor messages in the
- * transcript; the recipient retrieves any of them with
- * t3team_read_message(message_id) when it genuinely needs one. Keeping bodies
- * out of the reaction input is what stops message bursts from inflating the
- * recipient's context.
- */
-export const buildActorReactionHeaderSingleInput = (entry: T3TeamActorMailboxEntry): string => {
-  const header = entry.summary?.trim()
-    ? capActorMessageSummary(entry.summary)
-    : autoSummarizeActorMessage(entry.text);
-  return [
-    `[Message from peer agent «${entry.fromTitle}» · thread ${entry.fromThreadId} · ` +
-      `urgency ${entry.urgency}]`,
-    "",
-    `${header}\n…[body NOT loaded into your context — call t3team_read_message ` +
-      `with message id ${entry.messageId} to read the full text when you need it]`,
-    "",
-    "[Handoff, not conversation: do NOT reply just because a message arrived. Reply ONLY " +
-      "when the header explicitly asks you a question, requests your decision, or asks for " +
-      "an answer or artifact — otherwise act on it (fetching bodies with t3team_read_message " +
-      "as needed) and continue your own task. Report progress at most once, when you are " +
-      "completely done. No peer chat: if you are a child thread, address only the parent " +
-      "that spawned you.]",
-  ].join("\n");
-};
-
-/**
- * Header-only framing for a multi-entry batch: one sender section per delivery
- * (single entries reuse the exact single-entry format, so restart rehydrate
- * prefix-matching keeps working).
- */
-export const buildActorReactionHeaderInput = (
-  entries: ReadonlyArray<T3TeamActorMailboxEntry>,
-): string => {
-  const [single] = entries;
-  if (entries.length === 1 && single !== undefined) {
-    return buildActorReactionHeaderSingleInput(single);
-  }
-  const sections = entries.flatMap((entry) => [
-    ...buildActorReactionHeaderSingleInput(entry).split("\n"),
-    "",
-  ]);
-  return ["[Inter-agent messages (follow-up delivery — bodies not loaded)]", "", ...sections].join(
-    "\n",
-  );
-};
+// --- Restart rehydrate -------------------------------------------------------
 
 const fromDelivery = (
   payload: Extract<OrchestrationEvent, { type: "thread.actor-message-delivered" }>["payload"],
@@ -236,11 +200,27 @@ const fromDelivery = (
   dispatchAttempts: 0,
 });
 
-/** Replay deliveries and their admitted hidden inputs, leaving only pending work. */
+/**
+ * The single-entry bases an admitted reaction turn may have been framed with.
+ * The NEW digest base first; the legacy bases so pre-overhaul logs keep
+ * matching (see module docs, B4 invariant).
+ */
+const singleEntryBases = (entry: T3TeamActorMailboxEntry): ReadonlyArray<string> => [
+  buildActorReactionDigestInput([entry]),
+  buildActorReactionInput(entry),
+  buildActorReactionHeaderSingleInput(entry),
+  buildActorReactionCompressedInput([entry]),
+];
+
+/**
+ * Replay deliveries and their admitted reaction inputs, leaving only PENDING
+ * work. This is the function a restart double-reaction flows through: every
+ * delivery whose reaction was already admitted must be removed here.
+ */
 export function collectPendingActorDeliveries(
   events: ReadonlyArray<OrchestrationEvent>,
   hopCap: number,
-): ReadonlyArray<{ readonly threadId: string; readonly entry: T3TeamActorMailboxEntry }> {
+): ReadonlyArray<{ readonly threadId: string; entry: T3TeamActorMailboxEntry }> {
   const pending: Array<{ threadId: string; entry: T3TeamActorMailboxEntry }> = [];
   for (const event of events) {
     if (event.type === "thread.actor-message-delivered") {
@@ -252,9 +232,9 @@ export function collectPendingActorDeliveries(
     if (event.type !== "thread.message-sent" || event.payload.role !== "user") continue;
     const actor = event.payload.t3teamExt?.actor;
     if (!actor || event.payload.t3teamExt?.visibleToUser !== false) continue;
-    // A batched reaction turn coalesced several deliveries into ONE admitted
-    // input: its `actor.messageIds` names the whole batch, so every delivery
-    // it carries is already reacted — remove them all.
+    // PRIMARY (format-independent): a reaction turn's `actor.messageIds`
+    // names its WHOLE batch (startActorReaction always sets it, including
+    // single entries) — every delivery it carries is already reacted.
     if (actor.messageIds !== undefined) {
       const reactedIds = new Set(actor.messageIds);
       for (let i = pending.length - 1; i >= 0; i -= 1) {
@@ -269,18 +249,17 @@ export function collectPendingActorDeliveries(
       }
       continue;
     }
+    // LEGACY: single-entry admitted inputs without messageIds (pre-overhaul
+    // logs). The bases embed message ids, but the identity guards apply to
+    // EVERY base (the digest base aside — its header line carries the id,
+    // sender thread, and urgency; the guards below still apply).
     const index = pending.findIndex(
       ({ threadId, entry }) =>
-        // Identity guards apply to EVERY tier base (full / compressed / header),
-        // not just the full-body one: a prefix match alone is safe only because
-        // the bases embed message ids — keep the explicit invariants too.
         threadId === event.payload.threadId &&
         entry.fromThreadId === actor.senderThreadId &&
         entry.hopCount === actor.hopCount &&
         entry.rootThreadId === actor.rootThreadId &&
-        (event.payload.text.startsWith(buildActorReactionInput(entry)) ||
-          event.payload.text.startsWith(buildActorReactionCompressedInput([entry])) ||
-          event.payload.text.startsWith(buildActorReactionHeaderSingleInput(entry))),
+        singleEntryBases(entry).some((base) => event.payload.text.startsWith(base)),
     );
     if (index >= 0) pending.splice(index, 1);
   }

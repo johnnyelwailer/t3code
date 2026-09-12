@@ -68,6 +68,19 @@ in plain words, with the consequence:
 
 Never open with methodology, scope, or a restatement of the task.
 
+3a. A COMPLETION MESSAGE IS A VERDICT LINE + AN EVIDENCE PATH
+When you finish and report back (to a parent thread, to the human, or via any send-message), the
+message body is ONE line: the verdict, then where the evidence lives. Not the report body — the
+report body goes on disk (a file, a widget, the step's structured return), and the message points
+at it:
+
+  GOOD  done: 3/5 tests pass — full report at /tmp/qa-verdict.md, 2 failures logged
+  BAD   <the entire 4,000-character report pasted into the message>
+
+If the detail is already written to a file, cite the path. If it is in a structured return or a
+widget, say so. The recipient retrieves depth on demand; a message that re-sends the detail is
+redundant bytes for everyone who already has it.
+
 4. IF IT IS TEXT, STRUCTURE IT
 Text is the fallback, not the default (see 1). When you do write it, it renders as markdown — use
 that.

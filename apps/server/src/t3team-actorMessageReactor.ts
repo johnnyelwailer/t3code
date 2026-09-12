@@ -1,6 +1,26 @@
 /**
- * Reactor that turns a delivered inter-agent ("actor") message into a reaction
- * turn on the receiving thread.
+ * Reactor that turns a DELIVERED BATCH of inter-agent ("actor") messages into
+ * a single consolidated digest turn on the receiving thread.
+ *
+ * Delivery model (inter-agent messaging overhaul): messages do NOT drive
+ * individual turns. They accumulate in the mailbox and are claimed as ONE
+ * batch at a boundary — the thread is idle (`isThreadBusy`), not reacting and
+ * not suppressed — and delivered as one digest (t3team-actorReactionInput.ts)
+ * that carries sender/subject/urgency per message, short bodies inlined, long
+ * bodies as subject + t3team_read_message pointer.
+ *
+ * Drains are engagement-aware: the baseline coalescing window applies always,
+ * and while the USER is actively typing in the thread's composer (the
+ * per-thread composing heartbeat — see t3team-threadEngagement.ts) the drain
+ * backs off, re-checking every baseline window until the typing signal
+ * lapses. There is deliberately NO hard cap: a genuine typing signal is
+ * self-clearing, so a pending digest can never be starved. `urgent`
+ * deliveries keep the ONLY interrupt path: a zero window that claims
+ * immediately, unchanged.
+ *
+ * The standing inter-agent protocol is appended to a thread's FIRST digest
+ * since process start (mailbox isBriefed/markBriefed), not repeated per
+ * message.
  *
  * Design notes (F1 sendTurn framing, F2 admission + mailbox serialization,
  * coalescing semantics): see the module docs of
@@ -18,7 +38,7 @@ import * as Stream from "effect/Stream";
 
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
-import { makeT3TeamActorMailbox } from "./t3team-actorMailbox.ts";
+import { T3TeamActorMailbox } from "./t3team-actorMailbox.ts";
 import { rehydrateActorMailbox } from "./t3team-actorMailboxRehydrate.ts";
 import { startActorReaction, startActorRestartHoldSummary } from "./t3team-actorMessageReaction.ts";
 import { loadInterruptedChildThreads } from "./t3team-actorRestartHold.ts";
@@ -29,12 +49,14 @@ import {
   T3TEAM_ACTOR_MESSAGE_HOP_CAP,
 } from "./t3team-actorMessageReactorLimits.ts";
 import { createActorMessageEventHandler } from "./t3team-actorMessageReactorEvents.ts";
+import { T3TeamThreadEngagement } from "./t3team-threadEngagement.ts";
 
 export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
   Effect.gen(function* () {
     const engine = yield* OrchestrationEngineService;
     const query = yield* ProjectionSnapshotQuery;
-    const mailbox = yield* makeT3TeamActorMailbox;
+    const mailbox = yield* T3TeamActorMailbox;
+    const engagement = yield* T3TeamThreadEngagement;
     const debounceMs = resolveActorMessageDebounceMs();
     const batchMax = resolveActorMessageBatchMax();
     // Restart-held set (GHE #155): captured from rehydrate below; declared
@@ -64,8 +86,8 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
       for (const entry of batch) ids.delete(entry.messageId);
       if (ids.size === 0) urgentPending.delete(threadId);
     };
-    const drainWindowMs = (threadId: string) =>
-      (urgentPending.get(threadId)?.size ?? 0) > 0 ? 0 : debounceMs;
+    const hasUrgentPending = (threadId: string) =>
+      (urgentPending.get(threadId)?.size ?? 0) > 0;
 
     const loadThread = (threadId: string) =>
       query.getThreadDetailById(ThreadId.make(threadId)).pipe(
@@ -73,13 +95,15 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
         Effect.map(Option.getOrUndefined),
       );
 
-    // Claim-and-dispatch: only when the thread is neither reacting nor otherwise
-    // running does a queued batch become a reaction turn. The drain is FORKED
-    // (a domain-event must never block the stream on the debounce window) and
-    // debounced: it waits the window, then claims the whole pending batch so a
-    // burst of deliveries coalesces into ONE turn. The atomic claim plus the
-    // `reacting` flag keep per-thread serialization: concurrent drains for the
-    // same thread race to the claim, and only the first wins a non-empty batch.
+    // Claim-and-dispatch: only when the thread is neither reacting nor
+    // otherwise running does a queued batch become a digest turn. The drain
+    // is FORKED (a domain-event must never block the stream on the window)
+    // and coalescing: it waits the baseline window — re-checking, while the
+    // user is engaged, up to the hard cap — then claims the whole pending
+    // batch so a burst of deliveries coalesces into ONE turn. The atomic
+    // claim plus the `reacting` flag keep per-thread serialization:
+    // concurrent drains for the same thread race to the claim, and only the
+    // first wins a non-empty batch.
     const tryDrain = (threadId: string) =>
       Effect.gen(function* () {
         if (yield* mailbox.isReacting(threadId)) {
@@ -89,26 +113,44 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
         if (!thread || isThreadBusy(thread)) {
           return;
         }
-        // Coalescing window: deliveries enqueued while we wait join this batch.
-        // Zero window when an urgent delivery is pending ("wake now").
-        yield* Effect.sleep(Duration.millis(drainWindowMs(threadId)));
-        // Re-check after the window: a user turn may have started while we
-        // waited. If so, abort — the turn-settle drain picks the queue up.
-        const settled = yield* loadThread(threadId);
-        if (!settled || isThreadBusy(settled)) {
-          return;
+        // Coalescing window. Urgent: zero window, claim now (the only
+        // interrupt path — never gated by engagement). Everything else:
+        // baseline window; deliveries enqueued while we wait join the batch.
+        // While the user is actively TYPING in this thread's composer the
+        // drain backs off — re-check engagement every baseline window and
+        // keep waiting until the typing signal lapses. No cap: the signal is
+        // self-clearing (the heartbeat stops when the user stops typing), so
+        // a pending digest can never be starved.
+        if (!hasUrgentPending(threadId) && debounceMs > 0) {
+          for (;;) {
+            yield* Effect.sleep(Duration.millis(debounceMs));
+            // Re-check after the window: a user turn may have started while
+            // we waited. If so, abort — the turn-settle drain picks up.
+            const settled = yield* loadThread(threadId);
+            if (!settled || isThreadBusy(settled)) {
+              return;
+            }
+            if (!(yield* engagement.isEngaged(threadId))) {
+              break;
+            }
+          }
         }
         const batch = yield* mailbox.takeNextForDispatch(threadId, batchMax);
         forgetClaimedUrgent(threadId, batch);
         if (batch.length === 0) {
           return;
         }
-        yield* startActorReaction({
+        // Once-per-session standing instruction: append to the FIRST digest
+        // this thread receives since process start; mark only when the turn
+        // actually dispatched (a failed/requeued batch keeps its briefing).
+        const includeStanding = !(yield* mailbox.isBriefed(threadId));
+        const dispatched = yield* startActorReaction({
           engine,
           mailbox,
           threadId,
           loadThread,
           entries: batch,
+          includeStandingInstruction: includeStanding,
           // Re-note claimed-then-requeued urgent entries: forgetClaimedUrgent
           // already ran at claim, so a failed dispatch must not silently
           // downgrade them to the idle window.
@@ -118,6 +160,9 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
             }
           },
         });
+        if (dispatched && includeStanding) {
+          yield* mailbox.markBriefed(threadId);
+        }
       }).pipe(
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
@@ -163,19 +208,24 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
         // If the summary turn fails to start, the claimed entries are requeued
         // by the dispatcher and the ordinary drain picks them up on the next
         // settle.
-        yield* startActorRestartHoldSummary({
+        const includeStanding = !(yield* mailbox.isBriefed(threadId));
+        const dispatched = yield* startActorRestartHoldSummary({
           engine,
           mailbox,
           threadId,
           loadThread,
           entries: batch,
           interruptedChildren: interrupted,
+          includeStandingInstruction: includeStanding,
           onRequeueUrgent: (requeued) => {
             for (const entry of requeued) {
               if (entry.urgency === "urgent") noteUrgentDelivery(threadId, entry.messageId);
             }
           },
         });
+        if (dispatched && includeStanding) {
+          yield* mailbox.markBriefed(threadId);
+        }
       }).pipe(
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)

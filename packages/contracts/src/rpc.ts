@@ -1136,6 +1136,12 @@ const WsOrchestrationSubscribeThreadRpc = Rpc.make(ORCHESTRATION_WS_METHODS.subs
   stream: true,
 });
 
+const WsOrchestrationNoteComposingRpc = Rpc.make(ORCHESTRATION_WS_METHODS.noteComposing, {
+  payload: OrchestrationRpcSchemas.noteComposing.input,
+  success: OrchestrationRpcSchemas.noteComposing.output,
+  error: EnvironmentAuthorizationError,
+});
+
 const WsSubscribeTerminalEventsRpc = Rpc.make(WS_METHODS.subscribeTerminalEvents, {
   payload: Schema.Struct({}),
   success: TerminalEvent,
@@ -1379,4 +1385,5 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationGetArchivedShellSnapshotRpc,
   WsOrchestrationSubscribeShellRpc,
   WsOrchestrationSubscribeThreadRpc,
+  WsOrchestrationNoteComposingRpc,
 );

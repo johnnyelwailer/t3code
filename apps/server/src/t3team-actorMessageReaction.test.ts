@@ -1,12 +1,12 @@
 /**
- * Delivery tiers (anti-chatter): the thread's FIRST inter-agent delivery
- * carries full bodies (kickoff/handoff); every LATER delivery is header-only
- * with a t3team_read_message pointer; a user interjection while the batch was
- * queueing compresses the batch to "the user's message comes first" pointers.
- *
- * Each tier keeps the stable single-entry base format, so the restart-rehydrate
- * prefix-matching contract (collectPendingActorDeliveries) keeps working — see
- * t3team-actorReactionInput.test.ts for the matching side.
+ * Digest dispatch: one claimed mailbox batch becomes ONE `thread.turn.start`
+ * reaction turn in the single digest framing — sender/subject/urgency per
+ * message, short bodies inlined, long bodies as subject + t3team_read_message
+ * pointer. The standing inter-agent protocol is appended only when
+ * `includeStandingInstruction` (first digest of the session), and
+ * `t3teamExt.actor.messageIds` ALWAYS names the whole batch — including
+ * single-entry batches — so the restart rehydrate matches format-independently
+ * (B4 invariant; see t3team-actorReactionInput.test.ts for the matching side).
  */
 import type {
   OrchestrationCommand,
@@ -21,16 +21,8 @@ import type { OrchestrationEngineShape } from "./orchestration/Services/Orchestr
 import { OrchestrationCommandIdConflictError } from "./orchestration/Errors.ts";
 import { makeT3TeamActorMailbox, type T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
 import { startActorReaction } from "./t3team-actorMessageReaction.ts";
-import {
-  buildActorReactionBatchInput,
-  buildActorReactionCompressedInput,
-  buildActorReactionHeaderInput,
-  buildActorReactionInput,
-} from "./t3team-actorReactionInput.ts";
-import {
-  appendActorReactionUserReturnInstruction,
-  detectUserFacingOpenState,
-} from "./t3team-actorReactionVisibility.ts";
+import { ACTOR_STANDING_INSTRUCTION, buildActorReactionDigestInput } from "./t3team-actorReactionInput.ts";
+import { buildActorReactionTurnInput } from "./t3team-actorReactionVisibility.ts";
 
 type TurnStart = Extract<OrchestrationCommand, { type: "thread.turn.start" }>;
 
@@ -39,8 +31,8 @@ const entry = (messageId: string): T3TeamActorMailboxEntry => ({
   fromThreadId: "sender",
   fromTitle: "Sender",
   fromProjectId: "project",
-  // Long on purpose: a short body would fit inside its own auto-summary and
-  // defeat the "body NOT loaded" assertions below.
+  // Long on purpose: a short body would fit inside its own subject and defeat
+  // the "body NOT loaded" assertions below.
   text: `update for ${messageId}. ` + "z".repeat(2000),
   urgency: "normal",
   hopCount: 1,
@@ -49,40 +41,7 @@ const entry = (messageId: string): T3TeamActorMailboxEntry => ({
   dispatchAttempts: 0,
 });
 
-const message = (partial: {
-  role: OrchestrationMessage["role"];
-  text?: string;
-  createdAt?: string;
-  t3teamExt?: OrchestrationMessage["t3teamExt"];
-}): OrchestrationMessage =>
-  ({
-    role: partial.role,
-    text: partial.text ?? "x",
-    createdAt: partial.createdAt ?? "2026-07-19T07:00:00.000Z",
-    ...(partial.t3teamExt !== undefined ? { t3teamExt: partial.t3teamExt } : {}),
-  }) as unknown as OrchestrationMessage;
-
-/** A transcript with an already-admitted inter-agent delivery (follow-up tier). */
-const PRIOR_ACTOR_MESSAGES: ReadonlyArray<OrchestrationMessage> = [
-  message({
-    role: "user",
-    text: "prior delivery framing",
-    createdAt: "2026-07-19T07:30:00.000Z",
-    t3teamExt: {
-      visibleToUser: false,
-      actor: {
-        senderThreadId: "sender",
-        urgency: "normal",
-        hopCount: 1,
-        rootThreadId: "root",
-      },
-    },
-  }),
-];
-
-const makeThread = (
-  messages: ReadonlyArray<OrchestrationMessage> | null | undefined,
-): OrchestrationThread =>
+const makeThread = (): OrchestrationThread =>
   ({
     id: ThreadId.make("target"),
     session: { status: "idle" },
@@ -90,7 +49,7 @@ const makeThread = (
     modelSelection: null,
     runtimeMode: null,
     interactionMode: null,
-    messages,
+    messages: [],
     activities: [],
   }) as unknown as OrchestrationThread;
 
@@ -99,9 +58,6 @@ const makeEngine = (dispatches: TurnStart[], fail?: boolean): OrchestrationEngin
     streamDomainEvents: undefined,
     readEvents: () => undefined,
     dispatch: (command: OrchestrationCommand) =>
-      // Dispatch failures are TYPED OrchestrationDispatchErrors (a bare throw
-      // would be an unrecoverable defect, not the error startActorReaction's
-      // requeue handler recovers from).
       fail
         ? Effect.fail(
             new OrchestrationCommandIdConflictError({
@@ -119,163 +75,112 @@ const makeEngine = (dispatches: TurnStart[], fail?: boolean): OrchestrationEngin
 
 const runReaction = (input: {
   readonly dispatches: TurnStart[];
-  readonly thread: OrchestrationThread;
   readonly entries: ReadonlyArray<T3TeamActorMailboxEntry>;
+  readonly includeStandingInstruction?: boolean;
   readonly fail?: boolean;
 }) =>
   Effect.gen(function* () {
     const mailbox = yield* makeT3TeamActorMailbox;
-    yield* startActorReaction({
+    const dispatched = yield* startActorReaction({
       engine: makeEngine(input.dispatches, input.fail),
       mailbox,
       threadId: "target",
-      loadThread: () => Effect.succeed(input.thread),
+      loadThread: () => Effect.succeed(makeThread()),
       entries: input.entries,
+      includeStandingInstruction: input.includeStandingInstruction ?? false,
     });
-    return mailbox;
+    return { mailbox, dispatched };
   });
 
-describe("startActorReaction delivery tiers", () => {
-  it.effect("the thread's FIRST inter-agent delivery carries full bodies", () =>
+describe("startActorReaction digest dispatch", () => {
+  it.effect("claims one batch into ONE digest turn with inlined short bodies", () =>
     Effect.gen(function* () {
       const dispatches: TurnStart[] = [];
-      yield* runReaction({
-        dispatches,
-        thread: makeThread([]),
-        entries: [entry("m1"), entry("m2")],
-      });
+      const shortA = { ...entry("m1"), text: "short first body" };
+      const shortB = { ...entry("m2"), text: "short second body" };
+      const { dispatched } = yield* runReaction({ dispatches, entries: [shortA, shortB] });
+      expect(dispatched).toBe(true);
       expect(dispatches).toHaveLength(1);
-      const turn = dispatches[0] as TurnStart;
-      // No user-facing exchange → no suffixes: the full-body batch base verbatim.
-      expect(turn.message.text).toBe(buildActorReactionBatchInput([entry("m1"), entry("m2")]));
-      // The kickoff delivery inlines the bodies (over-long ones arrive as the
-      // summary + message-id marker — never the header-only pointer).
-      expect(turn.message.text).toContain("…[summarized — ");
-      expect(turn.message.text).toContain("message id m1");
-      expect(turn.message.text).not.toContain("body NOT loaded");
+      const text = (dispatches[0] as TurnStart).message.text;
+      // Idle thread: no human-steering suffix; no briefing: no standing block.
+      expect(text).toBe(buildActorReactionTurnInput([shortA, shortB], false));
+      expect(text).toContain("[Inter-agent digest: 2 message(s)]");
+      expect(text).toContain("short first body");
+      expect(text).toContain("short second body");
+      expect(text).not.toContain(ACTOR_STANDING_INSTRUCTION);
     }),
   );
 
-  it.effect("EVERY LATER delivery is header-only with a t3team_read_message pointer", () =>
+  it.effect("long bodies arrive as subject + pointer, never raw", () =>
     Effect.gen(function* () {
       const dispatches: TurnStart[] = [];
-      yield* runReaction({
-        dispatches,
-        thread: makeThread(PRIOR_ACTOR_MESSAGES),
-        entries: [entry("m1"), entry("m2")],
-      });
-      expect(dispatches).toHaveLength(1);
+      yield* runReaction({ dispatches, entries: [entry("m1"), entry("m2")] });
       const text = (dispatches[0] as TurnStart).message.text;
-      expect(text).toBe(buildActorReactionHeaderInput([entry("m1"), entry("m2")]));
-      // Headers, ids, and the fetch pointer — but NOT the bodies.
       expect(text).toContain("update for m1");
       expect(text).toContain("update for m2");
       expect(text).toContain("message id m1");
       expect(text).toContain("message id m2");
+      expect(text).toContain("body NOT loaded");
       expect(text).toContain("t3team_read_message");
-      // Headers yes, bodies no.
       expect(text).not.toContain("z".repeat(100));
-      // A single follow-up entry uses the exact single-entry base format.
-      const single: TurnStart[] = [];
+    }),
+  );
+
+  it.effect("appends the standing instruction ONLY when includeStandingInstruction", () =>
+    Effect.gen(function* () {
+      const dispatches: TurnStart[] = [];
       yield* runReaction({
-        dispatches: single,
-        thread: makeThread(PRIOR_ACTOR_MESSAGES),
+        dispatches,
         entries: [entry("m1")],
+        includeStandingInstruction: true,
       });
-      expect((single[0] as TurnStart).message.text).toBe(
-        buildActorReactionHeaderInput([entry("m1")]),
-      );
-    }),
-  );
-
-  it.effect("a user interjection while queueing compresses the batch to pointers", () =>
-    Effect.gen(function* () {
-      // Prior actor delivery + a real user message AFTER the batch queued:
-      // open context AND user-interjected → compressed tier, with the
-      // user-return instruction suffix (rehydrate prefix-matching kept).
-      const messages = [
-        ...PRIOR_ACTOR_MESSAGES,
-        message({ role: "user", createdAt: "2026-07-19T08:05:00.000Z" }),
-      ];
-      const dispatches: TurnStart[] = [];
-      yield* runReaction({
-        dispatches,
-        thread: makeThread(messages),
-        entries: [entry("m1"), entry("m2")],
-      });
-      expect(dispatches).toHaveLength(1);
       const text = (dispatches[0] as TurnStart).message.text;
-      const base = buildActorReactionCompressedInput([entry("m1"), entry("m2")]);
-      expect(
-        text ===
-          appendActorReactionUserReturnInstruction(base, detectUserFacingOpenState(messages)),
-      ).toBe(true);
-      expect(text.startsWith(base)).toBe(true);
-      expect(text).toContain("the user's message comes FIRST");
-      expect(text).toContain("Do not act on these by default");
-      expect(text).not.toContain("z".repeat(100));
+      expect(text).toBe(buildActorReactionTurnInput([entry("m1")], true));
+      expect(text.startsWith(buildActorReactionDigestInput([entry("m1")]))).toBe(true);
+      expect(text).toContain(ACTOR_STANDING_INSTRUCTION);
+      expect(text).toContain("verdict line plus an evidence path");
     }),
   );
 
-  it.effect(
-    "a follow-up batch without an interjection still gets the user-return instruction when the user has an open question",
-    () =>
-      Effect.gen(function* () {
-        // Prior actor delivery + a real user message BEFORE the batch queued:
-        // open context, but NOT interjected → header-only base + user-return
-        // suffix (GHE #156 behavior preserved on the new tier).
-        const messages = [
-          message({ role: "user", createdAt: "2026-07-19T07:45:00.000Z" }),
-          ...PRIOR_ACTOR_MESSAGES,
-        ];
-        const dispatches: TurnStart[] = [];
-        yield* runReaction({
-          dispatches,
-          thread: makeThread(messages),
-          entries: [entry("m1")],
-        });
-        expect(dispatches).toHaveLength(1);
-        const text = (dispatches[0] as TurnStart).message.text;
-        expect(
-          text ===
-            appendActorReactionUserReturnInstruction(
-              buildActorReactionHeaderInput([entry("m1")]),
-              detectUserFacingOpenState(messages),
-            ),
-        ).toBe(true);
-        expect(text.startsWith(buildActorReactionHeaderInput([entry("m1")]))).toBe(true);
-        expect(text).not.toContain("z".repeat(100));
-      }),
-  );
-
-  it.effect("keeps single-first-delivery semantics byte-identical to the historical framing", () =>
+  it.effect("ALWAYS sets actor.messageIds — including single-entry batches (B4 matching key)", () =>
     Effect.gen(function* () {
       const dispatches: TurnStart[] = [];
-      yield* runReaction({ dispatches, thread: makeThread([]), entries: [entry("m1")] });
-      expect((dispatches[0] as TurnStart).message.text).toBe(buildActorReactionInput(entry("m1")));
-      expect(buildActorReactionBatchInput([entry("m1")])).toBe(
-        buildActorReactionInput(entry("m1")),
-      );
+      yield* runReaction({ dispatches, entries: [entry("m1")] });
+      const actor = (dispatches[0] as TurnStart).message.t3teamExt?.actor;
+      expect(actor).toBeDefined();
+      expect(actor?.messageIds).toEqual(["m1"]);
+      const multi: TurnStart[] = [];
+      yield* runReaction({ dispatches: multi, entries: [entry("m1"), entry("m2")] });
+      expect((multi[0] as TurnStart).message.t3teamExt?.actor?.messageIds).toEqual(["m1", "m2"]);
     }),
   );
 
-  it.effect("requeues the claimed batch on dispatch failure and releases the reacting flag", () =>
+  it.effect("takes the batch's strongest urgency and hop count into the actor ext", () =>
     Effect.gen(function* () {
       const dispatches: TurnStart[] = [];
-      const mailbox = yield* runReaction({
+      const urgent: T3TeamActorMailboxEntry = { ...entry("m2"), urgency: "urgent", hopCount: 5 };
+      yield* runReaction({ dispatches, entries: [entry("m1"), urgent] });
+      const actor = (dispatches[0] as TurnStart).message.t3teamExt?.actor;
+      expect(actor?.urgency).toBe("urgent");
+      expect(actor?.hopCount).toBe(5);
+      expect(actor?.senderThreadId).toBe("sender");
+    }),
+  );
+
+  it.effect("requeues the claimed batch on dispatch failure, returns false, releases the flag", () =>
+    Effect.gen(function* () {
+      const dispatches: TurnStart[] = [];
+      const { mailbox, dispatched } = yield* runReaction({
         dispatches,
-        thread: makeThread([]),
         entries: [entry("m1"), entry("m2")],
         fail: true,
       });
+      expect(dispatched).toBe(false);
       expect(dispatches).toHaveLength(0);
-      // The claim was released and the batch is requeued intact (attempts +1).
       expect(yield* mailbox.isReacting("target")).toBe(false);
       const requeued = yield* mailbox.takeNextForDispatch("target");
-      expect(requeued).toHaveLength(2);
       expect(requeued.map((e) => e.messageId)).toEqual(["m1", "m2"]);
       expect(requeued.every((e) => e.dispatchAttempts === 1)).toBe(true);
-      // Clean up the flag this assertion claim flipped on.
       yield* mailbox.clearReacting("target");
     }),
   );

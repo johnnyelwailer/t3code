@@ -78,6 +78,8 @@ function makeDeps(overrides: Partial<T3TeamChildrenToolDeps> = {}): TestDeps {
       }),
     interruptTurn: (threadId) => Effect.sync(() => interrupted.push(threadId)),
     settleThread: (threadId) => Effect.sync(() => settled.push(threadId)),
+    drainOwnMailbox: () =>
+      Effect.succeed({ state: "dispatched" as const, delivered: 1, subjects: ["Subject A"] }),
     nowIso: () => "2026-01-01T00:20:00.000Z",
     newId: () => "wait-1",
     ...overrides,
@@ -647,5 +649,69 @@ describe("children tool — sweep (GHE #304)", () => {
     const skipped = out.structured.skipped as Array<Record<string, unknown>>;
     expect(skipped[0]!.threadId).toBe(CHILD);
     expect(skipped[0]!.reason).toContain("state is 'running'");
+  });
+});
+
+describe("children tool — drain (inter-agent mailbox)", () => {
+  it("drains the caller's own mailbox with no arguments", async () => {
+    const out = await run(makeDeps(), { op: "drain" });
+    expect(out.isError).toBeFalsy();
+    expect(out.structured.ok).toBe(true);
+    expect(out.structured.threadId).toBe(CALLER);
+    expect(out.structured.state).toBe("dispatched");
+    expect(out.structured.delivered).toBe(1);
+    expect(out.structured.subjects).toEqual(["Subject A"]);
+  });
+
+  it("reports queued and held states through verbatim", async () => {
+    const queued = await run(
+      makeDeps({
+        drainOwnMailbox: () =>
+          Effect.succeed({
+            state: "queued" as const,
+            queued: 2,
+            subjects: ["a", "b"],
+            note: "mid-turn",
+          }),
+      }),
+      { op: "drain" },
+    );
+    expect(queued.isError).toBeFalsy();
+    expect(queued.structured.state).toBe("queued");
+    expect(queued.structured.queued).toBe(2);
+    expect(queued.structured.note).toBe("mid-turn");
+
+    const held = await run(
+      makeDeps({
+        drainOwnMailbox: () =>
+          Effect.succeed({
+            state: "held" as const,
+            held: 1,
+            subjects: ["a"],
+            note: "suppressed",
+          }),
+      }),
+      { op: "drain" },
+    );
+    expect(held.structured.state).toBe("held");
+    expect(held.structured.note).toBe("suppressed");
+  });
+
+  it("rejects arguments — drain takes none", async () => {
+    const out = await run(makeDeps(), { op: "drain", thread_id: CHILD });
+    expect(out.isError).toBe(true);
+    expect(out.text).toContain("takes no arguments");
+  });
+
+  it("surfaces a missing mailbox as an error, not a silent no-op", async () => {
+    const out = await run(
+      makeDeps({
+        drainOwnMailbox: () => Effect.fail("inter-agent mailbox is not available in this host"),
+      }),
+      { op: "drain" },
+    );
+    expect(out.isError).toBe(true);
+    expect(out.text).toContain("Drain failed");
+    expect(out.text).toContain("not available");
   });
 });

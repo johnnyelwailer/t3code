@@ -164,6 +164,12 @@ import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
 import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 import { T3TeamThreadToolContextStoreLive } from "./t3team-threadToolContextStore.ts";
+import {
+  T3TeamThreadEngagement,
+  T3TeamThreadEngagementLive,
+  type T3TeamThreadEngagementShape,
+} from "./t3team-threadEngagement.ts";
+import { requiredScopeForRpcMethod } from "./auth/RpcAuthorization.ts";
 import { NoopT3TeamToolBroker, T3TeamToolBroker } from "./t3team-toolBroker.ts";
 import { T3TeamWidgetRegistryLive } from "./t3team-widgetRegistry.ts";
 import {
@@ -548,6 +554,7 @@ const buildAppUnderTest = (options?: {
     terminalManager?: Partial<TerminalManager.TerminalManager["Service"]>;
     toolAuthService?: Partial<ToolAuthService.ToolAuthService["Service"]>;
     orchestrationEngine?: Partial<OrchestrationEngine.OrchestrationEngineService["Service"]>;
+    threadEngagement?: Partial<T3TeamThreadEngagementShape>;
     threadDeletionReactor?: Partial<ThreadDeletionReactor["Service"]>;
     analyticsService?: Partial<AnalyticsService.AnalyticsService["Service"]>;
     projectionSnapshotQuery?: Partial<ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]>;
@@ -606,8 +613,16 @@ const buildAppUnderTest = (options?: {
       ...options?.config,
     };
     const layerConfig = ServerConfig.layer(config);
+    const threadEngagementLayer = options?.layers?.threadEngagement !== undefined
+      ? Layer.succeed(T3TeamThreadEngagement, {
+          noteTyping: () => Effect.void,
+          isEngaged: () => Effect.succeed(false),
+          ...options.layers.threadEngagement,
+        })
+      : T3TeamThreadEngagementLive;
     const t3teamRouterSupportLayer = Layer.mergeAll(
       SqlitePersistenceMemory,
+      threadEngagementLayer,
       // localProviderSessionsRouteLayer's sync handler reads the session directory.
       ProviderSessionDirectoryLive.pipe(
         Layer.provide(ProviderSessionRuntime.layer.pipe(Layer.provide(SqlitePersistenceMemory))),
@@ -8498,6 +8513,49 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(result.failure.reason, "not-found");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
+
+  // Inter-agent messaging overhaul: the composing heartbeat must travel the
+  // REAL RPC surface — declared authorization scope included — not just the
+  // engagement service in isolation. Without a scope entry, every
+  // noteComposing call throws before it reaches the handler.
+  it.effect("routes the noteComposing RPC through authorization into the engagement service", () =>
+    Effect.gen(function* () {
+      const typed: string[] = [];
+      yield* buildAppUnderTest({
+        layers: {
+          threadEngagement: {
+            noteTyping: (threadId) =>
+              Effect.sync(() => {
+                typed.push(threadId);
+              }),
+            isEngaged: () => Effect.succeed(false),
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const result = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.noteComposing]({ threadId: defaultThreadId }),
+        ),
+      ).pipe(Effect.result);
+
+      assert.equal(result._tag, "Success");
+      // The heartbeat reached the (per-thread) engagement service for the
+      // thread the caller typed in — not a different one.
+      assert.deepEqual(typed, [defaultThreadId]);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  // Completeness gate for the whole protocol: an RPC added to the WS group
+  // without a declared authorization scope throws on EVERY call — this
+  // assertion is what stops that class of gap from shipping.
+  it("declares an authorization scope for every RPC in the WS protocol group", () => {
+    for (const tag of WsRpcGroup.requests.keys()) {
+      // Throws "no declared authorization scope" for an undeclared method.
+      requiredScopeForRpcMethod(tag);
+    }
+  });
 
   it.effect("tags an unknown thread as not-found when resuming with afterSequence (no hang)", () =>
     Effect.gen(function* () {

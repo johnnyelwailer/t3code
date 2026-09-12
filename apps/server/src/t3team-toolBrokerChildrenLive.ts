@@ -9,13 +9,16 @@
  *
  * @module t3team-toolBrokerChildrenLive
  */
-import { CommandId, type ProjectId, type ThreadId as ThreadIdType } from "@t3tools/contracts";
+import { CommandId, ThreadId as ThreadIdBrand, type ProjectId, type ThreadId as ThreadIdType } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import type { ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import type { T3TeamActorMailboxShape } from "./t3team-actorMailbox.ts";
+import { startActorReaction } from "./t3team-actorMessageReaction.ts";
+import { isThreadBusy, resolveActorMessageBatchMax } from "./t3team-actorMessageReactorLimits.ts";
 import { type T3TeamToolCallResult } from "./t3team-toolBroker.ts";
 import { errorResult } from "./t3team-toolBrokerHelpers.ts";
 import {
@@ -31,8 +34,11 @@ const normalizeError = (error: unknown): string =>
 export function makeManageChildrenHandler(input: {
   readonly query: ProjectionSnapshotQueryShape;
   readonly orchestration: OrchestrationEngineShape;
+  /** Shared inter-agent mailbox for the `drain` op (absent in hosts without the reactor). */
+  readonly mailbox?: T3TeamActorMailboxShape;
 }): (toolArgs: unknown, callerThreadId: ThreadIdType) => Effect.Effect<T3TeamToolCallResult> {
-  const { query, orchestration } = input;
+  const { query, orchestration, mailbox } = input;
+  const batchMax = resolveActorMessageBatchMax();
   const nowIso = () => DateTime.formatIso(DateTime.nowUnsafe());
 
   const loadDetail = (threadId: ThreadIdType) =>
@@ -97,6 +103,90 @@ export function makeManageChildrenHandler(input: {
       })
       .pipe(Effect.asVoid, Effect.mapError(normalizeError));
 
+  // `drain`: claim the caller's OWN inter-agent mailbox now, reusing the SAME
+  // primitives the reactor uses (shared mailbox, startActorReaction) — one
+  // drain path, no second dispatcher. The caller detail is already loaded by
+  // the returned closure; the busy check re-reads it fresh at call time.
+  const drainOwnMailbox = (threadId: ThreadIdType): T3TeamChildrenToolDeps["drainOwnMailbox"] => () =>
+    Effect.gen(function* () {
+      if (mailbox === undefined) {
+        return yield* Effect.fail("inter-agent mailbox is not available in this host");
+      }
+      const pending = yield* mailbox.peekPending(threadId);
+      if (pending.length === 0) {
+        // Nothing owed: report dispatched-zero so the caller learns the inbox
+        // is clean rather than guessing.
+        return { state: "dispatched" as const, delivered: 0, subjects: [] as string[] };
+      }
+      const subjects = pending.map((entry) => entry.summary?.trim() || entry.text.slice(0, 80));
+      if (yield* mailbox.isSuppressed(threadId)) {
+        return {
+          state: "held" as const,
+          held: pending.length,
+          subjects,
+          note:
+            "auto-dispatch is suppressed for this thread (its turn was stopped by the user); " +
+            "the messages stay visible in the timeline and drain when the user re-engages",
+        };
+      }
+      const thread = yield* query
+        .getThreadShellById(threadId)
+        .pipe(Effect.map(Option.getOrUndefined));
+      if (!thread) {
+        return yield* Effect.fail("current thread was not found");
+      }
+      if (isThreadBusy(thread)) {
+        return {
+          state: "queued" as const,
+          queued: pending.length,
+          subjects,
+          note:
+            "this thread is mid-turn; the digest arrives when the turn ends (boundary drain)",
+        };
+      }
+      const batch = yield* mailbox.takeNextForDispatch(threadId, batchMax);
+      if (batch.length === 0) {
+        // A racing reactor drain claimed the batch first — report it.
+        return {
+          state: "queued" as const,
+          queued: pending.length,
+          subjects,
+          note: "a concurrent drain already claimed this batch; it is being delivered",
+        };
+      }
+      // Once-per-session standing instruction, mirroring the reactor's gate.
+      const includeStanding = !(yield* mailbox.isBriefed(threadId));
+      const dispatched = yield* startActorReaction({
+        engine: orchestration,
+        mailbox,
+        threadId,
+        loadThread: (id) =>
+          query.getThreadDetailById(ThreadIdBrand.make(id)).pipe(
+            Effect.orElseSucceed(() => Option.none()),
+            Effect.map(Option.getOrUndefined),
+          ),
+        entries: batch,
+        includeStandingInstruction: includeStanding,
+      });
+      if (!dispatched) {
+        return {
+          state: "queued" as const,
+          queued: batch.length,
+          subjects: batch.map((entry) => entry.summary?.trim() || entry.text.slice(0, 80)),
+          note:
+            "the digest turn failed to start; the batch was requeued and the boundary drain will retry",
+        };
+      }
+      if (includeStanding) {
+        yield* mailbox.markBriefed(threadId);
+      }
+      return {
+        state: "dispatched" as const,
+        delivered: batch.length,
+        subjects: batch.map((entry) => entry.summary?.trim() || entry.text.slice(0, 80)),
+      };
+    }).pipe(Effect.mapError(normalizeError));
+
   return (toolArgs, callerThreadId) =>
     loadDetail(callerThreadId).pipe(
       Effect.flatMap((caller) => {
@@ -114,6 +204,7 @@ export function makeManageChildrenHandler(input: {
           appendActivity,
           interruptTurn,
           settleThread,
+          drainOwnMailbox: drainOwnMailbox(callerThreadId),
           nowIso,
           newId: () => t3teamRandomUUID(),
         };

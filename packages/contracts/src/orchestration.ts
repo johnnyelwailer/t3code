@@ -34,6 +34,7 @@ export const ORCHESTRATION_WS_METHODS = {
   getArchivedShellSnapshot: "orchestration.getArchivedShellSnapshot",
   subscribeShell: "orchestration.subscribeShell",
   subscribeThread: "orchestration.subscribeThread",
+  noteComposing: "orchestration.noteComposing",
 } as const;
 
 export const ProviderApprovalPolicy = Schema.Literals([
@@ -888,6 +889,25 @@ export const OrchestrationSubscribeThreadInput = Schema.Struct({
   turnLimit: Schema.optionalKey(PositiveInt),
 });
 export type OrchestrationSubscribeThreadInput = typeof OrchestrationSubscribeThreadInput.Type;
+
+/**
+ * Per-thread composing heartbeat: the user's composer reports that they are
+ * ACTIVELY TYPING in THIS thread's composer. The server treats a fresh
+ * heartbeat (inside the typing-lapse window) as user engagement for
+ * inter-agent drain back-off — and ONLY typing counts: viewing a thread is
+ * not an engagement signal, and one thread's typing never holds another
+ * thread's digest. The client sends it debounced and treats it as
+ * fire-and-forget: a failure must never block typing or message sending.
+ */
+export const OrchestrationNoteComposingInput = Schema.Struct({
+  threadId: ThreadId,
+});
+export type OrchestrationNoteComposingInput = typeof OrchestrationNoteComposingInput.Type;
+
+export const OrchestrationNoteComposingResult = Schema.Struct({
+  ok: Schema.Literal(true),
+});
+export type OrchestrationNoteComposingResult = typeof OrchestrationNoteComposingResult.Type;
 
 /**
  * Bounds a thread detail read to a window of recent turns. `turnLimit` counts
@@ -2230,6 +2250,10 @@ export const OrchestrationRpcSchemas = {
   subscribeThread: {
     input: OrchestrationSubscribeThreadInput,
     output: OrchestrationThreadStreamItem,
+  },
+  noteComposing: {
+    input: OrchestrationNoteComposingInput,
+    output: OrchestrationNoteComposingResult,
   },
   subscribeShell: {
     input: OrchestrationSubscribeShellInput,

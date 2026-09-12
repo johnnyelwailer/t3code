@@ -192,6 +192,8 @@ import { T3TeamWidgetRegistryLive } from "./t3team-widgetRegistry.ts";
 import { T3TeamContextRefreshServiceLive } from "./t3team-contextRefreshService.ts";
 import { T3TeamWorkflowEngineReactorLive } from "./t3team-workflowEngineReactor.ts";
 import { T3TeamActorMessageReactorLive } from "./t3team-actorMessageReactor.ts";
+import { T3TeamActorMailboxLive } from "./t3team-actorMailbox.ts";
+import { T3TeamThreadEngagementLive } from "./t3team-threadEngagement.ts";
 import { T3TeamThreadStopCascadeReactorLive } from "./t3team-threadStopCascadeReactor.ts";
 import { T3TeamChildStatusReactorLive } from "./t3team-childStatusReactor.ts";
 import { T3TeamActivityLabelReactorLive } from "./t3team-activityLabelReactor.ts";
@@ -986,6 +988,12 @@ export const makeServerLayer = Layer.unwrap(
       Layer.provide(PullRequestServiceLive),
       Layer.provide(PullRequestProviderRegistry.layer),
       Layer.provideMerge(runtimeServicesLive),
+      // The inter-agent mailbox + engagement signals are process-wide, and both the
+      // tool broker (the `drain` op) and the actor reactor must resolve to the SAME
+      // in-memory instances — so they are provided OUTSIDE runtimeServicesLive, which
+      // materializes them once for the whole application layer.
+      Layer.provideMerge(T3TeamActorMailboxLive),
+      Layer.provideMerge(T3TeamThreadEngagementLive),
       Layer.provide(activationLayer),
       Layer.provideMerge(serverRelayBrokerTracingLayer),
       Layer.provideMerge(HttpServerLive),
