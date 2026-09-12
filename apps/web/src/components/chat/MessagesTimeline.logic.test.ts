@@ -1154,9 +1154,10 @@ describe("deriveMessagesTimelineRows", () => {
     expect(rows.some((row) => row.kind === "turn-fold")).toBe(false);
     // GHE #236: the working row is pinned to the BOTTOM — after everything the
     // active turn has already streamed — never at the turn start mid-conversation.
+    // Active tool work uses the shared live-activity row.
     expect(rows.map((row) => row.id)).toEqual([
       "assistant-thought-entry",
-      "work-live:work-entry-1",
+      "live-activity-row",
       "working-indicator-row",
     ]);
   });
