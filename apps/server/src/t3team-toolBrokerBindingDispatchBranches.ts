@@ -9,7 +9,6 @@ import type { ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import type { T3TeamToolCallResult } from "./t3team-toolBroker.ts";
-import { isT3TeamTaskJournalTool } from "./t3team-toolBrokerBindingTaskJournal.ts";
 import {
   errorResult,
   foldResult,
@@ -97,9 +96,6 @@ export function tryDispatchThreadScopedToolCall(input: {
   readonly showWidget?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   readonly searchSourceThread?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   readonly searchThread?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
-  /** Durable per-thread task journal (`t3team.task.write` / `t3team.task.list`);
-   * one callback for both ids because they share a store and a thread binding. */
-  readonly taskJournal?: (tool: string, toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   readonly readMessageThread?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   readonly manageChildren?: (
     toolArgs: unknown,
@@ -142,12 +138,6 @@ export function tryDispatchThreadScopedToolCall(input: {
       return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${scopeLabel}.`));
     }
     return input.searchThread(toolArgs);
-  }
-  if (isT3TeamTaskJournalTool(tool)) {
-    if (!input.taskJournal) {
-      return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${scopeLabel}.`));
-    }
-    return input.taskJournal(tool, toolArgs);
   }
   if (tool === "t3team.thread.search_source") {
     if (!input.searchSourceThread) {

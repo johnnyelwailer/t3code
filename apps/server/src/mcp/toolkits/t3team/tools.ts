@@ -34,8 +34,6 @@ export const T3TEAM_MCP_CANONICAL_TOOL_MAP = {
   t3team_models: "t3team.runtime.models",
   t3team_provider_usage: "t3team.runtime.provider_usage",
   t3team_rename_thread: "t3team.thread.rename",
-  t3team_task_write: "t3team.task.write",
-  t3team_task_list: "t3team.task.list",
   t3team_search_thread: "t3team.thread.search",
   t3team_search_source: "t3team.thread.search_source",
   t3team_read_message: "t3team.thread.read_message",
@@ -248,53 +246,6 @@ export const T3TeamChildrenTool = Tool.make("t3team_children", {
     reason: Schema.optional(Schema.String),
     op_name: Schema.optional(Schema.String),
   }),
-  success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
-  dependencies,
-});
-
-// The durable per-thread task journal. These descriptions ARE the UX: the
-// primary caller is a weak local model, and every behavioural rule it must
-// follow (whole-list replace, one in_progress, failures go in `note`) has to be
-// stated here, because nothing else will tell it.
-export const T3TeamTaskWriteTool = Tool.make("t3team_task_write", {
-  description:
-    "Record this thread's plan as a task list that SURVIVES CONTEXT COMPACTION. It is stored " +
-    "outside the context window, so it is the one reliable place to keep what you are doing. " +
-    "This REPLACES the whole list every time: always send EVERY task you still care about, not " +
-    "just the one that changed — anything you omit is deleted. Keep the list current: write it " +
-    "at the start of the work, and rewrite it whenever a task's status changes. Mark exactly " +
-    "ONE task 'in_progress' at a time, so the list always says what you are doing right now. " +
-    "When something fails, do NOT drop the task — keep it and put the reason in its 'note'. " +
-    "That reason is exactly the detail compaction destroys first. Order is the array order.",
-  parameters: Schema.Struct({
-    tasks: Schema.Array(
-      Schema.Struct({
-        subject: Schema.String,
-        status: Schema.optional(
-          Schema.Literals(["pending", "in_progress", "completed", "cancelled"]),
-        ),
-        active_form: Schema.optional(Schema.String),
-        note: Schema.optional(Schema.String),
-      }),
-    ),
-  }),
-  success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
-  dependencies,
-});
-
-export const T3TeamTaskListTool = Tool.make("t3team_task_list", {
-  description:
-    "Read back this thread's durable task list — your own plan, stored outside the context " +
-    "window. Call this after a compaction, or any time you are unsure what you were doing or " +
-    "what is left, INSTEAD of re-deriving it from the transcript or by polling your children. " +
-    "Takes no arguments. Returns each task with its 1-based position, subject, status, and note.",
-  // `parameters` is OMITTED, not `Schema.Struct({})`. An empty TS object type means "any
-  // non-null", which effect renders as `{anyOf:[{object},{array}]}` — MCP clients reject a
-  // non-object tool inputSchema on `tools/list` and drop the WHOLE toolkit, not just this tool.
-  // Omitting it picks up `Tool.EmptyParams` → `{type:"object",additionalProperties:false}`.
-  // Same trap as T3TeamRecipeListTool below; guarded by t3team-mcpToolInputSchema.test.ts.
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
   dependencies,
@@ -684,8 +635,6 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamModelsTool,
   T3TeamProviderUsageTool,
   T3TeamRenameThreadTool,
-  T3TeamTaskWriteTool,
-  T3TeamTaskListTool,
   T3TeamSearchThreadTool,
   T3TeamSearchSourceTool,
   T3TeamReadMessageTool,

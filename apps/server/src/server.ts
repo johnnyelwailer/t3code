@@ -177,7 +177,6 @@ import {
 } from "./t3team-thread-provider-hold-route.ts";
 import { T3TeamProviderUsageWatcherLive } from "./t3team-providerUsageWatcher.ts";
 import { ProviderUsageHoldRepositoryLive } from "./persistence/Layers/t3team-ProviderUsageHolds.ts";
-import { ThreadTaskRecordRepositoryLive } from "./persistence/Layers/t3team-ThreadTaskRecords.ts";
 import {
   t3teamGitHubAssetRouteLayer,
   t3teamGitHubInboxRouteLayer,
@@ -572,11 +571,6 @@ const RuntimeCoreDependenciesLive = mountT3TeamBrokerBeforeRuntimeServices(
     Layer.provide(OrchestrationLayerLive),
     Layer.provide(WorkflowEngineDurabilityLive),
     Layer.provide(ProviderRegistryLive),
-    // The durable task journal. Provided here rather than globally because the
-    // broker is its only consumer: it reads the repository through
-    // `serviceOption` at construction time, so it must be in scope at THIS
-    // provide, not merged in later.
-    Layer.provide(ThreadTaskRecordRepositoryLive.pipe(Layer.provide(PersistenceLayerLive))),
   ),
 )
   .pipe(

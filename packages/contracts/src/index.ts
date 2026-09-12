@@ -44,5 +44,4 @@ export * from "./t3team-toolauth.ts";
 export * from "./t3team-localProviderKinds.ts";
 export * from "./usage.ts";
 export * from "./t3team-providerUsage.ts";
-export * from "./t3team-taskRecord.ts";
 export * from "./rpc.ts";
