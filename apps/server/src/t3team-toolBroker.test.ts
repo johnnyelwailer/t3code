@@ -155,6 +155,9 @@ describe("T3TeamToolBrokerLive", () => {
 
     expect(binding?.listServers()[0]?.tools).toEqual({
       "t3team.runtime.models": expect.objectContaining({ name: "t3team.runtime.models" }),
+      "t3team.runtime.provider_usage": expect.objectContaining({
+        name: "t3team.runtime.provider_usage",
+      }),
       "t3team.thread.rename": expect.objectContaining({ name: "t3team.thread.rename" }),
       "t3team.thread.start_child": expect.objectContaining({
         name: "t3team.thread.start_child",
@@ -170,6 +173,22 @@ describe("T3TeamToolBrokerLive", () => {
         name: "t3team.thread.read_message",
       }),
       "t3team.orchestration.run": expect.objectContaining({ name: "t3team.orchestration.run" }),
+      // Orchestration lifecycle controls: status is read-only; resume/pause/stop
+      // are scoped to the CALLING thread's own runs (run row's launchThreadId),
+      // so they are safe to bind generically alongside run (see
+      // t3team-toolBrokerWorkflowControlTool.ts).
+      "t3team.orchestration.status": expect.objectContaining({
+        name: "t3team.orchestration.status",
+      }),
+      "t3team.orchestration.resume": expect.objectContaining({
+        name: "t3team.orchestration.resume",
+      }),
+      "t3team.orchestration.pause": expect.objectContaining({
+        name: "t3team.orchestration.pause",
+      }),
+      "t3team.orchestration.stop": expect.objectContaining({
+        name: "t3team.orchestration.stop",
+      }),
       // Ad-hoc widgets are a host tool too — bound for every thread, with or
       // without a stored view context (see genericThreadToolIds).
       "t3team.widget.show": expect.objectContaining({ name: "t3team.widget.show" }),
