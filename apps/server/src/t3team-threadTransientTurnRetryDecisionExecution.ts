@@ -20,6 +20,9 @@ import {
 } from "./t3team-threadTransientTurnRetryDecision.ts";
 import type { OrchestrationDispatchError } from "./orchestration/Errors.ts";
 
+/** Session statuses a later terminal event may already have landed on. */
+const TERMINAL_SESSION_STATUSES: ReadonlySet<string> = new Set(["interrupted", "stopped", "error"]);
+
 export interface DecisionExecutionDeps {
   readonly loadThread: (threadId: string) => Effect.Effect<Option.Option<OrchestrationThread>>;
   readonly dispatchSessionSet: (
@@ -108,6 +111,17 @@ export function executeTransientRetryDecision(
     yield* Effect.sleep(Duration.millis(IN_FLIGHT_SETTLE_MS));
     const settled = Option.getOrUndefined(yield* loadThread(threadId));
     if (settled === undefined) return;
+    const settledStatus = settled.session?.status;
+    if (settledStatus !== undefined && TERMINAL_SESSION_STATUSES.has(settledStatus)) {
+      // A later terminal event already settled the session during the settle:
+      // re-issuing "retrying" would overwrite the terminal status and re-spook
+      // the child-wait reactor. Back off entirely (no session.set, no resume).
+      yield* Effect.logInfo("transient-retry: back off, session already terminal", {
+        threadId,
+        status: settledStatus,
+      });
+      return;
+    }
     const session = sessionFrom(settled, d.inFlightText);
     if (session === null) return;
     yield* dispatchSessionSet(threadId, session).pipe(

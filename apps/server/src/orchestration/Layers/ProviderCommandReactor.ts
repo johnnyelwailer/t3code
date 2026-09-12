@@ -1913,21 +1913,28 @@ const make = Effect.gen(function* () {
           );
         },
         onSuccess: () =>
-          setThreadSession({
-            threadId: thread.id,
-            session: {
+          Effect.gen(function* () {
+            // Terminal re-emission guard: when the session was already stopped,
+            // stopSession above was a no-op and re-issuing a "stopped"
+            // session-set would fire a duplicate terminal event (spooking the
+            // child-wait reactor). Only announce the stop we performed (GHE #157).
+            if (thread.session?.status === "stopped") return;
+            yield* setThreadSession({
               threadId: thread.id,
-              status: "stopped",
-              providerName: thread.session?.providerName ?? null,
-              ...(thread.session?.providerInstanceId !== undefined
-                ? { providerInstanceId: thread.session.providerInstanceId }
-                : {}),
-              runtimeMode: thread.session?.runtimeMode ?? DEFAULT_RUNTIME_MODE,
-              activeTurnId: null,
-              lastError: thread.session?.lastError ?? null,
-              updatedAt: now,
-            },
-            createdAt: now,
+              session: {
+                threadId: thread.id,
+                status: "stopped",
+                providerName: thread.session?.providerName ?? null,
+                ...(thread.session?.providerInstanceId !== undefined
+                  ? { providerInstanceId: thread.session.providerInstanceId }
+                  : {}),
+                runtimeMode: thread.session?.runtimeMode ?? DEFAULT_RUNTIME_MODE,
+                activeTurnId: null,
+                lastError: thread.session?.lastError ?? null,
+                updatedAt: now,
+              },
+              createdAt: now,
+            });
           }),
       }),
       Effect.ensuring(clearStopping),

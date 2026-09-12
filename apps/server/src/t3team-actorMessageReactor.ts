@@ -245,11 +245,13 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
       noteUrgentDelivery,
     });
 
-    yield* Effect.forkScoped(Stream.runForEach(engine.streamDomainEvents, handleSafely));
+    // Rehydrate the held-message index BEFORE subscribing the live stream, so a
+    // restart-hold event landing in the window sees the fully-populated index.
     heldAtRehydrate = yield* rehydrateActorMailbox({
       engine,
       mailbox,
       hopCap: T3TEAM_ACTOR_MESSAGE_HOP_CAP,
     });
+    yield* Effect.forkScoped(Stream.runForEach(engine.streamDomainEvents, handleSafely));
   }),
 );
