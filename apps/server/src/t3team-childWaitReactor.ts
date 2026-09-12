@@ -26,17 +26,16 @@ import { deriveThreadRunState, type ThreadRunState } from "@t3tools/shared/t3tea
 import {
   CHILD_WAIT_REGISTERED_KIND,
   CHILD_WAIT_RESOLVED_KIND,
-  childWaitOutcomeMatches,
   collectPendingChildWaits,
   sessionStatusToWaitOutcome,
   type ChildWaitOn,
-  type ChildWaitOutcome,
   type ChildWaitRecord,
 } from "./t3team-childWait.ts";
 import { makeAbnormalStopGuards } from "./t3team-childAbnormalStopDedup.ts";
 import { makeChildWaitIndex } from "./t3team-childWaitIndex.ts";
 import { makeChildWaitScheduler, type ChildWaitScheduler } from "./t3team-childWaitScheduler.ts";
 import { makeResolveWait } from "./t3team-childWaitResolve.ts";
+import { makeChildWaitTerminal } from "./t3team-childWaitTerminal.ts";
 
 /** Map a derived run-state onto the terminal outcome we notify for (null when not terminal). */
 function terminalFromRunState(state: ThreadRunState): "completed" | "failed" | "aborted" | null {
@@ -56,43 +55,14 @@ export const T3TeamChildWaitReactorLive = Layer.effectDiscard(
       engine,
       query,
     });
-
-    // Resolves matching pending waits; returns how many (so the caller can dedup).
-    const resolveChildOutcome = (
-      childThreadId: string,
-      outcome: ChildWaitOutcome,
-    ): Effect.Effect<number> =>
-      Effect.gen(function* () {
-        const matching = index
-          .forChild(childThreadId)
-          .filter((record) => childWaitOutcomeMatches(outcome, record.on));
-        for (const record of matching) {
-          yield* resolveWait(record, outcome);
-        }
-        return matching.length;
-      });
-
-    // Terminal session-set with no wait resolved for the child: tell the parent.
-    // Abnormal stops (failed/aborted) always notify (GHE #157); a SILENT
-    // completion notifies only when the parent received nothing from the child.
-    // Both route through the ledger-guarded notifier, so each fires once per
-    // terminal epoch (re-armed on the child's resume).
-    const notifyTerminalIfNoWait = (
-      event: OrchestrationEvent & { type: "thread.session-set" },
-      outcome: "completed" | "failed" | "aborted",
-    ): Effect.Effect<void> =>
-      resolveChildOutcome(event.payload.threadId, outcome).pipe(
-        Effect.flatMap((resolvedWaits) => {
-          // A wait already resolved for this child+outcome told the parent — no second message.
-          if (resolvedWaits > 0) return Effect.void;
-          return notifyAbnormalStop({
-            childThreadId: event.payload.threadId,
-            outcome,
-            lastError: outcome === "completed" ? null : event.payload.session.lastError,
-            eventSequence: event.sequence,
-          });
-        }),
-      );
+    // Terminal-decision path (resolve matching waits, then notify the parent if
+    // none did) lives in t3team-childWaitTerminal.ts; wired to the live index,
+    // resolver, and ledger-guarded notifier here.
+    const { resolveChildOutcome, notifyTerminalIfNoWait } = makeChildWaitTerminal({
+      index,
+      resolveWait,
+      notifyAbnormalStop,
+    });
 
     // A newly registered wait: index it; resolve now if the child is already terminal.
     const onRegistered = (record: ChildWaitRecord): Effect.Effect<void> =>
