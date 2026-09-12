@@ -1,5 +1,8 @@
 import { EMPTY_OBJECT_INPUT_SCHEMA, type T3TeamToolCatalogEntry } from "./t3teamToolCatalogCore.ts";
-import { T3TEAM_WIDGET_AUTHORING_GUIDANCE } from "./t3teamWidgetGuidance.ts";
+import {
+  T3TEAM_WIDGET_AUTHORING_GUIDANCE,
+  T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION,
+} from "./t3teamWidgetGuidance.ts";
 
 const START_CHILD_INPUT_SCHEMA = {
   type: "object",
@@ -224,8 +227,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     id: "t3team.widget.show",
     label: "Show widget",
     title: "Show an inline widget in the chat timeline",
-    description:
-      "Show a widget inline in the current thread's chat timeline. Single entry point for all widget fidelities, selected via 'format': html/svg render instantly in a sandboxed iframe with live light/dark theme CSS variables plus the sendPrompt/callTool bridge; mdx (future) renders trusted whitelisted first-party components inline; tsx (future) composes a full design-system-native React view (slower). The widget body is persisted as a durable artifact. Use only provided theme variables for colors. Make the widget fluid and responsive across mobile and wide panes, keep it compact with progressive disclosure, keep the background transparent, and avoid top-level padding. Render icons from the host-injected sprite (<use href=\"#t3w-icon-NAME\">, class t3w-icon) rather than emoji or an external icon dependency.",
+    description: T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION,
     capabilities: ["write"],
     kind: "view-state",
     surfaces: ["thread"],
