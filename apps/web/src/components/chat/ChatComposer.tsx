@@ -52,6 +52,10 @@ import {
 } from "../../composer-logic";
 import { DISCONNECTED_COMPOSER_PLACEHOLDER } from "../../composerPlaceholder";
 import {
+  isEditingComposerDraft,
+  resolveComposerPromptEditorValue,
+} from "../composerDraftAnswerState";
+import {
   deriveComposerSendState,
   getAntigravitySendBlockReason,
   readFileAsDataUrl,
@@ -2148,6 +2152,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const isComposerApprovalState = activePendingApproval !== null;
   const isChoiceOnlyPendingQuestion =
     activePendingProgress?.activeQuestion?.allowCustomAnswer === false;
+  // The prompt editor's value while a pending question is docked: it stays on
+  // the user's in-progress draft until they actually start answering (see
+  // composerDraftAnswerState), so docking the question never rewrites the editor
+  // out from under the caret.
+  const composerDraftAnswerState = {
+    isComposerApprovalState,
+    activePendingCustomAnswer: activePendingProgress ? activePendingProgress.customAnswer : null,
+    draft: prompt,
+    isComposerFocused,
+  };
   const showComposerTopDrawer =
     isComposerApprovalState ||
     pendingUserInputs.length > 0 ||
@@ -2608,7 +2622,15 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       terminalContextIds: string[],
     ) => {
       expandComposerForEditorChange();
-      if (activePendingProgress?.activeQuestion && pendingUserInputs.length > 0) {
+      const editingDraft = isEditingComposerDraft({
+        isComposerApprovalState,
+        activePendingCustomAnswer: activePendingProgress
+          ? activePendingProgress.customAnswer
+          : null,
+        draft: prompt,
+        isComposerFocused,
+      });
+      if (activePendingProgress?.activeQuestion && pendingUserInputs.length > 0 && !editingDraft) {
         if (activePendingProgress.activeQuestion.allowCustomAnswer === false) return;
         setComposerCursor(nextCursor);
         setComposerTrigger(
@@ -2644,10 +2666,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     },
     [
       activePendingProgress?.activeQuestion,
+      activePendingProgress?.customAnswer,
       expandComposerForEditorChange,
       pendingUserInputs.length,
       onChangeActivePendingUserInputCustomAnswer,
       promptRef,
+      prompt,
+      isComposerFocused,
+      isComposerApprovalState,
       setPrompt,
       composerDraftTarget,
       composerTerminalContexts,
@@ -5601,13 +5627,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               >
                 <ComposerPromptEditor
                   editorRef={composerEditorRef}
-                  value={
-                    isComposerApprovalState
-                      ? ""
-                      : activePendingProgress
-                        ? activePendingProgress.customAnswer
-                        : prompt
-                  }
+                  value={resolveComposerPromptEditorValue(composerDraftAnswerState)}
                   cursor={composerCursor}
                   terminalContexts={
                     !isComposerApprovalState && pendingUserInputs.length === 0
