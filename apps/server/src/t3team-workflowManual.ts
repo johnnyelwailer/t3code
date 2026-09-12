@@ -115,6 +115,16 @@ THE ENGINE API (import the ones you use from "@t3team/sdk")
                               ['integration.read']. There is no default — a child that
                               inherits silently over-grants, and one granted nothing fails
                               later with a confusing "tool not enabled".
+                              agent() SUSPENDS the workflow durably until the child thread
+                              replies — the suspension is the engine's control flow, not an
+                              error. NEVER wrap agent()/askAgent()/askUser() in a try/catch
+                              that retries on failure: catching the engine's durable-
+                              suspension signal and re-invoking it just re-suspends, burns
+                              the step's attempt budget, and the run fails with "attempts
+                              exhausted" while the child thread was still working fine.
+                              Retry only the things you can retry yourself: a child that
+                              returned a value that failed your schema check (re-run agent()
+                              with a corrected prompt), not the suspension itself.
 - spawnThread({capabilities,name?,model?,retention?}) makes a multi-turn thread; capabilities
                               is REQUIRED here too, same two forms. It is ephemeral by default
                               (hidden from the sidebar but inspectable inline). Set
@@ -196,6 +206,8 @@ then pass it to waitUntil.
 RULES
 - No Node APIs (no fs, path, process) and no require(). Import the API above from "@t3team/sdk".
 - 'meta' must precede the default-exported function and be a plain literal (no calls in it).
+- The engine's durable-suspension signal (the one agent()/askAgent()/askUser() raise while the
+  run parks for a reply) is control flow, not an error: never catch or retry it.
 - Return the run's result from that function.
 - Prefer parallel()/pipeline() for fan-out; use phase()/log() so progress is visible.
 - For human input, add capabilities: ['user']. Prefer thread.askUser(...) so the decision
