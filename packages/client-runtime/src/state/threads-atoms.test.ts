@@ -40,7 +40,7 @@ import { EnvironmentCacheStore } from "../platform/persistence.ts";
 import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
 import type { RpcSession } from "../rpc/session.ts";
 import { createEnvironmentThreadDetailAtoms } from "./threadDetail.ts";
-import { THREAD_SNAPSHOT_IDLE_TTL_MS } from "./threadRetention.ts";
+import { THREAD_SNAPSHOT_IDLE_TTL_MS, THREAD_STATE_IDLE_TTL_MS } from "./threadRetention.ts";
 import type { ThreadSnapshotWindow } from "./threadSnapshotHttp.ts";
 import {
   createEnvironmentThreadStateAtoms,
@@ -96,6 +96,8 @@ const makeHarness = Effect.fn("TestThreadAtoms.makeHarness")(function* (options?
   readonly httpNone?: boolean;
   readonly initialLoad?: Effect.Effect<Option.Option<OrchestrationThreadDetailSnapshot>>;
   readonly stream?: Stream.Stream<OrchestrationThreadStreamItem, Error>;
+  /** Live-state idle TTL; defaults to 0 here. See the `raw` construction below. */
+  readonly idleTtlMs?: number;
 }) {
   const clock = yield* Clock.Clock;
   const wakeups = yield* Queue.unbounded<ConnectionWakeup>();
@@ -242,7 +244,12 @@ const makeHarness = Effect.fn("TestThreadAtoms.makeHarness")(function* (options?
       ),
     ),
   );
-  const raw = createEnvironmentThreadStateAtoms(runtime);
+  // Opt OUT of the shipped idle TTL. These cases assert what survives *across* a
+  // teardown, and use "the stream closed" as their synchronisation handle; with
+  // the real TTL every `Deferred.await(x.closed)` would be a timer to drive
+  // rather than an event to await. The TTL itself is pinned by the
+  // "live-state idle TTL" cases below, which use the shipped default.
+  const raw = createEnvironmentThreadStateAtoms(runtime, { idleTtlMs: options?.idleTtlMs ?? 0 });
   const details = createEnvironmentThreadDetailAtoms(raw.stateAtom);
   const ref = { environmentId: TARGET.environmentId, threadId: THREAD_ID };
   const stateAtom = details.stateAtom(ref);
@@ -795,6 +802,60 @@ describe("createEnvironmentThreadStateAtoms", () => {
       expect(h.counts()).toEqual({ httpLoads: 2, diskLoads: 2, opened: 2, active: 1 });
       remount();
       yield* Deferred.await(next.closed);
+    }),
+  );
+
+  // ---------------------------------------------------------------------------
+  // Live-state idle TTL. These two pin WHEN teardown happens, at the shipped
+  // value; everything above pins what survives ACROSS a teardown, at TTL 0.
+  //
+  // The first case is the regression guard. Restoring `Atom.setIdleTTL(0)` (the
+  // upstream #9740 behaviour) makes it fail, because a remount inside the window
+  // would open a second subscription. On a live install that cost 1.35
+  // `subscribeThread` re-opens per persisted domain event — 17 of 19
+  // subscriptions aborted inside one second, median lifetime 2.9ms. Do not
+  // "simplify" this back to an immediate close.
+  // ---------------------------------------------------------------------------
+
+  it.effect("keeps the live stream open across a consumer gap inside the idle TTL", () =>
+    Effect.gen(function* () {
+      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+      const h = yield* makeHarness({ idleTtlMs: THREAD_STATE_IDLE_TTL_MS });
+      const unmount = h.registry.mount(h.stateAtom);
+      const first = yield* Queue.take(h.subscriptions);
+      expect(h.counts().opened).toBe(1);
+
+      // A render pass that drops the consumer count to zero and restores it
+      // well inside the window: the node is revived, not rebuilt.
+      unmount();
+      yield* Effect.yieldNow;
+      yield* Effect.promise(() => vi.advanceTimersByTimeAsync(THREAD_STATE_IDLE_TTL_MS - 1));
+      const remount = h.registry.mount(h.stateAtom);
+      yield* Effect.yieldNow;
+
+      expect(yield* Deferred.isDone(first.closed)).toBe(false);
+      expect(h.counts()).toEqual({ httpLoads: 1, diskLoads: 1, opened: 1, active: 1 });
+
+      remount();
+      yield* Effect.promise(() => vi.advanceTimersByTimeAsync(THREAD_STATE_IDLE_TTL_MS + 1));
+      yield* Deferred.await(first.closed);
+    }),
+  );
+
+  it.effect("closes the live stream once the idle TTL elapses", () =>
+    Effect.gen(function* () {
+      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+      const h = yield* makeHarness({ idleTtlMs: THREAD_STATE_IDLE_TTL_MS });
+      const unmount = h.registry.mount(h.stateAtom);
+      const first = yield* Queue.take(h.subscriptions);
+
+      unmount();
+      yield* Effect.yieldNow;
+      expect(yield* Deferred.isDone(first.closed)).toBe(false);
+
+      yield* Effect.promise(() => vi.advanceTimersByTimeAsync(THREAD_STATE_IDLE_TTL_MS + 1));
+      yield* Deferred.await(first.closed);
+      expect(h.counts().active).toBe(0);
     }),
   );
 
