@@ -43,6 +43,10 @@ import {
   summarizeActorMessageForDelivery,
   summarizeActorMessageForDeliveryLegacy,
 } from "./t3team-actorReactionInputSummarize.ts";
+import {
+  renderAutomatedBurstBlock,
+  splitAutomatedBurst,
+} from "./t3team-actorBurstFold.ts";
 
 /**
  * The standing inter-agent protocol, appended to a thread's FIRST digest since
@@ -72,21 +76,33 @@ export const ACTOR_STANDING_INSTRUCTION =
  * turn per batch instead of one turn per message. Deterministic for a given
  * batch — including the single-entry shape — which is what the restart
  * rehydrate prefix-matching relies on.
+ *
+ * Burst fold (GHE #157): when a batch carries more than the fold threshold of
+ * non-urgent entries, those are rendered as ONE compact list (one line each +
+ * a t3team_read_message pointer) instead of one verbose block each; urgent
+ * entries keep their own full block. Sub-threshold (and single-entry) batches
+ * keep the full per-entry shape EXACTLY, so the rehydrate matcher is
+ * unaffected.
  */
 export const buildActorReactionDigestInput = (
   entries: ReadonlyArray<T3TeamActorMailboxEntry>,
-): string =>
-  [
-    `[Inter-agent digest: ${entries.length} message(s)]`,
+): string => {
+  const fullBlock = (entry: T3TeamActorMailboxEntry): string[] => [
+    `[from «${entry.fromTitle}» · thread ${entry.fromThreadId} · id ${entry.messageId} · ` +
+      `urgency ${entry.urgency}]`,
     "",
-    ...entries.flatMap((entry) => [
-      `[from «${entry.fromTitle}» · thread ${entry.fromThreadId} · id ${entry.messageId} · ` +
-        `urgency ${entry.urgency}]`,
-      "",
-      summarizeActorMessageForDelivery(entry.text, entry.messageId, entry.summary),
-      "",
-    ]),
-  ].join("\n");
+    summarizeActorMessageForDelivery(entry.text, entry.messageId, entry.summary),
+    "",
+  ];
+  const header = `[Inter-agent digest: ${entries.length} message(s)]`;
+  const { urgent, foldable, isBurst } = splitAutomatedBurst(entries);
+  if (!isBurst) return [header, "", ...entries.flatMap(fullBlock)].join("\n");
+  const parts: string[] = [header, ""];
+  if (urgent.length > 0) parts.push(...urgent.flatMap(fullBlock));
+  if (foldable.length > 0) parts.push(renderAutomatedBurstBlock(foldable));
+  parts.push("");
+  return parts.join("\n");
+};
 
 // --- Legacy single-entry bases (rehydrate matching only) ---------------------
 //
