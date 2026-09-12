@@ -17,6 +17,8 @@ import {
   type ThreadId,
   type TurnId,
 } from "@t3tools/contracts";
+import type { ActivePlanState } from "../session-logic";
+import type { ComposerTaskStep, ComposerTasksProgress } from "./chat/ComposerTasksBadge";
 import {
   type ComposerAttachment,
   type ComposerImageAttachment,
@@ -768,6 +770,45 @@ export function shouldShowBranchMismatchBanner(input: {
     return false;
   }
   return input.composerHasContent || input.wasShownForCurrentMismatch;
+}
+
+export interface ComposerTasksProgressView {
+  readonly progress: ComposerTasksProgress | null;
+  readonly steps: readonly ComposerTaskStep[] | null;
+}
+
+/**
+ * Decides how the composer task badge renders the thread's active plan.
+ *
+ * The plan itself is resolved by `deriveActivePlanState` (session-logic): a
+ * plan owned by the latest turn wins, otherwise the most recent plan from any
+ * turn — including thread-scoped plans written with `turnId: null` — and that
+ * resolution persists after the turn settles and honours explicit clears. This
+ * function must therefore NOT re-gate on turn ownership or turn settledness:
+ * the badge is a task list, not only a live-progress indicator.
+ */
+export function deriveComposerTasksProgress(input: {
+  readonly activeLatestTurnId: TurnId | null;
+  readonly activePlan: ActivePlanState | null;
+}): ComposerTasksProgressView {
+  if (input.activeLatestTurnId === null || input.activePlan === null) {
+    return { progress: null, steps: null };
+  }
+  const { activePlan } = input;
+  const currentStep =
+    activePlan.steps.find((step) => step.status === "inProgress") ??
+    activePlan.steps.find((step) => step.status === "pending");
+  if (currentStep === undefined) {
+    return { progress: null, steps: null };
+  }
+  return {
+    progress: {
+      step: currentStep.step,
+      completedSteps: activePlan.steps.filter((step) => step.status === "completed").length,
+      totalSteps: activePlan.steps.length,
+    },
+    steps: activePlan.steps,
+  };
 }
 
 export function shouldShowPlanFollowUpPrompt(input: {

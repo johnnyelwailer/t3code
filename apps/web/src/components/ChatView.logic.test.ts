@@ -2,10 +2,12 @@ import {
   ANTIGRAVITY_DEFAULT_MODEL,
   CheckpointRef,
   EnvironmentId,
+  EventId,
   MessageId,
   ProjectId,
   ProviderDriverKind,
   ProviderInstanceId,
+  type OrchestrationThreadActivity,
   type ServerProvider,
   ThreadId,
   TurnId,
@@ -13,7 +15,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { Thread, ThreadShell, TurnDiffSummary } from "../types";
-import type { TimelineEntry } from "../session-logic";
+import { deriveActivePlanState, type TimelineEntry } from "../session-logic";
 import { deriveProviderInstanceEntries, NO_PROVIDER_MODEL_SELECTION } from "../providerInstances";
 import type { CodexArtifactTemplate } from "@t3tools/client-runtime/codex-artifact-templates";
 import type { RightPanelSurface } from "../rightPanelStore";
@@ -28,6 +30,7 @@ import {
   buildThreadTurnInterruptInput,
   createLocalDispatchSnapshot,
   deriveComposerSendState,
+  deriveComposerTasksProgress,
   deriveLockedProvider,
   dismissBranchMismatchForSession,
   ENVIRONMENT_RECONNECT_WARNING_GRACE_MS,
@@ -2044,5 +2047,156 @@ describe("hasLocalDispatchGoneStuck", () => {
         now: "not-a-date",
       }),
     ).toBe(false);
+  });
+});
+
+// The 12-step plan actually stored for thread fbdb583b-a0b1-48e9-ae87-5e1cfe46dcf0
+// (projection_thread_activities, kind='turn.plan.updated', written by the one-time
+// replay with turnId: null). One step inProgress, two completed, nine pending.
+const REAL_THREAD_SCOPED_PLAN = [
+  { step: "Variant B: PR #476 open, waiting on #468 for full green gate", status: "inProgress" },
+  { step: "Per-thread quickstart picker + Legacy variant", status: "pending" },
+  { step: "Owner browser verification: #468 (6007) + #472 (6006)", status: "pending" },
+  { step: "CR revert UI-rule pass + rename Loslegen→Quickstart", status: "completed" },
+  { step: "Main LOC ratchet debt: pi-session shrink + pi-mcp pin", status: "completed" },
+  { step: "Final disk sweep: ~18 remaining orphan dirs, ~51Gi", status: "pending" },
+  { step: "Gate 4 source freeze → close #365", status: "pending" },
+  { step: "#433 disposition", status: "pending" },
+  { step: "Two flaky CR coverage tests → ticket", status: "pending" },
+  {
+    step: "Aspire stack: all 3 variants, per-thread switching, owner click-test",
+    status: "pending",
+  },
+  { step: "Reorganize Storybook story titles into logical hierarchy", status: "pending" },
+  { step: "Project-level glossary: drafts promote from session to project", status: "pending" },
+];
+
+describe("deriveComposerTasksProgress", () => {
+  let planActivitySeq = 0;
+  const makePlanActivity = (
+    turnId: string | null,
+    createdAt: string,
+    payload: Record<string, unknown>,
+  ): OrchestrationThreadActivity => ({
+    id: EventId.make(`composer-plan-${planActivitySeq++}`),
+    createdAt,
+    kind: "turn.plan.updated",
+    summary: "Plan updated",
+    tone: "info",
+    payload,
+    turnId: turnId === null ? null : TurnId.make(turnId),
+  });
+
+  /** Feed the activity stream through the real pipeline: derive, then badge. */
+  const badgeFor = (activities: OrchestrationThreadActivity[], latestTurnId: string) =>
+    deriveComposerTasksProgress({
+      activeLatestTurnId: TurnId.make(latestTurnId),
+      activePlan: deriveActivePlanState(activities, TurnId.make(latestTurnId)),
+    });
+
+  it("renders a thread-scoped (turnId: null) plan when the current turn has no plan", () => {
+    const activities = [
+      makePlanActivity(null, "2026-09-10T10:00:00.000Z", { plan: REAL_THREAD_SCOPED_PLAN }),
+    ];
+
+    const badge = badgeFor(activities, "turn-2");
+    expect(badge.progress).toEqual({
+      step: "Variant B: PR #476 open, waiting on #468 for full green gate",
+      completedSteps: 2,
+      totalSteps: 12,
+    });
+    expect(badge.steps).toHaveLength(12);
+    expect(badge.steps?.map((step) => step.status)).toEqual([
+      "inProgress",
+      "pending",
+      "pending",
+      "completed",
+      "completed",
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+    ]);
+  });
+
+  it("prefers the current turn's plan over an older thread-scoped plan", () => {
+    const activities = [
+      makePlanActivity(null, "2026-09-10T10:00:00.000Z", { plan: REAL_THREAD_SCOPED_PLAN }),
+      makePlanActivity("turn-2", "2026-09-10T11:00:00.000Z", {
+        plan: [{ step: "Turn-scoped task", status: "inProgress" }],
+      }),
+    ];
+
+    const badge = badgeFor(activities, "turn-2");
+    expect(badge.progress).toEqual({
+      step: "Turn-scoped task",
+      completedSteps: 0,
+      totalSteps: 1,
+    });
+    expect(badge.steps).toEqual([{ step: "Turn-scoped task", status: "inProgress" }]);
+  });
+
+  it("keeps the thread-scoped plan once the turn it belongs to has settled", () => {
+    // The plan was written during turn-1; turn-1 later settled. Settledness is not
+    // an input to the badge anymore — the list must survive the turn finishing.
+    const activities = [
+      makePlanActivity("turn-1", "2026-09-10T10:00:00.000Z", {
+        plan: REAL_THREAD_SCOPED_PLAN,
+      }),
+    ];
+
+    const badge = badgeFor(activities, "turn-1");
+    expect(badge.progress).toEqual({
+      step: "Variant B: PR #476 open, waiting on #468 for full green gate",
+      completedSteps: 2,
+      totalSteps: 12,
+    });
+    expect(badge.steps).toHaveLength(12);
+  });
+
+  it("still clears when an explicit clear activity lands after the plan", () => {
+    const activities = [
+      makePlanActivity(null, "2026-09-10T10:00:00.000Z", { plan: REAL_THREAD_SCOPED_PLAN }),
+      makePlanActivity(null, "2026-09-10T12:00:00.000Z", {}),
+    ];
+
+    expect(badgeFor(activities, "turn-1")).toEqual({ progress: null, steps: null });
+  });
+
+  it("reports live progress (current step, completed/total, durations) for an active turn", () => {
+    const activities = [
+      makePlanActivity("turn-1", "2026-09-10T10:00:00.000Z", {
+        plan: [
+          { step: "First", status: "inProgress" },
+          { step: "Second", status: "pending" },
+        ],
+      }),
+      makePlanActivity("turn-1", "2026-09-10T10:00:30.000Z", {
+        plan: [
+          { step: "First", status: "completed" },
+          { step: "Second", status: "inProgress" },
+        ],
+      }),
+    ];
+
+    const badge = badgeFor(activities, "turn-1");
+    expect(badge.progress).toEqual({ step: "Second", completedSteps: 1, totalSteps: 2 });
+    // Duration of the completed step (30s) flows through unchanged.
+    expect(badge.steps).toEqual([
+      { step: "First", status: "completed", durationMs: 30_000 },
+      { step: "Second", status: "inProgress" },
+    ]);
+  });
+
+  it("reports nothing when the thread has a plan but no active latest turn", () => {
+    expect(
+      deriveComposerTasksProgress({
+        activeLatestTurnId: null,
+        activePlan: { createdAt: "2026-09-10T10:00:00.000Z", turnId: null, steps: [] },
+      }),
+    ).toEqual({ progress: null, steps: null });
   });
 });
