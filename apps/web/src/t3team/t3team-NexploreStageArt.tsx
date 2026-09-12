@@ -22,11 +22,14 @@
 const STRIP_TILE_WIDTH = 1024;
 const STRIP_HEIGHT = 96;
 /** Covers STAGE_BACKDROP_VIEW_BOX's 8192 units. */
-const STRIP_TILE_COUNT = 8;
+const STRIP_TILE_COUNT = 2;
 
 /**
  * Arcs intrude from the top and bottom edges, and stay clear of x < 200 / y < 45 — that box is
  * where `sidebar-brand` sits, and it has to stay flat ground so the label keeps its contrast.
+ *
+ * Only 2 tiles render: the orbs occupy the left ~60px of the strip (before the brand at 90px),
+ * leaving the right side flat ground so the sidebar toggle keeps its contrast.
  */
 const STRIP_ORBS: ReadonlyArray<{
   cx: number;

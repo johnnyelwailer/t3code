@@ -21,7 +21,7 @@ export function resolveProjectSidebarBrandInset(input: {
   isDesktop: boolean;
   isWindowControlsOverlay: boolean;
 }): string {
-  if (input.isMac && input.isDesktop) return "ml-[var(--workspace-titlebar-content-left)]";
+  if (input.isMac && input.isDesktop) return "ml-[var(--workspace-controls-left)]";
   if (input.isMac && input.isWindowControlsOverlay) {
     return "ml-[var(--workspace-titlebar-content-left)]";
   }
@@ -111,7 +111,7 @@ export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHead
       </div>
       <SidebarTrigger
         className={cn(
-          "relative z-10 ms-auto shrink-0",
+          "relative z-10 ms-auto mr-[var(--sidebar-content-inset)] shrink-0",
           onBackdrop &&
             "[--control-icon-color:white] text-white focus-visible:ring-white/90 focus-visible:ring-offset-blue-700 [:hover,[data-pressed]]:bg-white/15",
         )}

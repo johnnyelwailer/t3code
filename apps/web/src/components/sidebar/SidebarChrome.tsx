@@ -70,7 +70,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
       <SidebarBrand isElectron={isElectron} backdropVariant={backdropVariant} />
       <SidebarTrigger
         className={cn(
-          "relative z-10 ms-auto",
+          "relative z-10 ms-auto mr-[var(--sidebar-content-inset)]",
           backdropVariant &&
             "[--control-icon-color:white] text-white focus-visible:ring-white/90 [:hover,[data-pressed]]:bg-white/15",
           backdropVariant && resolveSidebarStageFocusRingOffsetClass(backdropVariant),
@@ -122,7 +122,7 @@ function SidebarBrand({
         // native controls; on the web the inset only applies once the installed PWA is running
         // in window-controls-overlay mode (the `.wco` class toggled by windowControlsOverlay.ts).
         shouldInsetTitlebarBrand
-          ? "ml-[var(--workspace-titlebar-content-left)]"
+          ? "ml-[var(--workspace-controls-left)]"
           : "md:ml-[calc(var(--sidebar-content-inset)+var(--sidebar-row-content-inset))]",
         onBackdrop ? backdropLabelClass : "text-foreground",
       )}
