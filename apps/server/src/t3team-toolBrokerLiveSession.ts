@@ -14,7 +14,6 @@ import { makeT3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.
 import { callT3TeamReadMessageTool } from "./t3team-toolBrokerBindingReadMessage.ts";
 import { callT3TeamSearchSourceTool } from "./t3team-toolBrokerBindingSearchSource.ts";
 import { callT3TeamSearchThreadTool } from "./t3team-toolBrokerBindingSearchThread.ts";
-import { callT3TeamTaskJournalTool } from "./t3team-toolBrokerBindingTaskJournal.ts";
 import { createT3TeamThreadToolBinding } from "./t3team-toolBrokerBinding.ts";
 import { type T3TeamToolBrokerShape, type T3TeamTurnToolContext } from "./t3team-toolBroker.ts";
 import { setBacklogAssigneeFilterForContext } from "./t3team-toolBrokerBacklogFilter.ts";
@@ -42,7 +41,6 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
     recipeToolsForThread,
     workflowTools,
     loadThreadProject,
-    taskJournalStore,
   } = deps;
 
   return ({ threadId, toolContext, allowedToolGroups }) =>
@@ -146,18 +144,6 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
                 ),
               ),
           }),
-        ...(taskJournalStore
-          ? {
-              taskJournal: (tool: string, toolArgs: unknown, bindingThreadId: ThreadIdType) =>
-                callT3TeamTaskJournalTool({
-                  tool,
-                  scopeLabel: "for this thread.",
-                  toolArgs,
-                  threadId: bindingThreadId,
-                  store: taskJournalStore,
-                }),
-            }
-          : {}),
         recipeTools: recipeToolsForThread(threadId),
         ...(workflowTools.workflowRunToolsForThread
           ? { workflowRunTools: workflowTools.workflowRunToolsForThread(threadId) }

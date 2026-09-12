@@ -27,8 +27,6 @@ import { makeWorkflowToolsForThread } from "./t3team-toolBrokerWorkflowToolsWiri
 import { T3TeamContextRefreshService } from "./t3team-contextRefreshService.ts";
 import { makeT3TeamWidgetShowBinder } from "./t3team-toolBrokerWidgetShow.ts";
 import { makeBindSession } from "./t3team-toolBrokerLiveSession.ts";
-import { ThreadTaskRecordRepository } from "./persistence/Services/t3team-ThreadTaskRecords.ts";
-import { type TaskJournalStore } from "./t3team-toolBrokerBindingTaskJournal.ts";
 import { ServerSettingsService } from "./serverSettings.ts";
 
 const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () {
@@ -75,27 +73,6 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
   );
   bindChildProviderCatalog(providerRegistry);
   const bindShowWidget = yield* makeT3TeamWidgetShowBinder();
-
-  // Optional, like `providerRegistry` / `serverSettings` above: a host that
-  // composes the broker without the persistence layer still binds, and the two
-  // task-journal tools simply report "not enabled" instead of crashing the bind.
-  // The repository's `ProjectionRepositoryError` is flattened to a string here
-  // because the binding surface speaks strings, not persistence errors.
-  const taskJournalRepository = Option.getOrUndefined(
-    yield* Effect.serviceOption(ThreadTaskRecordRepository),
-  );
-  const taskJournalStore: TaskJournalStore | undefined = taskJournalRepository
-    ? {
-        replaceForThread: (input) =>
-          taskJournalRepository
-            .replaceForThread(input)
-            .pipe(Effect.mapError((error) => error.message)),
-        listForThread: (input) =>
-          taskJournalRepository
-            .listForThread(input)
-            .pipe(Effect.mapError((error) => error.message)),
-      }
-    : undefined;
 
   const loadThreadProject = (threadId: ThreadIdType) =>
     Effect.gen(function* () {
@@ -165,7 +142,6 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     recipeToolsForThread,
     workflowTools,
     loadThreadProject,
-    taskJournalStore,
   });
 
   const bindReadOnly: T3TeamToolBrokerShape["bindReadOnly"] = ({

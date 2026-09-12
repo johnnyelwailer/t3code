@@ -50,8 +50,8 @@ becomes a turn in that thread, so the thread is both the worker and the log:
   while (true) {
     await waitUntil(now() + 20 * MINUTES)
     await thread.askAgent(
-      'Continue the standing goal. Check t3team.task.list for the plan, do the next item, ' +
-      'update it, and stop when there is nothing left to do.',
+      'Continue the standing goal. Do the next item, update the plan as you go, '
+      + 'and stop when there is nothing left to do.',
       { label: 'Heartbeat' },
     )
   }
