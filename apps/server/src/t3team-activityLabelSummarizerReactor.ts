@@ -63,5 +63,7 @@ export function createActivityLabelEventReactor(input: {
     },
     /** The thread went idle or terminal: clear the label. */
     clear: (threadId: string) => summarizer.clear(threadId),
+    /** GHE #203: the thread was deleted — drop tracked state, no persist. */
+    forget: (threadId: string) => summarizer.forget(threadId),
   };
 }
