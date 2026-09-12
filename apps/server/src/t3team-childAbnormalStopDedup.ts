@@ -3,6 +3,8 @@
  * (t3team-terminalNotifyDedup.ts). A child that stops abnormally tells its
  * parent EXACTLY ONCE, re-arming only when the child resumes (running/starting)
  * after the last report — see the ledger's docs for the full reasoning.
+ * The same guard also carries the silent-completion notice (the `completed`
+ * outcome): one ledger, one marker, both terminal outcomes.
  *
  * The durable marker lands on the CHILD (kind `t3team.child_abnormal_stop_notified`,
  * payload `{ dedupKey, resumeThreadId, eventSequence, outcome }`); the observed
@@ -17,7 +19,7 @@ import type { OrchestrationEngineShape } from "./orchestration/Services/Orchestr
 import type { ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import {
   makeChildAbnormalStopNotifier,
-  type AbnormalStopOutcome,
+  type ChildTerminalOutcome,
 } from "./t3team-childAbnormalStopNotify.ts";
 import { makeTerminalNotifyLedger } from "./t3team-terminalNotifyDedup.ts";
 
@@ -30,7 +32,7 @@ export interface AbnormalStopGuards {
   /** The guarded notifier: reports once per epoch and writes the durable marker. */
   readonly notifyAbnormalStop: (input: {
     readonly childThreadId: string;
-    readonly outcome: AbnormalStopOutcome;
+    readonly outcome: ChildTerminalOutcome;
     readonly lastError: string | null | undefined;
     readonly eventSequence: number;
   }) => Effect.Effect<void>;

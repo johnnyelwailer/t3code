@@ -2,7 +2,15 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 
 import type { Project, Thread } from "~/types";
 import type { ProjectThread } from "~/t3team/t3team-types";
-import { deriveThreadRunState, isTerminalThreadRunState } from "@t3tools/shared/t3team-threadRunStatus";
+import {
+  deriveThreadAwaitingParent,
+  threadHasActionableProposedPlan,
+} from "@t3tools/shared/t3team-threadAwaitingParent";
+import { hasOpenChildWaits } from "@t3tools/shared/t3team-childWaitFacts";
+import {
+  deriveThreadRunState,
+  isTerminalThreadRunState,
+} from "@t3tools/shared/t3team-threadRunStatus";
 import {
   mergeProjectThreadLocalState,
   upsertProjectThreadLocalState,
@@ -107,6 +115,28 @@ export function mapLiveThreadToProjectThread(
     ...(thread.hasPendingUserInput !== undefined
       ? { pendingUserInput: thread.hasPendingUserInput }
       : {}),
+    // A plan-mode thread that presented its plan and stopped (shell live
+    // state, same pure predicate as the server's children tool). Drives the
+    // parent-side "Plan awaiting approval" indicator; cleared by the next
+    // sync once the plan is implemented or the mode leaves plan.
+    ...(deriveThreadAwaitingParent({
+      interactionMode: thread.interactionMode,
+      latestTurn: thread.latestTurn,
+      hasActionableProposedPlan: threadHasActionableProposedPlan(
+        thread.latestTurn,
+        thread.proposedPlans,
+      ),
+    })
+      ? { awaitingParent: true }
+      : {}),
+    // The DECLARED waiting fact: this thread registered a `t3team_children`
+    // wait (`op: wait`) that is still pending — derived from its own durable
+    // activities (open registered/resolved pair, same predicate as the
+    // server's status op). Distinct from the DERIVED `waitingOnChildren`
+    // (children are still live): declared is the stronger, intentional
+    // "blocked on a child's result" state and outranks it for the label
+    // ("Waiting" vs "Monitoring"). Absence clears on the next sync.
+    ...(hasOpenChildWaits(thread.activities ?? []) ? { waitingDeclared: true } : {}),
   };
 }
 

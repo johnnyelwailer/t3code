@@ -248,9 +248,18 @@ describe("T3TeamToolBrokerLive", () => {
           started: true,
           requested_kickoff_mode: "plan",
           interaction_mode: "plan",
+          // The launch result states the approval obligation up front: the
+          // child will stop and wait, and how the parent will see it.
+          plan_obligation: expect.stringContaining("awaitingParent"),
         }),
       }),
     );
+
+    const planObligation = (result.structuredContent as { plan_obligation?: string })
+      .plan_obligation;
+    expect(planObligation).toContain("wait ");
+    expect(planObligation).toContain("approval");
+    expect(planObligation).toContain("t3team_children");
 
     const childThreadId = (result.structuredContent as { project_session_id: string })
       .project_session_id;
@@ -439,6 +448,11 @@ describe("T3TeamToolBrokerLive", () => {
         }),
       }),
     );
+
+    // No obligation sentence outside plan mode.
+    expect(
+      (result.structuredContent as { plan_obligation?: string }).plan_obligation,
+    ).toBeUndefined();
 
     expect(dispatch.mock.calls).toEqual(
       expect.arrayContaining([

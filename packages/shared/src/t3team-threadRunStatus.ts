@@ -20,14 +20,22 @@
  *              the precedence: own live work still reads running/failed/aborted,
  *              so waiting replaces ONLY the would-be completed/idle.
  *
- * waiting is a STATE, not a side-channel flag, on purpose: both consumers read
- * `state`, and a flag would force each surface to re-apply the precedence
- * ("show Waiting only where it would say Done") — the exact drift this module
- * exists to prevent. It composes with the `awaitingUserInput` flag as a
- * separate fact: that one says "a question is docked in THIS thread's
- * composer" (answered here), waiting says "work is live in OTHER threads"
- * (resolved when the children settle) — different resolution, different
- * action, so one state with a reason would conflate two facts.
+ * waiting is a STATE, not a side-channel flag, on purpose: both consumers
+ * read `state`, and a flag would force each surface to re-apply the
+ * precedence ("show Waiting only where it would say Done") — the exact
+ * drift this module exists to prevent. The flags compose as separate facts:
+ * `awaitingUserInput` says "a question is docked in THIS thread's composer";
+ * `waitingDeclared` says "this thread explicitly blocked on a child's
+ * result" — different resolution, different action, so one state with a
+ * reason would conflate them.
+ *
+ * `awaitingParent` is the same flag discipline one hop over (full rationale
+ * in `t3team-threadAwaitingParent`): plan-mode thread + cleanly settled
+ * latest turn + an actionable (unimplemented) proposed plan says "the last
+ * turn IS completed, but the parent owes this thread a decision". `state`
+ * stays `completed` — a non-terminal "awaiting" state would conflate the
+ * settled fact with the owed action and disturb the terminal predicates the
+ * settle cascade and `wait` op build on.
  *
  * A dead child therefore surfaces as `failed` (session error) rather than
  * silence: the mapping is total over the shell's session/turn states.
@@ -35,6 +43,8 @@
  * @module threadRunStatus
  */
 import type { OrchestrationThreadShell } from "@t3tools/contracts";
+
+import { deriveThreadAwaitingParent } from "./t3team-threadAwaitingParent.ts";
 
 export type ThreadRunState = "running" | "idle" | "failed" | "completed" | "aborted" | "waiting";
 
@@ -46,14 +56,12 @@ export function isTerminalThreadRunState(state: ThreadRunState): boolean {
 }
 
 /** The shell fields the primitive reads. `Pick` keeps it decoupled from the
- *  full shell while staying structurally compatible with it.
- *
- *  `hasPendingUserInput` is an ADDITIONAL optional field (not in the Pick):
- *  shell rows carry it, but detail loads (the status op) do not — the status
- *  op derives the same fact from the thread's activities instead.
- *  `hasLiveChildren` is the same pattern for the `waiting` state: the shell
- *  has no child awareness; the caller computes it from the durable parent/
- *  child relation + the children's shells. */
+ *  full shell while staying structurally compatible with it. The optional
+ *  extras are NOT in the Pick because detail loads (the status op) lack
+ *  some of them: `hasPendingUserInput` and `hasActionableProposedPlan` are
+ *  derived from activities/proposed-plans there; `hasLiveChildren` and
+ *  `hasOpenChildWaits` are computed from durable relations/activities.
+ */
 export type ThreadRunStatusInput = Pick<
   OrchestrationThreadShell,
   | "id"
@@ -74,6 +82,9 @@ export type ThreadRunStatusInput = Pick<
 > & {
   readonly hasPendingUserInput?: boolean | undefined;
   readonly hasLiveChildren?: boolean | undefined;
+  readonly interactionMode?: string | null;
+  readonly hasActionableProposedPlan?: boolean | undefined;
+  readonly hasOpenChildWaits?: boolean | undefined;
 };
 
 export interface ThreadRunStatus {
@@ -101,8 +112,19 @@ export interface ThreadRunStatus {
   readonly settledOverride: string | null;
   readonly settledAt: string | null;
   /** True while the shell reports a pending user-input request — a question
-   *   docked in this thread's composer that the user has not answered. */
+   *   docked in this thread's composer that the user has not answered.
+   *   `awaitingParent` is the plan-mode twin: plan presented, turn settled,
+   *   plan not yet implemented — the parent owes this thread a decision. */
   readonly awaitingUserInput: boolean;
+  readonly awaitingParent: boolean;
+  /**
+   * The DECLARED waiting fact: a durable child wait registered on THIS thread
+   * (`children op: wait`) is still pending — the thread explicitly blocked on
+   * a child's result. The DERIVED twin (`hasLiveChildren` → state "waiting")
+   * only says the children are still live; declared outranks derived for the
+   * label ("Waiting" vs "Monitoring") but both keep the SAME state.
+   */
+  readonly waitingDeclared: boolean;
 }
 
 /**
@@ -166,9 +188,7 @@ export function deriveThreadRunStatus(shell: ThreadRunStatusInput): ThreadRunSta
       ...(shell.backgroundLiveness !== undefined
         ? { backgroundLiveness: shell.backgroundLiveness }
         : {}),
-      ...(shell.hasLiveChildren !== undefined
-        ? { hasLiveChildren: shell.hasLiveChildren }
-        : {}),
+      ...(shell.hasLiveChildren !== undefined ? { hasLiveChildren: shell.hasLiveChildren } : {}),
     }),
     provider: modelSelection ? String(modelSelection.instanceId) : null,
     model: modelSelection ? modelSelection.model : null,
@@ -185,5 +205,11 @@ export function deriveThreadRunStatus(shell: ThreadRunStatusInput): ThreadRunSta
     settledOverride: shell.settledOverride,
     settledAt: shell.settledAt,
     awaitingUserInput: shell.hasPendingUserInput === true,
+    awaitingParent: deriveThreadAwaitingParent({
+      interactionMode: shell.interactionMode,
+      latestTurn: shell.latestTurn,
+      hasActionableProposedPlan: shell.hasActionableProposedPlan,
+    }),
+    waitingDeclared: shell.hasOpenChildWaits === true,
   };
 }

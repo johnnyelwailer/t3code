@@ -1,5 +1,9 @@
 /**
- * Unconditional abnormal-stop notification to a child's parent (GHE #157).
+ * Unconditional abnormal-stop notification to a child's parent (GHE #157),
+ * and — the same path, no second notifier — the SILENT-COMPLETION notice
+ * (GHE #55 follow-up): a child that goes terminal-completed without having
+ * reported to its parent is told to the parent too. A finished child is never
+ * silent, exactly as a dead child is never silent.
  *
  * A child that stops abnormally (session `error`/`interrupted`/`stopped`) must
  * tell its parent even when the parent never registered a `t3team_children`
@@ -12,7 +16,11 @@
  *
  * Dedup: the caller (the child-wait reactor) invokes this ONLY when no matching
  * wait resolved for the same child+outcome, so the parent never receives both a
- * wait-resolution message and a standalone one for a single stop.
+ * wait-resolution message and a standalone one for a single stop. For the
+ * completion outcome the notifier additionally skips when the parent's
+ * durable transcript already holds an actor message from this child — the
+ * child's own report, or a notice we already sent (the notice is itself such a
+ * message, which is what makes it fire at most once per terminal epoch).
  *
  * @module t3team-childAbnormalStopNotify
  */
@@ -25,9 +33,16 @@ import * as Option from "effect/Option";
 import { type OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import { type ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
+import {
+  buildSilentCompletionNotice,
+  childAwaitingParentApproval,
+  parentReceivedFromChild,
+} from "./t3team-childSilentCompletion.ts";
 
 /** The abnormal terminal outcomes that warrant a parent notification. */
 export type AbnormalStopOutcome = "failed" | "aborted";
+/** Any terminal outcome the standalone notifier may be asked to report. */
+export type ChildTerminalOutcome = AbnormalStopOutcome | "completed";
 
 export interface HandoffActivityLike {
   readonly kind: string;
@@ -85,7 +100,7 @@ export interface ChildAbnormalStopNotifierDeps {
 
 export interface NotifyChildAbnormalStopInput {
   readonly childThreadId: string;
-  readonly outcome: AbnormalStopOutcome;
+  readonly outcome: ChildTerminalOutcome;
   readonly lastError: string | null | undefined;
 }
 
@@ -109,15 +124,39 @@ export const makeChildAbnormalStopNotifier =
       if (!child) return;
       const parentThreadId = findHandoffParentThreadId(child.activities);
       if (!parentThreadId) return;
-      const detail = buildAbnormalStopDetail({
-        lastError: input.lastError,
-        childStatus: child.childStatus,
-      });
-      const outcomeLabel = input.outcome === "failed" ? "failed" : "was aborted";
-      const text =
-        `[Child stopped abnormally] Child «${child.title}» (thread ${child.id}) ` +
-        `stopped abnormally (${outcomeLabel}). It did not complete.` +
-        (detail ? ` ${detail}.` : "");
+
+      let text: string;
+      if (input.outcome === "completed") {
+        // Silent completion: tell the parent ONLY if it has received the
+        // child's own report. The check reads the parent's durable transcript
+        // (a `thread.actor.message` from the child). This is the "was it
+        // silent?" gate, not the dedup — once-per-terminal-epoch dedup is the
+        // ledger the caller (t3team-childAbnormalStopDedup.ts) wraps this
+        // notifier in. No flag the child sets — a stuck child is exactly the
+        // one that would not set it.
+        const parent = Option.getOrUndefined(
+          yield* deps.query
+            .getThreadDetailById(ThreadId.make(parentThreadId))
+            .pipe(Effect.orElseSucceed(() => Option.none())),
+        );
+        if (!parent) return;
+        if (parentReceivedFromChild(parent, String(child.id))) return;
+        text = buildSilentCompletionNotice({
+          childTitle: child.title,
+          childThreadId: String(child.id),
+          awaitingParentApproval: childAwaitingParentApproval(child),
+        });
+      } else {
+        const detail = buildAbnormalStopDetail({
+          lastError: input.lastError,
+          childStatus: child.childStatus,
+        });
+        const outcomeLabel = input.outcome === "failed" ? "failed" : "was aborted";
+        text =
+          `[Child stopped abnormally] Child «${child.title}» (thread ${child.id}) ` +
+          `stopped abnormally (${outcomeLabel}). It did not complete.` +
+          (detail ? ` ${detail}.` : "");
+      }
       const nowIso = DateTime.formatIso(DateTime.nowUnsafe());
       yield* deps.engine
         .dispatch({

@@ -6,6 +6,11 @@
  * notifies the parent of an abnormal child stop, and arms the host timer. See
  * t3team-childAbnormalStopDedup.ts for the epoch-scoped dedup marker.
  *
+ * Silent-completion notice (GHE #55 follow-up): the SAME path also covers a
+ * child that completes without reporting — when no wait resolved, the notifier
+ * tells the parent to decide (settle via `sweep`, or follow up) unless it
+ * already got the child's report; the SAME epoch ledger dedups it.
+ *
  * @module t3team-childWaitReactor
  */
 import { ThreadId, type OrchestrationEvent } from "@t3tools/contracts";
@@ -17,7 +22,7 @@ import * as Stream from "effect/Stream";
 
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
-import { deriveThreadRunState } from "@t3tools/shared/t3team-threadRunStatus";
+import { deriveThreadRunState, type ThreadRunState } from "@t3tools/shared/t3team-threadRunStatus";
 import {
   CHILD_WAIT_REGISTERED_KIND,
   CHILD_WAIT_RESOLVED_KIND,
@@ -32,6 +37,11 @@ import { makeAbnormalStopGuards } from "./t3team-childAbnormalStopDedup.ts";
 import { makeChildWaitIndex } from "./t3team-childWaitIndex.ts";
 import { makeChildWaitScheduler, type ChildWaitScheduler } from "./t3team-childWaitScheduler.ts";
 import { makeResolveWait } from "./t3team-childWaitResolve.ts";
+
+/** Map a derived run-state onto the terminal outcome we notify for (null when not terminal). */
+function terminalFromRunState(state: ThreadRunState): "completed" | "failed" | "aborted" | null {
+  return state === "completed" || state === "failed" || state === "aborted" ? state : null;
+}
 
 export const T3TeamChildWaitReactorLive = Layer.effectDiscard(
   Effect.gen(function* () {
@@ -62,6 +72,28 @@ export const T3TeamChildWaitReactorLive = Layer.effectDiscard(
         return matching.length;
       });
 
+    // Terminal session-set with no wait resolved for the child: tell the parent.
+    // Abnormal stops (failed/aborted) always notify (GHE #157); a SILENT
+    // completion notifies only when the parent received nothing from the child.
+    // Both route through the ledger-guarded notifier, so each fires once per
+    // terminal epoch (re-armed on the child's resume).
+    const notifyTerminalIfNoWait = (
+      event: OrchestrationEvent & { type: "thread.session-set" },
+      outcome: "completed" | "failed" | "aborted",
+    ): Effect.Effect<void> =>
+      resolveChildOutcome(event.payload.threadId, outcome).pipe(
+        Effect.flatMap((resolvedWaits) => {
+          // A wait already resolved for this child+outcome told the parent — no second message.
+          if (resolvedWaits > 0) return Effect.void;
+          return notifyAbnormalStop({
+            childThreadId: event.payload.threadId,
+            outcome,
+            lastError: outcome === "completed" ? null : event.payload.session.lastError,
+            eventSequence: event.sequence,
+          });
+        }),
+      );
+
     // A newly registered wait: index it; resolve now if the child is already terminal.
     const onRegistered = (record: ChildWaitRecord): Effect.Effect<void> =>
       Effect.gen(function* () {
@@ -80,14 +112,7 @@ export const T3TeamChildWaitReactorLive = Layer.effectDiscard(
             ? { backgroundLiveness: child.backgroundLiveness }
             : {}),
         });
-        const outcome =
-          state === "completed"
-            ? "completed"
-            : state === "failed"
-              ? "failed"
-              : state === "aborted"
-                ? "aborted"
-                : null;
+        const outcome = terminalFromRunState(state);
         if (outcome !== null) {
           yield* resolveChildOutcome(record.childThreadId, outcome);
         }
@@ -148,19 +173,7 @@ export const T3TeamChildWaitReactorLive = Layer.effectDiscard(
             }
             return Effect.void;
           }
-          return resolveChildOutcome(event.payload.threadId, outcome).pipe(
-            Effect.flatMap((resolvedWaits) => {
-              // Completed: the child reports its own result; a resolved wait already told the parent.
-              if (outcome === "completed") return Effect.void;
-              if (resolvedWaits > 0) return Effect.void;
-              return notifyAbnormalStop({
-                childThreadId: event.payload.threadId,
-                outcome,
-                lastError: event.payload.session.lastError,
-                eventSequence: event.sequence,
-              });
-            }),
-          );
+          return notifyTerminalIfNoWait(event, outcome);
         }
         default:
           return Effect.void;

@@ -208,6 +208,48 @@ describe("children tool — list", () => {
     const rows = out.structured.threads as Array<Record<string, unknown>>;
     expect(rows[0]!.awaitingUserInput).toBe(true);
   });
+
+  it("flags a plan-mode child that stopped with its plan unimplemented (awaitingParent)", async () => {
+    // The incident shape: the plan turn settled cleanly (state completed) but
+    // the thread still carries an actionable proposed plan — the parent owes
+    // this child a decision. The flag rides ALONGSIDE state "completed",
+    // never replacing it.
+    const planShell: ChildThreadShell = {
+      ...childShell,
+      interactionMode: "plan",
+      hasActionableProposedPlan: true,
+    };
+    const deps = makeDeps({
+      listProjectThreadShells: () => Effect.succeed([planShell]),
+      loadThreadShell: () => Effect.succeed(planShell),
+    });
+    const out = await run(deps, { op: "list" });
+    expect(out.isError).toBeFalsy();
+    const rows = out.structured.threads as Array<Record<string, unknown>>;
+    expect(rows[0]!.state).toBe("completed");
+    expect(rows[0]!.awaitingParent).toBe(true);
+  });
+
+  it("a genuinely finished child reports plain completed, no awaitingParent", async () => {
+    // Default-mode settled child (the baseline fixture): nothing owed.
+    const out = await run(makeDeps(), { op: "list" });
+    expect(out.isError).toBeFalsy();
+    const rows = out.structured.threads as Array<Record<string, unknown>>;
+    expect(rows[0]!.state).toBe("completed");
+    expect(rows[0]!.awaitingParent).toBeUndefined();
+    // Plan-mode child whose plan an approval turn already implemented:
+    // the actionable fact is gone, so the flag clears too.
+    const implementedShell: ChildThreadShell = {
+      ...childShell,
+      interactionMode: "plan",
+      hasActionableProposedPlan: false,
+    };
+    const deps = makeDeps({ loadThreadShell: () => Effect.succeed(implementedShell) });
+    const done = await run(deps, { op: "list" });
+    const doneRows = done.structured.threads as Array<Record<string, unknown>>;
+    expect(doneRows[0]!.state).toBe("completed");
+    expect(doneRows[0]!.awaitingParent).toBeUndefined();
+  });
 });
 
 describe("children tool — waiting state (parent with live t3team children)", () => {
@@ -216,9 +258,7 @@ describe("children tool — waiting state (parent with live t3team children)", (
     session: { status: "running" } as never,
     latestTurn: { state: "running", startedAt: "2026-01-01T00:05:00.000Z" } as never,
   };
-  const relations = [
-    { childThreadId: "child-thread", parentThreadId: "caller-thread" },
-  ];
+  const relations = [{ childThreadId: "child-thread", parentThreadId: "caller-thread" }];
 
   it("status: parent settled + running child → waiting", async () => {
     const deps = makeDeps({
@@ -330,6 +370,65 @@ describe("children tool — status", () => {
     expect(out.text).toContain("different project");
   });
 
+  it("flags awaitingParent when the detail's plan is still unimplemented, and clears it once implemented", async () => {
+    // Detail loads carry the proposed-plan records, not the shell flag — the
+    // status op folds them into the same fact as the live shell.
+    const planDetail: ChildThreadDetail = {
+      ...childDetail,
+      interactionMode: "plan",
+      latestTurn: {
+        turnId: "turn-1",
+        state: "completed",
+        requestedAt: "2026-01-01T00:00:00.000Z",
+        startedAt: "2026-01-01T00:00:05.000Z",
+        completedAt: "2026-01-01T00:10:00.000Z",
+        assistantMessageId: null,
+      } as never,
+      proposedPlans: [
+        {
+          id: "plan-1",
+          turnId: "turn-1",
+          implementedAt: null,
+          updatedAt: "2026-01-01T00:09:00.000Z",
+        },
+      ],
+    };
+    const out = await run(
+      makeDeps({
+        loadThreadDetail: (id) =>
+          Effect.succeed(id === CALLER ? callerDetail : id === CHILD ? planDetail : undefined),
+      }),
+      { op: "status", thread_id: CHILD },
+    );
+    expect(out.isError).toBeFalsy();
+    expect(out.structured.state).toBe("completed");
+    expect(out.structured.awaitingParent).toBe(true);
+    // The approval-implementation turn stamps implementedAt: the plan is no
+    // longer actionable, so the flag clears and the child reads completed.
+    const implementedDetail: ChildThreadDetail = {
+      ...planDetail,
+      proposedPlans: [
+        {
+          id: "plan-1",
+          turnId: "turn-1",
+          implementedAt: "2026-01-01T01:00:00.000Z",
+          updatedAt: "2026-01-01T01:00:00.000Z",
+        },
+      ],
+    };
+    const done = await run(
+      makeDeps({
+        loadThreadDetail: (id) =>
+          Effect.succeed(
+            id === CALLER ? callerDetail : id === CHILD ? implementedDetail : undefined,
+          ),
+      }),
+      { op: "status", thread_id: CHILD },
+    );
+    expect(done.structured.state).toBe("completed");
+    expect(done.structured.awaitingParent).toBeUndefined();
+  });
+
   it("flags awaitingUserInput when the detail carries an open question", async () => {
     const pendingDetail: ChildThreadDetail = {
       ...childDetail,
@@ -370,6 +469,54 @@ describe("children tool — status", () => {
       { op: "status", thread_id: CHILD },
     );
     expect(answered.structured.awaitingUserInput).toBeUndefined();
+  });
+
+  it("surfaces waitingDeclared from the detail's open child-wait activities, and clears it once resolved", async () => {
+    // The DECLARED waiting fact: this thread registered a `children op: wait`
+    // that is still pending. Derived from the durable registered/resolved
+    // activity pair — not a flag anyone sets.
+    const waitingDetail: ChildThreadDetail = {
+      ...childDetail,
+      activities: [
+        {
+          kind: "t3team.child_wait.registered",
+          summary: "Waiting on child",
+          createdAt: "2026-01-01T00:11:00.000Z",
+          payload: { waitId: "wait-1", childThreadId: "grandchild-1", on: "terminal" },
+        },
+      ],
+    };
+    const out = await run(
+      makeDeps({
+        loadThreadDetail: (id) =>
+          Effect.succeed(id === CALLER ? callerDetail : id === CHILD ? waitingDetail : undefined),
+      }),
+      { op: "status", thread_id: CHILD },
+    );
+    expect(out.isError).toBeFalsy();
+    expect(out.structured.waitingDeclared).toBe(true);
+
+    // The wait resolves (child terminal): the open set is empty, the flag clears.
+    const resolvedDetail: ChildThreadDetail = {
+      ...waitingDetail,
+      activities: [
+        ...waitingDetail.activities,
+        {
+          kind: "t3team.child_wait.resolved",
+          summary: "Child reached terminal",
+          createdAt: "2026-01-01T00:15:00.000Z",
+          payload: { waitId: "wait-1", childThreadId: "grandchild-1", outcome: "completed" },
+        },
+      ],
+    };
+    const done = await run(
+      makeDeps({
+        loadThreadDetail: (id) =>
+          Effect.succeed(id === CALLER ? callerDetail : id === CHILD ? resolvedDetail : undefined),
+      }),
+      { op: "status", thread_id: CHILD },
+    );
+    expect(done.structured.waitingDeclared).toBeUndefined();
   });
 });
 

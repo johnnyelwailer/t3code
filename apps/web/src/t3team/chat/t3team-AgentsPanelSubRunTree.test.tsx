@@ -86,6 +86,24 @@ describe("T3TeamAgentsPanelSubRunTree status language (GHE #254)", () => {
     expect(questionSvg!.className.baseVal).toContain("size-3");
   });
 
+  it("a plan-mode child that stopped with its plan unimplemented shows the amber pending treatment", () => {
+    // Same surface, same navigation as the pending question: the amber
+    // question mark + the awaiting label — never a second indicator system.
+    render([node(createThread({ status: "completed", awaitingParent: true }))]);
+    expect(container!.textContent).toContain("Plan awaiting approval");
+    const svgs = Array.from(container!.querySelectorAll("button svg")) as SVGSVGElement[];
+    const pendingSvg = svgs.find((svg) => svg.className.baseVal.includes("text-amber-600"));
+    expect(pendingSvg, "amber pending icon present").toBeTruthy();
+  });
+
+  it("a docked question outranks the plan-approval fact on the same row", () => {
+    render([
+      node(createThread({ status: "completed", awaitingParent: true, pendingUserInput: true })),
+    ]);
+    expect(container!.textContent).toContain("Question awaiting answer");
+    expect(container!.textContent).not.toContain("Plan awaiting approval");
+  });
+
   it("a running sub-run renders the parent's dashed ring icon (sm), not the old plain dot", () => {
     render([node(createThread({ status: "running" }))]);
     const svg = ringSvg();

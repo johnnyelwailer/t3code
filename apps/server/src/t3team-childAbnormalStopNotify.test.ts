@@ -77,21 +77,27 @@ const childThread = (over: Partial<OrchestrationThread> = {}): OrchestrationThre
     ...over,
   }) as unknown as OrchestrationThread;
 
-type AbnormalStopInput = { outcome: "failed" | "aborted"; lastError: string | null };
+type TerminalInput = { outcome: "failed" | "aborted" | "completed"; lastError: string | null };
 
 const runNotifier = (
   child: OrchestrationThread | undefined,
-  input: AbnormalStopInput = { outcome: "failed", lastError: "provider timeout" },
+  input: TerminalInput = { outcome: "failed", lastError: "provider timeout" },
   dispatchError?: Error,
+  parent?: OrchestrationThread,
 ): { dispatches: OrchestrationCommand[]; effect: Effect.Effect<void> } => {
   const dispatches: OrchestrationCommand[] = [];
   const engine = {
     dispatch: (command: OrchestrationCommand) =>
       dispatchError ? Effect.fail(dispatchError) : Effect.sync(() => dispatches.push(command)),
   } as unknown as OrchestrationEngineShape;
+  const details = new Map<string, OrchestrationThread>();
+  if (child !== undefined) details.set("child-1", child);
+  if (parent !== undefined) details.set("parent-1", parent);
   const query = {
-    getThreadDetailById: () =>
-      Effect.succeed(child === undefined ? Option.none() : Option.some(child)),
+    getThreadDetailById: (id: unknown) => {
+      const found = details.get(String(id));
+      return Effect.succeed(found === undefined ? Option.none() : Option.some(found));
+    },
   } as unknown as ProjectionSnapshotQueryShape;
   const notifier = makeChildAbnormalStopNotifier({ engine, query });
   return { dispatches, effect: notifier({ childThreadId: "child-1", ...input }) };
@@ -158,6 +164,101 @@ describe("makeChildAbnormalStopNotifier", () => {
         new Error("boom"),
       );
       yield* effect;
+    }),
+  );
+});
+
+const parentThread = (
+  messages: Array<{ readonly role: string; readonly t3teamExt?: unknown }> = [],
+): OrchestrationThread =>
+  ({
+    id: ThreadId.make("parent-1"),
+    projectId: ProjectId.make("project-1"),
+    title: "Parent",
+    messages,
+    activities: [],
+  }) as unknown as OrchestrationThread;
+
+describe("makeChildAbnormalStopNotifier silent-completion (outcome: completed)", () => {
+  it.effect("notifies the parent when a child completes and the parent received nothing", () =>
+    Effect.gen(function* () {
+      const { dispatches, effect } = runNotifier(
+        childThread(),
+        { outcome: "completed", lastError: null },
+        undefined,
+        parentThread(),
+      );
+      yield* effect;
+      expect(dispatches).toHaveLength(1);
+      const command = actorMessage(dispatches[0]!);
+      expect(command.threadId).toBe(ThreadId.make("parent-1"));
+      expect(command.fromThreadId).toBe(ThreadId.make("child-1"));
+      expect(command.text).toContain("[Child completed silently]");
+      expect(command.text).toContain('op:"sweep"');
+    }),
+  );
+
+  it.effect(
+    "stays silent when the child already reported (parent holds an actor message from it)",
+    () =>
+      Effect.gen(function* () {
+        const { dispatches, effect } = runNotifier(
+          childThread(),
+          { outcome: "completed", lastError: null },
+          undefined,
+          parentThread([{ role: "actor", t3teamExt: { actor: { senderThreadId: "child-1" } } }]),
+        );
+        yield* effect;
+        expect(dispatches).toHaveLength(0);
+      }),
+  );
+
+  it.effect("fires at most once per terminal epoch: our own notice is the dedup marker", () =>
+    Effect.gen(function* () {
+      // The parent already holds the silent-completion notice we sent for this
+      // terminal — a redelivered completed event must not send a second one.
+      const { dispatches, effect } = runNotifier(
+        childThread(),
+        { outcome: "completed", lastError: null },
+        undefined,
+        parentThread([{ role: "actor", t3teamExt: { actor: { senderThreadId: "child-1" } } }]),
+      );
+      yield* effect;
+      expect(dispatches).toHaveLength(0);
+    }),
+  );
+
+  it.effect("plan-mode child awaiting approval gets the explicit approval wording", () =>
+    Effect.gen(function* () {
+      const { dispatches, effect } = runNotifier(
+        childThread({
+          interactionMode: "plan",
+          latestTurn: { state: "completed", turnId: "turn-1" } as never,
+          proposedPlans: [
+            { id: "p1", turnId: "turn-1", implementedAt: null, updatedAt: "t1" },
+          ] as never,
+        }),
+        { outcome: "completed", lastError: null },
+        undefined,
+        parentThread(),
+      );
+      yield* effect;
+      expect(dispatches).toHaveLength(1);
+      const command = actorMessage(dispatches[0]!);
+      expect(command.text).toContain("[Child awaiting your approval]");
+      expect(command.text).toContain("NOT implemented");
+      expect(command.text).not.toContain("[Child completed silently]");
+    }),
+  );
+
+  it.effect("dispatches nothing when the parent detail cannot be loaded", () =>
+    Effect.gen(function* () {
+      const { dispatches, effect } = runNotifier(childThread(), {
+        outcome: "completed",
+        lastError: null,
+      });
+      yield* effect;
+      expect(dispatches).toHaveLength(0);
     }),
   );
 });

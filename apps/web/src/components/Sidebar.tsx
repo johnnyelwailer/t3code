@@ -221,6 +221,10 @@ import {
   InboxWorkItemSection,
 } from "~/t3team/components/t3team-InboxSlots";
 import { runT3TeamThreadNavigationOverride } from "~/t3team/t3team-threadNavigationOverride";
+import {
+  SUB_RUN_MONITORING_LABEL,
+  SUB_RUN_WAITING_DECLARED_LABEL,
+} from "~/t3team/chat/t3team-AgentsPanelForkSection.logic";
 import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay";
 import { useT3TeamSidebarThreadMeta } from "~/t3team/hooks/t3team-useChildThreadRelations";
 import { useT3TeamChildThreadRelationsStore } from "~/t3team/t3team-childThreadRelationsStore";
@@ -786,11 +790,17 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // the user visits the thread.
   wokeAt: string | null;
   // t3team: true while this thread's own work is settled but it still has
-  // live (non-terminal, non-settled) t3team sub-run children — the row reads
-  // "Waiting" instead of "Done" (same precedence as the shared
-  // t3team-threadRunStatus primitive: reaching the waiting branch already
-  // means no live/failed own session).
+  // live (non-terminal, non-settled) t3team sub-run children — the DERIVED
+  // waiting fact: the row reads "Monitoring", not "Done" (same precedence as
+  // the shared t3team-threadRunStatus primitive: reaching the waiting branch
+  // already means no live/failed own session).
   waitingOnChildren?: boolean;
+  // t3team: the DECLARED waiting fact — this thread has a registered
+  // `t3team_children op:wait` that is still pending. Outranks the derived
+  // fact for the label: a parent explicitly blocked on a child's result
+  // reads "Waiting", a parent merely supervising live children reads
+  // "Monitoring". Both keep the standard working/in-progress hue.
+  waitingDeclared?: boolean;
   isActive: boolean;
   openPullRequestsInRightPanel: boolean;
   jumpLabel: string | null;
@@ -1025,26 +1035,39 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                   icon: null,
                   className: "text-red-700 dark:text-red-300",
                 }
-              : props.waitingOnChildren === true
+              : props.waitingDeclared === true
                 ? {
-                    // Waiting on live t3team sub-run children: not "Done" yet.
-                    label: "Waiting",
+                    // DECLARED waiting: a registered `op:wait` is still
+                    // pending — outranks the derived fact below. Standard
+                    // working hue: amber is reserved for "needs you".
+                    label: SUB_RUN_WAITING_DECLARED_LABEL,
                     icon: null,
-                    className: "text-amber-700 dark:text-amber-300",
+                    className: "text-sky-600 dark:text-sky-400",
                   }
-                : isWoke
+                : props.waitingOnChildren === true
                   ? {
-                      label: "Woke",
-                      icon: "woke" as const,
-                      className: "text-amber-700 dark:text-amber-300",
+                      // DERIVED waiting on live t3team sub-run children: not
+                      // "Done" yet — nothing is owed to the user, so it keeps
+                      // the standard working/in-progress hue (amber is
+                      // reserved for "needs you": Approval, Woke, Question
+                      // awaiting answer).
+                      label: SUB_RUN_MONITORING_LABEL,
+                      icon: null,
+                      className: "text-sky-600 dark:text-sky-400",
                     }
-                  : isUnread
+                  : isWoke
                     ? {
-                        label: "Done",
-                        icon: "done" as const,
-                        className: "text-emerald-700 dark:text-emerald-300",
+                        label: "Woke",
+                        icon: "woke" as const,
+                        className: "text-amber-700 dark:text-amber-300",
                       }
-                    : null;
+                    : isUnread
+                      ? {
+                          label: "Done",
+                          icon: "done" as const,
+                          className: "text-emerald-700 dark:text-emerald-300",
+                        }
+                      : null;
   const isWokeStatus = topStatus?.icon === "woke";
 
   const branchMismatch = resolveLocalCheckoutBranchMismatch({
@@ -1998,7 +2021,8 @@ export default function Sidebar() {
   // subRunCountsByParentId to t3team-sidebarThreadDataStore. Per-row slots
   // (InboxSubRunsChip, InboxThreadAttribution) read those maps with narrow
   // Zustand selectors — no per-row useProjectStore subscriptions, memo intact.
-  const { childThreadIds, childThreadsByParentId } = useT3TeamSidebarThreadMeta();
+  const { childThreadIds, childThreadsByParentId, waitingDeclaredThreadIds } =
+    useT3TeamSidebarThreadMeta();
   // t3team: mirror the relation for chrome outside this component (Agents panel fork section) —
   // see t3team-childThreadRelationsStore.ts for why this is a mirror rather than a second
   // useT3TeamChildThreadRelations()/useProjectStore() instance elsewhere.
@@ -4317,11 +4341,15 @@ export default function Sidebar() {
                     // one of its sub-run children is still live (non-settled,
                     // running or idle) — the same relation map the sub-run chip
                     // renders; legacy parent:N sub-runs never appear there.
-                    const waitingOnChildren = (childThreadsByParentId.get(thread.id) ?? [])
-                      .some(
-                        (child) =>
-                          !child.settled && (child.status === "running" || child.status === "idle"),
-                      );
+                    const waitingOnChildren = (childThreadsByParentId.get(thread.id) ?? []).some(
+                      (child) =>
+                        !child.settled && (child.status === "running" || child.status === "idle"),
+                    );
+                    // The DECLARED waiting fact (a registered `op:wait` still
+                    // pending) is per-thread local state, not something the live
+                    // child relation can derive — read it from the relations
+                    // set. It outranks `waitingOnChildren` for the label.
+                    const waitingDeclared = waitingDeclaredThreadIds.has(thread.id);
                     return (
                       <SidebarThreadRow
                         // Keyed per variant on purpose: when a thread settles,
@@ -4355,6 +4383,7 @@ export default function Sidebar() {
                         }
                         isPinned={thread.pinnedAt != null}
                         waitingOnChildren={waitingOnChildren}
+                        waitingDeclared={waitingDeclared}
                         sortable={sortable}
                         snoozeWakeLabelText={
                           section === "snoozed" && thread.snoozedUntil != null

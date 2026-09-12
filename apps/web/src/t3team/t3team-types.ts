@@ -99,13 +99,34 @@ export type ProjectThread = {
    */
   pendingUserInput?: boolean;
   /**
+   * True while the thread is in plan mode, its latest turn settled cleanly,
+   * and an actionable (unimplemented) proposed plan still exists: it stopped
+   * after presenting its plan and is waiting on the parent's approval. The
+   * SAME pure predicate the server's children tool applies
+   * (packages/shared/t3team-threadRunStatus `deriveThreadAwaitingParent`).
+   * Shell-sourced live state; recomputed on every live sync, absence clears.
+   * Drives the parent-side "Plan awaiting approval" indicator in the sub-run
+   * tree — the mirror of the plan the parent's child presented.
+   */
+  awaitingParent?: boolean;
+  /**
    * True while this thread's own work is settled but it has one or more
    * non-terminal, non-settled t3team children (durable handoff relation —
-   * legacy `parent:N` sub-runs never count). The row reads "Waiting", not
-   * "Done"/"Completed" — mirrors the server primitive's `waiting` run state
-   * (t3team-threadRunStatus). Recomputed on every live sync; absence clears.
+   * legacy `parent:N` sub-runs never count). The DERIVED waiting fact: the
+   * row reads "Monitoring", not "Done"/"Completed" — mirrors the server
+   * primitive's `waiting` run state (t3team-threadRunStatus). Recomputed on
+   * every live sync; absence clears.
    */
   waitingOnChildren?: boolean;
+  /**
+   * True while this thread has registered a `t3team_children` wait (`op: wait`)
+   * that is still pending — the DECLARED waiting fact: a genuine blocking
+   * relationship, not just "children are live". Derived from the thread's own
+   * durable activities (open registered/resolved pair) — no flag anyone sets.
+   * The row reads "Waiting" (declared outranks derived "Monitoring"); both
+   * keep the standard working/in-progress colour. Absence clears.
+   */
+  waitingDeclared?: boolean;
   childStatusUpdatedAt?: string | null;
 };
 

@@ -102,6 +102,30 @@ export const SUB_RUN_STATUS_LABEL: Record<ProjectThread["status"], string> = {
 };
 
 /**
+ * The two WAITING labels, defined in ONE place (they may become icon-led
+ * later, so keep the text here, not scattered across components).
+ *
+ * The parent's settled-own-work + children situation is TWO distinct facts,
+ * not one: DERIVED ("has live children") is the looser state — keeping an
+ * eye on children that are still running; DECLARED ("a `t3team_children`
+ * `op: wait` registered on this thread is still pending") is the stronger,
+ * intentional blocking relationship. Against "Waiting", "Monitoring" reads
+ * as the looser state; keep that contrast — a later reader who sees only one
+ * will otherwise collapse them back together. DECLARED outranks DERIVED for
+ * the label (a parent explicitly blocked on a result is more specific than
+ * one merely supervising); a parent's OWN live work outranks both.
+ *
+ * Both use the standard working/in-progress colour, NOT amber: amber stays
+ * reserved for "Question awaiting answer", the only one of these that
+ * actually needs the user. Rejected names: "Paused" (that is a resumable
+ * orchestration run state, and the parent is not suspended — it finished its
+ * part) and "Idle" (`ThreadRunState` "idle" means nothing is happening — the
+ * opposite of "children are running").
+ */
+export const SUB_RUN_MONITORING_LABEL = "Monitoring";
+export const SUB_RUN_WAITING_DECLARED_LABEL = "Waiting";
+
+/**
  * The live status TEXT of a panel sub-run/agent row — the SAME shared resolution the
  * sidebar sub-run rows use (`resolveActivityPillDisplay` over the same
  * `activityLabel`/`activityState` fields, so the panel and the sidebar never
@@ -115,7 +139,13 @@ export const SUB_RUN_STATUS_LABEL: Record<ProjectThread["status"], string> = {
 export function resolveSubRunStatusLabel(
   thread: Pick<
     ProjectThread,
-    "status" | "activityLabel" | "activityState" | "pendingUserInput" | "waitingOnChildren"
+    | "status"
+    | "activityLabel"
+    | "activityState"
+    | "pendingUserInput"
+    | "waitingOnChildren"
+    | "waitingDeclared"
+    | "awaitingParent"
   >,
   options: { readonly activityLabelsEnabled: boolean },
 ): string {
@@ -125,16 +155,28 @@ export function resolveSubRunStatusLabel(
   if (thread.pendingUserInput === true) {
     return "Question awaiting answer";
   }
-  // Own work settled but a t3team child is still live: the parent is waiting
-  // on that work — not done, not idle. Own live work (running) and a failed
-  // row (error) keep their own word, mirroring the server primitive's
-  // precedence.
+  // A plan-mode child that presented its plan and stopped: the turn IS
+  // completed, but the parent owes this child a decision (same surface,
+  // same navigation as the pending question above — the amber pending
+  // treatment, never a separate indicator system).
+  if (thread.awaitingParent === true) {
+    return "Plan awaiting approval";
+  }
+  // Own work settled: the thread is waiting on child work. Two facts, one
+  // branch — the DECLARED one (a registered `op: wait` still pending) is the
+  // stronger, intentional blocking state and outranks the DERIVED one
+  // (children merely still live). A parent explicitly blocked on a result
+  // reads "Waiting", a parent merely supervising live children reads
+  // "Monitoring". Own live work (running) and a failed row (error) keep their
+  // own word, mirroring the server primitive's precedence.
   if (
-    thread.waitingOnChildren === true &&
+    (thread.waitingOnChildren === true || thread.waitingDeclared === true) &&
     thread.status !== "running" &&
     thread.status !== "error"
   ) {
-    return "Waiting";
+    return thread.waitingDeclared === true
+      ? SUB_RUN_WAITING_DECLARED_LABEL
+      : SUB_RUN_MONITORING_LABEL;
   }
   const label = SUB_RUN_STATUS_LABEL[thread.status];
   if (thread.status !== "running") return label;
