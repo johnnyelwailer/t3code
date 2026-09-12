@@ -391,6 +391,7 @@ import {
   collectUserMessageBlobPreviewUrls,
   createLocalDispatchSnapshot,
   deriveComposerSendState,
+  deriveComposerTasksProgress,
   dismissBranchMismatchForSession,
   hasEnvironmentReconnectWarningGraceElapsed,
   latestTurnStartFailureId,
@@ -5468,24 +5469,16 @@ export default function ChatView(props: ChatViewProps) {
         : null,
     [activeThreadBranch, activeWorktreePath, envMode, gitStatusQuery.data?.refName, isServerThread],
   );
-  const activeComposerTasksProgress = useMemo(() => {
-    if (!activeLatestTurn || latestTurnSettled || activePlan?.turnId !== activeLatestTurn.turnId) {
-      return null;
-    }
-    const currentStep =
-      activePlan.steps.find((step) => step.status === "inProgress") ??
-      activePlan.steps.find((step) => step.status === "pending");
-    if (!currentStep) return null;
-    return {
-      step: currentStep.step,
-      completedSteps: activePlan.steps.filter((step) => step.status === "completed").length,
-      totalSteps: activePlan.steps.length,
-    };
-  }, [activeLatestTurn, activePlan, latestTurnSettled]);
-  const activeComposerTaskSteps =
-    activeComposerTasksProgress && activePlan && activePlan.turnId === activeLatestTurn?.turnId
-      ? activePlan.steps
-      : null;
+  const composerTasksProgressView = useMemo(
+    () =>
+      deriveComposerTasksProgress({
+        activeLatestTurnId: activeLatestTurn?.turnId ?? null,
+        activePlan,
+      }),
+    [activeLatestTurn?.turnId, activePlan],
+  );
+  const activeComposerTasksProgress = composerTasksProgressView.progress;
+  const activeComposerTaskSteps = composerTasksProgressView.steps;
 
   const publishComposerOverlayHeight = useCallback((height: number) => {
     const nextHeight = Math.ceil(height);
