@@ -96,6 +96,12 @@ export function projectThreadsEqual(left: ProjectThread, right: ProjectThread): 
     // would not re-render the row.
     left.activityLabel === right.activityLabel &&
     left.activityState === right.activityState &&
+    // Pending-question indicator: a question docking or clearing must diff
+    // through the equality gate or the sub-run row would not update.
+    left.pendingUserInput === right.pendingUserInput &&
+    // Waiting-on-children indicator: a child starting or settling must diff
+    // through the equality gate or the parent row would not update.
+    left.waitingOnChildren === right.waitingOnChildren &&
     projectThreadArraysEqual(left.selectedToolIds, right.selectedToolIds)
   );
 }

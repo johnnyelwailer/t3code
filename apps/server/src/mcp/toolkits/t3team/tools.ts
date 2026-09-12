@@ -4,10 +4,14 @@
  * dispatch/catalog once, then adding only a small static Tool.make wrapper here.
  */
 import * as Schema from "effect/Schema";
-import * as Scope from "effect/Scope";
 import { Tool, Toolkit } from "effect/unstable/ai";
 
-import { OrchestrationEngineService } from "../../../orchestration/Services/OrchestrationEngine.ts";
+import {
+  OrchestrationEngineService,
+} from "../../../orchestration/Services/OrchestrationEngine.ts";
+import {
+  ProjectionThreadActivityRepository,
+} from "../../../persistence/Services/ProjectionThreadActivities.ts";
 import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
 import { T3TEAM_WORKFLOW_TAGLINE } from "../../../t3team-workflowManual.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
@@ -15,16 +19,16 @@ import * as McpInvocationContext from "../../McpInvocationContext.ts";
 const dependencies = [McpInvocationContext.McpInvocationContext, T3TeamToolBroker];
 
 // t3team_ask_user does not route through the t3team broker: the handler
-// appends user-input activities to the orchestration thread directly and
-// suspends on the durable answer event, so its handler needs the
-// OrchestrationEngine instead of the broker binding. `Scope.Scope` is listed
-// because the handler registers a cancellation finalizer (Effect.addFinalizer
-// widens R with the ambient Scope); the toolkit's toLayer provides the ambient
-// scope and excludes it from the layer's public requirements.
+// appends a durable user-input.requested activity (responseMode "message")
+// to the orchestration thread directly and returns immediately — the answer
+// arrives later as a new-turn user message via the decider's message mode
+// branch. It needs the OrchestrationEngine (command dispatch) and the
+// projection activity repository (one-pending-question-per-thread check,
+// same query the shell pending count uses).
 const askUserDependencies = [
   McpInvocationContext.McpInvocationContext,
   OrchestrationEngineService,
-  Scope.Scope,
+  ProjectionThreadActivityRepository,
 ];
 
 /** Canonical broker tools exposed through provider-safe MCP names. Keep this registry beside
@@ -508,28 +512,47 @@ export const T3TeamWorkflowResumeTool = Tool.make("t3team_workflow_resume", {
 // Render an inline, sandboxed HTML/SVG widget in the calling thread. This is a
 // current-thread operation: the handler deliberately goes through the bound
 // broker surface, so normal thread resolution and tool-group policy still apply.
-// Structured user question: ask the user a question, suspend this turn until
-// they answer, and return the answer as the tool result. Works for any
-// agent thread — in particular for harnesses whose model ships no native
-// question tool. The question is surfaced through the thread's pending
-// user-input panel (user-input.requested activity) and the answer comes back
-// through the same path the provider adapters' AskUserQuestion uses.
+// Structured user question: ask the user a question that stays docked in
+// their composer until they answer or dismiss it (durable message-mode
+// question — survives the turn ending and restarts). The tool returns
+// immediately; the answer arrives in a later turn as a user message. The
+// handler appends the user-input.requested activity directly and refuses to
+// ask a second question while one is pending.
 export const T3TeamAskUserTool = Tool.make("t3team_ask_user", {
   description:
-    "Ask the user a structured question and suspend this turn until they answer. " +
-    "The question is shown in the thread's composer (options become answer buttons); " +
-    "the user's answer is returned as the tool result. Use it when you are blocked on " +
-    "a decision or piece of information only the user can provide. Keep the question " +
-    "short and answerable in one composer submission. If the turn is interrupted " +
-    "before the user answers, the question is discarded and no result is returned.",
+    "Ask the user a structured question. The question docks in the user's composer and stays " +
+    "open until they answer or dismiss it — it survives this turn ending and session/app " +
+    "restarts. The tool returns immediately; the answer arrives in a later turn as a user " +
+    "message, so do not proceed as if answered and do not ask the same question again — the " +
+    "tool rejects a new ask while one is pending, naming the outstanding requestId. Use it " +
+    "when you are blocked on a decision or piece of information only the user can provide. " +
+    "Field shape: 'header' is a short chip label (a few words); 'question' carries the full " +
+    "context plus the question itself and may use markdown; each option's 'description' " +
+    "explains what that choice means and its trade-off, never a restatement of its label; " +
+    "mark the recommended choice with '(recommended)' in its label.",
   parameters: Schema.Struct({
     question: Schema.String.annotate({
-      description: "The question to ask the user, shown verbatim in the composer.",
-    }),
-    options: Schema.optional(Schema.Array(Schema.String)).annotate({
       description:
-        "Optional answer choices offered to the user as buttons. The user can also " +
-        "type a free-form answer.",
+        "The full context plus the question itself; markdown is rendered in the composer panel.",
+    }),
+    header: Schema.optional(Schema.String).annotate({
+      description: "Short chip label shown beside the question — a few words, not a sentence.",
+    }),
+    options: Schema.optional(
+      Schema.Array(
+        Schema.Union([
+          Schema.String,
+          Schema.Struct({
+            label: Schema.String,
+            description: Schema.optional(Schema.String),
+          }),
+        ]),
+      ),
+    ).annotate({
+      description:
+        "Optional answer choices offered as buttons. Each option is a string (label only) or " +
+        "{label, description} where description explains the choice's trade-off — never just " +
+        "the label again. The user can also type a free-form answer.",
     }),
     multiSelect: Schema.optional(Schema.Boolean).annotate({
       description: "When true (with options), the user may pick several options.",

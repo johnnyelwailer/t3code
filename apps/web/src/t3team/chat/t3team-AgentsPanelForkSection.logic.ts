@@ -113,9 +113,29 @@ export const SUB_RUN_STATUS_LABEL: Record<ProjectThread["status"], string> = {
  * unaffected (they carry the 4-state + settled visuals).
  */
 export function resolveSubRunStatusLabel(
-  thread: Pick<ProjectThread, "status" | "activityLabel" | "activityState">,
+  thread: Pick<
+    ProjectThread,
+    "status" | "activityLabel" | "activityState" | "pendingUserInput" | "waitingOnChildren"
+  >,
   options: { readonly activityLabelsEnabled: boolean },
 ): string {
+  // A question docked in this thread's composer outranks the run state: the
+  // parent's next action is to look at that question (the row click jumps to
+  // the child's thread, where the panel sits).
+  if (thread.pendingUserInput === true) {
+    return "Question awaiting answer";
+  }
+  // Own work settled but a t3team child is still live: the parent is waiting
+  // on that work — not done, not idle. Own live work (running) and a failed
+  // row (error) keep their own word, mirroring the server primitive's
+  // precedence.
+  if (
+    thread.waitingOnChildren === true &&
+    thread.status !== "running" &&
+    thread.status !== "error"
+  ) {
+    return "Waiting";
+  }
   const label = SUB_RUN_STATUS_LABEL[thread.status];
   if (thread.status !== "running") return label;
   return resolveActivityPillDisplay({

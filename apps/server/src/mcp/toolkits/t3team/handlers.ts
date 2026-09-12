@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import { t3teamHelp } from "../../../t3team-help.ts";
 import { T3TEAM_MCP_SERVER_NAME, T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
-import { t3TeamAskUser } from "./askUser.ts";
+import { t3TeamAskUser, type T3TeamAskUserOption } from "./t3team-askUser.ts";
 import { T3TEAM_MCP_CANONICAL_TOOL_MAP, T3TeamMcpToolError, T3TeamToolkit } from "./tools.ts";
 
 const callBroker = Effect.fn("T3TeamMcpToolkit.callBroker")(function* (
@@ -58,7 +58,8 @@ const sendMessage = Effect.fn("T3TeamMcpToolkit.sendMessage")(function* (input: 
 
 const askUser = Effect.fn("T3TeamMcpToolkit.askUser")(function* (input: {
   readonly question: string;
-  readonly options?: readonly string[] | undefined;
+  readonly header?: string | undefined;
+  readonly options?: readonly (string | T3TeamAskUserOption)[] | undefined;
   readonly multiSelect?: boolean | undefined;
   readonly allowFreeText?: boolean | undefined;
 }) {

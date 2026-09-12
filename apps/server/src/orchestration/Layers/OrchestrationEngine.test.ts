@@ -304,6 +304,91 @@ describe("OrchestrationEngine", () => {
     },
   );
 
+  it("delivers multi-select async answers joined with a bullet, surviving comma labels", async () => {
+    const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-async-multiselect-"));
+    const databasePath = NodePath.join(directory, "state.sqlite");
+    const system = await createOrchestrationSystem(databasePath);
+    const threadId = ThreadId.make("async-multiselect-thread");
+    const requestId = ApprovalRequestId.make("t3team-ask-user:multiselect");
+    try {
+      await system.run(
+        system.engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("async-multiselect-project"),
+          projectId: ProjectId.make("async-multiselect-project"),
+          title: "Async multi-select",
+          workspaceRoot: "/tmp/async-multiselect",
+          createdAt: now(),
+        }),
+      );
+      await system.run(
+        system.engine.dispatch({
+          type: "thread.create",
+          commandId: CommandId.make("async-multiselect-thread"),
+          threadId,
+          projectId: ProjectId.make("async-multiselect-project"),
+          title: "Async multi-select",
+          modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: null,
+          createdAt: now(),
+        }),
+      );
+      await system.run(
+        system.engine.dispatch({
+          type: "thread.activity.append",
+          commandId: CommandId.make("async-multiselect-question"),
+          threadId,
+          createdAt: now(),
+          activity: {
+            id: EventId.make("async-multiselect-question"),
+            kind: "user-input.requested",
+            summary: "User input requested",
+            tone: "info",
+            turnId: null,
+            createdAt: now(),
+            payload: {
+              requestId,
+              responseMode: "message",
+              questions: [
+                {
+                  id: requestId,
+                  header: "Question",
+                  question: "Pick some flavors",
+                  options: [
+                    { label: "Chocolate, fudge", description: "Chocolate, fudge" },
+                    { label: "Vanilla", description: "Vanilla" },
+                  ],
+                  multiSelect: true,
+                },
+              ],
+            },
+          },
+        }),
+      );
+      await system.run(
+        system.engine.dispatch({
+          type: "thread.user-input.respond",
+          commandId: CommandId.make("async-multiselect-response"),
+          threadId,
+          requestId,
+          answers: { [requestId]: ["Chocolate, fudge", "Vanilla"] },
+          createdAt: "2026-01-01T00:00:02.000Z",
+        }),
+      );
+      const after = await system.readModel();
+      const userMessages = after.threads[0]?.messages.filter((message) => message.role === "user");
+      expect(userMessages).toHaveLength(1);
+      // The bullet join keeps a label containing a comma unambiguous.
+      expect(userMessages?.[0]?.text).toBe("Pick some flavors\nChocolate, fudge \u2022 Vanilla");
+    } finally {
+      await system.dispose();
+      await NodeFSP.rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("bootstraps command handling from persisted projections without reading the full snapshot", async () => {
     let nextSequence = 8;
     const eventStore: OrchestrationEventStoreShape = {

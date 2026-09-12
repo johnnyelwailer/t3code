@@ -785,6 +785,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // When a snooze ended (timer or early wake); drives the Woke pill until
   // the user visits the thread.
   wokeAt: string | null;
+  // t3team: true while this thread's own work is settled but it still has
+  // live (non-terminal, non-settled) t3team sub-run children — the row reads
+  // "Waiting" instead of "Done" (same precedence as the shared
+  // t3team-threadRunStatus primitive: reaching the waiting branch already
+  // means no live/failed own session).
+  waitingOnChildren?: boolean;
   isActive: boolean;
   openPullRequestsInRightPanel: boolean;
   jumpLabel: string | null;
@@ -1019,19 +1025,26 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                   icon: null,
                   className: "text-red-700 dark:text-red-300",
                 }
-              : isWoke
+              : props.waitingOnChildren === true
                 ? {
-                    label: "Woke",
-                    icon: "woke" as const,
+                    // Waiting on live t3team sub-run children: not "Done" yet.
+                    label: "Waiting",
+                    icon: null,
                     className: "text-amber-700 dark:text-amber-300",
                   }
-                : isUnread
+                : isWoke
                   ? {
-                      label: "Done",
-                      icon: "done" as const,
-                      className: "text-emerald-700 dark:text-emerald-300",
+                      label: "Woke",
+                      icon: "woke" as const,
+                      className: "text-amber-700 dark:text-amber-300",
                     }
-                  : null;
+                  : isUnread
+                    ? {
+                        label: "Done",
+                        icon: "done" as const,
+                        className: "text-emerald-700 dark:text-emerald-300",
+                      }
+                    : null;
   const isWokeStatus = topStatus?.icon === "woke";
 
   const branchMismatch = resolveLocalCheckoutBranchMismatch({
@@ -4300,6 +4313,15 @@ export default function Sidebar() {
                     // not from the sidebar second-guessing what still matters.
                     const isCard = section === "active" || section === "pinned";
                     const rowVariant = isCard ? "card" : "slim";
+                    // t3team: the parent row reads "Waiting", not "Done", while
+                    // one of its sub-run children is still live (non-settled,
+                    // running or idle) — the same relation map the sub-run chip
+                    // renders; legacy parent:N sub-runs never appear there.
+                    const waitingOnChildren = (childThreadsByParentId.get(thread.id) ?? [])
+                      .some(
+                        (child) =>
+                          !child.settled && (child.status === "running" || child.status === "idle"),
+                      );
                     return (
                       <SidebarThreadRow
                         // Keyed per variant on purpose: when a thread settles,
@@ -4332,6 +4354,7 @@ export default function Sidebar() {
                             .threadPinning === true
                         }
                         isPinned={thread.pinnedAt != null}
+                        waitingOnChildren={waitingOnChildren}
                         sortable={sortable}
                         snoozeWakeLabelText={
                           section === "snoozed" && thread.snoozedUntil != null

@@ -21,6 +21,7 @@ import {
   opUsage,
   readString,
 } from "./t3team-toolBrokerChildrenShared.ts";
+import { liveChildParentIds, loadLiveChildParentIds, buildChildRoster } from "./t3team-toolBrokerChildrenLiveChildren.ts";
 import {
   type ChildThreadShell,
   type ChildrenArgs,
@@ -42,24 +43,43 @@ export function opList(
   const includeSettled = args.include_settled === true;
   if (all) {
     return deps.listProjectThreadShells(deps.callerProjectId).pipe(
-      Effect.map((shells: ReadonlyArray<ChildThreadShell>) => {
-        const unsettled = includeSettled
-          ? shells
-          : shells.filter((shell) => shell.settledOverride !== "settled");
-        const limited = unsettled.slice(0, LIST_ALL_THREAD_CAP);
-        return okResult({
-          ok: true,
-          scope: "project",
-          count: limited.length,
-          ...(unsettled.length > limited.length
-            ? { truncated: true, total: unsettled.length }
-            : {}),
-          ...(unsettled.length !== shells.length
-            ? ({ settledExcluded: shells.length - unsettled.length } as { settledExcluded: number })
-            : {}),
-          threads: limited.map((shell) => childStatusFromShell(shell)),
-        });
-      }),
+      Effect.flatMap((shells: ReadonlyArray<ChildThreadShell>) =>
+        deps.listParentChildRelations().pipe(
+          Effect.map((relations) => {
+            const unsettled = includeSettled
+              ? shells
+              : shells.filter((shell) => shell.settledOverride !== "settled");
+            const limited = unsettled.slice(0, LIST_ALL_THREAD_CAP);
+            // Waiting fact resolved in memory: every child of a listed row is
+            // itself in this project snapshot, so no extra shell loads.
+            const byId = new Map<string, ChildThreadShell | undefined>(
+              shells.map((shell) => [shell.id.toString(), shell]),
+            );
+            const waitingParents = liveChildParentIds(
+              new Set(limited.map((shell) => shell.id.toString())),
+              relations,
+              byId,
+            );
+            return okResult({
+              ok: true,
+              scope: "project",
+              count: limited.length,
+              ...(unsettled.length > limited.length
+                ? { truncated: true, total: unsettled.length }
+                : {}),
+              ...(unsettled.length !== shells.length
+                ? ({ settledExcluded: shells.length - unsettled.length } as { settledExcluded: number })
+                : {}),
+              threads: limited.map((shell) =>
+                childStatusFromShell(
+                  shell,
+                  waitingParents.has(shell.id.toString()),
+                ),
+              ),
+            });
+          }),
+        ),
+      ),
       Effect.catch((error) =>
         Effect.succeed(errorResult(`Failed to list project threads: ${error}`)),
       ),
@@ -82,49 +102,36 @@ export function opList(
           Effect.forEach(childIds, (threadId) =>
             deps.loadThreadShell(ThreadId.make(threadId)),
           ).pipe(
-            Effect.map((shells) => {
-              // Settled children drop out of the default roster view (GHE #304):
-              // transcripts stay reachable (status op, include_settled, the UI
-              // fold); only the running + terminal-unsettled set is listed.
-              // Bind threadId BEFORE filtering so the mapping stays aligned.
-              const settledCount = includeSettled
-                ? 0
-                : shells.filter(
-                    (shell) => shell !== undefined && shell.settledOverride === "settled",
-                  ).length;
-              const visibleShells = childIds
-                .map((threadId, index) => ({ threadId, shell: shells[index] }))
-                .filter(
-                  (entry) =>
-                    includeSettled ||
-                    entry.shell === undefined ||
-                    entry.shell.settledOverride !== "settled",
-                );
-              const visible = visibleShells.map(({ threadId, shell }) => {
-                return shell
-                  ? { threadId, ...childStatusFromShell(shell) }
-                  : {
-                      threadId,
-                      state: "unknown" as const,
-                      note: "Child thread is no longer available.",
-                    };
-              });
-              return okResult({
-                ok: true,
-                scope: "children",
-                count: visible.length,
-                threads: visible,
-                ...(settledCount > 0 ? { settledExcluded: settledCount } : {}),
-                ...(visible.length === 0
-                  ? {
-                      hint:
-                        settledCount > 0
-                          ? `All ${settledCount} child session(s) are settled; list with include_settled:true to see them.`
-                          : `No child sessions started from this thread yet. Use t3team_start_child to spawn one.`,
-                    }
-                  : {}),
-              });
-            }),
+            Effect.flatMap((shells) =>
+              loadLiveChildParentIds(deps, new Set(childIds)).pipe(
+                Effect.map((waitingParents) => {
+                  // Settled children drop out of the default roster view (GHE
+                  // #304): transcripts stay reachable (status op, include_settled,
+                  // the UI fold); only running + terminal-unsettled are listed.
+                  const { threads, settledExcluded } = buildChildRoster(
+                    childIds,
+                    shells,
+                    includeSettled,
+                    waitingParents,
+                  );
+                  return okResult({
+                    ok: true,
+                    scope: "children",
+                    count: threads.length,
+                    threads,
+                    ...(settledExcluded > 0 ? { settledExcluded } : {}),
+                    ...(threads.length === 0
+                      ? {
+                          hint:
+                            settledExcluded > 0
+                              ? `All ${settledExcluded} child session(s) are settled; list with include_settled:true to see them.`
+                              : `No child sessions started from this thread yet. Use t3team_start_child to spawn one.`,
+                        }
+                      : {}),
+                  });
+                }),
+              ),
+            ),
             Effect.catch((error) =>
               Effect.succeed(errorResult(`Failed to list child threads: ${error}`)),
             ),
@@ -147,36 +154,41 @@ export function opStatus(
   if (!threadId) {
     return Effect.succeed(errorResult(`${opUsage("status")} — 'thread_id' is required.`));
   }
-  return loadTarget(deps, threadId).pipe(
-    Effect.flatMap((detail) => {
-      const status = deriveThreadRunStatus(detail);
-      const startedAt = status.latestTurnStartedAt;
-      const nowIso = deps.nowIso();
-      const elapsed =
-        status.state === "running"
-          ? formatElapsed(elapsedMs(startedAt, nowIso) ?? 0)
-          : status.latestTurnCompletedAt
-            ? formatElapsed(elapsedMs(startedAt, status.latestTurnCompletedAt) ?? 0)
-            : null;
-      const tail = detail.activities.slice(-STATUS_ACTIVITY_TAIL).map((activity) => ({
-        kind: activity.kind,
-        summary: activity.summary,
-        createdAt: activity.createdAt,
-      }));
-      return Effect.succeed(
-        okResult({
-          ok: true,
-          ...childStatusFromDetail(detail),
-          currentTurn: {
-            state: status.latestTurnState ?? "none",
-            ...(status.inProgressToolCall ? { inProgress: status.inProgressToolCall } : {}),
-            ...(startedAt ? { startedAt } : {}),
-            ...(elapsed ? { elapsed } : {}),
-          },
-          recentActivity: tail,
-        }),
-      );
-    }),
+  return Effect.gen(function* () {
+    const detail = yield* loadTarget(deps, threadId);
+    // Waiting fact: live work among the target's own t3team children (the
+    // durable handoff relation — legacy parent:N sub-runs never count).
+    const waitingParents = yield* loadLiveChildParentIds(
+      deps,
+      new Set([detail.id.toString()]),
+    );
+    const hasLiveChildren = waitingParents.has(detail.id.toString());
+    const status = deriveThreadRunStatus({ ...detail, hasLiveChildren });
+    const startedAt = status.latestTurnStartedAt;
+    const nowIso = deps.nowIso();
+    const elapsed =
+      status.state === "running"
+        ? formatElapsed(elapsedMs(startedAt, nowIso) ?? 0)
+        : status.latestTurnCompletedAt
+          ? formatElapsed(elapsedMs(startedAt, status.latestTurnCompletedAt) ?? 0)
+          : null;
+    const tail = detail.activities.slice(-STATUS_ACTIVITY_TAIL).map((activity) => ({
+      kind: activity.kind,
+      summary: activity.summary,
+      createdAt: activity.createdAt,
+    }));
+    return okResult({
+      ok: true,
+      ...childStatusFromDetail(detail, hasLiveChildren),
+      currentTurn: {
+        state: status.latestTurnState ?? "none",
+        ...(status.inProgressToolCall ? { inProgress: status.inProgressToolCall } : {}),
+        ...(startedAt ? { startedAt } : {}),
+        ...(elapsed ? { elapsed } : {}),
+      },
+      recentActivity: tail,
+    });
+  }).pipe(
     Effect.catch((error) => Effect.succeed(errorResult(`Failed to read thread status: ${error}`))),
   );
 }

@@ -137,14 +137,37 @@ const ASK_USER_INPUT_SCHEMA = {
   properties: {
     question: {
       type: "string",
-      description: "The question to ask the user, shown verbatim in the composer.",
+      description:
+        "The full context plus the question itself; markdown is rendered in the composer panel.",
       minLength: 1,
+    },
+    header: {
+      type: "string",
+      description: "Short chip label shown beside the question — a few words, not a sentence.",
     },
     options: {
       type: "array",
       description:
-        "Optional answer choices offered to the user as buttons. The user can also type a free-form answer.",
-      items: { type: "string" },
+        "Optional answer choices offered as buttons. Each option is a string (label only) or " +
+        "{label, description} where description explains the choice's trade-off — never just " +
+        "the label again. The user can also type a free-form answer.",
+      items: {
+        anyOf: [
+          { type: "string" },
+          {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              label: { type: "string", minLength: 1 },
+              description: {
+                type: "string",
+                description: "What this choice means and its trade-off — never a restatement of the label.",
+              },
+            },
+            required: ["label"],
+          },
+        ],
+      },
     },
     multiSelect: {
       type: "boolean",
@@ -588,7 +611,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     label: "Ask user a question",
     title: "Ask the user a structured question",
     description:
-      "Ask the user a structured question and suspend this thread's turn until they answer; the answer (option picks or free text) is returned to the agent as the tool result. The question is surfaced through the thread's pending user-input panel (user-input.requested/resolved activities), the same channel the provider adapters' AskUserQuestion uses — so it works for harnesses whose model ships no native question tool.",
+      "Ask the user a structured question that docks in their composer and stays open until they answer or dismiss it — it survives the turn ending and session/app restarts. The tool returns immediately; the answer arrives in a later turn as a user message, so do not proceed as if answered and do not re-ask (the tool rejects a new ask while one is pending, naming the outstanding requestId). Field shape: 'header' is a short chip label (a few words); 'question' carries the full context plus the question itself and may use markdown; each option's 'description' explains what that choice means and its trade-off, never a restatement of its label; mark the recommended choice with '(recommended)' in its label. Works for any agent thread — in particular for harnesses whose model ships no native question tool.",
     capabilities: ["write"],
     kind: "thread",
     surfaces: ["thread"],
