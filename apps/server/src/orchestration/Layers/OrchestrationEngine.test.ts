@@ -671,6 +671,106 @@ describe("OrchestrationEngine", () => {
       }).pipe(Effect.provide(makeOrchestrationLayer())),
   );
 
+  effectIt.effect(
+    "opted-in thread.settle is refused while background work is live at decide time, and the gate is opt-in only",
+    () =>
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(now()));
+        const engine = yield* OrchestrationEngineService;
+        const snapshots = yield* ProjectionSnapshotQuery;
+        const backgroundLiveness = yield* ThreadBackgroundLiveness.ThreadBackgroundLivenessService;
+        const projectId = ProjectId.make("project-settle-liveness");
+        const gatedThreadId = ThreadId.make("thread-settle-liveness-gated");
+        const plainThreadId = ThreadId.make("thread-settle-liveness-plain");
+
+        yield* engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("cmd-settle-liveness-project"),
+          projectId,
+          title: "Project",
+          workspaceRoot: "/tmp/project-settle-liveness",
+          defaultModelSelection: {
+            instanceId: ProviderInstanceId.make("codex"),
+            model: "gpt-5-codex",
+          },
+          createdAt: now(),
+        });
+        for (const threadId of [gatedThreadId, plainThreadId]) {
+          yield* engine.dispatch({
+            type: "thread.create",
+            commandId: CommandId.make(`cmd-settle-liveness-create-${threadId}`),
+            threadId,
+            projectId,
+            title: "Thread",
+            modelSelection: {
+              instanceId: ProviderInstanceId.make("codex"),
+              model: "gpt-5-codex",
+            },
+            interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+            runtimeMode: "full-access",
+            branch: null,
+            worktreePath: null,
+            createdAt: now(),
+          });
+        }
+        // Background work started AFTER any snapshot the sweep might have
+        // read: it must still be visible at decide time. The command carries
+        // no observation — only the flag — so nothing can age out of the
+        // gate, no matter how long the command sat in the queue.
+        for (const threadId of [gatedThreadId, plainThreadId]) {
+          backgroundLiveness.recordTaskLiveness({
+            threadId,
+            taskId: `task-settle-liveness-${threadId}`,
+            taskType: "subagent",
+            status: undefined,
+            kind: "started",
+          });
+        }
+
+        // Opted-in settle while live: refused with the settle-blocked signal
+        // (not an invariant error), and no events land.
+        const sequenceBefore = yield* engine.latestSequence;
+        const blocked = yield* engine
+          .dispatch({
+            type: "thread.settle",
+            commandId: CommandId.make("cmd-settle-liveness-blocked"),
+            threadId: gatedThreadId,
+            requireNoLiveBackgroundLiveness: true,
+          })
+          .pipe(Effect.flip);
+        expect(blocked._tag).toBe("OrchestrationThreadSettleBlockedError");
+        expect(yield* engine.latestSequence).toBe(sequenceBefore);
+
+        // The gate is opt-in: a plain thread.settle (client intent) settles
+        // despite the same live registry state.
+        yield* engine.dispatch({
+          type: "thread.settle",
+          commandId: CommandId.make("cmd-settle-liveness-plain"),
+          threadId: plainThreadId,
+        });
+
+        // Work gone (terminal notification or session death): the same
+        // opted-in command now settles. (The stranded-entry release — a
+        // registry entry that outlives its task — is bounded at the liveness
+        // source, ThreadBackgroundLiveness, and covered there; this layer
+        // proves that a null registry is the pass condition.)
+        backgroundLiveness.clearThreadLiveness(gatedThreadId);
+        yield* engine.dispatch({
+          type: "thread.settle",
+          commandId: CommandId.make("cmd-settle-liveness-after-clear"),
+          threadId: gatedThreadId,
+          requireNoLiveBackgroundLiveness: true,
+        });
+
+        const settled = yield* snapshots.getSnapshot();
+        for (const threadId of [gatedThreadId, plainThreadId]) {
+          expect(
+            settled.threads.find((candidate) => candidate.id === threadId)?.settledOverride,
+          ).toBe("settled");
+        }
+      }).pipe(Effect.provide(makeOrchestrationLayer())),
+  );
+
   it("persists deterministic read models for repeated snapshot reads", async () => {
     const createdAt = now();
     const system = await createOrchestrationSystem();
