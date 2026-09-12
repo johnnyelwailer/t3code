@@ -296,6 +296,8 @@
     "packages/client-runtime/src/state/threadCommands.ts",
     "packages/client-runtime/src/state/threadDetail.ts",
     "packages/client-runtime/src/state/threadReducer.ts",
+    "packages/client-runtime/src/state/threadRetention.ts",
+    "packages/client-runtime/src/state/threads-atoms.test.ts",
     "packages/client-runtime/src/state/threads.ts",
     "packages/contracts/src/assets.test.ts",
     "packages/contracts/src/assets.ts",

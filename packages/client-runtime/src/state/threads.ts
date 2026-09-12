@@ -29,7 +29,7 @@ import { subscribeDynamic } from "../rpc/client.ts";
 import { ThreadSnapshotLoader, type ThreadSnapshotWindow } from "./threadSnapshotHttp.ts";
 import { parseThreadKey, threadKey } from "./entities.ts";
 import { applyThreadDetailEvent } from "./threadReducer.ts";
-import { THREAD_SNAPSHOT_IDLE_TTL_MS } from "./threadRetention.ts";
+import { THREAD_SNAPSHOT_IDLE_TTL_MS, THREAD_STATE_IDLE_TTL_MS } from "./threadRetention.ts";
 import { followStreamInEnvironment } from "./runtime.ts";
 import {
   EMPTY_ENVIRONMENT_THREAD_STATE,
@@ -882,16 +882,27 @@ export function createEnvironmentThreadStateAtoms<R, E>(
     EnvironmentRegistry | EnvironmentCacheStore | ThreadSnapshotLoader | R,
     E
   >,
+  options?: {
+    /**
+     * How long the live-state node survives with no consumers before its
+     * `subscribeThread` stream is torn down. Defaults to
+     * {@link THREAD_STATE_IDLE_TTL_MS}.
+     *
+     * Only tests pass this. Cases that exercise what survives *across* a
+     * teardown (warm resume, cursors, paging, retries) use `0` so the close is
+     * a synchronous handle rather than a timer they have to drive; the tests
+     * that pin *when* teardown happens use the shipped default.
+     */
+    readonly idleTtlMs?: number;
+  },
 ) {
   // Cache definitions must outlive collectible live-atom definitions. The
   // registry retains these nodes without retaining environment or RPC scopes.
   const resumeFamily = Atom.family((key: string) =>
-    Atom.make(
-      (): ThreadResumeCache => ({
-        snapshot: undefined,
-        owner: undefined,
-      }),
-    ).pipe(
+    Atom.make((): ThreadResumeCache => ({
+      snapshot: undefined,
+      owner: undefined,
+    })).pipe(
       Atom.setIdleTTL(THREAD_SNAPSHOT_IDLE_TTL_MS),
       Atom.withLabel(`environment-thread-resume:${key}`),
     ),
@@ -899,6 +910,9 @@ export function createEnvironmentThreadStateAtoms<R, E>(
   const family = Atom.family((key: string) => {
     const { environmentId, threadId } = parseThreadKey(key);
     const resumeAtom = resumeFamily(key);
+    // This node owns the `subscribeThread` websocket stream, so its TTL — not the
+    // pure derivations in threadDetail.ts — decides whether a momentary consumer
+    // gap costs a server round trip. See THREAD_STATE_IDLE_TTL_MS.
     return runtime
       .atom(
         (get) => {
@@ -913,7 +927,10 @@ export function createEnvironmentThreadStateAtoms<R, E>(
           initialValue: EMPTY_ENVIRONMENT_THREAD_STATE,
         },
       )
-      .pipe(Atom.setIdleTTL(0), Atom.withLabel(`environment-thread-state:${key}`));
+      .pipe(
+        Atom.setIdleTTL(options?.idleTtlMs ?? THREAD_STATE_IDLE_TTL_MS),
+        Atom.withLabel(`environment-thread-state:${key}`),
+      );
   });
 
   return {
