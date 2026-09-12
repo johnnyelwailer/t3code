@@ -1,32 +1,15 @@
 /**
- * Thread silence watchdog (GHE #63) - shared types and pure helpers.
- *
- * A coordinator thread can register a silence WATCH on another thread with a
- * PER-SUBSCRIPTION timeout (a QA child may warrant 900s, a build child 30m).
- * The host tracks last activity per thread on the existing runtime event bus
- * (ThreadSilenceWatchdogService) and the sweeper emits a `thread.silent`
- * notification to the watching thread when the target has had no activity for
- * the configured duration.
- *
- * The emitted payload carries the pending-tool distinction (the critical
- * design requirement): silence WITH an in-progress tool call is a legitimate
- * long operation (higher threshold / lower severity); silence with NO active
- * tool is the real stuck signal.
- *
- * Re-emit policy: while the target stays silent, the notification re-fires at
- * each multiple of the subscription's timeout (fire at T, 2T, 3T, ...).
- * Activity on the target resets the clock.
- *
- * The complementary thread-stopped trigger: when the watched target reaches a
- * terminal session state (or is deleted) while a watch is open, the watcher is
- * notified once with `reason: "stopped"` and the watch is cleaned up - a dead
- * target is never silent.
- *
- * Durable surface (the same idiom as the child wait, GHE #55): the watch is
- * registered/cancelled as a persisted activity on the WATCHING thread
- * (`t3team.thread_silence.watch.registered` / `.cancelled`); each emission
- * appends a durable `t3team.thread_silence.detected` activity there plus an
- * actor message that drives the watching agent to react.
+ * Thread silence watchdog (GHE #63) - shared types and pure helpers. A
+ * coordinator registers a silence WATCH on another thread with a
+ * per-subscription timeout; the sweeper emits a `thread.silent` notification
+ * when the target has been silent for that duration. The payload carries the
+ * pending-tool distinction (silence WITH an in-progress tool is a legitimate
+ * long op; silence with NONE is the stuck signal). Re-emit fires at each
+ * multiple of the timeout while silent. The complementary thread-stopped
+ * trigger notifies the watcher once when the target reaches a terminal state.
+ * Durable surface: registration/cancel are persisted activities on the
+ * WATCHING thread, and each emission appends a `thread_silence.detected`
+ * activity plus an actor message there.
  *
  * @module t3team-threadSilenceWatch
  */
@@ -35,6 +18,13 @@ import type { OrchestrationEvent } from "@t3tools/contracts";
 export const THREAD_SILENCE_WATCH_REGISTERED_KIND = "t3team.thread_silence.watch.registered";
 export const THREAD_SILENCE_WATCH_CANCELLED_KIND = "t3team.thread_silence.watch.cancelled";
 export const THREAD_SILENCE_DETECTED_KIND = "t3team.thread_silence.detected";
+/**
+ * Durable "already reported terminal" marker for a watch (shared
+ * terminal-notify dedup ledger, GHE #157): appended on the WATCHING thread,
+ * payload `{ dedupKey, resumeThreadId, eventSequence, watchId, targetThreadId,
+ * stoppedStatus }`.
+ */
+export const SILENCE_WATCH_TERMINAL_NOTIFIED_KIND = "t3team.thread_silence.watch_terminal_notified";
 
 /** Default per-subscription timeout: 15 minutes (the issue's QA-child example). */
 export const THREAD_SILENCE_DEFAULT_TIMEOUT_MS = 900_000;

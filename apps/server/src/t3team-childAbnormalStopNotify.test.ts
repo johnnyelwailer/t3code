@@ -114,7 +114,7 @@ describe("makeChildAbnormalStopNotifier", () => {
       const command = actorMessage(dispatches[0]!);
       expect(command.threadId).toBe(ThreadId.make("parent-1"));
       expect(command.fromThreadId).toBe(ThreadId.make("child-1"));
-      expect(command.urgency).toBe("normal");
+      expect(command.urgency).toBe("urgent");
       expect(command.hopCount).toBe(0);
       expect(command.text).toBe(
         EXPECTED_HEAD +

@@ -48,9 +48,14 @@ const childShell = {
   childStatus: STATE,
 } as unknown as OrchestrationThread;
 
-const sessionSet = (status: string, lastError: string | null): OrchestrationEvent =>
+const sessionSet = (
+  status: string,
+  lastError: string | null,
+  seq = 0,
+): OrchestrationEvent =>
   ({
     type: "thread.session-set",
+    sequence: seq,
     payload: { threadId: ThreadId.make(CHILD), session: { status, lastError } },
   }) as unknown as OrchestrationEvent;
 
@@ -69,10 +74,11 @@ const waitRegistered = (): OrchestrationEvent =>
 const makeEngine = (
   events: OrchestrationEvent[],
   dispatches: OrchestrationCommand[],
+  replayed: OrchestrationEvent[] = [],
 ): OrchestrationEngineShape =>
   ({
     streamDomainEvents: Stream.fromIterable(events),
-    readEvents: () => Stream.empty,
+    readEvents: () => Stream.fromIterable(replayed),
     dispatch: (command: OrchestrationCommand) =>
       Effect.sync(() => {
         dispatches.push(command);
@@ -103,16 +109,24 @@ const waitFor = (dispatches: OrchestrationCommand[], count: number) =>
     expect(dispatches.length).toBeGreaterThanOrEqual(count);
   });
 
+const markerCount = (dispatches: OrchestrationCommand[]): number =>
+  dispatches.filter(
+    (c) =>
+      c.type === "thread.activity.append" &&
+      (c as { activity?: { kind?: string } }).activity?.kind === "t3team.child_abnormal_stop_notified",
+  ).length;
+
 const runScenario = (
   events: OrchestrationEvent[],
   count: number,
   assert: (dispatches: OrchestrationCommand[]) => void,
+  replayed: OrchestrationEvent[] = [],
 ) =>
   Effect.gen(function* () {
     const dispatches: OrchestrationCommand[] = [];
     yield* Effect.scoped(
       Effect.gen(function* () {
-        yield* Layer.build(makeLayer(makeEngine(events, dispatches)));
+        yield* Layer.build(makeLayer(makeEngine(events, dispatches, replayed)));
         yield* waitFor(dispatches, count);
         assert(dispatches);
       }),
@@ -158,6 +172,60 @@ describe("T3TeamChildWaitReactorLive abnormal-stop notification", () => {
         expect(messages).toHaveLength(1);
         expect(messages[0]).toContain("[Child stopped abnormally]");
       },
+    ),
+  );
+
+  // ── GHE #157 follow-up: epoch-scoped durable dedup (Fix 1) ────────────────
+
+  it.effect("notifies ONCE when two terminal session-sets land in the same stop-epoch", () =>
+    runScenario(
+      [
+        sessionSet("interrupted", "provider timeout", 1),
+        sessionSet("interrupted", "provider timeout", 2),
+      ],
+      2,
+      (dispatches) => {
+        const standalone = texts(dispatches).filter((m) =>
+          m.includes("[Child stopped abnormally]"),
+        );
+        // Two terminal events, ONE stop → exactly one standalone + one marker.
+        expect(standalone).toHaveLength(1);
+        expect(markerCount(dispatches)).toBe(1);
+      },
+    ),
+  );
+
+  it.effect("re-notifies when the child resumes (new epoch) and then stops again", () =>
+    runScenario(
+      [
+        sessionSet("interrupted", "first stop", 1),
+        sessionSet("running", null, 2),
+        sessionSet("interrupted", "second stop", 3),
+      ],
+      4,
+      (dispatches) => {
+        const standalone = texts(dispatches).filter((m) =>
+          m.includes("[Child stopped abnormally]"),
+        );
+        // A running transition starts a new epoch → the second stop notifies.
+        expect(standalone).toHaveLength(2);
+        expect(markerCount(dispatches)).toBe(2);
+      },
+    ),
+  );
+
+  it.effect("does NOT fire a spurious standalone when a persisted wait covers the terminal event", () =>
+    runScenario(
+      [sessionSet("error", "provider timeout", 5)],
+      2,
+      (dispatches) => {
+        const messages = texts(dispatches);
+        // The rehydrated (persisted) wait resolves the terminal event, so no
+        // standalone — this is the fork-before-rehydrate race (Fix 2).
+        expect(messages.filter((m) => m.includes("[Child stopped abnormally]"))).toHaveLength(0);
+        expect(messages.some((m) => m.includes("[Child wait"))).toBe(true);
+      },
+      [waitRegistered()],
     ),
   );
 });
