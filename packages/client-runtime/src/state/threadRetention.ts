@@ -28,4 +28,20 @@ export const THREAD_SNAPSHOT_IDLE_TTL_MS = 5 * 60_000;
 // rounds expiry into the next `timeoutResolution` bucket (default 1000ms, and
 // the web app constructs its registry with no options), so the effective window
 // is 5-6s, not exactly 5s.
+//
+// WHAT THIS BUYS, AND WHAT IT DOES NOT. Measured: subscriptions completing in
+// under a second fell from 17/75 to 1/62, and median subscription lifetime rose
+// from 2.9ms to 11.2s. That is a churn mitigation and it is proven.
+//
+// It is NOT proven that this explains the 50+ GB memory incident it was found
+// while investigating. RSS sampled every 20-30s has no GC boundaries and cannot
+// separate retention from allocator behaviour; the renderer's floor was not
+// monotonic across equal-size sample blocks; and the observed floor growth
+// (~1.35 GiB/h across server and renderer) needs ~37h of uninterrupted linear
+// growth to reach 50 GB. Do not cite this constant as the fix for that.
+//
+// It also does not address why a consumer count reaches zero in the first
+// place. A sidebar row that only needs metadata still instantiates the live
+// detail atom per shell update, which is the upstream cause and is tracked
+// separately.
 export const THREAD_STATE_IDLE_TTL_MS = 5_000;

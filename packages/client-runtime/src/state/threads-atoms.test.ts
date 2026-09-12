@@ -946,6 +946,64 @@ describe("createEnvironmentThreadStateAtoms", () => {
     }),
   );
 
+  it.effect("survives a session drop and return while retained", () =>
+    Effect.gen(function* () {
+      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+      const h = yield* makeHarness({ productionTtl: true, connected: true });
+      const unmount = h.registry.mount(h.stateAtom);
+      const first = yield* Queue.take(h.subscriptions);
+      yield* Queue.offer(first.events, { kind: "synchronized" });
+      yield* observeState(h.registry, h.stateAtom, (state) => state.status === "live");
+
+      // Retained with no consumer, the transport drops and returns. The node is
+      // still alive, so the session change drives a resubscribe on it rather
+      // than rebuilding it: the snapshot is not reloaded.
+      unmount();
+      yield* Effect.yieldNow;
+      yield* SubscriptionRef.set(h.sessionRef, Option.none());
+      yield* SubscriptionRef.set(h.connectionState, AVAILABLE_CONNECTION_STATE);
+      yield* Effect.yieldNow;
+      yield* SubscriptionRef.set(h.connectionState, CONNECTED_STATE);
+      yield* SubscriptionRef.set(h.sessionRef, Option.some(h.session));
+
+      const resumed = yield* Queue.take(h.subscriptions);
+      expect(resumed.afterSequence).toBe(7);
+      expect(h.counts().httpLoads).toBe(1);
+      expect(h.counts().diskLoads).toBe(1);
+
+      const remount = h.registry.mount(h.stateAtom);
+      yield* Effect.yieldNow;
+      remount();
+      yield* Effect.promise(() => vi.advanceTimersByTimeAsync(THREAD_STATE_IDLE_TTL_MS + 1001));
+      yield* Deferred.await(resumed.closed);
+    }),
+  );
+
+  it.effect("reloads once both the live node and the snapshot have expired", () =>
+    Effect.gen(function* () {
+      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+      const h = yield* makeHarness({ productionTtl: true });
+      const unmount = h.registry.mount(h.stateAtom);
+      const first = yield* Queue.take(h.subscriptions);
+
+      // Past BOTH clocks there is nothing warm left, so the return pays for a
+      // fresh snapshot. This is the boundary the shorter live TTL must not move:
+      // the snapshot's own five minutes still governs when data is discarded.
+      unmount();
+      yield* Effect.promise(() => vi.advanceTimersByTimeAsync(THREAD_STATE_IDLE_TTL_MS + 1001));
+      yield* Deferred.await(first.closed);
+      yield* Effect.promise(() => vi.advanceTimersByTimeAsync(THREAD_SNAPSHOT_IDLE_TTL_MS + 1));
+
+      const remount = h.registry.mount(h.stateAtom);
+      const next = yield* Queue.take(h.subscriptions);
+      expect(h.counts()).toEqual({ httpLoads: 2, diskLoads: 2, opened: 2, active: 1 });
+
+      remount();
+      yield* Effect.promise(() => vi.advanceTimersByTimeAsync(THREAD_STATE_IDLE_TTL_MS + 1001));
+      yield* Deferred.await(next.closed);
+    }),
+  );
+
   it.effect("cancels older-page work on unmount and permits it again on a warm return", () =>
     Effect.gen(function* () {
       const h = yield* makeHarness({
