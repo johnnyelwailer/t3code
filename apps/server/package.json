@@ -16,8 +16,8 @@
   ],
   "type": "module",
   "scripts": {
-    "dev": "node --watch src/bin.ts",
-    "dev:t3team": "node --watch src/t3team-bin.ts",
+    "dev": "node --watch --import ./scripts/t3team-distribution-devLoader.ts src/bin.ts",
+    "dev:t3team": "node --watch --import ./scripts/t3team-distribution-devLoader.ts src/t3team-bin.ts",
     "build:bundle": "vp pack && vp pack src/service-launcher.ts --out-dir dist --no-clean",
     "start": "node dist/bin.mjs",
     "start:t3team": "node dist/t3team-bin.mjs",
