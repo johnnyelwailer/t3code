@@ -140,6 +140,7 @@ import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts"
 import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStore.ts";
 import * as ToolAuthService from "./toolauth/t3team-ToolAuthService.ts";
 import { T3TeamThreadToolContextEvictionReactorLive } from "./t3team-threadToolContextEvictionReactor.ts";
+import { T3TeamProjectSourceIconReactorLive } from "./t3team-projectSourceIconReactor.ts";
 import {
   t3teamAtlassianAccountsRouteLayer,
   t3teamAtlassianAssetRouteLayer,
@@ -356,6 +357,7 @@ const ReactorLayerLive = Layer.empty.pipe(
   Layer.provideMerge(CheckpointReactorLive),
   Layer.provideMerge(ThreadDeletionReactorLive),
   Layer.provideMerge(T3TeamThreadToolContextEvictionReactorLive),
+  Layer.provideMerge(T3TeamProjectSourceIconReactorLive),
   Layer.provideMerge(ThreadSettlementReactor.layer),
   Layer.provideMerge(AgentAwarenessRelay.layer.pipe(Layer.provide(ServerSecretStore.layer))),
   Layer.provideMerge(RuntimeReceiptBusLive),
