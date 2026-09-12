@@ -115,21 +115,31 @@ describe("shouldUseRestingComposerLayout", () => {
     expect(shouldUseRestingComposerLayout({ ...resting, collapseOnBlur: false })).toBe(false);
   });
 
-  it("rests a scroll-collapsed composer even while focused", () => {
+  it("keeps a scroll-collapsed composer expanded while focused", () => {
     expect(
       shouldUseRestingComposerLayout({ ...resting, isFocused: true, isScrollCollapsed: true }),
+    ).toBe(false);
+  });
+
+  it("rests a scroll-collapsed composer when unfocused, regardless of the blur preference", () => {
+    expect(
+      shouldUseRestingComposerLayout({
+        ...resting,
+        isFocused: false,
+        isScrollCollapsed: true,
+        collapseOnBlur: false,
+      }),
     ).toBe(true);
   });
 
-  it("rests a scroll-collapsed composer regardless of the blur preference", () => {
+  it("never rests while focused, even when both scroll and blur collapse are requested", () => {
     expect(
       shouldUseRestingComposerLayout({
         ...resting,
         isFocused: true,
         isScrollCollapsed: true,
-        collapseOnBlur: false,
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("keeps the composer expanded while the timeline fits above it", () => {
