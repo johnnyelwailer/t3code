@@ -328,13 +328,65 @@ describe("remapProjectThreadToStoredProject", () => {
       defaultModelSelection: null,
     };
     expect(
-      mapLiveThreadToProjectThread({ ...base, hasPendingUserInput: true } as never).pendingUserInput,
+      mapLiveThreadToProjectThread({ ...base, hasPendingUserInput: true } as never)
+        .pendingUserInput,
     ).toBe(true);
     expect(
-      mapLiveThreadToProjectThread({ ...base, hasPendingUserInput: false } as never).pendingUserInput,
+      mapLiveThreadToProjectThread({ ...base, hasPendingUserInput: false } as never)
+        .pendingUserInput,
     ).toBe(false);
+    expect(mapLiveThreadToProjectThread(base as never).pendingUserInput).toBeUndefined();
+  });
+
+  it("carries the plan-mode awaiting-parent fact onto ProjectThread (same predicate as the children tool)", () => {
+    const base = {
+      id: "thread-plan-child",
+      projectId: ProjectId.make("live-saved"),
+      title: "Child planning",
+      messages: [],
+      createdAt: "2026-05-22T09:00:00.000Z",
+      updatedAt: "2026-05-22T10:00:00.000Z",
+      environmentId: "env-local" as EnvironmentId,
+      defaultModelSelection: null,
+      interactionMode: "plan",
+      latestTurn: {
+        turnId: "turn-1",
+        state: "completed",
+        requestedAt: "2026-05-22T09:00:01.000Z",
+        startedAt: "2026-05-22T09:00:02.000Z",
+        completedAt: "2026-05-22T09:30:00.000Z",
+        assistantMessageId: null,
+      },
+      proposedPlans: [
+        {
+          id: "plan-1",
+          turnId: "turn-1",
+          planMarkdown: "# Plan",
+          implementedAt: null,
+          implementationThreadId: null,
+          createdAt: "2026-05-22T09:29:00.000Z",
+          updatedAt: "2026-05-22T09:29:00.000Z",
+        },
+      ],
+    };
+    // The plan-mode child that presented its plan and stopped…
+    expect(mapLiveThreadToProjectThread(base as never).awaitingParent).toBe(true);
+    // …reads plain completed once the approval-implementation turn consumes the plan.
+    const implemented = {
+      ...base,
+      proposedPlans: [
+        {
+          ...base.proposedPlans[0]!,
+          implementedAt: "2026-05-22T10:00:00.000Z",
+          implementationThreadId: "thread-impl",
+          updatedAt: "2026-05-22T10:00:00.000Z",
+        },
+      ],
+    };
+    expect(mapLiveThreadToProjectThread(implemented as never).awaitingParent).toBeUndefined();
+    // Default-mode threads never flag.
     expect(
-      mapLiveThreadToProjectThread(base as never).pendingUserInput,
+      mapLiveThreadToProjectThread({ ...base, interactionMode: "default" } as never).awaitingParent,
     ).toBeUndefined();
   });
 

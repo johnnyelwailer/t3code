@@ -69,7 +69,11 @@ function SubRunRow({
         onClick={() => onOpen({ projectId: thread.projectId, threadId: thread.id })}
         className="flex min-w-0 flex-1 items-center gap-2 text-left"
       >
-        <SubRunStatusIcon status={thread.status} pendingUserInput={thread.pendingUserInput === true} />
+        <SubRunStatusIcon
+          status={thread.status}
+          pendingUserInput={thread.pendingUserInput === true}
+          awaitingParent={thread.awaitingParent === true}
+        />
         <span className="min-w-0 flex-1 truncate text-sm">{thread.title}</span>
         <span className="shrink-0 font-mono text-[.7rem] text-muted-foreground/80">
           {resolveSubRunStatusLabel(thread, { activityLabelsEnabled })}

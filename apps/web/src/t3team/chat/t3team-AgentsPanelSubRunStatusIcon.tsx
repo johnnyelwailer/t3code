@@ -18,6 +18,7 @@ import type { ProjectThread } from "~/t3team/t3team-types";
 export function SubRunStatusIcon({
   status,
   pendingUserInput = false,
+  awaitingParent = false,
   className,
 }: {
   status: ProjectThread["status"];
@@ -27,11 +28,17 @@ export function SubRunStatusIcon({
    * look at that question, not the child's run state.
    */
   pendingUserInput?: boolean;
+  /**
+   * A plan-mode child presented its plan and stopped: the SAME amber pending
+   * treatment as a docked question (one indicator system), because the
+   * parent's next action is likewise to look at the child's plan.
+   */
+  awaitingParent?: boolean;
   /** Optional size override (the fold list renders smaller glyphs). */
   className?: string;
 }) {
   const iconClass = className ?? "size-3";
-  if (pendingUserInput) {
+  if (pendingUserInput || awaitingParent) {
     return (
       <CircleQuestionMarkIcon
         aria-hidden

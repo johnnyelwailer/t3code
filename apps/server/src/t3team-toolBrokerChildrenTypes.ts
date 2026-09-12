@@ -76,6 +76,15 @@ export interface ChildThreadDetail extends ThreadRunStatusInput {
   readonly projectId: string;
   readonly activities: ReadonlyArray<ChildThreadActivity>;
   readonly messages: ReadonlyArray<ChildThreadMessage>;
+  /** The thread's proposed-plan records (durable provider-observed plans).
+   *   The status op derives `awaitingParent`'s actionable-plan fact from this
+   *   list — detail loads carry no shell `hasActionableProposedPlan` flag. */
+  readonly proposedPlans?: ReadonlyArray<{
+    readonly id: string;
+    readonly turnId: string | null;
+    readonly implementedAt: string | null;
+    readonly updatedAt: string;
+  }>;
 }
 
 export type ParentChildRelation = {
