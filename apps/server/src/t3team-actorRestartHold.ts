@@ -31,6 +31,10 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import type { ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
 import { summarizeActorMessageForDelivery } from "./t3team-actorReactionInputSummarize.ts";
+import {
+  renderAutomatedBurstBlock,
+  splitAutomatedBurst,
+} from "./t3team-actorBurstFold.ts";
 import { loadT3TeamThreadDescendants } from "./t3team-threadStopCascade.ts";
 
 /**
@@ -121,6 +125,11 @@ export const loadInterruptedChildThreads = (
  * carries the `t3team_read_message` pull marker for over-long bodies) and one
  * line per interrupted child. Never empty — callers only build it when at
  * least one section has content.
+ *
+ * Burst fold (GHE #157): a held batch of more than the fold threshold of
+ * non-urgent messages renders the foldable ones as ONE compact list (via the
+ * shared {@link renderAutomatedBurstBlock}) instead of one inlined body each;
+ * urgent entries keep their own line. Sub-threshold batches keep the full form.
  */
 export function buildActorRestartHoldSummary(input: {
   readonly entries: ReadonlyArray<T3TeamActorMailboxEntry>;
@@ -143,14 +152,20 @@ export function buildActorRestartHoldSummary(input: {
     );
   }
   if (entries.length > 0) {
+    const heldLine = (entry: T3TeamActorMailboxEntry) =>
+      `- [${entry.messageId}] from «${entry.fromTitle}» (thread ${entry.fromThreadId}): ` +
+      summarizeActorMessageForDelivery(entry.text, entry.messageId, entry.summary);
+    const { urgent, foldable, isBurst } = splitAutomatedBurst(entries);
+    const heldLines: string[] = isBurst
+      ? [
+          ...urgent.map(heldLine),
+          ...(foldable.length > 0 ? [renderAutomatedBurstBlock(foldable)] : []),
+        ]
+      : entries.map(heldLine);
     lines.push(
       `${entries.length} inter-agent message(s) were pending and were held back ` +
         "from auto-reaction:",
-      ...entries.map(
-        (entry) =>
-          `- [${entry.messageId}] from «${entry.fromTitle}» (thread ${entry.fromThreadId}): ` +
-          summarizeActorMessageForDelivery(entry.text, entry.messageId, entry.summary),
-      ),
+      ...heldLines,
       "",
     );
   }
