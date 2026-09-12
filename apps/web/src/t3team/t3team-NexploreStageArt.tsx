@@ -1,3 +1,5 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+
 /**
  * Nexplore stage art — the brand-refresh "2FORM" language, not a gradient wash.
  *
@@ -19,29 +21,90 @@
  * let the softer duo colour intrude only as edge arcs — the label/arrow contrast depends on it.
  */
 
-const STRIP_TILE_WIDTH = 1024;
 const STRIP_HEIGHT = 96;
-/** Covers STAGE_BACKDROP_VIEW_BOX's 8192 units. */
-const STRIP_TILE_COUNT = 2;
 
 /**
- * Arcs intrude from the top and bottom edges, and stay clear of x < 200 / y < 45 — that box is
- * where `sidebar-brand` sits, and it has to stay flat ground so the label keeps its contrast.
+ * Orb placement is MEASURED, not hardcoded.
  *
- * Only 2 tiles render: the orbs occupy the left ~60px of the strip (before the brand at 90px),
- * leaving the right side flat ground so the sidebar toggle keeps its contrast.
+ * Static coordinates cannot work here. The sidebar is resizable (min 256px, no max) and the SVG is
+ * `xMinYMin slice` with a height-driven scale, so a fixed `cx` is pinned to a fixed pixel offset
+ * from the LEFT — while the header toggle is anchored to the RIGHT and slides with the width. Any
+ * constant eventually collides. The brand's width is not a constant either: it depends on the
+ * distribution's app name and the display font.
+ *
+ * So the orb is placed into the widest gap actually free of header content, remeasured whenever
+ * the header resizes. That also removes the need for a macOS branch: on macOS desktop the brand is
+ * pushed out to `--workspace-titlebar-content-left` (90px + 2rem + 0.75rem = 134px), which makes
+ * the LEFT gap the widest one, so the orb lands behind the native traffic lights on its own — and
+ * in fullscreen, where the inset drops and the brand slides back, the measurement simply picks the
+ * middle gap again.
  */
-const STRIP_ORBS: ReadonlyArray<{
-  cx: number;
-  cy: number;
-  r: number;
-  token: "orb" | "orbAlt";
-  opacity?: number;
-}> = [
-  { cx: 300, cy: 152, r: 122, token: "orb" },
-  { cx: 700, cy: -58, r: 108, token: "orbAlt", opacity: 0.9 },
-  { cx: 980, cy: 142, r: 92, token: "orb", opacity: 0.85 },
-];
+type OrbPlacement = { cx: number; cy: number; r: number };
+
+/** Radius in px. Fixed: the orb descends rather than shrinking when space runs out. */
+const ORB_RADIUS_PX = 46;
+/** Breathing room between the orb and the nearest content box. */
+const ORB_CONTENT_MARGIN_PX = 12;
+/** Centre height while the orb sits in the header band. */
+const ORB_BAND_CY_PX = 18;
+/** Header band the orb sinks past when squeezed — `--workspace-topbar-height`. */
+const HEADER_BAND_PX = 52;
+// The full-squeeze centre is derived per measurement from the fitted radius (`HEADER_BAND_PX +
+// radius + 4`), so the circle clears the band rather than leaving its top third inside it.
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+/**
+ * Widest horizontal run of the header not covered by a child element, in px from the header's left
+ * edge. Children are read generically rather than by selector, so a header that gains a control
+ * later is accounted for without touching this file.
+ */
+/**
+ * A leading run at least this wide is the macOS traffic-light reserve, not incidental padding.
+ *
+ * Off-mac the brand starts at `--sidebar-content-inset` + `--sidebar-row-content-inset` = 18px, so
+ * the leading run is far below this. On macOS desktop `resolveProjectSidebarBrandInset` pushes it
+ * to `--workspace-controls-left` = 90px, which clears it. The threshold sits between those two
+ * rather than near either, so neither a slightly roomier off-mac header nor a slightly tighter
+ * reserve flips the decision.
+ *
+ * Detecting the reserve by its shape rather than by `navigator.platform` also means fullscreen
+ * needs no special case: the inset drops, the brand slides back to 18px, and the run stops
+ * qualifying on its own.
+ */
+const TITLEBAR_RESERVE_MIN_PX = 72;
+
+function measureFreeGap(host: HTMLElement, selfContainer: Element | null): { start: number; end: number } {
+  const hostRect = host.getBoundingClientRect();
+  const occupied: Array<[number, number]> = [];
+  for (const child of host.children) {
+    if (child === selfContainer || child.contains(selfContainer)) continue;
+    const rect = child.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) continue;
+    occupied.push([rect.left - hostRect.left, rect.right - hostRect.left]);
+  }
+  occupied.sort((a, b) => a[0] - b[0]);
+
+  // The titlebar reserve wins over a merely wider run: on macOS desktop the orb belongs BEHIND the
+  // native window buttons. Widest-gap alone put it in the middle on a wide sidebar, because the run
+  // between brand and toggle outgrew the 134px reserve.
+  const leadingEnd = occupied.length > 0 ? Math.max(0, occupied[0]![0]) : hostRect.width;
+  if (leadingEnd >= TITLEBAR_RESERVE_MIN_PX) return { start: 0, end: leadingEnd };
+
+  let best = { start: 0, end: 0 };
+  let cursor = 0;
+  const consider = (start: number, end: number) => {
+    if (end - start > best.end - best.start) best = { start, end };
+  };
+  for (const [start, end] of occupied) {
+    consider(cursor, Math.max(cursor, start));
+    cursor = Math.max(cursor, end);
+  }
+  consider(cursor, hostRect.width);
+  return best;
+}
 
 const ORB_FILL: Readonly<Record<"orb" | "orbAlt", string>> = {
   orb: "var(--stage-nx-orb, #f7cbed)",
@@ -50,10 +113,61 @@ const ORB_FILL: Readonly<Record<"orb" | "orbAlt", string>> = {
 
 const GROUND_FILL = "var(--stage-nx-ground, #f05a0a)";
 
-/** Sidebar header strip: wide, so sidebar resizing reveals more canvas instead of zooming. */
-function NexploreStripArt() {
+/**
+ * Sidebar header strip. The orb is positioned from a live measurement of the header — see
+ * {@link measureFreeGap}. Exported for the story, which drives it at several sidebar widths.
+ */
+export function T3TeamNexploreStripArt() {
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const [orb, setOrb] = useState<OrbPlacement | null>(null);
+
+  const remeasure = useCallback(() => {
+    const svg = svgRef.current;
+    const host = svg?.parentElement?.parentElement ?? svg?.parentElement ?? null;
+    if (!svg || !host) return;
+    const svgHeight = svg.getBoundingClientRect().height;
+    if (svgHeight <= 0) return;
+
+    // The viewBox is height-driven under `slice`, so this converts both axes.
+    const unitsPerPx = STRIP_HEIGHT / svgHeight;
+    const gap = measureFreeGap(host, svg.parentElement);
+    const gapWidth = gap.end - gap.start;
+
+    // The orb keeps its size and SINKS when the gap tightens — it never shrinks.
+    //
+    // The two thresholds make that safe. It fits the gap outright while the gap is at least its
+    // diameter, so anywhere in that range it can sit in the header band without touching content.
+    // Below the diameter it cannot fit at any height, so it must be clear of the band entirely.
+    // Interpolating between the two lands exactly at full clearance the moment it stops fitting,
+    // so the descent is continuous and there is no width at which it overlaps.
+    const roomy = 2 * (ORB_RADIUS_PX + ORB_CONTENT_MARGIN_PX);
+    const tight = 2 * ORB_RADIUS_PX;
+    const sink = clamp((roomy - gapWidth) / (roomy - tight), 0, 1);
+    const clearedCyPx = HEADER_BAND_PX + ORB_RADIUS_PX + 4;
+    const cyPx = ORB_BAND_CY_PX + sink * (clearedCyPx - ORB_BAND_CY_PX);
+
+    setOrb({
+      cx: ((gap.start + gap.end) / 2) * unitsPerPx,
+      cy: cyPx * unitsPerPx,
+      r: ORB_RADIUS_PX * unitsPerPx,
+    });
+  }, []);
+
+  useEffect(() => {
+    const svg = svgRef.current;
+    const host = svg?.parentElement?.parentElement ?? svg?.parentElement ?? null;
+    if (!host) return;
+    remeasure();
+    // Watches the header, not just the window: the sidebar resizes without a window resize.
+    const observer = new ResizeObserver(remeasure);
+    observer.observe(host);
+    for (const child of host.children) observer.observe(child);
+    return () => observer.disconnect();
+  }, [remeasure]);
+
   return (
     <svg
+      ref={svgRef}
       className="stage-art stage-nexplore h-full w-full"
       fill="none"
       preserveAspectRatio="xMinYMin slice"
@@ -62,18 +176,9 @@ function NexploreStripArt() {
     >
       <rect width="100%" height={STRIP_HEIGHT} style={{ fill: GROUND_FILL }} />
       <g className="stage-nexplore-orbs">
-        {Array.from({ length: STRIP_TILE_COUNT }, (_unused, tile) =>
-          STRIP_ORBS.map((orb) => (
-            <circle
-              key={`${tile}-${orb.cx}-${orb.cy}`}
-              cx={orb.cx + tile * STRIP_TILE_WIDTH}
-              cy={orb.cy}
-              r={orb.r}
-              fillOpacity={orb.opacity ?? 1}
-              style={{ fill: ORB_FILL[orb.token] }}
-            />
-          )),
-        )}
+        {orb ? (
+          <circle cx={orb.cx} cy={orb.cy} r={orb.r} style={{ fill: ORB_FILL.orb }} />
+        ) : null}
       </g>
     </svg>
   );
@@ -110,5 +215,5 @@ function NexploreButtonArt() {
 }
 
 export function T3TeamNexploreStageArt({ compact = false }: { compact?: boolean }) {
-  return compact ? <NexploreButtonArt /> : <NexploreStripArt />;
+  return compact ? <NexploreButtonArt /> : <T3TeamNexploreStripArt />;
 }
