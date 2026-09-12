@@ -290,7 +290,11 @@ export const T3TeamTaskListTool = Tool.make("t3team_task_list", {
     "window. Call this after a compaction, or any time you are unsure what you were doing or " +
     "what is left, INSTEAD of re-deriving it from the transcript or by polling your children. " +
     "Takes no arguments. Returns each task with its 1-based position, subject, status, and note.",
-  parameters: Schema.Struct({}),
+  // `parameters` is OMITTED, not `Schema.Struct({})`. An empty TS object type means "any
+  // non-null", which effect renders as `{anyOf:[{object},{array}]}` — MCP clients reject a
+  // non-object tool inputSchema on `tools/list` and drop the WHOLE toolkit, not just this tool.
+  // Omitting it picks up `Tool.EmptyParams` → `{type:"object",additionalProperties:false}`.
+  // Same trap as T3TeamRecipeListTool below; guarded by t3team-mcpToolInputSchema.test.ts.
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
   dependencies,
