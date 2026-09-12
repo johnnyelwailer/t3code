@@ -1,7 +1,7 @@
-import { expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 import { ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 
-import { deriveThreadRunState, deriveThreadRunStatus } from "./t3team-threadRunStatus.ts";
+import { deriveThreadRunState, deriveThreadRunStatus, isTerminalThreadRunState } from "./t3team-threadRunStatus.ts";
 
 const shellBase = {
   id: ThreadId.make("thread-1"),
@@ -90,6 +90,77 @@ it("no turn signal at all reads idle", () => {
   expect(deriveThreadRunState({ session: null, latestTurn: null })).toBe("idle");
 });
 
+describe("waiting state (settled own work + live t3team children)", () => {
+  it("replaces a would-be completed", () => {
+    expect(
+      deriveThreadRunState({
+        session: { status: "idle" },
+        latestTurn: { state: "completed" },
+        hasLiveChildren: true,
+      }),
+    ).toBe("waiting");
+  });
+
+  it("replaces a would-be idle", () => {
+    expect(deriveThreadRunState({ session: null, latestTurn: null, hasLiveChildren: true })).toBe(
+      "waiting",
+    );
+  });
+
+  it("own live work still wins (running)", () => {
+    expect(
+      deriveThreadRunState({
+        session: { status: "running" },
+        latestTurn: null,
+        hasLiveChildren: true,
+      }),
+    ).toBe("running");
+  });
+
+  it("a dead or aborted parent stays failed/aborted", () => {
+    expect(
+      deriveThreadRunState({
+        session: { status: "error" },
+        latestTurn: null,
+        hasLiveChildren: true,
+      }),
+    ).toBe("failed");
+    expect(
+      deriveThreadRunState({
+        session: { status: "stopped" },
+        latestTurn: null,
+        hasLiveChildren: true,
+      }),
+    ).toBe("aborted");
+  });
+
+  it("the terminal predicate treats waiting itself as non-terminal", () => {
+    expect(isTerminalThreadRunState("waiting")).toBe(false);
+    expect(isTerminalThreadRunState("completed")).toBe(true);
+    expect(isTerminalThreadRunState("failed")).toBe(true);
+    expect(isTerminalThreadRunState("aborted")).toBe(true);
+    expect(isTerminalThreadRunState("running")).toBe(false);
+    expect(isTerminalThreadRunState("idle")).toBe(false);
+  });
+
+  it("flows through the full status record", () => {
+    const status = deriveThreadRunStatus({
+      ...shellBase,
+      modelSelection: { instanceId: ProviderInstanceId.make("claude"), model: "claude-opus" },
+      branch: "feat/x",
+      worktreePath: "/wt/feat-x",
+      latestTurn: {
+        state: "completed",
+        startedAt: "2026-01-01T00:30:00.000Z",
+        completedAt: "2026-01-01T01:00:00.000Z",
+      } as never,
+      session: { status: "idle" } as never,
+      hasLiveChildren: true,
+    });
+    expect(status.state).toBe("waiting");
+  });
+});
+
 it("derives the full status record from a shell", () => {
   const status = deriveThreadRunStatus({
     ...shellBase,
@@ -143,4 +214,34 @@ it("tolerates a missing model selection", () => {
   expect(status.provider).toBeNull();
   expect(status.model).toBeNull();
   expect(status.state).toBe("idle");
+});
+
+it("surfaces a pending user-input request as awaitingUserInput", () => {
+  expect(
+    deriveThreadRunStatus({
+      ...shellBase,
+      modelSelection: null as never,
+      latestTurn: null,
+      session: null,
+      hasPendingUserInput: true,
+    }).awaitingUserInput,
+  ).toBe(true);
+  expect(
+    deriveThreadRunStatus({
+      ...shellBase,
+      modelSelection: null as never,
+      latestTurn: null,
+      session: null,
+      hasPendingUserInput: false,
+    }).awaitingUserInput,
+  ).toBe(false);
+  // Detail loads carry no shell flag — they derive the fact from activities.
+  expect(
+    deriveThreadRunStatus({
+      ...shellBase,
+      modelSelection: null as never,
+      latestTurn: null,
+      session: null,
+    }).awaitingUserInput,
+  ).toBe(false);
 });

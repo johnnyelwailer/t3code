@@ -90,6 +90,22 @@ export type ProjectThread = {
    *  the base pill word while a turn runs. Absent/idle = null. */
   activityState?: ActivityState | null;
   activityStateUpdatedAt?: string | null;
+  /**
+   * True while the thread has a pending user-input request (a question docked
+   * in its composer). Shell-sourced live state — absent/cleared when no
+   * question is pending. Drives the parent-side "Question awaiting answer"
+   * indicator in the sub-run tree (mirror of the composer panel the child's
+   * user sees).
+   */
+  pendingUserInput?: boolean;
+  /**
+   * True while this thread's own work is settled but it has one or more
+   * non-terminal, non-settled t3team children (durable handoff relation —
+   * legacy `parent:N` sub-runs never count). The row reads "Waiting", not
+   * "Done"/"Completed" — mirrors the server primitive's `waiting` run state
+   * (t3team-threadRunStatus). Recomputed on every live sync; absence clears.
+   */
+  waitingOnChildren?: boolean;
   childStatusUpdatedAt?: string | null;
 };
 

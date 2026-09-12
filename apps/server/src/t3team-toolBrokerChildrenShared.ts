@@ -27,8 +27,8 @@ const LAST_MESSAGE_SUMMARY_CHARS = 240;
 // ── Per-op usage (the self-healing discovery surface) ──────────────────────
 
 const OP_USAGE: Record<T3TeamChildOp, string> = {
-  list: `children({ op: "list", all?: boolean, include_settled?: boolean }) — this thread's child sessions with live state (name, state, provider+model, created/last-activity, worktree+branch when isolated, last-message summary). all:true lists the whole project instead. Settled children are EXCLUDED by default; include_settled:true lists them with a settled:true marker.`,
-  status: `children({ op: "status", thread_id }) — one thread's current turn state, in-progress work, elapsed time, and a recent activity tail.`,
+  list: `children({ op: "list", all?: boolean, include_settled?: boolean }) — this thread's child sessions with live state (name, state, provider+model, created/last-activity, worktree+branch when isolated, last-message summary; awaitingUserInput when a question is docked in the child's composer). A thread whose own work is settled but which still has live (non-terminal, non-settled) children reads state "waiting" instead of "completed"/"idle". all:true lists the whole project instead. Settled children are EXCLUDED by default; include_settled:true lists them with a settled:true marker.`,
+  status: `children({ op: "status", thread_id }) — one thread's current turn state, in-progress work, elapsed time, awaitingUserInput when a question is docked in its composer, and a recent activity tail.`,
   wait: `children({ op: "wait", thread_id, on?: "terminal"|"completed"|"failed", timeout?: number }) — durably resume this turn when the target thread reaches a terminal state (default on:"terminal"); a dead child resolves as failed. timeout is milliseconds.`,
   watch: `children({ op: "watch", thread_id, timeout?: number }) — watch a thread for silence (GHE #63): this thread is notified when the target has had no activity for timeout ms (default 900000 = 15m; per-subscription), re-notified at each multiple of the timeout while it stays silent. The notification flags whether a tool call was still in progress (legitimate long operation vs. the real stuck signal). If the target stops (terminal state) the watch closes with a stopped note.`,
   unwatch: `children({ op: "unwatch", thread_id }) — cancel all silence watches this thread has on the target thread.`,
@@ -85,8 +85,11 @@ export function formatElapsed(ms: number): string {
   return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
 }
 
-export function childStatusFromDetail(detail: ChildThreadDetail): Record<string, unknown> {
-  const status = deriveThreadRunStatus(detail);
+export function childStatusFromDetail(
+  detail: ChildThreadDetail,
+  hasLiveChildren: boolean = false,
+): Record<string, unknown> {
+  const status = deriveThreadRunStatus({ ...detail, hasLiveChildren });
   const lastMessage = summarizeLastMessage(detail.messages);
   return {
     threadId: status.threadId,
@@ -102,12 +105,18 @@ export function childStatusFromDetail(detail: ChildThreadDetail): Record<string,
     ...(status.branch ? { branch: status.branch } : {}),
     ...(status.worktreePath ? { worktreePath: status.worktreePath } : {}),
     ...(status.childStatus ? { childStatus: status.childStatus } : {}),
+    // Detail loads carry no shell pending flag; derive the same fact from the
+    // thread's user-input activity lifecycle (retention keeps the pending row).
+    ...(detailHasOpenUserInputRequest(detail.activities) ? { awaitingUserInput: true } : {}),
     ...(lastMessage ? { lastMessage: lastMessage } : {}),
   };
 }
 
-export function childStatusFromShell(shell: ChildThreadShell): Record<string, unknown> {
-  const status = deriveThreadRunStatus(shell);
+export function childStatusFromShell(
+  shell: ChildThreadShell,
+  hasLiveChildren: boolean = false,
+): Record<string, unknown> {
+  const status = deriveThreadRunStatus({ ...shell, hasLiveChildren });
   return {
     threadId: status.threadId,
     title: status.title,
@@ -122,7 +131,37 @@ export function childStatusFromShell(shell: ChildThreadShell): Record<string, un
     ...(status.branch ? { branch: status.branch } : {}),
     ...(status.worktreePath ? { worktreePath: status.worktreePath } : {}),
     ...(status.childStatus ? { childStatus: status.childStatus } : {}),
+    // Shell live state: a question docked in this child's composer.
+    ...(status.awaitingUserInput ? { awaitingUserInput: true } : {}),
   };
+}
+
+/**
+ * True when the detail load carries an open user-input.requested — a question
+ * docked in that thread's composer. Activities arrive in sequence order;
+ * requested opens a requestId, resolved closes it. (The shell's
+ * hasPendingUserInput flag is the same fact for live shells; detail loads do
+ * not carry it, so the status op derives it here.)
+ */
+export function detailHasOpenUserInputRequest(
+  activities: ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>,
+): boolean {
+  const openRequestIds = new Set<string>();
+  for (const activity of activities) {
+    const payload =
+      typeof activity.payload === "object" && activity.payload !== null
+        ? (activity.payload as Record<string, unknown>)
+        : null;
+    const requestId =
+      payload !== null && typeof payload.requestId === "string" ? payload.requestId : null;
+    if (requestId === null) continue;
+    if (activity.kind === "user-input.requested") {
+      openRequestIds.add(requestId);
+    } else if (activity.kind === "user-input.resolved") {
+      openRequestIds.delete(requestId);
+    }
+  }
+  return openRequestIds.size > 0;
 }
 
 /** The direct children of a thread, from its `t3team.handoff.started` activities. */

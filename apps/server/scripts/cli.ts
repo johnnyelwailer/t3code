@@ -25,6 +25,7 @@ import {
   ServerCliCommandExitError,
   ServerCliDevelopmentIconSourceMissingError,
   ServerCliDevelopmentIconTargetMissingError,
+  ServerCliDistributionNotInlinedError,
   ServerCliPublishIconSourceMissingError,
   ServerCliPublishIconTargetMissingError,
   ServerCliWebClientMissingError,
@@ -141,6 +142,71 @@ const applyDevelopmentIconOverrides = Effect.fn("applyDevelopmentIconOverrides")
 // build subcommand
 // ---------------------------------------------------------------------------
 
+/**
+ * A build invoked with T3CODE_DISTRIBUTION must ship that distribution compiled in, not the
+ * empty distribution stub. String literals survive minification and stripping unchanged, so the
+ * manifest's own strings — branding values and the asset entries under `assetsDir` (pack-root-
+ * relative) that the inlined asset map carries — are markers only the inlined module can emit.
+ * (The theme's `name` is deliberately NOT a marker: a distribution's theme name can collide with
+ * strings in the fork's own source — the nexplore theme is called "Nexplore", which the server
+ * source carries on its own.) The pack lands in a shared chunk (not necessarily the entry file),
+ * so every emitted `*.mjs` under dist is scanned. Before this check a silent no-op shipped a
+ * server that boots with no provider and no branding.
+ */
+const verifyCompiledInDistribution = Effect.fn("verifyCompiledInDistribution")(function* (
+  distDir: string,
+) {
+  const path = yield* Path.Path;
+  const fs = yield* FileSystem.FileSystem;
+  const distributionDir = process.env.T3CODE_DISTRIBUTION?.trim();
+  if (distributionDir === undefined || distributionDir === "") return;
+
+  const markers: string[] = [];
+  const manifestPath = path.join(distributionDir, "distribution.json");
+  let manifest: { branding?: Record<string, unknown>; assetsDir?: string } | undefined;
+  if (yield* fs.exists(manifestPath)) {
+    try {
+      manifest = JSON.parse(yield* fs.readFileString(manifestPath));
+    } catch {
+      manifest = undefined;
+    }
+  }
+  for (const value of Object.values(manifest?.branding ?? {})) {
+    if (typeof value === "string" && value !== "") markers.push(value);
+  }
+  const assetsDir = manifest?.assetsDir;
+  if (typeof assetsDir === "string" && assetsDir !== "") {
+    const assetDirPath = path.join(distributionDir, assetsDir);
+    if (yield* fs.exists(assetDirPath)) {
+      const assetNames = yield* fs
+        .readDirectory(assetDirPath)
+        .pipe(Effect.orElseSucceed((): string[] => []));
+      for (const name of assetNames) markers.push(`${assetsDir}/${name}`);
+    }
+  }
+
+  const names = yield* fs.readDirectory(distDir).pipe(Effect.orElseSucceed((): string[] => []));
+  let scannedFiles = 0;
+  let inlined = false;
+  for (const name of names) {
+    if (!name.endsWith(".mjs")) continue;
+    const contents = yield* fs.readFileString(path.join(distDir, name));
+    scannedFiles += 1;
+    if (!inlined && markers.some((marker) => contents.includes(marker))) inlined = true;
+  }
+
+  if (!inlined) {
+    return yield* new ServerCliDistributionNotInlinedError({
+      distributionDir,
+      expectedMarkers: markers,
+      scannedFiles,
+    });
+  }
+  yield* Effect.log(
+    `[cli] Compiled-in distribution verified: ${markers.length} marker(s) found across ${scannedFiles} dist file(s)`,
+  );
+});
+
 const buildCmd = Command.make(
   "build",
   {
@@ -162,6 +228,9 @@ const buildCmd = Command.make(
           shell: false,
         }),
       );
+
+      // A build asked to inline a distribution must be able to prove it did.
+      yield* verifyCompiledInDistribution(path.join(serverDir, "dist"));
 
       const webDist = path.join(repoRoot, "apps/web/dist");
       const clientTarget = path.join(serverDir, "dist/client");

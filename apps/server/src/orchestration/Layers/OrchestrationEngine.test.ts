@@ -304,6 +304,91 @@ describe("OrchestrationEngine", () => {
     },
   );
 
+  it("delivers multi-select async answers joined with a bullet, surviving comma labels", async () => {
+    const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-async-multiselect-"));
+    const databasePath = NodePath.join(directory, "state.sqlite");
+    const system = await createOrchestrationSystem(databasePath);
+    const threadId = ThreadId.make("async-multiselect-thread");
+    const requestId = ApprovalRequestId.make("t3team-ask-user:multiselect");
+    try {
+      await system.run(
+        system.engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("async-multiselect-project"),
+          projectId: ProjectId.make("async-multiselect-project"),
+          title: "Async multi-select",
+          workspaceRoot: "/tmp/async-multiselect",
+          createdAt: now(),
+        }),
+      );
+      await system.run(
+        system.engine.dispatch({
+          type: "thread.create",
+          commandId: CommandId.make("async-multiselect-thread"),
+          threadId,
+          projectId: ProjectId.make("async-multiselect-project"),
+          title: "Async multi-select",
+          modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          worktreePath: null,
+          createdAt: now(),
+        }),
+      );
+      await system.run(
+        system.engine.dispatch({
+          type: "thread.activity.append",
+          commandId: CommandId.make("async-multiselect-question"),
+          threadId,
+          createdAt: now(),
+          activity: {
+            id: EventId.make("async-multiselect-question"),
+            kind: "user-input.requested",
+            summary: "User input requested",
+            tone: "info",
+            turnId: null,
+            createdAt: now(),
+            payload: {
+              requestId,
+              responseMode: "message",
+              questions: [
+                {
+                  id: requestId,
+                  header: "Question",
+                  question: "Pick some flavors",
+                  options: [
+                    { label: "Chocolate, fudge", description: "Chocolate, fudge" },
+                    { label: "Vanilla", description: "Vanilla" },
+                  ],
+                  multiSelect: true,
+                },
+              ],
+            },
+          },
+        }),
+      );
+      await system.run(
+        system.engine.dispatch({
+          type: "thread.user-input.respond",
+          commandId: CommandId.make("async-multiselect-response"),
+          threadId,
+          requestId,
+          answers: { [requestId]: ["Chocolate, fudge", "Vanilla"] },
+          createdAt: "2026-01-01T00:00:02.000Z",
+        }),
+      );
+      const after = await system.readModel();
+      const userMessages = after.threads[0]?.messages.filter((message) => message.role === "user");
+      expect(userMessages).toHaveLength(1);
+      // The bullet join keeps a label containing a comma unambiguous.
+      expect(userMessages?.[0]?.text).toBe("Pick some flavors\nChocolate, fudge \u2022 Vanilla");
+    } finally {
+      await system.dispose();
+      await NodeFSP.rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("bootstraps command handling from persisted projections without reading the full snapshot", async () => {
     let nextSequence = 8;
     const eventStore: OrchestrationEventStoreShape = {
@@ -667,6 +752,106 @@ describe("OrchestrationEngine", () => {
           expect(thread?.settledOverride).toBe("settled");
           expect(thread?.settledAt).toBe(lastActivityAt);
           expect(thread?.updatedAt).toBe(now());
+        }
+      }).pipe(Effect.provide(makeOrchestrationLayer())),
+  );
+
+  effectIt.effect(
+    "opted-in thread.settle is refused while background work is live at decide time, and the gate is opt-in only",
+    () =>
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(now()));
+        const engine = yield* OrchestrationEngineService;
+        const snapshots = yield* ProjectionSnapshotQuery;
+        const backgroundLiveness = yield* ThreadBackgroundLiveness.ThreadBackgroundLivenessService;
+        const projectId = ProjectId.make("project-settle-liveness");
+        const gatedThreadId = ThreadId.make("thread-settle-liveness-gated");
+        const plainThreadId = ThreadId.make("thread-settle-liveness-plain");
+
+        yield* engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("cmd-settle-liveness-project"),
+          projectId,
+          title: "Project",
+          workspaceRoot: "/tmp/project-settle-liveness",
+          defaultModelSelection: {
+            instanceId: ProviderInstanceId.make("codex"),
+            model: "gpt-5-codex",
+          },
+          createdAt: now(),
+        });
+        for (const threadId of [gatedThreadId, plainThreadId]) {
+          yield* engine.dispatch({
+            type: "thread.create",
+            commandId: CommandId.make(`cmd-settle-liveness-create-${threadId}`),
+            threadId,
+            projectId,
+            title: "Thread",
+            modelSelection: {
+              instanceId: ProviderInstanceId.make("codex"),
+              model: "gpt-5-codex",
+            },
+            interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+            runtimeMode: "full-access",
+            branch: null,
+            worktreePath: null,
+            createdAt: now(),
+          });
+        }
+        // Background work started AFTER any snapshot the sweep might have
+        // read: it must still be visible at decide time. The command carries
+        // no observation — only the flag — so nothing can age out of the
+        // gate, no matter how long the command sat in the queue.
+        for (const threadId of [gatedThreadId, plainThreadId]) {
+          backgroundLiveness.recordTaskLiveness({
+            threadId,
+            taskId: `task-settle-liveness-${threadId}`,
+            taskType: "subagent",
+            status: undefined,
+            kind: "started",
+          });
+        }
+
+        // Opted-in settle while live: refused with the settle-blocked signal
+        // (not an invariant error), and no events land.
+        const sequenceBefore = yield* engine.latestSequence;
+        const blocked = yield* engine
+          .dispatch({
+            type: "thread.settle",
+            commandId: CommandId.make("cmd-settle-liveness-blocked"),
+            threadId: gatedThreadId,
+            requireNoLiveBackgroundLiveness: true,
+          })
+          .pipe(Effect.flip);
+        expect(blocked._tag).toBe("OrchestrationThreadSettleBlockedError");
+        expect(yield* engine.latestSequence).toBe(sequenceBefore);
+
+        // The gate is opt-in: a plain thread.settle (client intent) settles
+        // despite the same live registry state.
+        yield* engine.dispatch({
+          type: "thread.settle",
+          commandId: CommandId.make("cmd-settle-liveness-plain"),
+          threadId: plainThreadId,
+        });
+
+        // Work gone (terminal notification or session death): the same
+        // opted-in command now settles. (The stranded-entry release — a
+        // registry entry that outlives its task — is bounded at the liveness
+        // source, ThreadBackgroundLiveness, and covered there; this layer
+        // proves that a null registry is the pass condition.)
+        backgroundLiveness.clearThreadLiveness(gatedThreadId);
+        yield* engine.dispatch({
+          type: "thread.settle",
+          commandId: CommandId.make("cmd-settle-liveness-after-clear"),
+          threadId: gatedThreadId,
+          requireNoLiveBackgroundLiveness: true,
+        });
+
+        const settled = yield* snapshots.getSnapshot();
+        for (const threadId of [gatedThreadId, plainThreadId]) {
+          expect(
+            settled.threads.find((candidate) => candidate.id === threadId)?.settledOverride,
+          ).toBe("settled");
         }
       }).pipe(Effect.provide(makeOrchestrationLayer())),
   );

@@ -2841,12 +2841,16 @@ export function resolveDesktopProductName(version: string, productNameOverride?:
     : baseName;
 }
 
-function slugifyDesktopName(value: string): string {
+// `preserveCase` keeps the original casing — artifact base names are user-facing
+// ("Nexi Work" -> "Nexi-Work"); the default lowercases for filesystem slugs
+// (userDataDirName, the Linux .desktop entry name).
+function slugifyDesktopName(value: string, preserveCase = false): string {
+  const source = preserveCase ? value : value.toLowerCase();
+  const separatorPattern = preserveCase ? /[^a-zA-Z0-9]+/g : /[^a-z0-9]+/g;
   return (
-    value
+    source
       .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
+      .replace(separatorPattern, "-")
       .replace(/^-+|-+$/g, "") || "t3code"
   );
 }
@@ -2918,6 +2922,14 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     arch,
   } = options;
   const resolvedProductName = resolveDesktopProductName(version, productNameOverride);
+  // Artifact file names are derived from the resolved product name, not hardcoded:
+  // a branded build ("Nexi Work") must not ship T3-Code-* installers. The
+  // parenthetical channel/stage suffixes ("(Alpha)", "(Nightly)") are display-only,
+  // so unbranded builds keep the historical T3-Code-* shape.
+  const artifactBaseName = slugifyDesktopName(
+    resolvedProductName.replace(/\s*\([^)]*\)$/u, ""),
+    true,
+  );
   // One timestamp per build, stamped into the artifact file names (and the DMG
   // volume title) so successive builds of the same version produce distinct,
   // self-identifying artifacts instead of overwriting/colliding with each
@@ -2933,7 +2945,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     // \`), which reads like a bug and invites "simplification" that breaks
     // the escape.
     artifactName:
-      "T3-Code-" + "${version}" + "-" + "${arch}" + artifactTimestampSuffix + "." + "${ext}",
+      artifactBaseName + "-" + "${version}" + "-" + "${arch}" + artifactTimestampSuffix + "." + "${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [
       ...DESKTOP_FILE_EXCLUSIONS,

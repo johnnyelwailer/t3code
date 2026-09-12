@@ -9,7 +9,7 @@
  * Lives in its own file so t3team-AgentsPanelSubRunTree.tsx stays under the
  * additive guard's 200-LOC ceiling.
  */
-import { CircleAlertIcon, CircleCheckIcon } from "lucide-react";
+import { CircleAlertIcon, CircleCheckIcon, CircleQuestionMarkIcon } from "lucide-react";
 
 import { cn } from "~/lib/utils";
 import { ThreadActivityMorphIcon } from "~/components/t3team-ThreadActivityStatus";
@@ -17,13 +17,28 @@ import type { ProjectThread } from "~/t3team/t3team-types";
 
 export function SubRunStatusIcon({
   status,
+  pendingUserInput = false,
   className,
 }: {
   status: ProjectThread["status"];
+  /**
+   * A question is docked in this child's composer — the amber question mark
+   * outranks the lifecycle glyph, because the parent's next action is to
+   * look at that question, not the child's run state.
+   */
+  pendingUserInput?: boolean;
   /** Optional size override (the fold list renders smaller glyphs). */
   className?: string;
 }) {
   const iconClass = className ?? "size-3";
+  if (pendingUserInput) {
+    return (
+      <CircleQuestionMarkIcon
+        aria-hidden
+        className={cn("shrink-0 text-amber-600 dark:text-amber-400", iconClass)}
+      />
+    );
+  }
   if (status === "running") {
     return (
       <span className={cn("shrink-0 text-sky-600 dark:text-sky-400", className)}>

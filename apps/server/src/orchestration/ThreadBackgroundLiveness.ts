@@ -1,3 +1,6 @@
+// @effect-diagnostics globalDate:off -- recordTaskLiveness stamps wall-clock
+// time on every live transition; the registry is a pure in-memory recorder
+// (no Effect clock plumbing for a hot-path stamp).
 /**
  * ThreadBackgroundLivenessService - in-memory per-thread background liveness
  * for the sidebar status pill.
@@ -9,6 +12,14 @@
  * server restart the registry is empty until new task events arrive, which
  * matches reality: orphaned background work is not live.
  *
+ * Entries also EXPIRE, per task, after THREAD_BACKGROUND_LIVENESS_TTL_MS of
+ * silence (#475): if a task's terminal notification is lost the entry would
+ * otherwise survive until session death or restart, and every consumer of
+ * this registry (the engine's decide-time auto-settle gate, the opted-in
+ * settle gate, the shell pill, the child-settle sweep's candidacy) would be
+ * pinned by the stranded entry forever. A bounded registry at the source
+ * releases all of them at once, instead of a per-consumer bound — a
+ * duplicate state ladder.
  * "monitoring" is reserved for watch loops (monitor tasks and background
  * shells) when they are the ONLY live work; any agent work presents as
  * "working".
@@ -23,8 +34,29 @@ import * as Layer from "effect/Layer";
 export type ThreadBackgroundLiveness = "working" | "monitoring" | null;
 
 interface ThreadLivenessState {
-  readonly agents: Set<string>;
-  readonly monitors: Set<string>;
+  readonly agents: Map<string, number>;
+  readonly monitors: Map<string, number>;
+}
+
+/**
+ * Stranded-entry escape hatch (#475): a task with no lifecycle transition
+ * (task.started/progress/updated) for this long reads as NOT live. Deliberate
+ * tradeoff, visible here for future readers: a genuinely live task that
+ * emits zero lifecycle rows for longer than this is read as not-live. Live
+ * subagents and watch loops stream rows while they run (they are the feed),
+ * so sustained silence beyond the bound means stranded, not live — and the
+ * bound is what releases a stranded entry for every consumer at once.
+ */
+export const THREAD_BACKGROUND_LIVENESS_TTL_MS = 30 * 60 * 1_000;
+
+function livenessTtlEnvMs(name: string, fallbackMs: number): number {
+  const raw = process.env[name];
+  const parsed = raw === undefined ? Number.NaN : Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallbackMs;
+}
+
+export function threadBackgroundLivenessTtlMs(): number {
+  return livenessTtlEnvMs("T3TEAM_THREAD_LIVENESS_TTL_MS", THREAD_BACKGROUND_LIVENESS_TTL_MS);
 }
 
 // Classification sets are the shared contracts copies (MONITOR_TASK_TYPES:
@@ -72,7 +104,14 @@ export class ThreadBackgroundLivenessService extends Context.Service<
   }
 >()("t3/orchestration/ThreadBackgroundLiveness/ThreadBackgroundLivenessService") {}
 
-export function make(): ThreadBackgroundLivenessService["Service"] {
+export function make(
+  options: {
+    readonly ttlMs?: number;
+    readonly now?: () => number;
+  } = {},
+): ThreadBackgroundLivenessService["Service"] {
+  const ttlMs = options.ttlMs ?? threadBackgroundLivenessTtlMs();
+  const now = options.now ?? (() => Date.now());
   const stateByThreadId = new Map<string, ThreadLivenessState>();
 
   const stateFor = (threadId: string): ThreadLivenessState => {
@@ -80,7 +119,7 @@ export function make(): ThreadBackgroundLivenessService["Service"] {
     if (existing) {
       return existing;
     }
-    const created: ThreadLivenessState = { agents: new Set(), monitors: new Set() };
+    const created: ThreadLivenessState = { agents: new Map(), monitors: new Map() };
     stateByThreadId.set(threadId, created);
     return created;
   };
@@ -146,7 +185,7 @@ export function make(): ThreadBackgroundLivenessService["Service"] {
       const state = stateFor(input.threadId);
       const bucket =
         taskType !== undefined && MONITOR_TASK_TYPES.has(taskType) ? state.monitors : state.agents;
-      bucket.add(input.taskId);
+      bucket.set(input.taskId, now());
     },
 
     clearThreadLiveness: (threadId) => {
@@ -156,6 +195,24 @@ export function make(): ThreadBackgroundLivenessService["Service"] {
     getThreadBackgroundLiveness: (threadId) => {
       const state = stateByThreadId.get(threadId);
       if (!state) {
+        return null;
+      }
+      // #475: prune tasks silent past the TTL, lazily, on the read. Reads
+      // happen on every shell mapping and decide-time gate check, so a
+      // stranded entry can never outlive the bound — no timer needed.
+      const cutoff = now() - ttlMs;
+      for (const [taskId, lastSeenMs] of state.agents) {
+        if (lastSeenMs <= cutoff) {
+          state.agents.delete(taskId);
+        }
+      }
+      for (const [taskId, lastSeenMs] of state.monitors) {
+        if (lastSeenMs <= cutoff) {
+          state.monitors.delete(taskId);
+        }
+      }
+      if (state.agents.size === 0 && state.monitors.size === 0) {
+        stateByThreadId.delete(threadId);
         return null;
       }
       if (state.agents.size > 0) {

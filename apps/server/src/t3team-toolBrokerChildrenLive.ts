@@ -62,6 +62,16 @@ export function makeManageChildrenHandler(input: {
       Effect.map((ids) => ids.map((id) => id as unknown as string)),
       Effect.mapError(normalizeError),
     );
+  const listParentChildRelations: T3TeamChildrenToolDeps["listParentChildRelations"] = () =>
+    query.listParentChildRelations().pipe(
+      Effect.map((rows) =>
+        rows.map((row) => ({
+          childThreadId: String(row.childThreadId),
+          parentThreadId: String(row.parentThreadId),
+        })),
+      ),
+      Effect.mapError(normalizeError),
+    );
   const appendActivity: T3TeamChildrenToolDeps["appendActivity"] = (threadId, activity) =>
     appendThreadActivity(orchestration, threadId, {
       kind: activity.kind,
@@ -190,6 +200,7 @@ export function makeManageChildrenHandler(input: {
           loadThreadShell: loadShell,
           listProjectThreadShells: listProjectShells,
           listChildThreadIds,
+          listParentChildRelations,
           appendActivity,
           interruptTurn,
           settleThread,

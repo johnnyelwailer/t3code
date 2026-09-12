@@ -2,7 +2,7 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 
 import type { Project, Thread } from "~/types";
 import type { ProjectThread } from "~/t3team/t3team-types";
-import { deriveThreadRunState } from "@t3tools/shared/t3team-threadRunStatus";
+import { deriveThreadRunState, isTerminalThreadRunState } from "@t3tools/shared/t3team-threadRunStatus";
 import {
   mergeProjectThreadLocalState,
   upsertProjectThreadLocalState,
@@ -101,6 +101,12 @@ export function mapLiveThreadToProjectThread(
     ...(thread.activityStateUpdatedAt !== undefined
       ? { activityStateUpdatedAt: thread.activityStateUpdatedAt }
       : {}),
+    // A question docked in this thread's composer (shell live state). Drives
+    // the parent-side pending-question indicator; cleared by the next sync
+    // when the shell flag is false.
+    ...(thread.hasPendingUserInput !== undefined
+      ? { pendingUserInput: thread.hasPendingUserInput }
+      : {}),
   };
 }
 
@@ -114,6 +120,26 @@ export function mergeProjectThreads(threads: ReadonlyArray<ProjectThread>): Proj
   return [...byId.values()];
 }
 
+/**
+ * A live t3team child that keeps its parent reading "Waiting": not archived,
+ * not settled, and its run state is not terminal (completed/failed/aborted)
+ * — the SAME terminal predicate the server's children tool uses, so both
+ * surfaces agree on what "live" means.
+ */
+function isLiveT3TeamChild(thread: Thread): boolean {
+  if (thread.archivedAt) return false;
+  if (thread.settledOverride === "settled") return false;
+  return !isTerminalThreadRunState(
+    deriveThreadRunState({
+      session: thread.session,
+      latestTurn: thread.latestTurn,
+      ...(thread.backgroundLiveness !== undefined
+        ? { backgroundLiveness: thread.backgroundLiveness }
+        : {}),
+    }),
+  );
+}
+
 export function syncLiveThreadMetadataToLocalState(input: {
   threads: ReadonlyArray<ProjectThread>;
   storedProjects: ReadonlyArray<ProjectShellProject>;
@@ -123,20 +149,38 @@ export function syncLiveThreadMetadataToLocalState(input: {
   let nextThreads = input.threads as ProjectThread[];
   const parentByChildId = indexT3TeamChildParentThreads(input.liveThreads);
 
+  // Pass 1: map every live thread AND collect the parents that have a live
+  // t3team child. The relation comes only from the durable handoff index —
+  // legacy `parent:N` sub-runs never carry a parentThreadId here, so they
+  // can never trigger the waiting indicator.
+  const liveChildParentIds = new Set<string>();
+  const shadows: ProjectThread[] = [];
   for (const liveThread of input.liveThreads) {
     const mappedThread = mapLiveThreadToProjectThread(
       liveThread,
       resolveStoredProjectId(liveThread.projectId, input.storedProjects, input.liveProjects),
     );
     const inferredParentThreadId = parentByChildId.get(liveThread.id);
-    const shadowThread = {
+    shadows.push({
       ...mappedThread,
       ...(!mappedThread.parentThreadId && inferredParentThreadId
         ? { parentThreadId: inferredParentThreadId }
         : {}),
-    };
+    });
+    const parentId = mappedThread.parentThreadId ?? inferredParentThreadId;
+    if (parentId !== undefined && isLiveT3TeamChild(liveThread)) {
+      liveChildParentIds.add(parentId);
+    }
+  }
 
-    nextThreads = upsertProjectThreadLocalState(nextThreads, shadowThread);
+  // Pass 2: upsert with the waiting fact attached, so a parent's flag reflects
+  // children that appear later in the live list. Explicit false clears the
+  // flag on the next sync (the merge replaces live-derived fields).
+  for (const shadowThread of shadows) {
+    nextThreads = upsertProjectThreadLocalState(nextThreads, {
+      ...shadowThread,
+      waitingOnChildren: liveChildParentIds.has(shadowThread.id),
+    });
   }
 
   return nextThreads;

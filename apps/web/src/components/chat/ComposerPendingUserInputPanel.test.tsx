@@ -58,4 +58,44 @@ describe("ComposerPendingUserInputPanel", () => {
     expect(markup).toContain("Incremental");
     expect(markup).toContain("Big bang");
   });
+
+  it("renders the question text and option descriptions as markdown", () => {
+    const markup = renderToStaticMarkup(
+      <ComposerPendingUserInputPanel
+        pendingUserInputs={[
+          {
+            requestId: ApprovalRequestId.make("request-md"),
+            createdAt: "2026-08-15T00:00:00.000Z",
+            questions: [
+              {
+                id: "question-md",
+                header: "CR header",
+                question: "## Context\n\nThe **header** is too long; *drop* it?",
+                options: [
+                  {
+                    label: "Drop it",
+                    description: "Removes the chip; keeps the *panel*",
+                  },
+                ],
+                multiSelect: false,
+              },
+            ],
+          },
+        ]}
+        respondingRequestIds={[]}
+        answers={{}}
+        questionIndex={0}
+        onToggleOption={() => {}}
+        onAdvance={() => {}}
+      />,
+    );
+
+    // Question body: markdown, not a raw <p> dump of the source text.
+    expect(markup).toContain("<h2");
+    expect(markup).toContain("<strong>header</strong>");
+    expect(markup).toContain("<em>drop</em>");
+    expect(markup).not.toContain("The **header** is too long; *drop* it?");
+    // Option description: markdown too.
+    expect(markup).toContain("<em>panel</em>");
+  });
 });

@@ -137,14 +137,37 @@ const ASK_USER_INPUT_SCHEMA = {
   properties: {
     question: {
       type: "string",
-      description: "The question to ask the user, shown verbatim in the composer.",
+      description:
+        "The full context plus the question itself; markdown is rendered in the composer panel.",
       minLength: 1,
+    },
+    header: {
+      type: "string",
+      description: "Short chip label shown beside the question — a few words, not a sentence.",
     },
     options: {
       type: "array",
       description:
-        "Optional answer choices offered to the user as buttons. The user can also type a free-form answer.",
-      items: { type: "string" },
+        "Optional answer choices offered as buttons. Each option is a string (label only) or " +
+        "{label, description} where description explains the choice's trade-off — never just " +
+        "the label again. The user can also type a free-form answer.",
+      items: {
+        anyOf: [
+          { type: "string" },
+          {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              label: { type: "string", minLength: 1 },
+              description: {
+                type: "string",
+                description: "What this choice means and its trade-off — never a restatement of the label.",
+              },
+            },
+            required: ["label"],
+          },
+        ],
+      },
     },
     multiSelect: {
       type: "boolean",
@@ -447,76 +470,6 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       required: ["title"],
     },
   },
-  // The durable per-thread task journal. These are `implemented` — they have a
-  // real handler (`apps/server/src/t3team-toolBrokerBindingTaskJournal.ts`) and
-  // a real table (`thread_task_records`, migration t3team-056).
-  "t3team.task.write": {
-    id: "t3team.task.write",
-    label: "Write task list",
-    title: "Write this thread's task list",
-    description:
-      "Record this thread's plan as a task list that SURVIVES CONTEXT COMPACTION — it is stored outside the context window, so it is the one reliable place to keep what you are doing. This REPLACES the whole list every time: always send every task you still care about, not just the one that changed. Keep the list current — write it at the start, and rewrite it whenever a task's status changes. Mark exactly ONE task 'in_progress' at a time, so the list always says what you are doing right now. When something fails, do NOT drop the task: keep it and put the reason in its 'note' — that detail is exactly what compaction destroys. Order is the array order.",
-    capabilities: ["write"],
-    kind: "thread",
-    surfaces: ["thread"],
-    status: "implemented",
-    defaultEnabled: true,
-    inputSchema: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        tasks: {
-          type: "array",
-          description:
-            "The COMPLETE task list, in order. Replaces whatever was stored before; omitting a task deletes it.",
-          items: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              subject: {
-                type: "string",
-                description: "Imperative form of the task, e.g. 'Add the migration'.",
-                minLength: 1,
-              },
-              status: {
-                type: "string",
-                description:
-                  "Task state. Defaults to 'pending'. Keep exactly one task 'in_progress'. Use 'cancelled' (not deletion) when you decide not to do it.",
-                enum: ["pending", "in_progress", "completed", "cancelled"],
-              },
-              active_form: {
-                type: "string",
-                description:
-                  "Optional present-participle form shown while the task runs, e.g. 'Adding the migration'.",
-                minLength: 1,
-              },
-              note: {
-                type: "string",
-                description:
-                  "Optional free text — record WHY a task failed, what you already ruled out, or what a child reported back. Keep failures here rather than dropping the task.",
-                minLength: 1,
-              },
-            },
-            required: ["subject"],
-          },
-        },
-      },
-      required: ["tasks"],
-    },
-  },
-  "t3team.task.list": {
-    id: "t3team.task.list",
-    label: "Read task list",
-    title: "Read this thread's task list",
-    description:
-      "Read back this thread's durable task list — your own plan, stored outside the context window. Call this after a compaction, or any time you are unsure what you were doing or what is left, INSTEAD of re-deriving it from the transcript or by polling your children. Takes no arguments. Returns each task with its 1-based position, subject, status, and any note.",
-    capabilities: ["read"],
-    kind: "thread",
-    surfaces: ["thread"],
-    status: "implemented",
-    defaultEnabled: true,
-    inputSchema: EMPTY_OBJECT_INPUT_SCHEMA,
-  },
   "t3team.thread.search": {
     id: "t3team.thread.search",
     label: "Search this thread",
@@ -658,7 +611,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     label: "Ask user a question",
     title: "Ask the user a structured question",
     description:
-      "Ask the user a structured question and suspend this thread's turn until they answer; the answer (option picks or free text) is returned to the agent as the tool result. The question is surfaced through the thread's pending user-input panel (user-input.requested/resolved activities), the same channel the provider adapters' AskUserQuestion uses — so it works for harnesses whose model ships no native question tool.",
+      "Ask the user a structured question that docks in their composer and stays open until they answer or dismiss it — it survives the turn ending and session/app restarts. The tool returns immediately; the answer arrives in a later turn as a user message, so do not proceed as if answered and do not re-ask (the tool rejects a new ask while one is pending, naming the outstanding requestId). Field shape: 'header' is a short chip label (a few words); 'question' carries the full context plus the question itself and may use markdown; each option's 'description' explains what that choice means and its trade-off, never a restatement of its label; mark the recommended choice with '(recommended)' in its label. Works for any agent thread — in particular for harnesses whose model ships no native question tool.",
     capabilities: ["write"],
     kind: "thread",
     surfaces: ["thread"],
