@@ -12,6 +12,10 @@ import {
 import {
   ProjectionThreadActivityRepository,
 } from "../../../persistence/Services/ProjectionThreadActivities.ts";
+import {
+  T3TEAM_WIDGET_AUTHORING_GUIDANCE,
+  T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION,
+} from "@t3tools/project-context/t3teamWidgetGuidance";
 import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
 import { T3TEAM_WORKFLOW_TAGLINE } from "../../../t3team-workflowManual.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
@@ -569,14 +573,23 @@ export const T3TeamAskUserTool = Tool.make("t3team_ask_user", {
   dependencies: askUserDependencies,
 });
 
+//
+// The model-facing contract (theme variables for every color, sprite icons, fluid layout) lives
+// in @t3tools/project-context/t3teamWidgetGuidance — imported here, never restated. The tool
+// description plus the `widget_code` property description are what the agent actually sees when
+// it fills the schema; t3team-mcpToolInputSchema.test.ts locks both to the documented contract so
+// they cannot drift from the catalog snapshot again.
 export const T3TeamShowWidgetTool = Tool.make("t3team_show_widget", {
-  description:
-    "Show an inline widget in the current t3team thread. Use a small HTML or SVG fragment " +
-    "(not a complete document). The optional capabilities.tools allowlist controls which " +
-    "t3team broker tools the widget may call.",
+  description: T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION,
   parameters: Schema.Struct({
-    title: Schema.String,
-    widget_code: Schema.String,
+    title: Schema.String.annotate({
+      description:
+        "Short snake_case identifier for this widget (e.g. 'q4_revenue_chart'). Used as the artifact name.",
+    }),
+    // The full authoring contract rides the property annotation: it is the text the model reads
+    // while writing the widget body, and it is the single source of truth for the theme-token,
+    // icon-sprite, layout and CSP rules (never hard-code light or dark palette colors).
+    widget_code: Schema.String.annotate({ description: T3TEAM_WIDGET_AUTHORING_GUIDANCE }),
     format: Schema.optional(Schema.Literals(["html", "svg"])),
     loading_messages: Schema.optional(Schema.Array(Schema.String)),
     capabilities: Schema.optional(

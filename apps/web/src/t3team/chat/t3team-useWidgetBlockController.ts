@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ScopedThreadRef, T3TeamMessageWidgetAttachment } from "@t3tools/contracts";
 import { CommandId, MessageId } from "@t3tools/contracts";
 
+import { useThemeSnapshot } from "~/hooks/useTheme";
 import { useBackend } from "~/t3team/backend/t3team-BackendContext";
 import { useThread } from "~/state/entities";
 import {
@@ -64,6 +65,14 @@ export function useT3TeamWidgetBlockController(input: {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [height, setHeight] = useState(T3TEAM_WIDGET_MIN_HEIGHT);
   const nonce = useMemo(randomWidgetNonce, []);
+  // The iframe cannot inherit the host's CSS custom properties — the theme is SNAPSHOT into the
+  // srcdoc's own :root at build time. The snapshot identity is stable across renders unless the
+  // resolved theme (preference, light/dark half, custom halves, or the system appearance it
+  // follows) actually changes, so widgets re-snapshot exactly on theme flips: a widget that uses
+  // var(--*) tokens stays readable when the user (or the OS) switches light/dark instead of
+  // staying frozen on the mount-time palette. (useThemeSnapshot, not useTheme: the latter
+  // allocates a fresh object every render and would defeat the memo.)
+  const themeSnapshot = useThemeSnapshot();
   const srcdoc = useMemo(
     () =>
       buildT3TeamWidgetSrcdoc({
@@ -71,7 +80,7 @@ export function useT3TeamWidgetBlockController(input: {
         nonce,
         themeCss: collectT3TeamWidgetThemeCss(),
       }),
-    [widget.html, nonce],
+    [widget.html, nonce, themeSnapshot],
   );
 
   const inflightCallsRef = useRef(0);
