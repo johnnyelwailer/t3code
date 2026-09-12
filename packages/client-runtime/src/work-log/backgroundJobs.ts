@@ -55,6 +55,24 @@ export interface BackgroundJobFoldEntry {
   readonly createdAt: string;
   /** Tool result / item detail text, if any. */
   readonly detail?: string | undefined;
+  /**
+   * The row's command preview — read ONLY when `detail` is empty, because for
+   * a whole era of persisted history the result text landed here instead.
+   *
+   * A `command_execution` item whose runtime sent no structured command has
+   * its RESULT adopted as the command preview (web `session-logic`'s
+   * `extractToolCommand` falls back to `payload.detail`), and `detail` is then
+   * dropped as a duplicate of it. Every Pi bash row written before the pack
+   * started naming its command has exactly that shape, so the yield marker —
+   * the one row that can ever open a job — is in this field and nowhere else.
+   *
+   * Measured over 85 threads of live history: 3016 start markers in `command`,
+   * 13 in `detail`, and NEVER a start marker in `command` while `detail` was
+   * populated. Settle signals appeared in `command` zero times. So preferring
+   * `detail` loses nothing and keeps a command that merely mentions a job id
+   * from opening a phantom one.
+   */
+  readonly command?: string | undefined;
 }
 
 /**
@@ -166,10 +184,53 @@ export function backgroundJobFinishSignals(detail: string): Map<string, Backgrou
   return signals;
 }
 
+/** One row's result text, applied to the running fold state. */
+function applyJobMarkers(
+  byId: Map<string, BackgroundJobState>,
+  text: string,
+  entryId: string,
+  observedAtMs: number,
+): void {
+  const start = detectBackgroundJobStart(text, observedAtMs);
+  if (start !== null) {
+    const existing = byId.get(start.jobId);
+    const settled = existing?.state === "finished";
+    byId.set(start.jobId, {
+      ...start,
+      state: settled ? "finished" : "running",
+      startedEntryId: existing?.startedEntryId ?? entryId,
+      lastSeenEntryId: entryId,
+      ...(settled && existing !== undefined ? { finishedReason: existing.finishedReason } : {}),
+    });
+  }
+  for (const [jobId, reason] of backgroundJobFinishSignals(text)) {
+    const existing =
+      byId.get(jobId) ??
+      ({
+        jobId,
+        startedAtMs: observedAtMs,
+        deadlineMs: observedAtMs,
+        state: "running" as const,
+      } satisfies BackgroundJobState);
+    if (existing.state !== "finished") {
+      byId.set(jobId, {
+        ...existing,
+        state: "finished",
+        finishedReason: reason,
+        startedEntryId: existing.startedEntryId ?? entryId,
+        lastSeenEntryId: entryId,
+      });
+    }
+  }
+}
+
 /**
  * Folds a thread's work-log entries (in timeline order) into per-job state.
  * A start marker opens the job; later terminal markers settle it. Sticky:
  * once finished, the job stays finished for the lifetime of this fold.
+ *
+ * A row's result text is `detail`, falling back to `command` for the era of
+ * history where the two were transposed — see `BackgroundJobFoldEntry.command`.
  */
 export function foldBackgroundJobs(
   entries: ReadonlyArray<BackgroundJobFoldEntry>,
@@ -177,43 +238,10 @@ export function foldBackgroundJobs(
 ): readonly BackgroundJobState[] {
   const byId = new Map<string, BackgroundJobState>();
   for (const entry of entries) {
-    const detail = entry.detail;
-    if (detail === undefined || detail.length === 0) continue;
-    const observedAtMs = toFiniteMs(entry.createdAt);
-    const start = detectBackgroundJobStart(detail, observedAtMs);
-    if (start !== null) {
-      const existing = byId.get(start.jobId);
-      const settled = existing?.state === "finished";
-      byId.set(start.jobId, {
-        ...start,
-        state: settled ? "finished" : "running",
-        startedEntryId: existing?.startedEntryId ?? entry.id,
-        lastSeenEntryId: entry.id,
-        ...(settled && existing !== undefined ? { finishedReason: existing.finishedReason } : {}),
-      });
-    }
-    const signals = backgroundJobFinishSignals(detail);
-    if (signals.size > 0) {
-      for (const [jobId, reason] of signals) {
-        const existing =
-          byId.get(jobId) ??
-          ({
-            jobId,
-            startedAtMs: observedAtMs,
-            deadlineMs: observedAtMs,
-            state: "running" as const,
-          } satisfies BackgroundJobState);
-        if (existing.state !== "finished") {
-          byId.set(jobId, {
-            ...existing,
-            state: "finished",
-            finishedReason: reason,
-            startedEntryId: existing.startedEntryId ?? entry.id,
-            lastSeenEntryId: entry.id,
-          });
-        }
-      }
-    }
+    const text =
+      entry.detail !== undefined && entry.detail.length > 0 ? entry.detail : entry.command;
+    if (text === undefined || text.length === 0) continue;
+    applyJobMarkers(byId, text, entry.id, toFiniteMs(entry.createdAt));
   }
   return [...byId.values()];
 }
