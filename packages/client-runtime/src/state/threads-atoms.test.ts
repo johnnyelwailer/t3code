@@ -96,8 +96,8 @@ const makeHarness = Effect.fn("TestThreadAtoms.makeHarness")(function* (options?
   readonly httpNone?: boolean;
   readonly initialLoad?: Effect.Effect<Option.Option<OrchestrationThreadDetailSnapshot>>;
   readonly stream?: Stream.Stream<OrchestrationThreadStreamItem, Error>;
-  /** Live-state idle TTL; defaults to 0 here. See the `raw` construction below. */
-  readonly idleTtlMs?: number;
+  /** Build the atoms with no options, so the shipped idle TTL applies. See `raw` below. */
+  readonly productionTtl?: boolean;
 }) {
   const clock = yield* Clock.Clock;
   const wakeups = yield* Queue.unbounded<ConnectionWakeup>();
@@ -244,12 +244,21 @@ const makeHarness = Effect.fn("TestThreadAtoms.makeHarness")(function* (options?
       ),
     ),
   );
-  // Opt OUT of the shipped idle TTL. These cases assert what survives *across* a
-  // teardown, and use "the stream closed" as their synchronisation handle; with
-  // the real TTL every `Deferred.await(x.closed)` would be a timer to drive
-  // rather than an event to await. The TTL itself is pinned by the
-  // "live-state idle TTL" cases below, which use the shipped default.
-  const raw = createEnvironmentThreadStateAtoms(runtime, { idleTtlMs: options?.idleTtlMs ?? 0 });
+  // Two modes, on purpose.
+  //
+  // `productionTtl: true` constructs the atoms exactly as the apps do — no
+  // options, so the shipped `THREAD_STATE_IDLE_TTL_MS` applies. The idle-TTL
+  // cases below use this, so lowering the shipped default breaks them. Passing
+  // the TTL in explicitly would pin the argument instead of the default and
+  // guard nothing.
+  //
+  // Everything else opts OUT with `idleTtlMs: 0`. Those cases assert what
+  // survives *across* a teardown and use "the stream closed" as a
+  // synchronisation handle; under the real TTL every `Deferred.await(x.closed)`
+  // becomes a timer to drive, which tests the clock rather than the behaviour.
+  const raw = options?.productionTtl
+    ? createEnvironmentThreadStateAtoms(runtime)
+    : createEnvironmentThreadStateAtoms(runtime, { idleTtlMs: 0 });
   const details = createEnvironmentThreadDetailAtoms(raw.stateAtom);
   const ref = { environmentId: TARGET.environmentId, threadId: THREAD_ID };
   const stateAtom = details.stateAtom(ref);
@@ -820,7 +829,7 @@ describe("createEnvironmentThreadStateAtoms", () => {
   it.effect("keeps the live stream open across a consumer gap inside the idle TTL", () =>
     Effect.gen(function* () {
       vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
-      const h = yield* makeHarness({ idleTtlMs: THREAD_STATE_IDLE_TTL_MS });
+      const h = yield* makeHarness({ productionTtl: true });
       const unmount = h.registry.mount(h.stateAtom);
       const first = yield* Queue.take(h.subscriptions);
       expect(h.counts().opened).toBe(1);
@@ -845,7 +854,7 @@ describe("createEnvironmentThreadStateAtoms", () => {
   it.effect("closes the live stream once the idle TTL elapses", () =>
     Effect.gen(function* () {
       vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
-      const h = yield* makeHarness({ idleTtlMs: THREAD_STATE_IDLE_TTL_MS });
+      const h = yield* makeHarness({ productionTtl: true });
       const unmount = h.registry.mount(h.stateAtom);
       const first = yield* Queue.take(h.subscriptions);
 
@@ -856,6 +865,84 @@ describe("createEnvironmentThreadStateAtoms", () => {
       yield* Effect.promise(() => vi.advanceTimersByTimeAsync(THREAD_STATE_IDLE_TTL_MS + 1));
       yield* Deferred.await(first.closed);
       expect(h.counts().active).toBe(0);
+    }),
+  );
+
+  it.effect("defers older-page cancellation until the idle TTL elapses", () =>
+    Effect.gen(function* () {
+      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+      const h = yield* makeHarness({
+        productionTtl: true,
+        snapshot: {
+          ...SNAPSHOT,
+          page: { beforeCursor: "older-1", hasMore: true, snapshotSequence: 7 },
+        },
+      });
+      const unmount = h.registry.mount(h.stateAtom);
+      const first = yield* Queue.take(h.subscriptions);
+      expect(requestOlderThreadTurns(TARGET.environmentId, THREAD_ID)).toBe(true);
+      const older = yield* Queue.take(h.olderLoads);
+
+      // The retained node owns the older-page worker and its request
+      // registration, so unmount no longer cancels them — it only starts the
+      // clock. A consumer returning inside the window keeps the in-flight fetch.
+      unmount();
+      yield* Effect.yieldNow;
+      expect(yield* Deferred.isDone(older.closed)).toBe(false);
+      expect(Option.getOrThrow(h.registry.get(h.stateAtom).page).loadingOlder).toBe(true);
+
+      yield* Effect.promise(() => vi.advanceTimersByTimeAsync(THREAD_STATE_IDLE_TTL_MS + 1001));
+      yield* Deferred.await(older.closed);
+      yield* Deferred.await(first.closed);
+    }),
+  );
+
+  it.effect("reuses the retained subscription when a session returns inside the window", () =>
+    Effect.gen(function* () {
+      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+      const h = yield* makeHarness({ productionTtl: true, connected: true });
+      const unmount = h.registry.mount(h.stateAtom);
+      const first = yield* Queue.take(h.subscriptions);
+      yield* Queue.offer(first.events, { kind: "synchronized" });
+      yield* observeState(h.registry, h.stateAtom, (state) => state.status === "live");
+
+      unmount();
+      yield* Effect.yieldNow;
+      yield* Effect.promise(() => vi.advanceTimersByTimeAsync(1_000));
+      const remount = h.registry.mount(h.stateAtom);
+      yield* Effect.yieldNow;
+
+      // Retained, so no second subscription and no reload: opened stays 1.
+      expect(yield* Deferred.isDone(first.closed)).toBe(false);
+      expect(h.counts()).toEqual({ httpLoads: 1, diskLoads: 1, opened: 1, active: 1 });
+
+      remount();
+      yield* Effect.promise(() => vi.advanceTimersByTimeAsync(THREAD_STATE_IDLE_TTL_MS + 1001));
+      yield* Deferred.await(first.closed);
+    }),
+  );
+
+  it.effect("keeps the snapshot warm after the live node expires", () =>
+    Effect.gen(function* () {
+      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+      const h = yield* makeHarness({ productionTtl: true });
+      const unmount = h.registry.mount(h.stateAtom);
+      const first = yield* Queue.take(h.subscriptions);
+
+      // The live node and the resume snapshot expire on different clocks. Past
+      // the live TTL the stream is gone, but the snapshot still serves a warm
+      // remount, so returning re-subscribes without a second HTTP/disk load.
+      unmount();
+      yield* Effect.promise(() => vi.advanceTimersByTimeAsync(THREAD_STATE_IDLE_TTL_MS + 1001));
+      yield* Deferred.await(first.closed);
+
+      const remount = h.registry.mount(h.stateAtom);
+      const next = yield* Queue.take(h.subscriptions);
+      expect(h.counts()).toEqual({ httpLoads: 1, diskLoads: 1, opened: 2, active: 1 });
+
+      remount();
+      yield* Effect.promise(() => vi.advanceTimersByTimeAsync(THREAD_STATE_IDLE_TTL_MS + 1001));
+      yield* Deferred.await(next.closed);
     }),
   );
 
