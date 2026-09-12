@@ -75,21 +75,9 @@ export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHead
         className="pointer-events-none absolute inset-0 z-[1]"
         style={{ background: "var(--t3team-sidebar-header-background, transparent)" }}
       />
-      <SidebarTrigger
-        className={cn(
-          "relative z-10",
-          !isElectron && "md:ml-[var(--sidebar-content-inset)]",
-          isElectron && "md:hidden",
-          onBackdrop &&
-            "[:hover,[data-pressed]]:bg-white/15 focus-visible:ring-white/90 focus-visible:ring-offset-blue-700 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white!",
-        )}
-      />
       <div
         className={cn(
           "relative z-10 flex h-7 w-fit min-w-0 shrink-0 items-center gap-1.5 overflow-hidden",
-          // Only macOS needs a left inset for native traffic lights. Windows and
-          // Linux place native controls on the right, so the brand can align with
-          // the sidebar content. On the web, reserve space only for WCO mode.
           brandInsetClass,
           onBackdrop ? "text-white" : "text-sidebar-foreground",
         )}
@@ -121,6 +109,13 @@ export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHead
           {isNexploreDistribution ? brandSuffixLabel(appName) : appName}
         </span>
       </div>
+      <SidebarTrigger
+        className={cn(
+          "relative z-10 ms-auto shrink-0",
+          onBackdrop &&
+            "[--control-icon-color:white] text-white focus-visible:ring-white/90 focus-visible:ring-offset-blue-700 [:hover,[data-pressed]]:bg-white/15",
+        )}
+      />
     </SidebarHeader>
   );
 }

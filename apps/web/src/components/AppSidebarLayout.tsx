@@ -100,9 +100,10 @@ function SidebarControl() {
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [keybindings, toggleSidebar]);
 
-  // On web the toggle lives in the sidebar header; only show the fixed
-  // button when the sidebar is closed (so there is a way to reopen it).
-  if (!isElectron && isSidebarVisible) return null;
+  // The header trigger is the primary toggle (always visible). The fixed button
+  // only appears when the sidebar is closed and there's no header trigger to
+  // click — i.e. when the offcanvas sidebar has no visible header.
+  if (isSidebarVisible) return null;
 
   return (
     // The right-side layout controls carry mr-px (border compensation inside

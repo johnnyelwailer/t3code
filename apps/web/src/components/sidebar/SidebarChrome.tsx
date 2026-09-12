@@ -67,18 +67,15 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
       )}
     >
       {backdropVariant ? <SidebarStageBackdrop variant={backdropVariant} /> : null}
+      <SidebarBrand isElectron={isElectron} backdropVariant={backdropVariant} />
       <SidebarTrigger
         className={cn(
-          "relative z-10",
-          // Browser: align with sidebar content; Electron desktop: hidden (titlebar button instead).
-          !isElectron && "md:ml-[var(--sidebar-content-inset)]",
-          isElectron && "md:hidden",
+          "relative z-10 ms-auto",
           backdropVariant &&
-            "focus-visible:ring-white/90 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white! [:hover,[data-pressed]]:bg-white/15",
+            "[--control-icon-color:white] text-white focus-visible:ring-white/90 [:hover,[data-pressed]]:bg-white/15",
           backdropVariant && resolveSidebarStageFocusRingOffsetClass(backdropVariant),
         )}
       />
-      <SidebarBrand isElectron={isElectron} backdropVariant={backdropVariant} />
       {pillLabel ? (
         <Badge
           className="relative z-10 ml-1 hidden rounded-full px-1.5 text-muted-foreground @[15rem]/sidebar-header:inline-flex"
