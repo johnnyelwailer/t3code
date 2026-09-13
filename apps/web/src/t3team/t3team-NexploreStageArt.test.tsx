@@ -211,8 +211,8 @@ describe("T3TeamNexploreStripArt traffic-light wash", () => {
       expect(Number(circle().getAttribute("cx"))).toBeCloseTo(((236 + 372) / 2) * 1.2, 3);
       const gradient = svg.querySelector("linearGradient");
       expect(gradient).not.toBeNull();
-      // 80px default width at 1.2 units/px.
-      expect(Number(gradient!.getAttribute("x2"))).toBeCloseTo(80 * 1.2, 3);
+      // 110px default width at 1.2 units/px.
+      expect(Number(gradient!.getAttribute("x2"))).toBeCloseTo(110 * 1.2, 3);
       expect(gradient!.querySelector("stop")!.getAttribute("stop-opacity")).toBe("0.4");
       // jsdom's selector engine chokes on `#` inside attribute selectors, so read the attribute.
       const rects = svg.querySelectorAll("rect");

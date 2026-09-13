@@ -8,15 +8,15 @@ import { useTheme } from "~/hooks/useTheme";
  * wash lifts the button row without touching the composition. The host strip decides the macOS
  * gate; this renders only when the resolved theme appearance is light — nothing otherwise.
  *
- * The width stops at 80px so the wash reaches zero exactly where the mac brand inset begins —
- * the "nexi Work" label sits untouched, keeping its contrast on the saturated ground.
+ * The width stops near the brand inset so the wash keeps the light-appearance traffic-light row
+ * legible without washing out the "nexi Work" label that sits on the saturated ground.
  *
  * Strength is token-driven so a story or a pack retunes it without code:
  *   `--stage-nx-fade-opacity`  default 0.40 (0 disables the wash)
- *   `--stage-nx-fade-width`    default 80px, the distance from the left edge where it reaches zero
+ *   `--stage-nx-fade-width`    default 110px, the distance from the left edge where it reaches zero
  */
 export const FADE_OPACITY = 0.4;
-export const FADE_WIDTH_PX = 80;
+export const FADE_WIDTH_PX = 110;
 
 /** Read a custom property as a number, falling back when missing or malformed. */
 export function cssNumberPx(style: CSSStyleDeclaration, name: string, fallback: number): number {
