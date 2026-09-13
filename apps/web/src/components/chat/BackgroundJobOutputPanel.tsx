@@ -24,6 +24,11 @@ import { cn } from "../../lib/utils";
  * what is retained we render a "…" seam instead of claiming the page is the
  * whole stream.
  *
+ * The panel is opened from the job's own row, so it carries no job identity
+ * of its own (no command, no id) — the row above already says what this is.
+ * The header keeps only what the row does not: the live/settled state and
+ * the close affordance.
+ *
  * @module BackgroundJobOutputPanel
  */
 
@@ -35,14 +40,12 @@ const MAX_RENDERED_LINES = 400;
 export function BackgroundJobOutputPanel({
   threadId,
   jobId,
-  command,
   controller,
   onClose,
   className,
 }: {
   readonly threadId: string;
   readonly jobId: string;
-  readonly command?: string;
   readonly controller: ThreadJobsController;
   readonly onClose: () => void;
   readonly className?: string;
@@ -121,30 +124,25 @@ export function BackgroundJobOutputPanel({
         className,
       )}
       role="region"
-      aria-label={`Output of ${command ?? jobId}`}
+      aria-label="Background job output"
     >
-      <div className="flex items-center justify-between gap-2 border-b border-white/10 px-2 py-1">
-        <span className="min-w-0 truncate font-mono text-[.65rem] text-white/60" title={command}>
-          {command ?? jobId}
+      <div className="flex items-center gap-2 border-b border-white/10 px-2 py-1">
+        <span
+          className={cn(
+            "text-[.65rem] tabular-nums",
+            settled ? "text-emerald-300/80" : "text-amber-300/80",
+          )}
+        >
+          {settled ? "settled" : "live"}
         </span>
-        <div className="flex shrink-0 items-center gap-2">
-          <span
-            className={cn(
-              "text-[.65rem] tabular-nums",
-              settled ? "text-emerald-300/80" : "text-amber-300/80",
-            )}
-          >
-            {settled ? "settled" : "live"}
-          </span>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close job output"
-            className="rounded px-1 text-white/60 outline-none hover:bg-white/10 hover:text-white focus-visible:bg-white/10"
-          >
-            ×
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close job output"
+          className="rounded px-1 text-white/60 outline-none hover:bg-white/10 hover:text-white focus-visible:bg-white/10"
+        >
+          ×
+        </button>
       </div>
       {unknownJob ? (
         <div className="px-2 py-2 font-mono text-xs text-white/60">
@@ -155,7 +153,9 @@ export function BackgroundJobOutputPanel({
           ref={preRef}
           className="max-h-64 overflow-y-auto px-2 py-1.5 font-mono text-[.7rem] leading-relaxed whitespace-pre-wrap break-all text-white/85"
         >
-          {lines.length === 0 && !settled ? <span className="text-white/40">waiting for output…</span> : null}
+          {lines.length === 0 && !settled ? (
+            <span className="text-white/40">waiting for output…</span>
+          ) : null}
           {visible.map((line, i) => (
             <span key={i} className="block min-h-[1em]">
               {line}

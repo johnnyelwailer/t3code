@@ -5,8 +5,10 @@ import type { BackgroundJobState } from "@t3tools/client-runtime/work-log/backgr
 
 import {
   BackgroundJobsRunningIndicator,
+  BackgroundJobList,
   BackgroundJobRunningBadge,
 } from "~/components/chat/BackgroundJobsIndicator";
+import { BackgroundJobOutputPanel } from "~/components/chat/BackgroundJobOutputPanel";
 import {
   createThreadJobsController,
   type ThreadJobsController,
@@ -15,11 +17,15 @@ import {
 
 const NOW = Date.now();
 
-function jobs(list: Array<Pick<BackgroundJobState, "jobId"> & {
-  readonly command?: string;
-  readonly ageMs?: number;
-  readonly pid?: number;
-}>): BackgroundJobState[] {
+function jobs(
+  list: Array<
+    Pick<BackgroundJobState, "jobId"> & {
+      readonly command?: string;
+      readonly ageMs?: number;
+      readonly pid?: number;
+    }
+  >,
+): BackgroundJobState[] {
   return list.map((job, i) => ({
     jobId: job.jobId,
     ...(job.command !== undefined ? { command: job.command } : {}),
@@ -33,7 +39,12 @@ function jobs(list: Array<Pick<BackgroundJobState, "jobId"> & {
 
 const SAMPLE = jobs([
   { jobId: "job_8865dcbe", command: "pnpm -r build && pnpm -r test", pid: 48211, ageMs: 190_000 },
-  { jobId: "job_a1b2c3d4", command: "git log -p --stat main..HEAD | less", pid: 48260, ageMs: 40_000 },
+  {
+    jobId: "job_a1b2c3d4",
+    command: "git log -p --stat main..HEAD | less",
+    pid: 48260,
+    ageMs: 40_000,
+  },
 ]);
 
 /** SAMPLE is built from a non-empty literal array; the assertion is the one
@@ -48,13 +59,17 @@ const SAMPLE_HEAD = SAMPLE[0]!;
 function makeMockController() {
   const buffer =
     "vite v7.2.0 building for production...\n" +
-    Array.from({ length: 40 }, (_, i) => `  dist/chunk-${i}.js   ${(i * 1.7).toFixed(1)} kB`).join("\n") +
+    Array.from({ length: 40 }, (_, i) => `  dist/chunk-${i}.js   ${(i * 1.7).toFixed(1)} kB`).join(
+      "\n",
+    ) +
     "\n✓ built in 8.4s";
   let cursor = 0;
   let settled = false;
   let cancelled = false;
 
-  const controller: ThreadJobsController = async ({ request }): Promise<ThreadJobsControlResponse> => {
+  const controller: ThreadJobsController = async ({
+    request,
+  }): Promise<ThreadJobsControlResponse> => {
     if (request.kind === "list") {
       return {
         supported: true,
@@ -86,7 +101,7 @@ function makeMockController() {
       };
     }
     // read-output: emit a page up to (and a little past) the stored buffer.
-    const text = buffer.slice(request.since ?? 0, (request.since ?? 0) + (buffer.length));
+    const text = buffer.slice(request.since ?? 0, (request.since ?? 0) + buffer.length);
     cursor = Math.max(cursor, (request.since ?? 0) + text.length);
     return {
       supported: true,
@@ -174,6 +189,39 @@ export const RealController: Story = {
       />
     </div>
   ),
+};
+
+/** The expanded state without clicking: per-job rows stack UNDER the
+ *  summary line, full width; the output tail opens under the rows and
+ *  repeats nothing the row already says. */
+export const ExpandedWithOutput: Story = {
+  render: () => {
+    const [controller] = useState<ThreadJobsController>(() => makeMockController());
+    return (
+      <div className="max-w-xl py-1 text-sm leading-relaxed text-muted-foreground tabular-nums">
+        <div className="flex items-center gap-1.5">
+          <span className="size-1.5 shrink-0 rounded-full bg-info" aria-hidden />
+          <span className="min-w-0 truncate">2 background jobs running · 3m 10s</span>
+        </div>
+        <div className="mt-1">
+          <BackgroundJobList
+            running={SAMPLE}
+            now={Date.now()}
+            canControl
+            cancelPending={new Set()}
+            onCancel={() => {}}
+            onShowOutput={() => {}}
+          />
+          <BackgroundJobOutputPanel
+            threadId="thread-story"
+            jobId={SAMPLE_HEAD.jobId}
+            controller={controller}
+            onClose={() => {}}
+          />
+        </div>
+      </div>
+    );
+  },
 };
 
 /** The tool-card anchor tag on the bash row that yielded the handle. */

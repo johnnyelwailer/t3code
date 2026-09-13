@@ -78,7 +78,7 @@ export function BackgroundJobsRunningIndicator({
   const [cancelled, setCancelled] = useState<ReadonlySet<string>>(new Set());
   const [cancelPending, setCancelPending] = useState<ReadonlySet<string>>(new Set());
   const [cancelError, setCancelError] = useState<string | null>(null);
-  const [outputJob, setOutputJob] = useState<{ jobId: string; command?: string } | null>(null);
+  const [outputJob, setOutputJob] = useState<string | null>(null);
 
   const canControl = threadId !== undefined && controller !== undefined;
   const liveRunning = useMemo(
@@ -136,7 +136,7 @@ export function BackgroundJobsRunningIndicator({
   return (
     <div
       className={cn(
-        "flex items-start gap-1.5 py-1 text-sm leading-relaxed text-muted-foreground tabular-nums",
+        "flex flex-col py-1 text-sm leading-relaxed text-muted-foreground tabular-nums",
         className ?? "px-0.5",
       )}
       role="status"
@@ -166,7 +166,7 @@ export function BackgroundJobsRunningIndicator({
         ) : null}
       </button>
       {expanded && running.length > 0 ? (
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0">
           <BackgroundJobList
             running={liveRunning}
             cancelled={cancelledJobs}
@@ -174,13 +174,7 @@ export function BackgroundJobsRunningIndicator({
             canControl={canControl}
             cancelPending={cancelPending}
             onCancel={handleCancel}
-            onShowOutput={(job) =>
-              setOutputJob(
-                job.command !== undefined
-                  ? { jobId: job.jobId, command: job.command }
-                  : { jobId: job.jobId },
-              )
-            }
+            onShowOutput={(job) => setOutputJob(job.jobId)}
           />
           {cancelError !== null ? (
             <div className="mt-1 text-[.7rem] text-destructive">{cancelError}</div>
@@ -188,8 +182,7 @@ export function BackgroundJobsRunningIndicator({
           {outputJob !== null && threadId !== undefined && controller !== undefined ? (
             <BackgroundJobOutputPanel
               threadId={threadId}
-              jobId={outputJob.jobId}
-              {...(outputJob.command !== undefined ? { command: outputJob.command } : {})}
+              jobId={outputJob}
               controller={controller}
               onClose={() => setOutputJob(null)}
             />
@@ -227,7 +220,10 @@ export function BackgroundJobList({
   readonly onShowOutput?: (job: BackgroundJobState) => void;
 }) {
   return (
-    <ul className="mt-1 space-y-1.5 border-l border-border/60 pl-3 pr-1" aria-label="Running background jobs">
+    <ul
+      className="mt-1 space-y-1.5 border-l border-border/60 pl-3 pr-1"
+      aria-label="Running background jobs"
+    >
       {[...running, ...cancelled].map((job) => {
         const isCancelled = cancelled.some((c) => c.jobId === job.jobId);
         const total = Math.max(0, job.deadlineMs - job.startedAtMs);
@@ -276,7 +272,9 @@ export function BackgroundJobList({
               </span>
             </div>
             {job.pid !== undefined ? (
-              <div className="text-[.65rem] tabular-nums text-muted-foreground/60">pid {job.pid}</div>
+              <div className="text-[.65rem] tabular-nums text-muted-foreground/60">
+                pid {job.pid}
+              </div>
             ) : null}
           </li>
         );

@@ -180,17 +180,18 @@ describe("BackgroundJobsRunningIndicator", () => {
   it("opens the output panel for the selected job when a controller is present", () => {
     // The panel itself is driven by the controller's polls (effects); the
     // indicator's contract is that clicking Output mounts it with the job's
-    // id and command. Static markup: the panel's pre-state renders.
+    // id. Static markup: the panel's pre-state renders. The panel carries no
+    // command of its own — the row above already shows it.
     const markup = renderToStaticMarkup(
       <BackgroundJobOutputPanel
         threadId="thread_a"
         jobId="job_a"
-        command="sleep 30"
         controller={(() => Promise.resolve({ supported: false })) as ThreadJobsController}
         onClose={() => {}}
       />,
     );
-    expect(markup).toContain('aria-label="Output of sleep 30"');
+    expect(markup).toContain('aria-label="Background job output"');
+    expect(markup).not.toContain("sleep 30");
     expect(markup).toContain("waiting for output…");
   });
 });
@@ -201,7 +202,12 @@ describe("BackgroundJobList", () => {
       <BackgroundJobList
         running={[
           job({ jobId: "job_a", command: "node scripts/quality-gate.mjs", pid: 4242 }),
-          job({ jobId: "job_b", command: "sleep 30", startedAtMs: NOW - 10_000, deadlineMs: NOW + 590_000 }),
+          job({
+            jobId: "job_b",
+            command: "sleep 30",
+            startedAtMs: NOW - 10_000,
+            deadlineMs: NOW + 590_000,
+          }),
         ]}
         now={NOW}
       />,
