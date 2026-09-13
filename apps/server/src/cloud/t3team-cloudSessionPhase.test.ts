@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { cloudSessionElapsedSeconds, deriveCloudSessionPhase } from "./cloudSessionPhase.ts";
-import type { WorkflowJobStep, WorkflowRunSummary } from "./githubActionsSessionClient.ts";
+import { cloudSessionElapsedSeconds, deriveCloudSessionPhase } from "./t3team-cloudSessionPhase.ts";
+import type { WorkflowJobStep, WorkflowRunSummary } from "./t3team-githubActionsSessionClient.ts";
 
 const CREATED_AT = "2026-09-12T21:28:18Z";
 

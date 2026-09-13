@@ -5,8 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import {
   CloudSessionProvisionPanel,
   DEFAULT_CLOUD_SESSION_DURATION_SECONDS,
-} from "~/components/cloud/CloudSessionProvisionPanel";
-import type { CloudSessionProvisionPhase } from "~/components/cloud/cloudSessionProvisionPresentation";
+} from "~/components/cloud/t3team-CloudSessionProvisionPanel";
+import type { CloudSessionProvisionPhase } from "~/components/cloud/t3team-cloudSessionProvisionPresentation";
 
 const FLEET_MACHINE_LABEL = "ubuntu-slim · 12 GB · 4 cores";
 const DETAILS_URL = "https://github.com/hive/nx-nexi/actions/runs/248523362";

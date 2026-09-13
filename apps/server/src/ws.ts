@@ -164,7 +164,7 @@ import * as RelayClient from "@t3tools/shared/relayClient";
 import {
   CloudSessionService,
   layer as CloudSessionServiceLayer,
-} from "./cloud/CloudSessionService.ts";
+} from "./cloud/t3team-CloudSessionService.ts";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);

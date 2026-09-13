@@ -134,7 +134,7 @@ import {
   CloudSessionFailedError,
   CloudSessionListResultSchema,
   CloudSessionSchema,
-} from "./cloudSession.ts";
+} from "./t3team-cloudSession.ts";
 import {
   RelayClientInstallFailedError,
   RelayClientInstallProgressEventSchema,

@@ -9,7 +9,7 @@ import {
   parseJobStepsResponse,
   parseRunsResponse,
   sessionTagMarker,
-} from "./githubActionsSessionClient.ts";
+} from "./t3team-githubActionsSessionClient.ts";
 
 const REF: CloudSessionRepoRef = {
   host: "nexplore.ghe.com",

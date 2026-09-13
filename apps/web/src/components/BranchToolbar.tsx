@@ -11,8 +11,8 @@ import {
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
-import { useCloudSessionController } from "../cloud/useCloudSessionController";
-import { isCloudSessionProvisionPending } from "./cloud/cloudSessionProvisionPresentation";
+import { useCloudSessionController } from "../cloud/t3team-useCloudSessionController";
+import { isCloudSessionProvisionPending } from "./cloud/t3team-cloudSessionProvisionPresentation";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useProject, useThread, useThreadShellsForProjectRefs } from "../state/entities";
 import {

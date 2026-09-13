@@ -127,7 +127,7 @@ import {
 } from "~/versionSkew";
 import { hasCloudPublicConfig } from "~/cloud/publicConfig";
 import { useCloudLinkController } from "~/cloud/useCloudLinkController";
-import { useCloudSessionController } from "~/cloud/useCloudSessionController";
+import { useCloudSessionController } from "~/cloud/t3team-useCloudSessionController";
 import { authEnvironment } from "~/state/auth";
 import { environmentCatalog } from "~/connection/catalog";
 import {
@@ -151,7 +151,7 @@ import { primaryServerKeybindingsAtom, serverEnvironment } from "~/state/server"
 import { ConnectionStatusDot } from "../ConnectionStatusDot";
 import { ServerUpdateAction, ServerUpdateProgress } from "../ServerUpdateAction";
 import { CloudEnvironmentConnectRows } from "../cloud/CloudEnvironmentConnectList";
-import { CloudSessionProvisionPanel } from "../cloud/CloudSessionProvisionPanel";
+import { CloudSessionProvisionPanel } from "../cloud/t3team-CloudSessionProvisionPanel";
 import { ITEM_ROW_CLASSNAME, ITEM_ROW_INNER_CLASSNAME } from "./itemRows";
 import {
   resolveShortcutCommand,

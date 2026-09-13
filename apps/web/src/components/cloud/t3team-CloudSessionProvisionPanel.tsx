@@ -1,19 +1,28 @@
 import type { CloudSession } from "@t3tools/contracts";
 import { type ReactNode, useCallback, useMemo } from "react";
 
-import { cn } from "~/lib/utils";
-import { ConnectionStatusDot } from "../ConnectionStatusDot";
-import { ITEM_ROW_CLASSNAME, ITEM_ROW_INNER_CLASSNAME } from "../settings/itemRows";
 import { Button } from "../ui/button";
-import { Skeleton } from "../ui/skeleton";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import { CloudSessionRow, CloudSessionRowsSkeleton } from "./t3team-CloudSessionProvisionRow";
 import {
-  cloudSessionToneDotClassName,
-  cloudSessionTonePingClassName,
   formatDuration,
   isCloudSessionProvisionPending,
-  presentCloudSession,
-} from "./cloudSessionProvisionPresentation";
+} from "./t3team-cloudSessionProvisionPresentation";
+
+/**
+ * The one-click surface: start a Nexi workspace on fleet compute and connect to
+ * it when it comes up.
+ *
+ * Owns the panel chrome — the duration picker, the create button, and the
+ * composition of session rows. The per-row rendering lives in
+ * `t3team-CloudSessionProvisionRow`, and the phase wording in
+ * `t3team-cloudSessionProvisionPresentation`.
+ *
+ * Presentational by design. It owns no fetching and no dispatch — the caller
+ * supplies the sessions and handles the actions — so the whole lifecycle can be
+ * driven from a story without a live fleet, and so the provider wiring stays a
+ * separate, replaceable layer.
+ */
 
 /**
  * Session lengths offered in the panel. The provisioning job holds the machine
@@ -29,109 +38,6 @@ export const CLOUD_SESSION_DURATION_CHOICES = [
 
 export const DEFAULT_CLOUD_SESSION_DURATION_SECONDS = 4 * 3600;
 
-/**
- * A determinate bar for a session that is still provisioning. Deliberately not
- * a spinner: the timings are predictable enough (~2.5 min) that an indeterminate
- * spinner would understate how much is known.
- */
-function CloudSessionProgressBar({ progress }: { readonly progress: number }) {
-  return (
-    <div
-      className="h-1 w-full overflow-hidden rounded-full bg-muted"
-      role="progressbar"
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={Math.round(progress * 100)}
-    >
-      <div
-        className="h-full rounded-full bg-warning transition-[width] duration-500 ease-out"
-        style={{ width: `${Math.round(progress * 100)}%` }}
-      />
-    </div>
-  );
-}
-
-function CloudSessionRowsSkeleton() {
-  return (
-    <div className={ITEM_ROW_CLASSNAME}>
-      <div className={ITEM_ROW_INNER_CLASSNAME}>
-        <div className="min-w-0 flex-1 space-y-2">
-          <Skeleton className="h-4 w-40 rounded-full" />
-          <Skeleton className="h-3 w-56 rounded-full" />
-        </div>
-        <Skeleton className="h-7 w-20 rounded-md" />
-      </div>
-    </div>
-  );
-}
-
-/**
- * One provisioning attempt. The row never names the provider's concepts — no
- * run ids, no job names — because the user asked for a workspace, not a build.
- */
-export function CloudSessionRow({
-  session,
-  onAction,
-  actionPending = false,
-}: {
-  readonly session: CloudSession;
-  readonly onAction: (session: CloudSession) => void;
-  readonly actionPending?: boolean;
-}) {
-  const presentation = presentCloudSession(session);
-  const handleAction = useCallback(() => {
-    onAction(session);
-  }, [onAction, session]);
-
-  return (
-    <div className={ITEM_ROW_CLASSNAME}>
-      <div className={ITEM_ROW_INNER_CLASSNAME}>
-        <div className="flex min-w-0 flex-1 items-start gap-3">
-          <span className="mt-1">
-            <ConnectionStatusDot
-              dotClassName={cloudSessionToneDotClassName(presentation.tone)}
-              pingClassName={cloudSessionTonePingClassName(presentation.tone)}
-            />
-          </span>
-          <div className="min-w-0 flex-1 space-y-1.5">
-            <div className="truncate font-medium text-sm">{presentation.title}</div>
-            <div
-              className={cn(
-                "truncate text-xs",
-                presentation.tone === "error" ? "text-destructive" : "text-muted-foreground",
-              )}
-            >
-              {presentation.detail}
-            </div>
-            {presentation.progress === null ? null : (
-              <CloudSessionProgressBar progress={presentation.progress} />
-            )}
-          </div>
-        </div>
-        {presentation.actionLabel === null ? null : (
-          <Button
-            size="sm"
-            variant={presentation.tone === "ready" ? "default" : "outline"}
-            disabled={actionPending}
-            onClick={handleAction}
-          >
-            {actionPending ? "Working…" : presentation.actionLabel}
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/**
- * The one-click surface: start a Nexi workspace on fleet compute and connect to
- * it when it comes up.
- *
- * Presentational by design. It owns no fetching and no dispatch — the caller
- * supplies the sessions and handles the actions — so the whole lifecycle can be
- * driven from a story without a live fleet, and so the provider wiring stays a
- * separate, replaceable layer.
- */
 export function CloudSessionProvisionPanel({
   sessions,
   loading = false,

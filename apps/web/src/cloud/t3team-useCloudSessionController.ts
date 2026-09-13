@@ -5,9 +5,9 @@ import {
   cloudSessionEnvironment,
   useCloudSessions,
   usePrimaryEnvironmentId,
-} from "~/state/cloudSessions";
+} from "~/state/t3team-cloudSessions";
 import { useAtomCommand } from "~/state/use-atom-command";
-import { DEFAULT_CLOUD_SESSION_DURATION_SECONDS } from "~/components/cloud/CloudSessionProvisionPanel";
+import { DEFAULT_CLOUD_SESSION_DURATION_SECONDS } from "~/components/cloud/t3team-CloudSessionProvisionPanel";
 import { toastManager } from "~/components/ui/toast";
 
 /**

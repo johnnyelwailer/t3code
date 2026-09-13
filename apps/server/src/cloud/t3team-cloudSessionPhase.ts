@@ -1,4 +1,4 @@
-import type { WorkflowJobStep, WorkflowRunSummary } from "./githubActionsSessionClient.ts";
+import type { WorkflowJobStep, WorkflowRunSummary } from "./t3team-githubActionsSessionClient.ts";
 
 /**
  * Derive a cloud session's phase from its provisioning job.

@@ -8,23 +8,24 @@ import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Random from "effect/Random";
 
 import * as GitHubCli from "../sourceControl/GitHubCli.ts";
-import { cloudSessionElapsedSeconds, deriveCloudSessionPhase } from "./cloudSessionPhase.ts";
 import {
   cancelRunInvocation,
-  type CloudSessionRepoRef,
   dispatchSessionInvocation,
-  type GhInvocation,
-  jobStepsInvocation,
   listRunsInvocation,
-  parseJobStepsResponse,
   parseRunsResponse,
   sessionTagMarker,
-  type WorkflowJobStep,
+  type GhInvocation,
   type WorkflowRunSummary,
-} from "./githubActionsSessionClient.ts";
+} from "./t3team-githubActionsSessionClient.ts";
+import { toCloudSessionFailure } from "./t3team-CloudSessionErrors.ts";
+import { resolveFleetConfig } from "./t3team-CloudSessionFleet.ts";
+import {
+  makeSessionTag,
+  pendingCloudSession,
+  projectCloudSession,
+} from "./t3team-CloudSessionProjection.ts";
 
 /**
  * Starts and tracks *cloud sessions*: full Nexi workspaces provisioned on
@@ -36,20 +37,14 @@ import {
  * the login the user already has — which is the whole point of the surface:
  * one click, no setup.
  *
- * The defaults below describe the Nexplore fleet. They are overridable by
- * environment variable for anyone pointing at a different repository.
+ * Where each concern lives:
+ * - the fleet's identity (host, repo, runner label) is in
+ *   `t3team-CloudSessionFleet`,
+ * - gh failures are mapped onto user-visible reasons in
+ *   `t3team-CloudSessionErrors`,
+ * - the run → session projection and dispatch correlation in
+ *   `t3team-CloudSessionProjection`.
  */
-
-const DEFAULT_HOST = "nexplore.ghe.com";
-const DEFAULT_OWNER = "hive";
-const DEFAULT_REPO = "nx-nexi";
-const DEFAULT_WORKFLOW_FILE_NAME = "session.yml";
-
-/**
- * The fleet's runner shape, read from the live orchestrator rather than
- * guessed: `ubuntu-slim` VMs are 12288 MB across 4 cores.
- */
-const DEFAULT_MACHINE_LABEL = "ubuntu-slim · 12 GB · 4 cores";
 
 /**
  * Recent runs worth considering. Generous on purpose: this window is also what
@@ -61,38 +56,11 @@ const RUN_HISTORY_LIMIT = 100;
 /** Sessions shown to the user. The window above is for correctness, not display. */
 const SESSION_DISPLAY_LIMIT = 20;
 
-/** Session ids for a dispatch whose run has not surfaced yet. */
-const PENDING_SESSION_PREFIX = "pending:";
-
-function pendingSessionId(sessionTag: string): string {
-  return `${PENDING_SESSION_PREFIX}${sessionTag}`;
-}
-
-/**
- * A correlation tag for one dispatch. Random rather than time-based: two
- * clients dispatching in the same millisecond must not collide, which is the
- * whole failure this exists to prevent.
- */
-const makeSessionTag = Effect.map(
-  Random.nextIntBetween(0, Number.MAX_SAFE_INTEGER),
-  (value) => `s${value.toString(36)}`,
-);
-
-/** One-second polls after a dispatch, waiting for the run to become visible. */
-const DISPATCH_DISCOVERY_ATTEMPTS = 10;
-
 /** `gh` is a child process on a network call; give it more room than a local command. */
 const GH_TIMEOUT_MS = 30_000;
 
-/** Bound what a provider error can contribute to a user-visible message. */
-const ERROR_DETAIL_LIMIT = 300;
-
-/**
- * Fetching steps costs one `gh` call per run, and only a moving run can change
- * phase from its steps — a settled run's phase comes from status/conclusion
- * alone. Skipping settled runs keeps a full list to a handful of calls.
- */
-const isRunSettled = (run: WorkflowRunSummary): boolean => run.status === "completed";
+/** One-second polls after a dispatch, waiting for the run to become visible. */
+const DISPATCH_DISCOVERY_ATTEMPTS = 10;
 
 export class CloudSessionService extends Context.Service<
   CloudSessionService,
@@ -105,59 +73,11 @@ export class CloudSessionService extends Context.Service<
       readonly sessionId: string;
     }) => Effect.Effect<void, CloudSessionFailedError>;
   }
->()("t3/cloud/CloudSessionService") {}
-
-/**
- * Map a `gh` failure onto a reason the client can act on.
- *
- * `GitHubCli` already separates "gh missing" and "not logged in" from a plain
- * command failure, which is exactly the distinction the surface needs: the
- * first two mean *set something up*, the third means *this request failed*.
- */
-function toFailure(error: GitHubCli.GitHubCliError): CloudSessionFailedError {
-  switch (error._tag) {
-    case "GitHubCliUnavailableError":
-      return new CloudSessionFailedError({
-        reason: "not_configured",
-        message: "The GitHub CLI is not installed, so cloud sessions cannot be started.",
-      });
-    case "GitHubCliAuthenticationError":
-      return new CloudSessionFailedError({
-        reason: "unauthorized",
-        message: "The GitHub CLI is not signed in to the cloud session host.",
-      });
-    case "GitHubCliRateLimitError":
-      return new CloudSessionFailedError({
-        reason: "rejected",
-        message: "The provider is rate limiting cloud session requests. Try again shortly.",
-      });
-    default:
-      return new CloudSessionFailedError({
-        reason: "rejected",
-        message: String(error.message ?? "The provider refused the request.").slice(
-          0,
-          ERROR_DETAIL_LIMIT,
-        ),
-      });
-  }
-}
+>()("t3/cloud/t3team-CloudSessionService/CloudSessionService") {}
 
 export const make = Effect.fn("cloud.session_service.make")(function* () {
   const github = yield* GitHubCli.GitHubCli;
-
-  const repoRef: CloudSessionRepoRef = {
-    host: yield* Config.string("T3CODE_CLOUD_SESSION_HOST").pipe(Config.withDefault(DEFAULT_HOST)),
-    owner: yield* Config.string("T3CODE_CLOUD_SESSION_OWNER").pipe(
-      Config.withDefault(DEFAULT_OWNER),
-    ),
-    repo: yield* Config.string("T3CODE_CLOUD_SESSION_REPO").pipe(Config.withDefault(DEFAULT_REPO)),
-    workflowFileName: yield* Config.string("T3CODE_CLOUD_SESSION_WORKFLOW").pipe(
-      Config.withDefault(DEFAULT_WORKFLOW_FILE_NAME),
-    ),
-  };
-  const machineLabel = yield* Config.string("T3CODE_CLOUD_SESSION_MACHINE_LABEL").pipe(
-    Config.withDefault(DEFAULT_MACHINE_LABEL),
-  );
+  const { repoRef, machineLabel } = yield* resolveFleetConfig();
 
   /**
    * `gh` needs a cwd; it is irrelevant for `gh api --hostname`, which does not
@@ -173,7 +93,7 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
         timeoutMs: GH_TIMEOUT_MS,
         ...(invocation.stdin === undefined ? {} : { stdin: invocation.stdin }),
       })
-      .pipe(Effect.mapError(toFailure));
+      .pipe(Effect.mapError(toCloudSessionFailure));
 
   /**
    * Runs of the session workflow only — the endpoint is scoped to
@@ -198,49 +118,12 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
     }),
   );
 
-  const toSession = (
-    sessionRun: WorkflowRunSummary,
-    nowMs: number,
-  ): Effect.Effect<CloudSession, CloudSessionFailedError> =>
-    Effect.gen(function* () {
-      // `null` means "we could not read the steps", which is NOT the same as
-      // "there are no steps yet". Passing `[]` here would report `requested`
-      // for a running session and march its phase backwards on one flaky poll.
-      const steps: readonly WorkflowJobStep[] | null = isRunSettled(sessionRun)
-        ? []
-        : yield* run(jobStepsInvocation(repoRef, sessionRun.id)).pipe(
-            Effect.map((result) =>
-              result.stdoutTruncated ? null : parseJobStepsResponse(result.stdout),
-            ),
-            // Progress detail is a nicety: a run whose steps cannot be read is
-            // still a real session, so degrade to the run-level phase rather
-            // than failing the whole list.
-            Effect.orElseSucceed((): readonly WorkflowJobStep[] | null => null),
-          );
-      const phase = deriveCloudSessionPhase(sessionRun, steps);
-      return {
-        sessionId: String(sessionRun.id),
-        providerKind: "github_actions",
-        phase,
-        elapsedSeconds: cloudSessionElapsedSeconds(sessionRun, nowMs),
-        // The workflow owns the hold duration, so the server does not invent a
-        // remainder it cannot actually know.
-        remainingSeconds: null,
-        machineLabel,
-        failureReason:
-          phase === "failed"
-            ? (sessionRun.conclusion ?? "The session stopped before it became reachable.")
-            : null,
-        detailsUrl: sessionRun.htmlUrl === "" ? null : sessionRun.htmlUrl,
-      } satisfies CloudSession;
-    });
-
   const list: CloudSessionService["Service"]["list"] = Effect.gen(function* () {
     const runs = yield* listRuns;
     const nowMs = yield* Clock.currentTimeMillis;
     const sessions = yield* Effect.forEach(
       runs.slice(0, SESSION_DISPLAY_LIMIT),
-      (item) => toSession(item, nowMs),
+      (item) => projectCloudSession(item, nowMs, machineLabel, repoRef, run),
       { concurrency: 4 },
     );
     return { sessions, configured: true } satisfies CloudSessionListResult;
@@ -292,22 +175,15 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
       const discovered = yield* pollForTaggedRun(DISPATCH_DISCOVERY_ATTEMPTS);
 
       if (discovered === null) {
-        // The dispatch succeeded but the run has not surfaced yet. Report the
-        // session under its tag rather than a throwaway id, so a later `list`
-        // resolves the same session to the same identity and `cancel` keeps
-        // working once the run appears.
-        return {
-          sessionId: pendingSessionId(sessionTag),
-          providerKind: "github_actions",
-          phase: "requested",
-          elapsedSeconds: 0,
-          remainingSeconds: input.durationSeconds,
-          machineLabel,
-          failureReason: null,
-          detailsUrl: null,
-        } satisfies CloudSession;
+        return pendingCloudSession(sessionTag, input.durationSeconds, machineLabel);
       }
-      return yield* toSession(discovered, yield* Clock.currentTimeMillis);
+      return yield* projectCloudSession(
+        discovered,
+        yield* Clock.currentTimeMillis,
+        machineLabel,
+        repoRef,
+        run,
+      );
     });
 
   const cancel: CloudSessionService["Service"]["cancel"] = (input) =>

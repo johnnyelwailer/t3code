@@ -5,7 +5,7 @@ import { memo, useMemo } from "react";
 import type { EnvironmentOption } from "./BranchToolbar.logic";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { composerFloatingLayerProps } from "./chat/composerEventScope";
-import { presentCloudSession } from "./cloud/cloudSessionProvisionPresentation";
+import { presentCloudSession } from "./cloud/t3team-cloudSessionProvisionPresentation";
 import {
   Select,
   SelectGroup,
