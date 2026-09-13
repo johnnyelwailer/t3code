@@ -37,19 +37,35 @@ const TIMELINE_MINIMAP_MAX_HEIGHT_CSS = "calc(100vh - 18rem)";
 const TIMELINE_CONTENT_MAX_WIDTH = 768;
 const TIMELINE_MINIMAP_PERSISTENT_GUTTER = 48;
 
+/**
+ * The agent's deliberately chosen label for a tool call (toolTitle) beats
+ * the tool's static presentation: the translator emits `title` only when
+ * the model named the call, so a present toolTitle is always the agent's.
+ */
+function resolveToolCallTitleOrPresentation(
+  entry: Pick<WorkLogEntry, "toolTitle" | "label" | "toolData" | "toolLifecycleStatus">,
+  fallbackStatus?: "inProgress" | "completed",
+): string | undefined {
+  if (entry.toolTitle) {
+    const heading = normalizeCompactToolLabel(entry.toolTitle);
+    if (heading) return `${heading.charAt(0).toUpperCase()}${heading.slice(1)}`;
+  }
+  return resolveWorkEntryToolPresentation(entry, fallbackStatus)?.displayName;
+}
+
 function singleToolCallLabel(entry: WorkLogEntry): string {
-  const toolPresentation = resolveWorkEntryToolPresentation(entry, "completed");
-  if (toolPresentation) return toolPresentation.displayName;
   const command = entry.command?.trim();
   if (command) return command;
-  const heading = normalizeCompactToolLabel(entry.toolTitle || entry.label);
+  const heading =
+    resolveToolCallTitleOrPresentation(entry, "completed") ??
+    normalizeCompactToolLabel(entry.label);
   return `${heading.charAt(0).toUpperCase()}${heading.slice(1)}`;
 }
 
 export function workEntryDisplayLabel(entry: WorkLogEntry, workspaceRoot: string | undefined) {
-  const toolPresentation = resolveWorkEntryToolPresentation(entry);
-  if (toolPresentation) return toolPresentation.displayName;
   if (entry.command) return entry.command;
+  const toolTitleOrPresentation = resolveToolCallTitleOrPresentation(entry);
+  if (toolTitleOrPresentation) return toolTitleOrPresentation;
   if (entry.detail) return entry.detail;
   const [firstPath] = entry.changedFiles ?? [];
   if (firstPath) {
@@ -68,11 +84,6 @@ export function liveWorkEntryLabel(
   active: boolean,
 ) {
   const status = liveActivityToolStatus(entry.toolLifecycleStatus, active);
-  const toolPresentation = resolveWorkEntryToolPresentation({
-    ...entry,
-    toolLifecycleStatus: status,
-  });
-  if (toolPresentation) return toolPresentation.displayName;
   const command = entry.command?.trim();
   if (command) {
     const verb =
@@ -87,6 +98,11 @@ export function liveWorkEntryLabel(
               : "Ran";
     return `${verb} ${commandProgramName(command) ?? "command"}`;
   }
+  const toolTitleOrPresentation = resolveToolCallTitleOrPresentation({
+    ...entry,
+    toolLifecycleStatus: status,
+  });
+  if (toolTitleOrPresentation) return toolTitleOrPresentation;
   return workEntryDisplayLabel(entry, workspaceRoot);
 }
 
@@ -411,7 +427,9 @@ function backgroundJobEntryIdsOf(
   startEntryIds: ReadonlySet<string> | undefined,
 ): { backgroundJobEntryIds?: readonly string[] } {
   if (startEntryIds === undefined || startEntryIds.size === 0) return {};
-  const ids = groupedEntries.filter((entry) => startEntryIds.has(entry.id)).map((entry) => entry.id);
+  const ids = groupedEntries
+    .filter((entry) => startEntryIds.has(entry.id))
+    .map((entry) => entry.id);
   return ids.length > 0 ? { backgroundJobEntryIds: ids } : {};
 }
 
