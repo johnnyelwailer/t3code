@@ -86,7 +86,7 @@ function Section({ visibleThreads }: { visibleThreads: ProjectThread[] }) {
 }
 
 const meta: Meta = {
-  title: "Local provider sessions toggle",
+  title: "T3Team/Providers/Local Sessions Toggle",
   parameters: { layout: "fullscreen" },
 };
 export default meta;

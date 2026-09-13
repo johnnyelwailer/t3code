@@ -77,7 +77,7 @@ function ConnectPanelStory(props: React.ComponentProps<typeof ModelPickerProvide
 }
 
 const meta = {
-  title: "T3Team/Settings/ModelPickerProviderConnectPanel",
+  title: "T3Team/Providers/Model Picker Connect",
   component: ConnectPanelStory,
   parameters: {
     layout: "padded",

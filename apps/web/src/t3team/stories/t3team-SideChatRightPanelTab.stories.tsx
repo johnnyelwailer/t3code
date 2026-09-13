@@ -220,7 +220,7 @@ function SideChatStoryBody({ dark }: { dark: boolean }) {
 }
 
 const meta = {
-  title: "RightPanel/SideChatTab",
+  title: "T3Team/Right Panel/Side Chat Tab",
   parameters: {
     layout: "padded",
   },

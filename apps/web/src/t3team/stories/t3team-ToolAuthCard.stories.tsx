@@ -45,7 +45,7 @@ function ToolAuthCardStory(props: {
 }
 
 const meta = {
-  title: "T3Team/Settings/ToolAuthCard",
+  title: "T3Team/Providers/Tool Auth Card",
   component: ToolAuthCardStory,
   parameters: {
     layout: "padded",

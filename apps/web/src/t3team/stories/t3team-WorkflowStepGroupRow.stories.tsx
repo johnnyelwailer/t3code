@@ -44,7 +44,7 @@ function Frame({ children }: { readonly children: React.ReactNode }) {
 }
 
 const meta = {
-  title: "T3Team/Workflow Step Group Row",
+  title: "T3Team/Workflow/Step Group Row",
   parameters: { layout: "padded" },
 } satisfies Meta;
 

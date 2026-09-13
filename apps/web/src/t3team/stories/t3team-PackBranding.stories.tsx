@@ -160,7 +160,7 @@ function PackBrandingSheet({ mode }: { mode: "light" | "dark" }) {
 }
 
 const meta: Meta<typeof PackBrandingSheet> = {
-  title: "t3team/PackBranding",
+  title: "T3Team/Branding/Pack Branding",
   component: PackBrandingSheet,
   parameters: { layout: "fullscreen" },
 };

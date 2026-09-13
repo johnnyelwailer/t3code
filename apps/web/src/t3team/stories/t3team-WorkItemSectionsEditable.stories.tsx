@@ -204,7 +204,7 @@ function EditableSections() {
 }
 
 const meta = {
-  title: "T3Team/Work Item Sections (editable)",
+  title: "T3Team/Work Item/Sections (editable)",
   parameters: { layout: "padded" },
 } satisfies Meta;
 
