@@ -1,5 +1,5 @@
 /**
- * Contracts for signing CLI tools (`claude`, `codex`) into a hosted sandbox
+ * Contracts for signing CLI tools (`claude`, `codex`, `gh`) into a hosted sandbox
  * from the web UI — no terminal, no `claude auth login`, no pasting into a
  * shell.
  *
@@ -12,7 +12,7 @@ import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString } from "./baseSchemas.ts";
 
 /** The CLIs this surface can sign in. */
-export const ToolAuthToolId = Schema.Literals(["claude", "codex"]);
+export const ToolAuthToolId = Schema.Literals(["claude", "codex", "gh"]);
 export type ToolAuthToolId = typeof ToolAuthToolId.Type;
 
 export const ToolAuthPhase = Schema.Literals([
@@ -96,7 +96,8 @@ export type ToolAuthCancelInput = typeof ToolAuthCancelInput.Type;
 // drives a `fake` test/dev adapter (see `apps/server/src/toolauth/adapters.ts`)
 // that never reaches the wire, and these errors can describe it too. Payload
 // schemas below (`ToolAuthStartInput` and friends) still restrict `tool` to
-// `ToolAuthToolId`, so a real client can only ever request `claude | codex`.
+// `ToolAuthToolId`, so a real client can only ever request
+// `claude | codex | gh`.
 export class ToolAuthSpawnError extends Schema.TaggedErrorClass<ToolAuthSpawnError>()(
   "ToolAuthSpawnError",
   {

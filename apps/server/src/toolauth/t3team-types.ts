@@ -149,6 +149,17 @@ export interface ToolAuthAdapter {
     awaitingCode?: RegExp;
     /** A code to show the user (device flow). Group 1 must be the code. */
     displayCode?: RegExp;
+    /**
+     * A line that, once printed, is answered with a bare Enter on the pty.
+     *
+     * gh's device flow prints the one-time code and then blocks on
+     * "Press Enter to open … in your browser" — the Enter is what starts the
+     * CLI's own device-code polling. A headless sandbox has no hand on that
+     * keyboard, so the pty layer (`t3team-loginService.ts`) answers it once,
+     * automatically, the first time a line matches. Data, not code: a new
+     * tool with the same need stays a table entry.
+     */
+    autoEnter?: RegExp;
     success: RegExp;
     failure?: RegExp;
   };

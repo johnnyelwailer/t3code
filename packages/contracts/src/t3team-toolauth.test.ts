@@ -17,6 +17,7 @@ describe("ToolAuthInstallInput — the client can only send a closed tool id", (
   it("accepts the known tool ids", () => {
     expect(decodeToolAuthInstallInput({ tool: "claude" })).toEqual({ tool: "claude" });
     expect(decodeToolAuthInstallInput({ tool: "codex" })).toEqual({ tool: "codex" });
+    expect(decodeToolAuthInstallInput({ tool: "gh" })).toEqual({ tool: "gh" });
   });
 
   it("rejects any string outside the closed union — no command, package, or flag can ride along", () => {
@@ -37,6 +38,7 @@ describe("ToolAuthInstallInput — the client can only send a closed tool id", (
   it("shares the same closed union as ToolAuthToolId", () => {
     expect(() => decodeToolAuthToolId("claude")).not.toThrow();
     expect(() => decodeToolAuthToolId("codex")).not.toThrow();
+    expect(() => decodeToolAuthToolId("gh")).not.toThrow();
     expect(() => decodeToolAuthToolId("anything-else")).toThrow();
   });
 });
