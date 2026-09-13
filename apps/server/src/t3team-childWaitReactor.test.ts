@@ -178,6 +178,16 @@ const markerCount = (dispatches: OrchestrationCommand[]): number =>
         "t3team.child_abnormal_stop_notified",
   ).length;
 
+const markerSummaries = (dispatches: OrchestrationCommand[]): string[] =>
+  dispatches.flatMap(
+    (c) =>
+      c.type === "thread.activity.append" &&
+      (c as { activity?: { kind?: string; summary?: string } }).activity?.kind ===
+        "t3team.child_abnormal_stop_notified"
+        ? [(c as { activity: { summary: string } }).activity.summary]
+        : [],
+  );
+
 describe("makeChildWaitReactor abnormal-stop notification", () => {
   it.effect("notifies the parent when a child dies with NO wait registered", () =>
     Effect.gen(function* () {
@@ -191,6 +201,8 @@ describe("makeChildWaitReactor abnormal-stop notification", () => {
       expect(messages[0]).toContain("Last known state: editing src/app.ts");
       // A dead child is urgent.
       expect(urgencies(h.dispatches)).toEqual(["urgent"]);
+      // The marker's human line must match the outcome: a death is an incident.
+      expect(markerSummaries(h.dispatches)).toEqual(["Abnormal stop reported to parent"]);
     }),
   );
 
@@ -236,6 +248,9 @@ describe("makeChildWaitReactor silent-completion notice", () => {
       expect(messages[0]).toContain('op:"sweep"');
       // A normal completion is NON-urgent (it joins the burst fold, GHE #157).
       expect(urgencies(h.dispatches)).toEqual(["normal"]);
+      // The marker's human line must match the outcome: a clean finish is
+      // not an incident.
+      expect(markerSummaries(h.dispatches)).toEqual(["Child completion reported to parent"]);
     }),
   );
 

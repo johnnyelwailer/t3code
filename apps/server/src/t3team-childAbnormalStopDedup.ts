@@ -26,6 +26,13 @@ import { makeTerminalNotifyLedger } from "./t3team-terminalNotifyDedup.ts";
 /** Durable "already notified" marker kind, appended on the child thread. */
 export const CHILD_ABNORMAL_STOP_NOTIFIED_KIND = "t3team.child_abnormal_stop_notified";
 
+/**
+ * The marker's human line, outcome-aware: a clean finish must never read like
+ * an incident (the marker is visible on the child's timeline).
+ */
+const markerSummaryFor = (outcome: ChildTerminalOutcome): string =>
+  outcome === "completed" ? "Child completion reported to parent" : "Abnormal stop reported to parent";
+
 export interface AbnormalStopGuards {
   /** Epoch boundary: a running/starting transition resets the marker. */
   readonly noteResume: (childThreadId: string, seq: number) => void;
@@ -66,6 +73,7 @@ export function makeAbnormalStopGuards(deps: {
         resumeThreadId: childThreadId,
         terminalSeq: eventSequence,
         markerPayload: { outcome },
+        markerSummary: markerSummaryFor(outcome),
         doNotify: notify({ childThreadId, outcome, lastError }),
       }),
   };
