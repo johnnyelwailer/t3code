@@ -9,6 +9,9 @@ import {
   type TurnId,
 } from "@t3tools/contracts";
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
+import { createThreadJobsController, type ThreadJobsController } from "~/t3team/backend/t3team-thread-jobsBackend";
+import { resolveHttpBaseUrl } from "~/t3team/backend/t3team-t3BackendHttp";
+import { resolveWsBaseUrl } from "~/t3team/t3team-route-surface-wsUrl";
 import {
   EMPTY_ACTIVE_AGENTS,
   formatActiveAgentLabel,
@@ -256,6 +259,8 @@ interface TimelineRowSharedState {
   timestampFormat: TimestampFormat;
   routeThreadKey: string;
   threadRef: ScopedThreadRef | null;
+  /** Out-of-band background-job control (list/cancel/read-output) — see the jobs route. */
+  threadJobsController: ThreadJobsController | undefined;
   markdownCwd: string | undefined;
   resolvedTheme: "light" | "dark";
   workspaceRoot: string | undefined;
@@ -596,6 +601,17 @@ export const MessagesTimeline = memo(function MessagesTimeline({
 }: MessagesTimelineProps) {
   const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<TurnId>>(new Set());
   const citationThreadRef = useMemo(() => parseScopedThreadKey(routeThreadKey), [routeThreadKey]);
+  // Out-of-band job control for the background-jobs indicator: the backend
+  // URL is stable for the life of this surface, so the controller is built
+  // once and shared by the working-row indicator. A broken URL degrades to
+  // no affordances rather than a crash.
+  const threadJobsController = useMemo(() => {
+    try {
+      return createThreadJobsController(resolveHttpBaseUrl(resolveWsBaseUrl()));
+    } catch {
+      return undefined;
+    }
+  }, []);
   const expandCitedTurn = useCallback((turnId: TurnId) => {
     setExpandedTurnIds((current) =>
       current.has(turnId) ? current : new Set([...current, turnId]),
@@ -1029,6 +1045,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       routeThreadKey,
       // Keep Markdown callbacks memoized during unrelated activity updates.
       threadRef: citationThreadRef,
+      threadJobsController,
       markdownCwd,
       resolvedTheme,
       workspaceRoot,
@@ -1070,6 +1087,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       timestampFormat,
       routeThreadKey,
       citationThreadRef,
+      threadJobsController,
       markdownCwd,
       resolvedTheme,
       workspaceRoot,
@@ -2196,6 +2214,7 @@ function ProposedPlanTimelineRow({
 }
 
 export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "working" }> }) {
+  const { threadRef, threadJobsController } = use(TimelineRowCtx);
   const {
     isWorking,
     isCompacting,
@@ -2247,6 +2266,8 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
       <div data-t3team-working-row>
         <BackgroundJobsRunningIndicator
           jobs={backgroundJobs}
+          {...(threadRef !== null ? { threadId: threadRef.threadId } : {})}
+          {...(threadJobsController !== undefined ? { controller: threadJobsController } : {})}
           className="border-b border-border/60 px-1 pb-2 pt-1"
         />
       </div>
@@ -2363,7 +2384,12 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
         {/* A job started in an earlier turn keeps running through this one, so
             the job line sits under the status line rather than replacing it.
             It renders nothing when no job is running. */}
-        <BackgroundJobsRunningIndicator jobs={backgroundJobs} className="px-1" />
+        <BackgroundJobsRunningIndicator
+          jobs={backgroundJobs}
+          {...(threadRef !== null ? { threadId: threadRef.threadId } : {})}
+          {...(threadJobsController !== undefined ? { controller: threadJobsController } : {})}
+          className="px-1"
+        />
       </div>
     </div>
   );

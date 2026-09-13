@@ -2,11 +2,13 @@ import type { BackgroundJobState } from "@t3tools/client-runtime/work-log/backgr
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { BackgroundJobOutputPanel } from "./BackgroundJobOutputPanel";
 import {
   BackgroundJobList,
   BackgroundJobRunningBadge,
   BackgroundJobsRunningIndicator,
 } from "./BackgroundJobsIndicator";
+import type { ThreadJobsController } from "~/t3team/backend/t3team-thread-jobsBackend";
 
 const NOW = Date.parse("2026-09-11T12:00:00.000Z");
 vi.setSystemTime(NOW);
@@ -118,6 +120,78 @@ describe("BackgroundJobsRunningIndicator", () => {
     );
     expect(markup).toContain('aria-expanded="false"');
     expect(markup).not.toContain("Running background jobs");
+  });
+
+  // Out-of-band control: when the surface can reach the runtime's job
+  // registry (threadId + controller), each expanded job row gains Cancel
+  // and Output. Without them the indicator stays read-only.
+  it("offers cancel and output only when a controller is present", () => {
+    const readOnly = renderToStaticMarkup(
+      <BackgroundJobList running={[job({ jobId: "job_a", command: "sleep 30" })]} now={NOW} />,
+    );
+    expect(readOnly).not.toContain(">cancel<");
+    expect(readOnly).not.toContain(">output<");
+
+    const controllable = renderToStaticMarkup(
+      <BackgroundJobList
+        running={[job({ jobId: "job_a", command: "sleep 30" })]}
+        now={NOW}
+        canControl
+        cancelPending={new Set()}
+        onCancel={() => {}}
+        onShowOutput={() => {}}
+      />,
+    );
+    expect(controllable).toContain(">cancel<");
+    expect(controllable).toContain(">output<");
+  });
+
+  it("renders cancelled jobs dimmed and without a cancel button", () => {
+    const markup = renderToStaticMarkup(
+      <BackgroundJobList
+        running={[]}
+        cancelled={[job({ jobId: "job_a", command: "sleep 30" })]}
+        now={NOW}
+        canControl
+        cancelPending={new Set()}
+        onCancel={() => {}}
+        onShowOutput={() => {}}
+      />,
+    );
+    expect(markup).toContain(">cancelled</span>");
+    expect(markup).not.toContain(">cancel<");
+  });
+
+  it("marks an in-flight cancel as stopping… and disables the button", () => {
+    const markup = renderToStaticMarkup(
+      <BackgroundJobList
+        running={[job({ jobId: "job_a", command: "sleep 30" })]}
+        now={NOW}
+        canControl
+        cancelPending={new Set(["job_a"])}
+        onCancel={() => {}}
+        onShowOutput={() => {}}
+      />,
+    );
+    expect(markup).toContain("stopping…");
+    expect(markup).toContain('disabled=""');
+  });
+
+  it("opens the output panel for the selected job when a controller is present", () => {
+    // The panel itself is driven by the controller's polls (effects); the
+    // indicator's contract is that clicking Output mounts it with the job's
+    // id and command. Static markup: the panel's pre-state renders.
+    const markup = renderToStaticMarkup(
+      <BackgroundJobOutputPanel
+        threadId="thread_a"
+        jobId="job_a"
+        command="sleep 30"
+        controller={(() => Promise.resolve({ supported: false })) as ThreadJobsController}
+        onClose={() => {}}
+      />,
+    );
+    expect(markup).toContain('aria-label="Output of sleep 30"');
+    expect(markup).toContain("waiting for output…");
   });
 });
 
