@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 
 import { CLAUDE, CODEX, FAKE } from "./t3team-adapters.ts";
+import { GH, ghAdapter } from "./t3team-ghAdapter.ts";
 import { advance, assemblePtyRead, foldPtyRead, stripAnsi } from "./t3team-advance.ts";
 import type { AuthState } from "./t3team-types.ts";
 
@@ -98,6 +99,74 @@ describe("advance", () => {
     it("moves to failed when the device code path is unavailable", () => {
       const next = advance(idle("codex"), "Device code login is not enabled", CODEX);
       expect(next.phase).toBe("failed");
+    });
+  });
+
+  describe("GitHub (GHE device flow: code displayed, Enter auto-answered)", () => {
+    // The verbatim lines gh 2.96.0 printed in an 80x30 pty on nexplore.ghe.com
+    // (ANSI-stripped) — these fixtures are captures, not guesses.
+    const CODE_LINE = "! First copy your one-time code: B4A0-AA8E";
+    const ENTER_LINE =
+      "Press Enter to open https://nexplore.ghe.com/login/device in your browser...";
+
+    it("captures the display code from the code line, without leaving starting yet (no URL yet)", () => {
+      const next = advance({ tool: "gh", phase: "starting" }, CODE_LINE, GH);
+      expect(next.displayCode).toBe("B4A0-AA8E");
+      expect(next.phase).toBe("starting");
+      expect(next.url).toBeUndefined();
+    });
+
+    it("captures the device URL and moves to awaiting-open on the press-enter line", () => {
+      const withCode: AuthState = { tool: "gh", phase: "starting", displayCode: "B4A0-AA8E" };
+      const next = advance(withCode, ENTER_LINE, GH);
+      expect(next.phase).toBe("awaiting-open");
+      expect(next.url).toBe("https://nexplore.ghe.com/login/device");
+      expect(next.displayCode).toBe("B4A0-AA8E");
+    });
+
+    it("moves to connected on gh's success lines", () => {
+      const prev: AuthState = {
+        tool: "gh",
+        phase: "awaiting-open",
+        url: "https://nexplore.ghe.com/login/device",
+      };
+      expect(advance(prev, "Authentication complete.", GH).phase).toBe("connected");
+      const again: AuthState = { tool: "gh", phase: "awaiting-open" };
+      const next = advance(again, "Logged in to nexplore.ghe.com account pj (keyring)", GH);
+      expect(next.phase).toBe("connected");
+    });
+
+    it("moves to failed on gh's failure and timeout lines", () => {
+      expect(advance(idle("gh"), "Failed to log in to nexplore.ghe.com account pj (keyring)", GH).phase).toBe(
+        "failed",
+      );
+      const timedOut = advance(
+        idle("gh"),
+        "Timeout trying to log in to nexplore.ghe.com using token (keyring)",
+        GH,
+      );
+      expect(timedOut.phase).toBe("failed");
+    });
+
+    it("autoEnter matches only the press-enter line", () => {
+      expect(GH.match.autoEnter?.test(ENTER_LINE)).toBe(true);
+      expect(GH.match.autoEnter?.test(CODE_LINE)).toBe(false);
+      expect(GH.match.autoEnter?.test("Authentication complete.")).toBe(false);
+    });
+
+    it("does not let the display code capture a 4-4 fragment embedded in a URL", () => {
+      // Same trap as Codex: the URL line must not masquerade as a code.
+      const next = advance(idle("gh"), "visit https://nexplore.ghe.com/login/device now", GH);
+      expect(next.displayCode).toBeUndefined();
+    });
+
+    it("adapts to a non-default GHE host", () => {
+      const other = ghAdapter("github.corp.example");
+      const next = advance(idle("gh"), "Press Enter to open https://github.corp.example/login/device in your browser...", other);
+      expect(next.phase).toBe("awaiting-open");
+      expect(next.url).toBe("https://github.corp.example/login/device");
+      const logged = advance({ tool: "gh", phase: "awaiting-open" }, "Logged in to github.corp.example account pj (keyring)", other);
+      expect(logged.phase).toBe("connected");
     });
   });
 

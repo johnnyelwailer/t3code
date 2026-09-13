@@ -122,6 +122,11 @@ export function makeService(
     homeDir,
     env: {},
     tools: ["fake"],
+    // The login flow's own pre-spawn check must not depend on what PATH the
+    // test environment happens to carry (`env: {}` above makes a real PATH
+    // lookup fail for even `node`): the login tests assume spawn is possible.
+    // Install-flow tests pass their own controllable check, which wins.
+    checkBinaryAvailable: () => Effect.succeed(true),
     ...overrides,
   }).pipe(
     Effect.provide(testLayer),

@@ -1,12 +1,17 @@
 /**
  * Tool definitions. Adding a tool is a table entry — no new code path.
  *
- * The two flows differ in one important way, and the UI must reflect it:
+ * The flows differ in one important way, and the UI must reflect it:
  *
- *   Codex  — RFC-8628 device flow. We DISPLAY a code; the human types it into
- *            the web page. Nothing comes back to us. Cleanest possible UX.
+ *   Codex — RFC-8628 device flow. We DISPLAY a code; the human types it into
+ *           the web page. Nothing comes back to us. Cleanest possible UX.
  *   Claude — no device flow (upstream issue #22992). The browser shows a code
  *            the human must bring BACK. So the UI needs one input field.
+ *   GitHub — device flow against the GHE instance (default `nexplore.ghe.com`),
+ *            same shape as Codex: we display the one-time code, the human
+ *            types it at the GHE device page. gh additionally waits for an
+ *            Enter after printing the code before it starts polling — a
+ *            headless sandbox answers that automatically (`match.autoEnter`).
  *
  * That asymmetry is exactly why this is an adapter interface rather than one
  * hardcoded flow.
@@ -23,6 +28,7 @@
  * @module toolauth/adapters
  */
 import type { ToolAuthAdapter, ToolAuthPhase } from "./t3team-types.ts";
+import { GH } from "./t3team-ghAdapter.ts";
 
 export const CLAUDE: ToolAuthAdapter = {
   tool: "claude",
@@ -168,11 +174,12 @@ export const FAKE: ToolAuthAdapter = {
 export const ADAPTERS: Record<string, ToolAuthAdapter> = {
   [CLAUDE.tool]: CLAUDE,
   [CODEX.tool]: CODEX,
+  [GH.tool]: GH,
   [FAKE.tool]: FAKE,
 };
 
 /** The tools surfaced in the production API/UI — `fake` is test/dev only. */
-export const PRODUCTION_TOOLS: ReadonlyArray<string> = [CLAUDE.tool, CODEX.tool];
+export const PRODUCTION_TOOLS: ReadonlyArray<string> = [CLAUDE.tool, CODEX.tool, GH.tool];
 
 export function getAdapter(tool: string): ToolAuthAdapter {
   const adapter = ADAPTERS[tool];
