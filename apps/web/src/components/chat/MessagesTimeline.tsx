@@ -9,7 +9,10 @@ import {
   type TurnId,
 } from "@t3tools/contracts";
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
-import { createThreadJobsController, type ThreadJobsController } from "~/t3team/backend/t3team-thread-jobsBackend";
+import {
+  createThreadJobsController,
+  type ThreadJobsController,
+} from "~/t3team/backend/t3team-thread-jobsBackend";
 import { resolveHttpBaseUrl } from "~/t3team/backend/t3team-t3BackendHttp";
 import { resolveWsBaseUrl } from "~/t3team/t3team-route-surface-wsUrl";
 import {
@@ -522,6 +525,13 @@ interface MessagesTimelineProps {
   onContentOverflowChange?: (overflows: boolean) => void;
   onToolOutputCollapsedAtEnd?: () => void;
   onManualNavigation: () => void;
+  /**
+   * True while this thread has an open pending user-input question (ask_user /
+   * decision card). While open, turn folding is skipped entirely — the
+   * thread is mid-conversation and collapsing history would bury the context
+   * the user is answering from.
+   */
+  hasOpenUserInput?: boolean;
   workflowCardNavigationRequest?: {
     readonly messageId: MessageId;
     readonly requestId: number;
@@ -594,6 +604,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onContentOverflowChange,
   onToolOutputCollapsedAtEnd,
   onManualNavigation,
+  hasOpenUserInput = false,
   workflowCardNavigationRequest,
   hideEmptyPlaceholder = false,
   topFadeEnabled = false,
@@ -810,6 +821,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         idleActiveAgentsPresent: activeAgents.length > 0,
         idleBackgroundJobsPresent: backgroundJobFold.startEntryIds.size > 0,
         backgroundJobStartEntryIds: backgroundJobFold.startEntryIds,
+        hasOpenUserInput,
         turnDiffSummaryByAssistantMessageId,
         revertTurnCountByUserMessageId,
         resumeOffer: resumeMessageId !== null,
@@ -833,6 +845,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     isWorking,
     activeTurnStartedAt,
     backgroundJobFold,
+    hasOpenUserInput,
     turnDiffSummaryByAssistantMessageId,
     revertTurnCountByUserMessageId,
   ]);

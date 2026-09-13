@@ -103,6 +103,14 @@ export const T3TeamMessageExt = Schema.Struct({
   /** Present on an `actor`-role message (inter-agent coordination). */
   actor: Schema.optional(T3TeamActorMessageInfo),
   /**
+   * Present on the `role:"user"` framing of a server-forced NOTIFICATION turn
+   * (e.g. a job-completion notification that raises a turn while the thread
+   * is idle). Machine-driven turns carry it so a client de-emphasizes them
+   * the same way it de-emphasizes inter-agent reaction turns. Absence (or
+   * `false`) means a person raised the turn.
+   */
+  notification: Schema.optional(Schema.Boolean),
+  /**
    * Present on the fork-provenance note of a forked thread: identifies the
    * thread this one was forked from so agents can search its full transcript
    * (`t3team.thread.search_source`) even when the fork itself was truncated.
