@@ -3800,7 +3800,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       placement="inline"
       progress={activeTasksProgress}
       steps={activeTaskSteps}
-      planUpdatedAt={activeTaskUpdatedAt ?? undefined}
     />
   ) : null;
   const hasImageAttachmentAttention = standaloneComposerImages.some((image) => {
@@ -5099,7 +5098,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 onToggle={toggleTasksDrawer}
                 progress={activeTasksProgress}
                 steps={activeTaskSteps}
-                planUpdatedAt={activeTaskUpdatedAt ?? undefined}
               />
             </ComposerBanner.Attachment>
           ) : null}

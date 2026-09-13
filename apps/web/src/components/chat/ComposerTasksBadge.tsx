@@ -67,14 +67,11 @@ function TaskSummary({
   expanded,
   progress,
   steps,
-  planUpdatedAt,
 }: {
   readonly expanded: boolean;
   readonly progress: ComposerTasksProgress;
   readonly steps: readonly ComposerTaskStep[];
-  readonly planUpdatedAt?: string | undefined;
 }) {
-  const updatedLabel = planUpdatedAt ? formatRelativeTimeLabel(planUpdatedAt) : "";
   return (
     <>
       <ComposerBanner.Icon>
@@ -90,15 +87,6 @@ function TaskSummary({
         </span>
       </ComposerBanner.Content>
       <ComposerBanner.Actions>
-        {updatedLabel ? (
-          <span
-            className="hidden shrink-0 text-[10px] tabular-nums text-muted-foreground/45 md:inline"
-            data-composer-task-updated="true"
-            title={`Task list last updated ${updatedLabel}`}
-          >
-            {updatedLabel}
-          </span>
-        ) : null}
         <ComposerBanner.Count
           className={progress.completedSteps >= progress.totalSteps ? "text-success" : undefined}
           data-composer-task-progress="true"
@@ -118,14 +106,12 @@ export const ComposerTasksBadge = memo(function ComposerTasksBadge({
   placement = "tab",
   progress,
   steps,
-  planUpdatedAt,
 }: {
   readonly expanded: boolean;
   readonly onToggle: () => void;
   readonly placement?: "inline" | "tab";
   readonly progress: ComposerTasksProgress;
   readonly steps: readonly ComposerTaskStep[];
-  readonly planUpdatedAt?: string | undefined;
 }) {
   if (progress.totalSteps <= 0) return null;
 
@@ -138,7 +124,7 @@ export const ComposerTasksBadge = memo(function ComposerTasksBadge({
       onClick={onToggle}
       onPointerDown={(event) => event.preventDefault()}
     >
-      <TaskSummary expanded={expanded} progress={progress} steps={steps} planUpdatedAt={planUpdatedAt} />
+      <TaskSummary expanded={expanded} progress={progress} steps={steps} />
     </ComposerBanner.Row>
   );
   return placement === "inline" ? (
@@ -174,10 +160,17 @@ export const ComposerTasksContent = memo(function ComposerTasksContent({
         placement="inline"
         progress={progress}
         steps={steps}
-        planUpdatedAt={planUpdatedAt}
       />
       {expanded ? (
         <ComposerBanner.Scroll data-composer-tasks-scroll="true">
+          {planUpdatedAt ? (
+            <div
+              className="px-3 pb-1 pt-1.5 text-[10px] text-muted-foreground/45"
+              data-composer-task-updated="true"
+            >
+              Updated {formatRelativeTimeLabel(planUpdatedAt)}
+            </div>
+          ) : null}
           <ComposerBanner.Children
             render={<ul role="list" />}
             aria-label={`Task list. ${progress.completedSteps} of ${progress.totalSteps} complete.`}
