@@ -44,6 +44,15 @@ function HeaderRow({
         style={{ width }}
       >
         <Backdrop />
+        {/* Pack background layer — `t3team-ProjectSidebarHeader` renders this above the stage
+            backdrop (absolute inset-0, pointer-events-none, transparent by default). The stand-in
+            must keep it: the measurement has to ignore decorative layers or the whole header reads
+            as occupied and the orb sinks off the strip (regression 2026-09-13). */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-[1]"
+          style={{ background: "transparent" }}
+        />
         {/* Brand: inset differs between macOS desktop (traffic-light reserve) and everywhere else. */}
         <div
           className="relative z-10 flex h-7 items-center gap-1.5"

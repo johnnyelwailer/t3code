@@ -24,20 +24,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 const STRIP_HEIGHT = 96;
 
 /**
- * Orb placement is MEASURED, not hardcoded.
- *
- * Static coordinates cannot work here. The sidebar is resizable (min 256px, no max) and the SVG is
- * `xMinYMin slice` with a height-driven scale, so a fixed `cx` is pinned to a fixed pixel offset
- * from the LEFT — while the header toggle is anchored to the RIGHT and slides with the width. Any
- * constant eventually collides. The brand's width is not a constant either: it depends on the
- * distribution's app name and the display font.
- *
- * So the orb is placed into the widest gap actually free of header content, remeasured whenever
- * the header resizes. That also removes the need for a macOS branch: on macOS desktop the brand is
- * pushed out to `--workspace-titlebar-content-left` (90px + 2rem + 0.75rem = 134px), which makes
- * the LEFT gap the widest one, so the orb lands behind the native traffic lights on its own — and
- * in fullscreen, where the inset drops and the brand slides back, the measurement simply picks the
- * middle gap again.
+ * Orb placement is MEASURED, not hardcoded. The sidebar is resizable (min 256px, no max) and the
+ * SVG is `xMinYMin slice` with a height-driven scale, so a fixed `cx` is pinned to a fixed pixel
+ * offset from the LEFT while the header toggle is anchored to the RIGHT and slides with the width;
+ * any constant eventually collides. The orb therefore sits in the widest gap actually free of
+ * header content, remeasured on every header resize — which also covers macOS without a platform
+ * branch: desktop's titlebar inset makes the LEFT gap the widest, so the orb lands behind the
+ * traffic lights on its own; in fullscreen the inset drops and the middle gap wins again.
  */
 type OrbPlacement = { cx: number; cy: number; r: number };
 
@@ -49,8 +42,8 @@ const ORB_CONTENT_MARGIN_PX = 12;
 const ORB_BAND_CY_PX = 18;
 /** Header band the orb sinks past when squeezed — `--workspace-topbar-height`. */
 const HEADER_BAND_PX = 52;
-// The full-squeeze centre is derived per measurement from the fitted radius (`HEADER_BAND_PX +
-// radius + 4`), so the circle clears the band rather than leaving its top third inside it.
+// The full-squeeze centre derives per measurement (`HEADER_BAND_PX + radius + 4`) so the circle
+// clears the band rather than leaving its top third inside it.
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -83,13 +76,16 @@ function measureFreeGap(host: HTMLElement, selfContainer: Element | null): { sta
     if (child === selfContainer || child.contains(selfContainer)) continue;
     const rect = child.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) continue;
+    // Decorative layers are not content: the t3team header's pack-background layer is absolute
+    // inset-0 + pointer-events-none, so counting it read the whole header as occupied and sank
+    // the orb off the strip. It never blocks the pointer; painted opaque, it hides the art anyway.
+    if (getComputedStyle(child).pointerEvents === "none") continue;
     occupied.push([rect.left - hostRect.left, rect.right - hostRect.left]);
   }
   occupied.sort((a, b) => a[0] - b[0]);
 
-  // The titlebar reserve wins over a merely wider run: on macOS desktop the orb belongs BEHIND the
-  // native window buttons. Widest-gap alone put it in the middle on a wide sidebar, because the run
-  // between brand and toggle outgrew the 134px reserve.
+  // The titlebar reserve wins over a merely wider run: on macOS desktop the orb belongs BEHIND
+  // the native window buttons, and widest-gap alone put it in the middle on a wide sidebar.
   const leadingEnd = occupied.length > 0 ? Math.max(0, occupied[0]![0]) : hostRect.width;
   if (leadingEnd >= TITLEBAR_RESERVE_MIN_PX) return { start: 0, end: leadingEnd };
 
@@ -103,6 +99,9 @@ function measureFreeGap(host: HTMLElement, selfContainer: Element | null): { sta
     cursor = Math.max(cursor, end);
   }
   consider(cursor, hostRect.width);
+  // Content that tiles the header completely (full-width wrappers) leaves no free run: fall back
+  // to the horizontal centre rather than pinning the orb half-clipped at the left edge.
+  if (best.end - best.start <= 0) return { start: hostRect.width / 2, end: hostRect.width / 2 };
   return best;
 }
 
