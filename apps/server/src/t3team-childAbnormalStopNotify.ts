@@ -168,9 +168,13 @@ export const makeChildAbnormalStopNotifier =
           fromTitle: child.title,
           fromProjectId: child.projectId,
           text,
-          // M3: an abnormal child stop is exactly the kind of event the parent
-          // must hear about without the idle coalescing delay.
-          urgency: "urgent",
+          // Urgency is outcome-specific; the two outcomes must NOT be re-unified.
+          // A failed/aborted child is exactly the event the parent must hear
+          // about without the idle coalescing delay, so it is urgent. A normal
+          // completion is not — and urgent would BYPASS the automated-message
+          // burst fold (GHE #157), so the one outcome that most needs
+          // coalescing would jump the queue. completed dispatches at normal.
+          urgency: input.outcome === "completed" ? "normal" : "urgent",
           hopCount: NonNegativeInt.make(0),
           rootThreadId: ThreadId.make(parentThreadId),
           createdAt: nowIso,
