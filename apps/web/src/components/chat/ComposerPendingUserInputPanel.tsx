@@ -187,8 +187,14 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
             {activeQuestion.header}
           </span>
           {isCollapsed ? (
+            // The question is often a short "which option?" pointer; when it
+            // carries context, the header must show it — otherwise the
+            // collapsed card is unintelligible, which is the complaint this
+            // field exists to fix.
             <span className="min-w-0 flex-1 truncate text-secondary-label">
-              {activeQuestion.question}
+              {activeQuestion.context
+                ? `${activeQuestion.context} — ${activeQuestion.question}`
+                : activeQuestion.question}
             </span>
           ) : null}
         </ComposerBanner.Content>
@@ -204,6 +210,34 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
       <CollapsiblePanel>
         <ComposerBanner.Scroll>
           <ComposerBanner.Body className="pe-1 pb-1">
+            {activeQuestion.context ? (
+              // Context strip: the earlier-thread content the question points
+              // at, so the question reads without scrolling back. Subtle,
+              // clamped to ~4 lines, expandable via the same Collapsible
+              // pattern the card itself uses.
+              <div className="mb-2 rounded-md bg-muted/40 px-2.5 py-1.5">
+                <T3TeamPendingQuestionMarkdown
+                  text={activeQuestion.context}
+                  className="text-secondary-label text-[11px] line-clamp-4"
+                />
+                <Collapsible>
+                  <CollapsibleTrigger
+                    render={<button type="button" />}
+                    className="mt-0.5 text-[10px] font-medium text-muted-foreground"
+                  >
+                    Show full context
+                  </CollapsibleTrigger>
+                  <CollapsiblePanel>
+                    <div className="pt-0.5">
+                      <T3TeamPendingQuestionMarkdown
+                        text={activeQuestion.context}
+                        className="text-secondary-label text-[11px]"
+                      />
+                    </div>
+                  </CollapsiblePanel>
+                </Collapsible>
+              </div>
+            ) : null}
             <T3TeamPendingQuestionMarkdown text={activeQuestion.question} />
             {activeQuestion.multiSelect ? (
               <p className="mt-1 text-secondary-label text-xs">Select one or more options.</p>

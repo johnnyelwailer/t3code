@@ -58,6 +58,7 @@ const sendMessage = Effect.fn("T3TeamMcpToolkit.sendMessage")(function* (input: 
 
 const askUser = Effect.fn("T3TeamMcpToolkit.askUser")(function* (input: {
   readonly question: string;
+  readonly context?: string | undefined;
   readonly header?: string | undefined;
   readonly options?: readonly (string | T3TeamAskUserOption)[] | undefined;
   readonly multiSelect?: boolean | undefined;

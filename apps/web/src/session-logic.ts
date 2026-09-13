@@ -503,6 +503,9 @@ function parseUserInputQuestions(
         question: question.question,
         options,
         multiSelect: question.multiSelect === true,
+        ...(typeof question.context === "string" && question.context.length > 0
+          ? { context: question.context }
+          : {}),
         ...(typeof question.allowCustomAnswer === "boolean"
           ? { allowCustomAnswer: question.allowCustomAnswer }
           : {}),

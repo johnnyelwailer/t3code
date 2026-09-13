@@ -226,9 +226,11 @@ it.effect("maps header and structured options; warns when a description restates
     );
 
     expect(result.delivered).toBe(true);
-    // The string option has no distinct description, so it warns.
-    expect(result.warnings).toHaveLength(1);
+    // The string option has no distinct description, so it warns. The short
+    // context-less question also triggers the missing-context soft warning.
+    expect(result.warnings).toHaveLength(2);
     expect(result.warnings?.[0]).toContain("Drop the header (recommended)");
+    expect(result.warnings?.[1]).toContain("no context was provided");
 
     const requested = activityAt(fake.commands, 0);
     const questions = (requested.payload.questions ?? []) as Array<Record<string, unknown>>;
@@ -237,6 +239,93 @@ it.effect("maps header and structured options; warns when a description restates
       { label: "Drop the header (recommended)", description: "Drop the header (recommended)" },
       { label: "Keep it", description: "Preserves the observed UX; costs a render pass" },
     ]);
+  }),
+);
+
+it.effect(
+  "persists context onto the question payload and suppresses the missing-context warning",
+  () =>
+    Effect.gen(function* () {
+      const fake = makeRecordingEngine();
+      const result = yield* provideAskUser(
+        t3TeamAskUser(
+          {
+            question: "Which of these should we ship first?",
+            context:
+              "  ### Proposed options\n\n1. Ship A — smallest, ships this week\n2. Ship B — user-requested  ",
+          },
+          threadId,
+        ),
+        fake.shape,
+        makeRepository([]),
+      );
+
+      expect(result.warnings ?? []).toEqual([]);
+
+      const requested = activityAt(fake.commands, 0);
+      const questions = (requested.payload.questions ?? []) as Array<Record<string, unknown>>;
+      // Trimmed: the handler must not persist whitespace-padded context.
+      expect(questions[0]?.context).toBe(
+        "### Proposed options\n\n1. Ship A — smallest, ships this week\n2. Ship B — user-requested",
+      );
+    }),
+);
+
+it.effect("warns when the question is short and no context is provided", () =>
+  Effect.gen(function* () {
+    const fake = makeRecordingEngine();
+    const result = yield* provideAskUser(
+      t3TeamAskUser({ question: "Which option should I take?" }, threadId),
+      fake.shape,
+      makeRepository([]),
+    );
+
+    expect(result.delivered).toBe(true);
+    expect(result.warnings).toEqual([
+      "question references prior content but no context was provided — pass the referenced content in 'context'",
+    ]);
+
+    const requested = activityAt(fake.commands, 0);
+    const questions = (requested.payload.questions ?? []) as Array<Record<string, unknown>>;
+    // No context key on the payload — the panel must not render an empty strip.
+    expect(questions[0]?.context).toBeUndefined();
+  }),
+);
+
+it.effect("keeps whitespace-only context out of the payload and keeps the warning", () =>
+  Effect.gen(function* () {
+    const fake = makeRecordingEngine();
+    const result = yield* provideAskUser(
+      t3TeamAskUser({ question: "Which option should I take?", context: "   " }, threadId),
+      fake.shape,
+      makeRepository([]),
+    );
+
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings?.[0]).toContain("no context was provided");
+
+    const requested = activityAt(fake.commands, 0);
+    const questions = (requested.payload.questions ?? []) as Array<Record<string, unknown>>;
+    expect(questions[0]?.context).toBeUndefined();
+  }),
+);
+
+it.effect("does not warn on a long self-contained question without context", () =>
+  Effect.gen(function* () {
+    const fake = makeRecordingEngine();
+    const result = yield* provideAskUser(
+      t3TeamAskUser(
+        {
+          question:
+            "The migration can run per-tenant sequentially over a weekend window with a rollback job; should we proceed with that plan?",
+        },
+        threadId,
+      ),
+      fake.shape,
+      makeRepository([]),
+    );
+
+    expect(result.warnings ?? []).toEqual([]);
   }),
 );
 
