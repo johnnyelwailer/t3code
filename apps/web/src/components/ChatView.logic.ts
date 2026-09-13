@@ -775,6 +775,8 @@ export function shouldShowBranchMismatchBanner(input: {
 export interface ComposerTasksProgressView {
   readonly progress: ComposerTasksProgress | null;
   readonly steps: readonly ComposerTaskStep[] | null;
+  /** ISO instant of the last plan write (the activity's createdAt), for the badge's "updated 40m ago" staleness affordance. Null when there is no plan. */
+  readonly planUpdatedAt: string | null;
 }
 
 /**
@@ -792,14 +794,14 @@ export function deriveComposerTasksProgress(input: {
   readonly activePlan: ActivePlanState | null;
 }): ComposerTasksProgressView {
   if (input.activeLatestTurnId === null || input.activePlan === null) {
-    return { progress: null, steps: null };
+    return { progress: null, steps: null, planUpdatedAt: null };
   }
   const { activePlan } = input;
   const currentStep =
     activePlan.steps.find((step) => step.status === "inProgress") ??
     activePlan.steps.find((step) => step.status === "pending");
   if (currentStep === undefined) {
-    return { progress: null, steps: null };
+    return { progress: null, steps: null, planUpdatedAt: null };
   }
   return {
     progress: {
@@ -808,6 +810,7 @@ export function deriveComposerTasksProgress(input: {
       totalSteps: activePlan.steps.length,
     },
     steps: activePlan.steps,
+    planUpdatedAt: activePlan.createdAt,
   };
 }
 
