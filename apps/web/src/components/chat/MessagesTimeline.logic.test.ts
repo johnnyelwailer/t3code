@@ -88,6 +88,45 @@ describe("deriveInterAgentReactionTurnIds", () => {
     expect(ids.has(userTurn)).toBe(false);
   });
 
+  it("marks a turn a reaction turn when its framing user message carries t3teamExt.notification", () => {
+    const userTurn = TurnId.make("user-turn");
+    const notificationTurn = TurnId.make("notification-turn");
+    const entries: LogicTimelineEntry[] = [
+      entry({
+        id: "u1",
+        kind: "message",
+        createdAt: "2026-01-01T00:00:00Z",
+        message: msg({ id: "u1", role: "user", text: "do the thing" }),
+      }),
+      entry({
+        id: "a1",
+        kind: "message",
+        createdAt: "2026-01-01T00:00:05Z",
+        message: msg({ id: "a1", role: "assistant", turnId: userTurn }),
+      }),
+      entry({
+        id: "n1",
+        kind: "message",
+        createdAt: "2026-01-01T00:01:00Z",
+        message: msg({
+          id: "n1",
+          role: "user",
+          text: "Job finished in the background.",
+          t3teamExt: { notification: true },
+        }),
+      }),
+      entry({
+        id: "a2",
+        kind: "message",
+        createdAt: "2026-01-01T00:01:05Z",
+        message: msg({ id: "a2", role: "assistant", turnId: notificationTurn }),
+      }),
+    ];
+    const ids = deriveInterAgentReactionTurnIds(entries);
+    expect(ids.has(notificationTurn)).toBe(true);
+    expect(ids.has(userTurn)).toBe(false);
+  });
+
   it("does not mark a turn when the triggering user message is a real user message", () => {
     const userTurn = TurnId.make("user-turn");
     const entries: LogicTimelineEntry[] = [
@@ -1318,7 +1357,7 @@ describe("deriveMessagesTimelineRows", () => {
     expect(assistantRow?.assistantTurnDiffSummary).toBe(assistantTurnDiffSummary);
   });
 
-  it("folds the first assistant message and settled work before the terminal response", () => {
+  it("folds settled work before the terminal response while keeping prose visible", () => {
     const timelineEntries = [
       {
         id: "user-entry",
@@ -1392,8 +1431,11 @@ describe("deriveMessagesTimelineRows", () => {
     expect(foldRow?.expanded).toBe(false);
     // User message boundary (00:00:00) → terminal message updatedAt (00:00:22).
     expect(foldRow?.label).toBe("Worked for 22s");
+    // Prose never folds: the intermediate assistant message stays visible
+    // on the near side of the fold, which anchors at the hidden tool row.
     expect(collapsedRows.map((row) => row.id)).toEqual([
       "user-entry",
+      "assistant-first-entry",
       "turn-fold:turn-1",
       "assistant-final-entry",
     ]);
@@ -1409,14 +1451,193 @@ describe("deriveMessagesTimelineRows", () => {
 
     expect(expandedRows.map((row) => row.id)).toEqual([
       "user-entry",
-      "turn-fold:turn-1",
       "assistant-first-entry",
+      "turn-fold:turn-1",
       "work-entry-1",
       "assistant-final-entry",
     ]);
     expect(
       expandedRows.find((row) => row.kind === "turn-fold" && row.expanded === true),
     ).toBeDefined();
+  });
+
+  it("skips turn folding entirely while a user-input question is open", () => {
+    const timelineEntries = [
+      {
+        id: "user-entry",
+        kind: "message" as const,
+        createdAt: "2026-01-01T00:00:00Z",
+        message: {
+          id: "user-1" as never,
+          role: "user" as const,
+          text: "Build it",
+          turnId: null,
+          createdAt: "2026-01-01T00:00:00Z",
+          updatedAt: "2026-01-01T00:00:00Z",
+          streaming: false,
+        },
+      },
+      {
+        id: "assistant-first-entry",
+        kind: "message" as const,
+        createdAt: "2026-01-01T00:00:05Z",
+        message: {
+          id: "assistant-first" as never,
+          role: "assistant" as const,
+          text: "Gathering context…",
+          turnId: "turn-1" as never,
+          createdAt: "2026-01-01T00:00:05Z",
+          updatedAt: "2026-01-01T00:00:06Z",
+          streaming: false,
+        },
+      },
+      {
+        id: "work-entry-1",
+        kind: "work" as const,
+        createdAt: "2026-01-01T00:00:08Z",
+        entry: {
+          id: "work-1",
+          createdAt: "2026-01-01T00:00:08Z",
+          turnId: "turn-1" as never,
+          label: "Ran command",
+          tone: "tool" as const,
+        },
+      },
+      {
+        id: "assistant-final-entry",
+        kind: "message" as const,
+        createdAt: "2026-01-01T00:00:20Z",
+        message: {
+          id: "assistant-final" as never,
+          role: "assistant" as const,
+          text: "Which option should I use?",
+          turnId: "turn-1" as never,
+          createdAt: "2026-01-01T00:00:20Z",
+          updatedAt: "2026-01-01T00:00:22Z",
+          streaming: false,
+        },
+      },
+    ];
+
+    const input = {
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+    };
+    const rows = deriveMessagesTimelineRows({ ...input, timelineEntries, hasOpenUserInput: true });
+
+    expect(rows.some((row) => row.kind === "turn-fold")).toBe(false);
+    // The tool row the fold would have hidden stays visible, as does the
+    // intermediate prose the user is answering from.
+    expect(rows.map((row) => row.id)).toEqual([
+      "user-entry",
+      "assistant-first-entry",
+      "work-entry-1",
+      "assistant-final-entry",
+    ]);
+
+    // Closing the question restores the fold.
+    const settledRows = deriveMessagesTimelineRows({
+      ...input,
+      timelineEntries,
+      hasOpenUserInput: false,
+    });
+    expect(settledRows.some((row) => row.kind === "turn-fold")).toBe(true);
+  });
+
+  it("folds settled tool rows around an intermediate assistant message", () => {
+    const timelineEntries = [
+      {
+        id: "user-entry",
+        kind: "message" as const,
+        createdAt: "2026-01-01T00:00:00Z",
+        message: {
+          id: "user-1" as never,
+          role: "user" as const,
+          text: "Fix the bug",
+          turnId: null,
+          createdAt: "2026-01-01T00:00:00Z",
+          updatedAt: "2026-01-01T00:00:00Z",
+          streaming: false,
+        },
+      },
+      {
+        id: "work-entry-1",
+        kind: "work" as const,
+        createdAt: "2026-01-01T00:00:05Z",
+        entry: {
+          id: "work-1",
+          createdAt: "2026-01-01T00:00:05Z",
+          turnId: "turn-1" as never,
+          label: "Ran build",
+          tone: "tool" as const,
+        },
+      },
+      {
+        id: "assistant-middle-entry",
+        kind: "message" as const,
+        createdAt: "2026-01-01T00:00:10Z",
+        message: {
+          id: "assistant-middle" as never,
+          role: "assistant" as const,
+          text: "Found the cause, applying a fix.",
+          turnId: "turn-1" as never,
+          createdAt: "2026-01-01T00:00:10Z",
+          updatedAt: "2026-01-01T00:00:11Z",
+          streaming: false,
+        },
+      },
+      {
+        id: "work-entry-2",
+        kind: "work" as const,
+        createdAt: "2026-01-01T00:00:15Z",
+        entry: {
+          id: "work-2",
+          createdAt: "2026-01-01T00:00:15Z",
+          turnId: "turn-1" as never,
+          label: "Ran tests",
+          tone: "tool" as const,
+        },
+      },
+      {
+        id: "assistant-final-entry",
+        kind: "message" as const,
+        createdAt: "2026-01-01T00:00:20Z",
+        message: {
+          id: "assistant-final" as never,
+          role: "assistant" as const,
+          text: "Done",
+          turnId: "turn-1" as never,
+          createdAt: "2026-01-01T00:00:20Z",
+          updatedAt: "2026-01-01T00:00:21Z",
+          streaming: false,
+        },
+      },
+    ];
+
+    const rows = deriveMessagesTimelineRows({
+      timelineEntries,
+      isWorking: false,
+      activeTurnStartedAt: null,
+      turnDiffSummaryByAssistantMessageId: new Map(),
+      revertTurnCountByUserMessageId: new Map(),
+    });
+
+    // Both tool rows fold; the prose between them stays in place, so the
+    // fold anchors at the first tool row and the commentary renders after it.
+    expect(rows.map((row) => row.id)).toEqual([
+      "user-entry",
+      "turn-fold:turn-1",
+      "assistant-middle-entry",
+      "assistant-final-entry",
+    ]);
+    expect(
+      rows.find(
+        (row): row is Extract<(typeof rows)[number], { kind: "turn-fold" }> =>
+          row.kind === "turn-fold",
+      )?.label,
+    ).toBe("Worked for 21s");
   });
 
   it("keeps a tool group after the terminal response visible when the turn is folded", () => {
@@ -1506,7 +1727,7 @@ describe("deriveMessagesTimelineRows", () => {
     ).toEqual(["turn-fold:turn-1", "assistant-final-entry"]);
   });
 
-  it("folds all assistant messages before the terminal message", () => {
+  it("keeps intermediate assistant messages visible when the turn settles", () => {
     const timelineEntries = [
       {
         id: "assistant-first-entry",
@@ -1560,7 +1781,15 @@ describe("deriveMessagesTimelineRows", () => {
       revertTurnCountByUserMessageId: new Map(),
     });
 
-    expect(rows.map((row) => row.id)).toEqual(["turn-fold:turn-1", "assistant-final-entry"]);
+    // Prose never folds: with no tool activity in the turn there is nothing
+    // for a "Worked for ..." row to stand in for, so no fold at all — all
+    // commentary stays in place.
+    expect(rows.map((row) => row.id)).toEqual([
+      "assistant-first-entry",
+      "assistant-middle-entry",
+      "assistant-final-entry",
+    ]);
+    expect(rows.some((row) => row.kind === "turn-fold")).toBe(false);
   });
 
   it("derives a sane duration for a steer-superseded turn with one instant commentary message", () => {
