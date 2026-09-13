@@ -2,10 +2,13 @@ import type { BackgroundJobState } from "@t3tools/client-runtime/work-log/backgr
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { BackgroundJobOutputPanel } from "./BackgroundJobOutputPanel";
 import {
+  BackgroundJobList,
   BackgroundJobRunningBadge,
   BackgroundJobsRunningIndicator,
 } from "./BackgroundJobsIndicator";
+import type { ThreadJobsController } from "~/t3team/backend/t3team-thread-jobsBackend";
 
 const NOW = Date.parse("2026-09-11T12:00:00.000Z");
 vi.setSystemTime(NOW);
@@ -105,6 +108,122 @@ describe("BackgroundJobsRunningIndicator", () => {
     );
     expect(markup).toContain("motion-safe:visible-animate-pulse");
     expect(markup).not.toContain("animate-pulse rounded-full");
+  });
+
+  // The line is the handle to the per-job details: a toggle, collapsed by
+  // default, that must not render the list until opened.
+  it("collapses by default and exposes the toggle state", () => {
+    const markup = renderToStaticMarkup(
+      <BackgroundJobsRunningIndicator
+        jobs={[job({ jobId: "job_a", command: "sleep 30", pid: 4242 })]}
+      />,
+    );
+    expect(markup).toContain('aria-expanded="false"');
+    expect(markup).not.toContain("Running background jobs");
+  });
+
+  // Out-of-band control: when the surface can reach the runtime's job
+  // registry (threadId + controller), each expanded job row gains Cancel
+  // and Output. Without them the indicator stays read-only.
+  it("offers cancel and output only when a controller is present", () => {
+    const readOnly = renderToStaticMarkup(
+      <BackgroundJobList running={[job({ jobId: "job_a", command: "sleep 30" })]} now={NOW} />,
+    );
+    expect(readOnly).not.toContain(">cancel<");
+    expect(readOnly).not.toContain(">output<");
+
+    const controllable = renderToStaticMarkup(
+      <BackgroundJobList
+        running={[job({ jobId: "job_a", command: "sleep 30" })]}
+        now={NOW}
+        canControl
+        cancelPending={new Set()}
+        onCancel={() => {}}
+        onShowOutput={() => {}}
+      />,
+    );
+    expect(controllable).toContain(">cancel<");
+    expect(controllable).toContain(">output<");
+  });
+
+  it("renders cancelled jobs dimmed and without a cancel button", () => {
+    const markup = renderToStaticMarkup(
+      <BackgroundJobList
+        running={[]}
+        cancelled={[job({ jobId: "job_a", command: "sleep 30" })]}
+        now={NOW}
+        canControl
+        cancelPending={new Set()}
+        onCancel={() => {}}
+        onShowOutput={() => {}}
+      />,
+    );
+    expect(markup).toContain(">cancelled</span>");
+    expect(markup).not.toContain(">cancel<");
+  });
+
+  it("marks an in-flight cancel as stopping… and disables the button", () => {
+    const markup = renderToStaticMarkup(
+      <BackgroundJobList
+        running={[job({ jobId: "job_a", command: "sleep 30" })]}
+        now={NOW}
+        canControl
+        cancelPending={new Set(["job_a"])}
+        onCancel={() => {}}
+        onShowOutput={() => {}}
+      />,
+    );
+    expect(markup).toContain("stopping…");
+    expect(markup).toContain('disabled=""');
+  });
+
+  it("opens the output panel for the selected job when a controller is present", () => {
+    // The panel itself is driven by the controller's polls (effects); the
+    // indicator's contract is that clicking Output mounts it with the job's
+    // id and command. Static markup: the panel's pre-state renders.
+    const markup = renderToStaticMarkup(
+      <BackgroundJobOutputPanel
+        threadId="thread_a"
+        jobId="job_a"
+        command="sleep 30"
+        controller={(() => Promise.resolve({ supported: false })) as ThreadJobsController}
+        onClose={() => {}}
+      />,
+    );
+    expect(markup).toContain('aria-label="Output of sleep 30"');
+    expect(markup).toContain("waiting for output…");
+  });
+});
+
+describe("BackgroundJobList", () => {
+  it("lists each running job with command, pid and elapsed over deadline", () => {
+    const markup = renderToStaticMarkup(
+      <BackgroundJobList
+        running={[
+          job({ jobId: "job_a", command: "node scripts/quality-gate.mjs", pid: 4242 }),
+          job({ jobId: "job_b", command: "sleep 30", startedAtMs: NOW - 10_000, deadlineMs: NOW + 590_000 }),
+        ]}
+        now={NOW}
+      />,
+    );
+    expect(markup).toContain("Running background jobs");
+    // job_a: started 45s ago, deadline 10m from start -> 45s / 10m.
+    expect(markup).toContain("node scripts/quality-gate.mjs");
+    expect(markup).toContain("45s / 10m");
+    expect(markup).toContain("pid 4242");
+    // job_b: started 10s ago with a 10m window, and no pid on record ->
+    // the row still renders, without a pid line.
+    expect(markup).toContain("sleep 30");
+    expect(markup).toContain("10s / 10m");
+  });
+
+  it("degrades to the job id when the row never carried a command", () => {
+    const markup = renderToStaticMarkup(
+      <BackgroundJobList running={[job({ jobId: "job_old" })]} now={NOW} />,
+    );
+    // The id doubles as the displayed command; no pid line.
+    expect(markup).toContain("job_old");
+    expect(markup).not.toContain("pid ");
   });
 });
 

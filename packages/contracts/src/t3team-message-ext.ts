@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 
 import { TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { ProviderInstanceId } from "./providerInstance.ts";
 // WHO wrote a message lives in its own module (see t3team-message-author.ts); re-exported here so
 // `T3TeamMessageExt`'s neighbours keep resolving from one place.
 import { T3TeamMessageAuthor } from "./t3team-message-author.ts";
@@ -79,6 +80,17 @@ export const T3TeamMessageWidgetReply = Schema.Struct({
 });
 export type T3TeamMessageWidgetReply = typeof T3TeamMessageWidgetReply.Type;
 
+/**
+ * One side of a fork's model transition: which provider instance and model
+ * slug the thread runs on. Mirrors `ModelSelection`'s routing fields without
+ * the `options` payload (display provenance does not need option state).
+ */
+export const T3TeamForkModelSelection = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  model: TrimmedNonEmptyString,
+});
+export type T3TeamForkModelSelection = typeof T3TeamForkModelSelection.Type;
+
 export const T3TeamMessageExt = Schema.Struct({
   author: Schema.optional(T3TeamMessageAuthor),
   displayText: Schema.optional(Schema.String),
@@ -94,12 +106,19 @@ export const T3TeamMessageExt = Schema.Struct({
    * Present on the fork-provenance note of a forked thread: identifies the
    * thread this one was forked from so agents can search its full transcript
    * (`t3team.thread.search_source`) even when the fork itself was truncated.
+   *
+   * `parentSelection` / `childSelection` carry the machine-readable model
+   * transition (the note's prose says the same in human-readable form). Both
+   * are optional so notes persisted before they existed keep decoding; the
+   * child side is present on notes written after the field landed.
    */
   forkSource: Schema.optional(
     Schema.Struct({
       threadId: TrimmedNonEmptyString,
       threadTitle: Schema.String,
       omittedMessageCount: Schema.optional(Schema.Number),
+      parentSelection: Schema.optional(T3TeamForkModelSelection),
+      childSelection: Schema.optional(T3TeamForkModelSelection),
     }),
   ),
 });
