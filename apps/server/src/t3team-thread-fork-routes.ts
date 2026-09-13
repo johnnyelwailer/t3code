@@ -6,6 +6,8 @@ import { HttpRouter } from "effect/unstable/http";
 
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
+import { dispatchForkProvenanceNote } from "./t3team-thread-fork-note.ts";
 import {
   errorResponse,
   okJson,
@@ -139,30 +141,17 @@ export const t3teamThreadForkRouteLayer = HttpRouter.add(
     yield* Effect.forEach(tokenPlan.head, (id) => upsertMessage(resolveMessage(id)));
 
     if (tokenPlan.truncated) {
-      const omitted = tokenPlan.omittedCount;
-      yield* orchestration.dispatch({
-        type: "thread.message.upsert",
-        commandId: CommandId.make(`server:t3team:thread-fork:note:${t3teamRandomUUID()}`),
-        threadId: childThreadId,
-        message: {
-          messageId: MessageId.make(`fork:${childThreadId}:note:${t3teamRandomUUID()}`),
-          role: "system",
-          text:
-            `This thread was forked from \u201c${parentThread.title}\u201d. ` +
-            `${omitted} middle message${omitted === 1 ? "" : "s"} of the original conversation ` +
-            "were omitted to keep this thread's context small. Use the t3team.thread.search_source " +
-            "tool to look anything up from the omitted range, or open the original thread for the full history.",
-          turnId: null,
-          streaming: false,
-          t3teamExt: {
-            forkSource: {
-              threadId: threadIdValue,
-              threadTitle: parentThread.title,
-              omittedMessageCount: omitted,
-            },
-          },
-        },
+      const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
+      yield* dispatchForkProvenanceNote({
+        dispatch: orchestration.dispatch,
+        childThreadId,
+        parentThreadId: threadIdValue,
+        parentTitle: parentThread.title,
+        omittedMessageCount: tokenPlan.omittedCount,
+        parentSelection: parentThread.modelSelection,
+        childSelection: childModelSelection,
         createdAt,
+        providerRegistry,
       });
     }
 

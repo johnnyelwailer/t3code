@@ -28,6 +28,7 @@ export * from "./t3team-message-ext.ts";
 export * from "./t3team-widget-bridge.ts";
 export * from "./pullRequest.ts";
 export * from "./orchestration.ts";
+export * from "./providerJobControl.ts";
 export * from "./t3ProjectFile.ts";
 export * from "./editor.ts";
 export * from "./project.ts";

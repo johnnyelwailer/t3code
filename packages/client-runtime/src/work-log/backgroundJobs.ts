@@ -35,6 +35,8 @@ export interface BackgroundJobStart {
   readonly startedAtMs: number;
   /** Hard kill deadline reported in the marker (start + deadline). */
   readonly deadlineMs: number;
+  /** The process id reported in the start marker (absent when it said "pid ?"). */
+  readonly pid?: number;
 }
 
 export type BackgroundJobFinishReason = "finished" | "killed-deadline" | "cancelled";
@@ -42,11 +44,14 @@ export type BackgroundJobFinishReason = "finished" | "killed-deadline" | "cancel
 export interface BackgroundJobState extends BackgroundJobStart {
   readonly state: "running" | "finished";
   readonly finishedReason?: BackgroundJobFinishReason;
+  /** The shell command that produced the job. Modern rows only — see `command`. */
+  readonly command?: string;
   /** Entry id of the work-log row that first reported the job's start. */
   readonly startedEntryId?: string;
   /** Entry id of the work-log row that last mentioned this job. */
   readonly lastSeenEntryId?: string;
 }
+
 
 export interface BackgroundJobFoldEntry {
   /** Id of the work-log entry (timeline row anchor). */
@@ -89,6 +94,8 @@ const JOB_ID = String.raw`job_[0-9a-zA-Z]+`;
 const START_RE = new RegExp(String.raw`background job:\s*(${JOB_ID})`);
 /** "Command still running after 10s — …" (elapsed at yield time). */
 const ELAPSED_RE = new RegExp(String.raw`still running after (\d+)s`);
+/** "…it is now a background job: job_xxx (pid 4242)." — the numeric pid only. */
+const PID_RE = new RegExp(String.raw`\(pid (\d+)\)`);
 /** "…under a 600s hard deadline owned by this thread…". */
 const DEADLINE_RE = new RegExp(String.raw`(\d+)s hard deadline`);
 
@@ -153,10 +160,13 @@ export function detectBackgroundJobStart(
   const deadlineMatch = DEADLINE_RE.exec(detail);
   const deadlineSecs = deadlineMatch !== null ? Number(deadlineMatch[1]) : 0;
   const startedAtMs = Math.max(0, observedAtMs - elapsedSecs * 1000);
+  const pidMatch = PID_RE.exec(detail);
+  const pid = pidMatch !== null ? Number(pidMatch[1]) : undefined;
   return {
     jobId,
     startedAtMs,
     deadlineMs: startedAtMs + deadlineSecs * 1000,
+    ...(Number.isFinite(pid) && pid !== undefined ? { pid } : {}),
   };
 }
 
@@ -190,6 +200,8 @@ function applyJobMarkers(
   text: string,
   entryId: string,
   observedAtMs: number,
+  markerFromDetail: boolean,
+  commandPreview?: string,
 ): void {
   const start = detectBackgroundJobStart(text, observedAtMs);
   if (start !== null) {
@@ -198,6 +210,10 @@ function applyJobMarkers(
     byId.set(start.jobId, {
       ...start,
       state: settled ? "finished" : "running",
+      // The row's own command is only the shell command when the result text
+      // came from `detail` (modern rows). In the transposed era the marker
+      // text IS `command`, so it must not be adopted as the job's command.
+      ...(markerFromDetail !== false && commandPreview !== undefined ? { command: commandPreview } : {}),
       startedEntryId: existing?.startedEntryId ?? entryId,
       lastSeenEntryId: entryId,
       ...(settled && existing !== undefined ? { finishedReason: existing.finishedReason } : {}),
@@ -238,10 +254,18 @@ export function foldBackgroundJobs(
 ): readonly BackgroundJobState[] {
   const byId = new Map<string, BackgroundJobState>();
   for (const entry of entries) {
-    const text =
-      entry.detail !== undefined && entry.detail.length > 0 ? entry.detail : entry.command;
+    const detail = entry.detail;
+    const fromDetail = detail !== undefined && detail.length > 0;
+    const text = fromDetail ? detail : entry.command;
     if (text === undefined || text.length === 0) continue;
-    applyJobMarkers(byId, text, entry.id, toFiniteMs(entry.createdAt));
+    applyJobMarkers(
+      byId,
+      text,
+      entry.id,
+      toFiniteMs(entry.createdAt),
+      fromDetail,
+      entry.command,
+    );
   }
   return [...byId.values()];
 }

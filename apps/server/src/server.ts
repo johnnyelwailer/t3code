@@ -170,6 +170,7 @@ import {
   t3teamThreadWorkflowResolveInputRouteLayer,
 } from "./t3team-thread-recipe-workflow-routes.ts";
 import { t3teamThreadDraftMutationStatusRouteLayer } from "./t3team-thread-draftMutation-status-route.ts";
+import { t3teamThreadJobsRouteLayer } from "./t3team-thread-jobs-route.ts";
 import { t3teamThreadWorkflowControlRouteLayer } from "./t3team-thread-workflow-control-route.ts";
 import {
   t3teamProviderUsageDevRouteLayer,
@@ -730,6 +731,7 @@ export const makeRoutesLayer = Layer.mergeAll(
     t3teamThreadForkRouteLayer,
     t3teamThreadRecipeWorkflowLaunchRouteLayer,
     t3teamThreadWorkflowControlRouteLayer,
+    t3teamThreadJobsRouteLayer,
     t3teamThreadDraftMutationStatusRouteLayer,
     t3teamThreadWorkflowResolveInputRouteLayer,
     t3teamThreadToolContextRouteLayer,

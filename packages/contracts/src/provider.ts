@@ -22,6 +22,7 @@ import {
   RuntimeMode,
 } from "./orchestration.ts";
 import { ProviderInstanceId, ProviderDriverKind } from "./providerInstance.ts";
+import { ProviderJobControlRequest } from "./providerJobControl.ts";
 
 const ProviderSessionStatus = Schema.Literals([
   "connecting",
@@ -121,6 +122,12 @@ export const ProviderRespondToUserInputInput = Schema.Struct({
   answers: ProviderUserInputAnswers,
 });
 export type ProviderRespondToUserInputInput = typeof ProviderRespondToUserInputInput.Type;
+
+export const ProviderJobControlInput = Schema.Struct({
+  threadId: ThreadId,
+  request: ProviderJobControlRequest,
+});
+export type ProviderJobControlInput = typeof ProviderJobControlInput.Type;
 
 export const ProviderUploadFeedbackInput = Schema.Struct({
   threadId: ThreadId,
