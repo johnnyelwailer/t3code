@@ -105,7 +105,7 @@ function makeMockController() {
 }
 
 const meta = {
-  title: "T3Team/Background Jobs Indicator",
+  title: "T3Team/Chat/Background Jobs Indicator",
   parameters: { layout: "padded" },
 } satisfies Meta;
 
