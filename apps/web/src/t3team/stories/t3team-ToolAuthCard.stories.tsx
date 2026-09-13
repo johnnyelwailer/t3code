@@ -7,6 +7,7 @@ import { TOOL_AUTH_TOOLS } from "~/components/settings/t3team-toolAuthTools";
 
 const CLAUDE_META = TOOL_AUTH_TOOLS.find((meta) => meta.tool === "claude")!;
 const CODEX_META = TOOL_AUTH_TOOLS.find((meta) => meta.tool === "codex")!;
+const GH_META = TOOL_AUTH_TOOLS.find((meta) => meta.tool === "gh")!;
 
 const noop = () => {};
 const noopSubmit = (_code: string) => {};
@@ -114,6 +115,35 @@ export const AwaitingOpenCodex: Story = {
   },
 };
 
+/**
+ * gh's GHE device flow: the one-time code is shown to the user, who types it
+ * at the GHE device page — same shape as Codex, but the host is the company
+ * instance and the server auto-answers gh's "Press Enter" prompt.
+ */
+export const AwaitingOpenGh: Story = {
+  args: {
+    state: {
+      tool: "gh",
+      phase: "awaiting-open",
+      url: "https://nexplore.ghe.com/login/device",
+      displayCode: "B4A0-AA8E",
+    },
+    meta: GH_META,
+  },
+};
+
+/** gh is not on PATH: the card says so plainly instead of a bare ENOENT toast. */
+export const GhNotInstalled: Story = {
+  args: {
+    state: {
+      tool: "gh",
+      phase: "failed",
+      message: "gh is not installed on this machine — install it on the host, then try again.",
+    },
+    meta: GH_META,
+  },
+};
+
 /** Claude only: the human pastes a code back — one auto-focused input, Verify, link stays. */
 export const AwaitingCode: Story = {
   args: {
@@ -140,6 +170,21 @@ export const Connected: Story = {
       organization: "Acme Corp",
       expiresAt: Date.now() + 90 * 24 * 60 * 60 * 1000,
     },
+  },
+};
+
+/**
+ * Signed in to the GHE instance as a specific account — the probe reports
+ * "Logged in to nexplore.ghe.com account <login>" and the card names it.
+ */
+export const ConnectedGh: Story = {
+  args: {
+    state: {
+      tool: "gh",
+      phase: "connected",
+      account: "pj",
+    },
+    meta: GH_META,
   },
 };
 
@@ -239,6 +284,25 @@ const GALLERY_STATES: ReadonlyArray<{
     meta: CODEX_META,
   },
   {
+    label: "Awaiting open — GitHub (GHE device flow)",
+    state: {
+      tool: "gh",
+      phase: "awaiting-open",
+      url: "https://nexplore.ghe.com/login/device",
+      displayCode: "B4A0-AA8E",
+    },
+    meta: GH_META,
+  },
+  {
+    label: "Failed — gh not installed (plainly-worded card state)",
+    state: {
+      tool: "gh",
+      phase: "failed",
+      message: "gh is not installed on this machine — install it on the host, then try again.",
+    },
+    meta: GH_META,
+  },
+  {
     label: "Awaiting code — Claude",
     state: { tool: "claude", phase: "awaiting-code", url: "https://claude.ai/oauth/authorize" },
   },
@@ -252,6 +316,11 @@ const GALLERY_STATES: ReadonlyArray<{
       organization: "Acme Corp",
       expiresAt: Date.now() + 90 * 24 * 60 * 60 * 1000,
     },
+  },
+  {
+    label: "Connected — GitHub (GHE account)",
+    state: { tool: "gh", phase: "connected", account: "pj" },
+    meta: GH_META,
   },
   {
     // The real, verified claude auth status --json shape reports neither —
