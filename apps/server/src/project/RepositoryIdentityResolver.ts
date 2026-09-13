@@ -48,7 +48,10 @@ function parseRemoteFetchUrls(stdout: string): Map<string, string> {
 function pickPrimaryRemote(
   remotes: ReadonlyMap<string, string>,
 ): { readonly remoteName: string; readonly remoteUrl: string } | null {
-  for (const preferredRemoteName of ["upstream", "origin"] as const) {
+  // Origin first: in a fork workflow the fork's origin is the user's own repository, while
+  // `upstream` is a read-only sync reference — resolving the project to the sync source would
+  // shadow the repository the user actually works in (PR listing, VCS status).
+  for (const preferredRemoteName of ["origin", "upstream"] as const) {
     const remoteUrl = remotes.get(preferredRemoteName);
     if (remoteUrl) {
       return { remoteName: preferredRemoteName, remoteUrl };
