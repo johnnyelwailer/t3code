@@ -330,6 +330,58 @@ describe("derivePendingUserInputs", () => {
     expect(derivePendingUserInputs(activities)[0]?.questions).toEqual([question]);
   });
 
+  it("maps the question's context through to the panel question", () => {
+    const question = {
+      id: "ctx-1",
+      header: "Ship order",
+      question: "Which of these should we ship first?",
+      context: "### Proposed options\n\n1. Ship A — smallest, ships this week\n2. Ship B — user-requested",
+      options: [
+        { label: "Ship A", description: "Ships this week" },
+        { label: "Ship B", description: "User requested" },
+      ],
+      multiSelect: false,
+    };
+    const activities = [
+      makeActivity({
+        id: "question-with-context",
+        kind: "user-input.requested",
+        summary: "User input requested",
+        payload: { requestId: "ctx-req", responseMode: "message", questions: [question] },
+      }),
+    ];
+
+    expect(derivePendingUserInputs(activities)[0]?.questions).toEqual([question]);
+  });
+
+  it("drops empty-string context so the panel does not render a blank strip", () => {
+    const question = {
+      id: "ctx-blank",
+      header: "Question",
+      question: "Continue with the plan?",
+      context: "",
+      options: [],
+      multiSelect: false,
+    };
+    const activities = [
+      makeActivity({
+        id: "question-blank-context",
+        kind: "user-input.requested",
+        summary: "User input requested",
+        payload: { requestId: "ctx-blank-req", responseMode: "message", questions: [question] },
+      }),
+    ];
+
+    const parsed = derivePendingUserInputs(activities)[0]?.questions?.[0];
+    expect(parsed).toEqual({
+      id: "ctx-blank",
+      header: "Question",
+      question: "Continue with the plan?",
+      options: [],
+      multiSelect: false,
+    });
+  });
+
   it("tracks open structured prompts and removes resolved ones", () => {
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({

@@ -313,6 +313,7 @@
     "packages/contracts/src/orchestration.ts",
     "packages/contracts/src/provider.ts",
     "packages/contracts/src/providerInstance.ts",
+    "packages/contracts/src/providerRuntime.ts",
     "packages/contracts/src/rpc.ts",
     "packages/contracts/src/server.ts",
     "packages/contracts/src/settings.test.ts",
