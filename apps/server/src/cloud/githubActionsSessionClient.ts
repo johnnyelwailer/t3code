@@ -28,6 +28,18 @@ export interface WorkflowRunSummary {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly htmlUrl: string;
+  /**
+   * The run's display name. The workflow echoes the caller's `session_tag`
+   * into it, which is the only way to tell our own dispatch apart from one
+   * that another user started in the same second — `workflow_dispatch`
+   * answers 204 and never reveals the run id it created.
+   */
+  readonly name: string;
+}
+
+/** Wrap a correlation tag the way `run-name` renders it. */
+export function sessionTagMarker(tag: string): string {
+  return `[${tag}]`;
 }
 
 export interface WorkflowJobStep {
@@ -108,25 +120,29 @@ function toRun(raw: Record<string, unknown>): WorkflowRunSummary {
     createdAt: asString(raw["created_at"]),
     updatedAt: asString(raw["updated_at"]),
     htmlUrl: asString(raw["html_url"]),
+    name: asString(raw["name"]) || asString(raw["display_title"]),
   };
 }
 
 /**
  * Parse `GET /actions/workflows/{file}/runs`.
  *
- * Tolerant by design: this reads a remote API's response, and a shape we did
- * not expect should surface as "no sessions" rather than crash the list.
+ * Returns `null` — never `[]` — when the response is not the shape we expect.
+ * The distinction is load-bearing: an empty list is an authoritative "no
+ * sessions", while unparseable output means we do not know. Collapsing the two
+ * would let a truncated or error response read as "nothing is running", which
+ * both hides live sessions and lets a stale run be mistaken for a new one.
  */
-export function parseRunsResponse(stdout: string): readonly WorkflowRunSummary[] {
+export function parseRunsResponse(stdout: string): readonly WorkflowRunSummary[] | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(stdout);
   } catch {
-    return [];
+    return null;
   }
-  if (typeof parsed !== "object" || parsed === null) return [];
+  if (typeof parsed !== "object" || parsed === null) return null;
   const runs = (parsed as { workflow_runs?: unknown }).workflow_runs;
-  if (!Array.isArray(runs)) return [];
+  if (!Array.isArray(runs)) return null;
   return runs
     .filter((run): run is Record<string, unknown> => typeof run === "object" && run !== null)
     .map(toRun);
@@ -137,17 +153,21 @@ export function parseRunsResponse(stdout: string): readonly WorkflowRunSummary[]
  *
  * The session workflow has exactly one job today, but step order is what phase
  * derivation reads, so the flattening must preserve it.
+ *
+ * `null` on an unreadable response, for the same reason as `parseRunsResponse`:
+ * treating it as "no steps" would drag a running session's phase backwards to
+ * `requested` on one flaky poll.
  */
-export function parseJobStepsResponse(stdout: string): readonly WorkflowJobStep[] {
+export function parseJobStepsResponse(stdout: string): readonly WorkflowJobStep[] | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(stdout);
   } catch {
-    return [];
+    return null;
   }
-  if (typeof parsed !== "object" || parsed === null) return [];
+  if (typeof parsed !== "object" || parsed === null) return null;
   const jobs = (parsed as { jobs?: unknown }).jobs;
-  if (!Array.isArray(jobs)) return [];
+  if (!Array.isArray(jobs)) return null;
   return jobs.flatMap((job) => {
     if (typeof job !== "object" || job === null) return [];
     const steps = (job as { steps?: unknown }).steps;

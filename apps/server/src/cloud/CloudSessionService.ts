@@ -8,6 +8,7 @@ import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Random from "effect/Random";
 
 import * as GitHubCli from "../sourceControl/GitHubCli.ts";
 import { cloudSessionElapsedSeconds, deriveCloudSessionPhase } from "./cloudSessionPhase.ts";
@@ -20,6 +21,7 @@ import {
   listRunsInvocation,
   parseJobStepsResponse,
   parseRunsResponse,
+  sessionTagMarker,
   type WorkflowJobStep,
   type WorkflowRunSummary,
 } from "./githubActionsSessionClient.ts";
@@ -49,8 +51,32 @@ const DEFAULT_WORKFLOW_FILE_NAME = "session.yml";
  */
 const DEFAULT_MACHINE_LABEL = "ubuntu-slim · 12 GB · 4 cores";
 
-/** Recent runs worth showing. Anything older has long since stopped. */
-const RUN_HISTORY_LIMIT = 20;
+/**
+ * Recent runs worth considering. Generous on purpose: this window is also what
+ * `cancel` checks membership against, so a session that scrolls out of it would
+ * become uncancellable while still running.
+ */
+const RUN_HISTORY_LIMIT = 100;
+
+/** Sessions shown to the user. The window above is for correctness, not display. */
+const SESSION_DISPLAY_LIMIT = 20;
+
+/** Session ids for a dispatch whose run has not surfaced yet. */
+const PENDING_SESSION_PREFIX = "pending:";
+
+function pendingSessionId(sessionTag: string): string {
+  return `${PENDING_SESSION_PREFIX}${sessionTag}`;
+}
+
+/**
+ * A correlation tag for one dispatch. Random rather than time-based: two
+ * clients dispatching in the same millisecond must not collide, which is the
+ * whole failure this exists to prevent.
+ */
+const makeSessionTag = Effect.map(
+  Random.nextIntBetween(0, Number.MAX_SAFE_INTEGER),
+  (value) => `s${value.toString(36)}`,
+);
 
 /** One-second polls after a dispatch, waiting for the run to become visible. */
 const DISPATCH_DISCOVERY_ATTEMPTS = 10;
@@ -149,8 +175,27 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
       })
       .pipe(Effect.mapError(toFailure));
 
+  /**
+   * Runs of the session workflow only — the endpoint is scoped to
+   * `session.yml`, which is what makes membership checkable at all.
+   *
+   * An unparseable response fails rather than reading as "no runs": treating
+   * "we could not tell" as "nothing is running" would both hide live sessions
+   * and let a pre-existing run be mistaken for a freshly dispatched one.
+   */
   const listRuns = run(listRunsInvocation(repoRef, RUN_HISTORY_LIMIT)).pipe(
-    Effect.map((result) => parseRunsResponse(result.stdout)),
+    Effect.flatMap((result) => {
+      const parsed = parseRunsResponse(result.stdout);
+      if (parsed === null || result.stdoutTruncated) {
+        return Effect.fail(
+          new CloudSessionFailedError({
+            reason: "unreachable",
+            message: "The provider returned an unreadable session list.",
+          }),
+        );
+      }
+      return Effect.succeed(parsed);
+    }),
   );
 
   const toSession = (
@@ -158,14 +203,19 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
     nowMs: number,
   ): Effect.Effect<CloudSession, CloudSessionFailedError> =>
     Effect.gen(function* () {
-      const steps: readonly WorkflowJobStep[] = isRunSettled(sessionRun)
+      // `null` means "we could not read the steps", which is NOT the same as
+      // "there are no steps yet". Passing `[]` here would report `requested`
+      // for a running session and march its phase backwards on one flaky poll.
+      const steps: readonly WorkflowJobStep[] | null = isRunSettled(sessionRun)
         ? []
         : yield* run(jobStepsInvocation(repoRef, sessionRun.id)).pipe(
-            Effect.map((result) => parseJobStepsResponse(result.stdout)),
+            Effect.map((result) =>
+              result.stdoutTruncated ? null : parseJobStepsResponse(result.stdout),
+            ),
             // Progress detail is a nicety: a run whose steps cannot be read is
-            // still a real session, so fall back to the run-level phase rather
+            // still a real session, so degrade to the run-level phase rather
             // than failing the whole list.
-            Effect.orElseSucceed((): readonly WorkflowJobStep[] => []),
+            Effect.orElseSucceed((): readonly WorkflowJobStep[] | null => null),
           );
       const phase = deriveCloudSessionPhase(sessionRun, steps);
       return {
@@ -188,36 +238,46 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
   const list: CloudSessionService["Service"]["list"] = Effect.gen(function* () {
     const runs = yield* listRuns;
     const nowMs = yield* Clock.currentTimeMillis;
-    const sessions = yield* Effect.forEach(runs, (item) => toSession(item, nowMs), {
-      concurrency: 4,
-    });
+    const sessions = yield* Effect.forEach(
+      runs.slice(0, SESSION_DISPLAY_LIMIT),
+      (item) => toSession(item, nowMs),
+      { concurrency: 4 },
+    );
     return { sessions, configured: true } satisfies CloudSessionListResult;
   }).pipe(
-    // A server with no `gh`, or one not signed in, is not broken — it is
-    // unconfigured. Reporting that lets the client offer setup instead of
-    // rendering a permanently empty list.
+    // A server with no `gh` at all cannot ever start a session, so report it as
+    // unconfigured and let the client offer setup.
+    //
+    // `unauthorized` is deliberately NOT swallowed. It is indistinguishable
+    // from a transient credential blip, and answering "no sessions" to that
+    // would make a user's running workspaces silently disappear from the UI —
+    // far worse than showing an error, because it looks like they stopped.
     Effect.catchIf(
-      (error) => error.reason === "not_configured" || error.reason === "unauthorized",
+      (error) => error.reason === "not_configured",
       () => Effect.succeed({ sessions: [], configured: false } satisfies CloudSessionListResult),
     ),
   );
 
   const create: CloudSessionService["Service"]["create"] = (input) =>
     Effect.gen(function* () {
-      const before = yield* listRuns;
-      const knownIds = new Set(before.map((item) => item.id));
+      // A tag unique to THIS dispatch. `workflow_dispatch` answers 204 with no
+      // body, so it never reveals the run it created; the workflow echoes this
+      // into `run-name`, which is the only way to find our own run. Picking
+      // "newest run we had not seen" instead is wrong under concurrency — two
+      // users dispatching in the same second can each be handed the other's
+      // session, and then cancelling yours kills theirs.
+      const sessionTag = yield* makeSessionTag;
+      const marker = sessionTagMarker(sessionTag);
 
       yield* run(
         dispatchSessionInvocation(repoRef, {
           hold_minutes: String(Math.max(1, Math.round(input.durationSeconds / 60))),
+          session_tag: sessionTag,
         }),
       );
 
-      // `workflow_dispatch` answers 204 with no body: it does not report the run
-      // id, and the run does not appear instantly. Poll briefly for the first id
-      // we have not seen. If it never shows, still report a session — the
-      // dispatch succeeded, and the next list reconciles it.
-      const pollForNewRun = (
+      // The run does not appear instantly, so poll for the one carrying our tag.
+      const pollForTaggedRun = (
         attemptsLeft: number,
       ): Effect.Effect<WorkflowRunSummary | null, CloudSessionFailedError> =>
         attemptsLeft <= 0
@@ -225,15 +285,19 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
           : Effect.gen(function* () {
               yield* Effect.sleep("1 second");
               const runs = yield* listRuns;
-              const fresh = runs.find((item) => !knownIds.has(item.id));
-              return fresh === undefined ? yield* pollForNewRun(attemptsLeft - 1) : fresh;
+              const mine = runs.find((item) => item.name.includes(marker));
+              return mine === undefined ? yield* pollForTaggedRun(attemptsLeft - 1) : mine;
             });
 
-      const discovered = yield* pollForNewRun(DISPATCH_DISCOVERY_ATTEMPTS);
+      const discovered = yield* pollForTaggedRun(DISPATCH_DISCOVERY_ATTEMPTS);
 
       if (discovered === null) {
+        // The dispatch succeeded but the run has not surfaced yet. Report the
+        // session under its tag rather than a throwaway id, so a later `list`
+        // resolves the same session to the same identity and `cancel` keeps
+        // working once the run appears.
         return {
-          sessionId: `pending-${yield* Clock.currentTimeMillis}`,
+          sessionId: pendingSessionId(sessionTag),
           providerKind: "github_actions",
           phase: "requested",
           elapsedSeconds: 0,
@@ -250,13 +314,27 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
     Effect.gen(function* () {
       const runId = Number(input.sessionId);
       if (!Number.isSafeInteger(runId) || runId <= 0) {
-        // A session still waiting for its run id carries a `pending-` id and has
-        // nothing cancellable behind it yet.
+        // A session still waiting for its run to surface carries a tag-derived
+        // id and has nothing cancellable behind it yet.
         return yield* new CloudSessionFailedError({
           reason: "unknown_session",
           message: "That session cannot be cancelled yet.",
         });
       }
+
+      // The cancel endpoint is repository-wide: it will happily stop ANY run in
+      // `hive/nx-nexi`, including a deployment. `listRuns` is scoped to
+      // `session.yml`, so requiring membership here is what stops a caller from
+      // passing an arbitrary run id and cancelling something that is not a
+      // cloud session at all.
+      const sessionRuns = yield* listRuns;
+      if (!sessionRuns.some((item) => item.id === runId)) {
+        return yield* new CloudSessionFailedError({
+          reason: "unknown_session",
+          message: "That session does not exist.",
+        });
+      }
+
       yield* run(cancelRunInvocation(repoRef, runId)).pipe(Effect.asVoid);
     });
 
