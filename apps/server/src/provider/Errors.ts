@@ -203,6 +203,23 @@ export class ProviderSessionDirectoryPersistenceError extends Schema.TaggedError
   }
 }
 
+/**
+ * ProviderJobControlUnsupportedError - The thread's runtime exposes no
+ * out-of-band background-job control. Not a failure: callers map it to a
+ * plain "unsupported" result and hide their affordances, so the route never
+ * turns it into an error response.
+ */
+export class ProviderJobControlUnsupportedError extends Schema.TaggedErrorClass<ProviderJobControlUnsupportedError>()(
+  "ProviderJobControlUnsupportedError",
+  {
+    threadId: Schema.String,
+  },
+) {
+  override get message(): string {
+    return `This runtime does not support background-job control for ${this.threadId}`;
+  }
+}
+
 export type ProviderAdapterError =
   | ProviderAdapterValidationError
   | ProviderAdapterSessionNotFoundError
@@ -212,6 +229,7 @@ export type ProviderAdapterError =
 
 export type ProviderServiceError =
   | ProviderValidationError
+  | ProviderJobControlUnsupportedError
   | ProviderUnsupportedError
   | ProviderWorkspaceMissingError
   | ProviderInstanceNotFoundError

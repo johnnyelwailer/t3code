@@ -17,6 +17,7 @@ import {
   ThreadId,
   TurnId,
   ProviderInterruptTurnInput,
+  ProviderJobControlInput,
   ProviderRespondToRequestInput,
   ProviderRespondToUserInputInput,
   RuntimeRequestId,
@@ -63,6 +64,8 @@ import {
 } from "../../observability/Metrics.ts";
 import {
   ProviderAdapterRequestError,
+  ProviderJobControlUnsupportedError,
+  ProviderSessionNotFoundError,
   type ProviderAdapterError,
   ProviderValidationError,
   ProviderWorkspaceMissingError,
@@ -2011,6 +2014,57 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     );
   });
 
+  const jobControl: ProviderServiceMethod<"jobControl"> = Effect.fn("jobControl")(
+    function* (rawInput) {
+      const input = yield* decodeInputOrValidationError({
+        operation: "ProviderService.jobControl",
+        schema: ProviderJobControlInput,
+        payload: rawInput,
+      });
+      let metricProvider = "unknown";
+      return yield* Effect.gen(function* () {
+        // No recovery: job control reaches a LIVE session's registry. A dead
+        // session has no live jobs by definition — resuming the runtime here
+        // would be a side effect a list/cancel must not trigger.
+        const routed = yield* resolveRoutableSession({
+          threadId: input.threadId,
+          operation: "ProviderService.jobControl",
+          allowRecovery: false,
+        });
+        metricProvider = routed.adapter.provider;
+        yield* Effect.annotateCurrentSpan({
+          "provider.operation": "job-control",
+          "provider.kind": routed.adapter.provider,
+          "provider.thread_id": input.threadId,
+          "provider.job_kind": input.request.kind,
+        });
+        if (!routed.isActive) {
+          return yield* Effect.fail(
+            new ProviderSessionNotFoundError({ threadId: input.threadId }),
+          );
+        }
+        const adapter = routed.adapter;
+        // Capability check, never a swallowed call: adapters that keep no
+        // controllable jobs expose neither the flag nor the method, and the
+        // caller maps this error to a plain "unsupported" result.
+        if (!adapter.capabilities.jobControl || adapter.jobControl === undefined) {
+          return yield* Effect.fail(
+            new ProviderJobControlUnsupportedError({ threadId: input.threadId }),
+          );
+        }
+        return yield* adapter.jobControl(routed.threadId, input.request);
+      }).pipe(
+        withMetrics({
+          counter: providerTurnsTotal,
+          outcomeAttributes: () =>
+            providerMetricAttributes(metricProvider, {
+              operation: "job-control",
+            }),
+        }),
+      );
+    },
+  );
+
   const stopSession: ProviderServiceMethod<"stopSession"> = Effect.fn("stopSession")(
     function* (rawInput) {
       const input = yield* decodeInputOrValidationError({
@@ -2346,6 +2400,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     interruptTurn,
     respondToRequest,
     respondToUserInput,
+    jobControl,
     stopSession,
     listSessions,
     getCapabilities,

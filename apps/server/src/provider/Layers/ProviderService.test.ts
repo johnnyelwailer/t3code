@@ -55,6 +55,8 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import {
   ProviderAdapterRequestError,
   ProviderAdapterSessionNotFoundError,
+  ProviderJobControlUnsupportedError,
+  ProviderSessionNotFoundError,
   ProviderUnsupportedError,
   ProviderValidationError,
   ProviderWorkspaceMissingError,
@@ -138,6 +140,7 @@ type LegacyProviderRuntimeEvent = {
 function makeFakeCodexAdapter(
   provider: ProviderDriverKind = CODEX_DRIVER,
   supportsConversationRollback?: boolean,
+  supportsJobControl?: boolean,
 ) {
   const sessions = new Map<ThreadId, ProviderSession>();
   const runtimeEventPubSub = Effect.runSync(PubSub.unbounded<ProviderRuntimeEvent>());
@@ -272,11 +275,22 @@ function makeFakeCodexAdapter(
       }),
   );
 
+  const jobControl = vi.fn(
+    (
+      _threadId: ThreadId,
+      _request: unknown,
+    ): Effect.Effect<
+      { readonly kind: "jobs"; readonly jobs: readonly [] },
+      ProviderAdapterError
+    > => Effect.succeed({ kind: "jobs", jobs: [] }),
+  );
+
   const adapter: ProviderAdapterShape<ProviderAdapterError> = {
     provider,
     capabilities: {
       sessionModelSwitch: "in-session",
       ...(supportsConversationRollback !== undefined ? { supportsConversationRollback } : {}),
+      ...(supportsJobControl ? { jobControl: true } : {}),
       ...(provider === CODEX_DRIVER ? { promptlessTurnContinuation: true } : {}),
     },
     startSession,
@@ -292,6 +306,7 @@ function makeFakeCodexAdapter(
     rollbackThread,
     ...(provider === CODEX_DRIVER ? { uploadFeedback } : {}),
     stopAll,
+    ...(supportsJobControl ? { jobControl } : {}),
     get streamEvents() {
       return Stream.fromPubSub(runtimeEventPubSub);
     },
@@ -329,6 +344,7 @@ function makeFakeCodexAdapter(
     rollbackThread,
     uploadFeedback,
     stopAll,
+    jobControl,
   };
 }
 
@@ -413,11 +429,16 @@ function makeProviderServiceLayer(
   input: {
     readonly directory?: ProviderSessionDirectory.ProviderSessionDirectory["Service"];
     readonly supportsConversationRollback?: boolean;
+    readonly supportsJobControl?: boolean;
     readonly analyticsLayer?: Layer.Layer<AnalyticsService.AnalyticsService>;
     readonly registry?: ProviderAdapterRegistry.ProviderAdapterRegistry["Service"];
   } = {},
 ) {
-  const codex = makeFakeCodexAdapter(CODEX_DRIVER, input.supportsConversationRollback);
+  const codex = makeFakeCodexAdapter(
+    CODEX_DRIVER,
+    input.supportsConversationRollback,
+    input.supportsJobControl,
+  );
   const claude = makeFakeCodexAdapter(CLAUDE_AGENT_DRIVER);
   const cursor = makeFakeCodexAdapter(CURSOR_DRIVER);
   const registry =
@@ -4324,6 +4345,98 @@ const boundedListing = makeProviderServiceLayer({
     listThreadIds,
     listBindings: () => Effect.die("ProviderService.listSessions does not use listBindings"),
   },
+});
+
+describe("ProviderService job control", () => {
+  const jobControlRouting = makeProviderServiceLayer({ supportsJobControl: true });
+
+  jobControlRouting.layer("ProviderServiceLive background-job control", (it) => {
+    it.effect("forwards job control to the live session's adapter and returns its result", () =>
+      Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        const threadId = asThreadId("thread-jobs-forward");
+        yield* provider.startSession(threadId, {
+          provider: CODEX_DRIVER,
+          providerInstanceId: codexInstanceId,
+          threadId,
+          cwd: fixtureCwd("project"),
+          runtimeMode: "full-access",
+        });
+
+        const result = yield* provider.jobControl({
+          threadId,
+          request: { kind: "list" },
+        });
+
+        assert.deepEqual(jobControlRouting.codex.jobControl.mock.calls, [
+          [threadId, { kind: "list" }],
+        ]);
+        assert.deepEqual(result, { kind: "jobs", jobs: [] });
+      }),
+    );
+
+    it.effect("never forwards job control when the adapter exposes no capability", () =>
+      Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        const threadId = asThreadId("thread-jobs-no-cap");
+        yield* provider.startSession(threadId, {
+          provider: CLAUDE_AGENT_DRIVER,
+          providerInstanceId: claudeAgentInstanceId,
+          threadId,
+          cwd: fixtureCwd("project"),
+          runtimeMode: "full-access",
+        });
+
+        // The claude fake carries no jobControl capability nor method: the
+        // service must fail with the capability error, not call anything.
+        const error = yield* Effect.flip(
+          provider.jobControl({ threadId, request: { kind: "cancel", jobId: "job_x" } }),
+        );
+        assert.instanceOf(error, ProviderJobControlUnsupportedError);
+        assert.equal(jobControlRouting.claude.jobControl.mock.calls.length, 0);
+      }),
+    );
+
+    it.effect("job control never touches the adapter for a dead session", () =>
+      Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        const threadId = asThreadId("thread-jobs-stopped");
+        yield* provider.startSession(threadId, {
+          provider: CODEX_DRIVER,
+          providerInstanceId: codexInstanceId,
+          threadId,
+          cwd: fixtureCwd("project"),
+          runtimeMode: "full-access",
+        });
+        yield* provider.stopSession({ threadId });
+        jobControlRouting.codex.jobControl.mockClear();
+        jobControlRouting.codex.startSession.mockClear();
+
+        // A stopped session has no live registry: the service must fail with
+        // the session error and must NOT recover (no startSession side
+        // effect) or forward anything.
+        const error = yield* Effect.flip(
+          provider.jobControl({ threadId, request: { kind: "list" } }),
+        );
+        assert.instanceOf(error, ProviderSessionNotFoundError);
+        assert.equal(jobControlRouting.codex.jobControl.mock.calls.length, 0);
+        assert.equal(jobControlRouting.codex.startSession.mock.calls.length, 0);
+      }),
+    );
+
+    it.effect("a thread with no persisted binding is a validation error", () =>
+      Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        const error = yield* Effect.flip(
+          provider.jobControl({
+            threadId: asThreadId("thread-jobs-never-started"),
+            request: { kind: "list" },
+          }),
+        );
+        assert.instanceOf(error, ProviderValidationError);
+      }),
+    );
+  });
 });
 
 boundedListing.layer("ProviderServiceLive session listing", (it) => {
