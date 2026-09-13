@@ -8,8 +8,8 @@ import { T3TeamNexploreStripArt } from "~/t3team/t3team-NexploreStageArt";
 /**
  * The strip measures its host header and drops the orb into the widest run free of content, so the
  * only way to judge it is against real header content at several widths. Each row below is a
- * faithful stand-in for the sidebar header: same 52px height, same brand inset, same 32px trailing
- * toggle — so the measurement sees the same boxes it sees in the app.
+ * faithful stand-in for the sidebar header: same 52px band (clipped), same native-control inset on
+ * mac, same trailing toggle — so the measurement sees the same boxes it sees in the app.
  */
 const meta = {
   title: "t3team/NexploreStageArt",
@@ -47,7 +47,7 @@ function HeaderRow({
     <div className="flex flex-col gap-1">
       <div className="font-mono text-[10px] text-neutral-500">{label}</div>
       <div
-        className="relative flex h-[52px] shrink-0 flex-row items-center overflow-visible rounded-md"
+        className="relative flex h-[52px] shrink-0 flex-row items-center overflow-hidden rounded-md"
         style={style ? { width, ...style } : { width }}
       >
         <Backdrop />
@@ -102,16 +102,17 @@ export const WidthsOffMac: StoryObj = {
 };
 
 /**
- * macOS desktop: the brand is pushed to `--workspace-titlebar-content-left` (134px), which makes
- * the LEFT run the widest, so the orb lands in the traffic-light reserve — behind the native window
- * buttons — with no platform branch in the component. The dashed box marks where those buttons sit.
+ * macOS desktop: the brand sits past the native window-button row. The orb stays in the widest
+ * free run — between logo and toggle — and only slides behind the buttons when the sidebar gets
+ * narrow enough that the leading run wins (the 256px row). The dashed box marks where the native
+ * buttons sit.
  */
 export const WidthsMacDesktop: StoryObj = {
   render: () => (
     <div className="flex flex-col gap-16 rounded-lg bg-neutral-900 p-6">
       {[420, 340, 288, 256].map((width) => (
         <div key={width} className="relative">
-          <HeaderRow width={width} brandInset={134} label={`${width}px · macOS desktop`} />
+          <HeaderRow width={width} brandInset={80} label={`${width}px · macOS desktop`} />
           <div
             aria-hidden
             className="pointer-events-none absolute left-[13px] top-[22px] z-20 h-8 rounded-full border border-dashed border-white/70"
@@ -149,7 +150,7 @@ function ForceLight({ children }: { children: ReactNode }) {
 // Each row sets the wash tokens on the header itself; the component reads them at measurement
 // time, so one story shows the strength range without any component change.
 const FADE_CASES: ReadonlyArray<{ label: string; vars?: Record<string, string> }> = [
-  { label: "wash off — today's look" , vars: { "--stage-nx-fade-opacity": "0" } },
+  { label: "wash off — plain ground", vars: { "--stage-nx-fade-opacity": "0" } },
   { label: "default — 55% · 140px" },
   { label: "soft — 40% · 110px", vars: { "--stage-nx-fade-opacity": "0.4", "--stage-nx-fade-width": "110px" } },
   { label: "strong — 70% · 180px", vars: { "--stage-nx-fade-opacity": "0.7", "--stage-nx-fade-width": "180px" } },
@@ -157,9 +158,11 @@ const FADE_CASES: ReadonlyArray<{ label: string; vars?: Record<string, string> }
 ];
 
 /**
- * macOS light-theme traffic-light contrast: the left-edge wash (light appearance only). Each row
- * is the macOS desktop header with the native buttons drawn in, at the strength set through the
- * `--stage-nx-fade-*` tokens — flip between them here instead of rebuilding the app.
+ * macOS light-theme traffic-light contrast: the left-edge wash (mac + light appearance only). Each
+ * row is the macOS desktop header at the real 511px sidebar width, brand past the native button
+ * row, with the buttons drawn in — the orb parks between logo and toggle, the wash rides on the
+ * platform. Strengths are set through the `--stage-nx-fade-*` tokens: flip between them here
+ * instead of rebuilding the app.
  */
 export const TrafficLightFade: StoryObj = {
   render: () => (
@@ -168,8 +171,8 @@ export const TrafficLightFade: StoryObj = {
         {FADE_CASES.map(({ label, vars }) => (
           <HeaderRow
             key={label}
-            width={340}
-            brandInset={134}
+            width={511}
+            brandInset={80}
             label={label}
             {...(vars ? { style: vars as CSSProperties } : {})}
             trafficLights

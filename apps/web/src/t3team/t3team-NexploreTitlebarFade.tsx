@@ -3,10 +3,10 @@ import { useId } from "react";
 import { useTheme } from "~/hooks/useTheme";
 
 /**
- * Soft white wash that fades in from the LEFT edge of the strip, for the one composition where the
- * orb parks behind the native macOS traffic lights. In the light appearance the red close button
- * muddies out on the pale orb fill, so the wash lifts the button row without touching the
- * composition. Active only when the resolved theme appearance is light; renders nothing otherwise.
+ * Soft white wash that fades in from the LEFT edge of the strip, for the native macOS traffic-light
+ * row. In the light appearance the red close button muddies out on the saturated ground, so the
+ * wash lifts the button row without touching the composition. The host strip decides the macOS
+ * gate; this renders only when the resolved theme appearance is light — nothing otherwise.
  *
  * Strength is token-driven so a story or a pack retunes it without code:
  *   `--stage-nx-fade-opacity`  default 0.55 (0 disables the wash)

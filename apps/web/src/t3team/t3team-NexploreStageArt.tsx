@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { isMacPlatform } from "~/lib/utils";
 import { cssNumberPx, FADE_OPACITY, FADE_WIDTH_PX, NexploreTitlebarFade } from "./t3team-NexploreTitlebarFade";
 
 /**
@@ -21,15 +22,16 @@ const STRIP_HEIGHT = 96;
  * SVG is `xMinYMin slice` with a height-driven scale, so a fixed `cx` is pinned to a fixed pixel
  * offset from the LEFT while the header toggle is anchored to the RIGHT and slides with the width;
  * any constant eventually collides. The orb therefore sits in the widest gap actually free of
- * header content, remeasured on every header resize — which also covers macOS without a platform
- * branch: desktop's titlebar inset makes the LEFT gap the widest, so the orb lands behind the
- * traffic lights on its own; in fullscreen the inset drops and the middle gap wins again.
+ * header content, remeasured on every header resize: between the logo and the sidebar toggle,
+ * the "rising" position of the approved composition. The native macOS traffic lights live at the
+ * left edge above whatever the art shows there — the left-edge wash (light appearance only) keeps
+ * them legible, and the orb is NOT pulled into that zone.
  */
 type OrbPlacement = {
   cx: number;
   cy: number;
   r: number;
-  inReserve: boolean;
+  wash: boolean;
   fadeOpacity: number;
   fadeWidthUnits: number;
 };
@@ -54,15 +56,6 @@ function clamp(value: number, min: number, max: number): number {
  * edge. Children are read generically rather than by selector, so a header that gains a control
  * later is accounted for without touching this file.
  */
-/**
- * A leading run at least this wide is the macOS traffic-light reserve, not padding: off-mac the
- * brand starts at 18px (below it), macOS desktop pushes it to the 90px controls inset (above it),
- * and the threshold sits between so neither a roomier off-mac header nor a tighter reserve flips
- * the decision. Shape-based, not `navigator.platform`, so fullscreen needs no special case: the
- * inset drops, the brand slides back to 18px, and the run stops qualifying on its own.
- */
-const TITLEBAR_RESERVE_MIN_PX = 72;
-
 function measureFreeGap(host: HTMLElement, selfContainer: Element | null): { start: number; end: number } {
   const hostRect = host.getBoundingClientRect();
   const occupied: Array<[number, number]> = [];
@@ -77,11 +70,6 @@ function measureFreeGap(host: HTMLElement, selfContainer: Element | null): { sta
     occupied.push([rect.left - hostRect.left, rect.right - hostRect.left]);
   }
   occupied.sort((a, b) => a[0] - b[0]);
-
-  // The titlebar reserve wins over a merely wider run: on macOS desktop the orb belongs BEHIND
-  // the native window buttons, and widest-gap alone put it in the middle on a wide sidebar.
-  const leadingEnd = occupied.length > 0 ? Math.max(0, occupied[0]![0]) : hostRect.width;
-  if (leadingEnd >= TITLEBAR_RESERVE_MIN_PX) return { start: 0, end: leadingEnd };
 
   let best = { start: 0, end: 0 };
   let cursor = 0;
@@ -125,7 +113,10 @@ export function T3TeamNexploreStripArt() {
     const unitsPerPx = STRIP_HEIGHT / svgHeight;
     const gap = measureFreeGap(host, svg.parentElement);
     const gapWidth = gap.end - gap.start;
-    const inReserve = gap.start === 0 && gapWidth >= TITLEBAR_RESERVE_MIN_PX;
+    // The left-edge wash targets the native macOS traffic lights, not the orb's position: it rides
+    // on the platform so every mac light-theme header gets it (light appearance is gated inside
+    // NexploreTitlebarFade), whether or not the orb parks near the left edge.
+    const wash = isMacPlatform(navigator.platform);
     const hostStyle = getComputedStyle(host);
     const fadeOpacity = cssNumberPx(hostStyle, "--stage-nx-fade-opacity", FADE_OPACITY);
     const fadeWidthUnits = cssNumberPx(hostStyle, "--stage-nx-fade-width", FADE_WIDTH_PX) * unitsPerPx;
@@ -144,7 +135,7 @@ export function T3TeamNexploreStripArt() {
       cx: ((gap.start + gap.end) / 2) * unitsPerPx,
       cy: cyPx * unitsPerPx,
       r: ORB_RADIUS_PX * unitsPerPx,
-      inReserve, fadeOpacity, fadeWidthUnits,
+      wash, fadeOpacity, fadeWidthUnits,
     });
   }, []);
 
@@ -175,8 +166,8 @@ export function T3TeamNexploreStripArt() {
           <circle cx={orb.cx} cy={orb.cy} r={orb.r} style={{ fill: ORB_FILL.orb }} />
         ) : null}
       </g>
-      {/* Left-edge traffic-light wash (light appearance only; see t3team-NexploreTitlebarFade). */}
-      {orb?.inReserve ? <NexploreTitlebarFade opacity={orb.fadeOpacity} widthUnits={orb.fadeWidthUnits} /> : null}
+      {/* Left-edge traffic-light wash (macOS + light appearance only; see t3team-NexploreTitlebarFade). */}
+      {orb?.wash ? <NexploreTitlebarFade opacity={orb.fadeOpacity} widthUnits={orb.fadeWidthUnits} /> : null}
     </svg>
   );
 }

@@ -35,6 +35,8 @@ let originalGetBoundingClientRect: Element["getBoundingClientRect"] | null = nul
 beforeAll(() => {
   globalThis.ResizeObserver = NoopResizeObserver as unknown as typeof ResizeObserver;
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  // The wash is mac-gated; the placement tests are platform-agnostic, so default to macOS.
+  Object.defineProperty(navigator, "platform", { value: "MacIntel", configurable: true });
   originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
   // The component measures its own <svg> via getBoundingClientRect, which jsdom reports as zero
   // (no layout engine). The svg fills its container (`h-full w-full`), so it inherits the
@@ -197,12 +199,16 @@ describe("T3TeamNexploreStripArt placement", () => {
 });
 
 describe("T3TeamNexploreStripArt traffic-light wash", () => {
-  it("renders the left-edge wash when the orb parks in the titlebar reserve (light appearance)", async () => {
-    // macOS desktop: brand inset 134px → the leading run (134 ≥ 72) IS the reserve, so the wash
-    // activates. The jsdom theme store resolves to light by default.
+  it("renders the left-edge wash on macOS (light appearance), with the orb in the widest free run", async () => {
+    // beforeAll sets navigator.platform to MacIntel. Even though the leading run (134px brand
+    // inset) is wide, the orb must NOT park behind the native buttons — it stays in the widest
+    // free run, between brand and toggle — while the wash rides on the platform for the buttons.
+    // The jsdom theme store resolves to light by default.
     const layout = { width: 420, brand: [134, 236], toggle: [372, 404] } satisfies HeaderLayout;
-    const { cleanup, svg } = await renderHeader(layout);
+    const { cleanup, circle, svg } = await renderHeader(layout);
     try {
+      // Leading run 0..134 vs middle run 236..372: the middle is the widest (136 > 134).
+      expect(Number(circle().getAttribute("cx"))).toBeCloseTo(((236 + 372) / 2) * 1.2, 3);
       const gradient = svg.querySelector("linearGradient");
       expect(gradient).not.toBeNull();
       // 140px default width at 1.2 units/px.
@@ -217,14 +223,20 @@ describe("T3TeamNexploreStripArt traffic-light wash", () => {
     }
   });
 
-  it("stays off-mac: no wash when the leading run is not a titlebar reserve", async () => {
-    // Off-mac: brand at 18px → leading run far below the 72px threshold; the wash must not render.
-    const layout = { width: 420, brand: [18, 120], toggle: [372, 404] } satisfies HeaderLayout;
-    const { cleanup, svg } = await renderHeader(layout);
+  it("stays off without macOS: no wash on a non-mac platform", async () => {
+    // The gate is the platform, not the header shape: the same wide leading run must NOT earn
+    // a wash on a Win32 header, where no native buttons exist.
+    Object.defineProperty(navigator, "platform", { value: "Win32", configurable: true });
     try {
-      expect(svg.querySelector("linearGradient")).toBeNull();
+      const layout = { width: 420, brand: [134, 236], toggle: [372, 404] } satisfies HeaderLayout;
+      const { cleanup, svg } = await renderHeader(layout);
+      try {
+        expect(svg.querySelector("linearGradient")).toBeNull();
+      } finally {
+        cleanup();
+      }
     } finally {
-      cleanup();
+      Object.defineProperty(navigator, "platform", { value: "MacIntel", configurable: true });
     }
   });
 });
