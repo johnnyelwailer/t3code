@@ -1262,6 +1262,7 @@ export interface ChatComposerProps {
   activeProposedPlan: Thread["proposedPlans"][number] | null;
   activeTasksProgress: ComposerTasksProgress | null;
   activeTaskSteps: readonly ComposerTaskStep[] | null;
+  activeTaskUpdatedAt: string | null;
   threadSyncPhase: ThreadSyncPhase | null;
 
   // Mode
@@ -1444,6 +1445,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   } = props;
   const activeTasksProgress = props.threadSyncPhase === null ? props.activeTasksProgress : null;
   const activeTaskSteps = props.threadSyncPhase === null ? props.activeTaskSteps : null;
+  const activeTaskUpdatedAt = props.threadSyncPhase === null ? props.activeTaskUpdatedAt : null;
   // ------------------------------------------------------------------
   // Store subscriptions (prompt / images / terminal contexts)
   // ------------------------------------------------------------------
@@ -3798,6 +3800,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       placement="inline"
       progress={activeTasksProgress}
       steps={activeTaskSteps}
+      planUpdatedAt={activeTaskUpdatedAt ?? undefined}
     />
   ) : null;
   const hasImageAttachmentAttention = standaloneComposerImages.some((image) => {
@@ -4199,6 +4202,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         onToggle={toggleTasksDrawer}
         progress={activeTasksProgress}
         steps={activeTaskSteps}
+        planUpdatedAt={activeTaskUpdatedAt ?? undefined}
       />
     ) : null
   ) : null;
@@ -5085,6 +5089,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               onCollapse={toggleTasksDrawer}
               progress={activeTasksProgress}
               steps={activeTaskSteps}
+              planUpdatedAt={activeTaskUpdatedAt ?? undefined}
             />
           ) : null}
           {showTasksTab ? (
@@ -5094,6 +5099,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 onToggle={toggleTasksDrawer}
                 progress={activeTasksProgress}
                 steps={activeTaskSteps}
+                planUpdatedAt={activeTaskUpdatedAt ?? undefined}
               />
             </ComposerBanner.Attachment>
           ) : null}

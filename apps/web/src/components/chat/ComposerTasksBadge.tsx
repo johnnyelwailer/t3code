@@ -2,6 +2,7 @@ import { ListTodoIcon } from "lucide-react";
 import { memo, type ComponentProps } from "react";
 
 import { formatDuration } from "../../session-logic";
+import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { cn } from "~/lib/utils";
 import { ComposerBanner } from "./ComposerBanner";
 
@@ -66,11 +67,14 @@ function TaskSummary({
   expanded,
   progress,
   steps,
+  planUpdatedAt,
 }: {
   readonly expanded: boolean;
   readonly progress: ComposerTasksProgress;
   readonly steps: readonly ComposerTaskStep[];
+  readonly planUpdatedAt?: string | undefined;
 }) {
+  const updatedLabel = planUpdatedAt ? formatRelativeTimeLabel(planUpdatedAt) : "";
   return (
     <>
       <ComposerBanner.Icon>
@@ -86,6 +90,15 @@ function TaskSummary({
         </span>
       </ComposerBanner.Content>
       <ComposerBanner.Actions>
+        {updatedLabel ? (
+          <span
+            className="hidden shrink-0 text-[10px] tabular-nums text-muted-foreground/45 md:inline"
+            data-composer-task-updated="true"
+            title={`Task list last updated ${updatedLabel}`}
+          >
+            {updatedLabel}
+          </span>
+        ) : null}
         <ComposerBanner.Count
           className={progress.completedSteps >= progress.totalSteps ? "text-success" : undefined}
           data-composer-task-progress="true"
@@ -105,12 +118,14 @@ export const ComposerTasksBadge = memo(function ComposerTasksBadge({
   placement = "tab",
   progress,
   steps,
+  planUpdatedAt,
 }: {
   readonly expanded: boolean;
   readonly onToggle: () => void;
   readonly placement?: "inline" | "tab";
   readonly progress: ComposerTasksProgress;
   readonly steps: readonly ComposerTaskStep[];
+  readonly planUpdatedAt?: string | undefined;
 }) {
   if (progress.totalSteps <= 0) return null;
 
@@ -123,7 +138,7 @@ export const ComposerTasksBadge = memo(function ComposerTasksBadge({
       onClick={onToggle}
       onPointerDown={(event) => event.preventDefault()}
     >
-      <TaskSummary expanded={expanded} progress={progress} steps={steps} />
+      <TaskSummary expanded={expanded} progress={progress} steps={steps} planUpdatedAt={planUpdatedAt} />
     </ComposerBanner.Row>
   );
   return placement === "inline" ? (
@@ -140,11 +155,13 @@ export const ComposerTasksContent = memo(function ComposerTasksContent({
   onToggle,
   progress,
   steps,
+  planUpdatedAt,
 }: {
   readonly expanded: boolean;
   readonly onToggle: () => void;
   readonly progress: ComposerTasksProgress;
   readonly steps: readonly ComposerTaskStep[];
+  readonly planUpdatedAt?: string | undefined;
 }) {
   return (
     <div
@@ -157,6 +174,7 @@ export const ComposerTasksContent = memo(function ComposerTasksContent({
         placement="inline"
         progress={progress}
         steps={steps}
+        planUpdatedAt={planUpdatedAt}
       />
       {expanded ? (
         <ComposerBanner.Scroll data-composer-tasks-scroll="true">
