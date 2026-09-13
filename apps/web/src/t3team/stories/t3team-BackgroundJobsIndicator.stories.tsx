@@ -21,6 +21,7 @@ function jobs(
   list: Array<
     Pick<BackgroundJobState, "jobId"> & {
       readonly command?: string;
+      readonly label?: string;
       readonly ageMs?: number;
       readonly pid?: number;
     }
@@ -29,6 +30,7 @@ function jobs(
   return list.map((job, i) => ({
     jobId: job.jobId,
     ...(job.command !== undefined ? { command: job.command } : {}),
+    ...(job.label !== undefined ? { label: job.label } : {}),
     ...(job.pid !== undefined ? { pid: job.pid } : {}),
     startedAtMs: NOW - (job.ageMs ?? 45_000 + i * 20_000),
     // 10-minute hard deadline, as the runtime reports it.
@@ -38,10 +40,17 @@ function jobs(
 }
 
 const SAMPLE = jobs([
-  { jobId: "job_8865dcbe", command: "pnpm -r build && pnpm -r test", pid: 48211, ageMs: 190_000 },
+  {
+    jobId: "job_8865dcbe",
+    command: "pnpm -r build && pnpm -r test",
+    label: "Building the production bundle",
+    pid: 48211,
+    ageMs: 190_000,
+  },
   {
     jobId: "job_a1b2c3d4",
     command: "git log -p --stat main..HEAD | less",
+    label: "Reviewing the diff",
     pid: 48260,
     ageMs: 40_000,
   },
