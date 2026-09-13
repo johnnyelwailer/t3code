@@ -151,10 +151,10 @@ function ForceLight({ children }: { children: ReactNode }) {
 // time, so one story shows the strength range without any component change.
 const FADE_CASES: ReadonlyArray<{ label: string; vars?: Record<string, string> }> = [
   { label: "wash off — plain ground", vars: { "--stage-nx-fade-opacity": "0" } },
-  { label: "default — 55% · 140px" },
-  { label: "soft — 40% · 110px", vars: { "--stage-nx-fade-opacity": "0.4", "--stage-nx-fade-width": "110px" } },
-  { label: "strong — 70% · 180px", vars: { "--stage-nx-fade-opacity": "0.7", "--stage-nx-fade-width": "180px" } },
-  { label: "whisper — 30% · 90px", vars: { "--stage-nx-fade-opacity": "0.3", "--stage-nx-fade-width": "90px" } },
+  { label: "default — 40% · 80px" },
+  { label: "wide — 40% · 120px", vars: { "--stage-nx-fade-width": "120px" } },
+  { label: "strong — 55% · 80px", vars: { "--stage-nx-fade-opacity": "0.55" } },
+  { label: "whisper — 25% · 80px", vars: { "--stage-nx-fade-opacity": "0.25" } },
 ];
 
 /**
