@@ -775,7 +775,7 @@ export function shouldShowBranchMismatchBanner(input: {
 export interface ComposerTasksProgressView {
   readonly progress: ComposerTasksProgress | null;
   readonly steps: readonly ComposerTaskStep[] | null;
-  /** ISO instant of the last plan write (the activity's createdAt), for the badge's "updated 40m ago" staleness affordance. Null when there is no plan. */
+  /** ISO instant of the last plan write (the activity's createdAt), for the expanded task panel's "Updated 40m ago" staleness header. Null when there is no plan. */
   readonly planUpdatedAt: string | null;
 }
 
