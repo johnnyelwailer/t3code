@@ -44,6 +44,17 @@ import { ThreadBackgroundLivenessService } from "../ThreadBackgroundLiveness.ts"
 import { ThreadPlanProgressService } from "../ThreadPlanProgress.ts";
 import { ThreadPlanStalenessService } from "../ThreadPlanStaleness.ts";
 import { ThreadSilenceWatchdogService } from "../ThreadSilenceWatchdog.ts";
+import {
+  findClaimableJobNotificationMarker,
+  JOB_NOTIFICATION_CLAIMED_KIND,
+  JOB_NOTIFICATION_MARKER_KIND,
+  parseJobNotificationMarker,
+} from "./t3team-jobNotificationFraming.ts";
+import {
+  buildJobNotificationClaimActivity,
+  buildJobNotificationFramingCommand,
+  buildJobNotificationMarkerActivity,
+} from "./t3team-jobNotificationFraming.builders.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import {
   ProviderRuntimeIngestionService,
@@ -955,6 +966,29 @@ export function runtimeEventToActivities(
       ];
     }
 
+    case "thread.metadata.updated": {
+      // Job-completion wake marker (distribution pack): persist it durably so
+      // the forced turn it raises can be framed later (see
+      // claimJobNotificationMarker). Metadata records without the marker (e.g.
+      // a provider title rename) produce no activity.
+      const marker = parseJobNotificationMarker(event.payload.metadata?.lastJobNotification);
+      if (marker === undefined) {
+        return [];
+      }
+      const metadataEvent = event as ProviderRuntimeEvent & { sessionSequence?: number };
+      return [
+        buildJobNotificationMarkerActivity({
+          eventId: event.eventId,
+          createdAt: event.createdAt,
+          marker,
+          turnId: toTurnId(event.turnId) ?? null,
+          ...(metadataEvent.sessionSequence !== undefined
+            ? { sequence: metadataEvent.sessionSequence }
+            : {}),
+        }),
+      ];
+    }
+
     default:
       break;
   }
@@ -1587,6 +1621,48 @@ const make = Effect.gen(function* () {
     },
   );
 
+  // Consume the pack's job-completion marker (when one is pending and fresh)
+  // on a provider-originated forced turn: upsert the marker's notification
+  // text as the turn's hidden user framing, then record the claim durably so
+  // a redelivered or follow-up turn cannot re-claim it. Both dispatches are
+  // idempotent (deterministic ids keyed on the marker activity id), so a
+  // replay is a no-op.
+  const claimJobNotificationMarker = Effect.fn("claimJobNotificationMarker")(function* (
+    threadId: ThreadId,
+    event: ProviderRuntimeEvent,
+    turnId: TurnId | undefined,
+    nowIso: string,
+  ) {
+    const threadDetail = yield* resolveThreadDetail(threadId, [
+      JOB_NOTIFICATION_MARKER_KIND,
+      JOB_NOTIFICATION_CLAIMED_KIND,
+    ]);
+    const claim = findClaimableJobNotificationMarker(threadDetail?.activities, nowIso);
+    if (claim === undefined) {
+      return;
+    }
+    yield* orchestrationEngine.dispatch(
+      buildJobNotificationFramingCommand({
+        threadId,
+        commandId: yield* providerCommandId(event, "job-notification-upsert"),
+        marker: claim.marker,
+        markerActivityId: claim.markerActivityId,
+        nowIso,
+      }),
+    );
+    yield* orchestrationEngine.dispatch({
+      type: "thread.activity.append",
+      commandId: yield* providerCommandId(event, "job-notification-claim"),
+      threadId,
+      activity: buildJobNotificationClaimActivity({
+        markerActivityId: claim.markerActivityId,
+        turnId: turnId ?? null,
+        nowIso,
+      }),
+      createdAt: nowIso,
+    });
+  });
+
   const processRuntimeEvent = (event: ProviderRuntimeEvent) =>
     Effect.gen(function* () {
       if (event.type === "content.delta" && event.payload.streamKind !== "assistant_text") {
@@ -1783,6 +1859,29 @@ const make = Effect.gen(function* () {
               Effect.catchCause((cause) =>
                 Effect.logWarning(
                   "provider runtime ingestion failed to mark source proposed plan",
+                  {
+                    eventId: event.eventId,
+                    eventType: event.type,
+                    cause: Cause.pretty(cause),
+                  },
+                ),
+              ),
+            );
+          }
+
+          if (
+            event.type === "turn.started" &&
+            activeTurnId === null &&
+            Option.isNone(pendingTurnStart)
+          ) {
+            // No pending host turn start and no active host turn: the provider
+            // minted this turn itself (a job-completion follow-up is the
+            // distribution's only known producer of such a turn), so frame it
+            // with the pack's job-notification marker when one is claimable.
+            yield* claimJobNotificationMarker(thread.id, event, eventTurnId, now).pipe(
+              Effect.catchCause((cause) =>
+                Effect.logWarning(
+                  "provider runtime ingestion failed to claim job notification marker",
                   {
                     eventId: event.eventId,
                     eventType: event.type,
