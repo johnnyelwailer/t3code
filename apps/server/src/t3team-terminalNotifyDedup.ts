@@ -80,6 +80,8 @@ export interface TerminalNotifyLedger {
     readonly terminalSeq: number;
     readonly markerPayload: Readonly<Record<string, unknown>>;
     readonly doNotify: Effect.Effect<void>;
+    /** Per-call marker summary; falls back to the ledger's `markerSummary`. */
+    readonly markerSummary?: string;
   }) => Effect.Effect<void>;
 }
 
@@ -127,7 +129,7 @@ export function makeTerminalNotifyLedger(options: TerminalNotifyLedgerOptions): 
     rehydrate: (events) => {
       for (const event of events) foldEvent(event);
     },
-    notify: ({ key, markerThreadId, resumeThreadId, terminalSeq, markerPayload, doNotify }) =>
+    notify: ({ key, markerThreadId, resumeThreadId, terminalSeq, markerPayload, doNotify, markerSummary }) =>
       Effect.gen(function* () {
         if (!terminalNotifyNeedsNotify(stateFor(key), terminalSeq)) return;
         yield* doNotify;
@@ -142,7 +144,7 @@ export function makeTerminalNotifyLedger(options: TerminalNotifyLedgerOptions): 
               id: EventId.make(t3teamRandomUUID()),
               tone: "info",
               kind: options.markerKind,
-              summary: options.markerSummary,
+              summary: markerSummary ?? options.markerSummary,
               payload: { dedupKey: key, resumeThreadId, eventSequence: terminalSeq, ...markerPayload },
               turnId: null,
               createdAt: nowIso,
