@@ -583,7 +583,7 @@ describe("work entry labels", () => {
   ] as const)("uses the same friendly %s label in both views", (toolLifecycleStatus, label) => {
     const browserEntry = {
       ...entry,
-      toolTitle: "T3-code.preview_click",
+      toolData: { server: "t3-code", tool: "preview_click" },
       detail: '{"ok":true}',
       toolLifecycleStatus,
     };
@@ -594,7 +594,7 @@ describe("work entry labels", () => {
   });
 
   it("uses the active summary state for legacy tools without a lifecycle status", () => {
-    const browserEntry = { ...entry, toolTitle: "T3-code.preview_click" };
+    const browserEntry = { ...entry, toolData: { server: "t3-code", tool: "preview_click" } };
     expect(liveWorkEntryLabel(browserEntry, undefined, true)).toBe(
       "Clicking in the preview browser",
     );
@@ -606,7 +606,7 @@ describe("work entry labels", () => {
   it("keeps the latest live activity in the present tense after the call completes", () => {
     const browserEntry = {
       ...entry,
-      toolTitle: "T3-code.preview_click",
+      toolData: { server: "t3-code", tool: "preview_click" },
       toolLifecycleStatus: "completed" as const,
     };
     expect(liveWorkEntryLabel(browserEntry, undefined, true)).toBe(
@@ -620,9 +620,77 @@ describe("work entry labels", () => {
   it("keeps custom titles and output for unrecognized tools", () => {
     const unknownEntry = { ...entry, toolTitle: "mcp__github__search_issues" };
     expect(liveWorkEntryLabel(unknownEntry, undefined, true)).toBe("Mcp__github__search_issues");
+    // An agent-chosen title also beats the raw output of an unrecognized tool.
     expect(workEntryDisplayLabel({ ...unknownEntry, detail: "Found 3 issues" }, undefined)).toBe(
+      "Mcp__github__search_issues",
+    );
+    // Without a title the output still wins over the bare label.
+    expect(workEntryDisplayLabel({ ...entry, detail: "Found 3 issues" }, undefined)).toBe(
       "Found 3 issues",
     );
+  });
+
+  describe("agent-chosen tool titles", () => {
+    // Since distribution #499 the translator emits `title` only when the
+    // model labels a call, so a present toolTitle is the agent's deliberate
+    // name and must beat the static tool presentation.
+    const labeledMcpEntry = {
+      ...entry,
+      toolTitle: "Open the checkout page",
+      toolData: { server: "t3-code", tool: "preview_click" },
+      detail: '{"ok":true}',
+    };
+
+    it("prefers the agent's label over the static tool presentation in every view", () => {
+      expect(workEntryDisplayLabel(labeledMcpEntry, undefined)).toBe("Open the checkout page");
+      expect(liveWorkEntryLabel(labeledMcpEntry, undefined, true)).toBe("Open the checkout page");
+      expect(liveWorkEntryLabel(labeledMcpEntry, undefined, false)).toBe("Open the checkout page");
+      const rows = deriveMessagesTimelineRows({
+        timelineEntries: [
+          {
+            id: "browser-entry",
+            kind: "work",
+            createdAt: entry.createdAt,
+            entry: { ...labeledMcpEntry, itemType: "mcp_tool_call" as const },
+          },
+        ],
+        isWorking: false,
+        activeTurnStartedAt: null,
+        turnDiffSummaryByAssistantMessageId: new Map(),
+        revertTurnCountByUserMessageId: new Map(),
+      });
+      const directRow = rows.find((row) => row.kind === "work");
+      expect(directRow).toMatchObject({ displayLabel: "Open the checkout page" });
+    });
+
+    it("keeps the command winning over both the agent's label and the presentation", () => {
+      const labeledCommandEntry = {
+        ...entry,
+        toolTitle: "Run the web suite",
+        command: "/bin/bash -lc 'vp test run'",
+      };
+      expect(workEntryDisplayLabel(labeledCommandEntry, undefined)).toBe(
+        "/bin/bash -lc 'vp test run'",
+      );
+      expect(liveWorkEntryLabel(labeledCommandEntry, undefined, true)).toBe("Running vp");
+      expect(liveWorkEntryLabel(labeledCommandEntry, undefined, false)).toBe("Ran vp");
+      const rows = deriveMessagesTimelineRows({
+        timelineEntries: [
+          {
+            id: "browser-entry",
+            kind: "work",
+            createdAt: entry.createdAt,
+            entry: labeledCommandEntry,
+          },
+        ],
+        isWorking: false,
+        activeTurnStartedAt: null,
+        turnDiffSummaryByAssistantMessageId: new Map(),
+        revertTurnCountByUserMessageId: new Map(),
+      });
+      const directRow = rows.find((row) => row.kind === "work");
+      expect(directRow).toMatchObject({ displayLabel: "/bin/bash -lc 'vp test run'" });
+    });
   });
 
   it("keeps command summaries compact without replacing the full command in expanded rows", () => {

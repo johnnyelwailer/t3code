@@ -1,25 +1,27 @@
 /**
- * Terminal-decision path for the durable child-wait reactor (GHE #55), split
- * out of t3team-childWaitReactor.ts so that file keeps only the live wiring
- * (rehydrate, wait resolution, host timer). Given a child that just went
- * terminal, decide what (if anything) to tell the parent:
+ * Terminal-decision path for the durable child-wait reactor (GHE #55): given a
+ * child that just went terminal, decide what (if anything) to tell the parent.
  *
  * - Abnormal stops (failed/aborted) ALWAYS notify — otherwise a dead child is
- *   silent (GHE #157).
+ *   silent (GHE #157). They are genuine terminals, so the reactor calls this
+ *   immediately.
  * - A SILENT completion (completed) notifies ONLY when the parent received
  *   nothing from the child; the notifier decides that from the parent's
- *   durable transcript, so a stuck child can't hide a finished one.
+ *   durable transcript, so a stuck child can't hide a finished one. `ready`/
+ *   `idle` is NOT terminal (a multi-turn agent goes running -> ready -> running
+ *   between turns), so the reactor defers this outcome behind a quiet period
+ *   and only calls this path once the child has stayed quiet.
  *
- * Both outcomes route through the SAME ledger-guarded `notifyAbnormalStop`,
- * so each fires once per terminal epoch (re-armed on the child's resume) — one
+ * Both outcomes route through the SAME ledger-guarded `notifyAbnormalStop`, so
+ * each fires once per terminal epoch (re-armed on the child's resume) — one
  * durable marker, both outcomes.
  *
- * Moved VERBATIM from the reactor: no logic changed; the reactor wires these to
- * the live index, resolver, and guards.
+ * Split from t3team-childWaitReactor.ts so that file keeps only the live
+ * wiring (rehydrate, wait resolution, host timers). No logic lives here that
+ * the reactor does not invoke.
  *
  * @module t3team-childWaitTerminal
  */
-import type { OrchestrationEvent } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import { childWaitOutcomeMatches, type ChildWaitOutcome } from "./t3team-childWait.ts";
@@ -29,7 +31,21 @@ import type { ChildTerminalOutcome } from "./t3team-childAbnormalStopNotify.ts";
 
 export type TerminalOutcome = "completed" | "failed" | "aborted";
 
-/** A terminal session-set + outcome + the two runtime deps the reactor supplies. */
+/** Resolves matching pending waits for a child+outcome; returns how many. */
+export type ResolveChildOutcome = (
+  childThreadId: string,
+  outcome: ChildWaitOutcome,
+) => Effect.Effect<number>;
+
+/** A terminal outcome + the fields the ledger-guarded notifier needs. */
+export interface NotifyTerminalIfNoWaitInput {
+  readonly childThreadId: string;
+  readonly outcome: TerminalOutcome;
+  readonly lastError: string | null | undefined;
+  readonly eventSequence: number;
+}
+
+/** The runtime deps the reactor supplies (live index + resolver + notifier). */
 export interface ChildWaitTerminalDeps {
   readonly index: ChildWaitIndex;
   readonly resolveWait: ResolveWait;
@@ -59,25 +75,17 @@ export function makeChildWaitTerminal(deps: ChildWaitTerminalDeps) {
       return matching.length;
     });
 
-  // Terminal session-set with no wait resolved for the child: tell the parent.
+  // Terminal outcome with no wait resolved for the child: tell the parent.
   // Abnormal stops (failed/aborted) always notify (GHE #157); a SILENT
   // completion notifies only when the parent received nothing from the child.
   // Both route through the ledger-guarded notifier, so each fires once per
   // terminal epoch (re-armed on the child's resume).
-  const notifyTerminalIfNoWait = (
-    event: OrchestrationEvent & { type: "thread.session-set" },
-    outcome: TerminalOutcome,
-  ): Effect.Effect<void> =>
-    resolveChildOutcome(event.payload.threadId, outcome).pipe(
+  const notifyTerminalIfNoWait = (input: NotifyTerminalIfNoWaitInput): Effect.Effect<void> =>
+    resolveChildOutcome(input.childThreadId, input.outcome).pipe(
       Effect.flatMap((resolvedWaits) => {
         // A wait already resolved for this child+outcome told the parent — no second message.
         if (resolvedWaits > 0) return Effect.void;
-        return notifyAbnormalStop({
-          childThreadId: event.payload.threadId,
-          outcome,
-          lastError: outcome === "completed" ? null : event.payload.session.lastError,
-          eventSequence: event.sequence,
-        });
+        return notifyAbnormalStop(input);
       }),
     );
 
