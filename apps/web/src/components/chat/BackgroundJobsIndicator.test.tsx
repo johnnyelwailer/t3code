@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
+  BackgroundJobList,
   BackgroundJobRunningBadge,
   BackgroundJobsRunningIndicator,
 } from "./BackgroundJobsIndicator";
@@ -88,6 +89,50 @@ describe("BackgroundJobsRunningIndicator", () => {
     );
     expect(markup).toContain("motion-safe:visible-animate-pulse");
     expect(markup).not.toContain("animate-pulse rounded-full");
+  });
+
+  // The line is the handle to the per-job details: a toggle, collapsed by
+  // default, that must not render the list until opened.
+  it("collapses by default and exposes the toggle state", () => {
+    const markup = renderToStaticMarkup(
+      <BackgroundJobsRunningIndicator
+        jobs={[job({ jobId: "job_a", command: "sleep 30", pid: 4242 })]}
+      />,
+    );
+    expect(markup).toContain('aria-expanded="false"');
+    expect(markup).not.toContain("Running background jobs");
+  });
+});
+
+describe("BackgroundJobList", () => {
+  it("lists each running job with command, pid and elapsed over deadline", () => {
+    const markup = renderToStaticMarkup(
+      <BackgroundJobList
+        running={[
+          job({ jobId: "job_a", command: "node scripts/quality-gate.mjs", pid: 4242 }),
+          job({ jobId: "job_b", command: "sleep 30", startedAtMs: NOW - 10_000, deadlineMs: NOW + 590_000 }),
+        ]}
+        now={NOW}
+      />,
+    );
+    expect(markup).toContain("Running background jobs");
+    // job_a: started 45s ago, deadline 10m from start -> 45s / 10m.
+    expect(markup).toContain("node scripts/quality-gate.mjs");
+    expect(markup).toContain("45s / 10m");
+    expect(markup).toContain("pid 4242");
+    // job_b: started 10s ago with a 10m window, and no pid on record ->
+    // the row still renders, without a pid line.
+    expect(markup).toContain("sleep 30");
+    expect(markup).toContain("10s / 10m");
+  });
+
+  it("degrades to the job id when the row never carried a command", () => {
+    const markup = renderToStaticMarkup(
+      <BackgroundJobList running={[job({ jobId: "job_old" })]} now={NOW} />,
+    );
+    // The id doubles as the displayed command; no pid line.
+    expect(markup).toContain("job_old");
+    expect(markup).not.toContain("pid ");
   });
 });
 
