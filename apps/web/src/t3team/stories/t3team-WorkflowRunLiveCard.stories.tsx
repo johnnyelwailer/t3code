@@ -17,7 +17,7 @@ function WorkflowRunLiveCardStory(props: Parameters<typeof T3TeamWorkflowShapeLi
 }
 
 const meta = {
-  title: "T3Team/Chat/WorkflowRunLiveCard",
+  title: "T3Team/Chat/Workflow Run Live Card",
   component: WorkflowRunLiveCardStory,
   parameters: {
     layout: "centered",

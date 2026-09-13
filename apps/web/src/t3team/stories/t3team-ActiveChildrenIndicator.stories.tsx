@@ -370,7 +370,7 @@ function ActiveAgentsIndicatorStory({
 }
 
 const meta = {
-  title: "T3Team/Conversation/Active Agents Indicator (GHE #201)",
+  title: "T3Team/Chat/Active Agents Indicator (GHE #201)",
   component: ActiveAgentsIndicatorStory,
   args: {
     activeChildren: 3,

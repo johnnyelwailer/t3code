@@ -3,7 +3,7 @@ import { App } from "~/t3team/t3team-App";
 import { withT3TeamRouter } from "~/t3team/storybook/t3team-storybook-router-decorator";
 
 const meta = {
-  title: "Archived/App",
+  title: "T3Team/App",
   component: App,
   decorators: [withT3TeamRouter],
   parameters: {

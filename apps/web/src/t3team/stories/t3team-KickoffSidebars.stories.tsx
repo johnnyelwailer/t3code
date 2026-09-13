@@ -83,7 +83,7 @@ function KickoffRecipePreview() {
 }
 
 const meta = {
-  title: "T3Team/Kickoff Sidebars",
+  title: "T3Team/First Run/Kickoff Sidebars",
   component: KickoffRecipePreview,
   parameters: {
     layout: "fullscreen",
