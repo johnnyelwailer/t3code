@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { LoaderCircle, SquareTerminal, X } from "lucide-react";
 
 import {
   backgroundJobsSummaryLabel,
@@ -195,9 +196,12 @@ export function BackgroundJobsRunningIndicator({
 
 /**
  * The expanded per-job rows: what is running, under which pid, and how much
- * of its hard deadline is left. Command and pid are best-effort — rows
- * persisted before the pack named its commands carry only the job id, and a
- * "pid ?" marker carries no pid. Each degrades to the job id / no line.
+ * of its hard deadline is left. The row's primary text is the tool call's
+ * own display label when the runtime named it ("Building the project"), so
+ * the row reads like the tool card that started the job; the raw command
+ * stays reachable in the hover title. Labels and commands are best-effort —
+ * rows persisted before the pack named its commands carry only the job id,
+ * and a "pid ?" marker carries no pid. Each degrades to the job id / no line.
  *
  * With `canControl`, each running row also carries Cancel (stops the process
  * in the runtime's registry) and Output (opens the live tail panel).
@@ -233,12 +237,12 @@ export function BackgroundJobList({
             <div className="flex items-baseline justify-between gap-2">
               <span
                 className={cn(
-                  "min-w-0 truncate font-mono text-xs",
+                  "min-w-0 truncate text-xs",
                   isCancelled ? "text-muted-foreground/50 line-through" : "text-foreground/80",
                 )}
                 title={job.command ?? job.jobId}
               >
-                {job.command ?? job.jobId}
+                {job.label ?? job.command ?? job.jobId}
               </span>
               <span className="flex shrink-0 items-baseline gap-2">
                 {isCancelled ? (
@@ -249,22 +253,30 @@ export function BackgroundJobList({
                   </span>
                 )}
                 {canControl && onCancel && onShowOutput ? (
-                  <span className="flex items-center gap-1">
+                  <span className="flex shrink-0 items-center gap-0.5">
                     <button
                       type="button"
                       onClick={() => onShowOutput(job)}
-                      className="rounded px-1 text-[.65rem] text-muted-foreground outline-none hover:bg-foreground/5 hover:text-foreground focus-visible:bg-foreground/5"
+                      title="Show output"
+                      aria-label="Show job output"
+                      className="rounded p-0.5 text-muted-foreground outline-none hover:bg-foreground/5 hover:text-foreground focus-visible:bg-foreground/5"
                     >
-                      output
+                      <SquareTerminal className="size-3.5" aria-hidden />
                     </button>
                     {!isCancelled ? (
                       <button
                         type="button"
                         disabled={pending}
                         onClick={() => onCancel(job)}
-                        className="rounded px-1 text-[.65rem] text-destructive/80 outline-none hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 disabled:opacity-50"
+                        title={pending ? "Stopping job" : "Cancel job"}
+                        aria-label="Cancel job"
+                        className="rounded p-0.5 text-destructive/70 outline-none hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 disabled:opacity-50"
                       >
-                        {pending ? "stopping…" : "cancel"}
+                        {pending ? (
+                          <LoaderCircle className="size-3.5 motion-safe:animate-spin" aria-hidden />
+                        ) : (
+                          <X className="size-3.5" aria-hidden />
+                        )}
                       </button>
                     ) : null}
                   </span>

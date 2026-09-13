@@ -9,7 +9,10 @@ import {
   type TurnId,
 } from "@t3tools/contracts";
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
-import { createThreadJobsController, type ThreadJobsController } from "~/t3team/backend/t3team-thread-jobsBackend";
+import {
+  createThreadJobsController,
+  type ThreadJobsController,
+} from "~/t3team/backend/t3team-thread-jobsBackend";
 import { resolveHttpBaseUrl } from "~/t3team/backend/t3team-t3BackendHttp";
 import { resolveWsBaseUrl } from "~/t3team/t3team-route-surface-wsUrl";
 import {
@@ -781,6 +784,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         // BackgroundJobFoldEntry.command. Without it, every existing thread
         // stays blank no matter what the runtime sends from now on.
         command: entry.entry.command,
+        // The tool call's human label ("Building the project") — the same
+        // text the tool card above renders, so the job row reads like it.
+        label: entry.entry.label,
       }));
     const jobs = foldBackgroundJobs(foldEntries, Date.now(), serverStartedAtMs ?? undefined);
     const starters = new Map<string, BackgroundJobState>();

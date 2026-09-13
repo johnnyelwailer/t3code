@@ -42,6 +42,12 @@ export interface BackgroundJobStart {
   readonly deadlineMs: number;
   /** The process id reported in the start marker (absent when it said "pid ?"). */
   readonly pid?: number;
+  /**
+   * The tool call's own display label — the short human label the agent
+   * passed as a tool argument ("Building the project"). Shown INSTEAD of
+   * the raw command so the row reads like the tool card it came from.
+   */
+  readonly label?: string;
 }
 
 export type BackgroundJobFinishReason =
@@ -60,7 +66,6 @@ export interface BackgroundJobState extends BackgroundJobStart {
   /** Entry id of the work-log row that last mentioned this job. */
   readonly lastSeenEntryId?: string;
 }
-
 
 export interface BackgroundJobFoldEntry {
   /** Id of the work-log entry (timeline row anchor). */
@@ -87,6 +92,12 @@ export interface BackgroundJobFoldEntry {
    * from opening a phantom one.
    */
   readonly command?: string | undefined;
+  /**
+   * The row's display label (the tool call's human label, e.g.
+   * "Building the project"). Adopted for a job the row OPENS; later rows
+   * that merely mention the job never overwrite it.
+   */
+  readonly label?: string | undefined;
 }
 
 /**
@@ -211,18 +222,25 @@ function applyJobMarkers(
   observedAtMs: number,
   markerFromDetail: boolean,
   commandPreview?: string,
+  label?: string,
 ): void {
   const start = detectBackgroundJobStart(text, observedAtMs);
   if (start !== null) {
     const existing = byId.get(start.jobId);
     const settled = existing?.state === "finished";
+    // A repeated start marker must not clobber the label the first row gave
+    // the job (same as startedEntryId: first opener wins).
+    const jobLabel = existing !== undefined ? (existing.label ?? label) : label;
     byId.set(start.jobId, {
       ...start,
       state: settled ? "finished" : "running",
       // The row's own command is only the shell command when the result text
       // came from `detail` (modern rows). In the transposed era the marker
       // text IS `command`, so it must not be adopted as the job's command.
-      ...(markerFromDetail !== false && commandPreview !== undefined ? { command: commandPreview } : {}),
+      ...(markerFromDetail !== false && commandPreview !== undefined
+        ? { command: commandPreview }
+        : {}),
+      ...(jobLabel !== undefined ? { label: jobLabel } : {}),
       startedEntryId: existing?.startedEntryId ?? entryId,
       lastSeenEntryId: entryId,
       ...(settled && existing !== undefined ? { finishedReason: existing.finishedReason } : {}),
@@ -304,6 +322,7 @@ export function foldBackgroundJobs(
       toFiniteMs(entry.createdAt),
       fromDetail,
       entry.command,
+      entry.label?.trim() !== "" ? entry.label : undefined,
     );
   }
   settleJobsLostToRestart(byId, serverStartedAtMs);
