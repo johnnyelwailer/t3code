@@ -11,6 +11,8 @@ import type {
   ApprovalRequestId,
   ProviderApprovalDecision,
   ProviderDriverKind,
+  ProviderJobControlRequest,
+  ProviderJobControlResult,
   ProviderUserInputAnswers,
   ProviderRuntimeEvent,
   ProviderSendTurnInput,
@@ -37,6 +39,13 @@ export interface ProviderAdapterCapabilities {
   readonly promptlessTurnContinuation?: boolean;
   /** False when native conversation history cannot be rewound. */
   readonly supportsConversationRollback?: boolean;
+  /**
+   * The runtime exposes its background bash jobs for out-of-band control
+   * (list / cancel / read retained output) via `jobControl`. Absent means
+   * the adapter keeps no controllable jobs — the client hides the
+   * affordances, it does not retry.
+   */
+  readonly jobControl?: boolean;
 }
 
 export interface ProviderThreadTurnSnapshot {
@@ -97,6 +106,18 @@ export interface ProviderAdapterShape<TError> {
     requestId: ApprovalRequestId,
     answers: ProviderUserInputAnswers,
   ) => Effect.Effect<void, TError>;
+
+  /**
+   * Control the thread's background bash jobs out of band (list / cancel /
+   * read a bounded page of retained output). OPTIONAL: only adapters whose
+   * runtime owns a live job registry implement it; callers must check
+   * `capabilities.jobControl` first. `unknown-job` comes back as a RESULT,
+   * never as an error.
+   */
+  readonly jobControl?: (
+    threadId: ThreadId,
+    request: ProviderJobControlRequest,
+  ) => Effect.Effect<ProviderJobControlResult, TError>;
 
   /**
    * Stop one provider session.

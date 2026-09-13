@@ -14,6 +14,8 @@
 import type {
   ProviderInterruptTurnInput,
   ProviderInstanceId,
+  ProviderJobControlInput,
+  ProviderJobControlResult,
   ProviderRespondToRequestInput,
   ProviderRespondToUserInputInput,
   ProviderRuntimeEvent,
@@ -80,6 +82,21 @@ export interface ProviderServiceShape {
   readonly respondToUserInput: (
     input: ProviderRespondToUserInputInput,
   ) => Effect.Effect<void, ProviderServiceError>;
+
+  /**
+   * Control the thread's background bash jobs out of band (list / cancel /
+   * read a bounded page of retained output). Resolves the thread's live
+   * session and forwards to the adapter's `jobControl` when its runtime
+   * supports it.
+   *
+   * `ProviderJobControlUnsupportedError` means the runtime keeps no
+   * controllable jobs — the caller maps it to a plain "unsupported" result,
+   * it is not a failure. `unknown-job` comes back INSIDE the result, never
+   * as an error.
+   */
+  readonly jobControl: (
+    input: ProviderJobControlInput,
+  ) => Effect.Effect<ProviderJobControlResult, ProviderServiceError>;
 
   /**
    * Stop a provider session.
