@@ -241,6 +241,7 @@
     "apps/web/src/components/ui/button.tsx",
     "apps/web/src/components/ui/input.tsx",
     "apps/web/src/components/ui/textarea.tsx",
+    "apps/web/src/connection/platform.ts",
     "apps/web/src/composerDraftStore.ts",
     "apps/web/src/index.css",
     "apps/web/src/lib/attachmentUploadQueue.test.ts",
