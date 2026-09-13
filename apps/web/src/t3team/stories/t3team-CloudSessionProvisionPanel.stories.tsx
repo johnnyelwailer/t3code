@@ -1,22 +1,21 @@
 import type { Meta, StoryObj } from "@storybook/react";
+import type { CloudSession } from "@t3tools/contracts";
 import { useCallback, useEffect, useState } from "react";
 
 import {
   CloudSessionProvisionPanel,
   DEFAULT_CLOUD_SESSION_DURATION_SECONDS,
 } from "~/components/cloud/CloudSessionProvisionPanel";
-import type {
-  CloudSession,
-  CloudSessionProvisionPhase,
-} from "~/components/cloud/cloudSessionProvisionPresentation";
+import type { CloudSessionProvisionPhase } from "~/components/cloud/cloudSessionProvisionPresentation";
 
 const FLEET_MACHINE_LABEL = "ubuntu-slim · 12 GB · 4 cores";
+const DETAILS_URL = "https://github.com/hive/nx-nexi/actions/runs/248523362";
 
 function session(overrides: Partial<CloudSession> & { sessionId: string }): CloudSession {
   return {
     providerKind: "github_actions",
     phase: "ready",
-    environmentId: null,
+    detailsUrl: null,
     elapsedSeconds: 0,
     remainingSeconds: null,
     machineLabel: FLEET_MACHINE_LABEL,
@@ -59,7 +58,7 @@ export const AllPhases: Story = {
       session({
         sessionId: "s-ready",
         phase: "ready",
-        environmentId: "env_2f8c1a",
+        detailsUrl: DETAILS_URL,
         elapsedSeconds: 155,
         remainingSeconds: 4 * 3600 - 155,
       }),
@@ -81,7 +80,7 @@ export const Ready: Story = {
       session({
         sessionId: "s-ready",
         phase: "ready",
-        environmentId: "env_2f8c1a",
+        detailsUrl: DETAILS_URL,
         elapsedSeconds: 155,
         remainingSeconds: 4 * 3600 - 155,
       }),
@@ -154,7 +153,7 @@ export const LiveLifecycle: Story = {
                   sessionId: "s-live",
                   phase,
                   elapsedSeconds: elapsed,
-                  environmentId: phase === "ready" ? "env_2f8c1a" : null,
+                  detailsUrl: phase === "ready" ? DETAILS_URL : null,
                   remainingSeconds: phase === "ready" ? durationSeconds - elapsed : null,
                 }),
               ]

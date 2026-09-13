@@ -1,3 +1,5 @@
+import type { CloudSession, CloudSessionPhase } from "@t3tools/contracts";
+
 /**
  * Presentation logic for provisioning a *cloud session*: a full Nexi workspace
  * started on fleet compute, which joins the user's T3 Connect environment list
@@ -13,19 +15,15 @@
  */
 
 /**
- * Where a cloud session's compute comes from. Vendor-specific by nature — the
- * provisioning mechanics genuinely differ per provider — so these read as
- * provider ids, in the same shape as `RelayManagedEndpointProviderKind`.
- */
-export const CLOUD_SESSION_PROVIDER_KINDS = ["github_actions", "azure_container_apps"] as const;
-export type CloudSessionProviderKind = (typeof CLOUD_SESSION_PROVIDER_KINDS)[number];
-
-/**
- * Lifecycle of one provisioning attempt.
+ * Lifecycle of one provisioning attempt, mirroring the contract's
+ * `CloudSessionPhase`. `ready` is the only phase in which the relay has
+ * published an environment link — before that there is nothing for the client
+ * to connect to.
  *
- * `ready` is the only phase that carries an `environmentId`, because it is the
- * only phase in which the relay has published an environment link — before
- * that there is nothing for the client to connect to.
+ * Kept as a local const (rather than the contract's Schema) because it is a
+ * data value the progress maths iterates over; `satisfies` keeps it honest
+ * against the contract, so a phase added server-side cannot be silently
+ * dropped from the wording here.
  */
 export const CLOUD_SESSION_PROVISION_PHASES = [
   "requested",
@@ -35,8 +33,8 @@ export const CLOUD_SESSION_PROVISION_PHASES = [
   "ready",
   "failed",
   "stopped",
-] as const;
-export type CloudSessionProvisionPhase = (typeof CLOUD_SESSION_PROVISION_PHASES)[number];
+] as const satisfies readonly CloudSessionPhase[];
+export type CloudSessionProvisionPhase = CloudSessionPhase;
 
 /** Phases in which the session is still working toward `ready`. */
 export function isCloudSessionProvisionPending(phase: CloudSessionProvisionPhase): boolean {
@@ -77,26 +75,6 @@ export interface CloudSessionProvisionPresentation {
   readonly progress: number | null;
   /** Label for the row's primary action, or null when it has none. */
   readonly actionLabel: string | null;
-}
-
-/**
- * A session as the panel needs to render it. Deliberately not the provider's
- * response shape: the panel must not learn what a "workflow run" is.
- */
-export interface CloudSession {
-  readonly sessionId: string;
-  readonly providerKind: CloudSessionProviderKind;
-  readonly phase: CloudSessionProvisionPhase;
-  /** Set only once the relay has published the link (phase `ready`). */
-  readonly environmentId: string | null;
-  /** Seconds since this attempt was dispatched. */
-  readonly elapsedSeconds: number;
-  /** Remaining session lifetime in seconds; null when not yet running. */
-  readonly remainingSeconds: number | null;
-  /** Human-readable compute shape, e.g. "ubuntu-slim · 12 GB · 4 cores". */
-  readonly machineLabel: string;
-  /** Provider-supplied reason, shown verbatim when the phase is `failed`. */
-  readonly failureReason: string | null;
 }
 
 /** "2m 34s", "47s", "5h 12m" — the coarsest unit pair that stays honest. */

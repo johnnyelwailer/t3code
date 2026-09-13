@@ -1,8 +1,11 @@
 import type { CloudSession } from "@t3tools/contracts";
 import { useCallback, useState } from "react";
 
-import { cloudSessionEnvironment, useCloudSessions } from "~/state/cloudSessions";
-import { usePrimaryEnvironmentId } from "~/state/cloudSessions";
+import {
+  cloudSessionEnvironment,
+  useCloudSessions,
+  usePrimaryEnvironmentId,
+} from "~/state/cloudSessions";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { DEFAULT_CLOUD_SESSION_DURATION_SECONDS } from "~/components/cloud/CloudSessionProvisionPanel";
 import { toastManager } from "~/components/ui/toast";
@@ -19,20 +22,31 @@ export function useCloudSessionController() {
   const { sessions, loading, configured } = useCloudSessions();
   const [durationSeconds, setDurationSeconds] = useState(DEFAULT_CLOUD_SESSION_DURATION_SECONDS);
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
+  // `useAtomCommand` returns a bare command function with no pending state, so
+  // the create-in-flight flag lives here; the panel and the "Run on" menu both
+  // read it to keep the start button honest between dispatch and the atom's
+  // next list refresh.
+  const [createPending, setCreatePending] = useState(false);
 
   const createSession = useAtomCommand(cloudSessionEnvironment.create, { reportFailure: false });
   const cancelSession = useAtomCommand(cloudSessionEnvironment.cancel, { reportFailure: false });
 
   const onCreate = useCallback(
     (seconds: number) => {
-      if (environmentId === null) return;
-      void createSession({ environmentId, input: { durationSeconds: seconds } }).then((result) => {
-        if (result._tag === "Failure") {
-          toastManager.error("Could not start a cloud session.");
-        }
-      });
+      if (environmentId === null || createPending) return;
+      setCreatePending(true);
+      void createSession({ environmentId, input: { durationSeconds: seconds } })
+        .then((result) => {
+          if (result._tag === "Failure") {
+            toastManager.add({
+              type: "error",
+              title: "Could not start a cloud session.",
+            });
+          }
+        })
+        .finally(() => setCreatePending(false));
     },
-    [createSession, environmentId],
+    [createPending, createSession, environmentId],
   );
 
   const onSessionAction = useCallback(
@@ -43,7 +57,10 @@ export function useCloudSessionController() {
       // is already in the connect list — the row's job is to point there, not
       // to open a second connection path.
       if (session.phase === "ready") {
-        toastManager.info("This session is ready — connect to it from your environment list.");
+        toastManager.add({
+          type: "info",
+          title: "This session is ready — connect to it from your environment list.",
+        });
         return;
       }
 
@@ -57,7 +74,10 @@ export function useCloudSessionController() {
       void cancelSession({ environmentId, input: { sessionId: session.sessionId } })
         .then((result) => {
           if (result._tag === "Failure") {
-            toastManager.error("Could not cancel that cloud session.");
+            toastManager.add({
+              type: "error",
+              title: "Could not cancel that cloud session.",
+            });
           }
         })
         .finally(() => setPendingSessionId(null));
@@ -71,7 +91,7 @@ export function useCloudSessionController() {
     configured,
     durationSeconds,
     onDurationChange: setDurationSeconds,
-    createPending: createSession.pending,
+    createPending,
     pendingSessionId,
     onCreate,
     onSessionAction,

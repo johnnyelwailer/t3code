@@ -1,11 +1,11 @@
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { CloudSession, EnvironmentId } from "@t3tools/contracts";
 import { CloudIcon, ScaleIcon } from "lucide-react";
 import { memo, useMemo } from "react";
 
 import type { EnvironmentOption } from "./BranchToolbar.logic";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { composerFloatingLayerProps } from "./chat/composerEventScope";
-import { type CloudSession, presentCloudSession } from "./cloud/cloudSessionProvisionPresentation";
+import { presentCloudSession } from "./cloud/cloudSessionProvisionPresentation";
 import {
   Select,
   SelectGroup,

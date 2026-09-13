@@ -1,9 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
 
 import { BranchToolbarEnvironmentSelector } from "~/components/BranchToolbarEnvironmentSelector";
 import type { EnvironmentOption } from "~/components/BranchToolbar.logic";
-import type { CloudSession } from "~/components/cloud/cloudSessionProvisionPresentation";
 
 /**
  * The "Run on" picker in the composer context strip — the quickest place to
@@ -33,7 +32,7 @@ function cloudSession(overrides: Partial<CloudSession> & { sessionId: string }):
   return {
     providerKind: "github_actions",
     phase: "preparing",
-    environmentId: null,
+    detailsUrl: null,
     elapsedSeconds: 74,
     remainingSeconds: null,
     machineLabel: "ubuntu-slim · 12 GB · 4 cores",

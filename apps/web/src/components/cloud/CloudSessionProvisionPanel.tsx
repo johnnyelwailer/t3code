@@ -1,3 +1,4 @@
+import type { CloudSession } from "@t3tools/contracts";
 import { type ReactNode, useCallback, useMemo } from "react";
 
 import { cn } from "~/lib/utils";
@@ -7,7 +8,6 @@ import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import {
-  type CloudSession,
   cloudSessionToneDotClassName,
   cloudSessionTonePingClassName,
   formatDuration,

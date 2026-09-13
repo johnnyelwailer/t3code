@@ -11,6 +11,8 @@ import {
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
+import { useCloudSessionController } from "../cloud/useCloudSessionController";
+import { isCloudSessionProvisionPending } from "./cloud/cloudSessionProvisionPresentation";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useProject, useThread, useThreadShellsForProjectRefs } from "../state/entities";
 import {
@@ -535,6 +537,24 @@ export const BranchToolbar = memo(function BranchToolbar({
   const [stripElement, setStripElement] = useState<HTMLDivElement | null>(null);
   const labelsOverflow = useLabelsOverflow(stripElement);
 
+  // Cloud sessions shown in the "Run on" menu. Both derived values are
+  // memoised: the selector is memo'd and this strip re-renders on every
+  // keystroke, so a fresh array or callback here would defeat its memo.
+  // When there is no environment to provision from, neither prop is passed
+  // and the menu renders exactly as it did before.
+  const cloudSessions = useCloudSessionController();
+  const pendingCloudSessions = useMemo(
+    () =>
+      cloudSessions.available
+        ? cloudSessions.sessions.filter((session) => isCloudSessionProvisionPending(session.phase))
+        : [],
+    [cloudSessions.available, cloudSessions.sessions],
+  );
+  const onCreateCloudSession = useCallback(
+    () => cloudSessions.onCreate(cloudSessions.durationSeconds),
+    [cloudSessions.durationSeconds, cloudSessions.onCreate],
+  );
+
   if (!hasActiveThread || !activeProject) return null;
 
   return (
@@ -586,6 +606,7 @@ export const BranchToolbar = memo(function BranchToolbar({
                 environmentId={environmentId}
                 availableEnvironments={availableEnvironments}
                 {...(showEnvironmentPicker && onEnvironmentChange ? { onEnvironmentChange } : {})}
+                {...(cloudSessions.available ? { pendingCloudSessions, onCreateCloudSession } : {})}
               />
               {showGitControls ? (
                 <Separator
