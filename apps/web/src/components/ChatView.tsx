@@ -1473,6 +1473,8 @@ export default function ChatView(props: ChatViewProps) {
     routeKind === "server" ? props.beforeDispatchTurnStart : undefined;
   const dispatchTurnStartOverride =
     routeKind === "server" ? props.dispatchTurnStartOverride : undefined;
+  const enqueueOfflineTurnStart =
+    routeKind === "server" ? props.enqueueOfflineTurnStart : undefined;
   const composerContextAttachmentSlot =
     routeKind === "server" ? props.composerContextAttachmentSlot : undefined;
   const composerContextAttachments =
@@ -6724,6 +6726,35 @@ export default function ChatView(props: ChatViewProps) {
       return;
     }
     if (activeEnvironmentUnavailable) {
+      // Offline outbox (t3team host): instead of erroring, hand the would-be
+      // turn start to the host's queue; it drains FIFO when the environment
+      // reconnects. Text-only for now — attachments need a live connection to
+      // upload, so they keep the stock toast.
+      if (
+        enqueueOfflineTurnStart &&
+        !directAnnotation &&
+        !composerHasNonPromptContent &&
+        promptRef.current.trim().length > 0
+      ) {
+        const offlineSendCtx = composerRef.current?.getSendContext();
+        const queued = await enqueueOfflineTurnStart({
+          threadId: activeThread.id,
+          messageId: newMessageId(),
+          messageText: promptRef.current,
+          modelSelection: offlineSendCtx?.selectedModelSelection ?? null,
+          titleSeed: truncate(promptRef.current.trim()),
+          runtimeMode,
+          interactionMode,
+          createdAt: new Date().toISOString(),
+          hasAttachments: false,
+        });
+        if (queued) {
+          promptRef.current = "";
+          setComposerDraftPrompt(composerDraftTarget, "");
+          composerRef.current?.resetCursorState();
+          return;
+        }
+      }
       const toastSlot = environmentUnavailableSendToastSlotRef.current;
       environmentUnavailableSendToastSlotRef.current =
         (toastSlot + 1) % ENVIRONMENT_UNAVAILABLE_SEND_TOAST_TRAIL_SIZE;
