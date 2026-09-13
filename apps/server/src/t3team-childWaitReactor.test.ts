@@ -206,6 +206,17 @@ describe("makeChildWaitReactor abnormal-stop notification", () => {
     }),
   );
 
+  it.effect("writes NO marker on a top-level thread (no handoff parent) — the report has no recipient", () =>
+    Effect.gen(function* () {
+      // Owner-reported regression: a parentless thread that failed still got
+      // the "Abnormal stop reported to parent" marker on its own timeline.
+      const h = makeHarness(new Map([[CHILD, childDetail({ activities: [] })]]));
+      yield* h.reactor.handleEvent(sessionSet("error", "provider timeout"));
+      yield* settle();
+      expect(h.dispatches, "no actor message, no marker").toHaveLength(0);
+    }),
+  );
+
   it.effect("does NOT add a standalone message when a matching wait resolves", () =>
     Effect.gen(function* () {
       const h = makeHarness();

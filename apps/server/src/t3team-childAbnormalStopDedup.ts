@@ -13,11 +13,14 @@
  * @module t3team-childAbnormalStopDedup
  */
 import type { OrchestrationEvent } from "@t3tools/contracts";
+import { ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import type { ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import {
+  findHandoffParentThreadId,
   makeChildAbnormalStopNotifier,
   type ChildTerminalOutcome,
 } from "./t3team-childAbnormalStopNotify.ts";
@@ -67,14 +70,27 @@ export function makeAbnormalStopGuards(deps: {
     noteResume: (childThreadId, seq) => ledger.noteResume(childThreadId, seq),
     rehydrate: (events) => ledger.rehydrate(events),
     notifyAbnormalStop: ({ childThreadId, outcome, lastError, eventSequence }) =>
-      ledger.notify({
-        key: childThreadId,
-        markerThreadId: childThreadId,
-        resumeThreadId: childThreadId,
-        terminalSeq: eventSequence,
-        markerPayload: { outcome },
-        markerSummary: markerSummaryFor(outcome),
-        doNotify: notify({ childThreadId, outcome, lastError }),
+      Effect.gen(function* () {
+        const child = Option.getOrUndefined(
+          yield* deps.query
+            .getThreadDetailById(ThreadId.make(childThreadId))
+            .pipe(Effect.orElseSucceed(() => Option.none())),
+        );
+        // No parent, no report: a top-level thread's terminal state is not a
+        // child event. Without this gate the ledger would still write the
+        // "reported to parent" marker on a thread that has no parent
+        // (owner-reported 2026-09-13); the notifier itself already no-ops
+        // there, but the marker is what made the lie visible.
+        if (child === undefined || findHandoffParentThreadId(child.activities) === null) return;
+        yield* ledger.notify({
+          key: childThreadId,
+          markerThreadId: childThreadId,
+          resumeThreadId: childThreadId,
+          terminalSeq: eventSequence,
+          markerPayload: { outcome },
+          markerSummary: markerSummaryFor(outcome),
+          doNotify: notify({ childThreadId, outcome, lastError }),
+        });
       }),
   };
 }
