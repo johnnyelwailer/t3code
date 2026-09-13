@@ -61,8 +61,10 @@ export interface T3TeamAskUserOption {
 }
 
 export interface T3TeamAskUserInput {
-  /** Full context plus the question itself; markdown is rendered in the panel. */
+  /** Self-contained question; rendered on its own in the docked card. */
   readonly question: string;
+  /** Markdown content from earlier in the thread the question refers to; rendered above the question. */
+  readonly context?: string | undefined;
   /** Short chip label (a few words) shown beside the question. */
   readonly header?: string | undefined;
   /** Answer choices as strings or {label, description} objects. */
@@ -105,6 +107,8 @@ export const t3TeamAskUser = Effect.fn("T3TeamMcpToolkit.askUser")(function* (
     return yield* toToolError("t3team_ask_user requires a non-empty 'question'.");
   }
 
+  const contextText = (input.context ?? "").trim();
+
   const engine = yield* OrchestrationEngineService;
   const activityRepository = yield* ProjectionThreadActivityRepository;
 
@@ -138,6 +142,7 @@ export const t3TeamAskUser = Effect.fn("T3TeamMcpToolkit.askUser")(function* (
     // The composer reads allowCustomAnswer on the question; the old payload
     // carried allowFreeText at the top level where nothing consumed it.
     ...(input.allowFreeText === false ? { allowCustomAnswer: false } : {}),
+    ...(contextText.length > 0 ? { context: contextText } : {}),
   };
 
   // Soft feedback: options whose description just restates the label are
@@ -146,6 +151,15 @@ export const t3TeamAskUser = Effect.fn("T3TeamMcpToolkit.askUser")(function* (
   const warnings = normalizedOptions
     .filter((option) => option.description === option.label)
     .map((option) => `option '${option.label}': its description restates the label — describe the trade-off instead`);
+
+  // A short question that names no context almost certainly points at
+  // earlier thread content (proposals, options, a diff) that the dock card
+  // cannot show. Tell the agent to pass it in 'context'. Soft feedback.
+  if (questionText.length < 80 && contextText.length === 0) {
+    warnings.push(
+      "question references prior content but no context was provided — pass the referenced content in 'context'",
+    );
+  }
 
   const eventId = EventId.make(randomUUID());
   const createdAtIso = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));

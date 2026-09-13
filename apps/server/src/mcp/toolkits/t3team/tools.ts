@@ -529,14 +529,27 @@ export const T3TeamAskUserTool = Tool.make("t3team_ask_user", {
     "message, so do not proceed as if answered and do not ask the same question again — the " +
     "tool rejects a new ask while one is pending, naming the outstanding requestId. Use it " +
     "when you are blocked on a decision or piece of information only the user can provide. " +
-    "Field shape: 'header' is a short chip label (a few words); 'question' carries the full " +
-    "context plus the question itself and may use markdown; each option's 'description' " +
+    "Field shape: 'header' is a short chip label (a few words); 'question' must be " +
+    "self-contained — it is rendered on its own in the dock card; each option's 'description' " +
     "explains what that choice means and its trade-off, never a restatement of its label; " +
-    "mark the recommended choice with '(recommended)' in its label.",
+    "mark the recommended choice with '(recommended)' in its label. WHENEVER the question " +
+    "refers to options, proposals, or content written earlier in the thread, you MUST pass " +
+    "that earlier content in 'context' (markdown) — the dock card renders it above the " +
+    "question, truncated, so the question is intelligible without scrolling back through the " +
+    "thread. A question that points at earlier content but arrives without 'context' is " +
+    "unintelligible to the user; never make them hunt for what the question is about.",
   parameters: Schema.Struct({
     question: Schema.String.annotate({
       description:
-        "The full context plus the question itself; markdown is rendered in the composer panel.",
+        "The self-contained question; markdown is rendered in the composer panel. It must " +
+        "read on its own — anything it refers to from earlier in the thread belongs in " +
+        "'context'.",
+    }),
+    context: Schema.optional(Schema.String).annotate({
+      description:
+        "Markdown content from earlier in the thread that the question refers to (the " +
+        "options, proposal, or discussion the question is about). Rendered above the question " +
+        "in the dock card, truncated. Pass it whenever the question does not stand on its own.",
     }),
     header: Schema.optional(Schema.String).annotate({
       description: "Short chip label shown beside the question — a few words, not a sentence.",

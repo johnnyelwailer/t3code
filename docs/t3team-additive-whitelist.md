@@ -226,6 +226,11 @@ Until the new tag is pushed, the guard fails loudly on CI (missing tag), never s
 - `apps/web/src/t3team/stories/t3team-ActivityLabelPill.stories.tsx`
   - Extend the #40 stories: one story per state word, enrichment composition, flag-off, idle-cleared, and reduced-motion.
 
+## ask-user context — docked question references prior content
+
+- `packages/contracts/src/providerRuntime.ts`
+  - Optional `context` field on `UserInputQuestion` so a docked `t3team_ask_user` question can carry the content it refers to; shared with provider-native questions, but the field is optional so existing adapter payloads stay valid.
+
 ## Allowed Unprefixed New Files
 
 Whole trees the fork owns outright. The `t3team-` prefix exists so a file added by
