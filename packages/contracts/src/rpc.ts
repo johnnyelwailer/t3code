@@ -129,6 +129,13 @@ import {
   PullRequestUpdateInput,
 } from "./pullRequest.ts";
 import {
+  CloudSessionCancelInputSchema,
+  CloudSessionCreateInputSchema,
+  CloudSessionFailedError,
+  CloudSessionListResultSchema,
+  CloudSessionSchema,
+} from "./cloudSession.ts";
+import {
   RelayClientInstallFailedError,
   RelayClientInstallProgressEventSchema,
   RelayClientStatusSchema,
@@ -351,6 +358,9 @@ export const WS_METHODS = {
   // Cloud environment methods
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
   cloudInstallRelayClient: "cloud.installRelayClient",
+  cloudSessionList: "cloud.session.list",
+  cloudSessionCreate: "cloud.session.create",
+  cloudSessionCancel: "cloud.session.cancel",
 
   // Pull request methods
   pullRequestsList: "pullRequests.list",
@@ -622,6 +632,24 @@ const WsCloudInstallRelayClientRpc = Rpc.make(WS_METHODS.cloudInstallRelayClient
   success: RelayClientInstallProgressEventSchema,
   error: Schema.Union([RelayClientInstallFailedError, EnvironmentAuthorizationError]),
   stream: true,
+});
+
+const WsCloudSessionListRpc = Rpc.make(WS_METHODS.cloudSessionList, {
+  payload: Schema.Struct({}),
+  success: CloudSessionListResultSchema,
+  error: Schema.Union([CloudSessionFailedError, EnvironmentAuthorizationError]),
+});
+
+const WsCloudSessionCreateRpc = Rpc.make(WS_METHODS.cloudSessionCreate, {
+  payload: CloudSessionCreateInputSchema,
+  success: CloudSessionSchema,
+  error: Schema.Union([CloudSessionFailedError, EnvironmentAuthorizationError]),
+});
+
+const WsCloudSessionCancelRpc = Rpc.make(WS_METHODS.cloudSessionCancel, {
+  payload: CloudSessionCancelInputSchema,
+  success: Schema.Void,
+  error: Schema.Union([CloudSessionFailedError, EnvironmentAuthorizationError]),
 });
 
 const WsServerReportClientActivityRpc = Rpc.make(WS_METHODS.serverReportClientActivity, {
@@ -1294,6 +1322,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetBackgroundPolicyRpc,
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,
+  WsCloudSessionListRpc,
+  WsCloudSessionCreateRpc,
+  WsCloudSessionCancelRpc,
   WsPullRequestsListRpc,
   WsPullRequestsListStatsRpc,
   WsPullRequestsSummaryRpc,

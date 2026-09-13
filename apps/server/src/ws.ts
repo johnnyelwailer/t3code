@@ -160,6 +160,11 @@ import * as PairingGrantStore from "./auth/PairingGrantStore.ts";
 import * as SessionStore from "./auth/SessionStore.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
 import * as RelayClient from "@t3tools/shared/relayClient";
+
+import {
+  CloudSessionService,
+  layer as CloudSessionServiceLayer,
+} from "./cloud/CloudSessionService.ts";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
@@ -644,6 +649,7 @@ const makeWsRpcLayer = (
       const resourceTelemetry = yield* ResourceTelemetry.ResourceTelemetry;
       const usage = yield* UsageService.UsageService;
       const relayClient = yield* RelayClient.RelayClient;
+      const cloudSessions = yield* CloudSessionService;
       const authorizationError = (requiredScope: AuthEnvironmentScope) =>
         new EnvironmentAuthorizationError({
           message: `The authenticated token is missing required scope: ${requiredScope}.`,
@@ -1847,9 +1853,7 @@ const makeWsRpcLayer = (
             // engagement signal — an open thread must not starve its queue.
             threadEngagement === undefined
               ? Effect.succeed({ ok: true as const })
-              : threadEngagement.noteTyping(input.threadId).pipe(
-                  Effect.as({ ok: true as const }),
-                ),
+              : threadEngagement.noteTyping(input.threadId).pipe(Effect.as({ ok: true as const })),
             { "rpc.aggregate": "orchestration" },
           ),
         [WS_METHODS.serverProbe]: (_input) =>
@@ -2181,6 +2185,18 @@ const makeWsRpcLayer = (
           }),
         [WS_METHODS.cloudGetRelayClientStatus]: (_input) =>
           observeRpcEffect(WS_METHODS.cloudGetRelayClientStatus, relayClient.resolve, {
+            "rpc.aggregate": "cloud",
+          }),
+        [WS_METHODS.cloudSessionList]: (_input) =>
+          observeRpcEffect(WS_METHODS.cloudSessionList, cloudSessions.list, {
+            "rpc.aggregate": "cloud",
+          }),
+        [WS_METHODS.cloudSessionCreate]: (input) =>
+          observeRpcEffect(WS_METHODS.cloudSessionCreate, cloudSessions.create(input), {
+            "rpc.aggregate": "cloud",
+          }),
+        [WS_METHODS.cloudSessionCancel]: (input) =>
+          observeRpcEffect(WS_METHODS.cloudSessionCancel, cloudSessions.cancel(input), {
             "rpc.aggregate": "cloud",
           }),
         [WS_METHODS.cloudInstallRelayClient]: (_input) =>
@@ -3108,6 +3124,10 @@ export const websocketRpcRouteLayer = Layer.unwrap(
               // One server-lifetime service means clients share the same PR caches, and a WS
               // mutation invalidates the HTTP diff cache that every client reads from.
               Layer.provide(Layer.succeed(PullRequestService.PullRequestService, pullRequests)),
+              // Cloud sessions drive `gh` directly, exactly as pull-request
+              // reading does, so they inherit the user's existing login and
+              // carry no credential of their own.
+              Layer.provide(CloudSessionServiceLayer.pipe(Layer.provide(GitHubCli.layer))),
               Layer.provide(
                 SourceControlDiscovery.layer.pipe(
                   Layer.provide(
