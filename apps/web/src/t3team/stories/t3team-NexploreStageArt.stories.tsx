@@ -1,5 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react";
+import type { CSSProperties, ReactNode } from "react";
+import { useEffect } from "react";
 
+import { useTheme } from "~/hooks/useTheme";
 import { T3TeamNexploreStripArt } from "~/t3team/t3team-NexploreStageArt";
 
 /**
@@ -31,17 +34,21 @@ function HeaderRow({
   width,
   brandInset,
   label,
+  style,
+  trafficLights = false,
 }: {
   width: number;
   brandInset: number;
   label: string;
+  style?: CSSProperties;
+  trafficLights?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-1">
       <div className="font-mono text-[10px] text-neutral-500">{label}</div>
       <div
         className="relative flex h-[52px] shrink-0 flex-row items-center overflow-visible rounded-md"
-        style={{ width }}
+        style={style ? { width, ...style } : { width }}
       >
         <Backdrop />
         {/* Pack background layer — `t3team-ProjectSidebarHeader` renders this above the stage
@@ -65,6 +72,13 @@ function HeaderRow({
         <div className="relative z-10 ml-auto pr-2">
           <div className="size-8 rounded-md bg-white/25" />
         </div>
+        {trafficLights ? (
+          <div aria-hidden className="pointer-events-none absolute left-[13px] top-[13px] z-20 flex gap-2">
+            <span className="size-3 rounded-full" style={{ background: "#ff5f57" }} />
+            <span className="size-3 rounded-full" style={{ background: "#febc2e" }} />
+            <span className="size-3 rounded-full" style={{ background: "#28c840" }} />
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -117,5 +131,51 @@ export const DarkGround: StoryObj = {
         <HeaderRow key={width} width={width} brandInset={18} label={`${width}px · dark`} />
       ))}
     </div>
+  ),
+};
+
+/**
+ * The wash is light-appearance only, and Storybook's theme store may resolve to either — force
+ * light for this story so every row is judged on the same appearance.
+ */
+function ForceLight({ children }: { children: ReactNode }) {
+  const { setAppearanceMode } = useTheme();
+  useEffect(() => {
+    setAppearanceMode("light");
+  }, [setAppearanceMode]);
+  return <>{children}</>;
+}
+
+// Each row sets the wash tokens on the header itself; the component reads them at measurement
+// time, so one story shows the strength range without any component change.
+const FADE_CASES: ReadonlyArray<{ label: string; vars?: Record<string, string> }> = [
+  { label: "wash off — today's look" , vars: { "--stage-nx-fade-opacity": "0" } },
+  { label: "default — 55% · 140px" },
+  { label: "soft — 40% · 110px", vars: { "--stage-nx-fade-opacity": "0.4", "--stage-nx-fade-width": "110px" } },
+  { label: "strong — 70% · 180px", vars: { "--stage-nx-fade-opacity": "0.7", "--stage-nx-fade-width": "180px" } },
+  { label: "whisper — 30% · 90px", vars: { "--stage-nx-fade-opacity": "0.3", "--stage-nx-fade-width": "90px" } },
+];
+
+/**
+ * macOS light-theme traffic-light contrast: the left-edge wash (light appearance only). Each row
+ * is the macOS desktop header with the native buttons drawn in, at the strength set through the
+ * `--stage-nx-fade-*` tokens — flip between them here instead of rebuilding the app.
+ */
+export const TrafficLightFade: StoryObj = {
+  render: () => (
+    <ForceLight>
+      <div className="flex flex-col gap-16 rounded-lg bg-neutral-900 p-6">
+        {FADE_CASES.map(({ label, vars }) => (
+          <HeaderRow
+            key={label}
+            width={340}
+            brandInset={134}
+            label={label}
+            {...(vars ? { style: vars as CSSProperties } : {})}
+            trafficLights
+          />
+        ))}
+      </div>
+    </ForceLight>
   ),
 };

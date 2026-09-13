@@ -195,3 +195,36 @@ describe("T3TeamNexploreStripArt placement", () => {
     }
   });
 });
+
+describe("T3TeamNexploreStripArt traffic-light wash", () => {
+  it("renders the left-edge wash when the orb parks in the titlebar reserve (light appearance)", async () => {
+    // macOS desktop: brand inset 134px → the leading run (134 ≥ 72) IS the reserve, so the wash
+    // activates. The jsdom theme store resolves to light by default.
+    const layout = { width: 420, brand: [134, 236], toggle: [372, 404] } satisfies HeaderLayout;
+    const { cleanup, svg } = await renderHeader(layout);
+    try {
+      const gradient = svg.querySelector("linearGradient");
+      expect(gradient).not.toBeNull();
+      // 140px default width at 1.2 units/px.
+      expect(Number(gradient!.getAttribute("x2"))).toBeCloseTo(140 * 1.2, 3);
+      expect(gradient!.querySelector("stop")!.getAttribute("stop-opacity")).toBe("0.55");
+      // jsdom's selector engine chokes on `#` inside attribute selectors, so read the attribute.
+      const rects = svg.querySelectorAll("rect");
+      expect(rects.length).toBe(2);
+      expect(rects[1]!.getAttribute("fill")).toMatch(/^url\(#/);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("stays off-mac: no wash when the leading run is not a titlebar reserve", async () => {
+    // Off-mac: brand at 18px → leading run far below the 72px threshold; the wash must not render.
+    const layout = { width: 420, brand: [18, 120], toggle: [372, 404] } satisfies HeaderLayout;
+    const { cleanup, svg } = await renderHeader(layout);
+    try {
+      expect(svg.querySelector("linearGradient")).toBeNull();
+    } finally {
+      cleanup();
+    }
+  });
+});

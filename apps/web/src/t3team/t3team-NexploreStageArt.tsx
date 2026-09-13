@@ -1,24 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { cssNumberPx, FADE_OPACITY, FADE_WIDTH_PX, NexploreTitlebarFade } from "./t3team-NexploreTitlebarFade";
+
 /**
- * Nexplore stage art — the brand-refresh "2FORM" language, not a gradient wash.
+ * Nexplore stage art — the brand-refresh "2FORM" language: a FLAT ground in one duo colour and
+ * FLAT circles in the other, positioned so the frame hard-crops them. No gradients, no blur — the
+ * crisp arc against flat colour IS the identity. Colours arrive as `--stage-nx-*` tokens (see
+ * `index.css`), fallbacks the brand-manual hexes.
  *
- * The brand plates (NEXPLORE_2FORM_Orange_Rosa_*.svg / _Blau_Lila_*.svg) are built from exactly
- * two ingredients: a FLAT ground in one duo colour, and FLAT circles in the other, positioned so
- * the frame hard-crops them. There are no gradients and no blur anywhere in the source art — the
- * crisp arc against flat colour IS the identity.
- *
- * Colours arrive as `--stage-nx-*` tokens so the art is themeable exactly like `--stage-art-*`
- * drives DevBlueprintArt (see `index.css`); fallbacks are the brand-manual hexes.
- *
- * TWO SEPARATE COMPOSITIONS, deliberately. The sibling variants reuse one wide viewBox for both
- * the sidebar strip and the send button, shifting x for the compact case. That cannot work for a
- * flat-shape language: the button is ~32px, which crops to roughly 38 viewBox units, so ANY slice
- * of the wide art lands inside a single shape and the button renders as one flat fill. The button
- * therefore gets its own square composition whose arc is sized to be visible at 32px.
- *
- * Both compositions keep the saturated GROUND under the content (sidebar label, send arrow) and
- * let the softer duo colour intrude only as edge arcs — the label/arrow contrast depends on it.
+ * TWO SEPARATE COMPOSITIONS: the button is ~32px, so any slice of the wide strip art lands inside
+ * a single shape and the send button would render as one flat fill — it gets its own square
+ * composition sized to be visible at 32px. Both keep the saturated GROUND under the content
+ * (sidebar label, send arrow) and let the softer duo colour intrude only as edge arcs.
  */
 
 const STRIP_HEIGHT = 96;
@@ -32,7 +25,14 @@ const STRIP_HEIGHT = 96;
  * branch: desktop's titlebar inset makes the LEFT gap the widest, so the orb lands behind the
  * traffic lights on its own; in fullscreen the inset drops and the middle gap wins again.
  */
-type OrbPlacement = { cx: number; cy: number; r: number };
+type OrbPlacement = {
+  cx: number;
+  cy: number;
+  r: number;
+  inReserve: boolean;
+  fadeOpacity: number;
+  fadeWidthUnits: number;
+};
 
 /** Radius in px. Fixed: the orb descends rather than shrinking when space runs out. */
 const ORB_RADIUS_PX = 46;
@@ -55,17 +55,11 @@ function clamp(value: number, min: number, max: number): number {
  * later is accounted for without touching this file.
  */
 /**
- * A leading run at least this wide is the macOS traffic-light reserve, not incidental padding.
- *
- * Off-mac the brand starts at `--sidebar-content-inset` + `--sidebar-row-content-inset` = 18px, so
- * the leading run is far below this. On macOS desktop `resolveProjectSidebarBrandInset` pushes it
- * to `--workspace-controls-left` = 90px, which clears it. The threshold sits between those two
- * rather than near either, so neither a slightly roomier off-mac header nor a slightly tighter
- * reserve flips the decision.
- *
- * Detecting the reserve by its shape rather than by `navigator.platform` also means fullscreen
- * needs no special case: the inset drops, the brand slides back to 18px, and the run stops
- * qualifying on its own.
+ * A leading run at least this wide is the macOS traffic-light reserve, not padding: off-mac the
+ * brand starts at 18px (below it), macOS desktop pushes it to the 90px controls inset (above it),
+ * and the threshold sits between so neither a roomier off-mac header nor a tighter reserve flips
+ * the decision. Shape-based, not `navigator.platform`, so fullscreen needs no special case: the
+ * inset drops, the brand slides back to 18px, and the run stops qualifying on its own.
  */
 const TITLEBAR_RESERVE_MIN_PX = 72;
 
@@ -131,14 +125,15 @@ export function T3TeamNexploreStripArt() {
     const unitsPerPx = STRIP_HEIGHT / svgHeight;
     const gap = measureFreeGap(host, svg.parentElement);
     const gapWidth = gap.end - gap.start;
+    const inReserve = gap.start === 0 && gapWidth >= TITLEBAR_RESERVE_MIN_PX;
+    const hostStyle = getComputedStyle(host);
+    const fadeOpacity = cssNumberPx(hostStyle, "--stage-nx-fade-opacity", FADE_OPACITY);
+    const fadeWidthUnits = cssNumberPx(hostStyle, "--stage-nx-fade-width", FADE_WIDTH_PX) * unitsPerPx;
 
-    // The orb keeps its size and SINKS when the gap tightens — it never shrinks.
-    //
-    // The two thresholds make that safe. It fits the gap outright while the gap is at least its
-    // diameter, so anywhere in that range it can sit in the header band without touching content.
-    // Below the diameter it cannot fit at any height, so it must be clear of the band entirely.
-    // Interpolating between the two lands exactly at full clearance the moment it stops fitting,
-    // so the descent is continuous and there is no width at which it overlaps.
+    // The orb keeps its size and SINKS when the gap tightens — it never shrinks. It fits the gap
+    // outright while the gap is at least its diameter; below that it must clear the band entirely.
+    // Interpolating between the two thresholds lands at full clearance exactly when it stops
+    // fitting, so the descent is continuous with no overlapping width.
     const roomy = 2 * (ORB_RADIUS_PX + ORB_CONTENT_MARGIN_PX);
     const tight = 2 * ORB_RADIUS_PX;
     const sink = clamp((roomy - gapWidth) / (roomy - tight), 0, 1);
@@ -149,6 +144,7 @@ export function T3TeamNexploreStripArt() {
       cx: ((gap.start + gap.end) / 2) * unitsPerPx,
       cy: cyPx * unitsPerPx,
       r: ORB_RADIUS_PX * unitsPerPx,
+      inReserve, fadeOpacity, fadeWidthUnits,
     });
   }, []);
 
@@ -179,6 +175,8 @@ export function T3TeamNexploreStripArt() {
           <circle cx={orb.cx} cy={orb.cy} r={orb.r} style={{ fill: ORB_FILL.orb }} />
         ) : null}
       </g>
+      {/* Left-edge traffic-light wash (light appearance only; see t3team-NexploreTitlebarFade). */}
+      {orb?.inReserve ? <NexploreTitlebarFade opacity={orb.fadeOpacity} widthUnits={orb.fadeWidthUnits} /> : null}
     </svg>
   );
 }
