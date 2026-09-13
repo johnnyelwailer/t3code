@@ -42,6 +42,7 @@ import * as CheckpointStore from "../../checkpointing/CheckpointStore.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ThreadBackgroundLivenessService } from "../ThreadBackgroundLiveness.ts";
 import { ThreadPlanProgressService } from "../ThreadPlanProgress.ts";
+import { ThreadPlanStalenessService } from "../ThreadPlanStaleness.ts";
 import { ThreadSilenceWatchdogService } from "../ThreadSilenceWatchdog.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import {
@@ -964,6 +965,7 @@ export function runtimeEventToActivities(
 const make = Effect.gen(function* () {
   const threadBackgroundLiveness = yield* ThreadBackgroundLivenessService;
   const threadPlanProgress = yield* ThreadPlanProgressService;
+  const threadPlanStaleness = yield* ThreadPlanStalenessService;
   const threadSilenceWatchdog = yield* ThreadSilenceWatchdogService;
   const crypto = yield* Crypto.Crypto;
   const orchestrationEngine = yield* OrchestrationEngineService;
@@ -2165,6 +2167,8 @@ const make = Effect.gen(function* () {
       }
       // Working-indicator plan progress: current step while the turn runs,
       // cleared on settle so a finished plan never lingers as stale UI.
+      // Plan staleness: a plan write resets the per-thread tool-activity
+      // counter that the turn-framing nudge reads.
       // Events carrying a turn id that conflicts with the active turn are
       // stale (superseded turn) and must neither overwrite nor clear the
       // active turn's progress; session.exited always clears.
@@ -2173,6 +2177,7 @@ const make = Effect.gen(function* () {
       } else if (!conflictsWithActiveTurn) {
         if (event.type === "turn.plan.updated") {
           threadPlanProgress.recordPlanProgress(thread.id, event.payload.plan);
+          threadPlanStaleness.recordPlanWrite(thread.id);
         } else if (isTerminalTurn && shouldApplyThreadLifecycle) {
           threadPlanProgress.clearThreadPlanProgress(thread.id);
         }
@@ -2218,10 +2223,12 @@ const make = Effect.gen(function* () {
       // Thread silence watchdog (GHE #63): in-progress tool items feed the
       // pending-tool distinction (silence WITH a pending tool call is a
       // legitimate long operation); session death drops the thread's state.
+      // Plan staleness: each tool start ages the thread's plan by one.
       if (event.type === "item.started" || event.type === "item.completed") {
         if (isToolLifecycleItemType(event.payload.itemType)) {
           if (event.type === "item.started") {
             threadSilenceWatchdog.recordToolItemStarted(thread.id);
+            threadPlanStaleness.recordToolActivity(thread.id);
           } else {
             threadSilenceWatchdog.recordToolItemCompleted(thread.id);
           }

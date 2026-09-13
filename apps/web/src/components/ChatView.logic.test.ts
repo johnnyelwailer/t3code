@@ -2163,7 +2163,11 @@ describe("deriveComposerTasksProgress", () => {
       makePlanActivity(null, "2026-09-10T12:00:00.000Z", {}),
     ];
 
-    expect(badgeFor(activities, "turn-1")).toEqual({ progress: null, steps: null });
+    expect(badgeFor(activities, "turn-1")).toEqual({
+      progress: null,
+      steps: null,
+      planUpdatedAt: null,
+    });
   });
 
   it("reports live progress (current step, completed/total, durations) for an active turn", () => {
@@ -2197,6 +2201,25 @@ describe("deriveComposerTasksProgress", () => {
         activeLatestTurnId: null,
         activePlan: { createdAt: "2026-09-10T10:00:00.000Z", turnId: null, steps: [] },
       }),
-    ).toEqual({ progress: null, steps: null });
+    ).toEqual({ progress: null, steps: null, planUpdatedAt: null });
+  });
+
+  it("carries the winning plan's last-updated instant for the badge staleness label", () => {
+    const activities = [
+      makePlanActivity(null, "2026-09-10T10:00:00.000Z", { plan: REAL_THREAD_SCOPED_PLAN }),
+      makePlanActivity("turn-2", "2026-09-10T11:00:00.000Z", {
+        plan: [{ step: "Turn-scoped task", status: "inProgress" }],
+      }),
+    ];
+
+    const badge = badgeFor(activities, "turn-2");
+    // The current turn's plan wins, so its activity's createdAt is the label's source.
+    expect(badge.planUpdatedAt).toBe("2026-09-10T11:00:00.000Z");
+
+    const threadScopedOnly = badgeFor(
+      [makePlanActivity(null, "2026-09-10T10:00:00.000Z", { plan: REAL_THREAD_SCOPED_PLAN })],
+      "turn-2",
+    );
+    expect(threadScopedOnly.planUpdatedAt).toBe("2026-09-10T10:00:00.000Z");
   });
 });
