@@ -191,7 +191,11 @@ const COMMENTS: JiraCommentItem[] = [
     id: "c3",
     author: "Support Bot",
     created: new Date(NOW_MS - 4 * DAY_MS).toISOString(),
-    bodyMarkdown: "Customer confirmed the workaround is acceptable for this sprint.",
+    // A wide table with a genuinely unbreakable cell (a 40-char artifact hash, no
+    // spaces or hyphens) — the shape real Jira regression comments take. It is
+    // wider than the comments lane, so the lane must scroll it, not clip it.
+    bodyMarkdown:
+      "Regression matrix after the fix\n\n| Build | Drift | Restore | Artifact |\n|---|---|---|---|\n| 2026.7.2 | 412ms | 980ms | 9f3a1c7e4b2d80aa5f6c1b9e4d7a2c3f0e8b6d41 |\n| 2026.8.0 | 0ms | 410ms | 4d7e2b9a8c1f5630e7b9d2a4c6f8e1b0a2d4c6e8 |",
     isInternal: true,
   },
 ];
