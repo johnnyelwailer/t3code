@@ -10,6 +10,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
 import * as GitHubCli from "../sourceControl/GitHubCli.ts";
+import * as CliTokenManager from "./CliTokenManager.ts";
 import {
   cancelRunInvocation,
   dispatchSessionInvocation,
@@ -20,6 +21,10 @@ import {
   type WorkflowRunSummary,
 } from "./t3team-githubActionsSessionClient.ts";
 import { toCloudSessionFailure } from "./t3team-CloudSessionErrors.ts";
+import {
+  isSessionCredentialIssueEnabled,
+  runCredentialHandoff,
+} from "./t3team-CloudSessionCredential.ts";
 import { resolveFleetConfig } from "./t3team-CloudSessionFleet.ts";
 import {
   makeSessionTag,
@@ -32,25 +37,15 @@ import {
  * remote compute, which join the user's environment list once their relay link
  * is up.
  *
- * There is no credential to configure. Provisioning runs through `gh`, exactly
- * as pull-request reading does (`GitHubPullRequestCli`), so a session inherits
- * the login the user already has — which is the whole point of the surface:
- * one click, no setup.
- *
- * Where each concern lives:
- * - the fleet's identity (host, repo, runner label) is in
- *   `t3team-CloudSessionFleet`,
- * - gh failures are mapped onto user-visible reasons in
- *   `t3team-CloudSessionErrors`,
- * - the run → session projection and dispatch correlation in
- *   `t3team-CloudSessionProjection`.
+ * Provisioning runs through `gh` (as pull-request reading does), and the
+ * creator's connect credential is handed to the VM on demand via a tag-keyed
+ * payload issue (see `t3team-CloudSessionCredential`). The run → session
+ * projection and dispatch correlation live in `t3team-CloudSessionProjection`;
+ * gh failures map to user-visible reasons in `t3team-CloudSessionErrors`; the
+ * fleet's identity in `t3team-CloudSessionFleet`.
  */
 
-/**
- * Recent runs worth considering. Generous on purpose: this window is also what
- * `cancel` checks membership against, so a session that scrolls out of it would
- * become uncancellable while still running.
- */
+/** Recent runs worth considering; also the window `cancel` checks membership against. */
 const RUN_HISTORY_LIMIT = 100;
 
 /** Sessions shown to the user. The window above is for correctness, not display. */
@@ -77,12 +72,11 @@ export class CloudSessionService extends Context.Service<
 
 export const make = Effect.fn("cloud.session_service.make")(function* () {
   const github = yield* GitHubCli.GitHubCli;
+  const cloudCli = yield* CliTokenManager.CloudCliTokenManager;
+  const handoffEnabled = yield* isSessionCredentialIssueEnabled();
   const { repoRef, machineLabel } = yield* resolveFleetConfig();
 
-  /**
-   * `gh` needs a cwd; it is irrelevant for `gh api --hostname`, which does not
-   * consult the repository, but the process still has to start somewhere.
-   */
+  // `gh` needs a cwd; irrelevant for `gh api --hostname`, but the process starts somewhere.
   const cwd = yield* Config.string("HOME").pipe(Config.withDefault("/"));
 
   const run = (invocation: GhInvocation) =>
@@ -151,6 +145,14 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
       // session, and then cancelling yours kills theirs.
       const sessionTag = yield* makeSessionTag;
       const marker = sessionTagMarker(sessionTag);
+
+      yield* runCredentialHandoff({
+        repoRef,
+        sessionTag,
+        run,
+        enabled: handoffEnabled,
+        readCredential: cloudCli.getExisting,
+      });
 
       yield* run(
         dispatchSessionInvocation(repoRef, {

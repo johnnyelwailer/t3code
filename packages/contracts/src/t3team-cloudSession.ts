@@ -92,6 +92,19 @@ export const CloudSessionFailureReasonSchema = Schema.Literals([
   "unreachable",
   /** The session id does not correspond to a known session. */
   "unknown_session",
+  /**
+   * No usable T3 Connect credential exists on the creator's machine, so a
+   * per-session credential cannot be handed to the VM. The remediation is to
+   * sign in to T3 Connect on this machine; the client should surface a link,
+   * not a generic retry.
+   */
+  "connect_sign_in_required",
+  /**
+   * The per-session credential payload could not be written to its delivery
+   * issue (gh failure). The creator can retry — the credential itself is
+   * intact, only its handoff to the VM failed.
+   */
+  "payload_issue_failed",
 ]);
 export type CloudSessionFailureReason = typeof CloudSessionFailureReasonSchema.Type;
 

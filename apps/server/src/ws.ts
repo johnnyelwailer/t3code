@@ -165,6 +165,7 @@ import {
   CloudSessionService,
   layer as CloudSessionServiceLayer,
 } from "./cloud/t3team-CloudSessionService.ts";
+import * as CloudCliTokenManager from "./cloud/CliTokenManager.ts";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
@@ -3127,7 +3128,14 @@ export const websocketRpcRouteLayer = Layer.unwrap(
               // Cloud sessions drive `gh` directly, exactly as pull-request
               // reading does, so they inherit the user's existing login and
               // carry no credential of their own.
-              Layer.provide(CloudSessionServiceLayer.pipe(Layer.provide(GitHubCli.layer))),
+              Layer.provide(
+                CloudSessionServiceLayer.pipe(
+                  Layer.provide(GitHubCli.layer),
+                  // The create path hands the creator's live T3 Connect
+                  // credential to the VM, so it needs the CLI token manager.
+                  Layer.provide(CloudCliTokenManager.layer),
+                ),
+              ),
               Layer.provide(
                 SourceControlDiscovery.layer.pipe(
                   Layer.provide(

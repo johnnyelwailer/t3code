@@ -54,7 +54,7 @@ export interface GhInvocation {
   readonly stdin?: string;
 }
 
-const apiArgs = (ref: CloudSessionRepoRef, path: string): ReadonlyArray<string> => [
+export const apiArgs = (ref: CloudSessionRepoRef, path: string): ReadonlyArray<string> => [
   "api",
   "--hostname",
   ref.host,
