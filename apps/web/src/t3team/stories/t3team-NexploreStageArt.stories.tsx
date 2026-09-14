@@ -73,7 +73,10 @@ function HeaderRow({
           <div className="size-8 rounded-md bg-white/25" />
         </div>
         {trafficLights ? (
-          <div aria-hidden className="pointer-events-none absolute left-[13px] top-[13px] z-20 flex gap-2">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute left-[13px] top-[13px] z-20 flex gap-2"
+          >
             <span className="size-3 rounded-full" style={{ background: "#ff5f57" }} />
             <span className="size-3 rounded-full" style={{ background: "#febc2e" }} />
             <span className="size-3 rounded-full" style={{ background: "#28c840" }} />
