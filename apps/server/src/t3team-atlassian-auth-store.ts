@@ -17,6 +17,13 @@ import {
 import { invalidateT3TeamAtlassianAuthDependents } from "./t3team-atlassian-auth-changeHooks.ts";
 import { findAuthForAccountId } from "./t3team-atlassian-auth-lookup.ts";
 import {
+  accountNeedsReconnect,
+  clearAllNeedsReconnect,
+  failRefreshOrMarkNeedsReconnect,
+  reconnectRequiredError,
+  setAccountNeedsReconnect,
+} from "./t3team-atlassian-auth-staleToken.ts";
+import {
   readAtlassianOAuthClientId,
   readAtlassianOAuthClientSecret,
 } from "./t3team-atlassian-oauthEnv.ts";
@@ -53,7 +60,11 @@ const oauthRefreshSemaphore = Semaphore.makeUnsafe(1);
 function persistedAuthsPayload(): PersistedAtlassianAuths {
   return {
     version: 1,
-    auths: [...atlassianAuths].map(([accountId, auth]) => ({ accountId, auth })),
+    auths: [...atlassianAuths].map(([accountId, auth]) => ({
+      accountId,
+      auth,
+      ...(accountNeedsReconnect(accountId) ? { needsReconnect: true } : {}),
+    })),
   };
 }
 
@@ -61,8 +72,10 @@ export const loadPersistedAuths = Effect.gen(function* () {
   const parsed = yield* loadPersistedAtlassianAuthsPayload;
   if (!parsed) return;
   atlassianAuths.clear();
+  clearAllNeedsReconnect();
   for (const entry of parsed.auths) {
     atlassianAuths.set(entry.accountId, entry.auth);
+    setAccountNeedsReconnect(entry.accountId, entry.needsReconnect === true);
   }
 });
 
@@ -91,6 +104,10 @@ function refreshOAuthAuthIfNeeded(accountId: string, initialAuth: JiraApiAuth) {
     // Re-read under the permit: a concurrent caller may have refreshed this
     // account while we waited, and its rotated token is the only valid one.
     const auth = atlassianAuths.get(accountId) ?? initialAuth;
+    // A rotated-away refresh token never comes back; fail actionably instead of re-hitting Atlassian.
+    if (accountNeedsReconnect(accountId)) {
+      return yield* reconnectRequiredError();
+    }
     if (auth.kind !== "oauth" || auth.expiresAt === undefined) {
       return auth;
     }
@@ -112,6 +129,10 @@ function refreshOAuthAuthIfNeeded(accountId: string, initialAuth: JiraApiAuth) {
     const token = yield* tryAtlassianPromise(
       () => refreshAccessToken(config, auth.refreshToken!),
       "Failed to refresh Atlassian OAuth token.",
+    ).pipe(
+      Effect.catch((error) =>
+        failRefreshOrMarkNeedsReconnect(accountId, error, savePersistedAuths),
+      ),
     );
     const nextAuth: JiraApiAuth = {
       kind: "oauth",
@@ -169,6 +190,7 @@ export function providerForPersistedAuths() {
 
 export function setAtlassianAuth(accountId: string, auth: JiraApiAuth): void {
   atlassianAuths.set(accountId, auth);
+  setAccountNeedsReconnect(accountId, false);
   invalidateT3TeamAtlassianAuthDependents();
 }
 
@@ -182,6 +204,7 @@ export function replaceAtlassianAuths(
   entries: ReadonlyArray<{ readonly accountId: string; readonly auth: JiraApiAuth }>,
 ): void {
   atlassianAuths.clear();
+  clearAllNeedsReconnect();
   for (const entry of entries) {
     atlassianAuths.set(entry.accountId, entry.auth);
   }
