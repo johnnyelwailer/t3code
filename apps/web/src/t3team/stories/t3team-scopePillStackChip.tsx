@@ -37,6 +37,16 @@ function useWidth(): [RefObject<HTMLDivElement | null>, number] {
   return [ref, width];
 }
 
+function CastShadow({ left }: { left: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute -top-px size-7 rounded-full"
+      style={{ left, boxShadow: "0 0 5px 1.5px rgba(0,0,0,0.20)" }}
+    />
+  );
+}
+
 export function ScopeStackChipVariant({
   groups,
   activeScopeKey,
@@ -73,20 +83,19 @@ export function ScopeStackChipVariant({
               style={{
                 zIndex: isActive ? items.length + 1 : index + 1,
                 marginLeft: index === 0 ? 0 : -OVERLAP,
-                boxShadow: [
-                  coveredRight ? "inset -5px 0 5px -4px rgba(0,0,0,0.28)" : null,
-                  coveredLeft ? "inset 5px 0 5px -4px rgba(0,0,0,0.28)" : null,
-                ]
-                  .filter(Boolean)
-                  .join(", "),
               }}
               className={cn(
-                "h-7 min-w-7 gap-1.5 rounded-full bg-card dark:bg-sidebar-accent",
+                "h-7 min-w-7 gap-1.5 overflow-hidden rounded-full border border-border/70 bg-card dark:bg-sidebar-accent",
                 isActive
                   ? "-translate-y-px px-1 pr-2.5 text-foreground"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
+              {/* Cast shadow: a shadow-only circle standing exactly where the covering disc
+                  is, clipped by this disc — so the shade follows the upper disc's curve and
+                  exists nowhere else. */}
+              {coveredRight ? <CastShadow left={DISC - OVERLAP - 1} /> : null}
+              {coveredLeft ? <CastShadow left={-(DISC - OVERLAP) + 1} /> : null}
               <span className="inline-flex size-4 shrink-0 items-center justify-center">
                 {entry.icon}
               </span>
