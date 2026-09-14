@@ -19,6 +19,14 @@ const meta = {
   component: ProjectMyWorkDigestFixtureView,
   decorators: [withT3TeamRouter],
   parameters: { layout: "fullscreen" },
+  argTypes: {
+    nowOffsetHours: {
+      label: "Time of day (hours into the sprint)",
+      type: "number",
+      minimum: 0,
+      maximum: 48,
+    },
+  },
 } satisfies Meta<typeof ProjectMyWorkDigestFixtureView>;
 
 export default meta;
@@ -26,14 +34,38 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 function createStory(scenario: ProjectMyWorkDigestFixtureScenario, description: string): Story {
-  return { args: { scenario }, parameters: { docs: { description: { story: description } } } };
+  return {
+    args: { scenario, nowOffsetHours: 0 },
+    parameters: { docs: { description: { story: description } } },
+  };
 }
 
-export const ProjectHeuristic: Story = createStory(heuristicArrangementScenario, "Single project, before the first click. Deterministic buckets.");
-export const ProjectAgent: Story = createStory(agentArrangementScenario, "Single project, durable workflow live. Agent chose sections, order, hints.");
-export const ProjectGraphChanged: Story = createStory(agentArrangementRefreshScenario, "Items closed and arrived since the last pass.");
-export const ProjectPaused: Story = createStory(pausedArrangementScenario, "Paused via the menu. Facts keep refreshing.");
-export const ProjectWorkflowFailed: Story = createStory(errorArrangementScenario, "Heuristic fallback stays up.");
+export const ProjectHeuristic: Story = createStory(
+  heuristicArrangementScenario,
+  "Single project, before the first click. Deterministic buckets.",
+);
+export const ProjectAgent: Story = createStory(
+  agentArrangementScenario,
+  "Single project, durable workflow live. Agent chose sections, order, hints.",
+);
+export const ProjectGraphChanged: Story = createStory(
+  agentArrangementRefreshScenario,
+  "Items closed and arrived since the last pass.",
+);
+export const ProjectPaused: Story = createStory(
+  pausedArrangementScenario,
+  "Paused via the menu. Facts keep refreshing.",
+);
+export const ProjectWorkflowFailed: Story = createStory(
+  errorArrangementScenario,
+  "Heuristic fallback stays up.",
+);
 export const ProjectEmpty: Story = createStory(emptyGraphScenario, "Nothing assigned.");
-export const AllProjectsHeuristic: Story = createStory(allProjectsHeuristicScenario, "All projects, project chips on rows and group headers, no sprint bar.");
-export const AllProjectsAgent: Story = createStory(allProjectsAgentScenario, "All projects, one arrangement across projects.");
+export const AllProjectsHeuristic: Story = createStory(
+  allProjectsHeuristicScenario,
+  "All projects, project chips on rows and group headers, no sprint bar.",
+);
+export const AllProjectsAgent: Story = createStory(
+  allProjectsAgentScenario,
+  "All projects, one arrangement across projects.",
+);

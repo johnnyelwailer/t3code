@@ -5,7 +5,6 @@ import { Button } from "~/t3team/components/ui/t3team-button";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "~/t3team/components/ui/t3team-menu";
 import { Spinner } from "~/t3team/components/ui/t3team-spinner";
 import { formatDigestAgo } from "~/t3team/t3team-ProjectMyWorkDigestRows";
-import { ProjectMyWorkViewSwitch, type ProjectMyWorkLens } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
 import type { DigestPlan } from "~/t3team/t3team-projectMyWorkDigestPlan";
 
 export type DigestArrangement =
@@ -34,11 +33,19 @@ function ArrangementMenu({
       >
         <EllipsisIcon className="size-4" />
       </MenuTrigger>
-      <MenuPopup align="end" side="bottom" className="min-w-[13rem] border-border/80 bg-background/95">
+      <MenuPopup
+        align="end"
+        side="bottom"
+        className="min-w-[13rem] border-border/80 bg-background/95"
+      >
         {arrangement.state === "live" ? (
-          <MenuItem className={MENU_ITEM_CLASS} onClick={onPause}>Pause auto-arrange</MenuItem>
+          <MenuItem className={MENU_ITEM_CLASS} onClick={onPause}>
+            Pause auto-arrange
+          </MenuItem>
         ) : (
-          <MenuItem className={MENU_ITEM_CLASS} onClick={onResume}>Resume auto-arrange</MenuItem>
+          <MenuItem className={MENU_ITEM_CLASS} onClick={onResume}>
+            Resume auto-arrange
+          </MenuItem>
         )}
         <MenuItem className={MENU_ITEM_CLASS}>Open workflow thread</MenuItem>
       </MenuPopup>
@@ -58,17 +65,26 @@ function ArrangementStatus({
   if (arrangement.state !== "live" && arrangement.state !== "paused") return null;
   return (
     <span className="inline-flex items-center gap-2 text-[11.5px] text-muted-foreground">
-      {arrangement.state === "live" && arrangement.refreshing ? <Spinner className="size-3" /> : null}
-      <span className={`size-1.5 rounded-full ${arrangement.state === "live" ? "bg-success" : "bg-muted-foreground/50"}`} />
-      <span>{arrangement.state === "paused" ? "paused" : "auto"} · updated {formatDigestAgo(nowMs, arrangement.plan.producedAt)} ago</span>
-      {newSinceCount > 0 ? <Badge variant="info" size="sm">{newSinceCount} new</Badge> : null}
+      {arrangement.state === "live" && arrangement.refreshing ? (
+        <Spinner className="size-3" />
+      ) : null}
+      <span
+        className={`size-1.5 rounded-full ${arrangement.state === "live" ? "bg-success" : "bg-muted-foreground/50"}`}
+      />
+      <span>
+        {arrangement.state === "paused" ? "paused" : "auto"} · updated{" "}
+        {formatDigestAgo(nowMs, arrangement.plan.producedAt)} ago
+      </span>
+      {newSinceCount > 0 ? (
+        <Badge variant="info" size="sm">
+          {newSinceCount} new
+        </Badge>
+      ) : null}
     </span>
   );
 }
 
 export function ProjectMyWorkDigestToolbar({
-  lens,
-  onLensChange,
   arrangement,
   newSinceCount,
   nowMs,
@@ -77,8 +93,6 @@ export function ProjectMyWorkDigestToolbar({
   onPause,
   onResume,
 }: {
-  lens: ProjectMyWorkLens;
-  onLensChange: (value: ProjectMyWorkLens) => void;
   arrangement: DigestArrangement;
   newSinceCount: number;
   nowMs: number;
@@ -88,20 +102,25 @@ export function ProjectMyWorkDigestToolbar({
   onResume: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <ProjectMyWorkViewSwitch lens={lens} onLensChange={onLensChange} />
-      <div className="flex items-center gap-3">
+    <div className="flex items-center justify-end gap-2 sm:gap-3">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
         <ArrangementStatus arrangement={arrangement} newSinceCount={newSinceCount} nowMs={nowMs} />
         {arrangement.state === "off" ? (
-          <Button size="sm" disabled={graphEmpty} onClick={onStart}><Sparkles /> Arrange for me</Button>
+          <Button size="sm" disabled={graphEmpty} onClick={onStart}>
+            <Sparkles /> Arrange for me
+          </Button>
         ) : null}
         {arrangement.state === "starting" ? (
-          <Button size="sm" variant="outline" disabled><Spinner className="size-3.5" /> Starting</Button>
+          <Button size="sm" variant="outline" disabled>
+            <Spinner className="size-3.5" /> Starting
+          </Button>
         ) : null}
         {arrangement.state === "error" ? (
           <>
             <Badge variant="error">auto-arrange failed · fallback</Badge>
-            <Button size="sm" variant="outline" onClick={onStart}>Retry</Button>
+            <Button size="sm" variant="outline" onClick={onStart}>
+              Retry
+            </Button>
           </>
         ) : null}
         {arrangement.state === "live" || arrangement.state === "paused" ? (

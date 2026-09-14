@@ -36,15 +36,44 @@ h1      PW Sprint 8.5 · Day 12 of 20
 toolbar [✦][⋮≡][▥]                                  ● auto · updated 2 h ago  [2 new]  [⋯]
 
 side lane (2fr)                  | main lane (5fr)
-NEEDS YOU 2                      | RECOMMENDED ORDER 6
+NEEDS YOU 2                      | PRIORITY 6
 ┌ key  title            status ┐ | ┌ IES-13068 EdO Transport: Detailbereich      3 items ┐
-│      [decision chip · 3 h]   │ | │ 01 key  title   [agent · 2 h] [PR chip]     status │
+│      [decision chip · 3 h]   │ | │ 01 key  title   [agent dots] [PR chip]   status │
 REVIEW FIRST 2                   | │ 02 …                                                │
 ┌ …                            ┐ | └ ────────────────────────────────────────────────────┘
                                  | ┌ IES-18234 Leistungsadmin …                  2 items ┐
 ─────────────────────────────────────────────────────────────────────────────────────────
 footer: COLD AGENT THREADS 2 [ 2  silent > 3 d · nudge or release   Show ]   PARKED 2 [ … ]
 ```
+
+**Layout notes (2026-09-14 cut):**
+
+- **Priority** (was "Recommended order"): short, punchy heading. Renamed in plan.ts + fixtures.
+- **Agent dots** sit on the right side of the title row, next to the status dot — not in the middle of the row.
+- **Story group headers** have alignment spacers (`w-7` + `size-3.5`) so the ticket key lines up with the task-row key below it.
+- **Standalone tasks** (no story parent) render in a plain `T3SurfacePanel` with `divide-y`, no story-group wrapper.
+- **Rows are clickable**: `cursor-pointer` + `onClick` opens `ticket.ref.url` in a new tab. Inner `<a>` links (key, title, PR chip) use `stopPropagation`.
+- **Responsive shell**: no `max-w` cap. Fluid padding `px-4 sm:px-6 xl:px-10 2xl:px-14`. Works at 360 px and 2560 px+.
+- **PR chips**: 7-state lifecycle (draft / open / needs-you / changes-requested / ci-failing / approved / merged). Reviewer identity via avatar + tooltip only (no name text).
+- **Action line**: one per item, priority order: blocker → decision → changes-requested → needs-you → ci-failing → unhandled comments → null.
+
+## Reused components
+
+| Component                                     | Source                                               | Used for                                 |
+| --------------------------------------------- | ---------------------------------------------------- | ---------------------------------------- |
+| `WorkItemPersonAvatar`                        | `workitem/t3team-WorkItemPersonAvatar.tsx`           | Reviewer avatar in PR chips              |
+| `PullRequestReviewOutcomeBadge`               | `components/pullRequest/pullRequestPresentation.tsx` | PR state chip styling                    |
+| `Badge`                                       | `components/ui/badge.tsx`                            | Status dots, project chips               |
+| `Collapsible`                                 | `components/ui/collapsible.tsx`                      | Footer summary sections                  |
+| `Empty`                                       | `components/ui/empty.tsx`                            | Empty state for lanes                    |
+| `ToggleGroup`                                 | `components/ui/toggle-group.tsx`                     | View switch (Digest / Hierarchy / Board) |
+| `JiraIssueTypeIcon`                           | `workitem/t3team-JiraIssueTypeIcon.tsx`              | Issue-type icon in rows                  |
+| `T3SurfacePanel`                              | `components/ui/surface-panel.tsx`                    | Lane containers, standalone task panels  |
+| `buildProjectTicketHierarchy`                 | `project/t3team-projectTicketHierarchy.ts`           | Parent/child grouping in main lane       |
+| `createProjectBacklogTestTicket`              | `project/t3team-projectBacklogTestTicket.ts`         | Fixture ticket factory                   |
+| `Tooltip` / `TooltipTrigger` / `TooltipPopup` | `components/ui/tooltip.tsx`                          | Reviewer avatar tooltip                  |
+| `animate-status-pulse`                        | CSS token in `globals.css`                           | Agent dot pulse animation                |
+| `ActiveAgentEntry`                            | `chat/t3team-activeAgentsCore.ts`                    | Agent dot type                           |
 
 ## Reference page: PW Sprint 8.5 · Digest (http://127.0.0.1:18765/)
 
