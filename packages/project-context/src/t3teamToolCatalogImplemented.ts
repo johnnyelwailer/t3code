@@ -662,6 +662,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       "- wait: durably resume this turn when a child reaches a terminal state (on: terminal|completed|failed; timeout in ms)\n" +
       "- stop: halt a child's running turn\n" +
       "- close: mark a child done from this side\n" +
+      "- environments: read-only — which environments start_child's environment arg can target (own environment + recorded cross-environment bindings; every entry states its delivery boundary)\n" +
       "- help: exact schema for one op (op_name)",
     capabilities: ["write"],
     kind: "thread",
@@ -674,8 +675,8 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       properties: {
         op: {
           type: "string",
-          description: "The operation to perform: list, status, wait, stop, close, or help.",
-          enum: ["list", "status", "wait", "stop", "close", "help"],
+          description: "The operation to perform: list, status, wait, stop, close, environments, or help.",
+          enum: ["list", "status", "wait", "stop", "close", "environments", "help"],
         },
         thread_id: {
           type: "string",

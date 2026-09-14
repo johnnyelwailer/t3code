@@ -143,6 +143,7 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     query,
     orchestration,
     ...(mailbox !== undefined ? { mailbox } : {}),
+    ...(localEnvironmentId !== undefined ? { localEnvironmentId } : {}),
   });
 
   // Extracted to t3team-toolBrokerLiveSession.ts (additive LOC budget) — behavior unchanged.

@@ -10,6 +10,7 @@ import type {
   AgentSessionImportSource,
   ApprovalRequestId,
   CheckpointRef,
+  EnvironmentId,
   OrchestrationCheckpointSummary,
   OrchestrationProject,
   OrchestrationProjectShell,
@@ -204,6 +205,29 @@ export interface ProjectionSnapshotQueryShape {
    */
   readonly listParentChildRelations: () => Effect.Effect<
     ReadonlyArray<{ readonly childThreadId: ThreadId; readonly parentThreadId: ThreadId }>,
+    ProjectionRepositoryError
+  >;
+
+  /**
+   * The distinct cross-environment bindings recorded on threads in this store
+   * (the t3team start_child `environment` JSON column): every environment this
+   * host has ever targeted for a child session, with the newest recorded
+   * label, the number of bound threads, and when the newest one was updated.
+   * Own-environment threads never carry a binding (same-environment is a
+   * no-op), so only OTHER environments appear — the `t3team.thread.children`
+   * `environments` op merges its own environment in front of this history.
+   *
+   * Optional on the SHAPE: the live layer always provides it, but structural
+   * fakes in unrelated suites omit it; the children tool wiring degrades to a
+   * "not available in this host" error when it is absent.
+   */
+  readonly listEnvironmentBindings?: () => Effect.Effect<
+    ReadonlyArray<{
+      readonly environmentId: EnvironmentId;
+      readonly label: string | undefined;
+      readonly threadCount: number;
+      readonly latestThreadAt: string;
+    }>,
     ProjectionRepositoryError
   >;
 
