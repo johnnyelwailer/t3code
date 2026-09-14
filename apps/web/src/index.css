@@ -874,6 +874,29 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     -webkit-app-region: no-drag;
   }
 
+  /*
+   * macOS collapsed-sidebar fix: the expand button (T3TeamLeftSidebarDesktopToggle) is a
+   * position:fixed sibling of the content header. Electron's -webkit-app-region hit-testing
+   * ignores z-index — a floating sibling always loses to a drag-region ancestor, so the
+   * button's own no-drag class can't win. A no-drag DESCENDANT of the drag region does win,
+   * so we carve one out with a ::before covering the button's area. The button is
+   * --workspace-titlebar-control-size (2rem) at --workspace-controls-left (≈12px), so 3rem
+   * clears it with room to spare.
+   */
+  [data-sidebar-state="collapsed"] header.drag-region {
+    position: relative;
+  }
+  [data-sidebar-state="collapsed"] header.drag-region::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 3rem;
+    height: 100%;
+    -webkit-app-region: no-drag;
+    pointer-events: none;
+  }
+
   /* A side-by-side thread hides ChatView's normal header. Reserve the shared topbar band so its
      content and close action line up with the main thread and never land under native chrome. */
   .t3team-embedded-thread-pane {
