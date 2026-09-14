@@ -21,7 +21,6 @@ import type { SidebarProjectSnapshot } from "~/sidebarProjectGrouping";
 
 import { ScopeStackChipVariant } from "./t3team-scopePillStackChip";
 import {
-  ProjectInitials,
   ScopeDotVariant,
   ScopeSegmentedVariant,
   ScopeStackVariant,
