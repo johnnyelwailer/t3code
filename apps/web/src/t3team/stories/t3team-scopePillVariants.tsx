@@ -5,7 +5,7 @@
  * into that component. Every variant reacts to its own container width via `@container/pills`.
  */
 import { FolderIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { ProjectFavicon } from "~/components/ProjectFavicon";
 import { cn } from "~/lib/utils";
@@ -82,7 +82,7 @@ function Favicon({ group, className }: { group: SidebarProjectSnapshot; classNam
 }
 
 /** Icon + "All" entries share one render path so every variant treats "All" as a peer. */
-function entries(groups: ReadonlyArray<SidebarProjectSnapshot>) {
+export function entries(groups: ReadonlyArray<SidebarProjectSnapshot>) {
   return [
     { key: null as string | null, label: "All projects", icon: <FolderIcon className="size-4" /> },
     ...groups.map((group) => ({
@@ -93,17 +93,19 @@ function entries(groups: ReadonlyArray<SidebarProjectSnapshot>) {
   ];
 }
 
-function Pill({
+export function Pill({
   active,
   label,
   onClick,
   className,
+  style,
   children,
 }: {
   active: boolean;
   label: string;
   onClick: () => void;
   className?: string;
+  style?: CSSProperties | undefined;
   children: ReactNode;
 }) {
   return (
@@ -112,6 +114,7 @@ function Pill({
       aria-pressed={active}
       aria-label={label}
       title={label}
+      style={style}
       onClick={onClick}
       className={cn(
         "relative inline-flex shrink-0 items-center justify-center outline-none transition-[margin,opacity,transform,box-shadow] duration-150 focus-visible:ring-2 focus-visible:ring-ring/60",
