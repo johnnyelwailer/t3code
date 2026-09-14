@@ -267,6 +267,10 @@ An empty database is a bad test. Seed your worktree's `.t3` with a copy of real 
 - The server is event-sourced and its async flows emit typed receipts. Wait on receipts and worker drains, never on sleeps or polling. A test that needs a timeout to pass is wrong.
 - Upon request, user-visible frontend changes should get one integrated pass in a real client: `test-t3-app` for web, `test-t3-mobile` for mobile. The primary agent does this once after integrating. Subagents do not launch their own dev servers. Ask permission before doing computer use or spinning up browsers.
 
+## Storybook
+
+Stories start with the real components and realistic sample data — never re-creations, fakes, or parallel mock views. Render the production component (the real PR panel, the real work-item view, the real recipe list) with fixture data shaped like what the app actually receives. If a component fetches its own data, mock at the data seam (the atom/RPC boundary, scoped to the storybook build) rather than building a look-alike around it — and if no seam exists, add one to the real component instead of recreating the view beside it.
+
 ## Pull requests
 
 - Never make a PR unless the developer explicitly asks you to do so.
