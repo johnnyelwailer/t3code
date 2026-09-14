@@ -65,7 +65,7 @@ export function deriveProviderUsageHoldBanner(
   for (const activity of activities) {
     const payload = holdPayload(activity);
     if (activity.kind === KIND_STARTED || activity.kind === KIND_DEFERRED) {
-      const prev = hold;
+      const prev: ProviderUsageHoldBannerState | null = hold;
       hold = {
         driver: typeof payload?.driver === "string" ? payload.driver : null,
         since: activity.createdAt,
