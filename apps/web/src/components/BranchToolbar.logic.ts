@@ -12,6 +12,12 @@ export interface EnvironmentOption {
   label: string;
   isPrimary: boolean;
   machine: EnvironmentMachineKind;
+  /**
+   * True when the environment's connection is in the `connected` phase.
+   * Used by `dedupeRunOnEnvironments` as the tie-break between two rows for
+   * the same machine: the live one wins over a stale duplicate.
+   */
+  connected?: boolean;
 }
 
 export const EnvMode = Schema.Literals(["local", "worktree"]);
@@ -68,7 +74,11 @@ export function shouldShowEnvironmentIndicator(input: {
  * label); `environmentId` itself is exactly what differs. Primary rows never
  * compete (there is one primary), and a row that is the thread's active
  * environment is always kept — replacing its duplicate if the duplicate was
- * seen first — so the trigger never points at a filtered-out id.
+ * seen first — so the trigger never points at a filtered-out id. When the
+ * active-environment rule does not decide, the connected row beats a stale
+ * one: a duplicate that is not `connected` is exactly the registry entry for
+ * a machine whose relay link has since been republished, and keeping it would
+ * hide the live machine from the menu.
  *
  * Known limit: two genuinely different machines with the same machine kind
  * and the same label would collapse into one row. That is rarer than the
@@ -93,8 +103,12 @@ export function dedupeRunOnEnvironments(
       result.push(environment);
       continue;
     }
-    if (environment.environmentId === activeEnvironmentId) {
-      result[existingIndex] = environment;
+    const existing = result[existingIndex];
+    if (existing !== undefined) {
+      const connectedWins = environment.connected === true && existing.connected !== true;
+      if (environment.environmentId === activeEnvironmentId || connectedWins) {
+        result[existingIndex] = environment;
+      }
     }
   }
   return result;

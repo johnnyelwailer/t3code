@@ -75,6 +75,12 @@ export interface CloudSessionProvisionPresentation {
   readonly progress: number | null;
   /** Label for the row's primary action, or null when it has none. */
   readonly actionLabel: string | null;
+  /**
+   * True when `detail` ends with " · <elapsed>" and that elapsed time keeps
+   * advancing while the phase is in flight: the row renders that suffix on a
+   * one-second tick instead of the frozen snapshot the server last reported.
+   */
+  readonly liveElapsed: boolean;
 }
 
 /** "2m 34s", "47s", "5h 12m" — the coarsest unit pair that stays honest. */
@@ -107,6 +113,7 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
         tone: "working",
         progress: cloudSessionProgress(session.elapsedSeconds),
         actionLabel: "Cancel",
+        liveElapsed: false,
       };
     case "queued":
       return {
@@ -115,6 +122,7 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
         tone: "working",
         progress: cloudSessionProgress(session.elapsedSeconds),
         actionLabel: "Cancel",
+        liveElapsed: true,
       };
     case "preparing":
       return {
@@ -123,6 +131,7 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
         tone: "working",
         progress: cloudSessionProgress(session.elapsedSeconds),
         actionLabel: "Cancel",
+        liveElapsed: true,
       };
     case "starting":
       return {
@@ -131,6 +140,7 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
         tone: "working",
         progress: cloudSessionProgress(session.elapsedSeconds),
         actionLabel: "Cancel",
+        liveElapsed: true,
       };
     case "ready":
       return {
@@ -142,6 +152,7 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
         tone: "ready",
         progress: null,
         actionLabel: "Connect",
+        liveElapsed: false,
       };
     case "failed":
       return {
@@ -150,6 +161,7 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
         tone: "error",
         progress: null,
         actionLabel: "Retry",
+        liveElapsed: false,
       };
     case "stopped":
       return {
@@ -158,6 +170,7 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
         tone: "idle",
         progress: null,
         actionLabel: "Start another",
+        liveElapsed: false,
       };
   }
 }

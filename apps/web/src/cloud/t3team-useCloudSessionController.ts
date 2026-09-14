@@ -1,16 +1,20 @@
 import type { CloudSession } from "@t3tools/contracts";
 import { CLOUD_SESSION_REFRESH_INTERVAL_MS } from "@t3tools/client-runtime/state/cloud-sessions";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { environmentCatalog } from "~/connection/catalog";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import {
   cloudSessionEnvironment,
   useCloudSessions,
   usePrimaryEnvironmentId,
 } from "~/state/t3team-cloudSessions";
+import { useEnvironments } from "~/state/environments";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { DEFAULT_CLOUD_SESSION_DURATION_SECONDS } from "~/components/cloud/t3team-CloudSessionProvisionPanel";
 import { toastManager } from "~/components/ui/toast";
+import { findCloudSessionEnvironment } from "~/components/cloud/t3team-cloudSessionConnect";
+import { mergeLocalCloudSession, type LocalCloudSession } from "~/components/cloud/t3team-cloudSessionSplit";
 import { startCloudSessionListPolling } from "./t3team-cloudSessionPolling";
 
 /**
@@ -22,7 +26,8 @@ import { startCloudSessionListPolling } from "./t3team-cloudSessionPolling";
  */
 export function useCloudSessionController() {
   const environmentId = usePrimaryEnvironmentId();
-  const { sessions, loading, configured } = useCloudSessions();
+  const { environments } = useEnvironments();
+  const { sessions: serverSessions, loading, configured } = useCloudSessions();
   const [durationSeconds, setDurationSeconds] = useState(DEFAULT_CLOUD_SESSION_DURATION_SECONDS);
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
   // `useAtomCommand` returns a bare command function with no pending state, so
@@ -30,9 +35,20 @@ export function useCloudSessionController() {
   // read it to keep the start button honest between dispatch and the atom's
   // next list refresh.
   const [createPending, setCreatePending] = useState(false);
+  // The create result until the server's list covers it (see
+  // `mergeLocalCloudSession`). GHE takes seconds to index a dispatch, so
+  // without this the just-created session vanishes from every surface in that
+  // window — the "provisioning, then gone with no error" bug.
+  const [localSession, setLocalSession] = useState<LocalCloudSession | null>(null);
+
+  const sessions = useMemo(
+    () => mergeLocalCloudSession(serverSessions, localSession),
+    [serverSessions, localSession],
+  );
 
   const createSession = useAtomCommand(cloudSessionEnvironment.create, { reportFailure: false });
   const cancelSession = useAtomCommand(cloudSessionEnvironment.cancel, { reportFailure: false });
+  const connectEnvironment = useAtomCommand(environmentCatalog.retryNow, { reportFailure: false });
 
   // The list atom no longer polls on its own (owner decision: no background
   // GHE calls), so every consumer that needs a fresh list asks for one here.
@@ -65,6 +81,15 @@ export function useCloudSessionController() {
       void createSession({ environmentId, input: { durationSeconds: seconds } })
         .then((result) => {
           if (result._tag === "Success") {
+            // Track the created session until the server's list covers it —
+            // the snapshot of ids is what lets the merge tell "our run
+            // surfaced" apart from sessions that were already there.
+            setLocalSession({
+              session: result.value,
+              knownServerSessionIds: new Set(
+                serverSessions.map((session) => session.sessionId),
+              ),
+            });
             // A new session just entered the list; without the old 5-second
             // background poll this is what keeps the menu and the settings
             // panel honest right after a create.
@@ -78,21 +103,46 @@ export function useCloudSessionController() {
         })
         .finally(() => setCreatePending(false));
     },
-    [createPending, createSession, environmentId, refreshCloudSessionList],
+    [createPending, createSession, environmentId, refreshCloudSessionList, serverSessions],
   );
 
   const onSessionAction = useCallback(
     (session: CloudSession) => {
       if (environmentId === null) return;
 
-      // `ready` means the relay published the environment link, so the machine
-      // is already in the connect list — the row's job is to point there, not
-      // to open a second connection path.
+      // `ready` means the relay published the environment link, so connect the
+      // client to that machine for real — the same entry point the
+      // environment list's connect buttons use (`environmentCatalog.retryNow`),
+      // resolved through the catalog because the contract's session record
+      // carries no environment id of its own.
       if (session.phase === "ready") {
-        toastManager.add({
-          type: "info",
-          title: "This session is ready — connect to it from your environment list.",
-        });
+        const target = findCloudSessionEnvironment(environments, session);
+        if (target === null) {
+          // The catalog does not carry that machine yet (relay discovery lag
+          // or a label mismatch): keep pointing at the environment list
+          // instead of guessing an id.
+          toastManager.add({
+            type: "info",
+            title: "This session is ready — connect to it from your environment list.",
+          });
+          return;
+        }
+        setPendingSessionId(session.sessionId);
+        void connectEnvironment(target.environmentId)
+          .then((result) => {
+            if (result._tag === "Success") {
+              toastManager.add({
+                type: "success",
+                title: `Connected to ${target.label}.`,
+              });
+            } else {
+              toastManager.add({
+                type: "error",
+                title: "Could not connect to that cloud session.",
+              });
+            }
+          })
+          .finally(() => setPendingSessionId(null));
         return;
       }
 
@@ -116,7 +166,15 @@ export function useCloudSessionController() {
         })
         .finally(() => setPendingSessionId(null));
     },
-    [cancelSession, durationSeconds, environmentId, onCreate, refreshCloudSessionList],
+    [
+      cancelSession,
+      connectEnvironment,
+      durationSeconds,
+      environments,
+      environmentId,
+      onCreate,
+      refreshCloudSessionList,
+    ],
   );
 
   return {

@@ -887,4 +887,32 @@ describe("dedupeRunOnEnvironments", () => {
     const remote = runOnEnvironment({ environmentId: "env-a", label: "This device" });
     expect(dedupeRunOnEnvironments([primary, remote], primary.environmentId)).toHaveLength(2);
   });
+
+  it("keeps the connected row when the stale duplicate was seen first", () => {
+    const stale = runOnEnvironment({ environmentId: "env-a", label: "nx-nexi" });
+    const live = { ...runOnEnvironment({ environmentId: "env-b", label: "nx-nexi" }), connected: true };
+    const deduped = dedupeRunOnEnvironments([stale, live], stale.environmentId);
+    expect(deduped).toEqual([live]);
+  });
+
+  it("keeps the connected row when it was seen first", () => {
+    const live = { ...runOnEnvironment({ environmentId: "env-b", label: "nx-nexi" }), connected: true };
+    const stale = runOnEnvironment({ environmentId: "env-a", label: "nx-nexi" });
+    const deduped = dedupeRunOnEnvironments([live, stale], live.environmentId);
+    expect(deduped).toEqual([live]);
+  });
+
+  it("still prefers the active environment over a connected duplicate", () => {
+    const stale = { ...runOnEnvironment({ environmentId: "env-a", label: "nx-nexi" }), connected: true };
+    const active = runOnEnvironment({ environmentId: "env-b", label: "nx-nexi" });
+    const deduped = dedupeRunOnEnvironments([stale, active], active.environmentId);
+    expect(deduped).toEqual([active]);
+  });
+
+  it("keeps the first row when both duplicates are connected", () => {
+    const first = { ...runOnEnvironment({ environmentId: "env-a", label: "nx-nexi" }), connected: true };
+    const second = { ...runOnEnvironment({ environmentId: "env-b", label: "nx-nexi" }), connected: true };
+    const deduped = dedupeRunOnEnvironments([first, second], first.environmentId);
+    expect(deduped).toEqual([first]);
+  });
 });

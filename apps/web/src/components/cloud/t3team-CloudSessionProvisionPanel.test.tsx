@@ -198,4 +198,57 @@ describe("CloudSessionProvisionPanel", () => {
     expect(node.textContent).toContain("No active cloud sessions");
     expect(node.textContent).not.toContain("History ·");
   });
+
+  it("ticks the elapsed label of an in-progress session on the client", () => {
+    // The server snapshot says 2m 35s elapsed; without a client-side tick the
+    // label would sit there frozen until the next (minutes-away) refresh.
+    vi.useFakeTimers();
+    try {
+      const node = render(
+        <CloudSessionProvisionPanel
+          sessions={[session({ sessionId: "a-preparing", phase: "preparing", elapsedSeconds: 155 })]}
+          onCreate={() => {}}
+          onSessionAction={() => {}}
+        />
+      );
+
+      expect(node.textContent).toContain("Installing dependencies and building · 2m 35s");
+      act(() => {
+        vi.advanceTimersByTime(3_000);
+      });
+      expect(node.textContent).toContain("Installing dependencies and building · 2m 38s");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not tick the label of a finished session", () => {
+    vi.useFakeTimers();
+    try {
+      const node = render(
+        <CloudSessionProvisionPanel
+          sessions={[
+            session({
+              sessionId: "h-failed",
+              phase: "failed",
+              elapsedSeconds: 128,
+              failureReason: "rejected",
+            }),
+          ]}
+          onCreate={() => {}}
+          onSessionAction={() => {}}
+        />
+      );
+
+      expandHistory(node);
+      const before = node.textContent;
+      act(() => {
+        vi.advanceTimersByTime(5_000);
+      });
+      // No interval was registered for the terminal row: identical text.
+      expect(node.textContent).toBe(before);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -1,12 +1,13 @@
 import type { CloudSession, EnvironmentId } from "@t3tools/contracts";
 import { CloudIcon, ScaleIcon, SettingsIcon } from "lucide-react";
-import { memo, useMemo } from "react";
+import { memo, useMemo, useRef, useState } from "react";
 
 import type { EnvironmentOption } from "./BranchToolbar.logic";
 import { dedupeRunOnEnvironments } from "./BranchToolbar.logic";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { composerFloatingLayerProps } from "./chat/composerEventScope";
 import { presentCloudSession } from "./cloud/t3team-cloudSessionProvisionPresentation";
+import { cn } from "~/lib/utils";
 import {
   Select,
   SelectGroup,
@@ -42,10 +43,12 @@ export interface BranchToolbarEnvironmentSelectorProps {
   // renders (as a static label) so remote projects are always identifiable.
   onEnvironmentChange?: (environmentId: EnvironmentId) => void;
   /**
-   * Cloud sessions that have not finished provisioning yet, shown read-only so
-   * the machine you just asked for is visible where you pick a machine. A ready
-   * session is deliberately absent: it has joined `availableEnvironments` by
-   * then and listing it twice would be a lie about how many machines exist.
+   * Cloud sessions worth showing under "Cloud" while they are not ready: the
+   * ones still provisioning (read-only, so the machine you just asked for is
+   * visible where you pick a machine) and the most recent failed one, with
+   * its failure reason. A ready session is deliberately absent: it has joined
+   * `availableEnvironments` by then and listing it twice would be a lie about
+   * how many machines exist.
    */
   pendingCloudSessions?: readonly CloudSession[];
   /**
@@ -93,6 +96,14 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
     [runOnEnvironments, environmentId],
   );
 
+  // The menu's open state is controlled on purpose: selecting "New cloud
+  // session" must NOT close it — the just-created session has to appear in
+  // the open list and its phase tick forward live. Base UI closes the popup
+  // in the same tick as it fires `onValueChange`, so the keep-open request is
+  // stashed in a ref and consumed by the close that immediately follows.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const keepMenuOpenRef = useRef(false);
+
   const environmentItems = useMemo(
     () => [
       ...(onAutoEnvironment
@@ -120,6 +131,42 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       onSetupCloudSessions,
     ],
   );
+
+  const handleValueChange = (value: string | null, details?: { cancel?: () => void } | null) => {
+    if (value === CREATE_CLOUD_SESSION_SELECT_VALUE) {
+      // Do not commit the sentinel as the select's value (the trigger would
+      // point at an item that is not a machine) and keep the menu open.
+      details?.cancel?.();
+      keepMenuOpenRef.current = true;
+      onCreateCloudSession?.();
+      return;
+    }
+    if (value === SETUP_CLOUD_SESSIONS_SELECT_VALUE) {
+      onSetupCloudSessions?.();
+      return;
+    }
+    if (value === "auto") {
+      onAutoEnvironment?.();
+      return;
+    }
+    onEnvironmentChange?.(value as EnvironmentId);
+  };
+
+  const handleOpenChange = (open: boolean, details?: { reason?: string } | null) => {
+    if (
+      !open &&
+      keepMenuOpenRef.current &&
+      (details?.reason === undefined || details.reason === "item-press")
+    ) {
+      // The create item was just pressed: the close that Base UI fires for
+      // the selection is suppressed; the menu stays open and keeps polling.
+      keepMenuOpenRef.current = false;
+      return;
+    }
+    keepMenuOpenRef.current = false;
+    setMenuOpen(open);
+    onCloudMenuOpenChange?.(open);
+  };
 
   if (envLocked || (onEnvironmentChange === undefined && !hasCloudAffordance)) {
     return (
@@ -149,23 +196,10 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   return (
     <Select
       modal={false}
+      open={menuOpen}
       value={autoEnvironmentLabel ? "auto" : environmentId}
-      onOpenChange={(open) => onCloudMenuOpenChange?.(open)}
-      onValueChange={(value) => {
-        if (value === CREATE_CLOUD_SESSION_SELECT_VALUE) {
-          onCreateCloudSession?.();
-          return;
-        }
-        if (value === SETUP_CLOUD_SESSIONS_SELECT_VALUE) {
-          onSetupCloudSessions?.();
-          return;
-        }
-        if (value === "auto") {
-          onAutoEnvironment?.();
-          return;
-        }
-        onEnvironmentChange?.(value as EnvironmentId);
-      }}
+      onOpenChange={handleOpenChange}
+      onValueChange={handleValueChange}
       items={environmentItems}
     >
       <SelectTrigger
@@ -254,7 +288,10 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                   >
                     <EnvironmentMachineIcon
                       kind="cloud"
-                      className="size-3 shrink-0 animate-pulse"
+                      className={cn(
+                        "size-3 shrink-0",
+                        presentation.tone === "working" && "animate-pulse",
+                      )}
                     />
                     <span className="truncate">{presentation.title}</span>
                     <span className="truncate opacity-70">{presentation.detail}</span>

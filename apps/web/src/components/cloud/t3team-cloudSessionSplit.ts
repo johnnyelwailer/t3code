@@ -1,5 +1,7 @@
 import type { CloudSession, CloudSessionPhase } from "@t3tools/contracts";
 
+import { isCloudSessionProvisionPending } from "./t3team-cloudSessionProvisionPresentation";
+
 /**
  * Split the cloud session list into what the panel surfaces by default
  * (sessions still doing work) and what belongs in the collapsed history
@@ -59,4 +61,58 @@ export function splitCloudSessions(
     history,
     hiddenHistoryCount: Math.max(0, terminal.length - history.length),
   };
+}
+
+/**
+ * The sessions the composer's "Run on" menu shows under "Cloud": everything
+ * still provisioning (the machine the user just asked for, phases ticking
+ * live while the menu polls) plus the most recent failed session, so a
+ * failed provisioning is never silently forgotten. Ready sessions are
+ * excluded on purpose: a ready session has joined the environment list, and
+ * listing it a second time would read as a duplicate machine.
+ *
+ * List order (newest first, from the server) is preserved.
+ */
+export function runOnCloudSessions(sessions: readonly CloudSession[]): readonly CloudSession[] {
+  const mostRecentFailed = sessions.find((session) => session.phase === "failed") ?? null;
+  return sessions.filter(
+    (session) => isCloudSessionProvisionPending(session.phase) || session === mostRecentFailed,
+  );
+}
+
+/**
+ * A locally-created session the server's list does not authoritatively cover
+ * yet, plus the server-side ids that existed before the create.
+ */
+export interface LocalCloudSession {
+  readonly session: CloudSession;
+  readonly knownServerSessionIds: ReadonlySet<string>;
+}
+
+/**
+ * Union the server's session list with a locally-created session, so a
+ * dispatch does not vanish from the UI while GHE indexes the new run.
+ *
+ * The server's `create` answers with the run's projected session when the run
+ * is already visible, and with a `pending:`-tag session when it is not — and
+ * the list endpoint only ever reports runs that are visible, under the run's
+ * own id. The correlation tag never comes back to the client, so "the local
+ * session is covered" can only be detected two ways: the same `sessionId`
+ * appears in the server list, or a session that was not there before the
+ * create now is (the dispatch surfacing). Until then the local record is
+ * shown alongside the server list — no client-side TTL, a runner can
+ * legitimately take minutes to pick the job up.
+ */
+export function mergeLocalCloudSession(
+  serverSessions: readonly CloudSession[],
+  local: LocalCloudSession | null,
+): readonly CloudSession[] {
+  if (local === null) return serverSessions;
+  if (serverSessions.some((session) => session.sessionId === local.session.sessionId)) {
+    return serverSessions;
+  }
+  const tookOver = serverSessions.some(
+    (session) => !local.knownServerSessionIds.has(session.sessionId),
+  );
+  return tookOver ? serverSessions : [local.session, ...serverSessions];
 }

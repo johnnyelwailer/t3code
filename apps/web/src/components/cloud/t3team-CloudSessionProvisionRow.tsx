@@ -1,5 +1,5 @@
 import type { CloudSession } from "@t3tools/contracts";
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { cn } from "~/lib/utils";
 import { ConnectionStatusDot } from "../ConnectionStatusDot";
@@ -9,6 +9,7 @@ import { Skeleton } from "../ui/skeleton";
 import {
   cloudSessionToneDotClassName,
   cloudSessionTonePingClassName,
+  formatDuration,
   presentCloudSession,
 } from "./t3team-cloudSessionProvisionPresentation";
 
@@ -58,6 +59,35 @@ export function CloudSessionRowsSkeleton() {
 }
 
 /**
+ * The " · <elapsed>" suffix of an in-progress row's detail, ticking once a
+ * second. The server's `elapsedSeconds` only moves when the list refreshes
+ * (the Run-on menu polls every 5 s, the settings panel never polls at all),
+ * so without this the label freezes mid-build. The tick lives in this leaf
+ * on purpose: it re-renders itself and only itself, never the list.
+ */
+function CloudSessionLiveDetail({
+  detail,
+  elapsedSeconds,
+}: {
+  readonly detail: string;
+  readonly elapsedSeconds: number;
+}) {
+  const [liveSeconds, setLiveSeconds] = useState(elapsedSeconds);
+  useEffect(() => {
+    const timer = setInterval(() => setLiveSeconds((seconds) => seconds + 1), 1_000);
+    return () => clearInterval(timer);
+  }, []);
+  // Re-sync when the list refresh brings a newer snapshot; never step back.
+  useEffect(() => {
+    setLiveSeconds((current) => Math.max(current, elapsedSeconds));
+  }, [elapsedSeconds]);
+  const staticSuffix = formatDuration(elapsedSeconds);
+  const marker = ` · ${staticSuffix}`;
+  if (!detail.endsWith(marker)) return <>{detail}</>;
+  return <>{detail.slice(0, detail.length - marker.length)} · {formatDuration(liveSeconds)}</>;
+}
+
+/**
  * One provisioning attempt. The row never names the provider's concepts — no
  * run ids, no job names — because the user asked for a workspace, not a build.
  *
@@ -100,7 +130,14 @@ export function CloudSessionRow({
                 presentation.tone === "error" ? "text-destructive" : "text-muted-foreground",
               )}
             >
-              {presentation.detail}
+              {presentation.liveElapsed ? (
+                <CloudSessionLiveDetail
+                  detail={presentation.detail}
+                  elapsedSeconds={session.elapsedSeconds}
+                />
+              ) : (
+                presentation.detail
+              )}
             </div>
             {presentation.progress === null ? null : (
               <CloudSessionProgressBar progress={presentation.progress} />

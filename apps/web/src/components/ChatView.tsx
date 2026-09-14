@@ -2289,6 +2289,10 @@ export default function ChatView(props: ChatViewProps) {
         label: environment?.label ?? p.environmentId,
         isPrimary,
         machine: resolveEnvironmentMachineKind(environment?.serverConfig ?? null),
+        // The dedupe tie-break in `dedupeRunOnEnvironments`: when the same
+        // machine sits in the catalog under two ids, the connected row is the
+        // live one and the unconnected row is a stale registry duplicate.
+        connected: environment?.connection.phase === "connected",
       });
     }
     // Sort: primary first, then alphabetical

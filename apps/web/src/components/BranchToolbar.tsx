@@ -13,7 +13,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
 import { useCloudSessionController } from "../cloud/t3team-useCloudSessionController";
-import { isCloudSessionProvisionPending } from "./cloud/t3team-cloudSessionProvisionPresentation";
+import { runOnCloudSessions } from "./cloud/t3team-cloudSessionSplit";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useProject, useThread, useThreadShellsForProjectRefs } from "../state/entities";
 import {
@@ -539,17 +539,17 @@ export const BranchToolbar = memo(function BranchToolbar({
   const [stripElement, setStripElement] = useState<HTMLDivElement | null>(null);
   const labelsOverflow = useLabelsOverflow(stripElement);
 
-  // Cloud sessions shown in the "Run on" menu. Both derived values are
-  // memoised: the selector is memo'd and this strip re-renders on every
-  // keystroke, so a fresh array or callback here would defeat its memo.
+  // Cloud sessions shown in the "Run on" menu: everything still provisioning
+  // plus the most recent failed session (never silently forgotten). Read the
+  // split rule's doc for why ready sessions stay out of this list. Both
+  // derived values are memoised: the selector is memo'd and this strip
+  // re-renders on every keystroke, so a fresh array or callback here would
+  // defeat its memo.
   // When there is no primary environment, no cloud affordance is passed and
   // the menu renders exactly as it did before.
   const cloudSessions = useCloudSessionController();
   const pendingCloudSessions = useMemo(
-    () =>
-      cloudSessions.available
-        ? cloudSessions.sessions.filter((session) => isCloudSessionProvisionPending(session.phase))
-        : [],
+    () => (cloudSessions.available ? runOnCloudSessions(cloudSessions.sessions) : []),
     [cloudSessions.available, cloudSessions.sessions],
   );
   const onCreateCloudSession = useCallback(

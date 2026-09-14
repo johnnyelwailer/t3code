@@ -196,6 +196,8 @@
     "apps/web/src/components/AgentsPanel.tsx",
     "apps/web/src/components/AppSidebarLayout.tsx",
     "apps/web/src/components/BranchToolbar.tsx",
+    "apps/web/src/components/BranchToolbar.logic.test.ts",
+    "apps/web/src/components/BranchToolbar.logic.ts",
     "apps/web/src/components/BranchToolbarEnvironmentSelector.tsx",
     "apps/web/src/components/ChatView.logic.test.ts",
     "apps/web/src/components/ChatView.logic.ts",
