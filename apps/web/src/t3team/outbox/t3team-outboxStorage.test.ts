@@ -141,4 +141,13 @@ describe("durable entry presence and attempt timestamp", () => {
     removeStoredOutboxEntry(first);
     expect(storedOutboxEntryExists(first.entryId)).toBe(false);
   });
+
+  it('fails open when the store is unreadable (an error must not read as "gone")', () => {
+    vi.stubGlobal("localStorage", {
+      getItem() {
+        throw new Error("storage unavailable");
+      },
+    });
+    expect(storedOutboxEntryExists("any-id")).toBe(true);
+  });
 });

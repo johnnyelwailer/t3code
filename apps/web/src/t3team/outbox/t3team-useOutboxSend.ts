@@ -18,6 +18,7 @@ import { isStagedComposerActionLaunchable } from "~/t3team/t3team-stagedComposer
 import { useT3TeamStagedComposerActionStore } from "~/t3team/t3team-stagedComposerActionStore";
 import { makeT3TeamOutboxEntry } from "~/t3team/outbox/t3team-outboxModel";
 import { enqueueT3TeamOutboxEntry } from "~/t3team/outbox/t3team-outboxStore";
+import { toastManager } from "~/components/ui/toast";
 
 export type EnqueueOfflineTurnStart = (turnStart: {
   readonly threadId: string;
@@ -30,6 +31,15 @@ export type EnqueueOfflineTurnStart = (turnStart: {
   readonly createdAt: string;
   readonly hasAttachments: boolean;
 }) => boolean | Promise<boolean>;
+
+/** A workflow/card action failed to queue durably; surface it instead of dropping it silently. */
+function notifyOutboxPersistFailed(): void {
+  toastManager.add({
+    type: "warning",
+    title: "Couldn't queue that yet",
+    description: "The offline queue is unavailable. Reconnect to the environment and try again.",
+  });
+}
 
 export function useT3TeamOutboxSend(input: {
   readonly backend: BackendApi | null | undefined;
@@ -134,7 +144,7 @@ export function useT3TeamOutboxSend(input: {
     }) => {
       if (!input.backend) return;
       if (!availableRef.current && input.environmentId) {
-        enqueueT3TeamOutboxEntry(
+        const queued = enqueueT3TeamOutboxEntry(
           makeT3TeamOutboxEntry(
             "workflow-answer",
             {
@@ -147,6 +157,7 @@ export function useT3TeamOutboxSend(input: {
             decision.threadId,
           ),
         );
+        if (!queued) notifyOutboxPersistFailed();
         return;
       }
       await input.backend.resolveWorkflowInput({
@@ -164,7 +175,7 @@ export function useT3TeamOutboxSend(input: {
     async (action: { cardId: string; actionId: string; submit?: Record<string, unknown> }) => {
       if (!input.backend) return;
       if (!availableRef.current && input.environmentId) {
-        enqueueT3TeamOutboxEntry(
+        const queued = enqueueT3TeamOutboxEntry(
           makeT3TeamOutboxEntry(
             "recipe-card-action",
             {
@@ -176,6 +187,7 @@ export function useT3TeamOutboxSend(input: {
             input.threadId,
           ),
         );
+        if (!queued) notifyOutboxPersistFailed();
         return;
       }
       await input.backend.submitRecipeCardAction({

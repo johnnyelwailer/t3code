@@ -133,10 +133,11 @@ export function removeT3TeamOutboxEntry(entry: T3TeamOutboxEntry): void {
   releaseOutboxDispatch(entry.entryId);
   clearOutboxAttempt(entry.entryId);
   delete retryAttempts[entry.entryId];
+  // The in-memory dispatch lock is owned by the drain's .finally, not the
+  // removal: discarding the in-flight head must not release the lock and let a
+  // second entry dispatch concurrently with the still-running first.
   commit({
     entries: state.entries.filter((candidate) => candidate.entryId !== entry.entryId),
-    dispatchingEntryId:
-      state.dispatchingEntryId === entry.entryId ? null : state.dispatchingEntryId,
     retryNotBefore: clearEntryState(state.retryNotBefore, entry.entryId),
     failures: clearEntryState(state.failures, entry.entryId),
   });
@@ -188,6 +189,9 @@ export function recordT3TeamOutboxFailure(entryId: string, error: string): void 
 /** User-initiated resend of a failed entry: clears backoff and re-triggers the drain. */
 export function retryT3TeamOutboxEntry(entryId: string): void {
   delete retryAttempts[entryId];
+  // Clear the durable at-most-once shield too, so a resend is not blocked by a
+  // stale attempt timestamp no matter how the Resend affordance surfaced.
+  clearOutboxAttempt(entryId);
   commit({
     failures: clearEntryState(state.failures, entryId),
     retryNotBefore: clearEntryState(state.retryNotBefore, entryId),

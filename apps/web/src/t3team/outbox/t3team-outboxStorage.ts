@@ -17,14 +17,6 @@ const OUTBOX_ATTEMPT_PREFIX = "t3team-outbox:attempt:v1:";
 /** Stable per-tab identity, so a claim can distinguish "this tab" from others. */
 const DISPATCH_TAB_ID = randomUUID();
 
-export function outboxStorageAvailable(): boolean {
-  try {
-    return typeof globalThis.localStorage !== "undefined";
-  } catch {
-    return false;
-  }
-}
-
 function storage(): Storage {
   return globalThis.localStorage;
 }
@@ -80,12 +72,16 @@ export function removeStoredOutboxEntry(entry: T3TeamOutboxEntry): void {
  * Whether the entry still has a durable record. Once another tab delivers or
  * discards it, the record is gone and this tab can drop its stale in-memory
  * copy instead of re-dispatching something that no longer exists.
+ *
+ * Fails open: an unreadable store reports the entry as still present, so a
+ * storage error (quota, blocked storage, eviction) can never be mistaken for
+ * "delivered by another tab" and delete a queued send.
  */
 export function storedOutboxEntryExists(entryId: string): boolean {
   try {
     return storage().getItem(OUTBOX_STORAGE_PREFIX + entryId) !== null;
   } catch {
-    return false;
+    return true;
   }
 }
 
