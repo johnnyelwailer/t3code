@@ -125,6 +125,19 @@ export interface ToolAuthAdapter {
   readonly command: string[];
 
   /**
+   * Extra variables merged over the service env when spawning the login pty.
+   *
+   * gh uses it for `GH_BROWSER=/usr/bin/true`: the auto-answered Enter that
+   * starts the CLI's device-code polling would otherwise also make gh open
+   * the HOST's browser — on a desktop host that window pops up before the
+   * user has even read the code off the card, and on a headless VM it is
+   * useless anyway. Pointing the documented `GH_BROWSER` launcher at a no-op
+   * keeps the Enter (and thus the polling) but suppresses the window. The
+   * device URL is on the card; the user opens it on their own schedule.
+   */
+  readonly spawnEnv?: Readonly<Record<string, string>> | undefined;
+
+  /**
    * Most CLIs detect a non-TTY and change behaviour or refuse outright.
    * Retained from the prototype as adapter metadata; the server always
    * spawns through the real `PtyAdapter` service regardless (that is the

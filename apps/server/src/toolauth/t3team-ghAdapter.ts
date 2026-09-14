@@ -45,6 +45,16 @@ export function ghAdapter(hostname: string): ToolAuthAdapter {
     // store; nothing in this flow touches a token.
     command: ["gh", "auth", "login", "--hostname", hostname, "--web", "--git-protocol", "https"],
     needsTty: true,
+    // VERIFIED against gh 2.96.0: `GH_BROWSER` is gh's documented launcher
+    // override ("the web browser to use for opening links"); a probe with a
+    // logger script confirmed the Enter makes gh invoke it with the device
+    // URL. Pointing it at `true` keeps the auto-answered Enter from popping
+    // the host's browser open before the user has copied the code off the
+    // card (and does nothing on a headless VM, where it would be useless
+    // anyway) — while still starting gh's device-code polling. The device
+    // URL is on the card; the user opens it on their own schedule.
+    // (GH_NO_BROWSER is NOT a gh variable — verified absent from the binary.)
+    spawnEnv: { GH_BROWSER: "/usr/bin/true" },
     match: {
       // VERIFIED: gh prints "Press Enter to open https://nexplore.ghe.com/login/device
       // in your browser..." — the URL ends at the next space.

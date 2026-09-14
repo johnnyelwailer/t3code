@@ -96,7 +96,16 @@ export function makeToolAuthLoginFlow(deps: ToolAuthLoginFlowDeps) {
     const initialState: AuthState = { tool, phase: "starting" };
 
     const process = yield* ptyAdapter
-      .spawn({ shell: shell!, args, cwd: homeDir, cols: 80, rows: 30, env })
+      .spawn({
+        shell: shell!,
+        args,
+        cwd: homeDir,
+        cols: 80,
+        rows: 30,
+        // Adapter-specific variables (gh's GH_NO_BROWSER) win over the
+        // service env: they exist precisely to change host behaviour.
+        env: { ...env, ...adapter.spawnEnv },
+      })
       .pipe(Effect.mapError((cause) => new ToolAuthSpawnError({ tool, cause })));
 
     yield* SynchronizedRef.update(sessionsRef, (sessions) => {

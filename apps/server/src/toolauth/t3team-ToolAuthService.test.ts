@@ -306,6 +306,40 @@ describe("ToolAuthService", () => {
       }),
     );
 
+    it.effect("answers the press-enter prompt even while the line is still incomplete (no newline yet)", () =>
+      Effect.gen(function* () {
+        const homeDir = makeTempHome();
+        try {
+          const { service, ptyAdapter } = yield* makeService(homeDir, {
+            tools: ["gh"],
+            checkBinaryAvailable: () => Effect.succeed(true),
+          });
+          yield* service.start("gh");
+          const process = ptyAdapter.processes[0]!;
+
+          // The real-pty capture: the code line is complete, but the
+          // "Press Enter to open <url>…" line gets no newline while gh blocks
+          // on the keypress — it stays the incomplete trailing line (partial).
+          // Both the URL capture and the auto-Enter must work off that partial.
+          process.emitData("! First copy your one-time code: 4148-FBA3\r\n");
+          process.emitData(
+            "Press Enter to open https://nexplore.ghe.com/login/device in your browser... ",
+          );
+          yield* waitFor(
+            firstFakeState(service).pipe(Effect.map((s) => s?.phase === "awaiting-open")),
+          );
+          const open = yield* firstFakeState(service);
+          expect(open?.url).toBe("https://nexplore.ghe.com/login/device");
+          expect(open?.displayCode).toBe("4148-FBA3");
+          // The Enter is sent although the prompt line never completed.
+          yield* flush;
+          expect(process.writes).toEqual(["\n"]);
+        } finally {
+          removeTempHome(homeDir);
+        }
+      }),
+    );
+
     it.effect("spawns with the GHE device-flow argv", () =>
       Effect.gen(function* () {
         const homeDir = makeTempHome();
@@ -317,6 +351,15 @@ describe("ToolAuthService", () => {
           yield* service.start("gh");
           expect(ptyAdapter.spawnInputs[0]?.shell).toBe(GH.command[0]);
           expect(ptyAdapter.spawnInputs[0]?.args).toEqual(GH.command.slice(1));
+          // Enter must start polling WITHOUT opening the host's browser — the
+          // user opens the card's URL themselves, once the code is copied.
+          // gh's documented launcher override is `GH_BROWSER` (verified: it is
+          // invoked with the device URL on Enter); `GH_NO_BROWSER` is NOT a gh
+          // variable, so pointing the launcher at a no-op is what suppresses
+          // the window while keeping the Enter (and thus the polling).
+          expect(ptyAdapter.spawnInputs[0]?.env).toEqual(
+            expect.objectContaining({ GH_BROWSER: "/usr/bin/true" }),
+          );
         } finally {
           removeTempHome(homeDir);
         }
