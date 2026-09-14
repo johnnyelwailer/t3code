@@ -325,6 +325,7 @@
     "packages/contracts/src/vcs.ts",
     "packages/effect-codex-app-server/src/schema.test.ts",
     "packages/integrations-atlassian/src/jiraApi.live.test.ts",
+    "packages/integrations-atlassian/src/oauth.ts",
     "packages/integrations-atlassian/src/provider.ts",
     "packages/integrations-atlassian/src/provider.live.test.ts",
     "packages/project-context/src/index.ts",
