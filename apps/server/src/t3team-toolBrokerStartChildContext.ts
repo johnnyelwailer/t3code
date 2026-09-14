@@ -68,6 +68,9 @@ export type T3TeamStartChildServices = {
   readonly projectSetupScriptRunner: ProjectSetupScriptRunner["Service"];
   /** Live provider snapshots, used to resolve a cross-provider child model selection. */
   readonly listProviders: () => Effect.Effect<ReadonlyArray<ServerProvider>>;
+  /** This server's own EnvironmentId (resolved once at wiring time) — used to tell a
+   * same-environment `environment` argument (no-op binding) apart from a cross-environment one. */
+  readonly localEnvironmentId?: string;
   /** Resolves the launching thread of the workflow run that spawned `threadId` (undefined
    * when the caller is not a live run's child) — see the workflow-engine registry. */
   readonly workflowLaunchThreadForChild: (threadId: string) => string | undefined;

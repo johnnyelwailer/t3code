@@ -99,6 +99,9 @@ export function childStatusFromDetail(
     ...(status.branch ? { branch: status.branch } : {}),
     ...(status.worktreePath ? { worktreePath: status.worktreePath } : {}),
     ...(status.childStatus ? { childStatus: status.childStatus } : {}),
+    // Cross-environment child (t3team start_child `environment`): the row shows
+    // the target environment's identity; messaging stays same-environment.
+    ...(detail.environment ? { environment: detail.environment } : {}),
     // Detail loads carry no shell pending flag; derive the same fact from the
     // thread's user-input activity lifecycle (retention keeps the pending row).
     ...(detailHasOpenUserInputRequest(detail.activities) ? { awaitingUserInput: true } : {}),
@@ -129,6 +132,8 @@ export function childStatusFromShell(
     ...(status.branch ? { branch: status.branch } : {}),
     ...(status.worktreePath ? { worktreePath: status.worktreePath } : {}),
     ...(status.childStatus ? { childStatus: status.childStatus } : {}),
+    // Cross-environment child (t3team start_child `environment`).
+    ...(shell.environment ? { environment: shell.environment } : {}),
     // Shell live state: a question docked in this child's composer.
     ...(status.awaitingUserInput ? { awaitingUserInput: true } : {}),
     // Shell live state: a plan-mode child that presented its plan and stopped.

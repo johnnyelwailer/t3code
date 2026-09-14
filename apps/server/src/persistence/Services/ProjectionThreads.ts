@@ -14,6 +14,7 @@ import {
   ProjectId,
   ProviderInteractionMode,
   RuntimeMode,
+  ThreadEnvironmentBinding,
   ThreadLinkedPullRequest,
   ThreadId,
   TurnId,
@@ -36,6 +37,9 @@ export const ProjectionThread = Schema.Struct({
   worktreePath: Schema.NullOr(Schema.String),
   retention: Schema.optional(Schema.Literals(["ephemeral", "retained"])),
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
+  // Execution-environment binding (t3team start_child `environment`): JSON
+  // column; null/absent = same environment as the hosting server.
+  environment: Schema.optional(Schema.NullOr(ThreadEnvironmentBinding)),
   latestTurnId: Schema.NullOr(TurnId),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,

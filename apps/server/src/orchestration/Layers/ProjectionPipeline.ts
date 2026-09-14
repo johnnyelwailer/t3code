@@ -640,6 +640,9 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             worktreePath: event.payload.worktreePath,
             retention: event.payload.retention ?? "retained",
             linkedPullRequest: null,
+            // Environment binding (null = same environment as this server;
+            // every later upsert spreads the existing row, so it persists).
+            environment: event.payload.environment ?? null,
             latestTurnId: null,
             createdAt: event.payload.createdAt,
             updatedAt: event.payload.updatedAt,
