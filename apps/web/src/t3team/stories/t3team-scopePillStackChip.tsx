@@ -37,12 +37,19 @@ function useWidth(): [RefObject<HTMLDivElement | null>, number] {
   return [ref, width];
 }
 
-function CastShadow({ left }: { left: number }) {
+/**
+ * Shadow the disc one level up casts onto this one. `depth` is how many levels below the
+ * selection this disc sits: further down means the caster is further away, so the shade is
+ * blurrier and fainter.
+ */
+function CastShadow({ left, depth }: { left: number; depth: number }) {
+  const blur = 4 + depth * 2.5;
+  const alpha = Math.max(0.07, 0.24 - (depth - 1) * 0.05);
   return (
     <span
       aria-hidden="true"
       className="pointer-events-none absolute -top-px size-7 rounded-full"
-      style={{ left, boxShadow: "0 0 5px 1.5px rgba(0,0,0,0.20)" }}
+      style={{ left, boxShadow: `0 0 ${blur}px ${1 + depth * 0.5}px rgba(0,0,0,${alpha})` }}
     />
   );
 }
@@ -70,10 +77,13 @@ export function ScopeStackChipVariant({
       <div className="flex items-center">
         {items.map((entry, index) => {
           const isActive = index === activeIndex;
-          // The disc after this one covers its right edge — unless this one is the lifted
-          // selection. The disc right after the selection is covered on its LEFT edge.
-          const coveredRight = !isActive && index < items.length - 1;
-          const coveredLeft = activeIndex >= 0 && index === activeIndex + 1;
+          // Depth = distance from the selection ("All" when nothing is selected): the
+          // selection is on top, each step away sits one level lower and further back. A
+          // disc is covered on the side that faces the selection, by the disc one level up.
+          const top = activeIndex >= 0 ? activeIndex : 0;
+          const depth = Math.abs(index - top);
+          const coveredRight = index < top;
+          const coveredLeft = index > top;
           return (
             <Pill
               key={entry.key ?? "all"}
@@ -81,21 +91,24 @@ export function ScopeStackChipVariant({
               label={entry.label}
               onClick={() => onSelectScope(entry.key)}
               style={{
-                zIndex: isActive ? items.length + 1 : index + 1,
+                zIndex: items.length - depth,
                 marginLeft: index === 0 ? 0 : -OVERLAP,
+                transform: isActive
+                  ? "translateY(-1px)"
+                  : `scale(${1 - Math.min(depth, 4) * 0.02})`,
               }}
               className={cn(
-                "h-7 min-w-7 gap-1.5 overflow-hidden rounded-full border border-border/70 bg-card dark:bg-sidebar-accent",
+                "h-7 min-w-7 cursor-pointer gap-1.5 overflow-hidden rounded-full border border-black/15 bg-card dark:border-white/20 dark:bg-sidebar-accent",
                 isActive
-                  ? "-translate-y-px px-1 pr-2.5 text-foreground"
+                  ? "px-1 pr-2.5 text-foreground"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
               {/* Cast shadow: a shadow-only circle standing exactly where the covering disc
                   is, clipped by this disc — so the shade follows the upper disc's curve and
                   exists nowhere else. */}
-              {coveredRight ? <CastShadow left={DISC - OVERLAP - 1} /> : null}
-              {coveredLeft ? <CastShadow left={-(DISC - OVERLAP) + 1} /> : null}
+              {coveredRight ? <CastShadow left={DISC - OVERLAP - 1} depth={depth} /> : null}
+              {coveredLeft ? <CastShadow left={-(DISC - OVERLAP) + 1} depth={depth} /> : null}
               <span className="inline-flex size-4 shrink-0 items-center justify-center">
                 {entry.icon}
               </span>
