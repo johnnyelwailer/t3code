@@ -107,10 +107,16 @@ export function DigestItemRow({
   onOpen: () => void;
 }) {
   return (
-    <div className="grid grid-cols-[2rem_1.25rem_6.5rem_minmax(0,1fr)_auto] items-start gap-x-2 px-3 py-2 hover:bg-accent/30">
-      <span className="pt-0.5 text-[11px] tabular-nums text-muted-foreground/60">
-        {index !== undefined ? String(index).padStart(2, "0") : ""}
-      </span>
+    <div
+      className={`grid items-start gap-x-2 px-3 py-2 hover:bg-accent/30 ${
+        index !== undefined
+          ? "grid-cols-[2rem_1.25rem_6.5rem_minmax(0,1fr)_auto]"
+          : "grid-cols-[1.25rem_6.5rem_minmax(0,1fr)_auto]"
+      }`}
+    >
+      {index !== undefined ? (
+        <span className="pt-0.5 text-[11px] tabular-nums text-muted-foreground/60">{String(index).padStart(2, "0")}</span>
+      ) : null}
       <JiraIssueTypeIcon issueType={ticket.issueType} className="mt-0.5 size-3.5" />
       <button type="button" onClick={onOpen} className="pt-0.5 text-left font-mono text-[11.5px] text-muted-foreground hover:text-foreground">
         {ticket.ref.displayId}
