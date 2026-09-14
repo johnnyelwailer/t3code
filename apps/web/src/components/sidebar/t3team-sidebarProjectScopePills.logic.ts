@@ -1,8 +1,12 @@
 /** Disc geometry shared by the layout math and the renderer (px). */
 export const SCOPE_DISC_SIZE = 28;
 export const SCOPE_DISC_OVERLAP = 8;
-/** Width reserved for the selected disc's unfolded name. */
-export const SCOPE_CHIP_LABEL_WIDTH = 84;
+/**
+ * Extra width the selected disc takes when unfolded: the `max-w-28` label (112px) plus its
+ * gap and the wider padding, beyond the disc's own 28px. Reserved up front so the trailing
+ * discs never get clipped when a long name opens.
+ */
+export const SCOPE_CHIP_LABEL_WIDTH = 124;
 
 /** How many project discs fit beside the always-present "All" disc in `width` px. */
 export function projectScopeDiscCapacity(width: number): number {

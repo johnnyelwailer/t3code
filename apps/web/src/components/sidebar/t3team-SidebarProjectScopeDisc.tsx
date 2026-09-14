@@ -85,7 +85,7 @@ export function T3TeamSidebarProjectScopeDisc({
           {label}
         </span>
       </TooltipTrigger>
-      {active ? null : <TooltipPopup side="bottom">{label}</TooltipPopup>}
+      <TooltipPopup side="bottom">{label}</TooltipPopup>
     </Tooltip>
   );
 }

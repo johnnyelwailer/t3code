@@ -49,9 +49,9 @@ describe("selectProjectScopePillGroups", () => {
 describe("projectScopeDiscCapacity", () => {
   it("grows one disc per (size − overlap) once All and the label are paid for", () => {
     expect(projectScopeDiscCapacity(0)).toBe(0);
-    expect(projectScopeDiscCapacity(28 + 84)).toBe(0);
-    expect(projectScopeDiscCapacity(28 + 84 + 20)).toBe(1);
-    expect(projectScopeDiscCapacity(28 + 84 + 100)).toBe(5);
+    expect(projectScopeDiscCapacity(28 + 124)).toBe(0);
+    expect(projectScopeDiscCapacity(28 + 124 + 20)).toBe(1);
+    expect(projectScopeDiscCapacity(28 + 124 + 100)).toBe(5);
   });
 });
 
