@@ -15,6 +15,10 @@
       "types": "./src/connection/index.ts",
       "default": "./src/connection/index.ts"
     },
+    "./state/cloud-sessions": {
+      "types": "./src/state/t3team-cloudSessions.ts",
+      "default": "./src/state/t3team-cloudSessions.ts"
+    },
     "./authorization": {
       "types": "./src/authorization/index.ts",
       "default": "./src/authorization/index.ts"
