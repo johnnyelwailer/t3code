@@ -77,6 +77,27 @@ export function makeStartChildThread(input: {
         childThreadId,
       });
 
+      // Environment binding (additive): an explicit `environment` argument that
+      // names THIS server's own id is a same-environment no-op — the binding is
+      // omitted entirely, keeping the thread.create command byte-identical to
+      // pre-environment behavior. Anything else stamps the thread record, the
+      // handoff activity, and the launch result, with the delivery boundary
+      // documented on the result (`environmentNote`):
+      // inter-agent messaging (send_message / mailbox / children ops) only
+      // reaches threads in THIS environment; report-back from a cross-env
+      // child needs a separate channel (no relay is invented here).
+      const localEnvironmentId = input.services.localEnvironmentId;
+      const environment =
+        args.environment !== undefined &&
+        localEnvironmentId !== undefined &&
+        args.environment.environmentId === localEnvironmentId
+          ? undefined
+          : args.environment;
+      const environmentNote =
+        environment !== undefined
+          ? `Child session is bound to environment '${environment.label ?? environment.environmentId}' (a different T3 server). The thread record and handoff here are stamped with that environment, but inter-agent messaging (send_message, mailbox, children ops) only reaches threads in THIS environment; report-back from the cross-environment child needs a separate channel.`
+          : undefined;
+
       const childToolContext = createChildThreadToolContext({
         parentToolContext,
         projectId: thread.projectId,
@@ -98,6 +119,7 @@ export function makeStartChildThread(input: {
         interactionMode,
         branch,
         worktreePath,
+        ...(environment ? { environment } : {}),
         createdAt,
       });
 
@@ -126,6 +148,7 @@ export function makeStartChildThread(input: {
         ...(branch ? { branch } : {}),
         ...(worktreePath ? { worktreePath } : {}),
         ...(args.kickoffPrompt ? { kickoffPrompt: args.kickoffPrompt } : {}),
+        ...(environment ? { environment } : {}),
       });
 
       let started = false,
@@ -171,6 +194,8 @@ export function makeStartChildThread(input: {
         runtimeMode: thread.runtimeMode,
         provider: modelSelection.instanceId,
         model: modelSelection.model,
+        ...(environment ? { environment } : {}),
+        ...(environmentNote ? { environmentNote } : {}),
         ...(args.model ? { requestedModel: args.model } : {}),
         ...(effortNote ? { effortNote } : {}),
         setupScriptStatus,

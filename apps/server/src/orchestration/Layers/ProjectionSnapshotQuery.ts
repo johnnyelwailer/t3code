@@ -15,6 +15,7 @@ import {
   OrchestrationThreadDetailSnapshot,
   ProjectScript,
   ProjectIconOverride,
+  ThreadEnvironmentBinding,
   TurnId,
   type OrchestrationCheckpointSummary,
   type OrchestrationLatestTurn,
@@ -129,6 +130,8 @@ const ProjectionThreadDbRowSchema = ProjectionThread.mapFields(
   Struct.assign({
     modelSelection: Schema.fromJsonString(ModelSelection),
     linkedPullRequest: Schema.NullOr(Schema.fromJsonString(ThreadLinkedPullRequest)),
+    // JSON column added by migration 71 (t3team start_child `environment`).
+    environment: Schema.NullOr(Schema.fromJsonString(ThreadEnvironmentBinding)),
   }),
 );
 const ProjectionThreadActivityDbRowSchema = ProjectionThreadActivity.mapFields(
@@ -564,6 +567,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           worktree_path AS "worktreePath",
           retention,
           linked_pull_request_json AS "linkedPullRequest",
+          environment_json AS "environment",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -607,6 +611,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           worktree_path AS "worktreePath",
           retention,
           linked_pull_request_json AS "linkedPullRequest",
+          environment_json AS "environment",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -653,6 +658,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           worktree_path AS "worktreePath",
           retention,
           linked_pull_request_json AS "linkedPullRequest",
+          environment_json AS "environment",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -1212,6 +1218,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           worktree_path AS "worktreePath",
           retention,
           linked_pull_request_json AS "linkedPullRequest",
+          environment_json AS "environment",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -2294,6 +2301,10 @@ pending_approval_requests AS (
                 ...(row.linkedPullRequest === null
                   ? {}
                   : { linkedPullRequest: row.linkedPullRequest }),
+                  // Environment binding (t3team start_child `environment`); absent = same environment.
+                  ...(row.environment !== null && row.environment !== undefined
+                    ? { environment: row.environment }
+                    : {}),
                 latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                 createdAt: row.createdAt,
                 updatedAt: row.updatedAt,
@@ -2573,6 +2584,10 @@ pending_approval_requests AS (
                     ...(row.linkedPullRequest === null
                       ? {}
                       : { linkedPullRequest: row.linkedPullRequest }),
+                      // Environment binding (t3team start_child `environment`); absent = same environment.
+                      ...(row.environment !== null && row.environment !== undefined
+                        ? { environment: row.environment }
+                        : {}),
                     latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                     createdAt: row.createdAt,
                     updatedAt: row.updatedAt,
@@ -2761,6 +2776,10 @@ pending_approval_requests AS (
                       ...(row.linkedPullRequest === null
                         ? {}
                         : { linkedPullRequest: row.linkedPullRequest }),
+                        // Environment binding (t3team start_child `environment`); absent = same environment.
+                        ...(row.environment !== null && row.environment !== undefined
+                          ? { environment: row.environment }
+                          : {}),
                       latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                       createdAt: row.createdAt,
                       updatedAt: row.updatedAt,
@@ -2933,6 +2952,10 @@ pending_approval_requests AS (
                   ...(row.linkedPullRequest === null
                     ? {}
                     : { linkedPullRequest: row.linkedPullRequest }),
+                    // Environment binding (t3team start_child `environment`); absent = same environment.
+                    ...(row.environment !== null && row.environment !== undefined
+                      ? { environment: row.environment }
+                      : {}),
                   latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                   createdAt: row.createdAt,
                   updatedAt: row.updatedAt,
@@ -3348,6 +3371,10 @@ pending_approval_requests AS (
         ...(threadRow.value.linkedPullRequest === null
           ? {}
           : { linkedPullRequest: threadRow.value.linkedPullRequest }),
+        // Environment binding (t3team start_child `environment`); absent = same environment.
+        ...(threadRow.value.environment !== null && threadRow.value.environment !== undefined
+          ? { environment: threadRow.value.environment }
+          : {}),
         latestTurn: Option.isSome(latestTurnRow) ? mapLatestTurn(latestTurnRow.value) : null,
         createdAt: threadRow.value.createdAt,
         updatedAt: threadRow.value.updatedAt,
@@ -3643,6 +3670,10 @@ pending_approval_requests AS (
         ...(threadRow.value.linkedPullRequest === null
           ? {}
           : { linkedPullRequest: threadRow.value.linkedPullRequest }),
+        // Environment binding (t3team start_child `environment`); absent = same environment.
+        ...(threadRow.value.environment !== null && threadRow.value.environment !== undefined
+          ? { environment: threadRow.value.environment }
+          : {}),
         latestTurn: Option.isSome(latestTurnRow) ? mapLatestTurn(latestTurnRow.value) : null,
         createdAt: threadRow.value.createdAt,
         updatedAt: threadRow.value.updatedAt,

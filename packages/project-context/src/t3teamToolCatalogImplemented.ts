@@ -75,6 +75,25 @@ const START_CHILD_INPUT_SCHEMA = {
         "Optional branch, tag, or commit to use as the base ref for the child's worktree (linked or local). Only valid with isolation='own-worktree'. When omitted, the repository default branch is used.",
       minLength: 1,
     },
+    environment: {
+      type: "object",
+      additionalProperties: false,
+      description:
+        "Optional execution environment to bind the child session to — a DIFFERENT T3 server than this one. Omit to keep the child in this environment (the default). The thread record and handoff are stamped with the target environment, and the launch result carries an environment_note documenting the delivery boundary: inter-agent messaging (send_message, mailbox, children ops) only reaches threads in THIS environment, so report-back from a cross-environment child needs a separate channel.",
+      properties: {
+        id: {
+          type: "string",
+          description: "EnvironmentId of the target environment (a non-empty string).",
+          minLength: 1,
+        },
+        label: {
+          type: "string",
+          description: "Optional human-readable name of the target environment.",
+          minLength: 1,
+        },
+      },
+      required: ["id"],
+    },
   },
   required: ["name", "isolation"],
 } as const;
@@ -624,7 +643,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     label: "Start child session",
     title: "Start child session",
     description:
-      "Create a child t3team session from the current thread and optionally start it immediately. isolation is required: 'shared' keeps the child in the project's shared checkout without repo_full_name; 'own-worktree' prepares a dedicated scoped worktree — of the linked repository named by repo_full_name when the project has linked repos, or of the local repository when it does not.",
+      "Create a child t3team session from the current thread and optionally start it immediately. isolation is required: 'shared' keeps the child in the project's shared checkout without repo_full_name; 'own-worktree' prepares a dedicated scoped worktree — of the linked repository named by repo_full_name when the project has linked repos, or of the local repository when it does not. Optional 'environment' binds the child session to a DIFFERENT execution environment (another T3 server): the record and handoff are stamped with it, but inter-agent messaging stays same-environment (the launch result's environment_note documents that boundary).",
     capabilities: ["write"],
     kind: "thread",
     surfaces: ["thread"],
