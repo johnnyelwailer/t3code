@@ -22,7 +22,11 @@ import {
   type ProviderUsageThresholds,
 } from "./t3team-providerUsageSampler.ts";
 
-import { clampPercent, isFinitePercent } from "./t3team-providerUsageMappersHelpers.ts";
+import {
+  clampPercent,
+  isExpiredWindow,
+  isFinitePercent,
+} from "./t3team-providerUsageMappersHelpers.ts";
 
 /** Source labels reported in `ProviderUsageSample.source`. */
 export const CLAUDE_USAGE_SOURCE = "anthropic-oauth-usage";
@@ -63,7 +67,9 @@ const claudeLimitsForWindow = (
  *
  * Severity prefers the API's own pre-digested verdict (`limits[]`,
  * `session` → primary, `weekly_all` → secondary) and falls back to the host
- * thresholds on `utilization` when the entry is missing.
+ * thresholds on `utilization` when the entry is missing. A window whose
+ * `resets_at` is already in the past at `sampledAt` is dropped (see
+ * `isExpiredWindow`): the API's severity for it is not a live verdict.
  */
 export const mapClaudeUsage = (
   body: ClaudeUsageBody,
@@ -83,6 +89,8 @@ export const mapClaudeUsage = (
     window: ProviderUsageWindowKind,
   ) => {
     if (!source || !isFinitePercent(source.utilization)) return;
+    const resetsAt = source.resets_at ?? null;
+    if (isExpiredWindow(resetsAt, input.sampledAt)) return;
     const percentUsed = clampPercent(source.utilization);
     const limit = claudeLimitsForWindow(body.limits, limitKind);
     const severity: ProviderUsageSeverity =
@@ -95,7 +103,7 @@ export const mapClaudeUsage = (
       provider: input.provider,
       window,
       percentUsed,
-      resetsAt: source.resets_at ?? null,
+      resetsAt,
       severity,
       source: CLAUDE_USAGE_SOURCE,
       sampledAt: input.sampledAt,
