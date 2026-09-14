@@ -2022,31 +2022,12 @@ export default function Sidebar() {
   // (InboxSubRunsChip toggles this); persisted to localStorage so a parent
   // the user opened stays open across reload (see t3team-useExpandedSubRuns.ts).
   const expandedSubRunParentIds = useExpandedSubRunsStore((store) => store.expandedParentIds);
-  const ensureSubRunExpanded = useExpandedSubRunsStore((store) => store.ensureExpanded);
   // GHE #304: which parents' sub-run "Settled (N)" fold row is expanded.
   // Presentation-only, not persisted — a fresh expand starts folded.
   const [foldedSubRunParentIds, setFoldedSubRunParentIds] = useState<Set<string>>(new Set());
-  // t3team: auto-expand a parent the moment one of its children starts
-  // running, so active sub-run work is never invisible behind a collapsed
-  // chip — additive only (ensureExpanded never removes), and only fired on
-  // the rising edge (a parent newly seen running) so a user who explicitly
-  // collapses a still-running parent isn't immediately re-expanded.
-  const previouslyRunningSubRunParentIdsRef = useRef<ReadonlySet<string>>(new Set());
-  useEffect(() => {
-    const runningParentIds = new Set<string>();
-    for (const [parentId, children] of childThreadsByParentId) {
-      if (children.some((child) => child.status === "running")) {
-        runningParentIds.add(parentId);
-      }
-    }
-    const newlyRunningParentIds = [...runningParentIds].filter(
-      (parentId) => !previouslyRunningSubRunParentIdsRef.current.has(parentId),
-    );
-    previouslyRunningSubRunParentIdsRef.current = runningParentIds;
-    if (newlyRunningParentIds.length > 0) {
-      ensureSubRunExpanded(newlyRunningParentIds);
-    }
-  }, [childThreadsByParentId, ensureSubRunExpanded]);
+  // t3team: a parent whose children started running does NOT auto-expand —
+  // the sub-runs chip stays collapsed by default; the user opens it when they
+  // want to look (manual toggle is persisted across reload).
   // t3team: children are hidden from the flat row lists above (childThreadIds
   // filter) but still live in `threads` — this map recovers each child's
   // environmentId for navigation when its parent's row is expanded.
