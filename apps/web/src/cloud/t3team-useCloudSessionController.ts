@@ -17,46 +17,30 @@ import { DEFAULT_CLOUD_SESSION_DURATION_SECONDS } from "~/components/cloud/t3tea
 import { toastManager } from "~/components/ui/toast";
 import { type RelayEnvironmentCandidate } from "~/components/cloud/t3team-cloudSessionConnect";
 import {
+  isTerminalCloudSessionPhase,
   mergeLocalCloudSession,
   type LocalCloudSession,
 } from "~/components/cloud/t3team-cloudSessionSplit";
 import { useCloudSessionListPolling } from "./t3team-cloudSessionPolling";
 import { useCloudSessionConnect } from "./t3team-useCloudSessionConnect";
-
-type ActionKind = "connect" | "cancel" | "stop";
+import { useCloudSessionEnvironmentExit } from "./t3team-useCloudSessionEnvironmentExit";
 
 /**
- * Binds the cloud session surfaces to the server. One controller drives both
- * entry points — the settings panel and the "Run on" menu — so starting a
- * session from either behaves identically. Create and cancel/stop dispatch the
- * cloud atom; connect is delegated to `useCloudSessionConnect`, which
- * correlates the ready machine to its relay environment and registers it
- * through the normal remote-environment path.
+ * Drives the cloud session surfaces (settings panel + "Run on" menu). Create,
+ * cancel/stop, connect, and the saved-machine "Stop" all exit via their hooks.
  */
 export function useCloudSessionController() {
   const environmentId = usePrimaryEnvironmentId();
   const { environments: relayDiscovered } = useRelayEnvironmentDiscovery();
   const { sessions: serverSessions, loading, configured } = useCloudSessions();
   const [durationSeconds, setDurationSeconds] = useState(DEFAULT_CLOUD_SESSION_DURATION_SECONDS);
-  // `useAtomCommand` returns a bare command with no pending state, so each
-  // in-flight action's flag lives here; the surfaces read it to keep the right
-  // button honest between dispatch and the next list refresh.
   const [createPending, setCreatePending] = useState(false);
   const [actionPending, setActionPending] = useState<{
     readonly sessionId: string;
-    readonly kind: Extract<ActionKind, "cancel" | "stop">;
+    readonly kind: "cancel" | "stop";
   } | null>(null);
-  // The create result until the server's list covers it (see
-  // `mergeLocalCloudSession`). GHE takes seconds to index a dispatch, so
-  // without this the just-created session vanishes in that window — the
-  // "provisioning, then gone with no error" bug.
   const [localSession, setLocalSession] = useState<LocalCloudSession | null>(null);
-  // The relay environment ids present when a session was requested; "the
-  // environment that just appeared" is measured against this (captured before
-  // the machine registers its link).
   const relayIdsBeforeRef = useRef<ReadonlySet<string> | null>(null);
-  // Which surface is showing the list: the "Run on" menu or the settings panel.
-  // Nothing open, no polling.
   const [cloudMenuOpen, setCloudMenuOpen] = useState(false);
   const [panelVisible, setPanelVisible] = useState(false);
 
@@ -81,7 +65,6 @@ export function useCloudSessionController() {
   const refreshRelayEnvironments = useAtomCommand(relayEnvironmentDiscovery.refresh, {
     reportFailure: false,
   });
-
   const refreshCloudSessionList = useCallback(() => {
     if (environmentId === null) return;
     appAtomRegistry.refresh(cloudSessionEnvironment.list({ environmentId, input: {} }));
@@ -96,12 +79,21 @@ export function useCloudSessionController() {
     CLOUD_SESSION_REFRESH_INTERVAL_MS,
   );
 
+  const exit = useCloudSessionEnvironmentExit({
+    sessions,
+    environmentId,
+    cancelSession,
+    refreshCloudSessionList,
+    refreshRelayEnvironments,
+  });
+
   const { connectPendingSessionId, requestConnect } = useCloudSessionConnect({
     sessions,
     relayCandidates,
     primaryEnvironmentId: environmentId,
     environmentIdsBefore: relayIdsBeforeRef.current,
     register: registerRelayEnvironment,
+    onRegistered: exit.onRegistered,
   });
 
   const onCreate = useCallback(
@@ -137,8 +129,6 @@ export function useCloudSessionController() {
 
   const beginConnect = useCallback(
     (session: CloudSession) => {
-      // Pull the freshest relay list first so a just-linked machine is not
-      // missed on a stale snapshot; the connect hook resolves it.
       void refreshRelayEnvironments();
       requestConnect(session.sessionId);
     },
@@ -172,11 +162,7 @@ export function useCloudSessionController() {
         beginConnect(session);
         return;
       }
-      if (
-        session.phase === "failed" ||
-        session.phase === "stopped" ||
-        session.phase === "cancelled"
-      ) {
+      if (isTerminalCloudSessionPhase(session.phase)) {
         onCreate(durationSeconds);
         return;
       }
@@ -193,7 +179,7 @@ export function useCloudSessionController() {
   );
 
   const pendingSessionId = connectPendingSessionId ?? actionPending?.sessionId ?? null;
-  const pendingKind: ActionKind | null =
+  const pendingKind: "connect" | "cancel" | "stop" | null =
     connectPendingSessionId !== null ? "connect" : (actionPending?.kind ?? null);
   const pendingLabel =
     connectPendingSessionId !== null
@@ -215,6 +201,9 @@ export function useCloudSessionController() {
     onCreate,
     onSessionAction,
     onSessionSecondaryAction,
+    stopEnvironment: exit.stopEnvironment,
+    hasLiveCloudSession: exit.hasLiveCloudSession,
+    stoppingEnvironmentId: exit.stoppingEnvironmentId,
     onCloudMenuOpenChange: useCallback((open: boolean) => setCloudMenuOpen(open), []),
     onPanelVisibilityChange: useCallback((open: boolean) => setPanelVisible(open), []),
     available: environmentId !== null,

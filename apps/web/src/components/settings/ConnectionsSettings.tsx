@@ -152,6 +152,7 @@ import { ConnectionStatusDot } from "../ConnectionStatusDot";
 import { ServerUpdateAction, ServerUpdateProgress } from "../ServerUpdateAction";
 import { CloudEnvironmentConnectRows } from "../cloud/CloudEnvironmentConnectList";
 import { CloudSessionProvisionPanel } from "../cloud/t3team-CloudSessionProvisionPanel";
+import { CloudEnvironmentExitActions } from "../cloud/t3team-CloudEnvironmentExitActions";
 import { ITEM_ROW_CLASSNAME, ITEM_ROW_INNER_CLASSNAME } from "./itemRows";
 import {
   resolveShortcutCommand,
@@ -1400,6 +1401,9 @@ type SavedBackendListRowProps = {
   removingEnvironmentId: EnvironmentId | null;
   onConnect: (environmentId: EnvironmentId) => void;
   onRemove: (environmentId: EnvironmentId) => void;
+  canStopCloudSession: boolean;
+  onStopCloudSession: (environmentId: EnvironmentId) => void;
+  isStoppingCloudSession: boolean;
 };
 
 function SavedBackendListRow({
@@ -1407,11 +1411,17 @@ function SavedBackendListRow({
   removingEnvironmentId,
   onConnect,
   onRemove,
+  canStopCloudSession,
+  onStopCloudSession,
+  isStoppingCloudSession,
 }: SavedBackendListRowProps) {
   const environmentId = environment.environmentId;
   const connectionState = environment.connection.phase;
   const isConnected = connectionState === "connected";
   const isConnecting = connectionState === "connecting" || connectionState === "reconnecting";
+  // Cloud (T3 Connect) machines get dedicated "Stop this machine" / "Forget this
+  // environment" exits; other backends keep the plain Connect/Disconnect/Remove.
+  const isCloudRelay = environment.entry.target._tag === "RelayConnectionTarget";
   const stateDotClassName =
     connectionState === "connected"
       ? "bg-success"
@@ -1568,6 +1578,18 @@ function SavedBackendListRow({
                 The WSL backend is managed by the WSL setting above — turn it on or off there.
               </TooltipPopup>
             </Tooltip>
+          ) : isCloudRelay ? (
+            <CloudEnvironmentExitActions
+              environmentId={environmentId}
+              isConnected={isConnected}
+              isConnecting={isConnecting}
+              isRemoving={removingEnvironmentId === environmentId}
+              canStopCloudSession={canStopCloudSession}
+              isStoppingCloudSession={isStoppingCloudSession}
+              onConnect={onConnect}
+              onRemove={onRemove}
+              onStopCloudSession={onStopCloudSession}
+            />
           ) : (
             <>
               {!isConnected ? (
@@ -3598,6 +3620,11 @@ export function ConnectionsSettings() {
             removingEnvironmentId={removingSavedEnvironmentId}
             onConnect={handleConnectSavedBackend}
             onRemove={handleRemoveSavedBackend}
+            canStopCloudSession={cloudSessions.hasLiveCloudSession(environment.environmentId)}
+            onStopCloudSession={cloudSessions.stopEnvironment}
+            isStoppingCloudSession={
+              cloudSessions.stoppingEnvironmentId === environment.environmentId
+            }
           />
         ))}
         {cloudSessions.available ? (
