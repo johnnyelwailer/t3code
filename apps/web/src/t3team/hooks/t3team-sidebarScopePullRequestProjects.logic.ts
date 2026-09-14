@@ -1,8 +1,9 @@
-import type { ScopedProjectRef } from "@t3tools/contracts";
+import { scopeProjectRef, scopedProjectKey } from "@t3tools/client-runtime/environment";
+import type { EnvironmentId, ProjectId, ScopedProjectRef } from "@t3tools/contracts";
 
 export type SidebarScopePullRequestProject = {
-  readonly id: string;
-  readonly environmentId: string;
+  readonly id: ProjectId;
+  readonly environmentId: EnvironmentId;
   readonly repositoryIdentity?: { readonly canonicalKey?: string | undefined } | null | undefined;
 };
 
@@ -12,10 +13,6 @@ export type SidebarScopePullRequestSelection = {
   /** The same selection grouped for `PullRequestListInput.projectIds`, by environment. */
   readonly projectIdsByEnvironment: ReadonlyMap<string, ReadonlyArray<string>>;
 };
-
-export function scopedProjectKey(ref: { environmentId: string; projectId: string }): string {
-  return `${ref.environmentId}:${ref.projectId}`;
-}
 
 /**
  * Which projects the pull request list should read when the sidebar scope is on.
@@ -40,18 +37,12 @@ export function resolveSidebarScopePullRequestProjects(input: {
   for (const project of input.projects) {
     const remote = project.repositoryIdentity?.canonicalKey?.toLowerCase();
     if (remote !== undefined && linkedKeys.has(remote)) {
-      projectKeys.add(
-        scopedProjectKey({ environmentId: project.environmentId, projectId: project.id }),
-      );
+      projectKeys.add(scopedProjectKey(scopeProjectRef(project.environmentId, project.id)));
     }
   }
   const projectIdsByEnvironment = new Map<string, string[]>();
   for (const project of input.projects) {
-    if (
-      !projectKeys.has(
-        scopedProjectKey({ environmentId: project.environmentId, projectId: project.id }),
-      )
-    ) {
+    if (!projectKeys.has(scopedProjectKey(scopeProjectRef(project.environmentId, project.id)))) {
       continue;
     }
     const ids = projectIdsByEnvironment.get(project.environmentId);

@@ -6,7 +6,7 @@ import { resolveSidebarScopePullRequestProjects } from "./t3team-sidebarScopePul
 const env = "env-1" as EnvironmentId;
 const otherEnv = "env-2" as EnvironmentId;
 const project = (id: string, environmentId: EnvironmentId, remote?: string) => ({
-  id,
+  id: id as ProjectId,
   environmentId,
   repositoryIdentity: remote ? { canonicalKey: remote } : null,
 });
