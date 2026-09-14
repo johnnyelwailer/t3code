@@ -68,7 +68,18 @@ export function wireLoginProcess({
         yield* applySessionUpdate(tool, foldPtyRead(session.state, read, adapter), session.state);
         const autoEnter = adapter.match.autoEnter;
         const pty = session.process;
-        if (autoEnter && pty && read.lines.some((line) => autoEnter.test(stripAnsi(line)))) {
+        // The prompt is matched against complete lines AND the trailing
+        // partial: a CLI that blocks on a keypress (gh's "Press Enter to
+        // open …") prints the prompt and stops, so that line may still be
+        // incomplete when it arrives. It is a boolean prompt detector like
+        // `awaitingCode` — safe on the partial — and the regex is the full
+        // phrase, so a still-printing prefix cannot fire it early.
+        if (
+          autoEnter &&
+          pty &&
+          (read.lines.some((line) => autoEnter.test(stripAnsi(line))) ||
+            autoEnter.test(stripAnsi(read.partial)))
+        ) {
           yield* Effect.sync(() => {
             if (autoEnterSent) return;
             autoEnterSent = true;

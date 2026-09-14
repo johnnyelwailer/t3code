@@ -257,6 +257,40 @@ describe("pty read assembly (chunk boundaries)", () => {
     expect(state.phase).toBe("idle");
   });
 
+  it("defers a url that runs to the very end of the partial (still growing)", () => {
+    // The url so far is complete-looking, but nothing terminates it within the
+    // partial — the next read may extend the token. Deferring is the safe
+    // direction; this is the truncation trap the complete-line rule exists for.
+    const state = feed([`Visit: ${AUTHORIZE_URL}`]);
+    expect(state.url).toBeUndefined();
+    expect(state.phase).toBe("idle");
+  });
+
+  it("captures a closed url from the partial when terminator content follows it", () => {
+    // The url is followed by prose within the same (still incomplete) line, so
+    // the token is closed and the capture is stable even without the newline.
+    const state = feed([`Visit: ${AUTHORIZE_URL} (open in your browser)`]);
+    expect(state.url).toBe(AUTHORIZE_URL);
+    expect(state.phase).toBe("awaiting-open");
+  });
+
+  it("surfaces gh's device url on the press-enter line that never gets a newline", () => {
+    // gh prints "Press Enter to open <url> in your browser..." and then blocks
+    // on the keypress — through a real pty that line often stays the
+    // incomplete trailing line (verified live: it sat in `partial` for 30s).
+    // The code line is complete; the prompt line is not. The url must still
+    // surface so the card can show it, and the flow must reach awaiting-open.
+    const read = assemblePtyRead(
+      "",
+      "! First copy your one-time code: 4148-FBA3\r\n" +
+        "Press Enter to open https://nexplore.ghe.com/login/device in your browser... ",
+    );
+    const state = foldPtyRead({ tool: "gh", phase: "starting" }, read, GH);
+    expect(state.displayCode).toBe("4148-FBA3");
+    expect(state.url).toBe("https://nexplore.ghe.com/login/device");
+    expect(state.phase).toBe("awaiting-open");
+  });
+
   it("still detects a blocking prompt that never sends a newline", () => {
     // Real CLIs print "Paste code here:" and then block, so waiting for a
     // newline here would stall the flow on a prompt already received.
