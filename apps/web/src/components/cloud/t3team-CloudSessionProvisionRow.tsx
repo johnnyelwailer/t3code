@@ -60,15 +60,22 @@ export function CloudSessionRowsSkeleton() {
 /**
  * One provisioning attempt. The row never names the provider's concepts — no
  * run ids, no job names — because the user asked for a workspace, not a build.
+ *
+ * `showAction` renders the row without its action button (and without the
+ * pending state): that is how the collapsed history shows finished sessions —
+ * the same row style, with nothing to act on.
  */
 export function CloudSessionRow({
   session,
   onAction,
   actionPending = false,
+  showAction = true,
 }: {
   readonly session: CloudSession;
   readonly onAction: (session: CloudSession) => void;
   readonly actionPending?: boolean;
+  /** False for history rows, which have nothing to act on. */
+  readonly showAction?: boolean;
 }) {
   const presentation = presentCloudSession(session);
   const handleAction = useCallback(() => {
@@ -100,7 +107,7 @@ export function CloudSessionRow({
             )}
           </div>
         </div>
-        {presentation.actionLabel === null ? null : (
+        {!showAction || presentation.actionLabel === null ? null : (
           <Button
             size="sm"
             variant={presentation.tone === "ready" ? "default" : "outline"}

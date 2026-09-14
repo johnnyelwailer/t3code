@@ -3,18 +3,24 @@ import { type ReactNode, useCallback, useMemo } from "react";
 
 import { Button } from "../ui/button";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import { CloudSessionHistoryDisclosure } from "./t3team-CloudSessionHistoryDisclosure";
 import { CloudSessionRow, CloudSessionRowsSkeleton } from "./t3team-CloudSessionProvisionRow";
 import {
   formatDuration,
   isCloudSessionProvisionPending,
 } from "./t3team-cloudSessionProvisionPresentation";
+import { splitCloudSessions } from "./t3team-cloudSessionSplit";
 
 /**
  * The one-click surface: start a Nexi workspace on fleet compute and connect to
  * it when it comes up.
  *
  * Owns the panel chrome — the duration picker, the create button, and the
- * composition of session rows. The per-row rendering lives in
+ * composition of session rows. The list is split into sessions still doing
+ * work (shown by default, with their row actions) and a collapsed history of
+ * finished sessions (capped, no actions); the split rule lives in
+ * `t3team-cloudSessionSplit`, the history disclosure in
+ * `t3team-CloudSessionHistoryDisclosure`, the per-row rendering in
  * `t3team-CloudSessionProvisionRow`, and the phase wording in
  * `t3team-cloudSessionProvisionPresentation`.
  *
@@ -85,6 +91,12 @@ export function CloudSessionProvisionPanel({
     isCloudSessionProvisionPending(session.phase),
   ).length;
 
+  const {
+    active: activeSessions,
+    history: historySessions,
+    hiddenHistoryCount,
+  } = useMemo(() => splitCloudSessions(sessions), [sessions]);
+
   return (
     <section className="space-y-3">
       <header className="flex flex-col gap-3 px-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
@@ -126,21 +138,40 @@ export function CloudSessionProvisionPanel({
             <CloudSessionRowsSkeleton />
             <CloudSessionRowsSkeleton />
           </>
-        ) : sessions.length === 0 ? (
-          (empty ?? (
-            <p className="px-3 py-6 text-center text-muted-foreground text-xs sm:px-4">
-              No cloud sessions yet.
-            </p>
-          ))
         ) : (
-          sessions.map((session) => (
-            <CloudSessionRow
-              key={session.sessionId}
-              session={session}
-              onAction={onSessionAction}
-              actionPending={pendingSessionId === session.sessionId}
-            />
-          ))
+          <>
+            {activeSessions.length === 0
+              ? (empty ?? (
+                  <div className="px-3 py-8 text-center sm:px-4">
+                    <p className="text-muted-foreground text-xs">No active cloud sessions.</p>
+                    <p className="text-muted-foreground/80 text-xs">
+                      Start one — it will appear here as soon as it is ready.
+                    </p>
+                    <Button
+                      size="sm"
+                      className="mt-3"
+                      disabled={createPending}
+                      onClick={handleCreate}
+                    >
+                      {createPending ? "Starting…" : "New session"}
+                    </Button>
+                  </div>
+                ))
+              : activeSessions.map((session) => (
+                  <CloudSessionRow
+                    key={session.sessionId}
+                    session={session}
+                    onAction={onSessionAction}
+                    actionPending={pendingSessionId === session.sessionId}
+                  />
+                ))}
+            {historySessions.length === 0 ? null : (
+              <CloudSessionHistoryDisclosure
+                sessions={historySessions}
+                hiddenCount={hiddenHistoryCount}
+              />
+            )}
+          </>
         )}
       </div>
     </section>
