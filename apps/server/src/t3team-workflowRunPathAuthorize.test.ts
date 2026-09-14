@@ -283,6 +283,105 @@ describe("resolveRunWorkflowPath — execution authorization", () => {
     );
   });
 
+  it("snapshots a workspace-local .workflow.ts launch into .t3team-runs/<runId>/ and runs it from there", async () => {
+    await run(
+      Effect.gen(function* () {
+        const path = yield* Path.Path;
+        const workspaceRoot = yield* makeTempDir("t3team-run-auth-ws-");
+        const original = path.join(workspaceRoot, "probe.workflow.ts");
+        const fileSystem = yield* FileSystem.FileSystem;
+        yield* fileSystem.writeFileString(original, WORKFLOW_SOURCE);
+
+        const result = yield* authorize({
+          workspaceRoot,
+          runId: "run-snap",
+          workflowPath: original,
+        });
+        expect(result._tag).toBe("Success");
+        if (result._tag === "Success") {
+          // Exact equality matters: `canReplaceEphemeralSource` compares this path verbatim,
+          // and only this exact path unlocks the run's self-heal + corrected-source resume.
+          expect(result.success).toBe(
+            path.join(workspaceRoot, ".t3team-runs", "run-snap", "workflow.ts"),
+          );
+        }
+        // The snapshot holds the source, and the original file is untouched.
+        const snapshot = path.join(workspaceRoot, ".t3team-runs", "run-snap", "workflow.ts");
+        expect(NodeFS.readFileSync(snapshot, "utf8")).toBe(WORKFLOW_SOURCE);
+        expect(NodeFS.readFileSync(original, "utf8")).toBe(WORKFLOW_SOURCE);
+      }),
+    );
+  });
+
+  it("refuses an UNPARSEABLE workflow file synchronously with the authoring manual, before any launch", async () => {
+    await run(
+      Effect.gen(function* () {
+        const path = yield* Path.Path;
+        const workspaceRoot = yield* makeTempDir("t3team-run-auth-ws-");
+        const original = path.join(workspaceRoot, "broken.workflow.ts");
+        const fileSystem = yield* FileSystem.FileSystem;
+        // Live incident shape: an unescaped backtick in plain position inside a template
+        // literal in the body. The meta head is clean — only V8's compile of the transpiled
+        // body rejects this.
+        yield* fileSystem.writeFileString(
+          original,
+          [
+            `export const meta = { name: "broken.probe", description: "x" } as const;`,
+            `export default async function run() {`,
+            "  const prompt = `Review the `inner` changes`;",
+            `  return prompt;`,
+            `}`,
+          ].join("\n"),
+        );
+
+        const refused = yield* authorize({
+          workspaceRoot,
+          runId: "run-bad",
+          workflowPath: original,
+        });
+        expect(refused._tag).toBe("Failure");
+        if (refused._tag === "Failure") {
+          expect(refused.failure).toContain("rejected before launch");
+          expect(refused.failure).toContain("unparseable workflow TypeScript");
+          // The full authoring manual rides the rejection so the agent can fix + resubmit.
+          expect(refused.failure).toContain("AGENT-ORCHESTRATION MANUAL");
+        }
+        // Nothing durable was created: no snapshot, no run directory.
+        expect(NodeFS.existsSync(path.join(workspaceRoot, ".t3team-runs", "run-bad"))).toBe(false);
+      }),
+    );
+  });
+
+  it("refuses an unparseable PACK workflow synchronously too (packs still run in place)", async () => {
+    await run(
+      Effect.gen(function* () {
+        const path = yield* Path.Path;
+        const packDir = yield* makeTempDir("t3team-run-auth-pack-");
+        const workspaceRoot = yield* makeTempDir("t3team-run-auth-ws-");
+        const recipeRoot = path.join(packDir, "recipes/broken");
+        yield* writeRecipeDir({ root: recipeRoot, id: "broken", displayName: "Broken" });
+        const fileSystem = yield* FileSystem.FileSystem;
+        yield* fileSystem.writeFileString(
+          path.join(recipeRoot, "triage.workflow.ts"),
+          [
+            `export const meta = { name: "broken.pack", description: "x" } as const;`,
+            `export default async function run() { const x = \`a \` b \`; return x; }`,
+          ].join("\n"),
+        );
+        registerPack({ directory: packDir, recipes: [{ id: "broken", path: "recipes/broken" }] });
+
+        const refused = yield* authorize({
+          workspaceRoot,
+          workflowPath: path.join(recipeRoot, "triage.workflow.ts"),
+        });
+        expect(refused._tag).toBe("Failure");
+        if (refused._tag === "Failure") {
+          expect(refused.failure).toContain("rejected before launch");
+        }
+      }),
+    );
+  });
+
   it("keeps writing and accepting the ephemeral .t3team-runs/<runId>/workflow.ts source", async () => {
     await run(
       Effect.gen(function* () {

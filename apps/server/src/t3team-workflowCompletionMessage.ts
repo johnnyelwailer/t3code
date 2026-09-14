@@ -28,7 +28,27 @@ export function formatWorkflowOutput(output: unknown): string {
  * failure share ONE stable per-run message id, so whichever terminal outcome
  * lands last overwrites the other — a transient failure notice can never sit
  * contradicting a later success (or vice versa) in the same thread.
+ *
+ * Re-posting the SAME text under a fresh timestamp is how a terminal notice is
+ * RE-SURFACED: live incident — a run died 30 ms after launch, the notice posted
+ * while the launch turn was still active, and it was buried for 40 minutes until
+ * the user opened the card. When the launch turn ends, the reactor re-posts it so
+ * it lands AFTER the turn instead of inside it.
  */
+export async function postWorkflowTerminalNotice(input: {
+  readonly launchThreadId: string | undefined;
+  readonly workflowRunId: string;
+  readonly kind: "complete" | "failed";
+  readonly text: string;
+  /** Structured card data for clients that render one; the text stays the fallback. */
+  readonly attachments?: ReadonlyArray<T3TeamMessageAttachment>;
+  readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
+  readonly newId: () => string;
+  readonly nowIso: () => string;
+}): Promise<void> {
+  await postTerminalMessage(input);
+}
+
 async function postTerminalMessage(input: {
   readonly launchThreadId: string | undefined;
   readonly workflowRunId: string;
