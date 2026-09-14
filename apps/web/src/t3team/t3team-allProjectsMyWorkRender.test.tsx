@@ -28,6 +28,12 @@ vi.mock("~/t3team/hooks/t3team-useProjectStore", () => ({
   useProjectStore: () => ({ allProjects: [boundProject] }),
 }));
 
+// The digest lens reads the server-aggregated graph through the backend; a bare static render has
+// no backend provider, so pin the hook to its initial loading state.
+vi.mock("~/t3team/mywork-digest/t3team-useMyWorkDigestGraph", () => ({
+  useMyWorkDigestGraph: () => ({ graph: null, status: "loading", reload: () => {} }),
+}));
+
 vi.mock("~/t3team/hooks/t3team-useProjectMyWork", () => ({
   useProjectMyWork: () => ({
     tickets: [

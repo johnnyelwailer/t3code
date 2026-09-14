@@ -106,14 +106,7 @@ export function ProjectMyWorkContent({
     }
 
     if (lens === "digest") {
-      return (
-        <ProjectMyWorkDigestContent
-          project={project}
-          tickets={tickets}
-          githubActivityByWorkItem={githubActivityByWorkItem}
-          onOpenTicket={onOpenTicket}
-        />
-      );
+      return <ProjectMyWorkDigestContent project={project} />;
     }
 
     if (lens === "board" || viewMode === "kanban") {
