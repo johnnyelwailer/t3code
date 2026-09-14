@@ -36,6 +36,8 @@ export function ProjectDashboardMyWorkView({
     jiraLastCheckedAt,
     query,
     setQuery,
+    lens,
+    setLens,
     viewMode,
     setViewMode,
     groupMode,
@@ -75,6 +77,7 @@ export function ProjectDashboardMyWorkView({
   useProjectDashboardMyWorkRecipeSupport({
     state: {
       query,
+      lens,
       viewMode,
       groupMode,
       statusCategory,
@@ -157,6 +160,8 @@ export function ProjectDashboardMyWorkView({
           assignedWorkItems={assignedWorkItems}
           filteredWorkItems={filteredWorkItems}
           visibleHierarchy={visibleHierarchy}
+          lens={lens}
+          onLensChange={setLens}
           viewMode={viewMode}
           groupMode={groupMode}
           tableSortBy={tableSortBy}
