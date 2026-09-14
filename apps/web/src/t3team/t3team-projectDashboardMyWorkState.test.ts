@@ -10,6 +10,7 @@ describe("project dashboard my work state", () => {
   it("defaults to kanban view with no hidden lanes", () => {
     expect(resolveProjectDashboardMyWorkState({})).toEqual({
       query: "",
+      lens: "digest",
       viewMode: "kanban",
       groupMode: "hierarchy",
       statusCategory: "all",
@@ -53,6 +54,7 @@ describe("project dashboard my work state", () => {
 
     expect(resolveProjectDashboardMyWorkState({ persisted, search })).toEqual({
       query: "route query",
+      lens: "digest",
       viewMode: "table",
       groupMode: "hierarchy",
       statusCategory: "active",
@@ -69,6 +71,7 @@ describe("project dashboard my work state", () => {
   it("treats legacy lane-only route state as a custom lane selection", () => {
     expect(resolveProjectDashboardMyWorkState({ search: { myWorkLanes: "done" } })).toEqual({
       query: "",
+      lens: "digest",
       viewMode: "kanban",
       groupMode: "hierarchy",
       statusCategory: "all",
@@ -89,6 +92,7 @@ describe("project dashboard my work state", () => {
       }),
     ).toEqual({
       query: "q",
+      lens: "digest",
       viewMode: "kanban",
       groupMode: "hierarchy",
       statusCategory: "all",
@@ -100,5 +104,14 @@ describe("project dashboard my work state", () => {
       tableSortBy: "updated",
       tableSortDirection: "desc",
     });
+  });
+
+  it("keeps a persisted lens — the route search never mirrors it", () => {
+    expect(
+      resolveProjectDashboardMyWorkState({
+        persisted: { lens: "board" },
+        search: { myWorkView: "table" },
+      }),
+    ).toMatchObject({ lens: "board", viewMode: "table" });
   });
 });

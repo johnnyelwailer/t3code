@@ -46,6 +46,16 @@ vi.mock("~/t3team/hooks/t3team-useProjectMyWork", () => ({
   }),
 }));
 
+// The all-projects view persists its lens under the "all" scope via the My Work state hook, which
+// reads the ROUTE search through tanstack — unavailable in a bare static render, so pin the lens.
+const lensMock: { lens: "digest" | "hierarchy" | "board" } = { lens: "hierarchy" };
+vi.mock("~/t3team/t3team-projectDashboardMyWorkState", () => ({
+  useProjectDashboardMyWorkState: () => ({
+    state: { lens: lensMock.lens },
+    setState: () => {},
+  }),
+}));
+
 const { AllProjectsMyWorkView } = await import("~/t3team/t3team-AllProjectsMyWorkView");
 
 describe("AllProjectsMyWorkView with a bound project", () => {
@@ -56,5 +66,15 @@ describe("AllProjectsMyWorkView with a bound project", () => {
     expect(markup).toContain("Ship the thing");
     // And it must NOT fall back to the empty state, which is what made the first version look fine.
     expect(markup).not.toContain("No projects are connected to a work source yet");
+  });
+
+  it("renders the digest lens switch and a digest body in the default lens", () => {
+    lensMock.lens = "digest";
+    const markup = renderToStaticMarkup(<AllProjectsMyWorkView onOpenTicket={() => {}} />);
+    expect(markup).toContain("My Work view switch");
+    // Effects never run in a static render, so the digest has not received its reports yet and
+    // must show the loading state rather than the per-project sections.
+    expect(markup).not.toContain("Ship the thing");
+    lensMock.lens = "hierarchy";
   });
 });

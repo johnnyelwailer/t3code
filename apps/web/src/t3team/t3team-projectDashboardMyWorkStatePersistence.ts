@@ -6,6 +6,7 @@ import {
   projectDashboardMyWorkRouteSearchKeys,
   projectMyWorkGroupModeValues,
   projectMyWorkKanbanLaneSelectionModeValues,
+  projectMyWorkLensValues,
   projectMyWorkStatusCategoryValues,
   projectMyWorkTableSortByValues,
   projectMyWorkTableSortDirectionValues,
@@ -36,6 +37,9 @@ export function readPersistedProjectDashboardMyWorkState(
     const persisted: PersistedProjectDashboardMyWorkState = {};
 
     if (typeof parsed.query === "string") persisted.query = parsed.query;
+
+    const lens = parseRouteEnum(parsed.lens, projectMyWorkLensValues);
+    if (lens !== undefined) persisted.lens = lens;
 
     const viewMode = parseRouteEnum(parsed.viewMode, projectMyWorkViewModeValues);
     if (viewMode !== undefined) persisted.viewMode = viewMode;
@@ -179,6 +183,7 @@ export function areProjectDashboardMyWorkStatesEqual(
 ): boolean {
   return (
     left.query === right.query &&
+    left.lens === right.lens &&
     left.viewMode === right.viewMode &&
     left.groupMode === right.groupMode &&
     left.statusCategory === right.statusCategory &&
