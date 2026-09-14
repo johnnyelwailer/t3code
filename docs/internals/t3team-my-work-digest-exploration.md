@@ -61,9 +61,12 @@ Standalone HTML digest the owner pointed to as "a potential example". What it co
 
 What the current Storybook cut takes from it: kicker+count headings, two-lane layout with narrow needs-you side, numbered recommended order grouped by story, chips instead of sentences, collapsed footer summaries, sprint header with progress track, full width. Not yet taken: sprint goal in the side lane, per-person assignment chips, review-assignment lane, meeting notes, sources line.
 
+## Decided (parent thread, 2026-09-14)
+
+- **Plan return path:** a typed receipt on the workflow run carrying `plan + producedAt`. Not the workflow-card channel, which stays progress/status. The surface rehydrates the last receipt on reload.
+- **Default lens:** Digest for everyone, no opt-in migration. A stored lens preference still wins on revisit.
+
 ## Open for the owner
 
-1. How the workflow returns the typed plan to the surface. No structured run-output path exists today.
-2. Digest as default for existing kanban users, or only where no stored preference exists.
-3. One auto-arrange workflow per project, or one across all projects.
-4. Which reference lanes belong in Nexi Work's digest: review assignment, meeting notes, handled/agents.
+1. One auto-arrange workflow per project, or one across all projects.
+2. Which reference lanes belong in Nexi Work's digest: review assignment, meeting notes, handled/agents.
