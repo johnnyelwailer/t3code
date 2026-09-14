@@ -13,6 +13,7 @@ import {
   retryT3TeamOutboxEntry,
   getT3TeamOutboxSnapshot,
 } from "~/t3team/outbox/t3team-outboxStore";
+import { getOutboxAttemptTs, setOutboxAttempt } from "~/t3team/outbox/t3team-outboxStorage";
 
 function entry(text: string, environmentId = "env-a") {
   return makeT3TeamOutboxEntry(
@@ -106,11 +107,15 @@ describe("dispatch lock", () => {
     releaseT3TeamOutboxDispatch();
   });
 
-  it("removal of the dispatching entry releases the lock", () => {
+  it("discarding the in-flight head keeps the lock until the drain releases it", () => {
     const a = entry("a");
     enqueueT3TeamOutboxEntry(a);
     acquireT3TeamOutboxDispatch(a.entryId);
     removeT3TeamOutboxEntry(a);
+    // N3: removing the entry must not release the in-flight dispatch lock — a
+    // second entry must not start dispatching while this one is still running.
+    expect(getT3TeamOutboxSnapshot().dispatchingEntryId).toBe(a.entryId);
+    releaseT3TeamOutboxDispatch();
     expect(getT3TeamOutboxSnapshot().dispatchingEntryId).toBeNull();
   });
 });
@@ -152,6 +157,14 @@ describe("retry backoff", () => {
     const after = getT3TeamOutboxSnapshot();
     expect(after.failures[a.entryId]).toBeUndefined();
     expect(after.tick).toBeGreaterThan(tickBefore);
+  });
+
+  it("manual retry also clears the durable attempt shield", () => {
+    const a = entry("a");
+    enqueueT3TeamOutboxEntry(a);
+    setOutboxAttempt(a.entryId);
+    retryT3TeamOutboxEntry(a.entryId);
+    expect(getOutboxAttemptTs(a.entryId)).toBeNull();
   });
 
   it("removal clears backoff state", () => {

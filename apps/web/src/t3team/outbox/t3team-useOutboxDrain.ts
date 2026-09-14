@@ -33,6 +33,7 @@ import {
 import {
   acquireT3TeamOutboxDispatch,
   getT3TeamOutboxEntriesForEnvironment,
+  getT3TeamOutboxSnapshot,
   recordT3TeamOutboxFailure,
   recordT3TeamOutboxRetry,
   removeT3TeamOutboxEntry,
@@ -125,11 +126,17 @@ export function useT3TeamOutboxDrain(input: {
       recordOutboxAttempt: (entryId) => setOutboxAttempt(entryId),
     })
       .then((outcome) => {
+        // The entry may have been discarded while this dispatch was in flight;
+        // only record retry/failure state for entries that are still queued, so
+        // a late result can't leave an orphan backoff on a removed entry.
+        const stillQueued = getT3TeamOutboxSnapshot().entries.some(
+          (candidate) => candidate.entryId === entry.entryId,
+        );
         if (outcome.outcome === "delivered") {
           removeT3TeamOutboxEntry(entry);
         } else if (outcome.outcome === "retry") {
-          recordT3TeamOutboxRetry(entry.entryId);
-        } else {
+          if (stillQueued) recordT3TeamOutboxRetry(entry.entryId);
+        } else if (stillQueued) {
           // A permanent server rejection means the turn was not accepted, so it
           // is safe to allow a resend — drop the at-most-once shield.
           if (entry.kind === "turn-start") clearOutboxAttempt(entry.entryId);
