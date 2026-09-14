@@ -65,6 +65,7 @@ export function deriveProviderUsageHoldBanner(
   for (const activity of activities) {
     const payload = holdPayload(activity);
     if (activity.kind === KIND_STARTED || activity.kind === KIND_DEFERRED) {
+      const prev = hold;
       hold = {
         driver: typeof payload?.driver === "string" ? payload.driver : null,
         since: activity.createdAt,
@@ -74,7 +75,7 @@ export function deriveProviderUsageHoldBanner(
         autoResume:
           typeof payload?.autoResume === "boolean"
             ? payload.autoResume
-            : (hold?.autoResume ?? true),
+            : (prev?.autoResume ?? true),
       };
     } else if (activity.kind === KIND_RELEASED) {
       hold = null;

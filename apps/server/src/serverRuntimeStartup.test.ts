@@ -244,6 +244,9 @@ it.effect("resolveAutoBootstrapWelcomeTargets returns existing project and threa
         threadExists: () => Effect.die("unused"),
         hasPendingTurnStart: () => Effect.die("unused"),
         searchThreads: () => Effect.succeed({ matches: [] }),
+        hasNonTerminalWorkflowRun: () => Effect.succeed(false),
+        hasLiveChild: () => Effect.succeed(false),
+        hasPendingParentWait: () => Effect.succeed(false),
       }),
       Effect.provideService(OrchestrationEngine.OrchestrationEngineService, {
         readEvents: () => Stream.empty,
@@ -334,6 +337,9 @@ it.effect.each([
         threadExists: () => Effect.die("unused"),
         hasPendingTurnStart: () => Effect.die("unused"),
         searchThreads: () => Effect.succeed({ matches: [] }),
+        hasNonTerminalWorkflowRun: () => Effect.succeed(false),
+        hasLiveChild: () => Effect.succeed(false),
+        hasPendingParentWait: () => Effect.succeed(false),
       }),
       Effect.provideService(OrchestrationEngine.OrchestrationEngineService, {
         readEvents: () => Stream.empty,
@@ -406,6 +412,9 @@ it.effect(
           getThreadDetailById: () => Effect.die("unused"),
           getThreadDetailSnapshot: () => Effect.die("unused"),
           searchThreads: () => Effect.succeed({ matches: [] }),
+          hasNonTerminalWorkflowRun: () => Effect.succeed(false),
+          hasLiveChild: () => Effect.succeed(false),
+          hasPendingParentWait: () => Effect.succeed(false),
         }),
         Effect.provideService(OrchestrationEngine.OrchestrationEngineService, {
           readEvents: () => Stream.empty,
@@ -471,6 +480,9 @@ it.effect("resolveAutoBootstrapWelcomeTargets preserves typed UUID generation fa
         threadExists: () => Effect.die("unused"),
         hasPendingTurnStart: () => Effect.die("unused"),
         searchThreads: () => Effect.succeed({ matches: [] }),
+        hasNonTerminalWorkflowRun: () => Effect.succeed(false),
+        hasLiveChild: () => Effect.succeed(false),
+        hasPendingParentWait: () => Effect.succeed(false),
       }),
       Effect.provideService(OrchestrationEngine.OrchestrationEngineService, {
         readEvents: () => Stream.empty,

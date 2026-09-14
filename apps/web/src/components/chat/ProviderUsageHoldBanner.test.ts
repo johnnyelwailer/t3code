@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
-import { deriveProviderUsageHoldBanner } from "./ProviderUsageHoldBanner.tsx";
+import { deriveProviderUsageHoldBanner } from "./t3team-ProviderUsageHoldBanner.tsx";
 
 const started = (createdAt: string, payload: Record<string, unknown>) => ({
   kind: "provider.usage-hold.started",

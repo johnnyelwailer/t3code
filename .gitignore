@@ -53,3 +53,4 @@ node_modules/
 .t3work/
 apps/server/userdata/
 .vite-hooks/_/t3team-additive-guard-cache.json
+apps/web/.storybook-local/
