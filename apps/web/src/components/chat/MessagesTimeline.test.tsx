@@ -1348,8 +1348,10 @@ describe("MessagesTimeline", () => {
       />,
     );
 
-    expect(markup).toContain("Running pnpm");
-    expect(markup).toContain("tool call failed");
+    expect(markup).toContain('data-timeline-row-id="live-activity-row"');
+    expect(markup).toContain("Ran pnpm");
+    expect(markup).not.toContain("Running pnpm");
+    expect(markup).not.toContain("tool call failed");
   });
 
   it("renders exactly ONE live status row: the state word bases it, no duplicate Thinking row (GHE #236)", () => {
