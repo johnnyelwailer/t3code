@@ -93,6 +93,12 @@ export function ProjectMyWorkContent({
     renderProjectMyWorkTicketExtra({ ticket, compact });
 
   const renderBody = () => {
+    // The digest lens has its own server-aggregated data and its own loading/empty states, so it
+    // must not wait on (or be hidden by) the legacy assigned-items fetch.
+    if (lens === "digest") {
+      return <ProjectMyWorkDigestContent project={project} />;
+    }
+
     if (contentState.kind === "loading") {
       return <ProjectMyWorkLoadingState />;
     }
@@ -103,10 +109,6 @@ export function ProjectMyWorkContent({
           {contentState.message}
         </T3SurfacePanel>
       );
-    }
-
-    if (lens === "digest") {
-      return <ProjectMyWorkDigestContent project={project} />;
     }
 
     if (lens === "board" || viewMode === "kanban") {
