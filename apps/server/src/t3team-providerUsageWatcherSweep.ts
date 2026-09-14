@@ -8,7 +8,6 @@
  * @module t3team-providerUsageWatcherSweep
  */
 import { ProviderDriverKind } from "@t3tools/contracts";
-import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { FetchHttpClient } from "effect/unstable/http";
@@ -24,6 +23,23 @@ import {
 } from "./t3team-providerUsageWatcherTypes.ts";
 
 /**
+ * Hard invariant: a window that is exhausted *now* always resets in the
+ * future. A critical primary whose `resetsAt` is already in the past is a
+ * stale snapshot, not a live limit, and must never open or refresh a hold.
+ * A `null` or unparsable `resetsAt` is not "in the past" and keeps the
+ * previous behaviour.
+ */
+export const isLiveCriticalPrimary = (
+  primary: { readonly severity: string; readonly resetsAt: string | null },
+  nowMs: number,
+): boolean => {
+  if (primary.severity !== "critical") return false;
+  if (primary.resetsAt === null) return true;
+  const resetsAtMs = Date.parse(primary.resetsAt);
+  return !(Number.isFinite(resetsAtMs) && resetsAtMs <= nowMs);
+};
+
+/**
  * Sample the active sessions' providers once and apply any transition.
  * No-op when a sweep is already in flight (the loop and the manual
  * `sweep()` entry point share this guard).
@@ -34,7 +50,7 @@ export const sweepPass = Effect.fn("providerUsageWatcher.sweep")(function* (
   if (deps.state.sweepInFlight) return;
   deps.state.sweepInFlight = true;
   try {
-    const nowMs = DateTime.nowUnsafe().epochMilliseconds;
+    const nowMs = Date.parse(deps.nowIso());
     const settings = yield* deps.settingsService.getSettings.pipe(Effect.orDie);
 
     // Provider instance ids that currently have any session. A listing
@@ -61,7 +77,7 @@ export const sweepPass = Effect.fn("providerUsageWatcher.sweep")(function* (
     if (sample !== undefined) {
       for (const report of sample.reports) {
         const primary = report.windows.find((window) => window.window === "primary");
-        if (primary === undefined || primary.severity !== "critical") continue;
+        if (primary === undefined || !isLiveCriticalPrimary(primary, nowMs)) continue;
         if (deps.state.heldDrivers.has(report.provider)) {
           // Already held: refresh resetsAt with the live value so the
           // banner shows the correct reset time (the original may be stale).
