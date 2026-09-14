@@ -2330,10 +2330,10 @@ pending_approval_requests AS (
                 ...(row.linkedPullRequest === null
                   ? {}
                   : { linkedPullRequest: row.linkedPullRequest }),
-                  // Environment binding (t3team start_child `environment`); absent = same environment.
-                  ...(row.environment !== null && row.environment !== undefined
-                    ? { environment: row.environment }
-                    : {}),
+                // Environment binding (t3team start_child `environment`); absent = same environment.
+                ...(row.environment !== null && row.environment !== undefined
+                  ? { environment: row.environment }
+                  : {}),
                 latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                 createdAt: row.createdAt,
                 updatedAt: row.updatedAt,
@@ -2613,10 +2613,10 @@ pending_approval_requests AS (
                     ...(row.linkedPullRequest === null
                       ? {}
                       : { linkedPullRequest: row.linkedPullRequest }),
-                      // Environment binding (t3team start_child `environment`); absent = same environment.
-                      ...(row.environment !== null && row.environment !== undefined
-                        ? { environment: row.environment }
-                        : {}),
+                    // Environment binding (t3team start_child `environment`); absent = same environment.
+                    ...(row.environment !== null && row.environment !== undefined
+                      ? { environment: row.environment }
+                      : {}),
                     latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                     createdAt: row.createdAt,
                     updatedAt: row.updatedAt,
@@ -2805,10 +2805,10 @@ pending_approval_requests AS (
                       ...(row.linkedPullRequest === null
                         ? {}
                         : { linkedPullRequest: row.linkedPullRequest }),
-                        // Environment binding (t3team start_child `environment`); absent = same environment.
-                        ...(row.environment !== null && row.environment !== undefined
-                          ? { environment: row.environment }
-                          : {}),
+                      // Environment binding (t3team start_child `environment`); absent = same environment.
+                      ...(row.environment !== null && row.environment !== undefined
+                        ? { environment: row.environment }
+                        : {}),
                       latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                       createdAt: row.createdAt,
                       updatedAt: row.updatedAt,
@@ -2968,60 +2968,58 @@ pending_approval_requests AS (
                     )
                   : Result.failVoid,
               ),
-              threads: threadRows.map(
-                (row): OrchestrationThreadShell => ({
-                  id: row.threadId,
-                  projectId: row.projectId,
-                  title: row.title,
-                  modelSelection: row.modelSelection,
-                  runtimeMode: row.runtimeMode,
-                  interactionMode: row.interactionMode,
-                  branch: row.branch,
-                  worktreePath: row.worktreePath,
-                  ...(row.linkedPullRequest === null
-                    ? {}
-                    : { linkedPullRequest: row.linkedPullRequest }),
-                    // Environment binding (t3team start_child `environment`); absent = same environment.
-                    ...(row.environment !== null && row.environment !== undefined
-                      ? { environment: row.environment }
-                      : {}),
-                  latestTurn: latestTurnByThread.get(row.threadId) ?? null,
-                  createdAt: row.createdAt,
-                  updatedAt: row.updatedAt,
-                  archivedAt: row.archivedAt,
-                  settledOverride: row.settledOverride,
-                  settledAt: row.settledAt,
-                  unsettledAt: row.unsettledAt,
-                  snoozedUntil: row.snoozedUntil,
-                  snoozedAt: row.snoozedAt,
-                  pinnedAt: row.pinnedAt,
-                  pinOrderKey: row.pinOrderKey ?? null,
-                  titleRegeneration: mapTitleRegeneration(row),
-                  session: sessionByThread.get(row.threadId) ?? null,
-                  latestUserMessageAt: row.latestUserMessageAt,
-                  hasPendingApprovals: row.pendingApprovalCount > 0,
-                  hasPendingUserInput: row.pendingUserInputCount > 0,
-                  hasActionableProposedPlan: row.hasActionableProposedPlan > 0,
-                  backgroundLiveness: threadBackgroundLiveness.getThreadBackgroundLiveness(
-                    row.threadId,
-                  ),
-                  planProgress: threadPlanProgress.getThreadPlanProgress(row.threadId),
-                  ...(row.childStatus != null ? { childStatus: row.childStatus } : {}),
-                  ...(row.childStatusUpdatedAt != null
-                    ? { childStatusUpdatedAt: row.childStatusUpdatedAt }
-                    : {}),
-                  ...(row.activityLabel != null ? { activityLabel: row.activityLabel } : {}),
-                  ...(row.activityLabelUpdatedAt != null
-                    ? { activityLabelUpdatedAt: row.activityLabelUpdatedAt }
-                    : {}),
-                  ...(readableActivityState(row.activityState) !== undefined
-                    ? { activityState: readableActivityState(row.activityState)! }
-                    : {}),
-                  ...(row.activityStateUpdatedAt != null
-                    ? { activityStateUpdatedAt: row.activityStateUpdatedAt }
-                    : {}),
-                }),
-              ),
+              threads: threadRows.map((row): OrchestrationThreadShell => ({
+                id: row.threadId,
+                projectId: row.projectId,
+                title: row.title,
+                modelSelection: row.modelSelection,
+                runtimeMode: row.runtimeMode,
+                interactionMode: row.interactionMode,
+                branch: row.branch,
+                worktreePath: row.worktreePath,
+                ...(row.linkedPullRequest === null
+                  ? {}
+                  : { linkedPullRequest: row.linkedPullRequest }),
+                // Environment binding (t3team start_child `environment`); absent = same environment.
+                ...(row.environment !== null && row.environment !== undefined
+                  ? { environment: row.environment }
+                  : {}),
+                latestTurn: latestTurnByThread.get(row.threadId) ?? null,
+                createdAt: row.createdAt,
+                updatedAt: row.updatedAt,
+                archivedAt: row.archivedAt,
+                settledOverride: row.settledOverride,
+                settledAt: row.settledAt,
+                unsettledAt: row.unsettledAt,
+                snoozedUntil: row.snoozedUntil,
+                snoozedAt: row.snoozedAt,
+                pinnedAt: row.pinnedAt,
+                pinOrderKey: row.pinOrderKey ?? null,
+                titleRegeneration: mapTitleRegeneration(row),
+                session: sessionByThread.get(row.threadId) ?? null,
+                latestUserMessageAt: row.latestUserMessageAt,
+                hasPendingApprovals: row.pendingApprovalCount > 0,
+                hasPendingUserInput: row.pendingUserInputCount > 0,
+                hasActionableProposedPlan: row.hasActionableProposedPlan > 0,
+                backgroundLiveness: threadBackgroundLiveness.getThreadBackgroundLiveness(
+                  row.threadId,
+                ),
+                planProgress: threadPlanProgress.getThreadPlanProgress(row.threadId),
+                ...(row.childStatus != null ? { childStatus: row.childStatus } : {}),
+                ...(row.childStatusUpdatedAt != null
+                  ? { childStatusUpdatedAt: row.childStatusUpdatedAt }
+                  : {}),
+                ...(row.activityLabel != null ? { activityLabel: row.activityLabel } : {}),
+                ...(row.activityLabelUpdatedAt != null
+                  ? { activityLabelUpdatedAt: row.activityLabelUpdatedAt }
+                  : {}),
+                ...(readableActivityState(row.activityState) !== undefined
+                  ? { activityState: readableActivityState(row.activityState)! }
+                  : {}),
+                ...(row.activityStateUpdatedAt != null
+                  ? { activityStateUpdatedAt: row.activityStateUpdatedAt }
+                  : {}),
+              })),
               updatedAt: updatedAt ?? "1970-01-01T00:00:00.000Z",
             };
 
@@ -3065,12 +3063,10 @@ pending_approval_requests AS (
           "ProjectionSnapshotQuery.getCounts:decodeRow",
         ),
       ),
-      Effect.map(
-        (row): ProjectionSnapshotCounts => ({
-          projectCount: row.projectCount,
-          threadCount: row.threadCount,
-        }),
-      ),
+      Effect.map((row): ProjectionSnapshotCounts => ({
+        projectCount: row.projectCount,
+        threadCount: row.threadCount,
+      })),
     );
 
   const getEventReplayStats: ProjectionSnapshotQueryShape["getEventReplayStats"] = (input) =>
@@ -3081,12 +3077,10 @@ pending_approval_requests AS (
           "ProjectionSnapshotQuery.getEventReplayStats:decodeRow",
         ),
       ),
-      Effect.map(
-        (row): ProjectionEventReplayStats => ({
-          eventCount: row.eventCount,
-          payloadBytes: row.payloadBytes,
-        }),
-      ),
+      Effect.map((row): ProjectionEventReplayStats => ({
+        eventCount: row.eventCount,
+        payloadBytes: row.payloadBytes,
+      })),
     );
 
   const searchThreads: ProjectionSnapshotQueryShape["searchThreads"] = Effect.fn(
@@ -3251,7 +3245,7 @@ pending_approval_requests AS (
         })),
       ),
     );
-  const getImportedAgentSessionSources: ProjectionSnapshotQueryShape["getImportedAgentSessionSources"] = 
+  const getImportedAgentSessionSources: ProjectionSnapshotQueryShape["getImportedAgentSessionSources"] =
     Effect.fn("ProjectionSnapshotQuery.getImportedAgentSessionSources")(function* (projectId) {
       const rows = yield* listImportedAgentSessionSourceRows({ projectId }).pipe(
         Effect.mapError(
@@ -3308,17 +3302,15 @@ pending_approval_requests AS (
         projectId: threadRow.value.projectId,
         workspaceRoot: threadRow.value.workspaceRoot,
         worktreePath: threadRow.value.worktreePath,
-        checkpoints: checkpointRows.map(
-          (row): OrchestrationCheckpointSummary => ({
-            turnId: row.turnId,
-            checkpointTurnCount: row.checkpointTurnCount,
-            checkpointRef: row.checkpointRef,
-            status: row.status,
-            files: row.files,
-            assistantMessageId: row.assistantMessageId,
-            completedAt: row.completedAt,
-          }),
-        ),
+        checkpoints: checkpointRows.map((row): OrchestrationCheckpointSummary => ({
+          turnId: row.turnId,
+          checkpointTurnCount: row.checkpointTurnCount,
+          checkpointRef: row.checkpointRef,
+          status: row.status,
+          files: row.files,
+          assistantMessageId: row.assistantMessageId,
+          completedAt: row.completedAt,
+        })),
       });
     });
 
@@ -3951,6 +3943,120 @@ pending_approval_requests AS (
       Effect.map(Option.isSome),
     );
 
+  const NON_TERMINAL_WORKFLOW_RUN_STATUSES = new Set([
+    "queued",
+    "running",
+    "suspended",
+    "sleeping",
+    "paused",
+  ]);
+
+  const hasNonTerminalWorkflowRun: ProjectionSnapshotQueryShape["hasNonTerminalWorkflowRun"] =
+    Effect.fn("ProjectionSnapshotQuery.hasNonTerminalWorkflowRun")(function* (threadId: ThreadId) {
+      const run = yield* getWorkflowRunStatusByThread({ threadId }).pipe(
+        Effect.mapError(
+          toPersistenceSqlOrDecodeError(
+            "ProjectionSnapshotQuery.hasNonTerminalWorkflowRun:query",
+            "ProjectionSnapshotQuery.hasNonTerminalWorkflowRun:decodeRow",
+          ),
+        ),
+      );
+      if (Option.isNone(run)) return false;
+      return NON_TERMINAL_WORKFLOW_RUN_STATUSES.has(run.value.status);
+    });
+
+  const SettleGuardHitRowSchema = Schema.Struct({ hit: Schema.Number });
+
+  // A direct child that is live: owns a non-terminal workflow run, or its
+  // session is actively running/starting. "Working" and "running a workflow" are
+  // the same concept — one live child keeps the parent from settling.
+  const hasLiveChildQuery = SqlSchema.findOneOption({
+    Request: ThreadIdLookupInput,
+    Result: SettleGuardHitRowSchema,
+    execute: ({ threadId }) =>
+      sql`
+        SELECT 1 AS "hit"
+        FROM projection_threads AS c
+        WHERE c.deleted_at IS NULL
+          AND (
+            EXISTS (
+              SELECT 1 FROM projection_thread_activities AS a
+              WHERE a.thread_id = c.thread_id
+                AND a.kind = 't3team.handoff.created'
+                AND json_extract(a.payload_json, '$.parentThreadId') = ${threadId}
+            )
+            OR EXISTS (
+              SELECT 1 FROM projection_thread_activities AS a
+              WHERE a.thread_id = ${threadId}
+                AND a.kind = 't3team.handoff.started'
+                AND json_extract(a.payload_json, '$.childThreadId') = c.thread_id
+            )
+          )
+          AND (
+            EXISTS (
+              SELECT 1 FROM projection_thread_sessions AS s
+              WHERE s.thread_id = c.thread_id
+                AND s.status IN ('starting', 'running')
+            )
+            OR EXISTS (
+              SELECT 1 FROM workflow_runs AS w
+              WHERE w.launch_thread_id = c.thread_id
+                AND w.status IN ('queued', 'running', 'suspended', 'sleeping', 'paused')
+            )
+          )
+        LIMIT 1
+      `,
+  });
+
+  // A durable, unresolved t3team.child_wait registered on this child: a parent
+  // deterministically still needs its result. Registered with no matching
+  // resolved for the same waitId.
+  const hasPendingParentWaitQuery = SqlSchema.findOneOption({
+    Request: ThreadIdLookupInput,
+    Result: SettleGuardHitRowSchema,
+    execute: ({ threadId }) =>
+      sql`
+        SELECT 1 AS "hit"
+        FROM projection_thread_activities AS r
+        WHERE r.kind = 't3team.child_wait.registered'
+          AND json_extract(r.payload_json, '$.childThreadId') = ${threadId}
+          AND NOT EXISTS (
+            SELECT 1 FROM projection_thread_activities AS res
+            WHERE res.kind = 't3team.child_wait.resolved'
+              AND json_extract(res.payload_json, '$.waitId') = json_extract(r.payload_json, '$.waitId')
+          )
+        LIMIT 1
+      `,
+  });
+
+  const hasLiveChild: ProjectionSnapshotQueryShape["hasLiveChild"] = Effect.fn(
+    "ProjectionSnapshotQuery.hasLiveChild",
+  )(function* (threadId: ThreadId) {
+    const row = yield* hasLiveChildQuery({ threadId }).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.hasLiveChild:query",
+          "ProjectionSnapshotQuery.hasLiveChild:decodeRow",
+        ),
+      ),
+    );
+    return Option.isSome(row);
+  });
+
+  const hasPendingParentWait: ProjectionSnapshotQueryShape["hasPendingParentWait"] = Effect.fn(
+    "ProjectionSnapshotQuery.hasPendingParentWait",
+  )(function* (threadId: ThreadId) {
+    const row = yield* hasPendingParentWaitQuery({ threadId }).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.hasPendingParentWait:query",
+          "ProjectionSnapshotQuery.hasPendingParentWait:decodeRow",
+        ),
+      ),
+    );
+    return Option.isSome(row);
+  });
+
   return {
     getCommandReadModel,
     getUserInputActivity,
@@ -3968,6 +4074,9 @@ pending_approval_requests AS (
     listParentChildRelations,
     listEnvironmentBindings,
     getImportedAgentSessionSources,
+    hasNonTerminalWorkflowRun,
+    hasLiveChild,
+    hasPendingParentWait,
     getThreadCheckpointContext,
     getFullThreadDiffContext,
     getThreadShellById,
