@@ -1,50 +1,99 @@
 /**
- * V4 — Stack + chip (story-only, 2026-09-14). V1's overlapping discs sitting in V2's soft
- * track. The selected disc lifts out of the pile and unfolds into a chip with the project
- * name; the name's width and opacity are animated so the row re-flows smoothly rather than
- * jumping. Depth comes from three things: z-order runs left→right (the leftmost disc is on
- * top, like a fanned deck), every disc casts a soft shadow onto the one it covers, and the
- * fill is a slight top-lit gradient. The overlap relaxes as the container widens.
+ * V4 — Stack + chip (story-only, 2026-09-14). Flat discs that overlap like stacked coins.
+ * Depth is occlusion only: where a disc lies on its neighbour, the covered disc carries a
+ * soft inset crescent along the covered edge — nothing radiates outward, no ring, no glow.
+ * Later discs sit on top; the selection tops everything, lifts a pixel and unfolds its name
+ * (animated width/opacity). "All" is always present; the row shows as many recent projects
+ * as the container fits and hands the rest to the ⋯ menu.
  */
+import { useLayoutEffect, useRef, useState, type RefObject } from "react";
+
 import { cn } from "~/lib/utils";
 
 import { Pill, entries, type ScopeVariantProps } from "./t3team-scopePillVariants";
+
+const DISC = 28; // px, h-7
+const OVERLAP = 8; // px each disc hides of the previous one
+const CHIP_LABEL = 84; // px reserved for the unfolded name
+
+/** How many project discs fit next to the "All" disc in `width` px. */
+function discsThatFit(width: number): number {
+  const remaining = width - DISC - CHIP_LABEL;
+  return remaining <= 0 ? 0 : Math.floor(remaining / (DISC - OVERLAP));
+}
+
+function useWidth(): [RefObject<HTMLDivElement | null>, number] {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [width, setWidth] = useState(0);
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setWidth(entry.contentRect.width);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+  return [ref, width];
+}
 
 export function ScopeStackChipVariant({
   groups,
   activeScopeKey,
   onSelectScope,
 }: ScopeVariantProps) {
-  const items = entries(groups);
+  const [ref, width] = useWidth();
+  const all = entries(groups);
+  const capacity = discsThatFit(width);
+  // "All" always; then the leading (most recent) projects that fit, plus the active one
+  // if it fell off the end — a scope you cannot see is a scope you cannot clear.
+  const projects = all.slice(1);
+  let shown = projects.slice(0, capacity);
+  const active = projects.find((p) => p.key === activeScopeKey);
+  if (active && !shown.includes(active))
+    shown = [...shown.slice(0, Math.max(0, capacity - 1)), active];
+  const items = [all[0]!, ...shown];
+  const activeIndex = items.findIndex((p) => p.key === activeScopeKey);
+
   return (
-    <div className="@container/pills flex min-w-0 flex-1 items-center overflow-hidden">
-      <div className="flex min-w-0 items-center rounded-full bg-muted py-0.5 pr-1 pl-0.5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.06)]">
+    <div ref={ref} className="flex min-w-0 flex-1 items-center overflow-hidden">
+      <div className="flex items-center">
         {items.map((entry, index) => {
-          const active = entry.key === activeScopeKey;
+          const isActive = index === activeIndex;
+          // The disc after this one covers its right edge — unless this one is the lifted
+          // selection. The disc right after the selection is covered on its LEFT edge.
+          const coveredRight = !isActive && index < items.length - 1;
+          const coveredLeft = activeIndex >= 0 && index === activeIndex + 1;
           return (
             <Pill
               key={entry.key ?? "all"}
-              active={active}
+              active={isActive}
               label={entry.label}
               onClick={() => onSelectScope(entry.key)}
-              // Fanned deck: earlier discs sit on top of later ones; the selection tops all.
-              style={{ zIndex: active ? items.length + 1 : items.length - index }}
+              style={{
+                zIndex: isActive ? items.length + 1 : index + 1,
+                marginLeft: index === 0 ? 0 : -OVERLAP,
+                boxShadow: [
+                  coveredRight ? "inset -5px 0 5px -4px rgba(0,0,0,0.28)" : null,
+                  coveredLeft ? "inset 5px 0 5px -4px rgba(0,0,0,0.28)" : null,
+                ]
+                  .filter(Boolean)
+                  .join(", "),
+              }}
               className={cn(
-                "h-7 min-w-7 gap-1.5 rounded-full border border-black/10 bg-gradient-to-b from-card to-muted/80 shadow-[3px_0_6px_-1px_rgba(0,0,0,0.22)] dark:border-white/10 dark:from-card dark:to-black/20",
-                index > 0 && "-ml-3 @[15rem]/pills:-ml-2 @[19rem]/pills:-ml-1",
-                active
-                  ? "px-1 text-foreground shadow-[0_2px_6px_rgba(0,0,0,0.22),0_0_0_1px_rgba(0,0,0,0.06)] @[15rem]/pills:pr-2.5"
-                  : "text-muted-foreground hover:-translate-y-px hover:text-foreground",
+                "h-7 min-w-7 gap-1.5 rounded-full bg-card dark:bg-sidebar-accent",
+                isActive
+                  ? "-translate-y-px px-1 pr-2.5 text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
               )}
             >
               <span className="inline-flex size-4 shrink-0 items-center justify-center">
                 {entry.icon}
               </span>
-              {/* Name unfolds: max-width + opacity animate, so the neighbours slide, not jump. */}
               <span
                 className={cn(
-                  "hidden overflow-hidden whitespace-nowrap text-xs font-medium transition-[max-width,opacity,margin] duration-200 ease-out @[15rem]/pills:inline-block",
-                  active ? "max-w-28 opacity-100" : "-ml-1.5 max-w-0 opacity-0",
+                  "inline-block overflow-hidden whitespace-nowrap text-xs font-medium transition-[max-width,opacity,margin] duration-200 ease-out",
+                  isActive ? "max-w-28 opacity-100" : "-ml-1.5 max-w-0 opacity-0",
                 )}
               >
                 {entry.label}

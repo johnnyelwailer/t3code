@@ -86,7 +86,7 @@ const VARIANTS: ReadonlyArray<{
   {
     id: "v4",
     name: "V4 · stack + chip (V1 × V2)",
-    note: "solid discs in a track; the selection lifts and unfolds its name",
+    note: "fills the width; depth only where discs overlap; the selection lifts and unfolds its name",
     Render: (p) => <ScopeStackChipVariant {...p} />,
   },
   {
