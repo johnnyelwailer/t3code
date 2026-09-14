@@ -1,6 +1,8 @@
 import type { CloudSession } from "@t3tools/contracts";
-import { useCallback, useState } from "react";
+import { CLOUD_SESSION_REFRESH_INTERVAL_MS } from "@t3tools/client-runtime/state/cloud-sessions";
+import { useCallback, useEffect, useState } from "react";
 
+import { appAtomRegistry } from "~/rpc/atomRegistry";
 import {
   cloudSessionEnvironment,
   useCloudSessions,
@@ -9,6 +11,7 @@ import {
 import { useAtomCommand } from "~/state/use-atom-command";
 import { DEFAULT_CLOUD_SESSION_DURATION_SECONDS } from "~/components/cloud/t3team-CloudSessionProvisionPanel";
 import { toastManager } from "~/components/ui/toast";
+import { startCloudSessionListPolling } from "./t3team-cloudSessionPolling";
 
 /**
  * Binds the cloud session surfaces to the server.
@@ -31,13 +34,42 @@ export function useCloudSessionController() {
   const createSession = useAtomCommand(cloudSessionEnvironment.create, { reportFailure: false });
   const cancelSession = useAtomCommand(cloudSessionEnvironment.cancel, { reportFailure: false });
 
+  // The list atom no longer polls on its own (owner decision: no background
+  // GHE calls), so every consumer that needs a fresh list asks for one here.
+  // `appAtomRegistry.refresh` is the forceful SWR revalidation: it ignores the
+  // stale window and re-runs the `cloud.session.list` RPC.
+  const refreshCloudSessionList = useCallback(() => {
+    if (environmentId === null) return;
+    appAtomRegistry.refresh(cloudSessionEnvironment.list({ environmentId, input: {} }));
+  }, [environmentId]);
+
+  // "Run on" menu polling: the moment the menu opens the list is re-pulled
+  // immediately, then every 5 seconds so provisioning phases tick forward
+  // live. Closed menu, no interval — the whole point of the owner decision.
+  const [cloudMenuOpen, setCloudMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!cloudMenuOpen) return;
+    return startCloudSessionListPolling(refreshCloudSessionList, CLOUD_SESSION_REFRESH_INTERVAL_MS);
+  }, [cloudMenuOpen, refreshCloudSessionList]);
+  const onCloudMenuOpenChange = useCallback(
+    (open: boolean) => {
+      setCloudMenuOpen(open);
+    },
+    [],
+  );
+
   const onCreate = useCallback(
     (seconds: number) => {
       if (environmentId === null || createPending) return;
       setCreatePending(true);
       void createSession({ environmentId, input: { durationSeconds: seconds } })
         .then((result) => {
-          if (result._tag === "Failure") {
+          if (result._tag === "Success") {
+            // A new session just entered the list; without the old 5-second
+            // background poll this is what keeps the menu and the settings
+            // panel honest right after a create.
+            refreshCloudSessionList();
+          } else {
             toastManager.add({
               type: "error",
               title: "Could not start a cloud session.",
@@ -46,7 +78,7 @@ export function useCloudSessionController() {
         })
         .finally(() => setCreatePending(false));
     },
-    [createPending, createSession, environmentId],
+    [createPending, createSession, environmentId, refreshCloudSessionList],
   );
 
   const onSessionAction = useCallback(
@@ -73,7 +105,9 @@ export function useCloudSessionController() {
       setPendingSessionId(session.sessionId);
       void cancelSession({ environmentId, input: { sessionId: session.sessionId } })
         .then((result) => {
-          if (result._tag === "Failure") {
+          if (result._tag === "Success") {
+            refreshCloudSessionList();
+          } else {
             toastManager.add({
               type: "error",
               title: "Could not cancel that cloud session.",
@@ -82,7 +116,7 @@ export function useCloudSessionController() {
         })
         .finally(() => setPendingSessionId(null));
     },
-    [cancelSession, durationSeconds, environmentId, onCreate],
+    [cancelSession, durationSeconds, environmentId, onCreate, refreshCloudSessionList],
   );
 
   return {
@@ -95,6 +129,7 @@ export function useCloudSessionController() {
     pendingSessionId,
     onCreate,
     onSessionAction,
+    onCloudMenuOpenChange,
     /** Nothing can be started without an environment to start it from. */
     available: environmentId !== null,
   };

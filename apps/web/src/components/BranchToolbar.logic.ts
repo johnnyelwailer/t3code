@@ -55,6 +55,51 @@ export function shouldShowEnvironmentIndicator(input: {
   return input.activeEnvironment !== null && !input.activeEnvironment.isPrimary;
 }
 
+/**
+ * Collapses "Run on" rows that are the same machine reachable under two
+ * environment ids.
+ *
+ * How the duplicate arises: a ready cloud session publishes its relay
+ * environment, so the machine can sit in the environment catalog twice — the
+ * id the T3 Connect registry minted for it, and a second id minted when its
+ * relay link was (re)published. The catalog only carries `environmentId` and
+ * the server-provided label for each entry, so the strongest identity two
+ * rows of the same machine share is the pair (machine kind, normalized
+ * label); `environmentId` itself is exactly what differs. Primary rows never
+ * compete (there is one primary), and a row that is the thread's active
+ * environment is always kept — replacing its duplicate if the duplicate was
+ * seen first — so the trigger never points at a filtered-out id.
+ *
+ * Known limit: two genuinely different machines with the same machine kind
+ * and the same label would collapse into one row. That is rarer than the
+ * duplicate the menu has to prevent, and the row kept is a live one either
+ * way.
+ */
+export function dedupeRunOnEnvironments(
+  environments: readonly EnvironmentOption[],
+  activeEnvironmentId: EnvironmentId,
+): EnvironmentOption[] {
+  const result: EnvironmentOption[] = [];
+  const fingerprintIndex = new Map<string, number>();
+  for (const environment of environments) {
+    if (environment.isPrimary) {
+      result.push(environment);
+      continue;
+    }
+    const fingerprint = `${environment.machine}\u0000${environment.label.trim().toLowerCase()}`;
+    const existingIndex = fingerprintIndex.get(fingerprint);
+    if (existingIndex === undefined) {
+      fingerprintIndex.set(fingerprint, result.length);
+      result.push(environment);
+      continue;
+    }
+    if (environment.environmentId === activeEnvironmentId) {
+      result[existingIndex] = environment;
+    }
+  }
+  return result;
+}
+
 export function shouldShowComposerContextStrip(input: {
   hasActiveProject: boolean;
   isGitRepo: boolean;

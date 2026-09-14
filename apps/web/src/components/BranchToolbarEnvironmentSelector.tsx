@@ -1,8 +1,9 @@
 import type { CloudSession, EnvironmentId } from "@t3tools/contracts";
-import { CloudIcon, ScaleIcon } from "lucide-react";
+import { CloudIcon, ScaleIcon, SettingsIcon } from "lucide-react";
 import { memo, useMemo } from "react";
 
 import type { EnvironmentOption } from "./BranchToolbar.logic";
+import { dedupeRunOnEnvironments } from "./BranchToolbar.logic";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { composerFloatingLayerProps } from "./chat/composerEventScope";
 import { presentCloudSession } from "./cloud/t3team-cloudSessionProvisionPresentation";
@@ -24,6 +25,13 @@ import {
  */
 const CREATE_CLOUD_SESSION_SELECT_VALUE = "__create-cloud-session__";
 
+/**
+ * Sentinel value for the "go set up cloud sessions" item, shown instead of the
+ * create item when the server has no provider configured yet. Selecting it
+ * leaves for the Connections settings, where the provisioning panel lives.
+ */
+const SETUP_CLOUD_SESSIONS_SELECT_VALUE = "__setup-cloud-sessions__";
+
 export interface BranchToolbarEnvironmentSelectorProps {
   autoEnvironmentLabel?: string | undefined;
   onAutoEnvironment?: (() => void) | undefined;
@@ -40,8 +48,24 @@ export interface BranchToolbarEnvironmentSelectorProps {
    * then and listing it twice would be a lie about how many machines exist.
    */
   pendingCloudSessions?: readonly CloudSession[];
-  /** Absent hides the action item entirely, leaving the menu exactly as it was. */
+  /**
+   * Present when the server has a cloud provider configured: the menu offers a
+   * one-click "New cloud session". Absent hides the action item entirely.
+   */
   onCreateCloudSession?: () => void;
+  /**
+   * Present when a primary environment exists but the server has no provider
+   * configured yet: the menu offers "Set up cloud sessions", which leaves for
+   * the Connections settings instead of promising a machine. Mutually exclusive
+   * with `onCreateCloudSession`.
+   */
+  onSetupCloudSessions?: () => void;
+  /**
+   * Drives background polling of the session list for as long as the menu is
+   * open (a provisioning session changes phase every few seconds). Absent or
+   * the menu closed: no polling.
+   */
+  onCloudMenuOpenChange?: (open: boolean) => void;
 }
 
 export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvironmentSelector({
@@ -53,33 +77,51 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   onEnvironmentChange,
   pendingCloudSessions,
   onCreateCloudSession,
+  onSetupCloudSessions,
+  onCloudMenuOpenChange,
 }: BranchToolbarEnvironmentSelectorProps) {
-  const activeEnvironment = useMemo(() => {
-    return availableEnvironments.find((env) => env.environmentId === environmentId) ?? null;
-  }, [availableEnvironments, environmentId]);
+  // The cloud entry makes the selector interactive even with a single
+  // environment, so the static-label branch is the locked state or a state
+  // with neither an environment picker nor any cloud affordance.
+  const hasCloudAffordance = onCreateCloudSession !== undefined || onSetupCloudSessions !== undefined;
+  const runOnEnvironments = useMemo(
+    () => dedupeRunOnEnvironments(availableEnvironments, environmentId),
+    [availableEnvironments, environmentId],
+  );
+  const activeEnvironment = useMemo(
+    () => runOnEnvironments.find((env) => env.environmentId === environmentId) ?? null,
+    [runOnEnvironments, environmentId],
+  );
 
   const environmentItems = useMemo(
     () => [
       ...(onAutoEnvironment
         ? [{ value: "auto", label: autoEnvironmentLabel ?? "Auto balance" }]
         : []),
-      ...availableEnvironments.map((env) => ({
-        value: env.environmentId,
-        label: env.label,
-      })),
+      ...(onEnvironmentChange !== undefined
+        ? runOnEnvironments.map((env) => ({
+            value: env.environmentId,
+            label: env.label,
+          }))
+        : []),
       ...(onCreateCloudSession
         ? [{ value: CREATE_CLOUD_SESSION_SELECT_VALUE, label: "New cloud session" }]
         : []),
+      ...(onSetupCloudSessions
+        ? [{ value: SETUP_CLOUD_SESSIONS_SELECT_VALUE, label: "Set up cloud sessions" }]
+        : []),
     ],
-    [availableEnvironments, autoEnvironmentLabel, onAutoEnvironment, onCreateCloudSession],
+    [
+      runOnEnvironments,
+      autoEnvironmentLabel,
+      onAutoEnvironment,
+      onEnvironmentChange,
+      onCreateCloudSession,
+      onSetupCloudSessions,
+    ],
   );
 
-  // The static label carries the xs control's height (h-7 sm:h-6) as well as
-  // its padding: the composer context strip has no min-height of its own, and
-  // the glass seam joining it to the composer assumes a fixed strip height, so
-  // a shorter label would drag the seam out of line whenever this label is the
-  // only thing in the strip.
-  if (envLocked || onEnvironmentChange === undefined) {
+  if (envLocked || (onEnvironmentChange === undefined && !hasCloudAffordance)) {
     return (
       <span
         className="inline-flex h-7 min-w-0 max-w-full items-center gap-1 border border-transparent px-[calc(--spacing(2)-1px)] font-normal text-muted-foreground/70 text-xs sm:h-6"
@@ -108,16 +150,21 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
     <Select
       modal={false}
       value={autoEnvironmentLabel ? "auto" : environmentId}
+      onOpenChange={(open) => onCloudMenuOpenChange?.(open)}
       onValueChange={(value) => {
         if (value === CREATE_CLOUD_SESSION_SELECT_VALUE) {
           onCreateCloudSession?.();
+          return;
+        }
+        if (value === SETUP_CLOUD_SESSIONS_SELECT_VALUE) {
+          onSetupCloudSessions?.();
           return;
         }
         if (value === "auto") {
           onAutoEnvironment?.();
           return;
         }
-        onEnvironmentChange(value as EnvironmentId);
+        onEnvironmentChange?.(value as EnvironmentId);
       }}
       items={environmentItems}
     >
@@ -144,7 +191,11 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
             data-composer-label-motion
             className="block w-full min-w-0 max-w-[240px] origin-left truncate transition-[opacity,transform] duration-180 ease-[cubic-bezier(0.32,0.72,0,1)] group-data-[compact]/composer-context:[transform:translateX(-0.25rem)_scaleX(0.95)] group-data-[compact]/composer-context:opacity-0 motion-reduce:transform-none motion-reduce:transition-opacity"
           >
-            <SelectValue />
+            {onEnvironmentChange !== undefined ? (
+              <SelectValue />
+            ) : (
+              activeEnvironment?.label ?? "Run on"
+            )}
           </span>
         </span>
       </SelectTrigger>
@@ -164,14 +215,28 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
               </span>
             </SelectItem>
           )}
-          {availableEnvironments.map((env) => (
-            <SelectItem key={env.environmentId} value={env.environmentId}>
-              <span className="inline-flex items-center gap-1.5">
-                <EnvironmentMachineIcon kind={env.machine} className="size-3" />
-                {env.label}
-              </span>
-            </SelectItem>
-          ))}
+          {onEnvironmentChange !== undefined ? (
+            runOnEnvironments.map((env) => (
+              <SelectItem key={env.environmentId} value={env.environmentId}>
+                <span className="inline-flex items-center gap-1.5">
+                  <EnvironmentMachineIcon kind={env.machine} className="size-3" />
+                  {env.label}
+                </span>
+              </SelectItem>
+            ))
+          ) : (
+            // A single machine with a cloud entry behind it: the machine row is
+            // informational (it is already the selection), not a choice.
+            runOnEnvironments.map((env) => (
+              <div
+                key={env.environmentId}
+                className="flex items-center gap-1.5 px-2 py-1.5 text-xs"
+              >
+                <EnvironmentMachineIcon kind={env.machine} className="size-3 shrink-0" />
+                <span className="truncate">{env.label}</span>
+              </div>
+            ))
+          )}
         </SelectGroup>
         {onCreateCloudSession && (
           <>
@@ -200,6 +265,20 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                 <span className="inline-flex items-center gap-1.5">
                   <CloudIcon className="size-3" aria-hidden="true" />
                   New cloud session
+                </span>
+              </SelectItem>
+            </SelectGroup>
+          </>
+        )}
+        {onSetupCloudSessions && (
+          <>
+            <SelectSeparator />
+            <SelectGroup>
+              <SelectGroupLabel>Cloud</SelectGroupLabel>
+              <SelectItem value={SETUP_CLOUD_SESSIONS_SELECT_VALUE}>
+                <span className="inline-flex items-center gap-1.5">
+                  <SettingsIcon className="size-3" aria-hidden="true" />
+                  Set up cloud sessions
                 </span>
               </SelectItem>
             </SelectGroup>
