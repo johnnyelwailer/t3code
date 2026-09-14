@@ -9,10 +9,12 @@ import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { ProviderDriverKind } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import { FetchHttpClient } from "effect/unstable/http";
+import * as TestClock from "effect/testing/TestClock";
 import { describe } from "vite-plus/test";
 
 import { type ClaudeUsageBody } from "./t3team-providerUsageMappers.ts";
@@ -50,6 +52,25 @@ describe("sampleClaudeUsage", () => {
       assert.equal(report.windows[1]!.severity, "normal");
       assert.isString(report.windows[0]!.sampledAt);
       assert.equal(report.provider, CLAUDE);
+    }).pipe(Effect.provide(httpLayer)),
+  );
+
+  it.effect("drops an exhausted window whose resets_at is already in the past", () =>
+    Effect.gen(function* () {
+      // TestClock starts at the epoch; move "now" past the stale reset moment.
+      yield* TestClock.adjust(Duration.millis(Date.parse("2026-09-14T09:26:00.000Z")));
+      const report = yield* sampleClaudeUsage({
+        credentials: { accessToken: "sk-ant-oat-test-token" },
+        fetchUsageBody: () =>
+          Effect.succeed({
+            five_hour: { utilization: 100.0, resets_at: "2026-09-07T12:04:48.000Z" },
+            seven_day: { utilization: 40.0, resets_at: "2999-01-01T00:00:00.000Z" },
+            limits: [{ kind: "session", percent: 100, severity: "critical" }],
+          } satisfies ClaudeUsageBody),
+      });
+      assert.equal(report.windows.length, 1);
+      assert.equal(report.windows[0]!.window, "secondary");
+      assert.equal(report.windows[0]!.severity, "normal");
     }).pipe(Effect.provide(httpLayer)),
   );
 

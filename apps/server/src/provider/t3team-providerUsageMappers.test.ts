@@ -19,6 +19,7 @@ import {
   type ClaudeUsageBody,
   type CodexRateLimitsBody,
 } from "./t3team-providerUsageMappers.ts";
+import { isExpiredWindow } from "./t3team-providerUsageMappersHelpers.ts";
 import {
   DEFAULT_PROVIDER_USAGE_THRESHOLDS,
   severityForPercent,
@@ -155,5 +156,43 @@ describe("mapCodexRateLimits", () => {
     assert.equal(report.windows.length, 1);
     assert.equal(report.windows[0]!.severity, "critical");
     assert.equal(report.windows[0]!.resetsAt, null);
+  });
+});
+
+describe("expired windows", () => {
+  it("isExpiredWindow: past or equal resetsAt is expired, future/null/garbage is live", () => {
+    assert.isTrue(isExpiredWindow("2026-09-03T17:48:16.000Z", SAMPLED_AT));
+    assert.isTrue(isExpiredWindow(SAMPLED_AT, SAMPLED_AT));
+    assert.isFalse(isExpiredWindow("2026-09-03T17:48:18.000Z", SAMPLED_AT));
+    assert.isFalse(isExpiredWindow(null, SAMPLED_AT));
+    assert.isFalse(isExpiredWindow("not-a-date", SAMPLED_AT));
+  });
+
+  it("mapClaudeUsage drops a critical window whose resets_at already passed", () => {
+    const report = mapClaudeUsage(
+      {
+        five_hour: { utilization: 100, resets_at: "2026-09-03T12:00:00.000Z" },
+        seven_day: { utilization: 49, resets_at: "2026-09-07T00:59:59.994413+00:00" },
+        limits: [{ kind: "session", percent: 100, severity: "critical" }],
+      },
+      { provider: CLAUDE, sampledAt: SAMPLED_AT },
+    );
+    assert.equal(report.windows.length, 1);
+    assert.equal(report.windows[0]!.window, "secondary");
+  });
+
+  it("mapCodexRateLimits drops a critical window whose resetsAt already passed", () => {
+    const pastEpochSeconds = Math.floor(Date.parse("2026-09-03T12:00:00.000Z") / 1000);
+    const report = mapCodexRateLimits(
+      {
+        rateLimits: {
+          primary: { usedPercent: 100, windowDurationMins: 300, resetsAt: pastEpochSeconds },
+          secondary: { usedPercent: 40, windowDurationMins: 10080, resetsAt: 1788765840 },
+        },
+      },
+      { provider: CODEX, sampledAt: SAMPLED_AT },
+    );
+    assert.equal(report.windows.length, 1);
+    assert.equal(report.windows[0]!.window, "secondary");
   });
 });
