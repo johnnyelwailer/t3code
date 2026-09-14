@@ -12,6 +12,7 @@
 import { isTransportConnectionErrorMessage } from "@t3tools/client-runtime/errors";
 import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
 import type { T3TeamStagedComposerAction } from "~/t3team/t3team-stagedComposerActionStore";
+import { randomUUID } from "~/lib/utils";
 
 export type T3TeamOutboxEntryKind =
   | "turn-start"
@@ -64,9 +65,7 @@ export interface T3TeamOutboxEntry {
 }
 
 export function newT3TeamOutboxEntryId(): string {
-  const random = globalThis.crypto?.randomUUID?.();
-  if (random) return random;
-  return `outbox-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  return randomUUID();
 }
 
 export function makeT3TeamOutboxEntry(
@@ -154,6 +153,19 @@ export function groupT3TeamOutboxEntriesByEnvironment(
 export function t3TeamOutboxRetryDelayMs(attempt: number): number {
   return Math.min(1_000 * 2 ** Math.max(0, attempt - 1), 16_000);
 }
+
+/**
+ * How long a dispatched turn-start is shielded from being re-sent while its
+ * acknowledgement is being confirmed against the (re-synced) thread read
+ * model. The server does not dedupe turns by message id, so once a send has
+ * been attempted the client must not fire it again until the read model
+ * confirms the message is absent — long enough for the read model to have
+ * re-synced after a reconnect.
+ */
+export const OUTBOX_CONFIRMATION_TIMEOUT_MS = 90_000;
+
+/** How long a cross-tab dispatch claim stays authoritative before another tab may take over. */
+export const OUTBOX_CLAIM_TTL_MS = 45_000;
 
 /** Short human preview for the queued-state banner. */
 export function t3TeamOutboxEntryPreview(entry: T3TeamOutboxEntry): string {

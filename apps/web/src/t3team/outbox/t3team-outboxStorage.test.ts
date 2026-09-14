@@ -4,9 +4,15 @@ import { DEFAULT_PROVIDER_INTERACTION_MODE, DEFAULT_RUNTIME_MODE } from "@t3tool
 
 import { makeT3TeamOutboxEntry } from "~/t3team/outbox/t3team-outboxModel";
 import {
+  acquireOutboxDispatch,
+  clearOutboxAttempt,
+  getOutboxAttemptTs,
   loadStoredOutboxEntries,
   persistOutboxEntry,
   removeStoredOutboxEntry,
+  releaseOutboxDispatch,
+  setOutboxAttempt,
+  storedOutboxEntryExists,
 } from "~/t3team/outbox/t3team-outboxStorage";
 
 class FakeLocalStorage implements Storage {
@@ -91,5 +97,48 @@ describe("outbox storage", () => {
     expect(loaded).toEqual([first]);
     expect(storage.getItem("unrelated:key")).toEqual("{}");
     expect(storage.getItem("t3team-outbox:v1:corrupt")).toBeNull();
+  });
+});
+
+describe("cross-tab dispatch claim", () => {
+  const CLAIM = (id: string) => `t3team-outbox:claim:v1:${id}`;
+
+  it("defers when a fresh claim owned by another tab exists", () => {
+    storage.setItem(CLAIM("e-foreign"), JSON.stringify({ ts: Date.now(), owner: "other-tab" }));
+    expect(acquireOutboxDispatch("e-foreign")).toBe(false);
+  });
+
+  it("takes over once a foreign claim has gone stale", () => {
+    storage.setItem(
+      CLAIM("e-stale"),
+      JSON.stringify({ ts: Date.now() - 120_000, owner: "other-tab" }),
+    );
+    expect(acquireOutboxDispatch("e-stale")).toBe(true);
+  });
+
+  it("releases only this tab's claim, leaving a foreign one intact", () => {
+    storage.setItem(CLAIM("e-mine"), JSON.stringify({ ts: Date.now(), owner: "other-tab" }));
+    releaseOutboxDispatch("e-mine");
+    expect(storage.getItem(CLAIM("e-mine"))).not.toBeNull();
+  });
+
+  it("acquires and then releases this tab's own claim", () => {
+    expect(acquireOutboxDispatch("e-own")).toBe(true);
+    releaseOutboxDispatch("e-own");
+    expect(storage.getItem(CLAIM("e-own"))).toBeNull();
+  });
+});
+
+describe("durable entry presence and attempt timestamp", () => {
+  it("tracks presence and a clearable attempt marker", () => {
+    const first = entry("one");
+    persistOutboxEntry(first);
+    expect(storedOutboxEntryExists(first.entryId)).toBe(true);
+    setOutboxAttempt(first.entryId);
+    expect(getOutboxAttemptTs(first.entryId)).toBeTypeOf("number");
+    clearOutboxAttempt(first.entryId);
+    expect(getOutboxAttemptTs(first.entryId)).toBeNull();
+    removeStoredOutboxEntry(first);
+    expect(storedOutboxEntryExists(first.entryId)).toBe(false);
   });
 });

@@ -24,6 +24,7 @@ import type { EnvironmentId, MessageId, ThreadId } from "@t3tools/contracts";
 
 import {
   isTransientT3TeamOutboxError,
+  OUTBOX_CONFIRMATION_TIMEOUT_MS,
   type T3TeamOutboxEntry,
   type T3TeamOutboxRecipeCardActionPayload,
   type T3TeamOutboxStagedActionPayload,
@@ -64,6 +65,10 @@ export interface T3TeamOutboxDispatchDeps {
     threadId: string,
     messageId: string,
   ) => boolean | null;
+  /** Epoch ms the entry's turn was last attempted, or null (see model timeout). */
+  readonly outboxAttemptTs: (entryId: string) => number | null;
+  /** Durable: records that this entry's turn was just dispatched. */
+  readonly recordOutboxAttempt: (entryId: string) => void;
 }
 
 function failureText(result: AtomCommandResult<unknown, unknown>): string {
@@ -80,6 +85,15 @@ async function dispatchTurnStart(
   const seen = deps.threadHasUserMessage(entry.environmentId, entry.threadId, payload.messageId);
   if (seen === true) return { outcome: "delivered" };
   if (seen === null) return { outcome: "retry" };
+  // `seen === false`: the read model is loaded and lacks the id. The server does
+  // not dedupe turns, so if we already fired this send and are still inside the
+  // confirmation window, the acknowledgement is likely just in flight — do not
+  // fire it again (a lost-ACK reconnect is the exact case this guards).
+  const attemptedAt = deps.outboxAttemptTs(entry.entryId);
+  if (attemptedAt !== null && Date.now() - attemptedAt < OUTBOX_CONFIRMATION_TIMEOUT_MS) {
+    return { outcome: "retry" };
+  }
+  deps.recordOutboxAttempt(entry.entryId);
   const result = await deps.startTurn({
     environmentId: entry.environmentId as EnvironmentId,
     input: {

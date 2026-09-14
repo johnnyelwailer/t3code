@@ -15,6 +15,8 @@ import {
   loadStoredOutboxEntries,
   persistOutboxEntry,
   removeStoredOutboxEntry,
+  releaseOutboxDispatch,
+  clearOutboxAttempt,
 } from "~/t3team/outbox/t3team-outboxStorage";
 
 export interface T3TeamOutboxSnapshot {
@@ -108,23 +110,28 @@ export function getT3TeamOutboxEntriesForEnvironment(environmentId: string): T3T
   return groupT3TeamOutboxEntriesByEnvironment(currentSnapshot.entries)[environmentId] ?? [];
 }
 
-/** Enqueues (or, for a same-id retry, replaces) an entry and persists it. */
-export function enqueueT3TeamOutboxEntry(entry: T3TeamOutboxEntry): void {
+/** Enqueues (or, for a same-id retry, replaces) an entry and persists it.
+ *  Returns false when the entry could not be durably stored, so the caller
+ *  knows the send is NOT queued and should not clear the composer. */
+export function enqueueT3TeamOutboxEntry(entry: T3TeamOutboxEntry): boolean {
+  if (!persistOutboxEntry(entry)) return false;
   const withoutDuplicate = state.entries.filter((candidate) => candidate.entryId !== entry.entryId);
   const merged = [...withoutDuplicate, entry];
-  persistOutboxEntry(entry);
   delete retryAttempts[entry.entryId];
   commit({
     entries: Object.values(groupT3TeamOutboxEntriesByEnvironment(merged)).flat(),
     retryNotBefore: clearEntryState(state.retryNotBefore, entry.entryId),
     failures: clearEntryState(state.failures, entry.entryId),
   });
+  return true;
 }
 
 /** Removes an entry (delivered or discarded) from memory and storage. */
 export function removeT3TeamOutboxEntry(entry: T3TeamOutboxEntry): void {
   if (!state.entries.some((candidate) => candidate.entryId === entry.entryId)) return;
   removeStoredOutboxEntry(entry);
+  releaseOutboxDispatch(entry.entryId);
+  clearOutboxAttempt(entry.entryId);
   delete retryAttempts[entry.entryId];
   commit({
     entries: state.entries.filter((candidate) => candidate.entryId !== entry.entryId),

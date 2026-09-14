@@ -64,7 +64,7 @@ export function useT3TeamOutboxSend(input: {
           // The launch builder requires a concrete model selection; without
           // one the send keeps the stock offline toast instead of queueing.
           if (turnStart.modelSelection === null) return false;
-          enqueueT3TeamOutboxEntry(
+          const stagedEnqueued = enqueueT3TeamOutboxEntry(
             makeT3TeamOutboxEntry(
               "staged-action",
               {
@@ -78,8 +78,12 @@ export function useT3TeamOutboxSend(input: {
               turnStart.threadId,
             ),
           );
-          useT3TeamStagedComposerActionStore.getState().clear(target);
-          return true;
+          // Only consume the staged action when the queue actually stored it;
+          // otherwise the user's text stays editable and the action is kept.
+          if (stagedEnqueued) {
+            useT3TeamStagedComposerActionStore.getState().clear(target);
+          }
+          return stagedEnqueued;
         }
       }
       const payload = input.waitingForRecipeInput
@@ -108,8 +112,7 @@ export function useT3TeamOutboxSend(input: {
             input.environmentId,
             turnStart.threadId,
           );
-      enqueueT3TeamOutboxEntry(payload);
-      return true;
+      return enqueueT3TeamOutboxEntry(payload);
     },
     [
       input.environmentId,

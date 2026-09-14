@@ -50,12 +50,14 @@ interface FakeDeps {
   resolveWorkflowInput: ReturnType<typeof vi.fn>;
   submitRecipeCardAction: ReturnType<typeof vi.fn>;
   launchStagedAction: ReturnType<typeof vi.fn>;
+  recordOutboxAttempt: ReturnType<typeof vi.fn>;
 }
 
 function fakeDeps(
   overrides: {
     seen?: boolean | null;
     startTurnResult?: unknown;
+    attemptTs?: number | null;
   } = {},
 ): FakeDeps {
   const startTurn = vi
@@ -64,14 +66,24 @@ function fakeDeps(
   const resolveWorkflowInput = vi.fn().mockResolvedValue(undefined);
   const submitRecipeCardAction = vi.fn().mockResolvedValue({ ok: true });
   const launchStagedAction = vi.fn().mockResolvedValue(true);
+  const recordOutboxAttempt = vi.fn();
   const deps: T3TeamOutboxDispatchDeps = {
     startTurn: (request) => startTurn(request) as Promise<never>,
     resolveWorkflowInput: (request) => resolveWorkflowInput(request),
     submitRecipeCardAction: (request) => submitRecipeCardAction(request),
     launchStagedAction: (payload) => launchStagedAction(payload),
     threadHasUserMessage: () => ("seen" in overrides ? overrides.seen : false),
+    outboxAttemptTs: () => ("attemptTs" in overrides ? overrides.attemptTs : null),
+    recordOutboxAttempt: (entryId) => recordOutboxAttempt(entryId),
   };
-  return { deps, startTurn, resolveWorkflowInput, submitRecipeCardAction, launchStagedAction };
+  return {
+    deps,
+    startTurn,
+    resolveWorkflowInput,
+    submitRecipeCardAction,
+    launchStagedAction,
+    recordOutboxAttempt,
+  };
 }
 
 function run(entry: T3TeamOutboxEntry, fake: FakeDeps): Promise<T3TeamOutboxDispatchOutcome> {
@@ -91,6 +103,24 @@ describe("turn-start dispatch", () => {
     const outcome = await run(turnStartEntry(), fake);
     expect(outcome).toEqual({ outcome: "retry" });
     expect(fake.startTurn).not.toHaveBeenCalled();
+  });
+
+  it("does not re-send a turn whose send was recently attempted (lost-ACK confirmation window)", async () => {
+    const fake = fakeDeps({ seen: false, attemptTs: Date.now() });
+    const outcome = await run(turnStartEntry("m-recent"), fake);
+    expect(outcome).toEqual({ outcome: "retry" });
+    expect(fake.startTurn).not.toHaveBeenCalled();
+  });
+
+  it("re-sends a turn once the confirmation window has elapsed and the read model is still absent", async () => {
+    const fake = fakeDeps({
+      seen: false,
+      attemptTs: Date.now() - 120_000,
+    });
+    const outcome = await run(turnStartEntry("m-stale"), fake);
+    expect(outcome).toEqual({ outcome: "delivered" });
+    expect(fake.startTurn).toHaveBeenCalledTimes(1);
+    expect(fake.recordOutboxAttempt).toHaveBeenCalledWith(expect.any(String));
   });
 
   it("posts the turn with the queued message id when unseen", async () => {

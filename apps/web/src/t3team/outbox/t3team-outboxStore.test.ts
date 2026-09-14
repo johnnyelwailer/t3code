@@ -32,10 +32,26 @@ function entry(text: string, environmentId = "env-a") {
 }
 
 beforeEach(() => {
+  const backing = new Map<string, string>();
+  vi.stubGlobal("localStorage", {
+    getItem: (k: string) => (backing.has(k) ? backing.get(k)! : null),
+    setItem: (k: string, v: string) => {
+      backing.set(k, String(v));
+    },
+    removeItem: (k: string) => {
+      backing.delete(k);
+    },
+    clear: () => backing.clear(),
+    key: (i: number) => [...backing.keys()][i] ?? null,
+    get length() {
+      return backing.size;
+    },
+  });
   resetT3TeamOutboxStoreForTests();
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
@@ -57,6 +73,15 @@ describe("enqueueT3TeamOutboxEntry", () => {
     enqueueT3TeamOutboxEntry(entry("b", "env-b"));
     expect(getT3TeamOutboxEntriesForEnvironment("env-a")).toHaveLength(1);
     expect(getT3TeamOutboxEntriesForEnvironment("env-b")).toHaveLength(1);
+  });
+
+  it("returns false and does not enqueue when durable storage rejects the write", () => {
+    (globalThis.localStorage as unknown as { setItem: (k: string, v: string) => void }).setItem =
+      () => {
+        throw new Error("QuotaExceededError");
+      };
+    expect(enqueueT3TeamOutboxEntry(entry("nope"))).toBe(false);
+    expect(getT3TeamOutboxEntriesForEnvironment("env-a")).toHaveLength(0);
   });
 });
 

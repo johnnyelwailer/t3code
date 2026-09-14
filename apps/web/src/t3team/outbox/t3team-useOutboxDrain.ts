@@ -23,6 +23,14 @@ import { launchStagedComposerActionOnThread } from "~/t3team/chat/t3team-threadS
 import { dispatchT3TeamOutboxEntry } from "~/t3team/outbox/t3team-outboxDispatch";
 import type { T3TeamOutboxStagedActionPayload } from "~/t3team/outbox/t3team-outboxModel";
 import {
+  acquireOutboxDispatch,
+  clearOutboxAttempt,
+  getOutboxAttemptTs,
+  releaseOutboxDispatch,
+  setOutboxAttempt,
+  storedOutboxEntryExists,
+} from "~/t3team/outbox/t3team-outboxStorage";
+import {
   acquireT3TeamOutboxDispatch,
   getT3TeamOutboxEntriesForEnvironment,
   recordT3TeamOutboxFailure,
@@ -70,7 +78,19 @@ export function useT3TeamOutboxDrain(input: {
     // this the drain would re-dispatch it in a tight loop.
     if (snapshot.failures[entry.entryId] !== undefined) return;
     if ((snapshot.retryNotBefore[entry.entryId] ?? 0) > Date.now()) return;
+    // Another tab may already have delivered or discarded this entry; the
+    // durable record is the source of truth, so drop a stale in-memory copy.
+    if (!storedOutboxEntryExists(entry.entryId)) {
+      removeT3TeamOutboxEntry(entry);
+      return;
+    }
     if (!acquireT3TeamOutboxDispatch(entry.entryId)) return;
+    // Cross-tab guard: a fresh claim owned by another tab means it is already
+    // dispatching this entry, so this tab stays out.
+    if (!acquireOutboxDispatch(entry.entryId)) {
+      releaseT3TeamOutboxDispatch();
+      return;
+    }
     const { backend, startTurn: startTurnFn, headMessages } = depsRef.current;
     void dispatchT3TeamOutboxEntry(entry, {
       startTurn: (request) => startTurnFn(request),
@@ -101,6 +121,8 @@ export function useT3TeamOutboxDrain(input: {
         if (threadId !== entry.threadId || headMessages === null) return null;
         return headMessages.some((message) => message.id === messageId && message.role === "user");
       },
+      outboxAttemptTs: (entryId) => getOutboxAttemptTs(entryId),
+      recordOutboxAttempt: (entryId) => setOutboxAttempt(entryId),
     })
       .then((outcome) => {
         if (outcome.outcome === "delivered") {
@@ -108,10 +130,14 @@ export function useT3TeamOutboxDrain(input: {
         } else if (outcome.outcome === "retry") {
           recordT3TeamOutboxRetry(entry.entryId);
         } else {
+          // A permanent server rejection means the turn was not accepted, so it
+          // is safe to allow a resend — drop the at-most-once shield.
+          if (entry.kind === "turn-start") clearOutboxAttempt(entry.entryId);
           recordT3TeamOutboxFailure(entry.entryId, outcome.error);
         }
       })
       .finally(() => {
+        releaseOutboxDispatch(entry.entryId);
         releaseT3TeamOutboxDispatch();
       });
   }, [
