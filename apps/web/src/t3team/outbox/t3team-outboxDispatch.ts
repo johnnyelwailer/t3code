@@ -169,8 +169,20 @@ async function dispatchStagedAction(
   entry: T3TeamOutboxEntry,
   deps: T3TeamOutboxDispatchDeps,
 ): Promise<T3TeamOutboxDispatchOutcome> {
-  const launched = await deps.launchStagedAction(entry.payload as T3TeamOutboxStagedActionPayload);
-  return launched ? { outcome: "delivered" } : { outcome: "retry" };
+  try {
+    const launched = await deps.launchStagedAction(
+      entry.payload as T3TeamOutboxStagedActionPayload,
+    );
+    return launched ? { outcome: "delivered" } : { outcome: "retry" };
+  } catch (error) {
+    // Same transient/permanent split as the card action: a rejecting launch must
+    // become a recorded outcome, not an unhandled rejection that re-dispatches
+    // in a tight loop while the lock is released.
+    const message = error instanceof Error ? error.message : String(error);
+    return isTransientT3TeamOutboxError(error)
+      ? { outcome: "retry" }
+      : { outcome: "failed", error: message };
+  }
 }
 
 export async function dispatchT3TeamOutboxEntry(

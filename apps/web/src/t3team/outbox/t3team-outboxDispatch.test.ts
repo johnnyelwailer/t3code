@@ -44,6 +44,21 @@ function cardActionEntry() {
   );
 }
 
+function stagedActionEntry() {
+  return makeT3TeamOutboxEntry(
+    "staged-action",
+    {
+      action: { selectedRecipe: { id: "recipe-1" }, comments: [] } as never,
+      composerText: "note",
+      modelSelection: null,
+      runtimeMode: "full-access" as never,
+      interactionMode: "default" as never,
+    },
+    "env-a",
+    "thread-a",
+  );
+}
+
 interface FakeDeps {
   deps: T3TeamOutboxDispatchDeps;
   startTurn: ReturnType<typeof vi.fn>;
@@ -245,5 +260,20 @@ describe("staged-action dispatch", () => {
     const outcome = await run(entry, fake);
     expect(outcome).toEqual({ outcome: "delivered" });
     expect(fake.launchStagedAction).toHaveBeenCalledWith(entry.payload);
+  });
+
+  it("retries on a transient launch rejection and fails permanently on a non-transient one", async () => {
+    const transient = fakeDeps();
+    transient.launchStagedAction.mockRejectedValue(
+      new Error("Failed to reach backend /api/t3team/thread/recipe-workflow/launch at x."),
+    );
+    expect(await run(stagedActionEntry(), transient)).toEqual({ outcome: "retry" });
+
+    const permanent = fakeDeps();
+    permanent.launchStagedAction.mockRejectedValue(
+      new Error("No model selection was recorded for this action."),
+    );
+    const outcome = await run(stagedActionEntry(), permanent);
+    expect(outcome.outcome).toBe("failed");
   });
 });
