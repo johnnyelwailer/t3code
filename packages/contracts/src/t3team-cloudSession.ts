@@ -35,6 +35,7 @@ export const CloudSessionPhaseSchema = Schema.Literals([
   "ready",
   "failed",
   "stopped",
+  "cancelled",
 ]);
 export type CloudSessionPhase = typeof CloudSessionPhaseSchema.Type;
 
@@ -57,6 +58,20 @@ export const CloudSessionSchema = Schema.Struct({
    * such page.
    */
   detailsUrl: Schema.NullOr(Schema.String),
+  /**
+   * The relay environment this session's machine is registered under, so a
+   * client can connect to it without re-discovering the relay. Optional: it
+   * is minted on the machine the session runs on and only rides back when the
+   * provider exposes it, so records from earlier sessions (and providers that
+   * do not report it) still parse.
+   */
+  environmentId: Schema.optional(Schema.String),
+  /**
+   * How long the session actually ran, in seconds, present for terminal
+   * sessions. Distinct from `elapsedSeconds`, which is the session's *age*
+   * (now − dispatch) and keeps growing after the run ends.
+   */
+  durationSeconds: Schema.optional(Schema.Int),
 });
 export type CloudSession = typeof CloudSessionSchema.Type;
 

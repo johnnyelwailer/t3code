@@ -1,7 +1,5 @@
 import type { CloudSession, CloudSessionPhase } from "@t3tools/contracts";
 
-import { isCloudSessionProvisionPending } from "./t3team-cloudSessionProvisionPresentation";
-
 /**
  * Split the cloud session list into what the panel surfaces by default
  * (sessions still doing work) and what belongs in the collapsed history
@@ -14,11 +12,11 @@ import { isCloudSessionProvisionPending } from "./t3team-cloudSessionProvisionPr
 
 /**
  * Phases in which a session has no live work left. Mirrors the contract's
- * `CloudSessionPhase`: there is no "released" or "cancelled" — a session
- * either failed provisioning or ran to its hold time and stopped.
+ * `CloudSessionPhase`: a session either failed provisioning, ran to its hold
+ * time and stopped, or the user cancelled it — all terminal, all history.
  */
 export function isTerminalCloudSessionPhase(phase: CloudSessionPhase): boolean {
-  return phase === "failed" || phase === "stopped";
+  return phase === "failed" || phase === "stopped" || phase === "cancelled";
 }
 
 /**
@@ -66,17 +64,18 @@ export function splitCloudSessions(
 /**
  * The sessions the composer's "Run on" menu shows under "Cloud": everything
  * still provisioning (the machine the user just asked for, phases ticking
- * live while the menu polls) plus the most recent failed session, so a
- * failed provisioning is never silently forgotten. Ready sessions are
- * excluded on purpose: a ready session has joined the environment list, and
- * listing it a second time would read as a duplicate machine.
+ * live while the menu polls) PLUS any ready session (it stays a
+ * "Ready · Connect" row instead of vanishing the moment it comes up), plus the
+ * most recent terminal session (failed or cancelled), so a failed or stopped
+ * provisioning is never silently forgotten.
  *
  * List order (newest first, from the server) is preserved.
  */
 export function runOnCloudSessions(sessions: readonly CloudSession[]): readonly CloudSession[] {
-  const mostRecentFailed = sessions.find((session) => session.phase === "failed") ?? null;
+  const mostRecentTerminal =
+    sessions.find((session) => isTerminalCloudSessionPhase(session.phase)) ?? null;
   return sessions.filter(
-    (session) => isCloudSessionProvisionPending(session.phase) || session === mostRecentFailed,
+    (session) => !isTerminalCloudSessionPhase(session.phase) || session === mostRecentTerminal,
   );
 }
 

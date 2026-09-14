@@ -29,6 +29,7 @@ describe("isTerminalCloudSessionPhase", () => {
     }
     expect(isTerminalCloudSessionPhase("failed")).toBe(true);
     expect(isTerminalCloudSessionPhase("stopped")).toBe(true);
+    expect(isTerminalCloudSessionPhase("cancelled")).toBe(true);
   });
 });
 
@@ -80,46 +81,70 @@ describe("splitCloudSessions", () => {
 });
 
 describe("runOnCloudSessions", () => {
-  it("keeps provisioning sessions and the most recent failed one, in order", () => {
+  it("keeps provisioning and ready sessions plus the most recent terminal, in order", () => {
     const result = runOnCloudSessions([
       session("ready1", "ready"),
       session("prep1", "preparing"),
       session("failed2", "failed"),
-      session("failed1", "failed"),
+      session("cancelled1", "cancelled"),
       session("queued1", "queued"),
       session("stopped1", "stopped"),
     ]);
-    expect(result.map((item) => item.sessionId)).toEqual(["prep1", "failed2", "queued1"]);
+    // ready1 stays (a connectable row, not a vanishing one); the most recent
+    // terminal (failed2, newest-first) is kept so a failure is not forgotten.
+    expect(result.map((item) => item.sessionId)).toEqual(["ready1", "prep1", "failed2", "queued1"]);
   });
 
-  it("includes only provisioning sessions when none have failed", () => {
+  it("includes ready sessions even when none have failed", () => {
     const result = runOnCloudSessions([session("ready1", "ready"), session("prep1", "preparing")]);
-    expect(result.map((item) => item.sessionId)).toEqual(["prep1"]);
+    expect(result.map((item) => item.sessionId)).toEqual(["ready1", "prep1"]);
   });
 
-  it("returns an empty list when nothing is worth showing", () => {
-    expect(runOnCloudSessions([session("ready1", "ready"), session("stop1", "stopped")])).toEqual([]);
+  it("keeps a lone terminal session (the most recent outcome) so it is not forgotten", () => {
+    expect(runOnCloudSessions([session("stop1", "stopped")])).toEqual([
+      session("stop1", "stopped"),
+    ]);
+  });
+
+  it("returns an empty list for an empty input", () => {
+    expect(runOnCloudSessions([])).toEqual([]);
   });
 });
 
 describe("mergeLocalCloudSession", () => {
   it("shows the local session until the server list covers it", () => {
-    const local = { session: session("pending:abc", "requested"), knownServerSessionIds: new Set(["old1"]) };
-    expect(mergeLocalCloudSession([session("old1", "stopped")], local).map((item) => item.sessionId)).toEqual(["pending:abc", "old1"]);
-    expect(mergeLocalCloudSession([], local).map((item) => item.sessionId)).toEqual(["pending:abc"]);
+    const local = {
+      session: session("pending:abc", "requested"),
+      knownServerSessionIds: new Set(["old1"]),
+    };
+    expect(
+      mergeLocalCloudSession([session("old1", "stopped")], local).map((item) => item.sessionId),
+    ).toEqual(["pending:abc", "old1"]);
+    expect(mergeLocalCloudSession([], local).map((item) => item.sessionId)).toEqual([
+      "pending:abc",
+    ]);
   });
 
   it("drops the local session when the same id appears in the server list", () => {
-    const local = { session: session("real-1", "requested"), knownServerSessionIds: new Set<string>() };
-    expect(mergeLocalCloudSession([session("real-1", "queued")], local)).toEqual([session("real-1", "queued")]);
+    const local = {
+      session: session("real-1", "requested"),
+      knownServerSessionIds: new Set<string>(),
+    };
+    expect(mergeLocalCloudSession([session("real-1", "queued")], local)).toEqual([
+      session("real-1", "queued"),
+    ]);
   });
 
   it("drops the local session when a new session surfaces from the server", () => {
     // The dispatch indexed under its run id: a session that was not in the
     // pre-create snapshot now is.
-    const local = { session: session("pending:abc", "requested"), knownServerSessionIds: new Set(["old1"]) };
-    expect(mergeLocalCloudSession([session("run-9", "preparing"), session("old1", "stopped")], local))
-      .toHaveLength(2);
+    const local = {
+      session: session("pending:abc", "requested"),
+      knownServerSessionIds: new Set(["old1"]),
+    };
+    expect(
+      mergeLocalCloudSession([session("run-9", "preparing"), session("old1", "stopped")], local),
+    ).toHaveLength(2);
   });
 
   it("passes the server list through when there is no local session", () => {

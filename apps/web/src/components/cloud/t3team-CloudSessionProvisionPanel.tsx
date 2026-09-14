@@ -52,7 +52,10 @@ export function CloudSessionProvisionPanel({
   onDurationChange,
   onCreate,
   onSessionAction,
+  onSessionSecondaryAction,
   pendingSessionId = null,
+  pendingKind = null,
+  pendingLabel = null,
   empty = null,
 }: {
   readonly sessions: ReadonlyArray<CloudSession>;
@@ -62,8 +65,14 @@ export function CloudSessionProvisionPanel({
   readonly onDurationChange?: (seconds: number) => void;
   readonly onCreate: (durationSeconds: number) => void;
   readonly onSessionAction: (session: CloudSession) => void;
+  /** Secondary action on a ready row (release the machine). Absent hides it. */
+  readonly onSessionSecondaryAction?: ((session: CloudSession) => void) | undefined;
   /** Session whose action is in flight, so only that row shows a pending state. */
   readonly pendingSessionId?: string | null;
+  /** Which action on that session is in flight: drives the pending button. */
+  readonly pendingKind?: "connect" | "cancel" | "stop" | null;
+  /** Label for the in-flight primary button (Connect/Cancel); defaults to "Working…". */
+  readonly pendingLabel?: string | null;
   readonly empty?: ReactNode;
 }) {
   const handleCreate = useCallback(() => {
@@ -105,17 +114,18 @@ export function CloudSessionProvisionPanel({
           <p className="text-muted-foreground text-xs">
             {pendingCount > 0
               ? `${pendingCount} starting · usually ready in about ${formatDuration(155)}`
-              : "Run a full Nexi workspace on fleet compute, then connect to it from here."}
+              : "Start a Nexi machine in the cloud and work on it from here."}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <span className="text-muted-foreground text-xs">Runs for</span>
           <Select
             modal={false}
             value={String(durationSeconds)}
             onValueChange={handleDurationChange}
             items={durationItems}
           >
-            <SelectTrigger size="sm" className="w-28 min-w-0" aria-label="Session length">
+            <SelectTrigger size="sm" className="w-24 min-w-0" aria-label="Runs for">
               <SelectValue />
             </SelectTrigger>
             <SelectPopup>
@@ -157,14 +167,20 @@ export function CloudSessionProvisionPanel({
                     </Button>
                   </div>
                 ))
-              : activeSessions.map((session) => (
-                  <CloudSessionRow
-                    key={session.sessionId}
-                    session={session}
-                    onAction={onSessionAction}
-                    actionPending={pendingSessionId === session.sessionId}
-                  />
-                ))}
+              : activeSessions.map((session) => {
+                  const isThisPending = pendingSessionId === session.sessionId;
+                  return (
+                    <CloudSessionRow
+                      key={session.sessionId}
+                      session={session}
+                      onAction={onSessionAction}
+                      onSecondaryAction={onSessionSecondaryAction}
+                      actionPending={isThisPending && pendingKind !== "stop"}
+                      secondaryActionPending={isThisPending && pendingKind === "stop"}
+                      pendingLabel={pendingLabel}
+                    />
+                  );
+                })}
             {historySessions.length === 0 ? null : (
               <CloudSessionHistoryDisclosure
                 sessions={historySessions}

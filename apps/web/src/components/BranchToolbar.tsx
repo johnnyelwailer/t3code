@@ -560,12 +560,9 @@ export const BranchToolbar = memo(function BranchToolbar({
   // The provisioning panel lives in the Connections settings, so the item
   // leaves there — the same target the "Set up connections" link uses.
   const navigate = useNavigate();
-  const onSetupCloudSessions = useCallback(
-    () => {
-      void navigate({ to: "/settings/connections" });
-    },
-    [navigate],
-  );
+  const onSetupCloudSessions = useCallback(() => {
+    void navigate({ to: "/settings/connections" });
+  }, [navigate]);
 
   // The same machine can reach the catalog under two environment ids (its T3
   // Connect identity and a relay id minted when a cloud session's relay link
@@ -573,9 +570,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   // scoped to these menus so no other surface's environment list changes.
   const runOnEnvironments = useMemo(
     () =>
-      availableEnvironments
-        ? dedupeRunOnEnvironments(availableEnvironments, environmentId)
-        : null,
+      availableEnvironments ? dedupeRunOnEnvironments(availableEnvironments, environmentId) : null,
     [availableEnvironments, environmentId],
   );
   // The cloud entry is always offered whenever a primary environment exists,
@@ -639,6 +634,7 @@ export const BranchToolbar = memo(function BranchToolbar({
                   ? {
                       pendingCloudSessions,
                       onCreateCloudSession,
+                      onCloudSessionAction: cloudSessions.onSessionAction,
                       onCloudMenuOpenChange: cloudSessions.onCloudMenuOpenChange,
                     }
                   : {})}

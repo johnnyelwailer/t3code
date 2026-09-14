@@ -1782,6 +1782,15 @@ export function ConnectionsSettings() {
   const removeEnvironment = useAtomCommand(environmentCatalog.remove, { reportFailure: false });
   const retryEnvironment = useAtomCommand(environmentCatalog.retryNow, { reportFailure: false });
   const cloudSessions = useCloudSessionController();
+  // The connections page is a surface that shows the cloud session list, so it
+  // drives polling while visible — the settings panel used to be a dead screen
+  // that never refreshed (finding: a session in flight froze on one phase).
+  useEffect(() => {
+    cloudSessions.onPanelVisibilityChange(true);
+    return () => {
+      cloudSessions.onPanelVisibilityChange(false);
+    };
+  }, [cloudSessions.onPanelVisibilityChange]);
   const primaryEnvironmentId = primaryEnvironment?.environmentId ?? null;
   const primarySessionState = usePrimarySessionState();
   const currentSessionScopes = desktopBridge
@@ -3601,12 +3610,16 @@ export function ConnectionsSettings() {
               onDurationChange={cloudSessions.onDurationChange}
               onCreate={cloudSessions.onCreate}
               onSessionAction={cloudSessions.onSessionAction}
+              onSessionSecondaryAction={cloudSessions.onSessionSecondaryAction}
               pendingSessionId={cloudSessions.pendingSessionId}
+              pendingKind={cloudSessions.pendingKind}
+              pendingLabel={cloudSessions.pendingLabel}
             />
           ) : (
             <div className={ITEM_ROW_CLASSNAME}>
               <div className={ITEM_ROW_INNER_CLASSNAME}>
-                <p className="text-muted-foreground text-xs">
+                <p className="font-medium text-sm">Sign in to GitHub</p>
+                <p className="mt-1 text-muted-foreground text-xs">
                   Cloud sessions need the GitHub CLI signed in on this server.
                 </p>
               </div>

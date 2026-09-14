@@ -2,28 +2,19 @@ import type { CloudSession, CloudSessionPhase } from "@t3tools/contracts";
 
 /**
  * Presentation logic for provisioning a *cloud session*: a full Nexi workspace
- * started on fleet compute, which joins the user's T3 Connect environment list
- * once its relay link is up.
- *
- * Pure and React-free on purpose — the panel and its story both import from
- * here, so the phase vocabulary and the wording can never drift between them.
- *
- * The phase list mirrors what the provisioning job observably does, not what a
- * provider's API happens to call it. Measured on the first green run
- * (hive/nx-nexi run 248523362, 2026-09-12): accepted→queued 4s,
- * checkout+install+build 121s, `t3 serve` ready 10s, relay link provisioned 9s.
+ * started on fleet compute that joins the user's T3 Connect environment list
+ * once its relay link is up. Pure and React-free on purpose — the panel and its
+ * story both import from here, so the phase vocabulary and wording cannot
+ * drift between them. Phases mirror what the job observably does, not what a
+ * provider's API happens to call it.
  */
 
 /**
- * Lifecycle of one provisioning attempt, mirroring the contract's
- * `CloudSessionPhase`. `ready` is the only phase in which the relay has
- * published an environment link — before that there is nothing for the client
- * to connect to.
- *
- * Kept as a local const (rather than the contract's Schema) because it is a
- * data value the progress maths iterates over; `satisfies` keeps it honest
- * against the contract, so a phase added server-side cannot be silently
- * dropped from the wording here.
+ * `ready` is the only phase where the relay has published an environment link —
+ * before that there is nothing to connect to. Kept as a local const (rather
+ * than the contract's Schema) because the progress maths iterates over it;
+ * `satisfies` keeps it honest against the contract, so a phase added
+ * server-side cannot be silently dropped from the wording here.
  */
 export const CLOUD_SESSION_PROVISION_PHASES = [
   "requested",
@@ -33,6 +24,7 @@ export const CLOUD_SESSION_PROVISION_PHASES = [
   "ready",
   "failed",
   "stopped",
+  "cancelled",
 ] as const satisfies readonly CloudSessionPhase[];
 export type CloudSessionProvisionPhase = CloudSessionPhase;
 
@@ -59,6 +51,7 @@ export const CLOUD_SESSION_PHASE_TYPICAL_SECONDS: Readonly<
   ready: 0,
   failed: 0,
   stopped: 0,
+  cancelled: 0,
 };
 
 /** Total typical seconds from dispatch to a connectable environment. */
@@ -75,11 +68,12 @@ export interface CloudSessionProvisionPresentation {
   readonly progress: number | null;
   /** Label for the row's primary action, or null when it has none. */
   readonly actionLabel: string | null;
-  /**
-   * True when `detail` ends with " · <elapsed>" and that elapsed time keeps
-   * advancing while the phase is in flight: the row renders that suffix on a
-   * one-second tick instead of the frozen snapshot the server last reported.
-   */
+  /** Label for a secondary action on the row, or null when it has none. Kept
+   *  apart from the primary so a ready machine's release is never buried behind
+   *  its connect. */
+  readonly secondaryActionLabel: string | null;
+  /** True when `detail` ends with a live "· <elapsed>" suffix the row ticks on
+   *  a one-second timer rather than the frozen server snapshot. */
   readonly liveElapsed: boolean;
 }
 
@@ -113,6 +107,7 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
         tone: "working",
         progress: cloudSessionProgress(session.elapsedSeconds),
         actionLabel: "Cancel",
+        secondaryActionLabel: null,
         liveElapsed: false,
       };
     case "queued":
@@ -122,6 +117,7 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
         tone: "working",
         progress: cloudSessionProgress(session.elapsedSeconds),
         actionLabel: "Cancel",
+        secondaryActionLabel: null,
         liveElapsed: true,
       };
     case "preparing":
@@ -131,15 +127,17 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
         tone: "working",
         progress: cloudSessionProgress(session.elapsedSeconds),
         actionLabel: "Cancel",
+        secondaryActionLabel: null,
         liveElapsed: true,
       };
     case "starting":
       return {
-        title: "Opening the relay",
-        detail: `Server is up, publishing its environment link · ${elapsed}`,
+        title: "Almost there",
+        detail: `Making it reachable · ${elapsed}`,
         tone: "working",
         progress: cloudSessionProgress(session.elapsedSeconds),
         actionLabel: "Cancel",
+        secondaryActionLabel: null,
         liveElapsed: true,
       };
     case "ready":
@@ -152,6 +150,7 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
         tone: "ready",
         progress: null,
         actionLabel: "Connect",
+        secondaryActionLabel: "Stop",
         liveElapsed: false,
       };
     case "failed":
@@ -161,21 +160,34 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
         tone: "error",
         progress: null,
         actionLabel: "Retry",
+        secondaryActionLabel: null,
         liveElapsed: false,
       };
     case "stopped":
       return {
         title: "Stopped",
-        detail: `Ran for ${elapsed}.`,
+        detail: `Ran for ${
+          session.durationSeconds === undefined ? elapsed : formatDuration(session.durationSeconds)
+        }.`,
         tone: "idle",
         progress: null,
         actionLabel: "Start another",
+        secondaryActionLabel: null,
+        liveElapsed: false,
+      };
+    case "cancelled":
+      return {
+        title: "Cancelled",
+        detail: "Stopped by you.",
+        tone: "idle",
+        progress: null,
+        actionLabel: "Start another",
+        secondaryActionLabel: null,
         liveElapsed: false,
       };
   }
 }
 
-/** Canonical tone → dot colour, matching `connectionPhaseDotClassName`. */
 export function cloudSessionToneDotClassName(
   tone: CloudSessionProvisionPresentation["tone"],
 ): string {

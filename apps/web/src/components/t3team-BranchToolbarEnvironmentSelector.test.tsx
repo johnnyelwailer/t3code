@@ -18,7 +18,11 @@ const testState = vi.hoisted(() => ({
         ) => void;
         readonly onValueChange?: (
           value: string,
-          details?: { cancel: () => void; readonly isCanceled: boolean; readonly reason?: string } | null,
+          details?: {
+            cancel: () => void;
+            readonly isCanceled: boolean;
+            readonly reason?: string;
+          } | null,
         ) => void;
       }
     | undefined,
@@ -39,17 +43,17 @@ vi.mock("./ui/select", () => ({
     children?: ReactNode;
   }) => {
     testState.selectProps = props as NonNullable<typeof testState.selectProps>;
-    return <div data-testid="select" data-open={props.open ? "true" : "false"}>{props.children}</div>;
+    return (
+      <div data-testid="select" data-open={props.open ? "true" : "false"}>
+        {props.children}
+      </div>
+    );
   },
   SelectGroup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   SelectGroupLabel: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-  SelectItem: ({
-    value,
-    children,
-  }: {
-    value?: string;
-    children?: ReactNode;
-  }) => <div data-select-item={value}>{children}</div>,
+  SelectItem: ({ value, children }: { value?: string; children?: ReactNode }) => (
+    <div data-select-item={value}>{children}</div>
+  ),
   SelectPopup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   SelectSeparator: () => <div data-testid="separator" />,
   SelectTrigger: ({ children }: { children?: ReactNode }) => (
@@ -163,24 +167,19 @@ describe("BranchToolbarEnvironmentSelector", () => {
     expect(markup).not.toContain("New cloud session");
   });
 
-  it("opens a menu with the cloud entry on a single primary environment", () => {
-    const onCloudMenuOpenChange = vi.fn();
+  it("offers 'New cloud session' as a mouse-only row, not a keyboard item", () => {
     const onCreateCloudSession = vi.fn();
-    const markup = renderSelector({
-      onCreateCloudSession,
-      onCloudMenuOpenChange,
+    mountSelector({ onCreateCloudSession, onCloudMenuOpenChange: () => {} });
+
+    // The create affordance dispatches a real VM, so it is kept OUT of the
+    // arrow-key focus order: no keyboard item, only a clickable row.
+    expect(testState.selectProps?.items).toEqual([]);
+    const createButton = findCreateButton();
+    expect(createButton).not.toBeNull();
+
+    act(() => {
+      createButton?.click();
     });
-
-    // No picker: the machine row is informational, the only choice is cloud.
-    expect(testState.selectProps?.items).toEqual([
-      { value: "__create-cloud-session__", label: "New cloud session" },
-    ]);
-    expect(markup).toContain("New cloud session");
-    expect(markup).toContain("This device");
-    // The machine itself is not an item: only the cloud entry is a choice.
-    expect(markup).not.toContain('data-select-item="env-primary"');
-
-    testState.selectProps?.onValueChange?.("__create-cloud-session__");
     expect(onCreateCloudSession).toHaveBeenCalledTimes(1);
   });
 
@@ -260,7 +259,7 @@ describe("BranchToolbarEnvironmentSelector", () => {
     ]);
   });
 
-  it("keeps the menu open after selecting New cloud session, without committing the sentinel", () => {
+  it("keeps the menu open after clicking 'New cloud session' (it is not a select item)", () => {
     const onCreateCloudSession = vi.fn();
     const onCloudMenuOpenChange = vi.fn();
     mountSelector({ onCreateCloudSession, onCloudMenuOpenChange });
@@ -270,24 +269,14 @@ describe("BranchToolbarEnvironmentSelector", () => {
     });
     expect(testState.selectProps?.open).toBe(true);
 
-    const details = makeValueChangeDetails();
+    const createButton = findCreateButton();
     act(() => {
-      testState.selectProps?.onValueChange?.("__create-cloud-session__", details);
+      createButton?.click();
     });
     expect(onCreateCloudSession).toHaveBeenCalledTimes(1);
-    // The sentinel must not become the select's value: the trigger would
-    // point at an item that is not a machine.
-    expect(details.isCanceled).toBe(true);
-
-    // Base UI fires the close for the item press; the selector must swallow
-    // it, keep its controlled open state, and keep polling (no close notice
-    // to the controller).
-    act(() => {
-      testState.selectProps?.onOpenChange?.(false, { reason: "item-press" });
-    });
+    // A button click does not drive the Select's value or close the popup, so
+    // the just-created session keeps appearing in the open, still-polling list.
     expect(testState.selectProps?.open).toBe(true);
-    expect(onCloudMenuOpenChange).toHaveBeenLastCalledWith(true);
-    expect(onCloudMenuOpenChange).not.toHaveBeenCalledWith(false);
   });
 
   it("still closes the menu when a normal environment row is selected", () => {
@@ -368,4 +357,11 @@ describe("BranchToolbarEnvironmentSelector", () => {
 function markupContainsFailedRow(): boolean {
   const node = liveContainer;
   return node !== null && node.textContent?.includes("No matching runner was available.") === true;
+}
+
+function findCreateButton(): HTMLButtonElement | null {
+  const buttons = Array.from(liveContainer?.querySelectorAll("button") ?? []);
+  return (
+    buttons.find((button) => button.textContent?.includes("New cloud session") === true) ?? null
+  );
 }

@@ -10,6 +10,7 @@ import {
   cloudSessionToneDotClassName,
   cloudSessionTonePingClassName,
   formatDuration,
+  isCloudSessionProvisionPending,
   presentCloudSession,
 } from "./t3team-cloudSessionProvisionPresentation";
 
@@ -84,7 +85,11 @@ function CloudSessionLiveDetail({
   const staticSuffix = formatDuration(elapsedSeconds);
   const marker = ` · ${staticSuffix}`;
   if (!detail.endsWith(marker)) return <>{detail}</>;
-  return <>{detail.slice(0, detail.length - marker.length)} · {formatDuration(liveSeconds)}</>;
+  return (
+    <>
+      {detail.slice(0, detail.length - marker.length)} · {formatDuration(liveSeconds)}
+    </>
+  );
 }
 
 /**
@@ -98,19 +103,33 @@ function CloudSessionLiveDetail({
 export function CloudSessionRow({
   session,
   onAction,
+  onSecondaryAction,
   actionPending = false,
+  secondaryActionPending = false,
+  pendingLabel,
   showAction = true,
 }: {
   readonly session: CloudSession;
-  readonly onAction: (session: CloudSession) => void;
+  readonly onAction?: ((session: CloudSession) => void) | undefined;
+  readonly onSecondaryAction?: ((session: CloudSession) => void) | undefined;
   readonly actionPending?: boolean;
+  readonly secondaryActionPending?: boolean;
+  /** Label for the primary button while it is in flight; defaults to "Working…". */
+  readonly pendingLabel?: string | null;
   /** False for history rows, which have nothing to act on. */
   readonly showAction?: boolean;
 }) {
   const presentation = presentCloudSession(session);
   const handleAction = useCallback(() => {
-    onAction(session);
+    onAction?.(session);
   }, [onAction, session]);
+  const handleSecondaryAction = useCallback(() => {
+    onSecondaryAction?.(session);
+  }, [onSecondaryAction, session]);
+  const hasSecondary =
+    showAction && presentation.secondaryActionLabel !== null && onSecondaryAction !== undefined;
+  const showDetails =
+    showAction && session.detailsUrl !== null && isCloudSessionProvisionPending(session.phase);
 
   return (
     <div className={ITEM_ROW_CLASSNAME}>
@@ -142,18 +161,42 @@ export function CloudSessionRow({
             {presentation.progress === null ? null : (
               <CloudSessionProgressBar progress={presentation.progress} />
             )}
+            {showDetails && session.detailsUrl !== null ? (
+              <a
+                href={session.detailsUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="inline-flex items-center gap-1 text-muted-foreground/80 text-xs underline-offset-2 hover:text-foreground hover:underline"
+              >
+                Details
+              </a>
+            ) : null}
           </div>
         </div>
-        {!showAction || presentation.actionLabel === null ? null : (
-          <Button
-            size="sm"
-            variant={presentation.tone === "ready" ? "default" : "outline"}
-            disabled={actionPending}
-            onClick={handleAction}
-          >
-            {actionPending ? "Working…" : presentation.actionLabel}
-          </Button>
-        )}
+        {showAction ? (
+          <div className="flex shrink-0 items-center gap-1.5">
+            {hasSecondary ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={secondaryActionPending}
+                onClick={handleSecondaryAction}
+              >
+                {secondaryActionPending ? "Stopping…" : presentation.secondaryActionLabel}
+              </Button>
+            ) : null}
+            {presentation.actionLabel === null ? null : (
+              <Button
+                size="sm"
+                variant={presentation.tone === "ready" ? "default" : "outline"}
+                disabled={actionPending}
+                onClick={handleAction}
+              >
+                {actionPending ? (pendingLabel ?? "Working…") : presentation.actionLabel}
+              </Button>
+            )}
+          </div>
+        ) : null}
       </div>
     </div>
   );

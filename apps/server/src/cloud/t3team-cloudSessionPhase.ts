@@ -17,7 +17,8 @@ export type CloudSessionPhase =
   | "starting"
   | "ready"
   | "failed"
-  | "stopped";
+  | "stopped"
+  | "cancelled";
 
 /**
  * A step counts as reached once the job got that far — whether it is still
@@ -51,9 +52,13 @@ export function deriveCloudSessionPhase(
 ): CloudSessionPhase {
   // A finished run's outcome is decided by the run, not its steps: a job that
   // held the machine for its full duration and exited cleanly is `stopped`,
-  // which is a normal end, not a failure.
+  // which is a normal end, not a failure. A run the user cancelled is a third,
+  // distinct outcome — `cancelled` — which reads as "stopped by you" rather
+  // than "provisioning failed" in the client.
   if (run.status === "completed") {
-    return run.conclusion === "success" ? "stopped" : "failed";
+    if (run.conclusion === "success") return "stopped";
+    if (run.conclusion === "cancelled") return "cancelled";
+    return "failed";
   }
   if (run.status === "queued" || run.status === "pending" || run.status === "waiting") {
     return "queued";
@@ -89,4 +94,17 @@ export function cloudSessionElapsedSeconds(run: WorkflowRunSummary, nowMs: numbe
   const startedMs = Date.parse(run.createdAt);
   if (Number.isNaN(startedMs)) return 0;
   return Math.max(0, Math.floor((nowMs - startedMs) / 1000));
+}
+
+/**
+ * How long a *settled* session actually ran: from the run starting to it
+ * finishing. This is the honest "Ran for …" figure, unlike
+ * `cloudSessionElapsedSeconds` (now − start), which for a finished run is just
+ * the session's age and keeps growing long after it stopped.
+ */
+export function cloudSessionDurationSeconds(run: WorkflowRunSummary): number {
+  const startedMs = Date.parse(run.createdAt);
+  const endedMs = Date.parse(run.updatedAt);
+  if (Number.isNaN(startedMs) || Number.isNaN(endedMs)) return 0;
+  return Math.max(0, Math.floor((endedMs - startedMs) / 1000));
 }

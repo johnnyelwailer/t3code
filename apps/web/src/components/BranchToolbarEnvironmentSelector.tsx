@@ -1,6 +1,6 @@
 import type { CloudSession, EnvironmentId } from "@t3tools/contracts";
 import { CloudIcon, ScaleIcon, SettingsIcon } from "lucide-react";
-import { memo, useMemo, useRef, useState } from "react";
+import { memo, useMemo, useState } from "react";
 
 import type { EnvironmentOption } from "./BranchToolbar.logic";
 import { dedupeRunOnEnvironments } from "./BranchToolbar.logic";
@@ -18,13 +18,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
-
-/**
- * Sentinel value for the "start a cloud session" action item, in the same shape
- * as the existing `"auto"` item: selecting it runs a callback and leaves the
- * chosen environment alone, rather than becoming the selection itself.
- */
-const CREATE_CLOUD_SESSION_SELECT_VALUE = "__create-cloud-session__";
 
 /**
  * Sentinel value for the "go set up cloud sessions" item, shown instead of the
@@ -64,6 +57,12 @@ export interface BranchToolbarEnvironmentSelectorProps {
    */
   onSetupCloudSessions?: () => void;
   /**
+   * Connects a READY cloud session's machine (the "Ready · Connect" row). Absent
+   * hides the connect affordance on those rows. Present when a provider is
+   * configured; the same controller drives the Settings panel's Connect.
+   */
+  onCloudSessionAction?: (cloudSession: CloudSession) => void;
+  /**
    * Drives background polling of the session list for as long as the menu is
    * open (a provisioning session changes phase every few seconds). Absent or
    * the menu closed: no polling.
@@ -81,12 +80,14 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   pendingCloudSessions,
   onCreateCloudSession,
   onSetupCloudSessions,
+  onCloudSessionAction,
   onCloudMenuOpenChange,
 }: BranchToolbarEnvironmentSelectorProps) {
   // The cloud entry makes the selector interactive even with a single
   // environment, so the static-label branch is the locked state or a state
   // with neither an environment picker nor any cloud affordance.
-  const hasCloudAffordance = onCreateCloudSession !== undefined || onSetupCloudSessions !== undefined;
+  const hasCloudAffordance =
+    onCreateCloudSession !== undefined || onSetupCloudSessions !== undefined;
   const runOnEnvironments = useMemo(
     () => dedupeRunOnEnvironments(availableEnvironments, environmentId),
     [availableEnvironments, environmentId],
@@ -96,13 +97,11 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
     [runOnEnvironments, environmentId],
   );
 
-  // The menu's open state is controlled on purpose: selecting "New cloud
-  // session" must NOT close it — the just-created session has to appear in
-  // the open list and its phase tick forward live. Base UI closes the popup
-  // in the same tick as it fires `onValueChange`, so the keep-open request is
-  // stashed in a ref and consumed by the close that immediately follows.
+  // The menu's open state is controlled on purpose: the "New cloud session"
+  // row is a plain button inside the popup (not a Select item), so clicking it
+  // never triggers Base UI's select-and-close — the menu stays open and keeps
+  // polling, and the just-created session appears in the open list.
   const [menuOpen, setMenuOpen] = useState(false);
-  const keepMenuOpenRef = useRef(false);
 
   const environmentItems = useMemo(
     () => [
@@ -115,9 +114,9 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
             label: env.label,
           }))
         : []),
-      ...(onCreateCloudSession
-        ? [{ value: CREATE_CLOUD_SESSION_SELECT_VALUE, label: "New cloud session" }]
-        : []),
+      // "New cloud session" is deliberately NOT a keyboard-navigable item: it
+      // dispatches a real VM, so it is offered as a mouse-only row below and
+      // kept out of the arrow-key focus order.
       ...(onSetupCloudSessions
         ? [{ value: SETUP_CLOUD_SESSIONS_SELECT_VALUE, label: "Set up cloud sessions" }]
         : []),
@@ -127,20 +126,11 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       autoEnvironmentLabel,
       onAutoEnvironment,
       onEnvironmentChange,
-      onCreateCloudSession,
       onSetupCloudSessions,
     ],
   );
 
-  const handleValueChange = (value: string | null, details?: { cancel?: () => void } | null) => {
-    if (value === CREATE_CLOUD_SESSION_SELECT_VALUE) {
-      // Do not commit the sentinel as the select's value (the trigger would
-      // point at an item that is not a machine) and keep the menu open.
-      details?.cancel?.();
-      keepMenuOpenRef.current = true;
-      onCreateCloudSession?.();
-      return;
-    }
+  const handleValueChange = (value: string | null) => {
     if (value === SETUP_CLOUD_SESSIONS_SELECT_VALUE) {
       onSetupCloudSessions?.();
       return;
@@ -152,18 +142,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
     onEnvironmentChange?.(value as EnvironmentId);
   };
 
-  const handleOpenChange = (open: boolean, details?: { reason?: string } | null) => {
-    if (
-      !open &&
-      keepMenuOpenRef.current &&
-      (details?.reason === undefined || details.reason === "item-press")
-    ) {
-      // The create item was just pressed: the close that Base UI fires for
-      // the selection is suppressed; the menu stays open and keeps polling.
-      keepMenuOpenRef.current = false;
-      return;
-    }
-    keepMenuOpenRef.current = false;
+  const handleOpenChange = (open: boolean) => {
     setMenuOpen(open);
     onCloudMenuOpenChange?.(open);
   };
@@ -228,12 +207,16 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
             {onEnvironmentChange !== undefined ? (
               <SelectValue />
             ) : (
-              activeEnvironment?.label ?? "Run on"
+              (activeEnvironment?.label ?? "Run on")
             )}
           </span>
         </span>
       </SelectTrigger>
-      <SelectPopup alignItemWithTrigger={false} {...composerFloatingLayerProps}>
+      <SelectPopup
+        alignItemWithTrigger={false}
+        popupClassName="min-w-40"
+        {...composerFloatingLayerProps}
+      >
         <SelectGroup>
           <SelectGroupLabel>Run on</SelectGroupLabel>
           {onAutoEnvironment && (
@@ -249,28 +232,26 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
               </span>
             </SelectItem>
           )}
-          {onEnvironmentChange !== undefined ? (
-            runOnEnvironments.map((env) => (
-              <SelectItem key={env.environmentId} value={env.environmentId}>
-                <span className="inline-flex items-center gap-1.5">
-                  <EnvironmentMachineIcon kind={env.machine} className="size-3" />
-                  {env.label}
-                </span>
-              </SelectItem>
-            ))
-          ) : (
-            // A single machine with a cloud entry behind it: the machine row is
-            // informational (it is already the selection), not a choice.
-            runOnEnvironments.map((env) => (
-              <div
-                key={env.environmentId}
-                className="flex items-center gap-1.5 px-2 py-1.5 text-xs"
-              >
-                <EnvironmentMachineIcon kind={env.machine} className="size-3 shrink-0" />
-                <span className="truncate">{env.label}</span>
-              </div>
-            ))
-          )}
+          {onEnvironmentChange !== undefined
+            ? runOnEnvironments.map((env) => (
+                <SelectItem key={env.environmentId} value={env.environmentId}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <EnvironmentMachineIcon kind={env.machine} className="size-3" />
+                    {env.label}
+                  </span>
+                </SelectItem>
+              ))
+            : // A single machine with a cloud entry behind it: the machine row is
+              // informational (it is already the selection), not a choice.
+              runOnEnvironments.map((env) => (
+                <div
+                  key={env.environmentId}
+                  className="flex items-center gap-1.5 px-2 py-1.5 text-xs"
+                >
+                  <EnvironmentMachineIcon kind={env.machine} className="size-3 shrink-0" />
+                  <span className="truncate">{env.label}</span>
+                </div>
+              ))}
         </SelectGroup>
         {onCreateCloudSession && (
           <>
@@ -279,13 +260,28 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
               <SelectGroupLabel>Cloud</SelectGroupLabel>
               {pendingCloudSessions?.map((cloudSession) => {
                 const presentation = presentCloudSession(cloudSession);
-                return (
-                  // Not a SelectItem: a machine that cannot run anything yet must
-                  // not be selectable, and a disabled item still reads as a choice.
-                  <div
+                const isReady = cloudSession.phase === "ready";
+                const rowClasses =
+                  "flex w-full items-center gap-1.5 px-2 py-1.5 text-muted-foreground text-xs";
+                // A ready machine is a real connectable row (it must not vanish
+                // the moment it comes up). A still-provisioning one is
+                // read-only: it cannot run anything yet, and a disabled item
+                // would still read as a choice.
+                return isReady ? (
+                  <button
                     key={cloudSession.sessionId}
-                    className="flex items-center gap-1.5 px-2 py-1.5 text-muted-foreground text-xs"
+                    type="button"
+                    onClick={() => onCloudSessionAction?.(cloudSession)}
+                    className={cn(rowClasses, "cursor-pointer text-foreground hover:bg-muted/40")}
                   >
+                    <EnvironmentMachineIcon kind="cloud" className="size-3 shrink-0" />
+                    <span className="shrink-0">{presentation.title}</span>
+                    <span className="min-w-0 flex-1 truncate opacity-70">
+                      {presentation.detail}
+                    </span>
+                  </button>
+                ) : (
+                  <div key={cloudSession.sessionId} className={rowClasses}>
                     <EnvironmentMachineIcon
                       kind="cloud"
                       className={cn(
@@ -293,17 +289,26 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                         presentation.tone === "working" && "animate-pulse",
                       )}
                     />
-                    <span className="truncate">{presentation.title}</span>
-                    <span className="truncate opacity-70">{presentation.detail}</span>
+                    <span className="shrink-0">{presentation.title}</span>
+                    <span className="min-w-0 flex-1 truncate opacity-70">
+                      {presentation.detail}
+                    </span>
                   </div>
                 );
               })}
-              <SelectItem value={CREATE_CLOUD_SESSION_SELECT_VALUE}>
+              {/* Mouse-only on purpose: dispatching a VM is a real cost, so this
+                  row is outside the arrow-key focus order (finding: one Enter
+                  must not provision a machine). */}
+              <button
+                type="button"
+                onClick={() => onCreateCloudSession?.()}
+                className="flex w-full cursor-pointer items-center gap-1.5 rounded-sm px-2 py-1.5 text-foreground hover:bg-muted/40 sm:text-sm"
+              >
                 <span className="inline-flex items-center gap-1.5">
                   <CloudIcon className="size-3" aria-hidden="true" />
                   New cloud session
                 </span>
-              </SelectItem>
+              </button>
             </SelectGroup>
           </>
         )}

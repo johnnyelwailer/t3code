@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { cloudSessionElapsedSeconds, deriveCloudSessionPhase } from "./t3team-cloudSessionPhase.ts";
+import {
+  cloudSessionDurationSeconds,
+  cloudSessionElapsedSeconds,
+  deriveCloudSessionPhase,
+} from "./t3team-cloudSessionPhase.ts";
 import type { WorkflowJobStep, WorkflowRunSummary } from "./t3team-githubActionsSessionClient.ts";
 
 const CREATED_AT = "2026-09-12T21:28:18Z";
@@ -65,12 +69,20 @@ describe("deriveCloudSessionPhase", () => {
     );
   });
 
-  it.each(["failure", "cancelled", "timed_out", null])(
+  it.each(["failure", "timed_out", "action_required", "skipped", null])(
     "reports a completed run with conclusion %s as failed",
     (conclusion: string | null) => {
       expect(deriveCloudSessionPhase(run({ status: "completed", conclusion }), [])).toBe("failed");
     },
   );
+
+  it("reports a user-cancelled run as cancelled, not failed", () => {
+    // A cancel is a third, distinct outcome: it reads as "Stopped by you" in the
+    // client, not as a provisioning failure.
+    expect(deriveCloudSessionPhase(run({ status: "completed", conclusion: "cancelled" }), [])).toBe(
+      "cancelled",
+    );
+  });
 
   it.each(["queued", "pending", "waiting"])("reports %s as queued", (status: string) => {
     expect(deriveCloudSessionPhase(run({ status }), [])).toBe("queued");
@@ -155,7 +167,7 @@ describe("deriveCloudSessionPhase", () => {
       ready: 4,
     };
     // Terminal phases are exempt: a session leaving the list is not backwards.
-    const terminal = new Set(["failed", "stopped"]);
+    const terminal = new Set(["failed", "stopped", "cancelled"]);
 
     const polls: ReadonlyArray<readonly [WorkflowRunSummary, readonly WorkflowJobStep[] | null]> = [
       [run({ status: "queued" }), []],
@@ -212,5 +224,29 @@ describe("cloudSessionElapsedSeconds", () => {
   it("returns zero for an unparseable timestamp", () => {
     // The clock is irrelevant here; a fixed "now" keeps the test deterministic.
     expect(cloudSessionElapsedSeconds(run({ createdAt: "not a date" }), 0)).toBe(0);
+  });
+});
+
+describe("cloudSessionDurationSeconds", () => {
+  it("measures run length from created to updated, not to now", () => {
+    // A session that started and finished long ago reports how long it *ran*,
+    // not how old it is: the age keeps growing, the duration does not.
+    const run = {
+      createdAt: "2026-09-12T21:28:18Z",
+      updatedAt: "2026-09-12T23:28:00Z",
+    } as WorkflowRunSummary;
+    expect(cloudSessionDurationSeconds(run)).toBe(2 * 3600 - 18);
+  });
+
+  it("clamps a run that finished before it started to zero", () => {
+    const run = {
+      createdAt: "2026-09-12T21:28:18Z",
+      updatedAt: "2026-09-12T21:28:00Z",
+    } as WorkflowRunSummary;
+    expect(cloudSessionDurationSeconds(run)).toBe(0);
+  });
+
+  it("returns zero when either timestamp is unparseable", () => {
+    expect(cloudSessionDurationSeconds(run({ updatedAt: "not a date" }))).toBe(0);
   });
 });
