@@ -19,6 +19,7 @@ import {
   assertToolGroupDeclared,
   normalizeCapabilities,
 } from "./t3team-sdk.capabilityGating.ts";
+import { WorkflowInputDecodeError } from "./t3team-sdk.errors.ts";
 import type { HandleDispatch } from "./t3team-sdk.handles.ts";
 import { decodeWithSchema, setNestedValue } from "./t3team-sdk.internal.ts";
 import type { WorkflowPrimitives } from "./t3team-sdk.primitives.ts";
@@ -73,7 +74,16 @@ export async function runPreparedBody(opts: {
           meta.inputs as Schema.Schema<unknown>,
           opts.args,
           `Invalid inputs for workflow '${meta.name}'`,
-        );
+        ).catch((error: unknown) => {
+          // Distinguish an invocation fault (caller passed the wrong args) from every other
+          // failure a workflow run can raise: the SOURCE is not at fault here, so a host-side
+          // repair funnel must correct the ARGS, never rewrite the body. Typed, not a message
+          // regex — see WorkflowInputDecodeError's doc comment.
+          throw new WorkflowInputDecodeError(
+            error instanceof Error ? error.message : String(error),
+            error,
+          );
+        });
   // Build the Thread-model globals; capability-gate askUser/notifyUser against meta.capabilities.
   const capabilities = normalizeCapabilities(meta);
   if (opts.parentCapabilities !== undefined) {
@@ -118,6 +128,10 @@ export async function runPreparedBody(opts: {
   const output = await withWorkflowRuntime(opts.runtime, () =>
     withBodyApi(globals, () => runWorkflowBody(prepared, source, globals)),
   );
+  // The body returned while the run is suspended — it caught the suspension signal. Re-raise
+  // BEFORE decoding `output`, or a catch branch's stand-in value would be reported as an invalid
+  // result (a source fault) instead of what it is: a run that has to park and resume.
+  opts.handleDispatch.assertNotSuspended?.();
   if (meta.outputs === undefined) return output;
   return await decodeWithSchema(
     meta.outputs as Schema.Schema<unknown>,

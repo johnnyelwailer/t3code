@@ -31,6 +31,18 @@ vi.mock("@legendapp/list/react", async () => {
   return { LegendList };
 });
 
+// The timeline pulls in the diff worker pool; the worker module references `self`, a Web Worker
+// global the Node test environment does not provide. These tests render no diffs, so stub no-op
+// workers in place of the real one.
+vi.mock("@pierre/diffs/worker/worker.js?worker", () => ({
+  default: class {
+    postMessage() {}
+    addEventListener() {}
+    removeEventListener() {}
+    terminate() {}
+  },
+}));
+
 beforeAll(() => {
   vi.stubGlobal("window", {
     matchMedia: () => ({
@@ -73,6 +85,12 @@ beforeAll(() => {
 });
 
 describe("MessagesTimeline recipe cards", () => {
+  // The first render pays for importing the whole MessagesTimeline module graph — warm it here so
+  // no single test's 10 s budget absorbs module init when the directory runs concurrently.
+  beforeAll(async () => {
+    await import("~/components/chat/MessagesTimeline");
+  }, 60_000);
+
   it("renders an empty timeline shell", async () => {
     const { MessagesTimeline } = await import("~/components/chat/MessagesTimeline");
     const markup = renderToStaticMarkup(

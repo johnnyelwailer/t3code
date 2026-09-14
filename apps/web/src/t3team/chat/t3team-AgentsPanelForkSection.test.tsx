@@ -113,15 +113,15 @@ describe("T3TeamAgentsPanelForkSection", () => {
     expect(onOpenChildThread).toHaveBeenCalledWith({ projectId: "proj-9", threadId: "child-9" });
   });
 
-  it("orders sub-runs newest-to-oldest (most recently active first), status only breaking ties", () => {
+  it("orders sub-runs by lifecycle group (running, waiting, settled), never by lastMessageAt", () => {
     const now = Date.now();
     const at = (offsetMinutes: number) => new Date(now + offsetMinutes * 60_000).toISOString();
-    // Deliberately reversed against status: the settled (completed) row is the MOST recent, the
-    // running row the least recent. Recency must win over status — the completed row comes first
-    // even though it's settled, so a status-priority sort would fail this test.
+    // Deliberately reversed against status: the completed row is the MOST recent, the
+    // running row the least recent. Recency must NOT win — the running row comes first even
+    // though it's the least recently active, so a lastMessageAt sort would fail this test.
     const completed = createThread({
       id: "c-1",
-      title: "Settled work",
+      title: "Finished work",
       status: "completed",
       lastMessageAt: at(30),
     });
@@ -137,10 +137,17 @@ describe("T3TeamAgentsPanelForkSection", () => {
       status: "running",
       lastMessageAt: at(10),
     });
+    const settledChild = createThread({
+      id: "s-1",
+      title: "Settled work",
+      status: "completed",
+      settled: true,
+      lastMessageAt: at(40),
+    });
 
     render(
       <T3TeamAgentsPanelForkSection
-        childThreadsByParentId={new Map([["root-1", [completed, error, running]]])}
+        childThreadsByParentId={new Map([["root-1", [completed, error, running, settledChild]]])}
         rootThreadId="root-1"
         onOpenChildThread={() => {}}
         workflowRuns={[]}
@@ -151,31 +158,55 @@ describe("T3TeamAgentsPanelForkSection", () => {
     const rows = Array.from(container!.querySelectorAll("button")).map(
       (button) => button.textContent ?? "",
     );
-    const completedIndex = rows.findIndex((text) => text.includes("Settled work"));
-    const errorIndex = rows.findIndex((text) => text.includes("Broken build"));
+    // State-accurate roster: the fresh terminal rows (completed/error, NOT settled) stay
+    // visible in lifecycle order; only the actually-settled thread folds away.
     const runningIndex = rows.findIndex((text) => text.includes("Active probe"));
-    expect(completedIndex).toBeGreaterThan(-1);
-    expect(errorIndex).toBeGreaterThan(completedIndex);
-    expect(runningIndex).toBeGreaterThan(errorIndex);
+    const errorIndex = rows.findIndex((text) => text.includes("Broken build"));
+    const completedIndex = rows.findIndex((text) => text.includes("Finished work"));
+    const foldIndex = rows.findIndex((text) => text.includes("Settled (1)"));
+    expect(runningIndex).toBeGreaterThan(-1);
+    expect(errorIndex).toBeGreaterThan(runningIndex);
+    expect(completedIndex).toBeGreaterThan(errorIndex);
+    expect(foldIndex).toBeGreaterThan(completedIndex);
+    expect(rows.find((text) => text.includes("Settled work"))).toBeUndefined();
+    // Expanding the fold reveals the settled row
+    click(findButtonByText("Settled (1)"));
+    expect(container!.textContent).toContain("Settled work");
   });
 
-  it("caps the visible sub-runs at the limit and reveals the rest via a 'Show more' disclosure", () => {
+  it("folds ONLY actually-settled sub-runs into one 'Settled (N)' row, expandable", () => {
     const now = Date.now();
     const at = (offsetMinutes: number) => new Date(now - offsetMinutes * 60_000).toISOString();
-    // 14 non-idle threads — more than the VISIBLE_SUB_RUN_LIMIT of 10. Sub-run 0 is the most
-    // recent (now), Sub-run 13 the oldest (13m ago), so recency order is 0,1,...,13.
-    const threads = Array.from({ length: 14 }, (_, i) =>
+    // 12 settled threads + 2 fresh terminal ones. The settled 12 sit behind ONE dim fold
+    // row; the fresh pair keeps visible rows — a terminal thread is not settled.
+    const settledThreads = Array.from({ length: 12 }, (_, i) =>
       createThread({
         id: `s-${i}`,
-        title: `Sub-run ${i}`,
+        title: `Settled ${i}`,
         status: "completed",
+        settled: true,
         lastMessageAt: at(i),
+        createdAt: at(i),
       }),
     );
+    const freshA = createThread({
+      id: "fresh-0",
+      title: "Sub-run 0",
+      status: "completed",
+      lastMessageAt: at(0),
+      createdAt: at(0),
+    });
+    const freshB = createThread({
+      id: "fresh-1",
+      title: "Sub-run 10",
+      status: "completed",
+      lastMessageAt: at(1),
+      createdAt: at(1),
+    });
 
     render(
       <T3TeamAgentsPanelForkSection
-        childThreadsByParentId={new Map([["root-1", threads]])}
+        childThreadsByParentId={new Map([["root-1", [freshA, freshB, ...settledThreads]]])}
         rootThreadId="root-1"
         onOpenChildThread={() => {}}
         workflowRuns={[]}
@@ -183,38 +214,46 @@ describe("T3TeamAgentsPanelForkSection", () => {
       />,
     );
 
-    // Only the 10 most recent are visible up front; the newest (Sub-run 0) is first, and the
-    // 11th (Sub-run 10) is hidden behind the disclosure.
+    // The fresh terminal rows are visible up front; the 12 settled sit behind ONE fold row.
     expect(container!.textContent).toContain("Sub-run 0");
-    expect(container!.textContent).toContain("Sub-run 9");
-    expect(container!.textContent).not.toContain("Sub-run 10");
-    const showMore = findButtonByText("Show 4 more");
-    expect(showMore).toBeTruthy();
+    expect(container!.textContent).toContain("Sub-run 10");
+    expect(container!.textContent).toContain("Settled (12)");
+    expect(container!.textContent).not.toContain("Settled 0");
 
-    click(showMore);
+    click(findButtonByText("Settled (12)"));
 
-    // After expanding, all 14 are visible and the disclosure is gone.
-    expect(container!.textContent).toContain("Sub-run 13");
+    expect(container!.textContent).toContain("Settled 0");
+    expect(container!.textContent).toContain("Settled 11");
     expect(
       Array.from(container!.querySelectorAll("button")).some((b) =>
-        b.textContent?.includes("Show 4 more"),
+        b.textContent?.includes("Show more"),
       ),
     ).toBe(false);
+    // Oldest-first inside the fold: the oldest settled row (Settled 11) renders before the
+    // newest (Settled 0).
+    const foldRows = Array.from(container!.querySelectorAll("button")).map(
+      (button) => button.textContent ?? "",
+    );
+    expect(foldRows.findIndex((t) => t.includes("Settled 11"))).toBeLessThan(
+      foldRows.findIndex((t) => t.includes("Settled 0")),
+    );
   });
 
-  it("collapses idle sub-runs into a single disclosure row and expands on click", () => {
+  it("collapses settled idle sub-runs into a single disclosure row and expands on click", () => {
     const now = Date.now();
     const at = (offsetHours: number) => new Date(now - offsetHours * 3_600_000).toISOString();
     const staleA = createThread({
       id: "idle-1",
       title: "Old triage run",
       status: "idle",
+      settled: true,
       lastMessageAt: at(48),
     });
     const staleB = createThread({
       id: "idle-2",
       title: "Older probe",
       status: "idle",
+      settled: true,
       lastMessageAt: at(72),
     });
     const running = createThread({ id: "r-1", title: "Active probe", status: "running" });
@@ -229,17 +268,26 @@ describe("T3TeamAgentsPanelForkSection", () => {
       />,
     );
 
-    // The running row is visible; the idle rows are hidden behind one disclosure.
+    // The running row is visible; the settled rows are hidden behind one fold row.
     expect(container!.textContent).toContain("Active probe");
     expect(container!.textContent).not.toContain("Old triage run");
     expect(container!.textContent).not.toContain("Older probe");
-    expect(container!.textContent).toContain("2 idle · expand");
+    expect(container!.textContent).toContain("Settled (2)");
+    // Oldest (72h) leads the fold label.
+    expect(container!.textContent).toContain("oldest 3d ago");
 
-    click(findButtonByText("2 idle · expand"));
+    click(findButtonByText("Settled (2)"));
 
-    expect(container!.textContent).toContain("Old triage run");
     expect(container!.textContent).toContain("Older probe");
-    expect(container!.textContent).toContain("2 idle · collapse");
+    expect(container!.textContent).toContain("Old triage run");
+    expect(container!.textContent).toContain("collapse");
+    // Oldest-first inside the fold: the 72h row precedes the 48h row.
+    const foldRows = Array.from(container!.querySelectorAll("button")).map(
+      (button) => button.textContent ?? "",
+    );
+    expect(foldRows.findIndex((t) => t.includes("Older probe"))).toBeLessThan(
+      foldRows.findIndex((t) => t.includes("Old triage run")),
+    );
   });
 
   it("renders nested sub-runs indented under their parent, open by default while the parent runs", () => {
@@ -274,8 +322,13 @@ describe("T3TeamAgentsPanelForkSection", () => {
     ).toBe("true");
   });
 
-  it("keeps a settled parent's subtree collapsed by default and expands it on toggle", () => {
-    const parent = createThread({ id: "parent-1", title: "Settled parent", status: "completed" });
+  it("keeps a settled parent in the fold, and its nested subtree out of the fold's chrome", () => {
+    const parent = createThread({
+      id: "parent-1",
+      title: "Settled parent",
+      status: "completed",
+      settled: true,
+    });
     const child = createThread({ id: "child-1", title: "Nested probe", status: "completed" });
 
     render(
@@ -293,18 +346,20 @@ describe("T3TeamAgentsPanelForkSection", () => {
       />,
     );
 
+    // GHE #304: an actually-settled parent folds instead of rendering its own
+    // expanded row, and its nested subtree does not expand out of the fold's compact rows.
+    expect(container!.textContent).not.toContain("Settled parent");
+    expect(container!.textContent).toContain("Settled (1)");
+
+    click(findButtonByText("Settled (1)"));
+
     expect(container!.textContent).toContain("Settled parent");
     expect(container!.textContent).not.toContain("Nested probe");
-
-    const toggle = findButtonByText("Settled parent").previousElementSibling as HTMLButtonElement;
-    expect(toggle.getAttribute("aria-label")).toBe("Expand sub-runs");
-    click(toggle);
-    expect(container!.textContent).toContain("Nested probe");
   });
 
   it("survives a cyclic parent relation without hanging", () => {
     const a = createThread({ id: "a", title: "Thread A", status: "running" });
-    const b = createThread({ id: "b", title: "Thread B", status: "completed" });
+    const b = createThread({ id: "b", title: "Thread B", status: "completed", settled: true });
     render(
       <T3TeamAgentsPanelForkSection
         childThreadsByParentId={
@@ -321,6 +376,9 @@ describe("T3TeamAgentsPanelForkSection", () => {
       />,
     );
     expect(container!.textContent).toContain("Thread A");
+    // Thread B is settled, so it sits in the fold (no hang, no render crash).
+    expect(container!.textContent).toContain("Settled (1)");
+    click(findButtonByText("Settled (1)"));
     expect(container!.textContent).toContain("Thread B");
   });
 

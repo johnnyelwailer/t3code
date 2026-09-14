@@ -123,10 +123,12 @@ describe("callT3TeamSearchSourceTool", () => {
     expect(body.totalMatches).toBe(2);
     const matches = body.matches as Array<Record<string, unknown>>;
     expect(matches).toHaveLength(2);
-    expect(matches[0]!.index).toBe(2);
-    expect(matches[0]!.role).toBe("assistant");
-    expect(String(matches[0]!.snippet)).toContain("auth.ts");
-    expect(matches[1]!.index).toBe(3);
+    // Newest first, same result shape as t3team.thread.search.
+    expect(matches[0]!.position).toBe(3);
+    expect(matches[0]!.source).toBe("message");
+    expect(matches[1]!.position).toBe(2);
+    expect(matches[1]!.role).toBe("assistant");
+    expect(String(matches[1]!.snippet)).toContain("auth.ts");
   });
 
   it("reports zero matches with a hint", async () => {

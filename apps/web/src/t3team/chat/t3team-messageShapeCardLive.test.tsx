@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
-import { EventId } from "@t3tools/contracts";
+import { EventId, type OrchestrationThreadActivity } from "@t3tools/contracts";
 import { PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP } from "@t3tools/project-recipes";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vite-plus/test";
+import { beforeAll, describe, expect, it } from "vite-plus/test";
+import { buildT3TeamMessagesTimelineTestProps } from "~/t3team/chat/t3team-messagesTimelineTestProps";
 import { deriveT3TeamWorkflowStepRuns } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
+import type { ChatMessage } from "~/types";
 import {
   formatWorkflowStepDue,
   T3TeamWorkflowShapeLiveCard,
@@ -18,6 +20,14 @@ import {
   stepActivity,
   TEST_WORKFLOW_SHAPE,
 } from "~/t3team/chat/t3team-messageShapeCardLive.testSupport";
+
+// Prewarm the MessagesTimeline module graph once, outside the per-test 15s budget:
+// the first dynamic import inside renderTimeline() transforms the whole graph and
+// exceeds the unit project's testTimeout on its own (same pattern as
+// MessagesTimeline.test.tsx's beforeAll import).
+beforeAll(async () => {
+  await import("~/components/chat/MessagesTimeline");
+}, 60_000);
 
 describe("deriveT3TeamWorkflowStepRuns", () => {
   it("groups by run, orders by journal seq, keeps the latest phase, and splits the run row", () => {
@@ -46,8 +56,10 @@ describe("deriveT3TeamWorkflowStepRuns", () => {
     expect(run?.steps[0]?.phase).toBe("completed");
     expect(run?.steps[1]?.phase).toBe("waiting");
     expect(run?.steps[1]?.detail).toBe("Merge it?");
-    // the run-level terminal activity is NOT a step row
-    expect(run?.run).toEqual({ phase: "completed" });
+    // the run-level terminal activity is NOT a step row (its timestamp rides along as `updatedAt`
+    // so a paused banner can say when — GHE #403)
+    expect(run?.run).toMatchObject({ phase: "completed" });
+    expect(run?.run?.error).toBeUndefined();
     expect(runs.get("run-other")?.run).toBeNull();
   });
 
@@ -373,7 +385,22 @@ describe("live workflow step overlay on the plan card", () => {
     });
     expect(pausedMarkup).toContain('aria-label="Resume orchestration"');
     expect(pausedMarkup).toContain('aria-label="More orchestration actions"');
-    expect(pausedMarkup).toContain("Run paused");
+    // The banner says WHEN it was paused and offers Resume right there (GHE #403 §2).
+    expect(pausedMarkup).toMatch(/Paused (just now|\d+[mhd] ago)/);
+    expect(pausedMarkup).toContain("data-run-resume");
+
+    // GHE #344: a terminal failed card offers Retry (journal re-drive), labelled as a retry,
+    // not a pause-resume — and the failed banner carries the same affordance.
+    const failedRetryMarkup = await renderTimeline(
+      [...waiting, runActivity("failed", "boom")],
+      undefined,
+      { status: "failed" },
+    );
+    expect(failedRetryMarkup).toContain('aria-label="Retry run"');
+    expect(failedRetryMarkup).not.toContain('aria-label="Resume orchestration"');
+    expect(failedRetryMarkup).not.toContain('aria-label="Stop workflow"');
+    expect(failedRetryMarkup).toContain("data-run-resume");
+    expect(failedRetryMarkup).toContain(">Retry<");
 
     const stoppedMarkup = await renderTimeline([...waiting, runActivity("cancelled")], undefined, {
       status: "cancelled",
@@ -421,3 +448,7 @@ describe("live workflow step overlay on the plan card", () => {
     expect(markup).not.toContain("nexplore/coding should never be a row title");
   }, 30000);
 });
+
+// The header/outcome presentation tests (Defect 3 headline + outcome fold-in, and the
+// two-row header layout fix) live in `t3team-messageShapeCardLiveHeader.test.tsx`, split out
+// once this file outgrew the test-file LOC ceiling.

@@ -1,22 +1,25 @@
 import {
+  ANTIGRAVITY_DEFAULT_MODEL,
   type ProviderInstanceId,
   type ProviderDriverKind,
   type ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
 import { resolveSelectableModel } from "@t3tools/shared/model";
+import { useAtomValue } from "@effect/atom-react";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
 import { memo, useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { ChevronRightIcon, SearchIcon } from "lucide-react";
 import { ModelListRow } from "./ModelListRow";
+import { isModelPickerNewModel } from "./t3team-modelPickerModelHighlights";
 import { ModelPickerProviderConnectPanel } from "./t3team-ModelPickerProviderConnectPanel";
 import { ModelPickerSidebar } from "./ModelPickerSidebar";
+import { getProviderStatusMessage, hasProviderSetup } from "./ProviderStatusBanner";
 import {
   modelPickerLegacySectionKey,
   modelPickerModelKey,
   parseModelPickerLegacySectionKey,
   parseModelPickerModelKey,
 } from "./modelPickerKeys";
-import { isModelPickerNewModel } from "./modelPickerModelHighlights";
 import { buildModelPickerSearchText, scoreModelPickerSearch } from "./modelPickerSearch";
 import {
   Combobox,
@@ -26,6 +29,8 @@ import {
   ComboboxListVirtualized,
 } from "../ui/combobox";
 import { ModelEsque } from "./providerIconUtils";
+import { isCommandPaletteOpen } from "../../commandPaletteBus";
+import { primaryServerKeybindingsAtom } from "../../state/server";
 import {
   modelPickerJumpCommandForIndex,
   modelPickerJumpIndexFromCommand,
@@ -36,6 +41,7 @@ import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings"
 import { cn } from "~/lib/utils";
 import { getVirtualizedScrollFadeClassName } from "../ui/scroll-area";
 import { TooltipProvider } from "../ui/tooltip";
+import { Button } from "../ui/button";
 import {
   isProviderInstancePickerReady,
   isProviderInstancePickerVisible,
@@ -50,6 +56,7 @@ type ModelPickerItem = {
   name: string;
   shortName?: string;
   subProvider?: string;
+  badge?: "new";
   instanceId: ProviderInstanceId;
   driverKind: ProviderDriverKind;
   instanceDisplayName: string;
@@ -57,7 +64,59 @@ type ModelPickerItem = {
   instanceIconDataUrl?: string | undefined;
   continuationGroupKey?: string | undefined;
   isLegacy?: boolean | undefined;
+  isUnavailable?: boolean | undefined;
 };
+
+export function resolveModelPickerSelectedModel(input: {
+  driverKind: ProviderDriverKind | undefined;
+  model: string;
+  options: ReadonlyArray<ModelEsque>;
+}) {
+  if (input.driverKind === "antigravity" && input.model === ANTIGRAVITY_DEFAULT_MODEL) {
+    const availableModels = input.options.filter(
+      (option) => option.slug !== ANTIGRAVITY_DEFAULT_MODEL && !option.isUnavailable,
+    );
+    return (
+      availableModels.find((option) => option.aliases?.includes(ANTIGRAVITY_DEFAULT_MODEL)) ??
+      availableModels.find((option) => option.isDefault)
+    );
+  }
+  return input.options.find((option) => option.slug === input.model);
+}
+
+export function shouldIncludeModelPickerOption(input: {
+  readonly entry: ProviderInstanceEntry;
+  readonly option: ModelEsque;
+  readonly activeInstanceId: ProviderInstanceId;
+  readonly activeModel: string;
+}): boolean {
+  if (input.entry.driverKind === "antigravity" && input.option.slug === ANTIGRAVITY_DEFAULT_MODEL) {
+    return false;
+  }
+  if (isProviderInstancePickerReady(input.entry)) return true;
+  return (
+    input.entry.enabled &&
+    (input.entry.driverKind === "opencode" || input.entry.driverKind === "antigravity") &&
+    input.entry.instanceId === input.activeInstanceId &&
+    input.option.slug === input.activeModel &&
+    input.option.isUnavailable === true
+  );
+}
+
+export function shouldOfferModelPickerSetup(
+  entry: ProviderInstanceEntry,
+  options: ReadonlyArray<ModelEsque>,
+): boolean {
+  return (
+    entry.enabled &&
+    entry.status !== "disabled" &&
+    hasProviderSetup(entry.snapshot) &&
+    (!isProviderInstancePickerReady(entry) ||
+      !entry.installed ||
+      entry.snapshot.auth.status === "unauthenticated" ||
+      !options.some((option) => !option.isUnavailable))
+  );
+}
 
 const EMPTY_MODEL_JUMP_LABELS = new Map<string, string>();
 
@@ -94,6 +153,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   modelOptionsByInstance: ReadonlyMap<ProviderInstanceId, ReadonlyArray<ModelEsque>>;
   terminalOpen: boolean;
   onRequestClose?: () => void;
+  onOpenProviderSetup?: (instanceId: ProviderInstanceId) => void;
   getModelDisabledReason?: (instanceId: ProviderInstanceId, model: string) => string | null;
   onInstanceModelChange: (instanceId: ProviderInstanceId, model: string) => void;
 }) {
@@ -111,11 +171,45 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
   const modelListRef = useRef<LegendListRef | null>(null);
   const highlightedModelKeyRef = useRef<string | null>(null);
   const favorites = useClientSettings((s) => s.favorites ?? []);
+  const activeEntry = props.instanceEntries.find(
+    (entry) => entry.instanceId === props.activeInstanceId,
+  );
+  const activeModel = resolveModelPickerSelectedModel({
+    driverKind: activeEntry?.driverKind,
+    model: props.model,
+    options: modelOptionsByInstance.get(props.activeInstanceId) ?? [],
+  });
+  const activeModelSlug =
+    activeModel?.slug ?? (props.model === ANTIGRAVITY_DEFAULT_MODEL ? "" : props.model);
+  const activeModelKey = activeModelSlug
+    ? modelPickerModelKey(props.activeInstanceId, activeModelSlug)
+    : null;
+  const activeInstanceHasSelectableUnavailableModel =
+    activeEntry !== undefined &&
+    (modelOptionsByInstance.get(props.activeInstanceId) ?? []).some((option) =>
+      shouldIncludeModelPickerOption({
+        entry: activeEntry,
+        option,
+        activeInstanceId: props.activeInstanceId,
+        activeModel: activeModelSlug,
+      }),
+    ) &&
+    !isProviderInstancePickerReady(activeEntry);
+  const activeInstanceNeedsSetup =
+    props.onOpenProviderSetup !== undefined &&
+    activeEntry !== undefined &&
+    shouldOfferModelPickerSetup(
+      activeEntry,
+      modelOptionsByInstance.get(props.activeInstanceId) ?? [],
+    );
   const [selectedInstanceId, setSelectedInstanceId] = useState<ProviderInstanceId | "favorites">(
     () => {
-      if (props.lockedProvider !== null) {
-        // When locked, prime the sidebar to the currently-active instance
-        // so jumping into the picker keeps the focused instance visible.
+      if (
+        props.lockedProvider !== null ||
+        activeInstanceHasSelectableUnavailableModel ||
+        activeInstanceNeedsSetup
+      ) {
+        // Keep the active instance visible when it is locked or needs setup.
         return props.activeInstanceId;
       }
       return favorites.length > 0 ? "favorites" : props.activeInstanceId;
@@ -126,15 +220,13 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       new Set<ProviderInstanceId>(
         modelOptionsByInstance
           .get(props.activeInstanceId)
-          ?.some((model) => model.slug === props.model && model.isLegacy)
+          ?.some((model) => model.slug === activeModelSlug && model.isLegacy)
           ? [props.activeInstanceId]
           : [],
       ),
   );
-  const keybindings = useMemo<ResolvedKeybindingsConfig>(
-    () => providedKeybindings ?? [],
-    [providedKeybindings],
-  );
+  const serverKeybindings = useAtomValue(primaryServerKeybindingsAtom);
+  const keybindings = providedKeybindings ?? serverKeybindings;
   const updateSettings = useUpdateClientSettings();
 
   const focusSearchInput = useCallback(() => {
@@ -193,15 +285,28 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     [props.lockedContinuationGroupKey, props.lockedProvider],
   );
 
-  const readyInstanceSet = useMemo(() => {
-    const ready = new Set<ProviderInstanceId>();
-    for (const entry of instanceEntries) {
-      if (isProviderInstancePickerReady(entry)) {
-        ready.add(entry.instanceId);
+  const selectableUnavailableInstanceIds = useMemo(() => {
+    const instanceIds = new Set<ProviderInstanceId>();
+    if (activeInstanceHasSelectableUnavailableModel) {
+      instanceIds.add(props.activeInstanceId);
+    }
+    if (props.onOpenProviderSetup) {
+      for (const entry of instanceEntries) {
+        if (
+          shouldOfferModelPickerSetup(entry, modelOptionsByInstance.get(entry.instanceId) ?? [])
+        ) {
+          instanceIds.add(entry.instanceId);
+        }
       }
     }
-    return ready;
-  }, [instanceEntries]);
+    return instanceIds.size > 0 ? instanceIds : undefined;
+  }, [
+    activeInstanceHasSelectableUnavailableModel,
+    instanceEntries,
+    modelOptionsByInstance,
+    props.activeInstanceId,
+    props.onOpenProviderSetup,
+  ]);
 
   // Flatten models into a searchable array. One pass over the
   // instance-keyed map; each model carries its instance id + driver kind
@@ -216,16 +321,25 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
         // its models — stale options shouldn't appear in the picker.
         continue;
       }
-      if (!readyInstanceSet.has(instanceId)) {
-        continue;
-      }
       for (const model of models) {
+        if (
+          !shouldIncludeModelPickerOption({
+            entry,
+            option: model,
+            activeInstanceId: props.activeInstanceId,
+            activeModel: activeModelSlug,
+          })
+        ) {
+          continue;
+        }
         out.push({
           slug: model.slug,
           name: model.name,
           ...(model.shortName ? { shortName: model.shortName } : {}),
           ...(model.subProvider ? { subProvider: model.subProvider } : {}),
+          ...(model.badge ? { badge: model.badge } : {}),
           ...(model.isLegacy ? { isLegacy: true } : {}),
+          ...(model.isUnavailable ? { isUnavailable: true } : {}),
           instanceId,
           driverKind: entry.driverKind,
           instanceDisplayName: entry.displayName,
@@ -238,7 +352,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       }
     }
     return out;
-  }, [modelOptionsByInstance, entryByInstanceId, readyInstanceSet]);
+  }, [modelOptionsByInstance, entryByInstanceId, props.activeInstanceId, activeModelSlug]);
 
   const isLocked = props.lockedProvider !== null;
   const isSearching = searchQuery.trim().length > 0;
@@ -438,6 +552,23 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     ];
   }, [filteredModels, legacySection]);
 
+  const selectedEntry =
+    selectedInstanceId === "favorites" ? undefined : entryByInstanceId.get(selectedInstanceId);
+  const providerSetupEntries =
+    !isSearching && props.onOpenProviderSetup
+      ? instanceEntries.filter(
+          (entry) =>
+            matchesLockedProvider(entry) &&
+            shouldOfferModelPickerSetup(
+              entry,
+              modelOptionsByInstance.get(entry.instanceId) ?? [],
+            ) &&
+            (selectedEntry
+              ? entry.instanceId === selectedEntry.instanceId
+              : filteredModels.length === 0),
+        )
+      : [];
+
   const toggleLegacySection = useCallback((instanceId: ProviderInstanceId) => {
     setExpandedLegacyInstances((expanded) => {
       const next = new Set(expanded);
@@ -583,7 +714,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
 
   useEffect(() => {
     const onWindowKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.defaultPrevented || event.repeat) {
+      if (event.defaultPrevented || event.repeat || isCommandPaletteOpen()) {
         return;
       }
 
@@ -595,6 +726,8 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       if (jumpIndex === null) {
         return;
       }
+      event.preventDefault();
+      event.stopPropagation();
 
       const targetModelKey = modelJumpModelKeys[jumpIndex];
       if (!targetModelKey) {
@@ -604,8 +737,6 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
       if (!model) {
         return;
       }
-      event.preventDefault();
-      event.stopPropagation();
       handleModelSelect(model.slug, model.instanceId);
     };
 
@@ -643,6 +774,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
             onSelectInstance={handleSelectInstance}
             instanceEntries={sidebarInstanceEntries}
             showFavorites
+            {...(selectableUnavailableInstanceIds ? { selectableUnavailableInstanceIds } : {})}
             {...(lockedDisabledInstanceIds
               ? {
                   disabledInstanceIds: lockedDisabledInstanceIds,
@@ -662,7 +794,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
           autoHighlight
           open
           virtualized
-          value={modelPickerModelKey(props.activeInstanceId, props.model)}
+          value={activeModelKey}
           onItemHighlighted={(modelKey, eventDetails) => {
             highlightedModelKeyRef.current = typeof modelKey === "string" ? modelKey : null;
             if (eventDetails.reason === "keyboard" && eventDetails.index >= 0) {
@@ -806,13 +938,12 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                             isFavorite={favoritesSet.has(
                               providerModelKey(model.instanceId, model.slug),
                             )}
-                            isSelected={
-                              modelKey === modelPickerModelKey(props.activeInstanceId, props.model)
-                            }
+                            isSelected={modelKey === activeModelKey}
                             showProvider
                             preferShortName={!isLocked}
                             useTriggerLabel={false}
                             showNewBadge={isModelPickerNewModel(model.driverKind, model.slug)}
+                            unavailable={model.isUnavailable === true}
                             jumpLabel={modelJumpLabelByKey.get(modelKey) ?? null}
                             disabledReason={disabledReason}
                             onToggleFavorite={() => toggleFavorite(model.instanceId, model.slug)}
@@ -836,9 +967,34 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                     />
                   </ComboboxListVirtualized>
                 </div>
-                <ComboboxEmpty className="not-empty:py-6 empty:h-0 text-xs font-normal leading-snug">
-                  No models found
-                </ComboboxEmpty>
+                {providerSetupEntries.length > 0 ? (
+                  <div className="max-h-44 shrink-0 overflow-y-auto border-t border-border/70 p-2">
+                    {providerSetupEntries.map((entry) => (
+                      <div key={entry.instanceId} className="px-1 py-1.5 text-xs leading-snug">
+                        <p className="line-clamp-3 text-muted-foreground">
+                          {getProviderStatusMessage(entry.snapshot)}
+                        </p>
+                        <Button
+                          className="mt-1 px-0 text-foreground"
+                          onClick={() => {
+                            props.onRequestClose?.();
+                            props.onOpenProviderSetup?.(entry.instanceId);
+                          }}
+                          size="xs"
+                          variant="link"
+                        >
+                          {providerSetupEntries.length > 1
+                            ? `Set up ${entry.displayName}`
+                            : "Open provider setup"}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <ComboboxEmpty className="not-empty:py-6 empty:h-0 text-xs font-normal leading-snug">
+                    No models found
+                  </ComboboxEmpty>
+                )}
               </>
             )}
           </div>

@@ -579,15 +579,24 @@ Context-bound chat and standalone chat share thread tools.
 Useful tools:
 
 ```text
+t3team.runtime.models
+t3team.runtime.provider_usage
 t3team.view.read
 t3team.recipe.list
 t3team.recipe.validate
 t3team.orchestration.run
+t3team.orchestration.status
+t3team.orchestration.resume
+t3team.orchestration.pause
+t3team.orchestration.stop
 t3team.widget.show
+t3team.task.write
+t3team.task.list
 t3team.thread.rename
 t3team.thread.search
 t3team.thread.search_source
 t3team.thread.read_message
+t3team.thread.ask_user
 t3team.thread.read_current
 t3team.thread.rename.draft_update
 t3team.thread.create_context_bound
@@ -598,11 +607,48 @@ t3team.thread.attach_context
 t3team.thread.open_full_page
 ```
 
-`t3team.view.read`, `t3team.thread.rename`, `t3team.thread.search`,
-`t3team.thread.search_source`, `t3team.thread.read_message`, `t3team.thread.start_child`, and
-`t3team.thread.children` are the
-current live runtime slice used by the broker implementation. The rest of this section
+`t3team.runtime.models`, `t3team.view.read`, `t3team.thread.rename`, `t3team.thread.search`,
+`t3team.thread.search_source`, `t3team.thread.read_message`, `t3team.thread.start_child`,
+`t3team.thread.children`, `t3team.orchestration.run`, `t3team.orchestration.status`,
+`t3team.orchestration.resume`, `t3team.orchestration.pause`, and `t3team.orchestration.stop` are
+the current live runtime slice used by the broker implementation. The rest of this section
 remains planned catalog scope.
+
+`t3team.orchestration.pause` / `t3team.orchestration.stop` give the agent the same controls the
+run card gives the user, scoped to the runs its own thread launched (GHE #403): pause parks a
+waiting or scheduled run and keeps its continuation for `resume`; stop cancels the run and
+interrupts its child agent turns — the way to retire a superseded run before launching its
+replacement.
+
+`t3team.runtime.models` reads the current thread's true `ModelSelection` plus every configured
+provider instance and model from the live `ProviderRegistry` snapshots. Agent authors call it
+before naming an exact provider/model in `start_child` or an orchestration; the SDK deliberately
+ships no curated model tree.
+
+`t3team.runtime.provider_usage` samples the provider's LIVE rolling plan-limit windows —
+complements the transcript-based consumption reporting: it asks each configured provider
+instance (Claude via the Anthropic OAuth usage endpoint, Codex via the app-server's
+`account/rateLimits/read`) how much of its 5-hour and weekly quota is used, when the window
+resets, and the severity verdict against the host thresholds. Instances that cannot be
+sampled come back in `unavailable` with a reason, so one bad provider never hides the rest.
+
+`t3team.task.write` / `t3team.task.list` are the durable per-thread **task journal**: the
+agent's own plan, persisted in `thread_task_records` (migration t3team-056) so it survives
+context compaction. Each record carries a 1-based `position`, an imperative `subject`, an
+optional present-participle `active_form`, a `status`
+(`pending` / `in_progress` / `completed` / `cancelled`), and an optional `note`.
+
+`t3team.task.write` takes the COMPLETE list and replaces the stored one outright — there is
+deliberately no id-based partial patch. The primary consumer is a weak local model (qwen3.8
+via the nexplore gateway), which re-sends a whole list reliably but invents, reuses and drops
+ids when asked to patch; replace removes that failure class, and `position` is simply the
+array index. `note` is where a failure's reason is kept rather than dropped, because that is
+the detail compaction destroys first.
+
+The motivation is measured, not theoretical: one real 31-hour orchestration run (thread
+`fbdb583b`) spent 128 turns across 22 compactions and 12 hard truncations with zero task
+records — and issued 75 `t3team.thread.children` polls, re-deriving its own plan by
+interrogating its children because nothing durable held it.
 
 `t3team.thread.search` searches the transcript of the CURRENT thread (case-insensitive
 substring, optional `limit` and `role` filter), returning each match with its 1-based

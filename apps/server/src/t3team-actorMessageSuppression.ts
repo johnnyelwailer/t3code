@@ -65,11 +65,11 @@ export function collectSuppressedThreadsAtRehydrate(
  * message lands on the PARENT thread, not the child, so lifting only the
  * parent would leave a cascade-stopped child suppressed forever.
  */
-export function clearSuppressionForThreadTree(input: {
+export function clearSuppressionForThreadTree<R>(input: {
   readonly mailbox: T3TeamActorMailboxShape;
-  readonly tryDrain: (threadId: string) => Effect.Effect<void>;
+  readonly tryDrain: (threadId: string) => Effect.Effect<void, never, R>;
   readonly threadId: string;
-}): Effect.Effect<void, never, SqlClient.SqlClient> {
+}): Effect.Effect<void, never, R | SqlClient.SqlClient> {
   return Effect.gen(function* () {
     yield* input.mailbox.clearSuppression(input.threadId);
     yield* input.tryDrain(input.threadId);

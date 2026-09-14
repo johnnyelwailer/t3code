@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Bridges the launch API, like its siblings. */
 // @effect-diagnostics nodeBuiltinImport:off - test harness writes a workflow fixture + temp dir.
 /**
  * A workspace root may legitimately persist a literal `~`-prefixed path (see

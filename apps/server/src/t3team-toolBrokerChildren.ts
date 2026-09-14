@@ -23,6 +23,8 @@
  *   unwatch — cancel all silence watches this thread has on the target
  *   stop   — halt a child's running turn
  *   close  — mark a child done from this side (bookkeeping)
+ *   sweep  — settle terminal threads in bulk (verify first; cleanup protocol)
+ *   drain  — claim THIS thread's own pending inter-agent mailbox now (no args)
  *   help   — the exact schema for one op
  *
  * This module is the entry point: it validates the `op` and dispatches to the
@@ -35,6 +37,8 @@ import * as Effect from "effect/Effect";
 import { okResult, errorResult } from "./t3team-toolBrokerHelpers.ts";
 import { opUsage, readString } from "./t3team-toolBrokerChildrenShared.ts";
 import { opList, opStatus } from "./t3team-toolBrokerChildrenStatus.ts";
+import { opSweep } from "./t3team-toolBrokerChildrenSweep.ts";
+import { opDrain } from "./t3team-toolBrokerChildrenDrain.ts";
 import {
   opClose,
   opStop,
@@ -116,6 +120,10 @@ export function callT3TeamChildrenTool(input: {
       return opStop(deps, args);
     case "close":
       return opClose(deps, args);
+    case "sweep":
+      return opSweep(deps, args);
+    case "drain":
+      return opDrain(deps, args);
     default:
       return Effect.succeed(errorResult(opUsage(op)));
   }

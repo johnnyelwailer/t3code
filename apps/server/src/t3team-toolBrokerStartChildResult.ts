@@ -43,6 +43,16 @@ export function buildStartChildResult(input: {
     runtime_mode: input.runtimeMode,
     provider: input.provider,
     model: input.model,
+    ...(input.interactionMode === "plan"
+      ? {
+          plan_obligation:
+            "kickoff_mode 'plan': this child will stop after presenting its plan and wait " +
+            "for your approval — it does not implement on its own. Until you approve it " +
+            "reports state 'completed' with the awaitingParent flag in t3team_children " +
+            "(op: list or status); send your approval as a follow-up message to that " +
+            "child to let it implement.",
+        }
+      : {}),
     ...(input.requestedModel && input.requestedModel !== input.model
       ? { model_normalized_from: input.requestedModel }
       : {}),

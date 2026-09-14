@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import * as NodeAsyncHooks from "node:async_hooks";
 import * as NodeModule from "node:module";
 import * as NodeProcess from "node:process";

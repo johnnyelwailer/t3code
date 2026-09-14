@@ -10,16 +10,22 @@ import { ModelSelection } from "@t3tools/contracts";
 import { toPersistenceSqlError } from "../Errors.ts";
 import {
   WorkflowRunHostToolGrant,
+  CasClearWorkflowRunPendingInput,
+  CasSetWorkflowRunStatusInput,
   ClearWorkflowRunPendingInput,
   CountLiveWorkflowRunsByOriginInput,
   GetWorkflowRunInput,
   ListRecentWorkflowRunsInput,
   ListWorkflowRunsByStatusInput,
+  MarkWorkflowRunFailedInput,
   ResumePausedWorkflowRunInput,
   SetWorkflowRunPendingInput,
   SetWorkflowRunSleepingInput,
   SetWorkflowRunStatusInput,
+  SetWorkflowRunTurnRetriesInput,
+  UpdateWorkflowRunArgsInput,
   WorkflowRun,
+  WorkflowRunIntent,
   WorkflowRunRepository,
   type WorkflowRunRepositoryShape,
 } from "../Services/WorkflowRuns.ts";
@@ -42,12 +48,25 @@ const WorkflowRunDbRow = WorkflowRun.mapFields(
         Schema.catchDecoding(() => Effect.succeed(Option.some(null))),
       ),
     ),
+    // `intent_json` decodes LENIENTLY to `null` for the same reason as `host_tool_grant` above:
+    // the boot scan reads every row, so one unreadable intent must degrade that ONE run's report
+    // to "outcome unknown" rather than abort rehydration for all of them. The denying direction
+    // here is "no recorded intent", which is exactly what a pre-051 row looks like.
+    intent: Schema.optional(
+      Schema.NullOr(Schema.fromJsonString(WorkflowRunIntent)).pipe(
+        Schema.catchDecoding(() => Effect.succeed(Option.some(null))),
+      ),
+    ),
   }),
 );
 
 const makeWorkflowRunRepository = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
 
+  // The launch upsert (the only writer of `turn_retries` in this shape): it runs at
+  // `recordRunning`, when a run has no re-drives yet, so `turn_retries` inserts its NOT NULL
+  // default 0 — post-launch transitions use the targeted UPDATEs below, which leave the
+  // journaled budget untouched (migration 052).
   const upsertWorkflowRunRow = SqlSchema.void({
     Request: WorkflowRun,
     execute: (row) =>
@@ -71,7 +90,9 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           failure_reason,
           failure_step,
           host_tool_grant,
+          intent_json,
           wake_at,
+          turn_retries,
           created_at,
           updated_at
         )
@@ -94,7 +115,9 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           ${row.failureReason ?? null},
           ${row.failureStep ?? null},
           ${row.hostToolGrant ? JSON.stringify(row.hostToolGrant) : null},
+          ${row.intent ? JSON.stringify(row.intent) : null},
           ${row.wakeAt},
+          ${row.turnRetries ?? 0},
           ${row.createdAt},
           ${row.updatedAt}
         )
@@ -117,7 +140,9 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           failure_reason = excluded.failure_reason,
           failure_step = excluded.failure_step,
           host_tool_grant = excluded.host_tool_grant,
+          intent_json = excluded.intent_json,
           wake_at = excluded.wake_at,
+          turn_retries = excluded.turn_retries,
           created_at = excluded.created_at,
           updated_at = excluded.updated_at
       `,
@@ -147,7 +172,9 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           failure_reason AS "failureReason",
           failure_step AS "failureStep",
           host_tool_grant AS "hostToolGrant",
+          intent_json AS "intent",
           wake_at AS "wakeAt",
+          turn_retries AS "turnRetries",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM workflow_runs
@@ -179,7 +206,9 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           failure_reason AS "failureReason",
           failure_step AS "failureStep",
           host_tool_grant AS "hostToolGrant",
+          intent_json AS "intent",
           wake_at AS "wakeAt",
+          turn_retries AS "turnRetries",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM workflow_runs
@@ -214,7 +243,9 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           failure_reason AS "failureReason",
           failure_step AS "failureStep",
           host_tool_grant AS "hostToolGrant",
+          intent_json AS "intent",
           wake_at AS "wakeAt",
+          turn_retries AS "turnRetries",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM workflow_runs
@@ -223,16 +254,19 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       `,
   });
 
-  // The ephemeral concurrency cap's index: how many runs of one origin still hold engine
-  // resources (running now, or parked and resumable).
+  // The ephemeral run-count cap's index: how many runs of one origin, launched from one thread,
+  // still hold engine resources (running now, or parked and resumable). Scoped to
+  // `launch_thread_id` so the cap is per-caller, not one budget shared by every thread on the
+  // server.
   const countLiveWorkflowRunRowsByOrigin = SqlSchema.findAll({
     Request: CountLiveWorkflowRunsByOriginInput,
     Result: Schema.Struct({ count: Schema.Number }),
-    execute: ({ origin }) =>
+    execute: ({ origin, launchThreadId }) =>
       sql`
         SELECT COUNT(*) AS "count"
         FROM workflow_runs
         WHERE origin = ${origin}
+          AND launch_thread_id = ${launchThreadId}
           AND status IN ('running', 'suspended', 'sleeping', 'paused')
       `,
   });
@@ -246,6 +280,40 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
         WHERE run_id = ${runId}
           AND status != 'cancelled'
           AND (status != 'paused' OR ${status} IN ('paused', 'cancelled'))
+      `,
+  });
+
+  // Compare-and-set (GHE #411 §1): the UPDATE only fires when the row's CURRENT status is one of
+  // `expectedStatuses`, and `RETURNING run_id` reports whether it did — closing the TOCTOU window
+  // between a control action's read and its write (a run that settled in between is left alone).
+  const casSetWorkflowRunStatusRow = SqlSchema.findOneOption({
+    Request: CasSetWorkflowRunStatusInput,
+    Result: Schema.Struct({ runId: Schema.String }),
+    execute: ({ runId, status, updatedAt, expectedStatuses }) =>
+      sql`
+        UPDATE workflow_runs
+        SET status = ${status}, updated_at = ${updatedAt}
+        WHERE run_id = ${runId} AND ${sql.in("status", expectedStatuses)}
+        RETURNING run_id AS "runId"
+      `,
+  });
+
+  const casClearWorkflowRunPendingRow = SqlSchema.findOneOption({
+    Request: CasClearWorkflowRunPendingInput,
+    Result: Schema.Struct({ runId: Schema.String }),
+    execute: ({ runId, status, updatedAt, failureReason, failureStep, expectedStatuses }) =>
+      sql`
+        UPDATE workflow_runs
+        SET status = ${status},
+            pending_thread_id = NULL,
+            pending_correlation_id = NULL,
+            pending_kind = NULL,
+            failure_reason = ${failureReason ?? null},
+            failure_step = ${failureStep ?? null},
+            wake_at = NULL,
+            updated_at = ${updatedAt}
+        WHERE run_id = ${runId} AND ${sql.in("status", expectedStatuses)}
+        RETURNING run_id AS "runId"
       `,
   });
 
@@ -274,6 +342,8 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
             pending_correlation_id = ${pendingCorrelationId},
             pending_kind = ${pendingKind},
             wake_at = NULL,
+            failure_reason = NULL,
+            failure_step = NULL,
             updated_at = ${updatedAt}
         WHERE run_id = ${runId} AND status != 'cancelled'
       `,
@@ -298,6 +368,22 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       `,
   });
 
+  // A host-detected step failure (GHE #403): terminal `failed` + the reason, but the pending
+  // ask stays so `t3team.orchestration.resume` can re-drive that step. `wake_at` is left alone
+  // too — a `thread.turn` park never has one.
+  const markWorkflowRunFailedRow = SqlSchema.void({
+    Request: MarkWorkflowRunFailedInput,
+    execute: ({ runId, updatedAt, failureReason, failureStep }) =>
+      sql`
+        UPDATE workflow_runs
+        SET status = 'failed',
+            failure_reason = ${failureReason},
+            failure_step = ${failureStep},
+            updated_at = ${updatedAt}
+        WHERE run_id = ${runId} AND status != 'cancelled'
+      `,
+  });
+
   // A timer park (Epic 27): record the wake deadline + the `waitUntil` correlation the
   // scheduler resolves on fire. A timer has no thread/kind, so those pending columns clear.
   const setWorkflowRunSleepingRow = SqlSchema.void({
@@ -310,6 +396,33 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
             pending_thread_id = NULL,
             pending_correlation_id = ${correlationId},
             pending_kind = NULL,
+            updated_at = ${updatedAt}
+        WHERE run_id = ${runId} AND status != 'cancelled'
+      `,
+  });
+
+  // Journal a re-drive attempt for the run's interrupted thread.turn step (migration 052).
+  // A targeted UPDATE — status and the pending ask stay untouched, the run stays `suspended`.
+  const setWorkflowRunTurnRetriesRow = SqlSchema.void({
+    Request: SetWorkflowRunTurnRetriesInput,
+    execute: ({ runId, turnRetries, updatedAt }) =>
+      sql`
+        UPDATE workflow_runs
+        SET turn_retries = ${turnRetries}, updated_at = ${updatedAt}
+        WHERE run_id = ${runId} AND status != 'cancelled'
+      `,
+  });
+
+  // Input-contract repair (a same-run correction, never the launch path): rewrites args/hash
+  // only, leaving status/pending/every other column untouched. Mirrors the shape of
+  // `setWorkflowRunStatusRow` above — a narrow, single-purpose UPDATE rather than a full upsert.
+  const updateWorkflowRunArgsRow = SqlSchema.void({
+    Request: UpdateWorkflowRunArgsInput,
+    execute: ({ runId, args, argsHash, updatedAt }) =>
+      sql`
+        UPDATE workflow_runs
+        SET args_json = ${JSON.stringify(args)},
+            args_hash = ${argsHash},
             updated_at = ${updatedAt}
         WHERE run_id = ${runId} AND status != 'cancelled'
       `,
@@ -346,6 +459,12 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.setStatus:query")),
     );
 
+  const casSetStatus: WorkflowRunRepositoryShape["casSetStatus"] = (input) =>
+    casSetWorkflowRunStatusRow(input).pipe(
+      Effect.map(Option.isSome),
+      Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.casSetStatus:query")),
+    );
+
   const resumePaused: WorkflowRunRepositoryShape["resumePaused"] = (input) =>
     resumePausedWorkflowRunRow(input).pipe(
       Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.resumePaused:query")),
@@ -361,9 +480,34 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.clearPending:query")),
     );
 
+  const casClearPending: WorkflowRunRepositoryShape["casClearPending"] = (input) =>
+    casClearWorkflowRunPendingRow(input).pipe(
+      Effect.map(Option.isSome),
+      Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.casClearPending:query")),
+    );
+
+  const markFailedRetainingPending: WorkflowRunRepositoryShape["markFailedRetainingPending"] = (
+    input,
+  ) =>
+    markWorkflowRunFailedRow(input).pipe(
+      Effect.mapError(
+        toPersistenceSqlError("WorkflowRunRepository.markFailedRetainingPending:query"),
+      ),
+    );
+
   const setSleeping: WorkflowRunRepositoryShape["setSleeping"] = (input) =>
     setWorkflowRunSleepingRow(input).pipe(
       Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.setSleeping:query")),
+    );
+
+  const setTurnRetries: WorkflowRunRepositoryShape["setTurnRetries"] = (input) =>
+    setWorkflowRunTurnRetriesRow(input).pipe(
+      Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.setTurnRetries:query")),
+    );
+
+  const updateArgs: WorkflowRunRepositoryShape["updateArgs"] = (input) =>
+    updateWorkflowRunArgsRow(input).pipe(
+      Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.updateArgs:query")),
     );
 
   return {
@@ -373,10 +517,15 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
     listRecent,
     countLiveByOrigin,
     setStatus,
+    casSetStatus,
     resumePaused,
     setPending,
     clearPending,
+    casClearPending,
+    markFailedRetainingPending,
     setSleeping,
+    setTurnRetries,
+    updateArgs,
   } satisfies WorkflowRunRepositoryShape;
 });
 

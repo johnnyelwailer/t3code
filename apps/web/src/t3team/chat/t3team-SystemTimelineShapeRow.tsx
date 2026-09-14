@@ -23,6 +23,7 @@ export function T3TeamSystemTimelineShapeRow({
   workflowRunStatus,
   onControlWorkflow,
   onOpenThread,
+  outcomeSummary,
 }: {
   readonly workflowShape: NonNullable<ReturnType<typeof getT3TeamWorkflowShapeAttachment>>;
   readonly threadRef: ScopedThreadRef | null;
@@ -30,6 +31,9 @@ export function T3TeamSystemTimelineShapeRow({
   readonly workflowRunStatus?: OrchestrationWorkflowRunStatus;
   readonly onControlWorkflow?: ChatViewT3TeamExtensionProps["onControlWorkflow"];
   readonly onOpenThread?: ChatViewT3TeamExtensionProps["onOpenThread"];
+  /** A short, honest outcome line for the run's banner (never the full result) — see
+   * `t3team-workflowRunOutcome.ts`. Only meaningful once the run has a live progress card. */
+  readonly outcomeSummary?: string | undefined;
 }) {
   const mergedThreads = useMergedThreads();
   const childStatuses = Object.fromEntries(
@@ -55,6 +59,7 @@ export function T3TeamSystemTimelineShapeRow({
           {...(onOpenThread ? { onOpenThread } : {})}
           {...(threadRef ? { currentThreadId: threadRef.threadId } : {})}
           childStatuses={childStatuses}
+          {...(outcomeSummary ? { outcomeSummary } : {})}
         />
       ) : (
         <T3TeamWorkflowShapeCard shape={workflowShape} />

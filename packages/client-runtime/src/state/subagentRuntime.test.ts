@@ -5,10 +5,6 @@ import {
   foldSubagentActivities,
   formatSubagentModelLabel,
   formatSubagentTokenCount,
-  isAgentAttributedToolActivity,
-  isSubagentActivityKind,
-  isTimelineBypassActivity,
-  workflowCardMembers,
 } from "./subagentRuntime.ts";
 
 let sequence = 0;
@@ -66,6 +62,45 @@ function fold(rows: ReadonlyArray<OrchestrationThreadActivity>) {
 }
 
 describe("foldSubagentActivities", () => {
+  it("shows the batch status limit after its parent turn ends without claiming a result", () => {
+    const running = activity("task.progress", {
+      taskId: "batch-1",
+      taskType: "subagent_batch",
+      title: "Antigravity subagent batch",
+      status: "running",
+      summary: "Launch readers",
+    });
+    const agents = fold([
+      running,
+      activity("task.updated", {
+        taskId: "batch-1",
+        taskType: "subagent_batch",
+        status: "idle",
+        detail: "Turn ended. Individual agent status is unavailable.",
+        timelineBypass: true,
+      }),
+    ]);
+    expect(agents).toHaveLength(1);
+    expect(agents[0]).toMatchObject({
+      title: "Antigravity subagent batch",
+      kind: "subagent_batch",
+      status: "idle",
+      progress: "Turn ended. Individual agent status is unavailable.",
+      result: null,
+      error: null,
+    });
+  });
+
+  it("learns batch identity from a later update and retains it on sparse updates", () => {
+    const agents = fold([
+      activity("task.progress", { taskId: "batch-1", taskType: "subagent", status: "running" }),
+      activity("task.updated", { taskId: "batch-1", taskType: "subagent_batch", status: "idle" }),
+      activity("task.updated", { taskId: "batch-1", status: "idle" }),
+    ]);
+    expect(agents).toHaveLength(1);
+    expect(agents[0]).toMatchObject({ kind: "subagent_batch", status: "idle" });
+  });
+
   it("builds an agent from start → progress → completion", () => {
     const agents = fold([
       activity("task.started", {
@@ -518,64 +553,6 @@ describe("deriveAgentPanelModel", () => {
   });
 });
 
-describe("workflowCardMembers", () => {
-  it("orders by urgency (failed, running, waiting) and reports overflow", () => {
-    const roster = fold([
-      activity("task.started", { taskId: "wf-1", taskType: "local_workflow" }),
-      ...[..."abcdefghij"].map((letter, index) =>
-        activity("task.progress", {
-          taskId: `wf-1:wf:${index}`,
-          title: `agent-${letter}`,
-          status: index === 3 ? "failed" : index < 3 ? "completed" : "running",
-          ...(index === 3 ? { error: "died" } : {}),
-          parentAgentId: "wf-1",
-          agentIndex: index,
-          phaseIndex: 0,
-          phaseTitle: "Work",
-        }),
-      ),
-    ]);
-    const model = deriveAgentPanelModel({ agents: roster });
-    const { visible, overflow } = workflowCardMembers(model.workflows[0]!, 8);
-    expect(visible).toHaveLength(8);
-    expect(overflow).toBe(2);
-    expect(visible[0]!.status).toBe("failed");
-    expect(visible.filter((agent) => agent.status === "completed").length).toBeLessThanOrEqual(2);
-  });
-});
-
-describe("timeline predicates", () => {
-  it("recognizes subagent activity kinds as fold input", () => {
-    for (const kind of [
-      "task.started",
-      "task.progress",
-      "task.updated",
-      "task.completed",
-      "tool.progress",
-    ]) {
-      expect(isSubagentActivityKind(kind)).toBe(true);
-    }
-    expect(isSubagentActivityKind("tool.completed")).toBe(false);
-  });
-
-  it("attributed tool rows are re-homed; unattributed rows stay in the timeline", () => {
-    expect(isAgentAttributedToolActivity(activity("tool.completed", { agentId: "task-1" }))).toBe(
-      true,
-    );
-    expect(isAgentAttributedToolActivity(activity("tool.completed", {}))).toBe(false);
-    expect(isAgentAttributedToolActivity(activity("tool.completed", { agentId: "  " }))).toBe(
-      false,
-    );
-  });
-
-  it("timelineBypass rows never render in the parent chat", () => {
-    expect(isTimelineBypassActivity(activity("task.progress", { timelineBypass: true }))).toBe(
-      true,
-    );
-    expect(isTimelineBypassActivity(activity("task.progress", {}))).toBe(false);
-  });
-});
-
 describe("formatSubagentTokenCount", () => {
   it("formats plain counters", () => {
     expect(formatSubagentTokenCount(950)).toBe("950");
@@ -601,6 +578,43 @@ describe("model and effort attribution", () => {
     expect(agents).toHaveLength(1);
     expect(agents[0]!.model).toBe("claude-sonnet-5[1m]");
     expect(agents[0]!.effort).toBe("high");
+  });
+
+  it("applies metadata-only updates without changing the current status", () => {
+    const waitingRows = [
+      activity("task.updated", {
+        taskId: "task-metadata",
+        title: "Check metadata",
+        status: "waiting",
+      }),
+      activity("task.updated", {
+        taskId: "task-metadata",
+        model: "gpt-5.6-sol",
+        effort: "high",
+      }),
+    ];
+    const waitingAgent = fold(waitingRows)[0]!;
+    expect(waitingAgent.status).toBe("waiting");
+    expect(formatSubagentModelLabel(waitingAgent.model, waitingAgent.effort)).toBe(
+      "gpt-5.6-sol · high",
+    );
+
+    const idleRows = [
+      ...waitingRows,
+      activity("task.updated", { taskId: "task-metadata", status: "idle" }),
+      activity("task.updated", { taskId: "task-metadata", model: "gpt-5.6-sol" }),
+    ];
+    expect(fold(idleRows)[0]!.status).toBe("idle");
+
+    const completedAgent = fold([
+      ...idleRows,
+      activity("task.progress", { taskId: "task-metadata", typedUsage: { totalTokens: 42 } }),
+      activity("task.completed", { taskId: "task-metadata", status: "completed" }),
+      activity("task.updated", { taskId: "task-metadata", effort: "high" }),
+    ])[0]!;
+    expect(completedAgent.status).toBe("completed");
+    expect(completedAgent.model).toBe("gpt-5.6-sol");
+    expect(completedAgent.effort).toBe("high");
   });
 
   it("formatSubagentModelLabel compacts ids and appends effort", () => {
@@ -875,5 +889,164 @@ describe("nested agents vs subagent shells", () => {
       }),
     ]);
     expect(agents.map((agent) => agent.id)).toEqual(["nested-1"]);
+  });
+});
+
+// Real-shaped payloads below were read verbatim (field names/values, minus
+// ids) from a live workflow-orchestration thread's projection_thread_activities
+// rows — see apps/server/src/t3team-workflowEngineStepActivities.ts (the
+// emitter) and packages/project-recipes/src/runtime.ts
+// (ProjectRecipeWorkflowStepActivityPayload).
+describe("recipe-workflow-step fold (t3team.recipe.workflow.step)", () => {
+  const workflowRunId = "74710a7f-9da8-4207-bd80-da0b1fa302ce";
+  const launchThreadId = "3e97be2d-83a7-48af-924d-e925d8b22eb8";
+
+  it("thread.create + thread.turn pairs build a workflow group with member agents", () => {
+    const model = deriveAgentPanelModel({
+      agents: fold([
+        activity("t3team.recipe.workflow.step", {
+          workflowRunId,
+          stepId: `${workflowRunId}:blackbox:1`,
+          stepKind: "thread.create",
+          phase: "completed",
+          detail: "Review correctness",
+          projectId: "proj-1",
+          threadId: `${workflowRunId}:blackbox:1`,
+        }),
+        activity("t3team.recipe.workflow.step", {
+          workflowRunId,
+          stepId: `${workflowRunId}:blackbox:2`,
+          stepKind: "thread.turn",
+          phase: "completed",
+          detail: "Review correctness",
+          projectId: "proj-1",
+          threadId: `${workflowRunId}:blackbox:1`,
+        }),
+        activity("t3team.recipe.workflow.step", {
+          workflowRunId,
+          stepId: `${workflowRunId}:blackbox:3`,
+          stepKind: "thread.create",
+          phase: "completed",
+          detail: "Review edge cases",
+          projectId: "proj-1",
+          threadId: `${workflowRunId}:blackbox:3`,
+        }),
+        activity("t3team.recipe.workflow.step", {
+          workflowRunId,
+          stepId: `${workflowRunId}:blackbox:4`,
+          stepKind: "thread.turn",
+          phase: "completed",
+          detail: "Review edge cases",
+          projectId: "proj-1",
+          threadId: `${workflowRunId}:blackbox:3`,
+        }),
+        // Reports the LAUNCH thread's own id (asking the user a question) —
+        // must never become a roster member.
+        activity("t3team.recipe.workflow.step", {
+          workflowRunId,
+          stepId: `${workflowRunId}:5`,
+          stepKind: "user.input",
+          phase: "completed",
+          detail: "Pick a winner",
+          projectId: "proj-1",
+          threadId: launchThreadId,
+        }),
+        activity("t3team.recipe.workflow.step", {
+          workflowRunId,
+          stepId: `run:${workflowRunId}`,
+          stepKind: "run",
+          phase: "completed",
+          projectId: "proj-1",
+        }),
+      ]),
+    });
+
+    expect(model.workflows).toHaveLength(1);
+    const group = model.workflows[0]!;
+    expect(group.workflow.id).toBe(workflowRunId);
+    expect(group.workflow.kind).toBe("workflow");
+    expect(group.workflow.status).toBe("completed");
+
+    const members = [...group.phases.flatMap((phase) => phase.members), ...group.unphasedMembers];
+    expect(members.map((member) => member.id).toSorted()).toEqual(
+      [`${workflowRunId}:blackbox:1`, `${workflowRunId}:blackbox:3`].toSorted(),
+    );
+    expect(members.map((member) => member.id)).not.toContain(launchThreadId);
+
+    const first = members.find((member) => member.id === `${workflowRunId}:blackbox:1`);
+    expect(first?.title).toBe("Review correctness");
+    expect(first?.status).toBe("completed");
+    expect(first?.kind).toBe("workflow_agent");
+    expect(first?.parentAgentId).toBe(workflowRunId);
+    // Neither the payload nor the fold invents model/usage data for a
+    // recipe-workflow child thread.
+    expect(first?.model).toBeNull();
+    expect(first?.usage).toBeNull();
+  });
+
+  it("a thread.create with no thread.turn yet reads as running, not completed", () => {
+    const agents = fold([
+      activity("t3team.recipe.workflow.step", {
+        workflowRunId,
+        stepId: `${workflowRunId}:blackbox:1`,
+        stepKind: "thread.create",
+        phase: "completed",
+        detail: "Still working",
+        threadId: `${workflowRunId}:blackbox:1`,
+      }),
+    ]);
+    const member = agents.find((agent) => agent.id === `${workflowRunId}:blackbox:1`);
+    expect(member?.status).toBe("running");
+    const workflow = agents.find((agent) => agent.id === workflowRunId);
+    expect(workflow?.status).toBe("running");
+  });
+
+  it("an immediate run failure with no preceding steps still marks the workflow failed", () => {
+    // Observed live: a run can fail before any step activity lands
+    // (e.g. a synchronous script error), so the coordinator must be
+    // creatable from the terminal row alone.
+    const agents = fold([
+      activity("t3team.recipe.workflow.step", {
+        workflowRunId: "wf-fail",
+        stepId: "run:wf-fail",
+        stepKind: "run",
+        phase: "failed",
+        projectId: "proj-1",
+        error: "ReferenceError: readFileSync is not defined",
+      }),
+    ]);
+    expect(agents).toHaveLength(1);
+    expect(agents[0]!.kind).toBe("workflow");
+    expect(agents[0]!.status).toBe("failed");
+    expect(agents[0]!.error).toBe("ReferenceError: readFileSync is not defined");
+  });
+
+  it("groups members by their authored workflowPhase name", () => {
+    const model = deriveAgentPanelModel({
+      agents: fold([
+        activity("t3team.recipe.workflow.step", {
+          workflowRunId: "wf-phases",
+          stepId: "wf-phases:1",
+          stepKind: "thread.create",
+          phase: "completed",
+          detail: "Draft A",
+          threadId: "wf-phases:1",
+          workflowPhase: "Draft",
+        }),
+        activity("t3team.recipe.workflow.step", {
+          workflowRunId: "wf-phases",
+          stepId: "wf-phases:2",
+          stepKind: "thread.create",
+          phase: "started",
+          detail: "Review A",
+          threadId: "wf-phases:2",
+          workflowPhase: "Review",
+        }),
+      ]),
+    });
+    const group = model.workflows[0]!;
+    expect(group.phases.map((phase) => phase.title)).toEqual(["Draft", "Review"]);
+    expect(group.phases[0]!.members.map((member) => member.id)).toEqual(["wf-phases:1"]);
+    expect(group.phases[1]!.members.map((member) => member.id)).toEqual(["wf-phases:2"]);
   });
 });

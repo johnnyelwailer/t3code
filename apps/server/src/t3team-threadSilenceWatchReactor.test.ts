@@ -16,6 +16,7 @@ import { type OrchestrationEventStoreError } from "./persistence/Errors.ts";
 import { type ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { makeThreadSilenceWatchReactor } from "./t3team-threadSilenceWatchReactor.ts";
 import {
+  SILENCE_WATCH_TERMINAL_NOTIFIED_KIND,
   THREAD_SILENCE_DETECTED_KIND,
   THREAD_SILENCE_WATCH_CANCELLED_KIND,
   THREAD_SILENCE_WATCH_REGISTERED_KIND,
@@ -157,6 +158,7 @@ const watchRegistered = (
 ): OrchestrationEvent =>
   ({
     type: "thread.activity-appended",
+    sequence: 1,
     payload: {
       threadId: WATCHER,
       activity: {
@@ -174,6 +176,7 @@ const watchRegistered = (
 const watchCancelled = (): OrchestrationEvent =>
   ({
     type: "thread.activity-appended",
+    sequence: 1,
     payload: {
       threadId: WATCHER,
       activity: {
@@ -186,7 +189,38 @@ const watchCancelled = (): OrchestrationEvent =>
 const sessionSet = (status: string): OrchestrationEvent =>
   ({
     type: "thread.session-set",
+    sequence: 1,
     payload: { threadId: ThreadId.make(TARGET), session: { status, lastError: null } },
+  }) as unknown as OrchestrationEvent;
+
+/**
+ * A durable terminal-notified marker (shared dedup ledger, GHE #157): appended
+ * on the watcher when watch `dedupKey` reported `resumeThreadId`'s stop at
+ * `eventSequence`. Present in a replay, it rehydrates the ledger so the same
+ * terminal state is not re-notified.
+ */
+const terminalNotifiedMarker = (
+  dedupKey: string,
+  resumeThreadId: string,
+  eventSequence: number,
+): OrchestrationEvent =>
+  ({
+    type: "thread.activity-appended",
+    sequence: eventSequence + 1,
+    payload: {
+      threadId: WATCHER,
+      activity: {
+        kind: SILENCE_WATCH_TERMINAL_NOTIFIED_KIND,
+        payload: {
+          dedupKey,
+          resumeThreadId,
+          eventSequence,
+          watchId: dedupKey,
+          targetThreadId: resumeThreadId,
+          stoppedStatus: "error",
+        },
+      },
+    },
   }) as unknown as OrchestrationEvent;
 
 const detectedActivities = (dispatches: OrchestrationCommand[]) =>
@@ -455,6 +489,51 @@ describe("makeThreadSilenceWatchReactor", () => {
       harness.fireTick(); // the timer was cleared: nothing happens
       yield* Effect.yieldNow;
       expect(detectedPayloads(harness.dispatches)).toHaveLength(0);
+    }),
+  );
+
+  it.effect("rehydration: a persisted terminal-notified marker stops the re-notify", () =>
+    Effect.gen(function* () {
+      // The target already went terminal before the previous process died; the
+      // marker proves the watcher was already told. Rehydration must NOT re-fire.
+      const harness = makeHarness({
+        targetShell: { ...TARGET_SHELL, session: { status: "stopped" } },
+        replayEvents: [watchRegistered(), terminalNotifiedMarker("w1", TARGET, 3)],
+      });
+      yield* harness.rehydrate;
+      yield* Effect.yieldNow;
+      expect(detectedPayloads(harness.dispatches)).toHaveLength(0);
+      // The watch is closed by resolution (no lingering sweep target).
+      harness.advance(900_000);
+      harness.fireTick();
+      yield* settle(harness);
+      expect(detectedPayloads(harness.dispatches)).toHaveLength(0);
+    }),
+  );
+
+  it.effect("rehydration: no marker means the terminal target still notifies once", () =>
+    Effect.gen(function* () {
+      const harness = makeHarness({
+        targetShell: { ...TARGET_SHELL, session: { status: "stopped" } },
+        replayEvents: [watchRegistered()],
+      });
+      yield* harness.rehydrate;
+      yield* Effect.yieldNow;
+      const payloads = detectedPayloads(harness.dispatches);
+      expect(payloads).toHaveLength(1);
+      expect(payloads[0]).toMatchObject({
+        watchId: "w1",
+        reason: "stopped",
+        stoppedStatus: "stopped",
+      });
+      // The durable marker is written on the watcher so a later rehydrate dedups.
+      const markers = harness.dispatches.filter(
+        (command) =>
+          command.type === "thread.activity.append" &&
+          (command as { activity?: { kind?: string } }).activity?.kind ===
+            SILENCE_WATCH_TERMINAL_NOTIFIED_KIND,
+      );
+      expect(markers).toHaveLength(1);
     }),
   );
 });

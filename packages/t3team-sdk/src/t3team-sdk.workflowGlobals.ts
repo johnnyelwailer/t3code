@@ -75,6 +75,9 @@ export function buildWorkflowGlobals(opts: {
     budget: p.budget,
     phase: p.phase,
     log: p.log,
+    // `emit` journals a typed artifact into the run (the `artifact` primitive); the record is
+    // stable across replay, so a resumed run reports the same artifact ids it reported before.
+    emit: p.emit,
     // `now()` is the journaled wall clock (same source the deterministic `Date` reads): a
     // resume replays the recorded value, so time helpers built on it (and `waitUntil(now() +
     // ms)`) are replay-deterministic (Epic 27 §Time & scheduling helpers).

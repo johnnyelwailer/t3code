@@ -95,7 +95,6 @@ const makePackDiagnostic = (input: {
     },
   }) as never;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- test harness: services come from the merged layer below.
 const run = <A>(effect: Effect.Effect<A, any, any>) =>
   Effect.runPromise(
     Effect.scoped(

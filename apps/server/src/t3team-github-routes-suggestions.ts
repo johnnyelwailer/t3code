@@ -77,13 +77,24 @@ export function collectSuggestedRepositoryUrls(input: {
   return normalizeRepositoryUrls(ranked);
 }
 
-export function parseLinkedRepositoryName(host: string, repositoryUrl: string): string | undefined {
+/**
+ * A linked repository as the host it lives on plus the `owner/repo` below it. The host comes
+ * from the URL itself rather than from the host a request was named for: a reader signed in to
+ * more than one GitHub-kind host names one of them, and a repository knows its own.
+ */
+export function parseLinkedRepositoryTarget(repositoryUrl: string):
+  | {
+      readonly host: string;
+      readonly repository: string;
+    }
+  | undefined {
   try {
     const url = new URL(repositoryUrl);
-    if (url.hostname.toLowerCase() !== host.toLowerCase()) return undefined;
+    const host = url.hostname.trim().toLowerCase();
+    if (host.length === 0) return undefined;
     const [owner, repo] = url.pathname.split("/").filter((part) => part.length > 0);
     if (!owner || !repo) return undefined;
-    return `${owner}/${repo.replace(/\.git$/i, "")}`;
+    return { host, repository: `${owner}/${repo.replace(/\.git$/i, "")}` };
   } catch {
     return undefined;
   }
@@ -108,8 +119,13 @@ export function filterInboxItemsToLinkedRepositories(input: {
   if (linkedNormalized.size === 0) return [];
 
   return input.inboxItems.filter((item) => {
-    const repositoryUrl = normalizeRepositoryUrls([`https://${input.host}/${item.repository}`])[0];
-    return typeof repositoryUrl === "string" && linkedNormalized.has(repositoryUrl);
+    // The item's own URL first: a linked-PR item lives on the host its repository does, which
+    // can differ from the host the request was named for. The host-built URL is the fallback
+    // for items that never carried one.
+    const candidates = normalizeRepositoryUrls([
+      item.repositoryUrl ?? `https://${input.host}/${item.repository}`,
+    ]);
+    return candidates.some((url) => linkedNormalized.has(url));
   });
 }
 

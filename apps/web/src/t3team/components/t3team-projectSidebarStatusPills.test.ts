@@ -83,14 +83,14 @@ describe("resolveThreadStatusPill (activity state, GHE #208)", () => {
     }
   });
 
-  it("renders '{state} · {detail}' through the shared display helper", () => {
+  it("the LLM label replaces the state word through the shared display helper", () => {
     const pill = resolveThreadStatusPill({
       status: "running",
       activityState: "working",
       activityLabel: "editing the retry test",
     });
     expect(pill?.activityState).toBe("working");
-    expect(resolveActivityPillDisplay(pill!)).toBe("Working · editing the retry test");
+    expect(resolveActivityPillDisplay(pill!)).toBe("editing the retry test");
   });
 
   it("state word stands alone when the flag is off (enrichment gated)", () => {

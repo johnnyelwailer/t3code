@@ -29,10 +29,14 @@ const makeTimers = (): TimerHarness => {
 
 const makeTracker = (timers?: TimerHarness) => {
   const persisted: Array<{ threadId: string; state: ThreadActivityState | null }> = [];
+  // `minTransitionMs: 0` keeps these tests focused on the deterministic state
+  // machine (transitions on every boundary); the debounce is covered by its
+  // own tests with a controlled clock below.
   const tracker = createActivityStateTracker({
     persist: async ({ threadId, state }) => {
       persisted.push({ threadId, state });
     },
+    minTransitionMs: 0,
     ...(timers ? { setTimer: timers.setTimer, clearTimer: timers.clearTimer } : {}),
   });
   return { tracker, persisted };
@@ -125,5 +129,59 @@ describe("activity state tracker (GHE #208)", () => {
     ]);
     tracker.note({ threadId: "a", type: "turn-ended" });
     expect(tracker.stateOf("b")).toBe("working");
+  });
+
+  it("debounces rapid active-state churn — holds a state until the min interval elapses", () => {
+    let t = 0;
+    const persisted: Array<{ state: ThreadActivityState | null }> = [];
+    const tracker = createActivityStateTracker({
+      persist: async ({ state }) => {
+        persisted.push({ state });
+      },
+      now: () => t,
+    });
+    tracker.note({ threadId: "t1", type: "turn-started" }); // thinking — first state, immediate
+    t += 1_000;
+    tracker.note({ threadId: "t1", type: "assistant-delta" }); // writing wanted; 1s < 4s → held
+    t += 1_000;
+    tracker.note({ threadId: "t1", type: "tool-started" }); // working wanted; 2s < 4s → held
+    t += 1_000;
+    tracker.note({ threadId: "t1", type: "tool-completed" }); // thinking wanted; 3s < 4s → held
+    t += 1_500; // t = 5.5s; 5.5s since the last change ≥ 4s
+    tracker.note({ threadId: "t1", type: "assistant-delta" }); // writing → applied
+    expect(persisted.map((entry) => entry.state)).toEqual(["thinking", "writing"]);
+    expect(tracker.stateOf("t1")).toBe("writing");
+  });
+
+  it("re-arms the debounce window from the last ACTUAL change, not from suppressed requests", () => {
+    let t = 0;
+    const persisted: Array<{ state: ThreadActivityState | null }> = [];
+    const tracker = createActivityStateTracker({
+      persist: async ({ state }) => {
+        persisted.push({ state });
+      },
+      now: () => t,
+    });
+    tracker.note({ threadId: "t1", type: "tool-started" }); // working @ 0 (first)
+    t += 3_000;
+    tracker.note({ threadId: "t1", type: "tool-completed" }); // thinking wanted; 3s < 4s → held
+    t += 1_500; // t = 4.5s; 4.5s since the working change ≥ 4s
+    tracker.note({ threadId: "t1", type: "reasoning-delta" }); // thinking → applied
+    t += 3_000;
+    tracker.note({ threadId: "t1", type: "assistant-delta" }); // writing wanted; 3s < 4s → held
+    expect(persisted.map((entry) => entry.state)).toEqual(["working", "thinking"]);
+  });
+
+  it("applies the first active state immediately so a fresh turn never stays on the fallback", () => {
+    let t = 0;
+    const persisted: Array<{ state: ThreadActivityState | null }> = [];
+    const tracker = createActivityStateTracker({
+      persist: async ({ state }) => {
+        persisted.push({ state });
+      },
+      now: () => t,
+    });
+    tracker.note({ threadId: "t1", type: "turn-started" });
+    expect(persisted.map((entry) => entry.state)).toEqual(["thinking"]);
   });
 });

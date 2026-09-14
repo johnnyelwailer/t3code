@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- The launch/resume API is promise-shaped; the broker layer is bridged the way its siblings do. */
 // @effect-diagnostics nodeBuiltinImport:off - writes a probe workflow into a temp runs root.
 /**
  * The host-tool GRANT must survive a restart unchanged — in both directions.
@@ -102,18 +101,24 @@ const nowIso = (): string => "2026-07-27T00:00:00.000Z";
 const brokerDispatched: OrchestrationCommand[] = [];
 const brokerEngineMock: OrchestrationEngineShape = {
   readEvents: () => Stream.empty,
+  readThreadEvents: () => Stream.empty,
+  getThreadReplayStats: () => Effect.die("unused"),
   dispatch: (command) => {
     brokerDispatched.push(command);
     return Effect.succeed({ sequence: brokerDispatched.length });
   },
   streamDomainEvents: Stream.empty,
+  subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
   latestSequence: Effect.succeed(0),
 };
 
 const stubEngine: OrchestrationEngineShape = {
   readEvents: () => Stream.empty,
+  readThreadEvents: () => Stream.empty,
+  getThreadReplayStats: () => Effect.die("unused"),
   dispatch: () => Effect.succeed({ sequence: 0 }),
   streamDomainEvents: Stream.never,
+  subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
   latestSequence: Effect.succeed(0),
 };
 

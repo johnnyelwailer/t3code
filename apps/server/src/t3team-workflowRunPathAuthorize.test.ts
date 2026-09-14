@@ -302,6 +302,13 @@ describe("resolveRunWorkflowPath — execution authorization", () => {
         }
         expect(NodeFS.existsSync(expected)).toBe(true);
 
+        // `.t3team-runs/` is self-ignoring: it stays invisible to the user's own `git status`
+        // without touching the user's own root `.gitignore`.
+        const runsRootGitignore = path.join(workspaceRoot, ".t3team-runs", ".gitignore");
+        expect(NodeFS.existsSync(runsRootGitignore)).toBe(true);
+        expect(NodeFS.readFileSync(runsRootGitignore, "utf8")).toBe("*\n");
+        expect(NodeFS.existsSync(path.join(workspaceRoot, ".gitignore"))).toBe(false);
+
         // The persisted ephemeral file is also accepted when passed back as a path.
         const byPath = yield* authorize({ workspaceRoot, workflowPath: expected });
         expect(byPath._tag).toBe("Success");

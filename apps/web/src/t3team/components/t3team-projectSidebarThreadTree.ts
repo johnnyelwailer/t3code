@@ -48,32 +48,69 @@ export function countProjectSidebarThreadBranches(
 }
 
 /**
- * How many sub-run rows render at once in the sidebar before a "Show more" disclosure. A
- * coordinator with a large child fleet (dozens of sub-runs) would otherwise flood the sidebar
- * on expand; the user only wants the most recent active ones up front. Mirrors the Agents
- * panel fork section's cap (t3team-AgentsPanelSubRunTree.tsx).
+ * Stable sub-run ordering, shared by the sidebar sub-run list and the Agents panel sub-run
+ * tree: activity NEVER reorders the list — the same documented rule as
+ * `sortThreadsForSidebar` for main threads, where a row holds its position from open until
+ * settled and the screen only moves at lifecycle transitions. Sorting by live `lastMessageAt`
+ * reshuffled the list on every message while children ran; `lastMessageAt` still labels the
+ * row, it just never ranks it.
+ *
+ * Grouped by lifecycle — running/active first, then waiting (error), then idle, then settled
+ * (completed) — and within each group by `createdAt` newest-first (newest child on top, like
+ * the main thread list) with an `id` tiebreak, so equal timestamps can never flip two rows.
  */
-export const SIDEBAR_SUB_RUN_LIMIT = 10;
-
-export type SubRunPage = {
-  readonly visible: ProjectThread[];
-  readonly hiddenCount: number;
+export const SUB_RUN_LIFECYCLE_RANK: Record<ProjectThread["status"], number> = {
+  running: 0,
+  error: 1,
+  idle: 2,
+  completed: 3,
 };
 
 /**
- * Sort a parent's sub-run threads newest-to-oldest (most recently active first) and page them:
- * the first {@link SIDEBAR_SUB_RUN_LIMIT} when `showAll` is false, or all of them when true.
- * `hiddenCount` is how many sit behind the "Show more" disclosure (0 when `showAll` or within
- * the limit). Pure so the sidebar's expand/cap behavior is unit-testable without rendering the
- * whole component.
+ * GHE #304 — the split the sub-run rosters render from. Visible list = every
+ * sub-run that has NOT actually settled (running AND terminal-but-not-yet-
+ * settled — a fresh completed/failed/stopped child keeps its row with its
+ * true terminal status). ONLY threads whose shell carries
+ * `settledOverride === "settled"` (a real `thread.settled` event: user
+ * settle, auto-settle, or the 48h child-settle TTL sweep) collapse into the
+ * ONE dim "Settled (N)" fold row. The fold therefore matches the normal
+ * auto-settle lifecycle instead of claiming "settled" the moment a child
+ * stops running. Shared by the Agents panel sub-run tree and the sidebar
+ * sub-run list so the two rosters can never disagree about what is active.
  */
-export function pageSubRunThreads(
-  threads: ReadonlyArray<ProjectThread>,
-  showAll: boolean,
-): SubRunPage {
-  const sorted = [...threads].sort(
-    (a, b) => Date.parse(b.lastMessageAt) - Date.parse(a.lastMessageAt),
+export type SubRunPartition = {
+  readonly running: readonly ProjectThread[];
+  readonly folded: readonly ProjectThread[];
+};
+
+export function partitionSubRunThreads(threads: ReadonlyArray<ProjectThread>): SubRunPartition {
+  const running: ProjectThread[] = [];
+  const folded: ProjectThread[] = [];
+  for (const thread of threads) {
+    (thread.settled ? folded : running).push(thread);
+  }
+  return { running, folded };
+}
+
+/**
+ * Fold order: oldest last-activity first — the same "top by age" order the
+ * server's cleanup nudge digest uses, so the expand reads like the digest.
+ */
+export function sortFoldedSubRunThreads<T extends Pick<ProjectThread, "id" | "lastMessageAt">>(
+  threads: readonly T[],
+): T[] {
+  return threads.toSorted(
+    (a, b) => Date.parse(a.lastMessageAt) - Date.parse(b.lastMessageAt) || a.id.localeCompare(b.id),
   );
-  const visible = showAll ? sorted : sorted.slice(0, SIDEBAR_SUB_RUN_LIMIT);
-  return { visible, hiddenCount: sorted.length - visible.length };
+}
+
+export function compareSubRunThreads(
+  a: Pick<ProjectThread, "id" | "createdAt" | "status">,
+  b: Pick<ProjectThread, "id" | "createdAt" | "status">,
+): number {
+  return (
+    SUB_RUN_LIFECYCLE_RANK[a.status] - SUB_RUN_LIFECYCLE_RANK[b.status] ||
+    Date.parse(b.createdAt) - Date.parse(a.createdAt) ||
+    a.id.localeCompare(b.id)
+  );
 }

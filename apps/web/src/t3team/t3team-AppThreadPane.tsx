@@ -1,7 +1,11 @@
 import { useCallback, useEffect } from "react";
-import { PanelRightOpenIcon, XIcon } from "lucide-react";
+import { PanelRightOpenIcon } from "lucide-react";
 import { useCanGoBack } from "@tanstack/react-router";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { ProjectShellProject } from "@t3tools/project-context";
+import { ThreadId } from "@t3tools/contracts";
+import { usePrimaryEnvironmentId } from "~/state/environments";
+import { useRightPanelStore } from "~/rightPanelStore";
 import { ThreadChatView } from "~/t3team/chat/t3team-ThreadChatView";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import type { ProjectThread, ViewState } from "~/t3team/t3team-types";
@@ -13,7 +17,6 @@ export function AppThreadPane({
   view,
   threadProject,
   resolvedThread,
-  embeddedThread,
   onOpenTicket,
   onOpenEmbeddedThread,
   onCloseEmbeddedThread,
@@ -24,7 +27,6 @@ export function AppThreadPane({
   view: Extract<ViewState, { type: "thread" }>;
   threadProject: ProjectShellProject | null;
   resolvedThread: ProjectThread | null;
-  embeddedThread: ProjectThread | null;
   onOpenTicket: (projectId: string, ticketId: string) => void;
   onOpenEmbeddedThread: (projectId: string, threadId: string) => void;
   onCloseEmbeddedThread: () => void;
@@ -33,6 +35,7 @@ export function AppThreadPane({
   onBackToDashboard: (projectId: string) => void;
 }) {
   const canGoBack = useCanGoBack();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
   const canOpenEmbedded = Boolean(resolvedThread?.ticketId || resolvedThread?.dashboardMode);
   // Upstream retires the draft behind a promoted thread on its own thread
   // route; the Team shell owns this route instead, so it has to do it here.
@@ -45,6 +48,26 @@ export function AppThreadPane({
 
     onRememberFullThread(resolvedThread.id);
   }, [onRememberFullThread, resolvedThread]);
+
+  // Legacy migration: routes written while side chat was the `?chatThreadId` split pane still
+  // carry the peer in the URL. The split pane is retired — the peer is now a side-chat tab in
+  // this thread's right panel — so adopt it there and strip the search param (replace, so the
+  // old URL does not linger in history). A thread is never its own side chat.
+  const embeddedThreadId = view.embeddedThreadId;
+  useEffect(() => {
+    if (!embeddedThreadId || embeddedThreadId === view.threadId) {
+      return;
+    }
+    if (primaryEnvironmentId) {
+      useRightPanelStore
+        .getState()
+        .openThreadSurface(
+          scopeThreadRef(primaryEnvironmentId, ThreadId.make(view.threadId)),
+          embeddedThreadId,
+        );
+    }
+    onCloseEmbeddedThread();
+  }, [embeddedThreadId, onCloseEmbeddedThread, primaryEnvironmentId, view.threadId]);
 
   const handleBack = useCallback(() => {
     navigateBackWithFallback({
@@ -127,53 +150,5 @@ export function AppThreadPane({
     />
   );
 
-  const embeddedThreadId = embeddedThread?.id ?? view.embeddedThreadId;
-  // A thread is never its own side-by-side companion. Rendering it twice gives one conversation two
-  // timelines and two composers, and a suspended `askUser` two places to answer it — answering in one
-  // leaves the other stale and it is ambiguous which is real. The navigation helper refuses to
-  // produce this route; this is the invariant that holds regardless of how the route was reached.
-  if (!embeddedThreadId || embeddedThreadId === view.threadId) {
-    return parentChat;
-  }
-
-  return (
-    <div className="flex h-full min-h-0 flex-1 divide-x divide-border overflow-hidden">
-      <div className="flex min-w-0 flex-1">{parentChat}</div>
-      <div className="t3team-embedded-thread-pane relative flex min-w-0 flex-1">
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          className="t3team-embedded-thread-close absolute z-10 shrink-0 text-muted-foreground/80"
-          onClick={() => runT3TeamViewTransition(onCloseEmbeddedThread)}
-          aria-label="Close side-by-side thread"
-          title="Close side-by-side thread"
-        >
-          <XIcon className="size-4" />
-        </Button>
-        <ThreadChatView
-          // A workflow child can arrive in the route before the sidebar/store
-          // projection catches up. Render the known route target immediately;
-          // the thread view fetches its own server state and the title updates
-          // when the projection arrives.
-          threadId={embeddedThreadId}
-          projectId={view.projectId}
-          projectTitle={threadProject?.title ?? view.projectId}
-          {...(threadProject?.source ? { projectSource: threadProject.source } : {})}
-          {...(threadProject?.workspace?.rootPath
-            ? { projectWorkspaceRoot: threadProject.workspace.rootPath }
-            : {})}
-          title={embeddedThread?.title ?? "Orchestration thread"}
-          hideHeader
-          embeddedMode
-          {...(embeddedThread?.ticketId ? { ticketId: embeddedThread.ticketId } : {})}
-          {...(embeddedThread?.ticketDisplayId
-            ? { ticketDisplayId: embeddedThread.ticketDisplayId }
-            : {})}
-          {...(embeddedThread?.selectedToolIds !== undefined
-            ? { selectedToolIds: embeddedThread.selectedToolIds }
-            : {})}
-        />
-      </div>
-    </div>
-  );
+  return parentChat;
 }

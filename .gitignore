@@ -51,3 +51,5 @@ node_modules/
 .env*
 !.env.example
 .t3work/
+apps/server/userdata/
+.vite-hooks/_/t3team-additive-guard-cache.json

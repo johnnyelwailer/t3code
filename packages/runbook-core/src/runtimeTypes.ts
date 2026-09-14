@@ -37,4 +37,19 @@ export interface DurablePrimitiveSeat {
   readonly maxRecordedSeq: number;
   readonly isBlackBoxed: () => boolean;
   readonly takeSeq: () => number;
+  /** Host run id for live primitive events; absent = no primitive event emission. */
+  readonly runId?: string | undefined;
+  /** Live lifecycle observations; primitive started/completed events are emitted here. */
+  readonly events?: import("./events.ts").WorkflowEventSink | undefined;
+  /**
+   * First-class abort: checked before every LIVE primitive execution (never on the replay
+   * path); once aborted, the next live call throws WorkflowAborted.
+   */
+  readonly abortSignal?: AbortSignal | undefined;
+  /**
+   * The run's sticky suspension record (see `SuspensionLatch` in `handles.ts`). Checked before
+   * every primitive call AND again after `exec` resolves, so a body — or a composition thunk —
+   * that swallowed the suspension signal cannot journal a result on top of it.
+   */
+  readonly suspension: import("./handles.ts").SuspensionLatch;
 }

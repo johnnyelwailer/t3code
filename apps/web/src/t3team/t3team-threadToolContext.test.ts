@@ -108,8 +108,18 @@ describe("createT3TeamTurnToolContext", () => {
     expect(toolContext).toEqual({
       surface: "t3team",
       tools: [
-        // Catalog order: t3team.widget.show is the first defaultEnabled entry
-        // in IMPLEMENTED_T3TEAM_TOOL_CATALOG.
+        // Catalog order: the defaultEnabled entries of IMPLEMENTED_T3TEAM_TOOL_CATALOG, starting
+        // with t3team.runtime.models (GHE #339), then provider usage, then widget.show.
+        {
+          id: "t3team.runtime.models",
+          label: "List runtime models",
+          capabilities: ["read"],
+        },
+        {
+          id: "t3team.runtime.provider_usage",
+          label: "Read provider usage limits",
+          capabilities: ["read"],
+        },
         {
           id: "t3team.widget.show",
           label: "Show widget",
@@ -133,6 +143,26 @@ describe("createT3TeamTurnToolContext", () => {
         {
           id: "t3team.orchestration.run",
           label: "Run ephemeral orchestration",
+          capabilities: ["write"],
+        },
+        {
+          id: "t3team.orchestration.status",
+          label: "Observe orchestration run",
+          capabilities: ["read"],
+        },
+        {
+          id: "t3team.orchestration.resume",
+          label: "Resume orchestration run",
+          capabilities: ["write"],
+        },
+        {
+          id: "t3team.orchestration.pause",
+          label: "Pause orchestration run",
+          capabilities: ["write"],
+        },
+        {
+          id: "t3team.orchestration.stop",
+          label: "Stop orchestration run",
           capabilities: ["write"],
         },
         {

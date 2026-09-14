@@ -9,7 +9,6 @@ import {
   selectActiveRightPanelSurface,
   selectSelectedRightPanelSurface,
   selectThreadRightPanelState,
-  updatePullRequestTabStatus,
   useRightPanelStore,
 } from "./rightPanelStore";
 
@@ -280,6 +279,50 @@ describe("rightPanelStore", () => {
     });
   });
 
+  it("opens an attachment as a file surface without the standalone explorer", () => {
+    const attachment = {
+      type: "file" as const,
+      id: "thread-A-attachment-pdf",
+      name: "report.pdf",
+      mimeType: "application/pdf",
+      sizeBytes: 42,
+    };
+    useRightPanelStore.getState().open(refA, "files");
+    useRightPanelStore.getState().openAttachment(refA, attachment);
+
+    expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
+      isOpen: true,
+      activeSurfaceId: "attachment:thread-A-attachment-pdf",
+      surfaces: [
+        {
+          id: "attachment:thread-A-attachment-pdf",
+          kind: "file",
+          relativePath: "report.pdf",
+          revealLine: null,
+          revealRequestId: 0,
+          attachment,
+        },
+      ],
+    });
+  });
+
+  it("keeps attachment and workspace file ids disjoint", () => {
+    useRightPanelStore.getState().openFile(refA, "attachment:shared-id");
+    useRightPanelStore.getState().openAttachment(refA, {
+      type: "file",
+      id: "shared-id",
+      name: "report.pdf",
+      mimeType: "application/pdf",
+      sizeBytes: 42,
+    });
+
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA).surfaces.map(
+        (surface) => surface.id,
+      ),
+    ).toEqual(["file:attachment:shared-id", "attachment:shared-id"]);
+  });
+
   it("updates line reveal requests when reopening a file surface", () => {
     useRightPanelStore.getState().openFile(refA, "src/index.ts", 42);
     useRightPanelStore.getState().openFile(refA, "src/index.ts", 87);
@@ -334,6 +377,35 @@ describe("rightPanelStore", () => {
       isOpen: false,
       activeSurfaceId: null,
       surfaces: [],
+    });
+  });
+
+  it("keeps attachment previews when their workspace is unavailable", () => {
+    const attachment = {
+      type: "file" as const,
+      id: "thread-A-attachment-pdf",
+      name: "report.pdf",
+      mimeType: "application/pdf",
+      sizeBytes: 42,
+    };
+    useRightPanelStore.getState().openFile(refA, "README.md");
+    useRightPanelStore.getState().openAttachment(refA, attachment);
+
+    useRightPanelStore.getState().reconcileFileSurfaces(refA, false);
+
+    expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
+      isOpen: true,
+      activeSurfaceId: "attachment:thread-A-attachment-pdf",
+      surfaces: [
+        {
+          id: "attachment:thread-A-attachment-pdf",
+          kind: "file",
+          relativePath: "report.pdf",
+          revealLine: null,
+          revealRequestId: 0,
+          attachment,
+        },
+      ],
     });
   });
 
@@ -483,62 +555,6 @@ describe("rightPanelStore", () => {
         refAfterServerADisconnects,
       ).surfaces,
     ).toEqual([]);
-  });
-
-  describe("updatePullRequestTabStatus", () => {
-    const status = (isDraft: boolean) => ({
-      projectId: "project-a",
-      repository: "pingdotgg/t3code",
-      number: 4909,
-      state: "open" as const,
-      isDraft,
-    });
-
-    // Regression for the tab wearing no state: this failed when the status was written under a
-    // key rebuilt from the pull request while the tab strip reads it under the surface's own id.
-    it("keys a status under the same id a surface opened from an environment carries", () => {
-      const target = {
-        environmentId: "remote",
-        projectId: "project-a",
-        repository: "pingdotgg/t3code",
-        number: 4909,
-      };
-      useRightPanelStore.getState().openPullRequest(refA, target);
-      const surface = selectSelectedRightPanelSurface(
-        useRightPanelStore.getState().byThreadKey,
-        refA,
-      );
-      expect(surface).not.toBeNull();
-
-      const statuses = updatePullRequestTabStatus({}, surface!.id, status(false));
-      expect(statuses[surface!.id]).toEqual(status(false));
-    });
-
-    it("keys a status under the same id a thread surface with no environment carries", () => {
-      const target = { projectId: "project-a", repository: "pingdotgg/t3code", number: 4909 };
-      useRightPanelStore.getState().openPullRequest(refA, target);
-      const surface = selectSelectedRightPanelSurface(
-        useRightPanelStore.getState().byThreadKey,
-        refA,
-      );
-      expect(surface).not.toBeNull();
-
-      const statuses = updatePullRequestTabStatus({}, surface!.id, status(false));
-      expect(statuses[surface!.id]).toEqual(status(false));
-    });
-
-    it("returns the identical map when the tab's state and draft flag are unchanged", () => {
-      const first = updatePullRequestTabStatus({}, "pull-request:1", status(false));
-      const second = updatePullRequestTabStatus(first, "pull-request:1", status(false));
-      expect(second).toBe(first);
-    });
-
-    it("replaces the entry when the draft flag changes", () => {
-      const first = updatePullRequestTabStatus({}, "pull-request:1", status(false));
-      const second = updatePullRequestTabStatus(first, "pull-request:1", status(true));
-      expect(second).not.toBe(first);
-      expect(second["pull-request:1"]).toEqual(status(true));
-    });
   });
 
   it("tracks one surface per terminal session", () => {
@@ -694,5 +710,170 @@ describe("rightPanelStore", () => {
         (surface) => surface.id,
       ),
     ).toEqual(["terminal:term-1", "browser:tab-b", "browser:tab-c"]);
+  });
+
+  describe("side chat (thread surfaces)", () => {
+    it("opens a peer thread as an activated, visible thread surface", () => {
+      useRightPanelStore.getState().openBrowser(refA, "tab-a");
+
+      useRightPanelStore.getState().openThreadSurface(refA, "thread-C");
+
+      expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
+        isOpen: true,
+        activeSurfaceId: "thread:thread-C",
+        surfaces: [
+          { id: "browser:tab-a", kind: "preview", resourceId: "tab-a" },
+          { id: "thread:thread-C", kind: "thread", threadId: "thread-C", environmentId: "env-1" },
+        ],
+      });
+      expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refA)).toBe(
+        "thread",
+      );
+      expect(
+        selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA)?.kind,
+      ).toBe("thread");
+    });
+
+    it("does not duplicate a thread surface that is already open", () => {
+      useRightPanelStore.getState().openThreadSurface(refA, "thread-C");
+      useRightPanelStore.getState().openThreadSurface(refA, "thread-C");
+
+      const state = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA);
+      expect(state.surfaces).toHaveLength(1);
+      expect(state.activeSurfaceId).toBe("thread:thread-C");
+    });
+
+    it("keeps several peer threads open as coexisting tabs", () => {
+      useRightPanelStore.getState().openThreadSurface(refA, "thread-C");
+      useRightPanelStore.getState().openThreadSurface(refA, "thread-D");
+
+      const state = selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA);
+      expect(state.surfaces.map((surface) => surface.id)).toEqual([
+        "thread:thread-C",
+        "thread:thread-D",
+      ]);
+      expect(state.activeSurfaceId).toBe("thread:thread-D");
+    });
+
+    it("is a no-op when a thread is opened as its own side chat", () => {
+      useRightPanelStore.getState().openThreadSurface(refA, "thread-A");
+
+      expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
+        isOpen: false,
+        activeSurfaceId: null,
+        surfaces: [],
+      });
+    });
+
+    it("scopes side chats per thread: opening on one thread never touches another", () => {
+      useRightPanelStore.getState().openThreadSurface(refA, "thread-C");
+
+      expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refB)).toEqual({
+        isOpen: false,
+        activeSurfaceId: null,
+        surfaces: [],
+      });
+      const active = selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA);
+      expect(active?.kind === "thread" ? active.threadId : null).toBe("thread-C");
+    });
+
+    it("closing a thread surface falls back to the neighboring surface like any tab", () => {
+      useRightPanelStore.getState().openBrowser(refA, "tab-a");
+      useRightPanelStore.getState().openThreadSurface(refA, "thread-C");
+      useRightPanelStore.getState().openThreadSurface(refA, "thread-D");
+
+      useRightPanelStore.getState().closeSurface(refA, "thread:thread-C");
+
+      expect(
+        selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA).surfaces.map(
+          (surface) => surface.id,
+        ),
+      ).toEqual(["browser:tab-a", "thread:thread-D"]);
+      // The active surface survived the close; the closed tab did not swallow activation.
+      expect(
+        selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)
+          .activeSurfaceId,
+      ).toBe("thread:thread-D");
+    });
+
+    it("migration keeps valid thread surfaces and drops malformed ones", () => {
+      expect(
+        migratePersistedRightPanelState({
+          byThreadKey: {
+            "env-1:thread-A": {
+              isOpen: true,
+              activeSurfaceId: "thread:thread-C",
+              surfaces: [
+                {
+                  id: "thread:thread-C",
+                  kind: "thread",
+                  threadId: "thread-C",
+                  environmentId: "env-1",
+                },
+                {
+                  id: "thread:thread-X",
+                  kind: "thread",
+                  threadId: "thread-Y",
+                  environmentId: "env-1",
+                },
+                { id: "thread:thread-Z", kind: "thread", environmentId: "env-1" },
+              ],
+            },
+          },
+        }),
+      ).toEqual({
+        byThreadKey: {
+          "env-1:thread-A": {
+            isOpen: true,
+            activeSurfaceId: "thread:thread-C",
+            surfaces: [
+              {
+                id: "thread:thread-C",
+                kind: "thread",
+                threadId: "thread-C",
+                environmentId: "env-1",
+              },
+            ],
+          },
+        },
+      });
+    });
+
+    it("migration falls back to a surviving surface when the active thread surface is malformed", () => {
+      expect(
+        migratePersistedRightPanelState({
+          byThreadKey: {
+            "env-1:thread-A": {
+              isOpen: true,
+              activeSurfaceId: "thread:thread-C",
+              surfaces: [
+                { id: "thread:thread-C", kind: "thread", environmentId: "env-1" },
+                {
+                  id: "thread:thread-D",
+                  kind: "thread",
+                  threadId: "thread-D",
+                  environmentId: "env-1",
+                },
+              ],
+            },
+          },
+        }),
+      ).toEqual({
+        byThreadKey: {
+          "env-1:thread-A": {
+            isOpen: true,
+            activeSurfaceId: "thread:thread-D",
+            surfaces: [
+              {
+                id: "thread:thread-D",
+                kind: "thread",
+                threadId: "thread-D",
+                environmentId: "env-1",
+              },
+            ],
+          },
+        },
+      });
+    });
   });
 });

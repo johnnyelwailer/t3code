@@ -47,7 +47,6 @@ function Staged({
     rewrite.open();
     for (const note of notes) rewrite.submitComment(note);
     // Runs once, on mount, to reach the demonstrated state immediately.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return <WorkItemAgentRewriteControl {...props} />;

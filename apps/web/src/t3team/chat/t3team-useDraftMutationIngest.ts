@@ -18,7 +18,9 @@
 import { useEffect } from "react";
 import type { EnvironmentId, OrchestrationMessage, ThreadId } from "@t3tools/contracts";
 
-import { useThreadMessages } from "~/state/entities";
+import { useThreadDetail } from "~/state/entities";
+
+const EMPTY_MESSAGES: ReadonlyArray<OrchestrationMessage> = [];
 import { normalizeT3TeamDraftMutation } from "~/t3team/t3team-draftMutationModel";
 import { useT3TeamDraftMutationStore } from "~/t3team/t3team-draftMutationStore";
 import type { T3TeamDraftMutation } from "~/t3team/t3team-draftMutationTypes";
@@ -75,9 +77,10 @@ export function useT3TeamDraftMutationIngest(input: {
   readonly threadId: string;
 }): void {
   const { environmentId, threadId } = input;
-  const messages = useThreadMessages(
+  const thread = useThreadDetail(
     environmentId === null ? null : { environmentId, threadId: threadId as ThreadId },
   );
+  const messages = thread?.messages ?? EMPTY_MESSAGES;
 
   useEffect(() => {
     const { drafts, upsertDrafts } = useT3TeamDraftMutationStore.getState();

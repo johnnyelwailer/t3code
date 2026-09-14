@@ -6,6 +6,7 @@ import { createDurableRuntime } from "./durableRuntime.ts";
 import type { JournalEntry } from "./journalReader.ts";
 import type { JournalSink } from "./journalStore.ts";
 import { type ReplyResolver, WorkflowSuspended } from "./handles.ts";
+import { WorkflowAborted } from "./errors.ts";
 
 interface MemoryJournal {
   readonly entries: JournalEntry[];
@@ -144,5 +145,70 @@ describe("@runbook/core durable runtime", () => {
     });
     expect(replay.currentSeq()).toBe(5);
     expect(replayJournal.entries).toEqual([]);
+  });
+
+  it("throws WorkflowAborted on the next live primitive call once the abort signal fires", async () => {
+    const journal = makeMemoryJournal();
+    const source = {
+      now: () => 1_700_000_000_000,
+      random: () => 0.25,
+      uuid: () => "uuid-1",
+    };
+    const controller = new AbortController();
+    const runtime = createDurableRuntime({
+      journal: new Map(),
+      writer: journal.sink,
+      source,
+      abortSignal: controller.signal,
+    });
+    await runtime.callPrimitive({
+      kind: "tool",
+      refId: "t",
+      args: null,
+      exec: async () => "one",
+    });
+    controller.abort();
+    await expect(
+      runtime.callPrimitive({
+        kind: "tool",
+        refId: "t",
+        args: null,
+        exec: async () => "two",
+      }),
+    ).rejects.toThrow(WorkflowAborted);
+    // The aborted call journaled nothing — the journal stays a clean prefix.
+    expect(journal.entries.map((entry) => entry.seq)).toEqual([1]);
+  });
+
+  it("pre-aborted handle send fires nothing and consumes no seq (fire=0, seq=0)", async () => {
+    const journal = makeMemoryJournal();
+    const source = {
+      now: () => 1_700_000_000_000,
+      random: () => 0.25,
+      uuid: () => "uuid-1",
+    };
+    const controller = new AbortController();
+    controller.abort(); // pre-aborted: the signal is dead before the run starts
+    const runtime = createDurableRuntime({
+      journal: new Map(),
+      writer: journal.sink,
+      source,
+      abortSignal: controller.signal,
+    });
+    let fired = 0;
+    await expect(
+      runtime.handles.send({
+        kind: "custom.ask",
+        refId: "ask",
+        args: { prompt: "continue" },
+        fire: async () => {
+          fired += 1;
+        },
+      }),
+    ).rejects.toThrow(WorkflowAborted);
+    // No fire, no journaled seq, no in-memory seq consumed — the run leaves no trace.
+    expect(fired).toBe(0);
+    expect(journal.entries).toEqual([]);
+    expect(runtime.currentSeq()).toBe(0);
   });
 });

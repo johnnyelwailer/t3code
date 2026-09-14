@@ -9,7 +9,10 @@
  *     may still narrate, call tools, and answer afterwards (see t3team-workflowTurnResolution.ts).
  *   • the turn-end signal is a `thread.session-set` with no active turn; it ARMS the settle.
  *   • a `user.input` ask settles on the user's reply message, as it always has.
- *   • a settlement with no substantive text FAILS the run instead of resolving with "".
+ *   • a settlement with no substantive text: a LIVE (black-boxed) ask settles with "" so the
+ *     composition's own emptiness check fires; a durable ask whose turn was INTERRUPTED by a
+ *     host restart gets its bounded re-drive (t3team-workflowEngineTurnRetry.ts) instead of a
+ *     terminal failure; a durable ask set live this uptime fails the run.
  */
 
 import type { OrchestrationCommand, OrchestrationEvent } from "@t3tools/contracts";
@@ -26,28 +29,31 @@ import type {
   T3TeamWorkflowEngineRegistryShape,
   WorkflowPendingAsk,
 } from "./t3team-workflowEngineRegistry.ts";
+import { settleUnansweredTurn } from "./t3team-workflowEngineReactorUnanswered.ts";
+import type { InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
 import type { WorkflowTurnTracker } from "./t3team-workflowTurnResolution.ts";
 
 export type ThreadMessageSentEvent = Extract<OrchestrationEvent, { type: "thread.message-sent" }>;
 export type ThreadSessionSetEvent = Extract<OrchestrationEvent, { type: "thread.session-set" }>;
 
-/** One unit of serialized reactor work: an event to fold in, or a due turn settlement. */
+/** One unit of serialized reactor work: an event to fold in, a due turn settlement, or a due
+ * re-drive of an interrupted step. */
 export type WorkflowReactorTask =
   | { readonly kind: "event"; readonly event: ThreadMessageSentEvent | ThreadSessionSetEvent }
-  | { readonly kind: "settle"; readonly threadId: string; readonly correlationId: string };
+  | { readonly kind: "settle"; readonly threadId: string; readonly correlationId: string }
+  | { readonly kind: "turn-retry"; readonly threadId: string; readonly correlationId: string };
 
 export interface WorkflowReactorTaskDeps {
   readonly registry: T3TeamWorkflowEngineRegistryShape;
   readonly tracker: WorkflowTurnTracker;
   /** Queue the settlement for a turn that just ended, after the straggler grace window. */
   readonly armSettle: (threadId: string, correlationId: string) => Effect.Effect<void>;
+  /** The bounded re-drive of an interrupted step (see t3team-workflowEngineTurnRetry.ts). */
+  readonly turnRetry: InterruptedTurnRetry;
   /** Dispatch a command — used ONLY to attribute a step's answer to the step (see
    * t3team-workflowAnswerAttribution.ts). Absent leaves answers unattributed. */
   readonly dispatch?: (command: OrchestrationCommand) => Effect.Effect<unknown>;
 }
-
-const NO_TEXT_MESSAGE =
-  "The agent turn ended without any reply text, so this step has no answer to return.";
 
 export function createWorkflowReactorTaskHandler(
   deps: WorkflowReactorTaskDeps,
@@ -150,9 +156,19 @@ export function createWorkflowReactorTaskHandler(
       const { threadId, session } = event.payload;
       const pending = registry.peekPending(threadId);
       if (pending?.kind !== "thread.turn") return;
+      if (pending.redriveArmed === true) {
+        // A re-drive is armed but its turn has not started: idle/dead writes are the previous
+        // turn's tail (or the session-level retry's status note), not a verdict on this step.
+        // The first write with a LIVE turn is the re-driven turn starting — resume judging.
+        const turnStarted = session.activeTurnId !== null && session.status !== "error";
+        if (!turnStarted) return;
+        const { redriveArmed: _armed, ...judging } = pending;
+        registry.setPending(threadId, judging);
+      }
       const note = tracker.noteSession(threadId, pending.correlationId, {
         status: session.status,
         activeTurnId: session.activeTurnId,
+        lastError: session.lastError,
       });
       if (note === "ended") yield* deps.armSettle(threadId, pending.correlationId);
     });
@@ -168,26 +184,17 @@ export function createWorkflowReactorTaskHandler(
         yield* settle(pending, settlement.text);
         return;
       }
-      yield* Effect.logWarning("t3team workflow agent turn produced no reply text", {
-        threadId: task.threadId,
-        correlationId: task.correlationId,
-      });
-      // A live (black-boxed) ask has no failure channel of its own: settle it with "" so the
-      // composition's own emptiness check fires. A durable ask fails the run.
-      if (pending.resolveLive !== undefined) {
-        yield* Effect.promise(() => pending.resolveLive!(""));
-        return;
-      }
-      const run = registry.getRun(pending.runId);
-      if (run === undefined) return;
-      const error = new Error(NO_TEXT_MESSAGE);
-      yield* Effect.promise(() =>
-        run.fail === undefined ? run.resume(pending.correlationId, "") : run.fail(error),
+      // No answer: the turn died or said nothing — see t3team-workflowEngineReactorUnanswered.ts
+      // for which of those re-drives the step, fails the run, or settles a composition ask.
+      yield* settleUnansweredTurn(
+        { registry, turnRetry: deps.turnRetry },
+        { threadId: task.threadId, pending, settlement },
       );
     });
 
   return (task) => {
     if (task.kind === "settle") return processSettle(task);
+    if (task.kind === "turn-retry") return deps.turnRetry.processTurnRetry(task);
     return task.event.type === "thread.message-sent"
       ? processMessageSent(task.event)
       : processSessionSet(task.event);

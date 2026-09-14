@@ -3,22 +3,15 @@
 /**
  * Live wiring for the thread silence watchdog (GHE #63): the
  * `T3TeamThreadSilenceWatchReactorLive` layer that (1) indexes open watches
- * from the persisted `t3team.thread_silence.watch.registered` / `.cancelled`
- * activities on the watching threads, (2) resolves a watch when the watched
- * target leaves a terminal session state or is deleted (the complementary
- * thread-stopped trigger), and (3) runs the sweeper that emits the
- * `thread.silent` notification when a target has been silent for the
- * subscription's timeout.
- *
- * Last-activity tracking lives in ThreadSilenceWatchdogService (fed from the
- * per-thread runtime event bus by runtime ingestion); the emission and
- * registration side-effects live in t3team-threadSilenceWatchEmit.ts; this
- * module owns the event routing and the layer.
- *
- * Rehydration: the pending index is rebuilt by replaying persisted events
- * (see t3team-threadSilenceWatchRehydrate.ts); a rehydrated watch whose
- * target is already terminal resolves immediately, and a target with no live
- * activity state is seeded from the shell's persisted `updatedAt`.
+ * from persisted `watch.registered` / `.cancelled` activities, (2) resolves a
+ * watch when the target leaves a terminal state or is deleted - deduped by the
+ * shared terminal-notify ledger (GHE #157), which re-arms on target resume -
+ * and (3) runs the sweeper that emits `thread.silent` when a target has been
+ * silent for its timeout. Last-activity tracking lives in
+ * ThreadSilenceWatchdogService; emission/registration side-effects live in
+ * t3team-threadSilenceWatchEmit.ts; this module owns event routing + the
+ * layer. Rehydration rebuilds the index from persisted events and folds the
+ * ledger's markers + resumes.
  *
  * @module t3team-threadSilenceWatchReactor
  */
@@ -41,7 +34,11 @@ import {
 } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ThreadSilenceWatchdogService } from "./orchestration/ThreadSilenceWatchdog.ts";
 import { sessionStatusToWaitOutcome } from "./t3team-childWait.ts";
-import { parseThreadSilenceWatchEvent } from "./t3team-threadSilenceWatch.ts";
+import {
+  parseThreadSilenceWatchEvent,
+  SILENCE_WATCH_TERMINAL_NOTIFIED_KIND,
+} from "./t3team-threadSilenceWatch.ts";
+import { makeTerminalNotifyLedger } from "./t3team-terminalNotifyDedup.ts";
 import {
   makeThreadSilenceWatchEmitter,
   type ThreadSilenceWatchEmitter,
@@ -88,10 +85,20 @@ export const makeThreadSilenceWatchReactor = (
   deps: ThreadSilenceWatchReactorDeps,
 ): ThreadSilenceWatchReactor => {
   const index = makeThreadSilenceWatchIndex();
+  // Shared terminal-notify dedup ledger (GHE #157): the watcher reports a
+  // watch's terminal stop once per epoch; the marker is durable on the watcher
+  // and rehydrated at boot. The observed (resume) thread is the watch target.
+  const dedup = makeTerminalNotifyLedger({
+    engine: deps.engine,
+    markerKind: SILENCE_WATCH_TERMINAL_NOTIFIED_KIND,
+    markerCommandPrefix: "server:t3team:silence-watch-terminal-marker",
+    markerSummary: "Watched thread terminal state reported",
+  });
   const emitter: ThreadSilenceWatchEmitter = makeThreadSilenceWatchEmitter({
     engine: deps.engine,
     query: deps.query,
     index,
+    dedup,
     getActivityState: (threadId) => deps.watchdog.getActivityState(threadId),
     seedActivity: deps.watchdog.seedActivity,
   });
@@ -100,7 +107,9 @@ export const makeThreadSilenceWatchReactor = (
     switch (event.type) {
       case "thread.activity-appended": {
         const action = parseThreadSilenceWatchEvent(event);
-        if (action?.type === "registered") return emitter.onRegistered(action.record);
+        if (action?.type === "registered") {
+          return emitter.onRegistered(action.record, event.sequence);
+        }
         if (action?.type === "cancelled") {
           for (const record of index.forTarget(action.targetThreadId)) {
             if (record.watcherThreadId === action.watcherThreadId) {
@@ -112,19 +121,20 @@ export const makeThreadSilenceWatchReactor = (
         return Effect.void;
       }
       case "thread.session-set": {
-        const session = (
-          event.payload as {
-            readonly session?: { readonly status?: string } | null;
-          }
-        ).session;
-        const status = session?.status;
-        if (status === undefined || sessionStatusToWaitOutcome(status) === null) {
+        const payload = event.payload as {
+          readonly threadId: string;
+          readonly session?: { readonly status?: string } | null;
+        };
+        const status = payload.session?.status;
+        if (status === undefined) return Effect.void;
+        const threadId = payload.threadId;
+        if (status === "running" || status === "starting") {
+          // A resumed target starts a fresh epoch: its stopped watches re-notify.
+          dedup.noteResume(threadId, event.sequence);
           return Effect.void;
         }
-        return emitter.resolveStopped(
-          (event.payload as { readonly threadId: string }).threadId,
-          status,
-        );
+        if (sessionStatusToWaitOutcome(status) === null) return Effect.void;
+        return emitter.resolveStopped(threadId, status, event.sequence);
       }
       case "thread.deleted": {
         const threadId = (event.payload as { readonly threadId: string }).threadId;
@@ -135,7 +145,7 @@ export const makeThreadSilenceWatchReactor = (
             index.remove(record.watchId);
           }
         }
-        return emitter.resolveStopped(threadId, "deleted");
+        return emitter.resolveStopped(threadId, "deleted", event.sequence);
       }
       default:
         return Effect.void;
@@ -175,8 +185,9 @@ export const makeThreadSilenceWatchReactor = (
       const replayed: ReadonlyArray<OrchestrationEvent> = yield* Stream.runCollect(
         deps.engine.readEvents(0, Number.MAX_SAFE_INTEGER),
       ).pipe(Effect.map((chunk) => Array.from(chunk)));
+      dedup.rehydrate(replayed);
       for (const record of collectPendingThreadSilenceWatches(replayed)) {
-        yield* emitter.onRegistered(record);
+        yield* emitter.onRegistered(record, 0);
       }
     }),
     stop: () => sweeper.stop(),

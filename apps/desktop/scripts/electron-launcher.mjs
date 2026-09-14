@@ -176,6 +176,7 @@ function registerMacLauncherBundle(appBundlePath) {
   }
 }
 
+// Bundle-internal paths are macOS paths whatever host builds them.
 export function resolveMacLauncherIconPaths(runtimeDir, development = isDevelopment) {
   // A distribution's desktop icon (GHE #29): the dev-runner exports
   // T3CODE_DESKTOP_ICON_PNG when T3CODE_DISTRIBUTION names a distribution that
@@ -186,7 +187,10 @@ export function resolveMacLauncherIconPaths(runtimeDir, development = isDevelopm
     distributionIconPng || (development ? developmentMacIconPngPath : productionMacIconPngPath);
   return {
     sourceIconPath,
-    generatedIconPath: NodePath.join(runtimeDir, development ? "icon-dev.icns" : "icon-prod.icns"),
+    generatedIconPath: NodePath.posix.join(
+      runtimeDir,
+      development ? "icon-dev.icns" : "icon-prod.icns",
+    ),
   };
 }
 
@@ -329,12 +333,12 @@ function copyAppBundle(sourceAppBundlePath, targetAppBundlePath) {
 }
 
 export function resolveMacLauncherPaths(appBundlePath, displayName = APP_DISPLAY_NAME) {
-  const executableDir = NodePath.join(appBundlePath, "Contents", "MacOS");
+  const executableDir = NodePath.posix.join(appBundlePath, "Contents", "MacOS");
   const launcherExecutableName = `${displayName} Launcher`;
   return {
     launcherExecutableName,
-    launcherBinaryPath: NodePath.join(executableDir, launcherExecutableName),
-    runtimeElectronBinaryPath: NodePath.join(executableDir, "Electron"),
+    launcherBinaryPath: NodePath.posix.join(executableDir, launcherExecutableName),
+    runtimeElectronBinaryPath: NodePath.posix.join(executableDir, "Electron"),
   };
 }
 

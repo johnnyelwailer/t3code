@@ -42,7 +42,8 @@ import {
   type ProjectionSnapshotQueryShape,
 } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 
-const EVAL_REPO_FULL_NAME = "eval-owner/eval-repo";
+export const EVAL_REPO_FULL_NAME = "eval-owner/eval-repo";
+export const META_REPO_FULL_NAME = "eval-owner/eval-monorepo";
 
 type StoredThread = {
   readonly id: ThreadId;
@@ -52,10 +53,11 @@ type StoredThread = {
   readonly worktreePath: string | null;
 };
 
-const evalRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-start-child-eval-"));
-const projectWorkspaceRoot = NodePath.join(evalRoot, "project-workspace");
-const linkedRepoPath = NodePath.join(evalRoot, "linked-repo");
-const localWorkspaceRoot = NodePath.join(evalRoot, "local-workspace");
+export const evalRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-start-child-eval-"));
+export const projectWorkspaceRoot = NodePath.join(evalRoot, "project-workspace");
+export const linkedRepoPath = NodePath.join(evalRoot, "linked-repo");
+export const localWorkspaceRoot = NodePath.join(evalRoot, "local-workspace");
+export const metaWorkspaceRoot = NodePath.join(evalRoot, "monorepo-workspace");
 let evalHarnessReady = false;
 
 function runGit(cwd: string, args: ReadonlyArray<string>) {
@@ -104,12 +106,43 @@ function initLocalWorkspace() {
   initGitRepo(localWorkspaceRoot);
 }
 
+/** An adopted monorepo-as-meta-repo: the workspace root is a real git repository whose
+ * reference manifest carries a `metaRepository` entry alongside linked repositories. */
+function initMetaWorkspace() {
+  initGitRepo(metaWorkspaceRoot);
+
+  const manifestDir = NodePath.join(metaWorkspaceRoot, HIDDEN_T3TEAM_DIR, REFERENCES_DIR_NAME);
+  NodeFS.mkdirSync(manifestDir, { recursive: true });
+  NodeFS.writeFileSync(
+    NodePath.join(manifestDir, MANIFEST_FILE_NAME),
+    JSON.stringify({
+      workspaceRoot: metaWorkspaceRoot,
+      referencesRoot: manifestDir,
+      workspaceRepositoryInitialized: false,
+      metaRepository: {
+        url: `https://github.com/${META_REPO_FULL_NAME}`,
+        localPath: metaWorkspaceRoot,
+        status: "adopted",
+      },
+      linkedRepositories: [
+        {
+          url: `https://github.com/${EVAL_REPO_FULL_NAME}`,
+          localPath: linkedRepoPath,
+          status: "cloned",
+        },
+      ],
+    }),
+    "utf8",
+  );
+}
+
 function ensureEvalHarnessReady() {
   if (evalHarnessReady) {
     return;
   }
   initLinkedRepo();
   initLocalWorkspace();
+  initMetaWorkspace();
   evalHarnessReady = true;
 }
 
@@ -124,21 +157,28 @@ type EvalVariant = {
   readonly projectTitle: string;
 };
 
-const linkedVariant: EvalVariant = {
+export const linkedVariant: EvalVariant = {
   projectId: ProjectId.make("project-eval"),
   parentThreadId: ThreadId.make("parent-thread-eval"),
   workspaceRoot: projectWorkspaceRoot,
   projectTitle: "Eval Project",
 };
 
-const localVariant: EvalVariant = {
+export const localVariant: EvalVariant = {
   projectId: ProjectId.make("project-local-eval"),
   parentThreadId: ThreadId.make("parent-thread-local-eval"),
   workspaceRoot: localWorkspaceRoot,
   projectTitle: "Eval Local Project",
 };
 
-function createEvalHarness(variant: EvalVariant = linkedVariant) {
+export const metaVariant: EvalVariant = {
+  projectId: ProjectId.make("project-meta-eval"),
+  parentThreadId: ThreadId.make("parent-thread-meta-eval"),
+  workspaceRoot: metaWorkspaceRoot,
+  projectTitle: "Eval Monorepo Project",
+};
+
+export function createEvalHarness(variant: EvalVariant = linkedVariant) {
   ensureEvalHarnessReady();
   const threads = new Map<ThreadId, StoredThread>([
     [
@@ -156,7 +196,10 @@ function createEvalHarness(variant: EvalVariant = linkedVariant) {
 
   const orchestrationMock: OrchestrationEngineShape = {
     readEvents: () => Stream.empty,
+    readThreadEvents: () => Stream.empty,
+    getThreadReplayStats: () => Effect.die("unused"),
     streamDomainEvents: Stream.empty,
+    subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
     latestSequence: Effect.sync(() => sequence),
     dispatch: (command) =>
       Effect.sync(() => {
@@ -186,10 +229,14 @@ function createEvalHarness(variant: EvalVariant = linkedVariant) {
 
   const projectionQueryMock: ProjectionSnapshotQueryShape = {
     getCommandReadModel: () => Effect.die("unused"),
+    getUserInputActivity: () => Effect.die("unused"),
+    getImportedAgentSessionSources: () => Effect.succeed([]),
+    getThreadRuntimeContext: () => Effect.succeed(Option.none()),
     getSnapshot: () => Effect.die("unused"),
     getShellSnapshot: () => Effect.die("unused"),
     getArchivedShellSnapshot: () => Effect.die("unused"),
     getSnapshotSequence: () => Effect.die("unused"),
+    getEventReplayStats: () => Effect.die("unused"),
     getCounts: () => Effect.die("unused"),
     getActiveProjectByWorkspaceRoot: () => Effect.die("unused"),
     getProjectShellById: () =>
@@ -207,6 +254,7 @@ function createEvalHarness(variant: EvalVariant = linkedVariant) {
       ),
     getFirstActiveThreadIdByProjectId: () => Effect.die("unused"),
     listChildThreadIdsByParent: () => Effect.die("unused"),
+    listParentChildRelations: () => Effect.die("unused"),
     getThreadCheckpointContext: () => Effect.die("unused"),
     getThreadDetailSnapshot: () => Effect.die("unused"),
     getFullThreadDiffContext: () => Effect.die("unused"),
@@ -245,6 +293,7 @@ function createEvalHarness(variant: EvalVariant = linkedVariant) {
       );
     },
     threadExists: () => Effect.die("unused"),
+    hasPendingTurnStart: () => Effect.die("unused"),
     searchThreads: () => Effect.succeed({ matches: [] }),
   };
 
@@ -276,6 +325,13 @@ function createEvalHarness(variant: EvalVariant = linkedVariant) {
           resolve: () =>
             Effect.succeed({
               getDefaultBranch: () => Effect.succeed("main"),
+            }),
+          resolveHandle: () =>
+            Effect.succeed({
+              provider: {
+                getDefaultBranch: () => Effect.succeed("main"),
+              },
+              context: null,
             }),
         } as unknown as SourceControlProviderRegistry["Service"]),
         Layer.succeed(ProjectSetupScriptRunner, {
@@ -509,131 +565,6 @@ describe("t3team.thread.start_child isolation integration eval", () => {
     expect(ownWorktreeWithoutRepo.structuredContent).toEqual(
       expect.objectContaining({
         error: expect.stringContaining("pass 'repo_full_name'"),
-      }),
-    );
-  });
-
-  it("scenario D: local workspace isolates in a worktree of the local repository", async () => {
-    const harness = createEvalHarness(localVariant);
-    const { startResult, childView } = await harness.runBroker(
-      Effect.gen(function* () {
-        const broker = yield* T3TeamToolBroker;
-        const binding = yield* broker.bindSession({
-          threadId: localVariant.parentThreadId,
-          toolContext: harness.toolContext,
-        });
-        const startResult = yield* binding!.callTool({
-          server: "t3team",
-          tool: "t3team.thread.start_child",
-          arguments: {
-            name: "Fix local checkout",
-            isolation: "own-worktree",
-            kickoff_prompt: "Fix the checkout bug in this local repository.",
-          },
-        });
-        const structured = startResult.structuredContent as { project_session_id: string };
-        const childBinding = yield* broker.bindSession({
-          threadId: ThreadId.make(structured.project_session_id),
-        });
-        const childView = yield* childBinding!.callTool({
-          server: "t3team",
-          tool: "t3team.view.read",
-        });
-        return { startResult, childView };
-      }),
-    );
-
-    const structured = startResult.structuredContent as {
-      isolation: string;
-      execution_scope: string;
-      project_session_id: string;
-      worktree_path: string;
-      branch: string;
-      repo_full_name?: string;
-    };
-    expect(startResult.isError).toBeUndefined();
-    expect(structured.isolation).toBe("own-worktree");
-    expect(structured.execution_scope).toBe("repository");
-    expect(structured.repo_full_name).toBeUndefined();
-    expect(NodeFS.existsSync(structured.worktree_path)).toBe(true);
-    expect(
-      NodeChildProcess.spawnSync("git", ["rev-parse", "--is-inside-work-tree"], {
-        cwd: structured.worktree_path,
-        encoding: "utf8",
-      }).stdout.trim(),
-    ).toBe("true");
-    // The worktree lives inside the local repository and .t3team/ is gitignored.
-    expect(structured.worktree_path.startsWith(localWorkspaceRoot)).toBe(true);
-    expect(structured.worktree_path).toContain("child-session-worktrees");
-    const gitignore = NodeFS.readFileSync(NodePath.join(localWorkspaceRoot, ".gitignore"), "utf8");
-    expect(gitignore).toContain(".t3team/");
-
-    const view = childView.structuredContent as {
-      thread: {
-        executionScope: string;
-        workspace: { worktreePath: string; currentWorkspaceRoot: string; branch: string };
-      };
-    };
-    expect(view.thread.executionScope).toBe("repository");
-    expect(view.thread.workspace.worktreePath).toBe(structured.worktree_path);
-    expect(view.thread.workspace.currentWorkspaceRoot).toBe(structured.worktree_path);
-    expect(view.thread.workspace.branch).toBe(structured.branch);
-  });
-
-  it("scenario E: repo_full_name in a local workspace fails with a clear error", async () => {
-    const harness = createEvalHarness(localVariant);
-    const result = await harness.runBroker(
-      Effect.gen(function* () {
-        const broker = yield* T3TeamToolBroker;
-        const binding = yield* broker.bindSession({
-          threadId: localVariant.parentThreadId,
-          toolContext: harness.toolContext,
-        });
-        return yield* binding!.callTool({
-          server: "t3team",
-          tool: "t3team.thread.start_child",
-          arguments: {
-            name: "Wrong repo child",
-            isolation: "own-worktree",
-            repo_full_name: EVAL_REPO_FULL_NAME,
-          },
-        });
-      }),
-    );
-    expect(result.isError).toBe(true);
-    expect(result.structuredContent).toEqual(
-      expect.objectContaining({
-        error: expect.stringContaining("no linked repositories"),
-      }),
-    );
-  });
-
-  it("scenario F: the deprecated execution_scope alias still works and notes the deprecation", async () => {
-    const harness = createEvalHarness();
-    const result = await harness.runBroker(
-      Effect.gen(function* () {
-        const broker = yield* T3TeamToolBroker;
-        const binding = yield* broker.bindSession({
-          threadId: linkedVariant.parentThreadId,
-          toolContext: harness.toolContext,
-        });
-        return yield* binding!.callTool({
-          server: "t3team",
-          tool: "t3team.thread.start_child",
-          arguments: {
-            name: "Legacy planning child",
-            execution_scope: "metarepo",
-          },
-        });
-      }),
-    );
-    expect(result.isError).toBeUndefined();
-    expect(result.structuredContent).toEqual(
-      expect.objectContaining({
-        ok: true,
-        isolation: "shared",
-        execution_scope: "metarepo",
-        deprecation_note: expect.stringContaining("'isolation'"),
       }),
     );
   });

@@ -15,6 +15,7 @@ import { useHomeProjectChat } from "./t3team-AppMainContentShell";
 import { resolveWorkHomeProject } from "~/t3team/t3team-appMainContentResolution";
 import { resolveT3TeamSetupSurfaceReason } from "~/t3team/t3team-setupSurfaceReason";
 import { useAppMainContentThreadResolution } from "~/t3team/t3team-useAppMainContentThreadResolution";
+import { useLocalProviderSessionThreadFilter } from "~/t3team/hooks/t3team-useLocalProviderSessionThreadFilter";
 
 type MainContentProps = {
   view: ViewState | null;
@@ -69,6 +70,12 @@ export function AppMainContent({
   onThreadDisplayModeChange,
 }: MainContentProps) {
   const backendState = useBackendState();
+  // Display-only hiding of adopted local provider sessions (the "Local provider sessions"
+  // toggle). Thread resolution below intentionally keeps the full getThreadsForProject, so
+  // an external session that is open while the toggle turns off stays open — it just
+  // leaves the lists.
+  const { filterForProject: visibleThreadsForProject } =
+    useLocalProviderSessionThreadFilter(getThreadsForProject);
   const { homeChatProject, homeChatThreadId } = useHomeProjectChat({
     projects,
     getThreadsForProject,
@@ -85,7 +92,9 @@ export function AppMainContent({
     showInitialSetup,
     hasRouteView: Boolean(view),
   });
-  const homeChatProjectThreads = homeChatProject ? getThreadsForProject(homeChatProject.id) : [];
+  const homeChatProjectThreads = homeChatProject
+    ? visibleThreadsForProject(homeChatProject.id)
+    : [];
   const homeBrowser = (
     <AppMainContentHomeBrowser
       onCreate={onCreate}
@@ -105,15 +114,14 @@ export function AppMainContent({
     />
   );
 
-  const { threadProject, resolvedThread, embeddedThread, viewProject } =
-    useAppMainContentThreadResolution({
-      view,
-      allProjects,
-      homeProject,
-      homeChatProject,
-      homeChatThreadId,
-      getThreadsForProject,
-    });
+  const { threadProject, resolvedThread, viewProject } = useAppMainContentThreadResolution({
+    view,
+    allProjects,
+    homeProject,
+    homeChatProject,
+    homeChatThreadId,
+    getThreadsForProject,
+  });
 
   if (!view) {
     if (homeProject) {
@@ -121,7 +129,7 @@ export function AppMainContent({
         <AppDashboardPane
           activeDashboardMode={activeDashboardMode}
           project={homeProject}
-          projectThreads={getThreadsForProject(homeProject.id)}
+          projectThreads={visibleThreadsForProject(homeProject.id)}
           activeThread={null}
           activeThreadId={null}
           providers={backendState.providers}
@@ -157,7 +165,6 @@ export function AppMainContent({
         view={view}
         threadProject={threadProject}
         resolvedThread={resolvedThread}
-        embeddedThread={embeddedThread}
         onOpenTicket={onOpenTicket}
         onOpenEmbeddedThread={onOpenEmbeddedThread}
         onCloseEmbeddedThread={() =>
@@ -178,7 +185,7 @@ export function AppMainContent({
       <AppDashboardPane
         activeDashboardMode={activeDashboardMode}
         project={project}
-        projectThreads={getThreadsForProject(project.id)}
+        projectThreads={visibleThreadsForProject(project.id)}
         activeThread={resolvedThread}
         activeThreadId={view.embeddedThreadId ?? null}
         providers={backendState.providers}

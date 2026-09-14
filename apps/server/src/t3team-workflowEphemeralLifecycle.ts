@@ -40,6 +40,13 @@ export function buildPreparedWorkflowLifecycle(input: {
         ...(run.hostToolGrant === undefined ? {} : { hostToolGrant: run.hostToolGrant }),
         nowIso: nowIso(),
       }),
+      // The launch contract (migration 051), persisted here rather than inside
+      // `buildRunningWorkflowRunRow` for the same reason `status` is: this is the ONE funnel both
+      // launch surfaces drive through, so a field only the launch input knows about is set on the
+      // row here instead of widening the shared row builder's signature. Absent (a recipe launch
+      // with no intent) leaves the column NULL — the domain field is optional, not defaulted, so
+      // "never given one" and "given an empty one" stay distinguishable.
+      ...(run.intent === undefined ? {} : { intent: run.intent }),
       ...(run.origin === "ephemeral" ? { status: "queued" as const } : {}),
     },
     nowIso,

@@ -151,7 +151,7 @@ describe("buildBranchNamePrompt", () => {
 });
 
 describe("buildThreadTitlePrompt", () => {
-  it("includes the user message in the prompt", () => {
+  it("includes the user message without absent attachment metadata", () => {
     const result = buildThreadTitlePrompt({
       message: "Investigate reconnect regressions after session restore",
     });
@@ -159,18 +159,6 @@ describe("buildThreadTitlePrompt", () => {
     expect(result.prompt).toContain("User message:");
     expect(result.prompt).toContain("Investigate reconnect regressions after session restore");
     expect(result.prompt).not.toContain("Attachment metadata:");
-    expect(result.prompt).toContain(
-      "Generate a title that will help the user recognize this T3 Code thread weeks later.",
-    );
-    expect(result.prompt).toContain(
-      "Title the subject and outcome. Discard incidental instructions.",
-    );
-    expect(result.prompt).toContain(
-      "Name the product change, not the mock, plan, report, branch, or PR used to produce it.",
-    );
-    expect(result.prompt).not.toContain(
-      "Title should summarize the user's request, not restate it verbatim.",
-    );
   });
 
   it("includes attachment metadata when attachments are provided", () => {
@@ -193,9 +181,9 @@ describe("buildThreadTitlePrompt", () => {
     expect(result.prompt).toContain("67890 bytes");
   });
 
-  it("regenerates from recent thread contents and identifies the previous title", () => {
+  it("regenerates from recent agent-side contents and identifies the previous title", () => {
     const result = buildThreadTitlePrompt({
-      message: `USER:\nInvestigate reconnect regressions\n\nASSISTANT:\nThe remaining issue is stale session state`,
+      message: `ASSISTANT:\nThe remaining issue is stale session state`,
       previousTitle: "Investigate reconnect regressions",
     });
 
@@ -203,16 +191,18 @@ describe("buildThreadTitlePrompt", () => {
       "Regenerate the title for an existing T3 Code thread so the user can recognize it weeks later.",
     );
     expect(result.prompt).toContain('The previous title was "Investigate reconnect regressions".');
+    // GHE #308: the regeneration prompt is driven by agent activity, never user prose.
     expect(result.prompt).toContain(
-      "Read the USER messages first. Identify the latest explicit durable goal.",
+      "User messages are intentionally omitted — the title must name the work the agent is doing,",
     );
     expect(result.prompt).toContain(
-      "Do not promote one assistant finding into the thread subject unless the user adopts it as a new goal.",
+      "Read the ASSISTANT messages and name the work the thread is doing:",
     );
+    expect(result.prompt).not.toContain("Read the USER messages first");
     expect(result.prompt).toContain(
       'A subagent-monitoring review that finds a Codex roster bug remains "Review Subagent Monitoring Risks,"',
     );
-    expect(result.prompt).toContain("Thread contents:");
+    expect(result.prompt).toContain("Agent messages:");
     expect(result.prompt).toContain("The remaining issue is stale session state");
   });
 
@@ -235,7 +225,7 @@ describe("buildThreadTitlePrompt", () => {
     });
 
     expect(result.prompt).toContain(
-      `Thread contents:\n[Earlier content truncated]\n\n${retainedContext}`,
+      `Agent messages:\n[Earlier content truncated]\n\n${retainedContext}`,
     );
     expect(result.prompt.match(/\[Earlier content truncated\]/g)).toHaveLength(1);
   });

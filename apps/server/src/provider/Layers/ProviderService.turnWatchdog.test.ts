@@ -12,6 +12,7 @@
  * Timers use the Effect Clock, so `TestClock` drives them in tests — the
  * same approach the pack-level watchdog tests use.
  */
+/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Legacy async tests bridge Effect runtimes manually; tracked cleanup is separate from the green gate. */
 import type {
   ProviderApprovalDecision,
   ProviderRuntimeEvent,
@@ -28,10 +29,13 @@ import {
   ThreadId,
   TurnId,
 } from "@t3tools/contracts";
-import { it, assert } from "@effect/vitest";
+import { it, assert, afterAll } from "@effect/vitest";
 
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
@@ -75,6 +79,10 @@ type LegacyProviderRuntimeEvent = {
 function makeFakeAdapter(provider: ProviderDriverKind) {
   const sessions = new Map<ThreadId, ProviderSession>();
   const runtimeEventPubSub = Effect.runSync(PubSub.unbounded<ProviderRuntimeEvent>());
+  // Distinct turn id per sendTurn so multi-turn scenarios (e.g. a superseded
+  // turn) get real turn ids; the first turn keeps the historical
+  // `turn-<threadId>` shape existing tests compare against.
+  const turnsPerThread = new Map<ThreadId, number>();
 
   const startSession = (
     input: ProviderSessionStartInput,
@@ -111,9 +119,13 @@ function makeFakeAdapter(provider: ProviderDriverKind) {
         }),
       );
     }
+    const n = (turnsPerThread.get(input.threadId) ?? 0) + 1;
+    turnsPerThread.set(input.threadId, n);
     return Effect.succeed({
       threadId: input.threadId,
-      turnId: asTurnId(`turn-${String(input.threadId)}`),
+      turnId: asTurnId(
+        n === 1 ? `turn-${String(input.threadId)}` : `turn-${String(input.threadId)}-${String(n)}`,
+      ),
     });
   };
 
@@ -250,12 +262,21 @@ function makeWatchdogHarness(
       ),
       directoryLayer,
       runtimeRepositoryLayer,
-      NodeServices.layer,
-    ),
+    ).pipe(Layer.provideMerge(NodeServices.layer)),
   );
 
   return { layer };
 }
+
+// Upstream startSession stats the thread's cwd and fails fast when the folder
+// is gone; the session cwd fixture must therefore be a real, unique directory
+// that is cleaned up afterwards (never shared global state like /tmp/project).
+const fixtureCwdRoot = NodeFS.mkdtempSync(
+  NodePath.join(NodeOS.tmpdir(), "provider-turn-watchdog-test-"),
+);
+afterAll(() => NodeFS.rmSync(fixtureCwdRoot, { recursive: true, force: true }));
+const PROJECT_CWD = NodePath.join(fixtureCwdRoot, "project");
+NodeFS.mkdirSync(PROJECT_CWD, { recursive: true });
 
 const startCodexSession = (
   provider: ProviderService.ProviderService["Service"],
@@ -265,7 +286,7 @@ const startCodexSession = (
     provider: CODEX_DRIVER,
     providerInstanceId: codexInstanceId,
     threadId,
-    cwd: "/tmp/project",
+    cwd: PROJECT_CWD,
     runtimeMode: "full-access",
   });
 
@@ -277,7 +298,7 @@ const startClaudeSession = (
     provider: CLAUDE_AGENT_DRIVER,
     providerInstanceId: claudeAgentInstanceId,
     threadId,
-    cwd: "/tmp/project",
+    cwd: PROJECT_CWD,
     runtimeMode: "full-access",
   });
 
@@ -355,6 +376,60 @@ stalledHarness.layer("turn inactivity watchdog: stalled turn", (it) => {
       assert.equal(codexStalled.interruptTurnCalls[0]?.[1], undefined);
     }),
   );
+
+  it.effect(
+    "a terminal event for an older superseded turn does not clear the current turn's watchdog",
+    () =>
+      Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        codexStalled.interruptTurnCalls.length = 0;
+
+        yield* startCodexSession(provider, asThreadId("thread-supersede"));
+        const firstTurn = yield* provider.sendTurn({
+          threadId: asThreadId("thread-supersede"),
+          input: "stuck message",
+          attachments: [],
+        });
+        // The user sends a NEW message: the host arms the watchdog for the
+        // new turn (replacing the entry).
+        const secondTurn = yield* provider.sendTurn({
+          threadId: asThreadId("thread-supersede"),
+          input: "fresh message",
+          attachments: [],
+        });
+        yield* drainFibers;
+
+        // The pack settles the SUPERSEDED first turn (turn.aborted /
+        // "superseded by a new message") AFTER the new turn was armed. That
+        // stale terminal event must NOT clear the new turn's watchdog entry —
+        // otherwise the new turn loses its stall backstop the moment it
+        // starts (the observed "new message doesn't recover a stuck turn").
+        codexStalled.emit({
+          type: "turn.aborted",
+          eventId: asEventId("superseded-abort"),
+          provider: CODEX_DRIVER,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          threadId: asThreadId("thread-supersede"),
+          turnId: firstTurn.turnId,
+          payload: { reason: "superseded by a new message" },
+        });
+        yield* drainFibers;
+
+        // The new turn is still armed: advancing past the budget fires the
+        // watchdog for the CURRENT turn, not for the superseded one.
+        yield* advanceTestClock(600_000);
+        yield* drainFibers;
+        assert.equal(
+          codexStalled.interruptTurnCalls.length,
+          1,
+          "watchdog still armed for the new turn",
+        );
+        assert.deepEqual(codexStalled.interruptTurnCalls[0], [
+          asThreadId("thread-supersede"),
+          secondTurn.turnId,
+        ]);
+      }),
+  );
 });
 
 const codexActive = makeFakeAdapter(CODEX_DRIVER);
@@ -411,6 +486,145 @@ activeHarness.layer("turn inactivity watchdog: active stream", (it) => {
 
 const codexFast = makeFakeAdapter(CODEX_DRIVER);
 const claudeSlow = makeFakeAdapter(CLAUDE_AGENT_DRIVER);
+
+const retryAnnouncementWarning = (
+  threadId: ThreadId,
+  turnId: TurnId,
+  delayMs: number,
+  eventId: string,
+): LegacyProviderRuntimeEvent => ({
+  type: "runtime.warning",
+  eventId: asEventId(eventId),
+  provider: CODEX_DRIVER,
+  createdAt: "2026-01-01T00:00:00.000Z",
+  threadId,
+  turnId,
+  payload: {
+    message: `Retrying (attempt 11 of 14, waiting 17m): 423 gpu_reserved`,
+    detail: { code: "provider.retry", attempt: 11, maxAttempts: 14, delayMs },
+  },
+});
+
+const codexAnnounced = makeFakeAdapter(CODEX_DRIVER);
+const announcedHarness = makeWatchdogHarness({ [CODEX_DRIVER]: codexAnnounced.adapter });
+
+announcedHarness.layer("turn inactivity watchdog: announced retry backoff (GHE #306)", (it) => {
+  it.effect(
+    "does not fire mid-sleep when the driver announces a backoff longer than the budget",
+    () =>
+      Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        codexAnnounced.interruptTurnCalls.length = 0;
+
+        yield* startCodexSession(provider, asThreadId("thread-announced"));
+        const turn = yield* provider.sendTurn({
+          threadId: asThreadId("thread-announced"),
+          input: "hello",
+          attachments: [],
+        });
+        yield* drainFibers;
+
+        // The driver announces it will sleep 1024s (Pi's attempt-11 wait,
+        // longer than the 600s default budget) before its next attempt.
+        codexAnnounced.emit(
+          retryAnnouncementWarning(
+            asThreadId("thread-announced"),
+            turn.turnId,
+            1_024_000,
+            "retry-1",
+          ),
+        );
+        yield* drainFibers;
+
+        // 600s plain budget would have fired long ago; the effective budget
+        // is now 1024s + 120s slack = 1144s.
+        yield* advanceTestClock(1_143_000);
+        yield* drainFibers;
+        assert.equal(
+          codexAnnounced.interruptTurnCalls.length,
+          0,
+          "no interrupt inside the announced window",
+        );
+
+        // Crossing the extended budget still fires the backstop.
+        yield* advanceTestClock(5_000);
+        yield* drainFibers;
+        assert.equal(codexAnnounced.interruptTurnCalls.length, 1);
+        assert.deepEqual(codexAnnounced.interruptTurnCalls[0], [
+          asThreadId("thread-announced"),
+          turn.turnId,
+        ]);
+      }),
+  );
+
+  it.effect("a warning without the provider.retry detail re-arms the plain budget", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      codexAnnounced.interruptTurnCalls.length = 0;
+
+      yield* startCodexSession(provider, asThreadId("thread-other-warning"));
+      yield* provider.sendTurn({
+        threadId: asThreadId("thread-other-warning"),
+        input: "hello",
+        attachments: [],
+      });
+      yield* drainFibers;
+
+      // A large delayMs under a DIFFERENT detail code must not extend the
+      // budget — only the provider.retry announcement does.
+      codexAnnounced.emit({
+        type: "runtime.warning",
+        eventId: asEventId("other-warning"),
+        provider: CODEX_DRIVER,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        threadId: asThreadId("thread-other-warning"),
+        payload: {
+          message: "something else",
+          detail: { code: "something.else", delayMs: 10_000_000 },
+        },
+      });
+      yield* drainFibers;
+
+      yield* advanceTestClock(600_000);
+      yield* drainFibers;
+      assert.equal(codexAnnounced.interruptTurnCalls.length, 1);
+    }),
+  );
+
+  it.effect("a buggy huge announcement cannot disable the backstop (24h cap)", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      codexAnnounced.interruptTurnCalls.length = 0;
+
+      yield* startCodexSession(provider, asThreadId("thread-huge"));
+      const turn = yield* provider.sendTurn({
+        threadId: asThreadId("thread-huge"),
+        input: "hello",
+        attachments: [],
+      });
+      yield* drainFibers;
+
+      // 100 days announced: the budget caps at 24h, it does not vanish.
+      codexAnnounced.emit(
+        retryAnnouncementWarning(
+          asThreadId("thread-huge"),
+          turn.turnId,
+          100 * 24 * 60 * 60 * 1000,
+          "retry-huge",
+        ),
+      );
+      yield* drainFibers;
+
+      yield* advanceTestClock(24 * 60 * 60 * 1000 - 1_000);
+      yield* drainFibers;
+      assert.equal(codexAnnounced.interruptTurnCalls.length, 0);
+      yield* advanceTestClock(2_000);
+      yield* drainFibers;
+      assert.equal(codexAnnounced.interruptTurnCalls.length, 1);
+    }),
+  );
+});
+
 const perProviderHarness = makeWatchdogHarness(
   {
     [CODEX_DRIVER]: codexFast.adapter,
@@ -463,6 +677,58 @@ perProviderHarness.layer("turn inactivity watchdog: per-provider timeout", (it) 
       ]);
       // And codex's watchdog does not fire a second time.
       assert.equal(codexFast.interruptTurnCalls.length, 1);
+    }),
+  );
+});
+
+const codexReplace = makeFakeAdapter(CODEX_DRIVER);
+const replaceHarness = makeWatchdogHarness({ [CODEX_DRIVER]: codexReplace.adapter });
+
+replaceHarness.layer("turn inactivity watchdog: session replacement (GHE #328)", (it) => {
+  it.effect("does not fire the previous turn's watchdog into a replacement session", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      codexReplace.interruptTurnCalls.length = 0;
+
+      yield* startCodexSession(provider, asThreadId("thread-replace"));
+      yield* provider.sendTurn({
+        threadId: asThreadId("thread-replace"),
+        input: "hello",
+        attachments: [],
+      });
+      yield* drainFibers;
+
+      // Replace the session on the same thread while the in-flight turn's
+      // inactivity watchdog is still armed (a model or runtime-mode change
+      // restarts the session). The armed timer belongs to the replaced
+      // session: startSession must disarm it, otherwise it fires into the
+      // replacement session and closes a live session for no apparent reason.
+      yield* startCodexSession(provider, asThreadId("thread-replace"));
+      yield* drainFibers;
+
+      yield* advanceTestClock(600_000);
+      yield* drainFibers;
+      assert.equal(
+        codexReplace.interruptTurnCalls.length,
+        0,
+        "stale watchdog must not interrupt the replacement session",
+      );
+
+      // The replacement session's own turn is still covered: sendTurn
+      // re-arms the watchdog and it fires for the new turn when it stalls.
+      const freshTurn = yield* provider.sendTurn({
+        threadId: asThreadId("thread-replace"),
+        input: "again",
+        attachments: [],
+      });
+      yield* drainFibers;
+      yield* advanceTestClock(600_000);
+      yield* drainFibers;
+      assert.equal(codexReplace.interruptTurnCalls.length, 1);
+      assert.deepEqual(codexReplace.interruptTurnCalls[0], [
+        asThreadId("thread-replace"),
+        freshTurn.turnId,
+      ]);
     }),
   );
 });

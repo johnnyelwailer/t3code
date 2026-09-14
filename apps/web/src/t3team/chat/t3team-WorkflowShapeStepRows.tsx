@@ -23,6 +23,7 @@ import {
   StepStatusIcon,
   StepTrailing,
 } from "~/t3team/chat/t3team-workflowRunStepRow";
+import { TurnCountBadge } from "~/t3team/chat/t3team-workflowStepTrailing";
 import type { useT3TeamWorkflowShapeLiveState } from "~/t3team/chat/t3team-workflowShapeLiveState";
 
 type LiveState = ReturnType<typeof useT3TeamWorkflowShapeLiveState>;
@@ -44,12 +45,48 @@ export function T3TeamWorkflowShapeStepRows({
   readonly onOpenThread?: (input: { projectId: string; threadId: string }) => void;
   readonly currentThreadId?: string | undefined;
 }) {
-  const units = groupDynamicRuntimeRows(rows);
+  // Render each authored phase as exactly ONE group. `reconcileT3TeamWorkflowShapeProgress` places
+  // a dynamic row at its nearest-prior-matched-plan-step anchor — that is display order — while
+  // the phase it reports now comes from the server's `workflowPhase` stamp. The two can disagree:
+  // a stamped 'Analyse' row can sit after the 'Summarise' plan rows, which made the 'Analyse'
+  // header render a second time (observed live 2026-08-29 on `parallel(items.map(...))`). Bucket
+  // ROWS by phase first (keeping each phase's first-appearance order and each row's order within
+  // it), then group within each phase — so same-label repeats that the anchor placement scattered
+  // across the plan rows (a `parallel()` fan-out, GHE #407) still fold into one group, and the
+  // `priorPlanPhase` walk below emits one header per phase.
+  const orderedUnits = (() => {
+    const byPhase = new Map<string, LiveState["rows"][number][]>();
+    for (const row of rows) {
+      const key = row.planStep?.phase ?? row.phase ?? "Current work";
+      const bucket = byPhase.get(key);
+      if (bucket) bucket.push(row);
+      else byPhase.set(key, [row]);
+    }
+    // `unit.index` must stay the row's position in the FULL list (the scheduled/pending walk
+    // below reads it), not its position inside the phase bucket.
+    const originalIndex = new Map(rows.map((row, index) => [row, index] as const));
+    return [...byPhase.values()].flatMap((bucket) =>
+      groupDynamicRuntimeRows(bucket).map((unit) =>
+        unit.kind === "row" ? { ...unit, index: originalIndex.get(unit.row) ?? unit.index } : unit,
+      ),
+    );
+  })();
+  // Phases that saw at least one dynamic (plan-unmatched) runtime row — evidence that SOME call
+  // under this phase demonstrably fired, even though it didn't line up with a specific plan row
+  // (a dynamic fan-out like `parallel(items.map(() => agent(...)))` has one call site but many
+  // runtime labels; see `reconcileT3TeamWorkflowShapeProgress`). Used below so that call site's
+  // OWN plan row does not render as "skipped" once its phase clearly had work happen.
+  const dynamicPhaseTitles = new Set(
+    rows
+      .filter((row) => row.planStep === undefined && row.runtimeStep !== undefined)
+      .map((row) => row.phase)
+      .filter((phase): phase is string => phase !== null && phase !== undefined),
+  );
   return (
     <div className="mt-3 space-y-1.5">
       {(() => {
         let priorPlanPhase: string | null = null;
-        return units.map((unit) => {
+        return orderedUnits.map((unit) => {
           const firstRow = unit.kind === "row" ? unit.row : unit.rows[0]!;
           const phaseTitle = firstRow.planStep?.phase ?? firstRow.phase ?? "Current work";
           const showPhaseHeader = phaseTitle !== null && phaseTitle !== priorPlanPhase;
@@ -80,15 +117,25 @@ export function T3TeamWorkflowShapeStepRows({
           const step = row.runtimeStep;
           const planStep = row.planStep;
           const rawStatus = displayedStepStatus(step, status);
-          // An unmatched act ("script") plan row only looks "skipped" because no runtime
-          // activity matched it (see `stepMatchesPlan`) — unlike an `ask` that a run can
-          // legitimately bypass, a script step rarely gets skipped in practice, so once the
-          // run has settled successfully it likely ran without leaving a reconcilable match.
-          // We don't actually know that, though — claiming "completed" would invent data
-          // (a conditionally-skipped script would show a false green check). Stay neutral:
-          // plain row, pending-style icon, no strikethrough.
+          // Two reasons an unmatched plan row's "skipped" look is misleading rather than true,
+          // both worth staying neutral about (plain row, pending-style icon, no strikethrough)
+          // rather than claiming "completed" and inventing data:
+          //  - An unmatched act ("script") plan row only looks "skipped" because no runtime
+          //    activity matched it (see `stepMatchesPlan`) — unlike an `ask` that a run can
+          //    legitimately bypass, a script step rarely gets skipped in practice, so once the
+          //    run has settled successfully it likely ran without leaving a reconcilable match.
+          //  - A dynamic-fan-out call site (`agent`/`ask` inside `parallel(items.map(...))`) has
+          //    ONE plan row but MANY runtime labels, so the plan row itself never matches even
+          //    though its phase demonstrably ran (`dynamicPhaseTitles`, above) — e.g. the
+          //    generic `agent(prompt, { label: dynamicLabel })` fallback plan row "Agent turn".
+          const dynamicPhaseRanHere =
+            planStep !== undefined &&
+            planStep.phase !== null &&
+            dynamicPhaseTitles.has(planStep.phase);
           const effectiveStatus: typeof rawStatus =
-            rawStatus === "skipped" && planStep?.kind === "act" && status === "completed"
+            rawStatus === "skipped" &&
+            status === "completed" &&
+            (planStep?.kind === "act" || dynamicPhaseRanHere)
               ? "pending"
               : rawStatus;
           return (
@@ -114,11 +161,14 @@ export function T3TeamWorkflowShapeStepRows({
                       />
                     }
                     trailing={
-                      <StepTrailing
-                        step={step}
-                        wakeAt={index === scheduledPlanRow ? activeWaitAt : undefined}
-                        childStatuses={childStatuses}
-                      />
+                      <>
+                        <TurnCountBadge step={step} />
+                        <StepTrailing
+                          step={step}
+                          wakeAt={index === scheduledPlanRow ? activeWaitAt : undefined}
+                          childStatuses={childStatuses}
+                        />
+                      </>
                     }
                     hideKindLabel={step?.stepKind === "wait.until"}
                   />

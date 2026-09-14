@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { createWorkflowPrimitives } from "./composition.ts";
+import { createWorkflowPrimitives, type CompositionBranchFailure } from "./composition.ts";
 import type { PrimitiveCall } from "./runtimeTypes.ts";
 
 describe("@runbook/core composition primitives", () => {
@@ -25,6 +25,8 @@ describe("@runbook/core composition primitives", () => {
       budgetTotal: 10,
       onPhase: (title) => phases.push(title),
       onLog: (message) => logs.push(message),
+      hostUuid: () => "uuid-1",
+      nowIso: () => "2026-01-01T00:00:00.000Z",
       runSubWorkflow: async (ref, args) => ({ path: ref.path, args }),
     });
 
@@ -83,6 +85,8 @@ describe("@runbook/core composition primitives", () => {
       budgetTotal: 0,
       onPhase: () => {},
       onLog: () => {},
+      hostUuid: () => "uuid-2",
+      nowIso: () => "2026-01-01T00:00:00.000Z",
       // Stands in for a real child body: it makes one primitive call of its own, exactly as a
       // sub-workflow's `agent`/`wait`/`askUser` would.
       runSubWorkflow: async () => {
@@ -110,8 +114,126 @@ describe("@runbook/core composition primitives", () => {
       budgetTotal: 0,
       onPhase: () => {},
       onLog: () => {},
+      hostUuid: () => "uuid-3",
+      nowIso: () => "2026-01-01T00:00:00.000Z",
     });
 
     expect(() => primitives.workflow({ path: "./nested.ts" })).toThrow("no sub-workflow executor");
+  });
+
+  it("still resolves a rejecting parallel() thunk to null while reporting it as a visible failure", async () => {
+    const failures: CompositionBranchFailure[] = [];
+    const primitives = createWorkflowPrimitives({
+      callPrimitive: async <R>(call: PrimitiveCall<R>): Promise<R> => call.exec(),
+      runBlackBoxed: async (fn) => fn(),
+      sleep: async () => {},
+      spent: () => 0,
+      hostNow: () => 0,
+      budgetTotal: 0,
+      onPhase: () => {},
+      onLog: () => {},
+      hostUuid: () => "uuid-4",
+      nowIso: () => "2026-01-01T00:00:00.000Z",
+      onCompositionBranchFailed: (failure) => {
+        failures.push(failure);
+      },
+    });
+
+    // Reproduces the reported defect: a healthy branch alongside one whose thunk throws
+    // synchronously, and a third branch whose rejection carries no message at all — the report
+    // must describe that honestly instead of inventing text for it.
+    await expect(
+      primitives.parallel([
+        async () => "ok",
+        async () => {
+          throw new Error("deliberate QA failure inside a parallel thunk");
+        },
+        async () => {
+          throw undefined;
+        },
+      ]),
+    ).resolves.toEqual(["ok", null, null]);
+
+    expect(failures).toEqual([
+      {
+        compositionKind: "parallel",
+        index: 1,
+        total: 3,
+        error: "deliberate QA failure inside a parallel thunk",
+      },
+      {
+        compositionKind: "parallel",
+        index: 2,
+        total: 3,
+        error: "undefined was thrown (no error message)",
+      },
+    ]);
+  });
+
+  it("still resolves a rejecting pipeline() item to null while reporting which stage threw", async () => {
+    const failures: CompositionBranchFailure[] = [];
+    const primitives = createWorkflowPrimitives({
+      callPrimitive: async <R>(call: PrimitiveCall<R>): Promise<R> => call.exec(),
+      runBlackBoxed: async (fn) => fn(),
+      sleep: async () => {},
+      spent: () => 0,
+      hostNow: () => 0,
+      budgetTotal: 0,
+      onPhase: () => {},
+      onLog: () => {},
+      hostUuid: () => "uuid-5",
+      nowIso: () => "2026-01-01T00:00:00.000Z",
+      onCompositionBranchFailed: (failure) => {
+        failures.push(failure);
+      },
+    });
+
+    await expect(
+      primitives.pipeline(
+        ["a", "b"],
+        async (value) => `${value}!`,
+        async (value, _item, index) => {
+          if (index === 1) throw new Error("stage two rejected");
+          return value;
+        },
+      ),
+    ).resolves.toEqual(["a!", null]);
+
+    expect(failures).toEqual([
+      {
+        compositionKind: "pipeline",
+        index: 1,
+        total: 2,
+        stageIndex: 1,
+        stageTotal: 2,
+        error: "stage two rejected",
+      },
+    ]);
+  });
+
+  it("swallows a throwing onCompositionBranchFailed hook without breaking the null contract", async () => {
+    const primitives = createWorkflowPrimitives({
+      callPrimitive: async <R>(call: PrimitiveCall<R>): Promise<R> => call.exec(),
+      runBlackBoxed: async (fn) => fn(),
+      sleep: async () => {},
+      spent: () => 0,
+      hostNow: () => 0,
+      budgetTotal: 0,
+      onPhase: () => {},
+      onLog: () => {},
+      hostUuid: () => "uuid-6",
+      nowIso: () => "2026-01-01T00:00:00.000Z",
+      onCompositionBranchFailed: () => {
+        throw new Error("reporting itself is broken");
+      },
+    });
+
+    await expect(
+      primitives.parallel([
+        async () => {
+          throw new Error("thunk failure");
+        },
+      ]),
+    ).resolves.toEqual([null]);
   });
 });

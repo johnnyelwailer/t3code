@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { setActiveAgentHover, type ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
+import {
+  formatActiveAgentLabel,
+  setActiveAgentHover,
+  type ActiveAgentEntry,
+} from "~/t3team/chat/t3team-activeAgentsCore";
+import { MAX_VISIBLE_DOTS } from "~/t3team/chat/t3team-activeAgentsIndicator-sbend";
+import { useActiveAgentsSBendProximity } from "~/t3team/chat/t3team-activeAgentsIndicator-sbend";
 
 /**
  * GHE #201 — the dots of the active-agents indicator, rendered directly
@@ -20,15 +26,20 @@ const DOT_HUE_CLASSES = [
   "bg-amber-500 dark:bg-amber-300/90",
 ] as const;
 
-const MAX_VISIBLE_DOTS = 5;
-
 export function T3TeamActiveAgentsIndicator({
   entries,
   onOpenAgents,
+  onOpenAgent,
 }: {
   entries: readonly ActiveAgentEntry[];
   onOpenAgents: () => void;
+  /**
+   * GHE #201 follow-up: per-dot open. When provided, clicking a dot opens
+   * THAT agent (its thread / agent view) instead of the whole Agents panel.
+   */
+  onOpenAgent?: ((entry: ActiveAgentEntry) => void) | undefined;
 }) {
+  const groupRef = useRef<HTMLSpanElement | null>(null);
   const [pulseCounts, setPulseCounts] = useState<ReadonlyMap<string, number>>(() => new Map());
   const [hotIds, setHotIds] = useState<ReadonlySet<string>>(() => new Set());
   const seenActivity = useRef<ReadonlyMap<string, string> | null>(null);
@@ -84,16 +95,22 @@ export function T3TeamActiveAgentsIndicator({
     };
   }, []);
 
+  useActiveAgentsSBendProximity({ groupRef, entries });
+
   const visible = entries.slice(0, MAX_VISIBLE_DOTS);
   const overflow = entries.length - visible.length;
   const groupLabel = `${entries.length} active agent${entries.length === 1 ? "" : "s"} — open agents`;
 
+  // No title attribute on the group: the native hover tooltip was redundant —
+  // the working row already renders the status word + step label right next to
+  // the dots, and hovering a dot flips that label to the agent's live status.
+  // aria-label keeps the info for screen readers.
   return (
     <span
+      ref={groupRef}
       role="button"
       tabIndex={0}
       aria-label={groupLabel}
-      title={groupLabel}
       onClick={onOpenAgents}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -101,7 +118,12 @@ export function T3TeamActiveAgentsIndicator({
           onOpenAgents();
         }
       }}
-      className="ml-2 inline-flex h-[1em] shrink-0 -translate-y-[3px] cursor-pointer items-center rounded-sm align-middle outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      // GHE #236 follow-up: no vertical nudge — the working row centers its
+      // children (items-center), so the 14px group (dot centered in it)
+      // already shares the status text's optical center. The old
+      // -translate-y-[3px] + align-middle was tuned to the pre-GHE #238
+      // baseline-aligned row and now double-compensates.
+      className="ml-2 inline-flex h-[1em] shrink-0 items-center rounded-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
     >
       <span className="inline-flex h-full items-center gap-1">
         {visible.map((entry, i) => {
@@ -111,21 +133,27 @@ export function T3TeamActiveAgentsIndicator({
             <button
               key={entry.id}
               type="button"
-              aria-label={`${entry.title} — ${entry.statusLabel}`}
+              aria-label={formatActiveAgentLabel(entry.title, entry.statusLabel)}
               onClick={(event) => {
                 event.stopPropagation();
-                onOpenAgents();
+                // GHE #201 follow-up: per-dot open — the clicked dot opens
+                // its own agent when the app provides the seam.
+                if (onOpenAgent) onOpenAgent(entry);
+                else onOpenAgents();
               }}
               onMouseEnter={() => setActiveAgentHover(entry)}
               onMouseLeave={() => setActiveAgentHover(null)}
               onFocus={() => setActiveAgentHover(entry)}
               onBlur={() => setActiveAgentHover(null)}
+              data-t3team-state={entry.dotState}
+              style={{ "--t3team-aci-i": i } as React.CSSProperties}
               className="t3team-aci-cell inline-flex size-3 items-center justify-center"
             >
-              {/* Keyed remount replays the one-shot pendulum on each event. */}
+              {/* Keyed remount replays the one-shot pendulum on each event
+                  AND the one-shot state-shift swing when dotState changes. */}
               <span
-                key={`pulse-${pulse}`}
-                className={pulse > 0 ? "t3team-aci-pulse relative" : "relative"}
+                key={`pulse-${pulse}-${entry.dotState}`}
+                className={`t3team-aci-shift ${pulse > 0 ? "t3team-aci-pulse relative" : "relative"}`}
               >
                 <span
                   className={`t3team-aci-dot inline-block ${DOT_HUE_CLASSES[i % DOT_HUE_CLASSES.length]} ${

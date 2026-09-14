@@ -21,12 +21,39 @@ export const T3TEAM_CHILD_OPS = [
   "unwatch",
   "stop",
   "close",
+  "sweep",
+  "drain",
   "help",
 ] as const;
 export type T3TeamChildOp = (typeof T3TEAM_CHILD_OPS)[number];
 
 export const T3TEAM_CHILD_WAIT_OUTCOMES = ["terminal", "completed", "failed"] as const;
 export type T3TeamChildWaitOutcome = (typeof T3TEAM_CHILD_WAIT_OUTCOMES)[number];
+
+/**
+ * Outcome of the `drain` op: the caller's OWN inter-agent mailbox, claimed
+ * now instead of waiting for the boundary drain. One of the three states:
+ * dispatched (idle → digest turn started now), queued (busy → arrives when
+ * the turn ends), or held (suppressed → visible in the timeline only).
+ */
+export type ChildrenDrainOutcome =
+  | {
+      readonly state: "dispatched";
+      readonly delivered: number;
+      readonly subjects: ReadonlyArray<string>;
+    }
+  | {
+      readonly state: "queued";
+      readonly queued: number;
+      readonly subjects: ReadonlyArray<string>;
+      readonly note: string;
+    }
+  | {
+      readonly state: "held";
+      readonly held: number;
+      readonly subjects: ReadonlyArray<string>;
+      readonly note: string;
+    };
 
 // ── Structural input shapes (decoupled from the full projection types) ─────
 
@@ -49,7 +76,21 @@ export interface ChildThreadDetail extends ThreadRunStatusInput {
   readonly projectId: string;
   readonly activities: ReadonlyArray<ChildThreadActivity>;
   readonly messages: ReadonlyArray<ChildThreadMessage>;
+  /** The thread's proposed-plan records (durable provider-observed plans).
+   *   The status op derives `awaitingParent`'s actionable-plan fact from this
+   *   list — detail loads carry no shell `hasActionableProposedPlan` flag. */
+  readonly proposedPlans?: ReadonlyArray<{
+    readonly id: string;
+    readonly turnId: string | null;
+    readonly implementedAt: string | null;
+    readonly updatedAt: string;
+  }>;
 }
+
+export type ParentChildRelation = {
+  readonly childThreadId: string;
+  readonly parentThreadId: string;
+};
 
 export interface T3TeamChildrenToolDeps {
   readonly callerThreadId: ThreadIdType;
@@ -74,6 +115,17 @@ export interface T3TeamChildrenToolDeps {
     parentThreadId: ThreadIdType,
     projectId: ProjectId,
   ) => Effect.Effect<ReadonlyArray<string>, string>;
+  /**
+   * ALL durable parent/child relations in the store, one query — the canonical
+   * handoff.created / handoff.started source (same query the child-settle
+   * sweeper reads; the legacy `parent:N` sub-run scheme never emits handoff
+   * events and so never appears). Store-wide by design; the op scopes it to
+   * its project by matching parents against its own thread ids.
+   */
+  readonly listParentChildRelations: () => Effect.Effect<
+    ReadonlyArray<ParentChildRelation>,
+    string
+  >;
   /** Append a durable activity to a thread (wait registration, close marker). */
   readonly appendActivity: (
     threadId: ThreadIdType,
@@ -81,6 +133,19 @@ export interface T3TeamChildrenToolDeps {
   ) => Effect.Effect<void, string>;
   /** Interrupt a thread's active turn (the stop op). */
   readonly interruptTurn: (threadId: ThreadIdType) => Effect.Effect<void, string>;
+  /**
+   * Settle a thread (the sweep op): dispatches the durable `thread.settle`
+   * command. The decider's invariants still apply — running sessions and
+   * blocked-on-user work refuse the settle and surface as sweep errors.
+   */
+  readonly settleThread: (threadId: ThreadIdType) => Effect.Effect<void, string>;
+  /**
+   * The `drain` op: claim the CALLER's own inter-agent mailbox now — idle →
+   * dispatch the digest immediately; busy → report it is queued; suppressed
+   * → report it is held. No target thread: it always drains the calling
+   * thread's own inbox (the inter-agent messages this thread is owed).
+   */
+  readonly drainOwnMailbox: () => Effect.Effect<ChildrenDrainOutcome, string>;
   readonly nowIso: () => string;
   readonly newId: () => string;
 }
@@ -91,6 +156,9 @@ export type ChildrenArgs = {
   readonly on?: unknown;
   readonly timeout?: unknown;
   readonly all?: unknown;
+  readonly all_older_than_hours?: unknown;
+  readonly thread_ids?: unknown;
+  readonly include_settled?: unknown;
   readonly reason?: unknown;
   readonly op_name?: unknown;
 };

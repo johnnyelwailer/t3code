@@ -83,3 +83,24 @@ export class ServerCliWebClientMissingError extends Schema.TaggedErrorClass<Serv
     );
   }
 }
+
+export class ServerCliDistributionNotInlinedError extends Schema.TaggedErrorClass<ServerCliDistributionNotInlinedError>()(
+  "ServerCliDistributionNotInlinedError",
+  {
+    distributionDir: Schema.String,
+    expectedMarkers: Schema.Array(Schema.String),
+    scannedFiles: Schema.Int,
+  },
+) {
+  override get message(): string {
+    return (
+      `T3CODE_DISTRIBUTION names ${this.distributionDir}, but none of its markers ` +
+      `(${this.expectedMarkers.length > 0 ? this.expectedMarkers.join(", ") : "none derivable from distribution.json"}) ` +
+      `appear in the ${this.scannedFiles} emitted dist/*.mjs file(s): the distribution was NOT compiled in. ` +
+      `The packed server would boot with the empty distribution stub (no provider, no branding, no theme). ` +
+      `A build that was asked to inline a distribution must fail here, not succeed quietly. ` +
+      `Check that T3CODE_DISTRIBUTION reached the pack step and that apps/server/vite.config.ts still ` +
+      `registers t3teamDistributionPackPlugin.`
+    );
+  }
+}

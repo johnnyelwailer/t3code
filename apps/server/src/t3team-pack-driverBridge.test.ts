@@ -15,6 +15,7 @@ import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
 import { clearMcpProviderSession, setMcpProviderSession } from "./mcp/McpProviderSession.ts";
+import { layerTest as serverSettingsLayerTest } from "./serverSettings.ts";
 import { bridgePackProviderDriver } from "./t3team-pack-driverBridge.ts";
 
 const validEvent = {
@@ -73,6 +74,21 @@ const definitionFor = (instance: PackProviderInstance): PackProviderDriverDefini
   displayName: "Nexi",
   create: async () => instance,
 });
+
+const createDefinitionInScope = (definition: PackProviderDriverDefinition) =>
+  Effect.gen(function* () {
+    const scope = yield* Scope.make();
+    const built = yield* bridgePackProviderDriver(definition)
+      .create({
+        instanceId: ProviderInstanceId.make("nexi"),
+        displayName: "Nexi",
+        environment: [],
+        enabled: true,
+        config: {},
+      })
+      .pipe(Effect.provideService(Scope.Scope, scope));
+    return { scope, instance: built };
+  });
 
 const createInScope = (instance: PackProviderInstance) =>
   Effect.gen(function* () {
@@ -319,6 +335,50 @@ describe("bridgePackProviderDriver", () => {
         .pipe(Effect.scoped, Effect.flip);
       expect(result._tag).toBe("ProviderDriverError");
       expect(result.detail).toContain("nope");
+    }),
+  );
+
+  it.effect("passes the global agent-instructions setting to the pack create", () =>
+    Effect.gen(function* () {
+      let received: string | undefined;
+      const { scope } = yield* createDefinitionInScope({
+        schemaVersion: 1,
+        driver: "nexi",
+        displayName: "Nexi",
+        create: async (input) => {
+          received = input.agentInstructions;
+          return baseInstance([]);
+        },
+      }).pipe(Effect.provide(serverSettingsLayerTest({ agentInstructions: "Be brief." })));
+      expect(received).toBe("Be brief.");
+      yield* Scope.close(scope, Exit.void);
+    }),
+  );
+
+  it.effect("omits agent-instructions when the setting is empty or unreadable", () =>
+    Effect.gen(function* () {
+      const capture = () => {
+        let received: string | undefined;
+        return createDefinitionInScope({
+          schemaVersion: 1,
+          driver: "nexi",
+          displayName: "Nexi",
+          create: async (input) => {
+            received = input.agentInstructions;
+            return baseInstance([]);
+          },
+        }).pipe(Effect.map(({ scope }) => ({ scope, received })));
+      };
+
+      // Empty setting → field omitted (pack falls back to its default).
+      const emptyRun = yield* capture().pipe(Effect.provide(serverSettingsLayerTest({})));
+      expect(emptyRun.received).toBeUndefined();
+      yield* Scope.close(emptyRun.scope, Exit.void);
+
+      // No settings service at all → fail-open, still omitted.
+      const bareRun = yield* capture();
+      expect(bareRun.received).toBeUndefined();
+      yield* Scope.close(bareRun.scope, Exit.void);
     }),
   );
 });

@@ -9,6 +9,7 @@
  * shared T3 home. `--tailscale` publishes the server over Tailscale Serve
  * HTTPS and pairs through the tailnet URL instead.
  */
+import { distributionBranding } from "@t3code/distribution";
 import {
   AuthStandardClientScopes,
   ExecutionEnvironmentDescriptor,
@@ -41,9 +42,9 @@ import {
 import * as EnvironmentAuth from "../auth/EnvironmentAuth.ts";
 import * as ServerConfig from "../config.ts";
 import { resolveBaseDir } from "../os-jank.ts";
-import { distributionBranding } from "../t3team-distribution.ts";
 import {
   type PersistedServerRuntimeState,
+  isProcessAlive,
   readPersistedServerRuntimeState,
 } from "../serverRuntimeState.ts";
 import {
@@ -229,17 +230,6 @@ const probeEnvironmentDescriptor = (
     );
     return { _tag: "descriptor", descriptor } as const;
   }).pipe(Effect.catch((outcome) => Effect.succeed(outcome)));
-
-// signal 0 delivers nothing; it only reports whether the pid exists. EPERM
-// means it exists but belongs to another user, which still counts as alive.
-const isProcessAlive = (pid: number): boolean => {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return error instanceof Error && "code" in error && error.code === "EPERM";
-  }
-};
 
 interface DiscoveredPairTarget {
   readonly baseDir: string;

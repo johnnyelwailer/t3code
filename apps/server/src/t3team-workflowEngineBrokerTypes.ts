@@ -57,10 +57,13 @@ export interface WorkflowRunLifecycle {
   /** Mark the run `completed` and clear the pending ask. */
   readonly recordCompleted: () => Promise<void>;
   /** Mark the run `failed`, clear the pending ask, and persist the agent-facing failure detail
-   * (migration 044) so `status`/`resume` can report WHY without a journal read. */
+   * (migration 044) so `status`/`resume` can report WHY without a journal read. With
+   * `retainPending` the pending ask is KEPT (GHE #403): the failure is the host's verdict on an
+   * unanswered step, not a body fault, and `resume` re-drives that step from the retained ask. */
   readonly recordFailed: (detail?: {
     readonly reason: string;
     readonly step: string;
+    readonly retainPending?: boolean;
   }) => Promise<void>;
   /** Crash-recovery: if this correlation still owns a sleeping or newly-claimed active row and
    * its reply was already journaled, mark it failed. Correlation pinning protects newer work. */
@@ -100,6 +103,16 @@ export interface WorkflowEngineBrokerDeps {
   readonly stepActivities?: WorkflowStepActivityEmitter;
   readonly beforePrimitive?: () => Promise<boolean>;
   readonly afterPrimitive?: () => void;
+  /**
+   * The authored `phase()` group the workflow body is currently inside, read live at the moment
+   * a primitive is SENT. Backed by a cell the controller updates from `WorkflowRunOptions.onPhase`
+   * (see `t3team-workflowEngineController.ts`); replay-safe because the SDK re-executes the whole
+   * body from the top on every resume, so this cell is reconstructed identically every time —
+   * `phase()` needs no journaling of its own (unlike `now()`, it reads no host entropy/clock; its
+   * value is fully determined by already-deterministic source, so replaying the same statements
+   * in the same order reproduces it). Absent in tests/older wiring — `step()` then stamps nothing.
+   */
+  readonly currentPhase?: () => string | undefined;
 }
 
 export interface ThreadCreatePayload {

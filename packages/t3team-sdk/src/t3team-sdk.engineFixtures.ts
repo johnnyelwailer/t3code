@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Shared test fixtures for the durable-execution engine test suite. Keeps the per-test
  * counters and the SDK tool/script/workflow definitions in one file so the test files
@@ -43,6 +42,7 @@ import type * as ScriptWorkflow from "./__fixtures__/t3team-sdk.journalScript.wo
 import type * as ScriptNoCapabilityWorkflow from "./__fixtures__/t3team-sdk.scriptNoCapability.workflow.ts";
 import type * as TwoToolsWorkflow from "./__fixtures__/t3team-sdk.journalTwoTools.workflow.ts";
 import type * as UuidWorkflow from "./__fixtures__/t3team-sdk.journalUuid.workflow.ts";
+import type * as EmitArtifactWorkflow from "./__fixtures__/t3team-sdk.emitArtifact.workflow.ts";
 import type * as VoidResultWorkflow from "./__fixtures__/t3team-sdk.voidResult.workflow.ts";
 import type { MessageEnvelope, MockBrokerOutcome } from "./t3team-sdk.broker.ts";
 import { defineScript, defineTool, defineToolGroup, defineWorkflow } from "./t3team-sdk.index.ts";
@@ -224,6 +224,9 @@ export const randomWorkflow = defineWorkflow<typeof RandomWorkflow>(
 );
 export const uuidWorkflow = defineWorkflow<typeof UuidWorkflow>(
   "./__fixtures__/t3team-sdk.journalUuid.workflow.ts",
+);
+export const emitArtifactWorkflow = defineWorkflow<typeof EmitArtifactWorkflow>(
+  "./__fixtures__/t3team-sdk.emitArtifact.workflow.ts",
 );
 export const agentPrimitiveWorkflow = defineWorkflow<typeof AgentPrimitiveWorkflow>(
   "./__fixtures__/t3team-sdk.agentPrimitive.workflow.ts",

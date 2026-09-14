@@ -77,7 +77,7 @@ Use these project files internally before asking the user to restate context:
   | Work | \`isolation\` | Repository fields |
   | --- | --- | --- |
   | Planning, triage, synthesis, project status | \`shared\` | Do not pass \`repo_full_name\` or \`repo_ref\` |
-  | Implementation, debugging, tests, review, PR work | \`own-worktree\` | Pass \`repo_full_name\` for a linked repo (omit it in a local workspace to isolate in the local repository); pass \`repo_ref\` when the base matters |
+  | Implementation, debugging, tests, review, PR work | \`own-worktree\` | Pass \`repo_full_name\` for a linked repo (omit it in a local workspace or a monorepo project where the workspace is the meta-repo, to isolate in that repository); pass \`repo_ref\` when the base matters |
 - For work that means digging through a repository, changing code, debugging, validation, or code review, do it in a separate thread scoped to the right repository, and keep this thread clean.
 - Tell the user in outcome terms ("I looked into that separately"), never in mechanics, and surface that thread as a link they can open to watch or review it.
 - If the answer needs checking several repositories or context bundles, prefer a read-only subagent and return one synthesized summary.

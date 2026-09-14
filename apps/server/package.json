@@ -1,6 +1,6 @@
 {
   "name": "t3",
-  "version": "0.0.34",
+  "version": "0.0.42",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -16,8 +16,8 @@
   ],
   "type": "module",
   "scripts": {
-    "dev": "node --watch src/bin.ts",
-    "dev:t3team": "node --watch src/t3team-bin.ts",
+    "dev": "node --watch --import ./scripts/t3team-distribution-devLoader.ts src/bin.ts",
+    "dev:t3team": "node --watch --import ./scripts/t3team-distribution-devLoader.ts src/t3team-bin.ts",
     "build:bundle": "vp pack && vp pack src/service-launcher.ts --out-dir dist --no-clean",
     "start": "node dist/bin.mjs",
     "start:t3team": "node dist/t3team-bin.mjs",
@@ -29,12 +29,12 @@
     "@earendil-works/pi-coding-agent": "^0.80.10",
     "@effect/platform-bun": "catalog:",
     "@effect/platform-node": "catalog:",
-    "@effect/platform-node-shared": "catalog:",
     "@effect/sql-sqlite-bun": "catalog:",
     "@ff-labs/fff-node": "0.9.4",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@opencode-ai/sdk": "^1.3.15",
     "@pierre/diffs": "catalog:",
+    "@silvia-odwyer/photon-node": "^0.3.4",
     "@t3team/pack-api": "workspace:*",
     "@t3team/packs": "workspace:*",
     "@t3team/sdk": "workspace:*",
@@ -47,6 +47,7 @@
     "msgpackr-extract": "3.0.4",
     "node-pty": "^1.1.0",
     "yaml": "catalog:",
+    "yauzl": "^3.4.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -57,6 +58,7 @@
     "@t3tools/web": "workspace:*",
     "@types/bun": "1.3.14",
     "@types/node": "catalog:",
+    "@types/yauzl": "^3.4.0",
     "effect-acp": "workspace:*",
     "effect-codex-app-server": "workspace:*",
     "typebox": "1.1.38",

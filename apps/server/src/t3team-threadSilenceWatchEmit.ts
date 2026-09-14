@@ -1,32 +1,27 @@
 /**
  * Emission side-effects for the thread silence watchdog (GHE #63): the
- * `thread.silent` notification paths (silence breach + thread stopped) and
- * the registration side-effects (index the watch, resolve immediately when
- * the target is already gone/terminal, seed the activity state from the
- * shell's persisted `updatedAt` on rehydration). Each emission dispatches an
- * actor message on the WATCHING thread (drives the watching agent) plus a
- * durable `t3team.thread_silence.detected` activity there (the audit trail).
+ * `thread.silent` notification paths (silence breach + thread stopped) and the
+ * registration side-effects (index the watch, resolve immediately when the
+ * target is already gone/terminal, seed activity state from the shell's
+ * persisted `updatedAt`). Each emission dispatches an actor message on the
+ * WATCHING thread plus a durable `t3team.thread_silence.detected` activity.
+ * The stopped path is deduped by the shared terminal-notify ledger (GHE #157):
+ * one report per watch per terminal epoch, marker persisted on the watcher.
  *
  * @module t3team-threadSilenceWatchEmit
  */
-import {
-  CommandId,
-  EventId,
-  MessageId,
-  NonNegativeInt,
-  ProjectId,
-  ThreadId,
-} from "@t3tools/contracts";
+import { CommandId, EventId, MessageId, NonNegativeInt, ProjectId, ThreadId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-import { type OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
-import { type ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
-import { type ThreadSilenceActivityState } from "./orchestration/ThreadSilenceWatchdog.ts";
+import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
+import type { ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import type { ThreadSilenceActivityState } from "./orchestration/ThreadSilenceWatchdog.ts";
 import { sessionStatusToWaitOutcome } from "./t3team-childWait.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
+import type { TerminalNotifyLedger } from "./t3team-terminalNotifyDedup.ts";
 import {
   buildSilenceDetectedPayload,
   buildSilenceMessageText,
@@ -34,7 +29,7 @@ import {
   type ThreadSilenceDetectedPayload,
   type ThreadSilenceWatchRecord,
 } from "./t3team-threadSilenceWatch.ts";
-import { type ThreadSilenceWatchIndex } from "./t3team-threadSilenceWatchIndex.ts";
+import type { ThreadSilenceWatchIndex } from "./t3team-threadSilenceWatchIndex.ts";
 
 interface ThreadShellLike {
   readonly id: ThreadId;
@@ -48,24 +43,23 @@ export interface ThreadSilenceWatchEmitterDeps {
   readonly engine: OrchestrationEngineShape;
   readonly query: ProjectionSnapshotQueryShape;
   readonly index: ThreadSilenceWatchIndex;
+  /** Shared terminal-notify dedup ledger: reports a stopped watch once per epoch. */
+  readonly dedup: TerminalNotifyLedger;
   readonly getActivityState: (threadId: string) => ThreadSilenceActivityState | undefined;
   readonly seedActivity: (threadId: string, lastActivityAtMs: number) => void;
 }
 
 export interface ThreadSilenceWatchEmitter {
-  /** The sweep path: silence breach on a live target. */
+  /** Sweep path: a live target has been silent past its timeout. */
   readonly emitSilence: (record: ThreadSilenceWatchRecord, nowMs: number) => Effect.Effect<void>;
-  /**
-   * The thread-stopped path: the target left a terminal state (or was
-   * deleted) while watches were open - notify once per watch, then close.
-   */
-  readonly resolveStopped: (targetThreadId: string, stoppedStatus: string) => Effect.Effect<void>;
-  /**
-   * Index a newly registered watch; resolve immediately when the target is
-   * already gone or terminal; otherwise seed the activity state from the
-   * shell's persisted `updatedAt` when no live state exists yet.
-   */
-  readonly onRegistered: (record: ThreadSilenceWatchRecord) => Effect.Effect<void>;
+  /** Stopped path: the target reached a terminal state (or was deleted). */
+  readonly resolveStopped: (
+    targetThreadId: string,
+    stoppedStatus: string,
+    triggerSeq: number,
+  ) => Effect.Effect<void>;
+  /** Index a new watch; resolve immediately when the target is already gone. */
+  readonly onRegistered: (record: ThreadSilenceWatchRecord, triggerSeq: number) => Effect.Effect<void>;
 }
 
 export const makeThreadSilenceWatchEmitter = (
@@ -86,9 +80,7 @@ export const makeThreadSilenceWatchEmitter = (
       yield* deps.engine
         .dispatch({
           type: "thread.actor.message",
-          commandId: CommandId.make(
-            `server:t3team:thread-silence:${record.watchId}:${t3teamRandomUUID()}`,
-          ),
+          commandId: CommandId.make(`server:t3team:thread-silence:${record.watchId}:${t3teamRandomUUID()}`),
           threadId: ThreadId.make(record.watcherThreadId),
           messageId: MessageId.make(t3teamRandomUUID()),
           fromThreadId: ThreadId.make(record.targetThreadId),
@@ -111,9 +103,7 @@ export const makeThreadSilenceWatchEmitter = (
       yield* deps.engine
         .dispatch({
           type: "thread.activity.append",
-          commandId: CommandId.make(
-            `server:t3team:thread-silence:${record.watchId}:${t3teamRandomUUID()}`,
-          ),
+          commandId: CommandId.make(`server:t3team:thread-silence:${record.watchId}:${t3teamRandomUUID()}`),
           threadId: ThreadId.make(record.watcherThreadId),
           activity: {
             id: EventId.make(t3teamRandomUUID()),
@@ -155,7 +145,11 @@ export const makeThreadSilenceWatchEmitter = (
       yield* emitDetected(record, payload, nowIso);
     });
 
-  const resolveStopped = (targetThreadId: string, stoppedStatus: string): Effect.Effect<void> =>
+  const resolveStopped = (
+    targetThreadId: string,
+    stoppedStatus: string,
+    triggerSeq: number,
+  ): Effect.Effect<void> =>
     Effect.gen(function* () {
       const records = deps.index.forTarget(targetThreadId);
       if (records.length === 0) return;
@@ -172,12 +166,22 @@ export const makeThreadSilenceWatchEmitter = (
           pendingToolCount: state?.pendingToolCount ?? 0,
           stoppedStatus,
         });
-        yield* emitDetected(record, payload, nowIso);
+        // Dedup via the shared ledger: emit only if this watch hasn't already
+        // reported this stop in the current epoch; the marker persists on the
+        // watcher. The watch always closes - a dead target has no further stop.
+        yield* deps.dedup.notify({
+          key: record.watchId,
+          markerThreadId: record.watcherThreadId,
+          resumeThreadId: targetThreadId,
+          terminalSeq: triggerSeq,
+          markerPayload: { watchId: record.watchId, targetThreadId, stoppedStatus },
+          doNotify: emitDetected(record, payload, nowIso),
+        });
         deps.index.remove(record.watchId);
       }
     });
 
-  const onRegistered = (record: ThreadSilenceWatchRecord): Effect.Effect<void> =>
+  const onRegistered = (record: ThreadSilenceWatchRecord, triggerSeq: number): Effect.Effect<void> =>
     Effect.gen(function* () {
       deps.index.add(record);
       const shell = Option.getOrUndefined(
@@ -185,16 +189,17 @@ export const makeThreadSilenceWatchEmitter = (
           .getThreadShellById(ThreadId.make(record.targetThreadId))
           .pipe(Effect.orElseSucceed(() => Option.none())),
       ) as ThreadShellLike | null | undefined;
-      if (shell === undefined || shell === null) {
-        yield* resolveStopped(record.targetThreadId, "deleted");
+      const terminalStatus =
+        shell === undefined || shell === null
+          ? "deleted"
+          : sessionStatusToWaitOutcome(shell.session?.status ?? "") !== null
+            ? (shell.session?.status as string)
+            : null;
+      if (terminalStatus !== null) {
+        yield* resolveStopped(record.targetThreadId, terminalStatus, triggerSeq);
         return;
       }
-      const status = shell.session?.status;
-      if (status !== undefined && sessionStatusToWaitOutcome(status) !== null) {
-        yield* resolveStopped(record.targetThreadId, status);
-        return;
-      }
-      const seededAtMs = Date.parse(shell.updatedAt);
+      const seededAtMs = Date.parse(shell!.updatedAt);
       if (!Number.isNaN(seededAtMs)) {
         deps.seedActivity(record.targetThreadId, seededAtMs);
       }

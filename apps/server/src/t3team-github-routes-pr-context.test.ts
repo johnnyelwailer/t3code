@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
+import * as Stream from "effect/Stream";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
@@ -166,6 +167,12 @@ function pullRequestServiceLayer(
   const service = PullRequestService.PullRequestService.of({
     list: () => Effect.die("not used"),
     listStats: () => Effect.die("not used"),
+    summary: () => Effect.die("not used"),
+    subscribeMerges: Effect.die("not used"),
+    subscribeRefreshes: Stream.empty,
+    refreshAfterTurn: Effect.void,
+    labelCandidates: () => Effect.die("not used"),
+    setLabels: () => Effect.die("not used"),
     detail: () => Effect.succeed(detail),
     activity: activityImpl ?? (() => Effect.succeed(activity)),
     diff:

@@ -4,6 +4,7 @@ import type { OrchestrationCommand } from "@t3tools/contracts";
 import {
   buildWorkflowFailureText,
   deliverWorkflowCompletion,
+  extractFailureHeadlineText,
   formatWorkflowOutput,
 } from "./t3team-workflowCompletionMessage.ts";
 
@@ -24,22 +25,125 @@ describe("formatWorkflowOutput", () => {
     expect(output).toContain("**Count:** 3");
     expect(output).not.toContain("{");
   });
+
+  // GHE (Defect 1, live repro): a workflow returning `{ findings: [...], summaryStats: {...} }`
+  // rendered to the user as exactly "Workflow completed." — nested objects and arrays-of-objects
+  // were filtered out before this text was ever stored, so no client-side fix could recover the
+  // lost data. The rich rendering lives in the shared `renderWorkflowRecordAsDisplayText`; these
+  // prove this, the pre-storage formatter, is wired to it.
+  it("renders an array-of-objects field instead of collapsing to the generic fallback", () => {
+    const output = formatWorkflowOutput({
+      findings: [
+        { title: "Rounding drift in total()", severity: "high", file: "src/cart.ts:4" },
+        { title: "checkToken accepts whitespace", severity: "medium", file: "src/auth.ts:3" },
+      ],
+      summaryStats: { high: 1, medium: 1, low: 0 },
+    });
+    expect(output).toContain("Rounding drift in total()");
+    expect(output).toContain("checkToken accepts whitespace");
+    expect(output).toContain("High: 1, Medium: 1, Low: 0");
+    expect(output).not.toBe("Workflow completed.");
+  });
+
+  it("renders a nested object field instead of collapsing to the generic fallback", () => {
+    const output = formatWorkflowOutput({
+      before: { status: "draft" },
+      after: { status: "published" },
+      artifactId: "art-1",
+      artifactType: "document",
+    });
+    expect(output).toContain("**Artifact Id:** art-1");
+    expect(output).toContain("**Artifact Type:** document");
+    expect(output).toContain("Status: draft");
+    expect(output).toContain("Status: published");
+    expect(output).not.toBe("Workflow completed.");
+  });
 });
 
 describe("buildWorkflowFailureText", () => {
-  it("tells an agent that owns the source to fix and relaunch", () => {
-    const text = buildWorkflowFailureText({ errorText: "boom", hostOwnsSource: true });
-    expect(text).toContain("Fix the orchestration source");
-    expect(text).toContain('t3team_help("agent-orchestration")');
+  // The notice is read by the PERSON in the launch thread (GHE #408): no tool names, no
+  // authoring instructions, no host bookkeeping — only what stopped and what they can do.
+  it("never leaks agent-facing tool or authoring instructions", () => {
+    for (const input of [
+      { errorText: "boom", hostOwnsSource: true },
+      { errorText: "boom", hostOwnsSource: false },
+      { errorText: "boom", hostOwnsSource: true, resumable: true },
+    ]) {
+      const text = buildWorkflowFailureText(input);
+      expect(text).not.toContain("t3team_");
+      expect(text).not.toContain("orchestration source");
+    }
   });
 
   it("tells a human on a bundled recipe what they can actually do", () => {
     const text = buildWorkflowFailureText({ errorText: "boom", hostOwnsSource: false });
-    // A person who clicked a button cannot edit shipped recipe source, and t3team_help is not theirs.
-    expect(text).not.toContain("Fix the orchestration source");
-    expect(text).not.toContain("t3team_help");
     expect(text).toContain("nothing was saved");
     expect(text).toContain("start it again");
+  });
+
+  it("points at Resume instead of relaunch when the run is resumable", () => {
+    const text = buildWorkflowFailureText({
+      errorText: "boom",
+      hostOwnsSource: true,
+      resumable: true,
+    });
+    expect(text).toContain("Resume on the orchestration card");
+    expect(text).toContain("progress is kept");
+    expect(text).not.toContain("start it again");
+  });
+
+  it("keeps the non-resumable wording when resumable is false or omitted", () => {
+    const text = buildWorkflowFailureText({
+      errorText: "boom",
+      hostOwnsSource: true,
+      resumable: false,
+    });
+    expect(text).toContain("start it again");
+    expect(text).not.toContain("progress is kept");
+  });
+
+  it("strips embedded JSON bodies and the step bookkeeping suffix from the reason", () => {
+    const text = buildWorkflowFailureText({
+      errorText:
+        'The agent turn failed: 403: {"message":"forbidden by gateway","type":"forbidden"} (step abc:4, 3 re-drives exhausted)',
+      hostOwnsSource: true,
+      resumable: true,
+    });
+    expect(text).toContain("403: forbidden by gateway");
+    expect(text).not.toContain("{");
+    expect(text).not.toContain("re-drives exhausted");
+  });
+
+  it("extracts the message field instead of interpolating a raw JSON error body", () => {
+    const text = buildWorkflowFailureText({
+      errorText: JSON.stringify({
+        message: "Rate limit exceeded",
+        code: 429,
+        headers: { "retry-after": "30" },
+      }),
+      hostOwnsSource: true,
+    });
+    expect(text).toContain("Rate limit exceeded");
+    expect(text).not.toContain("retry-after");
+    expect(text).not.toContain("{");
+  });
+});
+
+describe("extractFailureHeadlineText", () => {
+  it("returns non-JSON text unchanged", () => {
+    expect(extractFailureHeadlineText("plain error text")).toBe("plain error text");
+  });
+
+  it("extracts the message field from a JSON object", () => {
+    expect(extractFailureHeadlineText('{"message":"boom","code":500}')).toBe("boom");
+  });
+
+  it("falls back to the raw text when JSON has no string message field", () => {
+    expect(extractFailureHeadlineText('{"code":500}')).toBe("");
+  });
+
+  it("falls back to the raw text when it looks like JSON but is not parseable", () => {
+    expect(extractFailureHeadlineText("{not valid json")).toBe("{not valid json");
   });
 });
 

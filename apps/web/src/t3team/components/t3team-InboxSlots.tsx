@@ -3,6 +3,7 @@ import { ListTreeIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { APP_DISPLAY_NAME } from "~/t3team/t3team-branding";
+import { resolveActivityStatePill } from "~/t3team/t3team-activityStateDisplay";
 import { useT3TeamPackAppearance } from "~/t3team/t3team-packAppearance";
 import {
   useT3TeamInboxPinnedGitHubActivity,
@@ -83,38 +84,50 @@ export function InboxSubRunsChip({ threadId }: { threadId: string }): ReactNode 
   );
   const expanded = useExpandedSubRunsStore((state) => state.expandedParentIds.has(threadId));
   const toggle = useExpandedSubRunsStore((state) => state.toggle);
+  // Three states, one handle: running > 0 → the ACTIVE count chip (settled
+  // children belong to the #304 "Settled (N)" fold, not the count); running = 0
+  // with total > 0 → a MUTED count chip — without it the section's
+  // persisted/auto-set expanded state left the #304 fold row under the row
+  // forever with nothing to collapse it (sidebar-row refine, 2026-08-30);
+  // total = 0 / unknown → nothing (no stale total, no "0").
   if (!counts || counts.total === 0) {
     return null;
   }
-  const noun = counts.total === 1 ? "sub-run" : "sub-runs";
-  const description =
-    counts.running > 0
-      ? `${counts.total} ${noun} · ${counts.running} active`
-      : `${counts.total} ${noun}`;
+  const active = counts.running > 0;
+  const settledCount = counts.total - counts.running;
+  const noun = (n: number) => (n === 1 ? "sub-run" : "sub-runs");
+  const description = active
+    ? `${counts.running} active ${noun(counts.running)}${settledCount > 0 ? ` · ${settledCount} settled` : ""}`
+    : `${settledCount} ${noun(settledCount)}`;
+  const chipClass = active
+    ? "flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm bg-sidebar-control-surface px-1 text-[0.6875rem] font-medium tabular-nums text-sidebar-muted-foreground hover:text-sidebar-foreground"
+    : "flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm bg-sidebar-control-surface px-1 text-[0.6875rem] font-medium tabular-nums text-sidebar-muted-foreground/60 hover:text-sidebar-muted-foreground/90";
   return (
     <button
       type="button"
       data-t3team-sub-runs-chip
+      data-t3team-sub-runs-chip-state={active ? "active" : "settled"}
       aria-expanded={expanded}
       aria-label={description}
       title={description}
       // The chip sits inside the row's own clickable button (see
-      // Sidebar.tsx's SidebarThreadRow), same nesting the Settle/Snooze
-      // affordances already use there — stopPropagation keeps this toggle
+      // Sidebar.tsx's SidebarThreadRow) — stopPropagation keeps this toggle
       // from also navigating to the parent thread.
       onClick={(event) => {
         event.stopPropagation();
         toggle(threadId);
       }}
-      // Just the count — the row line is already crowded, and the verbose label
-      // truncated ("6 sub-runs · 1 acti…"). Detail lives in the tooltip.
-      className="flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm bg-sidebar-control-surface px-1 text-[0.6875rem] font-medium tabular-nums text-sidebar-muted-foreground hover:text-sidebar-foreground"
+      className={chipClass}
     >
       <ListTreeIcon aria-hidden className="size-3 shrink-0" />
-      {counts.total}
-      {counts.running > 0 ? (
-        <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-primary" />
-      ) : null}
+      {/* The count speaks the state: the working-row hue while any sub-run is
+          running (same 4-state color as the pill), muted otherwise. No dot,
+          no word — the word "Settled" was dropped: the fold can hold
+          terminal-but-not-yet-settled children, so it miscounted (owner,
+          2026-09-13). */}
+      <span className={active ? resolveActivityStatePill("working").colorClass : undefined}>
+        {active ? counts.running : settledCount}
+      </span>
     </button>
   );
 }

@@ -70,11 +70,14 @@ async function makeBrokerWithSeededThread(): Promise<{
   const brokerDispatched: OrchestrationCommand[] = [];
   const orchestrationMock: OrchestrationEngineShape = {
     readEvents: () => Stream.empty,
+    readThreadEvents: () => Stream.empty,
+    getThreadReplayStats: () => Effect.die("unused"),
     dispatch: (command) => {
       brokerDispatched.push(command);
       return Effect.succeed({ sequence: brokerDispatched.length });
     },
     streamDomainEvents: Stream.empty,
+    subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
     latestSequence: Effect.succeed(0),
   };
   const broker = await Effect.runPromise(

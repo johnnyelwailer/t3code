@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The JournalStore seam (Epic 25 §Open question 2 — journal storage).
  *

@@ -18,10 +18,12 @@
 import { ProviderDriverKind, type ProviderInstanceEnvironment } from "@t3tools/contracts";
 import type { PackHostCapabilities, PackProviderDriverDefinition } from "@t3team/packs";
 import * as Deferred from "effect/Deferred";
+import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
+import { ServerSettingsService } from "./serverSettings.ts";
 import { ProviderDriverError } from "./provider/Errors.ts";
 import {
   defaultProviderContinuationIdentity,
@@ -40,6 +42,46 @@ const environmentToRecord = (
   environment: ProviderInstanceEnvironment,
 ): Record<string, string | undefined> =>
   Object.fromEntries(environment.map((entry) => [entry.name, entry.value]));
+
+/**
+ * Read the user's global "Personality / Instructions" override
+ * (`ServerSettings.agentInstructions`) from the ambient runtime context —
+ * the registry provides the full built-in driver context to every `create`,
+ * the same channel `createOpenCodeHarness` relies on (see
+ * `t3team-pack-driverHarness.ts`). Fail-open: when the settings service is
+ * absent (tests, non-provider hosts) the field is silently unset; when the
+ * settings file cannot be read it warns and unsets — either way the pack
+ * falls back to its built-in default, and an unreadable settings file must
+ * not take a provider instance down.
+ */
+const readAgentInstructions = (
+  ambient: Context.Context<never>,
+): Effect.Effect<string | undefined> => {
+  // Same ambient-context narrowing the OpenCode harness uses:
+  // the registry physically provides the full built-in driver context to
+  // every `create`.
+  const read = Effect.gen(function* () {
+    const service = yield* ServerSettingsService;
+    const settings = yield* service.getSettings;
+    return settings.agentInstructions;
+  }).pipe(
+    Effect.map((value) => (value ? value : undefined)),
+    Effect.catch((cause) =>
+      Effect.logWarning(
+        "Could not read server settings; the pack driver will use its default agent personality.",
+        { cause },
+      ).pipe(Effect.as(undefined)),
+    ),
+  );
+  const context = ambient as Context.Context<ServerSettingsService>;
+  return Effect.promise(() => Effect.runPromiseWith(context)(read)).pipe(
+    Effect.catchCause(() =>
+      // Settings service absent from this context (tests, non-provider
+      // hosts) — nothing to read, not a failure.
+      Effect.succeed(undefined as string | undefined),
+    ),
+  );
+};
 
 /** Upper bound on a pack `dispose()` so a hung teardown cannot stall registry reconcile. */
 const DISPOSE_TIMEOUT = Duration.seconds(5);
@@ -70,6 +112,7 @@ export const bridgePackProviderDriver = (
         const scope = yield* Effect.scope;
         const ambient = yield* Effect.context<never>();
         const resolvedName = displayName ?? definition.displayName;
+        const agentInstructions = yield* readAgentInstructions(ambient);
         const host: PackHostCapabilities = {
           createOpenCodeHarness: makeOpenCodeHarnessCapability({
             ambient,
@@ -87,6 +130,7 @@ export const bridgePackProviderDriver = (
               config,
               environment: environmentToRecord(environment),
               host,
+              ...(agentInstructions !== undefined ? { agentInstructions } : {}),
             }),
           catch: (cause) =>
             new ProviderDriverError({

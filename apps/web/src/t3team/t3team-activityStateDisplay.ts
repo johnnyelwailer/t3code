@@ -5,10 +5,14 @@
  * The base word is ALWAYS deterministic (zero inference): the server
  * classifier (t3team-activityState.ts) persists `activityState` on the thread
  * and it flows to the UI through the same shell/thread plumbing as the #40
- * activity label. The LLM free-text label is only enrichment, rendered AFTER
- * the state word — `{state} · {detail}` — and is present only while the
- * `t3teamActivityLabelsEnabled` flag is on (the pill resolvers gate
- * `activityLabel` on the flag before it reaches this module).
+ * activity label.
+ *
+ * Display precedence: the LLM free-text label REPLACES the state word when it
+ * is present (it is shorter and already names the activity) — the two never
+ * render side by side. So the pill reads the enrichment alone when available,
+ * else the deterministic state word, else the stable status label. The label
+ * is present only while the `t3teamActivityLabelsEnabled` flag is on (the pill
+ * resolvers gate `activityLabel` on the flag before it reaches this module).
  *
  * Fail-open: flag off or LLM failure leaves `activityLabel` empty and the
  * state word stands alone. A missing `activityState` (old server, or idle)
@@ -60,23 +64,24 @@ export function resolveActivityStatePill(state: ActivityState): {
 
 /**
  * The display text for a status pill that may carry a state word and/or an
- * LLM enrichment: `{state} · {detail}` when both, the state word alone when
- * the flag is off / the label is absent, and the pre-#208 fallbacks otherwise
- * (enrichment replacing the label for old servers without the state word).
+ * LLM enrichment. Precedence, never both: the LLM label REPLACES the state
+ * word when present (shorter, and it already says what is happening); the
+ * deterministic state word stands alone when there is no label; and the
+ * pre-#208 fallbacks apply otherwise (enrichment replacing the label for old
+ * servers without the state word).
  */
 export function resolveActivityPillDisplay(pill: {
   readonly label: string;
   readonly activityLabel?: string | null;
   readonly activityState?: ActivityState | null;
 }): string {
+  const detail = pill.activityLabel?.trim();
+  if (detail) return detail;
   const state = pill.activityState;
   if (state !== undefined && state !== null) {
-    const word = ACTIVITY_STATE_WORDS[state] ?? state;
-    const detail = pill.activityLabel?.trim();
-    return detail ? `${word} · ${detail}` : word;
+    return ACTIVITY_STATE_WORDS[state] ?? state;
   }
-  const detail = pill.activityLabel?.trim();
-  return detail || pill.label;
+  return pill.label;
 }
 
 /**

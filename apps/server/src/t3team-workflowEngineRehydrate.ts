@@ -136,6 +136,10 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
         runId: run.runId,
         correlationId: run.pendingCorrelationId,
         kind: run.pendingKind,
+        // The journaled re-drive budget (migration 052): a thread.turn step interrupted by the
+        // previous uptime keeps counting its re-drives across restarts instead of getting a
+        // fresh 3-attempt budget.
+        ...(run.pendingKind === "thread.turn" ? { turnRetries: run.turnRetries ?? 0 } : {}),
       });
       restored += 1;
     }

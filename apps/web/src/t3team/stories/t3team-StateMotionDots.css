@@ -1,0 +1,112 @@
+/* ===========================================================================
+ * GHE #201 follow-up — STORY-ONLY scaffolding for the state-motion dots.
+ *
+ * The dot language itself SHIPS in the app and lives in
+ * t3team-index.css (state textures keyed off data-t3team-state, hue
+ * wander, state-change swing, waiting ring, 1.5x rest scale, split lead
+ * .t3team-aci-lead). This file carries only the exploration extras:
+ * opt-out toggles, the re-roll swing, the alignment debug rig.
+ * ========================================================================= */
+
+/* Story toggles: opt out of the shipped behaviors, card by card. */
+.sdv-no-ring .t3team-aci-cell[data-t3team-state="waiting"] > span::before {
+  display: none;
+}
+
+.sdv-no-hue .t3team-aci-cell {
+  animation: none !important;
+}
+
+/* Alignment test: the real lead timer still ticks, but shape changes
+   apply instantly instead of gliding. */
+.sdv-frozen .t3team-aci-lead {
+  transition: none !important;
+}
+
+/* One-shot re-roll swing (story flourish — production fires the same
+   one-shot via the t3team-aci-shift keyed remount when entry.dotState
+   changes). */
+@keyframes t3team-sdv-shift {
+  0% {
+    filter: hue-rotate(-30deg) brightness(1.25);
+  }
+  55% {
+    filter: hue-rotate(10deg) brightness(1.08);
+  }
+  100% {
+    filter: none;
+  }
+}
+
+.sdv-mixed .t3team-aci-cell.sdv-shift {
+  animation: t3team-sdv-shift 1.1s ease-out;
+}
+
+/* ===========================================================================
+ * Debug alignment rig (exploration-only): raw-pointer crosshair + one
+ * dashed ring at each dot's true home, so trigger vs pointer vs home can
+ * be compared pixel-by-pixel.
+ * =========================================================================== */
+.sdv-mixed .sdv-debug {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.sdv-mixed .sdv-debug .sdv-debug-cross {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.sdv-mixed .sdv-debug .sdv-debug-cross::before,
+.sdv-mixed .sdv-debug .sdv-debug-cross::after {
+  content: "";
+  position: absolute;
+  background: rgb(244 63 94 / 0.9);
+}
+
+.sdv-mixed .sdv-debug .sdv-debug-cross::before {
+  left: -12px;
+  top: -0.5px;
+  width: 24px;
+  height: 1px;
+}
+
+.sdv-mixed .sdv-debug .sdv-debug-cross::after {
+  left: -0.5px;
+  top: -12px;
+  width: 1px;
+  height: 24px;
+}
+
+.sdv-mixed .sdv-debug .sdv-debug-home {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 9999px;
+  border: 1px dashed rgb(34 197 94 / 0.95);
+}
+
+/* Click-to-capture readouts. */
+.sdv-snap-chip {
+  font-family: ui-monospace, "SF Mono", monospace;
+  font-size: 10px;
+  color: rgb(203 213 225);
+  background: rgb(15 23 42 / 0.9);
+  border: 1px solid rgb(51 65 85);
+  border-radius: 6px;
+  padding: 4px 8px;
+  max-width: 640px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sdv-live {
+  font-family: ui-monospace, "SF Mono", monospace;
+  font-size: 10px;
+  color: rgb(148 163 184);
+}

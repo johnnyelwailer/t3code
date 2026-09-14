@@ -26,6 +26,8 @@ export const RunWorkflowToolArgs = Schema.Struct({
   args: Schema.optional(Schema.Unknown),
   /** Required execution contract for the workflow. */
   intent: WorkflowRunIntent,
+  /** Stop this still-active run (launched from the same thread) before launching the new one. */
+  replaceRunId: Schema.optional(Schema.String),
 });
 export type RunWorkflowToolArgs = typeof RunWorkflowToolArgs.Type;
 
@@ -85,6 +87,7 @@ export const runWorkflowTool = defineTool({
       ...(source.length > 0 ? { source } : { workflowPath }),
       ...(args.args === undefined ? {} : { args: args.args }),
       intent,
+      ...(args.replaceRunId === undefined ? {} : { replaceRunId: args.replaceRunId }),
     })) as RunWorkflowToolResult;
   },
 });

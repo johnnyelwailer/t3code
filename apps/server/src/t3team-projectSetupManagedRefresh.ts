@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import * as NodeCrypto from "node:crypto";
 
 import { buildT3TeamProjectProfileManifest } from "@t3tools/t3team-skill-packs";

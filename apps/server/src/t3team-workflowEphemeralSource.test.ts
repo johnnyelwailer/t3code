@@ -5,6 +5,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
 import {
+  ensureEphemeralRunsGitignore,
   replaceEphemeralWorkflowSourceAtomically,
   resolveEphemeralWorkflowSourcePath,
   writeEphemeralWorkflowRepairAudit,
@@ -69,6 +70,39 @@ describe("ephemeral workflow source replacement", () => {
         assert.strictEqual(text.includes("recovered"), true);
         assert.strictEqual(text.includes("SyntaxError: bad token"), true);
         assert.strictEqual(text.includes("repair:1"), false);
+      }).pipe(Effect.provide(NodeServices.layer)),
+    ),
+  );
+
+  it.effect("creates a self-ignoring .gitignore under a fresh runs root", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const runsRoot = yield* fs.makeTempDirectoryScoped({ prefix: "t3team-runs-gitignore-" });
+        const gitignorePath = path.join(runsRoot, ".gitignore");
+        assert.strictEqual(yield* fs.exists(gitignorePath), false);
+
+        yield* ensureEphemeralRunsGitignore({ runsRoot });
+
+        assert.strictEqual(yield* fs.exists(gitignorePath), true);
+        assert.strictEqual(yield* fs.readFileString(gitignorePath), "*\n");
+      }).pipe(Effect.provide(NodeServices.layer)),
+    ),
+  );
+
+  it.effect("leaves an existing .gitignore untouched", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const runsRoot = yield* fs.makeTempDirectoryScoped({ prefix: "t3team-runs-gitignore-" });
+        const gitignorePath = path.join(runsRoot, ".gitignore");
+        yield* fs.writeFileString(gitignorePath, "custom-entry\n");
+
+        yield* ensureEphemeralRunsGitignore({ runsRoot });
+
+        assert.strictEqual(yield* fs.readFileString(gitignorePath), "custom-entry\n");
       }).pipe(Effect.provide(NodeServices.layer)),
     ),
   );

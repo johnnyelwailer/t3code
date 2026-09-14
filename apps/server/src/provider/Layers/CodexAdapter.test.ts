@@ -62,6 +62,8 @@ const asItemId = (value: string): ProviderItemId => ProviderItemId.make(value);
 class FakeCodexRuntime implements CodexSessionRuntimeShape {
   private readonly eventQueue = Effect.runSync(Queue.unbounded<ProviderEvent>());
   private readonly now = "2026-01-01T00:00:00.000Z";
+  /** Set by the factory for stop-survival scenarios (GHE #326). */
+  public survivesStop = false;
 
   public readonly startImpl = vi.fn(() =>
     Promise.resolve({
@@ -83,6 +85,8 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
         turnId: asTurnId("turn-1"),
       }),
   );
+
+  public readonly compactThread = Effect.void;
 
   public readonly interruptTurnImpl = vi.fn(
     (_turnId?: TurnId): Promise<void> => Promise.resolve(undefined),
@@ -164,6 +168,10 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
 
   close = Effect.promise(() => this.closeImpl());
 
+  get isProcessAlive() {
+    return Effect.succeed(this.survivesStop);
+  }
+
   emit(event: ProviderEvent) {
     return Queue.offer(this.eventQueue, event).pipe(Effect.asVoid);
   }
@@ -185,7 +193,10 @@ function makeRuntimeFactory() {
   };
 }
 
-function makeScopedRuntimeFactory(options?: { readonly failConstruction?: boolean }) {
+function makeScopedRuntimeFactory(options?: {
+  readonly failConstruction?: boolean;
+  readonly surviveStop?: boolean;
+}) {
   const runtimes: Array<FakeCodexRuntime> = [];
   const releasedThreadIds: Array<ThreadId> = [];
 
@@ -206,6 +217,7 @@ function makeScopedRuntimeFactory(options?: { readonly failConstruction?: boolea
       }
 
       const runtime = new FakeCodexRuntime(runtimeOptions);
+      runtime.survivesStop = options?.surviveStop === true;
       runtimes.push(runtime);
       return runtime;
     }),
@@ -222,6 +234,7 @@ function makeScopedRuntimeFactory(options?: { readonly failConstruction?: boolea
 
 const providerSessionDirectoryTestLayer = Layer.succeed(ProviderSessionDirectory, {
   upsert: () => Effect.void,
+  recordImportedTranscript: () => Effect.die("unused"),
   getProvider: () =>
     Effect.die(new Error("ProviderSessionDirectory.getProvider is not used in test")),
   getBinding: () => Effect.succeed(Option.none()),
@@ -336,6 +349,47 @@ sessionErrorLayer("CodexAdapterLive session errors", (it) => {
     }),
   );
 
+  it.effect("compacts the active Codex thread and emits compacted state", () =>
+    Effect.gen(function* () {
+      const adapter = yield* CodexAdapter;
+      const threadId = asThreadId("thread-compact");
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("codex"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+      const runtime = sessionRuntimeFactory.lastRuntime;
+      NodeAssert.ok(runtime);
+      const compactedEventFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.type === "thread.state.changed"),
+        Stream.runHead,
+        Effect.forkChild,
+      );
+      yield* adapter.compactThread!(threadId);
+      yield* runtime.emit({
+        id: asEventId("evt-compaction-item-completed"),
+        kind: "notification",
+        provider: ProviderDriverKind.make("codex"),
+        createdAt: "2026-01-01T00:00:00.000Z",
+        method: "item/completed",
+        threadId,
+        payload: {
+          completedAtMs: 1_778_000_000_000,
+          threadId: "provider-thread-1",
+          turnId: "provider-compact-turn",
+          item: {
+            id: "provider-compact-item",
+            type: "contextCompaction",
+          },
+        },
+      });
+      const event = Option.getOrThrow(yield* Fiber.join(compactedEventFiber));
+      NodeAssert.ok(event.type === "thread.state.changed");
+      NodeAssert.equal(event.payload.state, "compacted");
+      yield* adapter.stopSession(threadId);
+    }),
+  );
+
   it.effect("uploads feedback for the active Codex thread", () =>
     Effect.gen(function* () {
       const adapter = yield* CodexAdapter;
@@ -404,6 +458,73 @@ sessionErrorLayer("CodexAdapterLive session errors", (it) => {
       });
     }),
   );
+
+  it.effect("skips file attachments when building the turn payload", () => {
+    const runtimeFactory = makeRuntimeFactory();
+    const layer = Layer.effect(
+      CodexAdapter,
+      Effect.gen(function* () {
+        const codexConfig = decodeCodexSettings({});
+        return yield* makeCodexAdapter(codexConfig, {
+          makeRuntime: runtimeFactory.factory,
+        });
+      }),
+    ).pipe(
+      // The prefix form of layerTest scopes baseDir to a temp directory, so
+      // the .bin fixture lands outside the repo (a plain cwd baseDir would
+      // write into apps/server/userdata/).
+      Layer.provideMerge(
+        ServerConfig.layerTest(process.cwd(), {
+          prefix: "t3code-codex-adapter-test-",
+        }),
+      ),
+      Layer.provideMerge(ServerSettingsService.layerTest()),
+      Layer.provideMerge(providerSessionDirectoryTestLayer),
+      Layer.provideMerge(NodeServices.layer),
+    );
+
+    return Effect.gen(function* () {
+      const adapter = yield* CodexAdapter;
+      const serverConfig = yield* ServerConfig;
+      const attachmentId = "codex-file-skip-12345678-1234-4234-8234-123456789abc";
+      NodeFS.writeFileSync(
+        NodePath.join(serverConfig.attachmentsDir, `${attachmentId}.bin`),
+        "hello",
+        "utf8",
+      );
+
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("codex"),
+        threadId: asThreadId("sess-file-skip"),
+        runtimeMode: "full-access",
+      });
+      const runtime = runtimeFactory.lastRuntime;
+      NodeAssert.ok(runtime);
+
+      yield* Effect.ignore(
+        adapter.sendTurn({
+          threadId: asThreadId("sess-file-skip"),
+          input: "read the notes",
+          attachments: [
+            {
+              type: "file",
+              id: attachmentId,
+              name: "notes.txt",
+              mimeType: "text/plain",
+              sizeBytes: 5,
+            },
+          ],
+        }),
+      );
+
+      // The file reaches the model only through the shared
+      // '[Attached file … is saved at: path]' line — never as an inlined
+      // image payload, so the turn payload carries no attachments at all.
+      NodeAssert.deepStrictEqual(runtime.sendTurnImpl.mock.calls[0]?.[0], {
+        input: "read the notes",
+      });
+    }).pipe(Effect.provide(layer));
+  });
 
   it.effect("passes configured launch args into the session runtime", () => {
     const runtimeFactory = makeRuntimeFactory();
@@ -556,7 +677,536 @@ function startLifecycleRuntime() {
   });
 }
 
+function codexTokenUsageEvent(input: {
+  readonly id: string;
+  readonly turnId: string;
+  readonly inputTokens: number;
+  readonly cachedInputTokens: number;
+  readonly cacheCreationTokens: number;
+  readonly outputTokens: number;
+  readonly reasoningTokens: number;
+  readonly last?: {
+    readonly inputTokens: number;
+    readonly cachedInputTokens: number;
+    readonly cacheCreationTokens: number;
+    readonly outputTokens: number;
+    readonly reasoningTokens: number;
+  };
+}): ProviderEvent {
+  const totalTokens = input.inputTokens + input.outputTokens;
+  const last = input.last ?? input;
+  return {
+    id: asEventId(input.id),
+    kind: "notification",
+    provider: ProviderDriverKind.make("codex"),
+    threadId: asThreadId("thread-1"),
+    turnId: asTurnId(input.turnId),
+    createdAt: "2026-01-01T00:00:00.000Z",
+    method: "thread/tokenUsage/updated",
+    payload: {
+      threadId: "thread-1",
+      turnId: input.turnId,
+      tokenUsage: {
+        total: {
+          inputTokens: input.inputTokens,
+          cachedInputTokens: input.cachedInputTokens,
+          cacheWriteInputTokens: input.cacheCreationTokens,
+          outputTokens: input.outputTokens,
+          reasoningOutputTokens: input.reasoningTokens,
+          totalTokens,
+        },
+        last: {
+          inputTokens: last.inputTokens,
+          cachedInputTokens: last.cachedInputTokens,
+          cacheWriteInputTokens: last.cacheCreationTokens,
+          outputTokens: last.outputTokens,
+          reasoningOutputTokens: last.reasoningTokens,
+          totalTokens: last.inputTokens + last.outputTokens,
+        },
+      },
+    },
+  };
+}
+
+function codexTurnEvent(method: "turn/started" | "turn/completed", turnId: string): ProviderEvent {
+  return {
+    id: asEventId(`evt-${method}-${turnId}`),
+    kind: "notification",
+    provider: ProviderDriverKind.make("codex"),
+    threadId: asThreadId("thread-1"),
+    turnId: asTurnId(turnId),
+    createdAt: "2026-01-01T00:00:00.000Z",
+    method,
+    payload:
+      method === "turn/started"
+        ? {}
+        : {
+            threadId: "thread-1",
+            turn: { id: turnId, items: [], status: "completed" },
+          },
+  };
+}
+
 lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
+  it.effect("calculates one Codex turn total from cumulative counters", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      const completedFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.type === "turn.completed"),
+        Stream.runHead,
+        Effect.forkChild,
+      );
+
+      yield* runtime.emit(codexTurnEvent("turn/started", "turn-usage"));
+      yield* runtime.emit(
+        codexTokenUsageEvent({
+          id: "evt-usage-1",
+          turnId: "turn-usage",
+          inputTokens: 100,
+          cachedInputTokens: 40,
+          cacheCreationTokens: 10,
+          outputTokens: 20,
+          reasoningTokens: 8,
+        }),
+      );
+      // Codex can repeat both notifications without new work.
+      yield* runtime.emit(codexTurnEvent("turn/started", "turn-usage"));
+      yield* runtime.emit(
+        codexTokenUsageEvent({
+          id: "evt-usage-duplicate",
+          turnId: "turn-usage",
+          inputTokens: 100,
+          cachedInputTokens: 40,
+          cacheCreationTokens: 10,
+          outputTokens: 20,
+          reasoningTokens: 8,
+        }),
+      );
+      yield* runtime.emit({
+        id: asEventId("evt-collab-activity"),
+        kind: "notification",
+        provider: ProviderDriverKind.make("codex"),
+        threadId: asThreadId("thread-1"),
+        turnId: asTurnId("turn-usage"),
+        createdAt: "2026-01-01T00:00:00.000Z",
+        method: "collabAgent/activity",
+        payload: {
+          agentThreadId: "child-1",
+          agentPath: "/root/child-1",
+          activityKind: "started",
+        },
+      });
+      yield* runtime.emit(
+        codexTokenUsageEvent({
+          id: "evt-usage-2",
+          turnId: "turn-usage",
+          inputTokens: 150,
+          cachedInputTokens: 60,
+          cacheCreationTokens: 15,
+          outputTokens: 30,
+          reasoningTokens: 12,
+        }),
+      );
+      yield* runtime.emit(codexTurnEvent("turn/completed", "turn-usage"));
+
+      const completed = yield* Fiber.join(completedFiber);
+      NodeAssert.equal(completed._tag, "Some");
+      if (completed._tag === "Some" && completed.value.type === "turn.completed") {
+        NodeAssert.deepStrictEqual(completed.value.payload.tokenUsage, {
+          usageStatus: "complete",
+          usageScope: "main_agent",
+          inputTokens: 150,
+          cachedInputTokens: 60,
+          cacheCreationTokens: 15,
+          outputTokens: 30,
+          reasoningTokens: 12,
+          hasSubagents: true,
+        });
+      }
+    }),
+  );
+
+  it.effect("does not charge a late prior-turn update to the next Codex turn", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      const completedFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.type === "turn.completed"),
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+
+      yield* runtime.emit(codexTurnEvent("turn/started", "turn-first"));
+      yield* runtime.emit(
+        codexTokenUsageEvent({
+          id: "evt-late-1",
+          turnId: "turn-first",
+          inputTokens: 100,
+          cachedInputTokens: 40,
+          cacheCreationTokens: 10,
+          outputTokens: 20,
+          reasoningTokens: 8,
+        }),
+      );
+      yield* runtime.emit(codexTurnEvent("turn/completed", "turn-first"));
+      yield* runtime.emit(codexTurnEvent("turn/started", "turn-second"));
+      // A late update for the finished turn lands after the next turn starts.
+      yield* runtime.emit(
+        codexTokenUsageEvent({
+          id: "evt-late-2",
+          turnId: "turn-first",
+          inputTokens: 150,
+          cachedInputTokens: 60,
+          cacheCreationTokens: 15,
+          outputTokens: 30,
+          reasoningTokens: 12,
+        }),
+      );
+      yield* runtime.emit(
+        codexTokenUsageEvent({
+          id: "evt-late-3",
+          turnId: "turn-second",
+          inputTokens: 170,
+          cachedInputTokens: 65,
+          cacheCreationTokens: 16,
+          outputTokens: 35,
+          reasoningTokens: 14,
+        }),
+      );
+      yield* runtime.emit(codexTurnEvent("turn/completed", "turn-second"));
+
+      const completed = Array.from(yield* Fiber.join(completedFiber));
+      const second = completed[1];
+      NodeAssert.equal(second?.type, "turn.completed");
+      if (second?.type === "turn.completed") {
+        NodeAssert.deepStrictEqual(second.payload.tokenUsage, {
+          usageStatus: "complete",
+          usageScope: "main_agent",
+          inputTokens: 20,
+          cachedInputTokens: 5,
+          cacheCreationTokens: 1,
+          outputTokens: 5,
+          reasoningTokens: 2,
+          hasSubagents: false,
+        });
+      }
+    }),
+  );
+
+  it.effect("clamps Codex cache and reasoning subsets to their totals", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      const completedFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.type === "turn.completed"),
+        Stream.runHead,
+        Effect.forkChild,
+      );
+
+      yield* runtime.emit(codexTurnEvent("turn/started", "turn-clamp"));
+      yield* runtime.emit(
+        codexTokenUsageEvent({
+          id: "evt-clamp-1",
+          turnId: "turn-clamp",
+          inputTokens: 100,
+          cachedInputTokens: 140,
+          cacheCreationTokens: 120,
+          outputTokens: 20,
+          reasoningTokens: 30,
+        }),
+      );
+      yield* runtime.emit(codexTurnEvent("turn/completed", "turn-clamp"));
+
+      const completed = yield* Fiber.join(completedFiber);
+      NodeAssert.equal(completed._tag, "Some");
+      if (completed._tag === "Some" && completed.value.type === "turn.completed") {
+        NodeAssert.deepStrictEqual(completed.value.payload.tokenUsage, {
+          usageStatus: "complete",
+          usageScope: "main_agent",
+          inputTokens: 100,
+          cachedInputTokens: 100,
+          cacheCreationTokens: 100,
+          outputTokens: 20,
+          reasoningTokens: 20,
+          hasSubagents: false,
+        });
+      }
+    }),
+  );
+
+  it.effect("counts the last response when Codex resets its running total mid-turn", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      const completedFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.type === "turn.completed"),
+        Stream.runHead,
+        Effect.forkChild,
+      );
+
+      yield* runtime.emit(codexTurnEvent("turn/started", "turn-reset"));
+      yield* runtime.emit(
+        codexTokenUsageEvent({
+          id: "evt-reset-1",
+          turnId: "turn-reset",
+          inputTokens: 5_000,
+          cachedInputTokens: 4_000,
+          cacheCreationTokens: 100,
+          outputTokens: 500,
+          reasoningTokens: 200,
+          last: {
+            inputTokens: 100,
+            cachedInputTokens: 80,
+            cacheCreationTokens: 10,
+            outputTokens: 20,
+            reasoningTokens: 8,
+          },
+        }),
+      );
+      // Codex restarted its cumulative total. The new total is smaller than
+      // the previous one, so only `last` is counted for this update.
+      yield* runtime.emit(
+        codexTokenUsageEvent({
+          id: "evt-reset-2",
+          turnId: "turn-reset",
+          inputTokens: 150,
+          cachedInputTokens: 90,
+          cacheCreationTokens: 5,
+          outputTokens: 30,
+          reasoningTokens: 12,
+        }),
+      );
+      yield* runtime.emit(codexTurnEvent("turn/completed", "turn-reset"));
+
+      const completed = yield* Fiber.join(completedFiber);
+      NodeAssert.equal(completed._tag, "Some");
+      if (completed._tag === "Some" && completed.value.type === "turn.completed") {
+        NodeAssert.deepStrictEqual(completed.value.payload.tokenUsage, {
+          usageStatus: "complete",
+          usageScope: "main_agent",
+          inputTokens: 250,
+          cachedInputTokens: 170,
+          cacheCreationTokens: 15,
+          outputTokens: 50,
+          reasoningTokens: 20,
+          hasSubagents: false,
+        });
+      }
+    }),
+  );
+
+  it.effect("uses the last response usage when no prior Codex total exists", () =>
+    Effect.gen(function* () {
+      const adapter = yield* CodexAdapter;
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("codex"),
+        threadId: asThreadId("thread-1"),
+        resumeCursor: { threadId: "provider-thread-1" },
+        runtimeMode: "full-access",
+      });
+      const runtime = lifecycleRuntimeFactory.lastRuntime;
+      NodeAssert.ok(runtime);
+      const firstCompletionsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.type === "turn.completed"),
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+
+      // Resumed thread: the cumulative total already holds old history, so the
+      // first update must count only `last`.
+      yield* runtime.emit(codexTurnEvent("turn/started", "turn-resumed"));
+      yield* runtime.emit(
+        codexTokenUsageEvent({
+          id: "evt-resume-baseline",
+          turnId: "turn-resumed",
+          inputTokens: 1_000,
+          cachedInputTokens: 400,
+          cacheCreationTokens: 100,
+          outputTokens: 200,
+          reasoningTokens: 80,
+          last: {
+            inputTokens: 300,
+            cachedInputTokens: 120,
+            cacheCreationTokens: 30,
+            outputTokens: 60,
+            reasoningTokens: 24,
+          },
+        }),
+      );
+      yield* runtime.emit(codexTurnEvent("turn/completed", "turn-resumed"));
+
+      yield* runtime.emit(codexTurnEvent("turn/started", "turn-after-resume"));
+      yield* runtime.emit(
+        codexTokenUsageEvent({
+          id: "evt-after-resume",
+          turnId: "turn-after-resume",
+          inputTokens: 1_100,
+          cachedInputTokens: 440,
+          cacheCreationTokens: 110,
+          outputTokens: 220,
+          reasoningTokens: 88,
+        }),
+      );
+      yield* runtime.emit(codexTurnEvent("turn/completed", "turn-after-resume"));
+
+      const firstCompletions = Array.from(yield* Fiber.join(firstCompletionsFiber));
+
+      yield* adapter.rollbackThread(asThreadId("thread-1"), 1);
+      const rollbackCompletionFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.type === "turn.completed"),
+        Stream.runHead,
+        Effect.forkChild,
+      );
+      // Rollback drops the baseline and Codex shrinks its total, so the first
+      // update after it counts only `last` again.
+      yield* runtime.emit(codexTurnEvent("turn/started", "turn-after-rollback"));
+      yield* runtime.emit(
+        codexTokenUsageEvent({
+          id: "evt-after-rollback",
+          turnId: "turn-after-rollback",
+          inputTokens: 1_050,
+          cachedInputTokens: 420,
+          cacheCreationTokens: 105,
+          outputTokens: 210,
+          reasoningTokens: 84,
+          last: {
+            inputTokens: 50,
+            cachedInputTokens: 20,
+            cacheCreationTokens: 5,
+            outputTokens: 10,
+            reasoningTokens: 4,
+          },
+        }),
+      );
+      yield* runtime.emit(codexTurnEvent("turn/completed", "turn-after-rollback"));
+
+      const rollbackCompletion = yield* Fiber.join(rollbackCompletionFiber);
+      const completions = [
+        ...firstCompletions,
+        ...(rollbackCompletion._tag === "Some" ? [rollbackCompletion.value] : []),
+      ];
+      NodeAssert.deepStrictEqual(
+        completions.map((event) =>
+          event.type === "turn.completed" ? event.payload.tokenUsage : undefined,
+        ),
+        [
+          {
+            usageStatus: "complete",
+            usageScope: "main_agent",
+            inputTokens: 300,
+            cachedInputTokens: 120,
+            cacheCreationTokens: 30,
+            outputTokens: 60,
+            reasoningTokens: 24,
+            hasSubagents: false,
+          },
+          {
+            usageStatus: "complete",
+            usageScope: "main_agent",
+            inputTokens: 100,
+            cachedInputTokens: 40,
+            cacheCreationTokens: 10,
+            outputTokens: 20,
+            reasoningTokens: 8,
+            hasSubagents: false,
+          },
+          {
+            usageStatus: "complete",
+            usageScope: "main_agent",
+            inputTokens: 50,
+            cachedInputTokens: 20,
+            cacheCreationTokens: 5,
+            outputTokens: 10,
+            reasoningTokens: 4,
+            hasSubagents: false,
+          },
+        ],
+      );
+    }),
+  );
+
+  it.effect("carries child model metadata through every task event", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      const eventsFiber = yield* Stream.runCollect(Stream.take(adapter.streamEvents, 10)).pipe(
+        Effect.forkChild,
+      );
+
+      const cases = [
+        ["collabAgent/started", {}],
+        ["collabAgent/activity", { activityKind: "started" }],
+        ["collabAgent/turnStarted", {}],
+        ["collabAgent/turnCompleted", { turn: { status: "completed" } }],
+        ["collabAgent/statusChanged", { status: { type: "active", activeFlags: [] } }],
+        ["collabAgent/tokenUsage", { tokenUsage: { total: { totalTokens: 42 } } }],
+        ["collabAgent/item", { item: { type: "commandExecution", command: "pwd" } }],
+        ["collabAgent/closed", {}],
+        ["collabAgent/metadataUpdated", {}],
+      ] as const;
+
+      for (const [index, [method, extra]] of cases.entries()) {
+        yield* runtime.emit({
+          id: asEventId(`evt-child-model-${index}`),
+          kind: "notification",
+          provider: ProviderDriverKind.make("codex"),
+          createdAt: "2026-01-01T00:00:00.000Z",
+          method,
+          threadId: asThreadId("thread-1"),
+          turnId: asTurnId("turn-1"),
+          payload: {
+            agentThreadId: "child-model",
+            agentPath: "/root/model-check",
+            model: " gpt-5.6-sol ",
+            effort: " high ",
+            ...extra,
+          },
+        });
+      }
+      yield* runtime.emit({
+        id: asEventId("evt-child-model-blank"),
+        kind: "notification",
+        provider: ProviderDriverKind.make("codex"),
+        createdAt: "2026-01-01T00:00:00.000Z",
+        method: "collabAgent/metadataUpdated",
+        threadId: asThreadId("thread-1"),
+        turnId: asTurnId("turn-1"),
+        payload: {
+          agentThreadId: "child-model",
+          model: "  ",
+          effort: "",
+        },
+      });
+
+      const events = Array.from(yield* Fiber.join(eventsFiber));
+      NodeAssert.deepStrictEqual(
+        events.map((event) => event.type),
+        [
+          "task.started",
+          "task.started",
+          "task.updated",
+          "task.updated",
+          "task.updated",
+          "task.progress",
+          "task.progress",
+          "task.updated",
+          "task.updated",
+          "task.updated",
+        ],
+      );
+      for (const event of events.slice(0, -1)) {
+        const payload = event.payload as Record<string, unknown>;
+        NodeAssert.equal(payload.model, "gpt-5.6-sol");
+        NodeAssert.equal(payload.effort, "high");
+      }
+
+      const metadataPayload = events[8]?.payload as Record<string, unknown>;
+      NodeAssert.equal("status" in metadataPayload, false);
+      const blankMetadataPayload = events[9]?.payload as Record<string, unknown>;
+      NodeAssert.equal("status" in blankMetadataPayload, false);
+      NodeAssert.equal("model" in blankMetadataPayload, false);
+      NodeAssert.equal("effort" in blankMetadataPayload, false);
+    }),
+  );
+
   it.effect("does not reactivate an idle child after a parent interaction", () =>
     Effect.gen(function* () {
       const { adapter, runtime } = yield* startLifecycleRuntime();
@@ -719,9 +1369,207 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
     }),
   );
 
+  it.effect("presents browser and computer-use calls with Codex-style titles and sources", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      const eventsFiber = yield* Stream.runCollect(Stream.take(adapter.streamEvents, 3)).pipe(
+        Effect.forkChild,
+      );
+      const longIntentTitle = `  ${"a".repeat(39)}   ${"a".repeat(38)}😀bc  `;
+      const serializedOverContractUrl = `https://example.com/?query=${"😀".repeat(400)}`;
+
+      yield* runtime.emit({
+        id: asEventId("evt-computer-start"),
+        kind: "notification",
+        provider: ProviderDriverKind.make("codex"),
+        createdAt: "2026-01-01T00:00:00.000Z",
+        method: "item/started",
+        threadId: asThreadId("thread-1"),
+        turnId: asTurnId("turn-1"),
+        itemId: asItemId("computer_1"),
+        payload: {
+          startedAtMs: 1_778_000_000_000,
+          threadId: "thread-1",
+          turnId: "turn-1",
+          item: {
+            type: "mcpToolCall",
+            id: "computer_1",
+            server: "node_repl",
+            tool: "js",
+            arguments: {
+              code: 'await sky.click({ app: "Finder", x: 10, y: 20 })',
+              title: longIntentTitle,
+            },
+            durationMs: null,
+            error: null,
+            result: {
+              _meta: {
+                "codex/toolSurface": {
+                  kind: "computerUse",
+                  app: { kind: "appId", appId: "com.apple.finder" },
+                },
+              },
+              content: [],
+            },
+            status: "inProgress",
+          },
+        },
+      });
+      yield* runtime.emit({
+        id: asEventId("evt-browser-complete"),
+        kind: "notification",
+        provider: ProviderDriverKind.make("codex"),
+        createdAt: "2026-01-01T00:00:01.000Z",
+        method: "item/completed",
+        threadId: asThreadId("thread-1"),
+        turnId: asTurnId("turn-1"),
+        itemId: asItemId("browser_1"),
+        payload: {
+          completedAtMs: 1_778_000_001_000,
+          threadId: "thread-1",
+          turnId: "turn-1",
+          item: {
+            type: "mcpToolCall",
+            id: "browser_1",
+            server: "node_repl",
+            tool: "js",
+            arguments: { code: "await tab.playwright.domSnapshot()", title: "Inspect checkout" },
+            durationMs: 12,
+            error: null,
+            result: {
+              _meta: {
+                "codex/toolSurface": {
+                  kind: "browserUse",
+                  backend: "chrome",
+                  openTabs: [
+                    {
+                      pageUrl: "https://www.mathworks.com/help/matlab/",
+                      faviconUrl: "https://www.mathworks.com/favicon.ico",
+                      faviconUrlDark: "https://www.mathworks.com/favicon-dark.ico",
+                      url: "https://www.mathworks.com/help/matlab/",
+                    },
+                  ],
+                },
+                browser_use: { url: serializedOverContractUrl },
+              },
+              content: [],
+            },
+            status: "completed",
+          },
+        },
+      });
+      yield* runtime.emit({
+        id: asEventId("evt-computer-use-complete"),
+        kind: "notification",
+        provider: ProviderDriverKind.make("codex"),
+        createdAt: "2026-01-01T00:00:02.000Z",
+        method: "item/completed",
+        threadId: asThreadId("thread-1"),
+        turnId: asTurnId("turn-1"),
+        itemId: asItemId("computer_2"),
+        payload: {
+          completedAtMs: 1_778_000_002_000,
+          threadId: "thread-1",
+          turnId: "turn-1",
+          item: {
+            type: "mcpToolCall",
+            id: "computer_2",
+            server: "computer-use",
+            tool: "type_text",
+            arguments: { text: "Hello world", app: "TextEdit" },
+            durationMs: 12,
+            error: null,
+            result: {
+              _meta: {
+                "codex/toolSurface": {
+                  kind: "computerUse",
+                  app: { kind: "displayName", displayName: "TextEdit" },
+                },
+              },
+              content: [],
+            },
+            status: "completed",
+          },
+        },
+      });
+
+      const events = Array.from(yield* Fiber.join(eventsFiber));
+      NodeAssert.deepStrictEqual(
+        events.map((event) => ({
+          type: event.type,
+          title: "title" in event.payload ? event.payload.title : undefined,
+          toolSurface: "toolSurface" in event.payload ? event.payload.toolSurface : undefined,
+          toolIcon: "toolIcon" in event.payload ? event.payload.toolIcon : undefined,
+          toolSource: "toolSource" in event.payload ? event.payload.toolSource : undefined,
+        })),
+        [
+          {
+            type: "item.started",
+            title: `${"a".repeat(39)} ${"a".repeat(38)}😀…`,
+            toolSurface: "computer",
+            toolIcon: {
+              _tag: "native-app",
+              app: { _tag: "app-id", appId: "com.apple.finder" },
+            },
+            toolSource: {
+              key: "native-app:com.apple.finder",
+              name: "Finder",
+              kind: "computer",
+              icon: {
+                _tag: "native-app",
+                app: { _tag: "app-id", appId: "com.apple.finder" },
+              },
+            },
+          },
+          {
+            type: "item.completed",
+            title: "Inspect checkout",
+            toolSurface: "browser",
+            toolIcon: {
+              _tag: "website",
+              pageUrl: "https://www.mathworks.com/help/matlab/",
+              faviconUrl: "https://www.mathworks.com/favicon.ico",
+              faviconUrlDark: "https://www.mathworks.com/favicon-dark.ico",
+            },
+            toolSource: {
+              key: "browser-use:chrome",
+              name: "Chrome",
+              kind: "integration",
+              icon: {
+                _tag: "native-app",
+                app: { _tag: "display-name", displayName: "Google Chrome" },
+              },
+            },
+          },
+          {
+            type: "item.completed",
+            title: "Typed text in TextEdit",
+            toolSurface: "computer",
+            toolIcon: {
+              _tag: "native-app",
+              app: { _tag: "display-name", displayName: "TextEdit" },
+            },
+            toolSource: {
+              key: "native-app-name:textedit",
+              name: "TextEdit",
+              kind: "computer",
+              icon: {
+                _tag: "native-app",
+                app: { _tag: "display-name", displayName: "TextEdit" },
+              },
+            },
+          },
+        ],
+      );
+    }),
+  );
+
   it.effect("preserves failed and declined outcomes on completed tool items", () =>
     Effect.gen(function* () {
       const { adapter, runtime } = yield* startLifecycleRuntime();
+      const maxLengthAppId = `com.${"a".repeat(508)}`;
+      const collidingMaxLengthAppId = `com.${"a".repeat(507)}b`;
+      const longAppSourceKeys: string[] = [];
       const items = [
         {
           type: "commandExecution",
@@ -739,6 +1587,42 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
           tool: "build",
           arguments: {},
           error: { message: "Build failed" },
+          status: "failed",
+        },
+        {
+          type: "mcpToolCall",
+          id: "failed-computer",
+          server: "computer-use",
+          tool: "click",
+          arguments: { app: "Finder" },
+          error: { message: "Click failed" },
+          result: {
+            _meta: {
+              "codex/toolSurface": {
+                kind: "computerUse",
+                app: { kind: "appId", appId: maxLengthAppId },
+              },
+            },
+            content: [],
+          },
+          status: "failed",
+        },
+        {
+          type: "mcpToolCall",
+          id: "failed-computer-collision",
+          server: "computer-use",
+          tool: "click",
+          arguments: { app: "Other" },
+          error: { message: "Click failed" },
+          result: {
+            _meta: {
+              "codex/toolSurface": {
+                kind: "computerUse",
+                app: { kind: "appId", appId: collidingMaxLengthAppId },
+              },
+            },
+            content: [],
+          },
           status: "failed",
         },
         {
@@ -775,7 +1659,14 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
           return;
         }
         NodeAssert.equal(firstEvent.value.payload.status, item.status);
+        if (item.id.startsWith("failed-computer")) {
+          NodeAssert.equal(firstEvent.value.payload.title, "computer-use · click");
+          const sourceKey = firstEvent.value.payload.toolSource?.key;
+          NodeAssert.equal(sourceKey?.length, 512);
+          if (sourceKey) longAppSourceKeys.push(sourceKey);
+        }
       }
+      NodeAssert.equal(new Set(longAppSourceKeys).size, 2);
     }),
   );
 
@@ -1066,6 +1957,213 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
     }),
   );
 
+  it.effect("names the edited files in an apply-patch approval without a reason", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      const firstEventFiber = yield* Stream.runHead(adapter.streamEvents).pipe(Effect.forkChild);
+
+      yield* runtime.emit({
+        id: asEventId("evt-apply-patch"),
+        kind: "request",
+        provider: ProviderDriverKind.make("codex"),
+        threadId: asThreadId("thread-1"),
+        createdAt: "2026-08-24T00:00:00.000Z",
+        method: "applyPatchApproval",
+        requestKind: "file-change",
+        requestId: ApprovalRequestId.make("req-patch"),
+        turnId: asTurnId("turn-1"),
+        payload: {
+          callId: "call-1",
+          conversationId: "provider-thread-1",
+          fileChanges: {
+            "/tmp/removed.md": { type: "delete", content: "gone" },
+            "/tmp/added.ts": { type: "add", content: "export {};" },
+          },
+        },
+      } satisfies ProviderEvent);
+
+      const firstEvent = yield* Fiber.join(firstEventFiber);
+
+      NodeAssert.equal(firstEvent._tag, "Some");
+      if (firstEvent._tag !== "Some" || firstEvent.value.type !== "request.opened") {
+        return;
+      }
+      NodeAssert.equal(firstEvent.value.payload.requestType, "apply_patch_approval");
+      NodeAssert.equal(
+        firstEvent.value.payload.detail,
+        "add /tmp/added.ts\ndelete /tmp/removed.md",
+      );
+    }),
+  );
+
+  it.effect("keeps the reason when an apply-patch approval carries one", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      const firstEventFiber = yield* Stream.runHead(adapter.streamEvents).pipe(Effect.forkChild);
+
+      yield* runtime.emit({
+        id: asEventId("evt-apply-patch-reason"),
+        kind: "request",
+        provider: ProviderDriverKind.make("codex"),
+        threadId: asThreadId("thread-1"),
+        createdAt: "2026-08-24T00:00:00.000Z",
+        method: "applyPatchApproval",
+        requestKind: "file-change",
+        requestId: ApprovalRequestId.make("req-patch-reason"),
+        turnId: asTurnId("turn-1"),
+        payload: {
+          callId: "call-2",
+          conversationId: "provider-thread-1",
+          reason: "Needs to rewrite the changelog",
+          fileChanges: { "/tmp/CHANGELOG.md": { type: "add", content: "x" } },
+        },
+      } satisfies ProviderEvent);
+
+      const firstEvent = yield* Fiber.join(firstEventFiber);
+
+      NodeAssert.equal(firstEvent._tag, "Some");
+      if (firstEvent._tag !== "Some" || firstEvent.value.type !== "request.opened") {
+        return;
+      }
+      NodeAssert.equal(firstEvent.value.payload.detail, "Needs to rewrite the changelog");
+    }),
+  );
+
+  it.effect("falls back to the grant root for a file-change approval without a reason", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      const firstEventFiber = yield* Stream.runHead(adapter.streamEvents).pipe(Effect.forkChild);
+
+      yield* runtime.emit({
+        id: asEventId("evt-file-change"),
+        kind: "request",
+        provider: ProviderDriverKind.make("codex"),
+        threadId: asThreadId("thread-1"),
+        createdAt: "2026-08-24T00:00:00.000Z",
+        method: "item/fileChange/requestApproval",
+        requestKind: "file-change",
+        requestId: ApprovalRequestId.make("req-file-change"),
+        turnId: asTurnId("turn-1"),
+        payload: {
+          itemId: "item-1",
+          grantRoot: "/tmp/workspace",
+          startedAtMs: 0,
+          threadId: "provider-thread-1",
+          turnId: "turn-1",
+        },
+      } satisfies ProviderEvent);
+
+      const firstEvent = yield* Fiber.join(firstEventFiber);
+
+      NodeAssert.equal(firstEvent._tag, "Some");
+      if (firstEvent._tag !== "Some" || firstEvent.value.type !== "request.opened") {
+        return;
+      }
+      NodeAssert.equal(firstEvent.value.payload.requestType, "file_change_approval");
+      NodeAssert.equal(firstEvent.value.payload.detail, "/tmp/workspace");
+    }),
+  );
+
+  it.effect("prefers the edited files over a blank apply-patch reason", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      const firstEventFiber = yield* Stream.runHead(adapter.streamEvents).pipe(Effect.forkChild);
+
+      yield* runtime.emit({
+        id: asEventId("evt-apply-patch-blank"),
+        kind: "request",
+        provider: ProviderDriverKind.make("codex"),
+        threadId: asThreadId("thread-1"),
+        createdAt: "2026-08-24T00:00:00.000Z",
+        method: "applyPatchApproval",
+        requestKind: "file-change",
+        requestId: ApprovalRequestId.make("req-patch-blank"),
+        turnId: asTurnId("turn-1"),
+        payload: {
+          callId: "call-3",
+          conversationId: "provider-thread-1",
+          reason: "   ",
+          fileChanges: {
+            "/tmp/moved.ts": { type: "update", unified_diff: "@@", move_path: "/tmp/renamed.ts" },
+          },
+        },
+      } satisfies ProviderEvent);
+
+      const firstEvent = yield* Fiber.join(firstEventFiber);
+
+      NodeAssert.equal(firstEvent._tag, "Some");
+      if (firstEvent._tag !== "Some" || firstEvent.value.type !== "request.opened") {
+        return;
+      }
+      NodeAssert.equal(firstEvent.value.payload.detail, "update /tmp/moved.ts -> /tmp/renamed.ts");
+    }),
+  );
+
+  it.effect("caps the described files in an oversized apply-patch approval", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      const firstEventFiber = yield* Stream.runHead(adapter.streamEvents).pipe(Effect.forkChild);
+
+      const fileChanges = Object.fromEntries(
+        Array.from({ length: 25 }, (_unused, index) => [
+          `/tmp/file-${String(index).padStart(2, "0")}.ts`,
+          { type: "add", content: "x" },
+        ]),
+      );
+
+      yield* runtime.emit({
+        id: asEventId("evt-apply-patch-many"),
+        kind: "request",
+        provider: ProviderDriverKind.make("codex"),
+        threadId: asThreadId("thread-1"),
+        createdAt: "2026-08-24T00:00:00.000Z",
+        method: "applyPatchApproval",
+        requestKind: "file-change",
+        requestId: ApprovalRequestId.make("req-patch-many"),
+        turnId: asTurnId("turn-1"),
+        payload: { callId: "call-4", conversationId: "provider-thread-1", fileChanges },
+      } satisfies ProviderEvent);
+
+      const firstEvent = yield* Fiber.join(firstEventFiber);
+
+      NodeAssert.equal(firstEvent._tag, "Some");
+      if (firstEvent._tag !== "Some" || firstEvent.value.type !== "request.opened") {
+        return;
+      }
+      const detail = firstEvent.value.payload.detail ?? "";
+      NodeAssert.equal(detail.split("\n").length, 21);
+      NodeAssert.ok(detail.endsWith("+5 more"));
+    }),
+  );
+
+  it.effect("leaves an apply-patch approval without changes or a reason undetailed", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      const firstEventFiber = yield* Stream.runHead(adapter.streamEvents).pipe(Effect.forkChild);
+
+      yield* runtime.emit({
+        id: asEventId("evt-apply-patch-empty"),
+        kind: "request",
+        provider: ProviderDriverKind.make("codex"),
+        threadId: asThreadId("thread-1"),
+        createdAt: "2026-08-24T00:00:00.000Z",
+        method: "applyPatchApproval",
+        requestKind: "file-change",
+        requestId: ApprovalRequestId.make("req-patch-empty"),
+        turnId: asTurnId("turn-1"),
+        payload: { callId: "call-5", conversationId: "provider-thread-1", fileChanges: {} },
+      } satisfies ProviderEvent);
+
+      const firstEvent = yield* Fiber.join(firstEventFiber);
+
+      NodeAssert.equal(firstEvent._tag, "Some");
+      if (firstEvent._tag !== "Some" || firstEvent.value.type !== "request.opened") {
+        return;
+      }
+      NodeAssert.equal(firstEvent.value.payload.detail, undefined);
+    }),
+  );
+
   it.effect("maps MCP elicitation requests into app access approvals", () =>
     Effect.gen(function* () {
       const { adapter, runtime } = yield* startLifecycleRuntime();
@@ -1326,6 +2424,81 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
       }),
   );
 
+  it.effect("maps async agent questions without ending the turn", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      const eventsFiber = yield* Stream.runCollect(Stream.take(adapter.streamEvents, 2)).pipe(
+        Effect.forkChild,
+      );
+      yield* runtime.emit({
+        id: asEventId("evt-async-question"),
+        kind: "notification",
+        provider: ProviderDriverKind.make("codex"),
+        threadId: asThreadId("thread-1"),
+        createdAt: "2026-01-01T00:00:00.000Z",
+        method: "item/completed",
+        payload: {
+          completedAtMs: 0,
+          threadId: "thread-1",
+          turnId: "turn-1",
+          item: {
+            type: "agentMessage",
+            id: "async-question-1",
+            text: "Which package manager?\n- pnpm\n- npm\n\nWhat should it be named?",
+            phase: "final_answer",
+            delivery: "async",
+            questions: [
+              { title: "Which package manager?", options: ["pnpm", "npm"] },
+              { title: "What should it be named?" },
+            ],
+          },
+        },
+      });
+      yield* runtime.emit({
+        id: asEventId("evt-async-continued"),
+        kind: "notification",
+        provider: ProviderDriverKind.make("codex"),
+        threadId: asThreadId("thread-1"),
+        createdAt: "2026-01-01T00:00:01.000Z",
+        method: "item/agentMessage/delta",
+        payload: {
+          threadId: "thread-1",
+          turnId: "turn-1",
+          itemId: "message-2",
+          delta: "I will keep working.",
+        },
+      });
+      const events = Array.from(yield* Fiber.join(eventsFiber));
+      NodeAssert.equal(events[0]?.type, "user-input.requested");
+      NodeAssert.equal(events[0]?.requestId, "codex-async:thread-1:async-question-1");
+      NodeAssert.deepEqual(events[0]?.payload, {
+        responseMode: "message",
+        questions: [
+          {
+            id: "0",
+            header: "Question",
+            question: "Which package manager?",
+            options: [
+              { label: "pnpm", description: "" },
+              { label: "npm", description: "" },
+            ],
+            allowCustomAnswer: true,
+            multiSelect: false,
+          },
+          {
+            id: "1",
+            header: "Question",
+            question: "What should it be named?",
+            options: [],
+            allowCustomAnswer: true,
+            multiSelect: false,
+          },
+        ],
+      });
+      NodeAssert.equal(events[1]?.type, "content.delta");
+    }),
+  );
+
   it.effect("unwraps Codex token usage payloads for context window events", () =>
     Effect.gen(function* () {
       const { adapter, runtime } = yield* startLifecycleRuntime();
@@ -1530,6 +2703,56 @@ scopedFailureLayer("CodexAdapterLive scoped startup failure", (it) => {
         asThreadId("thread-fail"),
       ]);
       NodeAssert.equal(yield* adapter.hasSession(asThreadId("thread-fail")), false);
+    }),
+  );
+});
+
+const scopedSurvivorRuntimeFactory = makeScopedRuntimeFactory({ surviveStop: true });
+const scopedSurvivorLayer = it.layer(
+  Layer.effect(
+    CodexAdapter,
+    Effect.gen(function* () {
+      const codexConfig = decodeCodexSettings({});
+      return yield* makeCodexAdapter(codexConfig, {
+        makeRuntime: scopedSurvivorRuntimeFactory.factory,
+      });
+    }),
+  ).pipe(
+    Layer.provideMerge(ServerConfig.layerTest(process.cwd(), process.cwd())),
+    Layer.provideMerge(ServerSettingsService.layerTest()),
+    Layer.provideMerge(providerSessionDirectoryTestLayer),
+    Layer.provideMerge(NodeServices.layer),
+  ),
+);
+
+scopedSurvivorLayer("CodexAdapterLive stop failure propagation", (it) => {
+  it.effect("stopSession fails when the child process survives the SIGKILL grace period", () =>
+    Effect.gen(function* () {
+      scopedSurvivorRuntimeFactory.releasedThreadIds.length = 0;
+      const adapter = yield* CodexAdapter;
+
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("codex"),
+        threadId: asThreadId("thread-survivor"),
+        runtimeMode: "full-access",
+      });
+
+      const runtime = scopedSurvivorRuntimeFactory.lastRuntime;
+      NodeAssert.ok(runtime);
+
+      const result = yield* adapter.stopSession(asThreadId("thread-survivor")).pipe(Effect.result);
+
+      // The teardown ran, but the surviving child must surface as a failure
+      // instead of being silently recorded as stopped (GHE #326).
+      NodeAssert.equal(runtime.closeImpl.mock.calls.length, 1);
+      NodeAssert.equal(result._tag, "Failure");
+      if (result._tag === "Failure") {
+        NodeAssert.equal(result.failure._tag, "ProviderAdapterProcessError");
+      }
+      // The session is recorded as NOT stopped: still present and its scope
+      // has not been released.
+      NodeAssert.equal(yield* adapter.hasSession(asThreadId("thread-survivor")), true);
+      NodeAssert.deepStrictEqual(scopedSurvivorRuntimeFactory.releasedThreadIds, []);
     }),
   );
 });

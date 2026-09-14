@@ -7,7 +7,8 @@ import { ProjectSidebarThreadTreeRows } from "./t3team-ProjectSidebarThreadTreeR
 import {
   buildProjectSidebarThreadTree,
   countProjectSidebarThreadBranches,
-  pageSubRunThreads,
+  partitionSubRunThreads,
+  sortFoldedSubRunThreads,
 } from "./t3team-projectSidebarThreadTree";
 
 function createThread(overrides: Partial<ProjectThread> = {}): ProjectThread {
@@ -85,39 +86,53 @@ describe("buildProjectSidebarThreadTree", () => {
   });
 });
 
-describe("pageSubRunThreads", () => {
+describe("partitionSubRunThreads / sortFoldedSubRunThreads (GHE #304 fold)", () => {
   const at = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60_000).toISOString();
 
-  it("sorts newest-to-oldest and caps at the limit with a hidden count", () => {
-    // 14 threads; most recent is s-0 (0m ago), oldest s-13 (13m ago).
-    const threads = Array.from({ length: 14 }, (_, i) =>
-      createThread({ id: `s-${i}`, title: `Sub-run ${i}`, lastMessageAt: at(i) }),
-    );
-    const page = pageSubRunThreads(threads, false);
-    expect(page.visible.length).toBe(10);
-    expect(page.visible[0]!.id).toBe("s-0"); // most recent first
-    expect(page.visible[9]!.id).toBe("s-9");
-    expect(page.hiddenCount).toBe(4);
-    expect(page.visible.some((t) => t.id === "s-10")).toBe(false);
+  it("folds ONLY actually-settled threads — terminal-but-not-settled children stay visible", () => {
+    const threads = [
+      createThread({ id: "run-1", status: "running" }),
+      createThread({ id: "err-1", status: "error" }),
+      createThread({ id: "idle-1", status: "idle" }),
+      createThread({ id: "done-1", status: "completed" }),
+      createThread({ id: "set-1", status: "completed", settled: true }),
+      createThread({ id: "set-2", status: "error", settled: true }),
+    ];
+    const { running, folded } = partitionSubRunThreads(threads);
+    expect(running.map((t) => t.id)).toEqual(["run-1", "err-1", "idle-1", "done-1"]);
+    expect(folded.map((t) => t.id)).toEqual(["set-1", "set-2"]);
   });
 
-  it("shows all threads when showAll is true (no cap, no hidden)", () => {
-    const threads = Array.from({ length: 14 }, (_, i) =>
-      createThread({ id: `s-${i}`, lastMessageAt: at(i) }),
-    );
-    const page = pageSubRunThreads(threads, true);
-    expect(page.visible.length).toBe(14);
-    expect(page.hiddenCount).toBe(0);
-    expect(page.visible[0]!.id).toBe("s-0");
+  it("a fresh terminal child (no thread.settled event) does NOT fold — the instant-settle bug", () => {
+    const { running, folded } = partitionSubRunThreads([
+      createThread({ id: "done-1", status: "completed" }),
+      createThread({ id: "stopped-1", status: "completed" }),
+    ]);
+    expect(running.map((t) => t.id)).toEqual(["done-1", "stopped-1"]);
+    expect(folded).toHaveLength(0);
   });
 
-  it("does not cap when within the limit", () => {
-    const threads = Array.from({ length: 3 }, (_, i) =>
-      createThread({ id: `s-${i}`, lastMessageAt: at(i) }),
-    );
-    const page = pageSubRunThreads(threads, false);
-    expect(page.visible.length).toBe(3);
-    expect(page.hiddenCount).toBe(0);
+  it("an empty fleet partitions to two empty sides (no fold row)", () => {
+    const { running, folded } = partitionSubRunThreads([]);
+    expect(running).toHaveLength(0);
+    expect(folded).toHaveLength(0);
+  });
+
+  it("orders the fold oldest-first by last activity, id tiebreak", () => {
+    const threads = [
+      createThread({ id: "new", status: "completed", lastMessageAt: at(5) }),
+      createThread({ id: "old", status: "error", lastMessageAt: at(90) }),
+      createThread({ id: "mid", status: "idle", lastMessageAt: at(30) }),
+      createThread({ id: "tie-b", status: "completed", lastMessageAt: at(60) }),
+      createThread({ id: "tie-a", status: "idle", lastMessageAt: at(60) }),
+    ];
+    expect(sortFoldedSubRunThreads(threads).map((t) => t.id)).toEqual([
+      "old",
+      "tie-a",
+      "tie-b",
+      "mid",
+      "new",
+    ]);
   });
 
   it("does not mutate its input", () => {
@@ -125,7 +140,8 @@ describe("pageSubRunThreads", () => {
       createThread({ id: "a", lastMessageAt: at(5) }),
       createThread({ id: "b", lastMessageAt: at(1) }),
     ];
-    pageSubRunThreads(input, false);
+    partitionSubRunThreads(input);
+    sortFoldedSubRunThreads(input);
     expect(input.map((t) => t.id)).toEqual(["a", "b"]);
   });
 });

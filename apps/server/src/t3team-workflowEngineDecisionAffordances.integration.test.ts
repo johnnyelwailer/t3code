@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Legacy async tests intentionally bridge Effect runtimes; tracked cleanup is separate from upstream green gate. */
 // @effect-diagnostics nodeBuiltinImport:off - integration test reads workflow fixtures + temp dir.
 /**
@@ -41,6 +40,7 @@ import * as Layer from "effect/Layer";
 import { OrchestrationCommandReceiptRepositoryLive } from "./persistence/Layers/OrchestrationCommandReceipts.ts";
 import { OrchestrationEventStoreLive } from "./persistence/Layers/OrchestrationEventStore.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
 import { OrchestrationEngineLive } from "./orchestration/Layers/OrchestrationEngine.ts";
 import { OrchestrationProjectionPipelineLive } from "./orchestration/Layers/ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./orchestration/Layers/ProjectionSnapshotQuery.ts";
@@ -67,6 +67,7 @@ const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "
 const ISO = "2026-06-09T00:00:00.000Z";
 
 const EngineLive = OrchestrationEngineLive.pipe(
+  Layer.provide(ThreadBackgroundLiveness.layer),
   // Upstream's shell mapper reads background liveness + plan progress per thread;
   // both are provided INTO the snapshot query so the requirement is discharged here.
   Layer.provide(
@@ -85,7 +86,27 @@ const EngineLive = OrchestrationEngineLive.pipe(
 );
 
 const TestLayer = T3TeamWorkflowEngineReactorLive.pipe(
-  Layer.provideMerge(Layer.merge(EngineLive, T3TeamWorkflowEngineRegistryLive)),
+  Layer.provideMerge(
+    Layer.merge(
+      EngineLive,
+      Layer.merge(
+        T3TeamWorkflowEngineRegistryLive,
+        Layer.merge(
+          OrchestrationProjectionSnapshotQueryLive.pipe(
+            Layer.provide(ThreadBackgroundLiveness.layer),
+            Layer.provide(ThreadPlanProgress.layer),
+            Layer.provide(RepositoryIdentityResolver.layer),
+            Layer.provideMerge(SqlitePersistenceMemory),
+            Layer.provideMerge(NodeServices.layer),
+          ),
+          WorkflowRunRepositoryLive.pipe(
+            Layer.provideMerge(SqlitePersistenceMemory),
+            Layer.provideMerge(NodeServices.layer),
+          ),
+        ),
+      ),
+    ),
+  ),
 );
 
 /** Poll an in-memory predicate (observe-only; never resolves an ask) until it holds or times out. */

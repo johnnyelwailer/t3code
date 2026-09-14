@@ -52,6 +52,33 @@ function turnStartCommand(input: {
   };
 }
 
+function fileTurnStartCommand(
+  input: ReadonlyArray<
+    | { readonly id: string; readonly sizeBytes: number }
+    | { readonly dataUrl: string; readonly sizeBytes: number }
+  >,
+): ClientOrchestrationCommand {
+  return {
+    type: "thread.turn.start",
+    commandId: CommandId.make("command-1"),
+    threadId: ThreadId.make("thread-1"),
+    message: {
+      messageId: MessageId.make("message-1"),
+      role: "user",
+      text: "read this",
+      attachments: input.map((attachment) => ({
+        type: "file" as const,
+        name: "notes.txt",
+        mimeType: "text/plain",
+        ...attachment,
+      })),
+    },
+    runtimeMode: "full-access",
+    interactionMode: "default",
+    createdAt: "2026-08-01T00:00:00.000Z",
+  };
+}
+
 describe("normalizeDispatchCommand attachments", () => {
   it.effect("preserves inline image attachments from existing mobile clients", () =>
     Effect.gen(function* () {
@@ -93,9 +120,12 @@ describe("normalizeDispatchCommand attachments", () => {
       expect(attachmentId.startsWith("thread-1-")).toBe(true);
       expect(attachmentId).not.toBe(`thread-1-${attachmentUuid}`);
       expect(NodeFS.existsSync(pendingPath)).toBe(true);
-      expect(NodeFS.existsSync(NodePath.join(config.attachmentsDir, `${attachmentId}.png`))).toBe(
-        true,
-      );
+      const claimedPngPath = NodePath.join(config.attachmentsDir, `${attachmentId}.png`);
+      expect(NodeFS.existsSync(claimedPngPath)).toBe(true);
+      // A copy, not a hard link: editing the delivered file must not mutate
+      // the retryable pending upload.
+      expect(NodeFS.statSync(claimedPngPath).ino).not.toBe(NodeFS.statSync(pendingPath).ino);
+      expect(NodeFS.readFileSync(claimedPngPath)).toEqual(bytes);
     }).pipe(Effect.provide(testLayer)),
   );
 
@@ -121,6 +151,45 @@ describe("normalizeDispatchCommand attachments", () => {
 
       expect(normalized.message.attachments).toHaveLength(2);
       expect(normalized.message.attachments[1]?.id.startsWith("thread-1-")).toBe(true);
+    }).pipe(Effect.provide(testLayer)),
+  );
+
+  it.effect("claims uploaded documents without changing their original extension", () =>
+    Effect.gen(function* () {
+      const config = yield* ServerConfig.ServerConfig;
+      const pendingId = `pending-${attachmentUuid}-pdf`;
+      const pendingPath = NodePath.join(config.attachmentsDir, `${pendingId}.pdf`);
+      NodeFS.writeFileSync(pendingPath, Buffer.from("report"));
+
+      const imageCommand = turnStartCommand({ attachments: [] });
+      if (imageCommand.type !== "thread.turn.start") {
+        throw new Error("Expected a thread.turn.start command.");
+      }
+      const normalized = yield* normalizeDispatchCommand({
+        ...imageCommand,
+        message: {
+          ...imageCommand.message,
+          attachments: [
+            {
+              type: "file",
+              id: pendingId,
+              name: "report.pdf",
+              mimeType: "application/pdf",
+              sizeBytes: 6,
+            },
+          ],
+        },
+      });
+      if (normalized.type !== "thread.turn.start") {
+        throw new Error("Expected a thread.turn.start command.");
+      }
+
+      const attachment = normalized.message.attachments[0]!;
+      expect(attachment.type).toBe("file");
+      expect(attachment.id).toMatch(/^thread-1-.*-pdf$/);
+      const claimedPath = NodePath.join(config.attachmentsDir, `${attachment.id}.pdf`);
+      expect(NodeFS.readFileSync(claimedPath)).toEqual(Buffer.from("report"));
+      expect(NodeFS.statSync(claimedPath).ino).not.toBe(NodeFS.statSync(pendingPath).ino);
     }).pipe(Effect.provide(testLayer)),
   );
 
@@ -274,6 +343,111 @@ describe("normalizeDispatchCommand attachments", () => {
     }).pipe(Effect.provide(testLayer)),
   );
 
+  it.effect("stores inline file attachments under a fixed .bin extension", () =>
+    Effect.gen(function* () {
+      const config = yield* ServerConfig.ServerConfig;
+      const normalized = yield* normalizeDispatchCommand(
+        fileTurnStartCommand([{ dataUrl: "data:text/plain;base64,YWJj", sizeBytes: 3 }]),
+      );
+      if (normalized.type !== "thread.turn.start") {
+        throw new Error("Expected a thread.turn.start command.");
+      }
+
+      const attachment = normalized.message.attachments[0]!;
+      expect(attachment.id.startsWith("thread-1-")).toBe(true);
+      expect(attachment).toMatchObject({ type: "file", name: "notes.txt", mimeType: "text/plain" });
+      expect(
+        NodeFS.readFileSync(NodePath.join(config.attachmentsDir, `${attachment.id}.bin`)),
+      ).toEqual(Buffer.from("abc"));
+      expect(
+        NodeFS.readdirSync(config.attachmentsDir).filter((entry) => entry.endsWith(".txt")),
+      ).toEqual([]);
+    }).pipe(Effect.provide(testLayer)),
+  );
+
+  it.effect("claims uploaded file attachments alongside images in the same turn", () =>
+    Effect.gen(function* () {
+      const config = yield* ServerConfig.ServerConfig;
+      NodeFS.writeFileSync(
+        NodePath.join(config.attachmentsDir, `pending-${attachmentUuid}.bin`),
+        Buffer.from("abc"),
+      );
+
+      const command: ClientOrchestrationCommand = {
+        type: "thread.turn.start",
+        commandId: CommandId.make("command-1"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: MessageId.make("message-1"),
+          role: "user",
+          text: "mixed",
+          attachments: [
+            {
+              type: "image",
+              name: "screenshot.png",
+              mimeType: "image/png",
+              dataUrl: "data:image/png;base64,cGl4ZWxz",
+              sizeBytes: 6,
+            },
+            {
+              type: "file",
+              name: "notes.txt",
+              mimeType: "text/plain",
+              id: `pending-${attachmentUuid}`,
+              sizeBytes: 3,
+            },
+          ],
+        },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        createdAt: "2026-08-01T00:00:00.000Z",
+      };
+
+      const normalized = yield* normalizeDispatchCommand(command);
+      if (normalized.type !== "thread.turn.start") {
+        throw new Error("Expected a thread.turn.start command.");
+      }
+
+      expect(normalized.message.attachments).toHaveLength(2);
+      const image = normalized.message.attachments[0]!;
+      const file = normalized.message.attachments[1]!;
+      expect(file).toMatchObject({ type: "file", name: "notes.txt", mimeType: "text/plain" });
+      expect(NodeFS.existsSync(NodePath.join(config.attachmentsDir, `${image.id}.png`))).toBe(true);
+      expect(NodeFS.readFileSync(NodePath.join(config.attachmentsDir, `${file.id}.bin`))).toEqual(
+        Buffer.from("abc"),
+      );
+    }).pipe(Effect.provide(testLayer)),
+  );
+
+  it.effect("rejects inline dataUrls whose mime type contradicts the image declaration", () =>
+    Effect.gen(function* () {
+      const command: ClientOrchestrationCommand = {
+        type: "thread.turn.start",
+        commandId: CommandId.make("command-1"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: MessageId.make("message-1"),
+          role: "user",
+          text: "mismatch",
+          attachments: [
+            {
+              type: "image",
+              name: "screenshot.png",
+              mimeType: "image/png",
+              dataUrl: "data:text/plain;base64,YWJj",
+              sizeBytes: 3,
+            },
+          ],
+        },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        createdAt: "2026-08-01T00:00:00.000Z",
+      };
+      const rejected = yield* normalizeDispatchCommand(command).pipe(Effect.flip);
+      expect(rejected.message).toContain("Invalid image attachment payload");
+    }).pipe(Effect.provide(testLayer)),
+  );
+
   it.effect("rejects uploaded attachments with the wrong size or thread", () =>
     Effect.gen(function* () {
       const config = yield* ServerConfig.ServerConfig;
@@ -312,7 +486,7 @@ describe("normalizeDispatchCommand attachments", () => {
           })),
         },
       }).pipe(Effect.flip);
-      expect(mismatchedType.message).toContain("image type");
+      expect(mismatchedType.message).toContain("attachment type");
     }).pipe(Effect.provide(testLayer)),
   );
 });

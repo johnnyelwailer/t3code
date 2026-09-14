@@ -9,7 +9,6 @@ export const runServerCommand = (
   flags: CliServerFlags,
   options?: {
     readonly startupPresentation?: StartupPresentation;
-    readonly forceAutoBootstrapProjectFromCwd?: boolean;
   },
 ) =>
   Effect.gen(function* () {
@@ -30,7 +29,6 @@ export const serveCommand = Command.make("serve", { ...sharedServerCommandFlags 
   Command.withHandler((flags) =>
     runServerCommand(flags, {
       startupPresentation: "headless",
-      forceAutoBootstrapProjectFromCwd: false,
     }),
   ),
 );

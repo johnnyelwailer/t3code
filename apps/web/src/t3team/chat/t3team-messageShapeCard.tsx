@@ -31,6 +31,7 @@ import type { ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
 import { T3TeamShapeCapabilityChips } from "~/t3team/chat/t3team-messageShapeCardCapabilities";
+import { T3TeamWorkflowCardHeadline } from "~/t3team/chat/t3team-workflowCardHeadline";
 import type { ChatMessage } from "~/types";
 
 export function getT3TeamWorkflowShapeAttachment(
@@ -146,15 +147,10 @@ export function T3TeamWorkflowShapeCard({ shape }: { shape: ProjectRecipeWorkflo
   const groups = groupT3TeamShapeSteps(shape);
   return (
     <div className="rounded-lg border border-primary/35 bg-background/65 px-4 py-3">
-      <div className="mb-2 flex items-center gap-1.5 text-primary">
-        <RouteIcon className="size-3.5" />
-        {shape.name ? (
-          <span className="text-sm font-semibold text-foreground">{shape.name}</span>
-        ) : null}
+      <div className="mb-2 flex items-start gap-1.5 text-primary">
+        <RouteIcon className="mt-0.5 size-3.5 shrink-0" />
+        <T3TeamWorkflowCardHeadline shape={shape} />
       </div>
-      {shape.description ? (
-        <p className="text-sm leading-6 text-muted-foreground">{shape.description}</p>
-      ) : null}
       <T3TeamShapeCapabilityChips capabilities={shape.capabilities} />
 
       {shape.steps.length > 0 ? (

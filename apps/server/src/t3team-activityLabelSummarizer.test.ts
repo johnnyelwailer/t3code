@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import { buildActivityLabelContext, parseActivityLabel } from "./t3team-activityLabelContext.ts";
 import {
+  ACTIVITY_LABEL_TTL_MS,
   createActivityLabelEventReactor,
   createActivityLabelSummarizer,
 } from "./t3team-activityLabelSummarizer.ts";
@@ -10,16 +11,13 @@ const model = { instanceId: "host", model: "current" } as never;
 interface TimerHarness {
   fire: (index: number) => Promise<void>;
   delays: number[];
-}
-
-interface TimerHarness {
-  fire: (index: number) => Promise<void>;
-  delays: number[];
   setTimer: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
   clearTimer: (timer: ReturnType<typeof setTimeout>) => void;
 }
 
-/** Manual timer capture: each setTimer records the delay and the callback. */
+/** Manual timer capture: each setTimer records the delay and the callback.
+ *  Handles are unique per timer so the TTL timer-handle race guard is
+ *  exercised even when two timers share a delay. */
 const makeTimers = (): TimerHarness => {
   const callbacks: Array<() => void> = [];
   const delays: number[] = [];
@@ -29,9 +27,10 @@ const makeTimers = (): TimerHarness => {
       await callbacks[index]!();
     },
     setTimer: (callback: () => void, delayMs: number) => {
+      const handle = { token: delays.length };
       delays.push(delayMs);
       callbacks.push(callback);
-      return delayMs as unknown as ReturnType<typeof setTimeout>;
+      return handle as unknown as ReturnType<typeof setTimeout>;
     },
     clearTimer: () => undefined,
   };
@@ -88,14 +87,16 @@ describe("activity label summarizer", () => {
     });
     await timers.fire(0);
     expect(generations).toBe(1);
-    // Identical window again — the hash matches the last generated one: no new timer.
+    // Identical window again — the hash matches the last generated one: no new
+    // generation timer. (Timers: 0 = first debounce, 1 = the 5s TTL clear
+    // scheduled after the persist; the second note adds neither.)
     summarizer.note({
       threadId: "t1",
       modelSelection: model,
       kind: "tool.started",
       summary: "Reading contracts.ts",
     });
-    expect(timers.delays.length).toBe(1);
+    expect(timers.delays.length).toBe(2);
     expect(generations).toBe(1);
   });
 
@@ -157,8 +158,10 @@ describe("activity label summarizer", () => {
       summary: "Editing contracts.ts",
       activityState: "writing",
     });
-    expect(timers.delays).toEqual([20_000, 50_000]);
-    await timers.fire(1);
+    expect(timers.delays).toEqual([20_000, ACTIVITY_LABEL_TTL_MS, 50_000]);
+    // Entry 1 is the 5s TTL clear scheduled after the first persist; the
+    // deferred generation is entry 2.
+    await timers.fire(2);
   });
 
   it("regenerates on a new activity kind class only after the debounce (no per-event flush)", async () => {
@@ -273,6 +276,189 @@ describe("activity label summarizer", () => {
     });
     await timers.fire(0);
     expect(observed).toBeInstanceOf(Error);
+  });
+
+  it("time-boxes a persisted label: schedules a TTL clear and clears it when it fires", async () => {
+    const timers = makeTimers();
+    const persisted: Array<{ label: string | null }> = [];
+    const summarizer = createActivityLabelSummarizer({
+      generate: async () => "Reading contracts",
+      persist: async ({ label }) => {
+        persisted.push({ label });
+      },
+      isActive: () => true,
+      onError: () => undefined,
+      ...timers,
+    });
+    summarizer.note({
+      threadId: "t1",
+      modelSelection: model,
+      kind: "tool.started",
+      summary: "Reading contracts.ts",
+    });
+    await timers.fire(0); // generation persists the label
+    // The debounce timer (index 0) plus a 5s TTL timer (index 1).
+    expect(timers.delays).toEqual([20_000, ACTIVITY_LABEL_TTL_MS]);
+    await timers.fire(1); // TTL elapses: the stored label is cleared.
+    expect(persisted).toEqual([{ label: "Reading contracts" }, { label: null }]);
+  });
+
+  it("a second label before expiry reschedules the TTL; the first label is not cleared late", async () => {
+    const timers = makeTimers();
+    const persisted: Array<{ label: string | null }> = [];
+    const summarizer = createActivityLabelSummarizer({
+      generate: async ({ context }) => context.split("\n").at(-1)?.split(": ").at(-1) ?? "",
+      persist: async ({ label }) => {
+        persisted.push({ label });
+      },
+      isActive: () => true,
+      onError: () => undefined,
+      minRegenerateMs: 0, // allow the second generation without the 60s cadence
+      ...timers,
+    });
+    summarizer.note({
+      threadId: "t1",
+      modelSelection: model,
+      kind: "tool.started",
+      summary: "Reading contracts.ts",
+    });
+    await timers.fire(0); // label A persists; TTL #1 = timer index 1
+    summarizer.note({
+      threadId: "t1",
+      modelSelection: model,
+      kind: "tool.started",
+      summary: "Editing contracts.ts",
+    });
+    await timers.fire(2); // label B persists; TTL #2 = timer index 3 (replaces #1)
+    expect(persisted).toEqual([
+      { label: "Reading contracts.ts" },
+      { label: "Editing contracts.ts" },
+    ]);
+    // Late fire of TTL #1: label B has rescheduled its own timer, so the
+    // handle guard must no-op — B is NOT cleared by A's stale timer.
+    await timers.fire(1);
+    expect(persisted).toEqual([
+      { label: "Reading contracts.ts" },
+      { label: "Editing contracts.ts" },
+    ]);
+    // B's own TTL elapses: it clears B, not A.
+    await timers.fire(3);
+    expect(persisted).toEqual([
+      { label: "Reading contracts.ts" },
+      { label: "Editing contracts.ts" },
+      { label: null },
+    ]);
+  });
+
+  it("a late note does not extend the current label: its TTL still clears it", async () => {
+    let nowMs = 0;
+    const timers = makeTimers();
+    const persisted: Array<{ label: string | null }> = [];
+    const summarizer = createActivityLabelSummarizer({
+      generate: async ({ context }) => context.split("\n").at(-1)?.split(": ").at(-1) ?? "",
+      persist: async ({ label }) => {
+        persisted.push({ label });
+      },
+      isActive: () => true,
+      onError: () => undefined,
+      now: () => nowMs,
+      minRegenerateMs: 60_000,
+      ...timers,
+    });
+    summarizer.note({
+      threadId: "t1",
+      modelSelection: model,
+      kind: "tool.started",
+      summary: "Reading contracts.ts",
+    });
+    await timers.fire(0); // label A persists; TTL #1 = timer index 1
+    nowMs += 2_000; // 2s into A's life
+    summarizer.note({
+      threadId: "t1",
+      modelSelection: model,
+      kind: "tool.started",
+      summary: "Editing contracts.ts",
+    });
+    // The next generation is deferred by the cadence (index 2, ~58s), but a
+    // note does NOT extend the current label's minimum life: TTL #1 still fires.
+    await timers.fire(1);
+    expect(persisted).toEqual([{ label: "Reading contracts.ts" }, { label: null }]);
+    // The deferred generation later persists a fresh label B.
+    await timers.fire(2);
+    expect(persisted.at(-1)).toEqual({ label: "Editing contracts.ts" });
+  });
+
+  it("turn-end clear cancels the pending TTL: no late null after the clear", async () => {
+    const timers = makeTimers();
+    const persisted: Array<{ label: string | null }> = [];
+    const summarizer = createActivityLabelSummarizer({
+      generate: async () => "Reading contracts",
+      persist: async ({ label }) => {
+        persisted.push({ label });
+      },
+      isActive: () => true,
+      onError: () => undefined,
+      ...timers,
+    });
+    summarizer.note({
+      threadId: "t1",
+      modelSelection: model,
+      kind: "tool.started",
+      summary: "Reading contracts.ts",
+    });
+    await timers.fire(0); // label persists; TTL = timer index 1
+    await summarizer.clear("t1"); // turn ended
+    expect(persisted).toEqual([{ label: "Reading contracts" }, { label: null }]);
+    await timers.fire(1); // late TTL — the entry is gone, must be a no-op
+    expect(persisted.length).toBe(2);
+  });
+
+  it("schedules no TTL timer when the flag is off", async () => {
+    const timers = makeTimers();
+    const persisted: Array<{ label: string | null }> = [];
+    const summarizer = createActivityLabelSummarizer({
+      generate: async () => "Reading contracts",
+      persist: async ({ label }) => {
+        persisted.push({ label });
+      },
+      isActive: () => false, // enrichment off: no generation, no TTL
+      onError: () => undefined,
+      ...timers,
+    });
+    summarizer.note({
+      threadId: "t1",
+      modelSelection: model,
+      kind: "tool.started",
+      summary: "Reading contracts.ts",
+    });
+    await timers.fire(0); // generation is skipped
+    expect(persisted).toEqual([]);
+    // Only the debounce timer was ever scheduled — no 5s TTL follow-on.
+    expect(timers.delays).toEqual([20_000]);
+  });
+
+  it("honors a custom TTL and treats 0 as 'no timer'", async () => {
+    const timers = makeTimers();
+    const persisted: Array<{ label: string | null }> = [];
+    const summarizer = createActivityLabelSummarizer({
+      generate: async () => "Reading contracts",
+      persist: async ({ label }) => {
+        persisted.push({ label });
+      },
+      isActive: () => true,
+      onError: () => undefined,
+      activityLabelTtlMs: 0, // disabled: label lives until the next generation
+      ...timers,
+    });
+    summarizer.note({
+      threadId: "t1",
+      modelSelection: model,
+      kind: "tool.started",
+      summary: "Reading contracts.ts",
+    });
+    await timers.fire(0);
+    expect(persisted).toEqual([{ label: "Reading contracts" }]);
+    expect(timers.delays).toEqual([20_000]);
   });
 
   it("caps the context payload at 400 chars no matter the input", () => {

@@ -1,3 +1,4 @@
+import { PRIMITIVE_KINDS as CORE_PRIMITIVE_KINDS } from "@runbook/core/primitiveKinds";
 import type { ScriptRef, ToolRef } from "./t3team-sdk.types.ts";
 import type {
   PrimitiveCall as GenericPrimitiveCall,
@@ -7,24 +8,16 @@ import type {
 /**
  * Every kind a journal line can carry, in ONE place: the {@link PrimitiveKind} union and the
  * read-side `Schema.Literals` validator in `t3team-sdk.journalReader.ts` are both derived from
- * this list, so a new primitive cannot be writable-but-unreadable.
+ * this list, so a new primitive cannot be writable-but-unreadable. The core kinds (tool,
+ * script, deterministic, composition, artifact, usage) come from `@runbook/core`; the SDK
+ * adds only its host-specific handle kinds.
  */
 export const PRIMITIVE_KINDS = [
-  "tool",
-  "script",
-  "script-never",
-  "now",
-  "random",
-  "uuid",
-  "wait",
-  "parallel",
-  "pipeline",
-  "workflow",
+  ...CORE_PRIMITIVE_KINDS,
   "thread.create",
   "thread.turn",
   "thread.message",
   "user.input",
-  "wait.until",
   "model.resolve",
 ] as const;
 

@@ -23,6 +23,10 @@
     "./t3teamDirectoryBundle": {
       "types": "./src/t3teamDirectoryBundle.ts",
       "import": "./src/t3teamDirectoryBundle.ts"
+    },
+    "./t3teamWidgetGuidance": {
+      "types": "./src/t3teamWidgetGuidance.ts",
+      "import": "./src/t3teamWidgetGuidance.ts"
     }
   },
   "scripts": {

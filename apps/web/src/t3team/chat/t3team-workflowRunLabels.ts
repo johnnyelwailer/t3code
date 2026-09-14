@@ -27,7 +27,11 @@ export function liveRunLabel(steps: ReadonlyArray<T3TeamWorkflowStepEntry>): str
     .toReversed()
     .find((step) => step.phase === "started" || step.phase === "waiting");
   if (pending === undefined) return "Running";
-  const since = pending.updatedAt === undefined ? "" : ` since ${relativeAge(pending.updatedAt)}`;
+  // "since just now" says nothing a bare status doesn't already say, and it was a large part of
+  // what made this compact status pill wrap across three lines — drop it. A genuinely aged wait
+  // ("since 5m ago", "since 2h ago") stays: that IS information, not verbosity.
+  const age = pending.updatedAt === undefined ? undefined : relativeAge(pending.updatedAt);
+  const since = age === undefined || age === "just now" ? "" : ` since ${age}`;
   if (pending.stepKind === "thread.turn") return `Waiting for agent${since}`;
   if (pending.stepKind === "user.input") return `Waiting for your answer${since}`;
   if (pending.stepKind === "wait.until") return "Scheduled";

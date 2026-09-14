@@ -153,6 +153,15 @@ export type PackDriverCreateInput = {
   readonly config: unknown;
   readonly environment: Record<string, string | undefined>;
   readonly host: PackHostCapabilities;
+  /**
+   * The user's global "Personality / Instructions" override from the host
+   * server settings (host `ServerSettings.agentInstructions`). Absent or
+   * empty = use the driver's built-in default personality. Hosts predating
+   * this field omit it; packs MUST treat absence as "unset". Applies to
+   * agent sessions only — host text-generation calls keep their own
+   * prompts.
+   */
+  readonly agentInstructions?: string | undefined;
 };
 
 export type PackProviderInstance = {
