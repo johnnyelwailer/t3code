@@ -30,24 +30,50 @@ export function DigestStatusDot({ status }: { status: string }) {
   );
 }
 
-export function DigestKicker({ children, count, right }: { children: ReactNode; count?: number; right?: ReactNode }) {
+export function DigestKicker({
+  children,
+  count,
+  right,
+}: {
+  children: ReactNode;
+  count?: number;
+  right?: ReactNode;
+}) {
   return (
     <div className="flex items-baseline gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
       <span>{children}</span>
-      {count !== undefined ? <span className="font-normal tabular-nums text-muted-foreground/70">{count}</span> : null}
-      {right ? <span className="ml-auto font-normal normal-case tracking-normal">{right}</span> : null}
+      {count !== undefined ? (
+        <span className="font-normal tabular-nums text-muted-foreground/70">{count}</span>
+      ) : null}
+      {right ? (
+        <span className="ml-auto font-normal normal-case tracking-normal">{right}</span>
+      ) : null}
     </div>
   );
 }
 
-const PR_STATE: Record<DigestChangeRequest["state"], { label: string; variant: "error" | "warning" | "success" | "secondary" }> = {
+const PR_STATE: Record<
+  DigestChangeRequest["state"],
+  { label: string; variant: "error" | "warning" | "success" | "secondary" }
+> = {
   "needs-you": { label: "your review", variant: "error" },
   "changes-requested": { label: "changes requested", variant: "warning" },
+  "ci-failing": { label: "ci failing", variant: "error" },
   approved: { label: "approved", variant: "success" },
-  waiting: { label: "waiting", variant: "secondary" },
+  draft: { label: "draft", variant: "secondary" },
+  merged: { label: "merged", variant: "success" },
+  open: { label: "open", variant: "secondary" },
 };
 
-export function DigestChips({ graph, ticketId, nowMs }: { graph: DigestGraph; ticketId: string; nowMs: number }) {
+export function DigestChips({
+  graph,
+  ticketId,
+  nowMs,
+}: {
+  graph: DigestGraph;
+  ticketId: string;
+  nowMs: number;
+}) {
   const chips: ReactNode[] = [];
   for (const d of graph.decisions.filter((d) => d.ticketId === ticketId)) {
     chips.push(
@@ -61,7 +87,9 @@ export function DigestChips({ graph, ticketId, nowMs }: { graph: DigestGraph; ti
     const state = PR_STATE[r.state];
     chips.push(
       <Badge key={r.id} variant={state.variant} className="gap-1 font-normal">
-        <span className="font-mono text-[10.5px]">{r.repo}#{r.number}</span>
+        <span className="font-mono text-[10.5px]">
+          {r.repo}#{r.number}
+        </span>
         <span className="opacity-80">{state.label}</span>
       </Badge>,
     );
@@ -75,7 +103,9 @@ export function DigestChips({ graph, ticketId, nowMs }: { graph: DigestGraph; ti
     );
   }
   const lastVisit = Date.parse(graph.viewer.lastVisitAt);
-  for (const t of graph.transitions.filter((t) => t.ticketId === ticketId && Date.parse(t.at) > lastVisit)) {
+  for (const t of graph.transitions.filter(
+    (t) => t.ticketId === ticketId && Date.parse(t.at) > lastVisit,
+  )) {
     chips.push(
       <Badge key={`${t.ticketId}-${t.at}`} variant="outline" className="gap-1 font-normal">
         {t.from} → {t.to}
@@ -88,7 +118,11 @@ export function DigestChips({ graph, ticketId, nowMs }: { graph: DigestGraph; ti
 export function DigestProjectChip({ graph, projectId }: { graph: DigestGraph; projectId: string }) {
   if (graph.scope !== "all") return null;
   const name = graph.projects.find((project) => project.id === projectId)?.name ?? projectId;
-  return <span className="shrink-0 rounded bg-muted/60 px-1.5 py-px text-[10px] text-muted-foreground">{name}</span>;
+  return (
+    <span className="shrink-0 rounded bg-muted/60 px-1.5 py-px text-[10px] text-muted-foreground">
+      {name}
+    </span>
+  );
 }
 
 export function DigestItemRow({
@@ -115,15 +149,25 @@ export function DigestItemRow({
       }`}
     >
       {index !== undefined ? (
-        <span className="pt-0.5 text-[11px] tabular-nums text-muted-foreground/60">{String(index).padStart(2, "0")}</span>
+        <span className="pt-0.5 text-[11px] tabular-nums text-muted-foreground/60">
+          {String(index).padStart(2, "0")}
+        </span>
       ) : null}
       <JiraIssueTypeIcon issueType={ticket.issueType} className="mt-0.5 size-3.5" />
-      <button type="button" onClick={onOpen} className="pt-0.5 text-left font-mono text-[11.5px] text-muted-foreground hover:text-foreground">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="pt-0.5 text-left font-mono text-[11.5px] text-muted-foreground hover:text-foreground"
+      >
         {ticket.ref.displayId}
       </button>
       <div className="min-w-0 space-y-1">
         <div className="flex min-w-0 items-baseline gap-2">
-          <button type="button" onClick={onOpen} className="min-w-0 truncate text-left text-[13px] font-medium leading-5 hover:underline">
+          <button
+            type="button"
+            onClick={onOpen}
+            className="min-w-0 truncate text-left text-[13px] font-medium leading-5 hover:underline"
+          >
             {ticket.ref.title}
           </button>
           <DigestProjectChip graph={graph} projectId={ticket.projectId} />

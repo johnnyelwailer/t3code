@@ -23,8 +23,16 @@ export type DigestChangeRequest = {
   readonly ticketId: string;
   readonly repo: string;
   readonly number: number;
-  readonly state: "needs-you" | "changes-requested" | "approved" | "waiting";
+  readonly state:
+    | "draft"
+    | "open"
+    | "needs-you"
+    | "changes-requested"
+    | "ci-failing"
+    | "approved"
+    | "merged";
   readonly updatedAt: string;
+  readonly reviewers?: ReadonlyArray<{ readonly name: string; readonly login?: string }>;
 };
 
 export type DigestTransition = {
@@ -93,14 +101,19 @@ function latestClaimActivity(graph: DigestGraph, ticketId: string): number | nul
   return times.length === 0 ? null : Math.max(...times);
 }
 
-export function digestFacetsFor(graph: DigestGraph, ticketId: string, nowMs: number): readonly DigestFacet[] {
+export function digestFacetsFor(
+  graph: DigestGraph,
+  ticketId: string,
+  nowMs: number,
+): readonly DigestFacet[] {
   const facets: DigestFacet[] = [];
   if (graph.decisions.some((d) => d.ticketId === ticketId)) facets.push("decision");
   if (graph.changeRequests.some((r) => r.ticketId === ticketId && r.state === "needs-you")) {
     facets.push("changeRequest");
   }
   const claimAt = latestClaimActivity(graph, ticketId);
-  if (claimAt !== null) facets.push(nowMs - claimAt > DIGEST_STALLED_AFTER_MS ? "stalled" : "claim");
+  if (claimAt !== null)
+    facets.push(nowMs - claimAt > DIGEST_STALLED_AFTER_MS ? "stalled" : "claim");
   const lastVisit = Date.parse(graph.viewer.lastVisitAt);
   if (graph.transitions.some((t) => t.ticketId === ticketId && Date.parse(t.at) > lastVisit)) {
     facets.push("moved");
@@ -116,10 +129,30 @@ type Bucket = {
 };
 
 const BUCKETS: readonly Bucket[] = [
-  { id: "needs-you", heading: "Needs you", placement: "side", accepts: (f) => f.includes("decision") },
-  { id: "review", heading: "Waiting for your review", placement: "side", accepts: (f) => f.includes("changeRequest") },
-  { id: "order", heading: "Recommended order", placement: "main", accepts: (f) => f.includes("claim") || f.includes("moved") },
-  { id: "stalled", heading: "Stalled agents", placement: "footer", accepts: (f) => f.includes("stalled") },
+  {
+    id: "needs-you",
+    heading: "Needs you",
+    placement: "side",
+    accepts: (f) => f.includes("decision"),
+  },
+  {
+    id: "review",
+    heading: "Waiting for your review",
+    placement: "side",
+    accepts: (f) => f.includes("changeRequest"),
+  },
+  {
+    id: "order",
+    heading: "Recommended order",
+    placement: "main",
+    accepts: (f) => f.includes("claim") || f.includes("moved"),
+  },
+  {
+    id: "stalled",
+    heading: "Stalled agents",
+    placement: "footer",
+    accepts: (f) => f.includes("stalled"),
+  },
   { id: "rest", heading: "Parked", placement: "footer", accepts: () => true },
 ];
 
@@ -158,20 +191,34 @@ export type ResolvedDigestPlan = DigestPlan & {
   readonly newSinceTicketIds: readonly string[];
 };
 
-export function resolveDigestPlan(plan: DigestPlan, graph: DigestGraph, nowMs: number): ResolvedDigestPlan {
+export function resolveDigestPlan(
+  plan: DigestPlan,
+  graph: DigestGraph,
+  nowMs: number,
+): ResolvedDigestPlan {
   const live = new Set(graph.tickets.filter((t) => !isDigestTicketDone(t)).map((t) => t.id));
   const referenced = new Set(plan.sections.flatMap((s) => s.items.map((i) => i.ticketId)));
   const droppedTicketIds = [...referenced].filter((id) => !live.has(id));
   const sections = plan.sections
-    .map((section) => ({ ...section, items: section.items.filter((item) => live.has(item.ticketId)) }))
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => live.has(item.ticketId)),
+    }))
     .filter((section) => section.items.length > 0);
   const unseen = new Set(
-    graph.tickets.filter((t) => live.has(t.id) && isMine(t, graph) && !referenced.has(t.id)).map((t) => t.id),
+    graph.tickets
+      .filter((t) => live.has(t.id) && isMine(t, graph) && !referenced.has(t.id))
+      .map((t) => t.id),
   );
   const trailing = buildHeuristicDigestPlan(graph, nowMs, unseen).sections.map((section) => ({
     ...section,
     id: `new-${section.id}`,
     heading: `New · ${section.heading}`,
   }));
-  return { ...plan, sections: [...sections, ...trailing], droppedTicketIds, newSinceTicketIds: [...unseen] };
+  return {
+    ...plan,
+    sections: [...sections, ...trailing],
+    droppedTicketIds,
+    newSinceTicketIds: [...unseen],
+  };
 }
