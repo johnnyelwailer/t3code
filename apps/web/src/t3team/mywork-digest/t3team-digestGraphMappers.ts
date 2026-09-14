@@ -161,6 +161,8 @@ export function payloadToDigestGraph(input: {
         number: pr.number,
         state: pr.state,
         updatedAt: pr.updatedAt,
+        // TODO(digest-data): reviewer identities and unhandled comment counts are not in the PR listing yet.
+        reviewers: [],
       });
     }
     for (const transition of data.transitions) {
@@ -185,5 +187,7 @@ export function payloadToDigestGraph(input: {
     decisions,
     changeRequests,
     transitions,
+    // TODO(digest-data): enabler-PR blockers need a server source (PR body links or Jira "blocks" links).
+    blockers: [],
   };
 }
