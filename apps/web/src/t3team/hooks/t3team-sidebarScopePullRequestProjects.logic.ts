@@ -60,10 +60,3 @@ export function resolveSidebarScopePullRequestProjects(input: {
   }
   return { projectKeys, projectIdsByEnvironment };
 }
-
-/** Stable identity for cache keys: the same selection must read as the same question. */
-export function sidebarScopePullRequestSelectionKey(
-  selection: SidebarScopePullRequestSelection | null,
-): string {
-  return selection === null ? "" : [...selection.projectKeys].sort().join("+");
-}

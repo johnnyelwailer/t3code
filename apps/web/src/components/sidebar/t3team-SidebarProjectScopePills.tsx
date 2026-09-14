@@ -33,13 +33,13 @@ export function T3TeamSidebarProjectScopePills({
     event: ReactMouseEvent<HTMLElement> | ReactKeyboardEvent<HTMLInputElement>,
     projectGroup: SidebarProjectSnapshot,
   ) => void;
-  maxPills?: number;
+  maxPills?: number | undefined;
 }) {
   const pinned = selectProjectScopePillGroups(groups, activeScopeKey, maxPills);
   return (
     <TooltipProvider delay={300} closeDelay={0}>
       <div
-        role="radiogroup"
+        role="group"
         aria-label="Project scope"
         className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden"
       >
@@ -95,8 +95,8 @@ function ScopePill({
           <SidebarMenuButton
             size="icon"
             type="button"
-            role="radio"
-            aria-checked={active}
+            // Toggle-button semantics: five independent Tab stops, no roving focus to maintain.
+            aria-pressed={active}
             aria-label={label}
             isActive={active}
             className="shrink-0 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground data-[active=true]:ring-1 data-[active=true]:ring-sidebar-ring/40"

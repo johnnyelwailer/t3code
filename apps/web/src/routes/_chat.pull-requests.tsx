@@ -671,8 +671,17 @@ function PullRequestsRouteView() {
   }> => {
     const plain = queryEnvironmentIds.map((environmentId) => ({ environmentId }));
     if (!projectsKnown || scopedProjectId !== undefined) return plain;
+    // t3team: the sidebar's project scope narrows the ask to the projects it covers. Narrowed
+    // BEFORE repositories are assigned to servers, so a scoped project whose repository another
+    // server would otherwise own is still asked for; a server left with nothing is not read.
+    const eligibleProjects =
+      sidebarScope === null
+        ? projects
+        : projects.filter((project) =>
+            sidebarScope.projectKeys.has(`${project.environmentId}:${project.id}`),
+          );
     const assignment = assignProjectsToEnvironments(
-      projects,
+      eligibleProjects,
       queryEnvironmentIds,
       queryEnvironmentIds[0],
     );
@@ -681,17 +690,8 @@ function PullRequestsRouteView() {
       totals.set(project.environmentId, (totals.get(project.environmentId) ?? 0) + 1);
     }
     return queryEnvironmentIds.flatMap((environmentId) => {
-      const assigned = assignment.get(environmentId);
-      if (assigned === undefined) return [];
-      // t3team: the sidebar's project scope narrows each server's ask to the projects it covers;
-      // a server left with none of them is not read at all.
-      const projectIds =
-        sidebarScope === null
-          ? assigned
-          : assigned.filter((projectId) =>
-              sidebarScope.projectKeys.has(`${environmentId}:${projectId}`),
-            );
-      if (projectIds.length === 0) return [];
+      const projectIds = assignment.get(environmentId);
+      if (projectIds === undefined) return [];
       // It lists everything it holds anyway, so the filter is left off and a one-server workspace
       // asks exactly the question it asked before.
       if (sidebarScope === null && projectIds.length === (totals.get(environmentId) ?? 0)) {
@@ -1061,8 +1061,10 @@ function PullRequestsRouteView() {
     }).filter(
       // t3team: rows carry no environment, so the sidebar scope narrows by project id alone here;
       // the keyed read that replaces this carry-over asks each server for exactly its projects.
+      // An explicit URL project already narrowed above and is not second-guessed by the sidebar.
       (entry) =>
         sidebarScope === null ||
+        scopedProjectId !== undefined ||
         [...sidebarScope.projectIdsByEnvironment.values()].some((ids) =>
           ids.includes(entry.projectId),
         ),

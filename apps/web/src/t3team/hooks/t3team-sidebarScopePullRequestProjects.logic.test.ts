@@ -1,10 +1,7 @@
 import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  resolveSidebarScopePullRequestProjects,
-  sidebarScopePullRequestSelectionKey,
-} from "./t3team-sidebarScopePullRequestProjects.logic";
+import { resolveSidebarScopePullRequestProjects } from "./t3team-sidebarScopePullRequestProjects.logic";
 
 const env = "env-1" as EnvironmentId;
 const otherEnv = "env-2" as EnvironmentId;
@@ -61,22 +58,5 @@ describe("resolveSidebarScopePullRequestProjects", () => {
       linkedRepositoryKeysByProjectId: new Map([["jira", ["github.com/acme/missing"]]]),
     });
     expect(selection.projectIdsByEnvironment.get(env)).toEqual(["jira"]);
-  });
-});
-
-describe("sidebarScopePullRequestSelectionKey", () => {
-  it("is order-independent and empty for no scope", () => {
-    const a = resolveSidebarScopePullRequestProjects({
-      scopedProjectRefs: [ref("x"), ref("y")],
-      projects: [],
-      linkedRepositoryKeysByProjectId: new Map(),
-    });
-    const b = resolveSidebarScopePullRequestProjects({
-      scopedProjectRefs: [ref("y"), ref("x")],
-      projects: [],
-      linkedRepositoryKeysByProjectId: new Map(),
-    });
-    expect(sidebarScopePullRequestSelectionKey(a)).toBe(sidebarScopePullRequestSelectionKey(b));
-    expect(sidebarScopePullRequestSelectionKey(null)).toBe("");
   });
 });
