@@ -138,6 +138,7 @@ import {
 } from "../rightPanelStore";
 import { useDebouncedValue } from "../state/queries";
 import { useAllEnvironmentShellsBootstrapped, useProjects } from "../state/entities";
+import { useT3TeamSidebarScopePullRequestProjects } from "~/t3team/hooks/t3team-useSidebarScopePullRequestProjects";
 import { useEnvironments } from "../state/environments";
 import {
   pullRequestEnvironment,
@@ -380,6 +381,9 @@ function PullRequestsRouteView() {
     () => resolveProjectScope(search.projectId, projects, projectsKnown),
     [projects, projectsKnown, search.projectId],
   );
+  // t3team: the sidebar's project scope (pills flag on). An explicit URL `projectId` still wins
+  // over it — that one was chosen on this page.
+  const sidebarScope = useT3TeamSidebarScopePullRequestProjects();
   const scopedProject = useMemo(
     () => findScopedProject(projects, scopedEnvironmentId, scopedProjectId),
     [projects, scopedEnvironmentId, scopedProjectId],
@@ -677,14 +681,25 @@ function PullRequestsRouteView() {
       totals.set(project.environmentId, (totals.get(project.environmentId) ?? 0) + 1);
     }
     return queryEnvironmentIds.flatMap((environmentId) => {
-      const projectIds = assignment.get(environmentId);
-      if (projectIds === undefined) return [];
+      const assigned = assignment.get(environmentId);
+      if (assigned === undefined) return [];
+      // t3team: the sidebar's project scope narrows each server's ask to the projects it covers;
+      // a server left with none of them is not read at all.
+      const projectIds =
+        sidebarScope === null
+          ? assigned
+          : assigned.filter((projectId) =>
+              sidebarScope.projectKeys.has(`${environmentId}:${projectId}`),
+            );
+      if (projectIds.length === 0) return [];
       // It lists everything it holds anyway, so the filter is left off and a one-server workspace
       // asks exactly the question it asked before.
-      if (projectIds.length === (totals.get(environmentId) ?? 0)) return [{ environmentId }];
+      if (sidebarScope === null && projectIds.length === (totals.get(environmentId) ?? 0)) {
+        return [{ environmentId }];
+      }
       return [{ environmentId, projectIds }];
     });
-  }, [projects, projectsKnown, queryEnvironmentIds, scopedProjectId]);
+  }, [projects, projectsKnown, queryEnvironmentIds, scopedProjectId, sidebarScope]);
   // Part of the scope, since a different split is a different question and its answers must not
   // be filed under the same page state.
   const assignmentKey = useMemo(
@@ -1043,9 +1058,17 @@ function PullRequestsRouteView() {
       state: search.state,
       projectId: scopedProjectId,
       host: search.host,
-    });
+    }).filter(
+      // t3team: rows carry no environment, so the sidebar scope narrows by project id alone here;
+      // the keyed read that replaces this carry-over asks each server for exactly its projects.
+      (entry) =>
+        sidebarScope === null ||
+        [...sidebarScope.projectIdsByEnvironment.values()].some((ids) =>
+          ids.includes(entry.projectId),
+        ),
+    );
     return entries.length === 0 ? null : { ...loaded.data, entries };
-  }, [environmentKey, loaded, scopeKey, scopedProjectId, search.host, search.state]);
+  }, [environmentKey, loaded, scopeKey, scopedProjectId, search.host, search.state, sidebarScope]);
   // With nothing typed and nothing to carry on from, the answer is taken from the read that is
   // keyed to exactly that question. Otherwise a search's answer lingers for a render after the
   // text has gone — the data cannot say which question it belongs to, but the read it came from
@@ -1679,6 +1702,7 @@ function PullRequestsRouteView() {
             search.state !== "open" ||
             search.involvement !== "all" ||
             scopedProjectId !== undefined ||
+            sidebarScope !== null ||
             search.host !== undefined
           }
           searching={typedQuery.length > 0 && (!querySettled || showingCarried)}

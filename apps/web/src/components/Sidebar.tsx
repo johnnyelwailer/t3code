@@ -46,6 +46,7 @@ import {
   ChevronRightIcon,
   CircleAlertIcon,
   ClockIcon,
+  EllipsisIcon,
   FolderIcon,
   FolderPlusIcon,
   GitBranchIcon,
@@ -235,6 +236,7 @@ import {
 } from "~/t3team/components/t3team-projectSidebarThreadTree";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
+import { T3TeamSidebarProjectScopePills } from "./sidebar/t3team-SidebarProjectScopePills";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import {
@@ -2425,13 +2427,19 @@ export default function Sidebar() {
       setProjectScopeKey(null);
     }
   }, [allProjectSnapshotsReady, projectScopeKey, scopedProjectGroup, setProjectScopeKey]);
-  // t3team: mirror the scope for chrome outside this component (footer "My work"/"Backlog").
-  const setScopedProjectIdForChrome = useT3TeamSidebarProjectScope(
-    (state) => state.setScopedProjectId,
-  );
+  // t3team: mirror the scope for chrome outside this component (footer "My work"/"Backlog",
+  // the pull request route's project narrowing).
+  const setScopedProjectForChrome = useT3TeamSidebarProjectScope((state) => state.setScopedProject);
   useEffect(() => {
-    setScopedProjectIdForChrome(scopedProjectGroup?.id ?? null);
-  }, [scopedProjectGroup, setScopedProjectIdForChrome]);
+    setScopedProjectForChrome(
+      scopedProjectGroup?.id ?? null,
+      scopedProjectGroup?.memberProjectRefs ?? null,
+    );
+  }, [scopedProjectGroup, setScopedProjectForChrome]);
+  // t3team: one-click recent-project pills in place of the dropdown alone (feature flag).
+  const projectScopePillsEnabled = usePrimarySettings(
+    (settings) => settings.t3teamProjectScopePillsEnabled,
+  );
   // Count-only subscription: the parent needs "are there draft rows" for the
   // empty state, while SidebarDraftBlock owns the per-keystroke content
   // subscription. Selecting a number keeps typing in a draft composer from
@@ -4071,6 +4079,14 @@ export default function Sidebar() {
             </div>
             {projectGroups.length > 0 ? (
               <div className="flex items-center gap-1">
+                {projectScopePillsEnabled ? (
+                  <T3TeamSidebarProjectScopePills
+                    groups={projectGroups}
+                    activeScopeKey={projectScopeKey}
+                    onSelectScope={setProjectScopeKey}
+                    onProjectContextMenu={handleProjectSettings}
+                  />
+                ) : null}
                 <Combobox
                   items={projectScopeItems}
                   filteredItems={filteredProjectScopeItems}
@@ -4095,36 +4111,56 @@ export default function Sidebar() {
                     setProjectScopeKey(item.value === "all" ? null : item.value);
                   }}
                 >
-                  <ComboboxTrigger
-                    render={
-                      <SidebarMenuButton
-                        aria-label="Filter threads by project"
-                        className="min-w-0 flex-1 ps-[calc(var(--sidebar-row-content-inset)-1px)] focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
-                      />
-                    }
-                  >
-                    {scopedProjectGroup ? (
-                      <span className="flex shrink-0">
-                        <ProjectFavicon
-                          environmentId={scopedProjectGroup.environmentId}
-                          cwd={scopedProjectGroup.workspaceRoot}
-                          projectName={scopedProjectGroup.title}
-                          faviconPath={scopedProjectGroup.faviconPath}
-                          projectIcon={scopedProjectGroup.projectIcon}
-                          className="size-4"
+                  {projectScopePillsEnabled ? (
+                    // t3team: with pills, the combobox is the "more" menu — icon only.
+                    <ComboboxTrigger
+                      render={
+                        <SidebarMenuButton
+                          size="icon"
+                          aria-label="More projects"
+                          title="More projects"
+                          className="shrink-0 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
                         />
+                      }
+                    >
+                      <EllipsisIcon className="size-4 shrink-0" />
+                    </ComboboxTrigger>
+                  ) : (
+                    <ComboboxTrigger
+                      render={
+                        <SidebarMenuButton
+                          aria-label="Filter threads by project"
+                          className="min-w-0 flex-1 ps-[calc(var(--sidebar-row-content-inset)-1px)] focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
+                        />
+                      }
+                    >
+                      {scopedProjectGroup ? (
+                        <span className="flex shrink-0">
+                          <ProjectFavicon
+                            environmentId={scopedProjectGroup.environmentId}
+                            cwd={scopedProjectGroup.workspaceRoot}
+                            projectName={scopedProjectGroup.title}
+                            faviconPath={scopedProjectGroup.faviconPath}
+                            projectIcon={scopedProjectGroup.projectIcon}
+                            className="size-4"
+                          />
+                        </span>
+                      ) : (
+                        <FolderIcon className="size-4 shrink-0" />
+                      )}
+                      <span className="min-w-0 flex-1 truncate">
+                        {scopedProjectGroup?.displayName ?? "All projects"}
                       </span>
-                    ) : (
-                      <FolderIcon className="size-4 shrink-0" />
-                    )}
-                    <span className="min-w-0 flex-1 truncate">
-                      {scopedProjectGroup?.displayName ?? "All projects"}
-                    </span>
-                    <ChevronDownIcon className="-mr-px size-4 shrink-0" />
-                  </ComboboxTrigger>
+                      <ChevronDownIcon className="-mr-px size-4 shrink-0" />
+                    </ComboboxTrigger>
+                  )}
                   <ComboboxPopup
                     align="start"
-                    className="w-(--anchor-width) min-w-0 overflow-hidden"
+                    className={
+                      projectScopePillsEnabled
+                        ? "w-64 min-w-0 overflow-hidden"
+                        : "w-(--anchor-width) min-w-0 overflow-hidden"
+                    }
                   >
                     <div className="shrink-0 px-3 pt-2.5">
                       <div className="relative -translate-y-px border-b border-border/70 pb-1.5 transition-colors focus-within:border-ring">
