@@ -1,14 +1,11 @@
 /**
  * Sidebar project scope pills (2026-09-14) — the one-click alternative to the "All projects"
- * dropdown, behind the `t3teamProjectScopePillsEnabled` setting.
+ * dropdown, behind the `t3teamProjectScopePillsEnabled` setting (on by default).
  *
- * Design exploration. "V0 current" is the production `T3TeamSidebarProjectScopePills`; V1–V3 are
- * story-only candidates in `t3team-scopePillVariants.tsx` fed the same data and selection
- * contract, so the pick can be ported 1:1. The ⋯ button is the REAL project combobox (search +
- * list) as in `Sidebar.tsx`, minus the per-project settings affordance.
- *
- * Fixtures deliberately mix favicon-less projects (initials fallback), emoji and lucide icons.
- * Every row is live: click a pill, resize by picking a frame width.
+ * Production components only: `T3TeamSidebarProjectScopePills` (the disc stack) and
+ * `T3TeamSidebarProjectScopeCombobox` (the real searchable project menu, compact trigger), in
+ * the same header-row composition `Sidebar.tsx` renders. Fixtures mix favicon-less projects
+ * (initials fallback), emoji and lucide icons. Rows are live: click a disc, pick a width.
  */
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { FolderPlusIcon } from "lucide-react";
@@ -18,14 +15,6 @@ import { SidebarMenuButton, SidebarProvider } from "~/components/ui/sidebar";
 import { T3TeamSidebarProjectScopeCombobox } from "~/components/sidebar/t3team-SidebarProjectScopeCombobox";
 import { T3TeamSidebarProjectScopePills } from "~/components/sidebar/t3team-SidebarProjectScopePills";
 import type { SidebarProjectSnapshot } from "~/sidebarProjectGrouping";
-
-import { ScopeStackChipVariant } from "./t3team-scopePillStackChip";
-import {
-  ScopeDotVariant,
-  ScopeSegmentedVariant,
-  ScopeStackVariant,
-  type ScopeVariantProps,
-} from "./t3team-scopePillVariants";
 
 const INSET_VARS = {
   "--sidebar-content-inset": "0.5rem",
@@ -65,64 +54,16 @@ const GROUPS: ReadonlyArray<SidebarProjectSnapshot> = [
   group("djangal", "djangal", { kind: "lucide", name: "database", color: "emerald" }),
 ];
 
-const VARIANTS: ReadonlyArray<{
-  id: string;
-  name: string;
-  note: string;
-  Render: (props: ScopeVariantProps) => ReactNode;
-}> = [
-  {
-    id: "v0",
-    name: "V0 · current",
-    note: "square SidebarMenuButtons, ring on selection",
-    Render: (p) => (
-      <T3TeamSidebarProjectScopePills
-        groups={p.groups}
-        activeScopeKey={p.activeScopeKey}
-        onSelectScope={p.onSelectScope}
-      />
-    ),
-  },
-  {
-    id: "v4",
-    name: "V4 · stack + chip (V1 × V2)",
-    note: "fills the width; depth only where discs overlap; the selection lifts and unfolds its name",
-    Render: (p) => <ScopeStackChipVariant {...p} />,
-  },
-  {
-    id: "v1",
-    name: "V1 · avatar stack",
-    note: "discs overlap when narrow; selected comes forward with a cut-out ring",
-    Render: (p) => <ScopeStackVariant {...p} />,
-  },
-  {
-    id: "v2",
-    name: "V2 · segmented track",
-    note: "raised chip, no border; reveals the name when wide",
-    Render: (p) => <ScopeSegmentedVariant {...p} />,
-  },
-  {
-    id: "v3",
-    name: "V3 · quiet row + dot",
-    note: "bare icons, accent dot marks the selection",
-    Render: (p) => <ScopeDotVariant {...p} />,
-  },
-];
-
-function HeaderRow({
-  width,
-  initialScope,
-  Render,
-}: {
-  width: number;
-  initialScope: string | null;
-  Render: (props: ScopeVariantProps) => ReactNode;
-}) {
+function HeaderRow({ width, initialScope }: { width: number; initialScope: string | null }) {
   const [scope, setScope] = useState<string | null>(initialScope);
   return (
     <div className="space-y-1" style={{ width }}>
       <div className="flex items-center gap-1 rounded-lg bg-sidebar p-1.5" style={INSET_VARS}>
-        <Render groups={GROUPS} activeScopeKey={scope} onSelectScope={setScope} />
+        <T3TeamSidebarProjectScopePills
+          groups={GROUPS}
+          activeScopeKey={scope}
+          onSelectScope={setScope}
+        />
         <T3TeamSidebarProjectScopeCombobox
           compact
           projectGroups={GROUPS}
@@ -151,22 +92,6 @@ function Frame({ children }: { children: ReactNode }) {
   );
 }
 
-function VariantBlock({ variant }: { variant: (typeof VARIANTS)[number] }) {
-  return (
-    <section className="space-y-2">
-      <div className="flex items-baseline gap-2">
-        <h3 className="text-sm font-semibold">{variant.name}</h3>
-        <span className="text-xs text-muted-foreground">{variant.note}</span>
-      </div>
-      <div className="flex flex-wrap items-start gap-6">
-        {[220, 260, 300, 360].map((width) => (
-          <HeaderRow key={width} width={width} initialScope="portal" Render={variant.Render} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
 export default {
   title: "T3Team/Sidebar/Project Scope Pills",
   tags: ["autodocs"],
@@ -174,49 +99,33 @@ export default {
 
 type Story = StoryObj;
 
-export const AllVariants: Story = {
-  name: "all variants × widths 220 / 260 / 300 / 360",
+export const Widths: Story = {
+  name: "widths 220 / 260 / 300 / 360, Nexi Portal selected",
   render: () => (
     <Frame>
-      {VARIANTS.map((variant) => (
-        <VariantBlock key={variant.id} variant={variant} />
-      ))}
+      <div className="flex flex-wrap items-start gap-6">
+        {[220, 260, 300, 360].map((width) => (
+          <HeaderRow key={width} width={width} initialScope="portal" />
+        ))}
+      </div>
     </Frame>
   ),
 };
 
-export const StackChip: Story = {
-  name: "V4 stack + chip",
+export const AllProjects: Story = {
+  name: "nothing selected → All on top",
   render: () => (
     <Frame>
-      <VariantBlock variant={VARIANTS[1]!} />
+      <HeaderRow width={300} initialScope={null} />
     </Frame>
   ),
 };
 
-export const AvatarStack: Story = {
-  name: "V1 avatar stack",
+export const ActiveBeyondCapacity: Story = {
+  name: "selected project beyond the visible slots keeps its disc",
   render: () => (
     <Frame>
-      <VariantBlock variant={VARIANTS[2]!} />
-    </Frame>
-  ),
-};
-
-export const SegmentedTrack: Story = {
-  name: "V2 segmented track",
-  render: () => (
-    <Frame>
-      <VariantBlock variant={VARIANTS[3]!} />
-    </Frame>
-  ),
-};
-
-export const QuietDot: Story = {
-  name: "V3 quiet row + dot",
-  render: () => (
-    <Frame>
-      <VariantBlock variant={VARIANTS[4]!} />
+      <HeaderRow width={240} initialScope="djangal" />
     </Frame>
   ),
 };

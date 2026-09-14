@@ -931,10 +931,10 @@ export const ServerSettings = Schema.Struct({
    * Sidebar project scope as a one-click pill row (recent projects + a "more" menu) instead of
    * the "All projects" dropdown alone. While on, the scope also narrows other surfaces (the pull
    * request list) to the selected project and, for a work-source project, its linked repositories.
-   * OFF by default: opt-in preview of a layout change.
+   * ON by default for this distribution; the setting is the way back to the dropdown alone.
    */
   t3teamProjectScopePillsEnabled: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
+    Schema.withDecodingDefault(Effect.succeed(true)),
   ),
   /**
    * Whether the server ingests a bound work source's project avatar (Jira)

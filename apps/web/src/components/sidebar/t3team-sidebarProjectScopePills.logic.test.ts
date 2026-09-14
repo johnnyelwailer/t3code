@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { selectProjectScopePillGroups } from "./t3team-sidebarProjectScopePills.logic";
+import {
+  projectScopeCastShadow,
+  projectScopeDiscCapacity,
+  projectScopeDiscDepth,
+  selectProjectScopePillGroups,
+} from "./t3team-sidebarProjectScopePills.logic";
 
 const groups = ["a", "b", "c", "d", "e"].map((projectKey) => ({ projectKey }));
 
@@ -38,5 +43,29 @@ describe("selectProjectScopePillGroups", () => {
 
   it("returns nothing for a zero budget", () => {
     expect(selectProjectScopePillGroups(groups, "a", 0)).toEqual([]);
+  });
+});
+
+describe("projectScopeDiscCapacity", () => {
+  it("grows one disc per (size − overlap) once All and the label are paid for", () => {
+    expect(projectScopeDiscCapacity(0)).toBe(0);
+    expect(projectScopeDiscCapacity(28 + 84)).toBe(0);
+    expect(projectScopeDiscCapacity(28 + 84 + 20)).toBe(1);
+    expect(projectScopeDiscCapacity(28 + 84 + 100)).toBe(5);
+  });
+});
+
+describe("projectScopeDiscDepth", () => {
+  it("forms a pyramid around the top index", () => {
+    expect(projectScopeDiscDepth(2, 2)).toEqual({ depth: 0, coveredSide: null });
+    expect(projectScopeDiscDepth(0, 2)).toEqual({ depth: 2, coveredSide: "right" });
+    expect(projectScopeDiscDepth(4, 2)).toEqual({ depth: 2, coveredSide: "left" });
+  });
+});
+
+describe("projectScopeCastShadow", () => {
+  it("gets blurrier and fainter further down, never vanishing", () => {
+    expect(projectScopeCastShadow(1)).toBe("0 0 6.5px 1.5px rgba(0,0,0,0.14)");
+    expect(projectScopeCastShadow(6)).toBe("0 0 19px 4px rgba(0,0,0,0.04)");
   });
 });

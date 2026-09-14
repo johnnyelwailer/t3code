@@ -1,4 +1,4 @@
-import { ChevronDownIcon, EllipsisIcon, FolderIcon, SearchIcon } from "lucide-react";
+import { SearchIcon } from "lucide-react";
 import {
   useCallback,
   useMemo,
@@ -10,7 +10,6 @@ import {
 
 import type { SidebarProjectSnapshot } from "~/sidebarProjectGrouping";
 
-import { ProjectFavicon } from "../ProjectFavicon";
 import {
   filterSidebarProjectScopeItems,
   reduceSidebarProjectScopeMenuState,
@@ -21,14 +20,13 @@ import {
   ComboboxInput,
   ComboboxList,
   ComboboxPopup,
-  ComboboxTrigger,
   useComboboxFilter,
 } from "../ui/combobox";
-import { SidebarMenuButton } from "../ui/sidebar";
 import {
   T3TeamSidebarProjectScopeComboboxItem,
   type SidebarProjectScopeItem,
 } from "./t3team-SidebarProjectScopeComboboxItem";
+import { T3TeamSidebarProjectScopeComboboxTrigger } from "./t3team-SidebarProjectScopeComboboxTrigger";
 
 const ALL_PROJECTS_ITEM: SidebarProjectScopeItem = { value: "all", label: "All projects" };
 
@@ -134,48 +132,7 @@ export function T3TeamSidebarProjectScopeCombobox({
         onScopeKeyChange(item.value === "all" ? null : item.value);
       }}
     >
-      {compact ? (
-        <ComboboxTrigger
-          render={
-            <SidebarMenuButton
-              size="icon"
-              aria-label="More projects"
-              title="More projects"
-              className="shrink-0 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
-            />
-          }
-        >
-          <EllipsisIcon className="size-4 shrink-0" />
-        </ComboboxTrigger>
-      ) : (
-        <ComboboxTrigger
-          render={
-            <SidebarMenuButton
-              aria-label="Filter threads by project"
-              className="min-w-0 flex-1 ps-[calc(var(--sidebar-row-content-inset)-1px)] focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
-            />
-          }
-        >
-          {scopedGroup ? (
-            <span className="flex shrink-0">
-              <ProjectFavicon
-                environmentId={scopedGroup.environmentId}
-                cwd={scopedGroup.workspaceRoot}
-                projectName={scopedGroup.title}
-                faviconPath={scopedGroup.faviconPath}
-                projectIcon={scopedGroup.projectIcon}
-                className="size-4"
-              />
-            </span>
-          ) : (
-            <FolderIcon className="size-4 shrink-0" />
-          )}
-          <span className="min-w-0 flex-1 truncate">
-            {scopedGroup?.displayName ?? "All projects"}
-          </span>
-          <ChevronDownIcon className="-mr-px size-4 shrink-0" />
-        </ComboboxTrigger>
-      )}
+      <T3TeamSidebarProjectScopeComboboxTrigger compact={compact} scopedGroup={scopedGroup} />
       <ComboboxPopup
         align="start"
         className={
