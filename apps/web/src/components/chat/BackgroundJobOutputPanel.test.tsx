@@ -9,19 +9,19 @@ import type { ThreadJobsController } from "~/t3team/backend/t3team-thread-jobsBa
 const HANGING_CONTROLLER: ThreadJobsController = () => new Promise(() => {});
 
 describe("BackgroundJobOutputPanel", () => {
-  it("renders its header (command, live state, close button) before the first page lands", () => {
+  it("renders its header (live state, close button) before the first page lands", () => {
     const markup = renderToStaticMarkup(
       <BackgroundJobOutputPanel
         threadId="thread_a"
         jobId="job_8865dcbe"
-        command="pnpm -r build"
         controller={HANGING_CONTROLLER}
         onClose={() => {}}
       />,
     );
-    // The command heads the panel; the region is labelled for it.
-    expect(markup).toContain('aria-label="Output of pnpm -r build"');
-    expect(markup).toContain("pnpm -r build");
+    // The panel carries no job identity of its own: the job's row above
+    // already says what this is, so no command or id is re-rendered here.
+    expect(markup).toContain('aria-label="Background job output"');
+    expect(markup).not.toContain("job_8865dcbe");
     // Live until the runtime says the job settled.
     expect(markup).toContain(">live</span>");
     // The tail is empty until the first page arrives.
@@ -30,7 +30,7 @@ describe("BackgroundJobOutputPanel", () => {
     expect(markup).toContain('aria-label="Close job output"');
   });
 
-  it("degrades to the job id when no command is on record", () => {
+  it("does not repeat the job row's information", () => {
     const markup = renderToStaticMarkup(
       <BackgroundJobOutputPanel
         threadId="thread_a"
@@ -39,7 +39,7 @@ describe("BackgroundJobOutputPanel", () => {
         onClose={() => {}}
       />,
     );
-    expect(markup).toContain("job_a1b2c3d4");
+    expect(markup).not.toContain("job_a1b2c3d4");
     expect(markup).toContain("waiting for output…");
   });
 
