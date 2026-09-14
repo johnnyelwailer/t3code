@@ -1603,7 +1603,7 @@ function PullRequestsRouteView() {
         number: entry.number,
         selectedProjectId: entry.projectId,
         selectedEnvironmentId: entry.environmentId,
-      });
+      }, true);
     },
     [rightPanelRef, updateSearch],
   );
