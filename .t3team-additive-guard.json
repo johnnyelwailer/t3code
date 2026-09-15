@@ -357,7 +357,11 @@
     "scripts/release-smoke.ts",
     "tsconfig.base.json",
     "vite.config.ts",
-    "vitest.config.ts"
+    "vitest.config.ts",
+    "packages/t3team-skill-packs/src/recipes.ts",
+    "packages/t3team-skill-packs/src/sidecarSections.ts",
+    "packages/t3team-skill-packs/src/profiles.ts",
+    "packages/project-recipes/src/sidecarComposition.test.ts"
   ],
   "allowedUnprefixedNewFiles": [
     ".agents/skills/merge-upstream/SKILL.md",

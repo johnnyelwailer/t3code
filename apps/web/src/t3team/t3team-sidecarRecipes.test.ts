@@ -86,7 +86,7 @@ describe("buildT3TeamSidecarRecipeQuickStarts", () => {
     });
 
     expect(quickStarts.map((recipe) => recipe.id)).toContain("prioritize-pending-work");
-    expect(quickStarts.map((recipe) => recipe.id)).toContain("create-contextual-recipe");
+    expect(quickStarts.map((recipe) => recipe.id)).not.toContain("create-contextual-recipe");
     expect(quickStarts.map((recipe) => recipe.id)).not.toContain("stakeholder-update");
     expect(quickStarts.map((recipe) => recipe.id)).not.toContain("summarize-project-risk");
     expect(quickStarts.map((recipe) => recipe.id)).not.toContain("shape-next-backlog-slice");
@@ -148,9 +148,9 @@ describe("buildT3TeamSidecarRecipeQuickStarts", () => {
       title: "Prioritize pending work",
       description: "Rank the my work in front of you by urgency, unblock value, and user impact.",
     });
-    expect(quickStarts.find((recipe) => recipe.id === "create-contextual-recipe")).toMatchObject({
-      title: "Create a recipe for this view",
-    });
+    // Meta recipe-authoring quick starts live on the ticket side panel only; the
+    // dashboard has no "this view" referent they could act on.
+    expect(quickStarts.some((recipe) => recipe.id === "create-contextual-recipe")).toBe(false);
   });
 
   it("renders the recipe-authoring quick start against selected ticket context", () => {
