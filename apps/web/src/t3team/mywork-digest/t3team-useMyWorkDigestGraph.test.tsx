@@ -20,13 +20,14 @@ import { useMyWorkDigestGraph } from "./t3team-useMyWorkDigestGraph";
 function createProject(overrides: {
   readonly id: string;
   readonly externalProjectId: string;
+  readonly accountId?: string;
 }): ProjectShellProject {
   return {
     id: overrides.id as ProjectShellProject["id"],
     title: `Project ${overrides.id}`,
     source: {
       provider: "atlassian",
-      accountId: `acct-${overrides.id}`,
+      accountId: overrides.accountId ?? `acct-${overrides.id}`,
       externalProjectId: overrides.externalProjectId,
       raw: {},
     },
@@ -215,11 +216,16 @@ describe("useMyWorkDigestGraph", () => {
     host = null;
   });
 
+  // `projectsRef` is what the harness reads on every render, so a test can swap the
+  // project list (a scope change) after the first mount without remounting.
   async function mountWith(
     initialFn: MyWorkDigestPollFn,
-    projects: readonly ProjectShellProject[],
+    initialProjects: readonly ProjectShellProject[],
   ) {
     const holder: { fn: MyWorkDigestPollFn } = { fn: initialFn };
+    const projectsRef: { projects: readonly ProjectShellProject[] } = {
+      projects: initialProjects,
+    };
     const backend = {
       state: { connectionStatus: "connected", serverConfig: null, providers: [], error: null },
       connect: async () => undefined,
@@ -236,21 +242,27 @@ describe("useMyWorkDigestGraph", () => {
     const latest: { result: ReturnType<typeof useMyWorkDigestGraph> | null } = { result: null };
 
     function Harness() {
-      latest.result = useMyWorkDigestGraph({ projects, viewer: { name: "Philip" } });
+      latest.result = useMyWorkDigestGraph({
+        projects: projectsRef.projects,
+        viewer: { name: "Philip" },
+      });
       return null;
     }
 
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
-    await act(async () => {
+    const render = () =>
       root?.render(
         <BackendProvider backend={backend}>
           <Harness />
         </BackendProvider>,
       );
+    await act(async () => {
+      render();
     });
-    return { latest, holder };
+    const rerender = () => act(async () => render());
+    return { latest, holder, projectsRef, rerender };
   }
 
   it("loads the graph, then short-circuits unchanged rounds", async () => {
@@ -329,5 +341,137 @@ describe("useMyWorkDigestGraph", () => {
       expect(latest.result?.status).toBe("error");
     });
     expect(latest.result?.error).toContain("digest");
+  });
+
+  it("reports 'retrying' on a failed fetch, carries no raw error, and recovers on its own", async () => {
+    const { latest, holder } = await mountWith(async () => {
+      // The kind of failure the owner saw on a cold start: the fetch never reaches
+      // the route. The raw text here must never surface in the UI.
+      throw new Error(
+        "Request to /api/t3team/mywork-digest/graph/poll failed: CORS mismatch or blocked preflight.",
+      );
+    }, [createProject({ id: "p1", externalProjectId: "IES" })]);
+
+    await vi.waitFor(() => {
+      expect(latest.result?.status).toBe("retrying");
+    });
+    expect(latest.result?.error).toBeUndefined();
+    expect(latest.result?.graph).toBeNull();
+
+    // The backend "comes up": the next successful round recovers the view with no user action.
+    holder.fn = async () => ({
+      unchanged: false,
+      fingerprint: "sha256:up",
+      value: createDigestPayload(),
+    });
+    await act(async () => {
+      latest.result?.reload();
+    });
+    await vi.waitFor(() => {
+      expect(latest.result?.status).toBe("ready");
+    });
+    expect(latest.result?.graph?.tickets).toHaveLength(2);
+  });
+
+  it("takes the last-visit cutoff from the server receipt and writes no digest state to localStorage", async () => {
+    const { latest } = await mountWith(
+      async () => ({
+        unchanged: false,
+        fingerprint: "sha256:lv",
+        value: {
+          ...createDigestPayload(),
+          viewer: { name: "Philip", lastVisitAt: "2026-09-13T00:00:00.000Z" },
+        },
+      }),
+      [createProject({ id: "p1", externalProjectId: "IES" })],
+    );
+    await vi.waitFor(() => {
+      expect(latest.result?.status).toBe("ready");
+    });
+    expect(latest.result?.graph?.viewer.lastVisitAt).toBe("2026-09-13T00:00:00.000Z");
+    // The owner storage rule: localStorage in My Work holds view preferences only.
+    expect(window.localStorage.getItem("t3team.mywork-digest.last-visit.project")).toBeNull();
+  });
+
+  it("invalidates and refetches when the project scope changes", async () => {
+    const calls: string[] = [];
+    const payloadFor = (key: string) => ({
+      scope: "project" as const,
+      projects: [
+        {
+          project: { id: key, name: key },
+          tickets: [],
+          claims: [],
+          decisions: [],
+          changeRequests: [],
+          transitions: [],
+        },
+      ],
+    });
+    const { latest, projectsRef, rerender } = await mountWith(
+      async (input) => {
+        const key = input.projects[0]?.externalProjectId ?? "?";
+        calls.push(key);
+        return { unchanged: false, fingerprint: `fp-${key}`, value: payloadFor(key) };
+      },
+      [createProject({ id: "pA", externalProjectId: "AAA" })],
+    );
+    await vi.waitFor(() => {
+      expect(latest.result?.status).toBe("ready");
+    });
+    expect(calls).toEqual(["AAA"]);
+
+    // The owner repro: switching the project in the selector must not keep the
+    // previous project's content — the scope change invalidates and re-fetches.
+    projectsRef.projects = [createProject({ id: "pB", externalProjectId: "BBB" })];
+    await rerender();
+    await vi.waitFor(() => {
+      expect(latest.result?.graph?.projects[0]?.name).toBe("BBB");
+    });
+    expect(calls.at(-1)).toBe("BBB");
+  });
+
+  it("refetches when switching between two app projects bound to the same Jira project", async () => {
+    // Same account + external project id, different APP project id: the scope
+    // signature must still change, because the server joins claims and decisions
+    // per app project.
+    const calls: string[] = [];
+    const { latest, projectsRef, rerender } = await mountWith(
+      async (input) => {
+        const appProjectId = input.projects[0]?.appProjectId ?? "?";
+        calls.push(appProjectId);
+        return {
+          unchanged: false,
+          fingerprint: `fp-${appProjectId}`,
+          value: {
+            scope: "project" as const,
+            projects: [
+              {
+                project: { id: appProjectId, name: "IES NG" },
+                tickets: [],
+                claims: [],
+                decisions: [],
+                changeRequests: [],
+                transitions: [],
+              },
+            ],
+          },
+        };
+      },
+      [createProject({ id: "appA", externalProjectId: "IES", accountId: "acct-same" })],
+    );
+    await vi.waitFor(() => {
+      expect(latest.result?.status).toBe("ready");
+    });
+    expect(calls).toEqual(["appA"]);
+
+    projectsRef.projects = [
+      createProject({ id: "appB", externalProjectId: "IES", accountId: "acct-same" }),
+    ];
+    await rerender();
+    await vi.waitFor(() => {
+      expect(latest.result?.graph?.projects[0]?.id).toBe("appB");
+    });
+    expect(calls.at(-1)).toBe("appB");
   });
 });

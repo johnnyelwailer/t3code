@@ -28,6 +28,7 @@ import {
 } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
 import { AllProjectsMyWorkSection } from "~/t3team/t3team-AllProjectsMyWorkSection";
+import { ProjectMyWorkDigestRetryState } from "~/t3team/t3team-ProjectMyWorkDigestRetryState";
 import { ProjectMyWorkDigestView } from "~/t3team/t3team-ProjectMyWorkDigestView";
 import {
   ProjectMyWorkViewSwitch,
@@ -97,6 +98,11 @@ export function AllProjectsMyWorkView({
   }
 
   const renderDigest = () => {
+    // A failed fetch (backend still starting, timeout) is not terminal: the poller retries with
+    // backoff and this recovers on its own, so it renders as "retrying" — never a raw error.
+    if (digestStatus === "retrying" && !digestGraph) {
+      return <ProjectMyWorkDigestRetryState />;
+    }
     // First paint shows a loading state instead of a misleading empty one.
     if (digestStatus === "loading" && !digestGraph) {
       return <ProjectMyWorkLoadingState />;
@@ -105,6 +111,7 @@ export function AllProjectsMyWorkView({
       return <JiraSessionExpiredPanel onSignedIn={digestReload} />;
     }
     if (digestStatus === "error") {
+      // Only a genuinely terminal condition reaches here (e.g. this server has no digest endpoint).
       return (
         <T3SurfacePanel
           tone="dashed"

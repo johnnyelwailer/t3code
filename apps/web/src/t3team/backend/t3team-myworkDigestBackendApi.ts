@@ -54,8 +54,14 @@ export type MyWorkDigestPayload = {
   /**
    * The viewer as the server resolved them; fills in when the client has no cached name.
    * `unresolved` means a project had no Jira identity (stale or missing token).
+   * `lastVisitAt` is the server's visit receipt from the PREVIOUS round — the "since
+   * last visit" cutoff lives on the server, not in the client's localStorage.
    */
-  readonly viewer?: { readonly name?: string; readonly unresolved?: true };
+  readonly viewer?: {
+    readonly name?: string;
+    readonly unresolved?: true;
+    readonly lastVisitAt?: string;
+  };
   readonly projects: ReadonlyArray<{
     readonly project: { readonly id: string; readonly name: string };
     readonly tickets: ReadonlyArray<MyWorkDigestTicketRef>;
