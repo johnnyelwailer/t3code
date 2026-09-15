@@ -18,6 +18,7 @@ import { useCallback, useMemo } from "react";
 import { useNowMinute } from "~/hooks/useNowMinute";
 
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
+import { JiraSessionExpiredPanel } from "~/t3team/components/t3team-JiraSessionExpiredPanel";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import { useProjectDashboardMyWorkState } from "~/t3team/t3team-projectDashboardMyWorkState";
@@ -67,6 +68,8 @@ export function AllProjectsMyWorkView({
     status: digestStatus,
     error: digestError,
     viewerUnresolved,
+    sessionExpired: digestSessionExpired,
+    reload: digestReload,
   } = useMyWorkDigestGraph({
     projects: boundProjects,
     scope: "all",
@@ -97,6 +100,9 @@ export function AllProjectsMyWorkView({
     // First paint shows a loading state instead of a misleading empty one.
     if (digestStatus === "loading" && !digestGraph) {
       return <ProjectMyWorkLoadingState />;
+    }
+    if (digestSessionExpired) {
+      return <JiraSessionExpiredPanel onSignedIn={digestReload} />;
     }
     if (digestStatus === "error") {
       return (

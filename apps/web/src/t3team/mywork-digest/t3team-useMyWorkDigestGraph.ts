@@ -18,6 +18,7 @@ import {
   type MyWorkDigestProjectInput,
   type MyWorkDigestScope,
 } from "~/t3team/backend/t3team-myworkDigestBackendApi";
+import { isJiraSessionExpiredError } from "~/t3team/backend/t3team-t3BackendHttp";
 import { useBackend } from "~/t3team/backend/t3team-index";
 import {
   ATLASSIAN_RESOURCES_CACHE_MAX_AGE_MS,
@@ -44,6 +45,11 @@ export type UseMyWorkDigestGraphResult = {
   readonly error?: string;
   /** True when the server had no Jira identity for a project (stale or missing token). */
   readonly viewerUnresolved: boolean;
+  /**
+   * The server dropped a dead Jira refresh token: the view should offer a sign-in affordance
+   * instead of the error string, and reload once the user signs back in.
+   */
+  readonly sessionExpired: boolean;
   readonly reload: () => void;
 };
 
@@ -53,6 +59,7 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | undefined>(undefined);
   const [viewerUnresolved, setViewerUnresolved] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   const projects = input.projects;
   const scope = input.scope ?? "project";
@@ -102,6 +109,7 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
     setStatus("loading");
     setError(undefined);
     setViewerUnresolved(false);
+    setSessionExpired(false);
   }
 
   const load = async (
@@ -165,12 +173,21 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
         viewer,
       });
       setViewerUnresolved(result.value.viewer?.unresolved === true);
+      setSessionExpired(false);
       setGraph(nextGraph);
       setStatus("ready");
       setError(undefined);
       lastCheckedAtRef.current = Date.now();
     } catch (cause) {
       if (generationRef.current !== gen) return;
+      // A dead refresh token is not a load failure to retry: the server cleared the credentials,
+      // so the only way forward is a fresh sign-in.
+      if (isJiraSessionExpiredError(cause)) {
+        setSessionExpired(true);
+        setError(undefined);
+        setStatus("error");
+        return;
+      }
       setError(cause instanceof Error ? cause.message : "Failed to load the My Work digest.");
       setStatus("error");
     }
@@ -212,6 +229,7 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
     status: idle ? "ready" : status,
     ...(error !== undefined && !idle ? { error } : {}),
     viewerUnresolved,
+    sessionExpired: idle ? false : sessionExpired,
     reload: () => {
       void loadRef.current(scope, entries);
     },

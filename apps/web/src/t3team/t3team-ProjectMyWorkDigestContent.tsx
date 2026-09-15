@@ -9,6 +9,7 @@ import { useMemo } from "react";
 import { useNowMinute } from "~/hooks/useNowMinute";
 
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
+import { JiraSessionExpiredPanel } from "~/t3team/components/t3team-JiraSessionExpiredPanel";
 import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
 import { ProjectMyWorkDigestView } from "~/t3team/t3team-ProjectMyWorkDigestView";
 import { useT3TeamBetaFlags } from "~/t3team/t3team-betaFlags";
@@ -35,7 +36,7 @@ export function ProjectMyWorkDigestContent({
       ? (ticketId: string) => onOpenTicket(project.id, ticketId)
       : undefined;
   const projects = useMemo(() => [project], [project]);
-  const { graph, status, error, viewerUnresolved } = useMyWorkDigestGraph({
+  const { graph, status, error, viewerUnresolved, sessionExpired, reload } = useMyWorkDigestGraph({
     projects,
     scope: "project",
   });
@@ -51,6 +52,9 @@ export function ProjectMyWorkDigestContent({
 
   if (status === "loading" && !graph) {
     return <ProjectMyWorkLoadingState />;
+  }
+  if (sessionExpired) {
+    return <JiraSessionExpiredPanel onSignedIn={reload} />;
   }
   if (status === "error") {
     return (
