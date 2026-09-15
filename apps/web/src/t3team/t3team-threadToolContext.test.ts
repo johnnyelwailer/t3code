@@ -279,14 +279,13 @@ describe("createT3TeamTurnToolContext", () => {
       kickoffPending: false,
       kickoffWorkflow: {
         kind: "recipe",
-        recipeId: "create-contextual-recipe",
+        recipeId: "author-view-recipe",
         title: "Create a recipe for this context",
         description: "Design a contextual recipe for the current surface.",
         source: "bundled",
         surface: "project.dashboard.backlog",
-        promptPath: "/workspace/project-alpha/.t3team/recipes/create-contextual-recipe/prompt.md",
-        workflowPath:
-          "/workspace/project-alpha/.t3team/recipes/create-contextual-recipe/workflow.ts",
+        promptPath: "/workspace/project-alpha/.t3team/recipes/author-view-recipe/prompt.md",
+        workflowPath: "/workspace/project-alpha/.t3team/recipes/author-view-recipe/workflow.ts",
         launchContext: {
           surface: "project.dashboard.backlog",
           project: {
@@ -322,11 +321,10 @@ describe("createT3TeamTurnToolContext", () => {
         message: "Recipe authoring kickoff",
         pending: false,
         workflow: {
-          recipeId: "create-contextual-recipe",
+          recipeId: "author-view-recipe",
           surface: "project.dashboard.backlog",
-          promptPath: "/workspace/project-alpha/.t3team/recipes/create-contextual-recipe/prompt.md",
-          workflowPath:
-            "/workspace/project-alpha/.t3team/recipes/create-contextual-recipe/workflow.ts",
+          promptPath: "/workspace/project-alpha/.t3team/recipes/author-view-recipe/prompt.md",
+          workflowPath: "/workspace/project-alpha/.t3team/recipes/author-view-recipe/workflow.ts",
           launchContext: {
             surface: "project.dashboard.backlog",
             project: {

@@ -86,7 +86,7 @@ describe("buildT3TeamSidecarRecipeQuickStarts", () => {
     });
 
     expect(quickStarts.map((recipe) => recipe.id)).toContain("prioritize-pending-work");
-    expect(quickStarts.map((recipe) => recipe.id)).not.toContain("create-contextual-recipe");
+    expect(quickStarts.map((recipe) => recipe.id)).not.toContain("manage-project-recipes");
     expect(quickStarts.map((recipe) => recipe.id)).not.toContain("stakeholder-update");
     expect(quickStarts.map((recipe) => recipe.id)).not.toContain("summarize-project-risk");
     expect(quickStarts.map((recipe) => recipe.id)).not.toContain("shape-next-backlog-slice");
@@ -150,10 +150,10 @@ describe("buildT3TeamSidecarRecipeQuickStarts", () => {
     });
     // Meta recipe-authoring quick starts live on the ticket side panel only; the
     // dashboard has no "this view" referent they could act on.
-    expect(quickStarts.some((recipe) => recipe.id === "create-contextual-recipe")).toBe(false);
+    expect(quickStarts.some((recipe) => recipe.id === "manage-project-recipes")).toBe(false);
   });
 
-  it("renders the recipe-authoring quick start against selected ticket context", () => {
+  it("renders the recipe management quick start against selected ticket context", () => {
     const quickStarts = buildT3TeamSidecarRecipeQuickStarts({
       surface: "workitem.detail.sidepanel",
       project: createProject("engineering-copilot"),
@@ -165,12 +165,12 @@ describe("buildT3TeamSidecarRecipeQuickStarts", () => {
       availableContextKeys: ["project.summary", "ticket.summary"],
     });
 
-    expect(quickStarts.find((recipe) => recipe.id === "create-contextual-recipe")).toMatchObject({
-      title: "Create a recipe for this view",
+    expect(quickStarts.find((recipe) => recipe.id === "manage-project-recipes")).toMatchObject({
+      title: "Create or edit a recipe",
     });
   });
 
-  it("includes local recipePath and workflowPath for the bundled create-recipe quick start", () => {
+  it("includes local recipePath and workflowPath for the bundled describe-rewrite quick start", () => {
     const quickStarts = buildT3TeamSidecarRecipeQuickStarts({
       surface: "workitem.detail.sidepanel",
       project: createProject("engineering-copilot", "/tmp/project-alpha"),
@@ -182,11 +182,11 @@ describe("buildT3TeamSidecarRecipeQuickStarts", () => {
       availableContextKeys: ["project.summary", "ticket.summary"],
     });
 
-    expect(quickStarts.find((recipe) => recipe.id === "create-recipe")).toMatchObject({
+    expect(quickStarts.find((recipe) => recipe.id === "describe-rewrite")).toMatchObject({
       workflow: {
-        recipeId: "create-recipe",
-        recipePath: "/tmp/project-alpha/.t3team/recipes/create-recipe",
-        workflowPath: "/tmp/project-alpha/.t3team/recipes/create-recipe/workflow.ts",
+        recipeId: "describe-rewrite",
+        recipePath: "/tmp/project-alpha/.t3team/recipes/describe-rewrite",
+        workflowPath: "/tmp/project-alpha/.t3team/recipes/describe-rewrite/workflow.ts",
       },
     });
   });

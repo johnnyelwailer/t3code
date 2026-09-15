@@ -22,8 +22,7 @@
  *
  * WHERE THE BODY LIVES
  * Bundled recipes reach a user's disk through project-setup scaffolding
- * (`renderBundledRecipeSetupFiles`), the same way `create-recipe` and `edit-plugin-module` ship
- * their `workflow.ts`. The packed server has no source tree to read at runtime, so the text must be
+ * (`renderBundledRecipeSetupFiles`), the same way this recipe ships its `workflow.ts`. The packed server has no source tree to read at runtime, so the text must be
  * embedded — but it is embedded from a REAL module (`./t3team-descriptionRewrite.workflow.ts`), so
  * the compiler checks the exact artifact the engine executes. Getting that module's TEXT differs
  * per loader; `./t3team-descriptionRewriteBody.ts` owns that, and validates it.

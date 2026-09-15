@@ -32,28 +32,6 @@ export default function Action() {
 }
 `;
 
-export const CREATE_CONTEXTUAL_RECIPE_ACTION_VIEW = `
-export default function Action({ ctx }) {
-  const dashboardMode = ctx.surfaceState?.dashboardMode;
-  const description =
-    ctx.surface === "workitem.detail.sidepanel"
-      ? "Let the agent handle repeatable ticket work: draft a handoff, check QA gaps, or trace blockers."
-      : dashboardMode === "my-work"
-        ? "Let the agent handle repeatable queue work: rank next actions, surface unblockers, or prep handoffs."
-        : dashboardMode === "backlog"
-          ? "Let the agent handle repeatable backlog work: triage risk, shape the next slice, or flag missing owners."
-          : "Let the agent handle repeatable work here: triage, review, or prep a handoff.";
-
-  return (
-    <RecipeAction
-      title="Create a recipe for this view"
-      icon="sparkles"
-      description={description}
-    />
-  );
-}
-`;
-
 export const REVIEW_ACCEPTANCE_CRITERIA_ACTION_VIEW = `
 export default function Action({ ctx }) {
   return (

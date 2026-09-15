@@ -166,7 +166,7 @@ export function T3TeamSidecarSectionInstance({
                       onUnpinItem: () => unpinItem(definition.id, itemId),
                       ...(sourcePath ? { editSourcePath: sourcePath } : {}),
                       onEditItem: (targetPath) => {
-                        void host.launchRecipe("edit-plugin-module", { targetPath });
+                        void host.launchRecipe("manage-project-recipes", { targetPath });
                       },
                       showCustomizeItem: itemResetLaunch !== null,
                       onCustomizeItem: itemResetLaunch
