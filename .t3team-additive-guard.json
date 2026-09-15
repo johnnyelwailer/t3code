@@ -370,6 +370,7 @@
     "vite.config.ts",
     "vitest.config.ts",
     "packages/t3team-skill-packs/src/recipes.ts",
+    "packages/t3team-skill-packs/src/recipeActionViews.ts",
     "packages/t3team-skill-packs/src/sidecarSections.ts",
     "packages/t3team-skill-packs/src/profiles.ts",
     "packages/project-recipes/src/sidecarComposition.test.ts"

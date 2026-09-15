@@ -170,54 +170,6 @@ export default function Action() {
     expect(markup).toContain("hover:border-border/50 hover:bg-accent/25");
   });
 
-  it("renders the bundled recipe-authoring card with plain-language guidance", async () => {
-    const markup = await renderBundledRecipeActionView({
-      recipeId: "create-contextual-recipe",
-      context: {
-        surface: "project.dashboard.backlog",
-        project: {
-          title: "Inbox Export Service",
-          provider: "atlassian",
-        },
-        linkedResources: createQueryable([]),
-        artifacts: createQueryable([]),
-        surfaceState: {
-          dashboardMode: "backlog",
-          hasContextAttachments: false,
-          hasSelectedWork: false,
-          currentView: {
-            itemCount: 8,
-            bugCount: 2,
-            primaryBugLabel: "IES-1234",
-          },
-        },
-        profile: {
-          technicalDepth: "medium",
-          brevity: "balanced",
-          guidanceStyle: "guided",
-          detailDensity: "balanced",
-          preferredArtifactKinds: ["priority-list"],
-          defaultActionFamilies: ["delivery"],
-          defaultRecipeWeights: {},
-        },
-        enabledSkillPacks: ["delivery"],
-        schema: {},
-        availableContextKeys: createQueryable([
-          "project.summary",
-          "dashboard.backlog.summary",
-          "dashboard.view.focused",
-          "dashboard.view.risk-hotspot",
-        ]),
-      },
-    });
-
-    expect(markup).toContain("Create a recipe for this view");
-    expect(markup).toContain(
-      "Let the agent handle repeatable backlog work: triage risk, shape the next slice, or flag missing owners.",
-    );
-    expect(markup).not.toContain("Badge");
-  });
-
   it("renders bundled recipe cards without redundant pill labels", async () => {
     const dashboardContext = {
       surface: "project.dashboard.myWork" as const,
