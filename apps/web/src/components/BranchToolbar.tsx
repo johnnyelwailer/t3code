@@ -1,5 +1,6 @@
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { useNavigate } from "@tanstack/react-router";
 import {
   ChevronDownIcon,
   FolderGit2Icon,
@@ -11,9 +12,12 @@ import {
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
+import { useCloudSessionController } from "../cloud/t3team-useCloudSessionController";
+import { runOnCloudSessions } from "./cloud/t3team-cloudSessionSplit";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useProject, useThread, useThreadShellsForProjectRefs } from "../state/entities";
 import {
+  dedupeRunOnEnvironments,
   type EnvMode,
   type EnvironmentOption,
   resolveContextStripLabelsCompact,
@@ -535,6 +539,46 @@ export const BranchToolbar = memo(function BranchToolbar({
   const [stripElement, setStripElement] = useState<HTMLDivElement | null>(null);
   const labelsOverflow = useLabelsOverflow(stripElement);
 
+  // Cloud sessions shown in the "Run on" menu: everything still provisioning
+  // plus the most recent failed session (never silently forgotten). Read the
+  // split rule's doc for why ready sessions stay out of this list. Both
+  // derived values are memoised: the selector is memo'd and this strip
+  // re-renders on every keystroke, so a fresh array or callback here would
+  // defeat its memo.
+  // When there is no primary environment, no cloud affordance is passed and
+  // the menu renders exactly as it did before.
+  const cloudSessions = useCloudSessionController();
+  const pendingCloudSessions = useMemo(
+    () => (cloudSessions.available ? runOnCloudSessions(cloudSessions.sessions) : []),
+    [cloudSessions.available, cloudSessions.sessions],
+  );
+  const onCreateCloudSession = useCallback(
+    () => cloudSessions.onCreate(cloudSessions.durationSeconds),
+    [cloudSessions.durationSeconds, cloudSessions.onCreate],
+  );
+  // Unconfigured: the entry is a setup affordance, not a machine promise.
+  // The provisioning panel lives in the Connections settings, so the item
+  // leaves there — the same target the "Set up connections" link uses.
+  const navigate = useNavigate();
+  const onSetupCloudSessions = useCallback(() => {
+    void navigate({ to: "/settings/connections" });
+  }, [navigate]);
+
+  // The same machine can reach the catalog under two environment ids (its T3
+  // Connect identity and a relay id minted when a cloud session's relay link
+  // was published). The Run-on menus must not list it twice; the dedupe is
+  // scoped to these menus so no other surface's environment list changes.
+  const runOnEnvironments = useMemo(
+    () =>
+      availableEnvironments ? dedupeRunOnEnvironments(availableEnvironments, environmentId) : null,
+    [availableEnvironments, environmentId],
+  );
+  // The cloud entry is always offered whenever a primary environment exists,
+  // so the selector shows even where the environment indicator itself is
+  // hidden (single-primary desktop): that is the case it exists for.
+  const showRunOnSelector =
+    runOnEnvironments !== null && (showEnvironmentIndicator || cloudSessions.available);
+
   if (!hasActiveThread || !activeProject) return null;
 
   return (
@@ -557,7 +601,7 @@ export const BranchToolbar = memo(function BranchToolbar({
             envLocked={envLocked}
             envModeLocked={envModeLocked}
             environmentId={environmentId}
-            availableEnvironments={availableEnvironments}
+            availableEnvironments={runOnEnvironments ?? []}
             showEnvironmentPicker={showEnvironmentPicker}
             showEnvironmentIndicator={showEnvironmentIndicator}
             onEnvironmentChange={onEnvironmentChange}
@@ -569,7 +613,7 @@ export const BranchToolbar = memo(function BranchToolbar({
           />
         </div>
       ) : null}
-      {showGitControls || showEnvironmentIndicator ? (
+      {showGitControls || showEnvironmentIndicator || showRunOnSelector ? (
         <div
           className={cn(
             "min-h-7 min-w-10 items-center gap-1 sm:min-h-6",
@@ -577,15 +621,26 @@ export const BranchToolbar = memo(function BranchToolbar({
             composerControlsHostRef ? "shrink" : "flex-1",
           )}
         >
-          {showEnvironmentIndicator && availableEnvironments && (
+          {showRunOnSelector && runOnEnvironments && (
             <>
               <BranchToolbarEnvironmentSelector
                 autoEnvironmentLabel={autoEnvironmentLabel}
                 onAutoEnvironment={onAutoEnvironment}
                 envLocked={envLocked}
                 environmentId={environmentId}
-                availableEnvironments={availableEnvironments}
+                availableEnvironments={runOnEnvironments}
                 {...(showEnvironmentPicker && onEnvironmentChange ? { onEnvironmentChange } : {})}
+                {...(cloudSessions.available && cloudSessions.configured
+                  ? {
+                      pendingCloudSessions,
+                      onCreateCloudSession,
+                      onCloudSessionAction: cloudSessions.onSessionAction,
+                      onCloudMenuOpenChange: cloudSessions.onCloudMenuOpenChange,
+                    }
+                  : {})}
+                {...(cloudSessions.available && !cloudSessions.configured
+                  ? { onSetupCloudSessions }
+                  : {})}
               />
               {showGitControls ? (
                 <Separator

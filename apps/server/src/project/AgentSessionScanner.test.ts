@@ -65,6 +65,9 @@ const makeProjectionSnapshotQueryLayer = (importedWorkspaceRoots: ReadonlyArray<
     getThreadDetailById: () => Effect.die("unused"),
     getThreadDetailSnapshot: () => Effect.die("unused"),
     searchThreads: () => Effect.die("unused"),
+    hasNonTerminalWorkflowRun: () => Effect.succeed(false),
+    hasLiveChild: () => Effect.succeed(false),
+    hasPendingParentWait: () => Effect.succeed(false),
   });
 
 /**

@@ -80,8 +80,7 @@ describe("ExecutionEnvironmentDescriptor", () => {
 
   it("preserves an advertised serverStartedAtMs boot stamp", () => {
     expect(
-      decodeDescriptor({ ...descriptor, serverStartedAtMs: 1_700_000_000_000 })
-        .serverStartedAtMs,
+      decodeDescriptor({ ...descriptor, serverStartedAtMs: 1_700_000_000_000 }).serverStartedAtMs,
     ).toBe(1_700_000_000_000);
   });
 });

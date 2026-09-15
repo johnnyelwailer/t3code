@@ -54,6 +54,9 @@ const makeProjectionSnapshotQueryLayer = (project: OrchestrationProject) =>
     threadExists: () => Effect.die("unused"),
     hasPendingTurnStart: () => Effect.die("unused"),
     searchThreads: () => Effect.succeed({ matches: [] }),
+    hasNonTerminalWorkflowRun: () => Effect.succeed(false),
+    hasLiveChild: () => Effect.succeed(false),
+    hasPendingParentWait: () => Effect.succeed(false),
   });
 
 const makeTerminalManagerLayer = (

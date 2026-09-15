@@ -56,9 +56,7 @@ export interface TerminalNoticeGateDeps {
   readonly quietMs?: number;
 }
 
-export const makeTerminalNoticeGate = (
-  deps: TerminalNoticeGateDeps = {},
-): TerminalNoticeGate => {
+export const makeTerminalNoticeGate = (deps: TerminalNoticeGateDeps = {}): TerminalNoticeGate => {
   const nowMs = deps.nowMs ?? (() => DateTime.nowUnsafe().epochMilliseconds);
   const quietMs = deps.quietMs ?? TERMINAL_NOTICE_QUIET_MS_DEFAULT;
   const lastByEpisode = new Map<string, number>();

@@ -117,6 +117,9 @@ describe("CheckpointDiffQuery.layer", () => {
             threadExists: () => Effect.succeed(false),
             hasPendingTurnStart: () => Effect.succeed(false),
             searchThreads: () => Effect.succeed({ matches: [] }),
+            hasNonTerminalWorkflowRun: () => Effect.succeed(false),
+            hasLiveChild: () => Effect.succeed(false),
+            hasPendingParentWait: () => Effect.succeed(false),
           }),
         ),
       );
@@ -219,6 +222,9 @@ describe("CheckpointDiffQuery.layer", () => {
             threadExists: () => Effect.succeed(false),
             hasPendingTurnStart: () => Effect.succeed(false),
             searchThreads: () => Effect.succeed({ matches: [] }),
+            hasNonTerminalWorkflowRun: () => Effect.succeed(false),
+            hasLiveChild: () => Effect.succeed(false),
+            hasPendingParentWait: () => Effect.succeed(false),
           }),
         ),
       );
@@ -311,6 +317,9 @@ describe("CheckpointDiffQuery.layer", () => {
             threadExists: () => Effect.succeed(false),
             hasPendingTurnStart: () => Effect.succeed(false),
             searchThreads: () => Effect.succeed({ matches: [] }),
+            hasNonTerminalWorkflowRun: () => Effect.succeed(false),
+            hasLiveChild: () => Effect.succeed(false),
+            hasPendingParentWait: () => Effect.succeed(false),
           }),
         ),
       );
@@ -388,6 +397,9 @@ describe("CheckpointDiffQuery.layer", () => {
             threadExists: () => Effect.succeed(false),
             hasPendingTurnStart: () => Effect.succeed(false),
             searchThreads: () => Effect.succeed({ matches: [] }),
+            hasNonTerminalWorkflowRun: () => Effect.succeed(false),
+            hasLiveChild: () => Effect.succeed(false),
+            hasPendingParentWait: () => Effect.succeed(false),
           }),
         ),
       );
@@ -450,6 +462,9 @@ describe("CheckpointDiffQuery.layer", () => {
             threadExists: () => Effect.succeed(false),
             hasPendingTurnStart: () => Effect.succeed(false),
             searchThreads: () => Effect.succeed({ matches: [] }),
+            hasNonTerminalWorkflowRun: () => Effect.succeed(false),
+            hasLiveChild: () => Effect.succeed(false),
+            hasPendingParentWait: () => Effect.succeed(false),
           }),
         ),
       );

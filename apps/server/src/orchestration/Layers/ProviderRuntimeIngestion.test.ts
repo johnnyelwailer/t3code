@@ -4597,4 +4597,264 @@ describe("ProviderRuntimeIngestion", () => {
     await harness.drain();
     expect(watchdog.getActivityState("thread-1")).toBeUndefined();
   });
+
+  it("persists a job-completion marker and frames the provider-originated turn it raises", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+    const markerAt = "2026-01-01T00:00:00.000Z";
+
+    harness.emit({
+      type: "thread.metadata.updated",
+      eventId: asEventId("evt-jn-marker"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: markerAt,
+      threadId: asThreadId("thread-1"),
+      payload: {
+        metadata: {
+          lastJobNotification: {
+            at: markerAt,
+            text: "Background job `build-app` (id: job_abc123) is completed.",
+            requestId: "req-jn-1",
+          },
+        },
+      },
+    });
+    await harness.drain();
+
+    let thread = (await harness.readModel()).threads.find(
+      (entry) => entry.id === asThreadId("thread-1"),
+    );
+    const markerActivities = thread?.activities.filter(
+      (activity) => activity.kind === "job-notification.pending",
+    );
+    expect(markerActivities?.length).toBe(1);
+    expect(markerActivities?.[0]?.id).toBe("evt-jn-marker");
+    expect(markerActivities?.[0]?.payload).toMatchObject({
+      at: markerAt,
+      text: "Background job `build-app` (id: job_abc123) is completed.",
+      requestId: "req-jn-1",
+      timelineBypass: true,
+    });
+
+    // The pack's follow-up wake: the provider mints its own turn (no host
+    // turn-start pending, no active turn) → the marker is claimed and the
+    // turn framed with a hidden user message.
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-jn-forced-turn"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: "2026-01-01T00:00:01.000Z",
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-jn-1"),
+    });
+    thread = await waitForThread(
+      harness.readModel,
+      (entry) =>
+        entry.session?.status === "running" &&
+        entry.messages.some(
+          (message) =>
+            message.role === "user" &&
+            message.text.startsWith("Background job") &&
+            message.t3teamExt?.notification === true,
+        ),
+    );
+
+    const framed = thread.messages.find(
+      (message) => message.role === "user" && message.text.startsWith("Background job"),
+    );
+    expect(framed?.id).toBe("job-notification:evt-jn-marker");
+    expect(framed?.t3teamExt).toEqual({
+      notification: true,
+      visibleToUser: false,
+      author: { kind: "system" },
+    });
+
+    const claimed = thread.activities.find((activity) =>
+      activity.kind === "job-notification.claimed",
+    );
+    expect(claimed?.payload).toMatchObject({
+      markerActivityId: "evt-jn-marker",
+      turnId: asTurnId("turn-jn-1"),
+    });
+
+    // The follow-up forced turn re-enters the idle→forced cycle: the marker
+    // was claimed, so NO second framing is created.
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("evt-jn-forced-turn-completed"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: "2026-01-01T00:00:02.000Z",
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-jn-1"),
+      payload: { state: "completed" },
+    });
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-jn-forced-turn-2"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: "2026-01-01T00:00:03.000Z",
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-jn-2"),
+    });
+    await harness.drain();
+
+    thread = (await harness.readModel()).threads.find(
+      (entry) => entry.id === asThreadId("thread-1"),
+    );
+    expect(
+      thread?.messages.filter((message) => message.t3teamExt?.notification === true).length,
+    ).toBe(1);
+    expect(
+      thread?.activities.filter((activity) => activity.kind === "job-notification.claimed")
+        .length,
+    ).toBe(1);
+  });
+
+  it("does not frame a host-initiated turn or a stale job-completion marker", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+
+    // Host-initiated turn: a pending host turn start means the provider's
+    // turn.started is the START of the host turn, not a forced turn.
+    harness.emit({
+      type: "thread.metadata.updated",
+      eventId: asEventId("evt-jn-marker-host"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      payload: {
+        metadata: {
+          lastJobNotification: {
+            at: now,
+            text: "Background job `host` (id: job_host) is completed.",
+          },
+        },
+      },
+    });
+    await harness.dispatch({
+      type: "thread.turn.start",
+      commandId: CommandId.make("cmd-jn-host-turn-start"),
+      threadId: asThreadId("thread-1"),
+      message: {
+        messageId: asMessageId("msg-jn-host"),
+        role: "user",
+        text: "Run the thing.",
+        attachments: [],
+      },
+      interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+      runtimeMode: "approval-required",
+      createdAt: now,
+    });
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-jn-host-turn-started"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: "2026-01-01T00:00:01.000Z",
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-jn-host"),
+    });
+    await harness.drain();
+
+    let thread = (await harness.readModel()).threads.find(
+      (entry) => entry.id === asThreadId("thread-1"),
+    );
+    expect(
+      thread?.messages.filter((message) => message.t3teamExt?.notification === true).length,
+    ).toBe(0);
+    expect(thread?.activities.some((activity) => activity.kind === "job-notification.claimed")).toBe(
+      false,
+    );
+
+    // Complete the host turn so the thread is idle again...
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("evt-jn-host-turn-completed"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: "2026-01-01T00:00:02.000Z",
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-jn-host"),
+      payload: { state: "completed" },
+    });
+    await harness.drain();
+
+    // ...then verify the recency window in isolation: a fresh provider-
+    // originated forced turn 6 minutes after the marker must NOT retroactively
+    // frame it (both markers are now stale: the first is 7 minutes old).
+    harness.emit({
+      type: "thread.metadata.updated",
+      eventId: asEventId("evt-jn-marker-stale"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: "2026-01-01T00:01:00.000Z",
+      threadId: asThreadId("thread-1"),
+      payload: {
+        metadata: {
+          lastJobNotification: {
+            at: "2026-01-01T00:01:00.000Z",
+            text: "Background job `stale` (id: job_stale) is completed.",
+          },
+        },
+      },
+    });
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-jn-stale-forced-turn"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: "2026-01-01T00:07:00.000Z",
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-jn-stale"),
+    });
+    await harness.drain();
+
+    thread = (await harness.readModel()).threads.find(
+      (entry) => entry.id === asThreadId("thread-1"),
+    );
+    expect(
+      thread?.messages.filter((message) => message.t3teamExt?.notification === true).length,
+    ).toBe(0);
+    expect(thread?.activities.some((activity) => activity.kind === "job-notification.claimed")).toBe(
+      false,
+    );
+    // Both markers stay pending (unclaimed) — the recency window dropped them,
+    // it did not consume them.
+    expect(
+      thread?.activities.filter((activity) => activity.kind === "job-notification.pending")
+        .length,
+    ).toBe(2);
+  });
+
+  it("persists no marker activity for metadata records without the job-notification marker", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+
+    // A provider title rename (Codex/OpenCode use the same event) carries no
+    // marker: no activity, no crash.
+    harness.emit({
+      type: "thread.metadata.updated",
+      eventId: asEventId("evt-jn-title-only"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      payload: { name: "Renamed by provider", metadata: { source: "provider" } },
+    });
+    harness.emit({
+      type: "thread.metadata.updated",
+      eventId: asEventId("evt-jn-malformed"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      payload: { metadata: { lastJobNotification: { at: "not-a-date", text: 42 } } },
+    });
+    await harness.drain();
+
+    const thread = (await harness.readModel()).threads.find(
+      (entry) => entry.id === asThreadId("thread-1"),
+    );
+    expect(
+      thread?.activities.some(
+        (activity) =>
+          activity.kind === "job-notification.pending" ||
+          activity.kind === "job-notification.claimed",
+      ),
+    ).toBe(false);
+  });
 });

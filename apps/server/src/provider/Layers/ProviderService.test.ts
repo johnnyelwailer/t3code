@@ -221,20 +221,18 @@ function makeFakeCodexAdapter(
     ): Effect.Effect<void, ProviderAdapterError> => Effect.void,
   );
 
-  const stopSession = vi.fn(
-    (threadId: ThreadId): Effect.Effect<void, ProviderAdapterError> =>
-      Effect.sync(() => {
-        sessions.delete(threadId);
-      }),
+  const stopSession = vi.fn((threadId: ThreadId): Effect.Effect<void, ProviderAdapterError> =>
+    Effect.sync(() => {
+      sessions.delete(threadId);
+    }),
   );
 
-  const listSessions = vi.fn(
-    (): Effect.Effect<ReadonlyArray<ProviderSession>> =>
-      Effect.sync(() => Array.from(sessions.values())),
+  const listSessions = vi.fn((): Effect.Effect<ReadonlyArray<ProviderSession>> =>
+    Effect.sync(() => Array.from(sessions.values())),
   );
 
-  const hasSession = vi.fn(
-    (threadId: ThreadId): Effect.Effect<boolean> => Effect.succeed(sessions.has(threadId)),
+  const hasSession = vi.fn((threadId: ThreadId): Effect.Effect<boolean> =>
+    Effect.succeed(sessions.has(threadId)),
   );
 
   const readThread = vi.fn(
@@ -268,21 +266,18 @@ function makeFakeCodexAdapter(
       Effect.succeed({ feedbackId: `feedback-${input.threadId}` }),
   );
 
-  const stopAll = vi.fn(
-    (): Effect.Effect<void, ProviderAdapterError> =>
-      Effect.sync(() => {
-        sessions.clear();
-      }),
+  const stopAll = vi.fn((): Effect.Effect<void, ProviderAdapterError> =>
+    Effect.sync(() => {
+      sessions.clear();
+    }),
   );
 
   const jobControl = vi.fn(
     (
       _threadId: ThreadId,
       _request: unknown,
-    ): Effect.Effect<
-      { readonly kind: "jobs"; readonly jobs: readonly [] },
-      ProviderAdapterError
-    > => Effect.succeed({ kind: "jobs", jobs: [] }),
+    ): Effect.Effect<{ readonly kind: "jobs"; readonly jobs: readonly [] }, ProviderAdapterError> =>
+      Effect.succeed({ kind: "jobs", jobs: [] }),
   );
 
   const adapter: ProviderAdapterShape<ProviderAdapterError> = {
@@ -4532,6 +4527,9 @@ describe("agent browser access", () => {
         getThreadDetailById: () => Effect.die("unused"),
         getThreadDetailSnapshot: () => Effect.die("unused"),
         searchThreads: () => Effect.die("unused"),
+        hasNonTerminalWorkflowRun: () => Effect.succeed(false),
+        hasLiveChild: () => Effect.succeed(false),
+        hasPendingParentWait: () => Effect.succeed(false),
       });
       const providerLayer = makeProviderServiceLive({
         issueMcpCredential: (request) =>

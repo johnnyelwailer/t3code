@@ -40,7 +40,11 @@ describe("makeTerminalNoticeGate", () => {
 
   it("keys on recipient, kind, and episode independently", () => {
     const gate = makeTerminalNoticeGate({ nowMs: () => 1_000, quietMs: 60_000 });
-    const base: TerminalNoticeEpisode = { recipientThreadId: "p1", kind: "terminal", episodeId: "c" };
+    const base: TerminalNoticeEpisode = {
+      recipientThreadId: "p1",
+      kind: "terminal",
+      episodeId: "c",
+    };
     expect(gate.allow(base)).toBe(true);
     // A different recipient is a distinct key.
     expect(gate.allow({ ...base, recipientThreadId: "p2" })).toBe(true);

@@ -24,7 +24,7 @@ import {
 } from "../themePalette";
 
 type Theme = ThemePreference;
-type ThemeSnapshot = {
+export type ThemeSnapshot = {
   theme: Theme;
   resolvedTheme: ThemeAppearance;
   systemDark: boolean;
@@ -554,6 +554,16 @@ function subscribe(listener: () => void): () => void {
       removeWindowListeners = null;
     }
   };
+}
+
+/**
+ * The raw theme snapshot with referential stability: `getSnapshot` returns the SAME object until
+ * a theme change is signalled, so this is safe as a React dependency for values that must
+ * re-derive exactly on theme flips (e.g. the widget srcdoc's theme snapshot) — unlike
+ * `useTheme()`, which allocates a fresh object on every render.
+ */
+export function useThemeSnapshot(): ThemeSnapshot {
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
 export function useTheme() {

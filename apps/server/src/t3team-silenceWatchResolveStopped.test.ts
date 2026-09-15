@@ -17,7 +17,11 @@ import type { TerminalNotifyLedger } from "./t3team-terminalNotifyDedup.ts";
  *
  * @module t3team-silenceWatchResolveStopped.test
  */
-const record = (watchId: string, watcher = "parent", target = "child"): ThreadSilenceWatchRecord => ({
+const record = (
+  watchId: string,
+  watcher = "parent",
+  target = "child",
+): ThreadSilenceWatchRecord => ({
   watchId,
   watcherThreadId: watcher,
   targetThreadId: target,
@@ -27,7 +31,9 @@ const record = (watchId: string, watcher = "parent", target = "child"): ThreadSi
 
 /** A ledger that always honors a notify (so we test the resolver, not the ledger). */
 const passthroughLedger = (): TerminalNotifyLedger =>
-  ({ notify: (input: { doNotify: Effect.Effect<void> }) => input.doNotify }) as unknown as TerminalNotifyLedger;
+  ({
+    notify: (input: { doNotify: Effect.Effect<void> }) => input.doNotify,
+  }) as unknown as TerminalNotifyLedger;
 
 interface Emitted {
   readonly watchId: string;
@@ -50,7 +56,11 @@ function makeFixtures(
     noticeGate: makeTerminalNoticeGate(options),
     getActivityState: () => ({ lastActivityAtMs: 0, pendingToolCount: 1 }),
     emitDetected: (rec: ThreadSilenceWatchRecord, payload: ThreadSilenceDetectedPayload) => {
-      emitted.push({ watchId: rec.watchId, reason: payload.reason, stoppedStatus: payload.stoppedStatus });
+      emitted.push({
+        watchId: rec.watchId,
+        reason: payload.reason,
+        stoppedStatus: payload.stoppedStatus,
+      });
       return Effect.void;
     },
   };
@@ -90,7 +100,10 @@ describe("resolveSilenceWatchStopped", () => {
   it.effect("coalesces a re-watch of the same terminal episode within the window", () =>
     Effect.gen(function* () {
       // Two watches (a re-watch) on the same recipient+target, same stop.
-      const fx = makeFixtures([record("w1"), record("w2")], { nowMs: () => 1_000, quietMs: 120_000 });
+      const fx = makeFixtures([record("w1"), record("w2")], {
+        nowMs: () => 1_000,
+        quietMs: 120_000,
+      });
       yield* resolveSilenceWatchStopped(fx.deps, "child", "error", 10);
       // Same recipient+kind+episode: only the first delivery passes the gate.
       expect(fx.emitted.map((e) => e.watchId)).toEqual(["w1"]);

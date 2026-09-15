@@ -409,23 +409,25 @@ describe("makeThreadSilenceWatchReactor", () => {
     }),
   );
 
-  it.effect("ready with no live background work closes the watch silently (turn ended, thread idle)", () =>
-    Effect.gen(function* () {
-      const harness = makeHarness({});
-      yield* harness.handleEvent(watchRegistered());
+  it.effect(
+    "ready with no live background work closes the watch silently (turn ended, thread idle)",
+    () =>
+      Effect.gen(function* () {
+        const harness = makeHarness({});
+        yield* harness.handleEvent(watchRegistered());
 
-      yield* harness.handleEvent(sessionSet("ready"));
-      yield* Effect.yieldNow;
+        yield* harness.handleEvent(sessionSet("ready"));
+        yield* Effect.yieldNow;
 
-      // Root-cause fix: ready is a turn-end, not a terminal - the watch closes
-      // with no "reached a terminal state" notice.
-      expect(detectedPayloads(harness.dispatches)).toHaveLength(0);
-      // The watch is closed: a later sweep emits nothing.
-      harness.advance(900_000);
-      harness.fireTick();
-      yield* settle(harness);
-      expect(detectedPayloads(harness.dispatches)).toHaveLength(0);
-    }),
+        // Root-cause fix: ready is a turn-end, not a terminal - the watch closes
+        // with no "reached a terminal state" notice.
+        expect(detectedPayloads(harness.dispatches)).toHaveLength(0);
+        // The watch is closed: a later sweep emits nothing.
+        harness.advance(900_000);
+        harness.fireTick();
+        yield* settle(harness);
+        expect(detectedPayloads(harness.dispatches)).toHaveLength(0);
+      }),
   );
 
   it.effect(

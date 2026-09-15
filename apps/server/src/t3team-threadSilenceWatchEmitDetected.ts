@@ -46,7 +46,9 @@ export const emitSilenceDetected = (
     yield* deps.engine
       .dispatch({
         type: "thread.actor.message",
-        commandId: CommandId.make(`server:t3team:thread-silence:${record.watchId}:${t3teamRandomUUID()}`),
+        commandId: CommandId.make(
+          `server:t3team:thread-silence:${record.watchId}:${t3teamRandomUUID()}`,
+        ),
         threadId: ThreadId.make(record.watcherThreadId),
         messageId: MessageId.make(t3teamRandomUUID()),
         fromThreadId: ThreadId.make(record.targetThreadId),
@@ -69,7 +71,9 @@ export const emitSilenceDetected = (
     yield* deps.engine
       .dispatch({
         type: "thread.activity.append",
-        commandId: CommandId.make(`server:t3team:thread-silence:${record.watchId}:${t3teamRandomUUID()}`),
+        commandId: CommandId.make(
+          `server:t3team:thread-silence:${record.watchId}:${t3teamRandomUUID()}`,
+        ),
         threadId: ThreadId.make(record.watcherThreadId),
         activity: {
           id: EventId.make(t3teamRandomUUID()),

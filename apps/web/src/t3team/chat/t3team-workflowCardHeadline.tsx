@@ -21,13 +21,22 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3
  * the row left empty. A ch bound tracks the thing actually being clamped: this is monospace, so
  * ~24ch is a readable slug, and anything longer still truncates with its `title` intact. The
  * headline sits on its own row above and cannot be pushed around by this either way.
+ *
+ * `className` (optional) is merged onto the root span for callers that need to control visibility
+ * at a container breakpoint — e.g. the live card hides the whole chip below its narrow-container
+ * width so only the live status shows. It never alters the chip's own monospace/bounded styling.
  */
-export function T3TeamWorkflowNameChip({ name }: { name: string }) {
+export function T3TeamWorkflowNameChip({ name, className }: { name: string; className?: string }) {
   return (
     <Tooltip>
       <TooltipTrigger
         render={
-          <span className="min-w-0 max-w-[24ch] truncate font-mono text-[10px] text-muted-foreground/70" />
+          <span
+            className={cn(
+              "min-w-0 max-w-[24ch] truncate font-mono text-[10px] text-muted-foreground/70",
+              className,
+            )}
+          />
         }
       >
         {name}

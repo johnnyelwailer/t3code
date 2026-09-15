@@ -1623,12 +1623,15 @@ function PullRequestsRouteView() {
       // The surface carries the row's own server, which is what its detail reads and acts on.
       if (rightPanelRef === null) return;
       useRightPanelStore.getState().openPullRequest(rightPanelRef, entry);
-      updateSearch({
-        repository: entry.repository,
-        number: entry.number,
-        selectedProjectId: entry.projectId,
-        selectedEnvironmentId: entry.environmentId,
-      });
+      updateSearch(
+        {
+          repository: entry.repository,
+          number: entry.number,
+          selectedProjectId: entry.projectId,
+          selectedEnvironmentId: entry.environmentId,
+        },
+        true,
+      );
     },
     [rightPanelRef, updateSearch],
   );

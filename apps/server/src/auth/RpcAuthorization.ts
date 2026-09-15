@@ -74,6 +74,11 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.serverGetBackgroundPolicy]: AuthOrchestrationReadScope,
   [WS_METHODS.cloudGetRelayClientStatus]: AuthRelayReadScope,
   [WS_METHODS.cloudInstallRelayClient]: AuthRelayWriteScope,
+  [WS_METHODS.cloudSessionList]: AuthRelayReadScope,
+  // Creating and cancelling spend real compute on the user's provider account,
+  // so they sit behind the write scope alongside relay-client installation.
+  [WS_METHODS.cloudSessionCreate]: AuthRelayWriteScope,
+  [WS_METHODS.cloudSessionCancel]: AuthRelayWriteScope,
   [WS_METHODS.pullRequestsList]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsListStats]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsSummary]: AuthOrchestrationReadScope,

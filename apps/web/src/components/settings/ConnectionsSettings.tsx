@@ -127,6 +127,7 @@ import {
 } from "~/versionSkew";
 import { hasCloudPublicConfig } from "~/cloud/publicConfig";
 import { useCloudLinkController } from "~/cloud/useCloudLinkController";
+import { useCloudSessionController } from "~/cloud/t3team-useCloudSessionController";
 import { authEnvironment } from "~/state/auth";
 import { environmentCatalog } from "~/connection/catalog";
 import {
@@ -150,6 +151,8 @@ import { primaryServerKeybindingsAtom, serverEnvironment } from "~/state/server"
 import { ConnectionStatusDot } from "../ConnectionStatusDot";
 import { ServerUpdateAction, ServerUpdateProgress } from "../ServerUpdateAction";
 import { CloudEnvironmentConnectRows } from "../cloud/CloudEnvironmentConnectList";
+import { CloudSessionProvisionPanel } from "../cloud/t3team-CloudSessionProvisionPanel";
+import { CloudEnvironmentExitActions } from "../cloud/t3team-CloudEnvironmentExitActions";
 import { ITEM_ROW_CLASSNAME, ITEM_ROW_INNER_CLASSNAME } from "./itemRows";
 import {
   resolveShortcutCommand,
@@ -1398,6 +1401,9 @@ type SavedBackendListRowProps = {
   removingEnvironmentId: EnvironmentId | null;
   onConnect: (environmentId: EnvironmentId) => void;
   onRemove: (environmentId: EnvironmentId) => void;
+  canStopCloudSession: boolean;
+  onStopCloudSession: (environmentId: EnvironmentId) => void;
+  isStoppingCloudSession: boolean;
 };
 
 function SavedBackendListRow({
@@ -1405,11 +1411,17 @@ function SavedBackendListRow({
   removingEnvironmentId,
   onConnect,
   onRemove,
+  canStopCloudSession,
+  onStopCloudSession,
+  isStoppingCloudSession,
 }: SavedBackendListRowProps) {
   const environmentId = environment.environmentId;
   const connectionState = environment.connection.phase;
   const isConnected = connectionState === "connected";
   const isConnecting = connectionState === "connecting" || connectionState === "reconnecting";
+  // Cloud (T3 Connect) machines get dedicated "Stop this machine" / "Forget this
+  // environment" exits; other backends keep the plain Connect/Disconnect/Remove.
+  const isCloudRelay = environment.entry.target._tag === "RelayConnectionTarget";
   const stateDotClassName =
     connectionState === "connected"
       ? "bg-success"
@@ -1566,6 +1578,18 @@ function SavedBackendListRow({
                 The WSL backend is managed by the WSL setting above — turn it on or off there.
               </TooltipPopup>
             </Tooltip>
+          ) : isCloudRelay ? (
+            <CloudEnvironmentExitActions
+              environmentId={environmentId}
+              isConnected={isConnected}
+              isConnecting={isConnecting}
+              isRemoving={removingEnvironmentId === environmentId}
+              canStopCloudSession={canStopCloudSession}
+              isStoppingCloudSession={isStoppingCloudSession}
+              onConnect={onConnect}
+              onRemove={onRemove}
+              onStopCloudSession={onStopCloudSession}
+            />
           ) : (
             <>
               {!isConnected ? (
@@ -1779,6 +1803,16 @@ export function ConnectionsSettings() {
   });
   const removeEnvironment = useAtomCommand(environmentCatalog.remove, { reportFailure: false });
   const retryEnvironment = useAtomCommand(environmentCatalog.retryNow, { reportFailure: false });
+  const cloudSessions = useCloudSessionController();
+  // The connections page is a surface that shows the cloud session list, so it
+  // drives polling while visible — the settings panel used to be a dead screen
+  // that never refreshed (finding: a session in flight froze on one phase).
+  useEffect(() => {
+    cloudSessions.onPanelVisibilityChange(true);
+    return () => {
+      cloudSessions.onPanelVisibilityChange(false);
+    };
+  }, [cloudSessions.onPanelVisibilityChange]);
   const primaryEnvironmentId = primaryEnvironment?.environmentId ?? null;
   const primarySessionState = usePrimarySessionState();
   const currentSessionScopes = desktopBridge
@@ -3586,8 +3620,39 @@ export function ConnectionsSettings() {
             removingEnvironmentId={removingSavedEnvironmentId}
             onConnect={handleConnectSavedBackend}
             onRemove={handleRemoveSavedBackend}
+            canStopCloudSession={cloudSessions.hasLiveCloudSession(environment.environmentId)}
+            onStopCloudSession={cloudSessions.stopEnvironment}
+            isStoppingCloudSession={
+              cloudSessions.stoppingEnvironmentId === environment.environmentId
+            }
           />
         ))}
+        {cloudSessions.available ? (
+          cloudSessions.configured ? (
+            <CloudSessionProvisionPanel
+              sessions={cloudSessions.sessions}
+              loading={cloudSessions.loading}
+              createPending={cloudSessions.createPending}
+              durationSeconds={cloudSessions.durationSeconds}
+              onDurationChange={cloudSessions.onDurationChange}
+              onCreate={cloudSessions.onCreate}
+              onSessionAction={cloudSessions.onSessionAction}
+              onSessionSecondaryAction={cloudSessions.onSessionSecondaryAction}
+              pendingSessionId={cloudSessions.pendingSessionId}
+              pendingKind={cloudSessions.pendingKind}
+              pendingLabel={cloudSessions.pendingLabel}
+            />
+          ) : (
+            <div className={ITEM_ROW_CLASSNAME}>
+              <div className={ITEM_ROW_INNER_CLASSNAME}>
+                <p className="font-medium text-sm">Sign in to GitHub</p>
+                <p className="mt-1 text-muted-foreground text-xs">
+                  Cloud sessions need the GitHub CLI signed in on this server.
+                </p>
+              </div>
+            </div>
+          )
+        ) : null}
         <CloudRemoteEnvironmentRows
           primaryEnvironmentId={primaryEnvironmentId}
           savedEnvironments={savedEnvironments}
