@@ -9,6 +9,13 @@ const publicConfigDefine = {
   __T3CODE_BUILD_CLERK_PUBLISHABLE_KEY__: JSON.stringify(
     repoEnv.T3CODE_CLERK_PUBLISHABLE_KEY?.trim() ?? "",
   ),
+  // The released desktop app pins its backend to the default port (3773) so the Atlassian OAuth
+  // callback — registered by exact port in the Atlassian Developer Console — always lands on a
+  // listening server. Set VITE_DESKTOP_PIN_BACKEND_PORT=1 in the build env to pin; dev and
+  // self-hosted builds keep the sequential scan.
+  __DESKTOP_PIN_BACKEND_PORT__: JSON.stringify(
+    repoEnv.VITE_DESKTOP_PIN_BACKEND_PORT?.trim() === "1",
+  ),
 };
 
 export default defineConfig({
