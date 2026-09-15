@@ -155,7 +155,7 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
 
       fingerprintRef.current = result.fingerprint;
       const viewer: DigestViewer = {
-        name: viewerDisplayName(),
+        name: viewerDisplayName() || result.value.viewer?.name || "",
         role: input.viewer?.role?.trim() !== "" ? (input.viewer?.role as string) : "",
         lastVisitAt: readLastVisitAt(scope),
       };

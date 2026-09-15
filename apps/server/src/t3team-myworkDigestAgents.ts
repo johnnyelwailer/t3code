@@ -23,8 +23,12 @@ export function readDigestThreadAgentRows(threadIds: ReadonlyArray<string>) {
   return Effect.gen(function* () {
     if (threadIds.length === 0) return [] as ThreadAgentRow[];
     const sql = yield* SqlClient.SqlClient;
+    // The thread's model lives inside `model_selection_json` ({ instanceId, model });
+    // the session row carries the provider name once a session has started.
     return yield* sql<ThreadAgentRow>`
-      SELECT t.thread_id AS "threadId", t.model AS "model", s.provider_name AS "providerName"
+      SELECT t.thread_id AS "threadId",
+             COALESCE(json_extract(t.model_selection_json, '$.model'), '') AS "model",
+             COALESCE(s.provider_name, json_extract(t.model_selection_json, '$.instanceId')) AS "providerName"
       FROM projection_threads t
       LEFT JOIN projection_thread_sessions s ON s.thread_id = t.thread_id
       WHERE ${sql.in("t.thread_id", threadIds)}
@@ -73,7 +77,9 @@ export function digestAgentLabel(input: {
   const provider =
     stored !== undefined && stored !== "" ? stored : (input.inferredProvider ?? "agent");
   const display = localProviderDisplayName(provider);
-  const model = input.model.trim();
+  // "<synthetic>" and similar placeholders are not a model the user picked.
+  const rawModel = input.model.trim();
+  const model = rawModel.startsWith("<") ? "" : rawModel;
   return model !== "" ? `${display} · ${model}` : display;
 }
 

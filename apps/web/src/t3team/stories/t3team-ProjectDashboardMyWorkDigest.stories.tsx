@@ -1,18 +1,20 @@
 import type { Meta, StoryObj } from "@storybook/react";
 
 import { withT3TeamRouter } from "~/t3team/storybook/t3team-storybook-router-decorator";
+import { ProjectMyWorkDigestFixtureView } from "~/t3team/t3team-ProjectMyWorkDigestFixtureView";
 import {
   agentArrangementRefreshScenario,
   agentArrangementScenario,
-  allProjectsAgentScenario,
-  allProjectsHeuristicScenario,
   emptyGraphScenario,
   errorArrangementScenario,
   heuristicArrangementScenario,
   pausedArrangementScenario,
-  ProjectMyWorkDigestFixtureView,
   type ProjectMyWorkDigestFixtureScenario,
-} from "~/t3team/t3team-projectMyWorkDigestFixtures";
+} from "~/t3team/t3team-projectMyWorkDigestFixtureScenarios";
+import {
+  allProjectsAgentScenario,
+  allProjectsHeuristicScenario,
+} from "~/t3team/t3team-projectMyWorkDigestFixtureScenariosAllProjects";
 
 const meta = {
   title: "T3Team/Project Dashboard/My Work Digest",

@@ -20,10 +20,11 @@ import {
   readDigestHandoffTickets,
   readDigestPendingDecisions,
   readDigestSprints,
-  readDigestTickets,
   readDigestThreads,
   readDigestToolContextTickets,
 } from "./t3team-myworkDigestQueries.ts";
+import { readMyWorkIssueRows } from "./t3team-atlassian-backlog-cacheQueries.ts";
+import { resolveT3TeamAtlassianViewerAccountId } from "./t3team-atlassian-viewer-identity.ts";
 import {
   assembleMyWorkDigestPayload,
   resolveDigestTicketRef,
@@ -46,7 +47,8 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
     const projects = input.projects.slice(0, 10);
     const nowMs = yield* Clock.currentTimeMillis;
     const nowIso = new Date(nowMs).toISOString();
-    const viewerName = input.viewer?.name?.trim() || undefined;
+    const requestedViewerName = input.viewer?.name?.trim() || undefined;
+    let resolvedViewerName: string | undefined = requestedViewerName;
     const appProjectIds = [
       ...new Set(
         projects
@@ -86,7 +88,24 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
             accountId: project.account.id,
             externalProjectId: project.externalProjectId,
           };
-          const tickets = yield* readDigestTickets(identity);
+          // "My Work" = the viewer's assigned issues plus their parents, off the
+          // same assignee-indexed mirror read the legacy My Work view uses.
+          // Without a resolved viewer there is nothing personal to show.
+          const viewerAccountId = yield* resolveT3TeamAtlassianViewerAccountId(
+            project.account,
+          ).pipe(Effect.catch(() => Effect.succeed(undefined)));
+          const projection =
+            viewerAccountId !== undefined && viewerAccountId !== ""
+              ? yield* readMyWorkIssueRows({ ...identity, viewerAccountId })
+              : { assigned: [], parents: [] };
+          const tickets = [...projection.assigned, ...projection.parents];
+          // The viewer's Jira display name: the client's cached name, else the
+          // assignee the mirror stamped on the viewer's own items.
+          const viewerName =
+            requestedViewerName ?? (projection.assigned[0]?.assignee?.trim() || undefined);
+          if (viewerName !== undefined && resolvedViewerName === undefined) {
+            resolvedViewerName = viewerName;
+          }
           const sprints = yield* readDigestSprints(identity);
           const estimateUnit = yield* readDigestEstimateUnit(identity);
           const transitions = yield* readDigestStatusTransitionsSince({
@@ -194,7 +213,11 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
       ),
     );
 
-    return assembleMyWorkDigestPayload({ scope: input.scope, sources });
+    const payload = assembleMyWorkDigestPayload({ scope: input.scope, sources });
+    return {
+      ...payload,
+      ...(resolvedViewerName !== undefined ? { viewer: { name: resolvedViewerName } } : {}),
+    };
   });
 }
 

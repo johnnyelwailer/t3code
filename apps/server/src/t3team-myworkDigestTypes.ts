@@ -133,6 +133,8 @@ export type T3TeamDigestProjectData = {
 export type T3TeamMyWorkDigestPayload = {
   readonly scope: T3TeamMyWorkDigestScope;
   readonly projects: ReadonlyArray<T3TeamDigestProjectData>;
+  /** The viewer as the server resolved them (display name from the mirror). */
+  readonly viewer?: { readonly name: string };
 };
 
 /**

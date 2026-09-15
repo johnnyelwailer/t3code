@@ -1,38 +1,18 @@
-import { useState } from "react";
-
 import { createProjectBacklogTestTicket as createTicket } from "~/t3team/t3team-projectBacklogTestUtils";
-import {
-  ProjectMyWorkDigestHeader,
-  type DigestBurndownVariant,
-} from "~/t3team/t3team-ProjectMyWorkDigestHeader";
-import {
-  ProjectMyWorkDigestToolbar,
-  type DigestArrangement,
-} from "~/t3team/t3team-ProjectMyWorkDigestToolbar";
-import { ProjectMyWorkDigestView } from "~/t3team/t3team-ProjectMyWorkDigestView";
-import {
-  ProjectMyWorkViewSwitch,
-  type ProjectMyWorkLens,
-} from "~/t3team/t3team-ProjectMyWorkViewSwitch";
-import {
-  buildHeuristicDigestPlan,
-  resolveDigestPlan,
-  type DigestGraph,
-  type DigestPlan,
-} from "~/t3team/t3team-projectMyWorkDigestPlan";
+import type { DigestGraph } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
 export const DIGEST_FIXTURE_NOW_MS = Date.UTC(2026, 8, 14, 9, 30);
-const HOUR = 60 * 60 * 1000;
-const ago = (hours: number) => new Date(DIGEST_FIXTURE_NOW_MS - hours * HOUR).toISOString();
+export const HOUR = 60 * 60 * 1000;
+export const ago = (hours: number) => new Date(DIGEST_FIXTURE_NOW_MS - hours * HOUR).toISOString();
 
-const viewer = { name: "Philip", role: "Product Owner", lastVisitAt: ago(18) };
-const IES = { id: "project-ies", name: "IES NG", url: "https://jira.example.at/IES" };
-const NXAI = { id: "project-nxai", name: "Nexi AI", url: "https://jira.example.at/NXAI" };
-const P = IES.id;
-const threadUrl = (id: string) => `https://t3.codes/thread/${id}`;
+export const viewer = { name: "Philip", role: "Product Owner", lastVisitAt: ago(18) };
+export const IES = { id: "project-ies", name: "IES NG", url: "https://jira.example.at/IES" };
+export const NXAI = { id: "project-nxai", name: "Nexi AI", url: "https://jira.example.at/NXAI" };
+export const P = IES.id;
+export const threadUrl = (id: string) => `https://t3.codes/thread/${id}`;
 
-const iesTickets: readonly ProjectTicket[] = [
+export const iesTickets: readonly ProjectTicket[] = [
   createTicket({
     id: "epic-transport",
     projectId: P,
@@ -240,7 +220,7 @@ const iesTickets: readonly ProjectTicket[] = [
   }),
 ];
 
-const nxaiTickets: readonly ProjectTicket[] = [
+export const nxaiTickets: readonly ProjectTicket[] = [
   createTicket({
     id: "nx-epic-roles",
     projectId: NXAI.id,
@@ -280,7 +260,7 @@ const nxaiTickets: readonly ProjectTicket[] = [
   }),
 ];
 
-const iesGraphWithoutSprint: DigestGraph = {
+export const iesGraphWithoutSprint: DigestGraph = {
   scope: "project",
   projects: [IES],
   viewer,
@@ -493,320 +473,3 @@ export const digestFixtureGraph: DigestGraph = {
     endDate: "2026-09-23T00:00:00.000Z",
   },
 };
-
-export const digestFixtureAgentPlan: DigestPlan = {
-  producer: "agent",
-  producedAt: ago(2),
-  sections: [
-    {
-      id: "unblock",
-      kind: "items",
-      placement: "side",
-      heading: "Two answers unblock three agents",
-      items: [
-        { ticketId: "task-formular", why: "GPT Luna is waiting on the Kostenstelle rule." },
-        { ticketId: "story-leistungsadmin", why: "Test blocked since yesterday." },
-      ],
-    },
-    {
-      id: "review-chain",
-      kind: "items",
-      placement: "side",
-      heading: "Review first",
-      hint: "#762 is the parent of the #64 fix.",
-      items: [
-        { ticketId: "task-liste" },
-        { ticketId: "story-detail", why: "Sitting 28 h, nobody picked it up." },
-      ],
-    },
-    {
-      id: "order",
-      kind: "items",
-      placement: "main",
-      heading: "Priority",
-      items: [
-        { ticketId: "task-api" },
-        { ticketId: "task-la-fe" },
-        { ticketId: "task-la-test" },
-        { ticketId: "task-pf-notif", why: "4 PRs waiting on reviewers." },
-        { ticketId: "task-pf-user" },
-        { ticketId: "bug-gis" },
-      ],
-    },
-    {
-      id: "cold",
-      kind: "items",
-      placement: "footer",
-      heading: "Cold agent threads",
-      hint: "silent > 3 d · nudge or release",
-      items: [{ ticketId: "bug-unterordner" }, { ticketId: "story-freigeben" }],
-    },
-    {
-      id: "parked",
-      kind: "items",
-      placement: "footer",
-      heading: "Parked",
-      hint: "nothing needed from you",
-      items: [{ ticketId: "story-import" }, { ticketId: "task-passkey" }],
-    },
-  ],
-};
-
-function withGraphChanges(graph: DigestGraph): DigestGraph {
-  const closed = new Set(["story-freigeben", "task-passkey"]);
-  const added: readonly ProjectTicket[] = [
-    createTicket({
-      id: "bug-neu",
-      projectId: P,
-      issueType: "Bug",
-      status: "To Do",
-      assignee: "Philip",
-      reporter: "Angie",
-      priority: "High",
-      updatedAt: ago(0.3),
-      ref: { displayId: "IES-20231", title: "Export CSV: Umlaute falsch kodiert" },
-    }),
-    createTicket({
-      id: "task-neu",
-      projectId: P,
-      issueType: "Task",
-      status: "In Progress",
-      assignee: "Philip",
-      updatedAt: ago(0.2),
-      ref: { displayId: "IES-20232", title: "Release Notes 2026.9 vorbereiten" },
-    }),
-  ];
-  return {
-    ...graph,
-    tickets: [
-      ...graph.tickets.map((t) =>
-        closed.has(t.id) ? { ...t, status: "Done", updatedAt: ago(0.4) } : t,
-      ),
-      ...added,
-    ],
-    claims: [
-      ...graph.claims,
-      {
-        threadId: "thr-neu",
-        threadTitle: "Release Notes entwerfen",
-        ticketId: "task-neu",
-        agent: "Nexplore AI",
-        lastActivityAt: ago(0.1),
-      },
-    ],
-  };
-}
-
-const allProjectsGraph: DigestGraph = {
-  ...iesGraphWithoutSprint,
-  scope: "all",
-  projects: [IES, NXAI],
-  tickets: [...iesTickets, ...nxaiTickets],
-  claims: [
-    ...digestFixtureGraph.claims,
-    {
-      threadId: "thr-nx-digest",
-      threadTitle: "Work Coordination View Modes",
-      ticketId: "nx-digest",
-      agent: "Claude Fable",
-      lastActivityAt: ago(0.2),
-      threadUrl: threadUrl("thr-nx-digest"),
-    },
-    {
-      threadId: "thr-nx-role",
-      threadTitle: "NXAI-8 Dev-Rolle klären",
-      ticketId: "nx-dev-role",
-      agent: "GPT Luna",
-      lastActivityAt: ago(30),
-      threadUrl: threadUrl("thr-nx-role"),
-    },
-  ],
-  decisions: [
-    ...digestFixtureGraph.decisions,
-    {
-      id: "dec-nx",
-      ticketId: "nx-dev-role",
-      threadId: "thr-nx-role",
-      requiredRole: "Product Owner",
-      askedAt: ago(30),
-      question: "Dev-Rolle: darf sie Recipes publizieren?",
-    },
-  ],
-};
-
-export type ProjectMyWorkDigestFixtureScenario = {
-  readonly graph: DigestGraph;
-  readonly arrangement: DigestArrangement;
-};
-
-const emptyGraph: DigestGraph = {
-  scope: "project",
-  projects: [IES],
-  viewer,
-  tickets: [],
-  claims: [],
-  decisions: [],
-  changeRequests: [],
-  transitions: [],
-  blockers: [],
-};
-
-export const emptyGraphScenario: ProjectMyWorkDigestFixtureScenario = {
-  graph: emptyGraph,
-  arrangement: { state: "off" },
-};
-export const heuristicArrangementScenario: ProjectMyWorkDigestFixtureScenario = {
-  graph: digestFixtureGraph,
-  arrangement: { state: "off" },
-};
-export const agentArrangementScenario: ProjectMyWorkDigestFixtureScenario = {
-  graph: digestFixtureGraph,
-  arrangement: { state: "live", plan: digestFixtureAgentPlan, refreshing: false },
-};
-export const agentArrangementRefreshScenario: ProjectMyWorkDigestFixtureScenario = {
-  graph: withGraphChanges(digestFixtureGraph),
-  arrangement: { state: "live", plan: digestFixtureAgentPlan, refreshing: true },
-};
-export const pausedArrangementScenario: ProjectMyWorkDigestFixtureScenario = {
-  graph: withGraphChanges(digestFixtureGraph),
-  arrangement: { state: "paused", plan: digestFixtureAgentPlan },
-};
-export const errorArrangementScenario: ProjectMyWorkDigestFixtureScenario = {
-  graph: digestFixtureGraph,
-  arrangement: { state: "error", message: "Recipe run exceeded budget" },
-};
-export const allProjectsHeuristicScenario: ProjectMyWorkDigestFixtureScenario = {
-  graph: allProjectsGraph,
-  arrangement: { state: "off" },
-};
-export const allProjectsAgentScenario: ProjectMyWorkDigestFixtureScenario = {
-  graph: allProjectsGraph,
-  arrangement: {
-    state: "live",
-    refreshing: false,
-    plan: {
-      ...digestFixtureAgentPlan,
-      sections: [
-        {
-          id: "unblock",
-          kind: "items",
-          placement: "side",
-          heading: "Three answers, two projects",
-          items: [
-            { ticketId: "task-formular" },
-            { ticketId: "story-leistungsadmin" },
-            { ticketId: "nx-dev-role", why: "Blocks the role epic for two weeks now." },
-          ],
-        },
-        ...digestFixtureAgentPlan.sections.slice(1, 2),
-        {
-          id: "order",
-          kind: "items",
-          placement: "main",
-          heading: "Priority",
-          items: [
-            { ticketId: "nx-digest", why: "Live exploration thread, answer while it is warm." },
-            { ticketId: "task-api" },
-            { ticketId: "task-la-fe" },
-            { ticketId: "task-pf-notif" },
-            { ticketId: "task-pf-user" },
-            { ticketId: "nx-composer" },
-          ],
-        },
-        ...digestFixtureAgentPlan.sections.slice(3),
-      ],
-    },
-  },
-};
-
-export function ProjectMyWorkDigestFixtureView({
-  scenario,
-  nowOffsetHours = 0,
-  burndownVariant = "off",
-  inAppOpen = false,
-}: {
-  scenario: ProjectMyWorkDigestFixtureScenario;
-  nowOffsetHours?: number;
-  burndownVariant?: DigestBurndownVariant;
-  /** Demo flag: routes row clicks through an onOpenTicket handler instead of window.open. */
-  inAppOpen?: boolean;
-}) {
-  const [lens, setLens] = useState<ProjectMyWorkLens>("digest");
-  const [arrangement, setArrangement] = useState<DigestArrangement>(scenario.arrangement);
-  const [openTicket, setOpenTicket] = useState<string | null>(null);
-  const nowMs = DIGEST_FIXTURE_NOW_MS + nowOffsetHours * HOUR;
-  const onOpenTicket = inAppOpen
-    ? (ticketId: string) => {
-        setOpenTicket(ticketId);
-        window.setTimeout(() => setOpenTicket(null), 1600);
-      }
-    : undefined;
-  const basePlan =
-    arrangement.state === "live" || arrangement.state === "paused"
-      ? arrangement.plan
-      : buildHeuristicDigestPlan(scenario.graph, nowMs);
-  const plan = resolveDigestPlan(basePlan, scenario.graph, nowMs);
-  const start = () => {
-    setArrangement({ state: "starting" });
-    window.setTimeout(
-      () =>
-        setArrangement({
-          state: "live",
-          plan: { ...digestFixtureAgentPlan, producedAt: new Date(nowMs).toISOString() },
-          refreshing: false,
-        }),
-      1200,
-    );
-  };
-  return (
-    <div className="min-h-screen bg-background px-4 py-5 text-foreground sm:px-6 sm:py-7 xl:px-10 2xl:px-14">
-      <div className="mx-auto w-full space-y-5 sm:space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-          <ProjectMyWorkViewSwitch lens={lens} onLensChange={setLens} />
-          {lens === "digest" ? (
-            <ProjectMyWorkDigestToolbar
-              arrangement={arrangement}
-              newSinceCount={plan.newSinceTicketIds.length}
-              nowMs={nowMs}
-              graphEmpty={scenario.graph.tickets.length === 0}
-              onStart={start}
-              onPause={() =>
-                setArrangement((c) => (c.state === "live" ? { state: "paused", plan: c.plan } : c))
-              }
-              onResume={() =>
-                setArrangement((c) =>
-                  c.state === "paused" ? { state: "live", plan: c.plan, refreshing: false } : c,
-                )
-              }
-            />
-          ) : null}
-        </div>
-        {lens === "digest" ? (
-          <>
-            <ProjectMyWorkDigestHeader
-              graph={scenario.graph}
-              nowMs={nowMs}
-              burndownVariant={burndownVariant}
-            />
-            <ProjectMyWorkDigestView
-              plan={plan}
-              graph={scenario.graph}
-              nowMs={nowMs}
-              onOpenTicket={onOpenTicket}
-            />
-          </>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            {lens === "hierarchy" ? "Hierarchy" : "Board"} lens: existing My Work view over the same
-            graph.
-          </p>
-        )}
-      </div>
-      {openTicket ? (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background shadow-lg">
-          demo: onOpenTicket("{openTicket}")
-        </div>
-      ) : null}
-    </div>
-  );
-}

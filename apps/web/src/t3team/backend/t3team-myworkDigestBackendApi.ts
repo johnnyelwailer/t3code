@@ -51,6 +51,8 @@ export type MyWorkDigestTicketRef = {
 
 export type MyWorkDigestPayload = {
   readonly scope: MyWorkDigestScope;
+  /** The viewer as the server resolved them; fills in when the client has no cached name. */
+  readonly viewer?: { readonly name: string };
   readonly projects: ReadonlyArray<{
     readonly project: { readonly id: string; readonly name: string };
     readonly tickets: ReadonlyArray<MyWorkDigestTicketRef>;

@@ -15,6 +15,8 @@
  */
 import { useCallback, useMemo } from "react";
 
+import { useNowMinute } from "~/hooks/useNowMinute";
+
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
@@ -60,18 +62,23 @@ export function AllProjectsMyWorkView({
   );
 
   // The digest lens reads one server-aggregated graph across every bound project.
-  const { graph: digestGraph, status: digestStatus } = useMyWorkDigestGraph({
+  const {
+    graph: digestGraph,
+    status: digestStatus,
+    error: digestError,
+  } = useMyWorkDigestGraph({
     projects: boundProjects,
     scope: "all",
     enabled: lens === "digest",
   });
+  // Minute-granular clock shared with the rest of the app: stable within a render, re-plans on tick.
+  const nowMs = Date.parse(useNowMinute());
   const digestPlan = useMemo(() => {
     if (!digestGraph) {
       return null;
     }
-    const nowMs = Date.now();
     return resolveDigestPlan(buildHeuristicDigestPlan(digestGraph, nowMs), digestGraph, nowMs);
-  }, [digestGraph]);
+  }, [digestGraph, nowMs]);
 
   if (boundProjects.length === 0) {
     return (
@@ -96,6 +103,9 @@ export function AllProjectsMyWorkView({
           className="px-6 py-10 text-center text-sm text-muted-foreground"
         >
           Could not load the digest view.
+          {digestError ? (
+            <span className="block pt-1 text-xs opacity-80">{digestError}</span>
+          ) : null}
         </T3SurfacePanel>
       );
     }
@@ -115,7 +125,7 @@ export function AllProjectsMyWorkView({
       <ProjectMyWorkDigestView
         plan={digestPlan}
         graph={digestGraph}
-        nowMs={Date.now()}
+        nowMs={nowMs}
         burndownVariant={flags.digestBurndownVariant}
       />
     );
