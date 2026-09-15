@@ -54,7 +54,7 @@ export function T3TeamSidebarProjectScopeDisc({
             onClick={onSelect}
             onContextMenu={onContextMenu}
             className={cn(
-              "relative inline-flex h-7 min-w-7 shrink-0 cursor-pointer items-center justify-center gap-1.5 overflow-hidden rounded-full border border-black/15 bg-card outline-none transition-[margin,transform,color] duration-150 focus-visible:ring-2 focus-visible:ring-ring/60 dark:border-white/20 dark:bg-sidebar-accent",
+              "relative inline-flex h-7 min-w-7 shrink-0 cursor-pointer items-center justify-center gap-1.5 overflow-hidden rounded-full border border-black/15 bg-card outline-none transition-[margin,transform,color] duration-150 focus-visible:ring-2 focus-visible:ring-ring/60 dark:border-white/15 dark:bg-sidebar-control-surface",
               active
                 ? "px-1 pr-2.5 text-foreground"
                 : "text-muted-foreground hover:text-foreground",

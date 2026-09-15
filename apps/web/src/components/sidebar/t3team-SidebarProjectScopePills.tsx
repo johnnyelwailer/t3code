@@ -3,7 +3,6 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  type ComponentType,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type RefObject,
@@ -13,7 +12,6 @@ import type { SidebarProjectSnapshot } from "~/sidebarProjectGrouping";
 
 import { ProjectFavicon } from "../ProjectFavicon";
 import { TooltipProvider } from "../ui/tooltip";
-import { T3TeamProjectInitials } from "./t3team-ProjectInitials";
 import { T3TeamSidebarProjectScopeDisc } from "./t3team-SidebarProjectScopeDisc";
 import {
   projectScopeDiscCapacity,
@@ -37,22 +35,9 @@ function useMeasuredWidth(): [RefObject<HTMLDivElement | null>, number] {
   return [ref, width];
 }
 
-// ProjectFavicon's fallback slot takes a component with only `className`; one component per
-// project name, created once, so the slot never remounts and nothing is defined during render.
-const initialsComponents = new Map<string, ComponentType<{ className?: string }>>();
-function initialsFor(name: string): ComponentType<{ className?: string }> {
-  let component = initialsComponents.get(name);
-  if (!component) {
-    component = function GroupInitials({ className }: { className?: string }) {
-      return <T3TeamProjectInitials name={name} className={className} />;
-    };
-    initialsComponents.set(name, component);
-  }
-  return component;
-}
-
+// Same props as the thread rows pass, so a disc shows exactly the icon its threads show
+// (favicon, chosen icon, or the automatic per-project fallback).
 function GroupIcon({ group }: { group: SidebarProjectSnapshot }) {
-  const Initials = initialsFor(group.displayName);
   return (
     <ProjectFavicon
       environmentId={group.environmentId}
@@ -60,7 +45,6 @@ function GroupIcon({ group }: { group: SidebarProjectSnapshot }) {
       projectName={group.title}
       faviconPath={group.faviconPath}
       projectIcon={group.projectIcon}
-      fallbackIcon={Initials}
       className="size-4 shrink-0"
     />
   );
@@ -103,7 +87,9 @@ export function T3TeamSidebarProjectScopePills({
         ref={ref}
         role="group"
         aria-label="Project scope"
-        className="flex min-w-0 flex-1 items-center overflow-hidden"
+        // Left inset matches the search field's padding above; the vertical inset keeps the
+        // lifted selection's top edge inside the clipping box.
+        className="flex min-w-0 flex-1 items-center overflow-hidden py-0.5 pl-2"
       >
         <div className="flex items-center">
           <T3TeamSidebarProjectScopeDisc
