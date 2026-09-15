@@ -612,7 +612,9 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain(
       '<button type="button" aria-label="Download report.pdf" class="flex min-w-0 cursor-pointer items-center gap-2 rounded-md py-1 text-left text-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70">',
     );
-    expect(markup).not.toContain("href=");
+    // SVG sprite references are valid; download links must remain lazy.
+    expect(markup).not.toMatch(/<a\b[^>]*\bhref=/);
+    expect(markup).not.toContain('download="report.pdf"');
   });
 
   it("does not download an optimistic file before the server supplies its attachment ID", () => {
