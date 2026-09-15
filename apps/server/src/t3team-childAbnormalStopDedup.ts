@@ -31,7 +31,9 @@ export const CHILD_ABNORMAL_STOP_NOTIFIED_KIND = "t3team.child_abnormal_stop_not
  * an incident (the marker is visible on the child's timeline).
  */
 const markerSummaryFor = (outcome: ChildTerminalOutcome): string =>
-  outcome === "completed" ? "Child completion reported to parent" : "Abnormal stop reported to parent";
+  outcome === "completed"
+    ? "Child completion reported to parent"
+    : "Abnormal stop reported to parent";
 
 export interface AbnormalStopGuards {
   /** Epoch boundary: a running/starting transition resets the marker. */

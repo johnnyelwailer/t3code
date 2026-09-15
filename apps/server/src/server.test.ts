@@ -613,13 +613,14 @@ const buildAppUnderTest = (options?: {
       ...options?.config,
     };
     const layerConfig = ServerConfig.layer(config);
-    const threadEngagementLayer = options?.layers?.threadEngagement !== undefined
-      ? Layer.succeed(T3TeamThreadEngagement, {
-          noteTyping: () => Effect.void,
-          isEngaged: () => Effect.succeed(false),
-          ...options.layers.threadEngagement,
-        })
-      : T3TeamThreadEngagementLive;
+    const threadEngagementLayer =
+      options?.layers?.threadEngagement !== undefined
+        ? Layer.succeed(T3TeamThreadEngagement, {
+            noteTyping: () => Effect.void,
+            isEngaged: () => Effect.succeed(false),
+            ...options.layers.threadEngagement,
+          })
+        : T3TeamThreadEngagementLive;
     const t3teamRouterSupportLayer = Layer.mergeAll(
       SqlitePersistenceMemory,
       threadEngagementLayer,

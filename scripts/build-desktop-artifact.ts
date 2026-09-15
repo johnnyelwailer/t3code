@@ -2945,7 +2945,14 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     // \`), which reads like a bug and invites "simplification" that breaks
     // the escape.
     artifactName:
-      artifactBaseName + "-" + "${version}" + "-" + "${arch}" + artifactTimestampSuffix + "." + "${ext}",
+      artifactBaseName +
+      "-" +
+      "${version}" +
+      "-" +
+      "${arch}" +
+      artifactTimestampSuffix +
+      "." +
+      "${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [
       ...DESKTOP_FILE_EXCLUSIONS,

@@ -34,7 +34,10 @@ layer("t3team-057 drop migration", (it) => {
       `;
 
       const executed = yield* runMigrations();
-      assert.deepStrictEqual(executed.map(([id]) => id), [70]);
+      assert.deepStrictEqual(
+        executed.map(([id]) => id),
+        [70],
+      );
 
       const tables = yield* sql<{ readonly name: string | null }>`
         SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'thread_task_records'
@@ -54,7 +57,10 @@ noDataLayer("t3team-057 on a table without data", (it) => {
       const sql = yield* SqlClient.SqlClient;
       yield* runMigrations({ toMigrationInclusive: 69 });
       const executed = yield* runMigrations();
-      assert.deepStrictEqual(executed.map(([id]) => id), [70]);
+      assert.deepStrictEqual(
+        executed.map(([id]) => id),
+        [70],
+      );
       const tables = yield* sql<{ readonly name: string | null }>`
         SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'thread_task_records'
       `;

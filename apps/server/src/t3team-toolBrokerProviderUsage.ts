@@ -56,11 +56,12 @@ export const makeReadProviderUsage =
       }
       // Sampler side-effects (keychain child, transient app-server) run in a
       // private scope that is closed when the sampling settles.
-      const sampling = sampleProviderInstancesUsage(settings, {
-        ...(argsExit.value.provider_instance_id !== undefined
+      const sampling = sampleProviderInstancesUsage(
+        settings,
+        argsExit.value.provider_instance_id !== undefined
           ? { requestedInstanceIds: new Set([argsExit.value.provider_instance_id]) }
-          : {}),
-      });
+          : {},
+      );
       const result = yield* Effect.gen(function* () {
         const scope = yield* Scope.make();
         const out = yield* Scope.provide(scope)(sampling);

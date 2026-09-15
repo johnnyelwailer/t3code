@@ -6,12 +6,8 @@
 import * as Schema from "effect/Schema";
 import { Tool, Toolkit } from "effect/unstable/ai";
 
-import {
-  OrchestrationEngineService,
-} from "../../../orchestration/Services/OrchestrationEngine.ts";
-import {
-  ProjectionThreadActivityRepository,
-} from "../../../persistence/Services/ProjectionThreadActivities.ts";
+import { OrchestrationEngineService } from "../../../orchestration/Services/OrchestrationEngine.ts";
+import { ProjectionThreadActivityRepository } from "../../../persistence/Services/ProjectionThreadActivities.ts";
 import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
 import { T3TEAM_WORKFLOW_TAGLINE } from "../../../t3team-workflowManual.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";

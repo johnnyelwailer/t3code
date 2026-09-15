@@ -86,8 +86,7 @@ export const T3TeamActorMessageReactorLive = Layer.effectDiscard(
       for (const entry of batch) ids.delete(entry.messageId);
       if (ids.size === 0) urgentPending.delete(threadId);
     };
-    const hasUrgentPending = (threadId: string) =>
-      (urgentPending.get(threadId)?.size ?? 0) > 0;
+    const hasUrgentPending = (threadId: string) => (urgentPending.get(threadId)?.size ?? 0) > 0;
 
     const loadThread = (threadId: string) =>
       query.getThreadDetailById(ThreadId.make(threadId)).pipe(

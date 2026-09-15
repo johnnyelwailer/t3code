@@ -21,7 +21,10 @@ import type { OrchestrationEngineShape } from "./orchestration/Services/Orchestr
 import { OrchestrationCommandIdConflictError } from "./orchestration/Errors.ts";
 import { makeT3TeamActorMailbox, type T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
 import { startActorReaction } from "./t3team-actorMessageReaction.ts";
-import { ACTOR_STANDING_INSTRUCTION, buildActorReactionDigestInput } from "./t3team-actorReactionInput.ts";
+import {
+  ACTOR_STANDING_INSTRUCTION,
+  buildActorReactionDigestInput,
+} from "./t3team-actorReactionInput.ts";
 import { buildActorReactionTurnInput } from "./t3team-actorReactionVisibility.ts";
 
 type TurnStart = Extract<OrchestrationCommand, { type: "thread.turn.start" }>;
@@ -167,21 +170,23 @@ describe("startActorReaction digest dispatch", () => {
     }),
   );
 
-  it.effect("requeues the claimed batch on dispatch failure, returns false, releases the flag", () =>
-    Effect.gen(function* () {
-      const dispatches: TurnStart[] = [];
-      const { mailbox, dispatched } = yield* runReaction({
-        dispatches,
-        entries: [entry("m1"), entry("m2")],
-        fail: true,
-      });
-      expect(dispatched).toBe(false);
-      expect(dispatches).toHaveLength(0);
-      expect(yield* mailbox.isReacting("target")).toBe(false);
-      const requeued = yield* mailbox.takeNextForDispatch("target");
-      expect(requeued.map((e) => e.messageId)).toEqual(["m1", "m2"]);
-      expect(requeued.every((e) => e.dispatchAttempts === 1)).toBe(true);
-      yield* mailbox.clearReacting("target");
-    }),
+  it.effect(
+    "requeues the claimed batch on dispatch failure, returns false, releases the flag",
+    () =>
+      Effect.gen(function* () {
+        const dispatches: TurnStart[] = [];
+        const { mailbox, dispatched } = yield* runReaction({
+          dispatches,
+          entries: [entry("m1"), entry("m2")],
+          fail: true,
+        });
+        expect(dispatched).toBe(false);
+        expect(dispatches).toHaveLength(0);
+        expect(yield* mailbox.isReacting("target")).toBe(false);
+        const requeued = yield* mailbox.takeNextForDispatch("target");
+        expect(requeued.map((e) => e.messageId)).toEqual(["m1", "m2"]);
+        expect(requeued.every((e) => e.dispatchAttempts === 1)).toBe(true);
+        yield* mailbox.clearReacting("target");
+      }),
   );
 });

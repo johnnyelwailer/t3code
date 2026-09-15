@@ -137,9 +137,9 @@ describe("InboxSubRunsChip — 3-state, one handle", () => {
   });
 
   it("state 2: 0 active + 189 settled → muted bare '189' chip, no 'Settled' word", () => {
-    seedFromThreads([
-      ...Array.from({ length: 189 }, (_, i) => makeThread(`settled-${i}`, "idle", "parent")),
-    ]);
+    seedFromThreads(
+      Array.from({ length: 189 }, (_, i) => makeThread(`settled-${i}`, "idle", "parent")),
+    );
     const { chip } = renderChip("parent");
     expect(chip, "settled-only parent still gets a visible handle").not.toBeNull();
     expect(chip!.textContent).toContain("189");
@@ -167,9 +167,9 @@ describe("InboxSubRunsChip — 3-state, one handle", () => {
   });
 
   it("state 2: clicking the chip toggles the section (expand, then collapse again)", () => {
-    seedFromThreads([
-      ...Array.from({ length: 189 }, (_, i) => makeThread(`settled-${i}`, "idle", "parent")),
-    ]);
+    seedFromThreads(
+      Array.from({ length: 189 }, (_, i) => makeThread(`settled-${i}`, "idle", "parent")),
+    );
     const { chip } = renderChip("parent");
     expect(chip).not.toBeNull();
     expect(chip!.getAttribute("aria-expanded")).toBe("false");

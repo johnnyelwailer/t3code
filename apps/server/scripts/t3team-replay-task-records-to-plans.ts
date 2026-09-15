@@ -30,7 +30,7 @@
 import * as NodeCrypto from "node:crypto";
 import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
-import { parseArgs } from "node:util";
+import * as NodeUtil from "node:util";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { CommandId, EventId, type OrchestrationThreadActivity } from "@t3tools/contracts";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
@@ -54,7 +54,11 @@ type PlanStep = { readonly step: string; readonly status: "pending" | "inProgres
 
 /** Same mapping the removed journal tool used: closed states read completed. */
 const toPlanStatus = (status: string): PlanStep["status"] =>
-  status === "in_progress" ? "inProgress" : status === "completed" || status === "cancelled" ? "completed" : "pending";
+  status === "in_progress"
+    ? "inProgress"
+    : status === "completed" || status === "cancelled"
+      ? "completed"
+      : "pending";
 
 const READ_SOURCE = `
   SELECT thread_id AS "threadId", status AS "status", subject AS "subject"
@@ -62,10 +66,11 @@ const READ_SOURCE = `
 `;
 
 /** All ids here come from this database (UUIDs); quote-escape anyway. */
-const inList = (ids: readonly string[]): string => ids.map((id) => `'${id.replaceAll("'", "''")}'`).join(", ");
+const inList = (ids: readonly string[]): string =>
+  ids.map((id) => `'${id.replaceAll("'", "''")}'`).join(", ");
 
 const program = Effect.gen(function* () {
-  const { values } = parseArgs({
+  const { values } = NodeUtil.parseArgs({
     allowPositionals: false,
     strict: true,
     options: {
@@ -88,11 +93,18 @@ const program = Effect.gen(function* () {
     return;
   }
   const byThread = new Map<string, TaskRecordRow[]>();
-  for (const row of source) byThread.set(row.threadId, [...(byThread.get(row.threadId) ?? []), row]);
+  for (const row of source)
+    byThread.set(row.threadId, [...(byThread.get(row.threadId) ?? []), row]);
   const threads = [...byThread.entries()].map(([threadId, rows]) => ({
-    threadId, plan: rows.map((row) => ({ step: row.subject, status: toPlanStatus(row.status) })) as PlanStep[],
+    threadId,
+    plan: rows.map((row) => ({
+      step: row.subject,
+      status: toPlanStatus(row.status),
+    })) as PlanStep[],
   }));
-  console.log(`Replaying ${source.length} row(s) across ${threads.length} thread(s) → turn.plan.updated activities.`);
+  console.log(
+    `Replaying ${source.length} row(s) across ${threads.length} thread(s) → turn.plan.updated activities.`,
+  );
   if (dryRun) {
     for (const { threadId, plan } of threads) {
       console.log(`\n${threadId}:\n  ${plan.map((s) => `[${s.status}] ${s.step}`).join("\n  ")}`);
@@ -106,14 +118,35 @@ const program = Effect.gen(function* () {
   const withConfig = Effect.gen(function* () {
     const derived = yield* ServerConfig.deriveServerPaths(baseDir, undefined);
     const config = ServerConfig.make({
-      logLevel: "Info", traceMinLevel: "Info", traceTimingEnabled: false, traceBatchWindowMs: 200,
-      traceMaxBytes: 10 * 1024 * 1024, traceMaxFiles: 10, otlpTracesUrl: undefined, otlpMetricsUrl: undefined,
-      otlpExportIntervalMs: 10_000, otlpServiceName: "t3-server", cwd: process.cwd(), baseDir,
-      ...derived, mode: "web", autoBootstrapProjectFromCwd: false, logWebSocketEvents: false,
-      tailscaleServeEnabled: false, tailscaleServePort: 443, port: 0, host: undefined,
-      desktopBootstrapToken: undefined, desktopTelemetryFd: undefined, desktopTelemetryControlFd: undefined,
-      resourceMonitorPath: undefined, staticDir: undefined, devUrl: undefined, devAllowedOrigins: [],
-      noBrowser: false, startupPresentation: "browser",
+      logLevel: "Info",
+      traceMinLevel: "Info",
+      traceTimingEnabled: false,
+      traceBatchWindowMs: 200,
+      traceMaxBytes: 10 * 1024 * 1024,
+      traceMaxFiles: 10,
+      otlpTracesUrl: undefined,
+      otlpMetricsUrl: undefined,
+      otlpExportIntervalMs: 10_000,
+      otlpServiceName: "t3-server",
+      cwd: process.cwd(),
+      baseDir,
+      ...derived,
+      mode: "web",
+      autoBootstrapProjectFromCwd: false,
+      logWebSocketEvents: false,
+      tailscaleServeEnabled: false,
+      tailscaleServePort: 443,
+      port: 0,
+      host: undefined,
+      desktopBootstrapToken: undefined,
+      desktopTelemetryFd: undefined,
+      desktopTelemetryControlFd: undefined,
+      resourceMonitorPath: undefined,
+      staticDir: undefined,
+      devUrl: undefined,
+      devAllowedOrigins: [],
+      noBrowser: false,
+      startupPresentation: "browser",
     });
 
     const runReplay = Effect.gen(function* () {
@@ -130,7 +163,9 @@ const program = Effect.gen(function* () {
       const replayable = threads.filter((t) => liveIds.has(t.threadId));
       const skipped = threads.filter((t) => !liveIds.has(t.threadId)).map((t) => t.threadId);
       if (skipped.length > 0) {
-        console.warn(`Skipping ${skipped.length} thread(s) no longer in projection_threads: ${skipped.join(", ")}`);
+        console.warn(
+          `Skipping ${skipped.length} thread(s) no longer in projection_threads: ${skipped.join(", ")}`,
+        );
       }
       if (replayable.length === 0) {
         console.log("No replayable threads — nothing written.");
@@ -144,13 +179,20 @@ const program = Effect.gen(function* () {
       let written = 0;
       for (const { threadId, plan } of replayable) {
         const activity: OrchestrationThreadActivity = {
-          id: EventId.make(NodeCrypto.randomUUID()), tone: "info", kind: "turn.plan.updated",
-          summary: "Plan updated", payload: { plan }, turnId: null, createdAt: nowIso,
+          id: EventId.make(NodeCrypto.randomUUID()),
+          tone: "info",
+          kind: "turn.plan.updated",
+          summary: "Plan updated",
+          payload: { plan },
+          turnId: null,
+          createdAt: nowIso,
         };
         yield* engine.dispatch({
           type: "thread.activity.append",
           commandId: CommandId.make(`server:task-record-replay:${NodeCrypto.randomUUID()}`),
-          threadId, activity, createdAt: nowIso,
+          threadId,
+          activity,
+          createdAt: nowIso,
         });
         written++;
       }
@@ -172,7 +214,9 @@ const program = Effect.gen(function* () {
       console.log("\nVerification (latest turn.plan.updated activity per thread):");
       for (const row of verify) {
         const plan = (JSON.parse(row.planJson) as { plan?: PlanStep[] }).plan ?? [];
-        console.log(`${row.threadId}: ${plan.length} step(s) — ${plan.map((s) => `[${s.status}] ${s.step}`).join("; ")}`);
+        console.log(
+          `${row.threadId}: ${plan.length} step(s) — ${plan.map((s) => `[${s.status}] ${s.step}`).join("; ")}`,
+        );
       }
       console.log(
         "\nDone. Re-run to pick up new rows; start the t3team-057 build (drops the table) only afterwards.",

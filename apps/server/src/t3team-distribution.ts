@@ -9,8 +9,8 @@
  * code path regardless of how the value arrived.
  */
 import type { PackActivate } from "@t3team/pack-api";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
 
 export type DistributionBranding = {
   readonly productName?: string;
@@ -33,13 +33,17 @@ function readDistributionFromEnv(): {
   const dir = process.env.T3CODE_DISTRIBUTION?.trim();
   if (!dir) return {};
   try {
-    const manifest = JSON.parse(readFileSync(resolve(dir, "distribution.json"), "utf-8")) as {
+    const manifest = JSON.parse(
+      NodeFS.readFileSync(NodePath.resolve(dir, "distribution.json"), "utf-8"),
+    ) as {
       theme?: string;
       branding?: DistributionBranding;
     };
     const result: { theme?: DistributionTheme; branding?: DistributionBranding } = {};
     if (manifest.theme) {
-      result.theme = JSON.parse(readFileSync(resolve(dir, manifest.theme), "utf-8"));
+      result.theme = JSON.parse(
+        NodeFS.readFileSync(NodePath.resolve(dir, manifest.theme), "utf-8"),
+      );
     }
     if (manifest.branding) result.branding = manifest.branding;
     return result;

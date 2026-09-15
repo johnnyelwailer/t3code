@@ -10,7 +10,14 @@
  *
  * @module t3team-threadSilenceWatchEmit
  */
-import { CommandId, EventId, MessageId, NonNegativeInt, ProjectId, ThreadId } from "@t3tools/contracts";
+import {
+  CommandId,
+  EventId,
+  MessageId,
+  NonNegativeInt,
+  ProjectId,
+  ThreadId,
+} from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -59,7 +66,10 @@ export interface ThreadSilenceWatchEmitter {
     triggerSeq: number,
   ) => Effect.Effect<void>;
   /** Index a new watch; resolve immediately when the target is already gone. */
-  readonly onRegistered: (record: ThreadSilenceWatchRecord, triggerSeq: number) => Effect.Effect<void>;
+  readonly onRegistered: (
+    record: ThreadSilenceWatchRecord,
+    triggerSeq: number,
+  ) => Effect.Effect<void>;
 }
 
 export const makeThreadSilenceWatchEmitter = (
@@ -80,7 +90,9 @@ export const makeThreadSilenceWatchEmitter = (
       yield* deps.engine
         .dispatch({
           type: "thread.actor.message",
-          commandId: CommandId.make(`server:t3team:thread-silence:${record.watchId}:${t3teamRandomUUID()}`),
+          commandId: CommandId.make(
+            `server:t3team:thread-silence:${record.watchId}:${t3teamRandomUUID()}`,
+          ),
           threadId: ThreadId.make(record.watcherThreadId),
           messageId: MessageId.make(t3teamRandomUUID()),
           fromThreadId: ThreadId.make(record.targetThreadId),
@@ -103,7 +115,9 @@ export const makeThreadSilenceWatchEmitter = (
       yield* deps.engine
         .dispatch({
           type: "thread.activity.append",
-          commandId: CommandId.make(`server:t3team:thread-silence:${record.watchId}:${t3teamRandomUUID()}`),
+          commandId: CommandId.make(
+            `server:t3team:thread-silence:${record.watchId}:${t3teamRandomUUID()}`,
+          ),
           threadId: ThreadId.make(record.watcherThreadId),
           activity: {
             id: EventId.make(t3teamRandomUUID()),
@@ -181,7 +195,10 @@ export const makeThreadSilenceWatchEmitter = (
       }
     });
 
-  const onRegistered = (record: ThreadSilenceWatchRecord, triggerSeq: number): Effect.Effect<void> =>
+  const onRegistered = (
+    record: ThreadSilenceWatchRecord,
+    triggerSeq: number,
+  ): Effect.Effect<void> =>
     Effect.gen(function* () {
       deps.index.add(record);
       const shell = Option.getOrUndefined(

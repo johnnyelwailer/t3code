@@ -305,7 +305,9 @@ describe("OrchestrationEngine", () => {
   );
 
   it("delivers multi-select async answers joined with a bullet, surviving comma labels", async () => {
-    const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-async-multiselect-"));
+    const directory = await NodeFSP.mkdtemp(
+      NodePath.join(NodeOS.tmpdir(), "t3-async-multiselect-"),
+    );
     const databasePath = NodePath.join(directory, "state.sqlite");
     const system = await createOrchestrationSystem(databasePath);
     const threadId = ThreadId.make("async-multiselect-thread");

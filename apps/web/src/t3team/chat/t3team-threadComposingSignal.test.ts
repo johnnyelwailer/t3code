@@ -103,9 +103,10 @@ describe("reportThreadComposing (per-thread composing heartbeat)", () => {
     mockState.environmentId = "env-2";
     reportThreadComposing("thread-x"); // env-2 beat at t=0 — NOT throttled by env-1's beat
     mockState.environmentId = "env-1";
-    expect(
-      sentBeats.map((beat) => `${beat.environmentId}:${beat.threadId}`),
-    ).toEqual(["env-1:thread-x", "env-2:thread-x"]);
+    expect(sentBeats.map((beat) => `${beat.environmentId}:${beat.threadId}`)).toEqual([
+      "env-1:thread-x",
+      "env-2:thread-x",
+    ]);
     // env-1's beat still throttles env-1's next keystroke on the same thread.
     reportThreadComposing("thread-x");
     expect(sentBeats).toHaveLength(2);
