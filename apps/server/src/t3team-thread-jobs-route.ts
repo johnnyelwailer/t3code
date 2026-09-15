@@ -20,6 +20,7 @@
  */
 import type { ProviderJobControlInput } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import { HttpRouter } from "effect/unstable/http";
 
 import {
@@ -81,7 +82,7 @@ export const t3teamThreadJobsRouteLayer = HttpRouter.add(
       );
   }).pipe(
     Effect.mapError((cause) => {
-      if (cause instanceof ProviderSessionNotFoundError) {
+      if (Schema.is(ProviderSessionNotFoundError, cause)) {
         return new T3TeamAtlassianError({
           message: "No active provider session for this thread; its jobs are gone with it.",
         });
