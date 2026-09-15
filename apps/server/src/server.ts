@@ -535,6 +535,8 @@ export const PullRequestServiceLive = PullRequestService.layer.pipe(
   Layer.provide(SourceControlProviderRegistryLayerLive),
   Layer.provide(SourceControlRateLimit.layer),
   Layer.provide(VcsProcess.layer),
+  // Project linked repositories are read from the workspace's .t3team context directory.
+  Layer.provide(WorkspacePaths.layer),
 );
 
 const AntigravityInstallationRefreshLive = Layer.effectDiscard(

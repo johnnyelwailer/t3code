@@ -1,4 +1,5 @@
 import { assert, it } from "@effect/vitest";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -6,6 +7,9 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 import type {
   OrchestrationProjectShell,
   ProjectId,
@@ -17,6 +21,7 @@ import type {
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as SourceControlRateLimit from "../sourceControl/SourceControlRateLimit.ts";
+import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 import {
   PullRequestProviderError,
   type ProviderChangeRequest,
@@ -196,6 +201,8 @@ function makeService(input: {
               updatedAt: "2026-07-01T00:00:00Z",
             }),
         }),
+        WorkspacePaths.layer.pipe(Layer.provide(NodeServices.layer)),
+        NodeServices.layer,
         SourceControlRateLimit.layer,
       ),
     ),
@@ -4176,4 +4183,264 @@ it.effect("names the signed-in account in the detail, and says nothing where the
     assert.strictEqual(named.viewer, "bilal");
     assert.strictEqual(unnamed.viewer, undefined);
   }),
+);
+
+/** A real directory whose `.t3team/context/linked-repositories.json` carries the given URLs. */
+function workspaceWithLinkedRepositories(urls: ReadonlyArray<string> | null): string {
+  const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pr-linked-repos-"));
+  if (urls !== null) {
+    const dir = NodePath.join(root, ".t3team", "context");
+    NodeFS.mkdirSync(dir, { recursive: true });
+    NodeFS.writeFileSync(
+      NodePath.join(dir, "linked-repositories.json"),
+      JSON.stringify({ linkedRepositoryUrls: urls }),
+    );
+  }
+  return root;
+}
+
+it.effect("lists a project's linked repositories alongside its own remote", () =>
+  Effect.gen(function* () {
+    const root = workspaceWithLinkedRepositories(["https://github.com/acme/web.git"]);
+    try {
+      const read: Array<{ readonly host: string; readonly repository: string }> = [];
+      const service = yield* makeService({
+        projects: [
+          project({
+            id: "p1",
+            title: "t3code",
+            workspaceRoot: root,
+            repository: "pingdotgg/t3code",
+          }),
+        ],
+        providers: [
+          fakeProvider("github", {
+            listChangeRequests: (input) => {
+              read.push({ host: input.host, repository: input.repository });
+              return Effect.succeed({
+                items: [
+                  changeRequest(input.repository === "acme/web" ? 21 : 7, "2026-07-02T00:00:00Z"),
+                ],
+                truncated: false,
+                continues: false,
+              });
+            },
+          }),
+        ],
+      });
+
+      const result = yield* service.list({ state: "all", projectId: "p1" as ProjectId });
+
+      assert.strictEqual(read.length, 2);
+      assert.deepStrictEqual(
+        read.toSorted((left, right) => left.repository.localeCompare(right.repository)),
+        [
+          { host: "github.com", repository: "acme/web" },
+          { host: "github.com", repository: "pingdotgg/t3code" },
+        ],
+      );
+      assert.strictEqual(result.entries.length, 2);
+      for (const entry of result.entries) {
+        // Both rows belong to the project that declared the link, on its own page.
+        assert.strictEqual(entry.projectId, "p1" as ProjectId);
+        assert.strictEqual(entry.projectTitle, "t3code");
+        assert.strictEqual(entry.host, "github.com");
+      }
+      assert.deepStrictEqual(result.entries.map((entry) => entry.repository).toSorted(), [
+        "acme/web",
+        "pingdotgg/t3code",
+      ]);
+    } finally {
+      NodeFS.rmSync(root, { recursive: true, force: true });
+    }
+  }),
+);
+
+it.effect("does not read a linked repository that is the project's own remote again", () =>
+  Effect.gen(function* () {
+    const root = workspaceWithLinkedRepositories(["git@github.com:PINGDOTGG/t3code.git"]);
+    try {
+      let reads = 0;
+      const service = yield* makeService({
+        projects: [
+          project({
+            id: "p1",
+            title: "t3code",
+            workspaceRoot: root,
+            repository: "pingdotgg/t3code",
+          }),
+        ],
+        providers: [
+          fakeProvider("github", {
+            listChangeRequests: () => {
+              reads += 1;
+              return Effect.succeed({
+                items: [changeRequest(7, "2026-07-02T00:00:00Z")],
+                truncated: false,
+                continues: false,
+              });
+            },
+          }),
+        ],
+      });
+
+      const result = yield* service.list({ state: "all", projectId: "p1" as ProjectId });
+
+      assert.strictEqual(reads, 1);
+      assert.strictEqual(result.entries.length, 1);
+      assert.strictEqual(result.entries[0]!.repository, "pingdotgg/t3code");
+    } finally {
+      NodeFS.rmSync(root, { recursive: true, force: true });
+    }
+  }),
+);
+
+it.effect("keeps a linked repository on another host out of a host-filtered listing", () =>
+  Effect.gen(function* () {
+    const root = workspaceWithLinkedRepositories(["https://gitlab.com/acme/web"]);
+    try {
+      const read: string[] = [];
+      const service = yield* makeService({
+        projects: [
+          project({
+            id: "p1",
+            title: "t3code",
+            workspaceRoot: root,
+            repository: "pingdotgg/t3code",
+          }),
+        ],
+        providers: [
+          fakeProvider("github", {
+            listChangeRequests: (input) => {
+              read.push(`github:${input.repository}`);
+              return Effect.succeed({
+                items: [changeRequest(7, "2026-07-02T00:00:00Z")],
+                truncated: false,
+                continues: false,
+              });
+            },
+          }),
+          fakeProvider("gitlab", {
+            listChangeRequests: (input) => {
+              read.push(`gitlab:${input.repository}`);
+              return Effect.succeed({
+                items: [changeRequest(13, "2026-07-02T00:00:00Z")],
+                truncated: false,
+                continues: false,
+              });
+            },
+          }),
+        ],
+      });
+
+      const result = yield* service.list({
+        state: "all",
+        projectId: "p1" as ProjectId,
+        host: "github.com",
+      });
+
+      assert.deepStrictEqual(read, ["github:pingdotgg/t3code"]);
+      assert.strictEqual(result.entries.length, 1);
+      assert.strictEqual(result.entries[0]!.repository, "pingdotgg/t3code");
+    } finally {
+      NodeFS.rmSync(root, { recursive: true, force: true });
+    }
+  }),
+);
+
+it.effect("reports a linked repository on an unsupported host as unimplemented", () =>
+  Effect.gen(function* () {
+    const root = workspaceWithLinkedRepositories(["https://gerrit.example.test/acme/web"]);
+    try {
+      let reads = 0;
+      const service = yield* makeService({
+        projects: [
+          project({
+            id: "p1",
+            title: "t3code",
+            workspaceRoot: root,
+            repository: "pingdotgg/t3code",
+          }),
+        ],
+        providers: [
+          fakeProvider("github", {
+            listChangeRequests: () => {
+              reads += 1;
+              return Effect.succeed({
+                items: [changeRequest(7, "2026-07-02T00:00:00Z")],
+                truncated: false,
+                continues: false,
+              });
+            },
+          }),
+        ],
+      });
+
+      const result = yield* service.list({ state: "all", projectId: "p1" as ProjectId });
+
+      assert.strictEqual(reads, 1);
+      assert.strictEqual(result.entries.length, 1);
+      const unimplemented = result.providers.find(
+        (provider) => provider.host === "gerrit.example.test",
+      );
+      assert.isNotNull(unimplemented);
+      assert.strictEqual(unimplemented!.kind, "unknown");
+      assert.strictEqual(unimplemented!.configured, false);
+    } finally {
+      NodeFS.rmSync(root, { recursive: true, force: true });
+    }
+  }),
+);
+
+it.effect(
+  "reads the detail of a linked-repository row, and refuses a repository the project does not carry",
+  () =>
+    Effect.gen(function* () {
+      const root = workspaceWithLinkedRepositories(["https://github.com/acme/web"]);
+      try {
+        let reads: string[] = [];
+        const service = yield* makeService({
+          projects: [
+            project({
+              id: "p1",
+              title: "t3code",
+              workspaceRoot: root,
+              repository: "pingdotgg/t3code",
+            }),
+          ],
+          providers: [
+            fakeProvider("github", {
+              getChangeRequest: (input) => {
+                reads.push(input.repository);
+                return Effect.succeed(hostedChangeRequest("body"));
+              },
+            }),
+          ],
+        });
+
+        const linked = yield* service.detail({
+          projectId: "p1" as ProjectId,
+          repository: "acme/web",
+          number: 1,
+        });
+        assert.strictEqual(linked.repository, "acme/web");
+        assert.strictEqual(linked.projectId, "p1" as ProjectId);
+        assert.strictEqual(linked.projectTitle, "t3code");
+
+        const own = yield* service.detail({
+          projectId: "p1" as ProjectId,
+          repository: "pingdotgg/t3code",
+          number: 1,
+        });
+        assert.strictEqual(own.repository, "pingdotgg/t3code");
+
+        const error = yield* service
+          .detail({ projectId: "p1" as ProjectId, repository: "attacker/repo", number: 1 })
+          .pipe(Effect.flip);
+        assert.strictEqual(error._tag, "PullRequestOperationError");
+        assert.deepStrictEqual(reads, ["acme/web", "pingdotgg/t3code"]);
+      } finally {
+        NodeFS.rmSync(root, { recursive: true, force: true });
+      }
+    }),
 );
