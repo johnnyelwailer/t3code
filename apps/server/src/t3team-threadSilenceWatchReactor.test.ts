@@ -409,7 +409,7 @@ describe("makeThreadSilenceWatchReactor", () => {
     }),
   );
 
-  it.effect("ready with no live background work resolves the watch (turn ended, thread idle)", () =>
+  it.effect("ready with no live background work closes the watch silently (turn ended, thread idle)", () =>
     Effect.gen(function* () {
       const harness = makeHarness({});
       yield* harness.handleEvent(watchRegistered());
@@ -417,16 +417,14 @@ describe("makeThreadSilenceWatchReactor", () => {
       yield* harness.handleEvent(sessionSet("ready"));
       yield* Effect.yieldNow;
 
-      expect(detectedPayloads(harness.dispatches)).toHaveLength(1);
-      expect(detectedPayloads(harness.dispatches)[0]).toMatchObject({
-        reason: "stopped",
-        stoppedStatus: "ready",
-      });
-      // The watch is closed.
+      // Root-cause fix: ready is a turn-end, not a terminal - the watch closes
+      // with no "reached a terminal state" notice.
+      expect(detectedPayloads(harness.dispatches)).toHaveLength(0);
+      // The watch is closed: a later sweep emits nothing.
       harness.advance(900_000);
       harness.fireTick();
       yield* settle(harness);
-      expect(detectedPayloads(harness.dispatches)).toHaveLength(1);
+      expect(detectedPayloads(harness.dispatches)).toHaveLength(0);
     }),
   );
 
@@ -455,7 +453,8 @@ describe("makeThreadSilenceWatchReactor", () => {
 
         // Task completion only clears the in-memory liveness entry; it does
         // not dispatch another session-set. The next deterministic sweep must
-        // re-evaluate the remembered ready state and close the watch.
+        // re-evaluate the remembered ready state and close the watch silently
+        // (ready is not a terminal - no "stopped" notice).
         harness.liveness.delete(TARGET);
         harness.fireTick();
         yield* settle(harness);
@@ -463,13 +462,14 @@ describe("makeThreadSilenceWatchReactor", () => {
           detectedPayloads(harness.dispatches).filter(
             (p) => (p as { reason?: string }).reason === "stopped",
           ),
-        ).toEqual([expect.objectContaining({ stoppedStatus: "ready" })]);
+        ).toEqual([]);
 
-        // Resolution removed the watch, so recurring silence stops too.
+        // Resolution removed the watch, so recurring silence stops too: only
+        // the single earlier "silent" notice remains.
         harness.advance(900_000);
         harness.fireTick();
         yield* settle(harness);
-        expect(detectedPayloads(harness.dispatches)).toHaveLength(2);
+        expect(detectedPayloads(harness.dispatches)).toHaveLength(1);
       }),
   );
 
@@ -515,11 +515,12 @@ describe("makeThreadSilenceWatchReactor", () => {
       yield* harness.handleEvent(sessionSet("ready"));
 
       // Registering B after settlement discovers ready in the projection and
-      // immediately resolves both pending watches.
+      // immediately resolves both pending watches - now silently, since ready
+      // is not a terminal.
       harness.liveness.delete(TARGET);
       targetShell.session.status = "ready";
       yield* harness.handleEvent(watchRegistered({ watchId: "w2" }));
-      expect(detectedPayloads(harness.dispatches)).toHaveLength(2);
+      expect(detectedPayloads(harness.dispatches)).toHaveLength(0);
 
       // A later watch sees running and must not inherit A's cached ready.
       targetShell.session.status = "running";
@@ -527,7 +528,7 @@ describe("makeThreadSilenceWatchReactor", () => {
       harness.watchdog.state.set(TARGET, { lastActivityAtMs: START, pendingToolCount: 0 });
       harness.fireTick();
       yield* settle(harness);
-      expect(detectedPayloads(harness.dispatches)).toHaveLength(2);
+      expect(detectedPayloads(harness.dispatches)).toHaveLength(0);
     }),
   );
 
@@ -542,15 +543,13 @@ describe("makeThreadSilenceWatchReactor", () => {
       expect(detectedPayloads(harness.dispatches)).toHaveLength(0);
 
       // The periodic recheck also covers a ready shell discovered at
-      // registration (for example after reactor startup/rehydration).
+      // registration (for example after reactor startup/rehydration). When the
+      // liveness clears, the remembered ready closes the watch silently - no
+      // "stopped" notice for a turn-end.
       harness.liveness.delete(TARGET);
       harness.fireTick();
       yield* settle(harness);
-      expect(detectedPayloads(harness.dispatches)).toHaveLength(1);
-      expect(detectedPayloads(harness.dispatches)[0]).toMatchObject({
-        reason: "stopped",
-        stoppedStatus: "ready",
-      });
+      expect(detectedPayloads(harness.dispatches)).toHaveLength(0);
     }),
   );
 
