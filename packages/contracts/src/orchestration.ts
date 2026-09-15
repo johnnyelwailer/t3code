@@ -10,6 +10,7 @@ import {
   CheckpointRef,
   ClientSurface,
   CommandId,
+  EnvironmentId,
   EventId,
   IsoDateTime,
   MessageId,
@@ -614,6 +615,26 @@ export const ThreadLinkedPullRequest = Schema.Struct({
 });
 export type ThreadLinkedPullRequest = typeof ThreadLinkedPullRequest.Type;
 
+/**
+ * The execution environment a thread is bound to (env-identity: the same
+ * EnvironmentId + label pair every other environment reference in the
+ * contracts carries — relay, background, citations). Set on threads created
+ * through `t3team.thread.start_child` with an explicit `environment` argument
+ * pointing at a DIFFERENT environment than the creating server's own.
+ *
+ * Delivery boundary (documented, not built here): inter-agent messaging
+ * (send_message / mailbox / children ops) reaches only threads in THIS
+ * environment's store. A cross-environment child is recorded, bound, and
+ * visible to its parent with its environment shown; routing execution and
+ * report-back across environments is a separate design (no relay invented
+ * by this field).
+ */
+export const ThreadEnvironmentBinding = Schema.Struct({
+  environmentId: EnvironmentId,
+  label: Schema.optional(TrimmedNonEmptyString),
+});
+export type ThreadEnvironmentBinding = typeof ThreadEnvironmentBinding.Type;
+
 export const OrchestrationThread = Schema.Struct({
   id: ThreadId,
   projectId: ProjectId,
@@ -626,6 +647,10 @@ export const OrchestrationThread = Schema.Struct({
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   retention: Schema.optional(Schema.Literals(["ephemeral", "retained"])),
+  // Execution-environment binding (ThreadEnvironmentBinding): set only when
+  // the thread was created bound to a DIFFERENT environment than the server
+  // hosting it. Optional so pre-binding events and rows still decode.
+  environment: Schema.optional(ThreadEnvironmentBinding),
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   latestTurn: Schema.NullOr(OrchestrationLatestTurn),
   /** In-process admission reservation between turn request and provider session start. */
@@ -736,6 +761,10 @@ export const OrchestrationThreadShell = Schema.Struct({
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
+  // Execution-environment binding — declared on the wire so the shell
+  // snapshot keeps it (decodeShellSnapshot ignores excess properties);
+  // absent = same environment as the hosting server.
+  environment: Schema.optional(ThreadEnvironmentBinding),
   latestTurn: Schema.NullOr(OrchestrationLatestTurn),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -1013,6 +1042,10 @@ const ThreadCreateCommand = Schema.Struct({
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   retention: Schema.optional(Schema.Literals(["ephemeral", "retained"])),
+  // Optional: the child's execution-environment binding (t3team start_child
+  // `environment` argument). Absent = same environment as the creating
+  // server, exactly as before this field existed.
+  environment: Schema.optional(ThreadEnvironmentBinding),
   createdAt: IsoDateTime,
   historyImport: Schema.optional(Schema.Literal(true)),
 });
@@ -1642,6 +1675,9 @@ export const ThreadCreatedPayload = Schema.Struct({
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   retention: Schema.optional(Schema.Literals(["ephemeral", "retained"])),
+  // Optional: historical thread.created events predate the environment
+  // binding; required would fail decode on every existing database.
+  environment: Schema.optional(ThreadEnvironmentBinding),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });

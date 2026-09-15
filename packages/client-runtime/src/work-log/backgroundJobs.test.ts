@@ -29,6 +29,8 @@ const entry = (
   id: overrides.id,
   createdAt: overrides.createdAt ?? T0_ISO,
   detail: overrides.detail,
+  command: overrides.command,
+  label: overrides.label,
 });
 
 describe("detectBackgroundJobStart", () => {
@@ -252,6 +254,49 @@ describe("foldBackgroundJobs over transposed history", () => {
   it("does NOT adopt the marker text as the command on transposed rows", () => {
     const jobs = foldBackgroundJobs([persistedRow], observedAtMs + 60_000);
     expect(jobs[0]?.command).toBeUndefined();
+    expect(jobs[0]?.label).toBeUndefined();
+  });
+
+  // The row's display label is the tool call's own human label ("Building
+  // the project") — the same text the tool card renders. Modern rows carry
+  // it; transposed history does not.
+  it("adopts the row's display label when the marker came from detail", () => {
+    const jobs = foldBackgroundJobs(
+      [
+        {
+          id: "bash",
+          createdAt: T0_PLUS_10S,
+          detail: startDetail,
+          command: "node scripts/quality-gate.mjs",
+          label: "Running the quality gate",
+        },
+      ],
+      T0 + 60_000,
+    );
+    expect(jobs[0]).toMatchObject({
+      label: "Running the quality gate",
+      command: "node scripts/quality-gate.mjs",
+    });
+  });
+
+  it("keeps the first opener's label on repeated start markers", () => {
+    const jobs = foldBackgroundJobs(
+      [
+        entry({ id: "e1", detail: startDetail, label: "First label" }),
+        entry({ id: "e2", detail: startDetail, label: "Second label" }),
+      ],
+      T0 + 60_000,
+    );
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]?.label).toBe("First label");
+  });
+
+  it("ignores a blank label instead of adopting it", () => {
+    const jobs = foldBackgroundJobs(
+      [entry({ id: "e1", detail: startDetail, label: "   " })],
+      T0 + 60_000,
+    );
+    expect(jobs[0]?.label).toBeUndefined();
   });
 });
 
@@ -351,6 +396,7 @@ describe("foldBackgroundJobs across a server restart", () => {
         // Marker reports 10s elapsed at observation, so start = observed - 10s.
         startedAtMs: startMs - 10_000,
         deadlineMs: startMs - 10_000 + 600_000,
+        // The start marker also reports the pid; the fold carries it.
         pid: 4242,
         state: "finished",
         finishedReason: "lost-restart",

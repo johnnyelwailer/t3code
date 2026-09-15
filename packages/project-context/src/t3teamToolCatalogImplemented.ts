@@ -75,6 +75,25 @@ const START_CHILD_INPUT_SCHEMA = {
         "Optional branch, tag, or commit to use as the base ref for the child's worktree (linked or local). Only valid with isolation='own-worktree'. When omitted, the repository default branch is used.",
       minLength: 1,
     },
+    environment: {
+      type: "object",
+      additionalProperties: false,
+      description:
+        "Optional execution environment to bind the child session to — a DIFFERENT T3 server than this one. Omit to keep the child in this environment (the default). The thread record and handoff are stamped with the target environment, and the launch result carries an environment_note documenting the delivery boundary: inter-agent messaging (send_message, mailbox, children ops) only reaches threads in THIS environment, so report-back from a cross-environment child needs a separate channel.",
+      properties: {
+        id: {
+          type: "string",
+          description: "EnvironmentId of the target environment (a non-empty string).",
+          minLength: 1,
+        },
+        label: {
+          type: "string",
+          description: "Optional human-readable name of the target environment.",
+          minLength: 1,
+        },
+      },
+      required: ["id"],
+    },
   },
   required: ["name", "isolation"],
 } as const;
@@ -161,7 +180,8 @@ const ASK_USER_INPUT_SCHEMA = {
               label: { type: "string", minLength: 1 },
               description: {
                 type: "string",
-                description: "What this choice means and its trade-off — never a restatement of the label.",
+                description:
+                  "What this choice means and its trade-off — never a restatement of the label.",
               },
             },
             required: ["label"],
@@ -624,7 +644,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     label: "Start child session",
     title: "Start child session",
     description:
-      "Create a child t3team session from the current thread and optionally start it immediately. isolation is required: 'shared' keeps the child in the project's shared checkout without repo_full_name; 'own-worktree' prepares a dedicated scoped worktree — of the linked repository named by repo_full_name when the project has linked repos, or of the local repository when it does not.",
+      "Create a child t3team session from the current thread and optionally start it immediately. isolation is required: 'shared' keeps the child in the project's shared checkout without repo_full_name; 'own-worktree' prepares a dedicated scoped worktree — of the linked repository named by repo_full_name when the project has linked repos, or of the local repository when it does not. Optional 'environment' binds the child session to a DIFFERENT execution environment (another T3 server): the record and handoff are stamped with it, but inter-agent messaging stays same-environment (the launch result's environment_note documents that boundary).",
     capabilities: ["write"],
     kind: "thread",
     surfaces: ["thread"],
@@ -643,6 +663,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       "- wait: durably resume this turn when a child reaches a terminal state (on: terminal|completed|failed; timeout in ms)\n" +
       "- stop: halt a child's running turn\n" +
       "- close: mark a child done from this side\n" +
+      "- environments: read-only — which environments start_child's environment arg can target (own environment + recorded cross-environment bindings; every entry states its delivery boundary)\n" +
       "- help: exact schema for one op (op_name)",
     capabilities: ["write"],
     kind: "thread",
@@ -655,8 +676,9 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       properties: {
         op: {
           type: "string",
-          description: "The operation to perform: list, status, wait, stop, close, or help.",
-          enum: ["list", "status", "wait", "stop", "close", "help"],
+          description:
+            "The operation to perform: list, status, wait, stop, close, environments, or help.",
+          enum: ["list", "status", "wait", "stop", "close", "environments", "help"],
         },
         thread_id: {
           type: "string",

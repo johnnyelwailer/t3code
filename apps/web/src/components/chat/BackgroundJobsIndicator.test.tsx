@@ -129,8 +129,8 @@ describe("BackgroundJobsRunningIndicator", () => {
     const readOnly = renderToStaticMarkup(
       <BackgroundJobList running={[job({ jobId: "job_a", command: "sleep 30" })]} now={NOW} />,
     );
-    expect(readOnly).not.toContain(">cancel<");
-    expect(readOnly).not.toContain(">output<");
+    expect(readOnly).not.toContain('aria-label="Cancel job"');
+    expect(readOnly).not.toContain('aria-label="Show job output"');
 
     const controllable = renderToStaticMarkup(
       <BackgroundJobList
@@ -142,8 +142,8 @@ describe("BackgroundJobsRunningIndicator", () => {
         onShowOutput={() => {}}
       />,
     );
-    expect(controllable).toContain(">cancel<");
-    expect(controllable).toContain(">output<");
+    expect(controllable).toContain('aria-label="Cancel job"');
+    expect(controllable).toContain('aria-label="Show job output"');
   });
 
   it("renders cancelled jobs dimmed and without a cancel button", () => {
@@ -159,10 +159,10 @@ describe("BackgroundJobsRunningIndicator", () => {
       />,
     );
     expect(markup).toContain(">cancelled</span>");
-    expect(markup).not.toContain(">cancel<");
+    expect(markup).not.toContain('aria-label="Cancel job"');
   });
 
-  it("marks an in-flight cancel as stopping… and disables the button", () => {
+  it("marks an in-flight cancel as stopping and disables the button", () => {
     const markup = renderToStaticMarkup(
       <BackgroundJobList
         running={[job({ jobId: "job_a", command: "sleep 30" })]}
@@ -173,24 +173,27 @@ describe("BackgroundJobsRunningIndicator", () => {
         onShowOutput={() => {}}
       />,
     );
-    expect(markup).toContain("stopping…");
+    // In flight: the X becomes a spinner and the button takes no more clicks.
+    expect(markup).toContain("motion-safe:animate-spin");
     expect(markup).toContain('disabled=""');
+    expect(markup).toContain('title="Stopping job"');
   });
 
   it("opens the output panel for the selected job when a controller is present", () => {
     // The panel itself is driven by the controller's polls (effects); the
     // indicator's contract is that clicking Output mounts it with the job's
-    // id and command. Static markup: the panel's pre-state renders.
+    // id. Static markup: the panel's pre-state renders. The panel carries no
+    // command of its own — the row above already shows it.
     const markup = renderToStaticMarkup(
       <BackgroundJobOutputPanel
         threadId="thread_a"
         jobId="job_a"
-        command="sleep 30"
         controller={(() => Promise.resolve({ supported: false })) as ThreadJobsController}
         onClose={() => {}}
       />,
     );
-    expect(markup).toContain('aria-label="Output of sleep 30"');
+    expect(markup).toContain('aria-label="Background job output"');
+    expect(markup).not.toContain("sleep 30");
     expect(markup).toContain("waiting for output…");
   });
 });
@@ -201,7 +204,12 @@ describe("BackgroundJobList", () => {
       <BackgroundJobList
         running={[
           job({ jobId: "job_a", command: "node scripts/quality-gate.mjs", pid: 4242 }),
-          job({ jobId: "job_b", command: "sleep 30", startedAtMs: NOW - 10_000, deadlineMs: NOW + 590_000 }),
+          job({
+            jobId: "job_b",
+            command: "sleep 30",
+            startedAtMs: NOW - 10_000,
+            deadlineMs: NOW + 590_000,
+          }),
         ]}
         now={NOW}
       />,
@@ -215,6 +223,29 @@ describe("BackgroundJobList", () => {
     // the row still renders, without a pid line.
     expect(markup).toContain("sleep 30");
     expect(markup).toContain("10s / 10m");
+  });
+
+  it("shows the tool call's display label, keeping the command in the hover title", () => {
+    const markup = renderToStaticMarkup(
+      <BackgroundJobList
+        running={[
+          job({
+            jobId: "job_a",
+            command: "node scripts/quality-gate.mjs",
+            label: "Running the quality gate",
+          }),
+        ]}
+        now={NOW}
+      />,
+    );
+    // The label is the primary text — it reads like the tool card that
+    // started the job — and the raw command moves to the hover title.
+    expect(markup).toContain("Running the quality gate");
+    expect(markup).toContain('title="node scripts/quality-gate.mjs"');
+    // The command must not also render as the row's primary text.
+    expect(markup).not.toContain(
+      'text-xs text-foreground/80">node scripts/quality-gate.mjs</span>',
+    );
   });
 
   it("degrades to the job id when the row never carried a command", () => {

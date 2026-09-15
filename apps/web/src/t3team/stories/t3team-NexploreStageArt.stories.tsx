@@ -12,7 +12,7 @@ import { T3TeamNexploreStripArt } from "~/t3team/t3team-NexploreStageArt";
  * mac, same trailing toggle — so the measurement sees the same boxes it sees in the app.
  */
 const meta = {
-  title: "t3team/NexploreStageArt",
+  title: "T3Team/Branding/Nexplore Stage Art",
   parameters: { layout: "centered" },
 } satisfies Meta;
 

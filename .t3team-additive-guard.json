@@ -51,6 +51,7 @@
     "apps/server/src/mcp/toolkits/t3team/tools.ts",
     "apps/server/src/orchestration/Layers/CheckpointReactor.test.ts",
     "apps/server/src/orchestration/Layers/CheckpointReactor.ts",
+    "apps/server/src/orchestration/Layers/CheckpointReactor.test.ts",
     "apps/server/src/orchestration/Layers/OrchestrationEngine.ts",
     "apps/server/src/orchestration/Layers/OrchestrationEngine.test.ts",
     "apps/server/src/orchestration/Layers/ProjectionPipeline.test.ts",

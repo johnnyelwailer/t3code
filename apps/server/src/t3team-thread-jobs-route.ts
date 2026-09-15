@@ -20,15 +20,16 @@
  */
 import type { ProviderJobControlInput } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
 import { HttpRouter } from "effect/unstable/http";
 
-import {
-  ProviderJobControlUnsupportedError,
-  ProviderSessionNotFoundError,
-} from "./provider/Errors.ts";
+import { ProviderJobControlUnsupportedError } from "./provider/Errors.ts";
 import { ProviderService } from "./provider/Services/ProviderService.ts";
-import { errorResponse, okJson, readJsonBody, T3TeamAtlassianError } from "./t3team-atlassian-http.ts";
+import {
+  errorResponse,
+  okJson,
+  readJsonBody,
+  T3TeamAtlassianError,
+} from "./t3team-atlassian-http.ts";
 
 export function threadJobsValidationError(input: {
   readonly threadId?: unknown;
@@ -37,7 +38,9 @@ export function threadJobsValidationError(input: {
   const threadId = input.threadId;
   const request = input.request;
   const kind: unknown =
-    request !== null && typeof request === "object" ? (request as { kind?: unknown }).kind : undefined;
+    request !== null && typeof request === "object"
+      ? (request as { kind?: unknown }).kind
+      : undefined;
   if (typeof threadId !== "string" || threadId.trim().length === 0) {
     return "threadId and a request with kind list|cancel|read-output are required.";
   }
@@ -69,24 +72,27 @@ export const t3teamThreadJobsRouteLayer = HttpRouter.add(
     // `unknown-job` is a RESULT, not an error: the registry simply does not
     // own that id (settled ago, other session, or fabricated), and the
     // round-trip itself succeeded.
-    return yield* providerService
-      .jobControl(input)
-      .pipe(
-        Effect.map((result) => okJson({ supported: true, result })),
-        // Capability signal, not a failure: the runtime keeps no controllable
-        // jobs (or the kill switch is off). The client hides its affordances
-        // on this, so the route answers 200 with the flag instead of 5xx.
-        Effect.catchTag("ProviderJobControlUnsupportedError", () =>
-          Effect.succeed(okJson({ supported: false })),
+    return yield* providerService.jobControl(input).pipe(
+      Effect.map((result) => okJson({ supported: true, result })),
+      // Capability signal, not a failure: the runtime keeps no controllable
+      // jobs (or the kill switch is off). The client hides its affordances
+      // on this, so the route answers 200 with the flag instead of 5xx.
+      Effect.catchTag("ProviderJobControlUnsupportedError", () =>
+        Effect.succeed(okJson({ supported: false })),
+      ),
+      // No live session: its job registry died with it, so nothing to list
+      // or cancel. Routed through the shared T3TeamAtlassianError mapping
+      // below (4xx) instead of a raw 5xx.
+      Effect.catchTag("ProviderSessionNotFoundError", () =>
+        Effect.fail(
+          new T3TeamAtlassianError({
+            message: "No active provider session for this thread; its jobs are gone with it.",
+          }),
         ),
-      );
+      ),
+    );
   }).pipe(
     Effect.mapError((cause) => {
-      if (Schema.is(ProviderSessionNotFoundError, cause)) {
-        return new T3TeamAtlassianError({
-          message: "No active provider session for this thread; its jobs are gone with it.",
-        });
-      }
       return new T3TeamAtlassianError({
         message: cause instanceof T3TeamAtlassianError ? cause.message : "Failed to control jobs.",
         ...(cause instanceof T3TeamAtlassianError ? {} : { cause }),

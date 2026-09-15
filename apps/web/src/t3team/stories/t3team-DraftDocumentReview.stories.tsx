@@ -81,7 +81,7 @@ function DraftDocumentReviewStory() {
 }
 
 const meta = {
-  title: "T3Team/Draft Document Review",
+  title: "T3Team/Work Item/Draft Document Review",
   component: DraftDocumentReviewStory,
   parameters: {
     layout: "fullscreen",

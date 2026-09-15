@@ -144,7 +144,7 @@ function ActivityLabelPillStory({ thread, flag }: { thread: T3Thread; flag: bool
 }
 
 const meta = {
-  title: "T3Team/Sidebar/Activity Label (GHE #40/#208)",
+  title: "T3Team/Sidebar/Activity Label (GHE #40 · #208)",
   component: ActivityLabelPillStory,
 } satisfies Meta<typeof ActivityLabelPillStory>;
 

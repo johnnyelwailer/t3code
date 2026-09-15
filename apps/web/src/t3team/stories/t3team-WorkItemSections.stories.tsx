@@ -154,7 +154,7 @@ function Frame({ width, label }: { readonly width: string; readonly label: strin
 }
 
 const meta = {
-  title: "T3Team/Work Item Sections",
+  title: "T3Team/Work Item/Sections",
   parameters: { layout: "padded" },
 } satisfies Meta;
 
