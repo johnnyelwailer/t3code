@@ -50,6 +50,11 @@ export type BacklogResourceRef = ExternalResourceRef & {
   readonly estimateValue?: number;
   readonly timeOriginalEstimateSeconds?: number;
   readonly subtaskCount?: number;
+  /** Sprint membership stamped by the Atlassian provider's mirror normalization. */
+  readonly sprintId?: string;
+  readonly sprintName?: string;
+  /** Outward Jira issue links (`is blocked by` et al.), stamped by the mirror walk. */
+  readonly links?: ReadonlyArray<{ readonly outward: string; readonly key: string }>;
 };
 
 export type BacklogViewRow = {

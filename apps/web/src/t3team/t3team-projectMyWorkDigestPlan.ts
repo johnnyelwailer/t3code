@@ -88,6 +88,12 @@ export type DigestGraph = {
   readonly projects: readonly DigestProject[];
   readonly viewer: { readonly name: string; readonly role: string; readonly lastVisitAt: string };
   readonly sprint?: DigestSprint;
+  /** The viewer's personal burndown for the digest sprint, in the project's estimate unit. */
+  readonly burndown?: {
+    readonly unit: "points" | "hours";
+    readonly total: number;
+    readonly points: readonly { readonly date: string; readonly remaining: number }[];
+  };
   readonly tickets: readonly ProjectTicket[];
   readonly claims: readonly DigestClaim[];
   readonly decisions: readonly DigestDecision[];

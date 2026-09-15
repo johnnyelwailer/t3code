@@ -94,8 +94,26 @@ function createDigestPayload(): MyWorkDigestPayload {
             state: "needs-you",
             updatedAt: "2026-09-14T05:00:00.000Z",
             workItemKey: "IES-101",
+            reviewers: [
+              { name: "Alice", login: "alice" },
+              { name: "bob", login: "bob" },
+            ],
+            unhandledReviewThreads: [
+              { lastCommentAt: "2026-09-14T01:00:00.000Z" },
+              { lastCommentAt: "2026-09-12T01:00:00.000Z" },
+              {},
+            ],
           },
         ],
+        blockers: [{ ticketRef: { issueKey: "IES-101" }, repo: "hive/ies-spital", number: 64 }],
+        burndown: {
+          unit: "points",
+          total: 5,
+          points: [
+            { date: "2026-09-03", remaining: 5 },
+            { date: "2026-09-04", remaining: 3 },
+          ],
+        },
         transitions: [
           {
             ticketRef: { issueId: "issue-101", issueKey: "IES-101" },
@@ -157,6 +175,23 @@ describe("digest graph mappers", () => {
     expect(graph.changeRequests).toHaveLength(1);
     expect(graph.changeRequests[0]?.ticketId).toBe(taskA);
     expect(graph.changeRequests[0]?.state).toBe("needs-you");
+    expect(graph.changeRequests[0]?.reviewers).toEqual([
+      { name: "Alice", login: "alice" },
+      { name: "bob", login: "bob" },
+    ]);
+    // Unhandled = unresolved AND newer than the last visit (09-13): the
+    // 09-14 comment counts, the 09-12 one does not, the untimed one always does.
+    expect(graph.changeRequests[0]?.unhandledComments).toBe(2);
+
+    expect(graph.blockers).toHaveLength(1);
+    expect(graph.blockers[0]).toEqual({ ticketId: taskA, repo: "hive/ies-spital", number: 64 });
+
+    expect(graph.burndown?.unit).toBe("points");
+    expect(graph.burndown?.total).toBe(5);
+    expect(graph.burndown?.points).toEqual([
+      { date: "2026-09-03", remaining: 5 },
+      { date: "2026-09-04", remaining: 3 },
+    ]);
 
     expect(graph.transitions).toHaveLength(1);
     expect(graph.transitions[0]?.ticketId).toBe(taskA);
@@ -220,10 +255,13 @@ describe("useMyWorkDigestGraph", () => {
 
   it("loads the graph, then short-circuits unchanged rounds", async () => {
     const payload = createDigestPayload();
-    const calls: Array<{ knownFingerprint?: string | undefined }> = [];
+    const calls: Array<{
+      knownFingerprint?: string | undefined;
+      viewer?: { readonly name?: string } | undefined;
+    }> = [];
     const { latest, holder } = await mountWith(
       async (input) => {
-        calls.push({ knownFingerprint: input.knownFingerprint });
+        calls.push({ knownFingerprint: input.knownFingerprint, viewer: input.viewer });
         return { unchanged: false, fingerprint: "sha256:one", value: payload };
       },
       [createProject({ id: "p1", externalProjectId: "IES" })],
@@ -236,6 +274,8 @@ describe("useMyWorkDigestGraph", () => {
     expect(firstGraph).not.toBeNull();
     expect(firstGraph?.tickets).toHaveLength(2);
     expect(firstGraph?.viewer.name).toBe("Philip");
+    // The request carries the viewer's display name for the server's burndown join.
+    expect(calls[0]?.viewer?.name).toBe("Philip");
 
     // Second round carries the fingerprint and answers unchanged: the previous
     // graph object is kept, nothing is re-mapped.

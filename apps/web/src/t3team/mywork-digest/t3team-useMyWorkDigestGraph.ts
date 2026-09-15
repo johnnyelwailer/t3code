@@ -129,10 +129,19 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
       return;
     }
 
+    const firstAccount = entries[0]?.account.id;
+    const viewerDisplayName = () =>
+      input.viewer?.name?.trim() !== ""
+        ? (input.viewer?.name as string)
+        : (readCachedAtlassianCurrentUserDisplayName(firstAccount) ?? "");
+
     try {
       const result = await pollFn({
         scope,
         projects: entries,
+        // The server's burndown join needs the Jira display name the mirror
+        // assigns to; the cached name is the same one the chip wears.
+        viewer: { name: viewerDisplayName() },
         ...(fingerprintRef.current !== undefined
           ? { knownFingerprint: fingerprintRef.current }
           : {}),
@@ -145,12 +154,8 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
       }
 
       fingerprintRef.current = result.fingerprint;
-      const firstAccount = entries[0]?.account.id;
       const viewer: DigestViewer = {
-        name:
-          input.viewer?.name?.trim() !== ""
-            ? (input.viewer?.name as string)
-            : (readCachedAtlassianCurrentUserDisplayName(firstAccount) ?? ""),
+        name: viewerDisplayName(),
         role: input.viewer?.role?.trim() !== "" ? (input.viewer?.role as string) : "",
         lastVisitAt: readLastVisitAt(scope),
       };
