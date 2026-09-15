@@ -1847,9 +1847,7 @@ const makeWsRpcLayer = (
             // engagement signal — an open thread must not starve its queue.
             threadEngagement === undefined
               ? Effect.succeed({ ok: true as const })
-              : threadEngagement.noteTyping(input.threadId).pipe(
-                  Effect.as({ ok: true as const }),
-                ),
+              : threadEngagement.noteTyping(input.threadId).pipe(Effect.as({ ok: true as const })),
             { "rpc.aggregate": "orchestration" },
           ),
         [WS_METHODS.serverProbe]: (_input) =>

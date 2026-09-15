@@ -5,10 +5,7 @@
  * backoff settle). Re-issuing would overwrite the terminal status and fire a
  * duplicate terminal event for the child-wait reactor.
  */
-import {
-  type OrchestrationSession,
-  type OrchestrationThread,
-} from "@t3tools/contracts";
+import { type OrchestrationSession, type OrchestrationThread } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -50,22 +47,15 @@ const RETRY_DECISION: TransientTurnRetryDecision = {
 };
 
 const trackerState = (attempts: number): Map<string, TransientTurnRetryState> =>
-  new Map([
-    [
-      THREAD_ID,
-      { attempts, stall: null, userStopped: false, lastTerminal: "transient" },
-    ],
-  ]);
+  new Map([[THREAD_ID, { attempts, stall: null, userStopped: false, lastTerminal: "transient" }]]);
 
 // Run the decision (which sleeps for the settle + backoff) against the TestClock
 // provided by @effect/vitest: fork it, advance the virtual clock, then await.
 const runDecision = (deps: DecisionExecutionDeps) =>
   Effect.gen(function* () {
-    const fiber = yield* executeTransientRetryDecision(
-      deps,
-      THREAD_ID,
-      RETRY_DECISION,
-    ).pipe(Effect.forkScoped);
+    const fiber = yield* executeTransientRetryDecision(deps, THREAD_ID, RETRY_DECISION).pipe(
+      Effect.forkScoped,
+    );
     // Advance the virtual clock and yield so the forked decision (which sleeps
     // for the settle + backoff) runs to completion.
     for (let i = 0; i < 50; i += 1) {

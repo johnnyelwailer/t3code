@@ -179,13 +179,12 @@ const markerCount = (dispatches: OrchestrationCommand[]): number =>
   ).length;
 
 const markerSummaries = (dispatches: OrchestrationCommand[]): string[] =>
-  dispatches.flatMap(
-    (c) =>
-      c.type === "thread.activity.append" &&
-      (c as { activity?: { kind?: string; summary?: string } }).activity?.kind ===
-        "t3team.child_abnormal_stop_notified"
-        ? [(c as { activity: { summary: string } }).activity.summary]
-        : [],
+  dispatches.flatMap((c) =>
+    c.type === "thread.activity.append" &&
+    (c as { activity?: { kind?: string; summary?: string } }).activity?.kind ===
+      "t3team.child_abnormal_stop_notified"
+      ? [(c as { activity: { summary: string } }).activity.summary]
+      : [],
   );
 
 describe("makeChildWaitReactor abnormal-stop notification", () => {

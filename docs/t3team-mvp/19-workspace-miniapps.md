@@ -429,9 +429,7 @@ defineContextAction({
   id: "convert-to-bug",
   label: "Convert to bug",
   appliesTo: (item, ctx) => item.kind === "jira.issue" && item.type !== "Bug",
-  run: defineWorkflow({
-    /* ... */
-  }),
+  run: defineWorkflow({/* ... */}),
 });
 ```
 

@@ -34,7 +34,7 @@
  *
  * @module mcp/toolkits/t3team/t3team-askUser
  */
-import { randomUUID } from "node:crypto";
+import * as NodeCrypto from "node:crypto";
 
 import {
   ApprovalRequestId,
@@ -47,9 +47,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
 import { OrchestrationEngineService } from "../../../orchestration/Services/OrchestrationEngine.ts";
-import {
-  ProjectionThreadActivityRepository,
-} from "../../../persistence/Services/ProjectionThreadActivities.ts";
+import { ProjectionThreadActivityRepository } from "../../../persistence/Services/ProjectionThreadActivities.ts";
 import { T3TeamMcpToolError } from "./tools.ts";
 import { openMessageModeRequestIds } from "./t3team-askUserLifecycle.ts";
 
@@ -92,7 +90,10 @@ const normalizeAskUserOptions = (
     .map((option) =>
       typeof option === "string"
         ? { label: option.trim(), description: option.trim() }
-        : { label: option.label.trim(), description: option.description?.trim() ?? option.label.trim() },
+        : {
+            label: option.label.trim(),
+            description: option.description?.trim() ?? option.label.trim(),
+          },
     )
     .filter((option) => option.label.length > 0);
 
@@ -123,7 +124,7 @@ export const t3TeamAskUser = Effect.fn("T3TeamMcpToolkit.askUser")(function* (
     );
   }
 
-  const requestId = ApprovalRequestId.make(randomUUID());
+  const requestId = ApprovalRequestId.make(NodeCrypto.randomUUID());
 
   // `id` is the requestId — a short, stable identifier draft answers are
   // keyed by. The old build used the full question text as the id, which the
@@ -145,9 +146,12 @@ export const t3TeamAskUser = Effect.fn("T3TeamMcpToolkit.askUser")(function* (
   // built exactly like this). Report, do not reject.
   const warnings = normalizedOptions
     .filter((option) => option.description === option.label)
-    .map((option) => `option '${option.label}': its description restates the label — describe the trade-off instead`);
+    .map(
+      (option) =>
+        `option '${option.label}': its description restates the label — describe the trade-off instead`,
+    );
 
-  const eventId = EventId.make(randomUUID());
+  const eventId = EventId.make(NodeCrypto.randomUUID());
   const createdAtIso = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
 
   // Message mode: the decider's `thread.user-input.respond` branch resolves

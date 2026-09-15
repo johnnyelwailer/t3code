@@ -161,7 +161,8 @@ const ASK_USER_INPUT_SCHEMA = {
               label: { type: "string", minLength: 1 },
               description: {
                 type: "string",
-                description: "What this choice means and its trade-off — never a restatement of the label.",
+                description:
+                  "What this choice means and its trade-off — never a restatement of the label.",
               },
             },
             required: ["label"],

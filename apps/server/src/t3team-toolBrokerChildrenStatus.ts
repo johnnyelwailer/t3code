@@ -21,7 +21,11 @@ import {
   opUsage,
   readString,
 } from "./t3team-toolBrokerChildrenShared.ts";
-import { liveChildParentIds, loadLiveChildParentIds, buildChildRoster } from "./t3team-toolBrokerChildrenLiveChildren.ts";
+import {
+  liveChildParentIds,
+  loadLiveChildParentIds,
+  buildChildRoster,
+} from "./t3team-toolBrokerChildrenLiveChildren.ts";
 import {
   type ChildThreadShell,
   type ChildrenArgs,
@@ -68,13 +72,12 @@ export function opList(
                 ? { truncated: true, total: unsettled.length }
                 : {}),
               ...(unsettled.length !== shells.length
-                ? ({ settledExcluded: shells.length - unsettled.length } as { settledExcluded: number })
+                ? ({ settledExcluded: shells.length - unsettled.length } as {
+                    settledExcluded: number;
+                  })
                 : {}),
               threads: limited.map((shell) =>
-                childStatusFromShell(
-                  shell,
-                  waitingParents.has(shell.id.toString()),
-                ),
+                childStatusFromShell(shell, waitingParents.has(shell.id.toString())),
               ),
             });
           }),
@@ -158,10 +161,7 @@ export function opStatus(
     const detail = yield* loadTarget(deps, threadId);
     // Waiting fact: live work among the target's own t3team children (the
     // durable handoff relation — legacy parent:N sub-runs never count).
-    const waitingParents = yield* loadLiveChildParentIds(
-      deps,
-      new Set([detail.id.toString()]),
-    );
+    const waitingParents = yield* loadLiveChildParentIds(deps, new Set([detail.id.toString()]));
     const hasLiveChildren = waitingParents.has(detail.id.toString());
     const status = deriveThreadRunStatus({ ...detail, hasLiveChildren });
     const startedAt = status.latestTurnStartedAt;

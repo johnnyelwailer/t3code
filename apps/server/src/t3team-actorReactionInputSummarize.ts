@@ -130,7 +130,8 @@ export function summarizeActorMessageForDelivery(
 
 /** LEGACY inline cap: bodies at or under this were inlined verbatim. */
 export const LEGACY_T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS = 1500;
-const LEGACY_T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS_ENV = "T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS";
+const LEGACY_T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS_ENV =
+  "T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS";
 
 /**
  * Resolve the LEGACY inline cap exactly as the pre-overhaul code did
