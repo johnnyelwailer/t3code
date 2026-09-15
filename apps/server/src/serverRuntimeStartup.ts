@@ -351,8 +351,7 @@ const runStartupPhase = <A, E, R>(phase: string, effect: Effect.Effect<A, E, R>)
     Effect.withSpan(`server.startup.${phase}`),
   );
 
-const ORPHANED_PROVIDER_SESSION_ERROR =
-  "Provider session did not survive a server restart. Send a new message to continue.";
+const ORPHANED_PROVIDER_SESSION_ERROR = "Restarted mid-turn — send a message to continue.";
 const SERVER_UPDATE_CONTINUATION_KEY = "continueAfterServerUpdate";
 const SERVER_UPDATE_CONTINUATION_PROMPT = "Continue where you left off.";
 
@@ -631,6 +630,12 @@ export const reconcileProviderSessions = Effect.gen(function* () {
               status: "error",
               activeTurnId: null,
               lastError,
+              // Restart marker (deterministic restart vs provider-failure
+              // signal): a turn was in flight when the server died. Every
+              // non-restart session write leaves this unset, so the flag is
+              // the one durable fact the child-wait reactor and the
+              // post-restart wake steer gate on.
+              stoppedByServerRestart: session.activeTurnId !== null,
               updatedAt: reconciledAt,
             },
             createdAt: reconciledAt,
@@ -678,6 +683,10 @@ export const reconcileProviderSessions = Effect.gen(function* () {
             status: "starting",
             activeTurnId: null,
             lastError: null,
+            // The auto-resume replaces the restart-interrupted session: the
+            // marker must not leak into the resumed session (the steer would
+            // then fire on the next user turn even though the turn continued).
+            stoppedByServerRestart: false,
             updatedAt: resumedAt,
           },
           createdAt: resumedAt,
@@ -733,7 +742,7 @@ export const reconcileProviderSessions = Effect.gen(function* () {
             cause: continuationExit.cause,
           });
           yield* settleAsError(
-            "Could not continue this thread after the server restart. Send a new message to continue.",
+            "The server restarted mid-turn and the session could not be resumed automatically — send a message to continue.",
           ).pipe(Effect.ignoreCause);
         }),
       );

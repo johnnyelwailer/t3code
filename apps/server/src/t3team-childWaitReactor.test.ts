@@ -72,11 +72,23 @@ const childShell = {
   childStatus: STATE,
 } as unknown as OrchestrationThread;
 
-const sessionSet = (status: string, lastError: string | null, seq = 0): OrchestrationEvent =>
+const sessionSet = (
+  status: string,
+  lastError: string | null,
+  seq = 0,
+  stoppedByServerRestart?: boolean,
+): OrchestrationEvent =>
   ({
     type: "thread.session-set",
     sequence: seq,
-    payload: { threadId: ThreadId.make(CHILD), session: { status, lastError } },
+    payload: {
+      threadId: ThreadId.make(CHILD),
+      session: {
+        status,
+        lastError,
+        ...(stoppedByServerRestart !== undefined ? { stoppedByServerRestart } : {}),
+      },
+    },
   }) as unknown as OrchestrationEvent;
 
 const waitRegistered = (): OrchestrationEvent =>
@@ -179,13 +191,12 @@ const markerCount = (dispatches: OrchestrationCommand[]): number =>
   ).length;
 
 const markerSummaries = (dispatches: OrchestrationCommand[]): string[] =>
-  dispatches.flatMap(
-    (c) =>
-      c.type === "thread.activity.append" &&
-      (c as { activity?: { kind?: string; summary?: string } }).activity?.kind ===
-        "t3team.child_abnormal_stop_notified"
-        ? [(c as { activity: { summary: string } }).activity.summary]
-        : [],
+  dispatches.flatMap((c) =>
+    c.type === "thread.activity.append" &&
+    (c as { activity?: { kind?: string; summary?: string } }).activity?.kind ===
+      "t3team.child_abnormal_stop_notified"
+      ? [(c as { activity: { summary: string } }).activity.summary]
+      : [],
   );
 
 describe("makeChildWaitReactor abnormal-stop notification", () => {
@@ -236,6 +247,57 @@ describe("makeChildWaitReactor abnormal-stop notification", () => {
             (c as { activity?: { kind?: string } }).activity?.kind === "t3team.child_wait.resolved",
         ),
       ).toBe(true);
+    }),
+  );
+});
+
+describe("makeChildWaitReactor restart-caused stops (wake steer instead of per-child notice)", () => {
+  it.effect("suppresses the standalone notice when the stop carries the restart marker", () =>
+    Effect.gen(function* () {
+      const h = makeHarness();
+      yield* h.reactor.handleEvent(
+        sessionSet("error", "Restarted mid-turn — send a message to continue.", 1, true),
+      );
+      yield* settle();
+      // No per-child notice: a server restart stopping a child is a restart,
+      // not a child incident. The parent's post-restart wake steer lists it.
+      expect(texts(h.dispatches)).toHaveLength(0);
+      expect(markerCount(h.dispatches)).toBe(0);
+    }),
+  );
+
+  it.effect("still resolves a registered wait when the stop carries the restart marker", () =>
+    Effect.gen(function* () {
+      const h = makeHarness();
+      yield* h.reactor.handleEvent(waitRegistered());
+      yield* h.reactor.handleEvent(
+        sessionSet("error", "Restarted mid-turn — send a message to continue.", 1, true),
+      );
+      yield* settle();
+      // The wait resolves (state is still recorded) — only the standalone
+      // notice is suppressed.
+      const messages = texts(h.dispatches);
+      expect(messages.filter((m) => m.includes("[Child wait"))).toHaveLength(1);
+      expect(messages.filter((m) => m.includes("[Child stopped abnormally]"))).toHaveLength(0);
+      expect(
+        h.dispatches.some(
+          (c) =>
+            c.type === "thread.activity.append" &&
+            (c as { activity?: { kind?: string } }).activity?.kind === "t3team.child_wait.resolved",
+        ),
+      ).toBe(true);
+    }),
+  );
+
+  it.effect("a provider failure WITHOUT the marker still notifies", () =>
+    Effect.gen(function* () {
+      const h = makeHarness();
+      yield* h.reactor.handleEvent(sessionSet("error", "provider 502", 1, false));
+      yield* settle();
+      const messages = texts(h.dispatches);
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain("[Child stopped abnormally]");
+      expect(urgencies(h.dispatches)).toEqual(["urgent"]);
     }),
   );
 });

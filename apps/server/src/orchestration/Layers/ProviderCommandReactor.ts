@@ -60,6 +60,7 @@ import { getConfiguredTextGenerationModelSelection } from "../../t3team-configur
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
 import { ProviderUsageWatcher } from "../../t3team-providerUsageWatcher.ts";
+import { loadRestartWakeSteer } from "../../t3team-restartWakeSteer.ts";
 const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
 const isProviderAdapterValidationError = Schema.is(ProviderAdapterValidationError);
 const isProviderWorkspaceMissingError = Schema.is(ProviderWorkspaceMissingError);
@@ -1594,21 +1595,31 @@ const make = Effect.gen(function* () {
         "Wait for context compaction to finish before sending another message.",
       );
     }
+    // Same classifier as turn admission (t3team-deciderTurnAdmission):
+    // automated dispatchers stamp an author/actor ext; a typed user message
+    // never carries one. Providers may prioritize interactive turns on it.
+    const isUserTurn =
+      message.t3teamExt?.author === undefined && message.t3teamExt?.actor === undefined;
+    // Restart wake steer (restart-resume): when this user message follows a
+    // server restart that interrupted this thread's in-flight turn (the
+    // session carries the durable `stoppedByServerRestart` marker the
+    // startup reconcile wrote), prepend a DETERMINISTIC context block: what
+    // the restart stopped + each child thread's live state. Agent context
+    // only, built from persisted read-model data (no model call), and
+    // best-effort — null means the turn proceeds exactly as before.
+    const restartWakeSteer = isUserTurn
+      ? yield* loadRestartWakeSteer({ thread, query: projectionSnapshotQuery })
+      : null;
     const sendTurnRequest = yield* buildSendTurnRequestForThread({
       threadId: event.payload.threadId,
-      messageText: message.text,
+      messageText:
+        restartWakeSteer !== null ? `${restartWakeSteer}\n\n${message.text}` : message.text,
       ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
       ...(event.payload.modelSelection !== undefined
         ? { modelSelection: event.payload.modelSelection }
         : {}),
       interactionMode: event.payload.interactionMode,
-      // Same classifier as turn admission (t3team-deciderTurnAdmission):
-      // automated dispatchers stamp an author/actor ext; a typed user message
-      // never carries one. Providers may prioritize interactive turns on it.
-      turnOrigin:
-        message.t3teamExt?.author !== undefined || message.t3teamExt?.actor !== undefined
-          ? ("automated" as const)
-          : ("user" as const),
+      turnOrigin: isUserTurn ? ("user" as const) : ("automated" as const),
       createdAt: event.payload.createdAt,
     }).pipe(
       Effect.map(Option.some),

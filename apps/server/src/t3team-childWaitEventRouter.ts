@@ -132,11 +132,18 @@ export function makeChildWaitEventRouter(deps: ChildWaitEventRouterDeps) {
           return Effect.void;
         }
         // failed / aborted: a genuine terminal — notify immediately (ledger dedups).
+        // Restart-caused terminal (the startup reconcile's stoppedByServerRestart
+        // marker): the per-child notice would be restart noise — suppress it, but
+        // still resolve matching waits. The parent's post-restart wake steer
+        // lists the interrupted children instead.
         return notifyTerminalIfNoWait({
           childThreadId: threadId,
           outcome,
           lastError: event.payload.session.lastError,
           eventSequence: event.sequence,
+          ...(event.payload.session.stoppedByServerRestart === true
+            ? { suppressParentNotice: true }
+            : {}),
         });
       }
       default:

@@ -43,6 +43,15 @@ export interface NotifyTerminalIfNoWaitInput {
   readonly outcome: TerminalOutcome;
   readonly lastError: string | null | undefined;
   readonly eventSequence: number;
+  /**
+   * Set when the terminal stop was caused by the SERVER restarting (the
+   * session carries the `stoppedByServerRestart` marker the startup
+   * reconcile writes). The stop is still recorded and matching waits still
+   * resolve — but the per-child standalone notice is suppressed: a restart
+   * stopping a whole fleet of children is a restart, not N child incidents,
+   * and the parent's post-restart wake steer lists the children instead.
+   */
+  readonly suppressParentNotice?: boolean;
 }
 
 /** The runtime deps the reactor supplies (live index + resolver + notifier). */
@@ -79,12 +88,16 @@ export function makeChildWaitTerminal(deps: ChildWaitTerminalDeps) {
   // Abnormal stops (failed/aborted) always notify (GHE #157); a SILENT
   // completion notifies only when the parent received nothing from the child.
   // Both route through the ledger-guarded notifier, so each fires once per
-  // terminal epoch (re-armed on the child's resume).
+  // terminal epoch (re-armed on the child's resume). A restart-caused stop
+  // still resolves matching waits, but skips the standalone notice (the
+  // wake steer on the parent's post-restart wake lists the children).
   const notifyTerminalIfNoWait = (input: NotifyTerminalIfNoWaitInput): Effect.Effect<void> =>
     resolveChildOutcome(input.childThreadId, input.outcome).pipe(
       Effect.flatMap((resolvedWaits) => {
         // A wait already resolved for this child+outcome told the parent — no second message.
         if (resolvedWaits > 0) return Effect.void;
+        // Restart-caused stop: state is recorded, waits resolved, notice suppressed.
+        if (input.suppressParentNotice === true) return Effect.void;
         return notifyAbnormalStop(input);
       }),
     );
