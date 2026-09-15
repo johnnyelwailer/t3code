@@ -482,6 +482,10 @@ interface MessagesTimelineProps {
   openingVideoAttachmentId?: string | null;
   onFileDownload?: (attachment: ChatFileAttachment) => void;
   activeThreadEnvironmentId: EnvironmentId;
+  /** Epoch ms the connected server booted (its environment descriptor).
+      Jobs started before the current server process died with it, so the
+      background-job fold settles them instead of running them to deadline. */
+  serverStartedAtMs?: number | null;
   markdownCwd: string | undefined;
   resolvedTheme: "light" | "dark";
   timestampFormat: TimestampFormat;
@@ -564,6 +568,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   openingVideoAttachmentId = null,
   onFileDownload = NOOP_OPEN_ATTACHMENT,
   activeThreadEnvironmentId,
+  serverStartedAtMs = null,
   markdownCwd,
   resolvedTheme,
   timestampFormat,
@@ -761,7 +766,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         // stays blank no matter what the runtime sends from now on.
         command: entry.entry.command,
       }));
-    const jobs = foldBackgroundJobs(foldEntries, Date.now());
+    const jobs = foldBackgroundJobs(foldEntries, Date.now(), serverStartedAtMs ?? undefined);
     const starters = new Map<string, BackgroundJobState>();
     for (const job of jobs) {
       if (job.state === "running" && job.startedEntryId !== undefined) {
@@ -769,7 +774,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       }
     }
     return { jobs, starters, startEntryIds: new Set(starters.keys()) };
-  }, [timelineEntries]);
+  }, [timelineEntries, serverStartedAtMs]);
   const rowsProjectionRef = useRef<{
     threadKey: string;
     workspaceRoot: string | undefined;

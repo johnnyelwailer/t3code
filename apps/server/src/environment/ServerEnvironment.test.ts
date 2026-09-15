@@ -161,6 +161,12 @@ it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
       }).pipe(Effect.provide(makeServerEnvironmentLayer(baseDir)));
 
       expect(first.environmentId).toBe(second.environmentId);
+      // The boot stamp identifies THIS server process (epoch ms, set once at
+      // layer construction): a background bash job that started before it
+      // cannot be live any more.
+      expect(Number.isInteger(second.serverStartedAtMs)).toBe(true);
+      expect(second.serverStartedAtMs ?? 0).toBeGreaterThan(0);
+      expect(second.serverStartedAtMs ?? 0).toBeLessThanOrEqual(Date.now());
       expect(second.capabilities.repositoryIdentity).toBe(true);
       expect(second.capabilities.connectionProbe).toBe(true);
       expect(second.capabilities.attachmentUploads).toBe(true);

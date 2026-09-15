@@ -44,6 +44,7 @@
     "apps/server/src/cli/pair.ts",
     "apps/server/src/cli/server.ts",
     "apps/server/src/environment/ServerEnvironment.ts",
+    "apps/server/src/environment/ServerEnvironment.test.ts",
     "apps/server/src/httpCors.ts",
     "apps/server/src/mcp/McpHttpServer.ts",
     "apps/server/src/mcp/toolkits/t3team/handlers.ts",
