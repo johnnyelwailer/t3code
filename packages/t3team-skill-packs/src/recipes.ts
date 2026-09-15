@@ -3,7 +3,6 @@ import type { ActionDefinition } from "@t3team/sdk/placements";
 
 import { buildBundledActionPlacement } from "./actionPlacements.ts";
 import {
-  CREATE_CONTEXTUAL_RECIPE_ACTION_VIEW,
   EXPLAIN_SELECTED_WORK_ACTION_VIEW,
   FOCUS_NEEDS_MY_ACTION_ACTION_VIEW,
   PRIORITIZE_PENDING_WORK_ACTION_VIEW,
@@ -74,196 +73,44 @@ function createBundledRecipe(
 
 const BUNDLED_RECIPES: ReadonlyArray<BundledT3TeamRecipe> = [
   createBundledRecipe({
-    id: "create-recipe",
-    title: "Create a project-local recipe",
-    manifestDisplayName: "Create a project-local recipe",
+    id: "manage-project-recipes",
+    title: "Create or edit a recipe",
+    manifestDisplayName: "Create or edit a recipe",
     shortDescription:
-      "Scaffold a reusable recipe in .t3team/recipes and have the agent finish the files.",
-    surfaces: DASHBOARD_AND_WORKITEM_SURFACES,
+      "Create a new recipe for this project, or edit an existing one, whether it lives with the project or with a view like this one.",
+    surfaces: ["workitem.detail.sidepanel"],
     promptTemplate:
-      "Create a reusable t3team recipe for this project. Describe what the recipe should do, where it should appear, the signals it should use, and any setup fields it needs before launch.",
+      "Create or edit a t3team recipe for this project. Decide from the request which branch applies. For a new recipe: scaffold it under .t3team/recipes/<recipe-id>/ with a recipe.ts and a prompt.md, and add a workflow.ts or helper scripts only when one agent step is not enough. For an edit: open the named existing recipe or plugin module, keep its ids and structure stable, draft the change, show the diff, and write it back only after the user approves.",
     kickoff: {
       version: 1,
       steps: [
         {
           kind: "collect-input",
-          id: "collect-recipe-brief",
+          id: "collect-recipe-intent",
           request: {
             kind: "text",
             when: "missing-prompt",
             promptRequest: {
-              title: "Describe the recipe you want to create",
-              body: "Tell the agent what the recipe should help with, where it should appear, which project or ticket signals it should react to, and whether it needs a small setup form before it runs.",
+              title: "What do you want to do with recipes?",
+              body: "A new recipe, or an edit to an existing one — and what should it do?",
               sections: ["context-summary", "available-context-keys", "capabilities"],
               capabilities: [
                 "Create a new recipe under .t3team/recipes/<recipe-id>.",
-                "Author recipe.json, prompt.md, workflow.ts, and helper script files when needed.",
-                "Use project and ticket context signals to control where the recipe appears.",
-                "Build a multi-step workflow when a single kickoff prompt is not enough.",
+                "Edit an existing project-local recipe or plugin module, with a diff to review before saving.",
+                "Use project and ticket context signals to control where a recipe appears.",
               ],
               responseInstructions:
-                "Describe the recipe goal, target surface, visibility rules, and any setup or workflow steps it should include.",
+                "Say whether this is a new recipe or an edit, name the recipe or file when editing, and describe the behavior you want.",
             },
           },
         },
         {
-          kind: "tool",
-          id: "read-current-view",
-          toolName: "t3team.view.read",
-        },
-        {
-          kind: "script",
-          id: "prepare-authoring-workspace",
-          module: "./recipe-script.ts#prepareAuthoringWorkspace",
-        },
-        {
           kind: "agent",
-          id: "author-recipe",
-        },
-        {
-          kind: "present-message",
-          id: "recipe-ready",
-          message: {
-            body: "Recipe authoring turn finished. Review the new or updated files under .t3team/recipes and run the flow again if you want another pass.",
-            visibleToAgent: false,
-          },
-        },
-      ],
-    },
-    icon: "sparkles",
-    appliesTo: {},
-    requiredContext: [{ key: "project.summary", description: "Project overview" }],
-    skillRef: { id: "recipe.create" },
-    outputPreference: "plan",
-    artifactKinds: ["implementation-plan", "decision-notes"],
-    actionFamilies: ["delivery", "engineering", "product"],
-    rankHint: 19,
-  }),
-  createBundledRecipe({
-    id: "edit-plugin-module",
-    title: "Edit this item",
-    manifestDisplayName: "Edit this item",
-    shortDescription:
-      "Draft and apply a surgical update to an existing project-local recipe or plugin module.",
-    surfaces: DASHBOARD_AND_WORKITEM_SURFACES,
-    promptTemplate:
-      "Edit an existing t3team recipe or plugin module. Describe the change you want, and keep the current module shape unless the request explicitly changes it.",
-    kickoff: {
-      version: 1,
-      steps: [
-        {
-          kind: "collect-input",
-          id: "collect-edit-brief",
-          request: {
-            kind: "text",
-            when: "missing-prompt",
-            promptRequest: {
-              title: "Describe the edit you want",
-              body: "Explain the change you want to make. If you did not launch this from Edit this..., include the source file path in the request.",
-              sections: ["context-summary", "available-context-keys", "capabilities"],
-              capabilities: [
-                "Open an existing project-local recipe or plugin module and keep the current shape intact.",
-                "Draft the change without touching the source file until you approve it.",
-                "Show a diff preview before saving the change back to the workspace.",
-              ],
-              responseInstructions:
-                "Describe the change you want, any constraints to preserve, and any identifiers or structure that must stay stable.",
-            },
-          },
-        },
-        {
-          kind: "tool",
-          id: "read-current-view",
-          toolName: "t3team.view.read",
-        },
-        {
-          kind: "script",
-          id: "prepare-edit-workspace",
-          module: "./recipe-script.ts#prepareEditWorkspace",
-        },
-        {
-          kind: "agent",
-          id: "draft-edit",
-          promptPath: "./draft-prompt.md",
-        },
-        {
-          kind: "present-message",
-          id: "review-edit",
-          message: {
-            body: "Review the proposed diff below. Approve it to write the change back to the source file.",
-            visibleToAgent: false,
-          },
-        },
-        {
-          kind: "script",
-          id: "present-edit-preview",
-          module: "./recipe-script.ts#presentEditPreview",
-        },
-        {
-          kind: "collect-input",
-          id: "approve-edit",
-          request: {
-            kind: "card-action",
-            actionId: "approve",
-          },
-        },
-        {
-          kind: "script",
-          id: "save-edit",
-          module: "./recipe-script.ts#saveApprovedEdit",
+          id: "manage-recipe",
         },
       ],
     },
     icon: "pencil",
-    appliesTo: {},
-    requiredContext: [{ key: "project.summary", description: "Project overview" }],
-    skillRef: { id: "recipe.edit" },
-    outputPreference: "markdown",
-    artifactKinds: ["decision-notes"],
-    actionFamilies: ["delivery", "engineering"],
-    rankHint: 17,
-  }),
-  createBundledRecipe({
-    id: "create-contextual-recipe",
-    title: "Create a recipe for this view",
-    manifestDisplayName: "Create a recipe for this view",
-    shortDescription:
-      "Draft a reusable quick action based on what is visible here, with optional setup fields or show/hide rules.",
-    actionViewTemplate: CREATE_CONTEXTUAL_RECIPE_ACTION_VIEW,
-    surfaces: DASHBOARD_AND_WORKITEM_SURFACES,
-    promptTemplate:
-      "Help me design a reusable t3team recipe for this view. Start by explaining, in plain language, what the user can see here and which signals the recipe can use. Then propose the recipe manifest, visibility rules, prompt, any pre-launch setup UI, and the files that should be created or updated.",
-    kickoff: {
-      version: 1,
-      steps: [
-        {
-          kind: "collect-input",
-          id: "collect-recipe-brief",
-          request: {
-            kind: "text",
-            when: "missing-prompt",
-            promptRequest: {
-              title: "Describe the recipe you want",
-              body: "A recipe is a reusable quick action for views like this. It can send a tailored prompt, ask a few setup questions before launch, or only appear when the right project or ticket signals are present.",
-              sections: ["context-summary", "available-context-keys", "capabilities"],
-              capabilities: [
-                "Simple quick actions that send a tailored prompt.",
-                "Recipes that only appear when this view matches certain signals.",
-                "Optional setup fields before launch, like tone, scope, or priority.",
-                "Multi-step flows or built-in UI actions when one prompt is not enough.",
-              ],
-              responseInstructions:
-                "Reply with the shortcut you want to create: what it should help with, where it should appear, what should make it show up, and whether it needs a small setup step before launch.",
-            },
-          },
-        },
-        {
-          kind: "agent",
-          id: "author-recipe",
-        },
-      ],
-    },
-    icon: "sparkles",
     appliesTo: {},
     requiredContext: [{ key: "project.summary", description: "Project overview" }],
     skillRef: { id: "recipe.authoring" },

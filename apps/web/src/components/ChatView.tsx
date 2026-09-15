@@ -2422,6 +2422,16 @@ export default function ChatView(props: ChatViewProps) {
   const serverConfig = activeThread
     ? (activeEnvironment?.serverConfig ?? null)
     : (primaryEnvironment?.serverConfig ?? null);
+  // Server process boot time, so the background-job fold can settle jobs that
+  // predate the current process (their completion notice lived in the dead
+  // process's memory). Null until the first snapshot or on older servers.
+  const descriptorStartedAtMs = serverConfig?.environment.serverStartedAtMs;
+  const serverStartedAtMs =
+    descriptorStartedAtMs !== undefined &&
+    Number.isFinite(descriptorStartedAtMs) &&
+    descriptorStartedAtMs > 0
+      ? descriptorStartedAtMs
+      : null;
   const providerStatuses = serverConfig?.providers ?? EMPTY_PROVIDERS;
   const selectedProviderByThreadId = composerActiveProvider ?? null;
   // Provider lock must reflect an actual runtime-bound session, not
@@ -8606,6 +8616,7 @@ export default function ChatView(props: ChatViewProps) {
                 runningTurnId={activeRunningTurnId}
                 turnDiffSummaryByAssistantMessageId={turnDiffSummaryByAssistantMessageId}
                 activeThreadEnvironmentId={activeThread.environmentId}
+                serverStartedAtMs={serverStartedAtMs}
                 routeThreadKey={routeThreadKey}
                 onOpenTurnDiff={onOpenTurnDiff}
                 revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}

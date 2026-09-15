@@ -1,5 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { normalizeGitRemoteUrl } from "@t3tools/shared/git";
 
+import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
 import { useT3TeamSidebarThreadDataStore } from "~/t3team/t3team-sidebarThreadDataStore";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 import {
@@ -7,6 +9,7 @@ import {
   type ChildThreadRelations,
   type SubRunCounts,
 } from "./t3team-childThreadRelationsCore";
+import { readLinkedRepositoryUrlsFromProject } from "./t3team-createProjectBootstrap";
 import { useProjectStore } from "./t3team-useProjectStore";
 
 export type { ChildThreadRelations, SubRunCounts };
@@ -100,6 +103,23 @@ export function useT3TeamSidebarThreadMeta(): ChildThreadRelations {
   useEffect(() => {
     setSubRunCountsByParentId(relations.subRunCountsByParentId);
   }, [relations.subRunCountsByParentId, setSubRunCountsByParentId]);
+
+  // Mirror each work-source project's linked repositories (as normalized remote keys) for the
+  // pull request route's sidebar-scope narrowing — same single-store rule as the maps above.
+  const setLinkedRepositoryKeysByProjectId = useT3TeamSidebarProjectScope(
+    (s) => s.setLinkedRepositoryKeysByProjectId,
+  );
+  const linkedRepositoryKeysByProjectId = useMemo(() => {
+    const keysByProjectId = new Map<string, ReadonlyArray<string>>();
+    for (const project of allProjects) {
+      const urls = readLinkedRepositoryUrlsFromProject(project);
+      if (urls.length > 0) keysByProjectId.set(project.id, urls.map(normalizeGitRemoteUrl));
+    }
+    return keysByProjectId;
+  }, [allProjects]);
+  useEffect(() => {
+    setLinkedRepositoryKeysByProjectId(linkedRepositoryKeysByProjectId);
+  }, [linkedRepositoryKeysByProjectId, setLinkedRepositoryKeysByProjectId]);
 
   return relations;
 }

@@ -161,6 +161,8 @@ export type ProjectTicket = {
   priority?: string;
   assignee?: string;
   assigneeAccountId?: string;
+  /** Jira reporter — the digest surfaces it for bugs, where who hit the problem matters. */
+  reporter?: string;
   estimateValue?: number;
   timeOriginalEstimateSeconds?: number;
   timeRemainingEstimateSeconds?: number;

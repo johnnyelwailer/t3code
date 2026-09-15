@@ -188,6 +188,7 @@ import { t3teamProjectWorkspaceBootstrapRouteLayer } from "./t3team-project-repo
 import { t3teamThreadPlacementRouteLayer } from "./t3team-thread-placement-routes.ts";
 import { t3teamThreadToolContextRouteLayer } from "./t3team-thread-tool-context-routes.ts";
 import { t3teamThreadForkRouteLayer } from "./t3team-thread-fork-routes.ts";
+import { t3teamMyWorkDigestRouteLayer } from "./t3team-myworkDigest-routes.ts";
 import { T3TeamThreadToolContextStoreLive } from "./t3team-threadToolContextStore.ts";
 import { t3teamWidgetToolCallRouteLayer } from "./t3team-widget-tool-call-route.ts";
 import { T3TeamWidgetRegistryLive } from "./t3team-widgetRegistry.ts";
@@ -203,7 +204,7 @@ import { T3TeamChildWaitReactorLive } from "./t3team-childWait.ts";
 import { T3TeamChildSettleSweeperLive } from "./t3team-childSettleSweeper.ts";
 import { T3TeamChildCleanupNudgeReactorLive } from "./t3team-childCleanupNudgeReactor.ts";
 import { T3TeamThreadTransientTurnRetryLive } from "./t3team-threadTransientTurnRetry.ts";
-import { T3TeamThreadSilenceWatchReactorLive } from "./t3team-threadSilenceWatchReactor.ts";
+import { T3TeamThreadSilenceWatchReactorLive } from "./t3team-threadSilenceWatchReactorLive.ts";
 import { T3TeamWorkflowEngineRehydrateLive } from "./t3team-workflowEngineRehydrate.ts";
 import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
@@ -539,6 +540,8 @@ export const PullRequestServiceLive = PullRequestService.layer.pipe(
   Layer.provide(SourceControlProviderRegistryLayerLive),
   Layer.provide(SourceControlRateLimit.layer),
   Layer.provide(VcsProcess.layer),
+  // Project linked repositories are read from the workspace's .t3team context directory.
+  Layer.provide(WorkspacePaths.layer),
 );
 
 const AntigravityInstallationRefreshLive = Layer.effectDiscard(
@@ -735,6 +738,7 @@ export const makeRoutesLayer = Layer.mergeAll(
     t3teamThreadDraftMutationStatusRouteLayer,
     t3teamThreadWorkflowResolveInputRouteLayer,
     t3teamThreadToolContextRouteLayer,
+    t3teamMyWorkDigestRouteLayer,
     t3teamWidgetToolCallRouteLayer,
     Layer.mergeAll(
       t3teamThreadProviderHoldControlRouteLayer,

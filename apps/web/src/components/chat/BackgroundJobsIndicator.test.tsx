@@ -63,6 +63,23 @@ describe("BackgroundJobsRunningIndicator", () => {
     expect(markup).not.toContain("background job");
   });
 
+  it("renders nothing for a job the fold settled as lost to a server restart", () => {
+    const markup = renderToStaticMarkup(
+      <BackgroundJobsRunningIndicator
+        jobs={[
+          job({
+            jobId: "job_a",
+            startedAtMs: NOW - 600_000,
+            deadlineMs: NOW + 300_000,
+            state: "finished",
+            finishedReason: "lost-restart",
+          }),
+        ]}
+      />,
+    );
+    expect(markup).not.toContain("background job");
+  });
+
   // The working-row slot passes its own chrome (the row's border and padding).
   // An empty render must take that chrome with it, or an idle thread keeps a
   // bare separator line after the last job settles.
@@ -254,6 +271,21 @@ describe("BackgroundJobRunningBadge", () => {
     const markup = renderToStaticMarkup(
       <BackgroundJobRunningBadge
         job={job({ jobId: "job_a", state: "finished", finishedReason: "cancelled" })}
+      />,
+    );
+    expect(markup).not.toContain("running in background");
+  });
+
+  it("un-tags the row for a job settled as lost to a server restart", () => {
+    const markup = renderToStaticMarkup(
+      <BackgroundJobRunningBadge
+        job={job({
+          jobId: "job_a",
+          startedAtMs: NOW - 600_000,
+          deadlineMs: NOW + 300_000,
+          state: "finished",
+          finishedReason: "lost-restart",
+        })}
       />,
     );
     expect(markup).not.toContain("running in background");

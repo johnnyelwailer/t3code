@@ -6,13 +6,10 @@ import * as Layer from "effect/Layer";
 import { afterEach, vi } from "vite-plus/test";
 
 import * as ServerConfig from "./config.ts";
-import { loadPersistedAtlassianAuthsPayload } from "./t3team-atlassian-auth-persistence.ts";
-import { ATLASSIAN_RECONNECT_REQUIRED_MESSAGE } from "./t3team-atlassian-auth-staleToken.ts";
 import {
   providerForAccount,
   providerForPersistedAuths,
   replaceAtlassianAuths,
-  savePersistedAuths,
 } from "./t3team-atlassian-auth-store.ts";
 
 const originalFetch = globalThis.fetch;
@@ -20,7 +17,7 @@ const originalFetch = globalThis.fetch;
 afterEach(() => {
   replaceAtlassianAuths([]);
   globalThis.fetch = originalFetch;
-  vi.unstubAllEnvs();
+  delete process.env.T3TEAM_ATLASSIAN_CLIENT_ID;
   vi.restoreAllMocks();
 });
 
@@ -185,95 +182,46 @@ it.effect("explains expired OAuth records that cannot be refreshed", () =>
   }).pipe(Effect.provide(testLayer("t3team-atlassian-auth-expired-"))),
 );
 
-function expiredOAuthAuth(cloudId: string) {
-  return {
-    kind: "oauth" as const,
-    cloudId,
-    siteUrl: `https://${cloudId}.atlassian.net`,
-    accessToken: "expired-access-token",
-    refreshToken: "rotated-away-refresh-token",
-    expiresAt: 0,
-  };
-}
+it.effect(
+  "clears the stored credentials and reports a typed session-expired error when the refresh token is dead",
+  () =>
+    Effect.gen(function* () {
+      replaceAtlassianAuths([
+        {
+          accountId: "dead-cloud",
+          auth: {
+            kind: "oauth",
+            cloudId: "dead-cloud",
+            siteUrl: "https://dead.atlassian.net",
+            accessToken: "stale-token",
+            refreshToken: "dead-refresh-token",
+            expiresAt: 0,
+          },
+        },
+      ]);
+      process.env.T3TEAM_ATLASSIAN_CLIENT_ID = "test-client";
 
-function stubTokenEndpoint(status: number, body: string) {
-  const requestedUrls: string[] = [];
-  globalThis.fetch = vi.fn(async (input: string | URL) => {
-    requestedUrls.push(input.toString());
-    return new Response(body, { status, headers: { "content-type": "application/json" } });
-  }) as unknown as typeof fetch;
-  return requestedUrls;
-}
+      const refreshCalls: string[] = [];
+      globalThis.fetch = vi.fn(async (input: string | URL) => {
+        refreshCalls.push(input.toString());
+        return Response.json(
+          { error: "unauthorized_client", error_description: "refresh_token is invalid" },
+          { status: 403 },
+        );
+      }) as unknown as typeof fetch;
 
-it.effect("flags a rotated-away refresh token and explains how to recover", () =>
-  Effect.gen(function* () {
-    vi.stubEnv("T3TEAM_ATLASSIAN_CLIENT_ID", "client-id");
-    replaceAtlassianAuths([{ accountId: "cloud-1", auth: expiredOAuthAuth("cloud-1") }]);
-    const requestedUrls = stubTokenEndpoint(
-      403,
-      '{"error":"unauthorized_client","error_description":"refresh_token is invalid"}',
-    );
+      const error = yield* providerForAccount("dead-cloud").pipe(Effect.flip);
 
-    const first = yield* providerForAccount("cloud-1").pipe(Effect.flip);
-    const second = yield* providerForAccount("cloud-1").pipe(Effect.flip);
+      // The clean typed error — never the upstream token JSON.
+      assert.equal(error.code, "jira_session_expired");
+      assert.equal(error.message, "Your Jira session expired. Sign in again.");
+      assert.isFalse(error.message.includes("refresh_token"));
+      assert.deepEqual(refreshCalls, ["https://auth.atlassian.com/oauth/token"]);
 
-    assert.equal(first.message, ATLASSIAN_RECONNECT_REQUIRED_MESSAGE);
-    assert.equal(second.message, ATLASSIAN_RECONNECT_REQUIRED_MESSAGE);
-    // The dead token is never redeemed twice: the second call short-circuits on the flag.
-    assert.deepEqual(requestedUrls, ["https://auth.atlassian.com/oauth/token"]);
-    const persisted = yield* loadPersistedAtlassianAuthsPayload;
-    assert.deepEqual(
-      persisted?.auths.map((entry) => [entry.accountId, entry.needsReconnect]),
-      [["cloud-1", true]],
-    );
-  }).pipe(Effect.provide(testLayer("t3team-atlassian-auth-rotated-"))),
-);
-
-it.effect("keeps the raw refresh error for failures that are not a dead refresh token", () =>
-  Effect.gen(function* () {
-    vi.stubEnv("T3TEAM_ATLASSIAN_CLIENT_ID", "client-id");
-    replaceAtlassianAuths([{ accountId: "cloud-1", auth: expiredOAuthAuth("cloud-1") }]);
-    const requestedUrls = stubTokenEndpoint(500, '{"error":"server_error"}');
-
-    const first = yield* providerForAccount("cloud-1").pipe(Effect.flip);
-    const second = yield* providerForAccount("cloud-1").pipe(Effect.flip);
-
-    assert.equal(first.message, 'Token refresh failed (500): {"error":"server_error"}');
-    assert.equal(second.message, first.message);
-    // Not flagged, so the next call retries the refresh as before.
-    assert.equal(requestedUrls.length, 2);
-    const persisted = yield* loadPersistedAtlassianAuthsPayload;
-    assert.equal(persisted, null);
-  }).pipe(Effect.provide(testLayer("t3team-atlassian-auth-refresh-5xx-"))),
-);
-
-it.effect("reconnecting clears the needs-reconnect flag", () =>
-  Effect.gen(function* () {
-    vi.stubEnv("T3TEAM_ATLASSIAN_CLIENT_ID", "client-id");
-    replaceAtlassianAuths([{ accountId: "cloud-1", auth: expiredOAuthAuth("cloud-1") }]);
-    stubTokenEndpoint(
-      403,
-      '{"error":"invalid_grant","error_description":"refresh_token is invalid or expired"}',
-    );
-    yield* providerForAccount("cloud-1").pipe(Effect.flip);
-
-    // Same two steps the OAuth connect route performs after a successful sign-in.
-    replaceAtlassianAuths([
-      {
-        accountId: "cloud-1",
-        auth: { kind: "oauth", cloudId: "cloud-1", accessToken: "fresh-token" },
-      },
-    ]);
-    yield* savePersistedAuths;
-    globalThis.fetch = vi.fn(async () =>
-      Response.json({ accountId: "user-1", displayName: "Test User" }),
-    ) as unknown as typeof fetch;
-
-    const provider = yield* providerForAccount("cloud-1");
-    const accounts = yield* Effect.tryPromise(() => provider.listAccounts());
-    assert.deepEqual(
-      accounts.map((account) => account.id),
-      ["cloud-1"],
-    );
-  }).pipe(Effect.provide(testLayer("t3team-atlassian-auth-reconnect-clears-"))),
+      // The dead credentials are cleared: the account is now "signed out" (mock provider)
+      // and no second refresh attempt may loop on the same token.
+      const provider = yield* providerForAccount("dead-cloud");
+      assert.equal(provider.constructor.name, "MockIntegrationProvider");
+      assert.deepEqual(refreshCalls, ["https://auth.atlassian.com/oauth/token"]);
+    }).pipe(Effect.provide(testLayer("t3team-atlassian-auth-dead-refresh-"))),
 );

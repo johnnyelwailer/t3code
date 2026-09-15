@@ -193,6 +193,11 @@ export const make = Effect.gen(function* () {
   const label = yield* resolveServerEnvironmentLabel({ cwdBaseName });
   const machine = yield* detectServerEnvironmentMachineKind();
   const launcher = yield* resolveServiceLauncherMode();
+  // Captured at layer construction (= process boot). The descriptor is
+  // rebuilt live on read, but the boot instant is not — it identifies THIS
+  // server process, and clients use it to settle in-memory state (bash
+  // background jobs) that died with the previous one.
+  const serverStartedAtMs = Date.now();
   const serverSelfUpdate = resolveServerSelfUpdateCapability({
     desktopManaged: serverConfig.mode === "desktop",
     launcherManaged: launcher.managed,
@@ -213,6 +218,7 @@ export const make = Effect.gen(function* () {
       ...(machine === null ? {} : { machine }),
     },
     serverVersion: packageJson.version,
+    serverStartedAtMs,
     capabilities: {
       repositoryIdentity: true,
       connectionProbe: true,

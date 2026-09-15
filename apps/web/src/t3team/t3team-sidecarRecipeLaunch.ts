@@ -49,12 +49,14 @@ export function buildBundledSidecarRecipeKickoffMessage(input: {
     return "";
   }
 
-  if (recipe.id === "edit-plugin-module") {
+  if (recipe.id === "manage-project-recipes") {
     const targetPath =
       typeof input.parameters?.targetPath === "string" && input.parameters.targetPath.length > 0
         ? input.parameters.targetPath
-        : "the selected item";
-    return `Edit ${targetPath}. Make the smallest coherent change needed and keep the current module shape unless the request changes it.`;
+        : undefined;
+    if (targetPath) {
+      return `Edit the recipe or plugin module at ${targetPath}. Make the smallest coherent change needed, keep the current ids and structure stable, show the diff, and write it back only after the user approves.`;
+    }
   }
 
   return recipe.promptTemplate ?? recipe.shortDescription;
@@ -71,11 +73,12 @@ export async function launchBundledSidecarRecipeThread(input: {
   readonly launchConfig: T3TeamKickoffLaunchConfig;
   readonly createThread: (input: {
     kickoffMessage: string;
-    kickoffWorkflow: BundledRecipeWorkflow;
+    kickoffWorkflow?: BundledRecipeWorkflow;
     launchConfig: T3TeamKickoffLaunchConfig;
   }) => unknown | Promise<unknown>;
 }): Promise<boolean> {
-  if (!input.backend || !input.environmentId) {
+  const recipe = getBundledT3TeamRecipe(input.recipeId);
+  if (!recipe || !input.backend || !input.environmentId) {
     return false;
   }
 
@@ -85,17 +88,13 @@ export async function launchBundledSidecarRecipeThread(input: {
     projectWorkspaceRoot: input.projectWorkspaceRoot,
     ...(input.parameters ? { parameters: input.parameters } : {}),
   });
-  if (!kickoffWorkflow) {
-    return false;
-  }
-
   const kickoffMessage = buildBundledSidecarRecipeKickoffMessage({
     recipeId: input.recipeId,
     ...(input.parameters ? { parameters: input.parameters } : {}),
   });
   const threadId = await input.createThread({
     kickoffMessage,
-    kickoffWorkflow,
+    ...(kickoffWorkflow ? { kickoffWorkflow } : {}),
     launchConfig: input.launchConfig,
   });
   if (typeof threadId !== "string" || threadId.length === 0) {
@@ -116,13 +115,13 @@ export async function launchBundledSidecarRecipeThread(input: {
     environmentId: input.environmentId,
     threadId,
     canonicalProjectId: input.projectId,
-    title: kickoffWorkflow.title,
+    title: recipe.title,
     initialUserMessage: kickoffMessage,
     kickoffModelSelection: input.launchConfig.selection,
     kickoffRuntimeMode: input.launchConfig.runtimeMode,
     kickoffInteractionMode: input.launchConfig.interactionMode,
     kickoffBranch: null,
-    kickoffWorkflow,
+    kickoffWorkflow: kickoffWorkflow ?? undefined,
     toolContext: undefined,
     createdAt: new Date().toISOString(),
     onInitialUserMessageSent: undefined,

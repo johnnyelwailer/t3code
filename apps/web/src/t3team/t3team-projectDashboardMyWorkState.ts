@@ -6,6 +6,7 @@ export type {
   ProjectDashboardMyWorkState,
   ProjectMyWorkGroupMode,
   ProjectMyWorkKanbanLaneSelectionMode,
+  ProjectMyWorkLens,
   ProjectMyWorkTableSortBy,
   ProjectMyWorkTableSortDirection,
   ProjectMyWorkViewMode,

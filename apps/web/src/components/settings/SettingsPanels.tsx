@@ -140,6 +140,7 @@ import {
   type ProviderUpdateCandidate,
 } from "../ProviderUpdateLaunchNotification.logic";
 import { AgentInstructionsSettingRow } from "./t3team-AgentInstructionsSetting";
+import { T3TeamBetaSettings } from "./t3team-BetaSettings";
 import { ProviderInstanceCard } from "./ProviderInstanceCard";
 import { DRIVER_OPTIONS, getDriverOption } from "./providerDriverMeta";
 import { T3TeamProjectSetupSetting } from "./t3team-ProjectSetupSetting";
@@ -1124,6 +1125,7 @@ export function AppearanceSettingsPanel() {
       <SettingsSection id="appearance-interface" title="Interface">
         {/* T3Team settings insertion seam: keep this mount stable to minimize merge conflicts. */}
         <T3TeamProjectSetupSetting />
+        <T3TeamBetaSettings />
 
         <SettingsRow
           {...searchableSetting("setting-appearance-contrast")}
@@ -2249,6 +2251,34 @@ export function GeneralSettingsPanel() {
                 updateSettings({ t3teamActivityLabelsEnabled: Boolean(checked) })
               }
               aria-label="Live activity labels"
+            />
+          }
+        />
+
+        <SettingsRow
+          {...searchableSetting("project-scope-pills")}
+          description="Replace the sidebar's project dropdown with one-click pills for your recent projects. The pull request list follows the selected project, including a work-source project's linked repositories."
+          resetAction={
+            settings.t3teamProjectScopePillsEnabled !==
+            DEFAULT_UNIFIED_SETTINGS.t3teamProjectScopePillsEnabled ? (
+              <SettingResetButton
+                label="project scope pills"
+                onClick={() =>
+                  updateSettings({
+                    t3teamProjectScopePillsEnabled:
+                      DEFAULT_UNIFIED_SETTINGS.t3teamProjectScopePillsEnabled,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.t3teamProjectScopePillsEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ t3teamProjectScopePillsEnabled: Boolean(checked) })
+              }
+              aria-label="Project scope pills"
             />
           }
         />

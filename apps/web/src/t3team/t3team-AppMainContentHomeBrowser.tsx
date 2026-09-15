@@ -7,7 +7,6 @@ import {
   T3TEAM_FIRST_PROJECT_SETUP_REASON,
   type T3TeamSetupSurfaceReason,
 } from "~/t3team/t3team-setupSurfaceReason";
-import type { ProjectThread } from "~/t3team/t3team-types";
 
 export function AppMainContentHomeBrowser({
   onCreate,
@@ -17,7 +16,6 @@ export function AppMainContentHomeBrowser({
   showAside,
   shouldInsetDesktopHeader = false,
   homeChatProject,
-  homeChatProjectThreads,
   providers,
   isConnected,
   onOpenHomeThread,
@@ -30,7 +28,6 @@ export function AppMainContentHomeBrowser({
   showAside: boolean;
   shouldInsetDesktopHeader?: boolean;
   homeChatProject: ProjectShellProject | null;
-  homeChatProjectThreads: ProjectThread[];
   providers: ReadonlyArray<ServerProvider>;
   isConnected: boolean;
   onOpenHomeThread: (threadId: string) => void;
@@ -45,7 +42,6 @@ export function AppMainContentHomeBrowser({
       showAside={showAside}
       shouldInsetDesktopHeader={shouldInsetDesktopHeader}
       homeChatProject={homeChatProject}
-      homeChatProjectThreads={homeChatProjectThreads}
       providers={providers}
       isConnected={isConnected}
       onOpenHomeThread={onOpenHomeThread}
