@@ -57,31 +57,39 @@ export function DigestReviewerStack({ reviewers }: { reviewers: readonly DigestR
           </TooltipPopup>
         </Tooltip>
       ))}
-      {rest > 0 ? <span className="text-[10px] text-muted-foreground">+{rest}</span> : null}
+      {rest > 0 ? (
+        <span className="-translate-y-px text-[10px] leading-none text-muted-foreground">
+          +{rest}
+        </span>
+      ) : null}
     </span>
   );
 }
 
 /**
- * One PR: repo#number (linked), its live state, and who is reviewing it. A ticket's PRs render
- * as a wrapped row of these, newest first as the graph orders them.
+ * One PR: repo#number (linked), its live state, who is reviewing it, and pending comments — as a
+ * contained pill, matching the other-children subtask chips so both read as "compact ticket
+ * references". A ticket's PRs render as a wrapped row of these, newest first as the graph orders
+ * them.
  */
 export function DigestPrChip({ pr }: { pr: DigestChangeRequest }) {
   const state = PR_STATE[pr.state];
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <span className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-background/70 px-1.5 py-0.5 text-[11px] text-muted-foreground ring-1 ring-border/50 hover:ring-border">
       <a
         href={digestPrUrl(pr)}
-        className="font-mono text-[10.5px] text-muted-foreground hover:text-foreground hover:underline"
+        className="-translate-y-px font-mono text-[10.5px] leading-none text-muted-foreground hover:text-foreground hover:underline"
       >
         {pr.repo}#{pr.number}
       </a>
-      <Badge size="sm" variant={state.variant} className="text-[10px]">
+      <Badge size="sm" variant={state.variant} className="text-[10px] leading-none">
         {state.label}
       </Badge>
       <DigestReviewerStack reviewers={pr.reviewers} />
       {pr.unhandledComments && pr.unhandledComments > 0 ? (
-        <span className="text-[10px] text-muted-foreground">{pr.unhandledComments} comments</span>
+        <span className="-translate-y-px text-[10px] leading-none text-muted-foreground">
+          {pr.unhandledComments} comments
+        </span>
       ) : null}
     </span>
   );
@@ -90,7 +98,7 @@ export function DigestPrChip({ pr }: { pr: DigestChangeRequest }) {
 export function DigestPrChips({ prs }: { prs: readonly DigestChangeRequest[] }) {
   if (prs.length === 0) return null;
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
       {prs.map((pr) => (
         <DigestPrChip key={pr.id} pr={pr} />
       ))}

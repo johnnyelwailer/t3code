@@ -26,6 +26,15 @@ const meta = {
       minimum: 0,
       maximum: 48,
     },
+    burndownVariant: {
+      label: "Sprint burndown variant",
+      options: ["off", "chart", "sparkline"],
+      control: "select",
+    },
+    inAppOpen: {
+      label: "Route row clicks through onOpenTicket (demo)",
+      control: "boolean",
+    },
   },
 } satisfies Meta<typeof ProjectMyWorkDigestFixtureView>;
 
@@ -61,6 +70,28 @@ export const ProjectWorkflowFailed: Story = createStory(
   "Heuristic fallback stays up.",
 );
 export const ProjectEmpty: Story = createStory(emptyGraphScenario, "Nothing assigned.");
+export const SprintBurndownChart: Story = {
+  args: { scenario: heuristicArrangementScenario, nowOffsetHours: 0, burndownVariant: "chart" },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Sprint time axis as variant A: the personal burndown chart — ideal line, remaining anchored at today, day ticks.",
+      },
+    },
+  },
+};
+export const SprintBurndownSparkline: Story = {
+  args: { scenario: heuristicArrangementScenario, nowOffsetHours: 0, burndownVariant: "sparkline" },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          "Sprint time axis as variant B: the same data as a quiet sparkline strip in place of the thin bar.",
+      },
+    },
+  },
+};
 export const AllProjectsHeuristic: Story = createStory(
   allProjectsHeuristicScenario,
   "All projects, project chips on rows and group headers, no sprint bar.",

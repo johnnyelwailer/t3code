@@ -1,7 +1,10 @@
 import { useState } from "react";
 
 import { createProjectBacklogTestTicket as createTicket } from "~/t3team/t3team-projectBacklogTestUtils";
-import { ProjectMyWorkDigestHeader } from "~/t3team/t3team-ProjectMyWorkDigestHeader";
+import {
+  ProjectMyWorkDigestHeader,
+  type DigestBurndownVariant,
+} from "~/t3team/t3team-ProjectMyWorkDigestHeader";
 import {
   ProjectMyWorkDigestToolbar,
   type DigestArrangement,
@@ -719,13 +722,25 @@ export const allProjectsAgentScenario: ProjectMyWorkDigestFixtureScenario = {
 export function ProjectMyWorkDigestFixtureView({
   scenario,
   nowOffsetHours = 0,
+  burndownVariant = "off",
+  inAppOpen = false,
 }: {
   scenario: ProjectMyWorkDigestFixtureScenario;
   nowOffsetHours?: number;
+  burndownVariant?: DigestBurndownVariant;
+  /** Demo flag: routes row clicks through an onOpenTicket handler instead of window.open. */
+  inAppOpen?: boolean;
 }) {
   const [lens, setLens] = useState<ProjectMyWorkLens>("digest");
   const [arrangement, setArrangement] = useState<DigestArrangement>(scenario.arrangement);
+  const [openTicket, setOpenTicket] = useState<string | null>(null);
   const nowMs = DIGEST_FIXTURE_NOW_MS + nowOffsetHours * HOUR;
+  const onOpenTicket = inAppOpen
+    ? (ticketId: string) => {
+        setOpenTicket(ticketId);
+        window.setTimeout(() => setOpenTicket(null), 1600);
+      }
+    : undefined;
   const basePlan =
     arrangement.state === "live" || arrangement.state === "paused"
       ? arrangement.plan
@@ -768,8 +783,17 @@ export function ProjectMyWorkDigestFixtureView({
         </div>
         {lens === "digest" ? (
           <>
-            <ProjectMyWorkDigestHeader graph={scenario.graph} nowMs={nowMs} />
-            <ProjectMyWorkDigestView plan={plan} graph={scenario.graph} nowMs={nowMs} />
+            <ProjectMyWorkDigestHeader
+              graph={scenario.graph}
+              nowMs={nowMs}
+              burndownVariant={burndownVariant}
+            />
+            <ProjectMyWorkDigestView
+              plan={plan}
+              graph={scenario.graph}
+              nowMs={nowMs}
+              onOpenTicket={onOpenTicket}
+            />
           </>
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -778,6 +802,11 @@ export function ProjectMyWorkDigestFixtureView({
           </p>
         )}
       </div>
+      {openTicket ? (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background shadow-lg">
+          demo: onOpenTicket("{openTicket}")
+        </div>
+      ) : null}
     </div>
   );
 }

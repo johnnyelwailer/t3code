@@ -15,6 +15,7 @@ type LaneProps = {
   graph: DigestGraph;
   ticketsById: ReadonlyMap<string, ProjectTicket>;
   nowMs: number;
+  onOpenTicket?: ((ticketId: string) => void) | undefined;
 };
 
 function SideSection({
@@ -22,6 +23,7 @@ function SideSection({
   graph,
   ticketsById,
   nowMs,
+  onOpenTicket,
 }: LaneProps & { section: DigestSection }) {
   return (
     <section className="space-y-2">
@@ -40,6 +42,7 @@ function SideSection({
               why={item.why}
               graph={graph}
               nowMs={nowMs}
+              onOpenTicket={onOpenTicket}
             />
           ) : null;
         })}
@@ -82,12 +85,13 @@ function MainSection({
   graph,
   ticketsById,
   nowMs,
+  onOpenTicket,
 }: LaneProps & { section: DigestSection }) {
   return (
     <section className="space-y-2">
       <DigestKicker count={section.items.length}>{section.heading}</DigestKicker>
       {section.hint ? <p className="text-[11.5px] text-muted-foreground">{section.hint}</p> : null}
-      <div className="space-y-3">
+      <div className="grid gap-3 2xl:grid-cols-2">
         {groupByParent(section, graph, ticketsById).map((group) => {
           if (!group.parent) {
             return (
@@ -102,6 +106,7 @@ function MainSection({
                       why={item.why}
                       graph={graph}
                       nowMs={nowMs}
+                      onOpenTicket={onOpenTicket}
                     />
                   );
                 })}
@@ -116,6 +121,7 @@ function MainSection({
               nowMs={nowMs}
               otherChildren={group.otherChildren}
               viewerName={graph.viewer.name}
+              onOpenTicket={onOpenTicket}
             >
               {group.items.map((item) => {
                 const ticket = ticketsById.get(item.ticketId);
@@ -127,6 +133,7 @@ function MainSection({
                     why={item.why}
                     graph={graph}
                     nowMs={nowMs}
+                    onOpenTicket={onOpenTicket}
                   />
                 );
               })}
@@ -143,6 +150,7 @@ function FooterSection({
   graph,
   ticketsById,
   nowMs,
+  onOpenTicket,
 }: LaneProps & { section: DigestSection }) {
   const [open, setOpen] = useState(false);
   return (
@@ -170,6 +178,7 @@ function FooterSection({
                   why={item.why}
                   graph={graph}
                   nowMs={nowMs}
+                  onOpenTicket={onOpenTicket}
                 />
               ) : null;
             })
@@ -183,13 +192,15 @@ export function ProjectMyWorkDigestView({
   plan,
   graph,
   nowMs,
+  onOpenTicket,
 }: {
   plan: ResolvedDigestPlan;
   graph: DigestGraph;
   nowMs: number;
+  onOpenTicket?: ((ticketId: string) => void) | undefined;
 }) {
   const ticketsById = new Map(graph.tickets.map((ticket) => [ticket.id, ticket]));
-  const lane = { graph, ticketsById, nowMs };
+  const lane = { graph, ticketsById, nowMs, onOpenTicket };
   if (plan.sections.length === 0) {
     return (
       <T3SurfacePanel
@@ -204,7 +215,7 @@ export function ProjectMyWorkDigestView({
   const main = plan.sections.filter((s) => s.placement === "main");
   const footer = plan.sections.filter((s) => s.placement === "footer");
   return (
-    <div className="space-y-8">
+    <div className="mx-auto max-w-[120rem] space-y-8">
       <div className="grid gap-x-6 gap-y-8 sm:gap-x-10 xl:grid-cols-[minmax(16rem,2fr)_minmax(0,5fr)]">
         <div className="space-y-8">
           {side.map((s) => (

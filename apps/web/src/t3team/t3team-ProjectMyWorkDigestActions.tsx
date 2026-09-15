@@ -24,8 +24,9 @@ function DigestActionPill({ action }: { action: DigestItemAction }) {
 
 /**
  * The row's next-step cluster, pinned to the row's bottom-right corner and revealed on hover.
- * Absolutely positioned, so it never shifts the row's layout. Fades and slides in instead of
- * popping; always visible on small screens, which have no hover.
+ * The agent dots live on the left-side PR row, so this corner is theirs alone. Absolutely
+ * positioned, so it never shifts the row's layout. Fades and slides in instead of popping;
+ * always visible on small screens, which have no hover.
  */
 export function DigestItemActions({ actions }: { actions: readonly DigestItemAction[] }) {
   if (actions.length === 0) return null;

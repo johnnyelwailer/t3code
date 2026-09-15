@@ -1,4 +1,14 @@
 import type { DigestGraph } from "~/t3team/t3team-projectMyWorkDigestPlan";
+import {
+  DigestBurndownChart,
+  DigestBurndownSparkline,
+} from "~/t3team/t3team-ProjectMyWorkDigestBurndown";
+
+/**
+ * How the sprint time axis is drawn: the 4px elapsed-time bar of today, the personal burndown
+ * chart, or its sparkline form. The real app feeds this from the Beta feature flag.
+ */
+export type DigestBurndownVariant = "off" | "chart" | "sparkline";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -7,7 +17,15 @@ function formatDay(iso: string): string {
   return `${String(date.getUTCDate()).padStart(2, "0")}.${String(date.getUTCMonth() + 1).padStart(2, "0")}.`;
 }
 
-export function ProjectMyWorkDigestHeader({ graph, nowMs }: { graph: DigestGraph; nowMs: number }) {
+export function ProjectMyWorkDigestHeader({
+  graph,
+  nowMs,
+  burndownVariant = "off",
+}: {
+  graph: DigestGraph;
+  nowMs: number;
+  burndownVariant?: DigestBurndownVariant;
+}) {
   const sprint = graph.sprint;
   const scopeLabel =
     graph.scope === "all" ? `All projects · ${graph.projects.length}` : graph.projects[0]?.name;
@@ -66,16 +84,22 @@ export function ProjectMyWorkDigestHeader({ graph, nowMs }: { graph: DigestGraph
         </div>
       </div>
       <div className="space-y-1.5">
-        <div className="relative h-1 rounded-full bg-border">
-          <div
-            className="absolute inset-y-0 left-0 rounded-full bg-foreground/70"
-            style={{ width: `${pct}%` }}
-          />
-          <div
-            className="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background bg-foreground"
-            style={{ left: `${pct}%` }}
-          />
-        </div>
+        {burndownVariant === "chart" ? (
+          <DigestBurndownChart graph={graph} nowMs={nowMs} />
+        ) : burndownVariant === "sparkline" ? (
+          <DigestBurndownSparkline graph={graph} nowMs={nowMs} />
+        ) : (
+          <div className="relative h-1 rounded-full bg-border">
+            <div
+              className="absolute inset-y-0 left-0 rounded-full bg-foreground/70"
+              style={{ width: `${pct}%` }}
+            />
+            <div
+              className="absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background bg-foreground"
+              style={{ left: `${pct}%` }}
+            />
+          </div>
+        )}
         <div className="flex justify-between text-[10.5px] text-muted-foreground/80">
           <span>{formatDay(sprint.startDate)}</span>
           <span>
