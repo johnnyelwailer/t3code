@@ -71,10 +71,22 @@ export function payloadToDigestGraph(input: {
   const indexByProject: Array<{ index: TicketIndex }> = [];
   let sprint: DigestSprint | undefined;
 
+  // The server answers one section per request entry, in order; the app project behind an
+  // entry is looked up by id (`appProjectId`), never by position, so a filtered project list
+  // cannot shift a section onto the wrong project.
+  const projectForEntry = (entry: MyWorkDigestProjectInput | undefined) =>
+    entry === undefined
+      ? undefined
+      : input.projects.find((project) => project.id === entry.appProjectId);
+
   input.payload.projects.forEach((data, position) => {
     const entry = input.entries[position];
-    const project = input.projects[position];
-    if (entry === undefined || project === undefined) return;
+    const project = projectForEntry(entry);
+    if (entry === undefined || project === undefined) {
+      // Keep the per-position index aligned with the payload so later joins stay on their section.
+      indexByProject.push({ index: new Map() });
+      return;
+    }
 
     const tickets = data.tickets.map((ref) =>
       resourceRefToProjectTicket(
@@ -198,9 +210,20 @@ export function payloadToDigestGraph(input: {
     }
   });
 
+  // Tickets carry the APP project id (`resourceRefToProjectTicket(project.id, …)`), so the
+  // graph's project list must be keyed the same way — the server's entry is keyed by the Jira
+  // project key, and a chip looking that up by app id would fall back to printing the raw uuid.
+  const projects = input.payload.projects.map((data, position) => {
+    const entry = input.entries[position];
+    const project = projectForEntry(entry);
+    const id = project?.id ?? entry?.appProjectId ?? data.project.id;
+    const title = project?.title.trim() ?? entry?.name?.trim() ?? "";
+    return { id, name: title !== "" ? title : data.project.name };
+  });
+
   return {
     scope: input.payload.scope,
-    projects: input.payload.projects.map((data) => data.project),
+    projects,
     viewer: input.viewer,
     ...(sprint !== undefined ? { sprint } : {}),
     ...(burndown !== undefined ? { burndown } : {}),

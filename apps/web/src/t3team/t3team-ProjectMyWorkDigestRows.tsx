@@ -119,9 +119,11 @@ export function DigestItemRow({
         >
           {ticket.ref.displayId}
         </a>
+        {/* flex-1 + min-w-0: the title takes the slack and truncates, instead of collapsing to
+            nothing when the unshrinkable key / status / people cells crowd a narrow card. */}
         <a
           href={ticket.ref.url}
-          className="min-w-0 truncate text-left text-[13px] font-medium leading-5 hover:underline"
+          className="min-w-0 flex-1 truncate text-left text-[13px] font-medium leading-5 hover:underline"
           onClick={onAnchorClick}
         >
           {ticket.ref.title}
