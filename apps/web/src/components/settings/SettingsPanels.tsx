@@ -140,6 +140,7 @@ import {
   type ProviderUpdateCandidate,
 } from "../ProviderUpdateLaunchNotification.logic";
 import { AgentInstructionsSettingRow } from "./t3team-AgentInstructionsSetting";
+import { T3TeamBetaSettings } from "./t3team-BetaSettings";
 import { ProviderInstanceCard } from "./ProviderInstanceCard";
 import { DRIVER_OPTIONS, getDriverOption } from "./providerDriverMeta";
 import { T3TeamProjectSetupSetting } from "./t3team-ProjectSetupSetting";
@@ -1124,6 +1125,7 @@ export function AppearanceSettingsPanel() {
       <SettingsSection id="appearance-interface" title="Interface">
         {/* T3Team settings insertion seam: keep this mount stable to minimize merge conflicts. */}
         <T3TeamProjectSetupSetting />
+        <T3TeamBetaSettings />
 
         <SettingsRow
           {...searchableSetting("setting-appearance-contrast")}

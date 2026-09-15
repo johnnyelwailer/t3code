@@ -15,6 +15,11 @@ import {
   buildProjectMyWorkTableRows,
   renderProjectMyWorkTicketExtra,
 } from "~/t3team/t3team-projectMyWorkContentHelpers";
+import { ProjectMyWorkDigestContent } from "~/t3team/t3team-ProjectMyWorkDigestContent";
+import {
+  ProjectMyWorkViewSwitch,
+  type ProjectMyWorkLens,
+} from "~/t3team/t3team-ProjectMyWorkViewSwitch";
 import type {
   ProjectMyWorkTableSortBy,
   ProjectMyWorkTableSortDirection,
@@ -32,6 +37,8 @@ export function ProjectMyWorkContent({
   assignedWorkItems,
   filteredWorkItems,
   visibleHierarchy,
+  lens,
+  onLensChange,
   viewMode,
   groupMode,
   tableSortBy,
@@ -51,6 +58,8 @@ export function ProjectMyWorkContent({
   assignedWorkItems: readonly ProjectTicket[];
   filteredWorkItems: readonly ProjectTicket[];
   visibleHierarchy: ProjectMyWorkVisibleHierarchy;
+  lens: ProjectMyWorkLens;
+  onLensChange: (value: ProjectMyWorkLens) => void;
   viewMode: "table" | "list" | "grid" | "kanban";
   groupMode: "flat" | "hierarchy";
   tableSortBy: ProjectMyWorkTableSortBy;
@@ -83,77 +92,96 @@ export function ProjectMyWorkContent({
   const renderTicketExtra = (ticket: ProjectTicket, compact?: boolean) =>
     renderProjectMyWorkTicketExtra({ ticket, compact });
 
-  if (contentState.kind === "loading") {
-    return <ProjectMyWorkLoadingState />;
-  }
+  const renderBody = () => {
+    // The digest lens has its own server-aggregated data and its own loading/empty states, so it
+    // must not wait on (or be hidden by) the legacy assigned-items fetch.
+    if (lens === "digest") {
+      return <ProjectMyWorkDigestContent project={project} onOpenTicket={onOpenTicket} />;
+    }
 
-  if (contentState.kind === "empty") {
-    return (
-      <T3SurfacePanel tone="dashed" className="px-4 py-8 text-sm text-muted-foreground">
-        {contentState.message}
-      </T3SurfacePanel>
-    );
-  }
+    if (contentState.kind === "loading") {
+      return <ProjectMyWorkLoadingState />;
+    }
 
-  if (viewMode === "table") {
+    if (contentState.kind === "empty") {
+      return (
+        <T3SurfacePanel tone="dashed" className="px-4 py-8 text-sm text-muted-foreground">
+          {contentState.message}
+        </T3SurfacePanel>
+      );
+    }
+
+    if (lens === "board" || viewMode === "kanban") {
+      return (
+        <ProjectDashboardKanban
+          kanbanColumns={kanbanColumns}
+          allTickets={tickets}
+          isHierarchyMode={groupMode === "hierarchy"}
+          parentChildGroups={parentChildGroups}
+          {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
+          projectId={project.id}
+          onOpenTicket={onOpenTicket}
+          onTicketContextMenu={openTicketAgentContextMenu}
+          renderTicketExtra={renderTicketExtra}
+          {...(onMoveTicketToStatus ? { onMoveTicketToStatus } : {})}
+        />
+      );
+    }
+
+    if (viewMode === "table") {
+      return (
+        <ProjectMyWorkTableView
+          projectId={project.id}
+          rows={tableRows}
+          sortBy={tableSortBy}
+          sortDirection={tableSortDirection}
+          onSortByChange={onTableSortByChange}
+          onSortDirectionChange={onTableSortDirectionChange}
+          onTicketContextMenu={openTicketAgentContextMenu}
+          onOpenTicket={onOpenTicket}
+        />
+      );
+    }
+
+    if (isHierarchyMode) {
+      return (
+        <ProjectMyWorkHierarchyView
+          projectId={project.id}
+          viewMode={viewMode === "grid" ? "grid" : "list"}
+          hierarchy={visibleHierarchy.hierarchy}
+          contextByTicketId={visibleHierarchy.contextByTicketId}
+          matchedTicketIds={visibleHierarchy.matchedTicketIds}
+          {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
+          onTicketContextMenu={openTicketAgentContextMenu}
+          getTicketAgentContext={getTicketAgentContext}
+          onOpenTicket={onOpenTicket}
+          renderTicketExtra={(ticket, _isContextOnly, compact) =>
+            renderTicketExtra(ticket, compact)
+          }
+        />
+      );
+    }
+
     return (
-      <ProjectMyWorkTableView
+      <ProjectMyWorkSimpleViews
+        viewMode={viewMode === "list" ? "list" : "grid"}
         projectId={project.id}
-        rows={tableRows}
-        sortBy={tableSortBy}
-        sortDirection={tableSortDirection}
-        onSortByChange={onTableSortByChange}
-        onSortDirectionChange={onTableSortDirectionChange}
-        onTicketContextMenu={openTicketAgentContextMenu}
-        onOpenTicket={onOpenTicket}
-      />
-    );
-  }
-
-  if (viewMode === "kanban") {
-    return (
-      <ProjectDashboardKanban
-        kanbanColumns={kanbanColumns}
-        allTickets={tickets}
-        isHierarchyMode={groupMode === "hierarchy"}
-        parentChildGroups={parentChildGroups}
-        {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
-        projectId={project.id}
-        onOpenTicket={onOpenTicket}
-        onTicketContextMenu={openTicketAgentContextMenu}
-        renderTicketExtra={renderTicketExtra}
-        {...(onMoveTicketToStatus ? { onMoveTicketToStatus } : {})}
-      />
-    );
-  }
-
-  if (isHierarchyMode) {
-    return (
-      <ProjectMyWorkHierarchyView
-        projectId={project.id}
-        viewMode={viewMode === "grid" ? "grid" : "list"}
-        hierarchy={visibleHierarchy.hierarchy}
-        contextByTicketId={visibleHierarchy.contextByTicketId}
-        matchedTicketIds={visibleHierarchy.matchedTicketIds}
-        {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
-        onTicketContextMenu={openTicketAgentContextMenu}
+        filteredWorkItems={filteredWorkItems}
         getTicketAgentContext={getTicketAgentContext}
+        onTicketContextMenu={openTicketAgentContextMenu}
+        jiraLastCheckedAt={jiraLastCheckedAt}
+        renderTicketExtra={(ticket) => renderTicketExtra(ticket)}
         onOpenTicket={onOpenTicket}
-        renderTicketExtra={(ticket, _isContextOnly, compact) => renderTicketExtra(ticket, compact)}
       />
     );
-  }
+  };
 
   return (
-    <ProjectMyWorkSimpleViews
-      viewMode={viewMode === "list" ? "list" : "grid"}
-      projectId={project.id}
-      filteredWorkItems={filteredWorkItems}
-      getTicketAgentContext={getTicketAgentContext}
-      onTicketContextMenu={openTicketAgentContextMenu}
-      jiraLastCheckedAt={jiraLastCheckedAt}
-      renderTicketExtra={(ticket) => renderTicketExtra(ticket)}
-      onOpenTicket={onOpenTicket}
-    />
+    <div className="space-y-4">
+      <div>
+        <ProjectMyWorkViewSwitch lens={lens} onLensChange={onLensChange} />
+      </div>
+      {renderBody()}
+    </div>
   );
 }

@@ -629,6 +629,28 @@ function describeAccountError(
   return `${siteUrl}: ${String(cause)}`;
 }
 
+/** The provider's mirror walk already requests `issuelinks`; surface the outward direction. */
+function readJiraOutwardIssueLinks(jiraIssue: JiraIssue): Array<{
+  readonly outward: string;
+  readonly key: string;
+}> {
+  const raw = jiraIssue.fields["issuelinks"];
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: Array<{ outward: string; key: string }> = [];
+  for (const link of raw as ReadonlyArray<Record<string, unknown>>) {
+    if (link === null || typeof link !== "object") continue;
+    const type = link["type"] as { readonly outward?: unknown } | null | undefined;
+    const outward = typeof type?.outward === "string" ? type.outward.trim() : "";
+    const target = link["outwardIssue"] as { readonly key?: unknown } | null | undefined;
+    const key = typeof target?.key === "string" ? target.key.trim() : "";
+    if (outward.length === 0 || key.length === 0 || seen.has(`${outward}|${key}`)) continue;
+    seen.add(`${outward}|${key}`);
+    out.push({ outward, key });
+  }
+  return out;
+}
+
 export class AtlassianIntegrationProvider implements IntegrationProvider {
   id = "atlassian";
   kind = "atlassian";
@@ -1007,9 +1029,47 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
           item.sprintCompleteDate = sprint.completeDate;
         }
       }
+      const links = readJiraOutwardIssueLinks(jiraIssue);
+      if (links.length > 0) {
+        item.links = links;
+      }
 
       return item as typeof normalized;
     }
+  }
+
+  /**
+   * One issue's status history from Jira's changelog: a single `getIssue` read
+   * with `expand=changelog` (the only caller that asks for the expansion),
+   * normalized to oldest-first status transitions. The digest burndown
+   * backfill is the consumer; everything else reads statuses from the mirror.
+   */
+  async listIssueStatusChangelog(input: {
+    account: IntegrationAccountRef;
+    issueIdOrKey: string;
+  }): Promise<
+    ReadonlyArray<{
+      readonly from: string | null;
+      readonly to: string;
+      readonly atMs: number;
+    }>
+  > {
+    const entry = this.getClientForAccount(input.account.id) ?? this.getDefaultClient();
+    if (!entry) return [];
+    const issue = await entry.client.getIssue(input.issueIdOrKey, [], { expandChangelog: true });
+    const out: Array<{ from: string | null; to: string; atMs: number }> = [];
+    for (const history of issue.changelog?.histories ?? []) {
+      const atMs = Date.parse(history.created ?? "");
+      if (!Number.isFinite(atMs)) continue;
+      for (const item of history.items ?? []) {
+        if ((item.field ?? "").toLowerCase() !== "status") continue;
+        const to = item.toString ?? (typeof item.to === "string" ? item.to : null);
+        if (to === null || to === "") continue;
+        const from = item.fromString ?? (typeof item.from === "string" ? item.from : null);
+        out.push({ from, to, atMs });
+      }
+    }
+    return out.toSorted((a, b) => a.atMs - b.atMs);
   }
 
   async listProjectStatuses(input: {

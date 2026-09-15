@@ -13,11 +13,27 @@
  * Each section is a read-only slice built on the fetch-only hook (see
  * `t3team-AllProjectsMyWorkSection.tsx` for why it does NOT reuse `ProjectDashboardMyWorkView`).
  */
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 
+import { useNowMinute } from "~/hooks/useNowMinute";
+
+import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
+import { useProjectDashboardMyWorkState } from "~/t3team/t3team-projectDashboardMyWorkState";
+import {
+  buildHeuristicDigestPlan,
+  resolveDigestPlan,
+} from "~/t3team/t3team-projectMyWorkDigestPlan";
+import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
 import { AllProjectsMyWorkSection } from "~/t3team/t3team-AllProjectsMyWorkSection";
+import { ProjectMyWorkDigestView } from "~/t3team/t3team-ProjectMyWorkDigestView";
+import {
+  ProjectMyWorkViewSwitch,
+  type ProjectMyWorkLens,
+} from "~/t3team/t3team-ProjectMyWorkViewSwitch";
+import { ProjectMyWorkLoadingState } from "~/t3team/t3team-projectMyWorkContentState";
+import { useT3TeamBetaFlags } from "~/t3team/t3team-betaFlags";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 /**
@@ -35,13 +51,36 @@ export function AllProjectsMyWorkView({
 }: {
   onOpenTicket: (projectId: string, ticketId: string) => void;
 }) {
-  // Reads the store directly rather than taking projects as a prop: this is a leaf surface, and
-  // threading it through the shell for one view is the kind of plumbing that makes the next
-  // upstream merge harder. `allProjects`, not `projects`: the latter omits loose workspace
-  // projects, which can be Jira-bound and would then be missing from the roll-up while the sidebar
-  // still lists them.
   const { allProjects } = useProjectStore();
+  const { flags } = useT3TeamBetaFlags();
   const boundProjects = useMemo(() => selectBoundProjects(allProjects), [allProjects]);
+  const { state, setState } = useProjectDashboardMyWorkState("all");
+  const lens = state.lens;
+  const setLens = useCallback(
+    (value: ProjectMyWorkLens) => setState((current) => ({ ...current, lens: value })),
+    [setState],
+  );
+
+  // The digest lens reads one server-aggregated graph across every bound project.
+  const {
+    graph: digestGraph,
+    status: digestStatus,
+    error: digestError,
+    viewerUnresolved,
+  } = useMyWorkDigestGraph({
+    projects: boundProjects,
+    scope: "all",
+    enabled: lens === "digest",
+  });
+  // Minute-granular clock shared with the rest of the app: stable within a render, re-plans on tick.
+  // useNowMinute yields UTC wall-clock text without a zone suffix; parse it as UTC.
+  const nowMs = Date.parse(`${useNowMinute()}Z`);
+  const digestPlan = useMemo(() => {
+    if (!digestGraph) {
+      return null;
+    }
+    return resolveDigestPlan(buildHeuristicDigestPlan(digestGraph, nowMs), digestGraph, nowMs);
+  }, [digestGraph, nowMs]);
 
   if (boundProjects.length === 0) {
     return (
@@ -54,16 +93,80 @@ export function AllProjectsMyWorkView({
     );
   }
 
+  const renderDigest = () => {
+    // First paint shows a loading state instead of a misleading empty one.
+    if (digestStatus === "loading" && !digestGraph) {
+      return <ProjectMyWorkLoadingState />;
+    }
+    if (digestStatus === "error") {
+      return (
+        <T3SurfacePanel
+          tone="dashed"
+          className="px-6 py-10 text-center text-sm text-muted-foreground"
+        >
+          Could not load the digest view.
+          {digestError ? (
+            <span className="block pt-1 text-xs opacity-80">{digestError}</span>
+          ) : null}
+        </T3SurfacePanel>
+      );
+    }
+    if (viewerUnresolved && (digestGraph?.tickets.length ?? 0) === 0) {
+      return (
+        <T3SurfacePanel
+          tone="dashed"
+          className="px-6 py-10 text-center text-sm text-muted-foreground"
+        >
+          Sign in to Jira under Settings → Connected tools to load your work.
+        </T3SurfacePanel>
+      );
+    }
+    if (!digestGraph || !digestPlan) {
+      return (
+        <T3SurfacePanel
+          tone="dashed"
+          className="px-6 py-10 text-center text-sm text-muted-foreground"
+        >
+          Nothing needs you
+        </T3SurfacePanel>
+      );
+    }
+    // TODO(digest-nav): rows open the ticket URL today; route through onOpenTicket once the digest
+    // rows accept an in-app handler.
+    return (
+      <ProjectMyWorkDigestView
+        plan={digestPlan}
+        graph={digestGraph}
+        nowMs={nowMs}
+        burndownVariant={flags.digestBurndownVariant}
+        onOpenTicket={
+          // Beta flag: rows open the ticket in-app (each ticket knows its project).
+          flags.digestRowNavigation === "in-app"
+            ? (ticketId: string) => {
+                const ticket = digestGraph.tickets.find((entry) => entry.id === ticketId);
+                if (ticket) onOpenTicket(ticket.projectId, ticketId);
+              }
+            : undefined
+        }
+      />
+    );
+  };
+
   return (
     <ScrollArea className="h-full min-h-0 flex-1">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 p-4 sm:p-6">
-        {boundProjects.map((project) => (
-          <AllProjectsMyWorkSection
-            key={project.id}
-            project={project}
-            onOpenTicket={onOpenTicket}
-          />
-        ))}
+        <div>
+          <ProjectMyWorkViewSwitch lens={lens} onLensChange={setLens} />
+        </div>
+        {lens === "digest"
+          ? renderDigest()
+          : boundProjects.map((project) => (
+              <AllProjectsMyWorkSection
+                key={project.id}
+                project={project}
+                onOpenTicket={onOpenTicket}
+              />
+            ))}
       </div>
     </ScrollArea>
   );

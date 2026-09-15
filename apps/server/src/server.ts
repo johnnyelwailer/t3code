@@ -187,6 +187,7 @@ import { t3teamProjectWorkspaceBootstrapRouteLayer } from "./t3team-project-repo
 import { t3teamThreadPlacementRouteLayer } from "./t3team-thread-placement-routes.ts";
 import { t3teamThreadToolContextRouteLayer } from "./t3team-thread-tool-context-routes.ts";
 import { t3teamThreadForkRouteLayer } from "./t3team-thread-fork-routes.ts";
+import { t3teamMyWorkDigestRouteLayer } from "./t3team-myworkDigest-routes.ts";
 import { T3TeamThreadToolContextStoreLive } from "./t3team-threadToolContextStore.ts";
 import { t3teamWidgetToolCallRouteLayer } from "./t3team-widget-tool-call-route.ts";
 import { T3TeamWidgetRegistryLive } from "./t3team-widgetRegistry.ts";
@@ -733,6 +734,7 @@ export const makeRoutesLayer = Layer.mergeAll(
     t3teamThreadDraftMutationStatusRouteLayer,
     t3teamThreadWorkflowResolveInputRouteLayer,
     t3teamThreadToolContextRouteLayer,
+    t3teamMyWorkDigestRouteLayer,
     t3teamWidgetToolCallRouteLayer,
     Layer.mergeAll(
       t3teamThreadProviderHoldControlRouteLayer,
