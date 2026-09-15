@@ -53,7 +53,7 @@ export function WorkItemIssueRow({
   const content = (
     <>
       {relationLabel ? (
-        <span className="w-full shrink-0 text-[0.6875rem] text-muted-foreground @md/workitem:w-24">
+        <span className="shrink-0 text-[0.6875rem] text-muted-foreground @md/issue-list:w-24">
           {relationLabel}
         </span>
       ) : null}
@@ -90,8 +90,10 @@ export function WorkItemIssueRow({
         of drifting with each row's title and status-name length. Every row uses the same template,
         which is what makes them align — a flex row cannot, because each row sizes independently.
 
-        The widths step up with the container, and at the narrowest the assignee keeps its avatar but
-        drops the name rather than truncating it to a couple of letters.
+        The widths step up with the list's own width (`@container/issue-list` on the card), not the
+        wider `workitem` detail container: at the two-column split this lane is ~26rem, so keying off
+        the detail would keep the widest columns on and overflow the card. At the narrowest the
+        assignee keeps its avatar but drops the name rather than truncating it to a couple of letters.
       */}
       <span
         className={cn(
@@ -103,10 +105,10 @@ export function WorkItemIssueRow({
             shrinks to its content, so hiding the name shrank the container and the name could never
             reappear. Elsewhere, such as the details panel, the name simply always shows.
           */
-          "[&_[data-slot=person-name]]:hidden @2xl/workitem:[&_[data-slot=person-name]]:block",
+          "[&_[data-slot=person-name]]:hidden @2xl/issue-list:[&_[data-slot=person-name]]:block",
           "grid-cols-[2rem_5.5rem_1.75rem]",
-          "@md/workitem:grid-cols-[2.5rem_7rem_2rem]",
-          "@2xl/workitem:grid-cols-[2.5rem_7rem_9.5rem]",
+          "@md/issue-list:grid-cols-[2.5rem_7rem_2rem]",
+          "@2xl/issue-list:grid-cols-[2.5rem_7rem_9.5rem]",
         )}
       >
         <span className="justify-self-end">
@@ -189,7 +191,9 @@ export function WorkItemIssueList({
   return (
     <div
       className={cn(
-        "divide-y divide-border/50 overflow-hidden rounded-lg border border-border/70 bg-card/30",
+        // A named container so each row steps its columns to THIS card's width, not the wider
+        // `workitem` detail container — otherwise the widest variant overflows the lane at the split.
+        "@container/issue-list divide-y divide-border/50 overflow-hidden rounded-lg border border-border/70 bg-card/30",
         className,
       )}
     >
