@@ -7,6 +7,7 @@ import { t3SurfaceBackdrops } from "~/t3team/components/ui/t3team-surface";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "~/t3team/components/ui/t3team-menu";
 import { AppProjectIcon } from "~/t3team/t3team-AppStatusBits";
 import { useProjectDashboardModeState } from "~/t3team/hooks/t3team-useProjectDashboardModeState";
+import { useProjectDashboardMyWorkState } from "~/t3team/t3team-projectDashboardMyWorkState";
 import { getT3TeamMainContentHeaderClassName } from "~/t3team/t3team-mainContentHeader";
 import { ProjectBindingRepairBanner } from "~/t3team/t3team-ProjectBindingRepairBanner";
 import { ProjectDashboardBacklogView } from "~/t3team/t3team-ProjectDashboardBacklogView";
@@ -30,6 +31,12 @@ export function ProjectDashboard({
 }) {
   const { state: dashboardState } = useProjectDashboardModeState(project.id);
   const dashboardMode = dashboardState.dashboardMode;
+  const { state: myWorkState } = useProjectDashboardMyWorkState(project.id);
+  // The digest lens spans the full pane; the other My Work lenses keep the centered column.
+  const myWorkContentClassName =
+    myWorkState.lens === "digest"
+      ? "flex h-full min-h-0 w-full flex-col p-4 sm:p-6"
+      : "mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col p-4 sm:p-6";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -68,7 +75,7 @@ export function ProjectDashboard({
           <ProjectDashboardBacklogView project={project} onOpenTicket={onOpenTicket} />
         ) : (
           <ScrollArea className="h-full min-h-0 flex-1">
-            <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col p-4 sm:p-6">
+            <div className={myWorkContentClassName}>
               <ProjectDashboardMyWorkView
                 project={project}
                 fallbackTickets={fallbackTickets}
