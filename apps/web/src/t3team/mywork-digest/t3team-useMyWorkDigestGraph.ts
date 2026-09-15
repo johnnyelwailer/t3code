@@ -11,7 +11,6 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ProjectShellProject } from "@t3tools/project-context";
 
 import {
   readMyWorkDigestPollFn,
@@ -28,30 +27,17 @@ import {
 import { readCachedAtlassianCurrentUserDisplayName } from "~/t3team/hooks/t3team-useAtlassianCurrentUserDisplayName";
 import { payloadToDigestGraph, type DigestViewer } from "./t3team-digestGraphMappers";
 import { readLastVisitAt, writeLastVisitAt } from "./t3team-digestLastVisit";
+import { toDigestProjectEntries } from "./t3team-digestProjectEntries";
 import type { DigestGraph } from "~/t3team/t3team-projectMyWorkDigestPlan";
 
-export type UseMyWorkDigestGraphInput = {
-  /** The scoped project list: one entry for scope "project", all for "all". */
-  readonly projects: ReadonlyArray<ProjectShellProject>;
-  readonly scope?: MyWorkDigestScope;
-  /** The viewer the plan heuristics match `assignee` against. */
-  readonly viewer?: { readonly name?: string; readonly role?: string };
-  readonly enabled?: boolean;
-};
-
-export type UseMyWorkDigestGraphResult = {
-  readonly graph: DigestGraph | null;
-  readonly status: "loading" | "ready" | "error";
-  readonly error?: string;
-  /** True when the server had no Jira identity for a project (stale or missing token). */
-  readonly viewerUnresolved: boolean;
-  /**
-   * The server dropped a dead Jira refresh token: the view should offer a sign-in affordance
-   * instead of the error string, and reload once the user signs back in.
-   */
-  readonly sessionExpired: boolean;
-  readonly reload: () => void;
-};
+export type {
+  UseMyWorkDigestGraphInput,
+  UseMyWorkDigestGraphResult,
+} from "./t3team-useMyWorkDigestGraphTypes";
+import type {
+  UseMyWorkDigestGraphInput,
+  UseMyWorkDigestGraphResult,
+} from "./t3team-useMyWorkDigestGraphTypes";
 
 export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWorkDigestGraphResult {
   const backend = useBackend();
@@ -65,30 +51,7 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
   const scope = input.scope ?? "project";
   const enabled = input.enabled ?? true;
 
-  const entries = useMemo(
-    () =>
-      projects
-        .filter(
-          (project): project is ProjectShellProject =>
-            project.source?.provider === "atlassian" &&
-            typeof project.source.externalProjectId === "string" &&
-            project.source.externalProjectId !== "" &&
-            typeof project.source.accountId === "string",
-        )
-        .map((project) => {
-          const entry: MyWorkDigestProjectInput = {
-            account: {
-              id: project.source.accountId as string,
-              provider: project.source.provider,
-            },
-            externalProjectId: project.source.externalProjectId as string,
-            appProjectId: project.id,
-            name: project.title,
-          };
-          return entry;
-        }),
-    [projects],
-  );
+  const entries = useMemo(() => toDigestProjectEntries(projects), [projects]);
 
   const scopeKey = entries
     .map((entry) => `${entry.account.id}:${entry.externalProjectId}`)
