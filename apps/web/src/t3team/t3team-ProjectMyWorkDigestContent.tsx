@@ -10,6 +10,7 @@ import { useNowMinute } from "~/hooks/useNowMinute";
 
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { JiraSessionExpiredPanel } from "~/t3team/components/t3team-JiraSessionExpiredPanel";
+import { JiraSignInPanel } from "~/t3team/components/t3team-JiraSignInPanel";
 import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
 import { ProjectMyWorkDigestErrorState } from "~/t3team/t3team-ProjectMyWorkDigestErrorState";
 import { ProjectMyWorkDigestView } from "~/t3team/t3team-ProjectMyWorkDigestView";
@@ -61,11 +62,7 @@ export function ProjectMyWorkDigestContent({
     return <ProjectMyWorkDigestErrorState error={error} onRetry={reload} />;
   }
   if (viewerUnresolved && (graph?.tickets.length ?? 0) === 0) {
-    return (
-      <T3SurfacePanel tone="dashed" className="px-4 py-8 text-sm text-muted-foreground">
-        Sign in to Jira under Settings → Connected tools to load your work.
-      </T3SurfacePanel>
-    );
+    return <JiraSignInPanel heading="Sign in to Jira to load your work." onSignedIn={reload} />;
   }
   if (!graph || !plan) {
     return (
