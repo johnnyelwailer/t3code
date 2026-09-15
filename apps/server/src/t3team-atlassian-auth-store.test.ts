@@ -17,6 +17,7 @@ const originalFetch = globalThis.fetch;
 afterEach(() => {
   replaceAtlassianAuths([]);
   globalThis.fetch = originalFetch;
+  delete process.env.T3TEAM_ATLASSIAN_CLIENT_ID;
   vi.restoreAllMocks();
 });
 
@@ -179,4 +180,48 @@ it.effect("explains expired OAuth records that cannot be refreshed", () =>
       "Atlassian OAuth token expired and no refresh token is stored. Reconnect Atlassian to grant offline access.",
     );
   }).pipe(Effect.provide(testLayer("t3team-atlassian-auth-expired-"))),
+);
+
+it.effect(
+  "clears the stored credentials and reports a typed session-expired error when the refresh token is dead",
+  () =>
+    Effect.gen(function* () {
+      replaceAtlassianAuths([
+        {
+          accountId: "dead-cloud",
+          auth: {
+            kind: "oauth",
+            cloudId: "dead-cloud",
+            siteUrl: "https://dead.atlassian.net",
+            accessToken: "stale-token",
+            refreshToken: "dead-refresh-token",
+            expiresAt: 0,
+          },
+        },
+      ]);
+      process.env.T3TEAM_ATLASSIAN_CLIENT_ID = "test-client";
+
+      const refreshCalls: string[] = [];
+      globalThis.fetch = vi.fn(async (input: string | URL) => {
+        refreshCalls.push(input.toString());
+        return Response.json(
+          { error: "unauthorized_client", error_description: "refresh_token is invalid" },
+          { status: 403 },
+        );
+      }) as unknown as typeof fetch;
+
+      const error = yield* providerForAccount("dead-cloud").pipe(Effect.flip);
+
+      // The clean typed error — never the upstream token JSON.
+      assert.equal(error.code, "jira_session_expired");
+      assert.equal(error.message, "Your Jira session expired. Sign in again.");
+      assert.isFalse(error.message.includes("refresh_token"));
+      assert.deepEqual(refreshCalls, ["https://auth.atlassian.com/oauth/token"]);
+
+      // The dead credentials are cleared: the account is now "signed out" (mock provider)
+      // and no second refresh attempt may loop on the same token.
+      const provider = yield* providerForAccount("dead-cloud");
+      assert.equal(provider.constructor.name, "MockIntegrationProvider");
+      assert.deepEqual(refreshCalls, ["https://auth.atlassian.com/oauth/token"]);
+    }).pipe(Effect.provide(testLayer("t3team-atlassian-auth-dead-refresh-"))),
 );

@@ -1,5 +1,6 @@
 import {
   AtlassianIntegrationProvider,
+  AtlassianOAuthSessionExpiredError,
   type AtlassianAccessibleResource,
   type JiraApiAuth,
   type TokenExchangeResult,
@@ -8,7 +9,11 @@ import {
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Semaphore from "effect/Semaphore";
-import { T3TeamAtlassianError, tryAtlassianPromise } from "./t3team-atlassian-http.ts";
+import {
+  JIRA_SESSION_EXPIRED_CODE,
+  T3TeamAtlassianError,
+  tryAtlassianPromise,
+} from "./t3team-atlassian-http.ts";
 import {
   loadPersistedAtlassianAuthsPayload,
   type PersistedAtlassianAuths,
@@ -77,6 +82,28 @@ function missingRefreshTokenError() {
   });
 }
 
+function jiraSessionExpiredError() {
+  return new T3TeamAtlassianError({
+    code: JIRA_SESSION_EXPIRED_CODE,
+    message: "Your Jira session expired. Sign in again.",
+  });
+}
+
+/**
+ * The refresh grant was rejected because the stored refresh token is dead (401/403 with
+ * `unauthorized_client`/`invalid_grant`). Keep the user from looping on the same token: drop the
+ * account's credentials from memory AND the persisted secret, invalidate every account-keyed cache
+ * and background loop, and fail with the clean typed error — never the upstream error body.
+ */
+function clearExpiredOAuthAuth(accountId: string) {
+  return Effect.gen(function* () {
+    atlassianAuths.delete(accountId);
+    invalidateT3TeamAtlassianAuthDependents();
+    yield* savePersistedAuths;
+    return yield* Effect.fail(jiraSessionExpiredError());
+  });
+}
+
 function atlassianOAuthClientConfig(): { clientId: string; clientSecret?: string } {
   const clientId = readAtlassianOAuthClientId();
   const clientSecret = readAtlassianOAuthClientSecret() || undefined;
@@ -112,6 +139,13 @@ function refreshOAuthAuthIfNeeded(accountId: string, initialAuth: JiraApiAuth) {
     const token = yield* tryAtlassianPromise(
       () => refreshAccessToken(config, auth.refreshToken!),
       "Failed to refresh Atlassian OAuth token.",
+    ).pipe(
+      Effect.catch((error) =>
+        error instanceof T3TeamAtlassianError &&
+        error.cause instanceof AtlassianOAuthSessionExpiredError
+          ? clearExpiredOAuthAuth(accountId)
+          : Effect.fail(error),
+      ),
     );
     const nextAuth: JiraApiAuth = {
       kind: "oauth",
