@@ -79,7 +79,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3TeamRecipe> = [
     manifestDisplayName: "Create a project-local recipe",
     shortDescription:
       "Scaffold a reusable recipe in .t3team/recipes and have the agent finish the files.",
-    surfaces: DASHBOARD_AND_WORKITEM_SURFACES,
+    surfaces: ["workitem.detail.sidepanel"],
     promptTemplate:
       "Create a reusable t3team recipe for this project. Describe what the recipe should do, where it should appear, the signals it should use, and any setup fields it needs before launch.",
     kickoff: {
@@ -141,11 +141,11 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3TeamRecipe> = [
   }),
   createBundledRecipe({
     id: "edit-plugin-module",
-    title: "Edit this item",
-    manifestDisplayName: "Edit this item",
+    title: "Edit a project recipe",
+    manifestDisplayName: "Edit a project recipe",
     shortDescription:
       "Draft and apply a surgical update to an existing project-local recipe or plugin module.",
-    surfaces: DASHBOARD_AND_WORKITEM_SURFACES,
+    surfaces: ["workitem.detail.sidepanel"],
     promptTemplate:
       "Edit an existing t3team recipe or plugin module. Describe the change you want, and keep the current module shape unless the request explicitly changes it.",
     kickoff: {
@@ -159,7 +159,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3TeamRecipe> = [
             when: "missing-prompt",
             promptRequest: {
               title: "Describe the edit you want",
-              body: "Explain the change you want to make. If you did not launch this from Edit this..., include the source file path in the request.",
+              body: "Explain the change you want to make. If you did not launch this from Edit a project recipe, include the source file path in the request.",
               sections: ["context-summary", "available-context-keys", "capabilities"],
               capabilities: [
                 "Open an existing project-local recipe or plugin module and keep the current shape intact.",
@@ -230,7 +230,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3TeamRecipe> = [
     shortDescription:
       "Draft a reusable quick action based on what is visible here, with optional setup fields or show/hide rules.",
     actionViewTemplate: CREATE_CONTEXTUAL_RECIPE_ACTION_VIEW,
-    surfaces: DASHBOARD_AND_WORKITEM_SURFACES,
+    surfaces: ["workitem.detail.sidepanel"],
     promptTemplate:
       "Help me design a reusable t3team recipe for this view. Start by explaining, in plain language, what the user can see here and which signals the recipe can use. Then propose the recipe manifest, visibility rules, prompt, any pre-launch setup UI, and the files that should be created or updated.",
     kickoff: {
