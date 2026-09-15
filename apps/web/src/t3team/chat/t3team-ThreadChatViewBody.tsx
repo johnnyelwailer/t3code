@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { EnvironmentId } from "@t3tools/contracts";
 import ChatView from "~/components/ChatView";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
@@ -6,6 +7,9 @@ import type { ThreadBootstrapStatus } from "~/t3team/chat/t3team-useThreadBootst
 import { useThreadChatComposerState } from "~/t3team/chat/t3team-useThreadChatComposerState";
 import { ThreadKickoffPlaceholder } from "~/t3team/chat/t3team-threadKickoffPlaceholder";
 import { T3TeamThreadComposerAccessory } from "~/t3team/chat/t3team-ThreadComposerAccessory";
+import { T3TeamOutboxBanner } from "~/t3team/outbox/t3team-outboxBanner";
+import { useT3TeamOutboxStore } from "~/t3team/outbox/t3team-outboxStore";
+import { useT3TeamOutboxDrain } from "~/t3team/outbox/t3team-useOutboxDrain";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
 import type { ChatMessage } from "~/types";
 
@@ -37,6 +41,23 @@ export interface ThreadChatViewBodyProps {
   composerState: ThreadChatComposerState;
 }
 
+/** Queued outbox entries for the viewed thread, plus the drain that delivers them on reconnect. */
+function useThreadOutbox(
+  environmentId: EnvironmentId,
+  threadId: string,
+  backend: BackendApi | null | undefined,
+) {
+  useT3TeamOutboxDrain({ environmentId, backend });
+  const snapshot = useT3TeamOutboxStore();
+  return useMemo(
+    () =>
+      snapshot.entries.filter(
+        (entry) => entry.environmentId === environmentId && entry.threadId === threadId,
+      ),
+    [snapshot.entries, environmentId, threadId],
+  );
+}
+
 /** Presentational body for {@link ThreadChatView}: kickoff placeholder + ChatView/pending-chat split. */
 export function ThreadChatViewBody({
   composerReadOnlyOverlay,
@@ -63,6 +84,7 @@ export function ThreadChatViewBody({
     composerDropTarget,
     contextAttachments,
     dispatchTurnStartOverride,
+    enqueueOfflineTurnStart,
     prepareComposerContextAttachments,
     prepareTurnStart,
     removeContextAttachment,
@@ -81,6 +103,8 @@ export function ThreadChatViewBody({
       onRemoveAttachment={removeContextAttachment}
     />
   );
+  const outboxEntries = useThreadOutbox(environmentId, threadId, backend);
+  const outboxSnapshot = useT3TeamOutboxStore();
   const controlWorkflow = backend?.controlWorkflow
     ? ({ workflowRunId, action }: { workflowRunId: string; action: "pause" | "resume" | "stop" }) =>
         backend.controlWorkflow!({ threadId, workflowRunId, action })
@@ -101,6 +125,11 @@ export function ThreadChatViewBody({
       {hasServerThread ? (
         <>
           {kickoffPlaceholder}
+          <T3TeamOutboxBanner
+            entries={outboxEntries}
+            dispatchingEntryId={outboxSnapshot.dispatchingEntryId}
+            failures={outboxSnapshot.failures}
+          />
           <ChatView
             environmentId={environmentId}
             threadId={threadId as never}
@@ -113,6 +142,7 @@ export function ThreadChatViewBody({
             minimalComposer={embeddedMode}
             beforeDispatchTurnStart={prepareTurnStart}
             dispatchTurnStartOverride={dispatchTurnStartOverride}
+            enqueueOfflineTurnStart={enqueueOfflineTurnStart}
             composerContextAttachmentSlot={contextAttachmentSlot}
             composerContainerProps={composerDropTarget.composerContainerProps}
             composerContainerOverlay={

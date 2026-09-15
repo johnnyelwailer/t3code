@@ -9,6 +9,7 @@ import { isThreadWaitingForRecipeInput } from "~/t3team/chat/t3team-recipeAwaiti
 import { useT3TeamOpenSenderThread } from "~/t3team/chat/t3team-useOpenSenderThread";
 import { useAddToChatComposerDropTarget } from "~/t3team/hooks/t3team-useAddToChatComposerDropTarget";
 import { useThreadStagedComposerAction } from "~/t3team/chat/t3team-useThreadStagedComposerAction";
+import { useT3TeamOutboxSend } from "~/t3team/outbox/t3team-useOutboxSend";
 import { useT3TeamAddToChatStore } from "~/t3team/t3team-addToChatStore";
 import type { T3TeamContextAttachment } from "~/t3team/t3team-contextAttachment";
 import type { T3TeamTurnToolContext } from "~/t3team/t3team-threadToolContext";
@@ -69,6 +70,16 @@ export function useThreadChatComposerState(input: {
   );
   const composerDropTarget = useAddToChatComposerDropTarget();
 
+  const outboxSend = useT3TeamOutboxSend({
+    backend: input.backend,
+    environmentId,
+    projectId: input.projectId,
+    threadId: input.threadId,
+    ...(input.ticketId ? { ticketId: input.ticketId } : {}),
+    serverThreadExists: serverThread !== null,
+    waitingForRecipeInput,
+  });
+
   const removeContextAttachment = useCallback(
     (attachmentId: string) => removeThreadAttachment(input.threadId, attachmentId),
     [input.threadId, removeThreadAttachment],
@@ -82,22 +93,6 @@ export function useThreadChatComposerState(input: {
     [input.backend, input.threadId],
   );
 
-  const submitRecipeCardAction = useCallback(
-    async (action: { cardId: string; actionId: string; submit?: Record<string, unknown> }) => {
-      if (!input.backend) {
-        return;
-      }
-
-      await input.backend.submitRecipeCardAction({
-        threadId: input.threadId,
-        cardId: action.cardId,
-        actionId: action.actionId,
-        ...(action.submit ? { submit: action.submit } : {}),
-      });
-    },
-    [input.backend, input.threadId],
-  );
-
   const prepareTurnStart = useCallback(async () => {
     if (!input.backend) {
       return;
@@ -105,31 +100,6 @@ export function useThreadChatComposerState(input: {
 
     await syncThreadToolContextCached(input.backend, input.threadId, input.turnToolContext ?? null);
   }, [input.backend, input.threadId, input.turnToolContext]);
-
-  // A decision-card click: ChatView renders the optimistic reply bubble (reusing the message id
-  // the resolve route reconciles with) and hands the structured value here to post.
-  const resolveWorkflowDecision = useCallback(
-    async (decision: {
-      threadId: string;
-      messageId: string;
-      text: string;
-      value: unknown;
-      correlationId: string;
-    }) => {
-      if (!input.backend) {
-        return;
-      }
-
-      await input.backend.resolveWorkflowInput({
-        threadId: decision.threadId,
-        text: decision.text,
-        messageId: decision.messageId,
-        value: decision.value,
-        correlationId: decision.correlationId,
-      });
-    },
-    [input.backend],
-  );
 
   const dispatchTurnStartOverride = useCallback(
     (turnStart: DispatchTurnStartInput) =>
@@ -163,11 +133,12 @@ export function useThreadChatComposerState(input: {
     composerDropTarget,
     contextAttachments,
     dispatchTurnStartOverride,
+    enqueueOfflineTurnStart: outboxSend.enqueueOfflineTurnStart,
     prepareComposerContextAttachments,
     prepareTurnStart,
     removeContextAttachment,
-    resolveWorkflowDecision,
-    submitRecipeCardAction,
+    resolveWorkflowDecision: outboxSend.resolveWorkflowDecision,
+    submitRecipeCardAction: outboxSend.submitRecipeCardAction,
     onOpenThread,
   };
 }

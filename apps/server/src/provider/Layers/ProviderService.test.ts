@@ -280,6 +280,14 @@ function makeFakeCodexAdapter(
       Effect.succeed({ kind: "jobs", jobs: [] }),
   );
 
+  const jobControl = vi.fn(
+    (
+      _threadId: ThreadId,
+      _request: unknown,
+    ): Effect.Effect<{ readonly kind: "jobs"; readonly jobs: readonly [] }, ProviderAdapterError> =>
+      Effect.succeed({ kind: "jobs", jobs: [] }),
+  );
+
   const adapter: ProviderAdapterShape<ProviderAdapterError> = {
     provider,
     capabilities: {
