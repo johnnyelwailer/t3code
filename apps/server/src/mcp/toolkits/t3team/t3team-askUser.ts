@@ -165,15 +165,6 @@ export const t3TeamAskUser = Effect.fn("T3TeamMcpToolkit.askUser")(function* (
     );
   }
 
-  // A short question that names no context almost certainly points at
-  // earlier thread content (proposals, options, a diff) that the dock card
-  // cannot show. Tell the agent to pass it in 'context'. Soft feedback.
-  if (questionText.length < 80 && contextText.length === 0) {
-    warnings.push(
-      "question references prior content but no context was provided — pass the referenced content in 'context'",
-    );
-  }
-
   const eventId = EventId.make(randomUUID());
   const createdAtIso = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
 
