@@ -339,6 +339,10 @@ export function projectEvent(
             branch: payload.branch,
             worktreePath: payload.worktreePath,
             retention: payload.retention ?? "retained",
+            // Environment binding: carried onto the read-model thread only
+            // when the event actually stamped it (absent = same environment
+            // as the hosting server, unchanged behavior).
+            ...(payload.environment !== undefined ? { environment: payload.environment } : {}),
             latestTurn: null,
             createdAt: payload.createdAt,
             updatedAt: payload.updatedAt,

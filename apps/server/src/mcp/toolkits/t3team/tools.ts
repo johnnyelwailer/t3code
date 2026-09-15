@@ -192,6 +192,15 @@ export const T3TeamStartChildTool = Tool.make("t3team_start_child", {
       description:
         "Optional branch, tag, or commit to use as the base ref for the child's worktree (linked or local). Only valid with isolation='own-worktree'. When omitted, the repository default branch is used.",
     }),
+    environment: Schema.optional(
+      Schema.Struct({
+        id: Schema.String,
+        label: Schema.optional(Schema.String),
+      }),
+    ).annotate({
+      description:
+        "Optional execution environment to bind the child session to — a DIFFERENT T3 server than this one. Omit to keep the child in this environment. The thread record and handoff are stamped with the target environment; inter-agent messaging (send_message, mailbox, children ops) stays same-environment, so report-back from a cross-environment child needs a separate channel (the launch result's environment_note documents this boundary).",
+    }),
   }),
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
@@ -228,6 +237,11 @@ const CHILDREN_TOOL_DESCRIPTION =
   "the boundary drain — takes no arguments; returns dispatched (idle → digest started now), " +
   "queued (mid-turn → arrives when the turn ends), or held (suppressed → stays in the " +
   "timeline until the user re-engages)\n" +
+  "- environments: read-only discovery of the environments t3team_start_child's `environment` " +
+  "argument can target — this server's own environment (isDefault:true) plus the distinct " +
+  "cross-environment bindings already recorded on threads in this store (with label, " +
+  "bound-thread count, newest activity); every entry states its delivery boundary " +
+  "(cross-env children run on the target, visible here; messaging stays same-environment)\n" +
   "- help: exact schema for one op (op_name)";
 
 export const T3TeamChildrenTool = Tool.make("t3team_children", {
@@ -243,6 +257,7 @@ export const T3TeamChildrenTool = Tool.make("t3team_children", {
       "close",
       "sweep",
       "drain",
+      "environments",
       "help",
     ]),
     thread_id: Schema.optional(Schema.String),

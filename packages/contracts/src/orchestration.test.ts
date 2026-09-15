@@ -636,6 +636,54 @@ it.effect("defaults settled fields when decoding historical thread data", () =>
   }),
 );
 
+it.effect("thread records carry the optional cross-environment binding", () =>
+  Effect.gen(function* () {
+    // thread.created: historical events (no environment field) still decode…
+    const legacy = yield* decodeThreadCreatedPayload({
+      threadId: "thread-1",
+      projectId: "project-1",
+      title: "Legacy thread",
+      modelSelection: { provider: "codex", model: "gpt-5.4" },
+      branch: null,
+      worktreePath: null,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    assert.strictEqual(legacy.environment, undefined);
+
+    // …and cross-environment children stamp the binding.
+    const stamped = yield* decodeThreadCreatedPayload({
+      threadId: "thread-1",
+      projectId: "project-1",
+      title: "Cross-env child",
+      modelSelection: { provider: "codex", model: "gpt-5.4" },
+      branch: null,
+      worktreePath: null,
+      environment: { environmentId: "env-remote", label: "GHA runner" },
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    assert.strictEqual(stamped.environment?.environmentId, "env-remote");
+    assert.strictEqual(stamped.environment?.label, "GHA runner");
+
+    // A malformed binding (empty environmentId) is rejected, not coerced.
+    const invalidExit = yield* Effect.exit(
+      decodeThreadCreatedPayload({
+        threadId: "thread-1",
+        projectId: "project-1",
+        title: "Bad binding",
+        modelSelection: { provider: "codex", model: "gpt-5.4" },
+        branch: null,
+        worktreePath: null,
+        environment: { environmentId: "   " },
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      }),
+    );
+    assert.strictEqual(invalidExit._tag, "Failure");
+  }),
+);
+
 it.effect("decodes thread archived and unarchived events", () =>
   Effect.gen(function* () {
     const archived = yield* decodeOrchestrationEvent({

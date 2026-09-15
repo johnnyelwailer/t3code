@@ -72,6 +72,7 @@ function makeDeps(overrides: Partial<T3TeamChildrenToolDeps> = {}): TestDeps {
     listProjectThreadShells: () => Effect.succeed([childShell]),
     listChildThreadIds: () => Effect.succeed([CHILD]),
     listParentChildRelations: () => Effect.succeed([]),
+    listEnvironmentBindings: () => Effect.succeed([]),
     appendActivity: (threadId, input) =>
       Effect.sync(() => {
         appended.push({ threadId, kind: input.kind, payload: input.payload });

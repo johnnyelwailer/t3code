@@ -15,6 +15,7 @@ import {
   OrchestrationThreadDetailSnapshot,
   ProjectScript,
   ProjectIconOverride,
+  ThreadEnvironmentBinding,
   TurnId,
   type OrchestrationCheckpointSummary,
   type OrchestrationLatestTurn,
@@ -129,6 +130,8 @@ const ProjectionThreadDbRowSchema = ProjectionThread.mapFields(
   Struct.assign({
     modelSelection: Schema.fromJsonString(ModelSelection),
     linkedPullRequest: Schema.NullOr(Schema.fromJsonString(ThreadLinkedPullRequest)),
+    // JSON column added by migration 71 (t3team start_child `environment`).
+    environment: Schema.NullOr(Schema.fromJsonString(ThreadEnvironmentBinding)),
   }),
 );
 const ProjectionThreadActivityDbRowSchema = ProjectionThreadActivity.mapFields(
@@ -248,6 +251,13 @@ const ParentChildRelationRowSchema = Schema.Struct({
   childThreadId: ThreadId,
   parentThreadId: ThreadId,
   createdAt: Schema.String,
+});
+// One distinct cross-environment binding (grouped by the full environment_json
+// so a label change surfaces both shapes; the op dedups per environmentId).
+const ThreadEnvironmentBindingRowSchema = Schema.Struct({
+  environment: Schema.fromJsonString(ThreadEnvironmentBinding),
+  threadCount: NonNegativeInt,
+  latestThreadAt: Schema.String,
 });
 const ProjectionThreadCheckpointContextThreadRowSchema = Schema.Struct({
   threadId: ThreadId,
@@ -564,6 +574,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           worktree_path AS "worktreePath",
           retention,
           linked_pull_request_json AS "linkedPullRequest",
+          environment_json AS "environment",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -607,6 +618,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           worktree_path AS "worktreePath",
           retention,
           linked_pull_request_json AS "linkedPullRequest",
+          environment_json AS "environment",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -653,6 +665,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           worktree_path AS "worktreePath",
           retention,
           linked_pull_request_json AS "linkedPullRequest",
+          environment_json AS "environment",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -1150,6 +1163,28 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       `,
   });
 
+  // Distinct cross-environment bindings recorded on threads (t3team start_child
+  // `environment`): the environments this host has ever targeted. Grouped by the
+  // full JSON so a label change for the same environmentId surfaces both shapes;
+  // the caller dedups per environmentId with the newest row winning. Own-env
+  // threads never carry a binding, so only other environments appear.
+  const listEnvironmentBindingsQuery = SqlSchema.findAll({
+    Request: Schema.Struct({}),
+    Result: ThreadEnvironmentBindingRowSchema,
+    execute: () =>
+      sql`
+        SELECT
+          environment_json AS "environment",
+          COUNT(*) AS "threadCount",
+          MAX(updated_at) AS "latestThreadAt"
+        FROM projection_threads
+        WHERE environment_json IS NOT NULL
+          AND deleted_at IS NULL
+        GROUP BY environment_json
+        ORDER BY MAX(updated_at) DESC
+      `,
+  });
+
   const listImportedAgentSessionSourceRows = SqlSchema.findAll({
     Request: ProjectIdLookupInput,
     Result: ProjectionImportedAgentSessionSourcesRowSchema,
@@ -1212,6 +1247,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           worktree_path AS "worktreePath",
           retention,
           linked_pull_request_json AS "linkedPullRequest",
+          environment_json AS "environment",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -2294,6 +2330,10 @@ pending_approval_requests AS (
                 ...(row.linkedPullRequest === null
                   ? {}
                   : { linkedPullRequest: row.linkedPullRequest }),
+                  // Environment binding (t3team start_child `environment`); absent = same environment.
+                  ...(row.environment !== null && row.environment !== undefined
+                    ? { environment: row.environment }
+                    : {}),
                 latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                 createdAt: row.createdAt,
                 updatedAt: row.updatedAt,
@@ -2573,6 +2613,10 @@ pending_approval_requests AS (
                     ...(row.linkedPullRequest === null
                       ? {}
                       : { linkedPullRequest: row.linkedPullRequest }),
+                      // Environment binding (t3team start_child `environment`); absent = same environment.
+                      ...(row.environment !== null && row.environment !== undefined
+                        ? { environment: row.environment }
+                        : {}),
                     latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                     createdAt: row.createdAt,
                     updatedAt: row.updatedAt,
@@ -2761,6 +2805,10 @@ pending_approval_requests AS (
                       ...(row.linkedPullRequest === null
                         ? {}
                         : { linkedPullRequest: row.linkedPullRequest }),
+                        // Environment binding (t3team start_child `environment`); absent = same environment.
+                        ...(row.environment !== null && row.environment !== undefined
+                          ? { environment: row.environment }
+                          : {}),
                       latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                       createdAt: row.createdAt,
                       updatedAt: row.updatedAt,
@@ -2933,6 +2981,10 @@ pending_approval_requests AS (
                   ...(row.linkedPullRequest === null
                     ? {}
                     : { linkedPullRequest: row.linkedPullRequest }),
+                    // Environment binding (t3team start_child `environment`); absent = same environment.
+                    ...(row.environment !== null && row.environment !== undefined
+                      ? { environment: row.environment }
+                      : {}),
                   latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                   createdAt: row.createdAt,
                   updatedAt: row.updatedAt,
@@ -3182,7 +3234,24 @@ pending_approval_requests AS (
           })),
       ),
     );
-  const getImportedAgentSessionSources: ProjectionSnapshotQueryShape["getImportedAgentSessionSources"] =
+  const listEnvironmentBindings: ProjectionSnapshotQueryShape["listEnvironmentBindings"] = () =>
+    listEnvironmentBindingsQuery({}).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.listEnvironmentBindings:query",
+          "ProjectionSnapshotQuery.listEnvironmentBindings:decodeRows",
+        ),
+      ),
+      Effect.map((rows) =>
+        rows.map((row) => ({
+          environmentId: row.environment.environmentId,
+          label: row.environment.label,
+          threadCount: row.threadCount,
+          latestThreadAt: row.latestThreadAt,
+        })),
+      ),
+    );
+  const getImportedAgentSessionSources: ProjectionSnapshotQueryShape["getImportedAgentSessionSources"] = 
     Effect.fn("ProjectionSnapshotQuery.getImportedAgentSessionSources")(function* (projectId) {
       const rows = yield* listImportedAgentSessionSourceRows({ projectId }).pipe(
         Effect.mapError(
@@ -3348,6 +3417,10 @@ pending_approval_requests AS (
         ...(threadRow.value.linkedPullRequest === null
           ? {}
           : { linkedPullRequest: threadRow.value.linkedPullRequest }),
+        // Environment binding (t3team start_child `environment`); absent = same environment.
+        ...(threadRow.value.environment !== null && threadRow.value.environment !== undefined
+          ? { environment: threadRow.value.environment }
+          : {}),
         latestTurn: Option.isSome(latestTurnRow) ? mapLatestTurn(latestTurnRow.value) : null,
         createdAt: threadRow.value.createdAt,
         updatedAt: threadRow.value.updatedAt,
@@ -3643,6 +3716,10 @@ pending_approval_requests AS (
         ...(threadRow.value.linkedPullRequest === null
           ? {}
           : { linkedPullRequest: threadRow.value.linkedPullRequest }),
+        // Environment binding (t3team start_child `environment`); absent = same environment.
+        ...(threadRow.value.environment !== null && threadRow.value.environment !== undefined
+          ? { environment: threadRow.value.environment }
+          : {}),
         latestTurn: Option.isSome(latestTurnRow) ? mapLatestTurn(latestTurnRow.value) : null,
         createdAt: threadRow.value.createdAt,
         updatedAt: threadRow.value.updatedAt,
@@ -3889,6 +3966,7 @@ pending_approval_requests AS (
     getFirstActiveThreadIdByProjectId,
     listChildThreadIdsByParent,
     listParentChildRelations,
+    listEnvironmentBindings,
     getImportedAgentSessionSources,
     getThreadCheckpointContext,
     getFullThreadDiffContext,
