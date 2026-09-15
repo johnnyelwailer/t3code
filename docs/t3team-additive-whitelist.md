@@ -22,9 +22,13 @@ Whitelisting ~1,000 files individually is not viable and would defeat the guard'
 The blocking base is therefore a **frozen fork-baseline tag**, recorded in
 `.t3team-additive-guard.json` as `forkBaselineRef`:
 
-- Current: `t3team/fork-baseline-20260908-postsync` → fork commit `046a181c46` (the
+- Current: `t3team/fork-baseline-20260915b` → fork commit `b1712df988` (post-merge main head
+  after PR #262). Grandfathered: everything in main up to and including #262.
+- Previous: `t3team/fork-baseline-20260915` → fork commit `a6277f7de9` (post-merge main head
+  after PR #259; superseded when #262 advanced main).
+- Previous: `t3team/fork-baseline-20260908-postsync` → fork commit `046a181c46` (the
   post-merge-main tree after PR #188 absorbed the 2026-09-06/07 upstream sync plus the
-  guard rebaseline). Grandfathered: the sync content the first baseline had to red on.
+  guard rebaseline).
 - Previous: `t3team/fork-baseline-20260908` → fork main commit `06c2bc30f0` (2026-09-08,
   cut before the sync was merged into main; kept for history — see "Move record" below).
 - Everything inside the tree the tag points at is **grandfathered debt**. It is not re-checked.
@@ -69,6 +73,7 @@ git push origin t3team/fork-baseline-YYYYMMDD
 | 2026-09-08 | —                                        | `t3team/fork-baseline-20260908` (`06c2bc30f0`)          | First baseline; grandfathers the pre-existing fork debt that red the guard on every CI run since 2026-09-06.                                                                                                                                         |
 | 2026-09-08 | `t3team/fork-baseline-20260908`          | `t3team/fork-baseline-20260908-postsync` (`046a181c46`) | PR #188 absorbed the 2026-09-06/07 upstream sync into main; the post-merge main tree (== the `046a181c46` tree) is grandfathered so main and every PR forked off it measure only their own additions.                                                |
 | 2026-09-15 | `t3team/fork-baseline-20260908-postsync` | `t3team/fork-baseline-20260915` (`a6277f7de9`)          | Post-baseline PRs (#255, #258, #259) modified upstream files without allowlist entries, red-ing the guard on main and every open PR; the post-merge main tree is grandfathered so main and PRs forked off it measure only their own additions again. |
+| 2026-09-15 | `t3team/fork-baseline-20260915`          | `t3team/fork-baseline-20260915b` (`b1712df988`)         | PR #262 (Atlassian OAuth port pin) merged into main after the previous baseline was cut; its 6-file desktop change is grandfathered by rebasing the blocking base onto current main head so it is not read as a new unwhitelisted upstream edit.     |
 
 Until the new tag is pushed, the guard fails loudly on CI (missing tag), never silently.
 
