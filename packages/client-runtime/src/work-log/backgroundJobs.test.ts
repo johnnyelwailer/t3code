@@ -398,6 +398,7 @@ describe("foldBackgroundJobs across a server restart", () => {
         deadlineMs: startMs - 10_000 + 600_000,
         state: "finished",
         finishedReason: "lost-restart",
+        pid: 4242,
         startedEntryId: "e1",
         lastSeenEntryId: "e1",
       },
