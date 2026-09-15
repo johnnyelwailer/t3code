@@ -22,6 +22,7 @@ import type { WorkflowBudget } from "./t3team-sdk.primitiveTypes.ts";
 import { bodyApiStorage } from "./t3team-sdk.internal.ts";
 import type { AgentOpts, SpawnThreadOpts, Thread } from "./t3team-sdk.threadTypes.ts";
 import type { WorkflowInvokeOpts, WorkflowRef } from "./t3team-sdk.types.ts";
+import type { Signal, SignalSourceHandle, SignalSourceRef } from "./t3team-sdk.signal.ts";
 
 /** Reads one member of the active body surface, or explains precisely why it is unavailable. */
 export function fromRun<T>(name: string): T {
@@ -112,6 +113,27 @@ export const log = call<[string], void>("log");
 /** Durable timer: suspends the run if the deadline has not passed, and survives a restart. */
 export const wait = call<[number], Promise<void>>("wait");
 export const waitUntil = call<[number], Promise<void>>("waitUntil");
+
+/**
+ * Bind a source instance and get the consumer handle (design 42). Journals the durable
+ * `signal.register` binding, then parks on `handle.waitFor(signal, { key })` until the host
+ * delivers the awaited `(signal, key)`. Requires the `'source:<name>'` capability in
+ * `meta.capabilities`.
+ */
+export function getSignalSource<
+  Params,
+  Signals extends ReadonlyArray<Signal<unknown>>,
+>(
+  source: SignalSourceRef<Params, Signals, unknown>,
+  params: Params,
+): Promise<SignalSourceHandle<Signals>> {
+  return fromRun<
+    <P, S extends ReadonlyArray<Signal<unknown>>>(
+      source: SignalSourceRef<P, S, unknown>,
+      params: P,
+    ) => Promise<SignalSourceHandle<S>>
+  >("getSignalSource")(source, params);
+}
 
 /** The journaled wall clock: a resume replays the recorded value, so it stays replay-deterministic. */
 export const now = call<[], number>("now");

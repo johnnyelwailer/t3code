@@ -137,6 +137,7 @@ import {
 } from "./serverRuntimeState.ts";
 import { orchestrationHttpApiLayer } from "./orchestration/http.ts";
 import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
+import { WorkflowSignalStoreLive } from "./persistence/Layers/WorkflowSignalStore.ts";
 import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStore.ts";
 import * as ToolAuthService from "./toolauth/t3team-ToolAuthService.ts";
 import { T3TeamThreadToolContextEvictionReactorLive } from "./t3team-threadToolContextEvictionReactor.ts";
@@ -205,6 +206,8 @@ import { T3TeamChildCleanupNudgeReactorLive } from "./t3team-childCleanupNudgeRe
 import { T3TeamThreadTransientTurnRetryLive } from "./t3team-threadTransientTurnRetry.ts";
 import { T3TeamThreadSilenceWatchReactorLive } from "./t3team-threadSilenceWatchReactor.ts";
 import { T3TeamWorkflowEngineRehydrateLive } from "./t3team-workflowEngineRehydrate.ts";
+import { T3TeamWorkflowSignalDeliveryLive } from "./t3team-workflowSignalDelivery.ts";
+import { T3TeamWorkflowSignalReconcilerLive } from "./t3team-workflowSignalReconciler.ts";
 import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
 import { T3TeamToolBrokerLive } from "./t3team-toolBrokerLive.ts";
@@ -541,6 +544,20 @@ export const PullRequestServiceLive = PullRequestService.layer.pipe(
   Layer.provide(VcsProcess.layer),
 );
 
+// Durable signal sources (GHE #332): the signal store (durable state), the delivery port
+// (event → parked runs / inbox), and the reconciler (the live source set, derived from the
+// journaled registrations). Chained provideMerge in DEPENDENCY ORDER — in `a.pipe(provideMerge(b))`
+// the inner accumulated layer's requirements are satisfied by b's services while b's own
+// requirements leak outward, so the reconciler (the fullest consumer) sits innermost and each
+// outer step supplies what the accumulated layer still needs. The result provides all three
+// signal services plus the re-exported durability singletons, with only {SqlClient,
+// PullRequestService} left as external requirements — satisfied in the outer runtime chain.
+const WorkflowSignalSourcesLive = T3TeamWorkflowSignalReconcilerLive.pipe(
+  Layer.provideMerge(T3TeamWorkflowSignalDeliveryLive),
+  Layer.provideMerge(WorkflowSignalStoreLive),
+  Layer.provideMerge(WorkflowEngineDurabilityLive),
+);
+
 const AntigravityInstallationRefreshLive = Layer.effectDiscard(
   Effect.gen(function* () {
     const installation = yield* AntigravityInstallation;
@@ -574,7 +591,7 @@ const RuntimeCoreDependenciesLive = mountT3TeamBrokerBeforeRuntimeServices(
     Layer.provideMerge(T3TeamWidgetRegistryLive),
     Layer.provideMerge(T3TeamContextRefreshServiceLive),
     Layer.provide(OrchestrationLayerLive),
-    Layer.provide(WorkflowEngineDurabilityLive),
+    Layer.provide(WorkflowSignalSourcesLive),
     Layer.provide(ProviderRegistryLive),
   ),
 )
@@ -588,6 +605,11 @@ const RuntimeCoreDependenciesLive = mountT3TeamBrokerBeforeRuntimeServices(
     // Core Services
     Layer.provideMerge(ServerSettingsLayerLive),
     Layer.provideMerge(CheckpointingLayerLive),
+    // Signal sources (GHE #332): placed BEFORE the PullRequestService + Persistence provides
+    // below — in `a.pipe(provideMerge(b))` the accumulated layer's requirements are satisfied
+    // by b at this step only, so the signal chain's external {PullRequestService, SqlClient}
+    // must be satisfied by a LATER step: PRS by the mergeAll below, SqlClient by PersistenceLayerLive.
+    Layer.provideMerge(WorkflowSignalSourcesLive),
     Layer.provideMerge(
       Layer.mergeAll(SourceControlProviderRegistryLayerLive, PullRequestServiceLive),
     ),
@@ -602,10 +624,6 @@ const RuntimeCoreDependenciesLive = mountT3TeamBrokerBeforeRuntimeServices(
       Layer.mergeAll(Keybindings.layer, EnvironmentTheme.layer, UsageLimitSources.layer),
     ),
     Layer.provideMerge(ProviderRegistryLive),
-    // Shared singletons: the launch route registers parked runs in the registry and writes the
-    // run record + journal through the repo/store; the workflow-engine reactor + boot rehydration
-    // resolve the same instances. See WorkflowEngineDurabilityLive above.
-    Layer.provideMerge(WorkflowEngineDurabilityLive),
     // The instance registry is the new routing keystone — text generation,
     // adapter lookup, and runtime ingestion all resolve `ProviderInstanceId`
     // through this layer. Built-in drivers come from `BUILT_IN_DRIVERS`;

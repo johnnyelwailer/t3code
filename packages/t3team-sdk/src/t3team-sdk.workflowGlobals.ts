@@ -27,8 +27,11 @@ import {
 } from "./t3team-sdk.errors.ts";
 import type { WorkflowPrimitives } from "./t3team-sdk.primitives.ts";
 import type { SchedulePrimitives } from "./t3team-sdk.schedulePrimitive.ts";
+import type { SignalPrimitives } from "./t3team-sdk.signalPrimitive.ts";
+import { BUILTIN_SIGNAL_GLOBALS } from "./t3team-sdk.builtinSignals.ts";
 import type { WorkflowThreadPrimitives } from "./t3team-sdk.threadPrimitives.ts";
 import { defineWorkflow } from "./t3team-sdk.ts";
+import { defineSignal } from "./t3team-sdk.signal.ts";
 
 export {
   deterministicGlobals,
@@ -55,6 +58,7 @@ export function buildWorkflowGlobals(opts: {
   readonly primitives: WorkflowPrimitives;
   readonly threads: WorkflowThreadPrimitives;
   readonly schedule: SchedulePrimitives;
+  readonly signals: SignalPrimitives;
   /** The `@runbook/core/authoring` `RunbookContext` subset a body's `run(ctx)` sees. Optional:
    * older globals shapes and legacy zero-arg bodies never reference `ctx` at all. */
   readonly ctx?: unknown;
@@ -91,6 +95,15 @@ export function buildWorkflowGlobals(opts: {
     // `waitUntil` (Epic 27) suspends until a wall-clock instant; gated by the `"schedule"`
     // capability (calling it without that capability throws PermissionDeniedError).
     waitUntil: opts.schedule.waitUntil,
+    // `getSignalSource` (design 42) binds a durable source instance; gated by the
+    // `"source:<name>"` capability per source.
+    getSignalSource: opts.signals.getSignalSource,
+    // The built-in signal-source declarations (design 42 §7): the loader blanks every import in
+    // a body, so `ScmChangeRequestWatch` & co. resolve from this surface, exactly like
+    // `defineWorkflow` and the error classes.
+    ...BUILTIN_SIGNAL_GLOBALS,
+    // `defineSignal` lets a body declare its own typed signal shape (pure data, no effects).
+    defineSignal,
     // The accessor form of the per-run VALUES above (Epic 25 §The engine API). A body that does
     // `import { getArgs } from "@t3team/sdk"` has that import blanked by the loader, so the call
     // has to resolve to something in this surface — these five are it. They read the same values
