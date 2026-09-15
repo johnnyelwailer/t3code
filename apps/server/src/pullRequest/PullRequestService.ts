@@ -5,6 +5,7 @@ import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as PubSub from "effect/PubSub";
 import * as Schema from "effect/Schema";
@@ -67,6 +68,8 @@ import {
   PullRequestProviderError,
 } from "./PullRequestProvider.ts";
 import { PullRequestProviderRegistry } from "./PullRequestProviderRegistry.ts";
+import { readProjectLinkedRepositories } from "./t3team-LinkedRepositories.ts";
+import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 
 export interface PullRequestMergeEvent extends PullRequestRef {
   readonly mergedAt: string;
@@ -521,7 +524,9 @@ function withRateLimitBackoff(
  * One function because everything downstream is keyed by what it answers: the rows' own
  * `repository`, the per-repository cursors, and the detail and diff reads a row leads to.
  */
-export function repositoryIdentityOf(project: OrchestrationProjectShell): string | null {
+export function repositoryIdentityOf(
+  project: Pick<OrchestrationProjectShell, "repositoryIdentity">,
+): string | null {
   const identity = project.repositoryIdentity;
   if (!identity) return null;
   if (identity.provider === "azure-devops") {
@@ -539,6 +544,10 @@ export const make = Effect.gen(function* () {
   const projections = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
   const sourceControlProviders = yield* SourceControlProviderRegistry.SourceControlProviderRegistry;
   const rateLimits = yield* SourceControlRateLimit.SourceControlRateLimit;
+  // Captured here, not looked up per read: a listing and an action both reach the linked-
+  // repository reader, and the service's own layers must carry it wherever a method runs.
+  const fileSystem = yield* FileSystem.FileSystem;
+  const workspacePaths = yield* WorkspacePaths.WorkspacePaths;
 
   const refineUnknownProjectKinds = (
     projects: ReadonlyArray<OrchestrationProjectShell>,
@@ -615,7 +624,38 @@ export const make = Effect.gen(function* () {
           Effect.map((refinedKinds) => ({ refinedKinds, snapshot })),
         ),
       ),
-      Effect.map(({ refinedKinds, snapshot }) => {
+      Effect.map(({ refinedKinds, snapshot }) => ({
+        refinedKinds,
+        snapshot,
+        // Only the projects that survive the filter get their linked-repository files read.
+        visible: snapshot.projects.filter(
+          (project) =>
+            (filter.projectId === undefined || project.id === filter.projectId) &&
+            (filter.projectIds === undefined || filter.projectIds.includes(project.id)),
+        ),
+      })),
+      Effect.flatMap(({ refinedKinds, snapshot, visible }) =>
+        // Read fresh per listing: a local file read, so a project's linked repositories
+        // changing takes effect in the next read rather than surviving a cache epoch.
+        Effect.forEach(
+          visible,
+          (project) =>
+            readProjectLinkedRepositories(project, {
+              fileSystem,
+              workspacePaths,
+            }),
+          { concurrency: REPOSITORY_CONCURRENCY },
+        ).pipe(
+          Effect.map((linked) => ({
+            refinedKinds,
+            snapshot,
+            linkedByProject: new Map(
+              visible.map((project, index) => [project.id, linked[index]!] as const),
+            ),
+          })),
+        ),
+      ),
+      Effect.map(({ refinedKinds, snapshot, linkedByProject }) => {
         const supported: SupportedProject[] = [];
         const unimplemented = new Map<
           string,
@@ -623,22 +663,19 @@ export const make = Effect.gen(function* () {
         >();
         const viewerRoots = new Map<string, string[]>();
         const seen = new Set<string>();
-        for (const project of snapshot.projects) {
-          if (filter.projectId !== undefined && project.id !== filter.projectId) continue;
-          if (filter.projectIds !== undefined && !filter.projectIds.includes(project.id)) continue;
-          const identity = project.repositoryIdentity;
-          let kind = identity?.provider as SourceControlProviderKind | undefined;
-          const repository = repositoryIdentityOf(project);
-          if (!identity || kind === undefined || repository === null) continue;
-          // Worktrees of one repository are separate projects; reading the remote once keeps
-          // the page from repeating every change request per local checkout. The host is part
-          // of the key, so the same `owner/repo` on two hosts stays two repositories.
-          if (kind === "unknown") {
-            const provider = detectSourceControlProviderFromRemoteUrl(identity.locator.remoteUrl);
-            kind = provider === null ? kind : (refinedKinds.get(provider.baseUrl) ?? kind);
-          }
-          const host = pullRequestHostOf(identity, kind);
-          if (filter.host !== undefined && host !== filter.host.toLowerCase()) continue;
+        /**
+         * One repository of a project, judged the same way whatever its source: the host's
+         * viewer lookup keeps every checkout it is asked about, worktrees of one repository are
+         * read once rather than repeated per local checkout, and a host this build cannot read
+         * is counted rather than dropped. The host is part of the key, so the same `owner/repo`
+         * on two hosts stays two repositories.
+         */
+        const addProjectRepository = (
+          project: OrchestrationProjectShell,
+          host: string,
+          kind: SourceControlProviderKind,
+          repository: string,
+        ) => {
           const api = registry.get(kind);
           // Recorded before the de-duplication below, so the viewer lookup keeps the alternates
           // the listing is about to drop.
@@ -648,13 +685,13 @@ export const make = Effect.gen(function* () {
             else if (!roots.includes(project.workspaceRoot)) roots.push(project.workspaceRoot);
           }
           const key = listCursorKey(host, repository);
-          if (seen.has(key)) continue;
+          if (seen.has(key)) return;
           seen.add(key);
           if (api === null) {
             const counted = unimplemented.get(host);
             if (counted === undefined) unimplemented.set(host, { kind, projectCount: 1 });
             else counted.projectCount += 1;
-            continue;
+            return;
           }
           supported.push({
             project,
@@ -662,6 +699,29 @@ export const make = Effect.gen(function* () {
             repository,
             host,
           });
+        };
+        for (const project of snapshot.projects) {
+          if (filter.projectId !== undefined && project.id !== filter.projectId) continue;
+          if (filter.projectIds !== undefined && !filter.projectIds.includes(project.id)) continue;
+          const identity = project.repositoryIdentity;
+          let kind = identity?.provider as SourceControlProviderKind | undefined;
+          const repository = repositoryIdentityOf(project);
+          if (identity && kind !== undefined && repository !== null) {
+            if (kind === "unknown") {
+              const provider = detectSourceControlProviderFromRemoteUrl(identity.locator.remoteUrl);
+              kind = provider === null ? kind : (refinedKinds.get(provider.baseUrl) ?? kind);
+            }
+            const host = pullRequestHostOf(identity, kind);
+            if (filter.host === undefined || host === filter.host.toLowerCase()) {
+              addProjectRepository(project, host, kind, repository);
+            }
+          }
+          // The project's linked repositories enter the listing as its own remote does: same
+          // host filter, same de-duplication against it, same unimplemented accounting.
+          for (const linked of linkedByProject.get(project.id) ?? []) {
+            if (filter.host !== undefined && linked.host !== filter.host.toLowerCase()) continue;
+            addProjectRepository(project, linked.host, linked.kind, linked.repository);
+          }
         }
         return { supported, unimplemented, viewerRoots };
       }),
@@ -670,13 +730,16 @@ export const make = Effect.gen(function* () {
   const requireProject = (ref: PullRequestRef): Effect.Effect<SupportedProject, PullRequestError> =>
     listWorkspaceProjects({ projectId: ref.projectId }).pipe(
       Effect.flatMap(({ supported }): Effect.Effect<SupportedProject, PullRequestError> => {
-        const match = supported[0];
-        if (!match) {
+        if (supported.length === 0) {
           return Effect.fail(new PullRequestUnavailableError({ reason: "provider-unsupported" }));
         }
         // The repository travels through the client, so it is checked against the project's
-        // own remote rather than being handed to a provider verbatim.
-        if (match.repository.toLowerCase() !== ref.repository.trim().toLowerCase()) {
+        // repositories — its own remote and its linked ones — rather than being handed to a
+        // provider verbatim.
+        const match = supported.find(
+          (project) => project.repository.toLowerCase() === ref.repository.trim().toLowerCase(),
+        );
+        if (!match) {
           return Effect.fail(
             new PullRequestOperationError({
               operation: "resolveRepository",
@@ -1053,21 +1116,19 @@ export const make = Effect.gen(function* () {
               }),
               // One unreachable repository must not blank the page. A host-level failure is
               // already reported through `providers`, so it degrades the same way here.
-              Effect.orElseSucceed(
-                (): RepositoryBatch => ({
-                  key,
-                  entries: [],
-                  errors: [
-                    {
-                      projectId: project.project.id,
-                      projectTitle: project.project.title,
-                      message: `${project.repository} could not be read.`,
-                    },
-                  ],
-                  truncated: false,
-                  nextCursor: null,
-                }),
-              ),
+              Effect.orElseSucceed((): RepositoryBatch => ({
+                key,
+                entries: [],
+                errors: [
+                  {
+                    projectId: project.project.id,
+                    projectTitle: project.project.title,
+                    message: `${project.repository} could not be read.`,
+                  },
+                ],
+                truncated: false,
+                nextCursor: null,
+              })),
             );
         }
       };
@@ -1248,23 +1309,21 @@ export const make = Effect.gen(function* () {
             : project.api.getChangeRequestSummary(providerInput);
         return read.pipe(
           Effect.mapError(toPullRequestError("summary")),
-          Effect.map(
-            (changeRequest): PullRequestSummary => ({
-              provider: project.api.kind,
-              projectId: project.project.id,
-              repository: project.repository,
-              number: changeRequest.number,
-              title: changeRequest.title,
-              url: changeRequest.url,
-              state: changeRequest.state,
-              ...(changeRequest.isDraft === true ? { isDraft: true } : {}),
-              headBranch: changeRequest.headBranch,
-              baseBranch: changeRequest.baseBranch,
-              closedAt: changeRequest.closedAt ?? null,
-              mergedAt: changeRequest.mergedAt ?? null,
-              updatedAt: changeRequest.updatedAt,
-            }),
-          ),
+          Effect.map((changeRequest): PullRequestSummary => ({
+            provider: project.api.kind,
+            projectId: project.project.id,
+            repository: project.repository,
+            number: changeRequest.number,
+            title: changeRequest.title,
+            url: changeRequest.url,
+            state: changeRequest.state,
+            ...(changeRequest.isDraft === true ? { isDraft: true } : {}),
+            headBranch: changeRequest.headBranch,
+            baseBranch: changeRequest.baseBranch,
+            closedAt: changeRequest.closedAt ?? null,
+            mergedAt: changeRequest.mergedAt ?? null,
+            updatedAt: changeRequest.updatedAt,
+          })),
         );
       }),
     );
@@ -1286,55 +1345,53 @@ export const make = Effect.gen(function* () {
           ],
           { concurrency: 2 },
         ).pipe(
-          Effect.map(
-            ([changeRequest, viewer]): PullRequestDetail => ({
-              provider: project.api.kind,
-              capabilities: project.api.capabilities,
-              projectId: project.project.id,
-              projectTitle: project.project.title,
-              workspaceRoot: project.project.workspaceRoot,
-              repository: project.repository,
-              number: changeRequest.number,
-              title: changeRequest.title,
-              body: changeRequest.body,
-              url: changeRequest.url,
-              author: changeRequest.author,
-              state: changeRequest.state,
-              isDraft: changeRequest.isDraft,
-              mergeability: changeRequest.mergeability,
-              additions: changeRequest.additions,
-              deletions: changeRequest.deletions,
-              changedFiles: changeRequest.changedFiles,
-              headBranch: changeRequest.headBranch,
-              ...(changeRequest.headRepositoryNameWithOwner === undefined
-                ? {}
-                : { headRepositoryNameWithOwner: changeRequest.headRepositoryNameWithOwner }),
-              baseBranch: changeRequest.baseBranch,
-              createdAt: changeRequest.createdAt,
-              updatedAt: changeRequest.updatedAt,
-              mergedAt: changeRequest.mergedAt,
-              closedAt: changeRequest.closedAt,
-              reviewers: changeRequest.reviewers,
-              labels: changeRequest.labels,
-              checks: changeRequest.checks,
-              mergeCapabilities: changeRequest.mergeCapabilities,
-              viewerPermissions: changeRequest.viewerPermissions,
-              ...(viewer === null || viewer.trim().length === 0 ? {} : { viewer }),
-              ...(changeRequest.baseComparison === undefined
-                ? {}
-                : { baseComparison: changeRequest.baseComparison }),
-              ...(changeRequest.behindBy === undefined ? {} : { behindBy: changeRequest.behindBy }),
-              ...(changeRequest.autoMergeEnabled === undefined
-                ? {}
-                : { autoMergeEnabled: changeRequest.autoMergeEnabled }),
-              ...(changeRequest.autoMergeMethod === undefined
-                ? {}
-                : { autoMergeMethod: changeRequest.autoMergeMethod }),
-              ...(changeRequest.workflowApprovalsRequired === undefined
-                ? {}
-                : { workflowApprovalsRequired: changeRequest.workflowApprovalsRequired }),
-            }),
-          ),
+          Effect.map(([changeRequest, viewer]): PullRequestDetail => ({
+            provider: project.api.kind,
+            capabilities: project.api.capabilities,
+            projectId: project.project.id,
+            projectTitle: project.project.title,
+            workspaceRoot: project.project.workspaceRoot,
+            repository: project.repository,
+            number: changeRequest.number,
+            title: changeRequest.title,
+            body: changeRequest.body,
+            url: changeRequest.url,
+            author: changeRequest.author,
+            state: changeRequest.state,
+            isDraft: changeRequest.isDraft,
+            mergeability: changeRequest.mergeability,
+            additions: changeRequest.additions,
+            deletions: changeRequest.deletions,
+            changedFiles: changeRequest.changedFiles,
+            headBranch: changeRequest.headBranch,
+            ...(changeRequest.headRepositoryNameWithOwner === undefined
+              ? {}
+              : { headRepositoryNameWithOwner: changeRequest.headRepositoryNameWithOwner }),
+            baseBranch: changeRequest.baseBranch,
+            createdAt: changeRequest.createdAt,
+            updatedAt: changeRequest.updatedAt,
+            mergedAt: changeRequest.mergedAt,
+            closedAt: changeRequest.closedAt,
+            reviewers: changeRequest.reviewers,
+            labels: changeRequest.labels,
+            checks: changeRequest.checks,
+            mergeCapabilities: changeRequest.mergeCapabilities,
+            viewerPermissions: changeRequest.viewerPermissions,
+            ...(viewer === null || viewer.trim().length === 0 ? {} : { viewer }),
+            ...(changeRequest.baseComparison === undefined
+              ? {}
+              : { baseComparison: changeRequest.baseComparison }),
+            ...(changeRequest.behindBy === undefined ? {} : { behindBy: changeRequest.behindBy }),
+            ...(changeRequest.autoMergeEnabled === undefined
+              ? {}
+              : { autoMergeEnabled: changeRequest.autoMergeEnabled }),
+            ...(changeRequest.autoMergeMethod === undefined
+              ? {}
+              : { autoMergeMethod: changeRequest.autoMergeMethod }),
+            ...(changeRequest.workflowApprovalsRequired === undefined
+              ? {}
+              : { workflowApprovalsRequired: changeRequest.workflowApprovalsRequired }),
+          })),
         ),
       ),
     );
@@ -1351,18 +1408,16 @@ export const make = Effect.gen(function* () {
           })
           .pipe(
             Effect.mapError(toPullRequestError("activity")),
-            Effect.map(
-              (activity): PullRequestActivity => ({
-                ...(activity.author === undefined ? {} : { author: activity.author }),
-                ...(activity.reviewers === undefined ? {} : { reviewers: activity.reviewers }),
-                comments: activity.comments,
-                commentCount: activity.commentCount,
-                commentsTruncated: activity.commentsTruncated,
-                reviewThreads: activity.reviewThreads,
-                commits: activity.commits,
-                ...(activity.reactions === undefined ? {} : { reactions: activity.reactions }),
-              }),
-            ),
+            Effect.map((activity): PullRequestActivity => ({
+              ...(activity.author === undefined ? {} : { author: activity.author }),
+              ...(activity.reviewers === undefined ? {} : { reviewers: activity.reviewers }),
+              comments: activity.comments,
+              commentCount: activity.commentCount,
+              commentsTruncated: activity.commentsTruncated,
+              reviewThreads: activity.reviewThreads,
+              commits: activity.commits,
+              ...(activity.reactions === undefined ? {} : { reactions: activity.reactions }),
+            })),
           ),
       ),
     );
@@ -1930,23 +1985,22 @@ export const make = Effect.gen(function* () {
           );
         }
         return viewerPermissionsOf(project, input, "setLabels").pipe(
-          Effect.flatMap(
-            (viewer): Effect.Effect<void, PullRequestError> =>
-              viewer.labels === false
-                ? Effect.fail(
-                    new PullRequestOperationError({
-                      operation: "setLabels",
-                      detail: LABEL_CHANGE_REFUSAL,
-                    }),
-                  )
-                : change({
-                    cwd: project.project.workspaceRoot,
-                    repository: project.repository,
-                    host: project.host,
-                    number: input.number,
-                    labels: input.labels,
-                    applied: input.applied,
-                  }).pipe(Effect.mapError(toPullRequestError("setLabels"))),
+          Effect.flatMap((viewer): Effect.Effect<void, PullRequestError> =>
+            viewer.labels === false
+              ? Effect.fail(
+                  new PullRequestOperationError({
+                    operation: "setLabels",
+                    detail: LABEL_CHANGE_REFUSAL,
+                  }),
+                )
+              : change({
+                  cwd: project.project.workspaceRoot,
+                  repository: project.repository,
+                  host: project.host,
+                  number: input.number,
+                  labels: input.labels,
+                  applied: input.applied,
+                }).pipe(Effect.mapError(toPullRequestError("setLabels"))),
           ),
         );
       }),
@@ -1966,20 +2020,26 @@ export const make = Effect.gen(function* () {
     Effect.gen(function* () {
       if (input.refs.length === 0) return { stats: [] };
       const { supported } = yield* listWorkspaceProjects({});
-      const byProject = new Map(supported.map((project) => [project.project.id, project]));
+      // A project may contribute more than one repository (its own remote plus its linked
+      // ones), so the rows are grouped per project rather than keyed to a single entry.
+      const byProject = new Map<string, SupportedProject[]>();
+      for (const entry of supported) {
+        const held = byProject.get(entry.project.id);
+        if (held === undefined) byProject.set(entry.project.id, [entry]);
+        else held.push(entry);
+      }
       const wanted = new Map<
         string,
         { readonly project: SupportedProject; readonly number: number }
       >();
       for (const ref of input.refs) {
-        const project = byProject.get(ref.projectId);
-        // The repository travels through the client, so it is checked against the project's own
-        // remote rather than being handed to a provider verbatim.
-        if (
-          project === undefined ||
-          project.api.listChangeRequestStats === undefined ||
-          project.repository.toLowerCase() !== ref.repository.trim().toLowerCase()
-        ) {
+        // The repository travels through the client, so it is checked against the project's
+        // own remote and its linked repositories rather than being handed to a provider
+        // verbatim.
+        const project = (byProject.get(ref.projectId) ?? []).find(
+          (entry) => entry.repository.toLowerCase() === ref.repository.trim().toLowerCase(),
+        );
+        if (project === undefined || project.api.listChangeRequestStats === undefined) {
           continue;
         }
         wanted.set(`${project.project.id} ${ref.number}`, { project, number: ref.number });
