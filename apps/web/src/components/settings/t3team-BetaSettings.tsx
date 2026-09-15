@@ -94,7 +94,7 @@ export function T3TeamBetaSettings() {
           flag={{
             key: "digestRowNavigation",
             label: "Digest row navigation",
-            description: "How digest rows open their ticket once row navigation lands.",
+            description: "How digest rows open their ticket: inside the app or on the ticket URL.",
             options: [
               { value: "in-app", label: "In-app" },
               { value: "ticket-url", label: "Ticket URL" },
@@ -107,7 +107,8 @@ export function T3TeamBetaSettings() {
           flag={{
             key: "digestAgentDots",
             label: "Agent dots on digest rows",
-            description: "How agents that touched a ticket appear on digest rows.",
+            description:
+              "How agents that touched a ticket appear on digest rows. The badge style is not built yet; stacked dots are shown either way.",
             options: [
               { value: "stacked", label: "Stacked" },
               { value: "badges", label: "Badges" },

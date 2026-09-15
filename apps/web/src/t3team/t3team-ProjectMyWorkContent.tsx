@@ -96,7 +96,7 @@ export function ProjectMyWorkContent({
     // The digest lens has its own server-aggregated data and its own loading/empty states, so it
     // must not wait on (or be hidden by) the legacy assigned-items fetch.
     if (lens === "digest") {
-      return <ProjectMyWorkDigestContent project={project} />;
+      return <ProjectMyWorkDigestContent project={project} onOpenTicket={onOpenTicket} />;
     }
 
     if (contentState.kind === "loading") {

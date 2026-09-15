@@ -139,6 +139,15 @@ export function AllProjectsMyWorkView({
         graph={digestGraph}
         nowMs={nowMs}
         burndownVariant={flags.digestBurndownVariant}
+        onOpenTicket={
+          // Beta flag: rows open the ticket in-app (each ticket knows its project).
+          flags.digestRowNavigation === "in-app"
+            ? (ticketId: string) => {
+                const ticket = digestGraph.tickets.find((entry) => entry.id === ticketId);
+                if (ticket) onOpenTicket(ticket.projectId, ticketId);
+              }
+            : undefined
+        }
       />
     );
   };

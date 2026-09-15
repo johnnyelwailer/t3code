@@ -21,8 +21,19 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 
 // TODO(digest-nav): rows navigate to the ticket URL today; thread an in-app onOpenTicket through
 // ProjectMyWorkDigestView -> DigestStoryGroup/DigestRow once the Storybook cut settles.
-export function ProjectMyWorkDigestContent({ project }: { project: ProjectShellProject }) {
+export function ProjectMyWorkDigestContent({
+  project,
+  onOpenTicket,
+}: {
+  project: ProjectShellProject;
+  onOpenTicket: (projectId: string, ticketId: string) => void;
+}) {
   const { flags } = useT3TeamBetaFlags();
+  // Beta flag: rows open the ticket in-app, or fall back to the ticket URL.
+  const openTicketInApp =
+    flags.digestRowNavigation === "in-app"
+      ? (ticketId: string) => onOpenTicket(project.id, ticketId)
+      : undefined;
   const projects = useMemo(() => [project], [project]);
   const { graph, status, error, viewerUnresolved } = useMyWorkDigestGraph({
     projects,
@@ -69,6 +80,7 @@ export function ProjectMyWorkDigestContent({ project }: { project: ProjectShellP
       graph={graph}
       nowMs={nowMs}
       burndownVariant={flags.digestBurndownVariant}
+      onOpenTicket={openTicketInApp}
     />
   );
 }
