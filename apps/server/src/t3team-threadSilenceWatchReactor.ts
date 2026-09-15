@@ -25,7 +25,10 @@ import { makeTerminalNotifyLedger } from "./t3team-terminalNotifyDedup.ts";
 import { makeThreadSilenceWatchEmitter } from "./t3team-threadSilenceWatchEmit.ts";
 import type { ThreadSilenceWatchEmitter } from "./t3team-threadSilenceWatchEmitTypes.ts";
 import { makeThreadSilenceWatchIndex } from "./t3team-threadSilenceWatchIndex.ts";
-import { collectPendingThreadSilenceWatches } from "./t3team-threadSilenceWatchRehydrate.ts";
+import {
+  collectPendingThreadSilenceWatches,
+  lastTerminalSequenceByThread,
+} from "./t3team-threadSilenceWatchRehydrate.ts";
 import { shouldStopSilenceWatch } from "./t3team-silenceWatchStop.ts";
 import { makeThreadSilenceWatchStopRecheck } from "./t3team-threadSilenceWatchStopRecheck.ts";
 import {
@@ -117,13 +120,10 @@ export const makeThreadSilenceWatchReactor = (
         return Effect.void;
       }
       case "thread.session-set": {
-        const payload = event.payload as {
-          readonly threadId: string;
-          readonly session?: { readonly status?: string } | null;
-        };
-        const status = payload.session?.status;
+        const status = (event.payload as { readonly session?: { readonly status?: string } | null })
+          .session?.status;
         if (status === undefined) return Effect.void;
-        const threadId = payload.threadId;
+        const threadId = (event.payload as { readonly threadId: string }).threadId;
         if (index.forTarget(threadId).length > 0) {
           stopRecheck.noteSession(threadId, status, event.sequence);
         }
@@ -196,8 +196,9 @@ export const makeThreadSilenceWatchReactor = (
         deps.engine.readEvents(0, Number.MAX_SAFE_INTEGER),
       ).pipe(Effect.map((chunk) => Array.from(chunk)));
       dedup.rehydrate(replayed);
+      const lastTerminalByThread = lastTerminalSequenceByThread(replayed);
       for (const record of collectPendingThreadSilenceWatches(replayed)) {
-        yield* emitter.onRegistered(record, 0);
+        yield* emitter.onRegistered(record, lastTerminalByThread.get(record.targetThreadId) ?? 0);
       }
     }),
     stop: () => sweeper.stop(),

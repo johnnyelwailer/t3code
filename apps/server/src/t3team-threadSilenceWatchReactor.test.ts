@@ -685,4 +685,99 @@ describe("makeThreadSilenceWatchReactor", () => {
       expect(markers).toHaveLength(1);
     }),
   );
+
+  const sessionEventSeq = (status: string, sequence: number): OrchestrationEvent =>
+    ({
+      type: "thread.session-set",
+      sequence,
+      payload: { threadId: ThreadId.make(TARGET), session: { status, lastError: null } },
+    }) as unknown as OrchestrationEvent;
+
+  it.effect(
+    "rehydration: a stop in a NEW epoch re-notifies, anchored on the real stop sequence",
+    () =>
+      Effect.gen(function* () {
+        // The target stopped @3, was reported, resumed @5, stopped again @6 -
+        // a fresh epoch the watcher still owes one notification. The marker
+        // written by the boot re-resolution must anchor on 6, not 0, or every
+        // later restart re-reports the same terminal episode.
+        const replay = [
+          watchRegistered(),
+          sessionEventSeq("running", 2),
+          sessionEventSeq("error", 3),
+          terminalNotifiedMarker("w1", TARGET, 3),
+          sessionEventSeq("running", 5),
+          sessionEventSeq("error", 6),
+        ];
+        const harness = makeHarness({
+          targetShell: { ...TARGET_SHELL, session: { status: "stopped" } },
+          replayEvents: replay,
+        });
+        yield* harness.rehydrate;
+        yield* Effect.yieldNow;
+        const payloads = detectedPayloads(harness.dispatches);
+        expect(payloads).toHaveLength(1);
+        expect(payloads[0]).toMatchObject({
+          watchId: "w1",
+          reason: "stopped",
+          stoppedStatus: "stopped",
+        });
+        const marker = harness.dispatches.find(
+          (command) =>
+            command.type === "thread.activity.append" &&
+            (command as { activity?: { kind?: string } }).activity?.kind ===
+              SILENCE_WATCH_TERMINAL_NOTIFIED_KIND,
+        );
+        const markerPayload = (marker as { activity: { payload: unknown } }).activity.payload as {
+          dedupKey: string;
+          resumeThreadId: string;
+          eventSequence: number;
+        };
+        expect(markerPayload).toMatchObject({
+          dedupKey: "w1",
+          resumeThreadId: TARGET,
+          eventSequence: 6,
+        });
+      }),
+  );
+
+  it.effect("rehydration: the boot-resolved marker stops the re-notify on the NEXT restart", () =>
+    Effect.gen(function* () {
+      // Same history plus the marker the previous boot wrote: a second boot
+      // must NOT re-report the same terminal episode.
+      const replay = [
+        watchRegistered(),
+        sessionEventSeq("running", 2),
+        sessionEventSeq("error", 3),
+        terminalNotifiedMarker("w1", TARGET, 3),
+        sessionEventSeq("running", 5),
+        sessionEventSeq("error", 6),
+        {
+          type: "thread.activity-appended",
+          sequence: 7,
+          payload: {
+            threadId: WATCHER,
+            activity: {
+              kind: SILENCE_WATCH_TERMINAL_NOTIFIED_KIND,
+              payload: {
+                dedupKey: "w1",
+                resumeThreadId: TARGET,
+                eventSequence: 6,
+                watchId: "w1",
+                targetThreadId: TARGET,
+                stoppedStatus: "stopped",
+              },
+            },
+          },
+        } as unknown as OrchestrationEvent,
+      ];
+      const harness = makeHarness({
+        targetShell: { ...TARGET_SHELL, session: { status: "stopped" } },
+        replayEvents: replay,
+      });
+      yield* harness.rehydrate;
+      yield* Effect.yieldNow;
+      expect(detectedPayloads(harness.dispatches)).toHaveLength(0);
+    }),
+  );
 });
