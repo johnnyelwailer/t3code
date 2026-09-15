@@ -12,6 +12,7 @@ import { ProjectId, type PullRequestListEntry } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import { PullRequestService } from "./pullRequest/PullRequestService.ts";
+import type { T3TeamDigestProjectSource } from "./t3team-myworkDigestTypes.ts";
 
 export const DIGEST_PR_LIMIT = 50;
 /**
@@ -81,15 +82,43 @@ function enrichOnePr(service: PullRequestService["Service"], entry: PullRequestL
     number: entry.number,
   };
   return Effect.all([service.detail(ref), service.activity(ref)], { concurrency: 2 }).pipe(
-    Effect.map(
-      ([detail, activity]): PrEnrichment => ({
-        reviewers: mapReviewers(detail),
-        unhandledReviewThreads: mapUnhandledThreads(activity),
-        body: typeof detail.body === "string" ? detail.body : "",
-      }),
-    ),
+    Effect.map(([detail, activity]): PrEnrichment => ({
+      reviewers: mapReviewers(detail),
+      unhandledReviewThreads: mapUnhandledThreads(activity),
+      body: typeof detail.body === "string" ? detail.body : "",
+    })),
     Effect.catch(() => Effect.succeed<PrEnrichment | undefined>(undefined)),
   );
+}
+
+/** The digest's PR rows: the cached listing shaped for the joiner, enrichment merged in. */
+export function toDigestPrEntries(
+  read: PrReadResult | undefined,
+): T3TeamDigestProjectSource["prEntries"] {
+  const enrichments = read?.enrichments ?? {};
+  return (read?.entries ?? []).map((entry) => {
+    const enrichment = enrichments[digestPrKey(entry)];
+    return {
+      host: entry.host,
+      repository: entry.repository,
+      number: entry.number,
+      title: entry.title,
+      headBranch: entry.headBranch,
+      state: entry.state,
+      isDraft: entry.isDraft,
+      updatedAt: entry.updatedAt,
+      viewerReviewRequested: entry.viewerReviewRequested,
+      ...(entry.reviewDecision !== undefined ? { reviewDecision: entry.reviewDecision } : {}),
+      ...(entry.checksState !== undefined ? { checksState: entry.checksState } : {}),
+      ...(enrichment !== undefined
+        ? {
+            reviewers: enrichment.reviewers,
+            unhandledReviewThreads: enrichment.unhandledReviewThreads,
+            body: enrichment.body,
+          }
+        : {}),
+    };
+  });
 }
 
 export function loadPrEntries(

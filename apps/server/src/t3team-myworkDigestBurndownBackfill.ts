@@ -78,18 +78,30 @@ export function backfillDigestBurndown(
  * blocks the digest round. Failures log and clear nothing — the next round
  * retries (the marker is only written on success).
  */
+/** Sprints with a backfill in flight: a second poll must not fan out to Jira again. */
+const inFlightBackfills = new Set<string>();
+
+function backfillKey(identity: T3TeamBacklogCacheIdentity, sprintId: string): string {
+  return `${identity.provider}|${identity.accountId}|${identity.externalProjectId}|${sprintId}`;
+}
+
 export function kickDigestBurndownBackfill(
   identity: T3TeamBacklogCacheIdentity,
   sprintId: string,
   issues: ReadonlyArray<{ readonly issueId: string; readonly issueKey?: string }>,
 ) {
+  const key = backfillKey(identity, sprintId);
+  if (inFlightBackfills.has(key)) return Effect.void;
+  inFlightBackfills.add(key);
   return backfillDigestBurndown(identity, sprintId, issues).pipe(
     Effect.catch((error) =>
       Effect.logWarning("t3team: digest burndown backfill failed", {
         error: error instanceof Error ? error.message : String(error),
       }),
     ),
+    Effect.ensuring(Effect.sync(() => inFlightBackfills.delete(key))),
     Effect.forkChild,
+    Effect.asVoid,
   );
 }
 

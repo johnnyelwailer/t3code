@@ -24,9 +24,13 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 export function ProjectMyWorkDigestContent({ project }: { project: ProjectShellProject }) {
   const { flags } = useT3TeamBetaFlags();
   const projects = useMemo(() => [project], [project]);
-  const { graph, status, error } = useMyWorkDigestGraph({ projects, scope: "project" });
+  const { graph, status, error, viewerUnresolved } = useMyWorkDigestGraph({
+    projects,
+    scope: "project",
+  });
   // Minute-granular clock shared with the rest of the app: stable within a render, re-plans on tick.
-  const nowMs = Date.parse(useNowMinute());
+  // useNowMinute yields UTC wall-clock text without a zone suffix; parse it as UTC.
+  const nowMs = Date.parse(`${useNowMinute()}Z`);
   const plan = useMemo(() => {
     if (!graph) {
       return null;
@@ -42,6 +46,13 @@ export function ProjectMyWorkDigestContent({ project }: { project: ProjectShellP
       <T3SurfacePanel tone="dashed" className="px-4 py-8 text-sm text-muted-foreground">
         Could not load the digest view.
         {error ? <span className="block pt-1 text-xs opacity-80">{error}</span> : null}
+      </T3SurfacePanel>
+    );
+  }
+  if (viewerUnresolved && (graph?.tickets.length ?? 0) === 0) {
+    return (
+      <T3SurfacePanel tone="dashed" className="px-4 py-8 text-sm text-muted-foreground">
+        Sign in to Jira under Settings → Connected tools to load your work.
       </T3SurfacePanel>
     );
   }

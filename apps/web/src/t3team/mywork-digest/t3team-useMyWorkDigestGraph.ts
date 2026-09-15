@@ -26,6 +26,7 @@ import {
 } from "~/t3team/hooks/t3team-integrationPolling";
 import { readCachedAtlassianCurrentUserDisplayName } from "~/t3team/hooks/t3team-useAtlassianCurrentUserDisplayName";
 import { payloadToDigestGraph, type DigestViewer } from "./t3team-digestGraphMappers";
+import { readLastVisitAt, writeLastVisitAt } from "./t3team-digestLastVisit";
 import type { DigestGraph } from "~/t3team/t3team-projectMyWorkDigestPlan";
 
 export type UseMyWorkDigestGraphInput = {
@@ -41,35 +42,17 @@ export type UseMyWorkDigestGraphResult = {
   readonly graph: DigestGraph | null;
   readonly status: "loading" | "ready" | "error";
   readonly error?: string;
+  /** True when the server had no Jira identity for a project (stale or missing token). */
+  readonly viewerUnresolved: boolean;
   readonly reload: () => void;
 };
-
-const lastVisitStorageKey = (scope: MyWorkDigestScope) =>
-  `t3team.mywork-digest.last-visit.${scope}`;
-
-function readLastVisitAt(scope: MyWorkDigestScope): string {
-  try {
-    const raw = window.localStorage.getItem(lastVisitStorageKey(scope));
-    if (raw !== null && Date.parse(raw) > 0) return raw;
-  } catch {
-    // localStorage may be unavailable (private mode); fall through to now.
-  }
-  return new Date(0).toISOString();
-}
-
-function writeLastVisitAt(scope: MyWorkDigestScope, at: string): void {
-  try {
-    window.localStorage.setItem(lastVisitStorageKey(scope), at);
-  } catch {
-    // Non-fatal: transitions simply widen to "everything" next visit.
-  }
-}
 
 export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWorkDigestGraphResult {
   const backend = useBackend();
   const [graph, setGraph] = useState<DigestGraph | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | undefined>(undefined);
+  const [viewerUnresolved, setViewerUnresolved] = useState(false);
 
   const projects = input.projects;
   const scope = input.scope ?? "project";
@@ -109,16 +92,22 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
   // previous scope cannot clobber the new one (same guard as useProjectMyWork).
   const generationRef = useRef(0);
 
-  useEffect(() => {
-    generationRef.current += 1;
+  // Scope changed since the last render: reset in place (React's "adjust state
+  // on prop change" pattern) instead of an effect, so no stale graph paints first.
+  const resetSignature = `${scope}|${scopeKey}`;
+  const [renderedSignature, setRenderedSignature] = useState(resetSignature);
+  if (renderedSignature !== resetSignature) {
+    setRenderedSignature(resetSignature);
     setGraph(null);
     setStatus("loading");
     setError(undefined);
-    fingerprintRef.current = undefined;
-    lastCheckedAtRef.current = undefined;
-  }, [scopeKey, scope]);
+    setViewerUnresolved(false);
+  }
 
-  const load = async () => {
+  const load = async (
+    scope: MyWorkDigestScope,
+    entries: ReadonlyArray<MyWorkDigestProjectInput>,
+  ) => {
     const gen = generationRef.current;
     if (!enabled || entries.length === 0) return;
     const pollFn = readMyWorkDigestPollFn(backend);
@@ -175,6 +164,7 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
         entries,
         viewer,
       });
+      setViewerUnresolved(result.value.viewer?.unresolved === true);
       setGraph(nextGraph);
       setStatus("ready");
       setError(undefined);
@@ -186,24 +176,44 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
     }
   };
 
+  // The poller reads the latest loader through a ref (fresh backend/viewer on
+  // every tick) while its subscription restarts only when scope or entries change.
+  const loadRef = useRef(load);
   useEffect(() => {
-    if (!enabled || entries.length === 0) {
-      if (entries.length === 0 && enabled) {
-        setStatus("ready");
-        setGraph(null);
-      }
-      return;
-    }
+    loadRef.current = load;
+  });
+
+  useEffect(() => {
+    if (!enabled || entries.length === 0) return;
+    // A new scope: no fingerprint, no freshness, and any in-flight result from
+    // the previous scope is dropped by the generation bump.
+    generationRef.current += 1;
+    fingerprintRef.current = undefined;
+    lastCheckedAtRef.current = undefined;
     const poller = startBrowserPolling({
       enabled: true,
       intervalMs: ATLASSIAN_RESOURCES_POLL_INTERVAL_MS,
       maxAgeMs: ATLASSIAN_RESOURCES_CACHE_MAX_AGE_MS,
       getUpdatedAt: () => lastCheckedAtRef.current,
-      poll: load,
+      poll: () => loadRef.current(scope, entries),
     });
-    return () => poller.dispose();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, scopeKey, scope]);
+    return () => {
+      poller.dispose();
+      // Unmount or scope change: results still in flight must not land.
+      generationRef.current += 1;
+    };
+  }, [enabled, entries, scope]);
 
-  return { graph, status, ...(error !== undefined ? { error } : {}), reload: load };
+  // Nothing to load for an empty scope: report "ready" without touching state.
+  const idle = enabled && entries.length === 0;
+
+  return {
+    graph: idle ? null : graph,
+    status: idle ? "ready" : status,
+    ...(error !== undefined && !idle ? { error } : {}),
+    viewerUnresolved,
+    reload: () => {
+      void loadRef.current(scope, entries);
+    },
+  };
 }

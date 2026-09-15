@@ -13,7 +13,7 @@ import * as Effect from "effect/Effect";
 
 import { readDigestThreadAgents } from "./t3team-myworkDigestAgents.ts";
 import { loadDigestBurndownContext } from "./t3team-myworkDigestBurndownBackfill.ts";
-import { digestPrKey, loadPrEntries } from "./t3team-myworkDigestPr.ts";
+import { loadPrEntries, toDigestPrEntries } from "./t3team-myworkDigestPr.ts";
 import {
   readDigestDecisionQuestions,
   readDigestEstimateUnit,
@@ -23,8 +23,7 @@ import {
   readDigestThreads,
   readDigestToolContextTickets,
 } from "./t3team-myworkDigestQueries.ts";
-import { readMyWorkIssueRows } from "./t3team-atlassian-backlog-cacheQueries.ts";
-import { resolveT3TeamAtlassianViewerAccountId } from "./t3team-atlassian-viewer-identity.ts";
+import { readDigestViewerTickets } from "./t3team-myworkDigestViewer.ts";
 import {
   assembleMyWorkDigestPayload,
   resolveDigestTicketRef,
@@ -49,6 +48,9 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
     const nowIso = new Date(nowMs).toISOString();
     const requestedViewerName = input.viewer?.name?.trim() || undefined;
     let resolvedViewerName: string | undefined = requestedViewerName;
+    // Set when any project could not resolve the viewer (no Jira session): the
+    // client shows "sign in" instead of a misleading empty digest.
+    let viewerUnresolved = false;
     const appProjectIds = [
       ...new Set(
         projects
@@ -88,21 +90,13 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
             accountId: project.account.id,
             externalProjectId: project.externalProjectId,
           };
-          // "My Work" = the viewer's assigned issues plus their parents, off the
-          // same assignee-indexed mirror read the legacy My Work view uses.
-          // Without a resolved viewer there is nothing personal to show.
-          const viewerAccountId = yield* resolveT3TeamAtlassianViewerAccountId(
-            project.account,
-          ).pipe(Effect.catch(() => Effect.succeed(undefined)));
-          const projection =
-            viewerAccountId !== undefined && viewerAccountId !== ""
-              ? yield* readMyWorkIssueRows({ ...identity, viewerAccountId })
-              : { assigned: [], parents: [] };
-          const tickets = [...projection.assigned, ...projection.parents];
-          // The viewer's Jira display name: the client's cached name, else the
-          // assignee the mirror stamped on the viewer's own items.
-          const viewerName =
-            requestedViewerName ?? (projection.assigned[0]?.assignee?.trim() || undefined);
+          const viewer = yield* readDigestViewerTickets({
+            project,
+            identity,
+            requestedViewerName,
+          });
+          const { tickets, viewerName } = viewer;
+          if (viewer.unresolved) viewerUnresolved = true;
           if (viewerName !== undefined && resolvedViewerName === undefined) {
             resolvedViewerName = viewerName;
           }
@@ -113,7 +107,6 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
             sinceMs: nowMs - DIGEST_TRANSITION_LOOKBACK_MS,
           });
           const prRead = yield* loadPrEntries(appProjectId);
-          const enrichments = prRead?.enrichments ?? {};
 
           // Burndown history: the sprint's backfilled changelog rows; when the
           // backfill has not run yet this round it is kicked in the background
@@ -170,28 +163,7 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
             })),
             claims,
             decisions,
-            prEntries: (prRead?.entries ?? []).map((entry) => ({
-              host: entry.host,
-              repository: entry.repository,
-              number: entry.number,
-              title: entry.title,
-              headBranch: entry.headBranch,
-              state: entry.state,
-              isDraft: entry.isDraft,
-              updatedAt: entry.updatedAt,
-              viewerReviewRequested: entry.viewerReviewRequested,
-              ...(entry.reviewDecision !== undefined
-                ? { reviewDecision: entry.reviewDecision }
-                : {}),
-              ...(entry.checksState !== undefined ? { checksState: entry.checksState } : {}),
-              ...(enrichments[digestPrKey(entry)] !== undefined
-                ? {
-                    reviewers: enrichments[digestPrKey(entry)]!.reviewers,
-                    unhandledReviewThreads: enrichments[digestPrKey(entry)]!.unhandledReviewThreads,
-                    body: enrichments[digestPrKey(entry)]!.body,
-                  }
-                : {}),
-            })),
+            prEntries: toDigestPrEntries(prRead),
             transitions: transitions.map((row) => ({
               ticketRef: {
                 issueId: row.issueId,
@@ -216,7 +188,10 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
     const payload = assembleMyWorkDigestPayload({ scope: input.scope, sources });
     return {
       ...payload,
-      ...(resolvedViewerName !== undefined ? { viewer: { name: resolvedViewerName } } : {}),
+      viewer: {
+        ...(resolvedViewerName !== undefined ? { name: resolvedViewerName } : {}),
+        ...(viewerUnresolved ? { unresolved: true as const } : {}),
+      },
     };
   });
 }

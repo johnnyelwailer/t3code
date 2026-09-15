@@ -66,13 +66,15 @@ export function AllProjectsMyWorkView({
     graph: digestGraph,
     status: digestStatus,
     error: digestError,
+    viewerUnresolved,
   } = useMyWorkDigestGraph({
     projects: boundProjects,
     scope: "all",
     enabled: lens === "digest",
   });
   // Minute-granular clock shared with the rest of the app: stable within a render, re-plans on tick.
-  const nowMs = Date.parse(useNowMinute());
+  // useNowMinute yields UTC wall-clock text without a zone suffix; parse it as UTC.
+  const nowMs = Date.parse(`${useNowMinute()}Z`);
   const digestPlan = useMemo(() => {
     if (!digestGraph) {
       return null;
@@ -106,6 +108,16 @@ export function AllProjectsMyWorkView({
           {digestError ? (
             <span className="block pt-1 text-xs opacity-80">{digestError}</span>
           ) : null}
+        </T3SurfacePanel>
+      );
+    }
+    if (viewerUnresolved && (digestGraph?.tickets.length ?? 0) === 0) {
+      return (
+        <T3SurfacePanel
+          tone="dashed"
+          className="px-6 py-10 text-center text-sm text-muted-foreground"
+        >
+          Sign in to Jira under Settings → Connected tools to load your work.
         </T3SurfacePanel>
       );
     }
