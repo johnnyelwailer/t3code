@@ -1,4 +1,5 @@
 import type { DigestGraph } from "~/t3team/t3team-projectMyWorkDigestPlan";
+import type { T3TeamDigestBurndownVariant } from "~/t3team/t3team-betaFlags";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -7,7 +8,18 @@ function formatDay(iso: string): string {
   return `${String(date.getUTCDate()).padStart(2, "0")}.${String(date.getUTCMonth() + 1).padStart(2, "0")}.`;
 }
 
-export function ProjectMyWorkDigestHeader({ graph, nowMs }: { graph: DigestGraph; nowMs: number }) {
+export function ProjectMyWorkDigestHeader({
+  graph,
+  nowMs,
+}: {
+  graph: DigestGraph;
+  nowMs: number;
+  /**
+   * Beta flag (digestBurndownVariant). Accepted, not rendered yet: the burndown
+   * variant work adds the rendering that consumes this prop.
+   */
+  burndownVariant?: T3TeamDigestBurndownVariant;
+}) {
   const sprint = graph.sprint;
   const scopeLabel =
     graph.scope === "all" ? `All projects · ${graph.projects.length}` : graph.projects[0]?.name;

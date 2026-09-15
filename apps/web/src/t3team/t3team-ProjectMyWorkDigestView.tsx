@@ -8,6 +8,7 @@ import type {
   DigestSection,
   ResolvedDigestPlan,
 } from "~/t3team/t3team-projectMyWorkDigestPlan";
+import type { T3TeamDigestBurndownVariant } from "~/t3team/t3team-betaFlags";
 import { buildProjectTicketHierarchy } from "~/t3team/t3team-ticketHierarchy";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
@@ -187,6 +188,11 @@ export function ProjectMyWorkDigestView({
   plan: ResolvedDigestPlan;
   graph: DigestGraph;
   nowMs: number;
+  /**
+   * Beta flag (digestBurndownVariant). Accepted, not rendered yet: the burndown
+   * variant work adds the header rendering and consumes this prop.
+   */
+  burndownVariant?: T3TeamDigestBurndownVariant;
 }) {
   const ticketsById = new Map(graph.tickets.map((ticket) => [ticket.id, ticket]));
   const lane = { graph, ticketsById, nowMs };

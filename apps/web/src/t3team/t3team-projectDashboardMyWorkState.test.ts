@@ -114,4 +114,35 @@ describe("project dashboard my work state", () => {
       }),
     ).toMatchObject({ lens: "board", viewMode: "table" });
   });
+
+  it("applies the beta default lens only when no lens has been persisted", () => {
+    const storage = new Map<string, string>([
+      ["t3team:beta-flags", JSON.stringify({ digestDefaultLens: "board" })],
+    ]);
+    const windowStub = {
+      localStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          storage.set(key, value);
+        },
+        removeItem: (key: string) => {
+          storage.delete(key);
+        },
+      },
+      dispatchEvent: () => true,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    } as unknown as Window & typeof globalThis;
+    Object.defineProperty(globalThis, "window", {
+      value: windowStub,
+      configurable: true,
+      writable: true,
+    });
+
+    expect(resolveProjectDashboardMyWorkState({}).lens).toBe("board");
+    // A persisted lens wins over the beta default.
+    expect(resolveProjectDashboardMyWorkState({ persisted: { lens: "hierarchy" } }).lens).toBe(
+      "hierarchy",
+    );
+  });
 });

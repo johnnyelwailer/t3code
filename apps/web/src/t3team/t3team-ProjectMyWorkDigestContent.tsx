@@ -9,6 +9,7 @@ import { useMemo } from "react";
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
 import { ProjectMyWorkDigestView } from "~/t3team/t3team-ProjectMyWorkDigestView";
+import { useT3TeamBetaFlags } from "~/t3team/t3team-betaFlags";
 import { ProjectMyWorkLoadingState } from "~/t3team/t3team-projectMyWorkContentState";
 import {
   buildHeuristicDigestPlan,
@@ -19,6 +20,7 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 // TODO(digest-nav): rows navigate to the ticket URL today; thread an in-app onOpenTicket through
 // ProjectMyWorkDigestView -> DigestStoryGroup/DigestRow once the Storybook cut settles.
 export function ProjectMyWorkDigestContent({ project }: { project: ProjectShellProject }) {
+  const { flags } = useT3TeamBetaFlags();
   const projects = useMemo(() => [project], [project]);
   const { graph, status } = useMyWorkDigestGraph({ projects, scope: "project" });
   const plan = useMemo(() => {
@@ -46,5 +48,12 @@ export function ProjectMyWorkDigestContent({ project }: { project: ProjectShellP
       </T3SurfacePanel>
     );
   }
-  return <ProjectMyWorkDigestView plan={plan} graph={graph} nowMs={Date.now()} />;
+  return (
+    <ProjectMyWorkDigestView
+      plan={plan}
+      graph={graph}
+      nowMs={Date.now()}
+      burndownVariant={flags.digestBurndownVariant}
+    />
+  );
 }
