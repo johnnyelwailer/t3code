@@ -136,7 +136,7 @@ function ProposedDescription() {
 }
 
 const meta = {
-  title: "T3Team/Work Item Description Diff",
+  title: "T3Team/Work Item/Description Diff",
   parameters: { layout: "padded" },
 } satisfies Meta;
 

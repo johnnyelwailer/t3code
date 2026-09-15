@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { T3TeamWidgetBlock } from "~/t3team/chat/t3team-widgetBlock";
 
 const meta = {
-  title: "T3Team/WidgetBlock",
+  title: "T3Team/Chat/Widget Block",
   component: T3TeamWidgetBlock,
   parameters: {
     layout: "padded",

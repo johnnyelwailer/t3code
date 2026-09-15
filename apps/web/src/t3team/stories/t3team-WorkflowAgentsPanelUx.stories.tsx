@@ -888,7 +888,7 @@ export const AllVariants_Complex: Story = {
  * `RealisticGheTriage` and the variant stories use their own `render` and ignore the binding.
  */
 const meta = {
-  title: "T3Team/Chat/WorkflowAgentsPanelUx",
+  title: "T3Team/Agents Panel/Agents Panel UX",
   component: CardStory,
   parameters: { layout: "centered" },
 } satisfies Meta;

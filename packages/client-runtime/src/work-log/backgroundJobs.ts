@@ -40,6 +40,14 @@ export interface BackgroundJobStart {
   readonly startedAtMs: number;
   /** Hard kill deadline reported in the marker (start + deadline). */
   readonly deadlineMs: number;
+  /** The process id reported in the start marker (absent when it said "pid ?"). */
+  readonly pid?: number;
+  /**
+   * The tool call's own display label — the short human label the agent
+   * passed as a tool argument ("Building the project"). Shown INSTEAD of
+   * the raw command so the row reads like the tool card it came from.
+   */
+  readonly label?: string;
 }
 
 export type BackgroundJobFinishReason =
@@ -51,6 +59,8 @@ export type BackgroundJobFinishReason =
 export interface BackgroundJobState extends BackgroundJobStart {
   readonly state: "running" | "finished";
   readonly finishedReason?: BackgroundJobFinishReason;
+  /** The shell command that produced the job. Modern rows only — see `command`. */
+  readonly command?: string;
   /** Entry id of the work-log row that first reported the job's start. */
   readonly startedEntryId?: string;
   /** Entry id of the work-log row that last mentioned this job. */
@@ -82,6 +92,12 @@ export interface BackgroundJobFoldEntry {
    * from opening a phantom one.
    */
   readonly command?: string | undefined;
+  /**
+   * The row's display label (the tool call's human label, e.g.
+   * "Building the project"). Adopted for a job the row OPENS; later rows
+   * that merely mention the job never overwrite it.
+   */
+  readonly label?: string | undefined;
 }
 
 /**
@@ -98,6 +114,8 @@ const JOB_ID = String.raw`job_[0-9a-zA-Z]+`;
 const START_RE = new RegExp(String.raw`background job:\s*(${JOB_ID})`);
 /** "Command still running after 10s — …" (elapsed at yield time). */
 const ELAPSED_RE = new RegExp(String.raw`still running after (\d+)s`);
+/** "…it is now a background job: job_xxx (pid 4242)." — the numeric pid only. */
+const PID_RE = new RegExp(String.raw`\(pid (\d+)\)`);
 /** "…under a 600s hard deadline owned by this thread…". */
 const DEADLINE_RE = new RegExp(String.raw`(\d+)s hard deadline`);
 
@@ -162,10 +180,13 @@ export function detectBackgroundJobStart(
   const deadlineMatch = DEADLINE_RE.exec(detail);
   const deadlineSecs = deadlineMatch !== null ? Number(deadlineMatch[1]) : 0;
   const startedAtMs = Math.max(0, observedAtMs - elapsedSecs * 1000);
+  const pidMatch = PID_RE.exec(detail);
+  const pid = pidMatch !== null ? Number(pidMatch[1]) : undefined;
   return {
     jobId,
     startedAtMs,
     deadlineMs: startedAtMs + deadlineSecs * 1000,
+    ...(Number.isFinite(pid) && pid !== undefined ? { pid } : {}),
   };
 }
 
@@ -199,14 +220,27 @@ function applyJobMarkers(
   text: string,
   entryId: string,
   observedAtMs: number,
+  markerFromDetail: boolean,
+  commandPreview?: string,
+  label?: string,
 ): void {
   const start = detectBackgroundJobStart(text, observedAtMs);
   if (start !== null) {
     const existing = byId.get(start.jobId);
     const settled = existing?.state === "finished";
+    // A repeated start marker must not clobber the label the first row gave
+    // the job (same as startedEntryId: first opener wins).
+    const jobLabel = existing !== undefined ? (existing.label ?? label) : label;
     byId.set(start.jobId, {
       ...start,
       state: settled ? "finished" : "running",
+      // The row's own command is only the shell command when the result text
+      // came from `detail` (modern rows). In the transposed era the marker
+      // text IS `command`, so it must not be adopted as the job's command.
+      ...(markerFromDetail !== false && commandPreview !== undefined
+        ? { command: commandPreview }
+        : {}),
+      ...(jobLabel !== undefined ? { label: jobLabel } : {}),
       startedEntryId: existing?.startedEntryId ?? entryId,
       lastSeenEntryId: entryId,
       ...(settled && existing !== undefined ? { finishedReason: existing.finishedReason } : {}),
@@ -277,10 +311,19 @@ export function foldBackgroundJobs(
 ): readonly BackgroundJobState[] {
   const byId = new Map<string, BackgroundJobState>();
   for (const entry of entries) {
-    const text =
-      entry.detail !== undefined && entry.detail.length > 0 ? entry.detail : entry.command;
+    const detail = entry.detail;
+    const fromDetail = detail !== undefined && detail.length > 0;
+    const text = fromDetail ? detail : entry.command;
     if (text === undefined || text.length === 0) continue;
-    applyJobMarkers(byId, text, entry.id, toFiniteMs(entry.createdAt));
+    applyJobMarkers(
+      byId,
+      text,
+      entry.id,
+      toFiniteMs(entry.createdAt),
+      fromDetail,
+      entry.command,
+      entry.label?.trim() !== "" ? entry.label : undefined,
+    );
   }
   settleJobsLostToRestart(byId, serverStartedAtMs);
   return [...byId.values()];

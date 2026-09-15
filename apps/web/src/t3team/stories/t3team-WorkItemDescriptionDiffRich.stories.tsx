@@ -298,7 +298,7 @@ function RichDiff() {
 }
 
 const meta = {
-  title: "T3Team/Work Item Description Diff Rich",
+  title: "T3Team/Work Item/Description Diff Rich",
   parameters: { layout: "padded" },
 } satisfies Meta;
 
