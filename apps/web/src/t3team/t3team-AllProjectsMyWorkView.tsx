@@ -31,6 +31,7 @@ import {
   type ProjectMyWorkLens,
 } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
 import { ProjectMyWorkLoadingState } from "~/t3team/t3team-projectMyWorkContentState";
+import { useT3TeamBetaFlags } from "~/t3team/t3team-betaFlags";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 /**
@@ -49,6 +50,7 @@ export function AllProjectsMyWorkView({
   onOpenTicket: (projectId: string, ticketId: string) => void;
 }) {
   const { allProjects } = useProjectStore();
+  const { flags } = useT3TeamBetaFlags();
   const boundProjects = useMemo(() => selectBoundProjects(allProjects), [allProjects]);
   const { state, setState } = useProjectDashboardMyWorkState("all");
   const lens = state.lens;
@@ -109,7 +111,14 @@ export function AllProjectsMyWorkView({
     }
     // TODO(digest-nav): rows open the ticket URL today; route through onOpenTicket once the digest
     // rows accept an in-app handler.
-    return <ProjectMyWorkDigestView plan={digestPlan} graph={digestGraph} nowMs={Date.now()} />;
+    return (
+      <ProjectMyWorkDigestView
+        plan={digestPlan}
+        graph={digestGraph}
+        nowMs={Date.now()}
+        burndownVariant={flags.digestBurndownVariant}
+      />
+    );
   };
 
   return (
