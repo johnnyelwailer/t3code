@@ -501,6 +501,16 @@ export const OrchestrationSession = Schema.Struct({
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
   activeTurnId: Schema.NullOr(TurnId),
   lastError: Schema.NullOr(TrimmedNonEmptyString),
+  /**
+   * Deterministic restart marker: set ONLY by the server's startup session
+   * reconcile, when a thread's session died with the server while a turn was
+   * in flight. Distinguishes a restart-caused terminal session from provider
+   * failures, provider death, and user stops, so consumers (the child
+   * abnormal-stop dedup, the post-restart wake steer) can tell the two apart
+   * without string-matching lastError. Absent on every non-restart session
+   * write; old persisted events decode without it (optional).
+   */
+  stoppedByServerRestart: Schema.optional(Schema.Boolean),
   updatedAt: IsoDateTime,
 });
 export type OrchestrationSession = typeof OrchestrationSession.Type;

@@ -987,3 +987,61 @@ it.effect("settles failed opt-in recovery without retrying the provider turn", (
     });
   }),
 );
+
+it.effect("stamps the durable restart marker only on sessions that had a turn in flight", () => {
+  // running + activeTurnId: a turn WAS in flight when the server died.
+  const interrupted = makeThread(
+    "thread-marker-interrupted",
+    "running",
+    TurnId.make("turn-marker"),
+  );
+  // starting with no active turn: the restart orphans the session, but no
+  // in-flight turn was interrupted — the wake steer must not fire for it.
+  const noTurn = makeThread("thread-marker-no-turn", "starting");
+  const dispatched: OrchestrationCommand[] = [];
+
+  return runReconciliation({
+    threads: [interrupted, noTurn],
+    directory: {
+      getBinding: () => Effect.succeed(Option.none()),
+      upsert: () => Effect.void,
+      recordImportedTranscript: () => Effect.die("unused"),
+      getProvider: () => Effect.die("unused"),
+      listThreadIds: () => Effect.die("unused"),
+      listBindings: () => Effect.succeed([]),
+    },
+    dispatch: (command) =>
+      Effect.sync(() => dispatched.push(command)).pipe(Effect.as({ sequence: dispatched.length })),
+  }).pipe(
+    Effect.tap(() =>
+      Effect.sync(() => {
+        assert.deepStrictEqual(
+          dispatched.map((command) =>
+            command.type === "thread.session.set"
+              ? {
+                  threadId: command.threadId,
+                  status: command.session.status,
+                  lastError: command.session.lastError,
+                  stoppedByServerRestart: command.session.stoppedByServerRestart,
+                }
+              : null,
+          ),
+          [
+            {
+              threadId: interrupted.id,
+              status: "error",
+              lastError: "Restarted mid-turn — send a message to continue.",
+              stoppedByServerRestart: true,
+            },
+            {
+              threadId: noTurn.id,
+              status: "error",
+              lastError: "Restarted mid-turn — send a message to continue.",
+              stoppedByServerRestart: false,
+            },
+          ],
+        );
+      }),
+    ),
+  );
+});
