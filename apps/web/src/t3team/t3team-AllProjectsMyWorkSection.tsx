@@ -18,6 +18,7 @@ import { ChevronRightIcon } from "lucide-react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { useProjectMyWork } from "~/t3team/hooks/t3team-useProjectMyWork";
+import { humanizeT3TeamBackendError } from "~/t3team/t3team-humanizeBackendError";
 import { JiraSessionExpiredPanel } from "~/t3team/components/t3team-JiraSessionExpiredPanel";
 import { AppProjectIcon } from "~/t3team/t3team-AppStatusBits";
 import { TicketWorkItemRow } from "~/t3team/t3team-ProjectDashboardItemViews";
@@ -67,7 +68,10 @@ export function AllProjectsMyWorkSection({
       {sessionExpired ? (
         <JiraSessionExpiredPanel onSignedIn={reload} />
       ) : error ? (
-        <p className="text-destructive text-xs">{error}</p>
+        <p className="text-destructive text-xs">
+          {humanizeT3TeamBackendError(error).title}
+          <span className="sr-only"> {error}</span>
+        </p>
       ) : (
         <div className="flex min-w-0 flex-col">
           {assigned.map((ticket) => (

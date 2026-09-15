@@ -28,6 +28,7 @@ import {
 } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
 import { AllProjectsMyWorkSection } from "~/t3team/t3team-AllProjectsMyWorkSection";
+import { ProjectMyWorkDigestErrorState } from "~/t3team/t3team-ProjectMyWorkDigestErrorState";
 import { ProjectMyWorkDigestView } from "~/t3team/t3team-ProjectMyWorkDigestView";
 import {
   ProjectMyWorkViewSwitch,
@@ -105,17 +106,7 @@ export function AllProjectsMyWorkView({
       return <JiraSessionExpiredPanel onSignedIn={digestReload} />;
     }
     if (digestStatus === "error") {
-      return (
-        <T3SurfacePanel
-          tone="dashed"
-          className="px-6 py-10 text-center text-sm text-muted-foreground"
-        >
-          Could not load the digest view.
-          {digestError ? (
-            <span className="block pt-1 text-xs opacity-80">{digestError}</span>
-          ) : null}
-        </T3SurfacePanel>
-      );
+      return <ProjectMyWorkDigestErrorState error={digestError} onRetry={digestReload} centered />;
     }
     if (viewerUnresolved && (digestGraph?.tickets.length ?? 0) === 0) {
       return (

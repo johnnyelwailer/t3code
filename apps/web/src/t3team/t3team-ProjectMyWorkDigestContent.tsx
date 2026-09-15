@@ -11,6 +11,7 @@ import { useNowMinute } from "~/hooks/useNowMinute";
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { JiraSessionExpiredPanel } from "~/t3team/components/t3team-JiraSessionExpiredPanel";
 import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
+import { ProjectMyWorkDigestErrorState } from "~/t3team/t3team-ProjectMyWorkDigestErrorState";
 import { ProjectMyWorkDigestView } from "~/t3team/t3team-ProjectMyWorkDigestView";
 import { useT3TeamBetaFlags } from "~/t3team/t3team-betaFlags";
 import { ProjectMyWorkLoadingState } from "~/t3team/t3team-projectMyWorkContentState";
@@ -57,12 +58,7 @@ export function ProjectMyWorkDigestContent({
     return <JiraSessionExpiredPanel onSignedIn={reload} />;
   }
   if (status === "error") {
-    return (
-      <T3SurfacePanel tone="dashed" className="px-4 py-8 text-sm text-muted-foreground">
-        Could not load the digest view.
-        {error ? <span className="block pt-1 text-xs opacity-80">{error}</span> : null}
-      </T3SurfacePanel>
-    );
+    return <ProjectMyWorkDigestErrorState error={error} onRetry={reload} />;
   }
   if (viewerUnresolved && (graph?.tickets.length ?? 0) === 0) {
     return (
