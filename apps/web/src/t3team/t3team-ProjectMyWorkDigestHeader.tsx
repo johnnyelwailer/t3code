@@ -3,6 +3,21 @@ import {
   DigestBurndownChart,
   DigestBurndownSparkline,
 } from "~/t3team/t3team-ProjectMyWorkDigestBurndown";
+import { formatDigestAgo } from "~/t3team/t3team-ProjectMyWorkDigestChips";
+
+/**
+ * The digest's data-source status. Read-only: the deterministic layer refreshes on its own
+ * ("auto"); the owner's live "arranging · 2 h" read was a status-reading bug — the view shows
+ * when the data was last updated, not a vague in-progress verb.
+ */
+function DigestAutoStatus({ updatedAtMs, nowMs }: { updatedAtMs: number; nowMs: number }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="size-1.5 rounded-full bg-success" aria-hidden />
+      auto · updated {formatDigestAgo(nowMs, new Date(updatedAtMs).toISOString())} ago
+    </span>
+  );
+}
 
 /**
  * How the sprint time axis is drawn: the 4px elapsed-time bar of today, the personal burndown
@@ -21,10 +36,12 @@ export function ProjectMyWorkDigestHeader({
   graph,
   nowMs,
   burndownVariant = "off",
+  updatedAtMs,
 }: {
   graph: DigestGraph;
   nowMs: number;
   burndownVariant?: DigestBurndownVariant;
+  updatedAtMs?: number;
 }) {
   const sprint = graph.sprint;
   const scopeLabel =
@@ -50,6 +67,9 @@ export function ProjectMyWorkDigestHeader({
           <span>
             {graph.viewer.name} · {graph.viewer.role}
           </span>
+          {updatedAtMs !== undefined ? (
+            <DigestAutoStatus updatedAtMs={updatedAtMs} nowMs={nowMs} />
+          ) : null}
         </div>
       </header>
     );
@@ -81,6 +101,9 @@ export function ProjectMyWorkDigestHeader({
           <span>
             {graph.viewer.name} · {graph.viewer.role}
           </span>
+          {updatedAtMs !== undefined ? (
+            <DigestAutoStatus updatedAtMs={updatedAtMs} nowMs={nowMs} />
+          ) : null}
         </div>
       </div>
       <div className="space-y-1.5">

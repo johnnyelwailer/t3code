@@ -49,11 +49,29 @@ vi.mock("~/t3team/hooks/t3team-useProjectMyWork", () => ({
         status: "In Progress",
         ref: { id: "ticket-1", title: "Ship the thing" },
       },
+      {
+        id: "ticket-2",
+        displayId: "NEX-2",
+        title: "Subtask of the thing",
+        status: "To Do",
+        parentId: "ticket-1",
+        ref: { id: "ticket-2", title: "Subtask of the thing" },
+      },
     ],
     loading: false,
     error: null,
     reload: () => {},
     lastCheckedAt: undefined,
+  }),
+}));
+
+vi.mock("~/t3team/hooks/t3team-useProjectKanbanBoardColumns", () => ({
+  useProjectKanbanBoardColumns: () => ({
+    boardColumns: [],
+    availableStatuses: [],
+    loading: false,
+    error: null,
+    reload: () => {},
   }),
 }));
 
@@ -86,6 +104,31 @@ describe("AllProjectsMyWorkView with a bound project", () => {
     // Effects never run in a static render, so the digest has not received its reports yet and
     // must show the loading state rather than the per-project sections.
     expect(markup).not.toContain("Ship the thing");
+    lensMock.lens = "hierarchy";
+  });
+
+  it("renders the depth-indented tree in the hierarchy lens, not the flat list", () => {
+    lensMock.lens = "hierarchy";
+    const markup = renderToStaticMarkup(<AllProjectsMyWorkView onOpenTicket={() => {}} />);
+    // Both parent and child render, and the child is indented under its parent.
+    expect(markup).toContain("Ship the thing");
+    expect(markup).toContain("Subtask of the thing");
+    expect(markup).toContain("border-l-2 border-border/60 pl-3");
+    expect(markup).not.toContain('class="divide-y divide-border/70');
+  });
+
+  it("renders the per-project kanban in the board lens — distinct from the hierarchy lens", () => {
+    lensMock.lens = "board";
+    const board = renderToStaticMarkup(<AllProjectsMyWorkView onOpenTicket={() => {}} />);
+    expect(board).toContain("Ship the thing");
+    expect(board).toContain("Subtask of the thing");
+    // The kanban scrolls horizontally and drops the tree's indent border.
+    expect(board).toContain("overflow-x-auto");
+    expect(board).not.toContain("border-l-2 border-border/60 pl-3");
+
+    lensMock.lens = "hierarchy";
+    const hierarchy = renderToStaticMarkup(<AllProjectsMyWorkView onOpenTicket={() => {}} />);
+    expect(board).not.toBe(hierarchy);
     lensMock.lens = "hierarchy";
   });
 });

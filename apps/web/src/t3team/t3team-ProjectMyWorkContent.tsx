@@ -128,22 +128,9 @@ export function ProjectMyWorkContent({
       );
     }
 
-    if (viewMode === "table") {
-      return (
-        <ProjectMyWorkTableView
-          projectId={project.id}
-          rows={tableRows}
-          sortBy={tableSortBy}
-          sortDirection={tableSortDirection}
-          onSortByChange={onTableSortByChange}
-          onSortDirectionChange={onTableSortDirectionChange}
-          onTicketContextMenu={openTicketAgentContextMenu}
-          onOpenTicket={onOpenTicket}
-        />
-      );
-    }
-
-    if (isHierarchyMode) {
+    // The Hierarchy lens renders the depth-indented parent/child tree directly; the legacy
+    // groupMode="hierarchy" switch keeps the same body for pre-lens state.
+    if (lens === "hierarchy" || isHierarchyMode) {
       return (
         <ProjectMyWorkHierarchyView
           projectId={project.id}
@@ -158,6 +145,21 @@ export function ProjectMyWorkContent({
           renderTicketExtra={(ticket, _isContextOnly, compact) =>
             renderTicketExtra(ticket, compact)
           }
+        />
+      );
+    }
+
+    if (viewMode === "table") {
+      return (
+        <ProjectMyWorkTableView
+          projectId={project.id}
+          rows={tableRows}
+          sortBy={tableSortBy}
+          sortDirection={tableSortDirection}
+          onSortByChange={onTableSortByChange}
+          onSortDirectionChange={onTableSortDirectionChange}
+          onTicketContextMenu={openTicketAgentContextMenu}
+          onOpenTicket={onOpenTicket}
         />
       );
     }

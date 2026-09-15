@@ -11,6 +11,10 @@
  *  - the recipe-action registry holds a single handler slot, so an agent action would silently
  *    address one arbitrary section.
  * A read-only roll-up needs none of that machinery, so it takes none of it.
+ *
+ * The lens makes the roll-up's non-digest views distinct instead of two copies of the flat list:
+ * Hierarchy reuses the per-project depth-indented tree (`ProjectMyWorkHierarchyView`), and Board
+ * reuses the per-project kanban read-only (`ProjectDashboardKanban` without a move handler).
  */
 import { useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
@@ -18,15 +22,103 @@ import { ChevronRightIcon } from "lucide-react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { useProjectMyWork } from "~/t3team/hooks/t3team-useProjectMyWork";
+import { useProjectKanbanBoardColumns } from "~/t3team/hooks/t3team-useProjectKanbanBoardColumns";
+import { readProjectSetupProfileIdFromProject } from "~/t3team/hooks/t3team-createProjectBootstrap";
 import { JiraSessionExpiredPanel } from "~/t3team/components/t3team-JiraSessionExpiredPanel";
 import { AppProjectIcon } from "~/t3team/t3team-AppStatusBits";
 import { TicketWorkItemRow } from "~/t3team/t3team-ProjectDashboardItemViews";
+import { ProjectMyWorkHierarchyView } from "~/t3team/t3team-ProjectMyWorkHierarchyView";
+import { ProjectDashboardKanban } from "~/t3team/t3team-ProjectDashboardKanban";
+import {
+  buildProjectTicketHierarchy,
+  type ProjectTicketHierarchy,
+} from "~/t3team/t3team-ticketHierarchy";
+import { buildProjectTicketKanbanColumns } from "~/t3team/t3team-projectTicketStatus";
+import type { ProjectMyWorkLens } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
+import type { ProjectTicket } from "~/t3team/t3team-types";
 
-export function AllProjectsMyWorkSection({
+/** The roll-up is read-only: no agent context menu, no ticket moves. */
+const NOOP_TICKET_CONTEXT_MENU = () => undefined;
+const NO_AGENT_CONTEXT = () => null;
+
+/** Read-only per-project board: the roll-up never moves tickets. */
+function AllProjectsMyWorkBoard({
   project,
+  tickets,
+  lastCheckedAt,
   onOpenTicket,
 }: {
   project: ProjectShellProject;
+  tickets: readonly ProjectTicket[];
+  lastCheckedAt?: number;
+  onOpenTicket: (projectId: string, ticketId: string) => void;
+}) {
+  const { boardColumns, availableStatuses } = useProjectKanbanBoardColumns(project);
+  const profileId = useMemo(() => readProjectSetupProfileIdFromProject(project), [project]);
+  const kanbanColumns = useMemo(
+    () =>
+      buildProjectTicketKanbanColumns(tickets, {
+        profileId,
+        availableStatuses,
+        boardColumns,
+      }),
+    [availableStatuses, boardColumns, profileId, tickets],
+  );
+  const parentChildGroups = useMemo(() => buildProjectTicketHierarchy(tickets), [tickets]);
+  return (
+    <ProjectDashboardKanban
+      kanbanColumns={kanbanColumns}
+      allTickets={tickets}
+      isHierarchyMode={false}
+      parentChildGroups={parentChildGroups}
+      {...(lastCheckedAt !== undefined ? { jiraLastCheckedAt: lastCheckedAt } : {})}
+      projectId={project.id}
+      onOpenTicket={onOpenTicket}
+      onTicketContextMenu={NOOP_TICKET_CONTEXT_MENU}
+    />
+  );
+}
+
+/** Depth-indented parent/child tree for one project, reusing the per-project hierarchy view. */
+function AllProjectsMyWorkTree({
+  project,
+  tickets,
+  lastCheckedAt,
+  onOpenTicket,
+}: {
+  project: ProjectShellProject;
+  tickets: readonly ProjectTicket[];
+  lastCheckedAt?: number;
+  onOpenTicket: (projectId: string, ticketId: string) => void;
+}) {
+  const hierarchy: ProjectTicketHierarchy = useMemo(
+    () => buildProjectTicketHierarchy(tickets),
+    [tickets],
+  );
+  const matchedTicketIds = useMemo(() => new Set(tickets.map((ticket) => ticket.id)), [tickets]);
+  return (
+    <ProjectMyWorkHierarchyView
+      projectId={project.id}
+      viewMode="list"
+      hierarchy={hierarchy}
+      contextByTicketId={new Map()}
+      matchedTicketIds={matchedTicketIds}
+      {...(lastCheckedAt !== undefined ? { jiraLastCheckedAt: lastCheckedAt } : {})}
+      onTicketContextMenu={NOOP_TICKET_CONTEXT_MENU}
+      getTicketAgentContext={NO_AGENT_CONTEXT}
+      onOpenTicket={onOpenTicket}
+      renderTicketExtra={() => null}
+    />
+  );
+}
+
+export function AllProjectsMyWorkSection({
+  project,
+  lens,
+  onOpenTicket,
+}: {
+  project: ProjectShellProject;
+  lens: ProjectMyWorkLens;
   onOpenTicket: (projectId: string, ticketId: string) => void;
 }) {
   const { tickets, loading, error, sessionExpired, reload, lastCheckedAt } =
@@ -68,6 +160,20 @@ export function AllProjectsMyWorkSection({
         <JiraSessionExpiredPanel onSignedIn={reload} />
       ) : error ? (
         <p className="text-destructive text-xs">{error}</p>
+      ) : lens === "board" ? (
+        <AllProjectsMyWorkBoard
+          project={project}
+          tickets={assigned}
+          {...(lastCheckedAt !== undefined ? { lastCheckedAt } : {})}
+          onOpenTicket={onOpenTicket}
+        />
+      ) : lens === "hierarchy" ? (
+        <AllProjectsMyWorkTree
+          project={project}
+          tickets={assigned}
+          {...(lastCheckedAt !== undefined ? { lastCheckedAt } : {})}
+          onOpenTicket={onOpenTicket}
+        />
       ) : (
         <div className="flex min-w-0 flex-col">
           {assigned.map((ticket) => (

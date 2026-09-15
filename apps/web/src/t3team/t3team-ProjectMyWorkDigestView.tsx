@@ -16,21 +16,28 @@ export function ProjectMyWorkDigestView({
   nowMs,
   onOpenTicket,
   burndownVariant = "off",
+  updatedAtMs,
 }: {
   plan: ResolvedDigestPlan;
   graph: DigestGraph;
   nowMs: number;
   onOpenTicket?: ((ticketId: string) => void) | undefined;
   burndownVariant?: DigestBurndownVariant;
+  updatedAtMs?: number;
 }) {
   const ticketsById = new Map(graph.tickets.map((ticket) => [ticket.id, ticket]));
   const lane = { graph, ticketsById, nowMs, onOpenTicket };
   const header = (
-    <ProjectMyWorkDigestHeader graph={graph} nowMs={nowMs} burndownVariant={burndownVariant} />
+    <ProjectMyWorkDigestHeader
+      graph={graph}
+      nowMs={nowMs}
+      burndownVariant={burndownVariant}
+      {...(updatedAtMs !== undefined ? { updatedAtMs } : {})}
+    />
   );
   if (plan.sections.length === 0) {
     return (
-      <div className="mx-auto max-w-[120rem] space-y-8">
+      <div className="space-y-8">
         {header}
         <T3SurfacePanel
           tone="dashed"
@@ -44,8 +51,10 @@ export function ProjectMyWorkDigestView({
   const side = plan.sections.filter((s) => s.placement === "side");
   const main = plan.sections.filter((s) => s.placement === "main");
   const footer = plan.sections.filter((s) => s.placement === "footer");
+  // The digest spans the full dashboard width — no max-width or centering cap —
+  // so a widescreen uses the whole pane instead of a narrow centered column.
   return (
-    <div className="mx-auto max-w-[120rem] space-y-8">
+    <div className="space-y-8">
       {header}
       <div className="grid gap-x-6 gap-y-8 sm:gap-x-10 xl:grid-cols-[minmax(16rem,2fr)_minmax(0,5fr)]">
         <div className="space-y-8">

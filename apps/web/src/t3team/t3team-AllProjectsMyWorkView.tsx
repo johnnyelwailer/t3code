@@ -28,6 +28,7 @@ import {
 } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
 import { AllProjectsMyWorkSection } from "~/t3team/t3team-AllProjectsMyWorkSection";
+import { ProjectMyWorkDigestRetryState } from "~/t3team/t3team-ProjectMyWorkDigestRetryState";
 import { ProjectMyWorkDigestView } from "~/t3team/t3team-ProjectMyWorkDigestView";
 import {
   ProjectMyWorkViewSwitch,
@@ -69,6 +70,7 @@ export function AllProjectsMyWorkView({
     error: digestError,
     viewerUnresolved,
     sessionExpired: digestSessionExpired,
+    updatedAt: digestUpdatedAt,
     reload: digestReload,
   } = useMyWorkDigestGraph({
     projects: boundProjects,
@@ -97,6 +99,11 @@ export function AllProjectsMyWorkView({
   }
 
   const renderDigest = () => {
+    // A failed fetch (backend still starting, timeout) is not terminal: the poller retries with
+    // backoff and this recovers on its own, so it renders as "retrying" — never a raw error.
+    if (digestStatus === "retrying" && !digestGraph) {
+      return <ProjectMyWorkDigestRetryState />;
+    }
     // First paint shows a loading state instead of a misleading empty one.
     if (digestStatus === "loading" && !digestGraph) {
       return <ProjectMyWorkLoadingState />;
@@ -105,6 +112,7 @@ export function AllProjectsMyWorkView({
       return <JiraSessionExpiredPanel onSignedIn={digestReload} />;
     }
     if (digestStatus === "error") {
+      // Only a genuinely terminal condition reaches here (e.g. this server has no digest endpoint).
       return (
         <T3SurfacePanel
           tone="dashed"
@@ -145,6 +153,7 @@ export function AllProjectsMyWorkView({
         graph={digestGraph}
         nowMs={nowMs}
         burndownVariant={flags.digestBurndownVariant}
+        {...(digestUpdatedAt !== undefined ? { updatedAtMs: digestUpdatedAt } : {})}
         onOpenTicket={
           // Beta flag: rows open the ticket in-app (each ticket knows its project).
           flags.digestRowNavigation === "in-app"
@@ -160,7 +169,14 @@ export function AllProjectsMyWorkView({
 
   return (
     <ScrollArea className="h-full min-h-0 flex-1">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 p-4 sm:p-6">
+      <div
+        className={
+          lens === "digest"
+            ? // The digest spans the full pane width; the legacy sections keep the centered column.
+              "flex w-full flex-col gap-8 p-4 sm:p-6"
+            : "mx-auto flex w-full max-w-6xl flex-col gap-8 p-4 sm:p-6"
+        }
+      >
         <div>
           <ProjectMyWorkViewSwitch lens={lens} onLensChange={setLens} />
         </div>
@@ -170,6 +186,7 @@ export function AllProjectsMyWorkView({
               <AllProjectsMyWorkSection
                 key={project.id}
                 project={project}
+                lens={lens}
                 onOpenTicket={onOpenTicket}
               />
             ))}

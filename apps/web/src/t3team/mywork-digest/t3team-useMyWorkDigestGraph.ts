@@ -27,8 +27,11 @@ import {
 } from "~/t3team/hooks/t3team-integrationPolling";
 import { readCachedAtlassianCurrentUserDisplayName } from "~/t3team/hooks/t3team-useAtlassianCurrentUserDisplayName";
 import { payloadToDigestGraph, type DigestViewer } from "./t3team-digestGraphMappers";
-import { readLastVisitAt, writeLastVisitAt } from "./t3team-digestLastVisit";
+import { buildMyWorkDigestEntries, digestScopeSignature } from "./t3team-digestScope";
 import type { DigestGraph } from "~/t3team/t3team-projectMyWorkDigestPlan";
+
+/** No visit record yet: everything counts as new since the last visit. */
+const LAST_VISIT_EPOCH = "1970-01-01T00:00:00.000Z";
 
 export type UseMyWorkDigestGraphInput = {
   /** The scoped project list: one entry for scope "project", all for "all". */
@@ -41,7 +44,8 @@ export type UseMyWorkDigestGraphInput = {
 
 export type UseMyWorkDigestGraphResult = {
   readonly graph: DigestGraph | null;
-  readonly status: "loading" | "ready" | "error";
+  /** "retrying" = a transient failure (cold start / blip) the poller is backing off; "error" = terminal. */
+  readonly status: "loading" | "ready" | "retrying" | "error";
   readonly error?: string;
   /** True when the server had no Jira identity for a project (stale or missing token). */
   readonly viewerUnresolved: boolean;
@@ -50,13 +54,15 @@ export type UseMyWorkDigestGraphResult = {
    * instead of the error string, and reload once the user signs back in.
    */
   readonly sessionExpired: boolean;
+  /** When the last successful graph update landed (drives the "auto · updated" status). */
+  readonly updatedAt?: number;
   readonly reload: () => void;
 };
 
 export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWorkDigestGraphResult {
   const backend = useBackend();
   const [graph, setGraph] = useState<DigestGraph | null>(null);
-  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [status, setStatus] = useState<"loading" | "ready" | "retrying" | "error">("loading");
   const [error, setError] = useState<string | undefined>(undefined);
   const [viewerUnresolved, setViewerUnresolved] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -65,43 +71,16 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
   const scope = input.scope ?? "project";
   const enabled = input.enabled ?? true;
 
-  const entries = useMemo(
-    () =>
-      projects
-        .filter(
-          (project): project is ProjectShellProject =>
-            project.source?.provider === "atlassian" &&
-            typeof project.source.externalProjectId === "string" &&
-            project.source.externalProjectId !== "" &&
-            typeof project.source.accountId === "string",
-        )
-        .map((project) => {
-          const entry: MyWorkDigestProjectInput = {
-            account: {
-              id: project.source.accountId as string,
-              provider: project.source.provider,
-            },
-            externalProjectId: project.source.externalProjectId as string,
-            appProjectId: project.id,
-            name: project.title,
-          };
-          return entry;
-        }),
-    [projects],
-  );
+  const entries = useMemo(() => buildMyWorkDigestEntries(projects), [projects]);
 
-  const scopeKey = entries
-    .map((entry) => `${entry.account.id}:${entry.externalProjectId}`)
-    .join("|");
   const fingerprintRef = useRef<string | undefined>(undefined);
   const lastCheckedAtRef = useRef<number | undefined>(undefined);
-  // Bumped when the scope signature changes so an in-flight load from the
-  // previous scope cannot clobber the new one (same guard as useProjectMyWork).
+  // Bumped on scope change so an in-flight load from the previous scope cannot clobber the new one.
   const generationRef = useRef(0);
 
   // Scope changed since the last render: reset in place (React's "adjust state
   // on prop change" pattern) instead of an effect, so no stale graph paints first.
-  const resetSignature = `${scope}|${scopeKey}`;
+  const resetSignature = digestScopeSignature(scope, entries);
   const [renderedSignature, setRenderedSignature] = useState(resetSignature);
   if (renderedSignature !== resetSignature) {
     setRenderedSignature(resetSignature);
@@ -154,11 +133,9 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
       const viewer: DigestViewer = {
         name: viewerDisplayName() || result.value.viewer?.name || "",
         role: input.viewer?.role?.trim() !== "" ? (input.viewer?.role as string) : "",
-        lastVisitAt: readLastVisitAt(scope),
+        // The server's visit receipt: the PREVIOUS round's value is the "since last visit" cutoff.
+        lastVisitAt: result.value.viewer?.lastVisitAt ?? LAST_VISIT_EPOCH,
       };
-      // Seeing it now counts as "being here": stamp the visit after the
-      // request already captured the previous one.
-      writeLastVisitAt(scope, new Date().toISOString());
 
       const nextGraph = payloadToDigestGraph({
         payload: result.value,
@@ -180,21 +157,21 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
       lastCheckedAtRef.current = Date.now();
     } catch (cause) {
       if (generationRef.current !== gen) return;
-      // A dead refresh token is not a load failure to retry: the server cleared the credentials,
-      // so the only way forward is a fresh sign-in.
+      // A dead refresh token is terminal: the server cleared the credentials, only sign-in recovers.
       if (isJiraSessionExpiredError(cause)) {
         setSessionExpired(true);
         setError(undefined);
         setStatus("error");
         return;
       }
-      setError(cause instanceof Error ? cause.message : "Failed to load the My Work digest.");
-      setStatus("error");
+      // A failed fetch (backend booting, timeout, network) is transient: the poller retries with
+      // backoff, so report "retrying" instead of a raw error and let the view recover on its own.
+      setStatus("retrying");
+      setError(undefined);
     }
   };
 
-  // The poller reads the latest loader through a ref (fresh backend/viewer on
-  // every tick) while its subscription restarts only when scope or entries change.
+  // The poller reads the latest loader through a ref; it restarts only when scope or entries change.
   const loadRef = useRef(load);
   useEffect(() => {
     loadRef.current = load;
@@ -202,8 +179,7 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
 
   useEffect(() => {
     if (!enabled || entries.length === 0) return;
-    // A new scope: no fingerprint, no freshness, and any in-flight result from
-    // the previous scope is dropped by the generation bump.
+    // New scope: no fingerprint, no freshness; in-flight results are dropped by the generation bump.
     generationRef.current += 1;
     fingerprintRef.current = undefined;
     lastCheckedAtRef.current = undefined;
@@ -230,6 +206,9 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
     ...(error !== undefined && !idle ? { error } : {}),
     viewerUnresolved,
     sessionExpired: idle ? false : sessionExpired,
+    ...(lastCheckedAtRef.current !== undefined && !idle
+      ? { updatedAt: lastCheckedAtRef.current }
+      : {}),
     reload: () => {
       void loadRef.current(scope, entries);
     },

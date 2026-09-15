@@ -136,8 +136,14 @@ export type T3TeamMyWorkDigestPayload = {
   /**
    * The viewer as the server resolved them: display name from the mirror;
    * `unresolved` when a project had no Jira identity (stale or missing token).
+   * `lastVisitAt` is the server's visit receipt from the previous CHANGED round
+   * (see t3team-myworkDigestLastVisit) — the "since last visit" cutoff.
    */
-  readonly viewer?: { readonly name?: string; readonly unresolved?: true };
+  readonly viewer?: {
+    readonly name?: string;
+    readonly unresolved?: true;
+    readonly lastVisitAt?: string;
+  };
 };
 
 /**
