@@ -21,7 +21,11 @@ import {
   severityForPercent,
   type ProviderUsageThresholds,
 } from "./t3team-providerUsageSampler.ts";
-import { clampPercent, isFinitePercent } from "./t3team-providerUsageMappersHelpers.ts";
+import {
+  clampPercent,
+  isExpiredWindow,
+  isFinitePercent,
+} from "./t3team-providerUsageMappersHelpers.ts";
 
 // The Claude OAuth mapper moved to `t3team-providerUsageMappersClaude.ts`;
 // re-exported here so existing importers keep their import path.
@@ -171,15 +175,17 @@ export const mapCodexRateLimits = (
     window: ProviderUsageWindowKind,
   ) => {
     if (!source || !isFinitePercent(source.usedPercent)) return;
+    const resetsAt =
+      typeof source.resetsAt === "number"
+        ? DateTime.formatIso(DateTime.fromEpochSeconds(source.resetsAt))
+        : null;
+    if (isExpiredWindow(resetsAt, input.sampledAt)) return;
     const percentUsed = clampPercent(source.usedPercent);
     windows.push({
       provider: input.provider,
       window,
       percentUsed,
-      resetsAt:
-        typeof source.resetsAt === "number"
-          ? DateTime.formatIso(DateTime.fromEpochSeconds(source.resetsAt))
-          : null,
+      resetsAt,
       severity: severityForPercent(percentUsed, thresholds),
       source: CODX_USAGE_SOURCE,
       sampledAt: input.sampledAt,

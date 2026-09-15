@@ -536,6 +536,11 @@ export const UserInputQuestion = Schema.Struct({
   header: TrimmedNonEmptyStringSchema,
   question: TrimmedNonEmptyStringSchema,
   options: Schema.Array(UserInputQuestionOption),
+  // Markdown content from earlier in the thread that the question refers to
+  // (options, proposals, or discussion). Rendered above the question in the
+  // dock card so the question is intelligible on its own. Optional: the
+  // provider-native question paths never set it.
+  context: Schema.optional(TrimmedNonEmptyStringSchema),
   allowCustomAnswer: Schema.optional(Schema.Boolean),
   multiSelect: Schema.optional(Schema.Boolean).pipe(
     Schema.withConstructorDefault(Effect.succeed(false)),

@@ -81,6 +81,8 @@ import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
 import * as ServerSettings from "../../serverSettings.ts";
 import * as ProjectionSnapshotQuery from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as ThreadPlanStaleness from "../../orchestration/ThreadPlanStaleness.ts";
+import { renderPlanStalenessNudge } from "../../orchestration/planStalenessNudge.ts";
 const isModelSelection = Schema.is(ModelSelection);
 
 interface PendingCompaction {
@@ -393,6 +395,9 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   const projectionQuery = yield* Effect.serviceOption(
     ProjectionSnapshotQuery.ProjectionSnapshotQuery,
   );
+  // Optional: provider-only runtimes may omit the orchestration side, where
+  // the plan-staleness counter lives; without it no nudge is ever appended.
+  const threadPlanStaleness = yield* Effect.serviceOption(ThreadPlanStaleness.ThreadPlanStalenessService);
   const issueMcpCredential =
     options?.issueMcpCredential ?? McpSessionRegistry.issueActiveMcpCredential;
   const revokeMcpCredential =
@@ -1654,6 +1659,20 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         ? { input: inputTextWithAttachmentPaths }
         : {}),
     };
+    // Plan-staleness nudge: when the thread's task list has gone stale
+    // (PLAN_STALENESS_NUDGE_THRESHOLD+ tool activities since the last plan
+    // write), append the reminder line to THIS turn's input so the model sees
+    // it once, on the turn it starts. Textless continuation turns carry no
+    // input, so they append nothing; the nudge is never persisted — it is
+    // provider-bound only.
+    const planStalenessNudge =
+      input.input === undefined || Option.isNone(threadPlanStaleness)
+        ? undefined
+        : renderPlanStalenessNudge(threadPlanStaleness.value.getPlanAge(input.threadId));
+    const turnInput =
+      input.input !== undefined && planStalenessNudge !== undefined
+        ? { ...input, input: `${input.input}\n\n${planStalenessNudge}` }
+        : input;
     yield* Effect.annotateCurrentSpan({
       "provider.operation": "send-turn",
       "provider.thread_id": input.threadId,
@@ -1711,7 +1730,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         }),
         (turnMetadata) =>
           Effect.gen(function* () {
-            const turn = yield* routed.adapter.sendTurn(input);
+            const turn = yield* routed.adapter.sendTurn(turnInput);
             yield* associateTurnAnalytics({
               providerInstanceId: routed.instanceId,
               threadId: input.threadId,

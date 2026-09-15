@@ -2,6 +2,7 @@ import { ListTodoIcon } from "lucide-react";
 import { memo, type ComponentProps } from "react";
 
 import { formatDuration } from "../../session-logic";
+import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { cn } from "~/lib/utils";
 import { ComposerBanner } from "./ComposerBanner";
 
@@ -140,11 +141,13 @@ export const ComposerTasksContent = memo(function ComposerTasksContent({
   onToggle,
   progress,
   steps,
+  planUpdatedAt,
 }: {
   readonly expanded: boolean;
   readonly onToggle: () => void;
   readonly progress: ComposerTasksProgress;
   readonly steps: readonly ComposerTaskStep[];
+  readonly planUpdatedAt?: string | undefined;
 }) {
   return (
     <div
@@ -160,6 +163,14 @@ export const ComposerTasksContent = memo(function ComposerTasksContent({
       />
       {expanded ? (
         <ComposerBanner.Scroll data-composer-tasks-scroll="true">
+          {planUpdatedAt ? (
+            <div
+              className="px-3 pb-1 pt-1.5 text-[10px] text-muted-foreground/45"
+              data-composer-task-updated="true"
+            >
+              Updated {formatRelativeTimeLabel(planUpdatedAt)}
+            </div>
+          ) : null}
           <ComposerBanner.Children
             render={<ul role="list" />}
             aria-label={`Task list. ${progress.completedSteps} of ${progress.totalSteps} complete.`}

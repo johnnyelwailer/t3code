@@ -110,10 +110,7 @@ describe("ToolAuthCard", () => {
   });
 
   it("connected (GitHub/GHE): names the GHE account the probe reported", () => {
-    const markup = renderCard(
-      { tool: "gh", phase: "connected", account: "pj" },
-      GH_META,
-    );
+    const markup = renderCard({ tool: "gh", phase: "connected", account: "pj" }, GH_META);
     expect(markup).toContain("Signed in as pj");
     expect(markup).toContain("Reconnect");
   });

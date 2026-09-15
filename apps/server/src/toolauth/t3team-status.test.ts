@@ -363,19 +363,23 @@ it.layer(NodeServices.layer)("toolauth status probe", (it) => {
       }),
     );
 
-    it.effect("being logged in to github.com does NOT count — the panel is about the GHE host", () =>
-      Effect.gen(function* () {
-        const homeDir = makeTempHome();
-        try {
-          const state = yield* probe(GH, homeDir, () =>
-            okTextResult("github.com\n  ✓ Logged in to github.com account johnnyelwailer (keyring)"),
-          );
-          expect(state.phase).toBe("idle");
-          expect(state.account).toBeUndefined();
-        } finally {
-          removeTempHome(homeDir);
-        }
-      }),
+    it.effect(
+      "being logged in to github.com does NOT count — the panel is about the GHE host",
+      () =>
+        Effect.gen(function* () {
+          const homeDir = makeTempHome();
+          try {
+            const state = yield* probe(GH, homeDir, () =>
+              okTextResult(
+                "github.com\n  ✓ Logged in to github.com account johnnyelwailer (keyring)",
+              ),
+            );
+            expect(state.phase).toBe("idle");
+            expect(state.account).toBeUndefined();
+          } finally {
+            removeTempHome(homeDir);
+          }
+        }),
     );
 
     it.effect("falls back to the hosts.yml hint when the probe cannot run", () =>
@@ -411,7 +415,9 @@ it.layer(NodeServices.layer)("toolauth status probe", (it) => {
         try {
           const other = ghAdapter("github.corp.example");
           const state = yield* probe(other, homeDir, () =>
-            okTextResult("github.corp.example\n  ✓ Logged in to github.corp.example account pj (keyring)"),
+            okTextResult(
+              "github.corp.example\n  ✓ Logged in to github.corp.example account pj (keyring)",
+            ),
           );
           expect(state.phase).toBe("connected");
           expect(state.account).toBe("pj");

@@ -576,17 +576,17 @@ function workEntryIsActiveTurnActivity(entry: WorkLogEntry): boolean {
 }
 
 /**
- * GHE #156 (part d): which turns are INTER-AGENT REACTION turns, derived from
- * message origin (turn-level surfacing of the message-level origin the
- * projection already carries on `t3teamExt`).
- *
- * A reaction turn is started by the hidden `role:"user"` framing the actor
- * reactor stores with `t3teamExt.actor` set (see t3team-actorMessageReactor.ts).
- * That framing is the user message that immediately precedes the turn's
- * assistant output, so we associate each turn with the user message that kicked
- * it off and mark it a reaction turn when that message carries
- * `t3teamExt.actor`. This lets the timeline de-emphasize inter-agent reaction
- * turns and keep user-originated turns prominent, with no transcript scan.
+ * A reaction turn is started by a `role:"user"` framing that is NOT a person
+ * typing at the keyboard: either the hidden framing the actor reactor stores
+ * with `t3teamExt.actor` set (see t3team-actorMessageReactor.ts), or a
+ * server-forced notification turn stamped with `t3teamExt.notification ===
+ * true` (job notifications and similar forced turns the server raises on
+ * behalf of the thread). That framing is the user message that immediately
+ * precedes the turn's assistant output, so we associate each turn with the
+ * user message that kicked it off and mark it a reaction turn when that
+ * message carries either marker. This lets the timeline de-emphasize
+ * machine-driven reaction turns and keep user-originated turns prominent,
+ * with no transcript scan.
  */
 export function deriveInterAgentReactionTurnIds(
   timelineEntries: ReadonlyArray<TimelineEntry>,
@@ -611,7 +611,10 @@ export function deriveInterAgentReactionTurnIds(
       continue;
     }
     assigned.add(turnId);
-    if (pendingUserMessage?.t3teamExt?.actor !== undefined) {
+    if (
+      pendingUserMessage?.t3teamExt?.actor !== undefined ||
+      pendingUserMessage?.t3teamExt?.notification === true
+    ) {
       reactionTurnIds.add(turnId);
     }
     pendingUserMessage = null;
@@ -620,8 +623,10 @@ export function deriveInterAgentReactionTurnIds(
 }
 
 /**
- * Settled turns fold activity before their terminal assistant message behind
- * a "Worked for ..." row. A single ordinary activity after that message joins
+ * Settled turns fold TOOL ACTIVITY before their terminal assistant message
+ * behind a "Worked for ..." row. Only `kind:"work"` rows fold — prose
+ * (`kind:"message"`) stays visible at all times, so intermediate commentary
+ * is never buried. A single ordinary activity after that message joins
  * the fold, while larger groups and failures stay visible as a trailing summary.
  */
 function deriveTurnFolds(input: {
@@ -707,6 +712,12 @@ function deriveTurnFolds(input: {
         entry.kind === "work" &&
         !workEntryDisplayIndicatesToolFailure(entry.entry);
       if (!isCompaction && index > terminalEntryIndex && !isSingleTrailingActivity) {
+        continue;
+      }
+      // Prose is conversation, not tool activity: the "Worked for ..." fold
+      // collapses only `kind:"work"` rows, so intermediate assistant (or user)
+      // messages keep rendering when the turn settles.
+      if (entry.kind === "message") {
         continue;
       }
       // Agent-spawn CTA rows never fold: workflows outlive their launching
@@ -889,6 +900,14 @@ export function deriveMessagesTimelineRows(input: {
    */
   idleBackgroundJobsPresent?: boolean;
   /**
+   * A user-input question is open on this thread (a pending ask_user /
+   * decision card). While it is open the thread is mid-conversation, so turn
+   * folding is skipped entirely — collapsing history would bury context the
+   * user needs to answer. Plain boolean so the caller (which already knows
+   * `pendingUserInputs`) doesn't hand the builder activity data.
+   */
+  hasOpenUserInput?: boolean;
+  /**
    * Work-entry ids whose tool result yielded a background job handle. A
    * collapsed tool group carries its own, because the per-entry row that owns
    * the "running in background" tag does not render until the group is
@@ -910,12 +929,16 @@ export function deriveMessagesTimelineRows(input: {
     unsettledTurnId,
     isWorking: input.isWorking,
   });
-  const foldsByAnchorEntryId = deriveTurnFolds({
-    timelineEntries: input.timelineEntries,
-    terminalAssistantMessageIds,
-    latestTurn: input.latestTurn ?? null,
-    unfoldedTurnIds: activeVisualResponseTurnIds,
-  });
+  // While a user-input question is open, the thread is mid-conversation:
+  // folding would collapse the history the user is answering from.
+  const foldsByAnchorEntryId = input.hasOpenUserInput
+    ? new Map<string, TurnFold>()
+    : deriveTurnFolds({
+        timelineEntries: input.timelineEntries,
+        terminalAssistantMessageIds,
+        latestTurn: input.latestTurn ?? null,
+        unfoldedTurnIds: activeVisualResponseTurnIds,
+      });
   const collapsedEntryIds = new Set<string>();
   for (const fold of foldsByAnchorEntryId.values()) {
     if (!input.expandedTurnIds?.has(fold.turnId)) {
