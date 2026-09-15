@@ -559,6 +559,62 @@ describe("MessagesTimeline", () => {
       expect(markup).not.toContain("background job running");
       expect(markup).not.toContain("running in background");
     });
+
+    // The marker's hard deadline (600s) alone would keep the chip up for a
+    // job that started 4m ago — but the job predates the server's current
+    // boot, so its process died with the previous one and it must settle now.
+    it("settles a background job that started before the server booted", () => {
+      const started = new Date(Date.now() - 4 * 60_000).toISOString();
+      const markup = renderToStaticMarkup(
+        <MessagesTimeline
+          {...buildProps()}
+          serverStartedAtMs={Date.now() - 60_000}
+          timelineEntries={[
+            {
+              id: "bg-restart-entry",
+              kind: "work",
+              createdAt: started,
+              entry: {
+                id: "bg-restart-entry",
+                createdAt: started,
+                label: "Run command",
+                tone: "tool",
+                toolLifecycleStatus: "completed",
+                detail: startDetail,
+              },
+            },
+          ]}
+        />,
+      );
+      expect(markup).not.toContain("background job running");
+      expect(markup).not.toContain("running in background");
+    });
+
+    it("keeps a background job running when it started after the server booted", () => {
+      const markup = renderToStaticMarkup(
+        <MessagesTimeline
+          {...buildProps()}
+          serverStartedAtMs={Date.now() - 60_000}
+          timelineEntries={[
+            {
+              id: "bg-live-entry",
+              kind: "work",
+              createdAt: bgNow(),
+              entry: {
+                id: "bg-live-entry",
+                createdAt: bgNow(),
+                label: "Run command",
+                tone: "tool",
+                toolLifecycleStatus: "completed",
+                detail: startDetail,
+              },
+            },
+          ]}
+        />,
+      );
+      expect(markup).toMatch(/1 background job running<\/span>/);
+      expect(markup).toContain("<span>running in background</span>");
+    });
   });
 
   it("renders elapsed time for a completed turn", () => {

@@ -4,6 +4,7 @@ import * as Schema from "effect/Schema";
 import {
   EnvironmentId,
   ForwardCompatibleOptional,
+  NonNegativeInt,
   ProjectId,
   ThreadId,
   TrimmedNonEmptyString,
@@ -155,6 +156,14 @@ export const ExecutionEnvironmentDescriptor = Schema.Struct({
   label: TrimmedNonEmptyString,
   platform: ExecutionEnvironmentPlatform,
   serverVersion: TrimmedNonEmptyString,
+  /**
+   * Epoch milliseconds of this server process's boot. The server's
+   * in-memory state (notably the bash background-job registry) dies with the
+   * process, so a job that started before this instant can no longer be
+   * live — clients settle such jobs instead of showing them running until
+   * their hard deadline. Absent on older servers.
+   */
+  serverStartedAtMs: Schema.optionalKey(NonNegativeInt),
   capabilities: ExecutionEnvironmentCapabilities,
   appearance: Schema.optionalKey(EnvironmentAppearance),
   setupProfiles: Schema.optionalKey(Schema.Array(EnvironmentSetupProfile)),
