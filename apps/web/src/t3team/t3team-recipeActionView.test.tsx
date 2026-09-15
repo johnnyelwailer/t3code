@@ -55,12 +55,9 @@ export default function Action({ ctx }) {
         placeholder="Optional subsystem"
         promptTemplate="Pay extra attention to {{value}}."
       />
-      <FieldList
-        items={[
-          { label: "Items", value: String(ctx.surfaceState?.currentView?.itemCount ?? 0) },
-          { label: "Bug", value: ctx.surfaceState?.currentView?.primaryBugLabel ?? "None" },
-        ]}
-      />
+      <div className="text-[10px] text-muted-foreground/70">
+        {(ctx.surfaceState?.currentView?.itemCount ?? 0) + " items · " + (ctx.surfaceState?.currentView?.primaryBugLabel ?? "None")}
+      </div>
       <RiskPill level="high">High risk</RiskPill>
       <SourceLink label="Visible backlog" />
     </RecipeAction>
@@ -301,33 +298,32 @@ export default function Action() {
     ]);
 
     expect(riskMarkup).toContain("Summarize project risk");
-    expect(riskMarkup).toContain("Items");
+    expect(riskMarkup).toContain("50 items · 1 bug");
     expect(riskMarkup).not.toContain("Risk scan");
     expect(riskMarkup).not.toContain("Bug-driven risk");
 
     expect(prioritizeMarkup).toContain("Prioritize");
-    expect(prioritizeMarkup).toContain("Bugs");
+    expect(prioritizeMarkup).toContain("50 items · 1 bug");
     expect(prioritizeMarkup).not.toContain("Current view");
     expect(prioritizeMarkup).not.toContain("Bug-heavy queue");
     expect(prioritizeMarkup).not.toContain("Lead");
     expect(prioritizeMarkup).not.toContain("IES-1235");
 
     expect(focusMarkup).toContain("Show what needs my action");
-    expect(focusMarkup).toContain("Visible items");
+    expect(focusMarkup).toContain("50 items · 1 bug");
     expect(focusMarkup).not.toContain("My work");
 
     expect(assignedMarkup).toContain("Show only assigned to me");
     expect(assignedMarkup).toContain("Apply filter");
 
     expect(backlogMarkup).toContain("Shape the next backlog slice");
-    expect(backlogMarkup).toContain("Bugs");
+    expect(backlogMarkup).toContain("50 items · 1 bug");
     expect(backlogMarkup).not.toContain("Lead bug first");
     expect(backlogMarkup).not.toContain("Lead");
     expect(backlogMarkup).not.toContain("IES-1235");
 
     expect(unblockMarkup).toContain("Unblock my work");
-    expect(unblockMarkup).toContain("Items");
-    expect(unblockMarkup).toContain("Bugs");
+    expect(unblockMarkup).toContain("50 items · 1 bug");
     expect(unblockMarkup).not.toContain("Current work");
     expect(unblockMarkup).not.toContain("Needs clarification");
     expect(unblockMarkup).not.toContain("Lead");
