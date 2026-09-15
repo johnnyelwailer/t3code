@@ -55,6 +55,29 @@ const configuredAtlassianOAuthRedirectUri =
   process.env.VITE_ATLASSIAN_OAUTH_REDIRECT_URI?.trim() ||
   process.env.T3TEAM_ATLASSIAN_OAUTH_REDIRECT_URI?.trim() ||
   "";
+// Build guard: a pinned desktop release listens on the default backend port
+// (3773, see DEFAULT_DESKTOP_BACKEND_PORT in apps/desktop/src/app/DesktopBackendPort.ts).
+// A baked redirect URI pointing at a different origin would desync the Atlassian
+// OAuth callback from the live listener — the resolver prefers the live desktop
+// base URL, but the baked value is still the fallback while the bridge has no
+// live URL, so a stale one must never ship. Refuse the build instead.
+const pinnedDesktopBackendPort = process.env.VITE_DESKTOP_PIN_BACKEND_PORT?.trim() === "1";
+if (pinnedDesktopBackendPort && configuredAtlassianOAuthRedirectUri) {
+  let redirectOrigin = "";
+  try {
+    redirectOrigin = new URL(configuredAtlassianOAuthRedirectUri).origin;
+  } catch {
+    redirectOrigin = "<unparseable>";
+  }
+  if (redirectOrigin !== "http://127.0.0.1:3773") {
+    throw new Error(
+      `VITE_ATLASSIAN_OAUTH_REDIRECT_URI (${configuredAtlassianOAuthRedirectUri}) does not match the ` +
+        "pinned desktop backend origin (http://127.0.0.1:3773). Unset VITE_ATLASSIAN_OAUTH_REDIRECT_URI " +
+        "(or T3TEAM_ATLASSIAN_OAUTH_REDIRECT_URI) so the desktop resolver uses the live backend origin, " +
+        "or point it at http://127.0.0.1:3773/oauth/callback.",
+    );
+  }
+}
 const configuredHostedAppUrl = (() => {
   const explicitHostedAppUrl = process.env.VITE_HOSTED_APP_URL?.trim();
   if (explicitHostedAppUrl) {
