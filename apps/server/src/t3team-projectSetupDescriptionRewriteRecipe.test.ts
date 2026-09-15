@@ -134,6 +134,9 @@ async function runRewrite(input: {
   // One reply per parked `askUser`: EMPTY when notes were already supplied (the body skips the
   // ask entirely and runs straight to the writer), exactly one when nothing was supplied yet.
   readonly userAnswers: ReadonlyArray<string>;
+  // One entry per parked writer turn: a schema-miss makes the engine re-ask (a fresh parked
+  // turn), so a pended first reply needs a second, clean one. Defaults to the single clean reply.
+  readonly writerReplies?: ReadonlyArray<unknown>;
 }) {
   const { broker, brokerDispatched } = await makeBrokerWithSeededThread();
   const runDispatched: OrchestrationCommand[] = [];
@@ -173,8 +176,12 @@ async function runRewrite(input: {
   for (const answer of input.userAnswers) {
     gates.push(await reply(registry, input.runId, answer));
   }
-  // 2. parked on the writer turn, on the LAUNCH thread — always present.
-  const writer = await reply(registry, input.runId, WRITTEN);
+  // 2. parked on the writer turn, on the LAUNCH thread — always present. A reply that misses the
+  // writer's result schema makes the engine re-ask, parking ANOTHER thread.turn.
+  const writer: Array<Awaited<ReturnType<typeof reply>>> = [];
+  for (const answer of input.writerReplies ?? [WRITTEN]) {
+    writer.push(await reply(registry, input.runId, answer));
+  }
 
   return {
     launched,
@@ -207,7 +214,7 @@ describe("describe-rewrite bundled workflow", () => {
     expect(userQuestions(run.runDispatched)).toHaveLength(0);
     // The writer runs on the LAUNCH thread — never a spawned child. `thread.create` would be the
     // fingerprint of `agent()`/`spawnThread()`, whose draft would land where nobody can see it.
-    expect(run.writer.kind).toBe("thread.turn");
+    expect(run.writer[0]?.kind).toBe("thread.turn");
     const turns = run.runDispatched.filter((command) => command.type === "thread.turn.start");
     expect(turns).toHaveLength(1);
     expect(turns[0]?.threadId).toBe(threadId);
@@ -272,6 +279,46 @@ describe("describe-rewrite bundled workflow", () => {
     expect(run.errors).toHaveLength(0);
     expect(draftCarrier(run.brokerDispatched)?.attachment).toMatchObject({
       draft: { target: { issueIdOrKey: "T3-77" }, patch: { description: WRITTEN_DESCRIPTION } },
+    });
+  });
+
+  it("re-asks when the writer pends a preamble before its JSON, and drafts only the clean description", async () => {
+    // The owner-reported regression: the writer's first reply pends narration before the JSON.
+    // The engine's whole-reply parse rejects it, re-asks with a corrective note, and only the
+    // clean second reply reaches the draft — the preamble can never masquerade as the payload.
+    const run = await runRewrite({
+      runId: "rewrite-preamble",
+      args: {
+        issueIdOrKey: "T3-42",
+        currentBody: "Rounding is wrong.",
+        instructions: "Tighten the wording.",
+      },
+      userAnswers: [],
+      writerReplies: [
+        "Im going to prepare the draft text now.\n" + JSON.stringify(WRITTEN),
+        WRITTEN,
+      ],
+    });
+
+    // Two parked writer turns: the pended first reply was rejected, the corrective re-ask got
+    // a clean one.
+    expect(run.writer).toHaveLength(2);
+    expect(run.writer[0]?.kind).toBe("thread.turn");
+    expect(run.writer[1]?.kind).toBe("thread.turn");
+    expect(run.errors).toHaveLength(0);
+    expect(run.completed[0]).toMatchObject({ issueIdOrKey: "T3-42", proposed: true });
+
+    const turns = turnPrompts(run.runDispatched);
+    expect(turns).toHaveLength(2);
+    expect(turns[0]).not.toContain("previous reply did not match");
+    expect(turns[1]).toContain("previous reply did not match the required schema");
+
+    // The preamble stayed out of the draft: only the structured field's value was proposed.
+    expect(draftCarrier(run.brokerDispatched)?.attachment).toMatchObject({
+      draft: {
+        target: { issueIdOrKey: "T3-42" },
+        patch: { description: WRITTEN_DESCRIPTION },
+      },
     });
   });
 
