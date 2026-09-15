@@ -1,7 +1,8 @@
 /**
  * Stories for the digest's owner fixes (nexplore.ghe.com/pj/nexi-distribution#480):
  * the cold-start "backend starting / retrying" state and its automatic recovery,
- * and the full-width layout.
+ * the full-width layout, the readable data-source status for empty scopes,
+ * and the three distinct view lenses.
  */
 import type { Meta, StoryObj } from "@storybook/react";
 import { useState } from "react";
@@ -17,7 +18,22 @@ import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { ProjectMyWorkDigestContent } from "~/t3team/t3team-ProjectMyWorkDigestContent";
 import { ProjectMyWorkDigestFixtureView } from "~/t3team/t3team-ProjectMyWorkDigestFixtureView";
 import { ProjectMyWorkDigestRetryState } from "~/t3team/t3team-ProjectMyWorkDigestRetryState";
+import { ProjectMyWorkDigestView } from "~/t3team/t3team-ProjectMyWorkDigestView";
+import {
+  buildHeuristicDigestPlan,
+  resolveDigestPlan,
+} from "~/t3team/t3team-projectMyWorkDigestPlan";
+import {
+  DIGEST_FIXTURE_NOW_MS,
+  HOUR,
+  iesGraphWithoutSprint,
+} from "~/t3team/t3team-projectMyWorkDigestFixtures";
 import { heuristicArrangementScenario } from "~/t3team/t3team-projectMyWorkDigestFixtureScenarios";
+import { ProjectMyWorkHierarchyView } from "~/t3team/t3team-ProjectMyWorkHierarchyView";
+import { ProjectDashboardKanban } from "~/t3team/t3team-ProjectDashboardKanban";
+import { buildProjectTicketKanbanColumns } from "~/t3team/t3team-projectTicketStatus";
+import { buildProjectTicketHierarchy } from "~/t3team/t3team-ticketHierarchy";
+import type { ProjectTicket } from "~/t3team/t3team-types";
 
 function createStoryProject(): ProjectShellProject {
   return {
@@ -158,4 +174,133 @@ export const FullWidthLayout: Story = {
       inAppOpen
     />
   ),
+};
+
+/**
+ * Repro 4: a project where the user has no items. The digest must land on the
+ * proper empty state (header + "Nothing needs you") with the readable
+ * "auto · updated" data-source status — never a stuck "arranging" read.
+ */
+export const EmptyProjectScopeDigest: Story = {
+  render: () => {
+    const graph = {
+      ...iesGraphWithoutSprint,
+      tickets: [],
+      claims: [],
+      decisions: [],
+      changeRequests: [],
+      transitions: [],
+      blockers: [],
+    };
+    const plan = resolveDigestPlan(
+      buildHeuristicDigestPlan(graph, DIGEST_FIXTURE_NOW_MS),
+      graph,
+      DIGEST_FIXTURE_NOW_MS,
+    );
+    return (
+      <div className="min-h-screen bg-background px-4 py-5 text-foreground sm:px-6 sm:py-7 xl:px-10 2xl:px-14">
+        <ProjectMyWorkDigestView
+          plan={plan}
+          graph={graph}
+          nowMs={DIGEST_FIXTURE_NOW_MS}
+          updatedAtMs={DIGEST_FIXTURE_NOW_MS - 2 * HOUR}
+        />
+      </div>
+    );
+  },
+};
+
+/**
+ * Repro 5: the Hierarchy and Board lenses side by side — they must be visibly
+ * different (depth-indented tree vs kanban columns), not two copies of one list.
+ */
+export const DistinctLensesSideBySide: Story = {
+  render: () => {
+    const storyTicket = (input: {
+      id: string;
+      displayId: string;
+      title: string;
+      status: string;
+      updatedAt: string;
+      parentId?: string;
+    }): ProjectTicket => ({
+      id: input.id,
+      projectId: "story-project",
+      status: input.status,
+      assignee: "Philip",
+      updatedAt: input.updatedAt,
+      ref: {
+        provider: "atlassian",
+        kind: "issue",
+        id: input.id,
+        displayId: input.displayId,
+        title: input.title,
+        url: `https://jira/${input.displayId}`,
+        projectId: "story-project",
+      },
+      ...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
+    });
+    const tickets = [
+      storyTicket({
+        id: "epic-1",
+        displayId: "NEX-1",
+        title: "Epical thing",
+        status: "In Progress",
+        updatedAt: "2026-09-14T08:00:00.000Z",
+      }),
+      storyTicket({
+        id: "sub-2",
+        displayId: "NEX-2",
+        title: "Subtask of the epic",
+        status: "To Do",
+        updatedAt: "2026-09-14T09:00:00.000Z",
+        parentId: "epic-1",
+      }),
+      storyTicket({
+        id: "task-3",
+        displayId: "NEX-3",
+        title: "Standalone task",
+        status: "In Progress",
+        updatedAt: "2026-09-13T08:00:00.000Z",
+      }),
+    ];
+    const hierarchy = buildProjectTicketHierarchy(tickets);
+    const matchedTicketIds = new Set(tickets.map((ticket) => ticket.id));
+    return (
+      <div className="min-h-screen bg-background px-4 py-5 text-foreground sm:px-6 sm:py-7">
+        <div className="grid gap-8 xl:grid-cols-2">
+          <div className="space-y-3">
+            <h3 className="text-xs font-semibold tracking-wide text-muted-foreground">
+              Hierarchy lens — depth-indented parent/child tree
+            </h3>
+            <ProjectMyWorkHierarchyView
+              projectId="story-project"
+              viewMode="list"
+              hierarchy={hierarchy}
+              contextByTicketId={new Map()}
+              matchedTicketIds={matchedTicketIds}
+              onTicketContextMenu={() => undefined}
+              getTicketAgentContext={() => null}
+              onOpenTicket={() => undefined}
+              renderTicketExtra={() => null}
+            />
+          </div>
+          <div className="space-y-3">
+            <h3 className="text-xs font-semibold tracking-wide text-muted-foreground">
+              Board lens — per-project kanban (read-only in the roll-up)
+            </h3>
+            <ProjectDashboardKanban
+              kanbanColumns={buildProjectTicketKanbanColumns(tickets)}
+              allTickets={tickets}
+              isHierarchyMode={false}
+              parentChildGroups={hierarchy}
+              projectId="story-project"
+              onOpenTicket={() => undefined}
+              onTicketContextMenu={() => undefined}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  },
 };

@@ -431,6 +431,69 @@ describe("useMyWorkDigestGraph", () => {
     expect(calls.at(-1)).toBe("BBB");
   });
 
+  it("reaches a proper ready state for a scope where the user has no items", async () => {
+    // The owner repro: the digest "loads" in one project but hangs in another. An
+    // empty scope (no assigned tickets) is a well-formed answer, not a failure —
+    // the hook must land on "ready" with an empty graph, never sit in a stuck state.
+    const payloadFor = (key: string, withItems: boolean) => ({
+      scope: "project" as const,
+      projects: [
+        {
+          project: { id: key, name: `${key} NG` },
+          tickets: withItems
+            ? [
+                {
+                  id: "issue-900",
+                  displayId: `${key}-900`,
+                  title: "Only item",
+                  provider: "atlassian" as const,
+                  kind: "issue" as const,
+                  url: `https://jira/${key}-900`,
+                  projectId: key,
+                  status: "To Do",
+                  assignee: "Philip",
+                  updatedAt: "2026-09-14T08:00:00.000Z",
+                },
+              ]
+            : [],
+          claims: [],
+          decisions: [],
+          changeRequests: [],
+          transitions: [],
+        },
+      ],
+    });
+    const calls: string[] = [];
+    const { latest, projectsRef, rerender } = await mountWith(
+      async (input) => {
+        const key = input.projects[0]?.externalProjectId ?? "?";
+        calls.push(key);
+        return {
+          unchanged: false,
+          fingerprint: `fp-${key}`,
+          value: payloadFor(key, key === "AAA"),
+        };
+      },
+      [createProject({ id: "pA", externalProjectId: "AAA" })],
+    );
+    await vi.waitFor(() => {
+      expect(latest.result?.status).toBe("ready");
+    });
+    expect(latest.result?.graph?.tickets).toHaveLength(1);
+
+    // Switch to the empty scope: the refetch lands on ready with zero tickets.
+    // The view renders the "Nothing needs you" panel from this state — it must
+    // not be "loading", "retrying", or stuck behind a stale graph.
+    projectsRef.projects = [createProject({ id: "pB", externalProjectId: "BBB" })];
+    await rerender();
+    await vi.waitFor(() => {
+      expect(latest.result?.graph?.projects[0]?.name).toBe("BBB NG");
+    });
+    expect(latest.result?.status).toBe("ready");
+    expect(latest.result?.graph?.tickets).toHaveLength(0);
+    expect(latest.result?.error).toBeUndefined();
+  });
+
   it("refetches when switching between two app projects bound to the same Jira project", async () => {
     // Same account + external project id, different APP project id: the scope
     // signature must still change, because the server joins claims and decisions

@@ -37,10 +37,11 @@ export function ProjectMyWorkDigestContent({
       ? (ticketId: string) => onOpenTicket(project.id, ticketId)
       : undefined;
   const projects = useMemo(() => [project], [project]);
-  const { graph, status, error, viewerUnresolved, sessionExpired, reload } = useMyWorkDigestGraph({
-    projects,
-    scope: "project",
-  });
+  const { graph, status, error, viewerUnresolved, sessionExpired, updatedAt, reload } =
+    useMyWorkDigestGraph({
+      projects,
+      scope: "project",
+    });
   // Minute-granular clock shared with the rest of the app: stable within a render, re-plans on tick.
   // useNowMinute yields UTC wall-clock text without a zone suffix; parse it as UTC.
   const nowMs = Date.parse(`${useNowMinute()}Z`);
@@ -92,6 +93,7 @@ export function ProjectMyWorkDigestContent({
       nowMs={nowMs}
       burndownVariant={flags.digestBurndownVariant}
       onOpenTicket={openTicketInApp}
+      {...(updatedAt !== undefined ? { updatedAtMs: updatedAt } : {})}
     />
   );
 }

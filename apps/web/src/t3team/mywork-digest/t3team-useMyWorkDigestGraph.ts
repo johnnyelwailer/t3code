@@ -44,11 +44,7 @@ export type UseMyWorkDigestGraphInput = {
 
 export type UseMyWorkDigestGraphResult = {
   readonly graph: DigestGraph | null;
-  /**
-   * "retrying" = the last fetch failed and the background poller is working its backoff:
-   * a cold start (backend still booting) or a network blip, never a terminal error.
-   * "error" is reserved for terminal conditions such as a server without the endpoint.
-   */
+  /** "retrying" = a transient failure (cold start / blip) the poller is backing off; "error" = terminal. */
   readonly status: "loading" | "ready" | "retrying" | "error";
   readonly error?: string;
   /** True when the server had no Jira identity for a project (stale or missing token). */
@@ -58,6 +54,8 @@ export type UseMyWorkDigestGraphResult = {
    * instead of the error string, and reload once the user signs back in.
    */
   readonly sessionExpired: boolean;
+  /** When the last successful graph update landed (drives the "auto · updated" status). */
+  readonly updatedAt?: number;
   readonly reload: () => void;
 };
 
@@ -208,6 +206,9 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
     ...(error !== undefined && !idle ? { error } : {}),
     viewerUnresolved,
     sessionExpired: idle ? false : sessionExpired,
+    ...(lastCheckedAtRef.current !== undefined && !idle
+      ? { updatedAt: lastCheckedAtRef.current }
+      : {}),
     reload: () => {
       void loadRef.current(scope, entries);
     },

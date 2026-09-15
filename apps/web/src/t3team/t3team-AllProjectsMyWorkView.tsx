@@ -70,6 +70,7 @@ export function AllProjectsMyWorkView({
     error: digestError,
     viewerUnresolved,
     sessionExpired: digestSessionExpired,
+    updatedAt: digestUpdatedAt,
     reload: digestReload,
   } = useMyWorkDigestGraph({
     projects: boundProjects,
@@ -152,6 +153,7 @@ export function AllProjectsMyWorkView({
         graph={digestGraph}
         nowMs={nowMs}
         burndownVariant={flags.digestBurndownVariant}
+        {...(digestUpdatedAt !== undefined ? { updatedAtMs: digestUpdatedAt } : {})}
         onOpenTicket={
           // Beta flag: rows open the ticket in-app (each ticket knows its project).
           flags.digestRowNavigation === "in-app"
@@ -184,6 +186,7 @@ export function AllProjectsMyWorkView({
               <AllProjectsMyWorkSection
                 key={project.id}
                 project={project}
+                lens={lens}
                 onOpenTicket={onOpenTicket}
               />
             ))}

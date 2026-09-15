@@ -16,17 +16,24 @@ export function ProjectMyWorkDigestView({
   nowMs,
   onOpenTicket,
   burndownVariant = "off",
+  updatedAtMs,
 }: {
   plan: ResolvedDigestPlan;
   graph: DigestGraph;
   nowMs: number;
   onOpenTicket?: ((ticketId: string) => void) | undefined;
   burndownVariant?: DigestBurndownVariant;
+  updatedAtMs?: number;
 }) {
   const ticketsById = new Map(graph.tickets.map((ticket) => [ticket.id, ticket]));
   const lane = { graph, ticketsById, nowMs, onOpenTicket };
   const header = (
-    <ProjectMyWorkDigestHeader graph={graph} nowMs={nowMs} burndownVariant={burndownVariant} />
+    <ProjectMyWorkDigestHeader
+      graph={graph}
+      nowMs={nowMs}
+      burndownVariant={burndownVariant}
+      {...(updatedAtMs !== undefined ? { updatedAtMs } : {})}
+    />
   );
   if (plan.sections.length === 0) {
     return (
