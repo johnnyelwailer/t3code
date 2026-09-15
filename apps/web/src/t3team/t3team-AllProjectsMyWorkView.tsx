@@ -19,6 +19,7 @@ import { useNowMinute } from "~/hooks/useNowMinute";
 
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { JiraSessionExpiredPanel } from "~/t3team/components/t3team-JiraSessionExpiredPanel";
+import { JiraSignInPanel } from "~/t3team/components/t3team-JiraSignInPanel";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import { useProjectDashboardMyWorkState } from "~/t3team/t3team-projectDashboardMyWorkState";
@@ -110,12 +111,7 @@ export function AllProjectsMyWorkView({
     }
     if (viewerUnresolved && (digestGraph?.tickets.length ?? 0) === 0) {
       return (
-        <T3SurfacePanel
-          tone="dashed"
-          className="px-6 py-10 text-center text-sm text-muted-foreground"
-        >
-          Sign in to Jira under Settings → Connected tools to load your work.
-        </T3SurfacePanel>
+        <JiraSignInPanel heading="Sign in to Jira to load your work." onSignedIn={digestReload} />
       );
     }
     if (!digestGraph || !digestPlan) {
