@@ -9,6 +9,8 @@
  */
 
 import type { BacklogResourceRef } from "./t3team-atlassian-backlog-cacheShared.ts";
+import { assembleMyWorkDigestBlockers } from "./t3team-myworkDigestBlockers.ts";
+import { assembleMyWorkDigestBurndown } from "./t3team-myworkDigestBurndown.ts";
 import type {
   T3TeamDigestChangeRequest,
   T3TeamDigestProjectData,
@@ -107,6 +109,10 @@ export function assembleMyWorkDigestChangeRequests(
       state: digestChangeRequestStateFromPr(entry),
       updatedAt: entry.updatedAt,
       ...(workItemKey !== undefined ? { workItemKey } : {}),
+      ...(entry.reviewers !== undefined ? { reviewers: entry.reviewers } : {}),
+      ...(entry.unhandledReviewThreads !== undefined
+        ? { unhandledReviewThreads: entry.unhandledReviewThreads }
+        : {}),
     });
   }
   return changeRequests;
@@ -144,6 +150,18 @@ export function assembleMyWorkDigestProjectData(
 ): T3TeamDigestProjectData {
   const tickets = [...source.tickets].toSorted(compareTicketsByUpdatedAtDesc);
   const sprint = pickDigestSprint(source.sprints);
+  const blockers = assembleMyWorkDigestBlockers(source);
+  const burndown = assembleMyWorkDigestBurndown({
+    tickets: source.tickets,
+    sprints: source.sprints,
+    transitions: source.transitions,
+    ...(source.burndownTransitions !== undefined
+      ? { burndownTransitions: source.burndownTransitions }
+      : {}),
+    ...(source.viewerName !== undefined ? { viewerName: source.viewerName } : {}),
+    ...(source.estimateUnit !== undefined ? { estimateUnit: source.estimateUnit } : {}),
+    nowIso: source.nowIso,
+  });
   const name = source.input.name?.trim();
   return {
     project: {
@@ -156,6 +174,8 @@ export function assembleMyWorkDigestProjectData(
     changeRequests: assembleMyWorkDigestChangeRequests(source),
     transitions: source.transitions,
     ...(sprint !== undefined ? { sprint } : {}),
+    ...(blockers.length > 0 ? { blockers } : {}),
+    ...(burndown !== undefined ? { burndown } : {}),
     ...(source.changeRequestNote !== undefined
       ? { changeRequestNote: source.changeRequestNote }
       : {}),

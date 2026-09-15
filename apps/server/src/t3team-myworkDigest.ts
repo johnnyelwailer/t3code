@@ -12,9 +12,11 @@ import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 
 import { readDigestThreadAgents } from "./t3team-myworkDigestAgents.ts";
-import { loadPrEntries } from "./t3team-myworkDigestPr.ts";
+import { loadDigestBurndownContext } from "./t3team-myworkDigestBurndownBackfill.ts";
+import { digestPrKey, loadPrEntries } from "./t3team-myworkDigestPr.ts";
 import {
   readDigestDecisionQuestions,
+  readDigestEstimateUnit,
   readDigestHandoffTickets,
   readDigestPendingDecisions,
   readDigestSprints,
@@ -43,6 +45,8 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
   return Effect.gen(function* () {
     const projects = input.projects.slice(0, 10);
     const nowMs = yield* Clock.currentTimeMillis;
+    const nowIso = new Date(nowMs).toISOString();
+    const viewerName = input.viewer?.name?.trim() || undefined;
     const appProjectIds = [
       ...new Set(
         projects
@@ -84,11 +88,24 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
           };
           const tickets = yield* readDigestTickets(identity);
           const sprints = yield* readDigestSprints(identity);
+          const estimateUnit = yield* readDigestEstimateUnit(identity);
           const transitions = yield* readDigestStatusTransitionsSince({
             ...identity,
             sinceMs: nowMs - DIGEST_TRANSITION_LOOKBACK_MS,
           });
           const prRead = yield* loadPrEntries(appProjectId);
+          const enrichments = prRead?.enrichments ?? {};
+
+          // Burndown history: the sprint's backfilled changelog rows; when the
+          // backfill has not run yet this round it is kicked in the background
+          // and the NEXT round carries the full history.
+          const burndownContext = yield* loadDigestBurndownContext({
+            identity,
+            tickets,
+            sprints,
+            ...(viewerName !== undefined ? { viewerName } : {}),
+          });
+          const burndownTransitions = burndownContext.burndownTransitions;
 
           const claims: T3TeamDigestClaim[] = (
             appProjectId === undefined
@@ -148,6 +165,13 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
                 ? { reviewDecision: entry.reviewDecision }
                 : {}),
               ...(entry.checksState !== undefined ? { checksState: entry.checksState } : {}),
+              ...(enrichments[digestPrKey(entry)] !== undefined
+                ? {
+                    reviewers: enrichments[digestPrKey(entry)]!.reviewers,
+                    unhandledReviewThreads: enrichments[digestPrKey(entry)]!.unhandledReviewThreads,
+                    body: enrichments[digestPrKey(entry)]!.body,
+                  }
+                : {}),
             })),
             transitions: transitions.map((row) => ({
               ticketRef: {
@@ -158,7 +182,11 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
               to: row.to,
               at: millisToIso(row.atMs),
             })),
+            ...(burndownTransitions.length > 0 ? { burndownTransitions } : {}),
+            ...(viewerName !== undefined ? { viewerName } : {}),
+            ...(estimateUnit !== undefined ? { estimateUnit } : {}),
             sprints,
+            nowIso,
             ...(prRead?.note !== undefined ? { changeRequestNote: prRead.note } : {}),
           };
           return source;

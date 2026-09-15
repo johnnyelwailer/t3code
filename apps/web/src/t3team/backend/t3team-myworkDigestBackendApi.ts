@@ -24,6 +24,8 @@ export type MyWorkDigestScope = "project" | "all";
 export type MyWorkDigestPollInput = {
   readonly scope: MyWorkDigestScope;
   readonly projects: ReadonlyArray<MyWorkDigestProjectInput>;
+  /** The Jira display name the mirror assigns to the viewer (drives the burndown). */
+  readonly viewer?: { readonly name?: string };
   /** The fingerprint from the previous round; lets the server answer `unchanged`. */
   readonly knownFingerprint?: string;
 };
@@ -80,7 +82,22 @@ export type MyWorkDigestPayload = {
         | "merged";
       readonly updatedAt: string;
       readonly workItemKey?: string;
+      /** Open PRs only, off the server's cached detail read. */
+      readonly reviewers?: ReadonlyArray<{ readonly name: string; readonly login: string }>;
+      readonly unhandledReviewThreads?: ReadonlyArray<{ readonly lastCommentAt?: string }>;
     }>;
+    /** PRs that gate a ticket: Jira "is blocked by" links or PR body mentions. */
+    readonly blockers?: ReadonlyArray<{
+      readonly ticketRef: DigestTicketRef;
+      readonly repo: string;
+      readonly number: number;
+    }>;
+    /** The viewer's personal burndown, in the project's estimate unit. */
+    readonly burndown?: {
+      readonly unit: "points" | "hours";
+      readonly total: number;
+      readonly points: ReadonlyArray<{ readonly date: string; readonly remaining: number }>;
+    };
     readonly transitions: ReadonlyArray<{
       readonly ticketRef: DigestTicketRef;
       readonly from: string;
@@ -109,12 +126,14 @@ export function createMyWorkDigestBackendApi(httpBaseUrl: string) {
         {
           readonly scope: MyWorkDigestScope;
           readonly projects: ReadonlyArray<MyWorkDigestProjectInput>;
+          readonly viewer?: { readonly name?: string };
           readonly poll: { readonly enabled: true; readonly knownFingerprint?: string };
         },
         MyWorkDigestPollResult
       >(httpBaseUrl, "/api/t3team/mywork-digest/graph/poll", {
         scope: input.scope,
         projects: input.projects,
+        ...(input.viewer !== undefined ? { viewer: input.viewer } : {}),
         poll: {
           enabled: true,
           ...(input.knownFingerprint !== undefined

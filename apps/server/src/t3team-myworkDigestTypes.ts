@@ -34,6 +34,8 @@ export type T3TeamMyWorkDigestScope = "project" | "all";
 export type T3TeamMyWorkDigestInput = {
   readonly scope: T3TeamMyWorkDigestScope;
   readonly projects: ReadonlyArray<T3TeamMyWorkDigestProjectInput>;
+  /** The viewer's Jira display name; drives the personal burndown when present. */
+  readonly viewer?: { readonly name?: string };
 };
 
 export type T3TeamMyWorkDigestPollInput = T3TeamMyWorkDigestInput & {
@@ -81,6 +83,9 @@ export type T3TeamDigestChangeRequest = {
   readonly updatedAt: string;
   /** The matched ticket's key, when the PR title/branch names one of this project's issues. */
   readonly workItemKey?: string;
+  /** Open PRs only, off the cached detail/activity reads. */
+  readonly reviewers?: ReadonlyArray<{ readonly name: string; readonly login: string }>;
+  readonly unhandledReviewThreads?: ReadonlyArray<{ readonly lastCommentAt?: string }>;
 };
 
 export type T3TeamDigestTransition = {
@@ -88,6 +93,20 @@ export type T3TeamDigestTransition = {
   readonly from: string;
   readonly to: string;
   readonly at: string;
+};
+
+/** A PR that gates a ticket: Jira "is blocked by" links or PR body mentions. */
+export type T3TeamDigestBlocker = {
+  readonly ticketRef: T3TeamDigestTicketRef;
+  readonly repo: string;
+  readonly number: number;
+};
+
+/** The viewer's personal burndown for the active sprint, in the project's estimate unit. */
+export type T3TeamDigestBurndown = {
+  readonly unit: "points" | "hours";
+  readonly total: number;
+  readonly points: ReadonlyArray<{ readonly date: string; readonly remaining: number }>;
 };
 
 export type T3TeamDigestSprint = {
@@ -105,6 +124,8 @@ export type T3TeamDigestProjectData = {
   readonly changeRequests: ReadonlyArray<T3TeamDigestChangeRequest>;
   readonly transitions: ReadonlyArray<T3TeamDigestTransition>;
   readonly sprint?: T3TeamDigestSprint;
+  readonly blockers?: ReadonlyArray<T3TeamDigestBlocker>;
+  readonly burndown?: T3TeamDigestBurndown;
   /** Set when the PR host could not be read this round (the list degrades, it does not fail). */
   readonly changeRequestNote?: string;
 };
@@ -139,8 +160,22 @@ export type T3TeamDigestProjectSource = {
     readonly viewerReviewRequested: boolean;
     readonly reviewDecision?: string;
     readonly checksState?: string;
+    /** Open PRs only, from the cached detail/activity reads. */
+    readonly reviewers?: ReadonlyArray<{ readonly name: string; readonly login: string }>;
+    readonly unhandledReviewThreads?: ReadonlyArray<{ readonly lastCommentAt?: string }>;
+    /** The PR body, for open PRs only (the blocker mention source). */
+    readonly body?: string;
   }>;
   readonly transitions: ReadonlyArray<T3TeamDigestTransition>;
+  /**
+   * The sprint's full status history (changelog backfill), merged into the
+   * burndown only — the capped `transitions` above stay the "what moved" read.
+   */
+  readonly burndownTransitions?: ReadonlyArray<T3TeamDigestTransition>;
+  /** The Jira display name the mirror assigns to the viewer; empty skips the burndown. */
+  readonly viewerName?: string;
+  /** The project's estimate unit (points where an estimate field is configured, hours otherwise). */
+  readonly estimateUnit?: "points" | "hours";
   readonly sprints: ReadonlyArray<{
     readonly id: string;
     readonly name: string;
@@ -151,4 +186,6 @@ export type T3TeamDigestProjectSource = {
   }>;
   /** Set when the PR host could not be read this round; carried to the payload. */
   readonly changeRequestNote?: string;
+  /** The round's clock, so the burndown "today" and unhandled-comment cutoffs are deterministic. */
+  readonly nowIso: string;
 };

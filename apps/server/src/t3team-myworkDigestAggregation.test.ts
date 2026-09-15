@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   assembleMyWorkDigestChangeRequests,
   assembleMyWorkDigestPayload,
+  assembleMyWorkDigestProjectData,
   digestChangeRequestStateFromPr,
   matchDigestWorkItemKey,
   pickDigestSprint,
@@ -38,6 +39,10 @@ function fixtureSources(): T3TeamDigestProjectSource {
     url: "https://jira/IES",
     provider: "atlassian",
     kind: "issue",
+    // The first ten tickets sit in the active sprint; the viewer's three of
+    // them (0, 4, 8) carry point estimates for the burndown.
+    ...(i < 10 ? { sprintName: "PW Sprint 8.5", estimateValue: i % 2 === 0 ? 3 : 2 } : {}),
+    ...(i === 0 ? { links: [{ outward: "is blocked by", key: "IES-1001" }] } : {}),
   }));
 
   const claims = Array.from({ length: THREADS }, (_, i) => ({
@@ -58,26 +63,30 @@ function fixtureSources(): T3TeamDigestProjectSource {
     },
   ];
 
-  const prEntries = Array.from({ length: PULL_REQUESTS }, (_, i) => {
-    // Half the PRs name a ticket key; quarter are closed, a slice of those merged;
-    // a few are draft; a few have failing checks.
-    const closed = i % 4 === 3;
-    const merged = i % 8 === 7;
-    return {
-      host: "github.com",
-      repository: "hive/ies-spital",
-      number: 100 + i,
-      title: i % 2 === 0 ? `Fix IES-${1001 + (i % 100)}` : `chore: no key here ${i}`,
-      headBranch: `feat/ies-${1002 + (i % 50)}-part`,
-      state: closed ? (merged ? "merged" : "closed") : "open",
-      isDraft: i % 10 === 9,
-      updatedAt: new Date(Date.UTC(2026, 8, 14, 7, 0) - i * 30_000).toISOString(),
-      viewerReviewRequested: i % 5 === 0,
-      ...(i % 5 === 1 ? { reviewDecision: "changes-requested" as const } : {}),
-      ...(i % 5 === 2 ? { reviewDecision: "approved" as const } : {}),
-      ...(i % 7 === 5 ? { checksState: "failing" as const } : {}),
-    };
-  });
+  type PrEntry = T3TeamDigestProjectSource["prEntries"][number];
+  const prEntries: Array<{ -readonly [K in keyof PrEntry]: PrEntry[K] }> = Array.from(
+    { length: PULL_REQUESTS },
+    (_, i) => {
+      // Half the PRs name a ticket key; quarter are closed, a slice of those merged;
+      // a few are draft; a few have failing checks.
+      const closed = i % 4 === 3;
+      const merged = i % 8 === 7;
+      return {
+        host: "github.com",
+        repository: "hive/ies-spital",
+        number: 100 + i,
+        title: i % 2 === 0 ? `Fix IES-${1001 + (i % 100)}` : `chore: no key here ${i}`,
+        headBranch: `feat/ies-${1002 + (i % 50)}-part`,
+        state: closed ? (merged ? "merged" : "closed") : "open",
+        isDraft: i % 10 === 9,
+        updatedAt: new Date(Date.UTC(2026, 8, 14, 7, 0) - i * 30_000).toISOString(),
+        viewerReviewRequested: i % 5 === 0,
+        ...(i % 5 === 1 ? { reviewDecision: "changes-requested" as const } : {}),
+        ...(i % 5 === 2 ? { reviewDecision: "approved" as const } : {}),
+        ...(i % 7 === 5 ? { checksState: "failing" as const } : {}),
+      };
+    },
+  );
 
   const transitions = [
     {
@@ -107,6 +116,13 @@ function fixtureSources(): T3TeamDigestProjectSource {
     },
   ];
 
+  // The freshest open PR (i=0, IES-1001) arrives enriched off the cached
+  // detail/activity reads; its sibling PR (i=2, IES-1003) names a blocker.
+  prEntries[0]!.reviewers = [{ name: "Alice", login: "alice" }];
+  prEntries[0]!.unhandledReviewThreads = [{ lastCommentAt: "2026-09-14T01:00:00.000Z" }, {}];
+  prEntries[0]!.body = "";
+  prEntries[2]!.body = "Depends on hive/ies-spital#555 for the API.";
+
   return {
     input,
     tickets,
@@ -119,10 +135,75 @@ function fixtureSources(): T3TeamDigestProjectSource {
     prEntries,
     transitions,
     sprints,
+    viewerName: "Philip",
+    estimateUnit: "points",
+    nowIso: "2026-09-14T10:00:00.000Z",
   };
 }
 
 describe("my work digest aggregation", () => {
+  it("carries the PR enrichment: reviewers and unhandled review threads", () => {
+    const changeRequests = assembleMyWorkDigestChangeRequests(fixtureSources());
+    const pr100 = changeRequests.find((pr) => pr.number === 100);
+    expect(pr100?.reviewers).toEqual([{ name: "Alice", login: "alice" }]);
+    expect(pr100?.unhandledReviewThreads).toEqual([
+      { lastCommentAt: "2026-09-14T01:00:00.000Z" },
+      {},
+    ]);
+    // Merged rows are never enriched: no reviewer faces on the merged chip.
+    const merged = changeRequests.filter((pr) => pr.state === "merged");
+    expect(merged.every((pr) => pr.reviewers === undefined)).toBe(true);
+  });
+
+  it("resolves blockers from Jira 'is blocked by' links and PR body mentions", () => {
+    const data = assembleMyWorkDigestProjectData(fixtureSources());
+    const blockers = data.blockers ?? [];
+    // (a) IES-1000 is blocked by IES-1001; PR #100 titles IES-1001.
+    const linked = blockers.find((blocker) => blocker.ticketRef.issueKey === "IES-1000");
+    expect(linked).toEqual({
+      ticketRef: { issueId: "issue-1000", issueKey: "IES-1000" },
+      repo: "hive/ies-spital",
+      number: 100,
+    });
+    // (b) PR #102 (IES-1003) says it depends on hive/ies-spital#555.
+    const mentioned = blockers.find((blocker) => blocker.ticketRef.issueKey === "IES-1003");
+    expect(mentioned).toEqual({
+      ticketRef: { issueId: "issue-1003", issueKey: "IES-1003" },
+      repo: "hive/ies-spital",
+      number: 555,
+    });
+    expect(blockers).toHaveLength(2);
+  });
+
+  it("builds the viewer's burndown from sprint items, estimates, and history", () => {
+    const data = assembleMyWorkDigestProjectData(fixtureSources());
+    const burndown = data.burndown;
+    expect(burndown?.unit).toBe("points");
+    expect(burndown?.total).toBe(9); // 3 + 3 (issue-1008 is Done but still estimated)
+    // 2026-09-03 .. 2026-09-14 (now) inclusive.
+    expect(burndown?.points).toHaveLength(12);
+    expect(burndown?.points[0]?.date).toBe("2026-09-03");
+    expect(burndown?.points.at(-1)?.date).toBe("2026-09-14");
+    // Nothing of Philip's moves toward Done in the fixture: a flat line.
+    expect(burndown?.points.every((point) => point.remaining === 6)).toBe(true);
+  });
+
+  it("leaves the burndown out without a viewer or without sprint items", () => {
+    const withoutViewer = assembleMyWorkDigestProjectData({
+      ...fixtureSources(),
+      viewerName: "",
+    });
+    expect(withoutViewer.burndown).toBeUndefined();
+    const withoutSprint = assembleMyWorkDigestProjectData({
+      ...fixtureSources(),
+      tickets: fixtureSources().tickets.map((ticket) => {
+        const { sprintName: _dropped, ...rest } = ticket;
+        return rest;
+      }),
+    });
+    expect(withoutSprint.burndown).toBeUndefined();
+  });
+
   it("joins a 500-ticket / 50-thread / 100-PR project in one pass", () => {
     const started = performance.now();
     const payload = assembleMyWorkDigestPayload({ scope: "project", sources: [fixtureSources()] });

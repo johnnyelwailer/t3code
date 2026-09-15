@@ -2,10 +2,9 @@
  * Raw digest payload → the web `DigestGraph` contract.
  *
  * The one place that joins the server's ticket refs to the ticket objects the
- * UI already knows (`resourceRefToProjectTicket`), and re-joins claims,
- * decisions, change requests, and transitions back to ticket ids by issue id
- * or Jira key. Everything is derived here once; the view layer memoizes over
- * the returned graph.
+ * UI already knows (`resourceRefToProjectTicket`) and re-joins claims, decisions,
+ * change requests, and transitions back to ticket ids. Derived here once;
+ * the view layer memoizes over the returned graph.
  */
 
 import type { ProjectShellProject } from "@t3tools/project-context";
@@ -16,6 +15,7 @@ import type {
 } from "~/t3team/backend/t3team-myworkDigestBackendApi";
 import { resourceRefToProjectTicket } from "~/t3team/t3team-ticketMappers";
 import type {
+  DigestBlocker,
   DigestClaim,
   DigestChangeRequest,
   DigestDecision,
@@ -123,7 +123,17 @@ export function payloadToDigestGraph(input: {
   const claims: DigestClaim[] = [];
   const decisions: DigestDecision[] = [];
   const changeRequests: DigestChangeRequest[] = [];
+  const blockers: DigestBlocker[] = [];
   const transitions: DigestTransition[] = [];
+  let burndown: DigestGraph["burndown"];
+
+  // "Unhandled" = unresolved AND newer than the last visit; untimed threads count always.
+  const lastVisitMs = Date.parse(input.viewer.lastVisitAt);
+  const unhandledCount = (threads: ReadonlyArray<{ readonly lastCommentAt?: string }>): number =>
+    threads.reduce((count, thread) => {
+      const at = thread.lastCommentAt !== undefined ? Date.parse(thread.lastCommentAt) : NaN;
+      return Number.isNaN(at) ? count + 1 : at > lastVisitMs ? count + 1 : count;
+    }, 0);
 
   input.payload.projects.forEach((data, position) => {
     for (const claim of data.claims) {
@@ -161,9 +171,20 @@ export function payloadToDigestGraph(input: {
         number: pr.number,
         state: pr.state,
         updatedAt: pr.updatedAt,
-        // TODO(digest-data): reviewer identities and unhandled comment counts are not in the PR listing yet.
-        reviewers: [],
+        // TODO(digest-data): per-reviewer verdicts have no host source yet; PR-level only.
+        reviewers: pr.reviewers ?? [],
+        ...(pr.unhandledReviewThreads !== undefined
+          ? { unhandledComments: unhandledCount(pr.unhandledReviewThreads) }
+          : {}),
       });
+    }
+    for (const blocker of data.blockers ?? []) {
+      const ticketId = resolveTicketId(position, blocker.ticketRef);
+      if (ticketId === "") continue;
+      blockers.push({ ticketId, repo: blocker.repo, number: blocker.number });
+    }
+    if (burndown === undefined && data.burndown !== undefined) {
+      burndown = { ...data.burndown, points: [...data.burndown.points] };
     }
     for (const transition of data.transitions) {
       const ticketId = resolveTicketId(position, transition.ticketRef);
@@ -182,12 +203,12 @@ export function payloadToDigestGraph(input: {
     projects: input.payload.projects.map((data) => data.project),
     viewer: input.viewer,
     ...(sprint !== undefined ? { sprint } : {}),
+    ...(burndown !== undefined ? { burndown } : {}),
     tickets: allTickets,
     claims,
     decisions,
     changeRequests,
     transitions,
-    // TODO(digest-data): enabler-PR blockers need a server source (PR body links or Jira "blocks" links).
-    blockers: [],
+    blockers,
   };
 }

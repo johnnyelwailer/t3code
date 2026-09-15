@@ -182,3 +182,20 @@ export function readDigestTickets(identity: T3TeamBacklogCacheIdentity) {
     return tickets;
   });
 }
+
+/**
+ * The project's estimate unit from the persisted capabilities: a configured
+ * estimate field ("Story Points") means points, otherwise hours. Absent where
+ * nothing has resolved the capabilities yet — the digest degrades to points,
+ * which is also the default the client shows.
+ */
+export function readDigestEstimateUnit(identity: T3TeamBacklogCacheIdentity) {
+  return Effect.gen(function* () {
+    const row = yield* readCachedBacklogViewRow(identity).pipe(
+      Effect.catch(() => Effect.succeed(null)),
+    );
+    if (row === null) return undefined as "points" | "hours" | undefined;
+    const capabilities = parseJson<{ readonly estimateFieldLabel?: string }>(row.capabilitiesJson);
+    return capabilities?.estimateFieldLabel ? "points" : "hours";
+  });
+}
