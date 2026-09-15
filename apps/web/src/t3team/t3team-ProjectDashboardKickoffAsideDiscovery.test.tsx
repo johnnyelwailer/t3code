@@ -126,7 +126,6 @@ describe("ProjectDashboardKickoffAside recipe discovery", () => {
       composition: {
         sections: [
           { sectionId: "quick-starts", visible: true, collapsed: false },
-          { sectionId: "recent-conversations", visible: true, collapsed: false },
         ],
       },
       setCollapsed: () => undefined,
@@ -149,7 +148,6 @@ describe("ProjectDashboardKickoffAside recipe discovery", () => {
         <ProjectDashboardKickoffAside
           project={project}
           dashboardMode="backlog"
-          projectThreads={[]}
           activeThread={null}
           providers={[]}
           isConnected

@@ -123,7 +123,6 @@ describe("ProjectDashboardKickoffAside", () => {
       composition: {
         sections: [
           { sectionId: "quick-starts", visible: true, collapsed: false },
-          { sectionId: "recent-conversations", visible: true, collapsed: false },
         ],
       },
       setCollapsed: () => undefined,
@@ -135,51 +134,6 @@ describe("ProjectDashboardKickoffAside", () => {
       pinItem: () => undefined,
       unpinItem: () => undefined,
     });
-  });
-
-  it("renders recent conversations as compact list entries without a misleading zero count", () => {
-    const markup = renderToStaticMarkup(
-      <ProjectDashboardKickoffAside
-        project={project}
-        dashboardMode="my-work"
-        projectThreads={[
-          {
-            id: "thread-zero",
-            projectId,
-            title: "IES-17877 thread 2",
-            messageCount: 0,
-            lastMessageAt: "2026-05-27T10:00:00.000Z",
-            createdAt: "2026-05-27T10:00:00.000Z",
-            status: "idle",
-          },
-          {
-            id: "thread-two",
-            projectId,
-            title: "New thread",
-            messageCount: 2,
-            lastMessageAt: "2026-05-27T11:00:00.000Z",
-            createdAt: "2026-05-27T11:00:00.000Z",
-            status: "idle",
-          },
-        ]}
-        activeThread={null}
-        providers={[]}
-        isConnected
-        onOpenThread={() => {}}
-        onThreadKickoffConsumed={() => {}}
-        onKickoffThread={(() => {}) as never}
-      />,
-    );
-
-    expect(markup).toContain("<ul");
-    expect(markup).toContain("Quick starts");
-    expect(markup).toContain("Recent conversations");
-    expect(markup).toContain("IES-17877 thread 2");
-    expect(markup).toContain("relative:2026-05-27T10:00:00.000Z");
-    expect(markup).not.toContain("Kick off a project thread");
-    expect(markup).not.toContain("Start a focused conversation for");
-    expect(markup).not.toContain("0 messages");
-    expect(markup).toContain("2 messages • relative:2026-05-27T11:00:00.000Z");
   });
 
   it("hands the surface recipe catalog and the shared staging callback to the composer", () => {
@@ -196,7 +150,6 @@ describe("ProjectDashboardKickoffAside", () => {
       <ProjectDashboardKickoffAside
         project={project}
         dashboardMode="backlog"
-        projectThreads={[]}
         activeThread={null}
         providers={[]}
         isConnected

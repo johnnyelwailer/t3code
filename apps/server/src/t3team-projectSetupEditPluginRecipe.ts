@@ -55,7 +55,7 @@ export function renderEditPluginModuleWorkflow(): string {
     '      when: "missing-prompt",',
     "      promptRequest: {",
     '        title: "Describe the edit you want",',
-    '        body: "Explain the change you want to make. If you did not launch this from Edit this..., include the source file path in the request.",',
+    '        body: "Explain the change you want to make. If you did not launch this from Edit a project recipe, include the source file path in the request.",',
     '        sections: ["context-summary", "available-context-keys", "capabilities"],',
     "        capabilities: [",
     '          "Open an existing project-local recipe or plugin module and keep the current shape intact.",',
