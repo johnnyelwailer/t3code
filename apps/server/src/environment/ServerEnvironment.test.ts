@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { expect, it } from "@effect/vitest";
+import { expect, it, vi } from "@effect/vitest";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -151,22 +151,33 @@ it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
         prefix: "t3-server-environment-test-",
       });
 
+      // The boot stamp identifies THIS server process (epoch ms, set once at
+      // layer construction): a background bash job that started before it
+      // cannot be live any more. Pin it with a Date-only fake clock: same
+      // layer → same stamp on every read; a rebuilt layer ("restart") gets
+      // the new time, never a persisted value.
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(1_700_000_000_000);
       const first = yield* Effect.gen(function* () {
         const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
-        return yield* serverEnvironment.getDescriptor;
+        const [a, b] = [
+          yield* serverEnvironment.getDescriptor,
+          yield* serverEnvironment.getDescriptor,
+        ];
+        expect(a.serverStartedAtMs).toBe(b.serverStartedAtMs);
+        return a;
       }).pipe(Effect.provide(makeServerEnvironmentLayer(baseDir)));
+      vi.setSystemTime(1_700_000_005_000);
       const second = yield* Effect.gen(function* () {
         const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
         return yield* serverEnvironment.getDescriptor;
       }).pipe(Effect.provide(makeServerEnvironmentLayer(baseDir)));
+      vi.useRealTimers();
 
       expect(first.environmentId).toBe(second.environmentId);
-      // The boot stamp identifies THIS server process (epoch ms, set once at
-      // layer construction): a background bash job that started before it
-      // cannot be live any more.
-      expect(Number.isInteger(second.serverStartedAtMs)).toBe(true);
-      expect(second.serverStartedAtMs ?? 0).toBeGreaterThan(0);
-      expect(second.serverStartedAtMs ?? 0).toBeLessThanOrEqual(Date.now());
+      expect(first.serverStartedAtMs).toBe(1_700_000_000_000);
+      expect(second.serverStartedAtMs).toBe(1_700_000_005_000);
+      expect(second.serverStartedAtMs).toBeGreaterThan(first.serverStartedAtMs);
       expect(second.capabilities.repositoryIdentity).toBe(true);
       expect(second.capabilities.connectionProbe).toBe(true);
       expect(second.capabilities.attachmentUploads).toBe(true);
