@@ -237,6 +237,11 @@ const CHILDREN_TOOL_DESCRIPTION =
   "the boundary drain — takes no arguments; returns dispatched (idle → digest started now), " +
   "queued (mid-turn → arrives when the turn ends), or held (suppressed → stays in the " +
   "timeline until the user re-engages)\n" +
+  "- environments: read-only discovery of the environments t3team_start_child's `environment` " +
+  "argument can target — this server's own environment (isDefault:true) plus the distinct " +
+  "cross-environment bindings already recorded on threads in this store (with label, " +
+  "bound-thread count, newest activity); every entry states its delivery boundary " +
+  "(cross-env children run on the target, visible here; messaging stays same-environment)\n" +
   "- help: exact schema for one op (op_name)";
 
 export const T3TeamChildrenTool = Tool.make("t3team_children", {
@@ -252,6 +257,7 @@ export const T3TeamChildrenTool = Tool.make("t3team_children", {
       "close",
       "sweep",
       "drain",
+      "environments",
       "help",
     ]),
     thread_id: Schema.optional(Schema.String),

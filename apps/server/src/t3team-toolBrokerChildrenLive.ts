@@ -36,8 +36,10 @@ export function makeManageChildrenHandler(input: {
   readonly orchestration: OrchestrationEngineShape;
   /** Shared inter-agent mailbox for the `drain` op (absent in hosts without the reactor). */
   readonly mailbox?: T3TeamActorMailboxShape;
+  /** This server's own EnvironmentId — the `environments` op marks it as the default target. */
+  readonly localEnvironmentId?: string;
 }): (toolArgs: unknown, callerThreadId: ThreadIdType) => Effect.Effect<T3TeamToolCallResult> {
-  const { query, orchestration, mailbox } = input;
+  const { query, orchestration, mailbox, localEnvironmentId } = input;
   const batchMax = resolveActorMessageBatchMax();
   const nowIso = () => DateTime.formatIso(DateTime.nowUnsafe());
 
@@ -72,6 +74,27 @@ export function makeManageChildrenHandler(input: {
       ),
       Effect.mapError(normalizeError),
     );
+  // `environments` op: the environments this host has targeted before (recorded
+  // cross-env bindings) — own environment is merged in by the op itself.
+  // Absent on structural fakes without the query: a clean host-degradation
+  // error, never a crash.
+  const listEnvironmentBindings: T3TeamChildrenToolDeps["listEnvironmentBindings"] = () => {
+    const reader = query.listEnvironmentBindings;
+    if (reader === undefined) {
+      return Effect.fail("environment discovery is not available in this host build");
+    }
+    return reader().pipe(
+      Effect.map((rows) =>
+        rows.map((row) => ({
+          environmentId: String(row.environmentId),
+          ...(row.label ? { label: row.label } : {}),
+          threadCount: row.threadCount,
+          latestThreadAt: row.latestThreadAt,
+        })),
+      ),
+      Effect.mapError(normalizeError),
+    );
+  };
   const appendActivity: T3TeamChildrenToolDeps["appendActivity"] = (threadId, activity) =>
     appendThreadActivity(orchestration, threadId, {
       kind: activity.kind,
@@ -196,11 +219,13 @@ export function makeManageChildrenHandler(input: {
         const deps: T3TeamChildrenToolDeps = {
           callerThreadId,
           callerProjectId: caller.projectId,
+          ...(localEnvironmentId !== undefined ? { localEnvironmentId } : {}),
           loadThreadDetail: loadDetail,
           loadThreadShell: loadShell,
           listProjectThreadShells: listProjectShells,
           listChildThreadIds,
           listParentChildRelations,
+          listEnvironmentBindings,
           appendActivity,
           interruptTurn,
           settleThread,

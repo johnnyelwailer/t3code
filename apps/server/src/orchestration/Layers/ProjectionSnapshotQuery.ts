@@ -252,6 +252,13 @@ const ParentChildRelationRowSchema = Schema.Struct({
   parentThreadId: ThreadId,
   createdAt: Schema.String,
 });
+// One distinct cross-environment binding (grouped by the full environment_json
+// so a label change surfaces both shapes; the op dedups per environmentId).
+const ThreadEnvironmentBindingRowSchema = Schema.Struct({
+  environment: Schema.fromJsonString(ThreadEnvironmentBinding),
+  threadCount: NonNegativeInt,
+  latestThreadAt: Schema.String,
+});
 const ProjectionThreadCheckpointContextThreadRowSchema = Schema.Struct({
   threadId: ThreadId,
   projectId: ProjectId,
@@ -1153,6 +1160,28 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         FROM projection_thread_activities AS s
         WHERE s.kind = 't3team.handoff.started'
           AND json_extract(s.payload_json, '$.childThreadId') <> ''
+      `,
+  });
+
+  // Distinct cross-environment bindings recorded on threads (t3team start_child
+  // `environment`): the environments this host has ever targeted. Grouped by the
+  // full JSON so a label change for the same environmentId surfaces both shapes;
+  // the caller dedups per environmentId with the newest row winning. Own-env
+  // threads never carry a binding, so only other environments appear.
+  const listEnvironmentBindingsQuery = SqlSchema.findAll({
+    Request: Schema.Struct({}),
+    Result: ThreadEnvironmentBindingRowSchema,
+    execute: () =>
+      sql`
+        SELECT
+          environment_json AS "environment",
+          COUNT(*) AS "threadCount",
+          MAX(updated_at) AS "latestThreadAt"
+        FROM projection_threads
+        WHERE environment_json IS NOT NULL
+          AND deleted_at IS NULL
+        GROUP BY environment_json
+        ORDER BY MAX(updated_at) DESC
       `,
   });
 
@@ -3205,7 +3234,24 @@ pending_approval_requests AS (
           })),
       ),
     );
-  const getImportedAgentSessionSources: ProjectionSnapshotQueryShape["getImportedAgentSessionSources"] =
+  const listEnvironmentBindings: ProjectionSnapshotQueryShape["listEnvironmentBindings"] = () =>
+    listEnvironmentBindingsQuery({}).pipe(
+      Effect.mapError(
+        toPersistenceSqlOrDecodeError(
+          "ProjectionSnapshotQuery.listEnvironmentBindings:query",
+          "ProjectionSnapshotQuery.listEnvironmentBindings:decodeRows",
+        ),
+      ),
+      Effect.map((rows) =>
+        rows.map((row) => ({
+          environmentId: row.environment.environmentId,
+          label: row.environment.label,
+          threadCount: row.threadCount,
+          latestThreadAt: row.latestThreadAt,
+        })),
+      ),
+    );
+  const getImportedAgentSessionSources: ProjectionSnapshotQueryShape["getImportedAgentSessionSources"] = 
     Effect.fn("ProjectionSnapshotQuery.getImportedAgentSessionSources")(function* (projectId) {
       const rows = yield* listImportedAgentSessionSourceRows({ projectId }).pipe(
         Effect.mapError(
@@ -3920,6 +3966,7 @@ pending_approval_requests AS (
     getFirstActiveThreadIdByProjectId,
     listChildThreadIdsByParent,
     listParentChildRelations,
+    listEnvironmentBindings,
     getImportedAgentSessionSources,
     getThreadCheckpointContext,
     getFullThreadDiffContext,

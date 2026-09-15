@@ -44,7 +44,9 @@ projectionSnapshotLayer("ProjectionSnapshotQuery — thread environment binding"
       INSERT INTO projection_threads (thread_id, project_id, title, model_selection_json, runtime_mode, interaction_mode, branch, worktree_path, retention, latest_turn_id, latest_user_message_at, pending_approval_count, pending_user_input_count, has_actionable_proposed_plan, created_at, updated_at, archived_at, deleted_at, environment_json)
       VALUES
         ('thread-legacy', 'project-env', 'Legacy child', '{"provider":"codex","model":"gpt-5-codex"}', 'full-access', 'default', NULL, NULL, 'retained', NULL, NULL, 0, 0, 0, '2026-09-14T00:00:01.000Z', '2026-09-14T00:00:01.000Z', NULL, NULL, NULL),
-        ('thread-cross', 'project-env', 'Cross-env child', '{"provider":"codex","model":"gpt-5-codex"}', 'full-access', 'default', NULL, NULL, 'retained', NULL, NULL, 0, 0, 0, '2026-09-14T00:00:02.000Z', '2026-09-14T00:00:02.000Z', NULL, NULL, '{"environmentId":"env-remote","label":"GHA runner"}')
+        ('thread-cross', 'project-env', 'Cross-env child', '{"provider":"codex","model":"gpt-5-codex"}', 'full-access', 'default', NULL, NULL, 'retained', NULL, NULL, 0, 0, 0, '2026-09-14T00:00:02.000Z', '2026-09-14T00:00:02.000Z', NULL, NULL, '{"environmentId":"env-remote","label":"GHA runner"}'),
+        ('thread-cross-2', 'project-env', 'Cross-env child 2', '{"provider":"codex","model":"gpt-5-codex"}', 'full-access', 'default', NULL, NULL, 'retained', NULL, NULL, 0, 0, 0, '2026-09-14T00:00:03.000Z', '2026-09-14T00:00:03.000Z', NULL, NULL, '{"environmentId":"env-remote","label":"GHA runner v2"}'),
+        ('thread-gha', 'project-env', 'GHA child', '{"provider":"codex","model":"gpt-5-codex"}', 'full-access', 'default', NULL, NULL, 'retained', NULL, NULL, 0, 0, 0, '2026-09-14T00:00:04.000Z', '2026-09-14T00:00:04.000Z', NULL, NULL, '{"environmentId":"env-gha","label":"Actions"}')
     `;
   });
 
@@ -84,6 +86,26 @@ projectionSnapshotLayer("ProjectionSnapshotQuery — thread environment binding"
         assert.strictEqual(crossDetail.value.environment?.environmentId, "env-remote");
         assert.strictEqual(crossDetail.value.environment?.label, "GHA runner");
       }
+
+      // Distinct cross-environment bindings (the children `environments` op
+      // data source): grouped per recorded JSON, newest first, own-env rows
+      // (NULL column) excluded.
+      const readBindings = snapshotQuery.listEnvironmentBindings;
+      assert.ok(readBindings, "live query provides listEnvironmentBindings");
+      const bindings = yield* readBindings();
+      assert.strictEqual(bindings.length, 3);
+      assert.strictEqual(String(bindings[0]?.environmentId), "env-gha");
+      assert.strictEqual(bindings[0]?.label, "Actions");
+      assert.strictEqual(bindings[0]?.threadCount, 1);
+      assert.strictEqual(bindings[0]?.latestThreadAt, "2026-09-14T00:00:04.000Z");
+      assert.strictEqual(String(bindings[1]?.environmentId), "env-remote");
+      assert.strictEqual(bindings[1]?.label, "GHA runner v2");
+      assert.strictEqual(bindings[1]?.threadCount, 1);
+      assert.strictEqual(bindings[1]?.latestThreadAt, "2026-09-14T00:00:03.000Z");
+      assert.strictEqual(String(bindings[2]?.environmentId), "env-remote");
+      assert.strictEqual(bindings[2]?.label, "GHA runner");
+      assert.strictEqual(bindings[2]?.threadCount, 1);
+      assert.strictEqual(bindings[2]?.latestThreadAt, "2026-09-14T00:00:02.000Z");
     }),
   );
 });
