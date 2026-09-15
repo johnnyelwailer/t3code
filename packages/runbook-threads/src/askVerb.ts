@@ -25,6 +25,17 @@ import type { ModelSelection } from "./models.ts";
 /** One attempt + two corrective retries. */
 const MAX_SCHEMA_ATTEMPTS = 3;
 
+/**
+ * A bounded, single-line view of the reply that last missed the schema, so the exhaustion error
+ * names what actually arrived. Without it the decode detail is just "Expected object" and the
+ * failure is unreadable — and the owner's contract is a decode error WITH the offending payload.
+ */
+function offendingReply(reply: unknown): string {
+  const text = (typeof reply === "string" ? reply : JSON.stringify(reply)) ?? "undefined";
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > 160 ? `${flat.slice(0, 157)}…` : flat;
+}
+
 export type ThreadEnvelopeKind = "thread.turn" | "thread.message" | "user.input";
 
 /** Curried `broker.send` for one envelope, matching the `fire` shape the dispatch expects. */
@@ -91,7 +102,8 @@ export function createAskVerb(deps: {
         const detail = error instanceof Error ? error.message : String(error);
         if (attempt >= MAX_SCHEMA_ATTEMPTS) {
           throw new SchemaExhaustedError(
-            `${kind} on thread '${threadId}' did not satisfy the response schema after ${attempt} attempts: ${detail}`,
+            `${kind} on thread '${threadId}' did not satisfy the response schema after ${attempt} ` +
+              `attempts: ${detail}; last reply: ${offendingReply(reply)}`,
           );
         }
         prompt = `${basePrompt}\n\nYour previous reply did not match the required schema (${detail}). ${plan.correctiveInstruction}`;
