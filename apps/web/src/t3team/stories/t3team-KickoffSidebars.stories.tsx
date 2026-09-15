@@ -64,7 +64,7 @@ function KickoffRecipePreview() {
           <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
             Project dashboard backlog
           </p>
-          <h2 className="text-lg font-semibold">Product partner rich quick starts</h2>
+          <h2 className="text-lg font-semibold">Dashboard quick starts</h2>
         </header>
         <T3TeamKickoffRecipeList recipes={projectDashboardRecipes} onSelectRecipe={() => {}} />
       </section>
@@ -74,7 +74,7 @@ function KickoffRecipePreview() {
           <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
             Ticket detail
           </p>
-          <h2 className="text-lg font-semibold">Engineering copilot rich quick starts</h2>
+          <h2 className="text-lg font-semibold">Ticket side panel quick starts</h2>
         </header>
         <T3TeamKickoffRecipeList recipes={ticketDetailRecipes} onSelectRecipe={() => {}} />
       </section>

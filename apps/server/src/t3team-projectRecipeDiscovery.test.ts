@@ -94,11 +94,7 @@ export default function Action({ ctx }) {
       subtitle={ctx.workitem?.type}
       icon="bug"
     >
-      <FieldList
-        items={[
-          { label: "Priority", value: ctx.workitem?.priority ?? "Unknown" },
-        ]}
-      />
+      <div className="text-[10px] text-muted-foreground/70">Priority: {ctx.workitem?.priority ?? "Unknown"}</div>
     </RecipeAction>
   );
 }

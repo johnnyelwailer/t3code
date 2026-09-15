@@ -76,12 +76,9 @@ export default function Action({ ctx }) {
       title="Summarize project risk"
       icon="triangle-alert"
     >
-      <FieldList
-        items={[
-          { label: "Items", value: String(itemCount) },
-          { label: "Bugs", value: String(bugCount) },
-        ]}
-      />
+      <div className="text-[10px] text-muted-foreground/70">
+        {itemCount} item{itemCount === 1 ? "" : "s"} · {bugCount} bug{bugCount === 1 ? "" : "s"}
+      </div>
     </RecipeAction>
   );
 }
@@ -97,12 +94,9 @@ export default function Action({ ctx }) {
       title="Prioritize pending work"
       icon="list-todo"
     >
-      <FieldList
-        items={[
-          { label: "Items", value: String(itemCount) },
-          { label: "Bugs", value: String(bugCount) },
-        ]}
-      />
+      <div className="text-[10px] text-muted-foreground/70">
+        {itemCount} item{itemCount === 1 ? "" : "s"} · {bugCount} bug{bugCount === 1 ? "" : "s"}
+      </div>
       <LaunchOptionGroup
         name="priorityLens"
         label="Prioritize for"
@@ -141,12 +135,9 @@ export default function Action({ ctx }) {
       icon="list-filter"
       description="Filter the current view to the slice most likely waiting on you, then explain the next best move."
     >
-      <FieldList
-        items={[
-          { label: "Visible items", value: String(itemCount) },
-          { label: "Bugs", value: String(bugCount) },
-        ]}
-      />
+      <div className="text-[10px] text-muted-foreground/70">
+        {itemCount} item{itemCount === 1 ? "" : "s"} · {bugCount} bug{bugCount === 1 ? "" : "s"}
+      </div>
     </RecipeAction>
   );
 }
@@ -175,12 +166,9 @@ export default function Action({ ctx }) {
       title="Shape the next backlog slice"
       icon="list-filter"
     >
-      <FieldList
-        items={[
-          { label: "Items", value: String(itemCount) },
-          { label: "Bugs", value: String(bugCount) },
-        ]}
-      />
+      <div className="text-[10px] text-muted-foreground/70">
+        {itemCount} item{itemCount === 1 ? "" : "s"} · {bugCount} bug{bugCount === 1 ? "" : "s"}
+      </div>
     </RecipeAction>
   );
 }
@@ -196,12 +184,9 @@ export default function Action({ ctx }) {
       title="Unblock my work"
       icon="arrow-up-right"
     >
-      <FieldList
-        items={[
-          { label: "Items", value: String(itemCount) },
-          { label: "Bugs", value: String(bugCount) },
-        ]}
-      />
+      <div className="text-[10px] text-muted-foreground/70">
+        {itemCount} item{itemCount === 1 ? "" : "s"} · {bugCount} bug{bugCount === 1 ? "" : "s"}
+      </div>
     </RecipeAction>
   );
 }
