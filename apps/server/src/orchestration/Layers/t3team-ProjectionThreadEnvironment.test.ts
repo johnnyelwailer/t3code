@@ -62,7 +62,9 @@ projectionSnapshotLayer("ProjectionSnapshotQuery — thread environment binding"
       assert.ok(legacy, "legacy thread is in the shell snapshot");
       assert.ok(cross, "cross-environment thread is in the shell snapshot");
       assert.strictEqual((legacy as { environment?: unknown }).environment, undefined);
-      const crossEnvironment = (cross as { environment?: { environmentId?: unknown; label?: unknown } }).environment;
+      const crossEnvironment = (
+        cross as { environment?: { environmentId?: unknown; label?: unknown } }
+      ).environment;
       assert.strictEqual(crossEnvironment?.environmentId, "env-remote");
       assert.strictEqual(crossEnvironment?.label, "GHA runner");
 

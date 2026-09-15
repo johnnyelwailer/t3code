@@ -6,12 +6,8 @@
 import * as Schema from "effect/Schema";
 import { Tool, Toolkit } from "effect/unstable/ai";
 
-import {
-  OrchestrationEngineService,
-} from "../../../orchestration/Services/OrchestrationEngine.ts";
-import {
-  ProjectionThreadActivityRepository,
-} from "../../../persistence/Services/ProjectionThreadActivities.ts";
+import { OrchestrationEngineService } from "../../../orchestration/Services/OrchestrationEngine.ts";
+import { ProjectionThreadActivityRepository } from "../../../persistence/Services/ProjectionThreadActivities.ts";
 import {
   T3TEAM_WIDGET_AUTHORING_GUIDANCE,
   T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION,

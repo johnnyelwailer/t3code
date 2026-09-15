@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 
-import { shouldStopSilenceWatch } from "./t3team-silenceWatchStop.ts";
+import { isTrueTerminalSessionStatus, shouldStopSilenceWatch } from "./t3team-silenceWatchStop.ts";
 
 describe("shouldStopSilenceWatch", () => {
   it.each(["error", "interrupted", "stopped"])(
@@ -22,6 +22,19 @@ describe("shouldStopSilenceWatch", () => {
     "does not stop unknown/non-terminal status %s",
     (status) => {
       expect(shouldStopSilenceWatch(status, null)).toBe(false);
+    },
+  );
+});
+
+describe("isTrueTerminalSessionStatus", () => {
+  it.each(["error", "interrupted", "stopped", "deleted"])("reports true terminal %s", (status) => {
+    expect(isTrueTerminalSessionStatus(status)).toBe(true);
+  });
+
+  it.each([undefined, "ready", "idle", "running", "starting"])(
+    "rejects non-terminal status %s (a turn-end is not a terminal fact)",
+    (status) => {
+      expect(isTrueTerminalSessionStatus(status)).toBe(false);
     },
   );
 });

@@ -335,7 +335,8 @@ describe("derivePendingUserInputs", () => {
       id: "ctx-1",
       header: "Ship order",
       question: "Which of these should we ship first?",
-      context: "### Proposed options\n\n1. Ship A — smallest, ships this week\n2. Ship B — user-requested",
+      context:
+        "### Proposed options\n\n1. Ship A — smallest, ships this week\n2. Ship B — user-requested",
       options: [
         { label: "Ship A", description: "Ships this week" },
         { label: "Ship B", description: "User requested" },

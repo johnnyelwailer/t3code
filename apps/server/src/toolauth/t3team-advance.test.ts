@@ -137,9 +137,9 @@ describe("advance", () => {
     });
 
     it("moves to failed on gh's failure and timeout lines", () => {
-      expect(advance(idle("gh"), "Failed to log in to nexplore.ghe.com account pj (keyring)", GH).phase).toBe(
-        "failed",
-      );
+      expect(
+        advance(idle("gh"), "Failed to log in to nexplore.ghe.com account pj (keyring)", GH).phase,
+      ).toBe("failed");
       const timedOut = advance(
         idle("gh"),
         "Timeout trying to log in to nexplore.ghe.com using token (keyring)",
@@ -162,10 +162,18 @@ describe("advance", () => {
 
     it("adapts to a non-default GHE host", () => {
       const other = ghAdapter("github.corp.example");
-      const next = advance(idle("gh"), "Press Enter to open https://github.corp.example/login/device in your browser...", other);
+      const next = advance(
+        idle("gh"),
+        "Press Enter to open https://github.corp.example/login/device in your browser...",
+        other,
+      );
       expect(next.phase).toBe("awaiting-open");
       expect(next.url).toBe("https://github.corp.example/login/device");
-      const logged = advance({ tool: "gh", phase: "awaiting-open" }, "Logged in to github.corp.example account pj (keyring)", other);
+      const logged = advance(
+        { tool: "gh", phase: "awaiting-open" },
+        "Logged in to github.corp.example account pj (keyring)",
+        other,
+      );
       expect(logged.phase).toBe("connected");
     });
   });

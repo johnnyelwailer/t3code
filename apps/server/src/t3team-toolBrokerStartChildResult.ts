@@ -1,4 +1,8 @@
-import type { ProviderInteractionMode, RuntimeMode, ThreadEnvironmentBinding } from "@t3tools/contracts";
+import type {
+  ProviderInteractionMode,
+  RuntimeMode,
+  ThreadEnvironmentBinding,
+} from "@t3tools/contracts";
 
 import type {
   T3TeamStartChildIsolation,

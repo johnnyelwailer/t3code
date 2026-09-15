@@ -384,9 +384,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           retention: command.retention ?? "retained",
           // Environment binding is pass-through: absent on the command means
           // absent on the event (byte-identical to pre-binding threads).
-          ...(command.environment !== undefined
-            ? { environment: command.environment }
-            : {}),
+          ...(command.environment !== undefined ? { environment: command.environment } : {}),
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
         },

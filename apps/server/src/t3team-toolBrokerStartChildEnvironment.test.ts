@@ -90,12 +90,19 @@ describe("readStartChildArgs environment plumbing", () => {
     });
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value.environment).toEqual({ environmentId: "env-remote", label: "GHA runner" });
+      expect(result.value.environment).toEqual({
+        environmentId: "env-remote",
+        label: "GHA runner",
+      });
     }
   });
 
   it("surfaces environment validation errors from the args parse", () => {
-    const result = readStartChildArgs({ name: "child", isolation: "shared", environment: { id: "" } });
+    const result = readStartChildArgs({
+      name: "child",
+      isolation: "shared",
+      environment: { id: "" },
+    });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toContain("'environment.id'");
   });
@@ -115,12 +122,21 @@ function makeHarness() {
       provider: "nexplore",
       model: "nexplore-a",
     },
-  } as unknown as { readonly id: unknown; readonly title: string; readonly workspaceRoot: string; readonly defaultModelSelection: unknown };
+  } as unknown as {
+    readonly id: unknown;
+    readonly title: string;
+    readonly workspaceRoot: string;
+    readonly defaultModelSelection: unknown;
+  };
   const thread = {
     id: ThreadId.make("parent-1"),
     projectId: "p1",
     title: "Parent",
-    modelSelection: { instanceId: "nexplore", model: "nexplore-a", options: [] } as unknown as ModelSelection,
+    modelSelection: {
+      instanceId: "nexplore",
+      model: "nexplore-a",
+      options: [],
+    } as unknown as ModelSelection,
     runtimeMode: "full-access" as const,
     interactionMode: "default" as const,
     worktreePath: null,

@@ -95,6 +95,5 @@ export function ghAdapter(hostname: string): ToolAuthAdapter {
   };
 }
 
-const ghLoginHostname =
-  process.env[GH_LOGIN_HOSTNAME_ENV]?.trim() || GH_DEFAULT_LOGIN_HOSTNAME;
+const ghLoginHostname = process.env[GH_LOGIN_HOSTNAME_ENV]?.trim() || GH_DEFAULT_LOGIN_HOSTNAME;
 export const GH: ToolAuthAdapter = ghAdapter(ghLoginHostname);
