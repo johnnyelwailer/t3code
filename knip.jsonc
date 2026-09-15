@@ -16,6 +16,10 @@
     "apps/server/__fixtures__/t3team-hostDraftToolUndeclared.workflow.ts",
     "apps/server/scripts/t3team-dev-entry.mjs",
     "apps/server/scripts/t3team-providerUsageLiveCheck.ts",
+    // One-time task-record replay tooling (PR #212): run before migration 057 drops
+    // thread_task_records; referenced only by the migration's procedure docs, not imported.
+    "apps/server/scripts/t3team-replay-task-records-layers.ts",
+    "apps/server/scripts/t3team-replay-task-records-to-plans.ts",
     "apps/server/src/t3team-provider-tool-injection-codex-cli.ts",
     "apps/server/src/t3team-provider-tool-injection-codex-utils.ts",
     "apps/server/src/t3team-provider-tool-injection-opencode-config.ts",
