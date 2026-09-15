@@ -99,7 +99,7 @@ const THREAD_DETAIL_ACTIVITY_LIMIT = 500;
  * corrupt value as null (fail-open: the state word is simply absent) instead
  * of failing the whole snapshot decode.
  */
-const READABLE_ACTIVITY_STATES: readonly string[] = new Set([
+const READABLE_ACTIVITY_STATES: ReadonlySet<string> = new Set([
   "thinking",
   "writing",
   "working",

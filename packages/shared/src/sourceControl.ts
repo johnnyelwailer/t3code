@@ -164,7 +164,7 @@ function hasDnsLabel(host: string, label: string): boolean {
 }
 
 const GITHUB_ENTERPRISE_HOST_SUFFIXES: ReadonlyArray<string> = [".ghe.com", ".ghe.localhost"];
-const GITHUB_HOST_LABELS: ReadonlyArray<string> = new Set(["github", "ghe"]);
+const GITHUB_HOST_LABELS: ReadonlySet<string> = new Set(["github", "ghe"]);
 
 /**
  * Matches github.com, its subdomains, GitHub's managed `.ghe.com` /
