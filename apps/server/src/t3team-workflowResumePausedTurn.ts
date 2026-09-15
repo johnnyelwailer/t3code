@@ -41,7 +41,12 @@ export const restorePausedPendingAsk = Effect.fn("restorePausedPendingAsk")(func
   deps: ResumePausedTurnDeps,
   run: WorkflowRun,
 ) {
-  if (run.pendingKind === null || run.pendingThreadId === null || run.pendingCorrelationId === null)
+  if (
+    run.pendingKind === null ||
+    run.pendingKind === "signal.wait" ||
+    run.pendingThreadId === null ||
+    run.pendingCorrelationId === null
+  )
     return;
   deps.registry.setPending(run.pendingThreadId, {
     runId: run.runId,

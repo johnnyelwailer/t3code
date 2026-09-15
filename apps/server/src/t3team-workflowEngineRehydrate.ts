@@ -35,6 +35,7 @@ import { ServerConfig } from "./config.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import { deliverWorkflowFailure } from "./t3team-workflowCompletionMessage.ts";
 import { T3TeamWorkflowEngineReactorLive } from "./t3team-workflowEngineReactor.ts";
@@ -67,6 +68,7 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
     const sleeping = yield* repo.listByStatus({ status: "sleeping" });
     const paused = yield* repo.listByStatus({ status: "paused" });
     const queued = yield* repo.listByStatus({ status: "queued" });
+    const watching = yield* repo.listByStatus({ status: "watching" });
     const dispatch = (command: Parameters<typeof orchestration.dispatch>[0]): Promise<void> =>
       Effect.runPromise(orchestration.dispatch(command)).then(() => undefined);
 
@@ -92,7 +94,8 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
       suspended.length === 0 &&
       sleeping.length === 0 &&
       paused.length === 0 &&
-      queued.length === 0
+      queued.length === 0 &&
+      watching.length === 0
     )
       return;
 
@@ -109,6 +112,7 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
       rearmScheduler: () => scheduler.rearm(),
       toolBroker,
       nowIso,
+      signalStore: Option.getOrUndefined(yield* Effect.serviceOption(WorkflowSignalStore)),
     });
 
     // Durable queued rows preserve FIFO order (`listByStatus` sorts by creation time). Each
@@ -122,8 +126,12 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
       if (
         run.pendingThreadId === null ||
         run.pendingCorrelationId === null ||
-        run.pendingKind === null
+        run.pendingKind === null ||
+        run.pendingKind === "signal.wait"
       ) {
+        // The `watching` status carries the event park (signal state lives in the signal store,
+        // not a thread-parked ask); a `suspended` row is always a thread-parked ask, so a
+        // signal.wait kind here means a corrupt row — skip it loudly rather than mis-resume.
         yield* Effect.logWarning("skipping suspended workflow run with no recorded pending ask", {
           runId: run.runId,
         });
@@ -171,11 +179,53 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
       restored += 1;
     }
 
+    // Event-parked runs (GHE #332) rebuild exactly like sleeping ones — no reactor ask, no
+    // clock to re-arm; the delivery port drives them. The boot-gap bridge: an event that
+    // landed in the durable inbox while this uptime was down (the run was not parked-reachable
+    // then) is drained NOW, before the reconciler starts any source, so the run wakes with it.
+    let woken = 0;
+    const watchingSignalStore = Option.getOrUndefined(
+      yield* Effect.serviceOption(WorkflowSignalStore),
+    );
+    for (const run of watching) {
+      if (
+        run.pendingCorrelationId == null ||
+        run.watchSourceName == null ||
+        run.watchParamsHash == null ||
+        run.watchSignalName == null ||
+        run.watchSignalKey == null
+      ) {
+        yield* Effect.logWarning("skipping watching workflow run with no recorded signal park", {
+          runId: run.runId,
+        });
+        continue;
+      }
+      rebuildController(run, yield* resolveRehydratedWorkflowScripts(run));
+      if (watchingSignalStore !== undefined) {
+        const pending = yield* watchingSignalStore.takeOpenInboxEntry({
+          sourceName: run.watchSourceName,
+          paramsHash: run.watchParamsHash,
+          signalName: run.watchSignalName,
+          key: run.watchSignalKey,
+          deliveredAt: nowIso(),
+        });
+        if (Option.isSome(pending)) {
+          const controller = registry.getRun(run.runId);
+          if (controller !== undefined) {
+            yield* Effect.promise(() =>
+              controller.resume(run.pendingCorrelationId!, pending.value.payload).catch(() => {}),
+            );
+            woken += 1;
+          }
+        }
+      }
+    }
+
     // Arm the single soonest-deadline timer over every rebuilt sleeping run. A past-due deadline
     // computes a 0ms delay and fires immediately — the downtime catch-up guarantee.
     yield* Effect.promise(() => scheduler.rearm());
 
-    yield* Effect.logInfo("rehydrated durable workflow runs", { restored, armed });
+    yield* Effect.logInfo("rehydrated durable workflow runs", { restored, armed, woken });
   },
 );
 

@@ -15,6 +15,10 @@
       "types": "./src/t3team-sdk.placements.ts",
       "import": "./src/t3team-sdk.placements.ts"
     },
+    "./source": {
+      "types": "./src/t3team-sdk.signalSource.ts",
+      "import": "./src/t3team-sdk.signalSource.ts"
+    },
     "./surface": {
       "types": "./src/t3team-sdk.surface.ts",
       "import": "./src/t3team-sdk.surface.ts"

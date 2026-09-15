@@ -30,12 +30,15 @@ export { WorkflowRunIntent };
 
 /** Run lifecycle, mirrored from the SDK's start/suspend/complete path. `sleeping` is the
  * clock-parked sibling of `suspended` (Epic 27): a run parked on `waitUntil`, woken by the
- * scheduler at its `wake_at` rather than by an event. */
+ * scheduler at its `wake_at` rather than by an event. `watching` is the EVENT-parked sibling
+ * (design 42): a run parked on a `signal.wait`, woken by the delivery port when the awaited
+ * `(signal, key)` is delivered. */
 export const WorkflowRunStatus = Schema.Literals([
   "queued",
   "running",
   "suspended",
   "sleeping",
+  "watching",
   "paused",
   "completed",
   "failed",
@@ -43,8 +46,9 @@ export const WorkflowRunStatus = Schema.Literals([
 ]);
 export type WorkflowRunStatus = typeof WorkflowRunStatus.Type;
 
-/** Which ask kind a suspended run is parked on (matches the engine registry's pending kind). */
-export const WorkflowRunPendingKind = Schema.Literals(["thread.turn", "user.input"]);
+/** Which ask kind a parked run is suspended on (matches the engine registry's pending kind).
+ * `signal.wait` marks the design-42 event park (status `watching`), which carries no thread. */
+export const WorkflowRunPendingKind = Schema.Literals(["thread.turn", "user.input", "signal.wait"]);
 export type WorkflowRunPendingKind = typeof WorkflowRunPendingKind.Type;
 
 /** How the run was launched: from a discovered recipe, or agent-authored via
@@ -110,6 +114,16 @@ export const WorkflowRun = Schema.Struct({
    * (migration 052) — the cross-restart half of the bounded no-text retry budget. 0 for every
    * pre-052 row and for every run that never had a step re-driven. */
   turnRetries: Schema.optional(Schema.Number),
+  /** The awaited (instance, signal, key) a `watching` run is parked on (design 42, migration
+   * 059): the source instance identity (name + params hash) it watches, plus the signal name +
+   * delivery key it joins on. NULL for every run not parked on a signal — optional on the
+   * domain shape so existing row builders stay valid, exactly like `failureReason`. Instance
+   * scoping matters: two different instances may emit the same (signal, key), so delivery
+   * targets the exact instance a run parked on. */
+  watchSourceName: Schema.optional(Schema.NullOr(Schema.String)),
+  watchParamsHash: Schema.optional(Schema.NullOr(Schema.String)),
+  watchSignalName: Schema.optional(Schema.NullOr(Schema.String)),
+  watchSignalKey: Schema.optional(Schema.NullOr(Schema.String)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });
@@ -223,6 +237,21 @@ export const SetWorkflowRunSleepingInput = Schema.Struct({
   updatedAt: IsoDateTime,
 });
 
+/** Flip a run to `watching` and record the signal it is parked on (design 42): the
+ * `signal.wait` correlation the delivery port resolves on delivery, plus the awaited
+ * `(signal, key)` it joins on. Clears the thread pending column (a signal park has no
+ * thread) and the timer column (a signal park has no deadline). */
+export const SetWorkflowRunWatchingInput = Schema.Struct({
+  runId: Schema.String,
+  correlationId: Schema.String,
+  watchSourceName: Schema.String,
+  watchParamsHash: Schema.String,
+  watchSignalName: Schema.String,
+  watchSignalKey: Schema.String,
+  updatedAt: IsoDateTime,
+});
+export type SetWorkflowRunWatchingInput = typeof SetWorkflowRunWatchingInput.Type;
+
 /** Journal a re-drive attempt for the run's interrupted `thread.turn` step (migration 052) —
  * the counter the bounded no-text retry budget reads and writes, so a second restart does not
  * reset it. */
@@ -290,14 +319,19 @@ export interface WorkflowRunRepositoryShape {
   readonly markFailedRetainingPending: (
     input: MarkWorkflowRunFailedInput,
   ) => Effect.Effect<void, ProjectionRepositoryError>;
-  /** Count live (running/suspended/sleeping/paused) runs of one origin for one launching thread
-   * — the per-thread ephemeral run-count cap. */
+  /** Count live (running/suspended/sleeping/watching/paused) runs of one origin for one
+   * launching thread — the per-thread ephemeral run-count cap. */
   readonly countLiveByOrigin: (
     input: CountLiveWorkflowRunsByOriginInput,
   ) => Effect.Effect<number, ProjectionRepositoryError>;
   /** Flip to `sleeping` and record the wake deadline + `waitUntil` correlation (Epic 27). */
   readonly setSleeping: (
     input: SetWorkflowRunSleepingInput,
+  ) => Effect.Effect<void, ProjectionRepositoryError>;
+  /** Flip to `watching` and record the awaited `(signal, key)` + `signal.wait` correlation
+   * (design 42). */
+  readonly setWatching: (
+    input: SetWorkflowRunWatchingInput,
   ) => Effect.Effect<void, ProjectionRepositoryError>;
   /** Journal a re-drive attempt for the run's interrupted step (the cross-restart counter). */
   readonly setTurnRetries: (

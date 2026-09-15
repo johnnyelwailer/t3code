@@ -109,6 +109,7 @@ import Migration0073 from "./Migrations/049_ProjectionThreadsActiveOrderKey.ts";
 import Migration0074 from "./Migrations/050_ProjectionThreadPullRequests.ts";
 import Migration0075 from "./Migrations/051_ProjectionThreadMessageContext.ts";
 import Migration0076 from "./Migrations/052_ProjectionThreadTitleState.ts";
+import Migration0077 from "./Migrations/t3team-059_SignalSources.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -197,6 +198,7 @@ const migrationEntries = [
   [74, "ProjectionThreadPullRequests", Migration0074],
   [75, "ProjectionThreadMessageContext", Migration0075],
   [76, "ProjectionThreadTitleState", Migration0076],
+  [77, "SignalSources", Migration0077],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

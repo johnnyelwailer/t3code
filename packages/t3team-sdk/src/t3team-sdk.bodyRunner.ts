@@ -25,6 +25,7 @@ import { decodeWithSchema, setNestedValue } from "./t3team-sdk.internal.ts";
 import type { WorkflowPrimitives } from "./t3team-sdk.primitives.ts";
 import { createSchedulePrimitives } from "./t3team-sdk.schedulePrimitive.ts";
 import type { CheckpointPrimitives, CheckpointRecord } from "@runbook/core/checkpoint";
+import { createSignalPrimitives } from "./t3team-sdk.signalPrimitive.ts";
 import { createThreadPrimitives } from "./t3team-sdk.threadPrimitives.ts";
 import {
   extractMeta,
@@ -116,6 +117,12 @@ export async function runPreparedBody(opts: {
     broker: opts.broker ?? defaultBroker,
     capabilities,
   });
+  // `getSignalSource` (design 42) — capability-gated per source (`"source:<name>"`).
+  const signals = createSignalPrimitives({
+    dispatch: opts.handleDispatch,
+    broker: opts.broker ?? defaultBroker,
+    capabilities,
+  });
   const globals = buildWorkflowGlobals({
     args: decodedArgs,
     tools: buildToolTree(opts.toolRefs, opts.runtime, capabilities),
@@ -128,6 +135,7 @@ export async function runPreparedBody(opts: {
     resume: opts.resume,
     threads,
     schedule,
+    signals,
     // The `RunbookContext` subset (`@runbook/core/authoring`) a `run(ctx)`-shaped body sees;
     // legacy bodies declare zero parameters and the loader never passes this to them.
     ctx: buildRunbookContext({ toolRefs: opts.toolRefs, runtime: opts.runtime, capabilities }),
