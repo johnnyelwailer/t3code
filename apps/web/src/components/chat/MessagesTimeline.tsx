@@ -828,12 +828,27 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       isVisibleMessagesTimelineRow(row, cardAnsweredWorkflowReplyMessageIds),
     ),
   );
+  // A navigation request is one-shot per requestId: opening a workflow run
+  // from the dock scrolls to its card once. The request is never cleared in
+  // ChatView, and `rows` gets a fresh identity on every timeline update
+  // (a live workflow run pushes activity every few seconds), so without this
+  // guard the effect would re-fire the scroll on each update and yank the
+  // user back to the card for the whole run. We only re-apply when the
+  // requestId changes (a new click) — and only after the row is found, so a
+  // request that lands before its row renders still retries until it does.
+  const consumedWorkflowCardNavigationRequestId = useRef<number | null>(null);
   useEffect(() => {
     if (!workflowCardNavigationRequest) return;
+    if (
+      consumedWorkflowCardNavigationRequestId.current === workflowCardNavigationRequest.requestId
+    ) {
+      return;
+    }
     const rowIndex = rows.findIndex(
       (row) => row.kind === "message" && row.message.id === workflowCardNavigationRequest.messageId,
     );
     if (rowIndex < 0) return;
+    consumedWorkflowCardNavigationRequestId.current = workflowCardNavigationRequest.requestId;
     onManualNavigation();
     void listRef.current?.scrollToIndex({
       index: rowIndex,
