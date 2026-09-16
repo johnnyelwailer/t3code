@@ -40,7 +40,10 @@ import { ProjectionThreadActivityRepository } from "../../persistence/Services/P
 import { ProjectionThreadActivityRepositoryLive } from "../../persistence/Layers/ProjectionThreadActivities.ts";
 import * as CheckpointStore from "../../checkpointing/CheckpointStore.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
-import { ThreadBackgroundLivenessService } from "../ThreadBackgroundLiveness.ts";
+import {
+  TERMINAL_SESSION_STATUSES,
+  ThreadBackgroundLivenessService,
+} from "../ThreadBackgroundLiveness.ts";
 import { ThreadPlanProgressService } from "../ThreadPlanProgress.ts";
 import { ThreadPlanStalenessService } from "../ThreadPlanStaleness.ts";
 import { ThreadSilenceWatchdogService } from "../ThreadSilenceWatchdog.ts";
@@ -1849,6 +1852,16 @@ const make = Effect.gen(function* () {
                 : (thread.session?.lastError ?? null);
 
         if (shouldApplyThreadLifecycle) {
+          // Terminal session transitions orphan the thread's background work:
+          // a session that dies by FAILURE (a failed `turn.completed`, a
+          // `session.state.changed` into `error`) transitions to a terminal
+          // status WITHOUT ever emitting `session.exited`, so without this
+          // clear the stranded registry entries would pin the "Monitoring"
+          // pill on the dead thread until the 30-minute TTL. Clear on every
+          // terminal transition — error / stopped / interrupted.
+          if (TERMINAL_SESSION_STATUSES.has(status)) {
+            threadBackgroundLiveness.clearThreadLiveness(thread.id);
+          }
           if (event.type === "turn.started" && acceptedTurnStartedSourcePlan !== null) {
             yield* markSourceProposedPlanImplemented(
               acceptedTurnStartedSourcePlan.sourceThreadId,
@@ -2283,7 +2296,9 @@ const make = Effect.gen(function* () {
       }
 
       // Sidebar background liveness: fed from the same lifecycle stream,
-      // read by the shell query at mapping time (no persistence).
+      // read by the shell query at mapping time (no persistence). The clear on
+      // terminal session transitions happens at the session-set dispatch above
+      // (a failure death never emits session.exited).
       switch (event.type) {
         case "task.started":
         case "task.progress":
@@ -2312,9 +2327,6 @@ const make = Effect.gen(function* () {
           });
           break;
         }
-        case "session.exited":
-          threadBackgroundLiveness.clearThreadLiveness(thread.id);
-          break;
         default:
           break;
       }

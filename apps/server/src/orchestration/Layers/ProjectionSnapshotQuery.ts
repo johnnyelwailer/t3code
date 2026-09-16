@@ -51,7 +51,10 @@ import {
   type ProjectionRepositoryError,
 } from "../../persistence/Errors.ts";
 import { ProjectionCheckpoint } from "../../persistence/Services/ProjectionCheckpoints.ts";
-import { ThreadBackgroundLivenessService } from "../ThreadBackgroundLiveness.ts";
+import {
+  resolveShellBackgroundLiveness,
+  ThreadBackgroundLivenessService,
+} from "../ThreadBackgroundLiveness.ts";
 import { ThreadPlanProgressService } from "../ThreadPlanProgress.ts";
 import { ProjectionProject } from "../../persistence/Services/ProjectionProjects.ts";
 import { ProjectionState } from "../../persistence/Services/ProjectionState.ts";
@@ -2826,8 +2829,9 @@ pending_approval_requests AS (
                       hasPendingApprovals: row.pendingApprovalCount > 0,
                       hasPendingUserInput: row.pendingUserInputCount > 0,
                       hasActionableProposedPlan: row.hasActionableProposedPlan > 0,
-                      backgroundLiveness: threadBackgroundLiveness.getThreadBackgroundLiveness(
-                        row.threadId,
+                      backgroundLiveness: resolveShellBackgroundLiveness(
+                        sessionByThread.get(row.threadId) ?? null,
+                        threadBackgroundLiveness.getThreadBackgroundLiveness(row.threadId),
                       ),
                       planProgress: threadPlanProgress.getThreadPlanProgress(row.threadId),
                       ...(row.childStatus != null ? { childStatus: row.childStatus } : {}),
@@ -3001,8 +3005,9 @@ pending_approval_requests AS (
                 hasPendingApprovals: row.pendingApprovalCount > 0,
                 hasPendingUserInput: row.pendingUserInputCount > 0,
                 hasActionableProposedPlan: row.hasActionableProposedPlan > 0,
-                backgroundLiveness: threadBackgroundLiveness.getThreadBackgroundLiveness(
-                  row.threadId,
+                backgroundLiveness: resolveShellBackgroundLiveness(
+                  sessionByThread.get(row.threadId) ?? null,
+                  threadBackgroundLiveness.getThreadBackgroundLiveness(row.threadId),
                 ),
                 planProgress: threadPlanProgress.getThreadPlanProgress(row.threadId),
                 ...(row.childStatus != null ? { childStatus: row.childStatus } : {}),
@@ -3397,6 +3402,8 @@ pending_approval_requests AS (
         return Option.none<OrchestrationThreadShell>();
       }
 
+      const session = Option.isSome(sessionRow) ? mapSessionRow(sessionRow.value) : null;
+
       return Option.some({
         id: threadRow.value.threadId,
         projectId: threadRow.value.projectId,
@@ -3425,13 +3432,14 @@ pending_approval_requests AS (
         pinnedAt: threadRow.value.pinnedAt,
         pinOrderKey: threadRow.value.pinOrderKey ?? null,
         titleRegeneration: mapTitleRegeneration(threadRow.value),
-        session: Option.isSome(sessionRow) ? mapSessionRow(sessionRow.value) : null,
+        session,
         latestUserMessageAt: threadRow.value.latestUserMessageAt,
         hasPendingApprovals: threadRow.value.pendingApprovalCount > 0,
         hasPendingUserInput: threadRow.value.pendingUserInputCount > 0,
         hasActionableProposedPlan: threadRow.value.hasActionableProposedPlan > 0,
-        backgroundLiveness: threadBackgroundLiveness.getThreadBackgroundLiveness(
-          threadRow.value.threadId,
+        backgroundLiveness: resolveShellBackgroundLiveness(
+          session,
+          threadBackgroundLiveness.getThreadBackgroundLiveness(threadRow.value.threadId),
         ),
         planProgress: threadPlanProgress.getThreadPlanProgress(threadRow.value.threadId),
         ...(threadRow.value.childStatus != null

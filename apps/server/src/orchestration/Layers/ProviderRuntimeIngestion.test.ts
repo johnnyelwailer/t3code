@@ -353,6 +353,9 @@ describe("ProviderRuntimeIngestion", () => {
     const silenceWatchdog = await testRuntime.runPromise(
       Effect.service(ThreadSilenceWatchdog.ThreadSilenceWatchdogService),
     );
+    const liveness = await testRuntime.runPromise(
+      Effect.service(ThreadBackgroundLiveness.ThreadBackgroundLivenessService),
+    );
     scope = await Effect.runPromise(Scope.make("sequential"));
     await testRuntime.runPromise(ingestion.start().pipe(Scope.provide(scope)));
     const drain = () => testRuntime.runPromise(ingestion.drain);
@@ -432,6 +435,7 @@ describe("ProviderRuntimeIngestion", () => {
       setProviderSession: provider.setSession,
       drain,
       silenceWatchdog,
+      liveness,
       logs: logCapture.entries,
     };
   }
@@ -476,6 +480,59 @@ describe("ProviderRuntimeIngestion", () => {
     );
     expect(thread.session?.status).toBe("error");
     expect(thread.session?.lastError).toBe("turn failed");
+  });
+
+  it("clears background liveness on the failure-death transition, with no session.exited", async () => {
+    // The stuck "Monitoring" pill: a session that dies by failure (a failed
+    // turn, no session.exited) used to leave the liveness registry set, pinning
+    // the sidebar pill until the 30-minute TTL. The terminal session transition
+    // itself must orphan the thread's background work.
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-liveness-turn-started"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      createdAt: now,
+      turnId: asTurnId("turn-1"),
+    });
+    await waitForThread(
+      harness.readModel,
+      (thread) => thread.session?.status === "running" && thread.session?.activeTurnId === "turn-1",
+    );
+
+    // A watch loop is the ONLY live work: the shell reads "monitoring" while
+    // the session is alive (non-terminal statuses pass the liveness through).
+    harness.emit({
+      type: "task.started",
+      eventId: asEventId("evt-liveness-monitor-started"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      createdAt: now,
+      payload: { taskId: "task-bash-1", taskType: "local_bash" },
+    });
+    await harness.drain();
+    const liveShell = await harness.readThreadShell();
+    expect(liveShell.backgroundLiveness).toBe("monitoring");
+
+    // Failure death: the failed turn settles the session to `error` WITHOUT
+    // any session.exited — the liveness registry must clear with it.
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("evt-liveness-turn-failed"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      createdAt: "2026-01-01T00:00:01.000Z",
+      turnId: asTurnId("turn-1"),
+      payload: { state: "failed", errorMessage: "provider died" },
+    });
+    await harness.drain();
+    expect(harness.liveness.getThreadBackgroundLiveness("thread-1")).toBeNull();
+    const deadShell = await harness.readThreadShell();
+    expect(deadShell.session?.status).toBe("error");
+    expect(deadShell.backgroundLiveness).toBeNull();
   });
 
   it("settles the session to interrupted when the active turn is aborted", async () => {
