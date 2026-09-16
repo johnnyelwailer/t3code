@@ -478,7 +478,7 @@ describe("ProviderRuntimeIngestion", () => {
     expect(thread.session?.lastError).toBe("turn failed");
   });
 
-  it("settles the session to ready when the active turn is aborted", async () => {
+  it("settles the session to interrupted when the active turn is aborted", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
 
@@ -509,11 +509,14 @@ describe("ProviderRuntimeIngestion", () => {
     const thread = await waitForThread(
       harness.readModel,
       (entry) =>
-        entry.session?.status === "ready" &&
+        entry.session?.status === "interrupted" &&
         entry.session?.activeTurnId === null &&
         entry.session?.lastError === null,
     );
-    expect(thread.session?.status).toBe("ready");
+    // "interrupted", not "ready": the session is alive and can take a new turn, but the turn
+    // did NOT complete — projections settle it as interrupted, and the workflow host must not
+    // take whatever it streamed as a step's answer.
+    expect(thread.session?.status).toBe("interrupted");
     expect(thread.session?.activeTurnId).toBe(null);
   });
 

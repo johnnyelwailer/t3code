@@ -1809,17 +1809,17 @@ const make = Effect.gen(function* () {
             case "session.exited":
               return "stopped";
             case "turn.aborted":
+              // An interrupted turn ends the session ALIVE and idle — it can accept a new turn
+              // immediately (providers that only emit turn.aborted on stop, without a follow-up
+              // session state change, must not leave the thread session stuck "running"). The
+              // status is "interrupted", NOT "ready": the turn did not complete, so projections
+              // settle it as interrupted and the workflow host must not take whatever it
+              // streamed as a step's answer.
               return "interrupted";
             case "turn.completed":
               return normalizeRuntimeTurnState(event.payload.state) === "failed"
                 ? "error"
                 : "ready";
-            case "turn.aborted":
-              // A user-interrupted turn leaves the session alive and idle —
-              // it can accept a new turn immediately. Providers that only
-              // emit turn.aborted on stop (without a follow-up session state
-              // change) must not leave the thread session stuck "running".
-              return "ready";
             case "session.started":
             case "thread.started":
               // Provider thread/session start notifications can arrive during an
