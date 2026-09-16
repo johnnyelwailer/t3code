@@ -70,6 +70,18 @@ export function ProjectDashboardMyWorkView({
     kanbanColumns,
     parentChildGroups,
   } = useProjectMyWorkState({ project, fallbackTickets });
+  // The active My Work filters, shared with the digest lens so the filter bar applies to it the
+  // same way it applies to the list/board lenses (see ProjectMyWorkDigestContent).
+  const digestFilters = useMemo(
+    () => ({
+      query,
+      statusCategory,
+      excludedTypeKeys,
+      selectedPriority,
+      selectedStatus,
+    }),
+    [query, statusCategory, excludedTypeKeys, selectedPriority, selectedStatus],
+  );
   const { canMoveTickets, moveTicketToStatus } = useProjectKanbanStatusMutation({
     project,
     reloadTickets,
@@ -169,6 +181,7 @@ export function ProjectDashboardMyWorkView({
           kanbanColumns={kanbanColumns}
           parentChildGroups={parentChildGroups}
           githubActivityByWorkItem={githubActivity.activityByWorkItem}
+          digestFilters={digestFilters}
           {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
           onTableSortByChange={setTableSortBy}
           onTableSortDirectionChange={setTableSortDirection}

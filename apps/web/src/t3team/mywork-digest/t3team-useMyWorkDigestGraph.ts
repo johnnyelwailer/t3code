@@ -115,7 +115,10 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
 
       fingerprintRef.current = result.fingerprint;
       const viewer: DigestViewer = {
-        name: viewerDisplayName() || result.value.viewer?.name || "",
+        // The server resolves the viewer from the mirror (the exact string `ticket.assignee`
+        // carries), so it is authoritative for the `isMine` join; the client's cached name is
+        // only a fallback for a payload that could not resolve one.
+        name: result.value.viewer?.name || viewerDisplayName() || "",
         role: input.viewer?.role?.trim() !== "" ? (input.viewer?.role as string) : "",
         lastVisitAt: readLastVisitAt(scope),
       };
