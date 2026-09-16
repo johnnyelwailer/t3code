@@ -113,6 +113,16 @@ export function ProjectMyWorkDigestContent({
       </T3SurfacePanel>
     );
   }
+  if (digestFilters && plan.sections.length === 0 && effectiveGraph.tickets.length > 0) {
+    // The filters kept tickets the digest lens cannot place in a lane (e.g. status "done": the
+    // digest shows active work, not finished items): attribute the empty state to the filters,
+    // not to the board.
+    return (
+      <T3SurfacePanel tone="dashed" className="px-4 py-8 text-sm text-muted-foreground">
+        No items match the active filters.
+      </T3SurfacePanel>
+    );
+  }
   return (
     <ProjectMyWorkDigestView
       plan={plan}
