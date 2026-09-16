@@ -59,7 +59,11 @@ export function DigestStoryGroupHeader({
         onOpenTicket ? onOpenTicket(story.id) : window.open(story.ref.url, "_blank", "noopener")
       }
     >
-      <JiraIssueTypeIcon issueType={story.issueType} className="size-3.5 shrink-0" />
+      <JiraIssueTypeIcon
+        issueType={story.issueType}
+        issueTypeIconUrl={story.issueTypeIconUrl}
+        className="size-3.5 shrink-0"
+      />
       <a
         href={story.ref.url}
         className="font-mono text-[11px] text-muted-foreground hover:text-foreground hover:underline"
@@ -107,7 +111,11 @@ export function DigestOtherChildren({
           className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-background/70 px-1.5 py-0.5 text-[11px] text-muted-foreground ring-1 ring-border/50 hover:text-foreground hover:ring-border"
           onClick={(e) => e.stopPropagation()}
         >
-          <JiraIssueTypeIcon issueType={child.issueType} className="size-3 shrink-0" />
+          <JiraIssueTypeIcon
+            issueType={child.issueType}
+            issueTypeIconUrl={child.issueTypeIconUrl}
+            className="size-3 shrink-0"
+          />
           <span className="shrink-0 font-mono text-[10px] leading-none -translate-y-px">
             {child.ref.displayId}
           </span>

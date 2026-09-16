@@ -47,7 +47,11 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
     const nowMs = yield* Clock.currentTimeMillis;
     const nowIso = new Date(nowMs).toISOString();
     const requestedViewerName = input.viewer?.name?.trim() || undefined;
-    let resolvedViewerName: string | undefined = requestedViewerName;
+    // The mirror-resolved name (the assignee Jira stamped on the viewer's own items) wins over
+    // the client's requested name: it is the exact string `ticket.assignee` carries, so the
+    // client's `isMine` join matches. The requested name is only a fallback for a project whose
+    // mirror had no assigned rows to read the name from.
+    let resolvedViewerName: string | undefined = undefined;
     // Set when any project could not resolve the viewer (no Jira session): the
     // client shows "sign in" instead of a misleading empty digest.
     let viewerUnresolved = false;
@@ -185,6 +189,7 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
       ),
     );
 
+    if (resolvedViewerName === undefined) resolvedViewerName = requestedViewerName;
     const payload = assembleMyWorkDigestPayload({ scope: input.scope, sources });
     return {
       ...payload,

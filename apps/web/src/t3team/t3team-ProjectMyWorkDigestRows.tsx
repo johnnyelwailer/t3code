@@ -111,7 +111,11 @@ export function DigestItemRow({
       }
     >
       <div className="flex items-center gap-2">
-        <JiraIssueTypeIcon issueType={ticket.issueType} className="size-3.5 shrink-0" />
+        <JiraIssueTypeIcon
+          issueType={ticket.issueType}
+          issueTypeIconUrl={ticket.issueTypeIconUrl}
+          className="size-3.5 shrink-0"
+        />
         <a
           href={ticket.ref.url}
           className="shrink-0 font-mono text-[11.5px] text-muted-foreground hover:text-foreground hover:underline"
