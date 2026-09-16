@@ -22,6 +22,7 @@ import {
   type LocalCloudSession,
 } from "~/components/cloud/t3team-cloudSessionSplit";
 import { useCloudSessionListPolling } from "./t3team-cloudSessionPolling";
+import { showCloudSessionFailureToast } from "./t3team-cloudSessionToast";
 import { useCloudSessionConnect } from "./t3team-useCloudSessionConnect";
 import { useCloudSessionEnvironmentExit } from "./t3team-useCloudSessionEnvironmentExit";
 
@@ -112,7 +113,7 @@ export function useCloudSessionController() {
             });
             refreshCloudSessionList();
           } else {
-            toastManager.add({ type: "error", title: "Could not start a cloud session." });
+            showCloudSessionFailureToast("Could not start a cloud session.", result);
           }
         })
         .finally(() => setCreatePending(false));
@@ -145,10 +146,10 @@ export function useCloudSessionController() {
             toastManager.add({ type: kind === "stop" ? "success" : "info", title: successTitle });
             refreshCloudSessionList();
           } else {
-            toastManager.add({
-              type: "error",
-              title: `Could not ${kind === "stop" ? "stop" : "cancel"} that cloud session.`,
-            });
+            showCloudSessionFailureToast(
+              `Could not ${kind === "stop" ? "stop" : "cancel"} that cloud session.`,
+              result,
+            );
           }
         })
         .finally(() => setActionPending(null));
