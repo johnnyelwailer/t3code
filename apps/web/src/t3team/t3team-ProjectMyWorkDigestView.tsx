@@ -30,7 +30,7 @@ export function ProjectMyWorkDigestView({
   );
   if (plan.sections.length === 0) {
     return (
-      <div className="mx-auto max-w-[120rem] space-y-8">
+      <div className="space-y-8">
         {header}
         <T3SurfacePanel
           tone="dashed"
@@ -56,7 +56,7 @@ export function ProjectMyWorkDigestView({
         ? "md:grid-cols-2"
         : "";
   return (
-    <div className="mx-auto max-w-[120rem] space-y-8">
+    <div className="space-y-8">
       {header}
       {lanesEmpty ? (
         <T3SurfacePanel

@@ -20,6 +20,8 @@ import {
   buildHeuristicDigestPlan,
   resolveDigestPlan,
 } from "~/t3team/t3team-projectMyWorkDigestPlan";
+import { filterDigestTickets } from "~/t3team/t3team-projectMyWork";
+import type { DigestFilterState } from "~/t3team/t3team-projectMyWorkDigestTypes";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 // TODO(digest-nav): rows navigate to the ticket URL today; thread an in-app onOpenTicket through
@@ -27,9 +29,11 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 export function ProjectMyWorkDigestContent({
   project,
   onOpenTicket,
+  digestFilters,
 }: {
   project: ProjectShellProject;
   onOpenTicket: (projectId: string, ticketId: string) => void;
+  digestFilters?: DigestFilterState | undefined;
 }) {
   const { flags } = useT3TeamBetaFlags();
   // Beta flag: rows open the ticket in-app, or fall back to the ticket URL.
@@ -42,15 +46,44 @@ export function ProjectMyWorkDigestContent({
     projects,
     scope: "project",
   });
+  // The My Work filter bar (search, status category, hidden types, priority, status) shapes the
+  // digest the same way it shapes the legacy lenses: keep only the tickets that match, and drop
+  // the agent activity that belongs to tickets the filter hid, so no lane orphans a filtered row.
+  const effectiveGraph = useMemo(() => {
+    if (!graph || !digestFilters) return graph;
+    const tickets = filterDigestTickets({
+      tickets: graph.tickets,
+      query: digestFilters.query,
+      statusCategory: digestFilters.statusCategory,
+      excludedTypeKeys: digestFilters.excludedTypeKeys,
+      selectedPriority: digestFilters.selectedPriority,
+      selectedStatus: digestFilters.selectedStatus,
+    });
+    if (tickets.length === graph.tickets.length) return graph;
+    const kept = new Set(tickets.map((ticket) => ticket.id));
+    return {
+      ...graph,
+      tickets,
+      claims: graph.claims.filter((claim) => kept.has(claim.ticketId)),
+      decisions: graph.decisions.filter((decision) => kept.has(decision.ticketId)),
+      changeRequests: graph.changeRequests.filter((request) => kept.has(request.ticketId)),
+      blockers: graph.blockers.filter((blocker) => kept.has(blocker.ticketId)),
+      transitions: graph.transitions.filter((transition) => kept.has(transition.ticketId)),
+    };
+  }, [graph, digestFilters]);
   // Minute-granular clock shared with the rest of the app: stable within a render, re-plans on tick.
   // useNowMinute yields UTC wall-clock text without a zone suffix; parse it as UTC.
   const nowMs = Date.parse(`${useNowMinute()}Z`);
   const plan = useMemo(() => {
-    if (!graph) {
+    if (!effectiveGraph) {
       return null;
     }
-    return resolveDigestPlan(buildHeuristicDigestPlan(graph, nowMs), graph, nowMs);
-  }, [graph, nowMs]);
+    return resolveDigestPlan(
+      buildHeuristicDigestPlan(effectiveGraph, nowMs),
+      effectiveGraph,
+      nowMs,
+    );
+  }, [effectiveGraph, nowMs]);
 
   if (status === "loading" && !graph) {
     return <ProjectMyWorkLoadingState />;
@@ -64,17 +97,26 @@ export function ProjectMyWorkDigestContent({
   if (viewerUnresolved && (graph?.tickets.length ?? 0) === 0) {
     return <JiraSignInPanel heading="Sign in to Jira to load your work." onSignedIn={reload} />;
   }
-  if (!graph || !plan) {
+  if (!effectiveGraph || !plan) {
     return (
       <T3SurfacePanel tone="dashed" className="px-4 py-8 text-sm text-muted-foreground">
         Nothing needs you
       </T3SurfacePanel>
     );
   }
+  if (effectiveGraph.tickets.length === 0 && graph !== null && effectiveGraph !== graph) {
+    // The graph has tickets, but the active filters hid every one of them: say so, instead of
+    // implying there is nothing on the board at all.
+    return (
+      <T3SurfacePanel tone="dashed" className="px-4 py-8 text-sm text-muted-foreground">
+        No items match the active filters.
+      </T3SurfacePanel>
+    );
+  }
   return (
     <ProjectMyWorkDigestView
       plan={plan}
-      graph={graph}
+      graph={effectiveGraph}
       nowMs={nowMs}
       burndownVariant={flags.digestBurndownVariant}
       onOpenTicket={openTicketInApp}

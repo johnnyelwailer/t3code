@@ -14,6 +14,7 @@ export {
 export {
   buildProjectMyWorkTypeOptions,
   compareProjectMyWorkTickets,
+  filterDigestTickets,
   filterProjectMyWorkTickets,
   sortProjectMyWorkTickets,
 } from "./t3team-projectMyWorkFiltering";
