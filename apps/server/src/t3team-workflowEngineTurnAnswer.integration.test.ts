@@ -84,9 +84,19 @@ const PREAMBLE =
   "Ich hole erst den Kontext zum Item: Parent, Kinder, Kommentare, Links. Dann schreibe ich nur die neue Beschreibung.";
 const ANSWER = "## Goal\nCheckout must round to two decimals.";
 
+/** A scripted turn: its messages, or an object form that also controls HOW THE SESSION ENDS —
+ * the shape of the death is what these regression tests pin (a mid-stream break must not
+ * settle the step with the pre-death text). */
+type StubTurnScript =
+  | ReadonlyArray<ReadonlyArray<string>>
+  | {
+      readonly messages: ReadonlyArray<ReadonlyArray<string>>;
+      readonly endStatus?: "ready" | "error" | "stopped" | "interrupted";
+    };
+
 /** A stub provider whose Nth turn on a thread emits the Nth scripted message list (last
  * script repeats), with a tool activity between the first two messages of multi-message turns. */
-const ScriptedStubProviderLive = (scripts: ReadonlyArray<ReadonlyArray<ReadonlyArray<string>>>) =>
+const ScriptedStubProviderLive = (scripts: ReadonlyArray<StubTurnScript>) =>
   Layer.effectDiscard(
     Effect.gen(function* () {
       const orchestration = yield* OrchestrationEngineService;
@@ -101,11 +111,20 @@ const ScriptedStubProviderLive = (scripts: ReadonlyArray<ReadonlyArray<ReadonlyA
           // resume re-runs the SAME user message, so the raw message id would collide with the
           // first turn's command ids and the receipt dedupe would drop the second turn.
           const idPrefix = `stub:${turnMessageId}:${attempt}`;
-          const messages = scripts[Math.min(attempt, scripts.length - 1)] ?? [];
-          const commands = stubAgentTurnCommands({ threadId, idPrefix, messages, createdAt: ISO });
+          const entry = scripts[Math.min(attempt, scripts.length - 1)];
+          const isObjectScript = entry !== undefined && "messages" in entry;
+          const script = isObjectScript ? entry.messages : (entry ?? []);
+          const endStatus = isObjectScript ? entry.endStatus : undefined;
+          const commands = stubAgentTurnCommands({
+            threadId,
+            idPrefix,
+            messages: script,
+            createdAt: ISO,
+            ...(endStatus !== undefined ? { endStatus } : {}),
+          });
           // A tool call in the middle of the turn: the reactor must not read it as an answer,
           // and must not settle the ask while the turn keeps working.
-          if (messages.length >= 2) {
+          if (script.length >= 2) {
             const toolActivity: OrchestrationCommand = {
               type: "thread.activity.append",
               commandId: CommandId.make(`${idPrefix}:tool`),
@@ -163,7 +182,7 @@ const EngineLive = OrchestrationEngineLive.pipe(
   Layer.provideMerge(NodeServices.layer),
 );
 
-const testLayer = (scripts: ReadonlyArray<ReadonlyArray<ReadonlyArray<string>>>) =>
+const testLayer = (scripts: ReadonlyArray<StubTurnScript>) =>
   Layer.mergeAll(T3TeamWorkflowEngineReactorLive, ScriptedStubProviderLive(scripts)).pipe(
     Layer.provideMerge(
       Layer.merge(
@@ -485,4 +504,67 @@ it.live("fails the run only after the bounded re-drive budget is exhausted", () 
     // The budget is what ran out: three journaled re-drives on the run row.
     assert.strictEqual(row?.turnRetries, 3);
   }).pipe(Effect.provide(testLayer([[], [], []]))),
+);
+
+it.live("rejects the askAgent step when the agent turn dies mid-stream, and re-drives it", () =>
+  Effect.gen(function* () {
+    yield* Effect.sleep(Duration.millis(100));
+    const launchThreadId = "turn-dead-launch";
+    yield* seedProjectAndThread(launchThreadId);
+    const run = yield* launch({ runId: "turn-dead-run", launchThreadId });
+    assert.strictEqual(run.launched.status, "suspended");
+
+    // THE regression: the step's FIRST drive dies mid-stream — the provider session exits right
+    // after one preamble message. That preamble must never settle the step as its answer:
+    // neither as the turn's "answer" (the dead-state session write settles it as a FAILURE) nor
+    // as a pre-existing reply the re-drive could consume (a dead turn's text is preamble).
+    yield* seedRunRow("turn-dead-run", launchThreadId);
+
+    yield* waitUntil(
+      () => run.completed.length > 0 || run.errors.length > 0,
+      "the dead-turn writer run to settle",
+    );
+    // No failure at all, and no completion on the preamble: the host rejected the dead turn and
+    // re-drove the SAME step, whose second turn answered.
+    assert.deepStrictEqual(run.errors, []);
+    assert.deepStrictEqual(run.completed, [{ answer: ANSWER }]);
+    assert.isUndefined(run.registry.getRun("turn-dead-run"));
+
+    // The rejection was journaled as a re-drive attempt on the run row — the step was rejected,
+    // not completed on the dead turn's text.
+    const repo = yield* WorkflowRunRepository;
+    const row = Option.getOrUndefined(yield* repo.getById({ runId: "turn-dead-run" }));
+    assert.strictEqual(row?.turnRetries, 1);
+  }).pipe(
+    Effect.provide(testLayer([{ messages: [[PREAMBLE]], endStatus: "stopped" }, [[ANSWER]]])),
+  ),
+);
+
+it.live("rejects the askAgent step when the agent turn is aborted before it completes", () =>
+  Effect.gen(function* () {
+    yield* Effect.sleep(Duration.millis(100));
+    const launchThreadId = "turn-abort-launch";
+    yield* seedProjectAndThread(launchThreadId);
+    const run = yield* launch({ runId: "turn-abort-run", launchThreadId });
+    assert.strictEqual(run.launched.status, "suspended");
+
+    // The turn is ABORTED (host watchdog, provider abort) after streaming one preamble message:
+    // the session is still alive, but the turn did not complete, so the step must not settle
+    // with the pre-abort text. The re-driven turn answers.
+    yield* seedRunRow("turn-abort-run", launchThreadId);
+
+    yield* waitUntil(
+      () => run.completed.length > 0 || run.errors.length > 0,
+      "the aborted-turn writer run to settle",
+    );
+    assert.deepStrictEqual(run.errors, []);
+    assert.deepStrictEqual(run.completed, [{ answer: ANSWER }]);
+    assert.isUndefined(run.registry.getRun("turn-abort-run"));
+
+    const repo = yield* WorkflowRunRepository;
+    const row = Option.getOrUndefined(yield* repo.getById({ runId: "turn-abort-run" }));
+    assert.strictEqual(row?.turnRetries, 1);
+  }).pipe(
+    Effect.provide(testLayer([{ messages: [[PREAMBLE]], endStatus: "interrupted" }, [[ANSWER]]])),
+  ),
 );
