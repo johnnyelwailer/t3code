@@ -203,7 +203,6 @@ import {
 } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
 import {
   deriveActorOutboundRelations,
-  describeActorOutboundSend,
   type ActorOutboundRelations,
 } from "~/t3team/chat/t3team-actorOutbound";
 import {
@@ -2312,7 +2311,12 @@ function LiveActivityContent({
 
 function LiveWorkEntryTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "work-live" }> }) {
   const ctx = use(TimelineRowCtx);
-  const label = liveWorkEntryLabel(row.entry, ctx.workspaceRoot, row.active);
+  const label = liveWorkEntryLabel(
+    row.entry,
+    ctx.workspaceRoot,
+    row.active,
+    ctx.actorOutboundRelations,
+  );
   const failed = workEntryDisplayIndicatesToolFailure(row.entry);
 
   return (
@@ -3221,7 +3225,7 @@ const PlainWorkEntryRow = memo(function PlainWorkEntryRow(props: {
     showWarningIndicator || (showFailedIndicator && !toolPresentation)
       ? "circle-alert"
       : workEntryIconName(workEntry);
-  const previewText = workEntryDisplayLabel(workEntry, workspaceRoot);
+  const previewText = workEntryDisplayLabel(workEntry, workspaceRoot, ctx.actorOutboundRelations);
   const displayText =
     !toolPresentation && expanded && workEntry.command?.trim() ? "Command" : previewText;
   const canExpand =

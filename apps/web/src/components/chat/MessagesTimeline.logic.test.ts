@@ -179,6 +179,38 @@ describe("work entry labels", () => {
   };
 
   it.each([
+    ["inProgress", "Sending"],
+    ["completed", "Sent"],
+    ["failed", "Failed to send"],
+    ["declined", "Declined to send"],
+    ["stopped", "Stopped sending"],
+  ] as const)(
+    "describes outbound %s calls without claiming successful delivery",
+    (status, verb) => {
+      const send = {
+        ...entry,
+        detail: 't3team_send_message: {"to_thread_id":"parent-1","text":"done"}',
+        toolLifecycleStatus: status,
+      };
+      const relations = { parentThreadId: "parent-1", childTitles: new Map<string, string>() };
+      const expected = `→ ${verb} message to parent`;
+      expect(workEntryDisplayLabel(send, undefined, relations)).toBe(expected);
+      expect(liveWorkEntryLabel(send, undefined, true, relations)).toBe(expected);
+    },
+  );
+
+  it("uses active state for legacy outbound calls with no lifecycle status", () => {
+    const send = { ...entry, detail: 't3team_send_message: {"to_thread_id":"unknown"}' };
+    const relations = { parentThreadId: "parent-1", childTitles: new Map<string, string>() };
+    expect(liveWorkEntryLabel(send, undefined, true, relations)).toBe(
+      "→ Sending message to another thread",
+    );
+    expect(liveWorkEntryLabel(send, undefined, false, relations)).toBe(
+      "→ Sent message to another thread",
+    );
+  });
+
+  it.each([
     ["inProgress", "Clicking in the preview browser"],
     ["completed", "Clicked in the preview browser"],
     ["failed", "Failed to click in the preview browser"],

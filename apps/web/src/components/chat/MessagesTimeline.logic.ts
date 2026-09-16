@@ -26,7 +26,11 @@ import {
 } from "../../session-logic";
 import { type ChatMessage, type ProposedPlan, type TurnDiffSummary } from "../../types";
 import { type MessageId, type OrchestrationLatestTurn, type TurnId } from "@t3tools/contracts";
-import { isActorOutboundSendMessageEntry } from "../../t3team/chat/t3team-actorOutbound";
+import {
+  describeActorOutboundSend,
+  isActorOutboundSendMessageEntry,
+  type ActorOutboundRelations,
+} from "../../t3team/chat/t3team-actorOutbound";
 import { formatWorkspaceRelativePath } from "../../filePathDisplay";
 
 export const TIMELINE_MINIMAP_ITEM_SPACING = 8;
@@ -35,7 +39,36 @@ export const TIMELINE_MINIMAP_MAX_HEIGHT_CSS = "calc(100vh - 18rem)";
 export const TIMELINE_CONTENT_MAX_WIDTH = 768;
 export const TIMELINE_MINIMAP_PERSISTENT_GUTTER = 48;
 
-export function workEntryDisplayLabel(entry: WorkLogEntry, workspaceRoot: string | undefined) {
+/** Keep outbound labels factual while preserving the sender's known relations. */
+function actorOutboundSendLabel(
+  entry: WorkLogEntry,
+  relations: ActorOutboundRelations | null,
+  active = false,
+): string | null {
+  if (relations === null) return null;
+  const description = describeActorOutboundSend(entry, relations);
+  if (description === null) return null;
+  const status = entry.toolLifecycleStatus ?? (active ? "inProgress" : "completed");
+  const verb =
+    status === "inProgress"
+      ? "Sending"
+      : status === "failed"
+        ? "Failed to send"
+        : status === "declined"
+          ? "Declined to send"
+          : status === "stopped"
+            ? "Stopped sending"
+            : "Sent";
+  return `→ ${verb}${description.slice("Sent".length)}`;
+}
+
+export function workEntryDisplayLabel(
+  entry: WorkLogEntry,
+  workspaceRoot: string | undefined,
+  actorOutboundRelations: ActorOutboundRelations | null = null,
+) {
+  const outboundLabel = actorOutboundSendLabel(entry, actorOutboundRelations);
+  if (outboundLabel !== null) return outboundLabel;
   const toolPresentation = resolveWorkEntryToolPresentation(entry);
   if (toolPresentation) return toolPresentation.displayName;
   if (entry.command) return entry.command;
@@ -55,7 +88,10 @@ export function liveWorkEntryLabel(
   entry: WorkLogEntry,
   workspaceRoot: string | undefined,
   active: boolean,
+  actorOutboundRelations: ActorOutboundRelations | null = null,
 ) {
+  const outboundLabel = actorOutboundSendLabel(entry, actorOutboundRelations, active);
+  if (outboundLabel !== null) return outboundLabel;
   const toolPresentation = resolveWorkEntryToolPresentation(
     entry,
     active ? "inProgress" : "completed",
@@ -76,7 +112,7 @@ export function liveWorkEntryLabel(
               : "Ran";
     return `${verb} ${commandProgramName(command) ?? "command"}`;
   }
-  return workEntryDisplayLabel(entry, workspaceRoot);
+  return workEntryDisplayLabel(entry, workspaceRoot, actorOutboundRelations);
 }
 
 export function workEntryIsVisibleInGroup(
