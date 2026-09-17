@@ -6,6 +6,7 @@ import {
 import * as Clock from "effect/Clock";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
@@ -13,24 +14,17 @@ import * as GitHubCli from "../sourceControl/GitHubCli.ts";
 import * as CliTokenManager from "./CliTokenManager.ts";
 import {
   cancelRunInvocation,
-  dispatchSessionInvocation,
   listRunsInvocation,
   parseRunsResponse,
-  sessionTagMarker,
   type GhInvocation,
-  type WorkflowRunSummary,
 } from "./t3team-githubActionsSessionClient.ts";
 import { toCloudSessionFailure } from "./t3team-CloudSessionErrors.ts";
-import {
-  isSessionCredentialIssueEnabled,
-  runCredentialHandoff,
-} from "./t3team-CloudSessionCredential.ts";
+import { isSessionCredentialIssueEnabled } from "./t3team-CloudSessionCredential.ts";
 import { resolveFleetConfig } from "./t3team-CloudSessionFleet.ts";
-import {
-  makeSessionTag,
-  pendingCloudSession,
-  projectCloudSession,
-} from "./t3team-CloudSessionProjection.ts";
+import { ConnectCredentialMinter } from "./t3team-ConnectCredentialMinter.ts";
+import { dispatchAndDiscoverSession } from "./t3team-CloudSessionDispatch.ts";
+import { dispatchCredentialHandoff } from "./t3team-CloudSessionMintGate.ts";
+import { makeSessionTag, projectCloudSession } from "./t3team-CloudSessionProjection.ts";
 
 /**
  * Starts and tracks *cloud sessions*: full Nexi workspaces provisioned on
@@ -57,6 +51,13 @@ const GH_TIMEOUT_MS = 30_000;
 /** One-second polls after a dispatch, waiting for the run to become visible. */
 const DISPATCH_DISCOVERY_ATTEMPTS = 10;
 
+/**
+ * How long a create may spend on a fresh in-app sign-in before it gives up
+ * and answers with the pending-sign-in error. The browser round-trip keeps
+ * running in the background after that, so the user's retry rides it.
+ */
+const CREATE_MINT_WAIT = Duration.seconds(45);
+
 export class CloudSessionService extends Context.Service<
   CloudSessionService,
   {
@@ -73,6 +74,7 @@ export class CloudSessionService extends Context.Service<
 export const make = Effect.fn("cloud.session_service.make")(function* () {
   const github = yield* GitHubCli.GitHubCli;
   const cloudCli = yield* CliTokenManager.CloudCliTokenManager;
+  const minter = yield* ConnectCredentialMinter;
   const handoffEnabled = yield* isSessionCredentialIssueEnabled();
   const { repoRef, machineLabel } = yield* resolveFleetConfig();
 
@@ -144,48 +146,30 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
       // users dispatching in the same second can each be handed the other's
       // session, and then cancelling yours kills theirs.
       const sessionTag = yield* makeSessionTag;
-      const marker = sessionTagMarker(sessionTag);
 
-      yield* runCredentialHandoff({
+      // Credential handoff, with the in-app mint fallback: if this machine
+      // has no usable T3 Connect credential yet, the mint (a browser
+      // round-trip, zero manual steps) gets a bounded chance to finish here;
+      // otherwise the user is told their sign-in is pending in the browser.
+      yield* dispatchCredentialHandoff({
         repoRef,
         sessionTag,
         run,
         enabled: handoffEnabled,
         readCredential: cloudCli.getExisting,
+        mint: minter.mint,
+        mintTimeout: CREATE_MINT_WAIT,
       });
 
-      yield* run(
-        dispatchSessionInvocation(repoRef, {
-          hold_minutes: String(Math.max(1, Math.round(input.durationSeconds / 60))),
-          session_tag: sessionTag,
-        }),
-      );
-
-      // The run does not appear instantly, so poll for the one carrying our tag.
-      const pollForTaggedRun = (
-        attemptsLeft: number,
-      ): Effect.Effect<WorkflowRunSummary | null, CloudSessionFailedError> =>
-        attemptsLeft <= 0
-          ? Effect.succeed(null)
-          : Effect.gen(function* () {
-              yield* Effect.sleep("1 second");
-              const runs = yield* listRuns;
-              const mine = runs.find((item) => item.name.includes(marker));
-              return mine === undefined ? yield* pollForTaggedRun(attemptsLeft - 1) : mine;
-            });
-
-      const discovered = yield* pollForTaggedRun(DISPATCH_DISCOVERY_ATTEMPTS);
-
-      if (discovered === null) {
-        return pendingCloudSession(sessionTag, input.durationSeconds, machineLabel);
-      }
-      return yield* projectCloudSession(
-        discovered,
-        yield* Clock.currentTimeMillis,
-        machineLabel,
+      return yield* dispatchAndDiscoverSession({
         repoRef,
+        sessionTag,
+        durationSeconds: input.durationSeconds,
+        machineLabel,
         run,
-      );
+        listRuns,
+        discoveryAttempts: DISPATCH_DISCOVERY_ATTEMPTS,
+      });
     });
 
   const cancel: CloudSessionService["Service"]["cancel"] = (input) =>

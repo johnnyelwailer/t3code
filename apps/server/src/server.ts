@@ -115,6 +115,8 @@ import { shouldRetryCloudLink } from "./cloud/relayResponse.ts";
 import * as CloudManagedEndpointRuntime from "./cloud/ManagedEndpointRuntime.ts";
 import * as CloudCliTokenManager from "./cloud/CliTokenManager.ts";
 import * as CloudCliState from "./cloud/CliState.ts";
+import * as ConnectCredentialMinter from "./cloud/t3team-ConnectCredentialMinter.ts";
+import { runConnectCredentialTopUp } from "./cloud/t3team-ConnectCredentialTopUp.ts";
 import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
 import * as DesktopAppUpdate from "./desktopUpdate/DesktopAppUpdate.ts";
 import * as ServiceLauncherClient from "./cloud/serviceLauncherClient.ts";
@@ -657,6 +659,10 @@ const RuntimeCoreDependenciesLive = mountT3TeamBrokerBeforeRuntimeServices(
           Layer.provide(ServerSecretStore.layer),
           Layer.provide(ExternalLauncher.layer),
         ),
+        // The in-app credential mint rides the SAME CloudCliTokenManager and
+        // ExternalLauncher instances the CLI flow uses, so minted and CLI
+        // credentials land in one shared secret.
+        ConnectCredentialMinter.layer,
         CloudManagedEndpointRuntimeLive,
       ),
     ),
@@ -944,6 +950,20 @@ export const makeServerLayer = Layer.unwrap(
               ),
             );
           }),
+        );
+        // Top up the per-user T3 Connect credential in the background: a
+        // linked environment (linked from the app or a phone) can outlive a
+        // missing or unrefreshable credential, and the cloud-session handoff
+        // needs one. The top-up may open the user's browser; it never blocks
+        // activation, and not-linked installs never attempt a mint.
+        yield* forkParked(
+          runConnectCredentialTopUp().pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning("Stopped the T3 Connect credential top-up", {
+                errors: Cause.prettyErrors(cause).map((error) => error.message),
+              }),
+            ),
+          ),
         );
         yield* Deferred.succeed(cloudLinkParked, undefined).pipe(Effect.orDie);
       }),
