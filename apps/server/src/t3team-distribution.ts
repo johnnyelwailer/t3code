@@ -86,7 +86,13 @@ async function readDistributionFromEnv(): Promise<{
         };
       }
       return out;
-    }).pipe(Effect.provide(NodeServices.layer)),
+    }).pipe(
+      Effect.provide(NodeServices.layer),
+      // A missing or unreadable distribution.json / theme file means "no
+      // distribution" ({}), matching the previous try/catch fallback — not a
+      // hard import failure.
+      Effect.orElseSucceed(() => ({})),
+    ),
   );
   return result;
 }

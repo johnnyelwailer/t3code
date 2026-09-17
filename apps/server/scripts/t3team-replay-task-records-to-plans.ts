@@ -31,7 +31,6 @@ import * as NodeOS from "node:os";
 import { parseArgs } from "node:util";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
-import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as PathService from "effect/Path";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
@@ -101,14 +100,12 @@ if (import.meta.main) {
   const reported = program.pipe(
     Effect.tapDefect((defect) =>
       Effect.gen(function* () {
-        if (!Cause.isCause(defect)) return;
+        // In this effect beta, tapDefect hands the callback the raw defect
+        // value (not a Cause), so format it directly.
         try {
-          const error = Cause.squash(defect);
-          if (error instanceof Error) {
-            yield* Effect.logError("DEFECT:", error.stack ?? error.message);
-          } else {
-            yield* Effect.logError("DEFECT:", String(error));
-          }
+          const message =
+            defect instanceof Error ? (defect.stack ?? defect.message) : String(defect);
+          yield* Effect.logError("DEFECT:", message);
         } catch {
           /* fall back to runMain's report */
         }
