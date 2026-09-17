@@ -3,6 +3,8 @@ import { Alert, AlertAction, AlertDescription } from "../ui/alert";
 import { Button } from "../ui/button";
 import { CircleAlertIcon, XIcon } from "lucide-react";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { isStructuredOutput, parseStructuredOutput } from "@t3tools/shared/t3team-structuredOutput";
+import { StructuredOutputView } from "../t3team-StructuredOutputView";
 
 export function getThreadErrorBannerKey(threadKey: string, error: string | null): string | null {
   return error === null ? null : `${threadKey}\u0000${error}`;
@@ -56,12 +58,16 @@ export const ThreadErrorBanner = memo(function ThreadErrorBanner({
       >
         <CircleAlertIcon />
         <AlertDescription>
-          <Tooltip>
-            <TooltipTrigger render={<div className="line-clamp-3" />}>{error}</TooltipTrigger>
-            <TooltipPopup side="top" className="max-w-96 whitespace-pre-wrap">
-              {error}
-            </TooltipPopup>
-          </Tooltip>
+          {isStructuredOutput(parseStructuredOutput(error)) ? (
+            <StructuredOutputView raw={error} className="max-w-[42rem]" />
+          ) : (
+            <Tooltip>
+              <TooltipTrigger render={<div className="line-clamp-3" />}>{error}</TooltipTrigger>
+              <TooltipPopup side="top" className="max-w-96 whitespace-pre-wrap">
+                {error}
+              </TooltipPopup>
+            </Tooltip>
+          )}
         </AlertDescription>
         {(onRetry ?? onDismiss) && (
           <AlertAction>
