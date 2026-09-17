@@ -39,6 +39,7 @@ import * as RepositoryIdentityResolver from "../src/project/RepositoryIdentityRe
 import * as ServerLifecycleEvents from "../src/serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "../src/serverRuntimeStartup.ts";
 import * as T3TeamThreadToolContextEvictionReactor from "../src/t3team-threadToolContextEvictionReactor.ts";
+import * as T3TeamProjectSourceIconReactor from "../src/t3team-projectSourceIconReactor.ts";
 import * as ServerSettings from "../src/serverSettings.ts";
 import * as AnalyticsService from "../src/telemetry/AnalyticsService.ts";
 import * as GitVcsDriver from "../src/vcs/GitVcsDriver.ts";
@@ -75,6 +76,10 @@ const startupDependencies = Layer.mergeAll(
     start: () => Effect.void,
   }),
   Layer.succeed(T3TeamThreadToolContextEvictionReactor.T3TeamThreadToolContextEvictionReactor, {
+    start: () => Effect.void,
+    drain: Effect.void,
+  }),
+  Layer.succeed(T3TeamProjectSourceIconReactor.T3TeamProjectSourceIconReactor, {
     start: () => Effect.void,
     drain: Effect.void,
   }),
