@@ -208,7 +208,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
         </ComposerBanner.Actions>
       </CollapsibleTrigger>
       <CollapsiblePanel>
-        <ComposerBanner.Scroll>
+        <ComposerBanner.Scroll className="max-h-[calc(100dvh-13rem)]">
           <ComposerBanner.Body className="pe-1 pb-1">
             {activeQuestion.context ? (
               // Context strip: the earlier-thread content the question points
