@@ -20,7 +20,7 @@ import { OrchestrationEventStoreLive } from "../src/persistence/Layers/Orchestra
 import * as Sqlite from "../src/persistence/Layers/Sqlite.ts";
 import * as RepositoryIdentityResolver from "../src/project/RepositoryIdentityResolver.ts";
 
-export const makeTaskReplayLiveLayers = (config: ServerConfig["Service"]) => {
+export const makeTaskReplayLiveLayers = (config: ServerConfig.ServerConfig["Service"]) => {
   const nodeLayer = NodeServices.layer;
   const configLayer = ServerConfig.layer(config);
   const persistence = Sqlite.layerConfig.pipe(Layer.provide(configLayer));
@@ -43,16 +43,14 @@ export const makeTaskReplayLiveLayers = (config: ServerConfig["Service"]) => {
     Layer.provideMerge(configLayer),
     Layer.provideMerge(nodeLayer),
   );
-  return Layer.mergeAll(
-    engine,
-    OrchestrationProjectionPipelineLive.pipe(
-      Layer.provide(OrchestrationEventStoreLive),
-      Layer.provideMerge(persistence),
-      Layer.provideMerge(configLayer),
-      Layer.provideMerge(nodeLayer),
-    ),
-    persistence,
-    configLayer,
-    nodeLayer,
+  const pipeline = OrchestrationProjectionPipelineLive.pipe(
+    Layer.provide(OrchestrationEventStoreLive),
+    Layer.provideMerge(persistence),
+    Layer.provideMerge(configLayer),
+    Layer.provideMerge(nodeLayer),
+  );
+  return Layer.mergeAll(engine, pipeline, persistence).pipe(
+    Layer.provideMerge(configLayer),
+    Layer.provideMerge(nodeLayer),
   );
 };
