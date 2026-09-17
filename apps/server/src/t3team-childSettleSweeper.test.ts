@@ -507,7 +507,13 @@ describe("child settle sweeper — settled-parent rule (dispatch pass)", () => {
     // precondition refuses it (and the sweep backoff-blocks the child for
     // the retry window).
     expect(await Effect.runPromise(sweeper.sweepOnce(NOW))).toBe(1); // nominated
-    expect(attempted).toEqual([{ threadId: "child-1", requireSettledParentThreadId: "parent-1" }]);
+    expect(attempted).toEqual([
+      {
+        threadId: "child-1",
+        requireSettledParentThreadId: "parent-1",
+        requireNoLiveBackgroundLiveness: true,
+      },
+    ]);
     expect(settled).toEqual([]); // never settled
     // Pass 2 (still inside the retry block, parent still un-settled): not even re-nominated.
     expect(await Effect.runPromise(sweeper.sweepOnce(NOW + 60_000))).toBe(0);

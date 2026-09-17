@@ -5,11 +5,11 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
-import * as NodeFS from "node:fs";
-import * as NodeOS from "node:os";
-import * as NodePath from "node:path";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import type {
   OrchestrationProjectShell,
   ProjectId,
@@ -4185,23 +4185,41 @@ it.effect("names the signed-in account in the detail, and says nothing where the
   }),
 );
 
+/** JSON shape of the fixture file; encoded through effect/Schema. */
+const LinkedRepositoryContextFixtureJson = Schema.Struct({
+  linkedRepositoryUrls: Schema.Array(Schema.String),
+});
+const encodeLinkedRepositoryContext = Schema.encodeSync(
+  Schema.fromJsonString(LinkedRepositoryContextFixtureJson),
+);
+
 /** A real directory whose `.t3team/context/linked-repositories.json` carries the given URLs. */
-function workspaceWithLinkedRepositories(urls: ReadonlyArray<string> | null): string {
-  const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-pr-linked-repos-"));
-  if (urls !== null) {
-    const dir = NodePath.join(root, ".t3team", "context");
-    NodeFS.mkdirSync(dir, { recursive: true });
-    NodeFS.writeFileSync(
-      NodePath.join(dir, "linked-repositories.json"),
-      JSON.stringify({ linkedRepositoryUrls: urls }),
-    );
-  }
-  return root;
-}
+const workspaceWithLinkedRepositories = (urls: ReadonlyArray<string> | null) =>
+  Effect.gen(function* () {
+    const path = yield* Path.Path;
+    const fs = yield* FileSystem.FileSystem;
+    const root = yield* fs.makeTempDirectory({ prefix: "t3-pr-linked-repos-" });
+    if (urls !== null) {
+      const dir = path.join(root, ".t3team", "context");
+      yield* fs.makeDirectory(dir, { recursive: true });
+      yield* fs.writeFileString(
+        path.join(dir, "linked-repositories.json"),
+        encodeLinkedRepositoryContext({ linkedRepositoryUrls: [...urls] }),
+      );
+    }
+    return root;
+  }).pipe(Effect.provide(NodeServices.layer));
+
+/** Best-effort recursive cleanup of a fixture workspace. */
+const removeWorkspace = (root: string) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    yield* fs.remove(root, { recursive: true, force: true });
+  }).pipe(Effect.provide(NodeServices.layer));
 
 it.effect("lists a project's linked repositories alongside its own remote", () =>
   Effect.gen(function* () {
-    const root = workspaceWithLinkedRepositories(["https://github.com/acme/web.git"]);
+    const root = yield* workspaceWithLinkedRepositories(["https://github.com/acme/web.git"]);
     try {
       const read: Array<{ readonly host: string; readonly repository: string }> = [];
       const service = yield* makeService({
@@ -4251,14 +4269,14 @@ it.effect("lists a project's linked repositories alongside its own remote", () =
         "pingdotgg/t3code",
       ]);
     } finally {
-      NodeFS.rmSync(root, { recursive: true, force: true });
+      yield* removeWorkspace(root);
     }
   }),
 );
 
 it.effect("does not read a linked repository that is the project's own remote again", () =>
   Effect.gen(function* () {
-    const root = workspaceWithLinkedRepositories(["git@github.com:PINGDOTGG/t3code.git"]);
+    const root = yield* workspaceWithLinkedRepositories(["git@github.com:PINGDOTGG/t3code.git"]);
     try {
       let reads = 0;
       const service = yield* makeService({
@@ -4290,14 +4308,14 @@ it.effect("does not read a linked repository that is the project's own remote ag
       assert.strictEqual(result.entries.length, 1);
       assert.strictEqual(result.entries[0]!.repository, "pingdotgg/t3code");
     } finally {
-      NodeFS.rmSync(root, { recursive: true, force: true });
+      yield* removeWorkspace(root);
     }
   }),
 );
 
 it.effect("keeps a linked repository on another host out of a host-filtered listing", () =>
   Effect.gen(function* () {
-    const root = workspaceWithLinkedRepositories(["https://gitlab.com/acme/web"]);
+    const root = yield* workspaceWithLinkedRepositories(["https://gitlab.com/acme/web"]);
     try {
       const read: string[] = [];
       const service = yield* makeService({
@@ -4343,14 +4361,14 @@ it.effect("keeps a linked repository on another host out of a host-filtered list
       assert.strictEqual(result.entries.length, 1);
       assert.strictEqual(result.entries[0]!.repository, "pingdotgg/t3code");
     } finally {
-      NodeFS.rmSync(root, { recursive: true, force: true });
+      yield* removeWorkspace(root);
     }
   }),
 );
 
 it.effect("reports a linked repository on an unsupported host as unimplemented", () =>
   Effect.gen(function* () {
-    const root = workspaceWithLinkedRepositories(["https://gerrit.example.test/acme/web"]);
+    const root = yield* workspaceWithLinkedRepositories(["https://gerrit.example.test/acme/web"]);
     try {
       let reads = 0;
       const service = yield* makeService({
@@ -4387,7 +4405,7 @@ it.effect("reports a linked repository on an unsupported host as unimplemented",
       assert.strictEqual(unimplemented!.kind, "unknown");
       assert.strictEqual(unimplemented!.configured, false);
     } finally {
-      NodeFS.rmSync(root, { recursive: true, force: true });
+      yield* removeWorkspace(root);
     }
   }),
 );
@@ -4396,7 +4414,7 @@ it.effect(
   "reads the detail of a linked-repository row, and refuses a repository the project does not carry",
   () =>
     Effect.gen(function* () {
-      const root = workspaceWithLinkedRepositories(["https://github.com/acme/web"]);
+      const root = yield* workspaceWithLinkedRepositories(["https://github.com/acme/web"]);
       try {
         let reads: string[] = [];
         const service = yield* makeService({
@@ -4440,7 +4458,7 @@ it.effect(
         assert.strictEqual(error._tag, "PullRequestOperationError");
         assert.deepStrictEqual(reads, ["acme/web", "pingdotgg/t3code"]);
       } finally {
-        NodeFS.rmSync(root, { recursive: true, force: true });
+        yield* removeWorkspace(root);
       }
     }),
 );

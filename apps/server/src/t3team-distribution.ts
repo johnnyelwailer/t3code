@@ -9,8 +9,12 @@
  * code path regardless of how the value arrived.
  */
 import type { PackActivate } from "@t3team/pack-api";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Option from "effect/Option";
+import * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
 
 export type DistributionBranding = {
   readonly productName?: string;
@@ -21,40 +25,79 @@ export type DistributionBranding = {
 /** The distribution's theme JSON (raw; brand paths resolved at activation). `undefined` when none. */
 export type DistributionTheme = Record<string, unknown>;
 
+const DistributionManifestJson = Schema.Struct({
+  theme: Schema.optional(Schema.String),
+  branding: Schema.optional(
+    Schema.Struct({
+      productName: Schema.optional(Schema.String),
+      iconPng: Schema.optional(Schema.String),
+      userDataDirName: Schema.optional(Schema.String),
+    }),
+  ),
+});
+const decodeDistributionManifest = Schema.decodeEffect(
+  Schema.fromJsonString(DistributionManifestJson),
+);
+const decodeDistributionTheme = Schema.decodeEffect(
+  Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)),
+);
+
 /**
  * When `T3CODE_DISTRIBUTION` names a directory with a `distribution.json`, read the theme and
  * branding from disk so the dev server carries the same identity as a packed build. The packed
  * build replaces this module with an inlined distribution, so this only runs in dev / tests.
+ * The platform FileSystem is asynchronous, so the module read is a top-level await; any missing
+ * or malformed file reads as "no distribution" (same as the previous try/catch fallback).
  */
-function readDistributionFromEnv(): {
+async function readDistributionFromEnv(): Promise<{
   theme?: DistributionTheme;
   branding?: DistributionBranding;
-} {
-  const dir = process.env.T3CODE_DISTRIBUTION?.trim();
-  if (!dir) return {};
-  try {
-    const manifest = JSON.parse(readFileSync(resolve(dir, "distribution.json"), "utf-8")) as {
-      theme?: string;
-      branding?: DistributionBranding;
-    };
-    const result: { theme?: DistributionTheme; branding?: DistributionBranding } = {};
-    if (manifest.theme) {
-      result.theme = JSON.parse(readFileSync(resolve(dir, manifest.theme), "utf-8"));
-    }
-    if (manifest.branding) result.branding = manifest.branding;
-    return result;
-  } catch {
-    return {};
-  }
+}> {
+  const result = await Effect.runPromise(
+    Effect.gen(function* () {
+      const dir = process.env.T3CODE_DISTRIBUTION?.trim();
+      if (dir === undefined || dir === "") return {};
+      const path = yield* Path.Path;
+      const fs = yield* FileSystem.FileSystem;
+      const manifest = Option.getOrUndefined(
+        yield* decodeDistributionManifest(
+          yield* fs.readFileString(path.join(dir, "distribution.json")),
+        ).pipe(Effect.option),
+      );
+      if (manifest === undefined) return {};
+      const out: { theme?: DistributionTheme; branding?: DistributionBranding } = {};
+      if (manifest.theme !== undefined && manifest.theme !== "") {
+        const theme = Option.getOrUndefined(
+          yield* decodeDistributionTheme(
+            yield* fs.readFileString(path.join(dir, manifest.theme)),
+          ).pipe(Effect.option),
+        );
+        if (theme === undefined) return {};
+        out.theme = theme;
+      }
+      if (manifest.branding !== undefined) {
+        const branding = manifest.branding;
+        out.branding = {
+          ...(branding.productName !== undefined ? { productName: branding.productName } : {}),
+          ...(branding.iconPng !== undefined ? { iconPng: branding.iconPng } : {}),
+          ...(branding.userDataDirName !== undefined
+            ? { userDataDirName: branding.userDataDirName }
+            : {}),
+        };
+      }
+      return out;
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+  return result;
 }
 
-const dist = readDistributionFromEnv();
+const dist = await readDistributionFromEnv();
 
 /** The compiled-in distribution's `activate(context)` entry, or `undefined` when none was built in. */
 export const activateDistribution: PackActivate | undefined = undefined;
 /** Inlined distribution assets: pack-root-relative path -> data URL. Empty when no distribution. */
 export const distributionAssets: Readonly<Record<string, string>> = {};
-/** The distribution's theme, or `undefined` when none was built in. */
+/** The distribution's theme, or `undefined` when no distribution was built in. */
 export const distributionTheme: DistributionTheme | undefined = dist.theme;
-/** Distribution branding (product name, icon, home dir), or `undefined` when none was built in. */
+/** Distribution branding (product name, icon, home dir), or `undefined` when no distribution. */
 export const distributionBranding: DistributionBranding | undefined = dist.branding;

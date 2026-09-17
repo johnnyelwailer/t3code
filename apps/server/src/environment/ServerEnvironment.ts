@@ -4,7 +4,7 @@ import {
   type ExecutionEnvironmentDescriptor,
 } from "@t3tools/contracts";
 import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import * as Clock from "effect/Clock";
+import * as DateTime from "effect/DateTime";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -197,8 +197,10 @@ export const make = Effect.gen(function* () {
   // Captured at layer construction (= process boot). The descriptor is
   // rebuilt live on read, but the boot instant is not — it identifies THIS
   // server process, and clients use it to settle in-memory state (bash
-  // background jobs) that died with the previous one.
-  const serverStartedAtMs = yield* Clock.currentTimeMillis;
+  // background jobs) that died with the previous one. nowUnsafe reads the same
+  // wall clock the previous Date.now() did (fake-timer test seams included)
+  // without the global Date the Effect linter rejects.
+  const serverStartedAtMs = DateTime.toEpochMillis(DateTime.nowUnsafe());
   const serverSelfUpdate = resolveServerSelfUpdateCapability({
     desktopManaged: serverConfig.mode === "desktop",
     launcherManaged: launcher.managed,

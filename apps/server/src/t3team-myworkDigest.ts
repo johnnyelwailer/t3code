@@ -9,6 +9,7 @@
  */
 
 import * as Clock from "effect/Clock";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
 import { readDigestThreadAgents } from "./t3team-myworkDigestAgents.ts";
@@ -45,7 +46,7 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
   return Effect.gen(function* () {
     const projects = input.projects.slice(0, 10);
     const nowMs = yield* Clock.currentTimeMillis;
-    const nowIso = new Date(nowMs).toISOString();
+    const nowIso = DateTime.formatIso(DateTime.makeUnsafe(nowMs));
     const requestedViewerName = input.viewer?.name?.trim() || undefined;
     // The mirror-resolved name (the assignee Jira stamped on the viewer's own items) wins over
     // the client's requested name: it is the exact string `ticket.assignee` carries, so the
@@ -203,7 +204,7 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
 
 export type T3TeamMyWorkDigestResult = { readonly payload: T3TeamMyWorkDigestPayload };
 
-/** Wall-clock millis → ISO string, the one Date construction in this loader. */
+/** Wall-clock millis → ISO string, via Effect's DateTime (byte-identical to the legacy toISOString). */
 function millisToIso(ms: number): string {
-  return new Date(ms).toISOString();
+  return DateTime.formatIso(DateTime.makeUnsafe(ms));
 }

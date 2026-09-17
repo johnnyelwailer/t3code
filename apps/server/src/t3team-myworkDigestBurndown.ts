@@ -11,6 +11,8 @@
  * chart is then a lower bound on reality, which it labels by being sparse.
  */
 
+import * as DateTime from "effect/DateTime";
+
 import type {
   T3TeamDigestBurndown,
   T3TeamDigestProjectSource,
@@ -83,7 +85,7 @@ function dayRange(startDate: string, endDate: string, nowIso: string): string[] 
     Number(last.slice(8, 10)),
   );
   while (cursor <= endUtc && days.length < MAX_BURNDOWN_DAYS) {
-    days.push(new Date(cursor).toISOString().slice(0, 10));
+    days.push(DateTime.formatIso(DateTime.makeUnsafe(cursor)).slice(0, 10));
     cursor += 24 * 60 * 60 * 1000;
   }
   return days;

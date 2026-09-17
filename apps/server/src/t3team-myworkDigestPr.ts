@@ -9,6 +9,7 @@
  */
 
 import { ProjectId, type PullRequestListEntry } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
 import { PullRequestService } from "./pullRequest/PullRequestService.ts";
@@ -66,7 +67,9 @@ function mapUnhandledThreads(activity: {
       const times = thread.comments
         .map((comment) => Date.parse(comment.createdAt))
         .filter((time) => Number.isFinite(time));
-      return times.length > 0 ? { lastCommentAt: new Date(Math.max(...times)).toISOString() } : {};
+      return times.length > 0
+        ? { lastCommentAt: DateTime.formatIso(DateTime.makeUnsafe(Math.max(...times))) }
+        : {};
     });
 }
 
