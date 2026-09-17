@@ -28,15 +28,17 @@
  * Usage: node apps/server/scripts/t3team-replay-task-records-to-plans.ts [--dry-run] [--base-dir DIR] (default ~/.t3)
  */
 import * as NodeCrypto from "node:crypto";
-import * as NodePath from "node:path";
 import * as NodeOS from "node:os";
 import { parseArgs } from "node:util";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { CommandId, EventId, type OrchestrationThreadActivity } from "@t3tools/contracts";
+import { CommandId, EventId, ThreadId, type OrchestrationThreadActivity } from "@t3tools/contracts";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as PathService from "effect/Path";
+import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { OrchestrationEngineService } from "../src/orchestration/Services/OrchestrationEngine.ts";
@@ -52,9 +54,23 @@ type TaskRecordRow = {
 
 type PlanStep = { readonly step: string; readonly status: "pending" | "inProgress" | "completed" };
 
+/** Tolerant read of a persisted `turn.plan.updated` payload for verification output. */
+const PlanActivityPayloadJson = Schema.Struct({
+  plan: Schema.optional(
+    Schema.Array(Schema.Struct({ step: Schema.String, status: Schema.String })),
+  ),
+});
+const decodePlanActivityPayload = Schema.decodeEffect(
+  Schema.fromJsonString(PlanActivityPayloadJson),
+);
+
 /** Same mapping the removed journal tool used: closed states read completed. */
 const toPlanStatus = (status: string): PlanStep["status"] =>
-  status === "in_progress" ? "inProgress" : status === "completed" || status === "cancelled" ? "completed" : "pending";
+  status === "in_progress"
+    ? "inProgress"
+    : status === "completed" || status === "cancelled"
+      ? "completed"
+      : "pending";
 
 const READ_SOURCE = `
   SELECT thread_id AS "threadId", status AS "status", subject AS "subject"
@@ -62,7 +78,8 @@ const READ_SOURCE = `
 `;
 
 /** All ids here come from this database (UUIDs); quote-escape anyway. */
-const inList = (ids: readonly string[]): string => ids.map((id) => `'${id.replaceAll("'", "''")}'`).join(", ");
+const inList = (ids: readonly string[]): string =>
+  ids.map((id) => `'${id.replaceAll("'", "''")}'`).join(", ");
 
 const program = Effect.gen(function* () {
   const { values } = parseArgs({
@@ -75,7 +92,8 @@ const program = Effect.gen(function* () {
   });
   const dryRun = values["dry-run"] === true;
   const baseDir = values["base-dir"] ?? `${NodeOS.homedir()}/.t3`;
-  const dbPath = NodePath.join(baseDir, "userdata", "state.sqlite");
+  const { join } = yield* PathService.Path;
+  const dbPath = join(baseDir, "userdata", "state.sqlite");
 
   // --- 1. Read the source rows READ-ONLY. --------------------------------
   const source = yield* Effect.gen(function* () {
@@ -84,20 +102,29 @@ const program = Effect.gen(function* () {
   }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: dbPath, readonly: true })));
 
   if (source.length === 0) {
-    console.log(`No thread_task_records rows at ${dbPath} — nothing to replay.`);
+    yield* Effect.log(`No thread_task_records rows at ${dbPath} — nothing to replay.`);
     return;
   }
   const byThread = new Map<string, TaskRecordRow[]>();
-  for (const row of source) byThread.set(row.threadId, [...(byThread.get(row.threadId) ?? []), row]);
+  for (const row of source)
+    byThread.set(row.threadId, [...(byThread.get(row.threadId) ?? []), row]);
   const threads = [...byThread.entries()].map(([threadId, rows]) => ({
-    threadId, plan: rows.map((row) => ({ step: row.subject, status: toPlanStatus(row.status) })) as PlanStep[],
+    threadId,
+    plan: rows.map((row) => ({
+      step: row.subject,
+      status: toPlanStatus(row.status),
+    })) as PlanStep[],
   }));
-  console.log(`Replaying ${source.length} row(s) across ${threads.length} thread(s) → turn.plan.updated activities.`);
+  yield* Effect.log(
+    `Replaying ${source.length} row(s) across ${threads.length} thread(s) → turn.plan.updated activities.`,
+  );
   if (dryRun) {
     for (const { threadId, plan } of threads) {
-      console.log(`\n${threadId}:\n  ${plan.map((s) => `[${s.status}] ${s.step}`).join("\n  ")}`);
+      yield* Effect.log(
+        `\n${threadId}:\n  ${plan.map((s) => `[${s.status}] ${s.step}`).join("\n  ")}`,
+      );
     }
-    console.log("\n--dry-run: no writes performed.");
+    yield* Effect.log("\n--dry-run: no writes performed.");
     return;
   }
 
@@ -106,14 +133,35 @@ const program = Effect.gen(function* () {
   const withConfig = Effect.gen(function* () {
     const derived = yield* ServerConfig.deriveServerPaths(baseDir, undefined);
     const config = ServerConfig.make({
-      logLevel: "Info", traceMinLevel: "Info", traceTimingEnabled: false, traceBatchWindowMs: 200,
-      traceMaxBytes: 10 * 1024 * 1024, traceMaxFiles: 10, otlpTracesUrl: undefined, otlpMetricsUrl: undefined,
-      otlpExportIntervalMs: 10_000, otlpServiceName: "t3-server", cwd: process.cwd(), baseDir,
-      ...derived, mode: "web", autoBootstrapProjectFromCwd: false, logWebSocketEvents: false,
-      tailscaleServeEnabled: false, tailscaleServePort: 443, port: 0, host: undefined,
-      desktopBootstrapToken: undefined, desktopTelemetryFd: undefined, desktopTelemetryControlFd: undefined,
-      resourceMonitorPath: undefined, staticDir: undefined, devUrl: undefined, devAllowedOrigins: [],
-      noBrowser: false, startupPresentation: "browser",
+      logLevel: "Info",
+      traceMinLevel: "Info",
+      traceTimingEnabled: false,
+      traceBatchWindowMs: 200,
+      traceMaxBytes: 10 * 1024 * 1024,
+      traceMaxFiles: 10,
+      otlpTracesUrl: undefined,
+      otlpMetricsUrl: undefined,
+      otlpExportIntervalMs: 10_000,
+      otlpServiceName: "t3-server",
+      cwd: process.cwd(),
+      baseDir,
+      ...derived,
+      mode: "web",
+      autoBootstrapProjectFromCwd: false,
+      logWebSocketEvents: false,
+      tailscaleServeEnabled: false,
+      tailscaleServePort: 443,
+      port: 0,
+      host: undefined,
+      desktopBootstrapToken: undefined,
+      desktopTelemetryFd: undefined,
+      desktopTelemetryControlFd: undefined,
+      resourceMonitorPath: undefined,
+      staticDir: undefined,
+      devUrl: undefined,
+      devAllowedOrigins: [],
+      noBrowser: false,
+      startupPresentation: "browser",
     });
 
     const runReplay = Effect.gen(function* () {
@@ -130,31 +178,41 @@ const program = Effect.gen(function* () {
       const replayable = threads.filter((t) => liveIds.has(t.threadId));
       const skipped = threads.filter((t) => !liveIds.has(t.threadId)).map((t) => t.threadId);
       if (skipped.length > 0) {
-        console.warn(`Skipping ${skipped.length} thread(s) no longer in projection_threads: ${skipped.join(", ")}`);
+        yield* Effect.logWarning(
+          `Skipping ${skipped.length} thread(s) no longer in projection_threads: ${skipped.join(", ")}`,
+        );
       }
       if (replayable.length === 0) {
-        console.log("No replayable threads — nothing written.");
+        yield* Effect.log("No replayable threads — nothing written.");
         return;
       }
-      const backupPath = `${dbPath}.backup-task-replay-${new Date().toISOString().replaceAll(":", "-")}`;
+      const nowMs = yield* Clock.currentTimeMillis;
+      const nowIso = DateTime.formatIso(DateTime.makeUnsafe(nowMs));
+      const backupPath = `${dbPath}.backup-task-replay-${nowIso.replaceAll(":", "-")}`;
       yield* sql`VACUUM INTO ${backupPath}`;
-      console.log(`Backup written to ${backupPath}`);
+      yield* Effect.log(`Backup written to ${backupPath}`);
 
-      const nowIso = new Date().toISOString();
       let written = 0;
       for (const { threadId, plan } of replayable) {
         const activity: OrchestrationThreadActivity = {
-          id: EventId.make(NodeCrypto.randomUUID()), tone: "info", kind: "turn.plan.updated",
-          summary: "Plan updated", payload: { plan }, turnId: null, createdAt: nowIso,
+          id: EventId.make(NodeCrypto.randomUUID()),
+          tone: "info",
+          kind: "turn.plan.updated",
+          summary: "Plan updated",
+          payload: { plan },
+          turnId: null,
+          createdAt: nowIso,
         };
         yield* engine.dispatch({
           type: "thread.activity.append",
           commandId: CommandId.make(`server:task-record-replay:${NodeCrypto.randomUUID()}`),
-          threadId, activity, createdAt: nowIso,
+          threadId: ThreadId.make(threadId),
+          activity,
+          createdAt: nowIso,
         });
         written++;
       }
-      console.log(`Dispatched ${written} thread.activity.append command(s).`);
+      yield* Effect.log(`Dispatched ${written} thread.activity.append command(s).`);
 
       // Project the new events (the same bootstrap a server boot performs).
       yield* pipeline.bootstrap;
@@ -169,17 +227,23 @@ const program = Effect.gen(function* () {
             ORDER BY p2.created_at DESC, p2.activity_id DESC LIMIT 1)
           AND p.thread_id IN (${inList(replayable.map((t) => t.threadId))})`,
       ).unprepared;
-      console.log("\nVerification (latest turn.plan.updated activity per thread):");
+      yield* Effect.log("\nVerification (latest turn.plan.updated activity per thread):");
       for (const row of verify) {
-        const plan = (JSON.parse(row.planJson) as { plan?: PlanStep[] }).plan ?? [];
-        console.log(`${row.threadId}: ${plan.length} step(s) — ${plan.map((s) => `[${s.status}] ${s.step}`).join("; ")}`);
+        const payload = yield* decodePlanActivityPayload(row.planJson);
+        const plan = payload.plan ?? [];
+        yield* Effect.log(
+          `${row.threadId}: ${plan.length} step(s) — ${plan.map((s) => `[${s.status}] ${s.step}`).join("; ")}`,
+        );
       }
-      console.log(
+      yield* Effect.log(
         "\nDone. Re-run to pick up new rows; start the t3team-057 build (drops the table) only afterwards.",
       );
     });
 
-    yield* runReplay.pipe(Effect.provide(makeTaskReplayLiveLayers(config)));
+    yield* runReplay.pipe(
+      Effect.provide(Clock.layerSystem),
+      Effect.provide(makeTaskReplayLiveLayers(config)),
+    );
   });
 
   yield* withConfig.pipe(Effect.provide(PathService.layer));
@@ -187,18 +251,23 @@ const program = Effect.gen(function* () {
 
 if (import.meta.main) {
   // Cause.pretty crashes on some cause shapes in this effect beta, so report
-  // via squash + plain stack; runMain still prints its own summary.
+  // the defect plainly; runMain still prints its own summary.
   const reported = program.pipe(
-    Effect.tapDefect((cause) =>
-      Effect.sync(() => {
+    Effect.tapDefect((defect) =>
+      Effect.gen(function* () {
+        if (!Cause.isCause(defect)) return;
         try {
-          const error = Cause.squash(cause);
-          console.error("DEFECT:", error?.stack ?? String(error));
+          const error = Cause.squash(defect);
+          if (error instanceof Error) {
+            yield* Effect.logError("DEFECT:", error.stack ?? error.message);
+          } else {
+            yield* Effect.logError("DEFECT:", String(error));
+          }
         } catch {
           /* fall back to runMain's report */
         }
       }),
     ),
   );
-  NodeRuntime.runMain(reported, { disableLoggerFactory: true });
+  NodeRuntime.runMain(reported);
 }
