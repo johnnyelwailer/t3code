@@ -135,17 +135,28 @@ export function createMyWorkDigestBackendApi(httpBaseUrl: string) {
           readonly poll: { readonly enabled: true; readonly knownFingerprint?: string };
         },
         MyWorkDigestPollResult
-      >(httpBaseUrl, "/api/t3team/mywork-digest/graph/poll", {
-        scope: input.scope,
-        projects: input.projects,
-        ...(input.viewer !== undefined ? { viewer: input.viewer } : {}),
-        poll: {
-          enabled: true,
-          ...(input.knownFingerprint !== undefined
-            ? { knownFingerprint: input.knownFingerprint }
-            : {}),
+      >(
+        httpBaseUrl,
+        "/api/t3team/mywork-digest/graph/poll",
+        {
+          scope: input.scope,
+          projects: input.projects,
+          ...(input.viewer !== undefined ? { viewer: input.viewer } : {}),
+          poll: {
+            enabled: true,
+            ...(input.knownFingerprint !== undefined
+              ? { knownFingerprint: input.knownFingerprint }
+              : {}),
+          },
         },
-      });
+        {
+          // A cold Jira backlog cache makes the first digest load refresh it
+          // server-side (12-17s observed vs the 15s default, which failed the
+          // request seconds before the payload was ready). Warm loads return in
+          // ~10ms, so this only matters on the first round after start or TTL.
+          timeoutMs: 45_000,
+        },
+      );
     },
   };
 }
