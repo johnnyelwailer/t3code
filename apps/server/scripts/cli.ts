@@ -153,6 +153,14 @@ const applyDevelopmentIconOverrides = Effect.fn("applyDevelopmentIconOverrides")
  * so every emitted `*.mjs` under dist is scanned. Before this check a silent no-op shipped a
  * server that boots with no provider and no branding.
  */
+const DistributionManifestJson = Schema.Struct({
+  branding: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
+  assetsDir: Schema.optional(Schema.String),
+});
+const decodeEffectDistributionManifest = Schema.decodeEffect(
+  Schema.fromJsonString(DistributionManifestJson),
+);
+
 const verifyCompiledInDistribution = Effect.fn("verifyCompiledInDistribution")(function* (
   distDir: string,
 ) {
@@ -163,13 +171,14 @@ const verifyCompiledInDistribution = Effect.fn("verifyCompiledInDistribution")(f
 
   const markers: string[] = [];
   const manifestPath = path.join(distributionDir, "distribution.json");
-  let manifest: { branding?: Record<string, unknown>; assetsDir?: string } | undefined;
+  let manifest:
+    | { branding?: Record<string, unknown> | undefined; assetsDir?: string | undefined }
+    | undefined;
   if (yield* fs.exists(manifestPath)) {
-    try {
-      manifest = JSON.parse(yield* fs.readFileString(manifestPath));
-    } catch {
-      manifest = undefined;
-    }
+    const contents = yield* fs.readFileString(manifestPath);
+    manifest = Option.getOrUndefined(
+      yield* decodeEffectDistributionManifest(contents).pipe(Effect.option),
+    );
   }
   for (const value of Object.values(manifest?.branding ?? {})) {
     if (typeof value === "string" && value !== "") markers.push(value);

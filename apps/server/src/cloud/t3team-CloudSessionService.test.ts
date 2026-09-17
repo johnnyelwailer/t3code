@@ -1,9 +1,12 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Clock from "effect/Clock";
 import * as ConfigProvider from "effect/ConfigProvider";
+import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
 import * as VcsProcess from "../vcs/VcsProcess.ts";
@@ -19,22 +22,52 @@ const ghOut = (stdout: string): VcsProcess.VcsProcessOutput => ({
   stderrTruncated: false,
 });
 
+/** JSON shapes the fake gh emits/consumes; encoded and decoded through effect/Schema. */
+const GitHubIssueCreateJson = Schema.Struct({ number: Schema.Number });
+const encodeGitHubIssueCreate = Schema.encodeSync(Schema.fromJsonString(GitHubIssueCreateJson));
+const GhDispatchInputsJson = Schema.Struct({
+  inputs: Schema.optional(Schema.Struct({ session_tag: Schema.optional(Schema.String) })),
+});
+const decodeGhDispatch = Schema.decodeSync(Schema.fromJsonString(GhDispatchInputsJson));
+const GhWorkflowRunsJson = Schema.Struct({
+  workflow_runs: Schema.Array(
+    Schema.Struct({
+      id: Schema.Number,
+      status: Schema.String,
+      conclusion: Schema.String,
+      created_at: Schema.String,
+      updated_at: Schema.String,
+      html_url: Schema.String,
+      name: Schema.String,
+    }),
+  ),
+});
+const encodeGhWorkflowRuns = Schema.encodeSync(Schema.fromJsonString(GhWorkflowRunsJson));
+const GhPayloadIssueJson = Schema.Struct({ title: Schema.String, body: Schema.String });
+const decodeGhPayloadIssue = Schema.decodeSync(Schema.fromJsonString(GhPayloadIssueJson));
+
 /**
  * A real-time clock. `it.effect` installs a fake clock that never advances on
  * its own, which would hang the discovery poll's `Effect.sleep`; this one
  * actually waits so the poll can make its (single, matching) attempt.
  */
 const realClock: Clock.Clock = {
-  currentTimeMillisUnsafe: () => Date.now(),
+  currentTimeMillisUnsafe: () => DateTime.toEpochMillis(DateTime.nowUnsafe()),
   currentTimeMillis: Effect.succeed(0),
   currentTimeNanosUnsafe: () => 0n,
   currentTimeNanos: Effect.succeed(0n),
   monotonicTimeNanosUnsafe: () => 0n,
-  sleep: (duration: number) =>
-    Effect.callback((resume) => {
-      setTimeout(() => resume(Effect.void), duration / 1e6);
+  monotonicTimeNanos: Effect.succeed(0n),
+  sleep: (duration: Duration.Duration) =>
+    Effect.callback<void, never>((resume) => {
+      // Effect.sleep would resolve against the ambient clock — this very clock — so
+      // bridge to the default runtime, whose clock is the real system one.
+      void Effect.runPromise(Effect.sleep(duration)).then(
+        () => resume(Effect.void),
+        (error) => resume(Effect.die(error)),
+      );
     }),
-} as unknown as Clock.Clock;
+};
 
 /**
  * A stateful fake gh: records every call, captures the dispatch tag, and hands
@@ -55,16 +88,16 @@ const makeGithubMock = () => {
       calls.push({ args: input.args, stdin: input.stdin });
       const joined = input.args.join(" ");
       if (joined.includes("repos/hive/nx-nexi/issues") && joined.includes("POST")) {
-        return ghOut(JSON.stringify({ number: 42 }));
+        return ghOut(encodeGitHubIssueCreate({ number: 42 }));
       }
       if (joined.includes("/dispatches")) {
-        const parsed = JSON.parse(input.stdin ?? "{}") as { inputs?: { session_tag?: string } };
+        const parsed = decodeGhDispatch(input.stdin ?? "{}");
         tag = parsed.inputs?.session_tag ?? null;
         return ghOut("");
       }
       if (joined.includes("/runs")) {
         return ghOut(
-          JSON.stringify({
+          encodeGhWorkflowRuns({
             workflow_runs: [
               {
                 id: 999,
@@ -128,7 +161,7 @@ describe("CloudSessionService.create credential handoff", () => {
       const payloadCall = calls.find((call) =>
         call.args.join(" ").includes("repos/hive/nx-nexi/issues"),
       );
-      const parsed = JSON.parse(payloadCall?.stdin ?? "{}") as { title: string; body: string };
+      const parsed = decodeGhPayloadIssue(payloadCall?.stdin ?? "{}");
       assert.match(parsed.title, /^nexi-session payload \[s[0-9a-z]+\]$/);
       const decoded = Buffer.from(parsed.body, "base64").toString("utf8");
       assert.include(decoded, "refreshToken");

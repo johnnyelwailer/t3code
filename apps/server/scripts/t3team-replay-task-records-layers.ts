@@ -23,7 +23,10 @@ import * as RepositoryIdentityResolver from "../src/project/RepositoryIdentityRe
 export const makeTaskReplayLiveLayers = (config: ServerConfig.ServerConfig["Service"]) => {
   const nodeLayer = NodeServices.layer;
   const configLayer = ServerConfig.layer(config);
-  const persistence = Sqlite.layerConfig.pipe(Layer.provide(configLayer));
+  const persistence = Sqlite.layerConfig.pipe(
+    Layer.provide(configLayer),
+    Layer.provideMerge(nodeLayer),
+  );
   const snapshotQuery = OrchestrationProjectionSnapshotQueryLive.pipe(
     // The shell mapper reads background liveness + plan progress per thread;
     // the engine requires both directly as well, so provide them into both.
@@ -49,8 +52,5 @@ export const makeTaskReplayLiveLayers = (config: ServerConfig.ServerConfig["Serv
     Layer.provideMerge(configLayer),
     Layer.provideMerge(nodeLayer),
   );
-  return Layer.mergeAll(engine, pipeline, persistence).pipe(
-    Layer.provideMerge(configLayer),
-    Layer.provideMerge(nodeLayer),
-  );
+  return Layer.mergeAll(engine, pipeline, persistence);
 };

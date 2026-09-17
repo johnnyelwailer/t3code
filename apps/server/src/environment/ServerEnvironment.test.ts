@@ -178,6 +178,9 @@ it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
       expect(first.environmentId).toBe(second.environmentId);
       expect(first.serverStartedAtMs).toBe(1_700_000_000_000);
       expect(second.serverStartedAtMs).toBe(1_700_000_005_000);
+      if (first.serverStartedAtMs === undefined || second.serverStartedAtMs === undefined) {
+        throw new Error("boot stamp missing from descriptor");
+      }
       expect(second.serverStartedAtMs).toBeGreaterThan(first.serverStartedAtMs);
       expect(second.capabilities.repositoryIdentity).toBe(true);
       expect(second.capabilities.connectionProbe).toBe(true);
