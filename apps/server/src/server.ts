@@ -5,6 +5,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schedule from "effect/Schedule";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/unstable/http";
 import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
@@ -761,6 +762,15 @@ export const makeRoutesLayer = Layer.mergeAll(
   Layer.provide(httpCompressionLayer),
 );
 
+class ServerDistributionActivationError extends Schema.TaggedErrorClass<ServerDistributionActivationError>()(
+  "ServerDistributionActivationError",
+  { cause: Schema.Unknown },
+) {
+  override get message(): string {
+    return `Compiled-in distribution activation failed: ${String(this.cause)}`;
+  }
+}
+
 export const makeServerLayer = Layer.unwrap(
   Effect.gen(function* () {
     const config = yield* ServerConfig.ServerConfig;
@@ -781,7 +791,7 @@ export const makeServerLayer = Layer.unwrap(
     // in t3team-server.ts; the standard start/serve path needs it too.
     yield* Effect.tryPromise({
       try: () => activateCompiledInDistribution(),
-      catch: (cause) => new Error(`Compiled-in distribution activation failed: ${String(cause)}`),
+      catch: (cause) => new ServerDistributionActivationError({ cause }),
     }).pipe(
       Effect.catch((cause) =>
         Effect.logWarning("Compiled-in distribution activation failed; continuing without it", {

@@ -476,6 +476,10 @@ describe("child settle sweeper — settled-parent rule (dispatch pass)", () => {
               requireSettledParentThreadId: command.requireSettledParentThreadId as
                 | string
                 | undefined,
+              requireNoLiveBackgroundLiveness:
+                command.requireNoLiveBackgroundLiveness === undefined
+                  ? undefined
+                  : (command.requireNoLiveBackgroundLiveness as boolean),
             });
             if (command.requireSettledParentThreadId !== undefined && !parentSettledAtDecideTime) {
               throw new Error("settle blocked: parent is no longer settled at decide time");

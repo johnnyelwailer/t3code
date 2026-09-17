@@ -110,7 +110,7 @@ export function makeActorSendMessage(input: {
         toThreadId: target.id,
         fromThreadId,
         delivered: true,
-        urgency: (urgent === true ? "urgent" : "normal") as const,
+        urgency: urgent === true ? "urgent" : "normal",
         hopCount,
       };
     }).pipe(Effect.mapError(normalizeError));

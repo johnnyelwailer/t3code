@@ -4,6 +4,7 @@ import {
   type ExecutionEnvironmentDescriptor,
 } from "@t3tools/contracts";
 import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -197,7 +198,7 @@ export const make = Effect.gen(function* () {
   // rebuilt live on read, but the boot instant is not — it identifies THIS
   // server process, and clients use it to settle in-memory state (bash
   // background jobs) that died with the previous one.
-  const serverStartedAtMs = Date.now();
+  const serverStartedAtMs = yield* Clock.currentTimeMillis;
   const serverSelfUpdate = resolveServerSelfUpdateCapability({
     desktopManaged: serverConfig.mode === "desktop",
     launcherManaged: launcher.managed,

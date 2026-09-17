@@ -200,6 +200,8 @@ const makeOrchestrationEngine = Effect.gen(function* () {
             envelope.command.requireNoLiveBackgroundLiveness === true);
         if (
           livenessGatedSettle &&
+          (envelope.command.type === "thread.auto-settle" ||
+            envelope.command.type === "thread.settle") &&
           threadBackgroundLiveness.getThreadBackgroundLiveness(envelope.command.threadId) !== null
         ) {
           if (envelope.command.type === "thread.auto-settle") {
