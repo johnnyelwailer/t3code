@@ -77,9 +77,11 @@ const realClock: Clock.Clock = {
 /**
  * A stateful fake gh: records every call, captures the dispatch tag, and hands
  * the tag back in the run list so the discovery poll finds our own run on the
- * first attempt.
+ * first attempt. `login` is what the `user --jq .login` identity call returns;
+ * pass `""` to simulate an unresolvable identity.
  */
-const makeGithubMock = () => {
+const makeGithubMock = (options: { login?: string } = {}) => {
+  const login = options.login ?? "pj";
   const calls: Array<{ args: readonly string[]; stdin?: string | undefined }> = [];
   let tag: string | null = null;
   const execute = (input: {
@@ -92,6 +94,11 @@ const makeGithubMock = () => {
     Effect.sync(() => {
       calls.push({ args: input.args, stdin: input.stdin });
       const joined = input.args.join(" ");
+      if (joined.includes("--jq")) {
+        // The identity-resolution call: `gh api --hostname … user --jq .login`
+        // prints the bare login plus a trailing newline.
+        return ghOut(`${login}\n`);
+      }
       if (joined.includes("repos/hive/nx-nexi/issues") && joined.includes("POST")) {
         return ghOut(encodeGitHubIssueCreate({ number: 42 }));
       }
@@ -289,6 +296,100 @@ describe("CloudSessionService.create credential handoff", () => {
       assert.include(decoded, "fresh-rt");
       assert.isTrue(calls.some((call) => call.args.join(" ").includes("/dispatches")));
       assert.equal(session.phase, "stopped");
+    }),
+  );
+});
+
+/**
+ * Provider layers for a service wired to a fake gh, mirroring the create test:
+ * empty env → handoff flag ON, default fleet config, a real clock so any poll
+ * can sleep. `getExisting` is `none` because these tests never reach the
+ * credential handoff.
+ */
+const providersFor = (
+  execute: (input: {
+    cwd: string;
+    args: readonly string[];
+    timeoutMs?: number;
+    stdin?: string;
+    maxOutputBytes?: number;
+  }) => Effect.Effect<VcsProcess.VcsProcessOutput, GitHubCli.GitHubCliError>,
+) => {
+  const ghMock = Layer.mock(GitHubCli.GitHubCli)({ execute });
+  const cloudCliMock = Layer.mock(CliTokenManager.CloudCliTokenManager)({
+    getExisting: Effect.succeed(Option.none()),
+  });
+  // The service's `make` always acquires the minter in its context (even when
+  // these list tests never reach the credential handoff); die loudly if a mint
+  // is ever attempted here.
+  const minterMock = Layer.mock(ConnectCredentialMinter.ConnectCredentialMinter)({
+    mint: () => Effect.die("the mint must not run in the list tests"),
+  });
+  const configLayer = ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }));
+  return Layer.mergeAll(
+    ghMock,
+    cloudCliMock,
+    minterMock,
+    configLayer,
+    Layer.succeed(Clock.Clock, realClock),
+  );
+};
+
+describe("CloudSessionService.list per-user isolation", () => {
+  it.effect("scopes the list to the caller's login via the server-side actor filter", () =>
+    Effect.gen(function* () {
+      const { calls, execute } = makeGithubMock();
+      const providers = providersFor(execute);
+      const full = Layer.mergeAll(
+        CloudSessionService.layer.pipe(Layer.provide(providers)),
+        providers,
+      );
+
+      const result = yield* Effect.service(CloudSessionService.CloudSessionService).pipe(
+        Effect.flatMap((svc) => svc.list),
+        Effect.provide(full),
+      );
+
+      // It resolved the caller's login from the same gh identity before fetching…
+      assert.isTrue(
+        calls.some((c) => c.args.join(" ").includes("--jq") && c.args.join(" ").includes("user")),
+      );
+      // …and the runs query carried that login as the server-side actor filter.
+      const runsArgs = calls.map((c) => c.args.join(" ")).find((a) => a.includes("/runs"));
+      assert.isTrue(runsArgs !== undefined && runsArgs.includes("actor=pj"));
+
+      // And the list still resolves to the caller's own session.
+      assert.equal(result.configured, true);
+      assert.equal(result.sessions.length, 1);
+      assert.equal(result.sessions[0]?.sessionId, "999");
+    }),
+  );
+
+  it.effect("fails closed when the caller's login cannot be resolved", () =>
+    Effect.gen(function* () {
+      const { calls, execute } = makeGithubMock({ login: "" });
+      const providers = providersFor(execute);
+      const full = Layer.mergeAll(
+        CloudSessionService.layer.pipe(Layer.provide(providers)),
+        providers,
+      );
+
+      const outcome = yield* Effect.service(CloudSessionService.CloudSessionService).pipe(
+        Effect.flatMap((svc) => svc.list),
+        Effect.match({
+          onSuccess: () => ({ kind: "success" as const }),
+          onFailure: (error) => ({ kind: "failure" as const, error }),
+        }),
+        Effect.provide(full),
+      );
+
+      // An unresolvable identity must surface an error, never an unscoped list.
+      assert.equal(outcome.kind, "failure");
+      if (outcome.kind === "failure") {
+        assert.equal(outcome.error.reason, "unauthorized");
+      }
+      // Fail-closed: no runs fetch happened at all.
+      assert.isFalse(calls.some((c) => c.args.join(" ").includes("/runs")));
     }),
   );
 });
