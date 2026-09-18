@@ -16,6 +16,7 @@ export {
   compareProjectMyWorkTickets,
   filterDigestTickets,
   filterProjectMyWorkTickets,
+  hasActiveDigestFilters,
   sortProjectMyWorkTickets,
 } from "./t3team-projectMyWorkFiltering";
 export { buildProjectMyWorkVisibleHierarchy } from "./t3team-projectMyWorkHierarchy";
