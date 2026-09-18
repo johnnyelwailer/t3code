@@ -6,6 +6,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 
 import { runMigrations } from "../Migrations.ts";
+import { assertRequiredIndexesLive } from "../../t3team-requiredIndexGuard.ts";
 import { ServerConfig } from "../../config.ts";
 
 const setup = Layer.effectDiscard(
@@ -16,6 +17,10 @@ const setup = Layer.effectDiscard(
     yield* sql`PRAGMA foreign_keys = ON;`;
     yield* sql`PRAGMA journal_mode = WAL;`;
     yield* runMigrations();
+    // A hot query's index must exist, not merely have had its migration run:
+    // the GHE #382 kind-index fix was a silent no-op where its id was
+    // consumed, and this assertion fails boot loudly instead.
+    yield* assertRequiredIndexesLive();
   }),
 );
 

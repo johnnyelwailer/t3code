@@ -576,6 +576,15 @@ export const ServerConfig = Schema.Struct({
   /** Whether thread subscriptions can emit an opt-in catch-up completion marker. */
   threadResumeCompletionMarker: Schema.optionalKey(Schema.Boolean),
   /**
+   * Whether the client should stagger thread-subscription resubscribes
+   * (first few of a burst immediate, the rest spread over time) instead of
+   * reopening every live thread stream in the same tick after a session
+   * change. Server-authoritative runtime feature flag (env
+   * `NEXI_FF_THREAD_RESUB_STAGGER`, default on); absent on older servers, so
+   * clients keep the legacy immediate behavior against them.
+   */
+  threadResubscribeStagger: Schema.optionalKey(Schema.Boolean),
+  /**
    * Whether thread detail reads accept a turn window (`turnLimit`/
    * `beforeCursor`) and return `page` metadata. Clients must not send window
    * fields to servers that don't advertise this.

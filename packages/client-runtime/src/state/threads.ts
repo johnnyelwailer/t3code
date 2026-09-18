@@ -26,6 +26,7 @@ import { EnvironmentSupervisor } from "../connection/supervisor.ts";
 import * as ConnectionWakeups from "../connection/wakeups.ts";
 import { EnvironmentCacheStore } from "../platform/persistence.ts";
 import { subscribeDynamic } from "../rpc/client.ts";
+import { defaultThreadResubscribeGate } from "../rpc/t3team-threadResubscribeGate.ts";
 import { ThreadSnapshotLoader, type ThreadSnapshotWindow } from "./threadSnapshotHttp.ts";
 import { parseThreadKey, threadKey } from "./entities.ts";
 import { applyThreadDetailEvent } from "./threadReducer.ts";
@@ -273,6 +274,12 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
   // pre-pagination server never sends unsupported window parameters.
   const paginationSupported = yield* Ref.make(false);
   const reasoningMessagesSupported = yield* Ref.make(false);
+  // Whether the connected server advertises staggered thread resubscribes
+  // (runtime feature flag, GHE #382 storm): when true, this stream's
+  // (re)subscribes take a slot in the shared resubscribe gate so a session
+  // change cannot reopen hundreds of thread streams in one tick. Older servers
+  // never advertise it and keep the legacy all-at-once behavior.
+  const resubscribeStaggerEnabled = yield* Ref.make(false);
   // An older page whose thread watermark is ahead of the live state, parked
   // until the subscription catches up (see mergeOlderPage's caller). At most
   // one can exist because loadOlderTurns no-ops while loadingOlder is true.
@@ -793,6 +800,7 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
                 threadResumeCompletionMarker?: boolean;
                 threadSnapshotPagination?: boolean;
                 reasoningMessages?: boolean;
+                threadResubscribeStagger?: boolean;
               },
           ),
         );
@@ -802,8 +810,12 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
         // such a server would silently hide history.
         const supportsPagination = config.threadSnapshotPagination === true;
         const supportsReasoningMessages = config.reasoningMessages === true;
+        // Staggered resubscribes are advertised by the server (behind its
+        // runtime feature flag) rather than assumed client-side.
+        const supportsResubscribeStagger = config.threadResubscribeStagger === true;
         yield* Ref.set(reasoningMessagesSupported, supportsReasoningMessages);
         yield* Ref.set(paginationSupported, supportsPagination);
+        yield* Ref.set(resubscribeStaggerEnabled, supportsResubscribeStagger);
         yield* Ref.set(awaitingCompletion, supportsCompletionMarker);
         yield* markSynchronizing;
         yield* Ref.set(resumingLive, false);
@@ -884,6 +896,16 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
         retryExpectedFailureAfter: "250 millis",
         resubscribe: foregroundResubscriptions,
         isTerminalFailure: isThreadNotFoundFailure,
+        // GHE #382 storm: when the server advertises the stagger, each
+        // (re)subscribe takes a slot in the shared gate — the first few in a
+        // burst open immediately, the rest drip in — so a session change
+        // cannot issue hundreds of snapshot loads in one tick. Unflagged
+        // sessions keep the legacy immediate behavior.
+        beforeSubscribe: Effect.fn("EnvironmentThreadState.beforeSubscribe")(function* (session) {
+          if (!(yield* Ref.get(resubscribeStaggerEnabled))) return;
+          const delayMs = yield* defaultThreadResubscribeGate.allocateDelayMsEffect(session);
+          if (delayMs > 0) yield* Effect.sleep(delayMs);
+        }),
       },
     ).pipe(
       Stream.runForEachArray((items) =>
