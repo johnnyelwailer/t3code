@@ -162,6 +162,16 @@ beforeAll(async () => {
     contains: () => false,
   };
 
+  // Client-rendered tests (react-test-renderer) mount @base-ui floating-ui
+  // hooks whose `isElement` guard does `value instanceof Element`. Provide an
+  // inert `Element` so that check resolves instead of throwing `ReferenceError`.
+  // Deliberately NOT stubbing `HTMLElement`: `@pierre/diffs` gates its
+  // browser-only web-component registration on `typeof HTMLElement !==
+  // "undefined"`, and enabling that path would hit the (unstubbed)
+  // `customElements` global at module load.
+  class ElementStub {}
+  vi.stubGlobal("Element", ElementStub);
+
   vi.stubGlobal("localStorage", {
     getItem: () => null,
     setItem: () => {},
@@ -178,6 +188,7 @@ beforeAll(async () => {
     },
     cancelAnimationFrame: () => {},
     desktopBridge: undefined,
+    Element: ElementStub,
   });
   vi.stubGlobal("document", {
     documentElement: {
@@ -359,6 +370,136 @@ describe("MessagesTimeline", () => {
       }
     },
   );
+
+  it("scrolls to the workflow card once per navigation request, not on every rows update", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const listRef = createRef<LegendListRef | null>();
+    const scrollToIndex = vi.fn();
+    listRef.current = {
+      getState: () => ({ isAtEnd: true }),
+      getScrollableNode: () => null,
+      scrollToIndex,
+    } as unknown as LegendListRef;
+    const onManualNavigation = vi.fn();
+    const baseProps = { ...buildProps(), listRef, onManualNavigation };
+    const cardMessageId = MessageId.make("workflow-card-message");
+    const cardEntry = {
+      id: "entry-workflow-card",
+      kind: "message" as const,
+      createdAt: MESSAGE_CREATED_AT,
+      message: {
+        id: cardMessageId,
+        role: "assistant" as const,
+        text: "Workflow run",
+        turnId: null,
+        createdAt: MESSAGE_CREATED_AT,
+        updatedAt: MESSAGE_CREATED_AT,
+        streaming: false,
+      },
+    };
+    const otherEntry = buildUserTimelineEntry("Some other message");
+    const request = { messageId: cardMessageId, requestId: 1 };
+
+    let renderer: ReactTestRenderer | undefined;
+    await act(() => {
+      renderer = create(
+        <MessagesTimeline
+          {...baseProps}
+          timelineEntries={[cardEntry, otherEntry]}
+          workflowCardNavigationRequest={request}
+        />,
+      );
+    });
+    expect(scrollToIndex).toHaveBeenCalledTimes(1);
+    expect(onManualNavigation).toHaveBeenCalledTimes(1);
+    expect(scrollToIndex).toHaveBeenCalledWith({
+      index: 0,
+      animated: true,
+      viewPosition: 0,
+      viewOffset: 24,
+    });
+
+    // A live workflow run keeps pushing activity: each update hands the
+    // timeline a fresh `rows` identity while the request stays pending.
+    // The one-shot guard must swallow every one of them.
+    await act(() => {
+      renderer!.update(
+        <MessagesTimeline
+          {...baseProps}
+          timelineEntries={[
+            cardEntry,
+            otherEntry,
+            {
+              id: "entry-live-activity-1",
+              kind: "work" as const,
+              createdAt: MESSAGE_CREATED_AT,
+              entry: {
+                id: "work-live-activity-1",
+                createdAt: MESSAGE_CREATED_AT,
+                label: "Run command",
+                tone: "tool",
+                toolLifecycleStatus: "inProgress",
+              },
+            },
+          ]}
+          workflowCardNavigationRequest={request}
+        />,
+      );
+    });
+    await act(() => {
+      renderer!.update(
+        <MessagesTimeline
+          {...baseProps}
+          timelineEntries={[
+            cardEntry,
+            otherEntry,
+            {
+              id: "entry-live-activity-1",
+              kind: "work" as const,
+              createdAt: MESSAGE_CREATED_AT,
+              entry: {
+                id: "work-live-activity-1",
+                createdAt: MESSAGE_CREATED_AT,
+                label: "Run command",
+                tone: "tool",
+                toolLifecycleStatus: "inProgress",
+              },
+            },
+            {
+              id: "entry-live-activity-2",
+              kind: "work" as const,
+              createdAt: MESSAGE_CREATED_AT,
+              entry: {
+                id: "work-live-activity-2",
+                createdAt: MESSAGE_CREATED_AT,
+                label: "Run command",
+                tone: "tool",
+                toolLifecycleStatus: "inProgress",
+              },
+            },
+          ]}
+          workflowCardNavigationRequest={request}
+        />,
+      );
+    });
+    expect(scrollToIndex).toHaveBeenCalledTimes(1);
+    expect(onManualNavigation).toHaveBeenCalledTimes(1);
+
+    // A new click bumps the requestId: the card is scrolled to again, exactly once.
+    await act(() => {
+      renderer!.update(
+        <MessagesTimeline
+          {...baseProps}
+          timelineEntries={[cardEntry, otherEntry]}
+          workflowCardNavigationRequest={{ messageId: cardMessageId, requestId: 2 }}
+        />,
+      );
+    });
+    expect(scrollToIndex).toHaveBeenCalledTimes(2);
+    expect(onManualNavigation).toHaveBeenCalledTimes(2);
+
+    await act(() => renderer?.unmount());
+  });
 
   it("renders a feedback command and its pending response as normal thread messages", () => {
     const submission = {
