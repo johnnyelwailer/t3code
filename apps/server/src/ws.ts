@@ -186,6 +186,7 @@ import {
   layer as CloudSessionServiceLayer,
 } from "./cloud/t3team-CloudSessionService.ts";
 import * as CloudCliTokenManager from "./cloud/CliTokenManager.ts";
+import * as ConnectCredentialMinter from "./cloud/t3team-ConnectCredentialMinter.ts";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
@@ -3921,6 +3922,9 @@ export const websocketRpcRouteLayer = Layer.unwrap(
                   // The create path hands the creator's live T3 Connect
                   // credential to the VM, so it needs the CLI token manager.
                   Layer.provide(CloudCliTokenManager.layer),
+                  // The create path mints the caller's credential in-app
+                  // before the handoff; the minter layer is self-contained.
+                  Layer.provide(ConnectCredentialMinter.layer),
                 ),
               ),
               Layer.provide(
