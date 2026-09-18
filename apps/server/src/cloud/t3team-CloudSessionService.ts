@@ -12,14 +12,9 @@ import * as Layer from "effect/Layer";
 
 import * as GitHubCli from "../sourceControl/GitHubCli.ts";
 import * as CliTokenManager from "./CliTokenManager.ts";
-import {
-  cancelRunInvocation,
-  listRunsInvocation,
-  parseRunsResponse,
-  type GhInvocation,
-} from "./t3team-githubActionsSessionClient.ts";
-import { toCloudSessionFailure } from "./t3team-CloudSessionErrors.ts";
+import { cancelRunInvocation } from "./t3team-githubActionsSessionClient.ts";
 import { isSessionCredentialIssueEnabled } from "./t3team-CloudSessionCredential.ts";
+import { makeSessionGh } from "./t3team-CloudSessionGh.ts";
 import { resolveFleetConfig } from "./t3team-CloudSessionFleet.ts";
 import { ConnectCredentialMinter } from "./t3team-ConnectCredentialMinter.ts";
 import { dispatchAndDiscoverSession } from "./t3team-CloudSessionDispatch.ts";
@@ -39,14 +34,8 @@ import { makeSessionTag, projectCloudSession } from "./t3team-CloudSessionProjec
  * fleet's identity in `t3team-CloudSessionFleet`.
  */
 
-/** Recent runs worth considering; also the window `cancel` checks membership against. */
-const RUN_HISTORY_LIMIT = 100;
-
 /** Sessions shown to the user. The window above is for correctness, not display. */
 const SESSION_DISPLAY_LIMIT = 20;
-
-/** `gh` is a child process on a network call; give it more room than a local command. */
-const GH_TIMEOUT_MS = 30_000;
 
 /** One-second polls after a dispatch, waiting for the run to become visible. */
 const DISPATCH_DISCOVERY_ATTEMPTS = 10;
@@ -81,45 +70,20 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
   // `gh` needs a cwd; irrelevant for `gh api --hostname`, but the process starts somewhere.
   const cwd = yield* Config.string("HOME").pipe(Config.withDefault("/"));
 
-  const run = (invocation: GhInvocation) =>
-    github
-      .execute({
-        cwd,
-        args: invocation.args,
-        timeoutMs: GH_TIMEOUT_MS,
-        ...(invocation.stdin === undefined ? {} : { stdin: invocation.stdin }),
-      })
-      .pipe(Effect.mapError(toCloudSessionFailure));
-
-  /**
-   * Runs of the session workflow only — the endpoint is scoped to
-   * `session.yml`, which is what makes membership checkable at all.
-   *
-   * An unparseable response fails rather than reading as "no runs": treating
-   * "we could not tell" as "nothing is running" would both hide live sessions
-   * and let a pre-existing run be mistaken for a freshly dispatched one.
-   */
-  const listRuns = run(listRunsInvocation(repoRef, RUN_HISTORY_LIMIT)).pipe(
-    Effect.flatMap((result) => {
-      const parsed = parseRunsResponse(result.stdout);
-      if (parsed === null || result.stdoutTruncated) {
-        return Effect.fail(
-          new CloudSessionFailedError({
-            reason: "unreachable",
-            message: "The provider returned an unreadable session list.",
-          }),
-        );
-      }
-      return Effect.succeed(parsed);
-    }),
-  );
+  // The gh-execution half (run / listRunsFor / resolveLogin) lives in
+  // `t3team-CloudSessionGh`; here we only orchestrate list/create/cancel on top.
+  const gh = makeSessionGh(github, repoRef, cwd);
 
   const list: CloudSessionService["Service"]["list"] = Effect.gen(function* () {
-    const runs = yield* listRuns;
+    // Hard isolation: resolve who the caller is BEFORE fetching, and scope the
+    // list to that login. If the identity cannot be resolved this fails closed
+    // (an error), never returning an unscoped list that would leak other users.
+    const login = yield* gh.resolveLogin;
+    const runs = yield* gh.listRunsFor(login);
     const nowMs = yield* Clock.currentTimeMillis;
     const sessions = yield* Effect.forEach(
       runs.slice(0, SESSION_DISPLAY_LIMIT),
-      (item) => projectCloudSession(item, nowMs, machineLabel, repoRef, run),
+      (item) => projectCloudSession(item, nowMs, machineLabel, repoRef, gh.run),
       { concurrency: 4 },
     );
     return { sessions, configured: true } satisfies CloudSessionListResult;
@@ -139,6 +103,11 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
 
   const create: CloudSessionService["Service"]["create"] = (input) =>
     Effect.gen(function* () {
+      // Resolve the creator's login up front, before any side effect: every run
+      // we read afterwards is scoped to it, and if it cannot be resolved we
+      // fail before writing the credential payload or dispatching.
+      const login = yield* gh.resolveLogin;
+
       // A tag unique to THIS dispatch. `workflow_dispatch` answers 204 with no
       // body, so it never reveals the run it created; the workflow echoes this
       // into `run-name`, which is the only way to find our own run. Picking
@@ -154,7 +123,7 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
       yield* dispatchCredentialHandoff({
         repoRef,
         sessionTag,
-        run,
+        run: gh.run,
         enabled: handoffEnabled,
         readCredential: cloudCli.getExisting,
         mint: minter.mint,
@@ -166,8 +135,8 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
         sessionTag,
         durationSeconds: input.durationSeconds,
         machineLabel,
-        run,
-        listRuns,
+        run: gh.run,
+        listRuns: gh.listRunsFor(login),
         discoveryAttempts: DISPATCH_DISCOVERY_ATTEMPTS,
       });
     });
@@ -185,11 +154,12 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
       }
 
       // The cancel endpoint is repository-wide: it will happily stop ANY run in
-      // `hive/nx-nexi`, including a deployment. `listRuns` is scoped to
-      // `session.yml`, so requiring membership here is what stops a caller from
-      // passing an arbitrary run id and cancelling something that is not a
-      // cloud session at all.
-      const sessionRuns = yield* listRuns;
+      // `hive/nx-nexi`, including a deployment. `listRunsFor` is scoped to
+      // `session.yml` AND to the caller's login, so requiring membership here
+      // stops a caller both from cancelling something that is not a cloud
+      // session at all and from cancelling another user's session.
+      const login = yield* gh.resolveLogin;
+      const sessionRuns = yield* gh.listRunsFor(login);
       if (!sessionRuns.some((item) => item.id === runId)) {
         return yield* new CloudSessionFailedError({
           reason: "unknown_session",
@@ -197,7 +167,7 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
         });
       }
 
-      yield* run(cancelRunInvocation(repoRef, runId)).pipe(Effect.asVoid);
+      yield* gh.run(cancelRunInvocation(repoRef, runId)).pipe(Effect.asVoid);
     });
 
   return { list, create, cancel } as const;
