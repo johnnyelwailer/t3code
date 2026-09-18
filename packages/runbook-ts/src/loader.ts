@@ -118,6 +118,18 @@ export function prepareWorkflow(source: WorkflowSource): PreparedWorkflow {
   return { metaScript, bodyScript };
 }
 
+/**
+ * Synthetic VM script name for the out-of-band meta/body executions below. It keeps the real
+ * path in stack traces (readable) while never matching a real source file, so V8 coverage
+ * tooling — which attributes `node:vm` scripts by their resource name — cannot merge this
+ * execution into the source file's counters. Without this, host test suites that run a workflow
+ * body through the engine mint a phantom zero-coverage instance of the source file that clobbers
+ * the file's real (in-process) branch-coverage numbers.
+ */
+function workflowVmName(absolutePath: string): string {
+  return `(runbook-ts) ${absolutePath}`;
+}
+
 /** Evaluate only the metadata head with caller-supplied pure values and `Schema`. */
 export function extractMeta(
   prepared: PreparedWorkflow,
@@ -134,7 +146,7 @@ export function extractMeta(
   let result: unknown;
   try {
     result = NodeVM.runInContext(prepared.metaScript, context, {
-      filename: source.absolutePath,
+      filename: workflowVmName(source.absolutePath),
       timeout: options.timeoutMs ?? 2000,
     });
   } catch (error) {
@@ -167,7 +179,7 @@ export async function runWorkflowBody(
   context["globalThis"] = context;
   NodeVM.createContext(context);
   const completion = NodeVM.runInContext(prepared.bodyScript, context, {
-    filename: source.absolutePath,
+    filename: workflowVmName(source.absolutePath),
   }) as Promise<unknown>;
   return await completion;
 }
