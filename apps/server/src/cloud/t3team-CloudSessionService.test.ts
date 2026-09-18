@@ -1,3 +1,6 @@
+import {
+  CloudSessionFailedError,
+} from "@t3tools/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Clock from "effect/Clock";
 import * as ConfigProvider from "effect/ConfigProvider";
@@ -12,6 +15,8 @@ import { ChildProcessSpawner } from "effect/unstable/process";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
 import * as GitHubCli from "../sourceControl/GitHubCli.ts";
 import * as CliTokenManager from "./CliTokenManager.ts";
+import * as ConnectCredentialMinter from "./t3team-ConnectCredentialMinter.ts";
+import { ConnectCredentialMintError } from "./t3team-ConnectCredentialMintError.ts";
 import * as CloudSessionService from "./t3team-CloudSessionService.ts";
 
 const ghOut = (stdout: string): VcsProcess.VcsProcessOutput => ({
@@ -132,6 +137,10 @@ describe("CloudSessionService.create credential handoff", () => {
           }),
         ),
       });
+      // A usable credential is present, so the mint must never be attempted.
+      const minterMock = Layer.mock(ConnectCredentialMinter.ConnectCredentialMinter)({
+        mint: () => Effect.die("the mint must not run when a credential exists"),
+      });
       // Empty env: handoff flag unset → default ON; fleet config → its defaults.
       const configLayer = ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }));
       // A real clock: the discovery poll sleeps between attempts, and the
@@ -139,6 +148,7 @@ describe("CloudSessionService.create credential handoff", () => {
       const providers = Layer.mergeAll(
         ghMock,
         cloudCliMock,
+        minterMock,
         configLayer,
         Layer.succeed(Clock.Clock, realClock),
       );
@@ -168,6 +178,117 @@ describe("CloudSessionService.create credential handoff", () => {
 
       assert.equal(session.phase, "stopped");
       assert.equal(session.failureReason, null);
+    }),
+  );
+
+  it.effect("answers connect_sign_in_pending when the mint did not finish in time", () =>
+    Effect.gen(function* () {
+      const { calls, execute } = makeGithubMock();
+
+      const ghMock = Layer.mock(GitHubCli.GitHubCli)({ execute });
+      // No usable credential, ever: the mint starts, times out (here: fails
+      // immediately), and the handoff still fails with connect_sign_in_required.
+      const cloudCliMock = Layer.mock(CliTokenManager.CloudCliTokenManager)({
+        getExisting: Effect.succeed(Option.none()),
+      });
+      const mintCalls: Array<unknown> = [];
+      const minterMock = Layer.mock(ConnectCredentialMinter.ConnectCredentialMinter)({
+        mint: (input) =>
+          Effect.sync(() => mintCalls.push(input)).pipe(
+            Effect.flatMap(() =>
+              Effect.fail(
+                new ConnectCredentialMintError({
+                  reason: "browser_callback_timeout",
+                }),
+              ),
+            ),
+          ),
+      });
+      const configLayer = ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }));
+      const providers = Layer.mergeAll(
+        ghMock,
+        cloudCliMock,
+        minterMock,
+        configLayer,
+        Layer.succeed(Clock.Clock, realClock),
+      );
+      const full = Layer.mergeAll(
+        CloudSessionService.layer.pipe(Layer.provide(providers)),
+        providers,
+      );
+
+      const error = yield* Effect.service(CloudSessionService.CloudSessionService).pipe(
+        Effect.flatMap((svc) => svc.create({ durationSeconds: 3600 })),
+        Effect.provide(full),
+        Effect.flip,
+      );
+
+      // The friendly pending reason — NOT the bare sign-in-required one —
+      // because a sign-in IS in flight and the browser still has it open.
+      assert.equal(error._tag, "CloudSessionFailedError");
+      if (Schema.is(CloudSessionFailedError)(error)) {
+        assert.equal(error.reason, "connect_sign_in_pending");
+        assert.match(error.message, /finishing in your browser/);
+      }
+      // The mint was attempted with the bounded create-side wait…
+      assert.lengthOf(mintCalls, 1);
+      // …and the dispatch never happened.
+      assert.isFalse(calls.some((call) => call.args.join(" ").includes("/dispatches")));
+    }),
+  );
+
+  it.effect("dispatches when the mint finishes within the bounded wait", () =>
+    Effect.gen(function* () {
+      const { calls, execute } = makeGithubMock();
+
+      const ghMock = Layer.mock(GitHubCli.GitHubCli)({ execute });
+      // First read (the gate's check): no credential. After the mint "succeeds",
+      // the handoff's read finds the freshly minted one.
+      let reads = 0;
+      const cloudCliMock = Layer.mock(CliTokenManager.CloudCliTokenManager)({
+        getExisting: Effect.sync(() =>
+          ++reads === 1
+            ? Option.none()
+            : Option.some({
+                accessToken: "fresh-at",
+                refreshToken: "fresh-rt",
+                expiresAtEpochMs: 9_999_999_999_999,
+              }),
+        ),
+      });
+      const mintCalls: Array<unknown> = [];
+      const minterMock = Layer.mock(ConnectCredentialMinter.ConnectCredentialMinter)({
+        mint: (input) => Effect.sync(() => mintCalls.push(input)).pipe(Effect.asVoid),
+      });
+      const configLayer = ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }));
+      const providers = Layer.mergeAll(
+        ghMock,
+        cloudCliMock,
+        minterMock,
+        configLayer,
+        Layer.succeed(Clock.Clock, realClock),
+      );
+      const full = Layer.mergeAll(
+        CloudSessionService.layer.pipe(Layer.provide(providers)),
+        providers,
+      );
+
+      const session = yield* Effect.service(CloudSessionService.CloudSessionService).pipe(
+        Effect.flatMap((svc) => svc.create({ durationSeconds: 3600 })),
+        Effect.provide(full),
+      );
+
+      // The mint ran, then the handoff delivered the fresh credential.
+      assert.lengthOf(mintCalls, 1);
+      const payloadCall = calls.find((call) =>
+        call.args.join(" ").includes("repos/hive/nx-nexi/issues"),
+      );
+      assert.isNotNull(payloadCall);
+      const parsed = JSON.parse(payloadCall!.stdin ?? "{}") as { body: string };
+      const decoded = Buffer.from(parsed.body, "base64").toString("utf8");
+      assert.include(decoded, "fresh-rt");
+      assert.isTrue(calls.some((call) => call.args.join(" ").includes("/dispatches")));
+      assert.equal(session.phase, "stopped");
     }),
   );
 });
