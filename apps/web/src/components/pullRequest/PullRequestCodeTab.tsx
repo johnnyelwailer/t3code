@@ -11,10 +11,14 @@ import type {
   PullRequestThreadCommentsResult,
 } from "@t3tools/contracts";
 import { setPairingTokenOnUrl } from "@t3tools/shared/remote";
+import { areAllDiffFilesCollapsed } from "~/lib/diffCollapse";
 import {
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ChevronsDownUpIcon,
+  ChevronsUpDownIcon,
+  Columns2Icon,
   EllipsisIcon,
   ExternalLinkIcon,
   LinkIcon,
@@ -22,6 +26,7 @@ import {
   MessageSquareOffIcon,
   PanelRightCloseIcon,
   PanelRightIcon,
+  Rows3Icon,
   TextWrapIcon,
   TriangleAlertIcon,
   XIcon,
@@ -80,7 +85,7 @@ import {
   MenuSeparator,
 } from "../ui/menu";
 import { toastManager } from "../ui/toast";
-import { Toggle } from "../ui/toggle-group";
+import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { PendingReviewCommentCard, ReviewThreadCard } from "./PullRequestReviewAnnotation";
 import { PullRequestReviewBar } from "./PullRequestReviewBar";
@@ -539,7 +544,11 @@ function PullRequestCodeTab({
           groupAt(anchor.side, anchor.line).draft = true;
         }
 
-        const collapsed = isFileDiffCollapsed(fileKey, foldOverride, toggledFiles);
+        const collapsed = isFileDiffCollapsed(
+          fileKey,
+          foldOverride ?? (settings.diffFilesCollapsed ? "folded" : "expanded"),
+          toggledFiles,
+        );
 
         const annotations: ReviewAnnotation[] = [...groups.values()].map((group) => ({
           side: toViewerSide(group.side),
@@ -592,6 +601,7 @@ function PullRequestCodeTab({
       foldOverride,
       pendingComments,
       placedThreadIds,
+      settings.diffFilesCollapsed,
       toggledFiles,
     ],
   );
@@ -605,6 +615,19 @@ function PullRequestCodeTab({
       ),
     [loadedSlices],
   );
+  const fileKeys = useMemo(() => items.map((item) => item.id), [items]);
+  const collapsedFileKeys = useMemo(
+    () => new Set(items.filter((item) => item.collapsed === true).map((item) => item.id)),
+    [items],
+  );
+  const allFilesCollapsed = areAllDiffFilesCollapsed(fileKeys, collapsedFileKeys);
+  const toggleAllFiles = () => {
+    // Held as an override of the default rather than as the file keys on screen: a diff that is
+    // still paging would otherwise bring its next slice in folded, moments after the reader
+    // asked for everything to be open.
+    setFoldOverride(areAllDiffFilesCollapsed(fileKeys, collapsedFileKeys) ? "expanded" : "folded");
+    setToggledFiles(new Set());
+  };
   // The explorer's read of the files: the checkbox tree and the focus navigation both work in
   // this shape rather than against the raw diff metadata.
   const explorerFiles = useMemo(() => files.map(diffExplorerFileInfo), [files]);
@@ -1093,7 +1116,14 @@ function PullRequestCodeTab({
     review.verdicts.length === 0 ? null : (
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10">
         {reviewOpen ? (
-          <div className="surface-glass pointer-events-auto absolute inset-x-3 bottom-3 rounded-xl border border-border/60 shadow-lg">
+          <div
+            className={cn(
+              "surface-glass pointer-events-auto absolute inset-x-3 rounded-xl border border-border/60 shadow-lg",
+              detail.capabilities.comment && detail.viewerPermissions.comment
+                ? "bottom-16"
+                : "bottom-3",
+            )}
+          >
             <Button
               type="button"
               size="icon-sm"
@@ -1108,6 +1138,7 @@ function PullRequestCodeTab({
               environmentId={environmentId}
               reference={reference}
               verdicts={review.verdicts}
+              requestChangesSummaryRequired={detail.provider === "forgejo"}
               onSubmitted={() => {
                 onRefresh();
                 setReviewOpen(false);
@@ -1115,10 +1146,13 @@ function PullRequestCodeTab({
             />
           </div>
         ) : (
-          // Bottom-right, clear of the vertical scrollbar the diff view keeps to its own right
-          // edge.
           <Button
-            className="pointer-events-auto absolute right-4 bottom-3 rounded-full shadow-lg"
+            className={cn(
+              "pointer-events-auto absolute bottom-3 rounded-full shadow-lg",
+              detail.capabilities.comment && detail.viewerPermissions.comment
+                ? "right-16"
+                : "right-4",
+            )}
             onClick={() => setReviewOpen(true)}
             size="compact"
             variant="glass"
@@ -1161,7 +1195,7 @@ function PullRequestCodeTab({
         {orderedCommits.length > 0 ? (
           <DropdownMenu>
             <DropdownMenuTrigger
-              className="inline-flex h-6 max-w-64 items-center gap-1 rounded-md bg-accent px-2 text-xs font-medium text-accent-foreground outline-none transition-colors hover:bg-accent/80 focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex h-6 min-w-0 max-w-64 items-center gap-1 rounded-md bg-accent px-2 text-xs font-medium text-accent-foreground outline-none transition-colors hover:bg-accent/80 focus-visible:ring-2 focus-visible:ring-ring"
               aria-label={`Diff scope: ${scopeLabel}`}
             >
               <span className="truncate">{scopeLabel}</span>
@@ -1210,7 +1244,7 @@ function PullRequestCodeTab({
         ) : null}
         {/* One count, and the caveats as icons that carry their own words. Spelled out they
             competed for a strip this narrow and every one of them truncated to nothing. */}
-        <PullRequestMetaLine>
+        <PullRequestMetaLine className="shrink-0">
           <span className="shrink-0 tabular-nums">
             {files.length} {files.length === 1 ? "file" : "files"}
             {nextCursor === null ? "" : "+"}
@@ -1286,6 +1320,49 @@ function PullRequestCodeTab({
           deletions={lineStat.deletions}
           className="mr-1"
         />
+        {fileKeys.length > 0 ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={allFilesCollapsed ? "Expand all files" : "Collapse all files"}
+                  onClick={toggleAllFiles}
+                />
+              }
+            >
+              {allFilesCollapsed ? (
+                <ChevronsUpDownIcon className="size-3.5" />
+              ) : (
+                <ChevronsDownUpIcon className="size-3.5" />
+              )}
+            </TooltipTrigger>
+            <TooltipPopup side="top">
+              {allFilesCollapsed ? "Expand all files" : "Collapse all files"}
+            </TooltipPopup>
+          </Tooltip>
+        ) : null}
+        <ToggleGroup
+          aria-label="Diff layout"
+          className="shrink-0"
+          variant="segmented"
+          value={[diffLayout]}
+          onValueChange={(value) => {
+            const next = value[0];
+            if (next === "stacked" || next === "split") {
+              updateClientSettings({ diffLayout: next });
+            }
+          }}
+        >
+          <Toggle aria-label="Stacked diff view" value="stacked">
+            <Rows3Icon className="size-3.5" />
+          </Toggle>
+          <Toggle aria-label="Split diff view" value="split">
+            <Columns2Icon className="size-3.5" />
+          </Toggle>
+        </ToggleGroup>
         <Tooltip>
           <TooltipTrigger
             render={

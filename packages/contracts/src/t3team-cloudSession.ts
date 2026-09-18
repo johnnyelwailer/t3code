@@ -123,7 +123,7 @@ export const CloudSessionFailureReasonSchema = Schema.Literals([
 ]);
 export type CloudSessionFailureReason = typeof CloudSessionFailureReasonSchema.Type;
 
-export class CloudSessionFailedError extends Schema.TaggedErrorClass<CloudSessionFailedError>()(
+export class CloudSessionFailedError extends Schema.TaggedError<CloudSessionFailedError>()(
   "CloudSessionFailedError",
   {
     reason: CloudSessionFailureReasonSchema,

@@ -95,7 +95,7 @@ export const T3TEAM_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS: ReadonlySet<string> = n
   "t3team.work_item.link.draft_remove",
 ]);
 
-export class T3TeamMcpToolError extends Schema.TaggedErrorClass<T3TeamMcpToolError>()(
+export class T3TeamMcpToolError extends Schema.TaggedError<T3TeamMcpToolError>()(
   "T3TeamMcpToolError",
   { message: Schema.String },
 ) {}

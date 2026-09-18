@@ -49,6 +49,8 @@ const INVALID_WORKFLOW = 'export const meta = { description: "no name field" };'
 
 const client = McpSchema.McpServerClient.of({
   clientId: 1,
+  clientCapabilities: {},
+  clientInfo: { name: "recipe-mcp-live-test", version: "1.0.0" },
   protocolVersion: "2025-06-18",
   initializePayload: {
     protocolVersion: "2025-03-26",
@@ -114,7 +116,11 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const registry = yield* makeRegistry;
-      const issued = yield* registry.issue({ threadId, providerInstanceId });
+      const issued = yield* registry.issue({
+        threadId,
+        providerInstanceId,
+        capabilities: new Set<never>(),
+      });
       expect(issued.config.endpoint).toBe("http://127.0.0.1:43199/mcp");
       const token = issued.config.authorizationHeader.replace(/^Bearer\s+/, "");
       expect(token.length).toBeGreaterThan(0);

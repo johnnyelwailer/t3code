@@ -11,7 +11,7 @@ import { T3TEAM_PROJECT_CONTEXT_ROOT } from "@t3tools/project-context/t3teamCont
 import { detectSourceControlProviderFromRemoteUrl } from "@t3tools/shared/sourceControl";
 
 import { WorkspacePaths } from "../workspace/WorkspacePaths.ts";
-import { repositoryIdentityOf } from "./PullRequestService.ts";
+import { sourceControlRepositorySelector } from "@t3tools/shared/sourceControl";
 
 /**
  * One of a project's linked repositories, resolved the same way the project's own remote is:
@@ -77,13 +77,9 @@ export function parseLinkedRepositoryUrls(
     );
     // The same identity a recorded remote carries, so Azure DevOps' `_git` path and the
     // owner/name fallback resolve exactly the way the project's own repository does.
-    const repository = repositoryIdentityOf({
-      repositoryIdentity: {
-        canonicalKey: `${split.host}/${split.repository}`,
-        locator: { source: "git-remote", remoteName: "origin", remoteUrl: trimmed },
-        displayName: split.repository,
-        provider: provider.kind,
-      },
+    const repository = sourceControlRepositorySelector({
+      displayName: split.repository,
+      provider: provider.kind,
     });
     if (repository === null) continue;
     const key = `${host} ${repository.toLowerCase()}`;

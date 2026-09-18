@@ -36,6 +36,7 @@ const message = (id: string, role: "user" | "assistant") => ({
 const baseThread = {
   id: threadId,
   projectId: ProjectId.make("turn-resume-project"),
+  pullRequests: [],
   title: "Thread",
   modelSelection: {
     instanceId: ProviderInstanceId.make("provider"),

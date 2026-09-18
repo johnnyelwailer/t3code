@@ -22,15 +22,18 @@
 import { describe, expect, it } from "vite-plus/test";
 import * as Tool from "effect/unstable/ai/Tool";
 
-import * as previewTools from "../preview/tools.ts";
-import * as t3teamTools from "./tools.ts";
+import { PreviewToolkit } from "../preview/tools.ts";
+import { T3TeamShowWidgetTool, T3TeamToolkit } from "./tools.ts";
 
-const exportedTools = (module: Record<string, unknown>) =>
-  Object.entries(module).filter(([name]) => name.endsWith("Tool"));
+// Tools are read from the toolkits' registered sets (upstream builds the preview
+// tools through factory helpers instead of named exports, so scanning the module
+// namespace no longer sees them).
+const toolkitTools = (toolkit: { readonly tools: Record<string, Tool.Any> }) =>
+  Object.values(toolkit.tools);
 
 const toolkits = [
-  { label: "t3team", tools: exportedTools(t3teamTools), atLeast: 10 },
-  { label: "preview", tools: exportedTools(previewTools), atLeast: 10 },
+  { label: "t3team", tools: toolkitTools(T3TeamToolkit), atLeast: 10 },
+  { label: "preview", tools: toolkitTools(PreviewToolkit), atLeast: 10 },
 ];
 
 for (const { label, tools, atLeast } of toolkits) {
@@ -39,13 +42,14 @@ for (const { label, tools, atLeast } of toolkits) {
       expect(tools.length).toBeGreaterThan(atLeast);
     });
 
-    for (const [exportName, tool] of tools) {
-      it(`${exportName} advertises an object inputSchema`, () => {
+    for (const tool of tools) {
+      const name = (tool as { readonly name?: unknown }).name ?? "anonymous";
+      it(`${name} advertises an object inputSchema`, () => {
         const schema = Tool.getJsonSchema(tool as never) as Record<string, unknown>;
         // Top level only: `anyOf` INSIDE a property is just how an optional union renders and is fine.
         expect(
           schema.anyOf,
-          `${exportName} inputSchema must not be a top-level union`,
+          `${name} inputSchema must not be a top-level union`,
         ).toBeUndefined();
         expect(schema.type).toBe("object");
       });
@@ -66,7 +70,7 @@ for (const { label, tools, atLeast } of toolkits) {
  * MCP server advertises.
  */
 describe("t3team_show_widget model-facing contract", () => {
-  const tool = t3teamTools.T3TeamShowWidgetTool;
+  const tool = T3TeamShowWidgetTool;
   const schema = Tool.getJsonSchema(tool as never) as Record<string, unknown>;
   const schemaText = JSON.stringify(schema);
 

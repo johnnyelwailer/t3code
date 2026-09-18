@@ -98,7 +98,7 @@ export type ToolAuthCancelInput = typeof ToolAuthCancelInput.Type;
 // schemas below (`ToolAuthStartInput` and friends) still restrict `tool` to
 // `ToolAuthToolId`, so a real client can only ever request
 // `claude | codex | gh`.
-export class ToolAuthSpawnError extends Schema.TaggedErrorClass<ToolAuthSpawnError>()(
+export class ToolAuthSpawnError extends Schema.TaggedError<ToolAuthSpawnError>()(
   "ToolAuthSpawnError",
   {
     tool: Schema.String,
@@ -110,7 +110,7 @@ export class ToolAuthSpawnError extends Schema.TaggedErrorClass<ToolAuthSpawnErr
   }
 }
 
-export class ToolAuthNotAwaitingCodeError extends Schema.TaggedErrorClass<ToolAuthNotAwaitingCodeError>()(
+export class ToolAuthNotAwaitingCodeError extends Schema.TaggedError<ToolAuthNotAwaitingCodeError>()(
   "ToolAuthNotAwaitingCodeError",
   {
     tool: Schema.String,
@@ -122,7 +122,7 @@ export class ToolAuthNotAwaitingCodeError extends Schema.TaggedErrorClass<ToolAu
   }
 }
 
-export class ToolAuthNoActiveSessionError extends Schema.TaggedErrorClass<ToolAuthNoActiveSessionError>()(
+export class ToolAuthNoActiveSessionError extends Schema.TaggedError<ToolAuthNoActiveSessionError>()(
   "ToolAuthNoActiveSessionError",
   {
     tool: Schema.String,
