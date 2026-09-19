@@ -473,6 +473,81 @@
         "licenseId": "MIT",
         "copyrights": ["Copyright (c) 2025 opencode"]
       }
+    },
+    {
+      "name": "@t3team/sdk",
+      "license": "MIT",
+      "noticeFile": "LICENSE"
+    },
+    {
+      "name": "@runbook/core",
+      "license": "MIT",
+      "noticeFile": "LICENSE"
+    },
+    {
+      "name": "@runbook/scripts",
+      "license": "MIT",
+      "noticeFile": "LICENSE"
+    },
+    {
+      "name": "@runbook/threads",
+      "license": "MIT",
+      "noticeFile": "LICENSE"
+    },
+    {
+      "name": "@runbook/tools",
+      "license": "MIT",
+      "noticeFile": "LICENSE"
+    },
+    {
+      "name": "@runbook/ts",
+      "license": "MIT",
+      "noticeFile": "LICENSE"
+    },
+    {
+      "name": "@t3team/pack-api",
+      "license": "MIT",
+      "noticeFile": "LICENSE"
+    },
+    {
+      "name": "@t3team/packs",
+      "license": "MIT",
+      "noticeFile": "LICENSE"
+    },
+    {
+      "repositoryUrl": "https://github.com/earendil-works/pi",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": ["Copyright (c) Earendil Works"]
+      }
+    },
+    {
+      "repositoryUrl": "https://github.com/badlogic/clipboard",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": ["Copyright (c) Mario Zechner"]
+      }
+    },
+    {
+      "name": "@nodable/entities",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": ["Copyright (c) Nodable"]
+      }
+    },
+    {
+      "name": "xml-naming",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": ["Copyright (c) Natural Intelligence"]
+      }
+    },
+    {
+      "name": "data-uri-to-buffer",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": ["Copyright (c) Nathan Rajlich (TooTallNate)"]
+      }
     }
   ]
 }
