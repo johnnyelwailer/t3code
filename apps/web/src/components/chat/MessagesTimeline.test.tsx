@@ -141,6 +141,12 @@ vi.mock("~/t3team/chat/t3team-activeAgentsStepLabel", () => ({
   T3TeamActiveAgentsStepLabel: ({ label }: { label: string | null }) =>
     label ? <span data-testid="active-agents-step-label">{label}</span> : null,
 }));
+// Break the composerDraftStore → t3team-threadComposingSignal → primaryEnvironment →
+// catalog → connection/runtime import cycle (the suite's entry order otherwise
+// evaluates the catalog while the runtime export is still initializing).
+vi.mock("~/t3team/chat/t3team-threadComposingSignal", () => ({
+  reportThreadComposing: () => {},
+}));
 vi.mock("../DiffWorkerPoolProvider", () => ({
   DiffWorkerPoolProvider: ({ children }: { children?: ReactNode }) => children,
 }));
@@ -2045,6 +2051,96 @@ describe("MessagesTimeline", () => {
     // under the "Working" line. It no longer exists.
     expect(markup).not.toContain("live-activity-focus");
     expect(markup).not.toContain("gap-1.5 py-0.5 px-1");
+  });
+
+  it("shows ONE live 'Thinking' surface while the native reasoning trace streams — the working row says 'Working' (owner dedup)", () => {
+    const turnId = TurnId.make("turn-reason");
+    const traceProps = {
+      isWorking: true,
+      activeTurnStartedAt: MESSAGE_CREATED_AT,
+      latestTurn: {
+        turnId,
+        state: "running" as const,
+        startedAt: MESSAGE_CREATED_AT,
+        completedAt: null,
+      },
+      runningTurnId: turnId,
+      timelineEntries: [
+        {
+          id: "entry-reason",
+          kind: "message" as const,
+          createdAt: MESSAGE_CREATED_AT,
+          message: {
+            id: MessageId.make("reason-1"),
+            role: "reasoning" as const,
+            text: "weighing the options",
+            turnId,
+            createdAt: MESSAGE_CREATED_AT,
+            updatedAt: MESSAGE_CREATED_AT,
+            streaming: true,
+          },
+        },
+      ],
+    };
+    const withState = renderToStaticMarkup(
+      <MessagesTimeline {...buildProps()} {...traceProps} threadActivityState="thinking" />,
+    );
+    // The native trace row (the active activity group) keeps its live
+    // "Thinking" surface…
+    expect(withState).toContain('data-timeline-row-id="live-activity-row"');
+    expect(withState).toContain('>Thinking</span>');
+    // …and the working row no longer says "Thinking" a second time — it
+    // reads "Working" instead. No third surface: the pre-dedup render had a
+    // state-word "Thinking" on the working row PLUS the trace row.
+    expect(withState).toContain('t3team-aci-lead-word">Working</span>');
+    expect(withState).not.toContain('t3team-aci-lead-word">Thinking</span>');
+    expect(withState).not.toContain('data-timeline-row-kind="thinking"');
+
+    // Same for the no-state base-word fallback (old servers): an active turn
+    // still reads "Working" while the trace is live, not a second "Thinking".
+    const withoutState = renderToStaticMarkup(
+      <MessagesTimeline {...buildProps()} {...traceProps} />,
+    );
+    expect(withoutState).toContain('t3team-aci-lead-word">Working</span>');
+    expect(withoutState).not.toContain('t3team-aci-lead-word">Thinking</span>');
+  });
+
+  it("keeps non-thinking state words on the working row while the native reasoning trace streams (owner dedup)", () => {
+    const turnId = TurnId.make("turn-reason");
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt={MESSAGE_CREATED_AT}
+        threadActivityState="writing"
+        latestTurn={{
+          turnId,
+          state: "running",
+          startedAt: MESSAGE_CREATED_AT,
+          completedAt: null,
+        }}
+        runningTurnId={turnId}
+        timelineEntries={[
+          {
+            id: "entry-reason",
+            kind: "message" as const,
+            createdAt: MESSAGE_CREATED_AT,
+            message: {
+              id: MessageId.make("reason-1"),
+              role: "reasoning" as const,
+              text: "weighing the options",
+              turnId,
+              createdAt: MESSAGE_CREATED_AT,
+              updatedAt: MESSAGE_CREATED_AT,
+              streaming: true,
+            },
+          },
+        ]}
+      />,
+    );
+    // "Writing" is not the redundant word — it stays, trace row and all.
+    expect(markup).toContain('t3team-aci-lead-word">Writing</span>');
+    expect(markup).toContain('>Thinking</span>');
   });
 
   it("falls back to 'Thinking' for an ACTIVE turn with no activity state yet (a turn starts thinking)", () => {

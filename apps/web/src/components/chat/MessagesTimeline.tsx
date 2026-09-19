@@ -412,6 +412,14 @@ interface TimelineRowActivityState {
    * activity "Thinking" row must not render beneath it.
    */
   suppressLiveActivityRow?: boolean;
+  /**
+   * Dedup vs. the provider's own thinking trace (#11784): an active
+   * activity group that ends in a reasoning entry already renders the
+   * live "Thinking" surface for the current turn. The working row's
+   * state word must not say "Thinking" a second time — it falls back to
+   * "Working"; every other state word is untouched.
+   */
+  liveReasoningTrace?: boolean;
   isRevertingCheckpoint: boolean;
   latestTurnId: TurnId | null;
   /** Current plan step label for the working row, when the turn has a plan. */
@@ -1603,6 +1611,12 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       isPreparingWorktree,
       isCompacting,
       suppressLiveActivityRow: rows.some((row) => row.kind === "working"),
+      liveReasoningTrace: rows.some(
+        (row) =>
+          row.kind === "activity-group" &&
+          row.active &&
+          row.entries.at(-1)?.kind === "message",
+      ),
       isRevertingCheckpoint,
       latestTurnId: latestTurn?.turnId ?? null,
       workingStepLabel,
@@ -3032,6 +3046,7 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
     onOpenAgent,
     threadActivityState,
     threadActivityLabel,
+    liveReasoningTrace,
     backgroundWorktreeSetup,
   } = use(TimelineRowActivityCtx);
   if (isPreparingWorktree || isCompacting) {
@@ -3105,6 +3120,10 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
     activityLabel: threadActivityLabel ?? null,
     activityState: threadActivityState ?? null,
   });
+  // The native reasoning trace owns the live "Thinking" surface while it is
+  // visible for this turn; the working row then says "Working" instead of a
+  // second "Thinking" (owner dedup). Other state words are unaffected.
+  const shownLeadWord = leadWord === "Thinking" && liveReasoningTrace ? "Working" : leadWord;
   return (
     <div data-t3team-working-row>
       <div className="border-b border-border/60 pb-2 pt-1">
@@ -3156,14 +3175,14 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
                   {row.createdAt ? (
                     <>
                       <WorkingLeadText
-                        stateWord={leadWord}
+                        stateWord={shownLeadWord}
                         createdAt={row.createdAt}
                         liveState={liveState}
                         shimmer
                       />
                     </>
                   ) : (
-                    <span className="t3team-label-shimmer">{`${leadWord}...`}</span>
+                    <span className="t3team-label-shimmer">{`${shownLeadWord}...`}</span>
                   )}
                 </span>
               </>
