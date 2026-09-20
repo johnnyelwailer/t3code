@@ -784,6 +784,92 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
     }),
   );
 
+  it.effect("hydrates the command read model with a bounded per-thread message tail", () =>
+    Effect.gen(function* () {
+      const snapshotQuery = yield* ProjectionSnapshotQuery;
+      const sql = yield* SqlClient.SqlClient;
+
+      yield* sql`DELETE FROM projection_projects`;
+      yield* sql`DELETE FROM projection_threads`;
+      yield* sql`DELETE FROM projection_thread_messages`;
+      yield* sql`DELETE FROM projection_state`;
+
+      yield* sql`
+        INSERT INTO projection_projects (
+          project_id, title, workspace_root, default_model_selection_json,
+          scripts_json, created_at, updated_at, deleted_at
+        ) VALUES (
+          'project-bounded', 'Bounded Project', '/tmp/bounded-project',
+          '{"provider":"codex","model":"gpt-5-codex"}', '[]',
+          '2026-04-06T00:00:00.000Z', '2026-04-06T00:00:01.000Z', NULL
+        )
+      `;
+
+      yield* sql`
+        INSERT INTO projection_threads (
+          thread_id, project_id, title, model_selection_json, runtime_mode,
+          interaction_mode, branch, worktree_path, latest_turn_id,
+          latest_user_message_at, pending_approval_count, pending_user_input_count,
+          has_actionable_proposed_plan, created_at, updated_at, deleted_at
+        ) VALUES (
+          'thread-bounded', 'project-bounded', 'Bounded Thread',
+          '{"provider":"codex","model":"gpt-5-codex"}', 'full-access', 'default',
+          NULL, NULL, NULL, '2026-04-06T00:00:05.000Z', 0, 0, 0,
+          '2026-04-06T00:00:02.000Z', '2026-04-06T00:00:05.000Z', NULL
+        )
+      `;
+
+      // Six alternating user/assistant messages across three turns. Only the
+      // last user, the last assistant, and the last message overall survive the
+      // command read model boot — never the full six-row history.
+      const messageRows: ReadonlyArray<readonly [string, string, number]> = [
+        ["message-u0", "user", 0],
+        ["message-a1", "assistant", 1],
+        ["message-u2", "user", 2],
+        ["message-a3", "assistant", 3],
+        ["message-u4", "user", 4],
+        ["message-a5", "assistant", 5],
+      ];
+      for (const [messageId, role, sequence] of messageRows) {
+        yield* sql`
+          INSERT INTO projection_thread_messages (
+            message_id, thread_id, turn_id, role, text, is_streaming,
+            created_at, updated_at, sequence
+          ) VALUES (
+            ${messageId}, 'thread-bounded', NULL, ${role},
+            ${`body of ${messageId}`}, 0,
+            ${`2026-04-06T00:00:0${sequence}.000Z`},
+            ${`2026-04-06T00:00:0${sequence}.500Z`},
+            ${sequence}
+          )
+        `;
+      }
+
+      const commandReadModel = yield* snapshotQuery.getCommandReadModel();
+      const commandThread = commandReadModel.threads.find(
+        (thread) => thread.id === ThreadId.make("thread-bounded"),
+      );
+      assert.ok(commandThread);
+      // Bounded boot footprint: exactly the last user and the last (assistant)
+      // message are resident, in natural order — the older five rows are not.
+      assert.deepEqual(
+        commandThread.messages.map((message) => message.id),
+        [asMessageId("message-u4"), asMessageId("message-a5")],
+      );
+      assert.equal(commandThread.messages.length, 2);
+      const resident = new Set(commandThread.messages.map((message) => message.id));
+      assert.equal(resident.has(asMessageId("message-u0")), false);
+      assert.equal(resident.has(asMessageId("message-a1")), false);
+      assert.equal(resident.has(asMessageId("message-u2")), false);
+      assert.equal(resident.has(asMessageId("message-a3")), false);
+      assert.equal(commandThread.messages.at(-1)?.id, asMessageId("message-a5"));
+      assert.equal(
+        commandThread.messages.findLast((message) => message.role === "user")?.id,
+        asMessageId("message-u4"),
+      );
+    }),
+  );
+
   it.effect("reads one turn-start message without decoding unrelated history", () =>
     Effect.gen(function* () {
       const query = yield* ProjectionSnapshotQuery;

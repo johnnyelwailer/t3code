@@ -1629,11 +1629,13 @@ export const ThreadTurnResumeCommand = Schema.Struct({
   threadId: ThreadId,
   /**
    * The unanswered user message to re-run — supplied by the client, which
-   * renders it. The decider cannot rely on its in-memory `thread.messages`:
-   * after a server restart the rehydrated read model leaves that array EMPTY
-   * (ProjectionSnapshotQuery rebuilds threads with `messages: []`), which is
-   * exactly the state a "lost reply" thread is in. The reactor re-validates
-   * the id against the SQL-backed thread detail.
+   * renders it. The decider works off a BOUNDED command read model: after a
+   * server restart a thread's `messages` array holds only the tail the
+   * message-shape invariants need (last user, last assistant, last message),
+   * not the full history. The decider's last-message check runs when that tail
+   * is present, and when a thread's tail does not hold the target it falls
+   * back to the reactor's SQL-backed re-validation of the id against the
+   * thread detail.
    */
   messageId: MessageId,
   modelSelection: Schema.optional(ModelSelection),

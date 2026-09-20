@@ -838,6 +838,64 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       `,
   });
 
+  /**
+   * Bounded message hydration for the decider's command read model (boot only).
+   *
+   * The decider inspects message SHAPE, never full history. Concretely it reads:
+   *   - the thread's last message  (`thread.turn.resume`'s last-message check),
+   *   - the thread's last user message (turn-start dedup / persistence check,
+   *     queued-turn-start detection, and the resume target), and
+   *   - the thread's last assistant message (the streaming turn's tail).
+   *
+   * Full message content stays in SQLite and is served to clients through the
+   * paged `getThreadDetail` / `listThreadMessageRowsByThreadWindow` paths (unchanged).
+   * The per-thread and per-role tails are computed here in SQLite via window
+   * functions, so only a handful of rows per thread — not the full 60k+ message
+   * history — are decoded into the in-memory model. That is what bounds the boot
+   * heap instead of materializing every row's text/attachments/context at once.
+   * The returned rows are ordered `thread_id ASC, sequence ASC` so each thread's
+   * array keeps its natural order and `messages.at(-1)` / `findLast` stay correct.
+   */
+  const listCommandReadModelThreadMessageRows = SqlSchema.findAll({
+    Request: Schema.Void,
+    Result: ProjectionThreadMessageDbRowSchema,
+    execute: () =>
+      sql`
+        WITH ranked AS (
+          SELECT
+            rowid,
+            thread_id,
+            role,
+            ROW_NUMBER() OVER (
+              PARTITION BY thread_id
+              ORDER BY sequence DESC, rowid DESC
+            ) AS thread_rank,
+            ROW_NUMBER() OVER (
+              PARTITION BY thread_id, role
+              ORDER BY sequence DESC, rowid DESC
+            ) AS role_rank
+          FROM projection_thread_messages
+        )
+        SELECT
+          m.message_id AS "messageId",
+          m.thread_id AS "threadId",
+          m.turn_id AS "turnId",
+          m.role,
+          m.text,
+          m.attachments_json AS "attachments",
+          m.t3team_ext_json AS "t3teamExt",
+          m.context_json AS "context",
+          m.is_streaming AS "isStreaming",
+          m.created_at AS "createdAt",
+          m.updated_at AS "updatedAt"
+        FROM projection_thread_messages m
+        JOIN ranked r ON r.rowid = m.rowid
+        WHERE r.thread_rank = 1
+          OR (r.role IN ('user', 'assistant') AND r.role_rank = 1)
+        ORDER BY m.thread_id ASC, m.sequence ASC, m.rowid ASC
+      `,
+  });
+
   const listThreadProposedPlanRows = SqlSchema.findAll({
     Request: Schema.Void,
     Result: ProjectionThreadProposedPlanDbRowSchema,
@@ -1591,7 +1649,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
   // ProjectionSnapshotQueryShape.listThreadMessageRefs.
   const listThreadMessageRefRowsByThread = SqlSchema.findAll({
     Request: ThreadIdLookupInput,
-    Result: Schema.Struct(Struct.pick(ProjectionThreadMessage.fields, ["messageId", "role", "turnId"])),
+    Result: Schema.Struct(
+      Struct.pick(ProjectionThreadMessage.fields, ["messageId", "role", "turnId"]),
+    ),
     execute: ({ threadId }) =>
       sql`
         SELECT
@@ -2735,11 +2795,11 @@ pending_approval_requests AS (
               ),
             ),
           ),
-          listThreadMessageRows(undefined).pipe(
+          listCommandReadModelThreadMessageRows(undefined).pipe(
             Effect.mapError(
               toPersistenceSqlOrDecodeError(
-                "ProjectionSnapshotQuery.getCommandReadModel:listThreadMessages:query",
-                "ProjectionSnapshotQuery.getCommandReadModel:listThreadMessages:decodeRows",
+                "ProjectionSnapshotQuery.getCommandReadModel:listCommandReadModelThreadMessages:query",
+                "ProjectionSnapshotQuery.getCommandReadModel:listCommandReadModelThreadMessages:decodeRows",
               ),
             ),
           ),
@@ -2815,12 +2875,20 @@ pending_approval_requests AS (
               let updatedAt: string | null = null;
               const projects: OrchestrationProject[] = [];
               const threads: OrchestrationThread[] = [];
-              // The decider's read model must carry messages: rebuilding
-              // threads with `messages: []` on boot made every message-shape
-              // invariant (thread.turn.resume's last-message check, and any
-              // future one) silently false for pre-restart threads. Loaded
-              // once here; the engine evolves the model per event afterwards
-              // (the projector caps per-thread messages the same way).
+              // The decider's read model only ever reads message SHAPE, not full
+              // history: thread.turn.resume's last-message check, turn-start's
+              // last-user persistence/dedup check, queued-turn-start detection, and
+              // the non-empty history-import guard. `listCommandReadModelThreadMessageRows`
+              // therefore loads just the per-thread tail the invariants need (last
+              // message, last user message, last assistant message + streaming flag)
+              // instead of the full 60k+ row history, so boot cannot spike the heap.
+              // Full message content stays in SQLite and is served to clients through
+              // the paged getThreadDetail / listThreadMessageRowsByThreadWindow paths.
+              // The engine evolves this bounded seed per event afterwards (the
+              // projector appends live messages and caps each thread the same way);
+              // any invariant that needs a specific historical message that the tail
+              // does not hold falls back to the reactor's SQL-backed lookup, exactly
+              // as thread.turn.resume already does when a thread's tail is empty.
               const messagesByThread = new Map<string, Array<OrchestrationMessage>>();
               for (const row of messageRows) {
                 updatedAt = maxIso(updatedAt, row.updatedAt);
@@ -2840,7 +2908,9 @@ pending_approval_requests AS (
                 messagesByThread.set(row.threadId, threadMessages);
               }
               for (const threadMessages of messagesByThread.values()) {
-                // Same cap the live projector applies (MAX_THREAD_MESSAGES).
+                // Defensive backstop matching the live projector cap
+                // (MAX_THREAD_MESSAGES). The SQL load is already bounded to the
+                // per-thread tail, so this never triggers in practice.
                 if (threadMessages.length > 2_000) {
                   threadMessages.splice(0, threadMessages.length - 2_000);
                 }
@@ -3296,125 +3366,125 @@ pending_approval_requests AS (
       .pipe(
         Effect.flatMap(
           ([projectRows, threadRows, sessionRows, pullRequestRows, latestTurnRows, stateRows]) =>
-          Effect.gen(function* () {
-            let updatedAt: string | null = null;
-            for (const row of projectRows) {
-              updatedAt = maxIso(updatedAt, row.updatedAt);
-            }
-            for (const row of threadRows) {
-              updatedAt = maxIso(updatedAt, row.updatedAt);
-            }
-            for (const row of sessionRows) {
-              updatedAt = maxIso(updatedAt, row.updatedAt);
-            }
-            for (const row of latestTurnRows) {
-              updatedAt = maxIso(updatedAt, row.requestedAt);
-              if (row.startedAt !== null) {
-                updatedAt = maxIso(updatedAt, row.startedAt);
+            Effect.gen(function* () {
+              let updatedAt: string | null = null;
+              for (const row of projectRows) {
+                updatedAt = maxIso(updatedAt, row.updatedAt);
               }
-              if (row.completedAt !== null) {
-                updatedAt = maxIso(updatedAt, row.completedAt);
+              for (const row of threadRows) {
+                updatedAt = maxIso(updatedAt, row.updatedAt);
               }
-            }
-            for (const row of stateRows) {
-              updatedAt = maxIso(updatedAt, row.updatedAt);
-            }
+              for (const row of sessionRows) {
+                updatedAt = maxIso(updatedAt, row.updatedAt);
+              }
+              for (const row of latestTurnRows) {
+                updatedAt = maxIso(updatedAt, row.requestedAt);
+                if (row.startedAt !== null) {
+                  updatedAt = maxIso(updatedAt, row.startedAt);
+                }
+                if (row.completedAt !== null) {
+                  updatedAt = maxIso(updatedAt, row.completedAt);
+                }
+              }
+              for (const row of stateRows) {
+                updatedAt = maxIso(updatedAt, row.updatedAt);
+              }
 
-            const activeProjectIds = new Set(threadRows.map((row) => row.projectId));
-            const repositoryIdentities = yield* resolveRepositoryIdentitiesForProjects(
-              projectRows.filter((row) => activeProjectIds.has(row.projectId)),
-            );
-            const sourceBindings = yield* queryProjectSourceBindingsByProjectId(sql);
-            const latestTurnByThread = new Map(
-              latestTurnRows.map((row) => [row.threadId, mapLatestTurn(row)] as const),
-            );
-            const sessionByThread = new Map(
-              sessionRows.map((row) => [row.threadId, mapSessionRow(row)] as const),
-            );
-            const pullRequestsByThread = groupPullRequestRowsByThread(pullRequestRows);
+              const activeProjectIds = new Set(threadRows.map((row) => row.projectId));
+              const repositoryIdentities = yield* resolveRepositoryIdentitiesForProjects(
+                projectRows.filter((row) => activeProjectIds.has(row.projectId)),
+              );
+              const sourceBindings = yield* queryProjectSourceBindingsByProjectId(sql);
+              const latestTurnByThread = new Map(
+                latestTurnRows.map((row) => [row.threadId, mapLatestTurn(row)] as const),
+              );
+              const sessionByThread = new Map(
+                sessionRows.map((row) => [row.threadId, mapSessionRow(row)] as const),
+              );
+              const pullRequestsByThread = groupPullRequestRowsByThread(pullRequestRows);
 
-            const snapshot = {
-              snapshotSequence: computeSnapshotSequence(stateRows),
-              projects: Arr.filterMap(projectRows, (row) =>
-                row.deletedAt === null && activeProjectIds.has(row.projectId)
-                  ? Result.succeed(
-                      mapProjectShellRow(
-                        row,
-                        repositoryIdentities.get(row.projectId) ?? null,
-                        sourceBindings.get(row.projectId),
-                      ),
-                    )
-                  : Result.failVoid,
-              ),
-              threads: threadRows.map((row): OrchestrationThreadShell => ({
-                id: row.threadId,
-                projectId: row.projectId,
-                title: row.title,
-                modelSelection: row.modelSelection,
-                runtimeMode: row.runtimeMode,
-                interactionMode: row.interactionMode,
-                branch: row.branch,
-                worktreePath: row.worktreePath,
-                branchPullRequest: row.branchPullRequest,
-                ...mapThreadPullRequests(
-                  pullRequestsByThread.get(row.threadId) ?? [],
-                  row.projectId,
-                  repositoryIdentities.get(row.projectId),
+              const snapshot = {
+                snapshotSequence: computeSnapshotSequence(stateRows),
+                projects: Arr.filterMap(projectRows, (row) =>
+                  row.deletedAt === null && activeProjectIds.has(row.projectId)
+                    ? Result.succeed(
+                        mapProjectShellRow(
+                          row,
+                          repositoryIdentities.get(row.projectId) ?? null,
+                          sourceBindings.get(row.projectId),
+                        ),
+                      )
+                    : Result.failVoid,
                 ),
-                // Environment binding (t3team start_child `environment`); absent = same environment.
-                ...(row.environment !== null && row.environment !== undefined
-                  ? { environment: row.environment }
-                  : {}),
-                latestTurn: latestTurnByThread.get(row.threadId) ?? null,
-                createdAt: row.createdAt,
-                updatedAt: row.updatedAt,
-                archivedAt: row.archivedAt,
-                settledOverride: row.settledOverride,
-                settledAt: row.settledAt,
-                unsettledAt: row.unsettledAt,
-                snoozedUntil: row.snoozedUntil,
-                snoozedAt: row.snoozedAt,
-                pinnedAt: row.pinnedAt,
-                pinOrderKey: row.pinOrderKey ?? null,
-                activeOrderKey: row.activeOrderKey ?? null,
-                titleRegeneration: mapTitleRegeneration(row),
-                titleState: row.titleState,
-                session: sessionByThread.get(row.threadId) ?? null,
-                latestUserMessageAt: row.latestUserMessageAt,
-                hasPendingApprovals: row.pendingApprovalCount > 0,
-                hasPendingUserInput: row.pendingUserInputCount > 0,
-                hasActionableProposedPlan: row.hasActionableProposedPlan > 0,
-                backgroundLiveness: resolveShellBackgroundLiveness(
-                  sessionByThread.get(row.threadId) ?? null,
-                  threadBackgroundLiveness.getThreadBackgroundLiveness(row.threadId),
-                ),
-                planProgress: threadPlanProgress.getThreadPlanProgress(row.threadId),
-                ...(row.childStatus != null ? { childStatus: row.childStatus } : {}),
-                ...(row.childStatusUpdatedAt != null
-                  ? { childStatusUpdatedAt: row.childStatusUpdatedAt }
-                  : {}),
-                ...(row.activityLabel != null ? { activityLabel: row.activityLabel } : {}),
-                ...(row.activityLabelUpdatedAt != null
-                  ? { activityLabelUpdatedAt: row.activityLabelUpdatedAt }
-                  : {}),
-                ...(readableActivityState(row.activityState) !== undefined
-                  ? { activityState: readableActivityState(row.activityState)! }
-                  : {}),
-                ...(row.activityStateUpdatedAt != null
-                  ? { activityStateUpdatedAt: row.activityStateUpdatedAt }
-                  : {}),
-              })),
-              updatedAt: updatedAt ?? "1970-01-01T00:00:00.000Z",
-            };
+                threads: threadRows.map((row): OrchestrationThreadShell => ({
+                  id: row.threadId,
+                  projectId: row.projectId,
+                  title: row.title,
+                  modelSelection: row.modelSelection,
+                  runtimeMode: row.runtimeMode,
+                  interactionMode: row.interactionMode,
+                  branch: row.branch,
+                  worktreePath: row.worktreePath,
+                  branchPullRequest: row.branchPullRequest,
+                  ...mapThreadPullRequests(
+                    pullRequestsByThread.get(row.threadId) ?? [],
+                    row.projectId,
+                    repositoryIdentities.get(row.projectId),
+                  ),
+                  // Environment binding (t3team start_child `environment`); absent = same environment.
+                  ...(row.environment !== null && row.environment !== undefined
+                    ? { environment: row.environment }
+                    : {}),
+                  latestTurn: latestTurnByThread.get(row.threadId) ?? null,
+                  createdAt: row.createdAt,
+                  updatedAt: row.updatedAt,
+                  archivedAt: row.archivedAt,
+                  settledOverride: row.settledOverride,
+                  settledAt: row.settledAt,
+                  unsettledAt: row.unsettledAt,
+                  snoozedUntil: row.snoozedUntil,
+                  snoozedAt: row.snoozedAt,
+                  pinnedAt: row.pinnedAt,
+                  pinOrderKey: row.pinOrderKey ?? null,
+                  activeOrderKey: row.activeOrderKey ?? null,
+                  titleRegeneration: mapTitleRegeneration(row),
+                  titleState: row.titleState,
+                  session: sessionByThread.get(row.threadId) ?? null,
+                  latestUserMessageAt: row.latestUserMessageAt,
+                  hasPendingApprovals: row.pendingApprovalCount > 0,
+                  hasPendingUserInput: row.pendingUserInputCount > 0,
+                  hasActionableProposedPlan: row.hasActionableProposedPlan > 0,
+                  backgroundLiveness: resolveShellBackgroundLiveness(
+                    sessionByThread.get(row.threadId) ?? null,
+                    threadBackgroundLiveness.getThreadBackgroundLiveness(row.threadId),
+                  ),
+                  planProgress: threadPlanProgress.getThreadPlanProgress(row.threadId),
+                  ...(row.childStatus != null ? { childStatus: row.childStatus } : {}),
+                  ...(row.childStatusUpdatedAt != null
+                    ? { childStatusUpdatedAt: row.childStatusUpdatedAt }
+                    : {}),
+                  ...(row.activityLabel != null ? { activityLabel: row.activityLabel } : {}),
+                  ...(row.activityLabelUpdatedAt != null
+                    ? { activityLabelUpdatedAt: row.activityLabelUpdatedAt }
+                    : {}),
+                  ...(readableActivityState(row.activityState) !== undefined
+                    ? { activityState: readableActivityState(row.activityState)! }
+                    : {}),
+                  ...(row.activityStateUpdatedAt != null
+                    ? { activityStateUpdatedAt: row.activityStateUpdatedAt }
+                    : {}),
+                })),
+                updatedAt: updatedAt ?? "1970-01-01T00:00:00.000Z",
+              };
 
-            return yield* decodeShellSnapshot(snapshot).pipe(
-              Effect.mapError(
-                toPersistenceDecodeError(
-                  "ProjectionSnapshotQuery.getArchivedShellSnapshot:decodeShellSnapshot",
+              return yield* decodeShellSnapshot(snapshot).pipe(
+                Effect.mapError(
+                  toPersistenceDecodeError(
+                    "ProjectionSnapshotQuery.getArchivedShellSnapshot:decodeShellSnapshot",
+                  ),
                 ),
-              ),
-            );
-          }),
+              );
+            }),
         ),
         Effect.mapError((error) => {
           if (isPersistenceError(error)) {
@@ -3755,61 +3825,60 @@ pending_approval_requests AS (
         sleepingRow,
         workflowRunStatusRow,
         pullRequestRows,
-      ] =
-        yield* Effect.all([
-          getActiveThreadRowById({ threadId }).pipe(
-            Effect.mapError(
-              toPersistenceSqlOrDecodeError(
-                "ProjectionSnapshotQuery.getThreadShellById:getThread:query",
-                "ProjectionSnapshotQuery.getThreadShellById:getThread:decodeRow",
-              ),
+      ] = yield* Effect.all([
+        getActiveThreadRowById({ threadId }).pipe(
+          Effect.mapError(
+            toPersistenceSqlOrDecodeError(
+              "ProjectionSnapshotQuery.getThreadShellById:getThread:query",
+              "ProjectionSnapshotQuery.getThreadShellById:getThread:decodeRow",
             ),
           ),
-          getLatestTurnRowByThread({ threadId }).pipe(
-            Effect.mapError(
-              toPersistenceSqlOrDecodeError(
-                "ProjectionSnapshotQuery.getThreadShellById:getLatestTurn:query",
-                "ProjectionSnapshotQuery.getThreadShellById:getLatestTurn:decodeRow",
-              ),
+        ),
+        getLatestTurnRowByThread({ threadId }).pipe(
+          Effect.mapError(
+            toPersistenceSqlOrDecodeError(
+              "ProjectionSnapshotQuery.getThreadShellById:getLatestTurn:query",
+              "ProjectionSnapshotQuery.getThreadShellById:getLatestTurn:decodeRow",
             ),
           ),
-          getThreadSessionRowByThread({ threadId }).pipe(
-            Effect.mapError(
-              toPersistenceSqlOrDecodeError(
-                "ProjectionSnapshotQuery.getThreadShellById:getSession:query",
-                "ProjectionSnapshotQuery.getThreadShellById:getSession:decodeRow",
-              ),
+        ),
+        getThreadSessionRowByThread({ threadId }).pipe(
+          Effect.mapError(
+            toPersistenceSqlOrDecodeError(
+              "ProjectionSnapshotQuery.getThreadShellById:getSession:query",
+              "ProjectionSnapshotQuery.getThreadShellById:getSession:decodeRow",
             ),
           ),
-          getSleepingWakeAtByThread({ threadId }).pipe(
-            Effect.mapError(
-              toPersistenceSqlOrDecodeError(
-                "ProjectionSnapshotQuery.getThreadShellById:getSleepingWakeAt:query",
-                "ProjectionSnapshotQuery.getThreadShellById:getSleepingWakeAt:decodeRow",
-              ),
+        ),
+        getSleepingWakeAtByThread({ threadId }).pipe(
+          Effect.mapError(
+            toPersistenceSqlOrDecodeError(
+              "ProjectionSnapshotQuery.getThreadShellById:getSleepingWakeAt:query",
+              "ProjectionSnapshotQuery.getThreadShellById:getSleepingWakeAt:decodeRow",
             ),
           ),
-          // Durable workflow-run status join (mirrors getShellSnapshot's listWorkflowRunStatusRows):
-          // without this, a live single-thread shell refetch (the push path every workflow-run
-          // lifecycle transition drives through) silently omits `workflowRunStatus`, so the
-          // sidebar's status pill only ever appears after a full snapshot reload.
-          getWorkflowRunStatusByThread({ threadId }).pipe(
-            Effect.mapError(
-              toPersistenceSqlOrDecodeError(
-                "ProjectionSnapshotQuery.getThreadShellById:getWorkflowRunStatus:query",
-                "ProjectionSnapshotQuery.getThreadShellById:getWorkflowRunStatus:decodeRow",
-              ),
+        ),
+        // Durable workflow-run status join (mirrors getShellSnapshot's listWorkflowRunStatusRows):
+        // without this, a live single-thread shell refetch (the push path every workflow-run
+        // lifecycle transition drives through) silently omits `workflowRunStatus`, so the
+        // sidebar's status pill only ever appears after a full snapshot reload.
+        getWorkflowRunStatusByThread({ threadId }).pipe(
+          Effect.mapError(
+            toPersistenceSqlOrDecodeError(
+              "ProjectionSnapshotQuery.getThreadShellById:getWorkflowRunStatus:query",
+              "ProjectionSnapshotQuery.getThreadShellById:getWorkflowRunStatus:decodeRow",
             ),
           ),
-          listThreadPullRequestRowsByThread({ threadId }).pipe(
-            Effect.mapError(
-              toPersistenceSqlOrDecodeError(
-                "ProjectionSnapshotQuery.getThreadShellById:listPullRequests:query",
-                "ProjectionSnapshotQuery.getThreadShellById:listPullRequests:decodeRows",
-              ),
+        ),
+        listThreadPullRequestRowsByThread({ threadId }).pipe(
+          Effect.mapError(
+            toPersistenceSqlOrDecodeError(
+              "ProjectionSnapshotQuery.getThreadShellById:listPullRequests:query",
+              "ProjectionSnapshotQuery.getThreadShellById:listPullRequests:decodeRows",
             ),
           ),
-        ]);
+        ),
+      ]);
 
       if (Option.isNone(threadRow)) {
         return Option.none<OrchestrationThreadShell>();
@@ -4422,9 +4491,7 @@ pending_approval_requests AS (
       Effect.map(Option.isSome),
     );
 
-  const listThreadMessageRefs: ProjectionSnapshotQueryShape["listThreadMessageRefs"] = (
-    threadId,
-  ) =>
+  const listThreadMessageRefs: ProjectionSnapshotQueryShape["listThreadMessageRefs"] = (threadId) =>
     listThreadMessageRefRowsByThread({ threadId }).pipe(
       Effect.mapError(
         toPersistenceSqlOrDecodeError(
