@@ -6,8 +6,7 @@
  * choreography, and run-level activity: the card and the tool can never disagree about what
  * "paused" or "stopped" means. Fails with a plain, agent-readable string; callers wrap it.
  */
-import { CommandId, EventId, ThreadId, type OrchestrationCommand } from "@t3tools/contracts";
-import { PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP } from "@t3tools/project-recipes";
+import { CommandId, ThreadId, type OrchestrationCommand } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import type { OrchestrationDispatchError } from "./orchestration/Errors.ts";
@@ -15,20 +14,24 @@ import type {
   WorkflowRun,
   WorkflowRunRepositoryShape,
 } from "./persistence/Services/WorkflowRuns.ts";
+import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 import type { InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
 import { NON_TERMINAL_STATUSES, reportStaleWrite } from "./t3team-workflowRunControlCas.ts";
+import { restorePausedRunContinuation } from "./t3team-workflowResumePausedTurn.ts";
 import {
   retryFailedWorkflowRun,
   type WorkflowRunControlRetryDeps,
 } from "./t3team-workflowRunControlRetry.ts";
-import { pausedResumeBlocker, restorePausedPendingAsk } from "./t3team-workflowResumePausedTurn.ts";
+import { pausedResumeBlocker } from "./t3team-workflowResumePausedTurn.ts";
+import { postWorkflowRunControlActivity } from "./t3team-workflowRunControlActivity.ts";
 
 export type WorkflowRunControlAction = "pause" | "resume" | "stop";
 export type WorkflowRunControlStatus =
   | "suspended"
   | "sleeping"
+  | "watching"
   | "paused"
   | "cancelled"
   | "running";
@@ -80,6 +83,9 @@ export interface WorkflowRunControlDeps {
   readonly turnRedrive?: InterruptedTurnRetry;
   /** GHE #344: failed-run retry deps; absent where no durable journal (agent pause/stop tools). */
   readonly retryFailed?: WorkflowRunControlRetryDeps;
+  /** Durable signal-source state (GHE #332); absent in test/broker layers without the engine —
+   * the signal-park resume then skips the inbox drain (there is no inbox to drain there). */
+  readonly signalStore?: WorkflowSignalStoreShape | undefined;
 }
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -136,15 +142,20 @@ export const controlWorkflowRun = Effect.fn("controlWorkflowRun")(function* (
       .resumePaused({ runId, updatedAt: deps.nowIso() })
       .pipe(Effect.mapError(errorMessage));
     workflowAdmissionQueue.resume(runId);
-    if (run.pendingKind !== null && run.pendingThreadId !== null) {
-      yield* restorePausedPendingAsk(deps, run);
-      status = "suspended";
-    } else if (run.wakeAt !== null) {
-      yield* Effect.promise(() => deps.rearmScheduler());
-      status = "sleeping";
-    } else {
-      return yield* Effect.fail("Paused workflow has no continuation.");
-    }
+    // One sequence, shared with the `t3team.orchestration.resume` tool (GHE #332): thread-parked
+    // ask, clock deadline, or event park — the SQL above already restored the row's status.
+    const { status: restored, warning } = yield* restorePausedRunContinuation({
+      registry,
+      run,
+      rearmScheduler: () => deps.rearmScheduler(),
+      nowIso: deps.nowIso,
+      ...(deps.turnRedrive === undefined ? {} : { turnRedrive: deps.turnRedrive }),
+      ...(deps.signalStore === undefined ? {} : { signalStore: deps.signalStore }),
+    }).pipe(Effect.mapError(errorMessage));
+    // Event-park drains are best-effort: a failed take/resume lands the run in `watching` and
+    // the next live event re-delivers the wake — surface it, don't abort the resume.
+    if (warning !== undefined) yield* Effect.logWarning(warning.message, warning.details);
+    status = restored;
   } else {
     // Synchronous first: an active detached controller can no longer publish completion, and the cancel
     // interrupts any re-drive fiber armed for the run's step (registry.cancelRun, GHE #411 §3).
@@ -179,34 +190,14 @@ export const controlWorkflowRun = Effect.fn("controlWorkflowRun")(function* (
 
   // Run-level activity: what the card's banner reads ("Workflow paused" + when); the tool emits it exactly as the button.
   const phase = status === "cancelled" ? "cancelled" : status === "paused" ? "paused" : "started";
-  yield* deps
-    .dispatch({
-      type: "thread.activity.append",
-      commandId: CommandId.make(`t3team-wf-control:${runId}:${deps.nowIso()}`),
-      threadId: ThreadId.make(input.threadId),
-      activity: {
-        id: EventId.make(`t3team-wf-step:${runId}:run`),
-        tone: "info",
-        kind: PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP,
-        summary:
-          status === "paused"
-            ? "Workflow paused"
-            : status === "cancelled"
-              ? "Workflow stopped"
-              : "Workflow resumed",
-        payload: {
-          workflowRunId: runId,
-          stepId: `run:${runId}`,
-          stepKind: "run",
-          phase,
-          projectId: run.projectId,
-        },
-        turnId: null,
-        createdAt: deps.nowIso(),
-      },
-      createdAt: deps.nowIso(),
-    })
-    .pipe(Effect.mapError(errorMessage));
+  yield* postWorkflowRunControlActivity({
+    dispatch: deps.dispatch,
+    runId,
+    threadId: input.threadId,
+    projectId: run.projectId,
+    phase,
+    nowIso: deps.nowIso,
+  });
 
   return { status };
 });

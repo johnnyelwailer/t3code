@@ -47,6 +47,10 @@ import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.
 import type { WorkflowRunRepositoryShape } from "./persistence/Services/WorkflowRuns.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
+import {
+  T3TeamWorkflowSignalRehydrateGate,
+  T3TeamWorkflowSignalRehydrateGateLive,
+} from "./t3team-workflowSignalRehydrateGate.ts";
 
 export interface SignalDeliveryInput {
   readonly sourceName: string;
@@ -71,41 +75,6 @@ export class T3TeamWorkflowSignalDelivery extends Context.Service<
   T3TeamWorkflowSignalDelivery,
   WorkflowSignalDeliveryShape
 >()("t3/t3team-workflowSignalDelivery/T3TeamWorkflowSignalDelivery") {}
-
-/**
- * Boot-rehydration gate (GHE #332 review): while the host is still rebuilding the watching-run
- * controllers at boot, a parked row with no registered controller is TRANSIENT — the delivery
- * port must leave the run parked (retry on the next event) instead of orphan-failing it. The
- * reconciler's layer edge makes rehydration complete before any source instance starts; this
- * flag is the defense-in-depth signal for the rare path where delivery happens mid-rehydrate.
- */
-export interface WorkflowSignalRehydrateGateShape {
-  readonly isRehydrateInFlight: () => boolean;
-  readonly markInFlight: () => void;
-  readonly markComplete: () => void;
-}
-
-/** T3TeamWorkflowSignalRehydrateGate - service tag for the boot-rehydration gate. */
-export class T3TeamWorkflowSignalRehydrateGate extends Context.Service<
-  T3TeamWorkflowSignalRehydrateGate,
-  WorkflowSignalRehydrateGateShape
->()("t3/t3team-workflowSignalRehydrateGate/T3TeamWorkflowSignalRehydrateGate") {}
-
-export const T3TeamWorkflowSignalRehydrateGateLive = Layer.effect(
-  T3TeamWorkflowSignalRehydrateGate,
-  Effect.gen(function* () {
-    let inFlight = false;
-    return {
-      isRehydrateInFlight: () => inFlight,
-      markInFlight: () => {
-        inFlight = true;
-      },
-      markComplete: () => {
-        inFlight = false;
-      },
-    };
-  }),
-);
 
 /**
  * The delivery port core as a plain factory (no Context tags): the same fan-out / orphan /
@@ -218,4 +187,12 @@ export const T3TeamWorkflowSignalDeliveryLive = Layer.effect(
     });
     return { emit: port.emit };
   }),
+).pipe(
+  // The gate's SINGLE production instance: the rehydrate layer provides the same
+  // `T3TeamWorkflowSignalRehydrateGateLive` reference, so both subgraphs memoize to one object —
+  // the flag the rehydration effect flips is the flag this port reads. Without this edge the
+  // `serviceOption` above resolved to None in production and the orphan-branch safety net was
+  // dead (GHE #332 re-review). Tests may still omit the gate; `serviceOption` keeps the layer
+  // constructible there.
+  Layer.provide(T3TeamWorkflowSignalRehydrateGateLive),
 );

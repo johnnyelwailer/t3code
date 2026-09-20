@@ -42,12 +42,13 @@ import { T3TeamWorkflowEngineReactorLive } from "./t3team-workflowEngineReactor.
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { resolveRehydratedWorkflowScripts } from "./t3team-workflowRehydrateScripts.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
+import { drainSignalParkInbox } from "./t3team-workflowSignalParkDrain.ts";
 import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
 import { makeWorkflowRunRehydrator } from "./t3team-workflowRehydrateRun.ts";
 import {
   T3TeamWorkflowSignalRehydrateGate,
   T3TeamWorkflowSignalRehydrateGateLive,
-} from "./t3team-workflowSignalDelivery.ts";
+} from "./t3team-workflowSignalRehydrateGate.ts";
 
 function nowIso(): string {
   return DateTime.formatIso(DateTime.nowUnsafe());
@@ -213,34 +214,18 @@ export const rehydrateSuspendedWorkflowRunsCore = Effect.fn("rehydrateSuspendedW
       }
       rebuildController(run, yield* resolveRehydratedWorkflowScripts(run));
       if (watchingSignalStore !== undefined) {
-        const pending = yield* watchingSignalStore.takeOpenInboxEntry({
-          sourceName: run.watchSourceName,
-          paramsHash: run.watchParamsHash,
-          signalName: run.watchSignalName,
-          key: run.watchSignalKey,
-          deliveredAt: nowIso(),
+        // The drain is the shared wake source (explicit resume drains the same way); best-effort
+        // by boot design — a failure here must not abort the rest of the rehydration (the
+        // sleeping-run re-arm below).
+        const drained = yield* drainSignalParkInbox({
+          signalStore: watchingSignalStore,
+          registry,
+          run,
+          nowIso,
         });
-        if (Option.isSome(pending)) {
-          const controller = registry.getRun(run.runId);
-          if (controller !== undefined) {
-            // Best-effort by boot design: a journal failure here must not abort the rest of
-            // the rehydration (the sleeping-run re-arm below). The inbox entry is consumed, so
-            // a lost wake is surfaced, not silently dropped — the run stays `watching` and the
-            // next live event for the tuple re-delivers it.
-            yield* Effect.promise(() =>
-              controller.resume(run.pendingCorrelationId!, pending.value.payload).catch(
-                (error) => {
-                  void Effect.runPromise(
-                    Effect.logWarning(
-                      "boot-gap inbox drain: resume failed; the run stays watching and the next event re-delivers",
-                      { runId: run.runId, error: String(error) },
-                    ),
-                  );
-                },
-              ),
-            );
-            woken += 1;
-          }
+        woken += drained.drained;
+        if (drained.warning !== undefined) {
+          yield* Effect.logWarning(drained.warning.message, drained.warning.details);
         }
       }
     }
