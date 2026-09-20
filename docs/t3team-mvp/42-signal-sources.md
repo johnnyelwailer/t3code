@@ -307,8 +307,22 @@ where it is not.
 
 Phases 1 and 2 each deliver user-visible value alone, which is the reason for that order.
 
+**Implementation status (2026-09-20, GHE #332):** Phases 2–4 are built and on main — the Tier A/B
+sources, the reconciler, and the delivery port all exist. Phase 3 is deliberately partial:
+**only catalog (built-in) sources have a host-side `start` channel.** The host's reconciler knows
+how to start the catalog entries; a `defineSignalSource` ref has nowhere to run its `start` effect,
+so `getSignalSource` now fails loudly at bind time for non-built-in refs rather than parking a run
+on a source that could never wake it. The missing piece for full Phase 3 is the host channel:
+a `.source.ts` artifact (or equivalent) whose `start` effect the reconciler can load and drive for
+non-catalog refs.
+
 ## 11. Open questions
 
+- **Host channel for author-defined sources** — the reconciler currently starts only catalog
+  entries. What is the artifact shape for a `defineSignalSource` ref's `start` effect (a
+  `.source.ts` file in the project? an in-repo module path?), and how does the host keep it
+  within its sandbox/capability envelope? Until this lands, non-built-in source refs are rejected
+  at `getSignalSource` (see the implementation status note above).
 - Does a source instance need a health/liveness signal of its own, so a workflow can react to its
   own trigger being broken — or does `ProviderHealth` cover it?
 - Reconciler ownership in multi-host deployments: one leader, or per-host with a lease?
