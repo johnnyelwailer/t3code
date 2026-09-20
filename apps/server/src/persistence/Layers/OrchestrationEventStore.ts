@@ -203,6 +203,34 @@ const makeEventStore = Effect.gen(function* () {
       `,
   });
 
+  const readAttachmentCleanupRowsFromSequence = SqlSchema.findAll({
+    Request: ReadFromSequenceRequestSchema,
+    Result: OrchestrationEventPersistedRowSchema,
+    execute: (request) =>
+      sql`
+        SELECT
+          sequence,
+          event_id AS "eventId",
+          event_type AS "type",
+          aggregate_kind AS "aggregateKind",
+          stream_id AS "aggregateId",
+          occurred_at AS "occurredAt",
+          command_id AS "commandId",
+          causation_event_id AS "causationEventId",
+          correlation_id AS "correlationId",
+          payload_json AS "payload",
+          metadata_json AS "metadata"
+        FROM orchestration_events
+        WHERE sequence > ${request.sequenceExclusive}
+          AND (
+            event_type IN ('thread.reverted', 'thread.deleted')
+            OR sequence = (SELECT MAX(sequence) FROM orchestration_events)
+          )
+        ORDER BY sequence ASC
+        LIMIT ${request.limit}
+      `,
+  });
+
   const readAggregateEventRows = SqlSchema.findAll({
     Request: AggregateReplayRequestSchema,
     Result: OrchestrationEventPersistedRowSchema,
@@ -328,6 +356,51 @@ const makeEventStore = Effect.gen(function* () {
     );
   };
 
+  const readAttachmentCleanupCandidatesFromSequence: NonNullable<
+    OrchestrationEventStoreShape["readAttachmentCleanupCandidatesFromSequence"]
+  > = (sequenceExclusive, limit = Number.MAX_SAFE_INTEGER) => {
+    const normalizedLimit = Math.max(0, Math.floor(limit));
+    if (normalizedLimit === 0) {
+      return Stream.empty;
+    }
+    return Stream.paginate(
+      { cursor: sequenceExclusive, remaining: normalizedLimit },
+      ({ cursor, remaining }) =>
+        readAttachmentCleanupRowsFromSequence({
+          sequenceExclusive: cursor,
+          limit: Math.min(remaining, READ_PAGE_SIZE),
+        }).pipe(
+          Effect.mapError(
+            toPersistenceSqlOrDecodeError(
+              "OrchestrationEventStore.readAttachmentCleanupCandidatesFromSequence:query",
+              "OrchestrationEventStore.readAttachmentCleanupCandidatesFromSequence:decodeRows",
+            ),
+          ),
+          Effect.flatMap((rows) =>
+            Effect.forEach(rows, (row) =>
+              decodeEvent(row).pipe(
+                Effect.mapError(
+                  toPersistenceDecodeError(
+                    "OrchestrationEventStore.readAttachmentCleanupCandidatesFromSequence:rowToEvent",
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Effect.map((events) => {
+            const last = events.at(-1);
+            const nextRemaining = remaining - events.length;
+            return [
+              events,
+              last === undefined || nextRemaining <= 0
+                ? Option.none()
+                : Option.some({ cursor: last.sequence, remaining: nextRemaining }),
+            ] as const;
+          }),
+        ),
+    );
+  };
+
   const findEventAfter = SqlSchema.findOneOption({
     Request: HasEventAfterRequestSchema,
     Result: Schema.Struct({ sequence: Schema.Number }),
@@ -419,6 +492,7 @@ const makeEventStore = Effect.gen(function* () {
   return {
     append,
     readFromSequence,
+    readAttachmentCleanupCandidatesFromSequence,
     readAggregateRange,
     getAggregateReplayStats,
     readAll: () => readFromSequence(0, Number.MAX_SAFE_INTEGER),

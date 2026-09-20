@@ -2163,9 +2163,16 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       const states = yield* projectionStateRepository.listAll();
       const byProjector = new Map(states.map((state) => [state.projector, state]));
       const cleanupState = byProjector.get(cleanupProjector);
-      const cleanupStart = Math.min(
-        cleanupState?.lastAppliedSequence ?? 0,
+      const oldestProjectorSequence = Math.min(
         ...projectors.map((projector) => byProjector.get(projector.name)?.lastAppliedSequence ?? 0),
+      );
+      const cleanupStart = Math.min(
+        // The cleanup cursor was introduced after the other projections. On its
+        // first run, start at their oldest committed boundary instead of replaying
+        // the entire event log. A real projector reset still lowers this boundary
+        // and replays the attachment side-effects it may have crossed.
+        cleanupState?.lastAppliedSequence ?? oldestProjectorSequence,
+        oldestProjectorSequence,
       );
       // Persist this boundary before replay: a reset projector can encounter an old
       // revert, then fail after other projectors have committed past that event.
@@ -2180,15 +2187,15 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
       // All message and activity references are current before any files are removed.
       const pendingCleanup = new Map<string, OrchestrationEvent>();
       let lastEvent: OrchestrationEvent | undefined;
-      yield* Stream.runForEach(
-        eventStore.readFromSequence(cleanupStart, Number.MAX_SAFE_INTEGER),
-        (event) =>
-          Effect.sync(() => {
-            lastEvent = event;
-            if (event.type === "thread.reverted" || event.type === "thread.deleted") {
-              pendingCleanup.set(`${event.type}:${event.payload.threadId}`, event);
-            }
-          }),
+      const cleanupCandidates =
+        eventStore.readAttachmentCleanupCandidatesFromSequence ?? eventStore.readFromSequence;
+      yield* Stream.runForEach(cleanupCandidates(cleanupStart, Number.MAX_SAFE_INTEGER), (event) =>
+        Effect.sync(() => {
+          lastEvent = event;
+          if (event.type === "thread.reverted" || event.type === "thread.deleted") {
+            pendingCleanup.set(`${event.type}:${event.payload.threadId}`, event);
+          }
+        }),
       );
       for (const event of pendingCleanup.values()) {
         if (event.type !== "thread.reverted" && event.type !== "thread.deleted") continue;

@@ -2160,6 +2160,60 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-atta
 );
 
 it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
+  it.effect("seeds a newly introduced attachment cleanup cursor from existing projectors", () =>
+    Effect.gen(function* () {
+      const projectionPipeline = yield* OrchestrationProjectionPipeline;
+      const eventStore = yield* OrchestrationEventStore;
+      const sql = yield* SqlClient.SqlClient;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const { attachmentsDir } = yield* ServerConfig;
+      const now = "2026-01-01T00:00:00.000Z";
+      const threadId = ThreadId.make("thread-existing-cleanup-cursor");
+      const deleted = yield* eventStore.append({
+        type: "thread.deleted",
+        eventId: EventId.make("evt-existing-cleanup-cursor"),
+        aggregateKind: "thread",
+        aggregateId: threadId,
+        occurredAt: now,
+        commandId: CommandId.make("cmd-existing-cleanup-cursor"),
+        causationEventId: null,
+        correlationId: CorrelationId.make("cmd-existing-cleanup-cursor"),
+        metadata: {},
+        payload: { threadId, deletedAt: now },
+      });
+
+      yield* sql`DELETE FROM projection_state WHERE projector = 'projection.attachment-cleanup'`;
+      yield* Effect.forEach(
+        Object.values(ORCHESTRATION_PROJECTOR_NAMES),
+        (projector) =>
+          sql`
+            INSERT INTO projection_state (projector, last_applied_sequence, updated_at)
+            VALUES (${projector}, ${deleted.sequence}, ${now})
+            ON CONFLICT (projector)
+            DO UPDATE SET
+              last_applied_sequence = excluded.last_applied_sequence,
+              updated_at = excluded.updated_at
+          `,
+        { discard: true },
+      );
+
+      const attachmentDir = path.join(attachmentsDir, threadId);
+      yield* fileSystem.makeDirectory(attachmentDir, { recursive: true });
+      yield* fileSystem.writeFileString(path.join(attachmentDir, "keep.txt"), "keep");
+
+      yield* projectionPipeline.bootstrap;
+
+      assert.isTrue(yield* exists(attachmentDir));
+      const cleanupRows = yield* sql<{ readonly lastAppliedSequence: number }>`
+        SELECT last_applied_sequence AS "lastAppliedSequence"
+        FROM projection_state
+        WHERE projector = 'projection.attachment-cleanup'
+      `;
+      assert.deepEqual(cleanupRows, [{ lastAppliedSequence: deleted.sequence }]);
+    }),
+  );
+
   it.effect("replays a bootstrap backlog larger than the event store default limit", () =>
     Effect.gen(function* () {
       const projectionPipeline = yield* OrchestrationProjectionPipeline;

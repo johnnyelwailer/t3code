@@ -107,6 +107,40 @@ layer("OrchestrationEventStore", (it) => {
     }),
   );
 
+  it.effect("reads only attachment cleanup events plus the current head", () =>
+    Effect.gen(function* () {
+      const eventStore = yield* OrchestrationEventStore;
+      const threadId = ThreadId.make("cleanup-candidates-thread");
+      const now = "2026-01-01T00:00:00.000Z";
+
+      yield* eventStore.append(messageEvent(threadId, "cleanup-before"));
+      const deleted = yield* eventStore.append({
+        type: "thread.deleted",
+        eventId: EventId.make("cleanup-deleted"),
+        aggregateKind: "thread",
+        aggregateId: threadId,
+        occurredAt: now,
+        commandId: null,
+        causationEventId: null,
+        correlationId: null,
+        metadata: {},
+        payload: { threadId, deletedAt: now },
+      });
+      const head = yield* eventStore.append(messageEvent(threadId, "cleanup-head"));
+
+      const readCandidates = eventStore.readAttachmentCleanupCandidatesFromSequence;
+      assert.isDefined(readCandidates);
+      const replayed = yield* Stream.runCollect(readCandidates!(0)).pipe(
+        Effect.map((chunk) => Array.from(chunk)),
+      );
+
+      assert.deepEqual(
+        replayed.map((event) => event.sequence),
+        [deleted.sequence, head.sequence],
+      );
+    }),
+  );
+
   it.effect("fails with PersistenceDecodeError when stored json is invalid", () =>
     Effect.gen(function* () {
       const eventStore = yield* OrchestrationEventStore;
