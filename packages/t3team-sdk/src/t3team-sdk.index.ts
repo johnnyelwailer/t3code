@@ -19,6 +19,7 @@ export {
   ProviderUnavailableError,
   ReplayDriftError,
   SchemaExhaustedError,
+  SubWorkflowCheckpointError,
   TargetMissingError,
   TimeoutError,
   WorkflowError,

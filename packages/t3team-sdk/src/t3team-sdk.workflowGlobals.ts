@@ -22,6 +22,7 @@ import {
   ProviderUnavailableError,
   ReplayDriftError,
   SchemaExhaustedError,
+  SubWorkflowCheckpointError,
   TargetMissingError,
   TimeoutError,
   WorkflowError,
@@ -118,6 +119,7 @@ export function buildWorkflowGlobals(opts: {
     // it is a pure ref constructor (no capability concern), so it is unconditionally bound.
     defineWorkflow,
     WorkflowError,
+    SubWorkflowCheckpointError,
     TimeoutError,
     SchemaExhaustedError,
     ProviderUnavailableError,
