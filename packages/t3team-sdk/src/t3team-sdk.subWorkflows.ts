@@ -10,6 +10,7 @@
 import { createWorkflowPrimitives, type WorkflowPrimitives } from "./t3team-sdk.primitives.ts";
 import { childBrokerFor } from "./t3team-sdk.broker.ts";
 import { defaultBroker } from "./t3team-sdk.bodyTrees.ts";
+import { createCheckpointPrimitives } from "@runbook/core/checkpoint";
 import type { DurableWorkflowRuntime } from "./t3team-sdk.durableRuntime.ts";
 import { WorkflowError } from "./t3team-sdk.errors.ts";
 import { runPreparedBody } from "./t3team-sdk.bodyRunner.ts";
@@ -94,6 +95,13 @@ export function buildWorkflowPrimitives(opts: {
 } {
   const { runtime, options } = opts;
   const broker = options.broker ?? defaultBroker;
+  // Bounded execution: the child journals into the SAME run sequence, so it shares the parent's
+  // checkpoint primitive. Children never see a restored `resume` — the window belongs to the run.
+  const checkpoint = createCheckpointPrimitives({
+    callPrimitive: runtime.callPrimitive,
+    currentSeq: runtime.currentSeq,
+    nowIso: opts.nowIso,
+  }).checkpoint;
   const shared = {
     callPrimitive: runtime.callPrimitive,
     runBlackBoxed: runtime.runBlackBoxed,
@@ -135,6 +143,7 @@ export function buildWorkflowPrimitives(opts: {
         args,
         toolRefs: opts.toolRefs,
         scripts: opts.scripts,
+        checkpoint,
         primitives: createWorkflowPrimitives({
           ...shared,
           runSubWorkflow: runSubWorkflowFor(() => childCapabilities, childChain),

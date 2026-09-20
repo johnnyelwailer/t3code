@@ -74,8 +74,10 @@ export {
 // The engine API as ordinary imports for orchestration bodies (Epic 25).
 export {
   agent,
+  checkpoint,
   getArgs,
   getBudget,
+  getResume,
   getScripts,
   getThread,
   getTools,

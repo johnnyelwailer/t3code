@@ -14,6 +14,7 @@
 import * as Schema from "effect/Schema";
 
 import { deterministicGlobals, hostSource, type DeterministicSource } from "@runbook/ts/globals";
+import type { CheckpointPrimitives, CheckpointRecord } from "@runbook/core/checkpoint";
 
 import {
   CancelledError,
@@ -53,6 +54,10 @@ export function buildWorkflowGlobals(opts: {
   readonly scripts: Record<string, unknown>;
   readonly runtime: DeterministicSource;
   readonly primitives: WorkflowPrimitives;
+  /** The run's `checkpoint` primitive (bounded execution). */
+  readonly checkpoint: CheckpointPrimitives["checkpoint"];
+  /** The compact state a checkpoint-window resume restored (absent = fresh / full-replay). */
+  readonly resume?: CheckpointRecord | undefined;
   readonly threads: WorkflowThreadPrimitives;
   readonly schedule: SchedulePrimitives;
   /** The `@runbook/core/authoring` `RunbookContext` subset a body's `run(ctx)` sees. Optional:
@@ -72,6 +77,13 @@ export function buildWorkflowGlobals(opts: {
     pipeline: p.pipeline,
     workflow: p.workflow,
     wait: p.wait,
+    // Bounded execution (docs/runbook/bounded-execution.md): the `checkpoint` primitive commits
+    // the (seq, compactState) boundary; `resume` carries the compact state a checkpoint-window
+    // resume restored, so a checkpoint-aware body seeds its carried state from it instead of
+    // re-running the superseded prefix. Absent on a fresh start and for bodies that never
+    // checkpoint — a plain loop is unchanged.
+    checkpoint: opts.checkpoint,
+    resume: opts.resume,
     budget: p.budget,
     phase: p.phase,
     log: p.log,
@@ -100,6 +112,8 @@ export function buildWorkflowGlobals(opts: {
     getBudget: () => p.budget,
     getScripts: () => opts.scripts,
     getTools: () => opts.tools,
+    // Bounded execution: the accessor form of the `resume` global above (same value).
+    getResume: () => opts.resume,
     // `defineWorkflow` lets a body construct the typed sub-workflow ref `workflow()` needs;
     // it is a pure ref constructor (no capability concern), so it is unconditionally bound.
     defineWorkflow,
