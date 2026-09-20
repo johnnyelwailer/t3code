@@ -294,6 +294,7 @@ import {
   findActiveWorkflowInputMessageId,
   T3TeamSystemTimelineRow,
 } from "~/t3team/chat/t3team-SystemTimelineRow";
+import { isT3TeamFullBleedWidgetRow } from "~/t3team/chat/t3team-fullBleedWidgetRow";
 import {
   findT3TeamWorkflowDecisionAnswers,
   type T3TeamWorkflowDecisionAnswer,
@@ -1643,7 +1644,17 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   // from TimelineRowCtx, which propagates through LegendList's memo.
   const renderItem = useCallback(
     ({ item }: { item: MessagesTimelineRow }) => (
-      <div className="mx-auto w-full min-w-0 max-w-3xl overflow-x-clip" data-timeline-root="true">
+      <div
+        className={
+          // Full-bleed t3team widget rows span the whole thread content width; every other
+          // row stays in the narrow message column. The widget card owns its own overflow,
+          // so the cap and clip can be dropped for those rows without bleed risk.
+          item.kind === "message" && isT3TeamFullBleedWidgetRow(item.message)
+            ? "mx-auto w-full min-w-0"
+            : "mx-auto w-full min-w-0 max-w-3xl overflow-x-clip"
+        }
+        data-timeline-root="true"
+      >
         <TimelineRowContent row={item} />
       </div>
     ),
