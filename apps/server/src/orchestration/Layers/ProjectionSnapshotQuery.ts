@@ -325,30 +325,38 @@ const WorkflowRunStatusRowSchema = Schema.Struct({
   threadId: ThreadId,
   runId: Schema.String,
   status: Schema.Literals([
+    "queued",
     "running",
     "suspended",
     "sleeping",
+    "watching",
     "paused",
     "completed",
     "failed",
     "cancelled",
   ]),
-  pendingKind: Schema.NullOr(Schema.Literals(["thread.turn", "user.input"])),
+  pendingKind: Schema.NullOr(
+    Schema.Literals(["thread.turn", "user.input", "signal.wait"]),
+  ),
   wakeAt: Schema.NullOr(IsoDateTime),
   updatedAt: IsoDateTime,
 });
 const WorkflowRunStatusByThreadRowSchema = Schema.Struct({
   runId: Schema.String,
   status: Schema.Literals([
+    "queued",
     "running",
     "suspended",
     "sleeping",
+    "watching",
     "paused",
     "completed",
     "failed",
     "cancelled",
   ]),
-  pendingKind: Schema.NullOr(Schema.Literals(["thread.turn", "user.input"])),
+  pendingKind: Schema.NullOr(
+    Schema.Literals(["thread.turn", "user.input", "signal.wait"]),
+  ),
   wakeAt: Schema.NullOr(IsoDateTime),
   updatedAt: IsoDateTime,
 });
@@ -4509,6 +4517,7 @@ pending_approval_requests AS (
     "running",
     "suspended",
     "sleeping",
+    "watching",
     "paused",
   ]);
 
@@ -4562,7 +4571,7 @@ pending_approval_requests AS (
             OR EXISTS (
               SELECT 1 FROM workflow_runs AS w
               WHERE w.launch_thread_id = c.thread_id
-                AND w.status IN ('queued', 'running', 'suspended', 'sleeping', 'paused')
+                AND w.status IN ('queued', 'running', 'suspended', 'sleeping', 'watching', 'paused')
             )
           )
         LIMIT 1

@@ -28,7 +28,9 @@ import {
   toNeutralWorkItem,
   workItemCursorFromFields,
 } from "./t3team-workflowSignalSourceWorkItem.ts";
+import { startScmSignalInstance } from "./t3team-workflowSignalSourceScm.ts";
 import type { PullRequestActivity, PullRequestDetail } from "@t3tools/contracts";
+import { PersistenceSqlError } from "./persistence/Errors.ts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import type {
@@ -491,5 +493,92 @@ describe("makeMintedEmit", () => {
       title: "x",
     });
     void ScmChangeRequestChecksConcluded;
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Poller cursor semantics (GHE #332 review): at-least-once delivery
+// ---------------------------------------------------------------------------
+
+describe("startScmSignalInstance durable cursor", () => {
+  it("holds the cursor when delivery fails, and advances only after redelivery succeeds", async () => {
+    let cursorValue: string | null = null;
+    const setCursorCalls: string[] = [];
+    const emitted: Array<{ signal: string; key: string }> = [];
+    let deliveryFails = true;
+    const ctx: SignalSourceContext<{ projectId: string; repository: string; number: number }> = {
+      params: { projectId: "p1", repository: "o/r", number: 42 },
+      emit: async (signal, key) => {
+        if (deliveryFails) {
+          throw new PersistenceSqlError({ operation: "db.transient", detail: "busy" });
+        }
+        emitted.push({ signal: signal.name, key });
+      },
+      getCursor: async () => cursorValue,
+      setCursor: async (value) => {
+        cursorValue = value;
+        setCursorCalls.push(value);
+      },
+    };
+    let detailNow: PullRequestDetail = detail({});
+    const instance = startScmSignalInstance({
+      ctx,
+      detail: () => Effect.succeed(detailNow),
+      pollMs: 30_000,
+      log: () => {},
+    });
+    try {
+      // Tick 1: baseline observation — silent, the cursor is established.
+      await instance.tick();
+      expect(setCursorCalls).toHaveLength(1);
+      expect(emitted).toHaveLength(0);
+
+      // Tick 2: the open → merged transition, delivery DOWN — the emit attempts and fails, so
+      // the transition is NOT recorded as delivered and the cursor must be HELD: it stays
+      // pending for redelivery.
+      detailNow = detail({ state: "merged", mergedAt: "2026-09-20T09:00:00Z" });
+      await instance.tick();
+      expect(emitted).toHaveLength(0);
+      expect(setCursorCalls).toHaveLength(1);
+
+      // Tick 3: the same transition re-derives from the held cursor; delivery is healthy —
+      // it is delivered and only NOW does the cursor advance.
+      deliveryFails = false;
+      await instance.tick();
+      expect(emitted).toHaveLength(1);
+      expect(setCursorCalls).toHaveLength(2);
+    } finally {
+      instance.stop?.();
+    }
+
+    // A source-side emit fault (not a delivery failure) must NOT wedge the cursor: it is
+    // skipped, and the cursor advances so later transitions keep flowing.
+    const ctxFault: SignalSourceContext<{ projectId: string; repository: string; number: number }> = {
+      params: { projectId: "p1", repository: "o/r", number: 42 },
+      emit: async () => {
+        throw new Error("source emitted an undeclared signal");
+      },
+      getCursor: async () => null,
+      setCursor: async () => {},
+    };
+    let faultCursorCalls = 0;
+    const faultInstance = startScmSignalInstance({
+      ctx: {
+        ...ctxFault,
+        setCursor: async () => {
+          faultCursorCalls += 1;
+        },
+      },
+      detail: () => Effect.succeed(detail({ state: "merged", mergedAt: "2026-09-20T09:00:00Z" })),
+      pollMs: 30_000,
+      log: () => {},
+    });
+    try {
+      await faultInstance.tick(); // baseline (no cursor yet → silent, cursor set)
+      await faultInstance.tick(); // now a transition + a permanently-failing emit
+      expect(faultCursorCalls).toBe(2); // the cursor advanced despite the emit fault
+    } finally {
+      faultInstance.stop?.();
+    }
   });
 });

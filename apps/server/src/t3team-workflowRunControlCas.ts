@@ -15,6 +15,7 @@ export const NON_TERMINAL_STATUSES = [
   "running",
   "suspended",
   "sleeping",
+  "watching",
   "paused",
 ] as const;
 

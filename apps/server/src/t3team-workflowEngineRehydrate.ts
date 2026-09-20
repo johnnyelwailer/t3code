@@ -44,14 +44,25 @@ import { resolveRehydratedWorkflowScripts } from "./t3team-workflowRehydrateScri
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
 import { makeWorkflowRunRehydrator } from "./t3team-workflowRehydrateRun.ts";
+import {
+  T3TeamWorkflowSignalRehydrateGate,
+  T3TeamWorkflowSignalRehydrateGateLive,
+} from "./t3team-workflowSignalDelivery.ts";
 
 function nowIso(): string {
   return DateTime.formatIso(DateTime.nowUnsafe());
 }
 
-export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkflowRuns")(
+export const rehydrateSuspendedWorkflowRunsCore = Effect.fn("rehydrateSuspendedWorkflowRuns")(
   function* () {
     const repo = yield* WorkflowRunRepository;
+    // The signal delivery port's orphan branch treats "no controller registered yet" as
+    // TRANSIENT while this gate reports the rehydration as in flight (GHE #332 review). The
+    // `Effect.ensuring` below clears the flag on every exit path, success or failure.
+    const rehydrateGate = Option.getOrUndefined(
+      yield* Effect.serviceOption(T3TeamWorkflowSignalRehydrateGate),
+    );
+    rehydrateGate?.markInFlight();
     const store = yield* WorkflowJournalStore;
     const registry = yield* T3TeamWorkflowEngineRegistry;
     const orchestration = yield* OrchestrationEngineService;
@@ -212,8 +223,21 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
         if (Option.isSome(pending)) {
           const controller = registry.getRun(run.runId);
           if (controller !== undefined) {
+            // Best-effort by boot design: a journal failure here must not abort the rest of
+            // the rehydration (the sleeping-run re-arm below). The inbox entry is consumed, so
+            // a lost wake is surfaced, not silently dropped — the run stays `watching` and the
+            // next live event for the tuple re-delivers it.
             yield* Effect.promise(() =>
-              controller.resume(run.pendingCorrelationId!, pending.value.payload).catch(() => {}),
+              controller.resume(run.pendingCorrelationId!, pending.value.payload).catch(
+                (error) => {
+                  void Effect.runPromise(
+                    Effect.logWarning(
+                      "boot-gap inbox drain: resume failed; the run stays watching and the next event re-delivers",
+                      { runId: run.runId, error: String(error) },
+                    ),
+                  );
+                },
+              ),
             );
             woken += 1;
           }
@@ -228,6 +252,21 @@ export const rehydrateSuspendedWorkflowRuns = Effect.fn("rehydrateSuspendedWorkf
     yield* Effect.logInfo("rehydrated durable workflow runs", { restored, armed, woken });
   },
 );
+
+/** The exported rehydration effect: the core above plus the boot-rehydration gate cleanup —
+ * `markComplete` runs on every exit path so the delivery port's "transient absence" window
+ * closes exactly when rehydration is done (success or failure). */
+export const rehydrateSuspendedWorkflowRuns = () =>
+  rehydrateSuspendedWorkflowRunsCore().pipe(
+    Effect.ensuring(
+      Effect.gen(function* () {
+        const gate = Option.getOrUndefined(
+          yield* Effect.serviceOption(T3TeamWorkflowSignalRehydrateGate),
+        );
+        gate?.markComplete();
+      }),
+    ),
+  );
 
 /**
  * Boot layer wiring {@link rehydrateSuspendedWorkflowRuns} into server startup (see the file
@@ -250,4 +289,7 @@ export const T3TeamWorkflowEngineRehydrateLive = Layer.effectDiscard(
       }),
     ),
   ),
-).pipe(Layer.provide(T3TeamWorkflowEngineReactorLive));
+).pipe(
+  Layer.provide(T3TeamWorkflowEngineReactorLive),
+  Layer.provide(T3TeamWorkflowSignalRehydrateGateLive),
+);

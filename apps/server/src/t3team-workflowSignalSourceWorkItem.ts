@@ -16,6 +16,7 @@
 import { WorkItemUpdated, type SignalSourceContext, type SignalSourceInstance } from "@t3team/sdk";
 
 import { makeSignalPollTimer } from "./t3team-workflowSignalSweepTimer.ts";
+import { isPersistenceSqlError } from "./persistence/Errors.ts";
 
 import type { AtlassianIntegrationProvider } from "@t3tools/integrations-atlassian";
 
@@ -151,6 +152,7 @@ export function startWorkItemSignalInstance(input: {
       const prev = await readCursor();
       const cursor = workItemCursorFromFields(snapshot.fields);
       const changedFields = diffWorkItemFields(prev, snapshot.fields);
+      let allEmitted = true;
       if (prev !== null && changedFields.length > 0) {
         const payload = toNeutralWorkItem({
           issueKey,
@@ -159,9 +161,27 @@ export function startWorkItemSignalInstance(input: {
           fields: snapshot.fields,
           changedFields,
         });
-        await ctx.emit(WorkItemUpdated, issueKey, payload).catch(() => {});
+        // At-least-once (GHE #332 review), mirroring the SCM poller: a TRANSIENT delivery
+        // failure (tagged `PersistenceSqlError`) holds the cursor so the change re-emits next
+        // tick; a source-side emit fault is swallowed (it would never succeed).
+        try {
+          await ctx.emit(WorkItemUpdated, issueKey, payload);
+        } catch (error) {
+          if (isPersistenceSqlError(error)) {
+            allEmitted = false;
+            log("work-item signal emit failed (delivery); holding the cursor for redelivery", {
+              error: String(error),
+            });
+          } else {
+            log("work-item signal emit rejected at the delivery boundary; skipping", {
+              error: String(error),
+            });
+          }
+        }
       }
-      await ctx.setCursor(JSON.stringify(cursor));
+      if (allEmitted) {
+        await ctx.setCursor(JSON.stringify(cursor));
+      }
     } finally {
       if (!stopped) pollTimer.schedule(() => void tick(), pollMs);
     }

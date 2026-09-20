@@ -29,6 +29,7 @@ import { makeSignalPollTimer } from "./t3team-workflowSignalSweepTimer.ts";
 import type { PullRequestActivity, PullRequestDetail, PullRequestRef } from "@t3tools/contracts";
 import { ProjectId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import { isPersistenceSqlError } from "./persistence/Errors.ts";
 import type { PullRequestError } from "./pullRequest/PullRequestService.ts";
 
 import {
@@ -65,7 +66,10 @@ export function startScmSignalInstance(input: {
   ) => Effect.Effect<PullRequestActivity, PullRequestError>;
   readonly pollMs: number;
   readonly log: (message: string, fields?: unknown) => void;
-}): SignalSourceInstance {
+}): SignalSourceInstance & {
+  /** Deterministic drive for tests: run one poll iteration without the poll timer. */
+  readonly tick: () => Promise<void>;
+} {
   const { ctx, detail, pollMs, log } = input;
   const ref: PullRequestRef = {
     projectId: ProjectId.make(ctx.params.projectId),
@@ -105,15 +109,41 @@ export function startScmSignalInstance(input: {
       if (detailNow !== null) {
         const prev = await readCursor();
         const { events, snapshot } = diffScmEvents(prev, detailNow, activityNow);
+        let allEmitted = true;
         for (const event of events) {
           const signal = SIGNALS_BY_NAME[event.signalName];
           if (signal === undefined) continue;
-          // `ctx.emit` is capability-gated + schema-decoded at the host's delivery boundary;
-          // an undeclared signal or mistyped payload rejects HERE and is swallowed, not fatal —
-          // a poll that keeps failing on its own emit must not kill the poll loop.
-          await ctx.emit(signal, key, event.payload).catch(() => {});
+          // `ctx.emit` is capability-gated + schema-decoded at the host's delivery boundary.
+          // A TRANSIENT delivery failure (the host's persistence port rejecting — tagged
+          // `PersistenceSqlError`) holds the cursor so the transition re-emits next tick
+          // (at-least-once — the engine's journal dedup keeps a redelivered event from
+          // re-firing on an already-woken run). A source-side emit fault (undeclared signal,
+          // mistyped payload — a plain `Error` the minted boundary throws) is swallowed as
+          // before: it would never succeed, and wedging the cursor on it would wedge the
+          // whole instance.
+          try {
+            await ctx.emit(signal, key, event.payload);
+          } catch (error) {
+            if (isPersistenceSqlError(error)) {
+              allEmitted = false;
+              log("scm signal emit failed (delivery); holding the cursor for redelivery", {
+                signal: event.signalName,
+                error: String(error),
+              });
+              break;
+            }
+            log("scm signal emit rejected at the delivery boundary; skipping", {
+              signal: event.signalName,
+              error: String(error),
+            });
+          }
         }
-        await ctx.setCursor(JSON.stringify(snapshot));
+        // At-least-once (GHE #332 review): the durable cursor only advances once EVERY
+        // transition in this batch was durably delivered — a held cursor re-derives the same
+        // transitions on the next poll instead of skipping over an undelivered one.
+        if (allEmitted) {
+          await ctx.setCursor(JSON.stringify(snapshot));
+        }
       }
     } finally {
       if (!stopped) pollTimer.schedule(() => void tick(), pollMs);
@@ -122,6 +152,8 @@ export function startScmSignalInstance(input: {
 
   pollTimer.schedule(() => void tick(), pollMs);
   return {
+    // Tests drive ticks deterministically without the poll timer.
+    tick: () => tick(),
     stop: () => {
       stopped = true;
       pollTimer.stop();

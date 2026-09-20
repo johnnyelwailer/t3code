@@ -11,6 +11,7 @@ import * as SqlSchema from "effect/unstable/sql/SqlSchema";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import * as SchemaTransformation from "effect/SchemaTransformation";
 import * as Struct from "effect/Struct";
 
 import { toPersistenceSqlError } from "../Errors.ts";
@@ -37,6 +38,17 @@ const SignalRegistrationDbRow = SignalRegistration.mapFields(
 const SignalInboxDbRow = SignalInboxEntry.mapFields(
   Struct.assign({
     payload: Schema.fromJsonString(Schema.Unknown),
+    // SQLite has no boolean type: the `delivered` 0/1 flag round-trips as an INTEGER, so the
+    // row decode maps it back to the domain's boolean.
+    delivered: Schema.Number.pipe(
+      Schema.decodeTo(
+        Schema.Boolean,
+        SchemaTransformation.transformOrFail({
+          decode: (value) => Effect.succeed(value === 1),
+          encode: (value) => Effect.succeed(value ? 1 : 0),
+        }),
+      ),
+    ),
   }),
 );
 

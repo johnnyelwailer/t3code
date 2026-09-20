@@ -44,6 +44,9 @@ export function workflowControlValidationError(
     input.action === "pause" &&
     run.status !== "suspended" &&
     run.status !== "sleeping" &&
+    // A run parked on a watched signal event pauses/resumes like the other parked states — the
+    // resume's SQL restores `watching` from `pending_kind = 'signal.wait'`.
+    run.status !== "watching" &&
     // Pause on an already-paused run is idempotent (GHE #411 §2): a retried tool call must
     // succeed, not error, so `paused` passes validation here and short-circuits below.
     run.status !== "paused"
@@ -109,7 +112,7 @@ export const controlWorkflowRun = Effect.fn("controlWorkflowRun")(function* (
         runId,
         status: "paused",
         updatedAt: deps.nowIso(),
-        expectedStatuses: ["suspended", "sleeping"],
+        expectedStatuses: ["suspended", "sleeping", "watching"],
       })
       .pipe(Effect.mapError(errorMessage));
     if (!affected) return yield* reportStaleWrite(repo, runId);

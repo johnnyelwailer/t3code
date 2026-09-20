@@ -802,12 +802,15 @@ export const OrchestrationWorkflowRunStatus = Schema.Struct({
     "running",
     "suspended",
     "sleeping",
+    "watching",
     "paused",
     "completed",
     "failed",
     "cancelled",
   ]),
-  pendingKind: Schema.NullOr(Schema.Literals(["thread.turn", "user.input"])),
+  pendingKind: Schema.NullOr(
+    Schema.Literals(["thread.turn", "user.input", "signal.wait"]),
+  ),
   wakeAt: Schema.NullOr(IsoDateTime),
   updatedAt: IsoDateTime,
 });

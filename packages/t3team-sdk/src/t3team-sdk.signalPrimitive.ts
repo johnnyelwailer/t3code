@@ -30,7 +30,16 @@ import {
   type SignalSourceHandle,
   type SignalSourceRef,
 } from "./t3team-sdk.signal.ts";
+import { BUILTIN_SIGNAL_SOURCES } from "./t3team-sdk.builtinSignals.ts";
 import { PermissionDeniedError } from "./t3team-sdk.errors.ts";
+
+/** The source names the host can actually START today: the built-in catalog. Author-defined
+ * sources (`defineSignalSource`) have no host-side `start` channel yet (design #142 follow-up,
+ * GHE #332) — binding one would park the run forever with no source to ever wake it, so the
+ * gate fails LOUD at bind time instead. */
+const BUILTIN_SOURCE_NAMES: ReadonlySet<string> = new Set(
+  BUILTIN_SIGNAL_SOURCES.map((source) => source.name),
+);
 
 export interface SignalPrimitives {
   readonly getSignalSource: <Params, Signals extends ReadonlyArray<Signal<unknown>>>(
@@ -53,6 +62,14 @@ export function createSignalPrimitives(deps: {
       throw new PermissionDeniedError(
         `'getSignalSource(${source.name})' requires the '${required}' capability. Add ` +
           `'${required}' to this workflow's meta.capabilities.`,
+      );
+    }
+    if (!BUILTIN_SOURCE_NAMES.has(source.name)) {
+      throw new Error(
+        `'getSignalSource(${source.name})' failed: '${source.name}' is not a built-in catalog source. ` +
+          `Only the built-in sources can be started by the host today ` +
+          `[${[...BUILTIN_SOURCE_NAMES].join(", ")}]. ` +
+          `Author-defined sources (defineSignalSource) need a host-side start channel — see the design doc follow-up (GHE #332).`,
       );
     }
     const { paramsHash } = await resolveSignalSourceParams(source, params);

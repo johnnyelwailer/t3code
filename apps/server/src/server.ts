@@ -585,9 +585,12 @@ export const PullRequestServiceLive = PullRequestService.layer.pipe(
 // journaled registrations). Chained provideMerge in DEPENDENCY ORDER — in `a.pipe(provideMerge(b))`
 // the inner accumulated layer's requirements are satisfied by b's services while b's own
 // requirements leak outward, so the reconciler (the fullest consumer) sits innermost and each
-// outer step supplies what the accumulated layer still needs. The result provides all three
-// signal services plus the re-exported durability singletons, with only {SqlClient,
-// PullRequestService} left as external requirements — satisfied in the outer runtime chain.
+// outer step supplies what the accumulated layer still needs. The reconciler additionally
+// carries a BOOT-ORDERING edge on `T3TeamWorkflowEngineRehydrateLive` (GHE #332 review): its
+// rehydration must finish before the boot reconcile starts source instances, and its rehydrate
+// requirements (repo / journal / registry / scheduler / orchestration / config) leak outward to
+// the mergeAll app layer, where the app already provides them (the rehydrate layer itself is a
+// mergeAll sibling, so no double execution — layers memoize by reference).
 const WorkflowSignalSourcesLive = T3TeamWorkflowSignalReconcilerLive.pipe(
   Layer.provideMerge(T3TeamWorkflowSignalDeliveryLive),
   Layer.provideMerge(WorkflowSignalStoreLive),

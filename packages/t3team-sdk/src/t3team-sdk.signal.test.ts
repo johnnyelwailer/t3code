@@ -35,6 +35,11 @@ import {
   type SuspendedResult,
   type WorkflowRunResult,
 } from "./t3team-sdk.index.ts";
+import { createSignalPrimitives } from "./t3team-sdk.signalPrimitive.ts";
+import { defineSignalSource } from "./t3team-sdk.signalSource.ts";
+import { defineSignal } from "./t3team-sdk.signal.ts";
+import * as Schema from "effect/Schema";
+import type { HandleDispatch } from "@runbook/core/handles";
 import { journalFilePath } from "./t3team-sdk.journal.ts";
 import { readJournalEntries } from "./t3team-sdk.journalReader.ts";
 
@@ -160,5 +165,40 @@ describe("durable workflow engine — signal sources (design 42)", () => {
     expect(error).toBeInstanceOf(PermissionDeniedError);
     expect((error as PermissionDeniedError).message).toContain("source:scm.change-request.watch");
     expect(broker.sent).toHaveLength(0); // the gate fires before the broker is touched
+  });
+});
+
+// GHE #332 review: an AUTHOR-DEFINED source has no host-side `start` channel yet — binding one
+// would park the run forever with no source that could ever wake it. The gate fails LOUD at
+// bind time, before any journal entry or broker traffic.
+describe("durable workflow engine — signal sources (builtin gate)", () => {
+  it("rejects a non-builtin source ref at bind time, before the broker", async () => {
+    const broker = createMockBroker(deferEverything);
+    const prims = createSignalPrimitives({
+      dispatch: {
+        sendOneWay: async () => {
+          throw new Error("the gate must fire before any journal traffic");
+        },
+        send: async () => {
+          throw new Error("unused");
+        },
+        awaitResolution: async () => {
+          throw new Error("unused");
+        },
+      } as unknown as HandleDispatch,
+      broker,
+      capabilities: new Set(["source:my.custom"]),
+    });
+    const authorSource = defineSignalSource({
+      name: "my.custom",
+      params: Schema.Struct({}),
+      emits: [defineSignal("my.custom.event", Schema.Struct({ value: Schema.String }))],
+      start: async () => ({}),
+    });
+
+    const error = await prims.getSignalSource(authorSource, {}).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain("not a built-in catalog source");
+    expect(broker.sent).toHaveLength(0);
   });
 });

@@ -25,6 +25,7 @@ import * as EffectFileSystem from "effect/FileSystem";
 import { AtlassianIntegrationProvider } from "@t3tools/integrations-atlassian";
 
 import { T3TeamWorkflowSignalDelivery } from "./t3team-workflowSignalDelivery.ts";
+import { T3TeamWorkflowEngineRehydrateLive } from "./t3team-workflowEngineRehydrate.ts";
 import {
   assertCatalogCoversDeclarations,
   makeWorkflowSignalSourceCatalog,
@@ -130,4 +131,12 @@ export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
       stopAll: () => core.stopAll(),
     };
   }),
+).pipe(
+  // Boot ordering (GHE #332 review): the source instances the boot reconcile starts must only
+  // be able to DELIVER after rehydration has rebuilt the watching-run controllers — otherwise
+  // a first tick that lands before the controllers exist hits the delivery port's orphan branch
+  // and fails a healthy parked run. Providing `T3TeamWorkflowEngineRehydrateLive` runs that
+  // layer's rehydration effect to completion before this one starts; the layer is memoized by
+  // reference, so the app's mergeAll sibling does not re-run the rehydration.
+  Layer.provide(T3TeamWorkflowEngineRehydrateLive),
 );
