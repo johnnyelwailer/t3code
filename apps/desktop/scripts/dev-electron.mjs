@@ -48,6 +48,12 @@ function readSupervisorPid() {
   }
 }
 
+NodeChildProcess.execFileSync(
+  process.execPath,
+  [NodePath.join(desktopDir, "scripts/build-browser-secret.mjs")],
+  { stdio: "inherit" },
+);
+
 function isProcessAlive(pid) {
   try {
     process.kill(pid, 0);

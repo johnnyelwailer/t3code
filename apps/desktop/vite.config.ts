@@ -15,18 +15,19 @@ export default defineConfig({
     tasks: {
       build: {
         command:
-          "node scripts/build-preview-annotation-css.mjs && node scripts/t3team-ensure-main-bundle.mjs && vp pack",
+          "node scripts/build-browser-secret.mjs && node scripts/build-preview-annotation-css.mjs && node scripts/t3team-ensure-main-bundle.mjs && vp pack",
         dependsOn: ["t3#build"],
         cache: false,
       },
       dev: {
         command:
-          "node scripts/build-preview-annotation-css.mjs && node scripts/t3team-ensure-main-bundle.mjs && cross-env T3CODE_DESKTOP_DEV=1 vp pack --watch",
+          "node scripts/build-browser-secret.mjs && node scripts/build-preview-annotation-css.mjs && node scripts/t3team-ensure-main-bundle.mjs && cross-env T3CODE_DESKTOP_DEV=1 vp pack --watch",
         dependsOn: ["t3#build"],
         cache: false,
       },
       "dev:bundle": {
-        command: "node scripts/build-preview-annotation-css.mjs && vp pack --watch",
+        command:
+          "node scripts/build-browser-secret.mjs && node scripts/build-preview-annotation-css.mjs && vp pack --watch",
         cache: false,
       },
       "dev:electron": {
