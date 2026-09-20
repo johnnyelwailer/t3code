@@ -10,6 +10,7 @@ import type { ExecuteBodyRequest } from "@runbook/core/runEngine";
 
 import { runPreparedBody } from "./t3team-sdk.bodyRunner.ts";
 import { buildWorkflowPrimitives } from "./t3team-sdk.subWorkflows.ts";
+import { createCheckpointPrimitives } from "@runbook/core/checkpoint";
 import {
   createDurableWorkflowRuntime,
   type DurableWorkflowRuntime,
@@ -87,6 +88,9 @@ export async function executeWorkflowBody(
     filePath: opts.ref.absolutePath,
     nowIso,
     runId: opts.runId,
+    // Bounded execution: a checkpoint-window resume re-drives the retained suffix at its original
+    // seqs, so the runtime's counter starts AT the boundary, not at zero.
+    ...(opts.resume === undefined ? {} : { initialSeq: opts.resume.fromSeq }),
     resolved: opts.journal.byCorrelation,
     // Share the run boundary's suspension latch: the runtime arms it, the boundary refuses to
     // report `completed` while it is armed (a body that caught the signal cannot fake a result).
@@ -107,6 +111,11 @@ export async function executeWorkflowBody(
     scripts,
     nowIso,
   });
+  const checkpoint = createCheckpointPrimitives({
+    callPrimitive: runtime.callPrimitive,
+    currentSeq: runtime.currentSeq,
+    nowIso,
+  }).checkpoint;
   return await runPreparedBody({
     runtime,
     ref: opts.ref,
@@ -114,6 +123,10 @@ export async function executeWorkflowBody(
     toolRefs,
     scripts,
     primitives,
+    // Bounded execution: the `checkpoint` primitive + the compact state a checkpoint-window
+    // resume restored (absent on fresh starts and full-replay resumes).
+    checkpoint,
+    resume: opts.resume?.checkpoint,
     // Feed the body's capability set back so workflow() children intersect against it.
     onCapabilities: captureCapabilities,
     handleDispatch: runtime.handles,

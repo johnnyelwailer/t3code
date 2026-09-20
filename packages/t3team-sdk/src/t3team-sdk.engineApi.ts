@@ -20,6 +20,11 @@
 
 import type { WorkflowBudget } from "./t3team-sdk.primitiveTypes.ts";
 import { bodyApiStorage } from "./t3team-sdk.internal.ts";
+import type {
+  CheckpointInput,
+  CheckpointPrimitives,
+  CheckpointRecord,
+} from "@runbook/core/checkpoint";
 import type { AgentOpts, SpawnThreadOpts, Thread } from "./t3team-sdk.threadTypes.ts";
 import type { WorkflowInvokeOpts, WorkflowRef } from "./t3team-sdk.types.ts";
 
@@ -112,6 +117,30 @@ export const log = call<[string], void>("log");
 /** Durable timer: suspends the run if the deadline has not passed, and survives a restart. */
 export const wait = call<[number], Promise<void>>("wait");
 export const waitUntil = call<[number], Promise<void>>("waitUntil");
+
+/**
+ * Bounded execution (docs/runbook/bounded-execution.md): commit the `(seq, compactState)`
+ * boundary that a resume replays from instead of from sequence zero. The input participates in
+ * the ordinary argsHash replay check, so a re-driven body whose compact state moved fails loud.
+ */
+export function checkpoint<State>(input: CheckpointInput<State>): Promise<CheckpointRecord<State>> {
+  return fromRun<CheckpointPrimitives["checkpoint"]>("checkpoint")(input);
+}
+
+/**
+ * The compact state a checkpoint-window resume restored — seed your carried state from it so the
+ * body continues from the boundary instead of re-running the superseded prefix.
+ * `undefined` on a fresh start, a full-replay resume, and inside sub-workflow bodies.
+ */
+export function getResume(): CheckpointRecord | undefined {
+  const surface = bodyApiStorage.getStore();
+  if (surface === undefined) {
+    throw new Error(
+      "'getResume' was called outside a workflow runtime. Engine APIs only resolve while an orchestration body is running.",
+    );
+  }
+  return surface.resume as CheckpointRecord | undefined;
+}
 
 /** The journaled wall clock: a resume replays the recorded value, so it stays replay-deterministic. */
 export const now = call<[], number>("now");

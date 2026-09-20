@@ -60,3 +60,6 @@ apps/web/.storybook-local/
 
 # pnpm content-addressable store; never belongs in the repo.
 .pnpm-store/
+
+# Bounded-execution e2e driver runtime state (journals, call logs, metrics).
+packages/t3team-sdk/e2e/.state/

@@ -8,13 +8,41 @@ import {
   type SuspensionLatch,
 } from "./handles.ts";
 import type { JournalMaps } from "./journalReader.ts";
+import type { CheckpointRecord, ReplayWindow } from "./checkpoint.ts";
 import type { JournalStore, JournalSink } from "./journalStore.ts";
 import { createStoreSink } from "./journalStore.ts";
+
+/** Read the checkpoint window; a store that reports an unsafe window (an unsettled resolvable
+ * ask in the collapsed prefix) must not be resumed into — fail loud instead of skipping it. */
+async function readReplayWindowChecked(
+  readWindow: (runId: string) => Promise<ReplayWindow>,
+  runId: string,
+): Promise<{ readonly journal: JournalMaps; readonly resume: RunResume | undefined }> {
+  const window = await readWindow(runId);
+  if (window.unresolvedPrefixCorrelationIds.length > 0) {
+    throw new WorkflowError(
+      `Run '${runId}' cannot resume from checkpoint: the collapsed prefix still holds ${window.unresolvedPrefixCorrelationIds.length} unanswered ask(s) (${window.unresolvedPrefixCorrelationIds.join(", ")}). Checkpointing over an unsettled ask is unsafe; resume the run without the checkpoint window instead.`,
+    );
+  }
+  return {
+    journal: window.entries,
+    resume:
+      window.checkpoint === undefined
+        ? undefined
+        : { fromSeq: window.checkpoint.seq, checkpoint: window.checkpoint.record },
+  };
+}
 
 export type RunOutcome<O = unknown> =
   | { readonly kind: "completed"; readonly output: O }
   | { readonly kind: "suspended"; readonly correlationId: string }
   | { readonly kind: "aborted" };
+
+/** The checkpoint a resume restores: the boundary seq seeds the runtime's seq counter. */
+export interface RunResume {
+  readonly fromSeq: number;
+  readonly checkpoint: CheckpointRecord;
+}
 
 export interface ExecuteBodyRequest<Ref extends WorkflowReference, Options> {
   readonly runId: string;
@@ -25,6 +53,13 @@ export interface ExecuteBodyRequest<Ref extends WorkflowReference, Options> {
   readonly journal: JournalMaps;
   readonly sink: JournalSink;
   readonly options: Options;
+  /**
+   * Present when the store read this run through its checkpoint-aware replay window: the body
+   * re-drives from the boundary ({@link RunResume.fromSeq} seeds the seq counter) and the compact
+   * state is available to the host so a checkpoint-aware body can restore its carried state.
+   * Absent on a fresh start or a full-replay resume.
+   */
+  readonly resume?: RunResume | undefined;
   /** Live lifecycle observations; forward to the durable runtime so it emits primitive events. */
   readonly events?: WorkflowEventSink;
   /** Host abort signal; the executor/broker checks it and throws {@link WorkflowAborted}. */
@@ -79,7 +114,12 @@ export async function executeWorkflowRun<Ref extends WorkflowReference, Options>
   readonly events?: WorkflowEventSink | undefined;
   readonly abortSignal?: AbortSignal | undefined;
 }): Promise<RunOutcome> {
-  const journal = await opts.store.readEntries(opts.runId);
+  const store = opts.store;
+  const readWindow = store.readReplayWindow;
+  const window: { readonly journal: JournalMaps; readonly resume: RunResume | undefined } =
+    typeof readWindow === "function"
+      ? await readReplayWindowChecked(readWindow.bind(store), opts.runId)
+      : { journal: await store.readEntries(opts.runId), resume: undefined };
   const sink = createStoreSink(opts.store, opts.runId);
   const suspension = createSuspensionLatch();
   try {
@@ -89,10 +129,11 @@ export async function executeWorkflowRun<Ref extends WorkflowReference, Options>
       args: opts.args,
       runsRoot: opts.runsRoot,
       store: opts.store,
-      journal,
+      journal: window.journal,
       sink,
       options: opts.options,
       suspension,
+      ...(window.resume === undefined ? {} : { resume: window.resume }),
       ...(opts.events === undefined ? {} : { events: opts.events }),
       ...(opts.abortSignal === undefined ? {} : { abortSignal: opts.abortSignal }),
     });
