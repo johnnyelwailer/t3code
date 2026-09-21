@@ -411,6 +411,7 @@
     "apps/server/src/persistence/Services/WorkflowJournalStore.ts",
     "apps/server/src/persistence/Services/WorkflowRuns.ts",
     "apps/server/src/provider/Layers/ProviderService.planStalenessNudge.test.ts",
+    "apps/server/src/provider/Layers/ProviderService.turnSupersede.test.ts",
     "apps/server/src/provider/Layers/ProviderService.turnWatchdog.test.ts",
     "apps/web/.storybook/main.ts",
     "apps/web/.storybook/preview.ts",

@@ -1,11 +1,7 @@
 /**
  * Event routing for the durable child-wait reactor (GHE #55): turns a domain
- * event into the index/ledger/quiet-gate calls. Split from
- * t3team-childWaitReactor.ts so that file keeps only the live wiring (index,
- * ledger, quiet gate, host timers, rehydrate). No logic lives here that the
- * reactor does not invoke.
- *
- * @module t3team-childWaitEventRouter
+ * event into the index/ledger/quiet-gate calls. Split from t3team-childWaitReactor.ts,
+ * which keeps only the live wiring. @module t3team-childWaitEventRouter
  */
 import { ThreadId, type OrchestrationEvent } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -116,9 +112,15 @@ export function makeChildWaitEventRouter(deps: ChildWaitEventRouterDeps) {
       case "thread.session-set": {
         const status = event.payload.session.status;
         const threadId = event.payload.threadId;
-        if (status === "running" || status === "starting") {
-          // Epoch boundary: resuming lets a later stop re-notify, and it CANCELS
-          // any pending completion quiet period (the child is not done).
+        // Epoch boundary: running/starting, or the host-stamped `superseded`
+        // marker (a nudge replaced the in-flight turn — the child is running
+        // the new turn, not stopped). Resuming re-arms the ledger so a later
+        // stop still notifies, and CANCELS any pending completion quiet period.
+        if (
+          event.payload.session.superseded === true ||
+          status === "running" ||
+          status === "starting"
+        ) {
           noteResume(threadId, event.sequence);
           quiet.noteResumed(threadId);
           return Effect.void;

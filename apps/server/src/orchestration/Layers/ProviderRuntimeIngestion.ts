@@ -2039,6 +2039,14 @@ const make = Effect.gen(function* () {
               : status === "ready" || status === "interrupted"
                 ? null
                 : (thread.session?.lastError ?? null);
+        // The structured turn-supersede marker (stamped by the host's
+        // ProviderService when a new message replaced this in-flight turn): the
+        // pack settles the superseded turn as "interrupted", which is
+        // indistinguishable from a genuine stop without this flag. Forward it
+        // on the session-set so the child-wait router treats it as a
+        // resume-epoch boundary instead of a terminal stop.
+        const isSupersededAbort =
+          event.type === "turn.aborted" && event.payload.superseded === true;
 
         if (shouldApplyThreadLifecycle) {
           // Terminal session transitions orphan the thread's background work:
@@ -2108,6 +2116,7 @@ const make = Effect.gen(function* () {
               runtimeMode: thread.session?.runtimeMode ?? "full-access",
               activeTurnId: nextActiveTurnId,
               lastError,
+              ...(isSupersededAbort ? { superseded: true } : {}),
               updatedAt: now,
             },
             createdAt: now,

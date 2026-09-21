@@ -3,6 +3,7 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeChildProcess from "node:child_process";
+import * as NodeAssert from "node:assert";
 
 import {
   OrchestrationReadModel,
@@ -18,6 +19,7 @@ import {
   EventId,
   MessageId,
   type OrchestrationCommand,
+  type OrchestrationEvent,
   ProjectId,
   ProviderItemId,
   RuntimeRequestId,
@@ -532,6 +534,121 @@ describe("ProviderRuntimeIngestion", () => {
     );
     expect(thread.session?.status).toBe("error");
     expect(thread.session?.lastError).toBe("turn failed");
+  });
+
+  it("tags a host-stamped turn-supersede abort on the resulting session-set", async () => {
+    // A new message replaced the in-flight turn: the host stamped the pack's
+    // late turn.aborted with the structured marker, and ingestion must carry
+    // it onto the session-set EVENT payload — the source the child-wait router
+    // consumes (event stream + event-log catch-up), not the denormalized
+    // projection rows, which drop one-shot markers.
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-supersede-turn-started"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      createdAt: now,
+      turnId: asTurnId("turn-1"),
+    });
+    await waitForThread(
+      harness.readModel,
+      (thread) => thread.session?.status === "running" && thread.session?.activeTurnId === "turn-1",
+    );
+
+    harness.emit({
+      type: "turn.aborted",
+      eventId: asEventId("evt-supersede-turn-aborted"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      createdAt: "2026-01-01T00:00:01.000Z",
+      turnId: asTurnId("turn-1"),
+      payload: { reason: "superseded by a new message", superseded: true },
+    });
+
+    const thread = await waitForThread(
+      harness.readModel,
+      (entry) => entry.session?.status === "interrupted",
+    );
+    expect(thread.session?.status).toBe("interrupted");
+    expect(thread.session?.lastError).toBeNull();
+
+    // The marker must survive the event-log round trip (event store JSON ->
+    // OrchestrationEvent decode), which is the exact payload the child-wait
+    // router sees on live events and on restart catch-up.
+    const events = await Effect.runPromise(
+      Stream.runCollect(
+        harness.engine.readThreadEvents({
+          threadId: asThreadId("thread-1"),
+          fromSequenceExclusive: 0,
+          toSequenceInclusive: Number.MAX_SAFE_INTEGER,
+        }),
+      ),
+    );
+    const sessionSets = Array.from(events).filter(
+      (event): event is Extract<OrchestrationEvent, { type: "thread.session-set" }> =>
+        event.type === "thread.session-set",
+    );
+    const interruptedSet = sessionSets.find(
+      (event) => event.payload.session.status === "interrupted",
+    );
+    NodeAssert.ok(interruptedSet !== undefined);
+    expect(interruptedSet.payload.session.superseded).toBe(true);
+  });
+
+  it("leaves an unmarked turn.aborted session-set untagged (genuine stop)", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-genuine-turn-started"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      createdAt: now,
+      turnId: asTurnId("turn-1"),
+    });
+    await waitForThread(
+      harness.readModel,
+      (thread) => thread.session?.status === "running" && thread.session?.activeTurnId === "turn-1",
+    );
+
+    harness.emit({
+      type: "turn.aborted",
+      eventId: asEventId("evt-genuine-turn-aborted"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      createdAt: "2026-01-01T00:00:01.000Z",
+      turnId: asTurnId("turn-1"),
+      payload: { reason: "Interrupted by user." },
+    });
+
+    const thread = await waitForThread(
+      harness.readModel,
+      (entry) => entry.session?.status === "interrupted",
+    );
+    expect(thread.session?.status).toBe("interrupted");
+
+    const events = await Effect.runPromise(
+      Stream.runCollect(
+        harness.engine.readThreadEvents({
+          threadId: asThreadId("thread-1"),
+          fromSequenceExclusive: 0,
+          toSequenceInclusive: Number.MAX_SAFE_INTEGER,
+        }),
+      ),
+    );
+    const sessionSets = Array.from(events).filter(
+      (event): event is Extract<OrchestrationEvent, { type: "thread.session-set" }> =>
+        event.type === "thread.session-set",
+    );
+    const interruptedSet = sessionSets.find(
+      (event) => event.payload.session.status === "interrupted",
+    );
+    NodeAssert.ok(interruptedSet !== undefined);
+    expect(interruptedSet.payload.session.superseded).toBeUndefined();
   });
 
   it("clears background liveness on the failure-death transition, with no session.exited", async () => {
