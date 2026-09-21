@@ -36,7 +36,7 @@ import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 
-import { ProviderAdapterSessionNotFoundError, type ProviderAdapterError } from "../Errors.ts";
+import { ProviderAdapterRequestError, ProviderAdapterSessionNotFoundError, type ProviderAdapterError } from "../Errors.ts";
 import type { ProviderAdapterShape } from "../Services/ProviderAdapter.ts";
 import * as ProviderAdapterRegistry from "../Services/ProviderAdapterRegistry.ts";
 import * as ProviderService from "../Services/ProviderService.ts";
@@ -68,7 +68,7 @@ type LegacyProviderRuntimeEvent = {
   readonly [key: string]: unknown;
 };
 
-function makeFakeAdapter() {
+function makeFakeAdapter(failSendTurnCalls: ReadonlySet<number> = new Set()) {
   const sessions = new Map<ThreadId, ProviderSession>();
   const runtimeEventPubSub = Effect.runSync(PubSub.unbounded<ProviderRuntimeEvent>());
   const turnsPerThread = new Map<ThreadId, number>();
@@ -101,6 +101,17 @@ function makeFakeAdapter() {
     }
     const n = (turnsPerThread.get(input.threadId) ?? 0) + 1;
     turnsPerThread.set(input.threadId, n);
+    if (failSendTurnCalls.has(n)) {
+      // Simulated provider rejection (busy/transport/rate-limit): the nudge
+      // is refused and no new turn starts.
+      return Effect.fail(
+        new ProviderAdapterRequestError({
+          provider: CODEX_DRIVER,
+          method: "sendTurn",
+          detail: "simulated provider rejection",
+        }),
+      );
+    }
     return Effect.succeed({
       threadId: input.threadId,
       turnId: asTurnId(n === 1 ? `turn-${String(input.threadId)}` : `turn-${String(input.threadId)}-${n}`),
@@ -168,8 +179,8 @@ const serverConfigTestLayer = ServerConfig.layerTest(process.cwd(), process.cwd(
   Layer.provide(NodeServices.layer),
 );
 
-function makeSupersedeHarness() {
-  const codex = makeFakeAdapter();
+function makeSupersedeHarness(failSendTurnCalls: ReadonlySet<number> = new Set()) {
+  const codex = makeFakeAdapter(failSendTurnCalls);
   const registry = makeAdapterRegistryMock({ [CODEX_DRIVER]: codex.adapter });
   const providerAdapterLayer = Layer.succeed(ProviderAdapterRegistry.ProviderAdapterRegistry, registry);
   const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(Layer.provide(SqlitePersistenceMemory));
@@ -350,6 +361,114 @@ supersedeHarness.layer("turn-supersede marker", (it) => {
         events.some((event) => abortedPayload(event).superseded === true),
         false,
         "a completed turn must never carry the supersede marker",
+      );
+    }),
+  );
+
+  it.effect("caps per-thread markers at 8; the freshest marker is never the one evicted", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const seen = yield* collectRuntimeEvents(provider);
+      const threadId = asThreadId("thread-cap-8");
+      yield* startCodexSession(provider, threadId);
+      // Ten sequential turns: calls 2..10 each arm a marker for the turn that
+      // was in flight before them, so 9 markers are armed and the cap keeps
+      // only the newest 8 — the first turn's marker is evicted, the ninth
+      // turn's (armed by the last call) survives.
+      const turnIds: string[] = [];
+      for (let i = 1; i <= 10; i += 1) {
+        const turn = yield* provider.sendTurn({
+          threadId,
+          input: `message ${i}`,
+          attachments: [],
+        });
+        turnIds.push(String(turn.turnId));
+      }
+      const evictedTurnId = turnIds[0];
+      const freshestTurnId = turnIds[8];
+      assert.ok(evictedTurnId !== undefined && freshestTurnId !== undefined);
+      supersedeHarness.codex.emit({
+        type: "turn.aborted",
+        eventId: asEventId("evt-cap-evicted-abort"),
+        provider: CODEX_DRIVER,
+        threadId,
+        turnId: asTurnId(evictedTurnId),
+        createdAt: "2026-01-01T00:00:12.000Z",
+        payload: { reason: "superseded by a new message" },
+      });
+      supersedeHarness.codex.emit({
+        type: "turn.aborted",
+        eventId: asEventId("evt-cap-fresh-abort"),
+        provider: CODEX_DRIVER,
+        threadId,
+        turnId: asTurnId(freshestTurnId),
+        createdAt: "2026-01-01T00:00:13.000Z",
+        payload: { reason: "superseded by a new message" },
+      });
+      yield* drainFibers;
+      const aborted = abortedEvents(yield* Ref.get(seen));
+      const evictedAbort = aborted.find((event) => event.turnId === evictedTurnId);
+      const freshAbort = aborted.find((event) => event.turnId === freshestTurnId);
+      assert.ok(evictedAbort !== undefined && freshAbort !== undefined);
+      assert.equal(
+        abortedPayload(evictedAbort).superseded,
+        undefined,
+        "the evicted (oldest) marker must not stamp",
+      );
+      assert.equal(
+        abortedPayload(freshAbort).superseded,
+        true,
+        "the freshest marker must survive the cap",
+      );
+    }),
+  );
+});
+
+const failingSupersedeHarness = makeSupersedeHarness(new Set([2]));
+failingSupersedeHarness.layer("turn-supersede marker: sendTurn failure rollback", (it) => {
+  it.effect("disarms the marker when the superseding sendTurn is rejected by the provider", () =>
+    Effect.gen(function* () {
+      // If the nudge itself is rejected (busy/transport/rate-limit), no new
+      // turn starts and the original turn is still the in-flight one: a later
+      // GENUINE stop of it must stay a terminal stop, not a supersede boundary
+      // that would strand the parent's registered wait.
+      const provider = yield* ProviderService.ProviderService;
+      const seen = yield* collectRuntimeEvents(provider);
+      const threadId = asThreadId("thread-rejected-nudge");
+      yield* startCodexSession(provider, threadId);
+      const firstTurn = yield* provider.sendTurn({
+        threadId,
+        input: "first message",
+        attachments: [],
+      });
+      const rejected = yield* Effect.match(
+        provider.sendTurn({ threadId, input: "second message (nudge)", attachments: [] }),
+        {
+          onFailure: (error) => ({ _tag: "Left" as const, error }),
+          onSuccess: (turn) => ({ _tag: "Right" as const, turn }),
+        },
+      );
+      assert.equal(rejected._tag, "Left", "the nudge must be rejected by the provider");
+      // The user stops the still-in-flight first turn: a genuine stop.
+      failingSupersedeHarness.codex.emit({
+        type: "turn.aborted",
+        eventId: asEventId("evt-rejected-nudge-abort"),
+        provider: CODEX_DRIVER,
+        threadId,
+        turnId: firstTurn.turnId,
+        createdAt: "2026-01-01T00:00:15.000Z",
+        payload: { reason: "Interrupted by user." },
+      });
+      yield* drainFibers;
+      const aborted = abortedEvents(yield* Ref.get(seen));
+      assert.equal(aborted.length, 1);
+      const onlyAborted = aborted[0];
+      assert.ok(onlyAborted !== undefined);
+      assert.equal(onlyAborted.turnId, firstTurn.turnId);
+      assert.equal(
+        abortedPayload(onlyAborted).superseded,
+        undefined,
+        "the rejected nudge's marker must have been disarmed",
       );
     }),
   );

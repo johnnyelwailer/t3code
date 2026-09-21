@@ -1058,21 +1058,13 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   // lastError, and a free-text reason that varies per pack). The host stamps
   // such an abort with a structured marker so the child-wait terminal router
   // can treat the session-set as a resume-epoch boundary, not a terminal
-  // stop. Markers are per-thread, capped, and self-cleaning: an unmatched
-  // entry (stale activeTurnId, session died first) ages out on the next mark
-  // or is consumed by the matching terminal event.
+  // stop. Markers are armed only while a turn is actually in flight (gated on
+  // the watchdog entry), capped at 8 per thread, and emptied on session.exited:
+  // an unmatched entry ages out on the next mark or is consumed by the
+  // matching terminal event, so the map stays bounded — at most 8 turn ids per
+  // live thread, never a leak.
   const MAX_SUPERSEDED_TURNS_PER_THREAD = 8;
   const supersededTurns = yield* Ref.make(new Map<ThreadId, string[]>());
-
-  const readSupersededActiveTurnId = (
-    runtimePayload: ProviderSessionDirectory.ProviderRuntimeBinding["runtimePayload"],
-  ): string | undefined => {
-    if (!runtimePayload || typeof runtimePayload !== "object" || Array.isArray(runtimePayload)) {
-      return undefined;
-    }
-    const raw = "activeTurnId" in runtimePayload ? runtimePayload.activeTurnId : undefined;
-    return typeof raw === "string" && raw.length > 0 ? raw : undefined;
-  };
 
   const markTurnSuperseded = (threadId: ThreadId, turnId: string): Effect.Effect<void> =>
     Ref.update(supersededTurns, (map) => {
@@ -2100,18 +2092,29 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           Effect.gen(function* () {
             // Turn-supersede marker: when this message replaces an in-flight
             // turn, the pack settles the superseded turn with a turn.aborted
-            // that is structurally identical to a genuine user stop. Record
-            // the replaced turn id now — the only place that knows the new
-            // message replaced it — so the late abort gets the structured
-            // marker instead of reading as a terminal stop.
-            const supersedeBinding = Option.getOrUndefined(
-              yield* directory.getBinding(input.threadId),
+            // that is structurally identical to a genuine user stop. The
+            // watchdog entry is the host's "in-flight turn" record (armed per
+            // sendTurn, settled by that turn's own terminal), so it names the
+            // replaced turn only when one is actually in flight — a normal
+            // follow-up after a completed turn finds no entry and arms no
+            // marker.
+            const supersededTurnId = yield* Ref.get(turnWatchdogs).pipe(
+              Effect.map((watchdogs) => watchdogs.get(input.threadId)?.turnId),
             );
-            const supersededTurnId = readSupersededActiveTurnId(supersedeBinding?.runtimePayload);
             if (supersededTurnId !== undefined) {
               yield* markTurnSuperseded(input.threadId, supersededTurnId);
             }
-            const turn = yield* routed.adapter.sendTurn(turnInput);
+            const turn = yield* routed.adapter.sendTurn(turnInput).pipe(
+              // Provider rejected the nudge: no new turn started, and the
+              // tracked turn is still the in-flight one. Disarm the marker so
+              // a later GENUINE stop of that turn stays a terminal stop
+              // instead of reading as a supersede boundary.
+              Effect.onError(() =>
+                supersededTurnId !== undefined
+                  ? takeSupersedeMarker(input.threadId, supersededTurnId)
+                  : Effect.void,
+              ),
+            );
             yield* associateTurnAnalytics({
               providerInstanceId: routed.instanceId,
               threadId: input.threadId,
