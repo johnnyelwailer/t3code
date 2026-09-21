@@ -2038,7 +2038,14 @@ const make = Effect.gen(function* () {
               ? (event.payload.errorMessage ?? thread.session?.lastError ?? "Turn failed")
               : status === "ready" || status === "interrupted"
                 ? null
-                : (thread.session?.lastError ?? null);
+                : // A fresh user message supersedes the previous turn's error:
+                // a supersede "interrupted" banner (or any stale lastError) must
+                // not carry into the running turn. Legit errors persist until
+                // the user retries — a rejected retry never reaches
+                // turn.started, so its lastError stays.
+                event.type === "turn.started"
+                  ? null
+                  : (thread.session?.lastError ?? null);
         // The structured turn-supersede marker (stamped by the host's
         // ProviderService when a new message replaced this in-flight turn): the
         // pack settles the superseded turn as "interrupted", which is

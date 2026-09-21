@@ -651,6 +651,76 @@ describe("ProviderRuntimeIngestion", () => {
     expect(interruptedSet.payload.session.superseded).toBeUndefined();
   });
 
+  it("clears the transient lastError when a new turn starts (nudge-supersede banner)", async () => {
+    // Second symptom of nudge-supersede: the pack settles the superseded turn
+    // with reason "superseded by a new message", which persists as
+    // session.lastError; without a clear on turn.started the stale banner
+    // (plus "Retry") survives into the running turn.
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-nudge-turn-started"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      createdAt: now,
+      turnId: asTurnId("turn-1"),
+    });
+    await waitForThread(
+      harness.readModel,
+      (thread) => thread.session?.status === "running" && thread.session?.activeTurnId === "turn-1",
+    );
+
+    harness.emit({
+      type: "turn.aborted",
+      eventId: asEventId("evt-nudge-turn-aborted"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      createdAt: "2026-01-01T00:00:01.000Z",
+      turnId: asTurnId("turn-1"),
+      payload: { reason: "superseded by a new message", superseded: true },
+    });
+    await waitForThread(harness.readModel, (thread) => thread.session?.status === "interrupted");
+
+    // Seed a visible transient error banner (session.error state carries the
+    // reason into lastError).
+    harness.emit({
+      type: "session.state.changed",
+      eventId: asEventId("evt-nudge-session-error"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      createdAt: "2026-01-01T00:00:02.000Z",
+      payload: { state: "error", reason: "superseded by a new message" },
+    });
+    await waitForThread(
+      harness.readModel,
+      (thread) =>
+        thread.session?.status === "error" &&
+        thread.session?.lastError === "superseded by a new message",
+    );
+
+    // The user's nudge: a fresh turn must clear the stale banner.
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-nudge-turn2-started"),
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      createdAt: "2026-01-01T00:00:03.000Z",
+      turnId: asTurnId("turn-2"),
+    });
+
+    const thread = await waitForThread(
+      harness.readModel,
+      (entry) =>
+        entry.session?.status === "running" &&
+        entry.session?.activeTurnId === "turn-2" &&
+        entry.session?.lastError === null,
+    );
+    expect(thread.session?.status).toBe("running");
+    expect(thread.session?.lastError).toBeNull();
+  });
+
   it("clears background liveness on the failure-death transition, with no session.exited", async () => {
     // The stuck "Monitoring" pill: a session that dies by failure (a failed
     // turn, no session.exited) used to leave the liveness registry set, pinning
