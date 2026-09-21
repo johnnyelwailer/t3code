@@ -70,7 +70,7 @@ export class PersistenceDecodeError extends Schema.TaggedError<PersistenceDecode
     return `Decode error in ${this.operation}: ${this.issue}`;
   }
 }
-const isPersistenceSqlError = Schema.is(PersistenceSqlError);
+export const isPersistenceSqlError = Schema.is(PersistenceSqlError);
 const isPersistenceDecodeError = Schema.is(PersistenceDecodeError);
 
 /**

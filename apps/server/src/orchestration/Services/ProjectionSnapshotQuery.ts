@@ -261,9 +261,9 @@ export interface ProjectionSnapshotQueryShape {
 
   /**
    * True if the thread currently owns a non-terminal workflow run
-   * (queued/running/suspended/sleeping/paused). A paused or clock-parked run is
-   * still "running" from the thread's point of view: it can wake and drive work.
-   * Used to refuse settling a thread that still has a live workflow orchestration.
+   * (queued/running/suspended/sleeping/watching/paused). A paused, clock-parked, or
+   * event-parked run is still "running" from the thread's point of view: it can wake and
+   * drive work. Used to refuse settling a thread that still has a live workflow orchestration.
    */
   readonly hasNonTerminalWorkflowRun: (
     threadId: ThreadId,

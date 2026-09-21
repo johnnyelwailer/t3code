@@ -30,16 +30,21 @@ import { WorkflowError } from "@runbook/core/errors";
 import type { ReplyResolver } from "@runbook/core/handles";
 import { FsJournalStore, type JournalStore } from "@runbook/core/journalStore";
 
-/** The thread-verb primitives, as the broker sees them, plus the clock-driven `wait.until`: a
- * durable suspension fired through the broker like an ask, but woken by the host scheduler at
- * its journaled deadline rather than by an event. */
+/** The thread-verb primitives, as the broker sees them, plus the clock-driven `wait.until`:
+ * a durable suspension fired through the broker like an ask, but woken by the host scheduler
+ * at its journaled deadline rather than by an event. The signal-source pair (Epic 42):
+ * `signal.register` journals a run's binding to a source instance (one-way — the engine's
+ * reconciler derives the live source set from these); `signal.wait` parks the run on a
+ * durable inbox slot the host fills when a source emits the awaited signal. */
 export type HandleKind =
   | "thread.create"
   | "thread.turn"
   | "thread.message"
   | "user.input"
   | "wait.until"
-  | "model.resolve";
+  | "model.resolve"
+  | "signal.register"
+  | "signal.wait";
 
 /** What the host is handed for one fired side effect. `payload` carries the verb's data —
  * always a `threadId`, plus `prompt`/`question`/`text`/`name`/`model` per kind. */
@@ -153,6 +158,12 @@ export interface HostBrokerHandlers {
   /** Walk a model cascade against the live provider registry. UNLIKE the others this handler MUST
    * settle the resolver itself — the choice IS the primitive's journaled reply. */
   readonly "model.resolve"?: (e: MessageEnvelope, r: ReplyResolver) => Promise<void>;
+  /** Journal the run's binding to a source instance; one-way, never settles a resolver. */
+  readonly "signal.register"?: (envelope: MessageEnvelope) => Promise<void>;
+  /** Park the run on a signal inbox slot. MAY settle the resolver itself when the awaited
+   * signal already has a durable inbox entry — that entry IS the primitive's journaled
+   * reply, so a live drain suspends no one. */
+  readonly "signal.wait"?: (e: MessageEnvelope, r: ReplyResolver) => Promise<void>;
 }
 
 /**
@@ -163,9 +174,12 @@ export interface HostBrokerHandlers {
 export function createHostBroker(handlers: HostBrokerHandlers): MessageBroker {
   return {
     send: async (envelope, resolver) => {
-      // `model.resolve` settles its own reply (the cascade choice IS the journaled reply), so it
-      // gets the resolver; an absent handler is netted by `createModelCascadeResolver`.
-      if (envelope.kind === "model.resolve") return handlers["model.resolve"]?.(envelope, resolver);
+      // `model.resolve` settles its own reply (the cascade choice IS the journaled reply), and
+      // `signal.wait` may too (a durable inbox entry is the reply) — both get the resolver.
+      if (envelope.kind === "model.resolve")
+        return handlers["model.resolve"]?.(envelope, resolver);
+      if (envelope.kind === "signal.wait")
+        return handlers["signal.wait"]?.(envelope, resolver);
       await handlers[envelope.kind]?.(envelope);
     },
   };
