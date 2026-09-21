@@ -179,7 +179,17 @@ interface SubscriptionOptions<TTag extends EnvironmentSubscriptionRpcTag> {
   readonly onDefect?: (
     cause: Cause.Cause<EnvironmentRpcStreamFailure<TTag>>,
   ) => Effect.Effect<void, never, never>;
-  readonly onExpectedFailure?: (
+  /**
+   * Runs after the subscribe input is built and before the stream opens, on
+   * every (re)subscribe attempt — the initial subscribe, the session-change
+   * resubscribe, and expected-failure retries alike. Return an effect that
+   * sleeps to stagger bursts where one event (a session replacement) would
+   * otherwise reopen hundreds of streams in the same tick and drown the
+   * server's event loop (GHE #382 storm).
+   */
+  readonly beforeSubscribe?: (
+    session: RpcSession,
+  ) => Effect.Effect<void, never, never> | undefined;  readonly onExpectedFailure?: (
     cause: Cause.Cause<EnvironmentRpcStreamFailure<TTag>>,
   ) => Effect.Effect<void, never, never>;
   readonly retryExpectedFailureAfter?: Duration.Input;
@@ -238,6 +248,12 @@ function subscribeDynamicMapped<TTag extends EnvironmentSubscriptionRpcTag, A>(
                   Stream.unwrap(
                     Effect.gen(function* () {
                       const input = yield* makeInput(session);
+                      // Stagger hook: after the input is built (the caller may
+                      // record session capabilities there) and before the
+                      // stream opens, so the whole burst — not just the WS
+                      // handshake — lands spread out over time.
+                      const beforeSubscribe = options?.beforeSubscribe?.(session);
+                      yield* beforeSubscribe ?? Effect.void;
                       const completeObservation = yield* observer.observe({
                         environmentId: supervisor.target.environmentId,
                         method: tag,

@@ -105,6 +105,7 @@ import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngi
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionReactor.ts";
 import { T3TeamThreadEngagement } from "./t3team-threadEngagement.ts";
+import { isThreadResubscribeStaggerEnabled } from "./t3team-threadResubscribeStaggerFlag.ts";
 import {
   observeRpcEffect as instrumentRpcEffect,
   observeRpcStream as instrumentRpcStream,
@@ -1880,6 +1881,11 @@ const makeWsRpcLayer = (
             threadResumeCompletionMarker: true,
             threadSnapshotPagination: true,
             reasoningMessages: true,
+            // Runtime feature flag (env NEXI_FF_THREAD_RESUB_STAGGER, default
+            // on): lets the client stagger thread resubscribe bursts so a
+            // session change cannot reopen hundreds of thread streams at once
+            // (GHE #382 disconnect storm).
+            threadResubscribeStagger: isThreadResubscribeStaggerEnabled(),
           };
         });
 
