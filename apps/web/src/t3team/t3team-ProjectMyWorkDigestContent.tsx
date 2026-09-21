@@ -20,7 +20,7 @@ import {
   buildHeuristicDigestPlan,
   resolveDigestPlan,
 } from "~/t3team/t3team-projectMyWorkDigestPlan";
-import { filterDigestTickets } from "~/t3team/t3team-projectMyWork";
+import { filterDigestTickets, hasActiveDigestFilters } from "~/t3team/t3team-projectMyWork";
 import type { DigestFilterState } from "~/t3team/t3team-projectMyWorkDigestTypes";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
@@ -113,7 +113,12 @@ export function ProjectMyWorkDigestContent({
       </T3SurfacePanel>
     );
   }
-  if (digestFilters && plan.sections.length === 0 && effectiveGraph.tickets.length > 0) {
+  if (
+    digestFilters &&
+    hasActiveDigestFilters(digestFilters) &&
+    plan.sections.length === 0 &&
+    effectiveGraph.tickets.length > 0
+  ) {
     // The filters kept tickets the digest lens cannot place in a lane (e.g. status "done": the
     // digest shows active work, not finished items): attribute the empty state to the filters,
     // not to the board.
