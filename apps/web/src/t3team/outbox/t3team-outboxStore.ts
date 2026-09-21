@@ -26,7 +26,7 @@ export interface T3TeamOutboxSnapshot {
   readonly dispatchingEntryId: string | null;
   /** entryId -> millis until which a failed dispatch's retry must wait. */
   readonly retryNotBefore: Readonly<Record<string, number>>;
-  /** entryId -> last permanent failure text, for the queued-state banner. */
+  /** entryId -> last permanent failure text, for the queued-send timeline row. */
   readonly failures: Readonly<Record<string, string>>;
   /** Bumped to wake subscribers after a backoff timer fires. */
   readonly tick: number;

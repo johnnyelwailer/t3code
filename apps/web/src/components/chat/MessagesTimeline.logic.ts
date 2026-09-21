@@ -1,4 +1,5 @@
 import { worktreeSetupAgentStarted } from "@t3tools/client-runtime/worktree-setup";
+import type * as React from "react";
 export { worktreeSetupAgentStarted } from "@t3tools/client-runtime/worktree-setup";
 import * as Equal from "effect/Equal";
 import { shallow } from "zustand/vanilla/shallow";
@@ -462,6 +463,17 @@ export type MessagesTimelineRow =
       queuedMessage: QueuedComposerMessage;
       /** Oldest queued message, the one the next boundary sends. */
       isNext: boolean;
+    }
+  | {
+      /**
+       * A host-provided queued-send row (the t3team offline outbox). It renders
+       * in the same place as native queued messages so there is one queued
+       * surface, but the host owns its content and its affordances (resend on
+       * permanent failure, discard of a stuck head).
+       */
+      kind: "host-queued";
+      id: string;
+      node: React.ReactNode;
     };
 
 export interface StableMessagesTimelineRowsState {
@@ -1822,6 +1834,9 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
       const bq = b as typeof a;
       return a.queuedMessage === bq.queuedMessage && a.isNext === bq.isNext;
     }
+
+    case "host-queued":
+      return a.node === (b as typeof a).node;
 
     case "work": {
       const bw = b as typeof a;
