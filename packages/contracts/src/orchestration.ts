@@ -713,6 +713,20 @@ export const OrchestrationSession = Schema.Struct({
    * write; old persisted events decode without it (optional).
    */
   stoppedByServerRestart: Schema.optional(Schema.Boolean),
+  /**
+   * Turn-supersede marker: set ONLY when a new message replaced the in-flight
+   * turn and the provider settled the SUPERSEDED turn as `interrupted`. A
+   * supersede-interrupt is structurally indistinguishable from a genuine
+   * user stop at this layer (status `interrupted`, no `turnId`, no
+   * `lastError`), so the flag must come from the writer — the host's
+   * sendTurn, the one place that knows a new message replaced the turn —
+   * never from string-matching the pack's free-text abort reason. The child
+   * is NOT stopped: it is running the new turn. Consumers (the child-wait
+   * terminal router) treat a superseded session-set as a resume-epoch
+   * boundary, not a terminal stop. Absent on every non-supersede session
+   * write; old persisted events decode without it (optional).
+   */
+  superseded: Schema.optional(Schema.Boolean),
   updatedAt: IsoDateTime,
 });
 export type OrchestrationSession = typeof OrchestrationSession.Type;

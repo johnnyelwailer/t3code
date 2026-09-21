@@ -1051,6 +1051,78 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   const serviceScope = yield* Scope.Scope;
   const turnWatchdogs = yield* Ref.make(new Map<ThreadId, TurnWatchdogEntry>());
 
+  // --- Turn-supersede marker ------------------------------------------------
+  // When sendTurn replaces an in-flight turn, the pack settles the SUPERSEDED
+  // turn with a turn.aborted whose resulting session-set is structurally
+  // identical to a genuine user stop (status "interrupted", no turnId, no
+  // lastError, and a free-text reason that varies per pack). The host stamps
+  // such an abort with a structured marker so the child-wait terminal router
+  // can treat the session-set as a resume-epoch boundary, not a terminal
+  // stop. Markers are armed only while a turn is actually in flight (gated on
+  // the watchdog entry), capped at 8 per thread, and emptied on session.exited:
+  // an unmatched entry ages out on the next mark or is consumed by the
+  // matching terminal event, so the map stays bounded — at most 8 turn ids per
+  // live thread, never a leak.
+  const MAX_SUPERSEDED_TURNS_PER_THREAD = 8;
+  const supersededTurns = yield* Ref.make(new Map<ThreadId, string[]>());
+
+  const markTurnSuperseded = (threadId: ThreadId, turnId: string): Effect.Effect<void> =>
+    Ref.update(supersededTurns, (map) => {
+      const next = new Map(map);
+      next.set(
+        threadId,
+        [...(next.get(threadId) ?? []), turnId].slice(-MAX_SUPERSEDED_TURNS_PER_THREAD),
+      );
+      return next;
+    });
+
+  /** Consume the thread's marker for `turnId` if one exists; report whether it did. */
+  const takeSupersedeMarker = (
+    threadId: ThreadId,
+    turnId: string | undefined,
+  ): Effect.Effect<boolean> =>
+    Ref.modify(supersededTurns, (map) => {
+      if (turnId === undefined) return [false, map] as const;
+      const entries = map.get(threadId);
+      if (entries === undefined || !entries.includes(turnId)) return [false, map] as const;
+      const next = new Map(map);
+      const rest = entries.filter((entry) => entry !== turnId);
+      if (rest.length === 0) next.delete(threadId);
+      else next.set(threadId, rest);
+      return [true, next] as const;
+    });
+
+  const clearSupersedeMarkers = (threadId: ThreadId): Effect.Effect<void> =>
+    Ref.update(supersededTurns, (map) => {
+      if (!map.has(threadId)) return map;
+      const next = new Map(map);
+      next.delete(threadId);
+      return next;
+    });
+
+  /**
+   * Stamp the turn-supersede marker onto a turn.aborted that settles a turn
+   * this host superseded with a newer sendTurn, and consume the marker either
+   * way (a matching turn.completed means the turn finished normally and no
+   * supersede-interrupt follows; a duplicate abort must not re-stamp).
+   */
+  const resolveSupersededAbort = (
+    input: ProviderRuntimeEvent,
+  ): Effect.Effect<ProviderRuntimeEvent> =>
+    Effect.gen(function* () {
+      if (input.type === "turn.aborted" || input.type === "turn.completed") {
+        const marked = yield* takeSupersedeMarker(input.threadId, input.turnId);
+        if (marked && input.type === "turn.aborted") {
+          return { ...input, payload: { ...input.payload, superseded: true } };
+        }
+        return input;
+      }
+      if (input.type === "session.exited") {
+        yield* clearSupersedeMarkers(input.threadId);
+      }
+      return input;
+    });
+
   const resolveTurnInactivityTimeoutMs = (instanceId: ProviderInstanceId): Effect.Effect<number> =>
     registry.getInstanceInfo(instanceId).pipe(
       Effect.map((info) => info.turnInactivityTimeoutSeconds),
@@ -1321,9 +1393,14 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     event: ProviderRuntimeEvent,
   ): Effect.Effect<void> =>
     Effect.gen(function* () {
-      const canonicalEvent = yield* Effect.sync(() =>
+      const correlatedEvent = yield* Effect.sync(() =>
         correlateRuntimeEventWithInstance(source, event),
       );
+      // Turn-supersede marker: stamp the structured flag when this abort
+      // settles a turn the host superseded with a newer sendTurn. The pack's
+      // free-text reason varies per pack and must not be matched — the marker
+      // comes from the writer (sendTurn, the one that replaced the turn).
+      const canonicalEvent = yield* resolveSupersededAbort(correlatedEvent);
       yield* increment(providerRuntimeEventsTotal, {
         provider: canonicalEvent.provider,
         eventType: canonicalEvent.type,
@@ -2013,7 +2090,31 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         }),
         (turnMetadata) =>
           Effect.gen(function* () {
-            const turn = yield* routed.adapter.sendTurn(turnInput);
+            // Turn-supersede marker: when this message replaces an in-flight
+            // turn, the pack settles the superseded turn with a turn.aborted
+            // that is structurally identical to a genuine user stop. The
+            // watchdog entry is the host's "in-flight turn" record (armed per
+            // sendTurn, settled by that turn's own terminal), so it names the
+            // replaced turn only when one is actually in flight — a normal
+            // follow-up after a completed turn finds no entry and arms no
+            // marker.
+            const supersededTurnId = yield* Ref.get(turnWatchdogs).pipe(
+              Effect.map((watchdogs) => watchdogs.get(input.threadId)?.turnId),
+            );
+            if (supersededTurnId !== undefined) {
+              yield* markTurnSuperseded(input.threadId, supersededTurnId);
+            }
+            const turn = yield* routed.adapter.sendTurn(turnInput).pipe(
+              // Provider rejected the nudge: no new turn started, and the
+              // tracked turn is still the in-flight one. Disarm the marker so
+              // a later GENUINE stop of that turn stays a terminal stop
+              // instead of reading as a supersede boundary.
+              Effect.onError(() =>
+                supersededTurnId !== undefined
+                  ? takeSupersedeMarker(input.threadId, supersededTurnId)
+                  : Effect.void,
+              ),
+            );
             yield* associateTurnAnalytics({
               providerInstanceId: routed.instanceId,
               threadId: input.threadId,

@@ -411,6 +411,16 @@ export type TurnCompletedPayload = typeof TurnCompletedPayload.Type;
 const TurnAbortedPayload = Schema.Struct({
   reason: TrimmedNonEmptyStringSchema,
   tokenUsage: Schema.optional(TurnTokenUsage),
+  /**
+   * Host-stamped (NOT provider-derived): the server set this when the abort
+   * settles a turn a newer sendTurn superseded — a new message replaced the
+   * in-flight turn. The pack's free-text `reason` varies per pack and must
+   * not be matched; this structured marker is the only trusted signal that
+   * the interrupted session is about to run a NEW turn. Absent on genuine
+   * user stops and on every provider-emitted event (old emitters decode
+   * unchanged).
+   */
+  superseded: Schema.optional(Schema.Boolean),
 });
 export type TurnAbortedPayload = typeof TurnAbortedPayload.Type;
 

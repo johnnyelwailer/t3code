@@ -12,7 +12,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
 import { type ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
-import { deriveThreadRunState, type ThreadRunState } from "@t3tools/shared/t3team-threadRunStatus";
+import { deriveThreadRunState } from "@t3tools/shared/t3team-threadRunStatus";
 import {
   CHILD_WAIT_REGISTERED_KIND,
   CHILD_WAIT_RESOLVED_KIND,
@@ -24,11 +24,6 @@ import type { ChildWaitIndex } from "./t3team-childWaitIndex.ts";
 import type { ChildCompletionQuiet } from "./t3team-childCompletionQuiet.ts";
 import type { ResolveChildOutcome } from "./t3team-childWaitTerminal.ts";
 import type { NotifyTerminalIfNoWaitInput } from "./t3team-childWaitTerminal.ts";
-
-/** Map a derived run-state onto the terminal outcome we notify for (null when not terminal). */
-function terminalFromRunState(state: ThreadRunState): "completed" | "failed" | "aborted" | null {
-  return state === "completed" || state === "failed" || state === "aborted" ? state : null;
-}
 
 export interface ChildWaitEventRouterDeps {
   readonly index: ChildWaitIndex;
@@ -62,7 +57,8 @@ export function makeChildWaitEventRouter(deps: ChildWaitEventRouterDeps) {
           ? { backgroundLiveness: child.backgroundLiveness }
           : {}),
       });
-      const outcome = terminalFromRunState(state);
+      const outcome =
+        state === "completed" || state === "failed" || state === "aborted" ? state : null;
       if (outcome !== null) {
         yield* resolveChildOutcome(record.childThreadId, outcome);
       }
@@ -116,9 +112,14 @@ export function makeChildWaitEventRouter(deps: ChildWaitEventRouterDeps) {
       case "thread.session-set": {
         const status = event.payload.session.status;
         const threadId = event.payload.threadId;
-        if (status === "running" || status === "starting") {
-          // Epoch boundary: resuming lets a later stop re-notify, and it CANCELS
-          // any pending completion quiet period (the child is not done).
+        // Epoch boundary: running/starting, or the host-stamped `superseded`
+        // marker (a nudge replaced the in-flight turn — the child is running,
+        // not stopped). Re-arms the ledger; cancels the completion quiet period.
+        if (
+          event.payload.session.superseded === true ||
+          status === "running" ||
+          status === "starting"
+        ) {
           noteResume(threadId, event.sequence);
           quiet.noteResumed(threadId);
           return Effect.void;
