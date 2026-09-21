@@ -337,6 +337,54 @@ describe("MessagesTimeline", () => {
     expect(markup).toContain('aria-label="Next turn"');
   });
 
+  it("renders host queued-send rows on the native queued surface, after queued messages", () => {
+    const entry = buildUserTimelineEntry("First turn");
+    const queued = {
+      id: "queued-1",
+      prompt: "follow-up while running",
+      images: [],
+      files: [],
+      terminalContexts: [],
+      previewAnnotations: [],
+      reviewComments: [],
+      submissionIntent: "foreground" as const,
+      queuedAfterToolActivityId: null,
+      createdAt: "2026-01-01T00:00:01Z",
+    };
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        {...buildProps()}
+        isWorking
+        activeTurnStartedAt="2026-01-01T00:00:00Z"
+        timelineEntries={[entry]}
+        queuedMessages={[queued]}
+        queuedExtensions={[
+          {
+            id: "t3team-outbox:outbox-1",
+            node: <div data-testid="outbox-row">queued outbox preview</div>,
+          },
+        ]}
+      />,
+    );
+
+    // One queue surface: the native queued message and the host row both
+    // render in the timeline, and the host row comes after the native one.
+    expect(markup).toContain('data-queued-message-id="queued-1"');
+    expect(markup).toContain('data-host-queued-row="t3team-outbox:outbox-1"');
+    expect(markup).toContain("queued outbox preview");
+    expect(markup.indexOf('data-queued-message-id="queued-1"')).toBeLessThan(
+      markup.indexOf('data-host-queued-row="t3team-outbox:outbox-1"'),
+    );
+  });
+
+  it("leaves the timeline alone when there are no host queued-send rows", () => {
+    const entry = buildUserTimelineEntry("First turn");
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline {...buildProps()} timelineEntries={[entry]} />,
+    );
+    expect(markup).not.toContain("data-host-queued-row");
+  });
+
   // Expanding history uses this suite's existing test renderer, deprecated in
   // React 19. Migrate these interaction tests together when a DOM test setup is added.
   it.each([{}, { text: "Text-only answer", file: "Answer with a file" }])(
@@ -2088,7 +2136,7 @@ describe("MessagesTimeline", () => {
     // The native trace row (the active activity group) keeps its live
     // "Thinking" surface…
     expect(withState).toContain('data-timeline-row-id="live-activity-row"');
-    expect(withState).toContain('>Thinking</span>');
+    expect(withState).toContain(">Thinking</span>");
     // …and the working row no longer says "Thinking" a second time — it
     // reads "Working" instead. No third surface: the pre-dedup render had a
     // state-word "Thinking" on the working row PLUS the trace row.
@@ -2140,7 +2188,7 @@ describe("MessagesTimeline", () => {
     );
     // "Writing" is not the redundant word — it stays, trace row and all.
     expect(markup).toContain('t3team-aci-lead-word">Writing</span>');
-    expect(markup).toContain('>Thinking</span>');
+    expect(markup).toContain(">Thinking</span>");
   });
 
   it("falls back to 'Thinking' for an ACTIVE turn with no activity state yet (a turn starts thinking)", () => {

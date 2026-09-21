@@ -100,6 +100,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type * as React from "react";
 import { flushSync } from "react-dom";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { assistantCitationsToPlainText } from "@t3tools/shared/assistantCitations";
@@ -572,6 +573,10 @@ const IMAGE_ONLY_BOOTSTRAP_PROMPT =
   "[User attached one or more images without additional text. Respond using the conversation context and the attached image(s).]";
 const EMPTY_ACTIVITIES: OrchestrationThreadActivity[] = [];
 const EMPTY_QUEUED_MESSAGES: QueuedComposerMessage[] = [];
+const EMPTY_TIMELINE_QUEUED_EXTENSIONS: ReadonlyArray<{
+  readonly id: string;
+  readonly node: React.ReactNode;
+}> = [];
 const EMPTY_PROVIDERS: ServerProvider[] = [];
 const EMPTY_USAGE_LIMIT_SOURCES: UsageLimitSourceSnapshots = [];
 const EMPTY_PROVIDER_SKILLS: ServerProvider["skills"] = [];
@@ -1564,6 +1569,10 @@ export default function ChatView(props: ChatViewProps) {
     routeKind === "server" ? props.dispatchTurnStartOverride : undefined;
   const enqueueOfflineTurnStart =
     routeKind === "server" ? props.enqueueOfflineTurnStart : undefined;
+  const queuedExtensions =
+    routeKind === "server"
+      ? (props.queuedExtensions ?? EMPTY_TIMELINE_QUEUED_EXTENSIONS)
+      : undefined;
   const composerContextAttachmentSlot =
     routeKind === "server" ? props.composerContextAttachmentSlot : undefined;
   const composerContextAttachments =
@@ -10496,6 +10505,7 @@ export default function ChatView(props: ChatViewProps) {
                 topFadeEnabled={!hasTimelineTopBanner}
                 loadEarlier={paintOnlyDisplayedTimeline ? null : loadEarlierTurns}
                 queuedMessages={paintOnlyDisplayedTimeline ? EMPTY_QUEUED_MESSAGES : queuedMessages}
+                {...(queuedExtensions ? { queuedExtensions } : {})}
                 onSteerQueuedMessage={onSteerQueuedMessage}
                 steerQueuedMessageShortcutLabel={shortcutLabelForCommand(
                   keybindings,

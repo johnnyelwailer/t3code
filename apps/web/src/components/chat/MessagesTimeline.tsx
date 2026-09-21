@@ -69,6 +69,10 @@ import {
 const EMPTY_AGENT_PANEL_MODEL = emptyAgentPanelModel();
 const NOOP_OPEN_AGENTS = () => {};
 const EMPTY_QUEUED_MESSAGES: ReadonlyArray<QueuedComposerMessage> = [];
+const EMPTY_QUEUED_EXTENSIONS: ReadonlyArray<{
+  readonly id: string;
+  readonly node: React.ReactNode;
+}> = [];
 const NOOP_QUEUED_MESSAGE_ACTION = (_id: string) => {};
 const NOOP_USE_ARTIFACT_TEMPLATE = () => {};
 const NOOP_OPEN_ATTACHMENT = (_attachment: ChatFileAttachment) => {};
@@ -77,6 +81,7 @@ import { toolActivityFaviconUrl } from "@t3tools/shared/favicon";
 import { formatDuration } from "@t3tools/shared/orchestrationTiming";
 import { getProjectFaviconCacheKey } from "@t3tools/shared/projectFavicon";
 import { observeVisibleAnimation } from "../../lib/visibleAnimation";
+import type * as React from "react";
 import {
   createContext,
   memo,
@@ -662,6 +667,12 @@ interface MessagesTimelineProps {
   onSteerQueuedMessage?: (id: string) => void;
   steerQueuedMessageShortcutLabel?: string | null;
   onRemoveQueuedMessage?: (id: string) => void;
+  /**
+   * Host-provided queued-send rows (the t3team offline outbox). They render
+   * directly after the native queued-message rows so both kinds of waiting
+   * sends share one queued surface at the bottom of the timeline.
+   */
+  queuedExtensions?: ReadonlyArray<{ readonly id: string; readonly node: React.ReactNode }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -741,6 +752,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onSteerQueuedMessage = NOOP_QUEUED_MESSAGE_ACTION,
   steerQueuedMessageShortcutLabel = null,
   onRemoveQueuedMessage = NOOP_QUEUED_MESSAGE_ACTION,
+  queuedExtensions = EMPTY_QUEUED_EXTENSIONS,
 }: MessagesTimelineProps) {
   const listIdentityKey = displayThreadKey ?? routeThreadKey;
   const rememberedPosition = useMemo(
@@ -1099,12 +1111,21 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     queuedMessages,
   ]);
   const rows = useStableRows(
-    rawRows.filter((row) =>
-      // Suppress `t3teamExt.visibleToUser === false` frames (the hidden
-      // actor-reactor turn prompts) and a decision card's own correlated
-      // reply, so neither renders as a second, bare row.
-      isVisibleMessagesTimelineRow(row, cardAnsweredWorkflowReplyMessageIds),
-    ),
+    [
+      ...rawRows.filter((row) =>
+        // Suppress `t3teamExt.visibleToUser === false` frames (the hidden
+        // actor-reactor turn prompts) and a decision card's own correlated
+        // reply, so neither renders as a second, bare row.
+        isVisibleMessagesTimelineRow(row, cardAnsweredWorkflowReplyMessageIds),
+      ),
+      // Host queued-send rows (t3team offline outbox) share the queued surface
+      // at the very bottom, directly after the native queued messages.
+      ...queuedExtensions.map((extension): MessagesTimelineRow => ({
+        kind: "host-queued",
+        id: extension.id,
+        node: extension.node,
+      })),
+    ],
     listIdentityKey,
   );
   useEffect(() => {
@@ -1614,9 +1635,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       suppressLiveActivityRow: rows.some((row) => row.kind === "working"),
       liveReasoningTrace: rows.some(
         (row) =>
-          row.kind === "activity-group" &&
-          row.active &&
-          row.entries.at(-1)?.kind === "message",
+          row.kind === "activity-group" && row.active && row.entries.at(-1)?.kind === "message",
       ),
       isRevertingCheckpoint,
       latestTurnId: latestTurn?.turnId ?? null,
@@ -2210,6 +2229,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
       {row.kind === "thinking" ? <ThinkingTimelineRow /> : null}
       {row.kind === "worktree-setup" ? <WorktreeSetupTimelineRow row={row} /> : null}
       {row.kind === "queued-message" ? <QueuedMessageTimelineRow row={row} /> : null}
+      {row.kind === "host-queued" ? <HostQueuedTimelineRow row={row} /> : null}
     </div>
   );
 });
@@ -2339,6 +2359,11 @@ function QueuedMessageTimelineRow({
       </div>
     </div>
   );
+}
+
+/** A host-provided queued-send row: the host owns the bubble and its affordances. */
+function HostQueuedTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "host-queued" }> }) {
+  return <div data-host-queued-row={row.id}>{row.node}</div>;
 }
 
 function ContextCompactionTimelineRow({
@@ -3217,9 +3242,9 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
               {workingStepLabel}
             </span>
           ) : null}
-        {backgroundWorktreeSetup ? (
-          <BackgroundWorktreeSetupChip snapshot={backgroundWorktreeSetup} />
-        ) : null}
+          {backgroundWorktreeSetup ? (
+            <BackgroundWorktreeSetupChip snapshot={backgroundWorktreeSetup} />
+          ) : null}
         </div>
         {/* A job started in an earlier turn keeps running through this one, so
             the job line sits under the status line rather than replacing it.
