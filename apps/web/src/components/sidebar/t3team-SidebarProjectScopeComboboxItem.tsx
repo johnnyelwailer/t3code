@@ -30,14 +30,7 @@ export function T3TeamSidebarProjectScopeComboboxItem({
       }}
     >
       {project ? (
-        <ProjectFavicon
-          environmentId={project.environmentId}
-          cwd={project.workspaceRoot}
-          projectName={project.title}
-          faviconPath={project.faviconPath}
-          projectIcon={project.projectIcon}
-          className="size-4 shrink-0"
-        />
+        <ProjectFavicon project={project} className="size-4 shrink-0" />
       ) : (
         <FolderIcon className="size-4 shrink-0" />
       )}

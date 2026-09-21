@@ -1,3 +1,4 @@
+import * as Data from "effect/Data";
 import * as Schema from "effect/Schema";
 
 /**
@@ -22,13 +23,10 @@ export const ConnectCredentialMintFailureReason = Schema.Literals([
 export type ConnectCredentialMintFailureReason =
   typeof ConnectCredentialMintFailureReason.Type;
 
-export class ConnectCredentialMintError extends Schema.TaggedErrorClass<ConnectCredentialMintError>()(
-  "ConnectCredentialMintError",
-  {
-    reason: ConnectCredentialMintFailureReason,
-    cause: Schema.optional(Schema.Defect()),
-  },
-) {
+export class ConnectCredentialMintError extends Data.TaggedError("ConnectCredentialMintError")<{
+  readonly reason: ConnectCredentialMintFailureReason;
+  readonly cause?: unknown;
+}> {
   override get message(): string {
     switch (this.reason) {
       case "connect_unavailable":
@@ -45,4 +43,5 @@ export class ConnectCredentialMintError extends Schema.TaggedErrorClass<ConnectC
   }
 }
 
-export const isConnectCredentialMintError = Schema.is(ConnectCredentialMintError);
+export const isConnectCredentialMintError = (error: unknown): error is ConnectCredentialMintError =>
+  error instanceof ConnectCredentialMintError;

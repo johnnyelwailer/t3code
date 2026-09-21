@@ -108,9 +108,15 @@ export const indexCheckpointPaths = (deps: {
   readonly path: Path.Path;
   /** Deadline for the whole-worktree `git add` / `ls-files` enumeration steps. */
   readonly timeoutMs?: number;
+  /** `-c key=value` config pairs the caller wants in front of every `git add` (upstream index/fsync config). */
+  readonly addPrefixArgs?: readonly string[];
+  /** Extra `git add` flags placed before `-A` (upstream passes `--sparse` for sparse checkouts). */
+  readonly addFlags?: readonly string[];
 }): Effect.Effect<void, VcsError> =>
   Effect.gen(function* () {
     const { operation, cwd, gitCommonDir, env, execute, fileSystem, path, timeoutMs } = deps;
+    const addPrefixArgs = deps.addPrefixArgs ?? [];
+    const addFlags = deps.addFlags ?? [];
     const run = (args: readonly string[]) =>
       execute({
         operation,
@@ -120,9 +126,16 @@ export const indexCheckpointPaths = (deps: {
         allowNonZeroExit: true,
         ...(timeoutMs !== undefined ? { timeoutMs } : {}),
       });
+    const addArgs = (...tail: readonly string[]) => [
+      ...addPrefixArgs,
+      "add",
+      ...addFlags,
+      "-A",
+      ...tail,
+    ];
 
     // Fast path: index everything.
-    const broadAdd = yield* run(["add", "-A", "--", "."]);
+    const broadAdd = yield* run(addArgs("--", "."));
     if (broadAdd.exitCode === 0) {
       return;
     }
@@ -181,7 +194,7 @@ export const indexCheckpointPaths = (deps: {
           Effect.flatMap(() =>
             // -A so deletions inside the pathspec are also applied to the
             // temp index (it was seeded from HEAD, so deletions exist there).
-            run(["add", "-A", "--pathspec-from-file", pathspecPath, "--pathspec-file-nul"]),
+            run(addArgs("--pathspec-from-file", pathspecPath, "--pathspec-file-nul")),
           ),
         );
 

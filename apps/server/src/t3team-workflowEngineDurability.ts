@@ -124,6 +124,24 @@ export function makeWorkflowRunLifecycle(opts: {
         opts.onSleep?.();
         pushIfTransitioned("sleeping");
       }),
+    // Event park (GHE #332): the delivery port resolves `correlationId` on delivery. Like a
+    // clock park, the run leaves the active set (admission released) — an event, not the clock,
+    // wakes it, so there is no `onSleep` re-arm.
+    recordWatching: (watch) =>
+      Effect.runPromise(
+        repo.setWatching({
+          runId: row.runId,
+          correlationId: watch.correlationId,
+          watchSourceName: watch.sourceName,
+          watchParamsHash: watch.paramsHash,
+          watchSignalName: watch.watchSignalName,
+          watchSignalKey: watch.watchSignalKey,
+          updatedAt: opts.nowIso(),
+        }),
+      ).then(() => {
+        releaseAdmission();
+        pushIfTransitioned("watching");
+      }),
     recordCompleted: () =>
       Effect.runPromise(
         repo.clearPending({ runId: row.runId, status: "completed", updatedAt: opts.nowIso() }),

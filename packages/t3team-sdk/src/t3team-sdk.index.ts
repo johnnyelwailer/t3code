@@ -19,6 +19,7 @@ export {
   ProviderUnavailableError,
   ReplayDriftError,
   SchemaExhaustedError,
+  SubWorkflowCheckpointError,
   TargetMissingError,
   TimeoutError,
   WorkflowError,
@@ -74,9 +75,12 @@ export {
 // The engine API as ordinary imports for orchestration bodies (Epic 25).
 export {
   agent,
+  checkpoint,
   getArgs,
   getBudget,
+  getResume,
   getScripts,
+  getSignalSource,
   getThread,
   getTools,
   log,
@@ -91,6 +95,55 @@ export {
   workflow,
 } from "./t3team-sdk.engineApi.ts";
 export { emit } from "./t3team-sdk.emit.ts";
+// Signal sources (design 42): the shared signal/source vocabulary + built-in Tier A/B
+// catalog declarations. `defineSignalSource` (the effectful producer half) lives on the
+// `@t3team/sdk/source` subpath only — it never re-enters the replayed surface.
+export {
+  builtinSignalSource,
+  declaresSignal,
+  defineSignal,
+  decodeSignalPayload,
+  resolveSignalSourceParams,
+  signalInstanceKey,
+} from "./t3team-sdk.signal.ts";
+export type {
+  Signal,
+  SignalEmit,
+  SignalSourceContext,
+  SignalSourceHandle,
+  SignalSourceInstance,
+  SignalSourceRef,
+  SignalWaitFor,
+} from "./t3team-sdk.signal.ts";
+export {
+  BUILTIN_SIGNALS,
+  BUILTIN_SIGNAL_GLOBALS,
+  BUILTIN_SIGNAL_SOURCES,
+  ChangeRequestChecksPayload,
+  ChangeRequestPayload,
+  ChangeRequestReviewPayload,
+  ScmChangeRequestChecks,
+  ScmChangeRequestChecksConcluded,
+  ScmChangeRequestClosed,
+  ScmChangeRequestDraftReady,
+  ScmChangeRequestMerged,
+  ScmChangeRequestParams,
+  ScmChangeRequestReview,
+  ScmChangeRequestReviewActivity,
+  ScmChangeRequestWatch,
+  WorkItemParams,
+  WorkItemPayload,
+  WorkItemUpdates,
+  WorkItemUpdated,
+} from "./t3team-sdk.builtinSignals.ts";
+export type {
+  ChangeRequestChecksPayloadType,
+  ChangeRequestPayloadType,
+  ChangeRequestReviewPayloadType,
+  ScmChangeRequestParamsType,
+  WorkItemParamsType,
+  WorkItemPayloadType,
+} from "./t3team-sdk.builtinSignals.ts";
 export { deriveWorkflowShape } from "./t3team-sdk.workflowShape.ts";
 export { createWorkflowHostRegistry, createWorkflowRunHost } from "./t3team-sdk.workflowHost.ts";
 export type {

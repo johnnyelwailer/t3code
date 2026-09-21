@@ -1,6 +1,7 @@
 import { readConnectAuthorizeRequest } from "@t3tools/shared/connectAuth";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
+import * as Clock from "effect/Clock";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -298,6 +299,7 @@ describe("ConnectCredentialMinter", () => {
     Effect.gen(function* () {
       const requests: Array<RecordedTokenRequest> = [];
       const opened: Array<string> = [];
+      const nowEpochMs = yield* Clock.currentTimeMillis;
       const configLayer = yield* buildStateDirLayer("connect-minter-seeded-");
 
       // Seed the secret the way a previous mint would have: the store holds
@@ -310,7 +312,7 @@ describe("ConnectCredentialMinter", () => {
               Schema.encodeSync(StoredTokenJson)({
                 accessToken: "access-token-seed",
                 refreshToken: "refresh-token-seed",
-                expiresAtEpochMs: Date.now() + 3_600_000,
+                expiresAtEpochMs: nowEpochMs + 3_600_000,
               }),
             ),
           ),

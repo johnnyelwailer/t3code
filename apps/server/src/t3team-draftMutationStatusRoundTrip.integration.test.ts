@@ -50,6 +50,8 @@ const ISO = "2026-07-28T00:00:00.000Z";
 const PATCH = { description: "## Goal\nCheckout must round to two decimals." };
 
 const EngineLive = OrchestrationEngineLive.pipe(
+  // The engine itself reads background liveness per thread (#475 shell mapping).
+  Layer.provideMerge(ThreadBackgroundLiveness.layer),
   // Upstream's shell mapper reads background liveness + plan progress per thread;
   // both are provided INTO the snapshot query so the requirement is discharged here.
   Layer.provideMerge(

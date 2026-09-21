@@ -1,4 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -54,12 +55,13 @@ describe("topUpConnectCredentialOnce", () => {
   it.effect("does nothing when a usable credential is already present", () =>
     Effect.gen(function* () {
       const calls: Array<unknown> = [];
+      const nowEpochMs = yield* Clock.currentTimeMillis;
       yield* run(
         "user-1",
         Option.some({
           accessToken: "at",
           refreshToken: "rt",
-          expiresAtEpochMs: Date.now() + 3_600_000,
+          expiresAtEpochMs: nowEpochMs + 3_600_000,
         }),
         calls,
       );

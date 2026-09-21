@@ -17,7 +17,7 @@ export const DEFAULT_DESKTOP_BACKEND_PORT = 3773;
 export const MAX_TCP_PORT = 65_535;
 export const DESKTOP_BACKEND_PORT_PROBE_HOSTS = ["127.0.0.1", "0.0.0.0", "::"] as const;
 
-export class DesktopBackendPortUnavailableError extends Schema.TaggedErrorClass<DesktopBackendPortUnavailableError>()(
+export class DesktopBackendPortUnavailableError extends Schema.TaggedError<DesktopBackendPortUnavailableError>()(
   "DesktopBackendPortUnavailableError",
   {
     startPort: Schema.Int,
@@ -30,7 +30,7 @@ export class DesktopBackendPortUnavailableError extends Schema.TaggedErrorClass<
   }
 }
 
-export class DesktopPinnedBackendPortBusyError extends Schema.TaggedErrorClass<DesktopPinnedBackendPortBusyError>()(
+export class DesktopPinnedBackendPortBusyError extends Schema.TaggedError<DesktopPinnedBackendPortBusyError>()(
   "DesktopPinnedBackendPortBusyError",
   {
     port: Schema.Int,

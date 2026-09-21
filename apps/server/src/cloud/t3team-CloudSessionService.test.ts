@@ -291,7 +291,9 @@ describe("CloudSessionService.create credential handoff", () => {
         call.args.join(" ").includes("repos/hive/nx-nexi/issues"),
       );
       assert.isNotNull(payloadCall);
-      const parsed = JSON.parse(payloadCall!.stdin ?? "{}") as { body: string };
+      const parsed = yield* Schema.decodeUnknownEffect(
+        Schema.fromJsonString(Schema.Struct({ body: Schema.String })),
+      )(payloadCall!.stdin ?? "{}");
       const decoded = Buffer.from(parsed.body, "base64").toString("utf8");
       assert.include(decoded, "fresh-rt");
       assert.isTrue(calls.some((call) => call.args.join(" ").includes("/dispatches")));

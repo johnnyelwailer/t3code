@@ -3,6 +3,7 @@ import * as Schema from "effect/Schema";
 import * as SchemaIssue from "effect/SchemaIssue";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 import * as Struct from "effect/Struct";
+import { OrchestrationMessageContext } from "./composerContext.ts";
 import { ProviderOptionSelections } from "./model.ts";
 import { RepositoryIdentity, ThreadEnvMode } from "./environment.ts";
 import {
@@ -25,6 +26,13 @@ import {
 } from "./baseSchemas.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
 import { T3TeamActorMessageUrgency, T3TeamMessageExt } from "./t3team-message-ext.ts";
+import {
+  PullRequestActor,
+  PullRequestChecksState,
+  PullRequestMergeability,
+  PullRequestReviewDecision,
+  PullRequestState,
+} from "./pullRequest.ts";
 
 export const ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
@@ -138,8 +146,6 @@ export const ProviderRequestKind = Schema.Literals([
   "mcp-elicitation",
 ]);
 export type ProviderRequestKind = typeof ProviderRequestKind.Type;
-export const AssistantDeliveryMode = Schema.Literals(["buffered", "streaming"]);
-export type AssistantDeliveryMode = typeof AssistantDeliveryMode.Type;
 export const ProviderApprovalDecision = Schema.Literals([
   "accept",
   "acceptForSession",
@@ -200,14 +206,125 @@ const ChatAttachmentId = TrimmedNonEmptyString.check(
 );
 export type ChatAttachmentId = typeof ChatAttachmentId.Type;
 
+export const SNAP_SHOT_ACCESSIBLE_TEXT_MAX_CHARS = 32_000;
+export const SNAP_SHOT_ACCESSIBILITY_MAX_NODES = 10_000;
+export const SNAP_SHOT_ACCESSIBILITY_MAX_SERIALIZED_CHARS = 32_000;
+
+const SnapShotAccessibilityBounds = Schema.Struct({
+  x: NonNegativeInt,
+  y: NonNegativeInt,
+  width: PositiveInt,
+  height: PositiveInt,
+});
+
+const SnapShotAccessibilityState = Schema.Struct({
+  active: Schema.optional(Schema.Boolean),
+  busy: Schema.optional(Schema.Boolean),
+  checked: Schema.optional(Schema.Literals(["on", "off", "mixed"])),
+  editable: Schema.optional(Schema.Boolean),
+  enabled: Schema.optional(Schema.Boolean),
+  expanded: Schema.optional(Schema.Boolean),
+  focused: Schema.optional(Schema.Boolean),
+  selected: Schema.optional(Schema.Boolean),
+  visible: Schema.optional(Schema.Boolean),
+});
+
+export interface SnapShotAccessibilityNode {
+  readonly role: string;
+  readonly name?: string;
+  readonly value?: string;
+  readonly description?: string;
+  readonly bounds: typeof SnapShotAccessibilityBounds.Type | null;
+  readonly state?: typeof SnapShotAccessibilityState.Type;
+  readonly actions?: Array<string>;
+  readonly children: Array<SnapShotAccessibilityNode>;
+}
+
+export const SnapShotAccessibilityNode: Schema.Codec<SnapShotAccessibilityNode> = Schema.Struct({
+  role: TrimmedNonEmptyString.check(Schema.isMaxLength(100)),
+  name: Schema.optionalKey(TrimmedNonEmptyString.check(Schema.isMaxLength(1_000))),
+  value: Schema.optionalKey(TrimmedNonEmptyString.check(Schema.isMaxLength(8_000))),
+  description: Schema.optionalKey(TrimmedNonEmptyString.check(Schema.isMaxLength(2_000))),
+  bounds: Schema.NullOr(SnapShotAccessibilityBounds),
+  state: Schema.optionalKey(SnapShotAccessibilityState),
+  actions: Schema.optionalKey(
+    Schema.mutable(Schema.Array(TrimmedNonEmptyString.check(Schema.isMaxLength(100)))).check(
+      Schema.isMaxLength(32),
+    ),
+  ),
+  children: Schema.mutable(
+    Schema.Array(
+      Schema.suspend((): Schema.Codec<SnapShotAccessibilityNode> => SnapShotAccessibilityNode),
+    ),
+  ).check(Schema.isMaxLength(SNAP_SHOT_ACCESSIBILITY_MAX_NODES)),
+});
+
+const SnapShotAccessibilityWire = Schema.Union([
+  Schema.Struct({
+    format: Schema.Literal("flat-text"),
+    text: TrimmedNonEmptyString.check(Schema.isMaxLength(SNAP_SHOT_ACCESSIBLE_TEXT_MAX_CHARS)),
+    truncated: Schema.Boolean,
+  }),
+  Schema.Struct({
+    format: Schema.Literal("element-tree"),
+    coordinateSpace: Schema.Literal("captured-image"),
+    imageSize: Schema.Struct({ width: PositiveInt, height: PositiveInt }),
+    truncated: Schema.Boolean,
+    root: SnapShotAccessibilityNode,
+  }),
+]);
+export const SnapShotAccessibility = SnapShotAccessibilityWire.check(
+  Schema.makeFilter((accessibility: typeof SnapShotAccessibilityWire.Type) => {
+    if (accessibility.format === "flat-text") return undefined;
+    let nodes = 0;
+    const stack = [accessibility.root];
+    while (stack.length > 0) {
+      const node = stack.pop()!;
+      nodes += 1;
+      if (nodes > SNAP_SHOT_ACCESSIBILITY_MAX_NODES) {
+        return `Accessibility trees must not exceed ${SNAP_SHOT_ACCESSIBILITY_MAX_NODES} nodes.`;
+      }
+      stack.push(...node.children);
+    }
+    return (
+      JSON.stringify(accessibility).length <= SNAP_SHOT_ACCESSIBILITY_MAX_SERIALIZED_CHARS ||
+      `Accessibility trees must not exceed ${SNAP_SHOT_ACCESSIBILITY_MAX_SERIALIZED_CHARS} serialized characters.`
+    );
+  }),
+);
+export type SnapShotAccessibility = typeof SnapShotAccessibility.Type;
+
+export const SnapShotSource = Schema.Struct({
+  kind: Schema.Literal("snap-shot"),
+  capturedAt: IsoDateTime,
+  appName: TrimmedNonEmptyString.check(Schema.isMaxLength(255)),
+  windowTitle: TrimmedString.check(Schema.isMaxLength(1_000)),
+  accessibleText: Schema.optional(
+    TrimmedNonEmptyString.check(Schema.isMaxLength(SNAP_SHOT_ACCESSIBLE_TEXT_MAX_CHARS)),
+  ),
+  accessibility: Schema.optional(SnapShotAccessibility),
+  appIdentifier: Schema.optional(TrimmedNonEmptyString.check(Schema.isMaxLength(255))),
+  appIconDataUrl: Schema.optional(
+    TrimmedNonEmptyString.check(
+      Schema.isMaxLength(100_000),
+      Schema.isPattern(/^data:image\/png;base64,/i),
+    ),
+  ),
+});
+export type SnapShotSource = typeof SnapShotSource.Type;
+
 export const ChatImageAttachment = Schema.Struct({
   type: Schema.Literal("image"),
   id: ChatAttachmentId,
   name: TrimmedNonEmptyString.check(Schema.isMaxLength(255)),
   mimeType: TrimmedNonEmptyString.check(Schema.isMaxLength(100), Schema.isPattern(/^image\//i)),
   sizeBytes: NonNegativeInt.check(Schema.isLessThanOrEqualTo(PROVIDER_SEND_TURN_MAX_IMAGE_BYTES)),
+  source: Schema.optional(SnapShotSource),
 });
 export type ChatImageAttachment = typeof ChatImageAttachment.Type;
+
+export const PastedTextAttachmentSource = Schema.TaggedStruct("pasted-text", {});
+export type PastedTextAttachmentSource = typeof PastedTextAttachmentSource.Type;
 
 /**
  * An arbitrary non-image file attached to a turn. The server stores it next
@@ -226,6 +343,10 @@ export const ChatFileAttachment = Schema.Struct({
     Schema.isGreaterThanOrEqualTo(1),
     Schema.isLessThanOrEqualTo(PROVIDER_SEND_TURN_MAX_FILE_BYTES),
   ),
+  /** Clipboard text folded by a client. Providers keep these path-only so the
+      agent can inspect the file selectively instead of eagerly spending the
+      same context the fold is intended to preserve. */
+  source: Schema.optional(PastedTextAttachmentSource),
 });
 export type ChatFileAttachment = typeof ChatFileAttachment.Type;
 
@@ -267,12 +388,15 @@ export type ChatUnknownAttachment = typeof ChatUnknownAttachment.Type;
 
 const UploadChatImageAttachment = Schema.Struct({
   type: Schema.Literal("image"),
+  /** Client-side id, so context records can bind to the attachment before it has a server id. */
+  id: Schema.optional(ChatAttachmentId),
   name: TrimmedNonEmptyString.check(Schema.isMaxLength(255)),
   mimeType: TrimmedNonEmptyString.check(Schema.isMaxLength(100), Schema.isPattern(/^image\//i)),
   sizeBytes: NonNegativeInt.check(Schema.isLessThanOrEqualTo(PROVIDER_SEND_TURN_MAX_IMAGE_BYTES)),
   dataUrl: TrimmedNonEmptyString.check(
     Schema.isMaxLength(PROVIDER_SEND_TURN_MAX_IMAGE_DATA_URL_CHARS),
   ),
+  source: Schema.optional(SnapShotSource),
 });
 export type UploadChatImageAttachment = typeof UploadChatImageAttachment.Type;
 
@@ -282,6 +406,22 @@ export const ChatAttachment = Schema.Union([
   ChatUnknownAttachment,
 ]);
 export type ChatAttachment = typeof ChatAttachment.Type;
+
+export const UserInputAttachments = Schema.Record(
+  Schema.String,
+  Schema.Array(Schema.Union([ChatImageAttachment, ChatFileAttachment])).pipe(
+    Schema.check(Schema.isMaxLength(PROVIDER_SEND_TURN_MAX_ATTACHMENTS)),
+  ),
+);
+export type UserInputAttachments = typeof UserInputAttachments.Type;
+
+export const UserInputAttachmentAnswerPayload = Schema.Struct({
+  requestId: ApprovalRequestId,
+  questionTextById: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+  answers: ProviderUserInputAnswers,
+  attachmentsByQuestionId: UserInputAttachments,
+});
+export type UserInputAttachmentAnswerPayload = typeof UserInputAttachmentAnswerPayload.Type;
 const UploadChatAttachment = Schema.Union([UploadChatImageAttachment, UploadChatFileAttachment]);
 export type UploadChatAttachment = typeof UploadChatAttachment.Type;
 
@@ -301,6 +441,12 @@ export const ProjectScript = Schema.Struct({
   command: TrimmedNonEmptyString,
   icon: ProjectScriptIcon,
   runOnWorktreeCreate: Schema.Boolean,
+  /**
+   * For `runOnWorktreeCreate` scripts: when false, the agent's first turn waits
+   * for the script to exit. Absent or true starts the agent right away and
+   * lets the script finish in the background.
+   */
+  async: Schema.optional(Schema.Boolean),
   /**
    * URL to open in the in-app browser preview when this script runs (or
    * when the user explicitly requests a preview). Optional; only honored on
@@ -373,17 +519,62 @@ const ProjectLucideIconName = TrimmedNonEmptyString.check(
 
 const ProjectEmoji = TrimmedNonEmptyString.check(Schema.isMaxLength(32));
 
+// Grapheme-count validation belongs to the server command boundary, not snapshot decoding.
+export const ProjectMonogramText = TrimmedNonEmptyString.check(
+  Schema.isMaxLength(32),
+  Schema.isPattern(/^[\p{L}\p{N}][\p{L}\p{N}\p{M}\u200c\u200d]*$/u),
+);
+
+const ProjectLucideIcon = Schema.Struct({
+  kind: Schema.Literal("lucide"),
+  name: ProjectLucideIconName,
+  color: ProjectIconColor,
+});
+const ProjectEmojiIcon = Schema.Struct({
+  kind: Schema.Literal("emoji"),
+  emoji: ProjectEmoji,
+});
+const ProjectMonogramIcon = Schema.Struct({
+  kind: Schema.Literal("monogram"),
+  text: ProjectMonogramText,
+  color: ProjectIconColor,
+});
+const ProjectIcon = Schema.Union([ProjectLucideIcon, ProjectEmojiIcon, ProjectMonogramIcon]);
+const ProjectLucideIconWire = Schema.Struct({
+  ...ProjectLucideIcon.fields,
+  monogramText: Schema.optional(ProjectMonogramText),
+  monogram: Schema.optional(ProjectMonogramText),
+});
+
+// Older peers only know lucide/emoji. Keep monograms out of their validated
+// `monogram` field too: old grapheme counters can reject otherwise valid text.
 export const ProjectIconOverride = Schema.Union([
-  Schema.Struct({
-    kind: Schema.Literal("lucide"),
-    name: ProjectLucideIconName,
-    color: ProjectIconColor,
-  }),
-  Schema.Struct({
-    kind: Schema.Literal("emoji"),
-    emoji: ProjectEmoji,
-  }),
-]);
+  ProjectLucideIconWire,
+  ProjectEmojiIcon,
+  ProjectMonogramIcon,
+]).pipe(
+  Schema.decodeTo(
+    ProjectIcon,
+    SchemaTransformation.transform({
+      decode: (icon): typeof ProjectIcon.Type => {
+        if (icon.kind !== "lucide") return icon;
+        const text = icon.monogramText ?? icon.monogram;
+        return text === undefined
+          ? { kind: "lucide", name: icon.name, color: icon.color }
+          : { kind: "monogram", text, color: icon.color };
+      },
+      encode: (icon) =>
+        icon.kind === "monogram"
+          ? {
+              kind: "lucide" as const,
+              name: "folder-code",
+              color: icon.color,
+              monogramText: icon.text,
+            }
+          : icon,
+    }),
+  ),
+);
 export type ProjectIconOverride = typeof ProjectIconOverride.Type;
 
 export const OrchestrationProject = Schema.Struct({
@@ -413,12 +604,22 @@ export const OrchestrationProject = Schema.Struct({
 });
 export type OrchestrationProject = typeof OrchestrationProject.Type;
 
-const OrchestrationMessageRoleKnown = Schema.Literals(["user", "assistant", "system", "actor"]);
+/** `reasoning` carries a provider's thinking trace: a reasoning summary, or
+ *  the raw chain of thought when the model exposes one. It is a sibling of the
+ *  assistant text it precedes, not a replacement for it. */
+const OrchestrationMessageRoleKnown = Schema.Literals([
+  "user",
+  "assistant",
+  "system",
+  "actor",
+  "reasoning",
+]);
 const ORCHESTRATION_MESSAGE_ROLE_VALUES: ReadonlySet<string> = new Set([
   "user",
   "assistant",
   "system",
   "actor",
+  "reasoning",
 ]);
 /**
  * Message role.
@@ -453,6 +654,7 @@ export const OrchestrationMessage = Schema.Struct({
   role: OrchestrationMessageRole,
   text: Schema.String,
   attachments: Schema.optional(Schema.Array(ChatAttachment)),
+  context: Schema.optional(OrchestrationMessageContext),
   t3teamExt: Schema.optional(T3TeamMessageExt),
   turnId: Schema.NullOr(TurnId),
   streaming: Schema.Boolean,
@@ -600,16 +802,26 @@ export const OrchestrationWorkflowRunStatus = Schema.Struct({
     "running",
     "suspended",
     "sleeping",
+    "watching",
     "paused",
     "completed",
     "failed",
     "cancelled",
   ]),
-  pendingKind: Schema.NullOr(Schema.Literals(["thread.turn", "user.input"])),
+  pendingKind: Schema.NullOr(
+    Schema.Literals(["thread.turn", "user.input", "signal.wait"]),
+  ),
   wakeAt: Schema.NullOr(IsoDateTime),
   updatedAt: IsoDateTime,
 });
 export type OrchestrationWorkflowRunStatus = typeof OrchestrationWorkflowRunStatus.Type;
+// Version changes even when a manual rename keeps the same text.
+export const ThreadTitleState = Schema.Struct({
+  source: Schema.Literals(["manual", "generated"]),
+  version: CommandId,
+  needsRefinement: Schema.Boolean,
+});
+export type ThreadTitleState = typeof ThreadTitleState.Type;
 
 export const ThreadTitleRegeneration = Schema.Struct({
   requestId: CommandId,
@@ -617,6 +829,11 @@ export const ThreadTitleRegeneration = Schema.Struct({
 });
 export type ThreadTitleRegeneration = typeof ThreadTitleRegeneration.Type;
 
+/**
+ * Legacy single-PR link. Still emitted as the thread's derived current pull
+ * request (see `@t3tools/shared/threadPullRequests`) so clients from before
+ * `pullRequests` keep working independently of their release schedule.
+ */
 export const ThreadLinkedPullRequest = Schema.Struct({
   projectId: ProjectId,
   repository: TrimmedNonEmptyString,
@@ -644,6 +861,79 @@ export const ThreadEnvironmentBinding = Schema.Struct({
   label: Schema.optional(TrimmedNonEmptyString),
 });
 export type ThreadEnvironmentBinding = typeof ThreadEnvironmentBinding.Type;
+/** Who created a thread ↔ pull request link. `stack-dismissed` is a tombstone
+ * for a native-stack member the user unlinked, so the sync reactor does not
+ * re-add it; clients hide it. */
+export const ThreadPullRequestLinkSource = Schema.Literals([
+  "manual",
+  "created",
+  "agent",
+  "stack",
+  "stack-dismissed",
+]);
+export type ThreadPullRequestLinkSource = typeof ThreadPullRequestLinkSource.Type;
+
+/**
+ * Host state persisted on a link by the sync reactor; null until first sync. The overview
+ * fields are optional: a host whose cheap read lacks them leaves them out, and snapshots
+ * written before they existed still decode.
+ */
+export const ThreadPullRequestSnapshot = Schema.Struct({
+  state: PullRequestState,
+  title: TrimmedNonEmptyString,
+  headBranch: TrimmedNonEmptyString,
+  baseBranch: TrimmedNonEmptyString,
+  isDraft: Schema.Boolean,
+  updatedAt: Schema.NullOr(IsoDateTime),
+  syncedAt: IsoDateTime,
+  closedAt: Schema.optional(Schema.NullOr(Schema.String)),
+  mergedAt: Schema.optional(Schema.NullOr(Schema.String)),
+  author: Schema.optional(Schema.NullOr(PullRequestActor)),
+  additions: Schema.optional(NonNegativeInt),
+  deletions: Schema.optional(NonNegativeInt),
+  changedFiles: Schema.optional(NonNegativeInt),
+  reviewDecision: Schema.optional(Schema.NullOr(PullRequestReviewDecision)),
+  checksState: Schema.optional(Schema.NullOr(PullRequestChecksState)),
+  mergeability: Schema.optional(PullRequestMergeability),
+});
+export type ThreadPullRequestSnapshot = typeof ThreadPullRequestSnapshot.Type;
+
+export const ThreadPullRequestStackLayer = Schema.Struct({
+  number: PositiveInt,
+  headBranch: TrimmedNonEmptyString,
+  state: PullRequestState,
+});
+export type ThreadPullRequestStackLayer = typeof ThreadPullRequestStackLayer.Type;
+
+/** A host-native stack the pull request belongs to. Layers run bottom to top. */
+export const ThreadPullRequestStack = Schema.Struct({
+  kind: Schema.Literal("native"),
+  id: TrimmedNonEmptyString,
+  number: PositiveInt,
+  url: TrimmedNonEmptyString,
+  base: TrimmedNonEmptyString,
+  layers: Schema.Array(ThreadPullRequestStackLayer),
+});
+export type ThreadPullRequestStack = typeof ThreadPullRequestStack.Type;
+
+/** Identity of a pull request as a thread link sees it: host-level, so the
+ * same PR linked from two projects (or two environments) compares equal. */
+export const ThreadPullRequestKey = Schema.Struct({
+  host: TrimmedNonEmptyString,
+  repository: TrimmedNonEmptyString,
+  number: PositiveInt,
+});
+export type ThreadPullRequestKey = typeof ThreadPullRequestKey.Type;
+
+export const ThreadPullRequestLink = Schema.Struct({
+  ...ThreadPullRequestKey.fields,
+  url: TrimmedNonEmptyString,
+  source: ThreadPullRequestLinkSource,
+  linkedAt: IsoDateTime,
+  snapshot: Schema.NullOr(ThreadPullRequestSnapshot),
+  stack: Schema.NullOr(ThreadPullRequestStack),
+});
+export type ThreadPullRequestLink = typeof ThreadPullRequestLink.Type;
 
 export const OrchestrationThread = Schema.Struct({
   id: ThreadId,
@@ -662,6 +952,11 @@ export const OrchestrationThread = Schema.Struct({
   // hosting it. Optional so pre-binding events and rows still decode.
   environment: Schema.optional(ThreadEnvironmentBinding),
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
+  // Optional so payloads from pre-link servers still decode.
+  pullRequests: Schema.Array(ThreadPullRequestLink).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
+  branchPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   latestTurn: Schema.NullOr(OrchestrationLatestTurn),
   /** In-process admission reservation between turn request and provider session start. */
   turnStartPending: Schema.optional(Schema.Boolean),
@@ -692,8 +987,12 @@ export const OrchestrationThread = Schema.Struct({
   // servers never need each other's threads to agree on the merged list.
   // Optional so payloads from pre-reorder servers still decode.
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  // Manual Active placement. Keyless threads retain their creation/re-entry
+  // order above the arranged run. Settling clears this slot.
+  activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   // Pending-only state. Optional so older servers remain compatible.
   titleRegeneration: Schema.optional(Schema.NullOr(ThreadTitleRegeneration)),
+  titleState: Schema.optional(Schema.NullOr(ThreadTitleState)),
   deletedAt: Schema.NullOr(IsoDateTime),
   messages: Schema.Array(OrchestrationMessage),
   proposedPlans: Schema.Array(OrchestrationProposedPlan).pipe(
@@ -775,6 +1074,10 @@ export const OrchestrationThreadShell = Schema.Struct({
   // snapshot keeps it (decodeShellSnapshot ignores excess properties);
   // absent = same environment as the hosting server.
   environment: Schema.optional(ThreadEnvironmentBinding),
+  pullRequests: Schema.Array(ThreadPullRequestLink).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
+  branchPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   latestTurn: Schema.NullOr(OrchestrationLatestTurn),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -789,7 +1092,9 @@ export const OrchestrationThreadShell = Schema.Struct({
   snoozedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   pinnedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   titleRegeneration: Schema.optional(Schema.NullOr(ThreadTitleRegeneration)),
+  titleState: Schema.optional(Schema.NullOr(ThreadTitleState)),
   session: Schema.NullOr(OrchestrationSession),
   latestUserMessageAt: Schema.NullOr(IsoDateTime),
   hasPendingApprovals: Schema.Boolean,
@@ -905,6 +1210,8 @@ export type OrchestrationSubscribeShellInput = typeof OrchestrationSubscribeShel
 
 export const OrchestrationSubscribeThreadInput = Schema.Struct({
   threadId: ThreadId,
+  /** Opt in to reasoning roles; older clients receive system messages instead. */
+  reasoningMessages: Schema.optionalKey(Schema.Boolean),
   /**
    * When provided, the server skips the initial snapshot frame and instead
    * replays events after this sequence before streaming live events. Clients
@@ -1169,6 +1476,13 @@ const ThreadPinReorderCommand = Schema.Struct({
   orderKey: TrimmedNonEmptyString,
 });
 
+const ThreadActiveReorderCommand = Schema.Struct({
+  type: Schema.Literal("thread.active.reorder"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  orderKey: TrimmedNonEmptyString,
+});
+
 const ThreadMetaUpdateCommand = Schema.Struct({
   type: Schema.Literal("thread.meta.update"),
   commandId: CommandId,
@@ -1192,6 +1506,22 @@ const ThreadMetaUpdateCommand = Schema.Struct({
       "title and regenerateTitle cannot be specified together",
   ),
 );
+
+const ThreadPullRequestLinkCommand = Schema.Struct({
+  type: Schema.Literal("thread.pull-request.link"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  ...ThreadPullRequestKey.fields,
+  url: TrimmedNonEmptyString,
+  source: ThreadPullRequestLinkSource,
+});
+
+const ThreadPullRequestUnlinkCommand = Schema.Struct({
+  type: Schema.Literal("thread.pull-request.unlink"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  ...ThreadPullRequestKey.fields,
+});
 
 const ThreadRuntimeModeSetCommand = Schema.Struct({
   type: Schema.Literal("thread.runtime-mode.set"),
@@ -1225,6 +1555,7 @@ const ThreadTurnStartBootstrapPrepareWorktree = Schema.Struct({
   baseBranch: TrimmedNonEmptyString,
   branch: Schema.optional(TrimmedNonEmptyString),
   startFromOrigin: Schema.optional(Schema.Boolean),
+  requireWorktree: Schema.optional(Schema.Boolean),
 });
 
 const ThreadTurnStartBootstrap = Schema.Struct({
@@ -1244,6 +1575,7 @@ export const ThreadTurnStartCommand = Schema.Struct({
     role: Schema.Literal("user"),
     text: Schema.String,
     attachments: Schema.Array(ChatAttachment),
+    context: Schema.optional(OrchestrationMessageContext),
     t3teamExt: Schema.optional(T3TeamMessageExt),
   }),
   modelSelection: Schema.optional(ModelSelection),
@@ -1275,6 +1607,7 @@ const ClientThreadTurnStartCommand = Schema.Struct({
     role: Schema.Literal("user"),
     text: Schema.String,
     attachments: Schema.Array(Schema.Union([UploadChatAttachment, ChatAttachment])),
+    context: Schema.optional(OrchestrationMessageContext),
     t3teamExt: Schema.optional(T3TeamMessageExt),
   }),
   modelSelection: Schema.optional(ModelSelection),
@@ -1299,11 +1632,13 @@ export const ThreadTurnResumeCommand = Schema.Struct({
   threadId: ThreadId,
   /**
    * The unanswered user message to re-run — supplied by the client, which
-   * renders it. The decider cannot rely on its in-memory `thread.messages`:
-   * after a server restart the rehydrated read model leaves that array EMPTY
-   * (ProjectionSnapshotQuery rebuilds threads with `messages: []`), which is
-   * exactly the state a "lost reply" thread is in. The reactor re-validates
-   * the id against the SQL-backed thread detail.
+   * renders it. The decider works off a BOUNDED command read model: after a
+   * server restart a thread's `messages` array holds only the tail the
+   * message-shape invariants need (last user, last assistant, last message),
+   * not the full history. The decider's last-message check runs when that tail
+   * is present, and when a thread's tail does not hold the target it falls
+   * back to the reactor's SQL-backed re-validation of the id against the
+   * thread detail.
    */
   messageId: MessageId,
   modelSelection: Schema.optional(ModelSelection),
@@ -1357,6 +1692,18 @@ const ThreadUserInputRespondCommand = Schema.Struct({
   threadId: ThreadId,
   requestId: ApprovalRequestId,
   answers: ProviderUserInputAnswers,
+  attachmentsByQuestionId: Schema.optional(UserInputAttachments),
+  createdAt: IsoDateTime,
+});
+
+// Closes an async question without answering it. The agent is not messaged;
+// the composer is simply released. Native callback questions cannot be dismissed
+// this way because the provider is blocked waiting on a reply.
+const ThreadUserInputDismissCommand = Schema.Struct({
+  type: Schema.Literal("thread.user-input.dismiss"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  requestId: ApprovalRequestId,
   createdAt: IsoDateTime,
 });
 
@@ -1366,6 +1713,13 @@ const ThreadCheckpointRevertCommand = Schema.Struct({
   threadId: ThreadId,
   turnCount: NonNegativeInt,
   createdAt: IsoDateTime,
+});
+
+// A separate command makes older servers reject history-only rewinds rather than
+// ignoring an unfamiliar option and restoring files.
+const ThreadConversationRevertCommand = Schema.Struct({
+  ...ThreadCheckpointRevertCommand.fields,
+  type: Schema.Literal("thread.conversation.revert"),
 });
 
 const ThreadSessionStopCommand = Schema.Struct({
@@ -1396,7 +1750,10 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadPinCommand,
   ThreadUnpinCommand,
   ThreadPinReorderCommand,
+  ThreadActiveReorderCommand,
   ThreadMetaUpdateCommand,
+  ThreadPullRequestLinkCommand,
+  ThreadPullRequestUnlinkCommand,
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
   ThreadTurnStartCommand,
@@ -1404,7 +1761,9 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadTurnInterruptCommand,
   ThreadApprovalRespondCommand,
   ThreadUserInputRespondCommand,
+  ThreadUserInputDismissCommand,
   ThreadCheckpointRevertCommand,
+  ThreadConversationRevertCommand,
   ThreadSessionStopCommand,
 ]);
 export type DispatchableClientOrchestrationCommand =
@@ -1425,7 +1784,10 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadPinCommand,
   ThreadUnpinCommand,
   ThreadPinReorderCommand,
+  ThreadActiveReorderCommand,
   ThreadMetaUpdateCommand,
+  ThreadPullRequestLinkCommand,
+  ThreadPullRequestUnlinkCommand,
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
   ClientThreadTurnStartCommand,
@@ -1433,7 +1795,9 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadTurnInterruptCommand,
   ThreadApprovalRespondCommand,
   ThreadUserInputRespondCommand,
+  ThreadUserInputDismissCommand,
   ThreadCheckpointRevertCommand,
+  ThreadConversationRevertCommand,
   ThreadSessionStopCommand,
 ]);
 export type ClientOrchestrationCommand = typeof ClientOrchestrationCommand.Type;
@@ -1512,6 +1876,25 @@ const ThreadMessageAssistantCompleteCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+const ThreadMessageReasoningDeltaCommand = Schema.Struct({
+  type: Schema.Literal("thread.message.reasoning.delta"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  messageId: MessageId,
+  delta: Schema.String,
+  turnId: Schema.optional(TurnId),
+  createdAt: IsoDateTime,
+});
+
+const ThreadMessageReasoningCompleteCommand = Schema.Struct({
+  type: Schema.Literal("thread.message.reasoning.complete"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  messageId: MessageId,
+  turnId: Schema.optional(TurnId),
+  createdAt: IsoDateTime,
+});
+
 const ThreadHistoryImportCommand = Schema.Struct({
   type: Schema.Literal("thread.history.import"),
   commandId: CommandId,
@@ -1524,6 +1907,24 @@ const ThreadHistoryImportCommand = Schema.Struct({
       createdAt: IsoDateTime,
     }),
   ).check(Schema.isNonEmpty()),
+});
+
+/**
+ * Persists a user message without starting a turn. Used by worktree bootstraps
+ * so the send is durable while the worktree is still being prepared; the
+ * turn that follows references the same message id.
+ */
+const ThreadMessageUserAppendCommand = Schema.Struct({
+  type: Schema.Literal("thread.message.user.append"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  message: Schema.Struct({
+    messageId: MessageId,
+    text: Schema.String,
+    attachments: Schema.Array(ChatAttachment),
+    context: Schema.optional(OrchestrationMessageContext),
+  }),
+  createdAt: IsoDateTime,
 });
 
 const ThreadProposedPlanUpsertCommand = Schema.Struct({
@@ -1564,6 +1965,23 @@ const ThreadRevertCompleteCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+const ThreadTitleGenerateCompleteCommand = Schema.Struct({
+  type: Schema.Literal("thread.title.generate.complete"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  expectedTitle: TrimmedNonEmptyString,
+  expectedVersion: Schema.NullOr(CommandId),
+  title: TrimmedNonEmptyString,
+  needsRefinement: Schema.Boolean,
+});
+
+const ThreadTitleRefineCommand = Schema.Struct({
+  type: Schema.Literal("thread.title.refine"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  expectedVersion: CommandId,
+});
+
 const ThreadTitleRegenerationCompleteCommand = Schema.Struct({
   type: Schema.Literal("thread.title.regeneration.complete"),
   commandId: CommandId,
@@ -1572,19 +1990,54 @@ const ThreadTitleRegenerationCompleteCommand = Schema.Struct({
   title: Schema.optional(TrimmedNonEmptyString),
 });
 
+const ThreadPullRequestSyncCommand = Schema.Struct({
+  type: Schema.Literal("thread.pull-request.sync"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  projectId: ProjectId,
+  snapshotSequence: NonNegativeInt,
+  expected: Schema.Struct({
+    workspaceRoot: TrimmedNonEmptyString,
+    branch: Schema.NullOr(TrimmedNonEmptyString),
+    worktreePath: Schema.NullOr(TrimmedNonEmptyString),
+    linkedPullRequest: Schema.NullOr(ThreadLinkedPullRequest),
+    branchPullRequest: Schema.NullOr(ThreadLinkedPullRequest),
+  }),
+  branchPullRequest: Schema.NullOr(ThreadLinkedPullRequest),
+  linkedPullRequest: Schema.optional(ThreadLinkedPullRequest),
+});
+
+const ThreadPullRequestLinkSyncCommand = Schema.Struct({
+  type: Schema.Literal("thread.pull-request-link.sync"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  ...ThreadPullRequestKey.fields,
+  snapshot: ThreadPullRequestSnapshot,
+  stack: Schema.NullOr(ThreadPullRequestStack),
+});
+
 const InternalOrchestrationCommand = Schema.Union([
   ThreadAutoSettleCommand,
+  ThreadPullRequestSyncCommand,
+  ThreadPullRequestLinkSyncCommand,
   ThreadSessionSetCommand,
   ThreadMessageUpsertCommand,
   ThreadActorMessageCommand,
   ThreadMessageAssistantDeltaCommand,
   ThreadMessageAssistantCompleteCommand,
+  ThreadMessageReasoningDeltaCommand,
+  ThreadMessageReasoningCompleteCommand,
   ThreadHistoryImportCommand,
+  ThreadMessageUserAppendCommand,
   ThreadProposedPlanUpsertCommand,
   ThreadTurnDiffCompleteCommand,
   ThreadActivityAppendCommand,
   ThreadRevertCompleteCommand,
   ThreadTitleRegenerationCompleteCommand,
+  ThreadTitleGenerateCompleteCommand,
+  ThreadTitleRefineCommand,
+  ThreadPullRequestSyncCommand,
+  ThreadPullRequestLinkSyncCommand,
 ]);
 export type InternalOrchestrationCommand = typeof InternalOrchestrationCommand.Type;
 
@@ -1610,6 +2063,9 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.unpinned",
   "thread.pin-reordered",
   "thread.meta-updated",
+  "thread.pull-request-linked",
+  "thread.pull-request-unlinked",
+  "thread.pull-request-synced",
   "thread.runtime-mode-set",
   "thread.interaction-mode-set",
   "thread.message-sent",
@@ -1759,6 +2215,9 @@ export const ThreadPinReorderedPayload = Schema.Struct({
 
 export const ThreadMetaUpdatedPayload = Schema.Struct({
   threadId: ThreadId,
+  // Order updates use this existing event so older clients can ignore the
+  // new field while continuing to decode the event stream.
+  activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   title: Schema.optional(TrimmedNonEmptyString),
   /** Intent marker consumed by the title-generation reactor. Keeping this on
       the existing event lets older clients safely ignore the new field. */
@@ -1767,6 +2226,7 @@ export const ThreadMetaUpdatedPayload = Schema.Struct({
   previousTitle: Schema.optional(TrimmedNonEmptyString),
   /** Pending state shared with clients. Null clears a matching request. */
   titleRegeneration: Schema.optional(Schema.NullOr(ThreadTitleRegeneration)),
+  titleState: Schema.optional(Schema.NullOr(ThreadTitleState)),
   modelSelection: Schema.optional(ModelSelection),
   branch: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   worktreePath: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
@@ -1776,9 +2236,35 @@ export const ThreadMetaUpdatedPayload = Schema.Struct({
   activityLabelUpdatedAt: Schema.optional(IsoDateTime),
   activityState: Schema.optional(Schema.NullOr(OrchestrationThreadActivityState)),
   activityStateUpdatedAt: Schema.optional(IsoDateTime),
+  // No longer produced; kept so persisted events from before
+  // thread.pull-request-linked still decode and replay into the link table.
   linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
+  branchPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   updatedAt: IsoDateTime,
 });
+
+export const ThreadPullRequestLinkedPayload = Schema.Struct({
+  threadId: ThreadId,
+  link: ThreadPullRequestLink,
+  updatedAt: IsoDateTime,
+});
+export type ThreadPullRequestLinkedPayload = typeof ThreadPullRequestLinkedPayload.Type;
+
+export const ThreadPullRequestUnlinkedPayload = Schema.Struct({
+  threadId: ThreadId,
+  ...ThreadPullRequestKey.fields,
+  updatedAt: IsoDateTime,
+});
+export type ThreadPullRequestUnlinkedPayload = typeof ThreadPullRequestUnlinkedPayload.Type;
+
+export const ThreadPullRequestSyncedPayload = Schema.Struct({
+  threadId: ThreadId,
+  ...ThreadPullRequestKey.fields,
+  snapshot: ThreadPullRequestSnapshot,
+  stack: Schema.NullOr(ThreadPullRequestStack),
+  updatedAt: IsoDateTime,
+});
+export type ThreadPullRequestSyncedPayload = typeof ThreadPullRequestSyncedPayload.Type;
 
 export const ThreadRuntimeModeSetPayload = Schema.Struct({
   threadId: ThreadId,
@@ -1800,6 +2286,7 @@ export const ThreadMessageSentPayload = Schema.Struct({
   role: OrchestrationMessageRole,
   text: Schema.String,
   attachments: Schema.optional(Schema.Array(ChatAttachment)),
+  context: Schema.optional(OrchestrationMessageContext),
   t3teamExt: Schema.optional(T3TeamMessageExt),
   turnId: Schema.NullOr(TurnId),
   streaming: Schema.Boolean,
@@ -1860,12 +2347,14 @@ const ThreadUserInputResponseRequestedPayload = Schema.Struct({
   threadId: ThreadId,
   requestId: ApprovalRequestId,
   answers: ProviderUserInputAnswers,
+  attachmentsByQuestionId: Schema.optional(UserInputAttachments),
   createdAt: IsoDateTime,
 });
 
 export const ThreadCheckpointRevertRequestedPayload = Schema.Struct({
   threadId: ThreadId,
   turnCount: NonNegativeInt,
+  restoreFiles: Schema.optional(Schema.Boolean),
   createdAt: IsoDateTime,
 });
 
@@ -1924,6 +2413,12 @@ export const OrchestrationEventMetadata = Schema.Struct({
   requestId: Schema.optional(ApprovalRequestId),
   ingestedAt: Schema.optional(IsoDateTime),
   historyImport: Schema.optional(Schema.Boolean),
+  /**
+   * The user message was persisted ahead of its turn (worktree bootstrap).
+   * Reactors that key off a user message as "turn is starting" wait for the
+   * turn-start event instead.
+   */
+  deferredTurn: Schema.optional(Schema.Boolean),
   origin: Schema.optional(OrchestrationClientOrigin),
 });
 export type OrchestrationEventMetadata = typeof OrchestrationEventMetadata.Type;
@@ -2015,6 +2510,21 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.meta-updated"),
     payload: ThreadMetaUpdatedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.pull-request-linked"),
+    payload: ThreadPullRequestLinkedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.pull-request-unlinked"),
+    payload: ThreadPullRequestUnlinkedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.pull-request-synced"),
+    payload: ThreadPullRequestSyncedPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,
@@ -2246,7 +2756,7 @@ const WORKFLOW_SCRIPT_ERROR_MESSAGES = {
   "read-failed": "Script read failed.",
 } as const;
 
-export class OrchestrationGetWorkflowScriptError extends Schema.TaggedErrorClass<OrchestrationGetWorkflowScriptError>()(
+export class OrchestrationGetWorkflowScriptError extends Schema.TaggedError<OrchestrationGetWorkflowScriptError>()(
   "OrchestrationGetWorkflowScriptError",
   {
     reason: Schema.Literals([
@@ -2307,7 +2817,7 @@ export const OrchestrationRpcSchemas = {
   },
 } as const;
 
-export class OrchestrationGetSnapshotError extends Schema.TaggedErrorClass<OrchestrationGetSnapshotError>()(
+export class OrchestrationGetSnapshotError extends Schema.TaggedError<OrchestrationGetSnapshotError>()(
   "OrchestrationGetSnapshotError",
   {
     message: TrimmedNonEmptyString,
@@ -2318,16 +2828,16 @@ export class OrchestrationGetSnapshotError extends Schema.TaggedErrorClass<Orche
   },
 ) {}
 
-export class OrchestrationDispatchCommandError extends Schema.TaggedErrorClass<OrchestrationDispatchCommandError>()(
+export class OrchestrationDispatchCommandError extends Schema.TaggedError<OrchestrationDispatchCommandError>()(
   "OrchestrationDispatchCommandError",
   {
     message: TrimmedNonEmptyString,
     cause: Schema.optional(Schema.Defect()),
-    bootstrapThreadDisposition: Schema.optional(Schema.Literal("deleted")),
+    bootstrapThreadDisposition: Schema.optional(Schema.Literals(["deleted", "not-created"])),
   },
 ) {}
 
-export class OrchestrationGetTurnDiffError extends Schema.TaggedErrorClass<OrchestrationGetTurnDiffError>()(
+export class OrchestrationGetTurnDiffError extends Schema.TaggedError<OrchestrationGetTurnDiffError>()(
   "OrchestrationGetTurnDiffError",
   {
     message: TrimmedNonEmptyString,
@@ -2335,7 +2845,7 @@ export class OrchestrationGetTurnDiffError extends Schema.TaggedErrorClass<Orche
   },
 ) {}
 
-export class OrchestrationGetFullThreadDiffError extends Schema.TaggedErrorClass<OrchestrationGetFullThreadDiffError>()(
+export class OrchestrationGetFullThreadDiffError extends Schema.TaggedError<OrchestrationGetFullThreadDiffError>()(
   "OrchestrationGetFullThreadDiffError",
   {
     message: TrimmedNonEmptyString,
@@ -2343,7 +2853,7 @@ export class OrchestrationGetFullThreadDiffError extends Schema.TaggedErrorClass
   },
 ) {}
 
-export class OrchestrationSearchThreadsError extends Schema.TaggedErrorClass<OrchestrationSearchThreadsError>()(
+export class OrchestrationSearchThreadsError extends Schema.TaggedError<OrchestrationSearchThreadsError>()(
   "OrchestrationSearchThreadsError",
   {
     message: TrimmedNonEmptyString,

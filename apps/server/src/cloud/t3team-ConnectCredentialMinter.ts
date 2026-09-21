@@ -10,6 +10,7 @@ import * as ConfigProvider from "effect/ConfigProvider";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 
 import * as ExternalLauncher from "../process/externalLauncher.ts";
+import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as CliTokenManager from "./CliTokenManager.ts";
 import { runConnectBrowserRoundTrip } from "./t3team-ConnectBrowserRoundTrip.ts";
 import {
@@ -151,7 +152,13 @@ export const make = Effect.gen(function* () {
   return ConnectCredentialMinter.of({ mint });
 });
 
+// The layer keeps its own CLI token manager + launcher + secret store
+// inline (single-flight per mint), so it can be dropped into any chain
+// without re-deriving the CLI flow's ambient services. The minted
+// credential still lands in the same on-disk secret store the CLI flow
+// uses — the store is file-backed, not instance-backed.
 export const layer = Layer.effect(ConnectCredentialMinter, make).pipe(
   Layer.provide(CliTokenManager.layer),
   Layer.provide(ExternalLauncher.layer),
+  Layer.provide(ServerSecretStore.layer),
 );

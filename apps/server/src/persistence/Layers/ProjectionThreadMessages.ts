@@ -1,3 +1,4 @@
+import { ChatAttachment, OrchestrationMessageContext, T3TeamMessageExt } from "@t3tools/contracts";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as SqlSchema from "effect/unstable/sql/SqlSchema";
 import * as Effect from "effect/Effect";
@@ -5,12 +6,12 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Struct from "effect/Struct";
-import { ChatAttachment, T3TeamMessageExt } from "@t3tools/contracts";
 
 import { toPersistenceSqlError } from "../Errors.ts";
 import {
   AppendStreamingProjectionThreadMessage,
   GetProjectionThreadMessageInput,
+  HasProjectionThreadAssistantMessageInput,
   ProjectionThreadMessageRepository,
   type ProjectionThreadMessageRepositoryShape,
   DeleteProjectionThreadMessagesInput,
@@ -23,8 +24,10 @@ const ProjectionThreadMessageDbRowSchema = ProjectionThreadMessage.mapFields(
     isStreaming: Schema.Number,
     attachments: Schema.NullOr(Schema.fromJsonString(Schema.Array(ChatAttachment))),
     t3teamExt: Schema.NullOr(Schema.fromJsonString(T3TeamMessageExt)),
+    context: Schema.NullOr(Schema.fromJsonString(OrchestrationMessageContext)),
   }),
 );
+const ProjectionThreadMessageExistsDbRowSchema = Schema.Struct({ exists: Schema.Number });
 
 function toProjectionThreadMessage(
   row: Schema.Schema.Type<typeof ProjectionThreadMessageDbRowSchema>,
@@ -40,6 +43,7 @@ function toProjectionThreadMessage(
     updatedAt: row.updatedAt,
     ...(row.attachments !== null ? { attachments: row.attachments } : {}),
     ...(row.t3teamExt !== null ? { t3teamExt: row.t3teamExt } : {}),
+    ...(row.context !== null ? { context: row.context } : {}),
   };
 }
 
@@ -52,6 +56,7 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
       const nextAttachmentsJson =
         row.attachments !== undefined ? JSON.stringify(row.attachments) : null;
       const nextT3TeamExtJson = row.t3teamExt !== undefined ? JSON.stringify(row.t3teamExt) : null;
+      const nextContextJson = row.context !== undefined ? JSON.stringify(row.context) : null;
       return sql`
         INSERT INTO projection_thread_messages (
           message_id,
@@ -61,6 +66,7 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
           text,
           attachments_json,
           t3team_ext_json,
+          context_json,
           is_streaming,
           sequence,
           created_at,
@@ -84,6 +90,14 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
             ${nextT3TeamExtJson},
             (
               SELECT t3team_ext_json
+              FROM projection_thread_messages
+              WHERE message_id = ${row.messageId}
+            )
+          ),
+          COALESCE(
+            ${nextContextJson},
+            (
+              SELECT context_json
               FROM projection_thread_messages
               WHERE message_id = ${row.messageId}
             )
@@ -118,6 +132,10 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
             excluded.t3team_ext_json,
             projection_thread_messages.t3team_ext_json
           ),
+          context_json = COALESCE(
+            excluded.context_json,
+            projection_thread_messages.context_json
+          ),
           is_streaming = excluded.is_streaming,
           -- A row first written by the streaming path has no sequence yet; the final upsert is
           -- its one chance to take the position the INSERT side computed (GHE #416).
@@ -133,6 +151,7 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
     execute: (row) => {
       const nextAttachmentsJson =
         row.attachments !== undefined ? JSON.stringify(row.attachments) : null;
+      const nextContextJson = row.context !== undefined ? JSON.stringify(row.context) : null;
       return sql`
         INSERT INTO projection_thread_messages (
           message_id,
@@ -141,6 +160,7 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
           role,
           text,
           attachments_json,
+          context_json,
           is_streaming,
           sequence,
           created_at,
@@ -153,6 +173,7 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
           ${row.role},
           ${row.text},
           ${nextAttachmentsJson},
+          ${nextContextJson},
           1,
           (
             SELECT COALESCE(MAX(sequence), -1) + 1
@@ -171,6 +192,10 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
           attachments_json = COALESCE(
             excluded.attachments_json,
             projection_thread_messages.attachments_json
+          ),
+          context_json = COALESCE(
+            excluded.context_json,
+            projection_thread_messages.context_json
           ),
           is_streaming = 1,
           updated_at = excluded.updated_at
@@ -191,12 +216,30 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
           text,
           attachments_json AS "attachments",
           t3team_ext_json AS "t3teamExt",
+          context_json AS "context",
           is_streaming AS "isStreaming",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM projection_thread_messages
         WHERE message_id = ${messageId}
         LIMIT 1
+      `,
+  });
+
+  const hasProjectionThreadAssistantMessageRow = SqlSchema.findOne({
+    Request: HasProjectionThreadAssistantMessageInput,
+    Result: ProjectionThreadMessageExistsDbRowSchema,
+    execute: ({ threadId, turnId, streamingOnly }) =>
+      sql`
+        SELECT EXISTS (
+          SELECT 1
+          FROM projection_thread_messages
+          WHERE thread_id = ${threadId}
+            AND turn_id = ${turnId}
+            AND role = 'assistant'
+            AND (${streamingOnly ? 1 : 0} = 0 OR is_streaming = 1)
+          LIMIT 1
+        ) AS "exists"
       `,
   });
 
@@ -213,6 +256,7 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
           text,
           attachments_json AS "attachments",
           t3team_ext_json AS "t3teamExt",
+          context_json AS "context",
           is_streaming AS "isStreaming",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
@@ -264,6 +308,17 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
       Effect.map(Option.map(toProjectionThreadMessage)),
     );
 
+  const hasAssistantMessageForTurn: ProjectionThreadMessageRepositoryShape["hasAssistantMessageForTurn"] =
+    (input) =>
+      hasProjectionThreadAssistantMessageRow(input).pipe(
+        Effect.mapError(
+          toPersistenceSqlError(
+            "ProjectionThreadMessageRepository.hasAssistantMessageForTurn:query",
+          ),
+        ),
+        Effect.map((row) => row.exists === 1),
+      );
+
   const listByThreadId: ProjectionThreadMessageRepositoryShape["listByThreadId"] = (input) =>
     listProjectionThreadMessageRows(input).pipe(
       Effect.mapError(
@@ -293,6 +348,7 @@ const makeProjectionThreadMessageRepository = Effect.gen(function* () {
     upsert,
     appendStreaming,
     getByMessageId,
+    hasAssistantMessageForTurn,
     listByThreadId,
     getLatestUserMessageAt,
     deleteByThreadId,

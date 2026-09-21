@@ -10,8 +10,13 @@
 import { createWorkflowPrimitives, type WorkflowPrimitives } from "./t3team-sdk.primitives.ts";
 import { childBrokerFor } from "./t3team-sdk.broker.ts";
 import { defaultBroker } from "./t3team-sdk.bodyTrees.ts";
+import type {
+  CheckpointInput,
+  CheckpointPrimitives,
+  CheckpointRecord,
+} from "@runbook/core/checkpoint";
 import type { DurableWorkflowRuntime } from "./t3team-sdk.durableRuntime.ts";
-import { WorkflowError } from "./t3team-sdk.errors.ts";
+import { WorkflowError, SubWorkflowCheckpointError } from "./t3team-sdk.errors.ts";
 import { runPreparedBody } from "./t3team-sdk.bodyRunner.ts";
 import type * as T from "./t3team-sdk.types.ts";
 
@@ -94,6 +99,20 @@ export function buildWorkflowPrimitives(opts: {
 } {
   const { runtime, options } = opts;
   const broker = options.broker ?? defaultBroker;
+  // Bounded-execution guard: children journal into the SAME run sequence as the top-level body
+  // and share its replay window (the window belongs to the run), so a checkpoint committed
+  // INSIDE a sub-workflow would move the run's SHARED replay boundary — a crash mid-sub-workflow
+  // would re-drive the TOP-level body from the child's boundary, no longer at its journaled
+  // seqs, and the pre-loop setup + child prefix would re-fire live (or fail drift), silently
+  // breaking the no-refire guarantee. The child therefore gets a refusing stand-in instead of a
+  // working primitive: the body's `checkpoint` global and the imported `checkpoint()` both
+  // resolve to it, and it throws before any boundary is journaled. The top-level body (see
+  // workflowRunner) keeps the real primitive, and children never see a restored `resume`.
+  const subWorkflowCheckpoint: CheckpointPrimitives["checkpoint"] = async <State>(
+    _input: CheckpointInput<State>,
+  ): Promise<CheckpointRecord<State>> => {
+    throw new SubWorkflowCheckpointError();
+  };
   const shared = {
     callPrimitive: runtime.callPrimitive,
     runBlackBoxed: runtime.runBlackBoxed,
@@ -135,6 +154,7 @@ export function buildWorkflowPrimitives(opts: {
         args,
         toolRefs: opts.toolRefs,
         scripts: opts.scripts,
+        checkpoint: subWorkflowCheckpoint,
         primitives: createWorkflowPrimitives({
           ...shared,
           runSubWorkflow: runSubWorkflowFor(() => childCapabilities, childChain),

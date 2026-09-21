@@ -105,6 +105,7 @@ const activityRow = (
 const makeRepository = (rows: ReadonlyArray<ProjectionThreadActivity>) =>
   ({
     upsert: () => Effect.die("unused"),
+    getLatestTaskActivity: () => Effect.die("unused"),
     listByThreadId: () => Effect.die("unused"),
     listUserInputLifecycleByThreadId: () => Effect.succeed(rows),
     deleteByThreadId: () => Effect.die("unused"),
@@ -443,6 +444,8 @@ const invocation: McpInvocationContext.McpInvocationScope = {
 };
 const client = McpSchema.McpServerClient.of({
   clientId: 1,
+  clientCapabilities: {},
+  clientInfo: { name: "t3team-test", version: "1.0.0" },
   protocolVersion: "2025-06-18",
   initializePayload: {
     protocolVersion: "2025-03-26",

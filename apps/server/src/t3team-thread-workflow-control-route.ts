@@ -9,6 +9,7 @@ import { OrchestrationEngineService } from "./orchestration/Services/Orchestrati
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
 import {
   errorResponse,
   okJson,
@@ -46,6 +47,9 @@ export const t3teamThreadWorkflowControlRouteLayer = HttpRouter.add(
     const orchestration = yield* OrchestrationEngineService;
     const threadQuery = yield* ProjectionSnapshotQuery;
     const journalStore = yield* WorkflowJournalStore;
+    const signalStore = Option.getOrUndefined(
+      yield* Effect.serviceOption(WorkflowSignalStore),
+    );
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const found = yield* repo.getById({ runId });
@@ -66,6 +70,8 @@ export const t3teamThreadWorkflowControlRouteLayer = HttpRouter.add(
           orchestration,
           threadQuery,
         }),
+        // GHE #332: a `watching` run's resume drains its bridged inbox events here.
+        ...(signalStore === undefined ? {} : { signalStore }),
         // GHE #344: "Retry run" on a failed card re-drives the journal through this route too.
         retryFailed: {
           journalStore,

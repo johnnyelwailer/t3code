@@ -6,6 +6,7 @@ export * from "./engineTypes.ts";
 export * from "./runEngine.ts";
 export * from "./composition.ts";
 export * from "./scheduling.ts";
+export * from "./checkpoint.ts";
 export * from "./schema.ts";
 export * from "./errors.ts";
 export * from "./events.ts";

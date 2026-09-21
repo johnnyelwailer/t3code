@@ -80,13 +80,17 @@ export function T3TeamSidebarProjectScopeCombobox({
   // and the visible list can never desync. "All projects" is a scope reset, not a searchable
   // entry: it only shows while a scope is active and the query is empty.
   const filteredItems = useMemo(
-    () =>
-      filterSidebarProjectScopeItems({
-        items,
-        activeScopeKey: scopeKey,
+    () => {
+      // While "All projects" is the active scope the reset row would duplicate the trigger,
+      // so it only lists while a project scope is active and the query is empty.
+      const visibleItems =
+        scopeKey === null ? items.filter((item) => item.value !== "all") : items;
+      return filterSidebarProjectScopeItems({
+        items: visibleItems,
         query: menuState.query,
         matches: (item, query) => filter.contains(item, query, (candidate) => candidate.label),
-      }),
+      });
+    },
     [filter, items, menuState.query, scopeKey],
   );
   // Safari can send a click after Ctrl+click opens settings. Ignore that one selection, then

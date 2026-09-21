@@ -33,7 +33,9 @@ layer("t3team-057 drop migration", (it) => {
             '2026-09-12T00:00:00.000Z', '2026-09-12T00:00:00.000Z')
       `;
 
-      const executed = yield* runMigrations();
+      // New upstream migrations (ids 72-76) landed after this one; bound the run
+      // to this migration so the assertion stays "only the drop runs".
+      const executed = yield* runMigrations({ toMigrationInclusive: 70 });
       assert.deepStrictEqual(executed.map(([id]) => id), [70]);
 
       const tables = yield* sql<{ readonly name: string | null }>`
@@ -53,7 +55,7 @@ noDataLayer("t3team-057 on a table without data", (it) => {
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       yield* runMigrations({ toMigrationInclusive: 69 });
-      const executed = yield* runMigrations();
+      const executed = yield* runMigrations({ toMigrationInclusive: 70 });
       assert.deepStrictEqual(executed.map(([id]) => id), [70]);
       const tables = yield* sql<{ readonly name: string | null }>`
         SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'thread_task_records'

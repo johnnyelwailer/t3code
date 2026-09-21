@@ -179,12 +179,16 @@ function PanelDemo({ threadId, label }: { threadId: string; label: string }) {
             onAddDiff={() => useRightPanelStore.getState().toggle(ref, "diff")}
             onAddFiles={() => useRightPanelStore.getState().open(ref, "files")}
             onAddPullRequest={() => undefined}
+            onAddPullRequests={() => undefined}
             onAddAgents={() => useRightPanelStore.getState().open(ref, "agents")}
+            onAddDevice={() => undefined}
             browserAvailable
             terminalAvailable={false}
             diffAvailable
             filesAvailable
             pullRequestAvailable={false}
+            pullRequestsAvailable={false}
+            deviceAvailable={false}
             agentsAvailable
             liveAgentCount={0}
           >

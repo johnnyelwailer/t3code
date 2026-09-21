@@ -17,7 +17,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
-export class AuthoringTypesStagingError extends Schema.TaggedErrorClass<AuthoringTypesStagingError>()(
+export class AuthoringTypesStagingError extends Schema.TaggedError<AuthoringTypesStagingError>()(
   "AuthoringTypesStagingError",
   { missingPath: Schema.String },
 ) {
