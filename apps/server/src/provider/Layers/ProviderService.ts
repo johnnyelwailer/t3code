@@ -551,7 +551,9 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   );
   // Optional: provider-only runtimes may omit the orchestration side, where
   // the plan-staleness counter lives; without it no nudge is ever appended.
-  const threadPlanStaleness = yield* Effect.serviceOption(ThreadPlanStaleness.ThreadPlanStalenessService);
+  const threadPlanStaleness = yield* Effect.serviceOption(
+    ThreadPlanStaleness.ThreadPlanStalenessService,
+  );
   const issueMcpCredential =
     options?.issueMcpCredential ?? McpSessionRegistry.issueActiveMcpCredential;
   const fileSystem = yield* FileSystem.FileSystem;
@@ -2072,10 +2074,12 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         ...(input.modelSelection?.model ? { "provider.model": input.modelSelection.model } : {}),
       });
       // A turn is the clearest sign a session is still alive. The MCP
-      // credential is minted once at session start and cannot be rotated into
+      // credential is minted at session start and cannot be rotated into
       // an already-spawned agent process, so we keep the existing token valid
       // rather than issuing a new one: sessions that go a long time between
-      // browser tool calls used to lose the toolkit outright.
+      // browser tool calls used to lose the toolkit outright. (A session
+      // RESTART does mint a new token — `startSession` above — but the
+      // registry keeps the earlier ones valid for the same reason.)
       yield* McpSessionRegistry.touchActiveMcpThread(input.threadId);
       const analyticsModelSelection =
         input.modelSelection?.instanceId === routed.instanceId ? input.modelSelection : undefined;
@@ -2448,9 +2452,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           "provider.job_kind": input.request.kind,
         });
         if (!routed.isActive) {
-          return yield* Effect.fail(
-            new ProviderSessionNotFoundError({ threadId: input.threadId }),
-          );
+          return yield* Effect.fail(new ProviderSessionNotFoundError({ threadId: input.threadId }));
         }
         const adapter = routed.adapter;
         // Capability check, never a swallowed call: adapters that keep no
