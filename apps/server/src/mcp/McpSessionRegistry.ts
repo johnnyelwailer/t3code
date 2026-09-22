@@ -137,6 +137,19 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
       };
       yield* SynchronizedRef.update(state, ({ records }) => {
         const next = new Map(pruneDead(records, issuedAt));
+        // Re-issuing for a thread that already holds credentials is a provider
+        // session RESTART (model tier / cwd / access change), not a stop. The
+        // agent process that received the earlier token may well survive that
+        // restart — the Nexplore driver reuses its live session and never sees
+        // the new bearer — so killing the old token here stranded a running
+        // thread on 401s until the whole app was restarted. Instead every live
+        // token of the thread adopts the new scope; they all die together on
+        // `revokeThread` or when the thread stops showing signs of life.
+        for (const [existingHash, record] of next) {
+          if (record.scope.threadId === scope.threadId) {
+            next.set(existingHash, { ...record, scope, lastAliveAt: issuedAt });
+          }
+        }
         next.set(tokenHash, { tokenHash, scope, lastAliveAt: issuedAt });
         return { records: next };
       });
@@ -227,13 +240,16 @@ const make = Effect.acquireRelease(
 
 export const layer = Layer.effect(McpSessionRegistry, make);
 
+/**
+ * Mints a credential for a (re)starting provider session. Earlier tokens of the
+ * same thread stay valid and adopt the new scope (see `issue`): a session
+ * restart must never strand an agent process that outlives it.
+ */
 export const issueActiveMcpCredential = (
   request: McpCredentialRequest,
 ): Effect.Effect<McpIssuedCredential | undefined> =>
   activeMcpSessionRegistry
-    ? activeMcpSessionRegistry
-        .revokeThread(request.threadId)
-        .pipe(Effect.andThen(activeMcpSessionRegistry.issue(request)))
+    ? activeMcpSessionRegistry.issue(request)
     : Effect.sync((): McpIssuedCredential | undefined => undefined);
 
 /**
