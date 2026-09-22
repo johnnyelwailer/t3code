@@ -102,11 +102,7 @@ const Content = (
     </Card>
     <Card title="A later turn is active — the job line sits under the status line, never replaces it">
       <RowPanel>
-        <Row
-          isWorking
-          backgroundJobs={[job()]}
-          workingStepLabel="Refactoring the settings panel"
-        />
+        <Row isWorking backgroundJobs={[job()]} workingStepLabel="Refactoring the settings panel" />
       </RowPanel>
     </Card>
     <Card title="Last job settled — the whole row goes, no bare separator left behind">

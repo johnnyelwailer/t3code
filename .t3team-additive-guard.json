@@ -44,6 +44,7 @@
     "apps/server/src/cli/pair.ts",
     "apps/server/src/cli/server.ts",
     "apps/server/src/environment/ServerEnvironment.ts",
+    "apps/server/src/environment/ServerEnvironment.test.ts",
     "apps/server/src/httpCors.ts",
     "apps/server/src/mcp/McpHttpServer.ts",
     "apps/server/src/mcp/toolkits/t3team/handlers.ts",
@@ -331,6 +332,7 @@
     "packages/effect-codex-app-server/src/schema.test.ts",
     "packages/integrations-atlassian/src/jiraApi.live.test.ts",
     "packages/integrations-atlassian/src/oauth.ts",
+    "packages/integrations-atlassian/src/provider.ts",
     "packages/integrations-atlassian/src/provider.live.test.ts",
     "packages/project-context/src/index.ts",
     "packages/project-context/src/t3teamToolCatalog.test.ts",
@@ -368,7 +370,12 @@
     "scripts/release-smoke.ts",
     "tsconfig.base.json",
     "vite.config.ts",
-    "vitest.config.ts"
+    "vitest.config.ts",
+    "packages/t3team-skill-packs/src/recipes.ts",
+    "packages/t3team-skill-packs/src/recipeActionViews.ts",
+    "packages/t3team-skill-packs/src/sidecarSections.ts",
+    "packages/t3team-skill-packs/src/profiles.ts",
+    "packages/project-recipes/src/sidecarComposition.test.ts"
   ],
   "allowedUnprefixedNewFiles": [
     ".agents/skills/merge-upstream/SKILL.md",

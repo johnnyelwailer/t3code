@@ -17,14 +17,7 @@ vi.mock("~/t3team/t3team-KickoffRecipeList", () => ({
   },
 }));
 
-vi.mock("~/t3team/t3team-ProjectDashboardRecentConversations", () => ({
-  T3TeamRecentConversations: ({ threads }: { threads: ReadonlyArray<{ id: string }> }) => {
-    return <div>{threads.map((thread) => thread.id).join(",")}</div>;
-  },
-}));
-
 import { T3TeamQuickStartsSection } from "~/t3team/t3team-QuickStartsSection";
-import { T3TeamRecentConversationsSection } from "~/t3team/t3team-RecentConversationsSection";
 import type { SidecarSectionHost } from "~/t3team/t3team-sidecarSectionHost";
 
 const project: ProjectShellProject = {
@@ -130,44 +123,5 @@ describe("bundled sidecar sections", () => {
 
     expect(markup).toContain("recipe-c,recipe-a");
     expect(markup).not.toContain("recipe-b");
-  });
-
-  it("applies hidden and pinned recent-conversation order before rendering", () => {
-    const markup = renderToStaticMarkup(
-      <T3TeamRecentConversationsSection
-        host={host}
-        props={{
-          threads: [
-            {
-              id: "thread-a",
-              title: "Thread A",
-              ticketId: null,
-              messageCount: 3,
-              lastMessageAt: "2026-05-29T09:00:00.000Z",
-            },
-            {
-              id: "thread-b",
-              title: "Thread B",
-              ticketId: null,
-              messageCount: 2,
-              lastMessageAt: "2026-05-28T09:00:00.000Z",
-            },
-            {
-              id: "thread-c",
-              title: "Thread C",
-              ticketId: null,
-              messageCount: 1,
-              lastMessageAt: "2026-05-27T09:00:00.000Z",
-            },
-          ],
-          shell: {
-            orderItemIds: buildOrderedItemIds,
-          },
-        }}
-      />,
-    );
-
-    expect(markup).toContain("thread-c,thread-a");
-    expect(markup).not.toContain("thread-b");
   });
 });

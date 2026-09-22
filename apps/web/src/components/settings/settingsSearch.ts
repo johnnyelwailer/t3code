@@ -193,6 +193,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/general",
   },
   {
+    id: "project-scope-pills",
+    title: "Project scope pills",
+    to: "/settings/general",
+    searchTerms: ["sidebar recent projects filter pull requests scope experimental"],
+  },
+  {
     id: "time-format",
     title: "Time format",
     to: "/settings/general",

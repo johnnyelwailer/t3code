@@ -16,6 +16,11 @@
  * State machine per job id:
  *   start marker seen                    -> running
  *   terminal marker for the id seen      -> finished (sticky)
+ *   started before the server's boot     -> finished ("lost-restart") — the
+ *                                          server-side job registry is
+ *                                          in-memory and dies with the
+ *                                          server, so no terminal marker
+ *                                          will ever reach the transcript
  *   now > startedAt + hard deadline      -> excluded (a job cannot outlive
  *                                           its hard deadline; the marker
  *                                           text carries the deadline, so
@@ -45,7 +50,11 @@ export interface BackgroundJobStart {
   readonly label?: string;
 }
 
-export type BackgroundJobFinishReason = "finished" | "killed-deadline" | "cancelled";
+export type BackgroundJobFinishReason =
+  | "finished"
+  | "killed-deadline"
+  | "cancelled"
+  | "lost-restart";
 
 export interface BackgroundJobState extends BackgroundJobStart {
   readonly state: "running" | "finished";
@@ -259,9 +268,38 @@ function applyJobMarkers(
 }
 
 /**
+ * Jobs that predate the server's current boot cannot be live: the job
+ * process died with the server (and so did the registry entry that would
+ * have announced its settlement), so no terminal marker will ever reach the
+ * transcript. Settling them in the fold — not in `runningBackgroundJobs` —
+ * also un-tags the originating tool row.
+ *
+ * Only jobs strictly started BEFORE the boot are settled: one started at or
+ * after it may still be live. An absent or invalid reference (older server,
+ * no bootstrap data yet) leaves the fold's deadline behavior untouched.
+ * The reference is the SERVER'S boot time, never the client's connect time —
+ * a client reconnect must not settle jobs.
+ */
+function settleJobsLostToRestart(
+  byId: Map<string, BackgroundJobState>,
+  serverStartedAtMs: number | undefined,
+): void {
+  if (serverStartedAtMs === undefined || !(serverStartedAtMs > 0)) return;
+  for (const [jobId, job] of byId) {
+    if (job.state === "running" && job.startedAtMs < serverStartedAtMs) {
+      byId.set(jobId, { ...job, state: "finished", finishedReason: "lost-restart" });
+    }
+  }
+}
+
+/**
  * Folds a thread's work-log entries (in timeline order) into per-job state.
  * A start marker opens the job; later terminal markers settle it. Sticky:
  * once finished, the job stays finished for the lifetime of this fold.
+ *
+ * Pass the server's boot time (`serverStartedAtMs`) to settle jobs that
+ * started before the current server process: their completion notice lived
+ * in the previous process's memory and never reached the transcript.
  *
  * A row's result text is `detail`, falling back to `command` for the era of
  * history where the two were transposed — see `BackgroundJobFoldEntry.command`.
@@ -269,6 +307,7 @@ function applyJobMarkers(
 export function foldBackgroundJobs(
   entries: ReadonlyArray<BackgroundJobFoldEntry>,
   nowMs: number,
+  serverStartedAtMs?: number,
 ): readonly BackgroundJobState[] {
   const byId = new Map<string, BackgroundJobState>();
   for (const entry of entries) {
@@ -286,6 +325,7 @@ export function foldBackgroundJobs(
       entry.label?.trim() !== "" ? entry.label : undefined,
     );
   }
+  settleJobsLostToRestart(byId, serverStartedAtMs);
   return [...byId.values()];
 }
 

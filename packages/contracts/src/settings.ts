@@ -928,6 +928,15 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(true)),
   ),
   /**
+   * Sidebar project scope as a one-click pill row (recent projects + a "more" menu) instead of
+   * the "All projects" dropdown alone. While on, the scope also narrows other surfaces (the pull
+   * request list) to the selected project and, for a work-source project, its linked repositories.
+   * ON by default for this distribution; the setting is the way back to the dropdown alone.
+   */
+  t3teamProjectScopePillsEnabled: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(true)),
+  ),
+  /**
    * Whether the server ingests a bound work source's project avatar (Jira)
    * as the project's `faviconPath` at bind/creation time — see
    * `apps/server/src/t3team-projectSourceIconIngest.ts`. Server-authoritative
@@ -1224,6 +1233,7 @@ export const ServerSettingsPatch = Schema.Struct({
   continueThreadsAfterServerUpdate: Schema.optionalKey(Schema.Boolean),
   enableAgentBrowserAccess: Schema.optionalKey(Schema.Boolean),
   t3teamActivityLabelsEnabled: Schema.optionalKey(Schema.Boolean),
+  t3teamProjectScopePillsEnabled: Schema.optionalKey(Schema.Boolean),
   projectAgentBrowserAccessOverrides: Schema.optionalKey(
     Schema.Record(ProjectId, Schema.NullOr(Schema.Boolean)),
   ),

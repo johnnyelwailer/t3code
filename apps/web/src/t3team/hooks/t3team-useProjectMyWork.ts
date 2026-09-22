@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectShellProject, ResourcePage } from "@t3tools/project-context";
 import { asT3TeamPollingBackend } from "~/t3team/backend/t3team-pollingBackend";
+import { isJiraSessionExpiredError } from "~/t3team/backend/t3team-t3BackendHttp";
 import { useBackend } from "~/t3team/backend/t3team-index";
 import { resourceRefToProjectTicket } from "~/t3team/t3team-ticketMappers";
 import {
@@ -21,6 +22,11 @@ export function useProjectMyWork(project: ProjectShellProject) {
   const [lastCheckedAt, setLastCheckedAt] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * The server dropped this account's dead Jira refresh token: the view should offer a sign-in
+   * affordance instead of the (now friendly) error string, and reload once the user signs back in.
+   */
+  const [sessionExpired, setSessionExpired] = useState(false);
   const fingerprintRef = useRef<string | undefined>(undefined);
   const lastCheckedAtRef = useRef<number | undefined>(undefined);
   // Bumped whenever the target project/account changes (and on unmount) so an
@@ -44,6 +50,7 @@ export function useProjectMyWork(project: ProjectShellProject) {
     }
     setLoading(fingerprintRef.current === undefined);
     setError(null);
+    setSessionExpired(false);
 
     try {
       if (!backend) throw new Error("Backend not available");
@@ -75,7 +82,14 @@ export function useProjectMyWork(project: ProjectShellProject) {
       setLastCheckedAt(nextCheckedAt);
     } catch (e) {
       if (generationRef.current !== generation) return;
-      setError(e instanceof Error ? e.message : "Failed to load resources");
+      // A dead refresh token is not a load failure to retry: the server cleared the credentials,
+      // so the only way forward is a fresh sign-in.
+      if (isJiraSessionExpiredError(e)) {
+        setSessionExpired(true);
+        setError(null);
+      } else {
+        setError(e instanceof Error ? e.message : "Failed to load resources");
+      }
     } finally {
       if (generationRef.current === generation) {
         setLoading(false);
@@ -88,6 +102,7 @@ export function useProjectMyWork(project: ProjectShellProject) {
     generationRef.current += 1;
     setResources(null);
     setLastCheckedAt(undefined);
+    setSessionExpired(false);
     fingerprintRef.current = undefined;
     lastCheckedAtRef.current = undefined;
 
@@ -128,5 +143,5 @@ export function useProjectMyWork(project: ProjectShellProject) {
     return resources.items.map((ref) => resourceRefToProjectTicket(project.id, ref, accountId));
   }, [resources, project.id, accountId]);
 
-  return { resources, tickets, loading, error, reload: load, lastCheckedAt };
+  return { resources, tickets, loading, error, sessionExpired, reload: load, lastCheckedAt };
 }

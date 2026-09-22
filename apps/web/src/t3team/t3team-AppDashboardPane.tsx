@@ -84,7 +84,6 @@ export function AppDashboardPane({
             <ProjectDashboardKickoffAside
               project={project}
               dashboardMode={activeDashboardMode}
-              projectThreads={projectThreads}
               activeThread={activeThread}
               providers={providers}
               isConnected={isConnected}

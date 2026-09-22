@@ -115,6 +115,7 @@ function makeQuery(targetShell: unknown) {
 interface Harness {
   readonly dispatches: OrchestrationCommand[];
   readonly watchdog: FakeWatchdog;
+  readonly liveness: Map<string, "working" | "monitoring">;
   readonly advance: (ms: number) => void;
   readonly fireTick: () => void;
   readonly handleEvent: (event: OrchestrationEvent) => Effect.Effect<void>;
@@ -129,6 +130,7 @@ function makeHarness(input: {
   const { engine, dispatches } = makeEngine(input.replayEvents);
   const query = makeQuery(input.targetShell === undefined ? TARGET_SHELL : input.targetShell);
   const watchdog = makeFakeWatchdog();
+  const liveness = new Map<string, "working" | "monitoring">();
   const fake = makeFakeClock(START);
   const reactor = makeThreadSilenceWatchReactor({
     engine,
@@ -136,6 +138,7 @@ function makeHarness(input: {
     watchdog,
     clock: fake.clock,
     tickMs: 5_000,
+    getLiveness: (threadId) => liveness.get(threadId) ?? null,
   });
   // The reactor's own sweeper runs on the shared fake clock; the test drives
   // its periodic tick through fireTick().
@@ -143,6 +146,7 @@ function makeHarness(input: {
   return {
     dispatches,
     watchdog,
+    liveness,
     advance: fake.advance,
     fireTick: fake.fireTick,
     handleEvent: reactor.handleEvent,
@@ -405,6 +409,151 @@ describe("makeThreadSilenceWatchReactor", () => {
     }),
   );
 
+  it.effect("ready with no live background work resolves the watch (turn ended, thread idle)", () =>
+    Effect.gen(function* () {
+      const harness = makeHarness({});
+      yield* harness.handleEvent(watchRegistered());
+
+      yield* harness.handleEvent(sessionSet("ready"));
+      yield* Effect.yieldNow;
+
+      expect(detectedPayloads(harness.dispatches)).toHaveLength(1);
+      expect(detectedPayloads(harness.dispatches)[0]).toMatchObject({
+        reason: "stopped",
+        stoppedStatus: "ready",
+      });
+      // The watch is closed.
+      harness.advance(900_000);
+      harness.fireTick();
+      yield* settle(harness);
+      expect(detectedPayloads(harness.dispatches)).toHaveLength(1);
+    }),
+  );
+
+  it.effect(
+    "last background task settles after ready with no later session-set and stops the watch",
+    () =>
+      Effect.gen(function* () {
+        const harness = makeHarness({});
+        yield* harness.handleEvent(watchRegistered());
+        harness.liveness.set(TARGET, "monitoring");
+
+        // Turn ends while a background job is live: waiting, not stopped.
+        yield* harness.handleEvent(sessionSet("ready"));
+        yield* Effect.yieldNow;
+        expect(detectedPayloads(harness.dispatches)).toHaveLength(0);
+
+        // The watch is still armed: a sweep can still report silence...
+        harness.advance(900_000);
+        harness.fireTick();
+        yield* settle(harness);
+        expect(
+          detectedPayloads(harness.dispatches).some(
+            (p) => (p as { reason?: string }).reason === "silent",
+          ),
+        ).toBe(true);
+
+        // Task completion only clears the in-memory liveness entry; it does
+        // not dispatch another session-set. The next deterministic sweep must
+        // re-evaluate the remembered ready state and close the watch.
+        harness.liveness.delete(TARGET);
+        harness.fireTick();
+        yield* settle(harness);
+        expect(
+          detectedPayloads(harness.dispatches).filter(
+            (p) => (p as { reason?: string }).reason === "stopped",
+          ),
+        ).toEqual([expect.objectContaining({ stoppedStatus: "ready" })]);
+
+        // Resolution removed the watch, so recurring silence stops too.
+        harness.advance(900_000);
+        harness.fireTick();
+        yield* settle(harness);
+        expect(detectedPayloads(harness.dispatches)).toHaveLength(2);
+      }),
+  );
+
+  it.effect("unknown session statuses are ignored by the stop path", () =>
+    Effect.gen(function* () {
+      const harness = makeHarness({});
+      yield* harness.handleEvent(watchRegistered());
+
+      yield* harness.handleEvent(sessionSet("resuming"));
+      yield* Effect.yieldNow;
+      expect(detectedPayloads(harness.dispatches)).toHaveLength(0);
+    }),
+  );
+
+  it.effect("cancelled watch cannot leak a stale ready status into a later watch", () =>
+    Effect.gen(function* () {
+      const harness = makeHarness({});
+      yield* harness.handleEvent(watchRegistered());
+      harness.liveness.set(TARGET, "working");
+      yield* harness.handleEvent(sessionSet("ready"));
+      yield* harness.handleEvent(watchCancelled());
+
+      // The projected shell is running. A new watch must use that current
+      // state rather than the cancelled watch's remembered ready event.
+      harness.liveness.delete(TARGET);
+      yield* harness.handleEvent(watchRegistered({ watchId: "w2" }));
+      harness.watchdog.state.set(TARGET, { lastActivityAtMs: START, pendingToolCount: 0 });
+      harness.fireTick();
+      yield* settle(harness);
+      expect(detectedPayloads(harness.dispatches)).toHaveLength(0);
+    }),
+  );
+
+  it.effect("immediate registration resolution clears the previous watch's ready cache", () =>
+    Effect.gen(function* () {
+      const targetShell = {
+        ...TARGET_SHELL,
+        session: { status: "running" },
+      } as unknown as { session: { status: string } };
+      const harness = makeHarness({ targetShell });
+      yield* harness.handleEvent(watchRegistered());
+      harness.liveness.set(TARGET, "working");
+      yield* harness.handleEvent(sessionSet("ready"));
+
+      // Registering B after settlement discovers ready in the projection and
+      // immediately resolves both pending watches.
+      harness.liveness.delete(TARGET);
+      targetShell.session.status = "ready";
+      yield* harness.handleEvent(watchRegistered({ watchId: "w2" }));
+      expect(detectedPayloads(harness.dispatches)).toHaveLength(2);
+
+      // A later watch sees running and must not inherit A's cached ready.
+      targetShell.session.status = "running";
+      yield* harness.handleEvent(watchRegistered({ watchId: "w3" }));
+      harness.watchdog.state.set(TARGET, { lastActivityAtMs: START, pendingToolCount: 0 });
+      harness.fireTick();
+      yield* settle(harness);
+      expect(detectedPayloads(harness.dispatches)).toHaveLength(2);
+    }),
+  );
+
+  it.effect("a registration for a ready target with live background work stays pending", () =>
+    Effect.gen(function* () {
+      const harness = makeHarness({
+        targetShell: { ...TARGET_SHELL, session: { status: "ready" } },
+      });
+      harness.liveness.set(TARGET, "working");
+      yield* harness.handleEvent(watchRegistered());
+      yield* Effect.yieldNow;
+      expect(detectedPayloads(harness.dispatches)).toHaveLength(0);
+
+      // The periodic recheck also covers a ready shell discovered at
+      // registration (for example after reactor startup/rehydration).
+      harness.liveness.delete(TARGET);
+      harness.fireTick();
+      yield* settle(harness);
+      expect(detectedPayloads(harness.dispatches)).toHaveLength(1);
+      expect(detectedPayloads(harness.dispatches)[0]).toMatchObject({
+        reason: "stopped",
+        stoppedStatus: "ready",
+      });
+    }),
+  );
+
   it.effect("a registration for an already-terminal target resolves immediately", () =>
     Effect.gen(function* () {
       const harness = makeHarness({
@@ -534,6 +683,101 @@ describe("makeThreadSilenceWatchReactor", () => {
             SILENCE_WATCH_TERMINAL_NOTIFIED_KIND,
       );
       expect(markers).toHaveLength(1);
+    }),
+  );
+
+  const sessionEventSeq = (status: string, sequence: number): OrchestrationEvent =>
+    ({
+      type: "thread.session-set",
+      sequence,
+      payload: { threadId: ThreadId.make(TARGET), session: { status, lastError: null } },
+    }) as unknown as OrchestrationEvent;
+
+  it.effect(
+    "rehydration: a stop in a NEW epoch re-notifies, anchored on the real stop sequence",
+    () =>
+      Effect.gen(function* () {
+        // The target stopped @3, was reported, resumed @5, stopped again @6 -
+        // a fresh epoch the watcher still owes one notification. The marker
+        // written by the boot re-resolution must anchor on 6, not 0, or every
+        // later restart re-reports the same terminal episode.
+        const replay = [
+          watchRegistered(),
+          sessionEventSeq("running", 2),
+          sessionEventSeq("error", 3),
+          terminalNotifiedMarker("w1", TARGET, 3),
+          sessionEventSeq("running", 5),
+          sessionEventSeq("error", 6),
+        ];
+        const harness = makeHarness({
+          targetShell: { ...TARGET_SHELL, session: { status: "stopped" } },
+          replayEvents: replay,
+        });
+        yield* harness.rehydrate;
+        yield* Effect.yieldNow;
+        const payloads = detectedPayloads(harness.dispatches);
+        expect(payloads).toHaveLength(1);
+        expect(payloads[0]).toMatchObject({
+          watchId: "w1",
+          reason: "stopped",
+          stoppedStatus: "stopped",
+        });
+        const marker = harness.dispatches.find(
+          (command) =>
+            command.type === "thread.activity.append" &&
+            (command as { activity?: { kind?: string } }).activity?.kind ===
+              SILENCE_WATCH_TERMINAL_NOTIFIED_KIND,
+        );
+        const markerPayload = (marker as { activity: { payload: unknown } }).activity.payload as {
+          dedupKey: string;
+          resumeThreadId: string;
+          eventSequence: number;
+        };
+        expect(markerPayload).toMatchObject({
+          dedupKey: "w1",
+          resumeThreadId: TARGET,
+          eventSequence: 6,
+        });
+      }),
+  );
+
+  it.effect("rehydration: the boot-resolved marker stops the re-notify on the NEXT restart", () =>
+    Effect.gen(function* () {
+      // Same history plus the marker the previous boot wrote: a second boot
+      // must NOT re-report the same terminal episode.
+      const replay = [
+        watchRegistered(),
+        sessionEventSeq("running", 2),
+        sessionEventSeq("error", 3),
+        terminalNotifiedMarker("w1", TARGET, 3),
+        sessionEventSeq("running", 5),
+        sessionEventSeq("error", 6),
+        {
+          type: "thread.activity-appended",
+          sequence: 7,
+          payload: {
+            threadId: WATCHER,
+            activity: {
+              kind: SILENCE_WATCH_TERMINAL_NOTIFIED_KIND,
+              payload: {
+                dedupKey: "w1",
+                resumeThreadId: TARGET,
+                eventSequence: 6,
+                watchId: "w1",
+                targetThreadId: TARGET,
+                stoppedStatus: "stopped",
+              },
+            },
+          },
+        } as unknown as OrchestrationEvent,
+      ];
+      const harness = makeHarness({
+        targetShell: { ...TARGET_SHELL, session: { status: "stopped" } },
+        replayEvents: replay,
+      });
+      yield* harness.rehydrate;
+      yield* Effect.yieldNow;
+      expect(detectedPayloads(harness.dispatches)).toHaveLength(0);
     }),
   );
 });

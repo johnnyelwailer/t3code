@@ -124,10 +124,7 @@ describe("ProjectDashboardKickoffAside recipe discovery", () => {
     };
     mockUseSidecarComposition.mockReturnValue({
       composition: {
-        sections: [
-          { sectionId: "quick-starts", visible: true, collapsed: false },
-          { sectionId: "recent-conversations", visible: true, collapsed: false },
-        ],
+        sections: [{ sectionId: "quick-starts", visible: true, collapsed: false }],
       },
       setCollapsed: () => undefined,
       userOverrides: { sections: [] },
@@ -149,7 +146,6 @@ describe("ProjectDashboardKickoffAside recipe discovery", () => {
         <ProjectDashboardKickoffAside
           project={project}
           dashboardMode="backlog"
-          projectThreads={[]}
           activeThread={null}
           providers={[]}
           isConnected
