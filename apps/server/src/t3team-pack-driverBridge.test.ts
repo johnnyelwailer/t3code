@@ -168,6 +168,7 @@ describe("bridgePackProviderDriver", () => {
         threadId: startThreadId,
         providerSessionId: "provider-session-1",
         providerInstanceId: ProviderInstanceId.make("nexi"),
+        capabilities: new Set<never>(),
         endpoint: "http://127.0.0.1:3000/mcp",
         authorizationHeader: "Bearer provider-token",
       });

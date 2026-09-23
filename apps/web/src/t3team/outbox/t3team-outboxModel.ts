@@ -167,7 +167,7 @@ export const OUTBOX_CONFIRMATION_TIMEOUT_MS = 90_000;
 /** How long a cross-tab dispatch claim stays authoritative before another tab may take over. */
 export const OUTBOX_CLAIM_TTL_MS = 45_000;
 
-/** Short human preview for the queued-state banner. */
+/** Short human preview for the queued-send timeline row. */
 export function t3TeamOutboxEntryPreview(entry: T3TeamOutboxEntry): string {
   switch (entry.kind) {
     case "turn-start":

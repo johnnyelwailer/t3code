@@ -27,9 +27,12 @@ describe("shouldStopSilenceWatch", () => {
 });
 
 describe("isTrueTerminalSessionStatus", () => {
-  it.each(["error", "interrupted", "stopped", "deleted"])("reports true terminal %s", (status) => {
-    expect(isTrueTerminalSessionStatus(status)).toBe(true);
-  });
+  it.each(["error", "interrupted", "stopped", "deleted", "settled"])(
+    "reports true terminal %s",
+    (status) => {
+      expect(isTrueTerminalSessionStatus(status)).toBe(true);
+    },
+  );
 
   it.each([undefined, "ready", "idle", "running", "starting"])(
     "rejects non-terminal status %s (a turn-end is not a terminal fact)",

@@ -20,17 +20,19 @@ const prompt: PendingUserInput = {
       multiSelect: false,
     },
   ],
+  dismissible: true,
 };
 
-function renderPanel() {
+function renderPanel(pendingUserInput: PendingUserInput = prompt) {
   return renderToStaticMarkup(
     <ComposerPendingUserInputPanel
-      pendingUserInputs={[prompt]}
+      pendingUserInputs={[pendingUserInput]}
       respondingRequestIds={[]}
       answers={{}}
       questionIndex={0}
       onToggleOption={() => {}}
       onAdvance={() => {}}
+      onDismiss={() => {}}
     />,
   );
 }
@@ -50,6 +52,13 @@ describe("ComposerPendingUserInputPanel", () => {
     expect(markup).toMatch(new RegExp(`<div[^>]*\\sid="${controlledId}"`));
   });
 
+  it("offers dismiss only for async questions", () => {
+    expect(renderPanel()).toContain("data-pending-user-input-dismiss");
+    expect(renderPanel({ ...prompt, dismissible: false })).not.toContain(
+      "data-pending-user-input-dismiss",
+    );
+  });
+
   it("starts expanded so the question and its options are visible", () => {
     const markup = renderPanel();
 
@@ -66,6 +75,7 @@ describe("ComposerPendingUserInputPanel", () => {
           {
             requestId: ApprovalRequestId.make("request-md"),
             createdAt: "2026-08-15T00:00:00.000Z",
+            dismissible: false,
             questions: [
               {
                 id: "question-md",
@@ -87,6 +97,7 @@ describe("ComposerPendingUserInputPanel", () => {
         questionIndex={0}
         onToggleOption={() => {}}
         onAdvance={() => {}}
+        onDismiss={() => {}}
       />,
     );
 
@@ -106,6 +117,7 @@ describe("ComposerPendingUserInputPanel", () => {
           {
             requestId: ApprovalRequestId.make("request-ctx"),
             createdAt: "2026-08-15T00:00:00.000Z",
+            dismissible: false,
             questions: [
               {
                 id: "question-ctx",
@@ -126,6 +138,7 @@ describe("ComposerPendingUserInputPanel", () => {
         questionIndex={0}
         onToggleOption={() => {}}
         onAdvance={() => {}}
+        onDismiss={() => {}}
       />,
     );
 

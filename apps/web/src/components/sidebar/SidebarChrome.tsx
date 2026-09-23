@@ -1,7 +1,6 @@
 import {
   ArrowLeftIcon,
   ChartNoAxesColumnIcon,
-  GitPullRequestIcon,
   InboxIcon,
   ListTreeIcon,
   SettingsIcon,
@@ -38,6 +37,7 @@ import { readPullRequestListPreferences } from "../pullRequest/pullRequestListPr
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
+import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
@@ -128,12 +128,13 @@ function SidebarBrand({
       )}
       to="/"
     >
-      <span className="inline-flex min-w-0 items-baseline gap-1">
-        <T3Wordmark aria-label="T3" className="h-2.5 w-auto shrink-0" />
+      {/* Center the visible capitals, without the font's ascender/descender space. */}
+      <span className="inline-flex min-w-0 items-baseline gap-1 text-sm font-medium tracking-tight">
+        <T3Wordmark aria-label="T3" className="h-[1cap] w-auto shrink-0" />
         <span
           className={cn(
-            "truncate text-sm font-medium tracking-tight",
-            onBackdrop ? backdropMutedLabelClass : "text-muted-foreground",
+            "truncate [text-box:trim-both_cap_alphabetic]",
+            onBackdrop ? "text-white/70" : "text-muted-foreground",
           )}
         >
           Code
@@ -294,7 +295,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             />
             {pullRequestsSupported ? (
               <SidebarUtilityItem
-                icon={<GitPullRequestIcon />}
+                icon={<PullRequestGlyph.pullRequest />}
                 label="Pull Requests"
                 onClick={handlePullRequestsClick}
               />
@@ -314,7 +315,7 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
 
 export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
   return (
-    <SidebarFooter className="p-[var(--sidebar-content-inset)]">
+    <SidebarFooter className="px-[var(--sidebar-content-inset)] py-1">
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
       {/* The fork's t3team team-nav rows live inside SidebarUtilityMenu (top of

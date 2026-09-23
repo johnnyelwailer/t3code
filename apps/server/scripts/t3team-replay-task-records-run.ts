@@ -30,6 +30,9 @@ type ThreadPlan = { readonly threadId: string; readonly plan: PlanStep[] };
 export const makeTaskReplayConfig = Effect.fn("makeTaskReplayConfig")(function* (baseDir: string) {
   const derived = yield* ServerConfig.deriveServerPaths(baseDir, undefined);
   return ServerConfig.make({
+    otlpHeaders: undefined,
+    otlpProtocol: "http/protobuf",
+    devAuthToken: undefined,
     logLevel: "Info",
     traceMinLevel: "Info",
     traceTimingEnabled: false,

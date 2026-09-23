@@ -7,7 +7,7 @@ import type { ThreadBootstrapStatus } from "~/t3team/chat/t3team-useThreadBootst
 import { useThreadChatComposerState } from "~/t3team/chat/t3team-useThreadChatComposerState";
 import { ThreadKickoffPlaceholder } from "~/t3team/chat/t3team-threadKickoffPlaceholder";
 import { T3TeamThreadComposerAccessory } from "~/t3team/chat/t3team-ThreadComposerAccessory";
-import { T3TeamOutboxBanner } from "~/t3team/outbox/t3team-outboxBanner";
+import { t3TeamOutboxTimelineExtensions } from "~/t3team/outbox/t3team-outboxTimelineRows";
 import { useT3TeamOutboxStore } from "~/t3team/outbox/t3team-outboxStore";
 import { useT3TeamOutboxDrain } from "~/t3team/outbox/t3team-useOutboxDrain";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
@@ -105,6 +105,17 @@ export function ThreadChatViewBody({
   );
   const outboxEntries = useThreadOutbox(environmentId, threadId, backend);
   const outboxSnapshot = useT3TeamOutboxStore();
+  // Stable row nodes for the native queued surface: re-built only when the
+  // outbox actually changes, so composer churn does not re-render the rows.
+  const outboxTimelineExtensions = useMemo(
+    () =>
+      t3TeamOutboxTimelineExtensions(
+        outboxEntries,
+        outboxSnapshot.dispatchingEntryId,
+        outboxSnapshot.failures,
+      ),
+    [outboxEntries, outboxSnapshot.dispatchingEntryId, outboxSnapshot.failures],
+  );
   const controlWorkflow = backend?.controlWorkflow
     ? ({ workflowRunId, action }: { workflowRunId: string; action: "pause" | "resume" | "stop" }) =>
         backend.controlWorkflow!({ threadId, workflowRunId, action })
@@ -125,11 +136,6 @@ export function ThreadChatViewBody({
       {hasServerThread ? (
         <>
           {kickoffPlaceholder}
-          <T3TeamOutboxBanner
-            entries={outboxEntries}
-            dispatchingEntryId={outboxSnapshot.dispatchingEntryId}
-            failures={outboxSnapshot.failures}
-          />
           <ChatView
             environmentId={environmentId}
             threadId={threadId as never}
@@ -163,6 +169,7 @@ export function ThreadChatViewBody({
             {...(controlWorkflow ? { onControlWorkflow: controlWorkflow } : {})}
             onOpenThread={onOpenThread}
             {...(onForkThread ? { onForkThread } : {})}
+            queuedExtensions={outboxTimelineExtensions}
           />
         </>
       ) : (

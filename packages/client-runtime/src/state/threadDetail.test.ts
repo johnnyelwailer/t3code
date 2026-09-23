@@ -33,6 +33,7 @@ const shell = {
   hasPendingApprovals: false,
   hasPendingUserInput: false,
   hasActionableProposedPlan: false,
+  pullRequests: [],
 } satisfies EnvironmentThreadShell;
 
 describe("mergeEnvironmentThread", () => {

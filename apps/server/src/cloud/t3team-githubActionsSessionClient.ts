@@ -81,13 +81,40 @@ export function dispatchSessionInvocation(
   };
 }
 
-export function listRunsInvocation(ref: CloudSessionRepoRef, limit: number): GhInvocation {
+/**
+ * List the session workflow's runs, scoped to one login when `actor` is given
+ * (server-side `actor=` filter — a user only sees runs THEY triggered; omit
+ * `actor` for the pre-isolation "every run" behavior).
+ *
+ * The filter is `actor`, not `created_by`: on the fleet's GHE `created_by` is
+ * silently ignored (verified live), while `actor` is honored, and for
+ * `workflow_dispatch` the actor is exactly the user who started the run.
+ */
+export function listRunsInvocation(
+  ref: CloudSessionRepoRef,
+  limit: number,
+  actor?: string,
+): GhInvocation {
+  const query =
+    actor === undefined
+      ? `per_page=${limit}`
+      : `per_page=${limit}&actor=${encodeURIComponent(actor)}`;
   return {
     args: apiArgs(
       ref,
-      `repos/${ref.owner}/${ref.repo}/actions/workflows/${ref.workflowFileName}/runs?per_page=${limit}`,
+      `repos/${ref.owner}/${ref.repo}/actions/workflows/${ref.workflowFileName}/runs?${query}`,
     ),
   };
+}
+
+/**
+ * Resolve the GitHub login the current `gh` credential is signed in as, on the
+ * fleet host. `--jq .login` prints the bare login, so the whole stdout is the
+ * answer. Same host + keyring token as dispatch, so a run's `actor` matches it
+ * exactly — what makes scoping the list to "my sessions" sound.
+ */
+export function currentLoginInvocation(ref: CloudSessionRepoRef): GhInvocation {
+  return { args: ["api", "--hostname", ref.host, "user", "--jq", ".login"] };
 }
 
 export function jobStepsInvocation(ref: CloudSessionRepoRef, runId: number): GhInvocation {
@@ -122,6 +149,14 @@ function toRun(raw: Record<string, unknown>): WorkflowRunSummary {
     htmlUrl: asString(raw["html_url"]),
     name: asString(raw["name"]) || asString(raw["display_title"]),
   };
+}
+
+/**
+ * The login is the whole stdout (`--jq .login` prints a bare string, minus the trailing newline `gh` appends); `null` when empty — the caller must fail closed, never read a blank answer as "no sessions".
+ */
+export function parseLogin(stdout: string): string | null {
+  const login = stdout.trim();
+  return login === "" ? null : login;
 }
 
 /**

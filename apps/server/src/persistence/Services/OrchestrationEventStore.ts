@@ -60,6 +60,18 @@ export interface OrchestrationEventStoreShape {
     limit?: number,
   ) => Stream.Stream<OrchestrationEvent, OrchestrationEventStoreError>;
 
+  /**
+   * Replay attachment-cleanup events plus the current head marker.
+   *
+   * Live storage filters this at the SQL boundary so cleanup recovery does not
+   * decode unrelated message and activity history. Optional for lightweight
+   * test stores; callers fall back to readFromSequence when it is absent.
+   */
+  readonly readAttachmentCleanupCandidatesFromSequence?: (
+    sequenceExclusive: number,
+    limit?: number,
+  ) => Stream.Stream<OrchestrationEvent, OrchestrationEventStoreError>;
+
   /** Read one aggregate through a captured global head, without decoding other streams. */
   readonly readAggregateRange: (
     input: OrchestrationAggregateReplayRange & { readonly limit?: number },

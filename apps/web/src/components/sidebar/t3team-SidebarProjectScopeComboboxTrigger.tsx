@@ -43,14 +43,7 @@ export function T3TeamSidebarProjectScopeComboboxTrigger({
     >
       {scopedGroup ? (
         <span className="flex shrink-0">
-          <ProjectFavicon
-            environmentId={scopedGroup.environmentId}
-            cwd={scopedGroup.workspaceRoot}
-            projectName={scopedGroup.title}
-            faviconPath={scopedGroup.faviconPath}
-            projectIcon={scopedGroup.projectIcon}
-            className="size-4"
-          />
+          <ProjectFavicon project={scopedGroup} className="size-4" />
         </span>
       ) : (
         <FolderIcon className="size-4 shrink-0" />

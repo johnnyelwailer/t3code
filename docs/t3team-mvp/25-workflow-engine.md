@@ -42,6 +42,10 @@ Treat this doc as authoritative for:
 - capability gating via `meta.capabilities`,
 - how recipes thread typed orchestration references into views.
 
+Long-lived runs need one additional contract: [Bounded Execution](../runbook/bounded-execution.md)
+defines checkpoint boundaries, replay windows, and retention without changing this epic's
+TypeScript author model or introducing a second runtime.
+
 ## Why now
 
 The current orchestration runtime is a forward-only cursor over a persisted step list (see
@@ -1342,6 +1346,8 @@ decides whether a human is needed. Small migration, large payoff.
 
 ## References
 
+- [Bounded Execution](../runbook/bounded-execution.md) — checkpointing, bounded replay, and
+  retention for long-lived runs built on this engine's journal and replay contract.
 - [Epic 16: Action Recipes](./16-action-recipes.md) — recipe shape, discovery, surfaces,
   applicability, kickoff UX.
 - [Epic 19: Workspace Miniapps](./19-workspace-miniapps.md) — View placements and the

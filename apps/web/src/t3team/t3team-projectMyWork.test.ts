@@ -7,6 +7,7 @@ import {
   buildProjectMyWorkVisibleHierarchy,
   filterDigestTickets,
   filterProjectMyWorkTickets,
+  hasActiveDigestFilters,
   isProjectMyWorkEpic,
   isProjectMyWorkTicket,
 } from "./t3team-projectMyWork";
@@ -273,5 +274,22 @@ describe("project my work", () => {
       "epic",
       "assigned",
     ]);
+  });
+
+  it("only treats non-default digest values as active filters", () => {
+    const defaults = {
+      query: "",
+      statusCategory: "all" as const,
+      excludedTypeKeys: [],
+      selectedPriority: "all",
+      selectedStatus: "all",
+    };
+
+    expect(hasActiveDigestFilters(defaults)).toBe(false);
+    expect(hasActiveDigestFilters({ ...defaults, query: "  done  " })).toBe(true);
+    expect(hasActiveDigestFilters({ ...defaults, statusCategory: "done" })).toBe(true);
+    expect(hasActiveDigestFilters({ ...defaults, excludedTypeKeys: ["epic"] })).toBe(true);
+    expect(hasActiveDigestFilters({ ...defaults, selectedPriority: "High" })).toBe(true);
+    expect(hasActiveDigestFilters({ ...defaults, selectedStatus: "Done" })).toBe(true);
   });
 });

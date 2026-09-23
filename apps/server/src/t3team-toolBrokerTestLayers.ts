@@ -75,6 +75,10 @@ const stubStartChildServices = Layer.mergeAll(
 
 const projectionQueryMock: ProjectionSnapshotQueryShape = {
   getCommandReadModel: () => Effect.die("unused"),
+  listActivitiesByKind: () => Effect.die("unused"),
+  getDeletedWorktreeThreads: () => Effect.die("unused"),
+  getProjectShells: () => Effect.die("unused"),
+  getTurnStartMessage: () => Effect.die("unused"),
   getUserInputActivity: () => Effect.die("unused"),
   getImportedAgentSessionSources: () => Effect.succeed([]),
   getThreadRuntimeContext: () => Effect.succeed(Option.none()),
@@ -110,6 +114,7 @@ const projectionQueryMock: ProjectionSnapshotQueryShape = {
   threadExists: () => Effect.die("unused"),
   getEventReplayStats: () => Effect.die("unused"),
   hasPendingTurnStart: () => Effect.die("unused"),
+  listThreadMessageRefs: () => Effect.die("unused"),
   searchThreads: () => Effect.succeed({ matches: [] }),
   getThreadDetailById: () =>
     Effect.succeed(
@@ -122,6 +127,7 @@ const projectionQueryMock: ProjectionSnapshotQueryShape = {
         interactionMode: "default",
         branch: null,
         worktreePath: null,
+        pullRequests: [],
         latestTurn: null,
         createdAt: "2026-01-01T00:00:00.000Z",
         updatedAt: "2026-01-01T00:00:00.000Z",

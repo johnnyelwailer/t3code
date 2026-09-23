@@ -15,7 +15,7 @@ const CodexMcpListSchema = Schema.Array(
 
 const decodeCodexMcpList = Schema.decodeEffect(Schema.fromJsonString(CodexMcpListSchema));
 
-export class T3TeamCodexCliError extends Schema.TaggedErrorClass<T3TeamCodexCliError>()(
+export class T3TeamCodexCliError extends Schema.TaggedError<T3TeamCodexCliError>()(
   "T3TeamCodexCliError",
   {
     detail: Schema.String,
@@ -23,7 +23,7 @@ export class T3TeamCodexCliError extends Schema.TaggedErrorClass<T3TeamCodexCliE
   },
 ) {}
 
-export class T3TeamWorkspacePathError extends Schema.TaggedErrorClass<T3TeamWorkspacePathError>()(
+export class T3TeamWorkspacePathError extends Schema.TaggedError<T3TeamWorkspacePathError>()(
   "T3TeamWorkspacePathError",
   {
     detail: Schema.String,

@@ -158,4 +158,73 @@ layer("loadT3TeamThreadPlacements (GHE #382)", (it) => {
       assert.deepStrictEqual(placements, [{ threadId: "thread-999", parentThreadId: "parent" }]);
     }),
   );
+
+  it.effect("binds the handoff.started lookup to the requested child ids in SQL", () =>
+    Effect.gen(function* () {
+      yield* runMigrations();
+
+      yield* insertThread("child-a");
+      yield* insertThread("child-b");
+      yield* insertThread("parent-a-old");
+      yield* insertThread("parent-a-new");
+      yield* insertThread("parent-b");
+      yield* insertThread("unrelated-parent");
+      yield* insertThread("child-with-number");
+
+      // child-a has two started rows; the newest wins (identical contract to
+      // the former in-memory newest-per-child reduce).
+      yield* insertActivity({
+        activityId: "s-a-old",
+        threadId: "parent-a-old",
+        kind: "t3team.handoff.started",
+        payload: { childThreadId: "child-a" },
+        createdAt: "2026-09-01T00:00:01.000Z",
+      });
+      yield* insertActivity({
+        activityId: "s-a-new",
+        threadId: "parent-a-new",
+        kind: "t3team.handoff.started",
+        payload: { childThreadId: "child-a" },
+        createdAt: "2026-09-01T00:00:02.000Z",
+      });
+      yield* insertActivity({
+        activityId: "s-b",
+        threadId: "parent-b",
+        kind: "t3team.handoff.started",
+        payload: { childThreadId: "child-b" },
+        createdAt: "2026-09-01T00:00:03.000Z",
+      });
+      // Not requested: the SQL-bound query must not even return this row,
+      // instead of fetching it and dropping it in JS.
+      yield* insertActivity({
+        activityId: "s-other",
+        threadId: "unrelated-parent",
+        kind: "t3team.handoff.started",
+        payload: { childThreadId: "child-unrequested" },
+        createdAt: "2026-09-01T00:00:04.000Z",
+      });
+      // Type contract: a numeric childThreadId must not match the text id "42" —
+      // json_extract is type-aware, so an INTEGER payload value never equals a
+      // bound TEXT parameter.
+      yield* insertActivity({
+        activityId: "s-number",
+        threadId: "unrelated-parent",
+        kind: "t3team.handoff.started",
+        payload: { childThreadId: 42 },
+        createdAt: "2026-09-01T00:00:05.000Z",
+      });
+
+      const placements = yield* loadT3TeamThreadPlacements([
+        "child-a",
+        "child-b",
+        "child-with-number",
+        "42",
+      ]);
+
+      assert.deepStrictEqual(placements, [
+        { threadId: "child-a", parentThreadId: "parent-a-new" },
+        { threadId: "child-b", parentThreadId: "parent-b" },
+      ]);
+    }),
+  );
 });

@@ -240,3 +240,25 @@ export function filterDigestTickets({
       return buildProjectMyWorkSearchHaystack(ticket, ticketById).includes(normalizedQuery);
     });
 }
+
+export function hasActiveDigestFilters({
+  query,
+  statusCategory,
+  excludedTypeKeys = [],
+  selectedPriority,
+  selectedStatus,
+}: {
+  query: string;
+  statusCategory: ProjectMyWorkStatusCategory;
+  excludedTypeKeys?: ReadonlyArray<string>;
+  selectedPriority: string;
+  selectedStatus: string;
+}): boolean {
+  return (
+    query.trim().length > 0 ||
+    statusCategory !== "all" ||
+    excludedTypeKeys.length > 0 ||
+    selectedPriority !== "all" ||
+    selectedStatus !== "all"
+  );
+}

@@ -52,6 +52,8 @@ function Row({
         backgroundJobs,
         onOpenAgents: () => {},
         threadActivityState: isWorking ? "thinking" : null,
+        unsettledTurnId: null,
+        backgroundWorktreeSetup: null,
       }}
     >
       <WorkingTimelineRow

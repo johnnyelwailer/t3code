@@ -199,6 +199,9 @@ export const ServerProvider = Schema.Struct({
   badgeLabel: Schema.optional(TrimmedNonEmptyString),
   continuation: Schema.optional(ServerProviderContinuation),
   showInteractionModeToggle: Schema.optional(Schema.Boolean),
+  // The driver streams context window usage, so a started thread will have a
+  // meter once its activities load. Clients reserve the meter's space on it.
+  reportsContextWindow: Schema.optional(Schema.Boolean),
   requiresNewThreadForModelChange: Schema.optional(Schema.Boolean),
   supportsConversationRollback: Schema.optional(Schema.Boolean),
   supportsTextGeneration: Schema.optional(Schema.Boolean),
@@ -573,11 +576,22 @@ export const ServerConfig = Schema.Struct({
   /** Whether thread subscriptions can emit an opt-in catch-up completion marker. */
   threadResumeCompletionMarker: Schema.optionalKey(Schema.Boolean),
   /**
+   * Whether the client should stagger thread-subscription resubscribes
+   * (first few of a burst immediate, the rest spread over time) instead of
+   * reopening every live thread stream in the same tick after a session
+   * change. Server-authoritative runtime feature flag (env
+   * `NEXI_FF_THREAD_RESUB_STAGGER`, default on); absent on older servers, so
+   * clients keep the legacy immediate behavior against them.
+   */
+  threadResubscribeStagger: Schema.optionalKey(Schema.Boolean),
+  /**
    * Whether thread detail reads accept a turn window (`turnLimit`/
    * `beforeCursor`) and return `page` metadata. Clients must not send window
    * fields to servers that don't advertise this.
    */
   threadSnapshotPagination: Schema.optionalKey(Schema.Boolean),
+  /** Whether thread reads accept the reasoningMessages opt-in. */
+  reasoningMessages: Schema.optionalKey(Schema.Boolean),
   /**
    * Palettes published by this environment's machine. Never sent in a config
    * snapshot: the theme stream emits the current set before any change, so a
@@ -597,14 +611,19 @@ export type ServerConfig = typeof ServerConfig.Type;
 
 /**
  * The machine an environment should be drawn as: the user's pick, else what
- * the server detected, else a generic server. A null config (not connected
- * yet, or an older server) resolves to the same generic so rows never
- * flicker between glyphs.
+ * the server detected, else a generic server. Settings only exist once
+ * connected; a descriptor alone (relay discovery, before any connection)
+ * still yields the detected kind. A null config (nothing known yet, or an
+ * older server) resolves to the same generic so rows never flicker between
+ * glyphs.
  */
 export function resolveEnvironmentMachineKind(
-  config: Pick<ServerConfig, "environment" | "settings"> | null,
+  config: {
+    readonly environment: Pick<ExecutionEnvironmentDescriptor, "platform">;
+    readonly settings?: Pick<ServerSettings, "environmentIcon">;
+  } | null,
 ): EnvironmentMachineKind {
-  return config?.settings.environmentIcon ?? config?.environment.platform.machine ?? "server";
+  return config?.settings?.environmentIcon ?? config?.environment.platform.machine ?? "server";
 }
 
 const ServerUpsertKeybindingReplaceTarget = Schema.Struct({
@@ -791,7 +810,7 @@ export const ServerProviderUpdateInput = Schema.Struct({
 });
 export type ServerProviderUpdateInput = typeof ServerProviderUpdateInput.Type;
 
-export class ServerProviderUpdateError extends Schema.TaggedErrorClass<ServerProviderUpdateError>()(
+export class ServerProviderUpdateError extends Schema.TaggedError<ServerProviderUpdateError>()(
   "ServerProviderUpdateError",
   {
     provider: ProviderDriverKind,
@@ -847,7 +866,7 @@ export const ServerSelfUpdateProgressEvent = Schema.Union([
 ]);
 export type ServerSelfUpdateProgressEvent = typeof ServerSelfUpdateProgressEvent.Type;
 
-export class ServerSelfUpdateError extends Schema.TaggedErrorClass<ServerSelfUpdateError>()(
+export class ServerSelfUpdateError extends Schema.TaggedError<ServerSelfUpdateError>()(
   "ServerSelfUpdateError",
   {
     reason: TrimmedNonEmptyString,

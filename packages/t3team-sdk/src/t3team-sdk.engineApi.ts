@@ -20,8 +20,14 @@
 
 import type { WorkflowBudget } from "./t3team-sdk.primitiveTypes.ts";
 import { bodyApiStorage } from "./t3team-sdk.internal.ts";
+import type {
+  CheckpointInput,
+  CheckpointPrimitives,
+  CheckpointRecord,
+} from "@runbook/core/checkpoint";
 import type { AgentOpts, SpawnThreadOpts, Thread } from "./t3team-sdk.threadTypes.ts";
 import type { WorkflowInvokeOpts, WorkflowRef } from "./t3team-sdk.types.ts";
+import type { Signal, SignalSourceHandle, SignalSourceRef } from "./t3team-sdk.signal.ts";
 
 /** Reads one member of the active body surface, or explains precisely why it is unavailable. */
 export function fromRun<T>(name: string): T {
@@ -112,6 +118,51 @@ export const log = call<[string], void>("log");
 /** Durable timer: suspends the run if the deadline has not passed, and survives a restart. */
 export const wait = call<[number], Promise<void>>("wait");
 export const waitUntil = call<[number], Promise<void>>("waitUntil");
+
+/**
+ * Bounded execution (docs/runbook/bounded-execution.md): commit the `(seq, compactState)`
+ * boundary that a resume replays from instead of from sequence zero. The input participates in
+ * the ordinary argsHash replay check, so a re-driven body whose compact state moved fails loud.
+ */
+export function checkpoint<State>(input: CheckpointInput<State>): Promise<CheckpointRecord<State>> {
+  return fromRun<CheckpointPrimitives["checkpoint"]>("checkpoint")(input);
+}
+
+/**
+ * The compact state a checkpoint-window resume restored — seed your carried state from it so the
+ * body continues from the boundary instead of re-running the superseded prefix.
+ * `undefined` on a fresh start, a full-replay resume, and inside sub-workflow bodies.
+ */
+export function getResume(): CheckpointRecord | undefined {
+  const surface = bodyApiStorage.getStore();
+  if (surface === undefined) {
+    throw new Error(
+      "'getResume' was called outside a workflow runtime. Engine APIs only resolve while an orchestration body is running.",
+    );
+  }
+  return surface.resume as CheckpointRecord | undefined;
+}
+
+/**
+ * Bind a source instance and get the consumer handle (design 42). Journals the durable
+ * `signal.register` binding, then parks on `handle.waitFor(signal, { key })` until the host
+ * delivers the awaited `(signal, key)`. Requires the `'source:<name>'` capability in
+ * `meta.capabilities`.
+ */
+export function getSignalSource<
+  Params,
+  Signals extends ReadonlyArray<Signal<unknown>>,
+>(
+  source: SignalSourceRef<Params, Signals, unknown>,
+  params: Params,
+): Promise<SignalSourceHandle<Signals>> {
+  return fromRun<
+    <P, S extends ReadonlyArray<Signal<unknown>>>(
+      source: SignalSourceRef<P, S, unknown>,
+      params: P,
+    ) => Promise<SignalSourceHandle<S>>
+  >("getSignalSource")(source, params);
+}
 
 /** The journaled wall clock: a resume replays the recorded value, so it stays replay-deterministic. */
 export const now = call<[], number>("now");

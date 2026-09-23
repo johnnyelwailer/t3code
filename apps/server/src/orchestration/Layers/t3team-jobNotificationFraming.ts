@@ -101,7 +101,7 @@ export interface JobNotificationClaim {
  * completion, so it claims that one (the rest expire via the recency window).
  */
 export function findClaimableJobNotificationMarker(
-  activities: ReadonlyArray<OrchestrationThreadActivity> | undefined,
+  activities: ReadonlyArray<Pick<OrchestrationThreadActivity, "id" | "kind" | "payload">> | undefined,
   nowIso: string,
 ): JobNotificationClaim | undefined {
   if (activities === undefined || activities.length === 0) {

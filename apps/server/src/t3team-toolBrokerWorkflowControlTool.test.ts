@@ -22,6 +22,7 @@ import { makeWorkflowControlToolHandlers } from "./t3team-toolBrokerWorkflowCont
 import { buildRunningWorkflowRunRow } from "./t3team-workflowEngineDurability.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { controlWorkflowRun } from "./t3team-workflowRunControl.ts";
+import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
 import type { InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
 
 const projectId = ProjectId.make("proj-control-tool");
@@ -152,6 +153,83 @@ repoLayer("t3team.orchestration.pause / stop", (it) => {
       assert.deepStrictEqual(h.redriven, [
         { threadId: `${runId}:child`, correlationId: `${runId}:2` },
       ]);
+    }),
+  );
+
+  it.effect("pause/resume on a signal-parked run lands back in watching and drains its bridged event", () =>
+    Effect.gen(function* () {
+      const runId = "ctl-resume-signal";
+      const h = yield* seed(runId);
+      // Re-park the row on a signal event instead of a thread ask (design 42): clears the
+      // thread + timer pending columns, records the awaited (signal, key) tuple.
+      yield* h.repo.setWatching({
+        runId,
+        correlationId: `${runId}:w`,
+        watchSourceName: "scm.change-request.watch",
+        watchParamsHash: "hash-1",
+        watchSignalName: "scm.pull-request.merged",
+        watchSignalKey: "42",
+        updatedAt: nowIso(),
+      });
+      // A bridged inbox entry that the delivery port wrote while the run was (about to be) paused.
+      const taken: Array<{ sourceName: string; paramsHash: string; signalName: string; key: string; deliveredAt: string }> = [];
+      let open = true;
+      const signalStore = {
+        takeOpenInboxEntry: (input: { sourceName: string; paramsHash: string; signalName: string; key: string; deliveredAt: string }) => {
+          taken.push(input);
+          if (!open) return Effect.succeed(Option.none());
+          open = false;
+          return Effect.succeed(
+            Option.some({
+              id: 1,
+              sourceName: input.sourceName,
+              paramsHash: input.paramsHash,
+              signalName: input.signalName,
+              key: input.key,
+              payload: { merged: true },
+              delivered: true,
+              createdAt: nowIso(),
+              deliveredAt: nowIso(),
+            }),
+          );
+        },
+      } as unknown as WorkflowSignalStoreShape;
+      // The controller a live launch (or boot rehydration) registered for the parked run.
+      const resumed: Array<{ correlationId: string; reply: unknown }> = [];
+      h.registry.registerRun(runId, {
+        resume: (correlationId, reply) => {
+          resumed.push({ correlationId, reply });
+          return Promise.resolve();
+        },
+        cancel: () => {},
+      });
+
+      yield* h.handlers(launchThreadId).controlWorkflowRun("pause", { runId });
+      const paused = Option.getOrThrow(yield* h.repo.getById({ runId }));
+      assert.strictEqual(paused.status, "paused");
+
+      const value = yield* controlWorkflowRun(
+        { ...h.controlDeps, signalStore, nowIso, stopOrigin: "user" },
+        paused,
+        { threadId: String(launchThreadId), action: "resume" },
+      );
+
+      // The regression (GHE #332 re-review): this used to fail with "Paused workflow has no
+      // continuation." because a signal park has neither a pending thread nor a wake_at.
+      assert.strictEqual(value.status, "watching");
+      const row = Option.getOrThrow(yield* h.repo.getById({ runId }));
+      assert.strictEqual(row.status, "watching");
+      // The bridged event was consumed and delivered to the run's parked correlation.
+      assert.deepStrictEqual(taken, [
+        {
+          sourceName: "scm.change-request.watch",
+          paramsHash: "hash-1",
+          signalName: "scm.pull-request.merged",
+          key: "42",
+          deliveredAt: nowIso(),
+        },
+      ]);
+      assert.deepStrictEqual(resumed, [{ correlationId: `${runId}:w`, reply: { merged: true } }]);
     }),
   );
 

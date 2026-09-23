@@ -30,6 +30,7 @@ import {
   lastTerminalSequenceByThread,
 } from "./t3team-threadSilenceWatchRehydrate.ts";
 import { shouldStopSilenceWatch } from "./t3team-silenceWatchStop.ts";
+import { makeThreadSilenceWatchTerminalClose } from "./t3team-threadSilenceWatchTerminal.ts";
 import { makeThreadSilenceWatchStopRecheck } from "./t3team-threadSilenceWatchStopRecheck.ts";
 import {
   makeThreadSilenceWatchSweeper,
@@ -94,6 +95,11 @@ export const makeThreadSilenceWatchReactor = (
     resolveStopped: (threadId, status, sequence) =>
       emitter.resolveStopped(threadId, status, sequence),
   });
+  const terminalThreadClose = makeThreadSilenceWatchTerminalClose({
+    index,
+    stopRecheck,
+    resolveStopped: emitter.resolveStopped,
+  });
 
   const handleEvent = (event: OrchestrationEvent): Effect.Effect<void> => {
     switch (event.type) {
@@ -142,20 +148,13 @@ export const makeThreadSilenceWatchReactor = (
           .resolveStopped(threadId, status, event.sequence)
           .pipe(Effect.tap(() => Effect.sync(() => stopRecheck.forgetIfUnwatched(threadId))));
       }
-      case "thread.deleted": {
-        const threadId = (event.payload as { readonly threadId: string }).threadId;
-        // The target: close its watches with a stopped notification. The
-        // watcher: its watches are dead with it - drop them without noise.
-        for (const record of index.all()) {
-          if (record.watcherThreadId === threadId) {
-            index.remove(record.watchId);
-            stopRecheck.forgetIfUnwatched(record.targetThreadId);
-          }
-        }
-        return emitter
-          .resolveStopped(threadId, "deleted", event.sequence)
-          .pipe(Effect.tap(() => Effect.sync(() => stopRecheck.forgetIfUnwatched(threadId))));
-      }
+      case "thread.deleted":
+      case "thread.settled":
+        return terminalThreadClose(
+          (event.payload as { readonly threadId: string }).threadId,
+          event.type === "thread.settled" ? "settled" : "deleted",
+          event.sequence,
+        );
       default:
         return Effect.void;
     }
