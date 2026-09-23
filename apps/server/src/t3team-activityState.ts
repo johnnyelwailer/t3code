@@ -17,7 +17,9 @@
  * - `waiting` — no output for `ACTIVITY_STATE_IDLE_GAP_MS` with no tool in
  *   flight. A pending tool suppresses the idle gap: silence while a tool call
  *   is in flight is a legitimate long operation (same rule as the GHE #63
- *   silence watchdog's pending-tool distinction).
+ *   silence watchdog's pending-tool distinction) — up to
+ *   `ACTIVITY_STATE_TOOL_STALL_CEILING_MS` for a tool that never reports back
+ *   (see `t3team-activityStateIdle.ts`, GHE #297 Defect 2).
  *
  * `ACTIVITY_STATE_IDLE_GAP_MS` (30s): long enough that normal thinking/writing
  * interleaving (deltas stream continuously for seconds at a time) never reads
@@ -47,6 +49,8 @@
  * `t3team-activityStateEvent.ts`; the per-thread tracker implementation
  * lives in `t3team-activityStateTracker.ts`.
  */
+
+export { ACTIVITY_STATE_TOOL_STALL_CEILING_MS } from "./t3team-activityStateIdle.ts";
 
 export const ACTIVITY_STATE_IDLE_GAP_MS = 30_000;
 
