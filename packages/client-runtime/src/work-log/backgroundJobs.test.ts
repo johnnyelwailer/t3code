@@ -396,6 +396,8 @@ describe("foldBackgroundJobs across a server restart", () => {
         // Marker reports 10s elapsed at observation, so start = observed - 10s.
         startedAtMs: startMs - 10_000,
         deadlineMs: startMs - 10_000 + 600_000,
+        // The start marker also reports the pid; the fold carries it.
+        pid: 4242,
         state: "finished",
         finishedReason: "lost-restart",
         startedEntryId: "e1",

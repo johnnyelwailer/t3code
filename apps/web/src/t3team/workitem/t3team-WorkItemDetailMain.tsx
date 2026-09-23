@@ -1,6 +1,7 @@
 import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import { useWorkItemDetailMainControls } from "~/t3team/workitem/t3team-useWorkItemDetailMainControls";
 import { useWorkItemDescriptionReviewOpen } from "~/t3team/workitem/t3team-useWorkItemDescriptionReviewOpen";
+import { WorkItemComments } from "~/t3team/workitem/t3team-WorkItemComments";
 import { WorkItemDescription } from "~/t3team/workitem/t3team-WorkItemDescription";
 import { WorkItemDescriptionDraftDiff } from "~/t3team/workitem/t3team-WorkItemDescriptionDraftDiff";
 import { WorkItemDetailLayout } from "~/t3team/workitem/t3team-WorkItemDetailLayout";
@@ -84,15 +85,7 @@ export function WorkItemDetailMain({
 
   return (
     <WorkItemDetailLayout
-      titleBand={
-        <WorkItemTitleBand
-          model={model}
-          nowMs={nowMs}
-          {...(currentUserName ? { currentUserName } : {})}
-          {...(statusControl ? { statusControl } : {})}
-          {...(assigneeControl ? { assigneeControl } : {})}
-        />
-      }
+      titleBand={<WorkItemTitleBand model={model} {...(statusControl ? { statusControl } : {})} />}
       sectionNav={sectionNav}
       properties={
         <WorkItemProperties
@@ -139,6 +132,20 @@ export function WorkItemDetailMain({
               />
             )}
           </WorkItemSection>
+
+          <WorkItemComments
+            comments={comments}
+            anchorId={anchors.comments}
+            nowMs={nowMs}
+            {...(resolveAssetUrl ? { resolveAssetUrl } : {})}
+            {...(renderCommentBody ? { renderBody: renderCommentBody } : {})}
+            {...(htmlBaseUrl ? { htmlBaseUrl } : {})}
+            backend={backend}
+            accountId={accountId}
+            issueIdOrKey={model.key}
+            onReload={onReload}
+            {...sectionMenu("comments", `${model.key} comments`)}
+          />
         </>
       }
       secondary={
@@ -152,17 +159,14 @@ export function WorkItemDetailMain({
           projectTickets={projectTickets}
           snapshotRaw={snapshotRaw}
           attachments={attachments}
-          comments={comments}
           nowMs={nowMs}
           {...(estimateFieldLabel ? { estimateFieldLabel } : {})}
           onOpenTicket={onOpenTicket}
           onReload={onReload}
-          renderCommentBody={renderCommentBody}
           {...(accountId ? { accountId } : {})}
           {...(backend ? { backend } : {})}
           {...(currentUserName ? { currentUserName } : {})}
           {...(resolveAssetUrl ? { resolveAssetUrl } : {})}
-          {...(htmlBaseUrl ? { htmlBaseUrl } : {})}
           supplementalSections={supplementalSections}
         />
       }

@@ -9,7 +9,7 @@ import { buildT3TeamProviderToolInjectionPlan } from "./t3team-provider-tool-inj
 const UnknownPrettyJson = fromJsonStringPretty(Schema.Unknown);
 const encodeUnknownPrettyJson = Schema.encodeEffect(UnknownPrettyJson);
 
-export class T3TeamOpenCodeConfigError extends Schema.TaggedErrorClass<T3TeamOpenCodeConfigError>()(
+export class T3TeamOpenCodeConfigError extends Schema.TaggedError<T3TeamOpenCodeConfigError>()(
   "T3TeamOpenCodeConfigError",
   {
     detail: Schema.String,
@@ -17,7 +17,7 @@ export class T3TeamOpenCodeConfigError extends Schema.TaggedErrorClass<T3TeamOpe
   },
 ) {}
 
-export class T3TeamWorkspacePathError extends Schema.TaggedErrorClass<T3TeamWorkspacePathError>()(
+export class T3TeamWorkspacePathError extends Schema.TaggedError<T3TeamWorkspacePathError>()(
   "T3TeamWorkspacePathError",
   {
     detail: Schema.String,

@@ -55,7 +55,7 @@ export const ProviderUsageThresholdsSchema = Schema.Struct({
   criticalPercent: Schema.Number,
 });
 
-export class ProviderUsageSamplerError extends Schema.TaggedErrorClass<ProviderUsageSamplerError>()(
+export class ProviderUsageSamplerError extends Schema.TaggedError<ProviderUsageSamplerError>()(
   "ProviderUsageSamplerError",
   {
     provider: ProviderDriverKind,

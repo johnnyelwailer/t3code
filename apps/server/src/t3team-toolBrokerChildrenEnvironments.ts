@@ -23,7 +23,10 @@
 import * as Effect from "effect/Effect";
 
 import { okResult, errorResult } from "./t3team-toolBrokerHelpers.ts";
-import { type ChildrenArgs, type T3TeamChildrenToolDeps } from "./t3team-toolBrokerChildrenTypes.ts";
+import {
+  type ChildrenArgs,
+  type T3TeamChildrenToolDeps,
+} from "./t3team-toolBrokerChildrenTypes.ts";
 import { type T3TeamToolCallResult } from "./t3team-toolBroker.ts";
 
 /** One environment the caller can target through start_child `environment`. */
@@ -120,12 +123,15 @@ export function opEnvironments(
         ...(hasOtherEnvironments
           ? {}
           : {
-              hint: "No other environments are recorded in this store yet; start_child with " +
+              hint:
+                "No other environments are recorded in this store yet; start_child with " +
                 "environment: { id, label } targets one by id once a host configuration or " +
                 "a previous launch has recorded it.",
             }),
       });
     }),
-    Effect.catch((error) => Effect.succeed(errorResult(`Failed to list target environments: ${error}`))),
+    Effect.catch((error) =>
+      Effect.succeed(errorResult(`Failed to list target environments: ${error}`)),
+    ),
   );
 }

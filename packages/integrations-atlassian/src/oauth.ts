@@ -11,28 +11,6 @@ export class AtlassianOAuthError extends Data.TaggedError("AtlassianOAuthError")
 }> {}
 
 /**
- * Atlassian answers token failures with an RFC 6749 JSON body such as
- * `{"error":"unauthorized_client","error_description":"refresh_token is invalid"}`. Parsed into
- * fields so callers can classify the failure instead of matching on the rendered message.
- */
-export function parseOAuthErrorBody(text: string): {
-  readonly oauthError?: string;
-  readonly oauthErrorDescription?: string;
-} {
-  try {
-    const body = JSON.parse(text) as { error?: unknown; error_description?: unknown };
-    return {
-      ...(typeof body.error === "string" ? { oauthError: body.error } : {}),
-      ...(typeof body.error_description === "string"
-        ? { oauthErrorDescription: body.error_description }
-        : {}),
-    };
-  } catch {
-    return {};
-  }
-}
-
-/**
  * The refresh token itself is dead — Atlassian rejected the refresh grant (401/403 with
  * `unauthorized_client`/`invalid_grant`, or a "refresh_token is invalid" description). Unlike
  * `AtlassianOAuthError` this is not an outage: retrying with the same token can never succeed, and
@@ -64,6 +42,28 @@ export function isDeadRefreshTokenResponse(status: number, body: string): boolea
   } catch {
     // Non-JSON body: only the exact documented description counts.
     return /refresh_token is invalid/i.test(body);
+  }
+}
+
+/**
+ * Atlassian answers token failures with an RFC 6749 JSON body such as
+ * `{"error":"unauthorized_client","error_description":"refresh_token is invalid"}`. Parsed into
+ * fields so callers can classify the failure instead of matching on the rendered message.
+ */
+export function parseOAuthErrorBody(text: string): {
+  readonly oauthError?: string;
+  readonly oauthErrorDescription?: string;
+} {
+  try {
+    const body = JSON.parse(text) as { error?: unknown; error_description?: unknown };
+    return {
+      ...(typeof body.error === "string" ? { oauthError: body.error } : {}),
+      ...(typeof body.error_description === "string"
+        ? { oauthErrorDescription: body.error_description }
+        : {}),
+    };
+  } catch {
+    return {};
   }
 }
 

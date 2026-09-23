@@ -149,6 +149,8 @@ function RealWorkingRow({
         activeAgents,
         backgroundJobs: [],
         onOpenAgents,
+        unsettledTurnId: null,
+        backgroundWorktreeSetup: null,
       }}
     >
       <WorkingTimelineRow row={WORKING_ROW} />

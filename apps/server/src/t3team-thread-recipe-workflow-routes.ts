@@ -10,6 +10,7 @@ import { PROJECT_RECIPE_ACTIVITY_KIND_LAUNCH } from "@t3tools/project-recipes";
 import type { LaunchProjectRecipeWorkflowRequest } from "@t3tools/project-recipes";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as FileSystem from "effect/FileSystem";
 import { HttpRouter } from "effect/unstable/http";
 
@@ -39,6 +40,8 @@ import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
 import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
 import { resolveRecipeHostToolScope } from "./t3team-recipeWorkflowToolScope.ts";
+import { T3TeamWorkflowSignalReconciler } from "./t3team-workflowSignalReconciler.ts";
+import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
 
 export { t3teamThreadWorkflowResolveInputRouteLayer } from "./t3team-thread-recipe-workflow-routes-resolve.ts";
 
@@ -57,6 +60,12 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
     const runRepository = yield* WorkflowRunRepository;
     const journalStore = yield* WorkflowJournalStore;
     const scheduler = yield* T3TeamWorkflowScheduler;
+    // Durable signal-source state (GHE #332); optional so test layers without the signal
+    // services still launch — a run then simply has no signal verbs.
+    const signalStore = Option.getOrUndefined(yield* Effect.serviceOption(WorkflowSignalStore));
+    const signalReconciler = Option.getOrUndefined(
+      yield* Effect.serviceOption(T3TeamWorkflowSignalReconciler),
+    );
     const toolBroker = yield* T3TeamToolBroker;
     const input = yield* readJsonBody<LaunchProjectRecipeWorkflowRequest>();
 
@@ -183,6 +192,14 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
         rearmScheduler: () => scheduler.rearm(),
         dispatch,
         fileSystem,
+        ...(signalStore === undefined
+          ? {}
+          : {
+              signalStore,
+              ...(signalReconciler === undefined
+                ? {}
+                : { pokeSignalReconcile: () => void signalReconciler.reconcile().catch(() => {}) }),
+            }),
       },
       {
         runId,

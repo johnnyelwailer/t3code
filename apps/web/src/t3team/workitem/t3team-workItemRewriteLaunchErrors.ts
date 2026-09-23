@@ -6,17 +6,18 @@
  * (`deliverDraftFeedbackToSourceThread` is the sibling case that established that rule).
  */
 
+import { isThreadBusyErrorMessage } from "@t3tools/shared/t3team-threadBusyInvariant";
+
 import {
   toUserFacingError,
   type T3TeamUserFacingError,
 } from "~/t3team/components/error/t3team-errorMessage";
 
 const REWRITE_ACTION = { action: "start the rewrite" } as const;
-const THREAD_BUSY_FRAGMENT = "already has a turn in progress";
 
 function isThreadBusyError(cause: unknown): boolean {
   const message = cause instanceof Error ? cause.message : typeof cause === "string" ? cause : "";
-  return message.includes(THREAD_BUSY_FRAGMENT);
+  return isThreadBusyErrorMessage(message);
 }
 
 /** A rejected launch. The busy-thread case gets its own wording because it is the one failure the

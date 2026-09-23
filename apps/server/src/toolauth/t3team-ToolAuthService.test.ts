@@ -306,38 +306,40 @@ describe("ToolAuthService", () => {
       }),
     );
 
-    it.effect("answers the press-enter prompt even while the line is still incomplete (no newline yet)", () =>
-      Effect.gen(function* () {
-        const homeDir = makeTempHome();
-        try {
-          const { service, ptyAdapter } = yield* makeService(homeDir, {
-            tools: ["gh"],
-            checkBinaryAvailable: () => Effect.succeed(true),
-          });
-          yield* service.start("gh");
-          const process = ptyAdapter.processes[0]!;
+    it.effect(
+      "answers the press-enter prompt even while the line is still incomplete (no newline yet)",
+      () =>
+        Effect.gen(function* () {
+          const homeDir = makeTempHome();
+          try {
+            const { service, ptyAdapter } = yield* makeService(homeDir, {
+              tools: ["gh"],
+              checkBinaryAvailable: () => Effect.succeed(true),
+            });
+            yield* service.start("gh");
+            const process = ptyAdapter.processes[0]!;
 
-          // The real-pty capture: the code line is complete, but the
-          // "Press Enter to open <url>…" line gets no newline while gh blocks
-          // on the keypress — it stays the incomplete trailing line (partial).
-          // Both the URL capture and the auto-Enter must work off that partial.
-          process.emitData("! First copy your one-time code: 4148-FBA3\r\n");
-          process.emitData(
-            "Press Enter to open https://nexplore.ghe.com/login/device in your browser... ",
-          );
-          yield* waitFor(
-            firstFakeState(service).pipe(Effect.map((s) => s?.phase === "awaiting-open")),
-          );
-          const open = yield* firstFakeState(service);
-          expect(open?.url).toBe("https://nexplore.ghe.com/login/device");
-          expect(open?.displayCode).toBe("4148-FBA3");
-          // The Enter is sent although the prompt line never completed.
-          yield* flush;
-          expect(process.writes).toEqual(["\n"]);
-        } finally {
-          removeTempHome(homeDir);
-        }
-      }),
+            // The real-pty capture: the code line is complete, but the
+            // "Press Enter to open <url>…" line gets no newline while gh blocks
+            // on the keypress — it stays the incomplete trailing line (partial).
+            // Both the URL capture and the auto-Enter must work off that partial.
+            process.emitData("! First copy your one-time code: 4148-FBA3\r\n");
+            process.emitData(
+              "Press Enter to open https://nexplore.ghe.com/login/device in your browser... ",
+            );
+            yield* waitFor(
+              firstFakeState(service).pipe(Effect.map((s) => s?.phase === "awaiting-open")),
+            );
+            const open = yield* firstFakeState(service);
+            expect(open?.url).toBe("https://nexplore.ghe.com/login/device");
+            expect(open?.displayCode).toBe("4148-FBA3");
+            // The Enter is sent although the prompt line never completed.
+            yield* flush;
+            expect(process.writes).toEqual(["\n"]);
+          } finally {
+            removeTempHome(homeDir);
+          }
+        }),
     );
 
     it.effect("spawns with the GHE device-flow argv", () =>
@@ -366,38 +368,40 @@ describe("ToolAuthService", () => {
       }),
     );
 
-    it.effect("reports a plainly-worded failed state when the binary is missing, without spawning", () =>
-      Effect.gen(function* () {
-        const homeDir = makeTempHome();
-        try {
-          const binaryCheck = makeControllableBinaryCheck(false);
-          const { service, ptyAdapter } = yield* makeService(homeDir, {
-            tools: ["gh"],
-            checkBinaryAvailable: binaryCheck.check,
-          });
-          const state = yield* service.start("gh");
-          expect(state.phase).toBe("failed");
-          expect(state.message).toContain("gh is not installed on this machine");
-          expect(ptyAdapter.processes).toHaveLength(0);
+    it.effect(
+      "reports a plainly-worded failed state when the binary is missing, without spawning",
+      () =>
+        Effect.gen(function* () {
+          const homeDir = makeTempHome();
+          try {
+            const binaryCheck = makeControllableBinaryCheck(false);
+            const { service, ptyAdapter } = yield* makeService(homeDir, {
+              tools: ["gh"],
+              checkBinaryAvailable: binaryCheck.check,
+            });
+            const state = yield* service.start("gh");
+            expect(state.phase).toBe("failed");
+            expect(state.message).toContain("gh is not installed on this machine");
+            expect(ptyAdapter.processes).toHaveLength(0);
 
-          // The card renders from list(), which must report the same state.
-          const listed = yield* service.list;
-          expect(listed[0]?.phase).toBe("failed");
+            // The card renders from list(), which must report the same state.
+            const listed = yield* service.list;
+            expect(listed[0]?.phase).toBe("failed");
 
-          // Retry stays failed while the binary is still absent — no spawn.
-          const retried = yield* service.start("gh");
-          expect(retried.phase).toBe("failed");
-          expect(ptyAdapter.processes).toHaveLength(0);
+            // Retry stays failed while the binary is still absent — no spawn.
+            const retried = yield* service.start("gh");
+            expect(retried.phase).toBe("failed");
+            expect(ptyAdapter.processes).toHaveLength(0);
 
-          // Once it appears, the next start spawns the real flow.
-          binaryCheck.setPresent(true);
-          const finallyStarted = yield* service.start("gh");
-          expect(finallyStarted.phase).toBe("starting");
-          expect(ptyAdapter.processes).toHaveLength(1);
-        } finally {
-          removeTempHome(homeDir);
-        }
-      }),
+            // Once it appears, the next start spawns the real flow.
+            binaryCheck.setPresent(true);
+            const finallyStarted = yield* service.start("gh");
+            expect(finallyStarted.phase).toBe("starting");
+            expect(ptyAdapter.processes).toHaveLength(1);
+          } finally {
+            removeTempHome(homeDir);
+          }
+        }),
     );
 
     it.effect("cancel() on a process-less failed session does not crash and re-probes", () =>

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { EventId, type OrchestrationThreadActivity } from "@t3tools/contracts";
+import {
+  CommandId,
+  EventId,
+  ThreadId,
+  TurnId,
+  type OrchestrationThreadActivity,
+} from "@t3tools/contracts";
 import {
   findClaimableJobNotificationMarker,
   JOB_NOTIFICATION_CLAIMED_KIND,
@@ -154,7 +160,10 @@ describe("findClaimableJobNotificationMarker", () => {
     expect(findClaimableJobNotificationMarker(undefined, NOW)).toBeUndefined();
     expect(findClaimableJobNotificationMarker([], NOW)).toBeUndefined();
     expect(
-      findClaimableJobNotificationMarker([markerActivity("evt-1", "2026-09-13T11:58:00.000Z")], "nope"),
+      findClaimableJobNotificationMarker(
+        [markerActivity("evt-1", "2026-09-13T11:58:00.000Z")],
+        "nope",
+      ),
     ).toBeUndefined();
   });
 
@@ -209,8 +218,8 @@ describe("job notification builders", () => {
 
   it("builds the hidden user-message upsert with the notification framing", () => {
     const command = buildJobNotificationFramingCommand({
-      threadId: "thread-1",
-      commandId: "cmd-1",
+      threadId: ThreadId.make("thread-1"),
+      commandId: CommandId.make("cmd-1"),
       marker: { atIso: "2026-09-13T11:59:00.000Z", text: "Background job done." },
       markerActivityId: "evt-marker-1",
       nowIso: NOW,
@@ -232,7 +241,7 @@ describe("job notification builders", () => {
   it("builds the claimed activity with a deterministic, marker-keyed id", () => {
     const activity = buildJobNotificationClaimActivity({
       markerActivityId: "evt-marker-1",
-      turnId: "turn-1",
+      turnId: TurnId.make("turn-1"),
       nowIso: NOW,
     });
     expect(activity.id).toBe(jobNotificationClaimActivityId("evt-marker-1"));

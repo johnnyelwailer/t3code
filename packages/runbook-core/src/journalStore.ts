@@ -33,6 +33,8 @@ import {
 } from "./journal.ts";
 import type { JournalEntry, JournalMaps } from "./journalReader.ts";
 import { readJournalEntries } from "./journalReader.ts";
+import type { ReplayWindow } from "./checkpoint.ts";
+import { selectReplayWindow } from "./checkpoint.ts";
 import { appendWireLine, type ResolvedWireInput, toResolvedWire, toWire } from "./journalWriter.ts";
 
 /**
@@ -47,6 +49,14 @@ export interface JournalStore {
   appendResolved(runId: string, resolved: ResolvedWireInput): Promise<void>;
   /** Load the replay maps (`seq → entry`, `correlationId → resolved`). Empty if no run. */
   readEntries(runId: string): Promise<JournalMaps>;
+  /**
+   * Checkpoint-aware replay window (bounded execution): the latest valid checkpoint, the bounded
+   * suffix maps a resume replays against, and lifetime totals. OPTIONAL — backends that do not
+   * implement it stay full-replay; `FsJournalStore` derives it from the same journal rows. A
+   * database backend with row-level windowing can override the materialization cost but must keep
+   * the SAME selection rule ({@link selectReplayWindow} is the shared reference).
+   */
+  readonly readReplayWindow?: ((runId: string) => Promise<ReplayWindow>) | undefined;
   /** Recorded run inputs, or `undefined` if none was written (drift boundary at seq 0). */
   readRunMeta(runId: string): Promise<RunMeta | undefined>;
   /** Record run inputs once at start, so a resume can detect input-args divergence. */
@@ -131,6 +141,13 @@ export class FsJournalStore implements JournalStore {
 
   async readEntries(runId: string): Promise<JournalMaps> {
     return readJournalEntries(journalFilePath(this.runsRoot, runId), this.onWarn);
+  }
+
+  async readReplayWindow(runId: string): Promise<ReplayWindow> {
+    // Phase one: read the same rows and select the window in memory. The fs journal is already
+    // append-only + fsync-durable per line, so the old-view-or-new-view commit guarantee a
+    // crashed mid-checkpoint leaves is "the full line or nothing" — no half-written boundary.
+    return selectReplayWindow(await this.readEntries(runId));
   }
 
   async readRunMeta(runId: string): Promise<RunMeta | undefined> {

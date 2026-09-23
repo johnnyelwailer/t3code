@@ -17,7 +17,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
-export class AuthoringTypesStagingError extends Schema.TaggedErrorClass<AuthoringTypesStagingError>()(
+export class AuthoringTypesStagingError extends Schema.TaggedError<AuthoringTypesStagingError>()(
   "AuthoringTypesStagingError",
   { missingPath: Schema.String },
 ) {
@@ -71,9 +71,20 @@ export const readAuthoringTypeDependencySpecs = Effect.fn(
     );
     specs[name] = (JSON.parse(manifestRaw) as { readonly version: string }).version;
   }
-  // The compiler ships as a trimmed copy (see stageAuthoringTypes); declare it
-  // with the catalog range so the manifest stays honest about what is staged.
-  specs["typescript"] = input.workspaceCatalog["typescript"] ?? "*";
+  // The compiler ships as a trimmed copy of the typescript @runbook/ts resolves
+  // (see stageAuthoringTypes); declare that range, not the catalog's, so the
+  // manifest stays honest about what is staged. The catalog moved to the
+  // native typescript 7, which has no lib/typescript.d.ts for the asar hook.
+  const runbookTsManifest = JSON.parse(
+    yield* fs.readFileString(path.join(input.repoRoot, "packages", "runbook-ts", "package.json")),
+  ) as { readonly dependencies?: Record<string, string> };
+  specs["typescript"] =
+    runbookTsManifest.dependencies?.["typescript"] ?? input.workspaceCatalog["typescript"] ?? "*";
+  // effect's declaration graph (TYPECHECKER_DTS_DIRECTORIES re-injects
+  // node_modules/effect into app.asar). Since the desktop main process is
+  // bundled, the staged install carries only native externals, so effect
+  // reaches the stage's top-level node_modules only if it is declared here.
+  specs["effect"] = input.workspaceCatalog["effect"] ?? "*";
   return specs;
 });
 

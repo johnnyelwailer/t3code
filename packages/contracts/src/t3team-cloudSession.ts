@@ -115,6 +115,14 @@ export const CloudSessionFailureReasonSchema = Schema.Literals([
    */
   "connect_sign_in_required",
   /**
+   * The app started an in-app T3 Connect sign-in (a browser round-trip on the
+   * creator's machine) but it had not finished when the bounded wait ended.
+   * The user's browser still has the sign-in open: confirming it there makes
+   * the retry succeed. Unlike `connect_sign_in_required`, the remediation is
+   * to finish the sign-in that is already in flight, not to start one.
+   */
+  "connect_sign_in_pending",
+  /**
    * The per-session credential payload could not be written to its delivery
    * issue (gh failure). The creator can retry — the credential itself is
    * intact, only its handoff to the VM failed.
@@ -123,7 +131,7 @@ export const CloudSessionFailureReasonSchema = Schema.Literals([
 ]);
 export type CloudSessionFailureReason = typeof CloudSessionFailureReasonSchema.Type;
 
-export class CloudSessionFailedError extends Schema.TaggedErrorClass<CloudSessionFailedError>()(
+export class CloudSessionFailedError extends Schema.TaggedError<CloudSessionFailedError>()(
   "CloudSessionFailedError",
   {
     reason: CloudSessionFailureReasonSchema,

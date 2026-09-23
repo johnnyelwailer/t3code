@@ -111,7 +111,11 @@ export function DigestItemRow({
       }
     >
       <div className="flex items-center gap-2">
-        <JiraIssueTypeIcon issueType={ticket.issueType} className="size-3.5 shrink-0" />
+        <JiraIssueTypeIcon
+          issueType={ticket.issueType}
+          issueTypeIconUrl={ticket.issueTypeIconUrl}
+          className="size-3.5 shrink-0"
+        />
         <a
           href={ticket.ref.url}
           className="shrink-0 font-mono text-[11.5px] text-muted-foreground hover:text-foreground hover:underline"
@@ -119,9 +123,11 @@ export function DigestItemRow({
         >
           {ticket.ref.displayId}
         </a>
+        {/* flex-1 + min-w-0: the title takes the slack and truncates, instead of collapsing to
+            nothing when the unshrinkable key / status / people cells crowd a narrow card. */}
         <a
           href={ticket.ref.url}
-          className="min-w-0 truncate text-left text-[13px] font-medium leading-5 hover:underline"
+          className="min-w-0 flex-1 truncate text-left text-[13px] font-medium leading-5 hover:underline"
           onClick={onAnchorClick}
         >
           {ticket.ref.title}

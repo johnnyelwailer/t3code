@@ -1,7 +1,7 @@
-import { isAtomCommandInterrupted } from "@t3tools/client-runtime/state/runtime";
+import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type { CloudSession } from "@t3tools/contracts";
 import { CLOUD_SESSION_REFRESH_INTERVAL_MS } from "@t3tools/client-runtime/state/cloud-sessions";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { environmentCatalog } from "~/connection/catalog";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
@@ -22,8 +22,10 @@ import {
   type LocalCloudSession,
 } from "~/components/cloud/t3team-cloudSessionSplit";
 import { useCloudSessionListPolling } from "./t3team-cloudSessionPolling";
+import { showCloudSessionFailureToast } from "./t3team-cloudSessionToast";
 import { useCloudSessionConnect } from "./t3team-useCloudSessionConnect";
 import { useCloudSessionEnvironmentExit } from "./t3team-useCloudSessionEnvironmentExit";
+import { reportCloudSessionCreateFailure } from "./t3team-cloudSessionFailure";
 
 /**
  * Drives the cloud session surfaces (settings panel + "Run on" menu). Create,
@@ -40,7 +42,7 @@ export function useCloudSessionController() {
     readonly kind: "cancel" | "stop";
   } | null>(null);
   const [localSession, setLocalSession] = useState<LocalCloudSession | null>(null);
-  const relayIdsBeforeRef = useRef<ReadonlySet<string> | null>(null);
+  const [relayIdsBefore, setRelayIdsBefore] = useState<ReadonlySet<string> | null>(null);
   const [cloudMenuOpen, setCloudMenuOpen] = useState(false);
   const [panelVisible, setPanelVisible] = useState(false);
 
@@ -91,7 +93,7 @@ export function useCloudSessionController() {
     sessions,
     relayCandidates,
     primaryEnvironmentId: environmentId,
-    environmentIdsBefore: relayIdsBeforeRef.current,
+    environmentIdsBefore: relayIdsBefore,
     register: registerRelayEnvironment,
     onRegistered: exit.onRegistered,
   });
@@ -99,8 +101,8 @@ export function useCloudSessionController() {
   const onCreate = useCallback(
     (seconds: number) => {
       if (environmentId === null || createPending) return;
-      relayIdsBeforeRef.current = new Set(
-        [...relayDiscovered.values()].map((entry) => String(entry.environment.environmentId)),
+      setRelayIdsBefore(
+        new Set([...relayDiscovered.values()].map((entry) => String(entry.environment.environmentId))),
       );
       setCreatePending(true);
       void createSession({ environmentId, input: { durationSeconds: seconds } })
@@ -112,7 +114,7 @@ export function useCloudSessionController() {
             });
             refreshCloudSessionList();
           } else {
-            toastManager.add({ type: "error", title: "Could not start a cloud session." });
+            reportCloudSessionCreateFailure(squashAtomCommandFailure(result));
           }
         })
         .finally(() => setCreatePending(false));
@@ -145,10 +147,10 @@ export function useCloudSessionController() {
             toastManager.add({ type: kind === "stop" ? "success" : "info", title: successTitle });
             refreshCloudSessionList();
           } else {
-            toastManager.add({
-              type: "error",
-              title: `Could not ${kind === "stop" ? "stop" : "cancel"} that cloud session.`,
-            });
+            showCloudSessionFailureToast(
+              `Could not ${kind === "stop" ? "stop" : "cancel"} that cloud session.`,
+              result,
+            );
           }
         })
         .finally(() => setActionPending(null));

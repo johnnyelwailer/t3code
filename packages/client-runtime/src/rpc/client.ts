@@ -13,7 +13,7 @@ import { EnvironmentSupervisor } from "../connection/supervisor.ts";
 import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
 import type { RpcSession } from "../rpc/session.ts";
 
-export class EnvironmentRpcUnavailableError extends Schema.TaggedErrorClass<EnvironmentRpcUnavailableError>()(
+export class EnvironmentRpcUnavailableError extends Schema.TaggedError<EnvironmentRpcUnavailableError>()(
   "EnvironmentRpcUnavailableError",
   {
     environmentId: Schema.String,
@@ -51,10 +51,13 @@ export type EnvironmentSubscriptionRpcTag =
   | typeof WS_METHODS.subscribeTerminalMetadata
   | typeof WS_METHODS.subscribePreviewEvents
   | typeof WS_METHODS.subscribeDiscoveredLocalServers
+  | typeof WS_METHODS.subscribeDeviceState
   | typeof WS_METHODS.subscribeResourceTelemetry
   | typeof WS_METHODS.pullRequestsSubscribeRefreshes
   | typeof WS_METHODS.previewAutomationConnect
   | typeof WS_METHODS.subscribeVcsStatus
+  | typeof WS_METHODS.subscribeWorktreeSetup
+  | typeof WS_METHODS.subscribeProjectClones
   | typeof WS_METHODS.terminalAttach
   | typeof WS_METHODS.subscribeToolAuth;
 
@@ -176,7 +179,17 @@ interface SubscriptionOptions<TTag extends EnvironmentSubscriptionRpcTag> {
   readonly onDefect?: (
     cause: Cause.Cause<EnvironmentRpcStreamFailure<TTag>>,
   ) => Effect.Effect<void, never, never>;
-  readonly onExpectedFailure?: (
+  /**
+   * Runs after the subscribe input is built and before the stream opens, on
+   * every (re)subscribe attempt — the initial subscribe, the session-change
+   * resubscribe, and expected-failure retries alike. Return an effect that
+   * sleeps to stagger bursts where one event (a session replacement) would
+   * otherwise reopen hundreds of streams in the same tick and drown the
+   * server's event loop (GHE #382 storm).
+   */
+  readonly beforeSubscribe?: (
+    session: RpcSession,
+  ) => Effect.Effect<void, never, never> | undefined;  readonly onExpectedFailure?: (
     cause: Cause.Cause<EnvironmentRpcStreamFailure<TTag>>,
   ) => Effect.Effect<void, never, never>;
   readonly retryExpectedFailureAfter?: Duration.Input;
@@ -235,6 +248,12 @@ function subscribeDynamicMapped<TTag extends EnvironmentSubscriptionRpcTag, A>(
                   Stream.unwrap(
                     Effect.gen(function* () {
                       const input = yield* makeInput(session);
+                      // Stagger hook: after the input is built (the caller may
+                      // record session capabilities there) and before the
+                      // stream opens, so the whole burst — not just the WS
+                      // handshake — lands spread out over time.
+                      const beforeSubscribe = options?.beforeSubscribe?.(session);
+                      yield* beforeSubscribe ?? Effect.void;
                       const completeObservation = yield* observer.observe({
                         environmentId: supervisor.target.environmentId,
                         method: tag,

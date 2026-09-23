@@ -11,6 +11,15 @@ describe("humanizeT3TeamBackendError", () => {
     expect(result.detail).toBe(raw);
   });
 
+  it("treats a backend timeout as 'still working', not 'server down'", () => {
+    const raw =
+      "Failed to reach backend /api/t3team/mywork-digest/graph/poll at http://127.0.0.1:3773. Fetch error: Backend request timed out after 15000ms.";
+    const result = humanizeT3TeamBackendError(raw);
+    expect(result.title).toContain("still working");
+    expect(result.title).not.toContain("not reachable");
+    expect(result.detail).toBe(raw);
+  });
+
   it("recognises an expired Jira session", () => {
     const result = humanizeT3TeamBackendError(
       'Token refresh failed (403): {"error":"unauthorized_client","error_description":"refresh_token is invalid"}',

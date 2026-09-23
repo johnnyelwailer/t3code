@@ -274,6 +274,10 @@ describe("useMyWorkDigestGraph", () => {
     expect(firstGraph).not.toBeNull();
     expect(firstGraph?.tickets).toHaveLength(2);
     expect(firstGraph?.viewer.name).toBe("Philip");
+    // Tickets are keyed by the APP project id, so the graph's project list must be too — the
+    // project chip looks it up by `ticket.projectId` and would otherwise print the raw uuid.
+    expect(firstGraph?.projects[0]?.id).toBe("p1");
+    expect(firstGraph?.tickets[0]?.projectId).toBe("p1");
     // The request carries the viewer's display name for the server's burndown join.
     expect(calls[0]?.viewer?.name).toBe("Philip");
 

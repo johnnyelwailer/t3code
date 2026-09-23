@@ -1,15 +1,20 @@
 import {
   CommandId,
+  EventId,
   DEFAULT_MODEL,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   DEFAULT_SERVER_SETTINGS,
+  type ServerSettings as ServerSettingsValue,
   type ModelSelection,
   type OrchestrationProjectShell,
   ProjectId,
   ThreadId,
   TurnId,
+  WORKTREE_SETUP_ACTIVITY_KIND,
+  WorktreeSetupSnapshot,
+  worktreeSetupActivityId,
 } from "@t3tools/contracts";
-import { resolveProjectAutoPull } from "@t3tools/shared/serverSettings";
+import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import * as Cause from "effect/Cause";
 import * as Console from "effect/Console";
 import * as Context from "effect/Context";
@@ -53,7 +58,7 @@ import {
   issueHeadlessServeAccessInfo,
 } from "./startupAccess.ts";
 
-export class ServerRuntimeStartupError extends Schema.TaggedErrorClass<ServerRuntimeStartupError>()(
+export class ServerRuntimeStartupError extends Schema.TaggedError<ServerRuntimeStartupError>()(
   "ServerRuntimeStartupError",
   {
     mode: ServerConfig.RuntimeMode,
@@ -149,7 +154,7 @@ export const makeCommandGate = Effect.gen(function* () {
   } satisfies CommandGate;
 });
 
-export const recordStartupHeartbeat = Effect.gen(function* () {
+const recordStartupHeartbeat = Effect.gen(function* () {
   const analytics = yield* AnalyticsService.AnalyticsService;
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
 
@@ -245,7 +250,8 @@ export const resolveAutoBootstrapWelcomeTargets = Effect.gen(function* () {
         nextProjectId = existingProject.value.id;
         bootstrapProjectId = nextProjectId;
         nextThreadModelSelection =
-          existingProject.value.defaultModelSelection ?? defaultModelSelection;
+          resolveProjectSettings(settings, nextProjectId, existingProject.value).settings
+            .defaultModelSelection ?? defaultModelSelection;
       }
 
       yield* Effect.gen(function* () {
@@ -262,7 +268,8 @@ export const resolveAutoBootstrapWelcomeTargets = Effect.gen(function* () {
             title: "New thread",
             modelSelection: nextThreadModelSelection,
             interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
-            runtimeMode: "full-access",
+            runtimeMode: resolveProjectSettings(settings, nextProjectId).settings
+              .defaultRuntimeMode,
             branch: null,
             worktreePath: null,
             createdAt,
@@ -351,12 +358,11 @@ const runStartupPhase = <A, E, R>(phase: string, effect: Effect.Effect<A, E, R>)
     Effect.withSpan(`server.startup.${phase}`),
   );
 
-const ORPHANED_PROVIDER_SESSION_ERROR =
-  "Provider session did not survive a server restart. Send a new message to continue.";
+const ORPHANED_PROVIDER_SESSION_ERROR = "Restarted mid-turn — send a message to continue.";
 const SERVER_UPDATE_CONTINUATION_KEY = "continueAfterServerUpdate";
 const SERVER_UPDATE_CONTINUATION_PROMPT = "Continue where you left off.";
 
-class ProviderSessionContinuationError extends Schema.TaggedErrorClass<ProviderSessionContinuationError>()(
+class ProviderSessionContinuationError extends Schema.TaggedError<ProviderSessionContinuationError>()(
   "ProviderSessionContinuationError",
   {
     threadId: ThreadId,
@@ -367,7 +373,7 @@ class ProviderSessionContinuationError extends Schema.TaggedErrorClass<ProviderS
   }
 }
 
-export class ServerUpdateThreadContinuationError extends Schema.TaggedErrorClass<ServerUpdateThreadContinuationError>()(
+export class ServerUpdateThreadContinuationError extends Schema.TaggedError<ServerUpdateThreadContinuationError>()(
   "ServerUpdateThreadContinuationError",
   {
     cause: Schema.Defect(),
@@ -482,7 +488,7 @@ const clearContinuationMarkers = (
     { concurrency: "unbounded", discard: true },
   );
 
-export const clearProviderSessionContinuationMarkers = (threadIds: ReadonlyArray<ThreadId>) =>
+const clearProviderSessionContinuationMarkers = (threadIds: ReadonlyArray<ThreadId>) =>
   Effect.gen(function* () {
     const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
     yield* clearContinuationMarkers(directory, threadIds);
@@ -495,14 +501,19 @@ export const reconcileProviderSessions = Effect.gen(function* () {
   const providerService = yield* ProviderService.ProviderService;
   const query = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
   const settings = yield* ServerSettings.ServerSettingsService;
-  const continueAfterRestart = yield* settings.getSettings.pipe(
-    Effect.map((value) => value.continueThreadsAfterServerUpdate),
+  const restartSettings = yield* settings.getSettings.pipe(
+    Effect.map(Option.some),
     Effect.catch((cause) =>
       Effect.logWarning("could not read restart continuation preference", { cause }).pipe(
-        Effect.as(false),
+        Effect.as(Option.none()),
       ),
     ),
   );
+  const continueAfterRestartFor = (projectId: ProjectId) =>
+    Option.isSome(restartSettings)
+      ? resolveProjectSettings(restartSettings.value, projectId).settings
+          .continueThreadsAfterServerUpdate
+      : false;
 
   const liveThreadIds = new Set(
     (yield* providerService.listSessions()).map((session) => session.threadId),
@@ -571,7 +582,8 @@ export const reconcileProviderSessions = Effect.gen(function* () {
       continuationTurnId !== null &&
       (session.activeTurnId === null || continuationTurnId === session.activeTurnId) &&
       Option.isSome(binding) &&
-      (readRuntimePayload(binding.value.runtimePayload).activeTurnId == null ||
+      (session.activeTurnId !== null ||
+        readRuntimePayload(binding.value.runtimePayload).activeTurnId == null ||
         readRuntimePayload(binding.value.runtimePayload).activeTurnId === continuationTurnId);
     const preparedWhileReady =
       session.status === "ready" &&
@@ -580,16 +592,15 @@ export const reconcileProviderSessions = Effect.gen(function* () {
       Option.isSome(binding) &&
       readRuntimePayload(binding.value.runtimePayload).activeTurnId === null &&
       readRuntimePayload(binding.value.runtimePayload).continueAfterServerUpdatePrepared === true;
-    // Abrupt shutdowns cannot write an update marker. Require both durable
-    // records to agree on an unfinished turn before recovering one implicitly.
+    // Runtime events advance the projection's turn, but not the directory's
+    // last admitted turn. Use the projection to identify interrupted work.
     const interruptedByRestart =
-      continueAfterRestart &&
+      continueAfterRestartFor(thread.projectId) &&
       session.status === "running" &&
       session.activeTurnId !== null &&
       Option.isSome(binding) &&
       binding.value.status === "running" &&
-      binding.value.resumeCursor != null &&
-      readRuntimePayload(binding.value.runtimePayload).activeTurnId === session.activeTurnId;
+      binding.value.resumeCursor != null;
     const settleAsError = (lastError: string) =>
       Effect.gen(function* () {
         yield* Effect.gen(function* () {
@@ -631,6 +642,12 @@ export const reconcileProviderSessions = Effect.gen(function* () {
               status: "error",
               activeTurnId: null,
               lastError,
+              // Restart marker (deterministic restart vs provider-failure
+              // signal): a turn was in flight when the server died. Every
+              // non-restart session write leaves this unset, so the flag is
+              // the one durable fact the child-wait reactor and the
+              // post-restart wake steer gate on.
+              stoppedByServerRestart: session.activeTurnId !== null,
               updatedAt: reconciledAt,
             },
             createdAt: reconciledAt,
@@ -678,6 +695,10 @@ export const reconcileProviderSessions = Effect.gen(function* () {
             status: "starting",
             activeTurnId: null,
             lastError: null,
+            // The auto-resume replaces the restart-interrupted session: the
+            // marker must not leak into the resumed session (the steer would
+            // then fire on the next user turn even though the turn continued).
+            stoppedByServerRestart: false,
             updatedAt: resumedAt,
           },
           createdAt: resumedAt,
@@ -733,7 +754,7 @@ export const reconcileProviderSessions = Effect.gen(function* () {
             cause: continuationExit.cause,
           });
           yield* settleAsError(
-            "Could not continue this thread after the server restart. Send a new message to continue.",
+            "The server restarted mid-turn and the session could not be resumed automatically — send a message to continue.",
           ).pipe(Effect.ignoreCause);
         }),
       );
@@ -750,6 +771,91 @@ export const reconcileProviderSessions = Effect.gen(function* () {
   ),
 );
 
+const decodeWorktreeSetupSnapshot = Schema.decodeUnknownOption(WorktreeSetupSnapshot);
+
+/**
+ * A worktree bootstrap records its setup snapshot on the thread while it runs
+ * and settles it when it finishes. The bootstrap itself lives only in memory,
+ * so a process exit mid-setup leaves a `running` record with nobody to finish
+ * it. Before the turn started that also strands the persisted user message, so
+ * the setup is marked failed and the user is told to send again. After the
+ * handoff only an async setup script was still running; its stage is marked
+ * failed and the setup settles as done, like any other script failure.
+ */
+export const reconcileWorktreeSetups = Effect.gen(function* () {
+  const crypto = yield* Crypto.Crypto;
+  const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
+  const query = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
+  // The command read model carries no activity bodies; read the setup
+  // records directly, live threads only.
+  const recordedSetups = yield* query.listActivitiesByKind(WORKTREE_SETUP_ACTIVITY_KIND);
+  const interruptedAt = DateTime.formatIso(yield* DateTime.now);
+
+  for (const recorded of recordedSetups) {
+    const snapshot = decodeWorktreeSetupSnapshot(recorded.payload);
+    if (Option.isNone(snapshot) || snapshot.value.phase !== "running") continue;
+    if (recorded.id !== worktreeSetupActivityId(snapshot.value.threadId)) continue;
+    const threadId = snapshot.value.threadId;
+
+    const turnStarted = snapshot.value.stages.some(
+      (stage) => stage.id === "agent" && stage.status === "done",
+    );
+    const interrupted: WorktreeSetupSnapshot = {
+      ...snapshot.value,
+      phase: turnStarted ? "done" : "failed",
+      endedAt: interruptedAt,
+      error: turnStarted
+        ? null
+        : "The server restarted before the worktree setup finished. Send the message again.",
+      stages: snapshot.value.stages.map((stage) =>
+        stage.status === "running" || stage.status === "pending"
+          ? {
+              ...stage,
+              status: "failed",
+              endedAt: interruptedAt,
+              detail: "interrupted by a server restart",
+            }
+          : stage,
+      ),
+      sequence: snapshot.value.sequence + 1,
+    };
+    yield* orchestrationEngine
+      .dispatch({
+        type: "thread.activity.append",
+        commandId: CommandId.make(yield* crypto.randomUUIDv4),
+        threadId,
+        activity: {
+          id: EventId.make(worktreeSetupActivityId(threadId)),
+          tone: "error",
+          kind: WORKTREE_SETUP_ACTIVITY_KIND,
+          summary: turnStarted
+            ? "Setup script interrupted by a server restart"
+            : "Worktree setup interrupted by a server restart",
+          payload: interrupted,
+          turnId: null,
+          createdAt: snapshot.value.startedAt,
+        },
+        createdAt: interruptedAt,
+      })
+      .pipe(
+        Effect.catchCause((cause) =>
+          Cause.hasInterrupts(cause)
+            ? Effect.failCause(cause)
+            : Effect.logWarning("failed to settle interrupted worktree setup", {
+                threadId,
+                cause,
+              }),
+        ),
+      );
+  }
+}).pipe(
+  Effect.catchCause((cause) =>
+    Cause.hasInterrupts(cause)
+      ? Effect.failCause(cause)
+      : Effect.logWarning("worktree setup startup reconciliation failed", { cause }),
+  ),
+);
+
 interface StartupOptions {
   readonly activate?: Effect.Effect<void>;
   readonly awaitAuxiliaryParked?: Effect.Effect<void>;
@@ -758,16 +864,13 @@ interface StartupOptions {
 
 export const autoPullProjects = Effect.fn("autoPullProjects")(function* (
   projects: ReadonlyArray<OrchestrationProjectShell>,
-  settings: Pick<
-    typeof DEFAULT_SERVER_SETTINGS,
-    "defaultAutoPull" | "projectAutoPullOverrides"
-  > = DEFAULT_SERVER_SETTINGS,
+  settings: ServerSettingsValue = DEFAULT_SERVER_SETTINGS,
 ) {
   const git = yield* GitVcsDriver.GitVcsDriver;
   const workspaceRoots = [
     ...new Set(
       projects
-        .filter((project) => resolveProjectAutoPull(settings, project.id, project.autoPull))
+        .filter((project) => resolveProjectSettings(settings, project.id).settings.defaultAutoPull)
         .map((project) => project.workspaceRoot),
     ),
   ];
@@ -819,6 +922,7 @@ export const autoPullProjects = Effect.fn("autoPullProjects")(function* (
   );
 });
 
+/** @public Service construction is part of the canonical Effect module API. */
 export const make = (options?: StartupOptions) =>
   Effect.gen(function* () {
     const serverConfig = yield* ServerConfig.ServerConfig;
@@ -903,6 +1007,7 @@ export const make = (options?: StartupOptions) =>
       // plus provider-directory binding cleanup, an error status with a
       // continue affordance message, and a retry.
       yield* runStartupPhase("provider-sessions.reconcile", reconcileProviderSessions);
+      yield* runStartupPhase("worktree-setups.reconcile", reconcileWorktreeSetups);
 
       yield* Effect.logDebug("startup phase: syncing clean projects");
       yield* runStartupPhase("projects.auto-pull", syncAutoPullProjects);

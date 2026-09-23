@@ -3,6 +3,7 @@ import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
 import { CloudSessionFailedError } from "@t3tools/contracts";
@@ -32,6 +33,12 @@ const ghOut = (stdout: string): VcsProcess.VcsProcessOutput => ({
   stdoutTruncated: false,
   stderrTruncated: false,
 });
+
+/** JSON shapes the fake gh emits/consumes; encoded and decoded through effect/Schema. */
+const GitHubIssueCreateJson = Schema.Struct({ number: Schema.Number });
+const encodeGitHubIssueCreate = Schema.encodeSync(Schema.fromJsonString(GitHubIssueCreateJson));
+const GhPayloadIssueJson = Schema.Struct({ title: Schema.String, body: Schema.String });
+const decodeGhPayloadIssue = Schema.decodeSync(Schema.fromJsonString(GhPayloadIssueJson));
 
 const FLAG = Credential.SESSION_CREDENTIAL_ISSUE_FLAG_ENV;
 
@@ -120,7 +127,9 @@ describe("runCredentialHandoff", () => {
     "creates the payload issue with the exact title and body when a credential exists",
     () =>
       Effect.gen(function* () {
-        const { run, calls } = makeFakeRun({ createResult: ghOut(JSON.stringify({ number: 42 })) });
+        const { run, calls } = makeFakeRun({
+          createResult: ghOut(encodeGitHubIssueCreate({ number: 42 })),
+        });
         yield* Credential.runCredentialHandoff({
           repoRef: REF,
           sessionTag: "c9f4a2",
@@ -130,7 +139,7 @@ describe("runCredentialHandoff", () => {
         });
         assert.equal(calls.length, 1);
         assert.include([...(calls[0]?.args ?? [])], "repos/hive/nx-nexi/issues");
-        const parsed = JSON.parse(calls[0]?.stdin ?? "{}") as { title: string; body: string };
+        const parsed = decodeGhPayloadIssue(calls[0]?.stdin ?? "{}");
         assert.equal(parsed.title, "nexi-session payload [c9f4a2]");
         assert.equal(parsed.body, Credential.sessionCredentialPayloadBody(TOKEN));
       }),

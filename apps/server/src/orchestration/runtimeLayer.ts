@@ -10,16 +10,16 @@ import * as ThreadPlanProgress from "./ThreadPlanProgress.ts";
 import * as ThreadPlanStaleness from "./ThreadPlanStaleness.ts";
 import * as ThreadSilenceWatchdog from "./ThreadSilenceWatchdog.ts";
 
-export const OrchestrationEventInfrastructureLayerLive = Layer.mergeAll(
+const OrchestrationEventInfrastructureLayerLive = Layer.mergeAll(
   OrchestrationEventStoreLive,
   OrchestrationCommandReceiptRepositoryLive,
 );
 
-export const OrchestrationProjectionPipelineLayerLive = OrchestrationProjectionPipelineLive.pipe(
+const OrchestrationProjectionPipelineLayerLive = OrchestrationProjectionPipelineLive.pipe(
   Layer.provide(OrchestrationEventStoreLive),
 );
 
-export const OrchestrationInfrastructureLayerLive = Layer.mergeAll(
+const OrchestrationInfrastructureLayerLive = Layer.mergeAll(
   OrchestrationProjectionSnapshotQueryLive,
   OrchestrationEventInfrastructureLayerLive,
   OrchestrationProjectionPipelineLayerLive,

@@ -18,7 +18,7 @@ export function T3TeamWidgetBlock(props: {
   const { iframeRef, srcdoc, height } = useT3TeamWidgetBlockController({ widget, threadRef });
 
   return (
-    <div className="w-full overflow-hidden rounded-xl border border-border/55 bg-background/65">
+    <div className="w-full overflow-hidden rounded-xl border border-border/55 bg-background/65 p-4">
       <iframe
         ref={iframeRef}
         title={`Widget: ${widget.title}`}

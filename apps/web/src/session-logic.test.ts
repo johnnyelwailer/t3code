@@ -13,19 +13,16 @@ import {
   createMessageAttachmentPreviewProjector,
   deriveActiveWorkStartedAt,
   deriveActivePlanState,
-  derivePendingApprovals,
-  derivePendingUserInputs,
   deriveTimelineEntries,
   deriveTimelineEntriesWithState,
+  deriveTurnResumeRetryTarget,
   deriveWorkLogEntries,
   findLatestProposedPlan,
   hasActionableProposedPlan,
   isLatestTurnSettled,
   selectHandoffImageResources,
   selectMessageImageResources,
-  workEntryIndicatesToolFailure,
   workEntryIndicatesToolNeutralStatus,
-  workEntryIndicatesToolSuccess,
 } from "./session-logic";
 import { PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP } from "@t3tools/project-recipes";
 
@@ -66,454 +63,34 @@ function makeActivity(overrides: {
   };
 }
 
-describe("derivePendingApprovals", () => {
-  it.each([{}, { requestType: "unknown" }])(
-    "exposes legacy OpenCode approvals without a known request kind: %j",
-    (legacyPayload) => {
-      const requested = makeActivity({
-        kind: "approval.requested",
-        payload: { requestId: "per-legacy", detail: "*", ...legacyPayload },
-      });
-
-      expect(derivePendingApprovals([requested])).toEqual([
-        {
-          requestId: "per-legacy",
-          requestKind: "command",
-          createdAt: requested.createdAt,
-          detail: "*",
-        },
-      ]);
-    },
-  );
-
-  it.each(["tool_user_input", "auth_tokens_refresh"])(
-    "does not turn %s into an approval",
-    (requestType) => {
-      const activity = makeActivity({
-        kind: "approval.requested",
-        payload: { requestId: "not-an-approval", requestType },
-      });
-
-      expect(derivePendingApprovals([activity])).toEqual([]);
-    },
-  );
-
-  it("tracks open approvals and removes resolved ones", () => {
-    const activities: OrchestrationThreadActivity[] = [
-      makeActivity({
-        id: "approval-open",
-        createdAt: "2026-02-23T00:00:01.000Z",
-        kind: "approval.requested",
-        summary: "Command approval requested",
-        tone: "approval",
-        payload: {
-          requestId: "req-1",
-          requestKind: "command",
-          detail: "bun run lint",
-        },
-      }),
-      makeActivity({
-        id: "approval-close",
-        createdAt: "2026-02-23T00:00:02.000Z",
-        kind: "approval.resolved",
-        summary: "Approval resolved",
-        tone: "info",
-        payload: { requestId: "req-2" },
-      }),
-      makeActivity({
-        id: "approval-closed-request",
-        createdAt: "2026-02-23T00:00:01.500Z",
-        kind: "approval.requested",
-        summary: "File-change approval requested",
-        tone: "approval",
-        payload: { requestId: "req-2", requestType: "unknown" },
-      }),
-    ];
-
-    expect(derivePendingApprovals(activities)).toEqual([
-      {
-        requestId: "req-1",
-        requestKind: "command",
-        createdAt: "2026-02-23T00:00:01.000Z",
-        detail: "bun run lint",
-      },
-    ]);
-  });
-
-  it("maps canonical requestType payloads into pending approvals", () => {
-    const activities: OrchestrationThreadActivity[] = [
-      makeActivity({
-        id: "approval-open-request-type",
-        createdAt: "2026-02-23T00:00:01.000Z",
-        kind: "approval.requested",
-        summary: "Command approval requested",
-        tone: "approval",
-        payload: {
-          requestId: "req-request-type",
-          requestType: "command_execution_approval",
-          detail: "pwd",
-        },
-      }),
-    ];
-
-    expect(derivePendingApprovals(activities)).toEqual([
-      {
-        requestId: "req-request-type",
-        requestKind: "command",
-        createdAt: "2026-02-23T00:00:01.000Z",
-        detail: "pwd",
-      },
-    ]);
-  });
-
-  it("keeps app access approvals and persistence choices from remote activities", () => {
-    const options = [
-      { decision: "decline", label: "Decline" },
-      { decision: "acceptAlways", label: "Always allow Safari" },
-      { decision: "accept", label: "Approve" },
-    ];
-    const activities = [
-      makeActivity({
-        kind: "approval.requested",
-        summary: "App access approval requested",
-        tone: "approval",
-        payload: {
-          requestId: "req-safari",
-          requestType: "mcp_elicitation_approval",
-          detail: "Allow ChatGPT to use Safari?",
-          appName: "Safari",
-          options,
-        },
-      }),
-    ];
-
-    expect(derivePendingApprovals(activities)).toEqual([
-      {
-        requestId: "req-safari",
-        requestKind: "mcp-elicitation",
-        createdAt: "2026-02-23T00:00:00.000Z",
-        detail: "Allow ChatGPT to use Safari?",
-        appName: "Safari",
-        options,
-      },
-    ]);
-  });
-
-  it("derives dynamic tool requests as actionable generic approvals", () => {
-    const activities: OrchestrationThreadActivity[] = [
-      makeActivity({
-        id: "approval-open-dynamic-tool",
-        createdAt: "2026-02-23T00:00:01.000Z",
-        kind: "approval.requested",
-        summary: "Approval requested",
-        tone: "approval",
-        payload: {
-          requestId: "req-dynamic-tool",
-          requestType: "dynamic_tool_call",
-          detail: "Search the web",
-        },
-      }),
-    ];
-
-    expect(derivePendingApprovals(activities)).toEqual([
-      {
-        requestId: "req-dynamic-tool",
-        requestKind: "command",
-        createdAt: "2026-02-23T00:00:01.000Z",
-        detail: "Search the web",
-      },
-    ]);
-  });
-
-  it("clears stale pending approvals when provider reports unknown pending request", () => {
-    const activities: OrchestrationThreadActivity[] = [
-      makeActivity({
-        id: "approval-open-stale",
-        createdAt: "2026-02-23T00:00:01.000Z",
-        kind: "approval.requested",
-        summary: "Command approval requested",
-        tone: "approval",
-        payload: {
-          requestId: "req-stale-1",
-          requestType: "unknown",
-        },
-      }),
-      makeActivity({
-        id: "approval-failed-stale",
-        createdAt: "2026-02-23T00:00:02.000Z",
-        kind: "provider.approval.respond.failed",
-        summary: "Provider approval response failed",
-        tone: "error",
-        payload: {
-          requestId: "req-stale-1",
-          detail: "Unknown pending permission request: req-stale-1",
-        },
-      }),
-    ];
-
-    expect(derivePendingApprovals(activities)).toEqual([]);
-  });
-
-  it("clears stale pending approvals when the backend marks them stale after restart", () => {
-    const activities: OrchestrationThreadActivity[] = [
-      makeActivity({
-        id: "approval-open-stale-restart",
-        createdAt: "2026-02-23T00:00:01.000Z",
-        kind: "approval.requested",
-        summary: "Command approval requested",
-        tone: "approval",
-        payload: {
-          requestId: "req-stale-restart-1",
-          requestKind: "command",
-        },
-      }),
-      makeActivity({
-        id: "approval-failed-stale-restart",
-        createdAt: "2026-02-23T00:00:02.000Z",
-        kind: "provider.approval.respond.failed",
-        summary: "Provider approval response failed",
-        tone: "error",
-        payload: {
-          requestId: "req-stale-restart-1",
-          detail:
-            "Stale pending approval request: req-stale-restart-1. Provider callback state does not survive app restarts or recovered sessions. Restart the turn to continue.",
-        },
-      }),
-    ];
-
-    expect(derivePendingApprovals(activities)).toEqual([]);
-  });
-});
-
-describe("derivePendingUserInputs", () => {
-  it("keeps free-text questions without suggested answers", () => {
-    const question = {
-      id: "0",
-      header: "Question",
-      question: "What should it be named?",
-      options: [],
-      allowCustomAnswer: true,
-      multiSelect: false,
-    };
-    const activities = [
-      makeActivity({
-        id: "async-question",
-        kind: "user-input.requested",
-        summary: "User input requested",
-        payload: { requestId: "async-1", responseMode: "message", questions: [question] },
-      }),
-    ];
-    expect(derivePendingUserInputs(activities)[0]?.questions).toEqual([question]);
-  });
-
-  it("preserves native choice values and the custom-answer restriction", () => {
-    const question = {
-      id: "interaction-result",
-      header: "Result",
-      question: "Which result should be used?",
-      options: [
-        { value: " first\t", label: "Result", description: "First result" },
-        { value: "second", label: "Result", description: "Second result" },
-      ],
-      allowCustomAnswer: false,
-      multiSelect: false,
-    };
-    const activities = [
-      makeActivity({
-        id: "native-user-input",
-        kind: "user-input.requested",
-        summary: "User input requested",
-        payload: { requestId: "req-native-choice", questions: [question] },
-      }),
-    ];
-
-    expect(derivePendingUserInputs(activities)[0]?.questions).toEqual([question]);
-  });
-
-  it("maps the question's context through to the panel question", () => {
-    const question = {
-      id: "ctx-1",
-      header: "Ship order",
-      question: "Which of these should we ship first?",
-      context: "### Proposed options\n\n1. Ship A — smallest, ships this week\n2. Ship B — user-requested",
-      options: [
-        { label: "Ship A", description: "Ships this week" },
-        { label: "Ship B", description: "User requested" },
-      ],
-      multiSelect: false,
-    };
-    const activities = [
-      makeActivity({
-        id: "question-with-context",
-        kind: "user-input.requested",
-        summary: "User input requested",
-        payload: { requestId: "ctx-req", responseMode: "message", questions: [question] },
-      }),
-    ];
-
-    expect(derivePendingUserInputs(activities)[0]?.questions).toEqual([question]);
-  });
-
-  it("drops empty-string context so the panel does not render a blank strip", () => {
-    const question = {
-      id: "ctx-blank",
-      header: "Question",
-      question: "Continue with the plan?",
-      context: "",
-      options: [],
-      multiSelect: false,
-    };
-    const activities = [
-      makeActivity({
-        id: "question-blank-context",
-        kind: "user-input.requested",
-        summary: "User input requested",
-        payload: { requestId: "ctx-blank-req", responseMode: "message", questions: [question] },
-      }),
-    ];
-
-    const parsed = derivePendingUserInputs(activities)[0]?.questions?.[0];
-    expect(parsed).toEqual({
-      id: "ctx-blank",
-      header: "Question",
-      question: "Continue with the plan?",
-      options: [],
-      multiSelect: false,
-    });
-  });
-
-  it("tracks open structured prompts and removes resolved ones", () => {
-    const activities: OrchestrationThreadActivity[] = [
-      makeActivity({
-        id: "user-input-open",
-        createdAt: "2026-02-23T00:00:01.000Z",
-        kind: "user-input.requested",
-        summary: "User input requested",
-        tone: "info",
-        payload: {
-          requestId: "req-user-input-1",
-          questions: [
-            {
-              id: "sandbox_mode",
-              header: "Sandbox",
-              question: "Which mode should be used?",
-              options: [
-                {
-                  label: "workspace-write",
-                  description: "Allow workspace writes only",
-                },
-              ],
-              multiSelect: true,
-            },
-          ],
-        },
-      }),
-      makeActivity({
-        id: "user-input-resolved",
-        createdAt: "2026-02-23T00:00:02.000Z",
-        kind: "user-input.resolved",
-        summary: "User input submitted",
-        tone: "info",
-        payload: {
-          requestId: "req-user-input-2",
-          answers: {
-            sandbox_mode: "workspace-write",
-          },
-        },
-      }),
-      makeActivity({
-        id: "user-input-open-2",
-        createdAt: "2026-02-23T00:00:01.500Z",
-        kind: "user-input.requested",
-        summary: "User input requested",
-        tone: "info",
-        payload: {
-          requestId: "req-user-input-2",
-          questions: [
-            {
-              id: "approval",
-              header: "Approval",
-              question: "Continue?",
-              options: [
-                {
-                  label: "yes",
-                  description: "Continue execution",
-                },
-              ],
-              multiSelect: false,
-            },
-          ],
-        },
-      }),
-    ];
-
-    expect(derivePendingUserInputs(activities)).toEqual([
-      {
-        requestId: "req-user-input-1",
-        createdAt: "2026-02-23T00:00:01.000Z",
-        questions: [
-          {
-            id: "sandbox_mode",
-            header: "Sandbox",
-            question: "Which mode should be used?",
-            options: [
-              {
-                label: "workspace-write",
-                description: "Allow workspace writes only",
-              },
-            ],
-            multiSelect: true,
-          },
-        ],
-      },
-    ]);
-  });
-
-  it("clears stale pending user-input prompts when the provider reports an orphaned request", () => {
-    const activities: OrchestrationThreadActivity[] = [
-      makeActivity({
-        id: "user-input-open-stale",
-        createdAt: "2026-02-23T00:00:01.000Z",
-        kind: "user-input.requested",
-        summary: "User input requested",
-        tone: "info",
-        payload: {
-          requestId: "req-user-input-stale-1",
-          questions: [
-            {
-              id: "sandbox_mode",
-              header: "Sandbox",
-              question: "Which mode should be used?",
-              options: [
-                {
-                  label: "workspace-write",
-                  description: "Allow workspace writes only",
-                },
-              ],
-              multiSelect: false,
-            },
-          ],
-        },
-      }),
-      makeActivity({
-        id: "user-input-failed-stale",
-        createdAt: "2026-02-23T00:00:02.000Z",
-        kind: "provider.user-input.respond.failed",
-        summary: "Provider user input response failed",
-        tone: "error",
-        payload: {
-          requestId: "req-user-input-stale-1",
-          detail:
-            "Provider adapter request failed (codex) for item/tool/requestUserInput: Unknown pending Codex user input request: req-user-input-stale-1",
-        },
-      }),
-    ];
-
-    expect(derivePendingUserInputs(activities)).toEqual([]);
-  });
-});
-
 describe("deriveActivePlanState", () => {
+  it("orders plan snapshots by sequence while ignoring unrelated activities", () => {
+    const activities = Object.freeze([
+      makeActivity({
+        id: "completed",
+        kind: "turn.plan.updated",
+        turnId: "turn-1",
+        sequence: 3,
+        createdAt: "2026-02-23T00:00:05.000Z",
+        payload: { plan: [{ step: "Check", status: "completed" }] },
+      }),
+      makeActivity({ sequence: 4, kind: "tool.completed" }),
+      makeActivity({
+        id: "started",
+        kind: "turn.plan.updated",
+        turnId: "turn-1",
+        sequence: 1,
+        payload: { plan: [{ step: "Check", status: "inProgress" }] },
+      }),
+      makeActivity({ sequence: 2, kind: "context-window.updated" }),
+    ]);
+    expect(deriveActivePlanState(activities, TurnId.make("turn-1"))?.steps).toEqual([
+      { step: "Check", status: "completed", durationMs: 5_000 },
+    ]);
+    expect(activities[0]?.id).toBe("completed");
+    expect(deriveActivePlanState([makeActivity({ kind: "tool.completed" })], undefined)).toBeNull();
+  });
+
   it("returns the latest plan update for the active turn", () => {
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({
@@ -862,121 +439,43 @@ describe("hasActionableProposedPlan", () => {
   });
 });
 
-describe("workEntryIndicatesToolFailure", () => {
-  const base = {
-    id: "w1",
-    createdAt: "2026-01-01T00:00:00.000Z",
-    label: "Read",
-  };
-
-  it("is true for error tone", () => {
-    expect(
-      workEntryIndicatesToolFailure({
-        ...base,
-        tone: "error",
-        detail: "nothing special",
-      }),
-    ).toBe(true);
-  });
-
-  it("is true when lifecycle says failed even if detail is empty", () => {
-    expect(
-      workEntryIndicatesToolFailure({
-        ...base,
-        tone: "tool",
-        toolLifecycleStatus: "failed",
-      }),
-    ).toBe(true);
-  });
-
-  it("detects file-not-found style tool output with completed lifecycle", () => {
-    expect(
-      workEntryIndicatesToolFailure({
-        ...base,
-        tone: "tool",
-        toolLifecycleStatus: "completed",
-        detail: "File not found: C:\\foo\\nonexistent.ts",
-      }),
-    ).toBe(true);
-  });
-
-  it("detects glob no files and PowerShell command errors", () => {
-    expect(
-      workEntryIndicatesToolFailure({
-        ...base,
-        label: "Glob",
-        tone: "tool",
-        detail: "No files found",
-      }),
-    ).toBe(true);
-    expect(
-      workEntryIndicatesToolFailure({
-        ...base,
-        label: "Bash",
-        tone: "tool",
-        detail:
-          "The term 'this_is_not_a_command' is not recognized as the name of a cmdlet, function, script file, or operable program.",
-      }),
-    ).toBe(true);
-  });
-
-  it("is false for successful completed tools", () => {
-    expect(
-      workEntryIndicatesToolFailure({
-        ...base,
-        tone: "tool",
-        toolLifecycleStatus: "completed",
-        detail: "Found 3 matching files",
-      }),
-    ).toBe(false);
-  });
-
-  it("treats successful tool rows as success candidates", () => {
-    expect(
-      workEntryIndicatesToolSuccess({
-        ...base,
-        tone: "tool",
-        toolLifecycleStatus: "completed",
-        detail: "ok",
-      }),
-    ).toBe(true);
-    expect(
-      workEntryIndicatesToolSuccess({
-        ...base,
-        tone: "tool",
-        toolLifecycleStatus: "inProgress",
-        detail: "…",
-      }),
-    ).toBe(false);
-    expect(workEntryIndicatesToolSuccess({ ...base, tone: "thinking", detail: "…" })).toBe(false);
+describe("workEntryIndicatesToolNeutralStatus", () => {
+  it("keeps active tools neutral and agent spawns visible", () => {
+    const entry = {
+      id: "work-1",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      label: "Read",
+      tone: "tool" as const,
+      toolLifecycleStatus: "inProgress" as const,
+    };
+    expect(workEntryIndicatesToolNeutralStatus(entry)).toBe(true);
     expect(
       workEntryIndicatesToolNeutralStatus({
-        ...base,
-        tone: "tool",
-        toolLifecycleStatus: "inProgress",
-        detail: "…",
+        ...entry,
+        agentSpawn: { workflowId: null, agentTaskIds: ["agent-1"] },
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
-      workEntryIndicatesToolNeutralStatus({
-        ...base,
-        tone: "tool",
-        toolLifecycleStatus: "completed",
-        detail: "ok",
-      }),
+      workEntryIndicatesToolNeutralStatus({ ...entry, toolLifecycleStatus: "completed" }),
     ).toBe(false);
   });
 
-  it("does not run heuristics on non-tool info rows", () => {
-    expect(
-      workEntryIndicatesToolFailure({
-        ...base,
-        label: "Context compacted",
-        tone: "info",
-        detail: "File not found in conversation",
-      }),
-    ).toBe(false);
-  });
+  it.each(["waiting", "cancelled", "interrupted"])(
+    "keeps the status of a %s background task",
+    (status) => {
+      const entries = deriveWorkLogEntries([
+        makeActivity({
+          kind: "task.progress",
+          payload: { taskId: "background-1", agentKind: "background", status },
+        }),
+      ]);
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).toMatchObject({
+        toolLifecycleStatus: status === "waiting" ? "inProgress" : "stopped",
+      });
+      expect(workEntryIndicatesToolNeutralStatus(entries[0]!)).toBe(true);
+    },
+  );
 });
 
 describe("deriveWorkLogEntries", () => {
@@ -2728,10 +2227,43 @@ describe("deriveActiveWorkStartedAt", () => {
 });
 
 describe("deriveWorkLogEntries quiet-timeline guarantee", () => {
-  it("N concurrent subagents produce exactly N lifecycle rows, zero attributed tool rows", () => {
+  it("concurrent subagents replace their launch tools with one lifecycle row", () => {
     const activities: OrchestrationThreadActivity[] = [];
     for (let agent = 0; agent < 5; agent += 1) {
+      activities.push(
+        makeActivity({
+          kind: "tool.updated",
+          summary: "Subagent task",
+          payload: {
+            toolCallId: `launch-${agent}`,
+            itemType: "collab_agent_tool_call",
+            status: "inProgress",
+            data: { toolName: agent % 2 === 0 ? "Agent" : "Task" },
+          },
+          turnId: "turn-batch",
+          sequence: agent - 10,
+        }),
+      );
+      expect(deriveWorkLogEntries(activities)).toHaveLength(0);
+    }
+    for (let agent = 0; agent < 5; agent += 1) {
       const taskId = `task-${agent}`;
+      const toolUseId = `launch-${agent}`;
+      expect(deriveWorkLogEntries(activities)).toHaveLength(agent === 0 ? 0 : 1);
+      activities.push(
+        makeActivity({
+          id: `started-${agent}`,
+          kind: "task.started",
+          summary: "Task started",
+          payload: { taskId, toolUseId, taskType: "local_agent" },
+          turnId: "turn-batch",
+          sequence: agent * 20 - 1,
+        }),
+      );
+      const runningEntries = deriveWorkLogEntries(activities);
+      expect(runningEntries).toHaveLength(1);
+      expect(runningEntries[0]!.id).toBe("started-0");
+      expect(runningEntries[0]!.agentSpawn?.agentTaskIds).toHaveLength(agent + 1);
       // Progress ticks (several per agent) + attributed tool rows.
       for (let tick = 0; tick < 4; tick += 1) {
         activities.push(
@@ -2739,7 +2271,7 @@ describe("deriveWorkLogEntries quiet-timeline guarantee", () => {
             kind: "task.progress",
             summary: `agent ${agent} tick ${tick}`,
             tone: "info",
-            payload: { taskId, summary: `working ${tick}`, role: "explorer" },
+            payload: { taskId, toolUseId, summary: `working ${tick}`, role: "explorer" },
             turnId: "turn-batch",
             sequence: agent * 20 + tick,
           }),
@@ -2760,10 +2292,18 @@ describe("deriveWorkLogEntries quiet-timeline guarantee", () => {
           tone: "info",
           payload: {
             taskId,
+            toolUseId,
             status: "completed",
             summary: `agent ${agent} done`,
             role: "explorer",
           },
+          turnId: "turn-batch",
+          sequence: agent * 20 + 19,
+        }),
+        makeActivity({
+          kind: "tool.completed",
+          summary: "Subagent task",
+          payload: { toolCallId: toolUseId, status: "completed" },
           turnId: "turn-batch",
           sequence: agent * 20 + 19,
         }),
@@ -2813,15 +2353,69 @@ describe("deriveWorkLogEntries quiet-timeline guarantee", () => {
     );
   });
 
-  it("keeps unattributed tool rows (over-hiding loses the only signal)", () => {
+  it("keeps unrelated tools and failed launches, including failures after a task starts", () => {
     const entries = deriveWorkLogEntries([
       makeActivity({
         kind: "tool.completed",
         summary: "Bash",
         payload: { itemType: "command_execution", command: "ls" },
       }),
+      makeActivity({
+        id: "unlinked-failure",
+        kind: "tool.completed",
+        summary: "Subagent task",
+        tone: "error",
+        payload: { toolCallId: "unlinked", status: "failed" },
+      }),
+      makeActivity({
+        id: "linked-task",
+        kind: "task.started",
+        summary: "Task started",
+        payload: { taskId: "agent", toolUseId: "linked", taskType: "local_agent" },
+      }),
+      makeActivity({
+        id: "linked-failure",
+        kind: "tool.completed",
+        summary: "Subagent task",
+        payload: { toolCallId: "linked", status: "failed" },
+      }),
+      makeActivity({
+        id: "orphan-completion",
+        kind: "tool.completed",
+        summary: "Subagent task",
+        payload: {
+          toolCallId: "orphan",
+          itemType: "collab_agent_tool_call",
+          status: "completed",
+          data: { toolName: "Agent" },
+        },
+      }),
+      makeActivity({
+        id: "send-input",
+        kind: "tool.updated",
+        payload: {
+          toolCallId: "send-input",
+          itemType: "collab_agent_tool_call",
+          status: "inProgress",
+          data: { toolName: "send_input" },
+        },
+      }),
+      makeActivity({
+        id: "active-launch-error",
+        kind: "tool.updated",
+        tone: "error",
+        payload: {
+          toolCallId: "active-launch-error",
+          itemType: "collab_agent_tool_call",
+          status: "inProgress",
+          data: { toolName: "Task" },
+        },
+      }),
     ]);
-    expect(entries).toHaveLength(1);
+    expect(entries).toHaveLength(7);
+    expect(entries.map((entry) => entry.id)).toEqual(
+      expect.arrayContaining(["unlinked-failure", "linked-task", "linked-failure"]),
+    );
   });
 
   it("folds timelineBypass agent rows into one CTA (Codex children, workflow members)", () => {
@@ -3003,5 +2597,90 @@ describe("session activity performance", () => {
       command: "git diff",
       toolLifecycleStatus: "completed",
     });
+  });
+});
+
+describe("deriveTurnResumeRetryTarget (GHE #402)", () => {
+  const requested = MessageId.make("original-ask");
+  const followUp = MessageId.make("mid-turn-follow-up");
+  const rejection = (messageId: string, hint: string | null) =>
+    `Orchestration command invariant failed (thread.turn.resume): Thread 't1' does not end with unanswered user message '${messageId}'.${hint ?? ""}`;
+
+  it("re-targets the last user message named in the decider rejection", () => {
+    expect(
+      deriveTurnResumeRetryTarget({
+        requestedMessageId: requested,
+        failureMessage: rejection(
+          String(requested),
+          ` Last user message is '${String(followUp)}'.`,
+        ),
+        fallbackLastUserMessageId: null,
+      }),
+    ).toBe(followUp);
+  });
+
+  it("falls back to the client's own last user message when the server predates the hint", () => {
+    expect(
+      deriveTurnResumeRetryTarget({
+        requestedMessageId: requested,
+        failureMessage: rejection(String(requested), null),
+        fallbackLastUserMessageId: followUp,
+      }),
+    ).toBe(followUp);
+  });
+
+  it("prefers the server hint over the client fallback", () => {
+    const staleView = MessageId.make("stale-client-view");
+    expect(
+      deriveTurnResumeRetryTarget({
+        requestedMessageId: requested,
+        failureMessage: rejection(
+          String(requested),
+          ` Last user message is '${String(followUp)}'.`,
+        ),
+        fallbackLastUserMessageId: staleView,
+      }),
+    ).toBe(followUp);
+  });
+
+  it("does not retry when the rejection names the same message we already tried", () => {
+    expect(
+      deriveTurnResumeRetryTarget({
+        requestedMessageId: requested,
+        failureMessage: rejection(
+          String(requested),
+          ` Last user message is '${String(requested)}'.`,
+        ),
+        fallbackLastUserMessageId: requested,
+      }),
+    ).toBeNull();
+  });
+
+  it("does not retry unrelated failures", () => {
+    expect(
+      deriveTurnResumeRetryTarget({
+        requestedMessageId: requested,
+        failureMessage:
+          "Orchestration command invariant failed (thread.turn.resume): Thread 't1' already has a turn in progress.",
+        fallbackLastUserMessageId: followUp,
+      }),
+    ).toBeNull();
+  });
+
+  it("does not retry without a failure message or a requested id", () => {
+    expect(
+      deriveTurnResumeRetryTarget({
+        requestedMessageId: null,
+        failureMessage: rejection("x", null),
+        fallbackLastUserMessageId: followUp,
+      }),
+    ).toBeNull();
+    expect(
+      deriveTurnResumeRetryTarget({
+        requestedMessageId: requested,
+        failureMessage: null,
+        fallbackLastUserMessageId: followUp,
+      }),
+    ).toBeNull();
   });
 });

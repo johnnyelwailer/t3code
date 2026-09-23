@@ -27,11 +27,21 @@ import {
 import { PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION } from "@t3tools/project-recipes";
 import { type ReactNode, type Ref } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import type { LegendListRef } from "@legendapp/list/react";
 
 import { buildT3TeamMessagesTimelineTestProps } from "~/t3team/chat/t3team-messagesTimelineTestProps";
 import type { ChatMessage } from "~/types";
+// Loaded statically so its large module graph evaluates in Vitest's untimed collection phase, not
+// inside a hook or test budget; the tests' own `await import(...)` calls then hit the module cache.
+import "~/components/chat/MessagesTimeline";
+
+// Break the composerDraftStore → t3team-threadComposingSignal → primaryEnvironment → catalog →
+// connection/runtime import cycle (same mock as MessagesTimeline.test.tsx): with the timeline as
+// the graph's entry, the catalog otherwise evaluates while the runtime export is uninitialized.
+vi.mock("~/t3team/chat/t3team-threadComposingSignal", () => ({
+  reportThreadComposing: () => {},
+}));
 
 vi.mock("@legendapp/list/react", async () => {
   const LegendList = (props: {
@@ -121,12 +131,6 @@ const countOccurrences = (markup: string, needle: string): number =>
   markup.split(needle).length - 1;
 
 describe("answered decision reply — the card settles, the value is stated once", () => {
-  // The first render pays for importing the whole MessagesTimeline module graph (~8 s on a
-  // loaded machine) — warm it here so no single test's 10 s budget absorbs module init.
-  beforeAll(async () => {
-    await import("~/components/chat/MessagesTimeline");
-  }, 60_000);
-
   function boolReply(text: string, value: boolean, correlationId = "run-1:1"): ChatMessage {
     return {
       id: MessageId.make(`message-reply-${text}`),

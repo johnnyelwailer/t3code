@@ -11,7 +11,10 @@
 import * as Effect from "effect/Effect";
 import { assert, describe, it } from "@effect/vitest";
 
-import { buildChildrenEnvironmentEntries, opEnvironments } from "./t3team-toolBrokerChildrenEnvironments.ts";
+import {
+  buildChildrenEnvironmentEntries,
+  opEnvironments,
+} from "./t3team-toolBrokerChildrenEnvironments.ts";
 import type { T3TeamChildrenToolDeps } from "./t3team-toolBrokerChildrenTypes.ts";
 
 type HistoryRow = {
@@ -90,8 +93,18 @@ describe("buildChildrenEnvironmentEntries", () => {
       history: [
         // Newest first (the query orders by latestThreadAt DESC): the first
         // occurrence of env-remote (the newer label) wins over the older shape.
-        { environmentId: "env-remote", label: "GHA runner v2", threadCount: 1, latestThreadAt: "newer" },
-        { environmentId: "env-remote", label: "GHA runner", threadCount: 3, latestThreadAt: "older" },
+        {
+          environmentId: "env-remote",
+          label: "GHA runner v2",
+          threadCount: 1,
+          latestThreadAt: "newer",
+        },
+        {
+          environmentId: "env-remote",
+          label: "GHA runner",
+          threadCount: 3,
+          latestThreadAt: "older",
+        },
         { environmentId: "env-other", threadCount: 1, latestThreadAt: "t" },
         { environmentId: "env-local", threadCount: 9, latestThreadAt: "t" }, // never own
         { environmentId: "   ", threadCount: 1, latestThreadAt: "t" }, // empty id skipped

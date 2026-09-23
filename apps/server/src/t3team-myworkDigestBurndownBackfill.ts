@@ -7,6 +7,7 @@
  * afterwards are in the captured-transition table, which the burndown merges.
  */
 
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
 import { providerForAccount } from "./t3team-atlassian-auth-store.ts";
@@ -132,7 +133,7 @@ export function loadDigestBurndownContext(input: {
         },
         from: row.from ?? "",
         to: row.to,
-        at: new Date(row.atMs).toISOString(),
+        at: DateTime.formatIso(DateTime.makeUnsafe(row.atMs)),
       });
     }
     if (!backfill.ready) {

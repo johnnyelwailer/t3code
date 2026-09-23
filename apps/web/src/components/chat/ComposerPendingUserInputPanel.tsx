@@ -18,6 +18,7 @@ interface PendingUserInputPanelProps {
   questionIndex: number;
   onToggleOption: (questionId: string, optionValue: string) => void;
   onAdvance: () => void;
+  onDismiss: (requestId: ApprovalRequestId) => void;
 }
 
 export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserInputPanel({
@@ -27,6 +28,7 @@ export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserIn
   questionIndex,
   onToggleOption,
   onAdvance,
+  onDismiss,
 }: PendingUserInputPanelProps) {
   if (pendingUserInputs.length === 0) return null;
   const activePrompt = pendingUserInputs[0];
@@ -41,6 +43,7 @@ export const ComposerPendingUserInputPanel = memo(function ComposerPendingUserIn
       questionIndex={questionIndex}
       onToggleOption={onToggleOption}
       onAdvance={onAdvance}
+      onDismiss={onDismiss}
     />
   );
 });
@@ -52,6 +55,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   questionIndex,
   onToggleOption,
   onAdvance,
+  onDismiss,
 }: {
   prompt: PendingUserInput;
   isResponding: boolean;
@@ -59,6 +63,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   questionIndex: number;
   onToggleOption: (questionId: string, optionValue: string) => void;
   onAdvance: () => void;
+  onDismiss: (requestId: ApprovalRequestId) => void;
 }) {
   const progress = derivePendingUserInputProgress(prompt.questions, answers, questionIndex);
   const activeQuestion = progress.activeQuestion;
@@ -187,8 +192,14 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
             {activeQuestion.header}
           </span>
           {isCollapsed ? (
+            // The question is often a short "which option?" pointer; when it
+            // carries context, the header must show it — otherwise the
+            // collapsed card is unintelligible, which is the complaint this
+            // field exists to fix.
             <span className="min-w-0 flex-1 truncate text-secondary-label">
-              {activeQuestion.question}
+              {activeQuestion.context
+                ? `${activeQuestion.context} — ${activeQuestion.question}`
+                : activeQuestion.question}
             </span>
           ) : null}
         </ComposerBanner.Content>
@@ -199,10 +210,32 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
             </span>
           ) : null}
           <ComposerBanner.ToggleIcon expanded={!isCollapsed} />
+          {prompt.dismissible ? (
+            // Sits inside the trigger button, so stop the click from toggling
+            // the disclosure. Dismiss closes the question without a reply.
+            <ComposerBanner.Dismiss
+              render={<span role="button" tabIndex={0} />}
+              aria-label="Dismiss question without answering"
+              title="Dismiss question without answering"
+              disabled={isResponding}
+              data-pending-user-input-dismiss
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onDismiss(prompt.requestId);
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                event.stopPropagation();
+                onDismiss(prompt.requestId);
+              }}
+            />
+          ) : null}
         </ComposerBanner.Actions>
       </CollapsibleTrigger>
       <CollapsiblePanel>
-        <ComposerBanner.Scroll>
+        <ComposerBanner.Scroll className="max-h-[calc(100dvh-13rem)]">
           <ComposerBanner.Body className="pe-1 pb-1">
             {activeQuestion.context ? (
               // Context strip: the earlier-thread content the question points

@@ -23,6 +23,7 @@ import {
   SetWorkflowRunSleepingInput,
   SetWorkflowRunStatusInput,
   SetWorkflowRunTurnRetriesInput,
+  SetWorkflowRunWatchingInput,
   UpdateWorkflowRunArgsInput,
   WorkflowRun,
   WorkflowRunIntent,
@@ -57,6 +58,8 @@ const WorkflowRunDbRow = WorkflowRun.mapFields(
         Schema.catchDecoding(() => Effect.succeed(Option.some(null))),
       ),
     ),
+    // `watch_signal_*` (migration 059) are plain nullable TEXT: no JSON round-trip, no decode
+    // hazard — an unreadable value cannot exist, only a set or unset pair.
   }),
 );
 
@@ -93,6 +96,10 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           intent_json,
           wake_at,
           turn_retries,
+          watch_source_name,
+          watch_params_hash,
+          watch_signal_name,
+          watch_signal_key,
           created_at,
           updated_at
         )
@@ -118,6 +125,10 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           ${row.intent ? JSON.stringify(row.intent) : null},
           ${row.wakeAt},
           ${row.turnRetries ?? 0},
+          NULL,
+          NULL,
+          NULL,
+          NULL,
           ${row.createdAt},
           ${row.updatedAt}
         )
@@ -143,6 +154,10 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           intent_json = excluded.intent_json,
           wake_at = excluded.wake_at,
           turn_retries = excluded.turn_retries,
+          watch_source_name = NULL,
+          watch_params_hash = NULL,
+          watch_signal_name = NULL,
+          watch_signal_key = NULL,
           created_at = excluded.created_at,
           updated_at = excluded.updated_at
       `,
@@ -175,6 +190,10 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           intent_json AS "intent",
           wake_at AS "wakeAt",
           turn_retries AS "turnRetries",
+          watch_source_name AS "watchSourceName",
+          watch_params_hash AS "watchParamsHash",
+          watch_signal_name AS "watchSignalName",
+          watch_signal_key AS "watchSignalKey",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM workflow_runs
@@ -209,6 +228,10 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           intent_json AS "intent",
           wake_at AS "wakeAt",
           turn_retries AS "turnRetries",
+          watch_source_name AS "watchSourceName",
+          watch_params_hash AS "watchParamsHash",
+          watch_signal_name AS "watchSignalName",
+          watch_signal_key AS "watchSignalKey",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM workflow_runs
@@ -246,6 +269,10 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
           intent_json AS "intent",
           wake_at AS "wakeAt",
           turn_retries AS "turnRetries",
+          watch_source_name AS "watchSourceName",
+          watch_params_hash AS "watchParamsHash",
+          watch_signal_name AS "watchSignalName",
+          watch_signal_key AS "watchSignalKey",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM workflow_runs
@@ -267,7 +294,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
         FROM workflow_runs
         WHERE origin = ${origin}
           AND launch_thread_id = ${launchThreadId}
-          AND status IN ('running', 'suspended', 'sleeping', 'paused')
+          AND status IN ('running', 'suspended', 'sleeping', 'watching', 'paused')
       `,
   });
 
@@ -311,6 +338,10 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
             failure_reason = ${failureReason ?? null},
             failure_step = ${failureStep ?? null},
             wake_at = NULL,
+            watch_source_name = NULL,
+            watch_params_hash = NULL,
+            watch_signal_name = NULL,
+            watch_signal_key = NULL,
             updated_at = ${updatedAt}
         WHERE run_id = ${runId} AND ${sql.in("status", expectedStatuses)}
         RETURNING run_id AS "runId"
@@ -323,6 +354,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       sql`
         UPDATE workflow_runs
         SET status = CASE
+              WHEN pending_kind = 'signal.wait' THEN 'watching'
               WHEN pending_kind IS NOT NULL THEN 'suspended'
               WHEN wake_at IS NOT NULL THEN 'sleeping'
               ELSE status
@@ -342,6 +374,10 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
             pending_correlation_id = ${pendingCorrelationId},
             pending_kind = ${pendingKind},
             wake_at = NULL,
+            watch_source_name = NULL,
+            watch_params_hash = NULL,
+            watch_signal_name = NULL,
+            watch_signal_key = NULL,
             failure_reason = NULL,
             failure_step = NULL,
             updated_at = ${updatedAt}
@@ -363,6 +399,10 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
             failure_reason = ${failureReason ?? null},
             failure_step = ${failureStep ?? null},
             wake_at = NULL,
+            watch_source_name = NULL,
+            watch_params_hash = NULL,
+            watch_signal_name = NULL,
+            watch_signal_key = NULL,
             updated_at = ${updatedAt}
         WHERE run_id = ${runId} AND status != 'cancelled'
       `,
@@ -396,6 +436,32 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
             pending_thread_id = NULL,
             pending_correlation_id = ${correlationId},
             pending_kind = NULL,
+            watch_source_name = NULL,
+            watch_params_hash = NULL,
+            watch_signal_name = NULL,
+            watch_signal_key = NULL,
+            updated_at = ${updatedAt}
+        WHERE run_id = ${runId} AND status != 'cancelled'
+      `,
+  });
+
+  // An event park (design 42): the `signal.wait` correlation the delivery port resolves on
+  // delivery + the awaited `(instance, signal, key)` it joins on. A signal has no thread and no
+  // timer, so those columns clear.
+  const setWorkflowRunWatchingRow = SqlSchema.void({
+    Request: SetWorkflowRunWatchingInput,
+    execute: ({ runId, correlationId, watchSourceName, watchParamsHash, watchSignalName, watchSignalKey, updatedAt }) =>
+      sql`
+        UPDATE workflow_runs
+        SET status = 'watching',
+            pending_thread_id = NULL,
+            pending_correlation_id = ${correlationId},
+            pending_kind = 'signal.wait',
+            wake_at = NULL,
+            watch_source_name = ${watchSourceName},
+            watch_params_hash = ${watchParamsHash},
+            watch_signal_name = ${watchSignalName},
+            watch_signal_key = ${watchSignalKey},
             updated_at = ${updatedAt}
         WHERE run_id = ${runId} AND status != 'cancelled'
       `,
@@ -500,6 +566,11 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.setSleeping:query")),
     );
 
+  const setWatching: WorkflowRunRepositoryShape["setWatching"] = (input) =>
+    setWorkflowRunWatchingRow(input).pipe(
+      Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.setWatching:query")),
+    );
+
   const setTurnRetries: WorkflowRunRepositoryShape["setTurnRetries"] = (input) =>
     setWorkflowRunTurnRetriesRow(input).pipe(
       Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.setTurnRetries:query")),
@@ -524,6 +595,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
     casClearPending,
     markFailedRetainingPending,
     setSleeping,
+    setWatching,
     setTurnRetries,
     updateArgs,
   } satisfies WorkflowRunRepositoryShape;

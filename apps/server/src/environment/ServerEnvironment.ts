@@ -1,9 +1,11 @@
 import {
   EnvironmentId,
+  ORCHESTRATION_PROTOCOL_VERSION,
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   type ExecutionEnvironmentDescriptor,
 } from "@t3tools/contracts";
 import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import * as DateTime from "effect/DateTime";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -24,7 +26,7 @@ import * as ProcessRunner from "../processRunner.ts";
 import { resolveServerEnvironmentLabel } from "./ServerEnvironmentLabel.ts";
 import { detectServerEnvironmentMachineKind } from "./ServerEnvironmentMachine.ts";
 
-export class ServerEnvironmentIdPersistenceError extends Schema.TaggedErrorClass<ServerEnvironmentIdPersistenceError>()(
+export class ServerEnvironmentIdPersistenceError extends Schema.TaggedError<ServerEnvironmentIdPersistenceError>()(
   "ServerEnvironmentIdPersistenceError",
   {
     operation: Schema.Literals(["check", "read", "write", "initialize"]),
@@ -181,6 +183,7 @@ const makeIdentity = Effect.gen(function* () {
   });
 });
 
+/** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
   const path = yield* Path.Path;
   const serverConfig = yield* ServerConfig.ServerConfig;
@@ -196,8 +199,10 @@ export const make = Effect.gen(function* () {
   // Captured at layer construction (= process boot). The descriptor is
   // rebuilt live on read, but the boot instant is not — it identifies THIS
   // server process, and clients use it to settle in-memory state (bash
-  // background jobs) that died with the previous one.
-  const serverStartedAtMs = Date.now();
+  // background jobs) that died with the previous one. nowUnsafe reads the same
+  // wall clock the previous Date.now() did (fake-timer test seams included)
+  // without the global Date the Effect linter rejects.
+  const serverStartedAtMs = DateTime.toEpochMillis(DateTime.nowUnsafe());
   const serverSelfUpdate = resolveServerSelfUpdateCapability({
     desktopManaged: serverConfig.mode === "desktop",
     launcherManaged: launcher.managed,
@@ -219,24 +224,35 @@ export const make = Effect.gen(function* () {
     },
     serverVersion: packageJson.version,
     serverStartedAtMs,
+    orchestrationProtocolVersion: ORCHESTRATION_PROTOCOL_VERSION,
     capabilities: {
       repositoryIdentity: true,
       connectionProbe: true,
       attachmentUploads: true,
+      questionAttachments: true,
       fileAttachments: { maxUploadBytes: PROVIDER_SEND_TURN_MAX_FILE_BYTES },
       pullRequests: true,
+      inlineMessageContext: true,
+      requiredWorktreeBootstrap: true,
       threadSettlement: true,
       threadAutoSettlement: true,
+      storageCleanup: true,
+      projectWorktreeCleanup: true,
       threadRestartContinuation: true,
+      projectSettingsOverrides: true,
       threadSnooze: true,
       environmentThemes: true,
       usageLimitSources: true,
       usagePriceOverrides: true,
       threadPinning: true,
       threadPinReorder: true,
+      threadActiveReorder: true,
       threadTitleRegeneration: true,
+      threadPullRequests: true,
+      pullRequestStackActions: true,
       threadPullRequestLinking: true,
       environmentIcon: true,
+      projectCloneTracking: true,
       ...(serverSelfUpdate === null ? {} : { serverSelfUpdate }),
       ...(serverSelfUpdate === "boot-service" || desktopAppUpdate
         ? {

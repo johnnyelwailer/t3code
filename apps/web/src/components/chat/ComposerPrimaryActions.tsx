@@ -299,7 +299,9 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
                 ? "Preparing worktree"
                 : isSendBusy
                   ? "Sending"
-                  : "Send message"
+                  : isRunning
+                    ? "Queue message"
+                    : "Send message"
       }
     >
       {stageBackdropVariant ? (
@@ -332,10 +334,12 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
     return sendButton;
   }
 
+  // While a turn runs, a sendable draft queues for the next tool boundary, so
+  // the send button stays next to Stop on every viewport.
   return (
     <>
       {renderStopGenerationButton(false)}
-      {showSendWhileRunning && hasSendableContent ? sendButton : null}
+      {hasSendableContent ? sendButton : null}
     </>
   );
 });

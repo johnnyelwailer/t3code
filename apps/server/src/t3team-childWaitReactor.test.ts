@@ -72,11 +72,25 @@ const childShell = {
   childStatus: STATE,
 } as unknown as OrchestrationThread;
 
-const sessionSet = (status: string, lastError: string | null, seq = 0): OrchestrationEvent =>
+const sessionSet = (
+  status: string,
+  lastError: string | null,
+  seq = 0,
+  stoppedByServerRestart?: boolean,
+  superseded?: boolean,
+): OrchestrationEvent =>
   ({
     type: "thread.session-set",
     sequence: seq,
-    payload: { threadId: ThreadId.make(CHILD), session: { status, lastError } },
+    payload: {
+      threadId: ThreadId.make(CHILD),
+      session: {
+        status,
+        lastError,
+        ...(stoppedByServerRestart !== undefined ? { stoppedByServerRestart } : {}),
+        ...(superseded !== undefined ? { superseded } : {}),
+      },
+    },
   }) as unknown as OrchestrationEvent;
 
 const waitRegistered = (): OrchestrationEvent =>
@@ -179,13 +193,12 @@ const markerCount = (dispatches: OrchestrationCommand[]): number =>
   ).length;
 
 const markerSummaries = (dispatches: OrchestrationCommand[]): string[] =>
-  dispatches.flatMap(
-    (c) =>
-      c.type === "thread.activity.append" &&
-      (c as { activity?: { kind?: string; summary?: string } }).activity?.kind ===
-        "t3team.child_abnormal_stop_notified"
-        ? [(c as { activity: { summary: string } }).activity.summary]
-        : [],
+  dispatches.flatMap((c) =>
+    c.type === "thread.activity.append" &&
+    (c as { activity?: { kind?: string; summary?: string } }).activity?.kind ===
+      "t3team.child_abnormal_stop_notified"
+      ? [(c as { activity: { summary: string } }).activity.summary]
+      : [],
   );
 
 describe("makeChildWaitReactor abnormal-stop notification", () => {
@@ -236,6 +249,57 @@ describe("makeChildWaitReactor abnormal-stop notification", () => {
             (c as { activity?: { kind?: string } }).activity?.kind === "t3team.child_wait.resolved",
         ),
       ).toBe(true);
+    }),
+  );
+});
+
+describe("makeChildWaitReactor restart-caused stops (wake steer instead of per-child notice)", () => {
+  it.effect("suppresses the standalone notice when the stop carries the restart marker", () =>
+    Effect.gen(function* () {
+      const h = makeHarness();
+      yield* h.reactor.handleEvent(
+        sessionSet("error", "Restarted mid-turn — send a message to continue.", 1, true),
+      );
+      yield* settle();
+      // No per-child notice: a server restart stopping a child is a restart,
+      // not a child incident. The parent's post-restart wake steer lists it.
+      expect(texts(h.dispatches)).toHaveLength(0);
+      expect(markerCount(h.dispatches)).toBe(0);
+    }),
+  );
+
+  it.effect("still resolves a registered wait when the stop carries the restart marker", () =>
+    Effect.gen(function* () {
+      const h = makeHarness();
+      yield* h.reactor.handleEvent(waitRegistered());
+      yield* h.reactor.handleEvent(
+        sessionSet("error", "Restarted mid-turn — send a message to continue.", 1, true),
+      );
+      yield* settle();
+      // The wait resolves (state is still recorded) — only the standalone
+      // notice is suppressed.
+      const messages = texts(h.dispatches);
+      expect(messages.filter((m) => m.includes("[Child wait"))).toHaveLength(1);
+      expect(messages.filter((m) => m.includes("[Child stopped abnormally]"))).toHaveLength(0);
+      expect(
+        h.dispatches.some(
+          (c) =>
+            c.type === "thread.activity.append" &&
+            (c as { activity?: { kind?: string } }).activity?.kind === "t3team.child_wait.resolved",
+        ),
+      ).toBe(true);
+    }),
+  );
+
+  it.effect("a provider failure WITHOUT the marker still notifies", () =>
+    Effect.gen(function* () {
+      const h = makeHarness();
+      yield* h.reactor.handleEvent(sessionSet("error", "provider 502", 1, false));
+      yield* settle();
+      const messages = texts(h.dispatches);
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain("[Child stopped abnormally]");
+      expect(urgencies(h.dispatches)).toEqual(["urgent"]);
     }),
   );
 });
@@ -441,6 +505,90 @@ describe("makeChildWaitReactor epoch-scoped durable dedup (abnormal stop)", () =
         // standalone — this is the fork-before-rehydrate race (Fix 2).
         expect(messages.filter((m) => m.includes("[Child stopped abnormally]"))).toHaveLength(0);
         expect(messages.some((m) => m.includes("[Child wait"))).toBe(true);
+      }),
+  );
+});
+
+describe("makeChildWaitReactor turn-supersede interrupt (nudge mid-turn)", () => {
+  // The confirmed misfire (thread ab9fdd8c): a user nudge supersedes the
+  // in-flight turn; the pack settles the SUPERSEDED turn with a
+  // thread.session-set { status: "interrupted", superseded: true } — no
+  // turnId, no lastError — ~160ms before the child's new turn is observed.
+  // That session-set is a resume-epoch boundary, not a terminal stop: it must
+  // neither notify the parent nor resolve a parent wait as "aborted".
+
+  it.effect("a superseded interrupt fires NO abnormal-stop notice and writes NO marker", () =>
+    Effect.gen(function* () {
+      const h = makeHarness();
+      yield* h.reactor.handleEvent(sessionSet("running", null, 1));
+      yield* h.reactor.handleEvent(sessionSet("interrupted", null, 2, undefined, true));
+      yield* settle();
+      expect(texts(h.dispatches), "no actor message").toHaveLength(0);
+      expect(markerCount(h.dispatches), "no durable marker").toBe(0);
+    }),
+  );
+
+  it.effect("a superseded interrupt does NOT resolve a registered parent wait as aborted", () =>
+    Effect.gen(function* () {
+      const h = makeHarness();
+      yield* h.reactor.handleEvent(waitRegistered());
+      yield* h.reactor.handleEvent(sessionSet("running", null, 1));
+      yield* h.reactor.handleEvent(sessionSet("interrupted", null, 2, undefined, true));
+      yield* settle();
+      // The child is running the new turn: the wait stays pending.
+      expect(texts(h.dispatches), "no wait-resolution message").toHaveLength(0);
+      expect(
+        h.dispatches.some(
+          (c) =>
+            c.type === "thread.activity.append" &&
+            (c as { activity?: { kind?: string } }).activity?.kind ===
+              "t3team.child_wait.resolved",
+        ),
+        "no resolved marker",
+      ).toBe(false);
+    }),
+  );
+
+  it.effect("a genuine interrupt WITHOUT the supersede marker still notifies exactly once", () =>
+    Effect.gen(function* () {
+      const h = makeHarness();
+      yield* h.reactor.handleEvent(sessionSet("interrupted", "provider timeout", 1));
+      yield* settle();
+      const standalone = texts(h.dispatches).filter((m) =>
+        m.includes("[Child stopped abnormally]"),
+      );
+      expect(standalone).toHaveLength(1);
+      expect(markerCount(h.dispatches)).toBe(1);
+      expect(urgencies(h.dispatches)).toEqual(["urgent"]);
+    }),
+  );
+
+  it.effect(
+    "a genuine stop in a LATER epoch still notifies after a superseded interrupt re-armed the ledger",
+    () =>
+      Effect.gen(function* () {
+        const h = makeHarness();
+        yield* h.reactor.handleEvent(sessionSet("interrupted", "first stop", 1));
+        yield* settle();
+        expect(texts(h.dispatches).filter((m) => m.includes("[Child stopped abnormally]")))
+          .toHaveLength(1);
+        // The nudge: a new turn starts (epoch boundary)…
+        yield* h.reactor.handleEvent(sessionSet("running", null, 2));
+        // …and the pack's supersede-interrupt for the replaced turn lands.
+        yield* h.reactor.handleEvent(sessionSet("interrupted", null, 3, undefined, true));
+        yield* settle();
+        // The superseded interrupt must not have notified.
+        expect(texts(h.dispatches).filter((m) => m.includes("[Child stopped abnormally]")))
+          .toHaveLength(1);
+        // A genuine stop on the NEW turn still notifies (the gate re-armed the
+        // once-per-epoch ledger instead of consuming it).
+        yield* h.reactor.handleEvent(sessionSet("interrupted", "second stop", 4));
+        yield* settle();
+        const standalone = texts(h.dispatches).filter((m) =>
+          m.includes("[Child stopped abnormally]"),
+        );
+        expect(standalone).toHaveLength(2);
+        expect(markerCount(h.dispatches)).toBe(2);
       }),
   );
 });

@@ -67,6 +67,7 @@ layer("t3team-034_WorkflowDurability", (it) => {
         "run_id",
         "runtime_mode",
         "status",
+        "turn_retries", // added by t3team-053 (interrupted-turn re-drive budget)
         "updated_at",
         "wake_at", // added by t3team-035 (Epic 27 scheduler)
         "workflow_path",

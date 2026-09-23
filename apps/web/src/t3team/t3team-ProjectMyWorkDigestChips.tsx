@@ -45,12 +45,12 @@ export function DigestProjectChip({ graph, projectId }: { graph: DigestGraph; pr
   const project = graph.projects.find((entry) => entry.id === projectId);
   const name = project?.name ?? projectId;
   const chip = (
-    <span className="shrink-0 rounded bg-muted/60 px-1.5 py-px text-[10px] text-muted-foreground">
+    <span className="block min-w-0 max-w-[9rem] shrink truncate rounded bg-muted/60 px-1.5 py-px text-[10px] text-muted-foreground">
       {name}
     </span>
   );
   return project?.url ? (
-    <a href={project.url} className="hover:opacity-80">
+    <a href={project.url} className="min-w-0 shrink hover:opacity-80">
       {chip}
     </a>
   ) : (

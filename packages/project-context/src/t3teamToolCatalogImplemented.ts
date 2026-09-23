@@ -183,7 +183,8 @@ const ASK_USER_INPUT_SCHEMA = {
               label: { type: "string", minLength: 1 },
               description: {
                 type: "string",
-                description: "What this choice means and its trade-off — never a restatement of the label.",
+                description:
+                  "What this choice means and its trade-off — never a restatement of the label.",
               },
             },
             required: ["label"],
@@ -677,7 +678,8 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       properties: {
         op: {
           type: "string",
-          description: "The operation to perform: list, status, wait, stop, close, environments, or help.",
+          description:
+            "The operation to perform: list, status, wait, stop, close, environments, or help.",
           enum: ["list", "status", "wait", "stop", "close", "environments", "help"],
         },
         thread_id: {

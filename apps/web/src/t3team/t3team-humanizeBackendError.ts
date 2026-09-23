@@ -13,6 +13,11 @@ export type HumanizedBackendError = {
 
 const RULES: ReadonlyArray<{ readonly test: RegExp; readonly title: string }> = [
   {
+    test: /Backend request timed out after \d+ms/i,
+    title:
+      "The backend is still working — this took longer than usual. Give it a moment, then retry.",
+  },
+  {
     test: /Failed to reach backend|Fetch error|NetworkError|ECONNREFUSED|502|Bad Gateway/i,
     title: "The server is not reachable right now. Check that it is running, then retry.",
   },

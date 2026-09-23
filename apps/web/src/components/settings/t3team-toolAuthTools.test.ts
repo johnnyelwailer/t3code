@@ -1,7 +1,11 @@
 import { ProviderDriverKind } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { TOOL_AUTH_TOOLS, toolAuthMetaForTool, toolAuthToolForDriverKind } from "./t3team-toolAuthTools";
+import {
+  TOOL_AUTH_TOOLS,
+  toolAuthMetaForTool,
+  toolAuthToolForDriverKind,
+} from "./t3team-toolAuthTools";
 
 describe("TOOL_AUTH_TOOLS", () => {
   it("has exactly one entry per tool id, with a label, description, and icon", () => {

@@ -86,6 +86,10 @@
       "types": "./src/composition.ts",
       "import": "./src/composition.ts"
     },
+    "./checkpoint": {
+      "types": "./src/checkpoint.ts",
+      "import": "./src/checkpoint.ts"
+    },
     "./scheduling": {
       "types": "./src/scheduling.ts",
       "import": "./src/scheduling.ts"

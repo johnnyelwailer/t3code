@@ -29,6 +29,7 @@ function makeReadModel(
   const child: OrchestrationThread = {
     id: ThreadId.make("child-1"),
     projectId: ProjectId.make("project-1"),
+    pullRequests: [],
     title: "Child",
     modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
     runtimeMode: "full-access",

@@ -45,6 +45,7 @@ describe("@runbook/core journal-derived run status", () => {
       pendingCorrelationIds: [],
       artifacts: [],
       usage: { inputTokens: 0, outputTokens: 0, records: 0 },
+      materializedEntryCount: 0,
     });
   });
 

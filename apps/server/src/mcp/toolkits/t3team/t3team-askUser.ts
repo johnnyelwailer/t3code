@@ -47,9 +47,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
 import { OrchestrationEngineService } from "../../../orchestration/Services/OrchestrationEngine.ts";
-import {
-  ProjectionThreadActivityRepository,
-} from "../../../persistence/Services/ProjectionThreadActivities.ts";
+import { ProjectionThreadActivityRepository } from "../../../persistence/Services/ProjectionThreadActivities.ts";
 import { T3TeamMcpToolError } from "./tools.ts";
 import { openMessageModeRequestIds } from "./t3team-askUserLifecycle.ts";
 
@@ -94,7 +92,10 @@ const normalizeAskUserOptions = (
     .map((option) =>
       typeof option === "string"
         ? { label: option.trim(), description: option.trim() }
-        : { label: option.label.trim(), description: option.description?.trim() ?? option.label.trim() },
+        : {
+            label: option.label.trim(),
+            description: option.description?.trim() ?? option.label.trim(),
+          },
     )
     .filter((option) => option.label.length > 0);
 
@@ -150,7 +151,10 @@ export const t3TeamAskUser = Effect.fn("T3TeamMcpToolkit.askUser")(function* (
   // built exactly like this). Report, do not reject.
   const warnings = normalizedOptions
     .filter((option) => option.description === option.label)
-    .map((option) => `option '${option.label}': its description restates the label — describe the trade-off instead`);
+    .map(
+      (option) =>
+        `option '${option.label}': its description restates the label — describe the trade-off instead`,
+    );
 
   // A short question that names no context almost certainly points at
   // earlier thread content (proposals, options, a diff) that the dock card

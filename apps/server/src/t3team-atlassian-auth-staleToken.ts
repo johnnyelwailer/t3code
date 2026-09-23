@@ -68,11 +68,11 @@ export function clearAllNeedsReconnect(): void {
  * best-effort: the in-memory flag already protects this process, and a persistence hiccup must not
  * hide the actionable message behind a file-system error.
  */
-export function failRefreshOrMarkNeedsReconnect<E>(
+export function failRefreshOrMarkNeedsReconnect<E, R>(
   accountId: string,
   error: E,
-  persist: Effect.Effect<void, unknown>,
-): Effect.Effect<never, E | T3TeamAtlassianError> {
+  persist: Effect.Effect<void, E, R>,
+): Effect.Effect<never, E | T3TeamAtlassianError, R> {
   if (!isRefreshTokenInvalidError(error)) return Effect.fail(error);
   setAccountNeedsReconnect(accountId, true);
   return persist.pipe(

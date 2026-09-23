@@ -105,6 +105,7 @@ const activityRow = (
 const makeRepository = (rows: ReadonlyArray<ProjectionThreadActivity>) =>
   ({
     upsert: () => Effect.die("unused"),
+    getLatestTaskActivity: () => Effect.die("unused"),
     listByThreadId: () => Effect.die("unused"),
     listUserInputLifecycleByThreadId: () => Effect.succeed(rows),
     deleteByThreadId: () => Effect.die("unused"),
@@ -242,30 +243,33 @@ it.effect("maps header and structured options; warns when a description restates
   }),
 );
 
-it.effect("persists context onto the question payload and suppresses the missing-context warning", () =>
-  Effect.gen(function* () {
-    const fake = makeRecordingEngine();
-    const result = yield* provideAskUser(
-      t3TeamAskUser(
-        {
-          question: "Which of these should we ship first?",
-          context: "  ### Proposed options\n\n1. Ship A — smallest, ships this week\n2. Ship B — user-requested  ",
-        },
-        threadId,
-      ),
-      fake.shape,
-      makeRepository([]),
-    );
+it.effect(
+  "persists context onto the question payload and suppresses the missing-context warning",
+  () =>
+    Effect.gen(function* () {
+      const fake = makeRecordingEngine();
+      const result = yield* provideAskUser(
+        t3TeamAskUser(
+          {
+            question: "Which of these should we ship first?",
+            context:
+              "  ### Proposed options\n\n1. Ship A — smallest, ships this week\n2. Ship B — user-requested  ",
+          },
+          threadId,
+        ),
+        fake.shape,
+        makeRepository([]),
+      );
 
-    expect(result.warnings ?? []).toEqual([]);
+      expect(result.warnings ?? []).toEqual([]);
 
-    const requested = activityAt(fake.commands, 0);
-    const questions = (requested.payload.questions ?? []) as Array<Record<string, unknown>>;
-    // Trimmed: the handler must not persist whitespace-padded context.
-    expect(questions[0]?.context).toBe(
-      "### Proposed options\n\n1. Ship A — smallest, ships this week\n2. Ship B — user-requested",
-    );
-  }),
+      const requested = activityAt(fake.commands, 0);
+      const questions = (requested.payload.questions ?? []) as Array<Record<string, unknown>>;
+      // Trimmed: the handler must not persist whitespace-padded context.
+      expect(questions[0]?.context).toBe(
+        "### Proposed options\n\n1. Ship A — smallest, ships this week\n2. Ship B — user-requested",
+      );
+    }),
 );
 
 it.effect("warns when the question is short and no context is provided", () =>
@@ -440,6 +444,8 @@ const invocation: McpInvocationContext.McpInvocationScope = {
 };
 const client = McpSchema.McpServerClient.of({
   clientId: 1,
+  clientCapabilities: {},
+  clientInfo: { name: "t3team-test", version: "1.0.0" },
   protocolVersion: "2025-06-18",
   initializePayload: {
     protocolVersion: "2025-03-26",

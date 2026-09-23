@@ -35,7 +35,15 @@ export function isDigestTicketDone(ticket: ProjectTicket): boolean {
 }
 
 function isMine(ticket: ProjectTicket, graph: DigestGraph): boolean {
-  return ticket.assignee === graph.viewer.name;
+  const assignee = ticket.assignee?.trim().toLowerCase();
+  const viewer = graph.viewer.name?.trim().toLowerCase();
+  return (
+    assignee !== undefined &&
+    assignee !== "" &&
+    viewer !== undefined &&
+    viewer !== "" &&
+    assignee === viewer
+  );
 }
 
 function latestClaimActivity(graph: DigestGraph, ticketId: string): number | null {

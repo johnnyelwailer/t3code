@@ -39,14 +39,7 @@ function useMeasuredWidth(): [RefObject<HTMLDivElement | null>, number] {
 // (favicon, chosen icon, or the automatic per-project fallback).
 function GroupIcon({ group }: { group: SidebarProjectSnapshot }) {
   return (
-    <ProjectFavicon
-      environmentId={group.environmentId}
-      cwd={group.workspaceRoot}
-      projectName={group.title}
-      faviconPath={group.faviconPath}
-      projectIcon={group.projectIcon}
-      className="size-4 shrink-0"
-    />
+    <ProjectFavicon project={group} className="size-4 shrink-0" />
   );
 }
 

@@ -1,5 +1,9 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it, vi } from "@effect/vitest";
+import {
+  ORCHESTRATION_PROTOCOL_VERSION,
+  PROVIDER_SEND_TURN_MAX_FILE_BYTES,
+} from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -54,6 +58,8 @@ const makeServerConfig = Effect.fn(function* (baseDir: string) {
     otlpMetricsUrl: undefined,
     otlpExportIntervalMs: 10_000,
     otlpServiceName: "t3-server",
+    otlpHeaders: undefined,
+    otlpProtocol: "http/json",
     cwd: process.cwd(),
     baseDir,
     mode: "web",
@@ -177,14 +183,23 @@ it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
       expect(first.environmentId).toBe(second.environmentId);
       expect(first.serverStartedAtMs).toBe(1_700_000_000_000);
       expect(second.serverStartedAtMs).toBe(1_700_000_005_000);
+      if (first.serverStartedAtMs === undefined || second.serverStartedAtMs === undefined) {
+        throw new Error("boot stamp missing from descriptor");
+      }
       expect(second.serverStartedAtMs).toBeGreaterThan(first.serverStartedAtMs);
+      expect(first.orchestrationProtocolVersion).toBe(ORCHESTRATION_PROTOCOL_VERSION);
       expect(second.capabilities.repositoryIdentity).toBe(true);
       expect(second.capabilities.connectionProbe).toBe(true);
       expect(second.capabilities.attachmentUploads).toBe(true);
-      expect(second.capabilities.fileAttachments).toEqual({ maxUploadBytes: 50 * 1024 * 1024 });
+      expect(second.capabilities.fileAttachments).toEqual({
+        maxUploadBytes: PROVIDER_SEND_TURN_MAX_FILE_BYTES,
+      });
       expect(second.capabilities.pullRequests).toBe(true);
+      expect(second.capabilities.requiredWorktreeBootstrap).toBe(true);
       expect(second.capabilities.usagePriceOverrides).toBe(true);
+      expect(second.capabilities.threadActiveReorder).toBe(true);
       expect(second.capabilities.threadTitleRegeneration).toBe(true);
+      expect(second.capabilities.threadPullRequests).toBe(true);
       expect(second.capabilities.threadPullRequestLinking).toBe(true);
       expect(second.capabilities.agentActivityPublishing).toBe(false);
     }),

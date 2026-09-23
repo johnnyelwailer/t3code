@@ -16,7 +16,7 @@ import { connectionAtomRuntime } from "../connection/runtime";
 import { environmentSnapshotAtom } from "./shell";
 
 export const threadEnvironment: ReturnType<typeof createThreadEnvironmentAtoms> =
-  createThreadEnvironmentAtoms(connectionAtomRuntime);
+  createThreadEnvironmentAtoms(connectionAtomRuntime, environmentSnapshotAtom);
 // Upstream made environmentThreads module-internal (consumers use
 // environmentThreadDetails); the explicit threadEnvironment typing is the fork
 // addition.
@@ -26,7 +26,7 @@ export const environmentThreadDetails = createEnvironmentThreadDetailAtoms(
 );
 export const environmentThreadShells = createEnvironmentThreadShellAtoms({
   catalogValueAtom: environmentCatalog.catalogValueAtom,
-  snapshotAtom: environmentSnapshotAtom,
+  snapshotAtom: threadEnvironment.snapshotAtom,
 });
 
 const EMPTY_THREAD_STATE_ATOM = Atom.make(AsyncResult.success(EMPTY_ENVIRONMENT_THREAD_STATE)).pipe(
