@@ -25,6 +25,7 @@ import type {
   CheckpointPrimitives,
   CheckpointRecord,
 } from "@runbook/core/checkpoint";
+import type { RetryOptions, RetryPrimitives } from "@runbook/core/retryBackoff";
 import type { AgentOpts, SpawnThreadOpts, Thread } from "./t3team-sdk.threadTypes.ts";
 import type { WorkflowInvokeOpts, WorkflowRef } from "./t3team-sdk.types.ts";
 import type { Signal, SignalSourceHandle, SignalSourceRef } from "./t3team-sdk.signal.ts";
@@ -129,6 +130,16 @@ export function checkpoint<State>(input: CheckpointInput<State>): Promise<Checkp
 }
 
 /**
+ * Bounded execution: run `fn(attempt)` up to `maxAttempts` times with a durable, journaled backoff
+ * (`waitUntil`) between attempts. A resume never re-runs a settled attempt, and a crash mid-backoff
+ * wakes at the SAME deadline. Gives up with `RetryExhaustedError` (carrying the last classified
+ * failure) on exhaustion or a `"fatal"` classification. Requires the `'schedule'` capability.
+ */
+export function retry<T>(fn: (attempt: number) => Promise<T>, opts: RetryOptions): Promise<T> {
+  return fromRun<RetryPrimitives["retry"]>("retry")(fn, opts);
+}
+
+/**
  * The compact state a checkpoint-window resume restored — seed your carried state from it so the
  * body continues from the boundary instead of re-running the superseded prefix.
  * `undefined` on a fresh start, a full-replay resume, and inside sub-workflow bodies.
@@ -149,10 +160,7 @@ export function getResume(): CheckpointRecord | undefined {
  * delivers the awaited `(signal, key)`. Requires the `'source:<name>'` capability in
  * `meta.capabilities`.
  */
-export function getSignalSource<
-  Params,
-  Signals extends ReadonlyArray<Signal<unknown>>,
->(
+export function getSignalSource<Params, Signals extends ReadonlyArray<Signal<unknown>>>(
   source: SignalSourceRef<Params, Signals, unknown>,
   params: Params,
 ): Promise<SignalSourceHandle<Signals>> {
