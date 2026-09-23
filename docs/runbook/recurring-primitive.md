@@ -170,10 +170,10 @@ export default async () => {
 - **Time zones.** `recurring` does no calendar math. `everyMs` is absolute milliseconds and
   ignores DST on purpose. Anything calendar-shaped ("Mondays 09:00 Europe/Zurich") goes through
   `next`, built from the passed instants — never from a live clock. Epic 27 names
-  `@t3team/sdk/time` (`nextWeekday`, `nextCron`) for this; **it is declared, not implemented**:
-  `git grep -n "nextWeekday\|nextCron\|sdk/time" -- packages apps ':!*.md'` on `origin/main`
-  (`b18db1d9bb`) returns nothing. A `{ cron, tz }` cadence is deferred until those helpers exist;
-  it would be sugar for `next`, not a new journal shape.
+  `@t3team/sdk/time` (`nextWeekday`, `nextCron`) for this. Those helpers are implemented; the
+  remaining reason to defer a host-scheduler-backed `{ cron, tz }` cadence is the multi-host
+  wake-delivery gap tracked by distro GHE #332. It would be sugar for `next`, not a new journal
+  shape.
 - **Capability.** The inter-iteration wait is an ordinary `wait.until`, so a body using
   `recurring` needs the `"schedule"` capability, exactly like `waitUntil`.
 
@@ -216,6 +216,8 @@ strict-future rule above still applies.
 interface RecurringEnvelope<C> {
   readonly v: 1;
   readonly primitive: "recurring";
+  /** Canonical hash of cadence, init code, and primitive version; checked before every resumed call. */
+  readonly configFingerprint: string;
   readonly status: "active" | "finished";
   /** Index of the NEXT iteration to run. */
   readonly iteration: number;
@@ -229,8 +231,15 @@ interface RecurringEnvelope<C> {
 }
 ```
 
-The envelope is inside `state`, so it is covered by the checkpoint's `argsHash` drift check for
-free (`checkpoint.ts` passes `{ state, retention }` as `args`).
+The envelope is inside `state`, so it is covered by the checkpoint's `argsHash` integrity check.
+That does not detect drift once the checkpoint is compacted out of the selected replay window.
+Therefore every envelope MUST persist a canonical configuration fingerprint over the normalized
+cadence (including `everyMs` or the stable `next` code hash), the `init` code hash and any
+canonical literal init value, and the recurring primitive version. Before any resumed journaled
+call—including the re-issued wait—the runtime compares the current fingerprint with the restored
+envelope. A mismatch throws `RecurringConfigDriftError`; it must never silently re-seed or run
+with the new configuration. Migration requires an explicit continue-as-new successor run (or an
+explicit future versioned migrate contract); editing cadence/init in place is not migration.
 
 ### Seq layout
 
@@ -243,9 +252,13 @@ fresh run
   [now] [step calls…] [checkpoint En {status:"finished", result}] [post-loop calls…]
 ```
 
-The checkpoint commits **before** the wait is sent. While the run is parked — which is almost
-all of its life — the replay window is **one entry**: the `wait.until` `sent` record. The
-iteration's detail is already behind the boundary.
+The checkpoint append is not durable merely because `checkpoint()` returned: the writer may only
+have queued it. After each recurring checkpoint, the engine MUST await the journal sink's flush
+barrier and propagate flush failure before it dispatches `wait.until`. This is the existing sink
+flush/error barrier, applied at this boundary; it is not a replacement persistence path. The
+finished `E_n` must pass the same barrier before any post-loop journaled call or other side effect.
+While parked, the replay window is **one entry**: the `wait.until` `sent` record. The iteration's
+detail is already behind the boundary.
 
 ### Replay rule
 
@@ -263,12 +276,14 @@ Inside the step, calls replay positionally against the suffix, exactly like toda
 completed before the crash replay; the rest run live.
 
 **Delivery stays at-least-once.** A call whose `exec` started but whose result was never
-journaled runs again on resume. For handle kinds, the `correlationId` is `runId:seq` and is
-stable, so the host dedupes (`handlesDispatch.ts:89`). `recurring` does not weaken or strengthen
-this.
+journaled runs again on resume; `recurring` does not provide exactly-once tool execution. For
+handle kinds, the `correlationId` is `runId:seq` and is stable, so the host dedupes
+(`handlesDispatch.ts:89`), but this does not convert arbitrary external tool effects into an
+exactly-once contract. Provider watchdog settlement changes turn resolution; it does not change
+runbook sequence/replay semantics.
 
 **Crash during `init`** (before `E0`): there is no checkpoint, so the resume is a full replay
-from seq 0. `init`'s journaled calls replay; nothing fires twice.
+from seq 0. `init`'s journaled calls replay; previously journaled effects are not re-executed, but a call whose effect happened without a journaled result may execute again, as stated in the delivery limit.
 
 ### Retention
 
@@ -296,7 +311,8 @@ export type RecurringScopeViolation =
   | "sub-workflow"                // recurring() inside a workflow() child
   | "nested"                      // recurring() inside a recurring step
   | "second-entry"                // a second recurring() in the same body
-  | "checkpoint-in-scope";        // raw checkpoint() in a body that uses recurring
+  | "checkpoint-in-scope"        // raw checkpoint() in a body that uses recurring
+  | "outstanding-journal-work";  // queued work could dispatch after the entry guard
 
 export class RecurringScopeError extends WorkflowError {
   readonly violation: RecurringScopeViolation;
@@ -304,6 +320,8 @@ export class RecurringScopeError extends WorkflowError {
 
 /** Restored checkpoint state is not a RecurringEnvelope v1. */
 export class RecurringResumeMismatchError extends WorkflowError {}
+/** The active code/configuration differs from the durable recurring envelope. */
+export class RecurringConfigDriftError extends WorkflowError {}
 ```
 
 ### Entry guard — exact rule
@@ -318,8 +336,17 @@ That is precise, not heuristic: any journaled call before entry advanced the cur
 small seam — the drive's start seq must reach `recurring`. `createDurableRuntime` already holds
 it (`initialSeq`); expose it as `startSeq()` next to `currentSeq()`.
 
-Refusal throws **before** `recurring` takes a seq, so the journal is unchanged — the same
-"throws before any boundary is journaled" property the sub-workflow guard has. The message
+Cursor equality alone is insufficient: a previously queued/unawaited promise can dispatch a
+primitive after this check and steal `B+1`. The runtime therefore owns a per-drive journal
+dispatch gate. Entry atomically verifies no outstanding journal dispatch/work reservation exists
+and acquires exclusive recurring ownership; all primitive dispatches are serialized through that
+gate, and only the recurring controller and its awaited init/step work may dispatch while owned.
+An outstanding task that cannot be proven settled causes detectable refusal with
+`outstanding-journal-work`; it is never allowed to race past the guard. The gate releases only
+when recurring returns/throws. Authors MUST await all journal-producing work before entering and
+must not launch detached journal work from `init` or a step. Refusal throws **before** recurring
+takes a seq, so the journal is unchanged — the same "throws before any boundary is journaled"
+property the sub-workflow guard has. The message
 names the fix: *"move setup into `init`, or compute it from `args` without journaled calls."*
 
 Non-journaled code before entry is allowed: reading `args`, pure computation, declaring
@@ -343,6 +370,12 @@ positionally after it.
 
 ## Conformance tests
 
+Checkpointing already refuses a boundary over unresolved resolvable handles: the engine rejects
+such checkpoints before committing them (`checkpoint.ts` unresolved-prefix checks and
+`runEngine.ts` suspension checks). This contract remains in force and narrows the recurring
+checkpoint guarantee: a boundary is eligible only after all resolvable work in its prefix has
+settled. It does not imply exactly-once external tool execution.
+
 Location: `packages/runbook-core/src/recurring.test.ts` (unit, in-memory journal) and
 `packages/runbook-core/src/engineRecurring.test.ts` (real engine + `FsJournalStore`, same harness
 as `engineCheckpoint.test.ts`). SDK-surface tests (globals, sub-workflow stand-in) go in
@@ -354,22 +387,24 @@ host scheduler stub that settles `wait.until` on demand, so parking and waking a
 | # | scenario | assertions |
 | --- | --- | --- |
 | C1 | **Crash mid-iteration N.** `init` makes one tool call. Step makes two tool calls `a(i)`, `b(i)`. Crash after `a(N)` is journaled, before `b(N)`. Resume. | `init` tool exec count = **1** over the run's lifetime; `a(N)` replays (exec count 1); `b(N)` runs live once; iteration N+1 receives the carried state returned by iteration N; every `a(i)`/`b(i)` exec count = 1 |
-| C2 | **Crash between checkpoint commit and wait send.** | resume sends `wait.until(nextWakeMs)` live exactly once, with the envelope's deadline; no step call re-fires |
+| C2 | **Checkpoint flush barrier and crash before wait send.** Delay the checkpoint append, kill the drive while append is pending, then release it; repeat with append failure. Also delay the finished `E_n` append. | no `wait.until` dispatch occurs before successful awaited flush; append failure propagates and no wait/post-loop side effect occurs; after durable `E_n`, post-loop work may begin; recovery after a successful flush but before wait dispatch sends the wait live once |
 | C3 | **Parked resume.** Run parks at wake N; settle; resume. | materialized `bySeq` on the resume drive = **1** (the `wait.until` sent); `inspectRun.checkpoint.state.iteration` = N |
 | C4 | **Crash during `init`**, after its first of two tool calls. | no checkpoint exists; full replay; first call replays, second runs live; `E0.carried` equals `init`'s return |
-| C5 | **Entry guard.** One fixture per journaled kind before entry: `tools.*`, `now()`, `new Date()`, `uuid`, `waitUntil`, `workflow`, `emit`. | throws `RecurringScopeError` with `violation: "journaled-call-before-entry"`; journal `bySeq` size equals the size before the `recurring` call (nothing journaled by `recurring`) |
-| C6 | **Entry guard allows non-journaled prelude**: read `args`, pure computation. | runs normally |
+| C5 | **Entry guard.** One fixture per seq-allocating kind before entry, including `getSignalSource`, plus a queued-promise microtask that attempts a primitive dispatch after the guard. Include nonjournaled `log`/phase controls and a `getSignalSource` control. | seq-allocating prelude calls throw `RecurringScopeError` with `violation: "journaled-call-before-entry"`; the race is refused as `outstanding-journal-work` (cursor equality alone is not accepted); journal size is unchanged by refusal. `getSignalSource` trips because it allocates a seq; nonjournaled `log`/phase does not false-positive because it allocates none |
+| C6 | **Entry guard allows non-journaled prelude**: read `args`, pure computation, `log`, and phase; paired with `getSignalSource` refusal in C5. | runs normally; no false-positive for operations that allocate no seq |
 | C7 | **Scope guard** — `recurring` in a sub-workflow; nested `recurring`; second `recurring` after the first returns; `checkpoint()` inside the step; `checkpoint()` after the loop. | each throws `RecurringScopeError` with the matching `violation`; no checkpoint boundary journaled by the refused call |
 | C8 | **Stop, then crash post-loop.** Step calls `it.stop(x)`; a post-loop tool call is journaled; crash; resume. | `recurring` returns the recorded `result` without running the step or `init`; post-loop tool call replays (exec count 1) |
 | C9 | **`maxIterations`.** | loop ends after exactly `maxIterations`; result `reason: "max-iterations"`; finished envelope committed |
 | C10 | **Missed wakes.** `everyMs = 1h`; settle wake N five hours late. | exactly **one** step runs; `it.missedWakes = 5` on that step; next `nextWakeMs` is the first grid slot after `firedAtMs` |
-| C11 | **Drift is loud.** Change `everyMs`, or the shape of `init`'s value, between crash and resume. | `ReplayDriftError` at the `wait.until` or `checkpoint` argsHash check — never a silent re-seed |
+| C11 | **Configuration drift after compaction.** Start from envelope `B` already compacted out of replay selection; test both an empty suffix and a parked suffix; change `everyMs`, `next` code, init code, and init literal value independently. | fingerprint comparison occurs before any resumed call and throws `RecurringConfigDriftError`; no wait, init, or step is dispatched, regardless of suffix contents |
 | C12 | **Bounded over a long run.** 200 iterations, crash every 37th, resume each time. | every step call exec count = 1; every resume drive materializes ≤ (calls per iteration + 1) entries; `inspectRun.entryCount` grows, `materializedEntryCount` does not |
 | C13 | **Validation before journaling.** `everyMs: 0`, below the floor, non-integer; `maxIterations: 0`; `next()` returning a past or equal instant; non-JSON `carried`. | typed `WorkflowError`; for the first four nothing is journaled; for `next()` / `carried` no `wait.until` is sent |
 | C14 | **Mismatched restored state.** Resume a run whose latest checkpoint was written by a raw `checkpoint()` (constructed journal). | `RecurringResumeMismatchError`; nothing journaled |
 | C15 | **Backend parity.** C1–C3 against every `JournalStore` that implements `readReplayWindow`. | identical assertions per backend |
+| C16 | **Sent without sleeping row.** Persist `wait.until` sent durably, crash before `recordSleeping` persists, restart broker/host. | recovery scans/retries pending sent waits by stable run/seq identity (or makes send + sleeping persistence atomic), reaches one durable sleeping registration or settled wake, and cannot strand the run; restart rearm alone is insufficient |
+| C17 | **Provider death during an iteration with in-flight tool calls.** Real host integration test kills provider after dispatch and before all tool resolutions, then resumes. | turn resolution is deterministic and waits for unresolved resolvable handles; recurring checkpoint stays behind unresolved work and cannot commit while they remain. The test observes possible re-execution when an exec result was never journaled; it does not assert exactly-once tool execution |
 
-C1, C2, C3 and C8 together are the Phase 1 exit condition ("crash-safe commit and identical
+C1–C3, C8, C16 and C17 together are the Phase 1 exit condition ("crash-safe commit and identical
 result before/after resume") made concrete for the callback-owning form.
 
 ## Alternatives considered
@@ -394,8 +429,9 @@ result before/after resume") made concrete for the callback-owning form.
    each one moves or confuses the shared boundary the same way.
 3. **Finished envelope.** The plan's state covered an active loop only. Without a final
    `status: "finished"` checkpoint, a crash in post-loop code would re-enter the loop.
-4. **No cron / tz in v1.** `@t3team/sdk/time` is declared in Epic 27 but not implemented (grep
-   above). v1 ships `everyMs` and `next`; `cron` waits for the helpers.
+4. **No host-scheduler-backed cron in v1.** `@t3team/sdk/time` implements `nextWeekday` and
+   `nextCron`; the remaining gap is multi-host wake delivery tracked by distro GHE #332. v1 ships
+   `everyMs` and `next`; cron syntax would be sugar for `next`, not a new journal shape.
 5. **Amends a sentence in bounded-execution.md.** It says *"The author model stays a loop.
    `recurring` is an engine-recognized shape"*. Option A contradicts that. When this spec is
    accepted, that paragraph should point here and say the author writes a step, not a loop.
