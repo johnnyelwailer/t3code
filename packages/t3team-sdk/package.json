@@ -31,6 +31,10 @@
       "types": "./src/t3team-sdk.models.ts",
       "import": "./src/t3team-sdk.models.ts"
     },
+    "./time": {
+      "types": "./src/t3team-sdk.time.ts",
+      "import": "./src/t3team-sdk.time.ts"
+    },
     "./tools/t3team": {
       "types": "./src/tools/t3team-sdk.t3team.ts",
       "import": "./src/tools/t3team-sdk.t3team.ts"
@@ -54,6 +58,7 @@
     "@runbook/threads": "workspace:*",
     "@runbook/tools": "workspace:*",
     "@runbook/ts": "workspace:*",
+    "cron-parser": "^5.10.1",
     "effect": "catalog:",
     "typescript": "~6.0.3"
   },
