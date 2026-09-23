@@ -12,13 +12,14 @@ import * as NodeFS from "node:fs";
 import { act, createRef, useLayoutEffect, type ReactNode, type Ref } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { create, type ReactTestRenderer } from "react-test-renderer";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { LegendListRef, MaintainScrollAtEndOptions } from "@legendapp/list/react";
 import type {
   AgentPanelModel,
   RuntimeSubagent,
 } from "@t3tools/client-runtime/state/subagentRuntime";
 import { shouldUseRestingComposerLayout } from "../composerFooterLayout";
+import { MessagesTimeline, resolvePreviewAnnotationImage } from "./MessagesTimeline";
 import { useComposerFocusState } from "./useComposerFocusState";
 
 vi.mock("@legendapp/list/react", async () => {
@@ -155,58 +156,60 @@ vi.mock("../DiffWorkerPoolProvider", () => ({
   DiffWorkerPoolProvider: ({ children }: { children?: ReactNode }) => children,
 }));
 
-function matchMedia() {
-  return {
-    matches: false,
-    addEventListener: () => {},
-    removeEventListener: () => {},
-  };
-}
+// The timeline module reads `window`/`document` while it evaluates, so the DOM stubs must be in
+// place before the static `./MessagesTimeline` import below. `vi.hoisted` runs ahead of every
+// import. Loading the module statically (rather than awaiting it in a `beforeAll`) puts its
+// ~500-module graph in Vitest's untimed collection phase: a hook-scoped import is capped by the
+// hook's timeout, and on a loaded machine that graph alone takes 30–90 s to evaluate.
+const { stubDomGlobals } = vi.hoisted(() => {
+  function matchMedia() {
+    return {
+      matches: false,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    };
+  }
 
-let MessagesTimeline: typeof import("./MessagesTimeline").MessagesTimeline;
-let resolvePreviewAnnotationImage: typeof import("./MessagesTimeline").resolvePreviewAnnotationImage;
+  const ElementStub = class ElementStub {};
 
-const ElementStub = class ElementStub {};
+  function stubDomGlobals() {
+    const classList = {
+      add: () => {},
+      remove: () => {},
+      toggle: () => {},
+      contains: () => false,
+    };
 
-function stubDomGlobals() {
-  const classList = {
-    add: () => {},
-    remove: () => {},
-    toggle: () => {},
-    contains: () => false,
-  };
+    vi.stubGlobal("Element", ElementStub);
+    vi.stubGlobal("localStorage", {
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {},
+      clear: () => {},
+    });
+    vi.stubGlobal("window", {
+      Element: ElementStub,
+      matchMedia,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      requestAnimationFrame: (callback: FrameRequestCallback) => {
+        callback(0);
+        return 0;
+      },
+      cancelAnimationFrame: () => {},
+      desktopBridge: undefined,
+    });
+    vi.stubGlobal("document", {
+      documentElement: {
+        classList,
+        offsetHeight: 0,
+      },
+    });
+  }
 
-  vi.stubGlobal("Element", ElementStub);
-  vi.stubGlobal("localStorage", {
-    getItem: () => null,
-    setItem: () => {},
-    removeItem: () => {},
-    clear: () => {},
-  });
-  vi.stubGlobal("window", {
-    Element: ElementStub,
-    matchMedia,
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    requestAnimationFrame: (callback: FrameRequestCallback) => {
-      callback(0);
-      return 0;
-    },
-    cancelAnimationFrame: () => {},
-    desktopBridge: undefined,
-  });
-  vi.stubGlobal("document", {
-    documentElement: {
-      classList,
-      offsetHeight: 0,
-    },
-  });
-}
-
-beforeAll(async () => {
   stubDomGlobals();
-  ({ MessagesTimeline, resolvePreviewAnnotationImage } = await import("./MessagesTimeline"));
-}, 30_000);
+  return { stubDomGlobals };
+});
 
 // The scroll-settling test clears every global stub; mounted timeline rows
 // still touch `window` through the tooltip's focus handling.

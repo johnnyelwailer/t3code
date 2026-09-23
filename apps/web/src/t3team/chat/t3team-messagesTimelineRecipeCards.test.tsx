@@ -5,9 +5,12 @@ import {
 } from "@t3tools/project-recipes";
 import { type ReactNode, type Ref } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import type { LegendListRef } from "@legendapp/list/react";
 
+// Loaded statically so its large module graph evaluates in Vitest's untimed collection phase, not
+// inside a hook or test budget; the tests' own `await import(...)` calls then hit the module cache.
+import "~/components/chat/MessagesTimeline";
 import { buildT3TeamMessagesTimelineTestProps } from "~/t3team/chat/t3team-messagesTimelineTestProps";
 
 vi.mock("@legendapp/list/react", async () => {
@@ -43,7 +46,8 @@ vi.mock("@pierre/diffs/worker/worker.js?worker", () => ({
   },
 }));
 
-beforeAll(() => {
+// `vi.hoisted` runs ahead of the static timeline import below, so the stubs exist while it evaluates.
+vi.hoisted(() => {
   vi.stubGlobal("window", {
     matchMedia: () => ({
       matches: false,
@@ -85,12 +89,6 @@ beforeAll(() => {
 });
 
 describe("MessagesTimeline recipe cards", () => {
-  // The first render pays for importing the whole MessagesTimeline module graph — warm it here so
-  // no single test's 10 s budget absorbs module init when the directory runs concurrently.
-  beforeAll(async () => {
-    await import("~/components/chat/MessagesTimeline");
-  }, 60_000);
-
   it("renders an empty timeline shell", async () => {
     const { MessagesTimeline } = await import("~/components/chat/MessagesTimeline");
     const markup = renderToStaticMarkup(
