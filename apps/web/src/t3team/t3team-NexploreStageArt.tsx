@@ -1,0 +1,207 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import { isMacPlatform } from "~/lib/utils";
+import { cssNumberPx, FADE_OPACITY, FADE_WIDTH_PX, NexploreTitlebarFade } from "./t3team-NexploreTitlebarFade";
+
+/**
+ * Nexplore stage art — the brand-refresh "2FORM" language: a FLAT ground in one duo colour and
+ * FLAT circles in the other, positioned so the frame hard-crops them. No gradients, no blur — the
+ * crisp arc against flat colour IS the identity. Colours arrive as `--stage-nx-*` tokens (see
+ * `index.css`), fallbacks the brand-manual hexes.
+ *
+ * TWO SEPARATE COMPOSITIONS: the button is ~32px, so any slice of the wide strip art lands inside
+ * a single shape and the send button would render as one flat fill — it gets its own square
+ * composition sized to be visible at 32px. Both keep the saturated GROUND under the content
+ * (sidebar label, send arrow) and let the softer duo colour intrude only as edge arcs.
+ */
+
+const STRIP_HEIGHT = 96;
+
+/**
+ * Orb placement is MEASURED, not hardcoded. The sidebar is resizable (min 256px, no max) and the
+ * SVG is `xMinYMin slice` with a height-driven scale, so a fixed `cx` is pinned to a fixed pixel
+ * offset from the LEFT while the header toggle is anchored to the RIGHT and slides with the width;
+ * any constant eventually collides. The orb therefore sits in the widest gap actually free of
+ * header content, remeasured on every header resize: between the logo and the sidebar toggle,
+ * the "rising" position of the approved composition. The native macOS traffic lights live at the
+ * left edge above whatever the art shows there — the left-edge wash (light appearance only) keeps
+ * them legible, and the orb is NOT pulled into that zone.
+ */
+type OrbPlacement = {
+  cx: number;
+  cy: number;
+  r: number;
+  wash: boolean;
+  fadeOpacity: number;
+  fadeWidthUnits: number;
+};
+
+/** Radius in px. Fixed: the orb descends rather than shrinking when space runs out. */
+const ORB_RADIUS_PX = 46;
+/** Breathing room between the orb and the nearest content box. */
+const ORB_CONTENT_MARGIN_PX = 12;
+/** Centre height while the orb sits in the header band. */
+const ORB_BAND_CY_PX = 18;
+/** Header band the orb sinks past when squeezed — `--workspace-topbar-height`. */
+const HEADER_BAND_PX = 52;
+// The full-squeeze centre derives per measurement (`HEADER_BAND_PX + radius + 4`) so the circle
+// clears the band rather than leaving its top third inside it.
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+/**
+ * Widest horizontal run of the header not covered by a child element, in px from the header's left
+ * edge. Children are read generically rather than by selector, so a header that gains a control
+ * later is accounted for without touching this file.
+ */
+function measureFreeGap(host: HTMLElement, selfContainer: Element | null): { start: number; end: number } {
+  const hostRect = host.getBoundingClientRect();
+  const occupied: Array<[number, number]> = [];
+  for (const child of host.children) {
+    if (child === selfContainer || child.contains(selfContainer)) continue;
+    const rect = child.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) continue;
+    // Decorative layers are not content: the t3team header's pack-background layer is absolute
+    // inset-0 + pointer-events-none, so counting it read the whole header as occupied and sank
+    // the orb off the strip. It never blocks the pointer; painted opaque, it hides the art anyway.
+    if (getComputedStyle(child).pointerEvents === "none") continue;
+    occupied.push([rect.left - hostRect.left, rect.right - hostRect.left]);
+  }
+  occupied.sort((a, b) => a[0] - b[0]);
+
+  let best = { start: 0, end: 0 };
+  let cursor = 0;
+  const consider = (start: number, end: number) => {
+    if (end - start > best.end - best.start) best = { start, end };
+  };
+  for (const [start, end] of occupied) {
+    consider(cursor, Math.max(cursor, start));
+    cursor = Math.max(cursor, end);
+  }
+  consider(cursor, hostRect.width);
+  // Content that tiles the header completely (full-width wrappers) leaves no free run: fall back
+  // to the horizontal centre rather than pinning the orb half-clipped at the left edge.
+  if (best.end - best.start <= 0) return { start: hostRect.width / 2, end: hostRect.width / 2 };
+  return best;
+}
+
+const ORB_FILL: Readonly<Record<"orb" | "orbAlt", string>> = {
+  orb: "var(--stage-nx-orb, #f7cbed)",
+  orbAlt: "var(--stage-nx-orb-alt, var(--stage-nx-orb, #f7cbed))",
+};
+
+const GROUND_FILL = "var(--stage-nx-ground, #f05a0a)";
+
+/**
+ * Sidebar header strip. The orb is positioned from a live measurement of the header — see
+ * {@link measureFreeGap}. Exported for the story, which drives it at several sidebar widths.
+ */
+export function T3TeamNexploreStripArt() {
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const [orb, setOrb] = useState<OrbPlacement | null>(null);
+
+  const remeasure = useCallback(() => {
+    const svg = svgRef.current;
+    const host = svg?.parentElement?.parentElement ?? svg?.parentElement ?? null;
+    if (!svg || !host) return;
+    const svgHeight = svg.getBoundingClientRect().height;
+    if (svgHeight <= 0) return;
+
+    // The viewBox is height-driven under `slice`, so this converts both axes.
+    const unitsPerPx = STRIP_HEIGHT / svgHeight;
+    const gap = measureFreeGap(host, svg.parentElement);
+    const gapWidth = gap.end - gap.start;
+    // The left-edge wash targets the native macOS traffic lights, not the orb's position: it rides
+    // on the platform so every mac light-theme header gets it (light appearance is gated inside
+    // NexploreTitlebarFade), whether or not the orb parks near the left edge.
+    const wash = isMacPlatform(navigator.platform);
+    const hostStyle = getComputedStyle(host);
+    const fadeOpacity = cssNumberPx(hostStyle, "--stage-nx-fade-opacity", FADE_OPACITY);
+    const fadeWidthUnits = cssNumberPx(hostStyle, "--stage-nx-fade-width", FADE_WIDTH_PX) * unitsPerPx;
+
+    // The orb keeps its size and SINKS when the gap tightens — it never shrinks. It fits the gap
+    // outright while the gap is at least its diameter; below that it must clear the band entirely.
+    // Interpolating between the two thresholds lands at full clearance exactly when it stops
+    // fitting, so the descent is continuous with no overlapping width.
+    const roomy = 2 * (ORB_RADIUS_PX + ORB_CONTENT_MARGIN_PX);
+    const tight = 2 * ORB_RADIUS_PX;
+    const sink = clamp((roomy - gapWidth) / (roomy - tight), 0, 1);
+    const clearedCyPx = HEADER_BAND_PX + ORB_RADIUS_PX + 4;
+    const cyPx = ORB_BAND_CY_PX + sink * (clearedCyPx - ORB_BAND_CY_PX);
+
+    setOrb({
+      cx: ((gap.start + gap.end) / 2) * unitsPerPx,
+      cy: cyPx * unitsPerPx,
+      r: ORB_RADIUS_PX * unitsPerPx,
+      wash, fadeOpacity, fadeWidthUnits,
+    });
+  }, []);
+
+  useEffect(() => {
+    const svg = svgRef.current;
+    const host = svg?.parentElement?.parentElement ?? svg?.parentElement ?? null;
+    if (!host) return;
+    remeasure();
+    // Watches the header, not just the window: the sidebar resizes without a window resize.
+    const observer = new ResizeObserver(remeasure);
+    observer.observe(host);
+    for (const child of host.children) observer.observe(child);
+    return () => observer.disconnect();
+  }, [remeasure]);
+
+  return (
+    <svg
+      ref={svgRef}
+      className="stage-art stage-nexplore h-full w-full"
+      fill="none"
+      preserveAspectRatio="xMinYMin slice"
+      viewBox={`0 0 8192 ${STRIP_HEIGHT}`}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <rect width="100%" height={STRIP_HEIGHT} style={{ fill: GROUND_FILL }} />
+      <g className="stage-nexplore-orbs">
+        {orb ? (
+          <circle cx={orb.cx} cy={orb.cy} r={orb.r} style={{ fill: ORB_FILL.orb }} />
+        ) : null}
+      </g>
+      {/* Left-edge traffic-light wash (macOS + light appearance only; see t3team-NexploreTitlebarFade). */}
+      {orb?.wash ? <NexploreTitlebarFade opacity={orb.fadeOpacity} widthUnits={orb.fadeWidthUnits} /> : null}
+    </svg>
+  );
+}
+
+/**
+ * Send-button fill: square, and deliberately NOT the strip's hard-edged language.
+ *
+ * At 32px the whole button spans ~32 user units, so a crisp arc either misses the button entirely
+ * or fills it as one flat colour — the crop is simply too small to carry a shape. So the duo reads
+ * as heavily blurred colour instead (`.stage-nexplore-compact .stage-nexplore-orbs` blurs in
+ * index.css): the orbs become a soft field, and the send arrow stays crisp on top of it.
+ *
+ * Orbs are oversized and pushed past the edges so the blur never reveals a hard rim inside the
+ * button's rounded clip.
+ */
+function NexploreButtonArt() {
+  return (
+    <svg
+      className="stage-art stage-nexplore stage-nexplore-compact h-full w-full"
+      fill="none"
+      preserveAspectRatio="xMidYMid slice"
+      viewBox="0 0 32 32"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <rect width="32" height="32" style={{ fill: GROUND_FILL }} />
+      <g className="stage-nexplore-orbs">
+        <circle cx="30" cy="27" r="17" style={{ fill: ORB_FILL.orb }} />
+        <circle cx="1" cy="3" r="13" fillOpacity="0.85" style={{ fill: ORB_FILL.orbAlt }} />
+        <circle cx="26" cy="2" r="9" fillOpacity="0.5" style={{ fill: ORB_FILL.orbAlt }} />
+      </g>
+    </svg>
+  );
+}
+
+export function T3TeamNexploreStageArt({ compact = false }: { compact?: boolean }) {
+  return compact ? <NexploreButtonArt /> : <T3TeamNexploreStripArt />;
+}

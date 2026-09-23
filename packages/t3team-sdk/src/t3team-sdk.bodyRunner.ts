@@ -24,6 +24,8 @@ import type { HandleDispatch } from "./t3team-sdk.handles.ts";
 import { decodeWithSchema, setNestedValue } from "./t3team-sdk.internal.ts";
 import type { WorkflowPrimitives } from "./t3team-sdk.primitives.ts";
 import { createSchedulePrimitives } from "./t3team-sdk.schedulePrimitive.ts";
+import type { CheckpointPrimitives, CheckpointRecord } from "@runbook/core/checkpoint";
+import { createSignalPrimitives } from "./t3team-sdk.signalPrimitive.ts";
 import { createThreadPrimitives } from "./t3team-sdk.threadPrimitives.ts";
 import {
   extractMeta,
@@ -50,6 +52,13 @@ export async function runPreparedBody(opts: {
   readonly toolRefs: ReadonlyArray<T.AnyToolRef>;
   readonly scripts: Readonly<Record<string, T.AnyScriptRef>>;
   readonly primitives: WorkflowPrimitives;
+  /** The run's `checkpoint` primitive (bounded execution) — bound into the body globals. */
+  readonly checkpoint: CheckpointPrimitives["checkpoint"];
+  /**
+   * The compact state a checkpoint-window resume restored, for the top-level body only.
+   * Absent on a fresh start and on a full-replay resume; sub-workflow bodies never see one.
+   */
+  readonly resume?: CheckpointRecord | undefined;
   readonly handleDispatch: HandleDispatch;
   readonly broker?: MessageBroker;
   readonly launchThreadId?: string;
@@ -108,6 +117,12 @@ export async function runPreparedBody(opts: {
     broker: opts.broker ?? defaultBroker,
     capabilities,
   });
+  // `getSignalSource` (design 42) — capability-gated per source (`"source:<name>"`).
+  const signals = createSignalPrimitives({
+    dispatch: opts.handleDispatch,
+    broker: opts.broker ?? defaultBroker,
+    capabilities,
+  });
   const globals = buildWorkflowGlobals({
     args: decodedArgs,
     tools: buildToolTree(opts.toolRefs, opts.runtime, capabilities),
@@ -116,8 +131,11 @@ export async function runPreparedBody(opts: {
     scripts: capabilities.has("script") ? buildScriptTree(opts.scripts, opts.runtime) : {},
     runtime: opts.runtime,
     primitives: opts.primitives,
+    checkpoint: opts.checkpoint,
+    resume: opts.resume,
     threads,
     schedule,
+    signals,
     // The `RunbookContext` subset (`@runbook/core/authoring`) a `run(ctx)`-shaped body sees;
     // legacy bodies declare zero parameters and the loader never passes this to them.
     ctx: buildRunbookContext({ toolRefs: opts.toolRefs, runtime: opts.runtime, capabilities }),

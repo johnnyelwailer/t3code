@@ -16,12 +16,18 @@
  * reflects the new running turn. Batching is what coalesces an inter-agent
  * message burst into ONE reaction turn instead of one turn per message.
  *
+ * The mailbox also owns the ONCE-PER-SESSION briefing flag: the standing
+ * inter-agent protocol is appended to a thread's first digest since process
+ * start (`isBriefed`/`markBriefed`), not repeated on every message.
+ *
  * State is in-memory and process-local (matching the provider sessions it
  * guards); it is intentionally not persisted.
  *
  * @module t3team-actorMailbox
  */
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 
 export interface T3TeamActorMailboxEntry {
@@ -86,6 +92,15 @@ export interface T3TeamActorMailboxShape {
   ) => Effect.Effect<boolean>;
   /** Whether a reaction turn is currently in flight for the thread. */
   readonly isReacting: (threadId: string) => Effect.Effect<boolean>;
+  /** Read-only view of the thread's pending queue (no claim, no flags). */
+  readonly peekPending: (threadId: string) => Effect.Effect<ReadonlyArray<T3TeamActorMailboxEntry>>;
+  /**
+   * Whether the thread's standing-instruction briefing has already been
+   * delivered this process lifetime ("once per session").
+   */
+  readonly isBriefed: (threadId: string) => Effect.Effect<boolean>;
+  /** Mark the briefing delivered (call only when the briefed digest actually dispatched). */
+  readonly markBriefed: (threadId: string) => Effect.Effect<void>;
   /** Mark the thread suppressed: queued/future actor messages enqueue but do not auto-dispatch. */
   readonly suppress: (threadId: string) => Effect.Effect<void>;
   /** Lift suppression (called when the user sends the thread's next real message). */
@@ -98,6 +113,7 @@ export const makeT3TeamActorMailbox: Effect.Effect<T3TeamActorMailboxShape> = Ef
   function* () {
     const state = yield* Ref.make(new Map<string, ThreadMailboxState>());
     const knownMessageIds = yield* Ref.make(new Set<string>());
+    const briefed = yield* Ref.make(new Set<string>());
 
     const read = (map: Map<string, ThreadMailboxState>, threadId: string): ThreadMailboxState =>
       map.get(threadId) ?? EMPTY;
@@ -164,6 +180,22 @@ export const makeT3TeamActorMailbox: Effect.Effect<T3TeamActorMailboxShape> = Ef
     const isReacting: T3TeamActorMailboxShape["isReacting"] = (threadId) =>
       Ref.get(state).pipe(Effect.map((map) => read(map, threadId).reacting));
 
+    const peekPending: T3TeamActorMailboxShape["peekPending"] = (threadId) =>
+      Ref.get(state).pipe(Effect.map((map) => read(map, threadId).queue));
+
+    const isBriefed: T3TeamActorMailboxShape["isBriefed"] = (threadId) =>
+      Ref.get(briefed).pipe(Effect.map((set) => set.has(threadId)));
+
+    const markBriefed: T3TeamActorMailboxShape["markBriefed"] = (threadId) =>
+      Ref.update(briefed, (set) => {
+        if (set.has(threadId)) {
+          return set;
+        }
+        const next = new Set(set);
+        next.add(threadId);
+        return next;
+      });
+
     const suppress: T3TeamActorMailboxShape["suppress"] = (threadId) =>
       Ref.update(state, (map) => {
         const current = read(map, threadId);
@@ -195,9 +227,24 @@ export const makeT3TeamActorMailbox: Effect.Effect<T3TeamActorMailboxShape> = Ef
       clearReacting,
       requeueFailed,
       isReacting,
+      peekPending,
+      isBriefed,
+      markBriefed,
       suppress,
       clearSuppression,
       isSuppressed,
     };
   },
 );
+
+/**
+ * Shared mailbox service: the process's ONE in-memory actor mailbox, provided
+ * by {@link T3TeamActorMailboxLive} so the reactor, the `drain` tool op and
+ * any other dispatcher claim/peek against the same state.
+ */
+export const T3TeamActorMailbox = Context.Service<
+  "T3TeamActorMailbox",
+  T3TeamActorMailboxShape
+>("T3TeamActorMailbox");
+
+export const T3TeamActorMailboxLive = Layer.effect(T3TeamActorMailbox, makeT3TeamActorMailbox);

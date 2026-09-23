@@ -36,6 +36,34 @@ export interface WorkflowEngineSleep {
   readonly deadline: number;
 }
 
+/** The event a run parks on when it fires `signal.waitFor` (GHE #332): the `signal.wait`
+ * correlation the delivery port resolves on delivery, plus the awaited `(signal, key)` it joins
+ * on. A signal park has no thread (no thread column) and no deadline (no timer). */
+export interface WorkflowEngineWatch {
+  readonly correlationId: string;
+  readonly sourceName: string;
+  readonly paramsHash: string;
+  readonly watchSignalName: string;
+  readonly watchSignalKey: string;
+}
+
+/** The `signal.register` envelope payload: the run's binding to one source instance. `params`
+ * is the author's validated params (host-validated at bind time against the source's params
+ * schema); `paramsHash` is the canonical-JSON hash forming the instance-identity half. */
+export interface SignalRegisterPayload {
+  readonly source: string;
+  readonly params: unknown;
+  readonly paramsHash: string;
+}
+
+/** The `signal.wait` envelope payload: the awaited `(signal, key)` within one source instance. */
+export interface SignalWaitPayload {
+  readonly source: string;
+  readonly paramsHash: string;
+  readonly signal: string;
+  readonly key: string;
+}
+
 /**
  * Write-through to the durable `workflow_runs` record. The host implements this over
  * {@link import("./persistence/Services/WorkflowRuns.ts").WorkflowRunRepository}; absent (SDK
@@ -54,13 +82,20 @@ export interface WorkflowRunLifecycle {
   /** Flip to `sleeping` + record the wake deadline the run parked on (Epic 27; driven by the
    * broker when the body fires `waitUntil`). */
   readonly recordSleeping: (sleep: WorkflowEngineSleep) => Promise<void>;
+  /** Flip to `watching` + record the awaited `(signal, key)` + correlation the run parked on
+   * (GHE #332; driven by the broker when the body fires `signal.waitFor`). Absent on
+   * pre-signal hosts — the park is then purely in-memory (fs path / tests). */
+  readonly recordWatching?: (watch: WorkflowEngineWatch) => Promise<void>;
   /** Mark the run `completed` and clear the pending ask. */
   readonly recordCompleted: () => Promise<void>;
   /** Mark the run `failed`, clear the pending ask, and persist the agent-facing failure detail
-   * (migration 044) so `status`/`resume` can report WHY without a journal read. */
+   * (migration 044) so `status`/`resume` can report WHY without a journal read. With
+   * `retainPending` the pending ask is KEPT (GHE #403): the failure is the host's verdict on an
+   * unanswered step, not a body fault, and `resume` re-drives that step from the retained ask. */
   readonly recordFailed: (detail?: {
     readonly reason: string;
     readonly step: string;
+    readonly retainPending?: boolean;
   }) => Promise<void>;
   /** Crash-recovery: if this correlation still owns a sleeping or newly-claimed active row and
    * its reply was already journaled, mark it failed. Correlation pinning protects newer work. */
@@ -92,6 +127,25 @@ export interface WorkflowEngineBrokerDeps {
    * {@link recordPending} for the timer wake source. No-op (undefined) on the fs/in-memory path.
    */
   readonly recordSleeping?: (sleep: WorkflowEngineSleep) => Promise<void>;
+  /**
+   * Durably record the awaited `(signal, key)` + correlation (status=watching) before the run
+   * parks, so the delivery port finds it on boot (GHE #332). Mirrors {@link recordSleeping} for
+   * the event wake source. No-op (undefined) on the fs/in-memory path.
+   */
+  readonly recordWatching?: (watch: WorkflowEngineWatch) => Promise<void>;
+  /**
+   * Durably upsert the run × source-instance binding FACT for the `signal.register` verb
+   * (GHE #332) — the reconciler derives the desired live source set from these rows. One-way:
+   * it never settles a resolver. No-op (undefined) on the fs/in-memory path.
+   */
+  readonly recordSignalRegistration?: (reg: SignalRegisterPayload) => Promise<void>;
+  /**
+   * Drain a matching OPEN entry from the durable signal inbox for a `signal.wait` (GHE #332):
+   * an event that landed while no run was parked on this `(signal, key)` is journaled here, and
+   * a later wait takes it (first-wins). Returns the entry's payload, or `undefined` when no
+   * entry is open (the run then parks until the delivery port resolves it).
+   */
+  readonly drainSignalWait?: (wait: SignalWaitPayload) => Promise<unknown | undefined>;
   /**
    * Live step-status sink (UX slice 1 — "no black box"): each fired primitive emits a
    * `workflow.step` thread activity on the launch thread. Best-effort by construction; absent

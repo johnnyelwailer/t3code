@@ -200,3 +200,65 @@ export function filterProjectMyWorkTickets({
     })
     .toSorted(compareProjectBacklogTickets);
 }
+
+/**
+ * The digest-lens counterpart of `filterProjectMyWorkTickets`: it applies the same
+ * user-selected filters (status category, hidden types, priority, status, search) but skips
+ * the "assigned to me" pre-filter — the digest graph is already scoped to this viewer, and its
+ * lanes are driven by agent activity, decisions, and PRs, not just assignment. It also leaves
+ * ordering to the caller: the digest's sectioning owns its own arrangement, so no sort here.
+ */
+export function filterDigestTickets({
+  tickets,
+  query,
+  statusCategory,
+  excludedTypeKeys = [],
+  selectedPriority,
+  selectedStatus,
+}: {
+  tickets: readonly ProjectTicket[];
+  query: string;
+  statusCategory: ProjectMyWorkStatusCategory;
+  excludedTypeKeys?: ReadonlyArray<string>;
+  selectedPriority: string;
+  selectedStatus: string;
+}): ProjectTicket[] {
+  const excludedTypeKeySet = new Set(excludedTypeKeys);
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const ticketById = new Map(tickets.map((ticket) => [ticket.id, ticket]));
+
+  return tickets
+    .filter((ticket) => matchesStatusCategory(ticket, statusCategory))
+    .filter((ticket) => !excludedTypeKeySet.has(getProjectTicketIssueTypeKey(ticket)))
+    .filter((ticket) => selectedPriority === "all" || ticket.priority === selectedPriority)
+    .filter((ticket) => selectedStatus === "all" || ticket.status === selectedStatus)
+    .filter((ticket) => {
+      if (!normalizedQuery) {
+        return true;
+      }
+
+      return buildProjectMyWorkSearchHaystack(ticket, ticketById).includes(normalizedQuery);
+    });
+}
+
+export function hasActiveDigestFilters({
+  query,
+  statusCategory,
+  excludedTypeKeys = [],
+  selectedPriority,
+  selectedStatus,
+}: {
+  query: string;
+  statusCategory: ProjectMyWorkStatusCategory;
+  excludedTypeKeys?: ReadonlyArray<string>;
+  selectedPriority: string;
+  selectedStatus: string;
+}): boolean {
+  return (
+    query.trim().length > 0 ||
+    statusCategory !== "all" ||
+    excludedTypeKeys.length > 0 ||
+    selectedPriority !== "all" ||
+    selectedStatus !== "all"
+  );
+}

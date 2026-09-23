@@ -25,6 +25,13 @@ export interface EnvironmentThread extends OrchestrationThread {
    */
   readonly backgroundLiveness?: OrchestrationThreadShell["backgroundLiveness"];
   readonly planProgress?: OrchestrationThreadShell["planProgress"];
+  /**
+   * Whether the thread has a pending user-input request (a question docked in
+   * the composer). Shell-sourced live state, like backgroundLiveness: the
+   * detail stream does not carry it. Drives the parent-side pending-question
+   * indicator (sub-run tree / Agents panel).
+   */
+  readonly hasPendingUserInput?: boolean | undefined;
 }
 
 export function scopeProject(

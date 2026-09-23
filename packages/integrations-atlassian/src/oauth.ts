@@ -3,7 +3,69 @@ import * as Data from "effect/Data";
 export class AtlassianOAuthError extends Data.TaggedError("AtlassianOAuthError")<{
   readonly message: string;
   readonly cause?: unknown;
+  /** HTTP status of the failing Atlassian response, when there was one. */
+  readonly status?: number;
+  /** The `error` / `error_description` fields of an RFC 6749 error body, when Atlassian sent one. */
+  readonly oauthError?: string;
+  readonly oauthErrorDescription?: string;
 }> {}
+
+/**
+ * The refresh token itself is dead — Atlassian rejected the refresh grant (401/403 with
+ * `unauthorized_client`/`invalid_grant`, or a "refresh_token is invalid" description). Unlike
+ * `AtlassianOAuthError` this is not an outage: retrying with the same token can never succeed, and
+ * the stored credentials must be cleared so the user signs in again instead of looping on the same
+ * dead token. The upstream body is kept only as `cause` (server logs), never in `message`.
+ */
+export class AtlassianOAuthSessionExpiredError extends Data.TaggedError(
+  "AtlassianOAuthSessionExpiredError",
+)<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
+
+/**
+ * True when a refresh-token grant was rejected because the token is no longer usable, as opposed to
+ * a transient outage (5xx, network). Only 401/403 with the OAuth error codes Atlassian returns for
+ * a dead refresh token count; anything else is left to the generic refresh error so a real outage
+ * keeps its existing behavior.
+ */
+export function isDeadRefreshTokenResponse(status: number, body: string): boolean {
+  if (status !== 401 && status !== 403) return false;
+  try {
+    const parsed = JSON.parse(body) as { error?: string; error_description?: string };
+    return (
+      parsed.error === "unauthorized_client" ||
+      parsed.error === "invalid_grant" ||
+      /refresh_token is invalid/i.test(parsed.error_description ?? "")
+    );
+  } catch {
+    // Non-JSON body: only the exact documented description counts.
+    return /refresh_token is invalid/i.test(body);
+  }
+}
+
+/**
+ * Atlassian answers token failures with an RFC 6749 JSON body such as
+ * `{"error":"unauthorized_client","error_description":"refresh_token is invalid"}`. Parsed into
+ * fields so callers can classify the failure instead of matching on the rendered message.
+ */
+export function parseOAuthErrorBody(text: string): {
+  readonly oauthError?: string;
+  readonly oauthErrorDescription?: string;
+} {
+  try {
+    const body = JSON.parse(text) as { error?: unknown; error_description?: unknown };
+    return {
+      ...(typeof body.error === "string" ? { oauthError: body.error } : {}),
+      ...(typeof body.error_description === "string"
+        ? { oauthErrorDescription: body.error_description }
+        : {}),
+    };
+  } catch {
+    return {};
+  }
+}
 
 const AUTH_BASE = "https://auth.atlassian.com";
 export const ATLASSIAN_API_BASE = "https://api.atlassian.com";
@@ -143,8 +205,16 @@ export async function refreshAccessToken(
 
   if (!response.ok) {
     const text = await response.text().catch(() => "Unknown error");
+    if (isDeadRefreshTokenResponse(response.status, text)) {
+      throw new AtlassianOAuthSessionExpiredError({
+        message: "The Atlassian refresh token is no longer valid. Sign in again.",
+        cause: text,
+      });
+    }
     throw new AtlassianOAuthError({
       message: `Token refresh failed (${response.status}): ${text}`,
+      status: response.status,
+      ...parseOAuthErrorBody(text),
     });
   }
 

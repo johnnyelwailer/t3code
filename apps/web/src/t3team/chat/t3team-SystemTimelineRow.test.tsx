@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 // @vitest-environment jsdom
 /**
  * A workflow's plain-text `thread.notifyUser(...)` report (see `t3team-workflowEngineBrokerNotify.ts`)
@@ -288,5 +287,74 @@ describe("workflow notification collapse in the timeline", () => {
 
     const recollapsedBody = container.querySelector("[data-workflow-notification-collapsed]");
     expect(recollapsedBody?.getAttribute("data-workflow-notification-collapsed")).toBe("true");
+  }, 10000);
+});
+
+function widgetOnlyMessage(id: string): ChatMessage {
+  return {
+    id: MessageId.make(id),
+    role: "system",
+    text: "",
+    streaming: false,
+    createdAt: "2026-06-20T00:00:00.000Z",
+    updatedAt: "2026-06-20T00:00:00.000Z",
+    turnId: null,
+    t3teamExt: {
+      visibleToUser: true,
+      attachments: [
+        {
+          kind: "widget",
+          widget: {
+            widgetId: "widget-1",
+            title: "q4_revenue_chart",
+            format: "html",
+            html: "<div>chart</div>",
+          },
+        },
+      ],
+    },
+  };
+}
+
+describe("full-bleed widget row width in the timeline", () => {
+  it("gives a widget-only row the full-width wrapper while a prose row keeps the narrow column", async () => {
+    const proseLine = "The review window is due.";
+    const markup = await renderTimeline([
+      widgetOnlyMessage("message-widget-width"),
+      workflowNotificationMessage("message-prose-width", proseLine),
+    ]);
+
+    const fullWidthWrapper = '<div class="mx-auto w-full min-w-0" data-timeline-root="true">';
+    const narrowWrapper =
+      '<div class="mx-auto w-full min-w-0 max-w-3xl overflow-x-clip" data-timeline-root="true">';
+
+    // Exactly one full-width (no cap, no clip) row wrapper — the widget row's.
+    const firstFull = markup.indexOf(fullWidthWrapper);
+    expect(firstFull).toBeGreaterThan(-1);
+    expect(markup.indexOf(fullWidthWrapper, firstFull + 1)).toBe(-1);
+    // The widget iframe sits inside that wrapper, before the next row starts.
+    const widgetStart = markup.indexOf('data-widget-id="widget-1"');
+    expect(widgetStart).toBeGreaterThan(firstFull);
+    expect(markup).not.toContain("max-w-[92%]");
+
+    // The prose row keeps the narrow capped wrapper, and its text lives after it.
+    const narrowStart = markup.indexOf(narrowWrapper);
+    expect(narrowStart).toBeGreaterThan(firstFull);
+    expect(markup.indexOf(narrowWrapper, narrowStart + 1)).toBe(-1);
+    expect(markup.indexOf(proseLine)).toBeGreaterThan(narrowStart);
+  }, 10000);
+
+  it("keeps the narrow column for a mixed text + widget row", async () => {
+    const mixed: ChatMessage = {
+      ...widgetOnlyMessage("message-mixed-width"),
+      text: "Here is the chart:",
+    };
+    const markup = await renderTimeline([mixed]);
+
+    const fullWidthWrapper = '<div class="mx-auto w-full min-w-0" data-timeline-root="true">';
+    const narrowWrapper =
+      '<div class="mx-auto w-full min-w-0 max-w-3xl overflow-x-clip" data-timeline-root="true">';
+    expect(markup.indexOf(fullWidthWrapper)).toBe(-1);
+    expect(markup.indexOf(narrowWrapper)).toBeGreaterThan(-1);
   }, 10000);
 });

@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-native-title-tooltip -- Mirrors the sidebar rows' native provider-icon title. */
 /**
  * "Local provider sessions" setting toggle — the display-side contract.
  *
@@ -87,7 +86,7 @@ function Section({ visibleThreads }: { visibleThreads: ProjectThread[] }) {
 }
 
 const meta: Meta = {
-  title: "Local provider sessions toggle",
+  title: "T3Team/Providers/Local Sessions Toggle",
   parameters: { layout: "fullscreen" },
 };
 export default meta;

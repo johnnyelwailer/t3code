@@ -51,6 +51,7 @@ import {
 } from "../environments/primary/target";
 import { clearComposerDraftsEnvironment } from "../composerDraftStore";
 import { isHostedStaticApp } from "../hostedPairing";
+import { isLocalEnvironmentDisabled } from "../localEnvironment";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { acknowledgeRpcRequest, trackRpcRequestSent } from "../rpc/requestLatencyState";
 import {
@@ -60,6 +61,7 @@ import {
 } from "./desktopLocal";
 import { connectionStorageLayer } from "./storage";
 import { clientPresentationMetadata } from "./clientMetadata";
+import { isApplicationActiveResubscribeWake } from "./t3team-applicationActiveWake";
 
 let nextObservedRpcRequestId = 0;
 
@@ -95,8 +97,19 @@ const wakeupsLayer = Wakeups.layer({
     Stream.callback<"application-active">((queue) =>
       Effect.acquireRelease(
         Effect.sync(() => {
+          let hiddenSinceEpochMs: number | null = null;
           const listener = () => {
-            if (document.visibilityState === "visible") {
+            if (document.visibilityState === "hidden") {
+              hiddenSinceEpochMs = Date.now();
+              return;
+            }
+            if (document.visibilityState !== "visible") return;
+            const shownAtEpochMs = Date.now();
+            const shouldWake =
+              hiddenSinceEpochMs !== null &&
+              isApplicationActiveResubscribeWake(hiddenSinceEpochMs, shownAtEpochMs);
+            hiddenSinceEpochMs = null;
+            if (shouldWake) {
               Queue.offerUnsafe(queue, "application-active");
             }
           };
@@ -182,6 +195,9 @@ const capabilitiesLayer = Layer.effectContext(
       scopes: AuthStandardClientScopes,
     });
     const cloudSession = CloudSession.of({
+      identity: Effect.sync(() =>
+        Option.fromNullishOr(appAtomRegistry.get(managedRelaySessionAtom)),
+      ),
       clerkToken: Effect.gen(function* () {
         const session = appAtomRegistry.get(managedRelaySessionAtom);
         if (session === null) {
@@ -461,7 +477,7 @@ export function secondaryRegistrationsToRetainAfterTopologyRead(
 const platformConnectionSourceLayer = Layer.effect(
   PlatformConnectionSource,
   Effect.gen(function* () {
-    if (isHostedStaticApp()) {
+    if (isHostedStaticApp() || isLocalEnvironmentDisabled()) {
       return PlatformConnectionSource.of({
         registrations: Stream.empty,
       });

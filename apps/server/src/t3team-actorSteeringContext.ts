@@ -1,10 +1,13 @@
 /**
- * Human-steering context (GHE #209): when a human is actively steering this
- * thread, tell the agent — each turn — not to proactively ping the parent
- * thread. The legitimate "report back to the parent" channel is NOT blocked
- * (no hard backstop on send-message): this computed context line reduces
- * unprompted chatter while a human is at the keyboard, and Part 2 of #209
- * makes outbound inter-agent messages visible in the sender's timeline.
+ * Human-steering context (GHE #209 + chatter fix): when a thread has a
+ * parent, tell the agent — each turn — the anti-ping rule. While a human is
+ * actively steering the measured-age variant fires (answer the human first);
+ * when idle the standing variant fires (one final report when done, hard
+ * blockers only). The legitimate "report back to the parent" channel is NOT
+ * blocked (no hard backstop on send-message): these computed context lines
+ * reduce unprompted chatter whether or not a human is at the keyboard, and
+ * Part 2 of #209 makes outbound inter-agent messages visible in the sender's
+ * timeline.
  *
  * Injected at the same seam that wraps an inter-agent reaction turn with the
  * user-return instruction (t3team-actorReactionVisibility.ts, consumed by
@@ -150,17 +153,29 @@ export function detectHumanSteeringState(
 }
 
 /**
- * The harness instruction appended to a turn's context when a human is
- * steering and the thread has a parent. `""` when the signal is idle OR the
- * thread has no parent (root threads and workflow-owned children are a
- * no-op: there is no parent to ping).
+ * The harness instruction appended to a turn's context when the thread has a
+ * parent. Two variants (chatter fix, follow-up to GHE #209 — the #209 line
+ * only fired while a human was steering, which is exactly when autonomous
+ * multi-child runs are NOT covered):
+ *   - steering: measured-age phrasing, answer the human first;
+ *   - idle: standing anti-ping rule — one final report when done, hard
+ *     blockers only, no pings or acknowledgements.
+ * `""` when the thread has no parent (root threads and workflow-owned
+ * children: there is no parent to ping).
  */
 export function buildHumanSteeringInstruction(
   state: HumanSteeringState,
   parentThreadId: string | null | undefined,
 ): string {
-  if (state.kind !== "steering" || parentThreadId === undefined || parentThreadId === null) {
+  if (parentThreadId === undefined || parentThreadId === null) {
     return "";
+  }
+  if (state.kind === "idle") {
+    return (
+      "[No human is actively steering this thread. Keep inter-agent messages to the parent " +
+      "to exactly one final report when the work is completely done, or a blocker you cannot " +
+      "solve yourself. No progress pings, no acknowledgements.]"
+    );
   }
   const ageMinutes = Math.max(1, Math.round(state.lastUserMessageAgeMs / 60000));
   return (
@@ -184,11 +199,12 @@ export function appendHumanSteeringInstruction(baseInput: string, instruction: s
 }
 
 /**
- * The GHE #209 human-steering SUFFIX for a reaction turn, computed from the
- * thread's own durable state: non-empty only when a real user message is
- * recent AND the thread has a parent (root threads and workflow-owned
- * children have no parent → no-op). Kept here so the reaction dispatch stays
- * thin — the caller only decides WHERE the suffix rides in the turn input.
+ * Human-steering SUFFIX for a reaction turn, computed from the thread's own
+ * durable state: non-empty whenever the thread has a parent (root threads and
+ * workflow-owned children have no parent → no-op). Steered turns get the
+ * measured-age phrasing; idle turns get the standing anti-ping rule. Kept
+ * here so the reaction dispatch stays thin — the caller only decides WHERE
+ * the suffix rides in the turn input.
  */
 export function humanSteeringInstructionForThread(
   thread: Pick<OrchestrationThread, "messages" | "activities">,

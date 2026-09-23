@@ -141,11 +141,16 @@ function RealWorkingRow({
     <TimelineRowActivityCtx.Provider
       value={{
         isWorking: !mainThreadIdle,
+        isPreparingWorktree: false,
+        isCompacting: false,
         isRevertingCheckpoint: false,
         latestTurnId: "turn-design-pass" as TurnId,
         workingStepLabel,
         activeAgents,
+        backgroundJobs: [],
         onOpenAgents,
+        unsettledTurnId: null,
+        backgroundWorktreeSetup: null,
       }}
     >
       <WorkingTimelineRow row={WORKING_ROW} />
@@ -367,7 +372,7 @@ function ActiveAgentsIndicatorStory({
 }
 
 const meta = {
-  title: "T3Team/Conversation/Active Agents Indicator (GHE #201)",
+  title: "T3Team/Chat/Active Agents Indicator (GHE #201)",
   component: ActiveAgentsIndicatorStory,
   args: {
     activeChildren: 3,

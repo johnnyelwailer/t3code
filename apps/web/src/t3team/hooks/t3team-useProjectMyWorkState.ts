@@ -18,6 +18,7 @@ import { useProjectMyWork } from "~/t3team/hooks/t3team-useProjectMyWork";
 import { type ProjectMyWorkStatusCategory } from "~/t3team/t3team-projectMyWork";
 import {
   useProjectDashboardMyWorkState,
+  type ProjectMyWorkLens,
   type ProjectMyWorkTableSortBy,
   type ProjectMyWorkTableSortDirection,
   type ProjectMyWorkViewMode,
@@ -53,6 +54,7 @@ export function useProjectMyWorkState({
   const { state, setState } = useProjectDashboardMyWorkState(project.id);
   const {
     query,
+    lens,
     viewMode,
     groupMode,
     statusCategory,
@@ -122,6 +124,8 @@ export function useProjectMyWorkState({
     jiraLastCheckedAt: lastCheckedAt,
     query,
     setQuery: (value: string) => updateState({ query: value }),
+    lens,
+    setLens: (value: ProjectMyWorkLens) => updateState({ lens: value }),
     viewMode,
     setViewMode: (value: ProjectMyWorkViewMode) => updateState({ viewMode: value }),
     groupMode,

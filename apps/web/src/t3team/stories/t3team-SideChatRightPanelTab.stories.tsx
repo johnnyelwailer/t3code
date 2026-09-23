@@ -155,6 +155,8 @@ function PanelDemo({ threadId, label }: { threadId: string; label: string }) {
           <RightPanelTabs
             mode="inline"
             surfaces={state.surfaces}
+            environmentId={null}
+            onAddBrowserInProfile={() => undefined}
             activeSurfaceId={activeSurface?.id ?? null}
             pendingSurfaceIds={new Set()}
             previewSessions={{}}
@@ -177,12 +179,16 @@ function PanelDemo({ threadId, label }: { threadId: string; label: string }) {
             onAddDiff={() => useRightPanelStore.getState().toggle(ref, "diff")}
             onAddFiles={() => useRightPanelStore.getState().open(ref, "files")}
             onAddPullRequest={() => undefined}
+            onAddPullRequests={() => undefined}
             onAddAgents={() => useRightPanelStore.getState().open(ref, "agents")}
+            onAddDevice={() => undefined}
             browserAvailable
             terminalAvailable={false}
             diffAvailable
             filesAvailable
             pullRequestAvailable={false}
+            pullRequestsAvailable={false}
+            deviceAvailable={false}
             agentsAvailable
             liveAgentCount={0}
           >
@@ -218,7 +224,7 @@ function SideChatStoryBody({ dark }: { dark: boolean }) {
 }
 
 const meta = {
-  title: "RightPanel/SideChatTab",
+  title: "T3Team/Right Panel/Side Chat Tab",
   parameters: {
     layout: "padded",
   },

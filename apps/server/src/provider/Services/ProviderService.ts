@@ -14,6 +14,8 @@
 import type {
   ProviderInterruptTurnInput,
   ProviderInstanceId,
+  ProviderJobControlInput,
+  ProviderJobControlResult,
   ProviderRespondToRequestInput,
   ProviderRespondToUserInputInput,
   ProviderRuntimeEvent,
@@ -23,6 +25,7 @@ import type {
   ProviderStopSessionInput,
   ProviderUploadFeedbackInput,
   ProviderUploadFeedbackResult,
+  MessageId,
   ThreadId,
   ProviderTurnStartResult,
 } from "@t3tools/contracts";
@@ -53,6 +56,12 @@ export interface ProviderServiceShape {
     input: ProviderSendTurnInput,
   ) => Effect.Effect<ProviderTurnStartResult, ProviderServiceError>;
 
+  readonly compactThread: (
+    threadId: ThreadId,
+    modelSelection?: ProviderSendTurnInput["modelSelection"],
+    requestId?: MessageId,
+  ) => Effect.Effect<void, ProviderServiceError>;
+
   /**
    * Interrupt a running provider turn.
    */
@@ -73,6 +82,21 @@ export interface ProviderServiceShape {
   readonly respondToUserInput: (
     input: ProviderRespondToUserInputInput,
   ) => Effect.Effect<void, ProviderServiceError>;
+
+  /**
+   * Control the thread's background bash jobs out of band (list / cancel /
+   * read a bounded page of retained output). Resolves the thread's live
+   * session and forwards to the adapter's `jobControl` when its runtime
+   * supports it.
+   *
+   * `ProviderJobControlUnsupportedError` means the runtime keeps no
+   * controllable jobs — the caller maps it to a plain "unsupported" result,
+   * it is not a failure. `unknown-job` comes back INSIDE the result, never
+   * as an error.
+   */
+  readonly jobControl: (
+    input: ProviderJobControlInput,
+  ) => Effect.Effect<ProviderJobControlResult, ProviderServiceError>;
 
   /**
    * Stop a provider session.
@@ -98,6 +122,13 @@ export interface ProviderServiceShape {
   readonly getInstanceInfo: (
     instanceId: ProviderInstanceId,
   ) => Effect.Effect<ProviderInstanceRoutingInfo, ProviderServiceError>;
+
+  /**
+   * Reject unsupported rewind before files change, without resuming the session.
+   */
+  readonly assertConversationRollbackSupported: (
+    threadId: ThreadId,
+  ) => Effect.Effect<void, ProviderServiceError>;
 
   /**
    * Roll back provider conversation state by a number of turns.

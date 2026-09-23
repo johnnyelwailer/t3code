@@ -12,6 +12,8 @@ import { makeBrokerLayer, threadId } from "./t3team-toolBrokerTestUtils.ts";
 // t3team-toolBroker.test.ts so that file stays at its pristine size under the additive guard.
 const makeOrchestrationMock = (): OrchestrationEngineShape => ({
   readEvents: () => Stream.empty,
+  readThreadEvents: () => Stream.empty,
+  getThreadReplayStats: () => Effect.die("unused"),
   dispatch: () => Effect.succeed({ sequence: 1 }),
   streamDomainEvents: Stream.empty,
   subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),

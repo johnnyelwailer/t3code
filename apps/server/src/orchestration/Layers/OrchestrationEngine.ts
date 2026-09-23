@@ -37,6 +37,7 @@ import {
   OrchestrationCommandIdConflictError,
   OrchestrationCommandInvariantError,
   OrchestrationCommandPreviouslyRejectedError,
+  OrchestrationThreadSettleBlockedError,
   type OrchestrationDispatchError,
   type OrchestrationProjectorDecodeError,
 } from "../Errors.ts";
@@ -185,19 +186,113 @@ const makeOrchestrationEngine = Effect.gen(function* () {
           });
         }
 
+        // The decider compares the lookup inputs. Only recreation needs an
+        // event check, since it can reset a thread to the same field values.
         if (
-          envelope.command.type === "thread.auto-settle" &&
-          threadBackgroundLiveness.getThreadBackgroundLiveness(envelope.command.threadId) !== null
+          envelope.command.type === "thread.pull-request.sync" &&
+          (yield* eventStore.hasEventAfter({
+            aggregateKind: "thread",
+            aggregateId: envelope.command.threadId,
+            sequenceExclusive: envelope.command.snapshotSequence,
+            type: "thread.created",
+          }))
         ) {
           return yield* new OrchestrationCommandInvariantError({
             commandType: envelope.command.type,
-            detail: `thread ${envelope.command.threadId} has live background work`,
+            detail: `thread ${envelope.command.threadId} was recreated before pull request discovery`,
           });
         }
 
+        // Decide-time background-liveness gate. Automatic settlement and
+        // opted-in settlement (server-driven sweeps stamp
+        // requireNoLiveBackgroundLiveness on every thread.settle they
+        // dispatch) must not settle a thread that has live background work
+        // AT DECIDE TIME: the command may have sat in the queue while new
+        // work started, so no earlier observation could have caught it.
+        // Stranded registry entries cannot pin a settle forever — the
+        // liveness source bounds them (ThreadBackgroundLiveness, #475).
+        const livenessGatedSettle =
+          envelope.command.type === "thread.auto-settle" ||
+          (envelope.command.type === "thread.settle" &&
+            envelope.command.requireNoLiveBackgroundLiveness === true);
+        if (
+          livenessGatedSettle &&
+          (envelope.command.type === "thread.auto-settle" ||
+            envelope.command.type === "thread.settle") &&
+          threadBackgroundLiveness.getThreadBackgroundLiveness(envelope.command.threadId) !== null
+        ) {
+          if (envelope.command.type === "thread.auto-settle") {
+            return yield* new OrchestrationCommandInvariantError({
+              commandType: envelope.command.type,
+              detail: `thread ${envelope.command.threadId} has live background work`,
+            });
+          }
+          return yield* new OrchestrationThreadSettleBlockedError({
+            threadId: envelope.command.threadId,
+          });
+        }
+
+        // New and moved projects do not carry a resolved identity in the event-derived
+        // command model. Legacy PR edits need it to identify the link they replace.
+        if (
+          envelope.command.type === "thread.meta.update" &&
+          envelope.command.linkedPullRequest !== undefined
+        ) {
+          const threadId = envelope.command.threadId;
+          const thread = commandReadModel.threads.find((thread) => thread.id === threadId);
+          if (thread !== undefined) {
+            const project = yield* projectionSnapshotQuery.getProjectShellById(thread.projectId);
+            if (Option.isSome(project)) {
+              commandReadModel = {
+                ...commandReadModel,
+                projects: commandReadModel.projects.map((entry) =>
+                  entry.id === thread.projectId
+                    ? { ...entry, repositoryIdentity: project.value.repositoryIdentity }
+                    : entry,
+                ),
+              };
+            }
+          }
+        }
+
+        // Hard invariant: a thread must not settle while it (or its parent/child
+        // relation) is still live. Enforced at this single dispatch choke point so
+        // every settle path is covered (thread.settle + thread.auto-settle). A thread
+        // is refused when any of:
+        //   - it owns a non-finished workflow run,
+        //   - it has a child that is live (working or running a workflow — one concept), or
+        //   - a parent has a durable, unresolved wait on it.
+        if (
+          envelope.command.type === "thread.settle" ||
+          envelope.command.type === "thread.auto-settle"
+        ) {
+          const threadId = envelope.command.threadId;
+          const [ownWorkflow, liveChild, parentWait] = yield* Effect.all([
+            projectionSnapshotQuery.hasNonTerminalWorkflowRun(threadId),
+            projectionSnapshotQuery.hasLiveChild(threadId),
+            projectionSnapshotQuery.hasPendingParentWait(threadId),
+          ]);
+          if (ownWorkflow || liveChild || parentWait) {
+            return yield* new OrchestrationCommandInvariantError({
+              commandType: envelope.command.type,
+              detail: `thread ${threadId} is still live (workflow=${ownWorkflow} liveChild=${liveChild} parentWait=${parentWait}); refusing to settle`,
+            });
+          }
+        }
+
+        // Command snapshots omit activities at startup and cap them while running.
+        // Read this request's durable state before deciding how to send the answer.
+        const userInputActivity =
+          envelope.command.type === "thread.user-input.respond" ||
+          envelope.command.type === "thread.user-input.dismiss"
+            ? yield* projectionSnapshotQuery.getUserInputActivity(envelope.command)
+            : Option.none();
         const eventBase = yield* decideOrchestrationCommand({
           command: envelope.command,
           readModel: commandReadModel,
+          ...(Option.isSome(userInputActivity)
+            ? { userInputActivity: userInputActivity.value }
+            : {}),
         }).pipe(
           Effect.provideService(Crypto.Crypto, crypto),
           Effect.mapError((cause) =>
@@ -372,6 +467,19 @@ const makeOrchestrationEngine = Effect.gen(function* () {
   const readEvents: OrchestrationEngineShape["readEvents"] = (fromSequenceExclusive, limit) =>
     eventStore.readFromSequence(fromSequenceExclusive, limit);
 
+  const readThreadEvents: OrchestrationEngineShape["readThreadEvents"] = ({ threadId, ...range }) =>
+    eventStore.readAggregateRange({ ...range, aggregateKind: "thread", aggregateId: threadId });
+
+  const getThreadReplayStats: OrchestrationEngineShape["getThreadReplayStats"] = ({
+    threadId,
+    ...range
+  }) =>
+    eventStore.getAggregateReplayStats({
+      ...range,
+      aggregateKind: "thread",
+      aggregateId: threadId,
+    });
+
   const dispatch: OrchestrationEngineShape["dispatch"] = (command, options) =>
     Effect.gen(function* () {
       const result = yield* Deferred.make<{ sequence: number }, OrchestrationDispatchError>();
@@ -386,6 +494,8 @@ const makeOrchestrationEngine = Effect.gen(function* () {
 
   return {
     readEvents,
+    readThreadEvents,
+    getThreadReplayStats,
     dispatch,
     subscribeDomainEvents: PubSub.subscribe(eventPubSub).pipe(Effect.map(Stream.fromSubscription)),
     // Each access creates a fresh PubSub subscription so that multiple

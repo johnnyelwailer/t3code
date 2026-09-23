@@ -51,6 +51,15 @@ export type ProjectThread = {
   selectedToolIds?: ReadonlyArray<T3TeamThreadToolId>;
   kickoffWorkflow?: T3TeamKickoffWorkflow;
   status: "idle" | "running" | "completed" | "error";
+  /**
+   * GHE #304 follow-up: the thread's REAL settle state — shell
+   * `settledOverride === "settled"` (a `thread.settled` event fired: user
+   * settle, auto-settle, or the child-settle TTL sweep). Distinct from
+   * `status`: a terminal or idle sub-run is NOT settled until that happens,
+   * and the sub-run rosters' "Settled (N)" fold may only contain threads
+   * where this is true.
+   */
+  settled?: boolean;
   /** Workflow repair/one-shot child threads may be opened directly but are never navigation. */
   retention?: "ephemeral" | "retained";
   /** ISO instant a scheduled-workflow run on this thread is sleeping until (Epic 27), or
@@ -81,6 +90,43 @@ export type ProjectThread = {
    *  the base pill word while a turn runs. Absent/idle = null. */
   activityState?: ActivityState | null;
   activityStateUpdatedAt?: string | null;
+  /**
+   * True while the thread has a pending user-input request (a question docked
+   * in its composer). Shell-sourced live state — absent/cleared when no
+   * question is pending. Drives the parent-side "Question awaiting answer"
+   * indicator in the sub-run tree (mirror of the composer panel the child's
+   * user sees).
+   */
+  pendingUserInput?: boolean;
+  /**
+   * True while the thread is in plan mode, its latest turn settled cleanly,
+   * and an actionable (unimplemented) proposed plan still exists: it stopped
+   * after presenting its plan and is waiting on the parent's approval. The
+   * SAME pure predicate the server's children tool applies
+   * (packages/shared/t3team-threadRunStatus `deriveThreadAwaitingParent`).
+   * Shell-sourced live state; recomputed on every live sync, absence clears.
+   * Drives the parent-side "Plan awaiting approval" indicator in the sub-run
+   * tree — the mirror of the plan the parent's child presented.
+   */
+  awaitingParent?: boolean;
+  /**
+   * True while this thread's own work is settled but it has one or more
+   * non-terminal, non-settled t3team children (durable handoff relation —
+   * legacy `parent:N` sub-runs never count). The DERIVED waiting fact: the
+   * row reads "Monitoring", not "Done"/"Completed" — mirrors the server
+   * primitive's `waiting` run state (t3team-threadRunStatus). Recomputed on
+   * every live sync; absence clears.
+   */
+  waitingOnChildren?: boolean;
+  /**
+   * True while this thread has registered a `t3team_children` wait (`op: wait`)
+   * that is still pending — the DECLARED waiting fact: a genuine blocking
+   * relationship, not just "children are live". Derived from the thread's own
+   * durable activities (open registered/resolved pair) — no flag anyone sets.
+   * The row reads "Waiting" (declared outranks derived "Monitoring"); both
+   * keep the standard working/in-progress colour. Absence clears.
+   */
+  waitingDeclared?: boolean;
   childStatusUpdatedAt?: string | null;
 };
 
@@ -115,6 +161,8 @@ export type ProjectTicket = {
   priority?: string;
   assignee?: string;
   assigneeAccountId?: string;
+  /** Jira reporter — the digest surfaces it for bugs, where who hit the problem matters. */
+  reporter?: string;
   estimateValue?: number;
   timeOriginalEstimateSeconds?: number;
   timeRemainingEstimateSeconds?: number;

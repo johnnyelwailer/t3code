@@ -83,10 +83,10 @@ describe("workflow card headline — description leads, slug demoted", () => {
 
     expect(markup).toContain(description);
     expect(markup).toContain("qa-nested-result");
-    // the slug stays visible, copyable, and in its `title` — but as a demoted chip, not the
+    // the slug stays visible, copyable, and in a tooltip — but as a demoted chip, not the
     // bold headline (the chip carries a distinct monospace class the old headline never had).
     expect(markup).toContain("font-mono");
-    expect(markup).toContain('title="qa-nested-result"');
+    expect(markup).toContain('data-slot="tooltip-trigger">qa-nested-result<');
     // the chip is plain muted monospace text — no bordered/filled box giving it button-like
     // weight (PJ: "just a muted text without card bg would be fine").
     expect(markup).not.toContain("border-border/60");
@@ -331,6 +331,32 @@ describe("live card header — two-row layout", () => {
     // row 2 carries the narrow-container fallback (stack instead of squeeze) — proves the fix
     // uses the container-query infrastructure rather than a fixed one-row layout.
     expect(markup).toContain("@sm/workflow-live-card:flex-row");
+  });
+
+  it("hides the machine slug (and its separator) below the narrow-container breakpoint", async () => {
+    const markup = await renderHeaderCard([
+      {
+        id: EventId.make("activity-header-scheduled"),
+        tone: "info",
+        kind: PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP,
+        summary: "scheduled",
+        payload: {
+          workflowRunId: "run-header-1",
+          stepId: "run-header-1:0",
+          stepKind: "wait.until",
+          phase: "waiting",
+        },
+        turnId: null,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+
+    // the live status still shows at every width.
+    expect(markup).toContain("data-run-live-status");
+    // the machine slug and the "·" separator both opt out of the narrow row (hidden by default,
+    // reappearing at >=sm where the card is wide enough for slug + status on one line) — this is
+    // what stops the status text overflowing the card's edge at the 240px QA width.
+    expect(markup).toContain("hidden @sm/workflow-live-card:inline");
   });
 
   it("keeps row 2 sensible once the run is terminal and both the status and controls are gone", async () => {

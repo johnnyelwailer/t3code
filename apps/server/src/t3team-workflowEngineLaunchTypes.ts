@@ -27,6 +27,7 @@ import type {
 
 import type { WorkflowRunLifecycle } from "./t3team-workflowEngineBrokerTypes.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
+import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
 import type { WorkflowRepairIntent } from "./t3team-workflowSelfHeal.ts";
 import type { WorkflowStepActivityEmitter } from "./t3team-workflowEngineStepActivities.ts";
 
@@ -57,6 +58,12 @@ export interface LaunchWorkflowRecipeInput {
   readonly nowIso: () => string;
   /** DB-backed journal store; defaults to the fs store rooted at `runsRoot` when absent. */
   readonly store?: JournalStore;
+  /** Durable signal-source state (GHE #332): journaled bindings, the delivery inbox, and
+   * per-instance cursors. Absent on the fs/in-memory path — the signal verbs then no-op. */
+  readonly signalStore?: WorkflowSignalStoreShape;
+  /** Poke fired after a binding FACT is journaled, so the reconciler starts a newly-bound
+   * source instance promptly (its periodic sweep is the backstop). */
+  readonly pokeSignalReconcile?: () => void;
   /** Write-through to the durable run record; no-op when absent. */
   readonly lifecycle?: WorkflowRunLifecycle;
   /** Admission already durably wrote the running row before detached execution. */
@@ -105,6 +112,8 @@ export interface LaunchWorkflowRecipeResult {
 export interface WorkflowRunController {
   readonly ref: WorkflowRef;
   readonly options: WorkflowRunOptions;
+  /** Launch through the shared host funnel (running row → start → settle → repair). */
+  readonly start: () => Promise<WorkflowLaunchStatus>;
   readonly settle: (
     result: WorkflowRunResult<unknown> | SuspendedResult | AbortedResult,
   ) => Promise<WorkflowLaunchStatus>;

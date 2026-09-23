@@ -202,7 +202,13 @@
 }
 
 .chat-markdown table {
+  display: block;
   width: 100%;
+  overflow-x: auto;
+  /* Wide content should scroll this block, not break mid-token or clip at the
+     pane edge: opt the table subtree out of .chat-markdown's word splitting. */
+  overflow-wrap: normal;
+  word-break: normal;
   border-collapse: collapse;
 }
 

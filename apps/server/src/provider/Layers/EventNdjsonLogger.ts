@@ -92,7 +92,7 @@ export interface EventNdjsonLoggerOptions extends EventNdjsonLogStoreOptions {
   readonly stream: EventNdjsonStream;
 }
 
-export class EventNdjsonLogConfigurationError extends Schema.TaggedErrorClass<EventNdjsonLogConfigurationError>()(
+export class EventNdjsonLogConfigurationError extends Schema.TaggedError<EventNdjsonLogConfigurationError>()(
   "EventNdjsonLogConfigurationError",
   {
     filePath: Schema.String,
@@ -106,7 +106,7 @@ export class EventNdjsonLogConfigurationError extends Schema.TaggedErrorClass<Ev
   }
 }
 
-export class EventNdjsonLogDirectoryError extends Schema.TaggedErrorClass<EventNdjsonLogDirectoryError>()(
+export class EventNdjsonLogDirectoryError extends Schema.TaggedError<EventNdjsonLogDirectoryError>()(
   "EventNdjsonLogDirectoryError",
   {
     directory: Schema.String,
@@ -240,7 +240,15 @@ function shouldPersist(stream: EventNdjsonStream, event: unknown): boolean {
       const part = Reflect.get(properties, "part");
       if (typeof part !== "object" || part === null) return true;
       const partType = Reflect.get(part, "type");
-      return partType !== "text" && partType !== "reasoning";
+      if (partType === "text" || partType === "reasoning") return false;
+      if (partType === "tool") {
+        // Running snapshots repeat growing output. Pending and terminal states stay in the log.
+        const state = Reflect.get(part, "state");
+        if (typeof state === "object" && state !== null) {
+          return Reflect.get(state, "status") !== "running";
+        }
+      }
+      return true;
     }
 
     return true;

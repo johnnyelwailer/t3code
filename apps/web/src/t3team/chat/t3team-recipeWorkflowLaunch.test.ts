@@ -12,7 +12,7 @@ function createBackend(): Pick<BackendApi, "launchRecipeWorkflow"> {
 
 const TEST_WORKFLOW: T3TeamKickoffWorkflow = {
   kind: "recipe",
-  recipeId: "create-contextual-recipe",
+  recipeId: "author-view-recipe",
   recipeVersion: "0.1.0",
   kickoff: {
     version: 1,
@@ -38,8 +38,8 @@ const TEST_WORKFLOW: T3TeamKickoffWorkflow = {
   description: "Design a contextual recipe for the current surface.",
   source: "bundled",
   surface: "project.dashboard.backlog",
-  recipePath: "/tmp/project-alpha/.t3team/recipes/create-contextual-recipe",
-  workflowPath: "/tmp/project-alpha/.t3team/recipes/create-contextual-recipe/workflow.ts",
+  recipePath: "/tmp/project-alpha/.t3team/recipes/author-view-recipe",
+  workflowPath: "/tmp/project-alpha/.t3team/recipes/author-view-recipe/workflow.ts",
 };
 
 describe("launchPendingRecipeWorkflowTurn", () => {
@@ -68,7 +68,7 @@ describe("launchPendingRecipeWorkflowTurn", () => {
         threadId: "thread-1",
         kickoffMessage: "Build me a recipe for backlog risk hotspots.",
         launch: expect.objectContaining({
-          recipeId: "create-contextual-recipe",
+          recipeId: "author-view-recipe",
           kickoff: TEST_WORKFLOW.kickoff,
         }),
       }),

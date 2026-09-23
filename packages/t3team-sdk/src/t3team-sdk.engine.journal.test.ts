@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Journal-correctness tests: void result envelope round-trip, JournalSerializeError on
  * non-JSON results, JournalSchemaError when a recorded result no longer decodes against

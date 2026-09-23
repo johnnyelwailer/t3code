@@ -108,8 +108,18 @@ describe("createT3TeamTurnToolContext", () => {
     expect(toolContext).toEqual({
       surface: "t3team",
       tools: [
-        // Catalog order: t3team.widget.show is the first defaultEnabled entry
-        // in IMPLEMENTED_T3TEAM_TOOL_CATALOG.
+        // Catalog order: the defaultEnabled entries of IMPLEMENTED_T3TEAM_TOOL_CATALOG, starting
+        // with t3team.runtime.models (GHE #339), then provider usage, then widget.show.
+        {
+          id: "t3team.runtime.models",
+          label: "List runtime models",
+          capabilities: ["read"],
+        },
+        {
+          id: "t3team.runtime.provider_usage",
+          label: "Read provider usage limits",
+          capabilities: ["read"],
+        },
         {
           id: "t3team.widget.show",
           label: "Show widget",
@@ -143,6 +153,16 @@ describe("createT3TeamTurnToolContext", () => {
         {
           id: "t3team.orchestration.resume",
           label: "Resume orchestration run",
+          capabilities: ["write"],
+        },
+        {
+          id: "t3team.orchestration.pause",
+          label: "Pause orchestration run",
+          capabilities: ["write"],
+        },
+        {
+          id: "t3team.orchestration.stop",
+          label: "Stop orchestration run",
           capabilities: ["write"],
         },
         {
@@ -259,14 +279,13 @@ describe("createT3TeamTurnToolContext", () => {
       kickoffPending: false,
       kickoffWorkflow: {
         kind: "recipe",
-        recipeId: "create-contextual-recipe",
+        recipeId: "author-view-recipe",
         title: "Create a recipe for this context",
         description: "Design a contextual recipe for the current surface.",
         source: "bundled",
         surface: "project.dashboard.backlog",
-        promptPath: "/workspace/project-alpha/.t3team/recipes/create-contextual-recipe/prompt.md",
-        workflowPath:
-          "/workspace/project-alpha/.t3team/recipes/create-contextual-recipe/workflow.ts",
+        promptPath: "/workspace/project-alpha/.t3team/recipes/author-view-recipe/prompt.md",
+        workflowPath: "/workspace/project-alpha/.t3team/recipes/author-view-recipe/workflow.ts",
         launchContext: {
           surface: "project.dashboard.backlog",
           project: {
@@ -302,11 +321,10 @@ describe("createT3TeamTurnToolContext", () => {
         message: "Recipe authoring kickoff",
         pending: false,
         workflow: {
-          recipeId: "create-contextual-recipe",
+          recipeId: "author-view-recipe",
           surface: "project.dashboard.backlog",
-          promptPath: "/workspace/project-alpha/.t3team/recipes/create-contextual-recipe/prompt.md",
-          workflowPath:
-            "/workspace/project-alpha/.t3team/recipes/create-contextual-recipe/workflow.ts",
+          promptPath: "/workspace/project-alpha/.t3team/recipes/author-view-recipe/prompt.md",
+          workflowPath: "/workspace/project-alpha/.t3team/recipes/author-view-recipe/workflow.ts",
           launchContext: {
             surface: "project.dashboard.backlog",
             project: {

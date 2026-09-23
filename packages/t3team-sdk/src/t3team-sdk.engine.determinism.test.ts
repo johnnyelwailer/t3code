@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Deterministic-globals tests: the journaled `Date`/`Math.random`/`crypto.randomUUID`
  * round-trip (a resume replays the recorded value, not a fresh wall-clock/entropy read),

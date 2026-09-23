@@ -81,10 +81,7 @@ describe("TicketKickoffPanel", () => {
   beforeEach(() => {
     mockUseSidecarComposition.mockReturnValue({
       composition: {
-        sections: [
-          { sectionId: "quick-starts", visible: true, collapsed: false },
-          { sectionId: "recent-conversations", visible: true, collapsed: false },
-        ],
+        sections: [{ sectionId: "quick-starts", visible: true, collapsed: false }],
       },
       setCollapsed: () => undefined,
       userOverrides: { sections: [] },
@@ -97,33 +94,11 @@ describe("TicketKickoffPanel", () => {
     });
   });
 
-  it("renders conversations as compact list entries without a misleading zero count", () => {
+  it("renders quick starts without a recent conversations section", () => {
     const markup = renderToStaticMarkup(
       <TicketKickoffPanel
         profileId="engineering-copilot"
         projectId="project-1"
-        issueThreads={[
-          {
-            id: "thread-zero",
-            projectId: "project-1",
-            ticketId: "ticket-1",
-            title: "IES-17877 thread 2",
-            messageCount: 0,
-            lastMessageAt: "2026-05-27T10:00:00.000Z",
-            createdAt: "2026-05-27T10:00:00.000Z",
-            status: "idle",
-          },
-          {
-            id: "thread-two",
-            projectId: "project-1",
-            ticketId: "ticket-1",
-            title: "New thread",
-            messageCount: 2,
-            lastMessageAt: "2026-05-27T11:00:00.000Z",
-            createdAt: "2026-05-27T11:00:00.000Z",
-            status: "idle",
-          },
-        ]}
         quickStartRecipeInput={{
           backend: null,
           surface: "workitem.detail.sidepanel",
@@ -136,17 +111,8 @@ describe("TicketKickoffPanel", () => {
       />,
     );
 
-    expect(markup).toContain("<ul");
     expect(markup).toContain("Quick starts");
-    expect(markup).toContain("Recent conversations");
-    expect(markup).toContain("IES-17877 thread 2");
-    expect(markup).toContain("relative:2026-05-27T10:00:00.000Z");
-    expect(markup).not.toContain("Get Help With IES-17877");
-    expect(markup).not.toContain(
-      "Start a new conversation with all ticket context included automatically.",
-    );
-    expect(markup).not.toContain("0 messages");
-    expect(markup).toContain("2 messages • relative:2026-05-27T11:00:00.000Z");
+    expect(markup).not.toContain("Recent conversations");
     expect(markup).not.toContain("Search conversations");
   });
 });

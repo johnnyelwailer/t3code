@@ -1,17 +1,23 @@
 import * as NodeCrypto from "node:crypto";
+import * as NodeBuffer from "node:buffer";
 
 import * as Context from "effect/Context";
+import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as Schema from "effect/Schema";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
 import {
   GitCommandError,
+  type VcsError,
   VcsProcessExitError,
+  VcsProcessTimeoutError,
   type VcsSwitchRefInput,
   type VcsSwitchRefResult,
   type VcsCreateRefInput,
@@ -30,8 +36,12 @@ import {
   type VcsStatusInput,
   type VcsStatusResult,
 } from "@t3tools/contracts";
-import { makeGitVcsDriverCore, splitNullSeparatedGitStdoutPaths } from "./GitVcsDriverCore.ts";
-import { indexCheckpointPaths } from "./GitVcsDriverCheckpointIndex.ts";
+import {
+  makeGitVcsDriverCore,
+  PATCH_RENDER_PREFIX_ARGS,
+  splitNullSeparatedGitStdoutPaths,
+} from "./GitVcsDriverCore.ts";
+import { indexCheckpointPaths } from "./t3team-GitVcsDriverCheckpointIndex.ts";
 import * as VcsDriver from "./VcsDriver.ts";
 import * as VcsProcess from "./VcsProcess.ts";
 
@@ -45,6 +55,12 @@ export interface ExecuteGitInput {
   readonly timeoutMs?: number | null;
   readonly maxOutputBytes?: number;
   readonly appendTruncationMarker?: boolean;
+  /**
+   * With `appendTruncationMarker`, keep invoking the line callbacks after the
+   * buffered copy is full. For long-running commands whose output is only
+   * consumed through `progress`.
+   */
+  readonly keepLineCallbacksAfterTruncation?: boolean;
   readonly progress?: ExecuteGitProgress;
 }
 
@@ -97,6 +113,36 @@ export interface ExecuteGitProgress {
     exitCode: number | null;
     durationMs: number | null;
   }) => Effect.Effect<void, never>;
+}
+
+/**
+ * Progress callbacks for `createWorktree`. Git prints `Updating files: 78% (2104/2700)`
+ * to stderr during checkout, and `Submodule path 'x': checked out` during
+ * submodule init. The tracker uses these to drive the worktree setup card.
+ */
+export interface CreateWorktreeProgress {
+  /**
+   * Fires once `git worktree add` has created and registered the directory,
+   * before the (possibly long) submodule step. Git refuses an existing path,
+   * so a path reported here belongs to this call and is safe to remove on
+   * cancel.
+   */
+  readonly onWorktreeClaimed?: (path: string) => Effect.Effect<void, never>;
+  readonly onCheckoutProgress?: (input: {
+    percent: number;
+    completed: number;
+    total: number;
+  }) => Effect.Effect<void, never>;
+  readonly onSubmodulesStarted?: () => Effect.Effect<void, never>;
+  readonly onSubmoduleLine?: (line: string) => Effect.Effect<void, never>;
+  readonly onSubmodulesFinished?: (input: {
+    ok: boolean;
+    detail: string | null;
+  }) => Effect.Effect<void, never>;
+}
+
+export interface CreateWorktreeOptions {
+  readonly progress?: CreateWorktreeProgress;
 }
 
 export interface GitCommitProgress {
@@ -198,11 +244,16 @@ export interface GitFetchRemoteTrackingBranchInput {
 export interface GitFetchRemoteInput {
   cwd: string;
   remoteName: string;
+  refName?: string;
 }
 
 export interface GitRemoteExistsInput {
   cwd: string;
   remoteName: string;
+}
+
+export interface GitRemoteBranchExistsInput extends GitRemoteExistsInput {
+  refName: string;
 }
 
 export interface GitResolveRemoteTrackingCommitInput {
@@ -273,6 +324,7 @@ export class GitVcsDriver extends Context.Service<
     readonly pullCurrentBranch: (cwd: string) => Effect.Effect<VcsPullResult, GitCommandError>;
     readonly createWorktree: (
       input: VcsCreateWorktreeInput,
+      options?: CreateWorktreeOptions,
     ) => Effect.Effect<VcsCreateWorktreeResult, GitCommandError>;
     readonly fetchPullRequestBranch: (
       input: GitFetchPullRequestBranchInput,
@@ -296,6 +348,9 @@ export class GitVcsDriver extends Context.Service<
     ) => Effect.Effect<string | null, GitCommandError>;
     readonly fetchRemote: (input: GitFetchRemoteInput) => Effect.Effect<void, GitCommandError>;
     readonly remoteExists: (input: GitRemoteExistsInput) => Effect.Effect<boolean, GitCommandError>;
+    readonly remoteBranchExists: (
+      input: GitRemoteBranchExistsInput,
+    ) => Effect.Effect<boolean, GitCommandError>;
     readonly resolveRemoteTrackingCommit: (
       input: GitResolveRemoteTrackingCommitInput,
     ) => Effect.Effect<GitResolveRemoteTrackingCommitResult, GitCommandError>;
@@ -421,6 +476,7 @@ const gitCommand = (
     readonly allowNonZeroExit?: boolean;
     readonly timeoutMs?: number;
     readonly maxOutputBytes?: number;
+    readonly outputMode?: VcsProcess.VcsProcessInput["outputMode"];
     readonly appendTruncationMarker?: boolean;
   },
 ) =>
@@ -437,6 +493,7 @@ const gitCommand = (
       : {}),
     ...(options?.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
     ...(options?.maxOutputBytes !== undefined ? { maxOutputBytes: options.maxOutputBytes } : {}),
+    ...(options?.outputMode !== undefined ? { outputMode: options.outputMode } : {}),
     ...(options?.appendTruncationMarker !== undefined
       ? { appendTruncationMarker: options.appendTruncationMarker }
       : {}),
@@ -475,6 +532,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
       ...(input.allowNonZeroExit !== undefined ? { allowNonZeroExit: input.allowNonZeroExit } : {}),
       ...(input.timeoutMs !== undefined ? { timeoutMs: input.timeoutMs } : {}),
       ...(input.maxOutputBytes !== undefined ? { maxOutputBytes: input.maxOutputBytes } : {}),
+      ...(input.outputMode !== undefined ? { outputMode: input.outputMode } : {}),
       ...(input.appendTruncationMarker !== undefined
         ? { appendTruncationMarker: input.appendTruncationMarker }
         : {}),
@@ -698,89 +756,304 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
       return path.isAbsolute(gitCommonDir) ? gitCommonDir : path.resolve(cwd, gitCommonDir);
     });
 
+  /**
+   * `git add -A` re-indexes the whole worktree. In large repositories (many
+   * worktrees, submodules, thousands of files) it routinely exceeds the
+   * generic 30s VcsProcess default under disk pressure — and it can stall
+   * further behind an auto-gc repacking the shared object store. The index
+   * step gets its own budget; a timeout that still fires is self-healed by
+   * re-running the whole capture on a fresh temp index with the same backoff
+   * ladder pattern as the interrupted-turn re-drive
+   * (t3team-workflowEngineTurnRetrySupport.ts).
+   */
+  const CHECKPOINT_INDEX_TIMEOUT_MS = 120_000;
+  /** Backoff ladder (ms) before capture attempts 2 and 3. */
+  const CHECKPOINT_TIMEOUT_RETRY_BACKOFF_MS = [5_000, 30_000] as const;
+  /** Total capture attempts before a timed-out capture surfaces to the caller. */
+  const CHECKPOINT_MAX_CAPTURE_ATTEMPTS = CHECKPOINT_TIMEOUT_RETRY_BACKOFF_MS.length + 1;
+  /**
+   * Total wall-clock budget for the whole self-heal. The per-step and
+   * per-attempt caps above bound each attempt, but 3 attempts + backoff can
+   * still block the single serial checkpoint worker for many minutes. This
+   * gate stops scheduling further retries once the capture has already spent
+   * this much real time, so the worst case is bounded to this budget plus one
+   * in-flight attempt. Sized well above a healthy (slow) capture — the 120s
+   * index deadline plus the fast steps — so a legitimate slow capture still
+   * gets its retries.
+   */
+  const CHECKPOINT_TOTAL_WALLCLOCK_BUDGET_MS = 180_000;
+  const isVcsProcessTimeoutError = Schema.is(VcsProcessTimeoutError);
+
+  // Git renames loose objects and refs into place without fsync by default, so
+  // an unclean restart can leave 0-byte files under refs/t3/** that break every
+  // later fetch and push. Checkpoint writes flush before they are published;
+  // macOS defaults to writeout-only, which does not reach the disk either.
+  const durableWrite = [
+    "-c",
+    "core.fsync=objects,reference",
+    "-c",
+    "core.fsyncMethod=fsync",
+  ] as const;
+
   const checkpoints: VcsDriver.VcsCheckpointOps = {
     captureCheckpoint: Effect.fn("GitVcsDriver.checkpoints.captureCheckpoint")(function* (input) {
       const operation = "GitVcsDriver.checkpoints.captureCheckpoint";
+      const indexConfig = [
+        "-c",
+        "core.fsmonitor=false",
+        "-c",
+        "sparse.expectFilesOutsideOfPatterns=false",
+      ];
       const gitCommonDir = yield* resolveGitCommonDir(input.cwd);
-      const tempIndexPath = path.join(
-        gitCommonDir,
-        `t3-checkpoint-index-${NodeCrypto.randomUUID()}`,
-      );
-      const commitEnv: NodeJS.ProcessEnv = {
-        ...process.env,
-        GIT_INDEX_FILE: tempIndexPath,
-        GIT_AUTHOR_NAME: "T3 Code",
-        GIT_AUTHOR_EMAIL: "t3code@users.noreply.github.com",
-        GIT_COMMITTER_NAME: "T3 Code",
-        GIT_COMMITTER_EMAIL: "t3code@users.noreply.github.com",
-      };
+      const captureStartMs = yield* Clock.currentTimeMillis;
 
-      const cleanupTempIndex = fileSystem
-        .remove(tempIndexPath, { force: true })
-        .pipe(Effect.ignore);
+      // One attempt is fully isolated: a fresh temp index file, seeded from
+      // HEAD, and an idempotent update-ref — so retrying a timed-out attempt
+      // from scratch is always safe.
+      const attempt = Effect.gen(function* () {
+        const tempIndexPath = path.join(
+          gitCommonDir,
+          `t3-checkpoint-index-${NodeCrypto.randomUUID()}`,
+        );
+        const commitEnv: NodeJS.ProcessEnv = {
+          ...process.env,
+          GIT_INDEX_FILE: tempIndexPath,
+          GIT_AUTHOR_NAME: "T3 Code",
+          GIT_AUTHOR_EMAIL: "t3code@users.noreply.github.com",
+          GIT_COMMITTER_NAME: "T3 Code",
+          GIT_COMMITTER_EMAIL: "t3code@users.noreply.github.com",
+        };
 
-      yield* Effect.gen(function* () {
-        const headExists = yield* hasHeadCommit(input.cwd);
-        if (headExists) {
+        const cleanupTempIndex = fileSystem
+          .remove(tempIndexPath, { force: true })
+          .pipe(Effect.ignore);
+
+        yield* Effect.gen(function* () {
+          const headExists = yield* hasHeadCommit(input.cwd);
+          const sparseConfig = yield* execute({
+            operation,
+            cwd: input.cwd,
+            args: ["config", "--bool", "core.sparseCheckout"],
+            allowNonZeroExit: true,
+          });
+          let sparseCheckout = sparseConfig.stdout.trim() === "true";
+          if (sparseCheckout) {
+            const help = yield* execute({
+              operation,
+              cwd: input.cwd,
+              args: ["add", "-h"],
+              allowNonZeroExit: true,
+            });
+            sparseCheckout = /--(?:\[no-\])?sparse\b/.test(`${help.stdout}${help.stderr}`);
+          }
+          if (headExists) {
+            const reusedIndex = yield* Effect.gen(function* () {
+              const indexPath = yield* execute({
+                operation,
+                cwd: input.cwd,
+                args: ["rev-parse", "--path-format=absolute", "--git-path", "index"],
+              });
+              const { mtime } = yield* fileSystem.stat(indexPath.stdout.trim());
+              if (Option.isNone(mtime)) return false;
+              // Stay below the source timestamp even if Date rounded up, preserving Git's racy check.
+              const indexTime = Math.floor((mtime.value.getTime() - 1) / 1000);
+              if (indexTime <= 0) return false;
+              yield* fileSystem.copyFile(indexPath.stdout.trim(), tempIndexPath);
+              // Retain stat data only where the copied index already matches HEAD.
+              yield* execute({
+                operation,
+                cwd: input.cwd,
+                args: [...indexConfig, "read-tree", "--reset", "HEAD"],
+                env: commitEnv,
+              });
+              // read-tree can rewrite the index, so restore its racy timestamp afterward.
+              yield* fileSystem.utimes(tempIndexPath, indexTime, indexTime);
+              let specialFlags = false;
+              let recordStart = true;
+              let skipped = false;
+              let skippedRecord: number[] = [];
+              const skippedPaths: string[] = [];
+              yield* vcsProcess.run({
+                operation,
+                command: "git",
+                cwd: input.cwd,
+                args: [...indexConfig, "ls-files", "--full-name", "--sparse", "-v", "-z"],
+                env: commitEnv,
+                maxOutputBytes: 4_096,
+                outputMode: "truncate",
+                // Inspect every tag; retain only skipped file paths for checking sparse rules.
+                onStdoutChunk: (chunk) => {
+                  for (const byte of chunk) {
+                    if (recordStart) skipped = byte === 83;
+                    if (skipped && sparseCheckout) {
+                      if (byte !== 0) skippedRecord.push(byte);
+                      else {
+                        if (skippedRecord.at(-1) !== 47) {
+                          const name = Buffer.from(skippedRecord).subarray(2);
+                          if (!NodeBuffer.isUtf8(name)) specialFlags = true;
+                          else skippedPaths.push(name.toString("utf8"));
+                        }
+                        skippedRecord = [];
+                      }
+                    }
+                    if (
+                      recordStart &&
+                      ((byte >= 97 && byte <= 122) || (!sparseCheckout && byte === 83))
+                    ) {
+                      specialFlags = true;
+                    }
+                    recordStart = byte === 0;
+                  }
+                },
+              });
+              if (skippedPaths.length > 0 && !specialFlags) {
+                const selected = yield* execute({
+                  operation,
+                  cwd: input.cwd,
+                  args: [...indexConfig, "sparse-checkout", "check-rules", "-z"],
+                  stdin: skippedPaths.join("\0") + "\0",
+                  env: commitEnv,
+                  maxOutputBytes: 1,
+                  outputMode: "truncate",
+                });
+                // Any selected skipped file has a manual flag, not a sparse exclusion.
+                specialFlags = selected.stdout.length > 0 || selected.stdoutTruncated;
+              }
+              // Sparse Git clears skip-worktree for present files. Manual flags still need a reset.
+              return !specialFlags;
+            }).pipe(Effect.orElseSucceed(() => false));
+            if (!reusedIndex) {
+              if (sparseCheckout) {
+                const cone = yield* execute({
+                  operation,
+                  cwd: input.cwd,
+                  args: ["config", "--bool", "core.sparseCheckoutCone"],
+                  allowNonZeroExit: true,
+                });
+                // Rebuilding a non-cone index loses exclusions; do not publish false deletions.
+                if (cone.stdout.trim() !== "true") {
+                  return yield* new VcsProcessExitError({
+                    operation,
+                    command: "git read-tree",
+                    cwd: input.cwd,
+                    exitCode: 1,
+                    detail: "Cannot rebuild a checkpoint index for non-cone sparse checkout.",
+                  });
+                }
+              }
+              yield* cleanupTempIndex;
+              yield* execute({
+                operation,
+                cwd: input.cwd,
+                // A fresh sparse index represents excluded directories without marking them deleted.
+                args: sparseCheckout
+                  ? [...indexConfig, "-c", "index.sparse=true", "read-tree", "--reset", "HEAD"]
+                  : ["read-tree", "HEAD"],
+                env: commitEnv,
+              });
+            }
+          }
+
+          // t3team: `git add -A -- .` with the unindexable-path fallback (reserved
+          // host names abort the broad add; retry via an explicit pathspec file).
+          // Preserve absent skipped entries, but capture present nonignored files outside the cone.
+          yield* indexCheckpointPaths({
+            operation,
+            cwd: input.cwd,
+            gitCommonDir,
+            env: commitEnv,
+            execute,
+            fileSystem,
+            path,
+            timeoutMs: CHECKPOINT_INDEX_TIMEOUT_MS,
+            addPrefixArgs: [...indexConfig, ...durableWrite],
+            addFlags: sparseCheckout ? ["--sparse"] : [],
+          });
+
+          const writeTreeResult = yield* execute({
+            operation,
+            cwd: input.cwd,
+            args: [...indexConfig, ...durableWrite, "write-tree"],
+            env: commitEnv,
+          });
+          const treeOid = writeTreeResult.stdout.trim();
+          if (treeOid.length === 0) {
+            return yield* new VcsProcessExitError({
+              operation,
+              command: "git write-tree",
+              cwd: input.cwd,
+              exitCode: 0,
+              detail: "git write-tree returned an empty tree oid.",
+            });
+          }
+
+          const message = `t3 checkpoint ref=${input.checkpointRef}`;
+          const commitTreeResult = yield* execute({
+            operation,
+            cwd: input.cwd,
+            args: [...durableWrite, "commit-tree", treeOid, "-m", message],
+            env: commitEnv,
+          });
+          const commitOid = commitTreeResult.stdout.trim();
+          if (commitOid.length === 0) {
+            return yield* new VcsProcessExitError({
+              operation,
+              command: "git commit-tree",
+              cwd: input.cwd,
+              exitCode: 0,
+              detail: "git commit-tree returned an empty commit oid.",
+            });
+          }
+
           yield* execute({
             operation,
             cwd: input.cwd,
-            args: ["read-tree", "HEAD"],
-            env: commitEnv,
+            args: [...durableWrite, "update-ref", input.checkpointRef, commitOid],
           });
+        }).pipe(Effect.ensuring(cleanupTempIndex));
+      });
+
+      // Bounded self-heal: on a timed-out attempt, wait down the backoff
+      // ladder and capture again from scratch. Any other failure — and the
+      // final timed-out attempt — propagates unchanged.
+      const captureWithTimeoutSelfHeal: (
+        attemptNumber: number,
+      ) => Effect.Effect<void, VcsError, never> = Effect.fn(
+        "GitVcsDriver.checkpoints.captureCheckpoint.timeoutSelfHeal",
+      )(function* (attemptNumber: number) {
+        if (attemptNumber >= CHECKPOINT_MAX_CAPTURE_ATTEMPTS) {
+          return yield* attempt;
         }
+        const backoffMs = CHECKPOINT_TIMEOUT_RETRY_BACKOFF_MS[attemptNumber - 1]!;
+        return yield* attempt.pipe(
+          Effect.catchIf(
+            (error) => isVcsProcessTimeoutError(error),
+            (error) =>
+              Effect.gen(function* () {
+                const elapsedMs = (yield* Clock.currentTimeMillis) - captureStartMs;
+                if (elapsedMs >= CHECKPOINT_TOTAL_WALLCLOCK_BUDGET_MS) {
+                  yield* Effect.logWarning("checkpoint.capture.timeout-budget", {
+                    detail: `checkpoint capture exceeded its ${CHECKPOINT_TOTAL_WALLCLOCK_BUDGET_MS}ms wall-clock budget in ${input.cwd}; stopping further retries`,
+                    cwd: input.cwd,
+                    attemptNumber,
+                    elapsedMs,
+                  });
+                  return yield* error;
+                }
+                yield* Effect.logWarning("checkpoint.capture.timeout-retry", {
+                  detail: `checkpoint capture timed out in ${input.cwd}; retrying in ${backoffMs}ms (attempt ${attemptNumber} of ${CHECKPOINT_MAX_CAPTURE_ATTEMPTS})`,
+                  cwd: input.cwd,
+                  attemptNumber,
+                  cause: error.message,
+                });
+                yield* Effect.sleep(Duration.millis(backoffMs));
+                return yield* captureWithTimeoutSelfHeal(attemptNumber + 1);
+              }),
+          ),
+        );
+      });
 
-        yield* indexCheckpointPaths({
-          operation,
-          cwd: input.cwd,
-          gitCommonDir,
-          env: commitEnv,
-          execute,
-          fileSystem,
-          path,
-        });
-
-        const writeTreeResult = yield* execute({
-          operation,
-          cwd: input.cwd,
-          args: ["write-tree"],
-          env: commitEnv,
-        });
-        const treeOid = writeTreeResult.stdout.trim();
-        if (treeOid.length === 0) {
-          return yield* new VcsProcessExitError({
-            operation,
-            command: "git write-tree",
-            cwd: input.cwd,
-            exitCode: 0,
-            detail: "git write-tree returned an empty tree oid.",
-          });
-        }
-
-        const message = `t3 checkpoint ref=${input.checkpointRef}`;
-        const commitTreeResult = yield* execute({
-          operation,
-          cwd: input.cwd,
-          args: ["commit-tree", treeOid, "-m", message],
-          env: commitEnv,
-        });
-        const commitOid = commitTreeResult.stdout.trim();
-        if (commitOid.length === 0) {
-          return yield* new VcsProcessExitError({
-            operation,
-            command: "git commit-tree",
-            cwd: input.cwd,
-            exitCode: 0,
-            detail: "git commit-tree returned an empty commit oid.",
-          });
-        }
-
-        yield* execute({
-          operation,
-          cwd: input.cwd,
-          args: ["update-ref", input.checkpointRef, commitOid],
-        });
-      }).pipe(Effect.ensuring(cleanupTempIndex));
+      return yield* captureWithTimeoutSelfHeal(1);
     }),
 
     hasCheckpointRef: (input) =>
@@ -801,16 +1074,56 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
         return false;
       }
 
-      yield* execute({
+      const tracked = yield* execute({
         operation,
         cwd: input.cwd,
-        args: ["restore", "--source", commitOid, "--worktree", "--staged", "--", "."],
+        args: ["ls-files", "--cached", `--with-tree=${commitOid}`, "-z", "--", "."],
       });
-      yield* execute({
+      // An empty index and checkpoint have nothing for git restore's pathspec to match.
+      if (tracked.stdout.length > 0) {
+        yield* execute({
+          operation,
+          cwd: input.cwd,
+          args: ["restore", "--source", commitOid, "--worktree", "--staged", "--", "."],
+        });
+      }
+      // Restoring away the last tracked file can remove a nested workspace directory.
+      yield* fileSystem.makeDirectory(input.cwd, { recursive: true }).pipe(
+        Effect.mapError(
+          (cause) =>
+            new VcsProcessExitError({
+              operation,
+              command: "git restore",
+              cwd: input.cwd,
+              exitCode: 0,
+              detail: `Could not recreate the checkpoint workspace: ${cause.message}`,
+            }),
+        ),
+      );
+      const cleaned = yield* execute({
         operation,
         cwd: input.cwd,
         args: ["clean", "-fd", "--", "."],
+        allowNonZeroExit: true,
       });
+      if (cleaned.exitCode !== 0) {
+        // Git can remove every child, then fail trying to remove './' itself.
+        const emptiedWorkspace =
+          cleaned.exitCode === 1 &&
+          /^warning: failed to remove \.\/: [^\n]+$/.test(cleaned.stderr.trim()) &&
+          (yield* fileSystem.readDirectory(input.cwd).pipe(
+            Effect.map((entries) => entries.length === 0),
+            Effect.catch(() => Effect.succeed(false)),
+          ));
+        if (!emptiedWorkspace)
+          return yield* new VcsProcessExitError({
+            operation,
+            command: "git clean",
+            cwd: input.cwd,
+            exitCode: cleaned.exitCode,
+            detail: cleaned.stderr.trim() || "Could not clean the checkpoint workspace.",
+          });
+      }
 
       const headExists = yield* hasHeadCommit(input.cwd);
       if (headExists) {
@@ -831,6 +1144,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
         "checkpoint.from_ref": input.fromCheckpointRef,
         "checkpoint.to_ref": input.toCheckpointRef,
         "checkpoint.ignore_whitespace": input.ignoreWhitespace,
+        "checkpoint.format": input.format ?? "patch",
         "checkpoint.fallback_from_to_head": input.fallbackFromToHead,
       });
 
@@ -862,16 +1176,18 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
         cwd: input.cwd,
         args: [
           "diff",
-          "--patch",
+          ...(input.format === "numstat" ? ["--numstat", "-z"] : ["--patch"]),
           "--no-color",
           "--no-ext-diff",
           "--no-textconv",
+          ...PATCH_RENDER_PREFIX_ARGS,
           ...(input.ignoreWhitespace ? ["--ignore-all-space"] : []),
           `${fromRevision}^{commit}`,
           `${input.toCheckpointRef}^{commit}`,
         ],
         allowNonZeroExit: true,
         maxOutputBytes: CHECKPOINT_DIFF_MAX_OUTPUT_BYTES,
+        outputMode: input.format === "numstat" ? "error" : "truncate",
       });
 
       if (result.exitCode !== 0) {

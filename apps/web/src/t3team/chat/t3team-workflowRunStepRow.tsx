@@ -98,11 +98,14 @@ export function RuntimeStepRow({
   wakeAt,
   runStatus,
   childStatuses,
+  hideDuration = false,
 }: {
   step: T3TeamWorkflowStepEntry;
   wakeAt?: string | null | undefined;
   runStatus?: OrchestrationWorkflowRunStatus["status"];
   childStatuses?: Readonly<Record<string, string>> | undefined;
+  /** Collapsed-group members hide their per-row duration; the group summary shows the Σ. */
+  hideDuration?: boolean | undefined;
 }) {
   return (
     <div className="flex items-center gap-2.5" data-step-runtime="unknown">
@@ -111,7 +114,12 @@ export function RuntimeStepRow({
         {fallbackRuntimeLabel(step)}
       </span>
       <TurnCountBadge step={step} />
-      <StepTrailing step={step} wakeAt={wakeAt} childStatuses={childStatuses} />
+      <StepTrailing
+        step={step}
+        wakeAt={wakeAt}
+        childStatuses={childStatuses}
+        hideDuration={hideDuration}
+      />
     </div>
   );
 }

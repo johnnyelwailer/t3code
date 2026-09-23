@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 // @effect-diagnostics nodeBuiltinImport:off - test harness reads a workflow fixture + temp dir.
 /**
  * Proves a recipe's `.workflow.ts` runs end-to-end through the REAL launch path
@@ -196,8 +195,11 @@ describe("launchWorkflowRecipe — real launch path", () => {
       threadId: launchThreadId,
       message: {
         role: "assistant",
-        text: expect.stringContaining("Workflow run failed"),
+        text: expect.stringContaining("The orchestration stopped"),
       },
     });
+    expect(
+      (failureMessage?.type === "thread.message.upsert" && failureMessage.message.text) || "",
+    ).toContain("nothing was saved");
   });
 });

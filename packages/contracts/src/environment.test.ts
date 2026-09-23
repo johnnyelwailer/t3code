@@ -33,6 +33,16 @@ const descriptor = {
 } as const;
 
 describe("ExecutionEnvironmentDescriptor", () => {
+  it("requires an advertised required-worktree bootstrap capability", () => {
+    expect(decodeDescriptor(descriptor).capabilities.requiredWorktreeBootstrap).toBeUndefined();
+    expect(
+      decodeDescriptor({
+        ...descriptor,
+        capabilities: { ...descriptor.capabilities, requiredWorktreeBootstrap: true },
+      }).capabilities.requiredWorktreeBootstrap,
+    ).toBe(true);
+  });
+
   it("treats a missing pull-request capability as unsupported under version skew", () => {
     expect(decodeDescriptor(descriptor).capabilities.pullRequests).toBeUndefined();
   });
@@ -69,5 +79,18 @@ describe("ExecutionEnvironmentDescriptor", () => {
         },
       }).capabilities.fileAttachments,
     ).toEqual({ maxUploadBytes: 50 * 1024 * 1024 });
+  });
+
+  it("accepts a descriptor from an older server without serverStartedAtMs", () => {
+    // Old servers omit the field; clients must decode (and treat as
+    // "unknown boot time") instead of failing the whole envelope.
+    expect(() => decodeDescriptor(descriptor)).not.toThrow();
+    expect(decodeDescriptor(descriptor).serverStartedAtMs).toBeUndefined();
+  });
+
+  it("preserves an advertised serverStartedAtMs boot stamp", () => {
+    expect(
+      decodeDescriptor({ ...descriptor, serverStartedAtMs: 1_700_000_000_000 }).serverStartedAtMs,
+    ).toBe(1_700_000_000_000);
   });
 });

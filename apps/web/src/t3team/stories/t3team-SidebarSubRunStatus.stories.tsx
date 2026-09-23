@@ -19,7 +19,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import type { CSSProperties, ReactNode } from "react";
 import { CircleCheckIcon } from "lucide-react";
 
-import { ThreadActivityMorphIcon } from "~/components/ThreadActivityStatus";
+import { ThreadActivityMorphIcon } from "~/components/t3team-ThreadActivityStatus";
 import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay";
 
 /* production inset vars (src/index.css) so the verbatim inset classes work */

@@ -12,6 +12,7 @@
  * Timers use the Effect Clock, so `TestClock` drives them in tests — the
  * same approach the pack-level watchdog tests use.
  */
+/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Legacy async tests bridge Effect runtimes manually; tracked cleanup is separate from the green gate. */
 import type {
   ProviderApprovalDecision,
   ProviderRuntimeEvent,
@@ -28,10 +29,13 @@ import {
   ThreadId,
   TurnId,
 } from "@t3tools/contracts";
-import { it, assert } from "@effect/vitest";
+import { it, assert, afterAll } from "@effect/vitest";
 
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
@@ -258,12 +262,21 @@ function makeWatchdogHarness(
       ),
       directoryLayer,
       runtimeRepositoryLayer,
-      NodeServices.layer,
-    ),
+    ).pipe(Layer.provideMerge(NodeServices.layer)),
   );
 
   return { layer };
 }
+
+// Upstream startSession stats the thread's cwd and fails fast when the folder
+// is gone; the session cwd fixture must therefore be a real, unique directory
+// that is cleaned up afterwards (never shared global state like /tmp/project).
+const fixtureCwdRoot = NodeFS.mkdtempSync(
+  NodePath.join(NodeOS.tmpdir(), "provider-turn-watchdog-test-"),
+);
+afterAll(() => NodeFS.rmSync(fixtureCwdRoot, { recursive: true, force: true }));
+const PROJECT_CWD = NodePath.join(fixtureCwdRoot, "project");
+NodeFS.mkdirSync(PROJECT_CWD, { recursive: true });
 
 const startCodexSession = (
   provider: ProviderService.ProviderService["Service"],
@@ -273,7 +286,7 @@ const startCodexSession = (
     provider: CODEX_DRIVER,
     providerInstanceId: codexInstanceId,
     threadId,
-    cwd: "/tmp/project",
+    cwd: PROJECT_CWD,
     runtimeMode: "full-access",
   });
 
@@ -285,7 +298,7 @@ const startClaudeSession = (
     provider: CLAUDE_AGENT_DRIVER,
     providerInstanceId: claudeAgentInstanceId,
     threadId,
-    cwd: "/tmp/project",
+    cwd: PROJECT_CWD,
     runtimeMode: "full-access",
   });
 

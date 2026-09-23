@@ -31,7 +31,6 @@ export function useRepairProjectBinding(project: ProjectShellProject) {
   useEffect(() => {
     void setup.loadPersistedAccounts();
     // Only ever needs to run once, when the repair dialog mounts.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Pre-select the account the stored entry already points at, once accounts load.

@@ -291,9 +291,9 @@ that has fired weekly for a year, that's a large journal to replay on each wake.
 This is acceptable for now (unbounded threads are explicitly fine), and it's the standard
 durable-execution problem with a standard answer: **continue-as-new / checkpointing** —
 periodically collapse completed iterations so replay starts from a checkpoint, not the
-top. Deferred. It does _not_ change the author model (the loop stays a loop); it's an
-engine optimization that bounds replay cost when it eventually matters. Flagged here so
-the journal/replay layer isn't designed in a way that precludes it.
+top. [Bounded Execution](../runbook/bounded-execution.md) defines that checkpoint,
+its replay rule, and its retention policy. It does _not_ change the author model (the loop
+stays a loop); it is an engine optimization that bounds replay cost when it matters.
 
 ## Implementation phasing
 
@@ -305,7 +305,7 @@ Builds on the shipped Epic 25 engine + durability.
 | 27.2  | Scheduler service — arm soonest `wake_at`, fire → resume, re-arm on boot (the core new piece) | Implemented |
 | 27.3  | `sleeping` status + `wake_at` column + dormant-thread UX (state pill, run history, run-now)   | Implemented |
 | 27.4  | Lifecycle (pause/resume/run-now) + `"schedule"` capability + frequency floor                  | Implemented |
-| 27.5  | Continue-as-new / journal checkpointing — only when long-lived routines make replay cost real | Deferred    |
+| 27.5  | [Continue-as-new / journal checkpointing](../runbook/bounded-execution.md) — bounded replay for long-lived routines | Deferred to the bounded-execution track |
 
 27.2 is the load-bearing build — once the scheduler can durably wake a parked run on the
 clock, the one-off timer and the routine loop are both just `waitUntil`.
@@ -327,6 +327,8 @@ clock, the one-off timer and the routine loop are both just `waitUntil`.
 
 ## References
 
+- [Bounded Execution](../runbook/bounded-execution.md) — phase 27.5's checkpoint, retention,
+  and bounded replay contract.
 - [Epic 25: Agent Orchestration Engine](./25-workflow-engine.md) — durable suspension, `wait`, the
   determinism contract, and the DB-backed run/journal tables this builds on.
 - The event reactor (`apps/server/src/t3team-workflowEngineReactor.ts`) — the existing

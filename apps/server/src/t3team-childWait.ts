@@ -22,6 +22,10 @@
  * @module t3team-childWait
  */
 import { type OrchestrationEvent } from "@t3tools/contracts";
+import {
+  CHILD_WAIT_REGISTERED_KIND,
+  CHILD_WAIT_RESOLVED_KIND,
+} from "@t3tools/shared/t3team-childWaitFacts";
 
 export { makeChildWaitIndex, type ChildWaitIndex } from "./t3team-childWaitIndex.ts";
 export {
@@ -32,8 +36,9 @@ export {
 } from "./t3team-childWaitScheduler.ts";
 export { T3TeamChildWaitReactorLive } from "./t3team-childWaitReactor.ts";
 
-export const CHILD_WAIT_REGISTERED_KIND = "t3team.child_wait.registered";
-export const CHILD_WAIT_RESOLVED_KIND = "t3team.child_wait.resolved";
+// Re-exported for downstream consumers; also used locally below (rehydration
+// and the reactor's kind checks).
+export { CHILD_WAIT_REGISTERED_KIND, CHILD_WAIT_RESOLVED_KIND };
 
 export type ChildWaitOn = "terminal" | "completed" | "failed";
 

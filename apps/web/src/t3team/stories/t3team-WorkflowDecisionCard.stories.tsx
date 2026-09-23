@@ -22,7 +22,7 @@ function decision(overrides?: Record<string, unknown>) {
 }
 
 const meta = {
-  title: "T3Team/Workflow Decision Card",
+  title: "T3Team/Workflow/Decision Card",
   parameters: { layout: "padded" },
 } satisfies Meta;
 

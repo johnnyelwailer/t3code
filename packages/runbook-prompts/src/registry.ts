@@ -180,7 +180,9 @@ export function resolvePrompt(id: string, promptsDir: string): ResolvedPrompt {
     return loadPromptFile(filePath, id);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      throw new Error(`prompt registry: unknown prompt id "${id}" (expected file at ${filePath})`);
+      throw new Error(`prompt registry: unknown prompt id "${id}" (expected file at ${filePath})`, {
+        cause: err,
+      });
     }
     throw err;
   }

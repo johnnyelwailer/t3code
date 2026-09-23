@@ -223,4 +223,111 @@ describe("resolveSubRunStatusLabel (GHE #208 panel/sidebar seam)", () => {
       expect(resolveSubRunStatusLabel(thread, { activityLabelsEnabled: true })).toBe(label);
     }
   });
+
+  it("shows 'Question awaiting answer' while a question is docked in the child's composer", () => {
+    // The pending-question state outranks both the live state word and the
+    // stable label — the parent's next action is to look at that question.
+    const running = createThread({
+      status: "running",
+      activityState: "writing",
+      activityLabel: "Editing the router",
+      pendingUserInput: true,
+    });
+    expect(resolveSubRunStatusLabel(running, { activityLabelsEnabled: true })).toBe(
+      "Question awaiting answer",
+    );
+    const idle = createThread({ status: "idle", pendingUserInput: true });
+    expect(resolveSubRunStatusLabel(idle, { activityLabelsEnabled: true })).toBe(
+      "Question awaiting answer",
+    );
+    // Absent / false keeps the normal resolution.
+    expect(
+      resolveSubRunStatusLabel(createThread({ status: "idle", pendingUserInput: false }), {
+        activityLabelsEnabled: true,
+      }),
+    ).toBe("Idle");
+  });
+
+  it("shows 'Plan awaiting approval' for a settled plan-mode child that owes its parent a decision", () => {
+    // The plan-mode child's turn IS completed — the label says what the
+    // PARENT owes, not what the child did.
+    const completed = createThread({ status: "completed", awaitingParent: true });
+    expect(resolveSubRunStatusLabel(completed, { activityLabelsEnabled: true })).toBe(
+      "Plan awaiting approval",
+    );
+    // Absent / false keeps the normal resolution.
+    expect(
+      resolveSubRunStatusLabel(createThread({ status: "completed", awaitingParent: false }), {
+        activityLabelsEnabled: true,
+      }),
+    ).toBe("Completed");
+    // A docked question outranks the plan-approval fact on the same row.
+    const both = createThread({
+      status: "completed",
+      awaitingParent: true,
+      pendingUserInput: true,
+    });
+    expect(resolveSubRunStatusLabel(both, { activityLabelsEnabled: true })).toBe(
+      "Question awaiting answer",
+    );
+  });
+
+  it("shows 'Monitoring' while the thread's own work is settled but a t3team child is live (derived)", () => {
+    // The DERIVED waiting fact (live children) reads "Monitoring" — replacing
+    // the would-be stable label (Completed/Idle) but keeping its own live work
+    // (running) and a failed row (error) intact — the same precedence as the
+    // server primitive.
+    const completed = createThread({ status: "completed", waitingOnChildren: true });
+    expect(resolveSubRunStatusLabel(completed, { activityLabelsEnabled: true })).toBe("Monitoring");
+    const idle = createThread({ status: "idle", waitingOnChildren: true });
+    expect(resolveSubRunStatusLabel(idle, { activityLabelsEnabled: true })).toBe("Monitoring");
+    const running = createThread({ status: "running", waitingOnChildren: true });
+    expect(resolveSubRunStatusLabel(running, { activityLabelsEnabled: true })).not.toBe(
+      "Monitoring",
+    );
+    const errored = createThread({ status: "error", waitingOnChildren: true });
+    expect(resolveSubRunStatusLabel(errored, { activityLabelsEnabled: true })).toBe("Error");
+    // A docked question still outranks waiting.
+    const both = createThread({
+      status: "completed",
+      waitingOnChildren: true,
+      pendingUserInput: true,
+    });
+    expect(resolveSubRunStatusLabel(both, { activityLabelsEnabled: true })).toBe(
+      "Question awaiting answer",
+    );
+    // Absent / false keeps the normal resolution.
+    expect(
+      resolveSubRunStatusLabel(createThread({ status: "completed", waitingOnChildren: false }), {
+        activityLabelsEnabled: true,
+      }),
+    ).toBe("Completed");
+  });
+
+  it("shows 'Waiting' when the thread declared a blocking child wait (declared outranks derived)", () => {
+    // The DECLARED fact (a registered `op: wait` still pending) is the stronger
+    // state: "Waiting", even when the derived fact is absent (children all
+    // terminal) and when both are present at once.
+    const declaredOnly = createThread({ status: "completed", waitingDeclared: true });
+    expect(resolveSubRunStatusLabel(declaredOnly, { activityLabelsEnabled: true })).toBe("Waiting");
+    const both = createThread({
+      status: "completed",
+      waitingOnChildren: true,
+      waitingDeclared: true,
+    });
+    expect(resolveSubRunStatusLabel(both, { activityLabelsEnabled: true })).toBe("Waiting");
+    // Absent / false falls back to the derived word.
+    expect(
+      resolveSubRunStatusLabel(
+        createThread({ status: "idle", waitingOnChildren: true, waitingDeclared: false }),
+        { activityLabelsEnabled: true },
+      ),
+    ).toBe("Monitoring");
+    // Own live work and errors still outrank the declared fact.
+    expect(
+      resolveSubRunStatusLabel(createThread({ status: "running", waitingDeclared: true }), {
+        activityLabelsEnabled: true,
+      }),
+    ).toBe("Running");
+  });
 });

@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- mirrors t3team-toolBrokerWorkflowResumeTool.test.ts: a real-engine integration test bridging the Effect runtime. */
 // @effect-diagnostics nodeBuiltinImport:off - integration test writes an ephemeral workflow source + temp dir.
 /**
  * A failed run must say WHY — round trip, real engine + real SQLite.
@@ -55,6 +54,7 @@ import {
   T3TeamWorkflowEngineRegistryLive,
 } from "./t3team-workflowEngineRegistry.ts";
 import {
+  userFacingFailureStep,
   workflowFailureReasonText,
   workflowFailureStepText,
 } from "./t3team-workflowFailureReason.ts";
@@ -73,6 +73,8 @@ const nowIso = (): string => "2026-07-20T00:00:00.000Z";
 
 const stubEngine: OrchestrationEngineShape = {
   readEvents: () => Stream.empty,
+  readThreadEvents: () => Stream.empty,
+  getThreadReplayStats: () => Effect.die("unused"),
   dispatch: () => Effect.succeed({ sequence: 0 }),
   streamDomainEvents: Stream.never,
   subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
@@ -244,4 +246,25 @@ describe("workflowFailureReasonText / workflowFailureStepText", () => {
       );
     },
   );
+});
+
+describe("userFacingFailureStep (GHE #344)", () => {
+  vitestIt("strips the leading internal settle-phase token for a human-facing string", () => {
+    expect(userFacingFailureStep("resume: thread.turn (QA round 1)")).toBe(
+      "thread.turn (QA round 1)",
+    );
+  });
+
+  vitestIt("leaves a string with no phase prefix unchanged", () => {
+    expect(userFacingFailureStep("thread.turn (QA round 1)")).toBe("thread.turn (QA round 1)");
+  });
+
+  vitestIt("falls back to a generic label for a bare phase token instead of leaking it", () => {
+    expect(userFacingFailureStep("rehydration")).toBe("an unknown step");
+    expect(userFacingFailureStep("resume")).toBe("an unknown step");
+  });
+
+  vitestIt("leaves an unrelated string unchanged", () => {
+    expect(userFacingFailureStep("apply migration")).toBe("apply migration");
+  });
 });

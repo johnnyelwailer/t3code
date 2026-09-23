@@ -4,6 +4,7 @@ import {
   ComposerPromptEditor,
   type ComposerPromptEditorHandle,
 } from "~/components/ComposerPromptEditor";
+import { EMPTY_COMPOSER_CONTEXT_RECORDS } from "~/components/composerContextPresentation";
 
 /**
  * `ComposerPromptEditor` is built on Lexical's `PlainTextPlugin` with no default Enter handler
@@ -25,7 +26,7 @@ export function spliceNewlineAtCursor(
  * The Lexical `ComposerPromptEditor` (see `TicketKickoffComposer.tsx` for the same
  * outside-chat-reuse pattern), wrapped once so the comment composer and the comment edit form share
  * one authoring surface instead of one reusing it and the other keeping a bare `<Textarea>`.
- * `terminalContexts`/`skills` are always empty — a Jira comment has nothing chat-side to mention —
+ * `contextRecords`/`skills` are always empty — a Jira comment has nothing chat-side to mention —
  * but the @/$/ trigger infrastructure comes for free rather than needing a second editor.
  *
  * Fully controlled (`value`/`cursor`/`onChange`) rather than owning its own cursor state, so a
@@ -55,10 +56,9 @@ export function CommentBodyEditor({
         editorRef={editorRef}
         value={value}
         cursor={cursor}
-        terminalContexts={[]}
+        contextRecords={EMPTY_COMPOSER_CONTEXT_RECORDS}
         skills={[]}
         disabled={Boolean(disabled)}
-        onRemoveTerminalContext={() => {}}
         onChange={onChange}
         onCommandKeyDown={(key, event) => {
           if (key !== "Enter") return false;

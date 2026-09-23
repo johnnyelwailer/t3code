@@ -70,13 +70,18 @@ function RealWorkingRow({
     <TimelineRowActivityCtx.Provider
       value={{
         isWorking: true,
+        isPreparingWorktree: false,
+        isCompacting: false,
         isRevertingCheckpoint: false,
         latestTurnId: "turn-design-pass" as TurnId,
         workingStepLabel,
         activeAgents,
+        backgroundJobs: [],
         onOpenAgents,
         onOpenAgent,
         threadActivityState: threadState === "settled" ? null : threadState,
+        unsettledTurnId: null,
+        backgroundWorktreeSetup: null,
       }}
     >
       <WorkingTimelineRow row={WORKING_ROW} />
@@ -280,7 +285,6 @@ function StateMotionDots({
       3200,
     );
     return () => window.clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveStream]);
 
   // Per-dot clicks now go through the PRODUCTION onOpenAgent seam (the
@@ -515,7 +519,7 @@ function StateMotionDots({
 }
 
 const meta = {
-  title: "T3Team/Conversation/Status Dots — State Motion (GHE #201)",
+  title: "T3Team/Chat/Status Dots — State Motion (GHE #201)",
   component: StateMotionDots,
   args: {
     threadState: "auto" as "auto" | DotState,

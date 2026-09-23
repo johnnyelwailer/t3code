@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Legacy async tests intentionally bridge Effect runtimes; tracked cleanup is separate from upstream green gate. */
 // @effect-diagnostics nodeBuiltinImport:off - integration test writes an ephemeral workflow source + temp dir.
 /**
  * `t3team.orchestration.resume` — the broker tool surfacing the engine's journal resume:
@@ -34,10 +33,12 @@ import { ServerConfig } from "./config.ts";
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { WorkflowSignalStoreLive } from "./persistence/Layers/WorkflowSignalStore.ts";
 import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStore.ts";
 import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
 import { makeWorkflowResumeToolHandlers } from "./t3team-toolBrokerWorkflowResumeTool.ts";
 import type { WorkflowResumeToolDeps } from "./t3team-toolBrokerWorkflowResumeActions.ts";
 import {
@@ -65,6 +66,8 @@ const nowIso = (): string => "2026-07-20T00:00:00.000Z";
 
 const stubEngine: OrchestrationEngineShape = {
   readEvents: () => Stream.empty,
+  readThreadEvents: () => Stream.empty,
+  getThreadReplayStats: () => Effect.die("unused"),
   dispatch: () => Effect.succeed({ sequence: 0 }),
   streamDomainEvents: Stream.never,
   subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
@@ -88,6 +91,7 @@ const WorkflowEngineDurabilityTestLive = T3TeamWorkflowSchedulerLive.pipe(
 const TestLayer = Layer.mergeAll(
   WorkflowEngineDurabilityTestLive,
   OrchestrationEngineTestLive,
+  WorkflowSignalStoreLive.pipe(Layer.provide(SqlitePersistenceMemory)),
   ServerConfig.layerTest(cwd, { prefix: "t3-resume-tool-test-" }),
 ).pipe(Layer.provideMerge(NodeServices.layer));
 
@@ -103,6 +107,7 @@ const makeHandlers = Effect.gen(function* () {
     rearmScheduler: () => scheduler.rearm(),
     dispatch: () => Promise.resolve(),
     loadThreadProject: () => Effect.succeed({ project: { workspaceRoot: cwd } }),
+    signalStore: yield* WorkflowSignalStore,
   };
   return makeWorkflowResumeToolHandlers(deps)(threadId);
 });
@@ -202,6 +207,76 @@ it.effect("paused: restores the parked pending ask into the registry", () =>
     assert.strictEqual(pending?.correlationId, `${runId}:1`);
     const row = Option.getOrThrow(yield* repo.getById({ runId }));
     assert.strictEqual(row.status, "suspended");
+  }).pipe(Effect.provide(TestLayer)),
+);
+
+it.effect("paused on a signal park: resume lands in watching and drains the bridged inbox event", () =>
+  Effect.gen(function* () {
+    const repo = yield* WorkflowRunRepository;
+    const registry = yield* T3TeamWorkflowEngineRegistry;
+    const signalStore = yield* WorkflowSignalStore;
+    const handlers = yield* makeHandlers;
+    const runId = "paused-signal-run";
+    yield* repo.upsert(baseRow(runId));
+    // Park the row on a signal event (design 42): clears the thread + timer columns, records
+    // the awaited (signal, key) tuple and the park's correlation.
+    yield* repo.setWatching({
+      runId,
+      correlationId: `${runId}:w`,
+      watchSourceName: "scm.change-request.watch",
+      watchParamsHash: "hash-1",
+      watchSignalName: "scm.pull-request.merged",
+      watchSignalKey: "42",
+      updatedAt: nowIso(),
+    });
+    // Pause exactly the way the control route's CAS does.
+    yield* repo.casSetStatus({
+      runId,
+      status: "paused",
+      updatedAt: nowIso(),
+      expectedStatuses: ["watching"],
+    });
+    // An event the delivery port bridged to the durable inbox while the run was paused.
+    yield* signalStore.insertInboxEntry({
+      sourceName: "scm.change-request.watch",
+      paramsHash: "hash-1",
+      signalName: "scm.pull-request.merged",
+      key: "42",
+      payload: { merged: true },
+      createdAt: nowIso(),
+    });
+    // The controller a boot rehydration (or live launch) would have registered.
+    const resumed: Array<{ correlationId: string; reply: unknown }> = [];
+    registry.registerRun(runId, {
+      resume: (correlationId, reply) => {
+        resumed.push({ correlationId, reply });
+        return Promise.resolve();
+      },
+      cancel: () => {},
+    });
+
+    const value = yield* handlers.resumeWorkflowRun({ runId });
+    // The regression (GHE #332 re-review): this used to fail with
+    // "Paused workflow has no continuation to resume." — a signal park has neither a pending
+    // thread nor a wake_at, so neither old resume branch matched.
+    assert.strictEqual(value.status, "watching");
+    const row = Option.getOrThrow(yield* repo.getById({ runId }));
+    assert.strictEqual(row.status, "watching");
+    // The bridged event was consumed and delivered to the parked correlation (first-wins: a
+    // second take of the same tuple finds nothing).
+    assert.deepStrictEqual(resumed, [{ correlationId: `${runId}:w`, reply: { merged: true } }]);
+    assert.strictEqual(
+      Option.isNone(
+        yield* signalStore.takeOpenInboxEntry({
+          sourceName: "scm.change-request.watch",
+          paramsHash: "hash-1",
+          signalName: "scm.pull-request.merged",
+          key: "42",
+          deliveredAt: nowIso(),
+        }),
+      ),
+      true,
+    );
   }).pipe(Effect.provide(TestLayer)),
 );
 

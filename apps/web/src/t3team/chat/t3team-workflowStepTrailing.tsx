@@ -63,30 +63,53 @@ export function StepDue({
   ) : null;
 }
 
+/** A child thread's raw stop reason (server's "Retrying (3/14) — provider transient error") is
+ * machinery, not a status word: render the compact state word + counter, and keep the reason
+ * available in the row's tooltip instead of dumping the whole sentence into the trailing slot
+ * (agents-panel UX 2026-09-08, variant 3 "normalize status words"). */
+export function normalizeChildStatusLabel(status: string): {
+  readonly label: string;
+  readonly detail?: string;
+} {
+  const retry = status.match(/^Retrying \((\d+)\/(\d+)\) — (.+)$/);
+  if (retry) {
+    const reason = retry[3];
+    return reason === undefined
+      ? { label: `Retrying ${retry[1]}/${retry[2]}` }
+      : { label: `Retrying ${retry[1]}/${retry[2]}`, detail: reason };
+  }
+  return { label: status };
+}
+
 export function StepTrailing({
   step,
   wakeAt,
   childStatuses,
+  hideDuration = false,
 }: {
   step: T3TeamWorkflowStepEntry | undefined;
   wakeAt?: string | null | undefined;
   childStatuses?: Readonly<Record<string, string>> | undefined;
+  /** Inside a collapsed dynamic group the per-row durations are Σ-noise — the group summary
+   * shows the total instead. */
+  hideDuration?: boolean | undefined;
 }) {
   const childStatus = step?.threadId ? childStatuses?.[step.threadId] : undefined;
   if (childStatus) {
+    const normalized = normalizeChildStatusLabel(childStatus);
     return (
       <span
         data-step-child-status={childStatus}
         className="max-w-[45%] shrink-0 truncate text-right text-[11px] font-normal text-muted-foreground/70"
-        title={childStatus}
+        title={normalized.detail ?? childStatus}
       >
-        {childStatus}
+        {normalized.label}
       </span>
     );
   }
   return (
     <>
-      <StepDuration step={step} />
+      {hideDuration ? null : <StepDuration step={step} />}
       <StepDue step={step} wakeAt={wakeAt} />
     </>
   );

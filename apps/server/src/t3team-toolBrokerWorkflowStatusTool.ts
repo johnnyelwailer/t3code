@@ -55,6 +55,9 @@ const errorMessage = (error: unknown) => (error instanceof Error ? error.message
 const hintForStatus = (row: WorkflowRun): string => {
   switch (row.status) {
     case "failed":
+      // Agent-facing: keep the raw `failureStep` (settle phase included) — an agent reasoning
+      // about where a run parked needs the phase, unlike a human-facing surface
+      // (`userFacingFailureStep` in t3team-workflowFailureReason.ts, GHE #344).
       return row.failureReason
         ? `The run failed in ${row.failureStep ?? "an unknown step"}: ${row.failureReason} — fix that cause, then resume (keeps the executed prefix) or launch again.`
         : "The run failed — the failure reason was posted to the launching thread; fix the source and launch again.";
@@ -66,6 +69,8 @@ const hintForStatus = (row: WorkflowRun): string => {
       return row.wakeAt
         ? `Sleeping until ${row.wakeAt}; the scheduler wakes it automatically.`
         : "Sleeping on a timer; the scheduler wakes it automatically.";
+    case "watching":
+      return "Parked waiting on a watched signal event; it resumes automatically when the event is delivered.";
     case "queued":
       return "Queued for engine capacity; it starts automatically once a slot frees up.";
     case "running":

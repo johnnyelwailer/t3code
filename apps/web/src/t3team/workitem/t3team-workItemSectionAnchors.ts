@@ -44,17 +44,19 @@ export function buildWorkItemSectionNavEntries({
 }): ReadonlyArray<WorkItemSectionNavEntry> {
   const linkCount = countWorkItemIssueLinks(snapshotRaw);
 
+  // Mirrors the rendered order: the description and the conversation (comments) lead, then the
+  // reference lane — children, links, files.
   return [
     { anchorId: anchors.description, label: "Description" },
+    ...(commentCount > 0
+      ? [{ anchorId: anchors.comments, label: "Comments", count: commentCount }]
+      : []),
     ...(childCount > 0
       ? [{ anchorId: anchors.children, label: "Children", count: childCount }]
       : []),
     ...(linkCount > 0 ? [{ anchorId: anchors.links, label: "Links", count: linkCount }] : []),
     ...(attachmentCount > 0
       ? [{ anchorId: anchors.attachments, label: "Files", count: attachmentCount }]
-      : []),
-    ...(commentCount > 0
-      ? [{ anchorId: anchors.comments, label: "Comments", count: commentCount }]
       : []),
   ];
 }

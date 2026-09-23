@@ -96,7 +96,9 @@ function tryLoadSlots(id: string, dir: string): Record<string, string> | undefin
   try {
     parsed = JSON.parse(raw);
   } catch (err) {
-    throw new Error(`prompt cascade: ${filePath} is not valid JSON: ${(err as Error).message}`);
+    throw new Error(`prompt cascade: ${filePath} is not valid JSON: ${(err as Error).message}`, {
+      cause: err,
+    });
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     throw new Error(

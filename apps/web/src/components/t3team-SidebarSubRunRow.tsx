@@ -1,4 +1,4 @@
-import { CircleAlertIcon, CircleCheckIcon } from "lucide-react";
+import { CircleAlertIcon, CircleCheckIcon, CircleQuestionMarkIcon } from "lucide-react";
 import {
   memo,
   useCallback,
@@ -13,8 +13,9 @@ import { formatRelativeTimeLabel } from "../timestampFormat";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay";
 import { usePrimarySettings } from "~/hooks/useSettings";
-import { ThreadActivityMorphIcon } from "./ThreadActivityStatus";
+import { ThreadActivityMorphIcon } from "./t3team-ThreadActivityStatus";
 import { cn } from "~/lib/utils";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 
 /**
  * Compact time label for the dense sidebar rows: "just now" → "now",
@@ -90,25 +91,41 @@ export const SidebarSubRunRow = memo(function SidebarSubRunRow(props: {
     },
     [props.childRef, props.onContextMenu],
   );
+  // Child-ask surfacing: a question docked in this child's composer (shell
+  // `hasPendingUserInput` → `ProjectThread.pendingUserInput`). The SAME amber
+  // question mark the Agents panel's sub-run tree uses (one indicator
+  // system); it outranks the lifecycle glyph, because the parent's next
+  // action is to open this row and answer, not to watch run state.
+  const pendingQuestion = child.pendingUserInput === true;
   // GHE #40: a running sub-run carries the parent card's ring icon (sm
   // variant of ThreadActivityMorphIcon, same dashed-ring language, no
   // forked status chrome); settled/error/idle keep their compact marks.
-  const statusIcon =
-    child.status === "running" ? (
-      <span className="shrink-0 text-sky-600 dark:text-sky-400">
-        <ThreadActivityMorphIcon solid={false} size="sm" pulse />
-      </span>
-    ) : child.status === "error" ? (
-      <CircleAlertIcon aria-hidden className="size-3 shrink-0 text-destructive" />
-    ) : child.status === "completed" ? (
-      <CircleCheckIcon aria-hidden className="size-3 shrink-0 text-sidebar-muted-foreground/70" />
-    ) : (
-      // GHE #254: idle keeps the SAME ring, just faded + static, so every
-      // state reads at the ring's size instead of a shrunk dot next to it.
-      <span className="shrink-0 text-sidebar-muted-foreground/40">
-        <ThreadActivityMorphIcon solid={false} size="sm" />
-      </span>
-    );
+  const statusIcon = pendingQuestion ? (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span className="shrink-0 text-amber-600 dark:text-amber-400">
+            <CircleQuestionMarkIcon aria-hidden className="size-3 shrink-0" />
+          </span>
+        }
+      />
+      <TooltipPopup side="top">is asking you a question — open to answer</TooltipPopup>
+    </Tooltip>
+  ) : child.status === "running" ? (
+    <span className="shrink-0 text-sky-600 dark:text-sky-400">
+      <ThreadActivityMorphIcon solid={false} size="sm" pulse />
+    </span>
+  ) : child.status === "error" ? (
+    <CircleAlertIcon aria-hidden className="size-3 shrink-0 text-destructive" />
+  ) : child.status === "completed" ? (
+    <CircleCheckIcon aria-hidden className="size-3 shrink-0 text-sidebar-muted-foreground/70" />
+  ) : (
+    // GHE #254: idle keeps the SAME ring, just faded + static, so every
+    // state reads at the ring's size instead of a shrunk dot next to it.
+    <span className="shrink-0 text-sidebar-muted-foreground/40">
+      <ThreadActivityMorphIcon solid={false} size="sm" />
+    </span>
+  );
   return (
     <li role="presentation" className="list-none">
       <button
@@ -125,16 +142,20 @@ export const SidebarSubRunRow = memo(function SidebarSubRunRow(props: {
         )}
       >
         {statusIcon}
-        <span
-          className="min-w-0 flex-1 truncate"
-          title={childLabelMode === "flip" ? child.title : undefined}
-        >
-          {childLabelMode === "flip" ? (
-            <span className="t3team-label-shimmer">{childLabel}</span>
-          ) : (
-            child.title
-          )}
-        </span>
+        {childLabelMode === "flip" ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span className="min-w-0 flex-1 truncate">
+                  <span className="t3team-label-shimmer">{childLabel}</span>
+                </span>
+              }
+            />
+            <TooltipPopup side="top">{child.title}</TooltipPopup>
+          </Tooltip>
+        ) : (
+          <span className="min-w-0 flex-1 truncate">{child.title}</span>
+        )}
         {childLabelMode === "dock" ? (
           <span className="shrink-0 text-sky-600 dark:text-sky-400">
             <span className="t3team-label-shimmer">{childLabel}</span>

@@ -86,7 +86,7 @@ export function InboxSubRunsChip({ threadId }: { threadId: string }): ReactNode 
   const toggle = useExpandedSubRunsStore((state) => state.toggle);
   // Three states, one handle: running > 0 → the ACTIVE count chip (settled
   // children belong to the #304 "Settled (N)" fold, not the count); running = 0
-  // with total > 0 → a MUTED "Settled N" chip — without it the section's
+  // with total > 0 → a MUTED count chip — without it the section's
   // persisted/auto-set expanded state left the #304 fold row under the row
   // forever with nothing to collapse it (sidebar-row refine, 2026-08-30);
   // total = 0 / unknown → nothing (no stale total, no "0").
@@ -98,7 +98,7 @@ export function InboxSubRunsChip({ threadId }: { threadId: string }): ReactNode 
   const noun = (n: number) => (n === 1 ? "sub-run" : "sub-runs");
   const description = active
     ? `${counts.running} active ${noun(counts.running)}${settledCount > 0 ? ` · ${settledCount} settled` : ""}`
-    : `Settled ${settledCount} ${noun(settledCount)}`;
+    : `${settledCount} ${noun(settledCount)}`;
   const chipClass = active
     ? "flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm bg-sidebar-control-surface px-1 text-[0.6875rem] font-medium tabular-nums text-sidebar-muted-foreground hover:text-sidebar-foreground"
     : "flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm bg-sidebar-control-surface px-1 text-[0.6875rem] font-medium tabular-nums text-sidebar-muted-foreground/60 hover:text-sidebar-muted-foreground/90";
@@ -120,18 +120,14 @@ export function InboxSubRunsChip({ threadId }: { threadId: string }): ReactNode 
       className={chipClass}
     >
       <ListTreeIcon aria-hidden className="size-3 shrink-0" />
-      {active ? (
-        <>
-          {counts.running}
-          {/* sky = the working row's "in motion" 4-state color, not the theme's primary accent */}
-          <span
-            aria-hidden
-            className={`size-1.5 shrink-0 rounded-full ${resolveActivityStatePill("working").dotClass}`}
-          />
-        </>
-      ) : (
-        <span>Settled {settledCount}</span>
-      )}
+      {/* The count speaks the state: the working-row hue while any sub-run is
+          running (same 4-state color as the pill), muted otherwise. No dot,
+          no word — the word "Settled" was dropped: the fold can hold
+          terminal-but-not-yet-settled children, so it miscounted (owner,
+          2026-09-13). */}
+      <span className={active ? resolveActivityStatePill("working").colorClass : undefined}>
+        {active ? counts.running : settledCount}
+      </span>
     </button>
   );
 }

@@ -254,9 +254,6 @@ export const T3TEAM_PROFILES: Record<BundledT3TeamProfileId, T3TeamProfile> = {
       "release-handoff-checklist": 10,
       "next-best-task": 10,
     },
-    sidecarSections: {
-      sections: [{ sectionId: "recent-conversations" }, { sectionId: "quick-starts" }],
-    },
     recommendedSkillPackIds: ["engineering", "release"],
     hideImplementationComplexity: false,
   },
