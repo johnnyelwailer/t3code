@@ -38,6 +38,8 @@ const tickingSource = () => {
 interface Drive {
   readonly entries: JournalEntry[];
   readonly primitives: WatermarkPrimitives;
+  /** The run's journaled clock — an ordinary journaled call to interleave with advances. */
+  readonly now: () => number;
   readonly maps: () => JournalMaps;
 }
 
@@ -84,7 +86,12 @@ const drive = (opts: {
           denied: (key: string) => new WorkflowError(`denied ${key}`),
         }),
   });
-  return { entries, primitives, maps: () => buildJournalMaps(entries.map((e) => toWire(e))) };
+  return {
+    entries,
+    primitives,
+    now: runtime.now,
+    maps: () => buildJournalMaps(entries.map((e) => toWire(e))),
+  };
 };
 
 /** The checkpoint-window resume a host builds from the durable journal. */
@@ -239,36 +246,45 @@ describe("@runbook/core watermark primitive", () => {
     expect(again.current()).toBe(20);
   });
 
-  it("serializes overlapping advances, so a failed advance never rides along in a later boundary", async () => {
-    let release!: () => void;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
+  it("refuses every advance after a failed one, so no boundary is built past an uncommitted cursor", async () => {
     let calls = 0;
     const first = drive({
       wrapCheckpoint: (real) => async (input) => {
         calls += 1;
-        if (calls === 1) {
-          await gate;
-          throw CRASH;
-        }
+        if (calls === 1) throw CRASH;
         return await real(input);
       },
     });
     const a = first.primitives.watermark<number>("src.a");
     const b = first.primitives.watermark<number>("src.b");
-    const pendingA = a.advance(1);
-    const pendingB = b.advance(2);
-    release();
-    await expect(pendingA).rejects.toBe(CRASH);
-    await pendingB;
-    // 'src.b' committed on the COMMITTED state — without the failed cursor of 'src.a'.
+    await expect(a.advance(1)).rejects.toBe(CRASH);
+    await expect(b.advance(2)).rejects.toThrow(/an earlier advance failed/);
     expect(a.current()).toBeUndefined();
-    expect(b.current()).toBe(2);
-    const committed = checkpoints(first.entries).map(
-      (entry) => (entry.result as CheckpointRecord<WatermarkState>).state.sources,
-    );
-    expect(committed).toEqual([{ "src.b": expect.objectContaining({ cursor: 2 }) }]);
+    expect(b.current()).toBeUndefined();
+    // Only the failed advance's clock read is journaled; the refused one takes no seq at all.
+    expect(first.entries.map((e) => e.kind)).toEqual(["now"]);
+  });
+
+  it("refuses a cursor that cannot be journaled before it takes any seq", async () => {
+    const first = drive({});
+    await expect(
+      first.primitives.watermark<unknown>("src.a").advance({ at: BigInt(1) }),
+    ).rejects.toThrow(/not canonical JSON/);
+    expect(first.entries).toHaveLength(0);
+    // Not a failure of a taken boundary: the watermark keeps working.
+    await first.primitives.watermark<number>("src.a").advance(1);
+    expect(first.entries.map((e) => e.kind)).toEqual(["now", CHECKPOINT_KIND]);
+  });
+
+  it("takes its seqs at call time, like every other journaled call", async () => {
+    const first = drive({});
+    const a = first.primitives.watermark<number>("src.a");
+    const pending = a.advance(1);
+    // An ordinary journaled call made AFTER the (un-awaited) advance lands after its boundary.
+    first.now();
+    await pending;
+    const bySeq = [...first.entries].sort((x, y) => x.seq - y.seq);
+    expect(bySeq.map((e) => `${e.seq}:${e.kind}`)).toEqual(["1:now", "2:checkpoint", "3:now"]);
   });
 
   it("journals the same sequence however fast a checkpoint resolves (replay-safe ordering)", async () => {
@@ -283,8 +299,10 @@ describe("@runbook/core watermark primitive", () => {
     const kinds = async (delayTicks: number) => {
       const run = drive({
         wrapCheckpoint: (real) => async (input) => {
+          // A slow commit: the seq is taken at call time, the settle arrives `delayTicks` later.
+          const settled = real(input);
           for (let i = 0; i < delayTicks; i++) await Promise.resolve();
-          return await real(input);
+          return await settled;
         },
       });
       await body(run.primitives);

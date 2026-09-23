@@ -31,6 +31,7 @@ import {
   type CheckpointRecord,
   type CheckpointRetention,
 } from "./checkpoint.ts";
+import { canonicalJsonError } from "./canonicalJson.ts";
 import { WatermarkScopeError, WorkflowError } from "./errors.ts";
 
 /** Envelope version; a restored envelope with another version is not this primitive's state. */
@@ -117,11 +118,17 @@ export function createWatermarkPrimitives(deps: WatermarkPrimitivesDeps): Waterm
   const restored = deps.resume?.state;
   let owner: "watermark" | "checkpoint" | undefined =
     deps.resume === undefined ? undefined : isWatermarkState(restored) ? "watermark" : "checkpoint";
-  let sources: Readonly<Record<string, WatermarkSourceState>> = isWatermarkState(restored)
+  const initial: Readonly<Record<string, WatermarkSourceState>> = isWatermarkState(restored)
     ? restored.sources
     : {};
-  /** Settles when every advance issued so far has committed or failed. */
-  let tail: Promise<void> = Promise.resolve();
+  // `issued` is what the next envelope builds on: every advance issued so far, in call order.
+  // `committed` is what `current()` reports: the newest envelope whose boundary committed.
+  let issued = initial;
+  let committed = initial;
+  let issuedCount = 0;
+  let committedCount = 0;
+  /** The first advance failure; every later advance refuses instead of building past it. */
+  let failure: unknown;
 
   const watermark = <Cursor>(
     sourceKey: string,
@@ -143,33 +150,44 @@ export function createWatermarkPrimitives(deps: WatermarkPrimitivesDeps): Waterm
 
     return {
       current: () => {
-        const entry = sourceState(sources, sourceKey);
+        const entry = sourceState(committed, sourceKey);
         return entry === undefined ? opts?.initial : (entry.cursor as Cursor);
       },
-      advance: async (next: Cursor): Promise<void> => {
-        if (next === undefined) {
-          throw new WorkflowError(
-            `watermark('${sourceKey}').advance: cursor must not be undefined.`,
-          );
-        }
-        // Every boundary carries EVERY source's cursor, so each advance must build on the last
-        // COMMITTED state: advances run one at a time, in call order. The queue position is fixed
-        // by call order alone — never by how fast a checkpoint resolves — so a replay journals
-        // the same sequence as the original run, and a failed advance never rides along.
-        const run = tail.then(() => commit(sourceKey, next, retention));
-        tail = run.catch(() => {});
-        await run;
-      },
+      advance: (next: Cursor): Promise<void> => advance(sourceKey, next, retention),
     };
   };
 
-  /** Build the envelope on the committed state, commit it, and only then move the cursor. */
-  const commit = async (
+  /**
+   * Issue one boundary. Everything up to the checkpoint call runs synchronously, so the clock
+   * read and the checkpoint take their seqs at CALL time — exactly like every other journaled
+   * call — and a replay journals the same positions however fast a checkpoint resolves.
+   *
+   * Every envelope carries every source's cursor, so it builds on all advances issued before it.
+   * A cursor that could not be journaled is refused up front; the failures left after a seq is
+   * taken (replay drift, abort, suspension) end the run. Should one be caught anyway, every later
+   * advance refuses, so no further boundary is built past an advance that never committed.
+   */
+  const advance = async (
     sourceKey: string,
     next: unknown,
     retention: ReturnType<typeof normalizeCheckpointRetention>,
   ): Promise<void> => {
-    const prior = sourceState(sources, sourceKey);
+    if (next === undefined) {
+      throw new WorkflowError(`watermark('${sourceKey}').advance: cursor must not be undefined.`);
+    }
+    const invalid = canonicalJsonError(next);
+    if (invalid !== undefined) {
+      throw new WorkflowError(
+        `watermark('${sourceKey}').advance: cursor is not canonical JSON (${invalid.message}).`,
+      );
+    }
+    if (failure !== undefined) {
+      throw new WorkflowError(
+        `watermark('${sourceKey}').advance: an earlier advance failed, so no later cursor can ` +
+          `be committed in this run: ${failure instanceof Error ? failure.message : String(failure)}`,
+      );
+    }
+    const prior = sourceState(issued, sourceKey);
     const observedAt = deps.now();
     // The replaced cursor joins the ring; the oldest entries past `history` are evicted.
     const ring =
@@ -178,7 +196,7 @@ export function createWatermarkPrimitives(deps: WatermarkPrimitivesDeps): Waterm
         : [...prior.diagnostics, { cursor: prior.cursor, observedAt: prior.observedAt }];
     const diagnostics = ring.slice(Math.max(0, ring.length - retention.history));
     const updated: Readonly<Record<string, WatermarkSourceState>> = {
-      ...sources,
+      ...issued,
       [sourceKey]: { cursor: next, observedAt, diagnostics },
     };
     const state: WatermarkState = {
@@ -189,8 +207,19 @@ export function createWatermarkPrimitives(deps: WatermarkPrimitivesDeps): Waterm
       observedAt,
       sources: updated,
     };
-    await deps.checkpoint({ state, retention });
-    sources = updated;
+    issued = updated;
+    const position = ++issuedCount;
+    try {
+      await deps.checkpoint({ state, retention });
+    } catch (error) {
+      failure ??= error;
+      throw error;
+    }
+    // Commits may settle out of order; a newer envelope already contains every older one.
+    if (position > committedCount) {
+      committedCount = position;
+      committed = updated;
+    }
   };
 
   const checkpoint: CheckpointPrimitives["checkpoint"] = async (input) => {
