@@ -37,18 +37,17 @@ export function selectHistoryView(maps: JournalMaps, n: number): ReadonlyArray<H
     throw new WorkflowError(`history: n must be a non-negative integer (got ${String(n)}).`);
   }
   const checkpoints: HistoryEntry[] = [];
-  let capacity = 0;
-  let activeSeq = -1;
+  // Same boundary rule as selectReplayWindow: the latest valid checkpoint by seq is active.
+  let active: { readonly seq: number; readonly capacity: number } | undefined;
   for (const entry of maps.bySeq.values()) {
     if (entry.kind !== CHECKPOINT_KIND || entry.refId !== CHECKPOINT_REF_ID) continue;
     if (!isCheckpointRecord(entry.result)) continue;
     checkpoints.push({ seq: entry.seq, state: entry.result.state, at: entry.result.at });
-    if (entry.seq > activeSeq) {
-      activeSeq = entry.seq;
-      capacity = entry.result.retainedHistory;
+    if (active === undefined || entry.seq > active.seq) {
+      active = { seq: entry.seq, capacity: entry.result.retainedHistory };
     }
   }
-  const take = Math.min(n, capacity);
+  const take = Math.min(n, active?.capacity ?? 0);
   if (take === 0) return [];
   checkpoints.sort((a, b) => a.seq - b.seq);
   return checkpoints.slice(-take);
