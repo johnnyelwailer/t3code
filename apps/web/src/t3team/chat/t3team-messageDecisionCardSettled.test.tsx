@@ -30,11 +30,18 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 import type { LegendListRef } from "@legendapp/list/react";
 
+import { buildT3TeamMessagesTimelineTestProps } from "~/t3team/chat/t3team-messagesTimelineTestProps";
+import type { ChatMessage } from "~/types";
 // Loaded statically so its large module graph evaluates in Vitest's untimed collection phase, not
 // inside a hook or test budget; the tests' own `await import(...)` calls then hit the module cache.
 import "~/components/chat/MessagesTimeline";
-import { buildT3TeamMessagesTimelineTestProps } from "~/t3team/chat/t3team-messagesTimelineTestProps";
-import type { ChatMessage } from "~/types";
+
+// Break the composerDraftStore → t3team-threadComposingSignal → primaryEnvironment → catalog →
+// connection/runtime import cycle (same mock as MessagesTimeline.test.tsx): with the timeline as
+// the graph's entry, the catalog otherwise evaluates while the runtime export is uninitialized.
+vi.mock("~/t3team/chat/t3team-threadComposingSignal", () => ({
+  reportThreadComposing: () => {},
+}));
 
 vi.mock("@legendapp/list/react", async () => {
   const LegendList = (props: {
