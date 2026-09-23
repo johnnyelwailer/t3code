@@ -18,6 +18,7 @@ import type {
 import type { DurableWorkflowRuntime } from "./t3team-sdk.durableRuntime.ts";
 import { WorkflowError, SubWorkflowCheckpointError } from "./t3team-sdk.errors.ts";
 import { runPreparedBody } from "./t3team-sdk.bodyRunner.ts";
+import { subWorkflowReducePrimitives } from "./t3team-sdk.reducePrimitive.ts";
 import type * as T from "./t3team-sdk.types.ts";
 
 /**
@@ -155,6 +156,8 @@ export function buildWorkflowPrimitives(opts: {
         toolRefs: opts.toolRefs,
         scripts: opts.scripts,
         checkpoint: subWorkflowCheckpoint,
+        // `accumulate` commits a checkpoint boundary too, so it is refused the same way.
+        reduce: subWorkflowReducePrimitives,
         primitives: createWorkflowPrimitives({
           ...shared,
           runSubWorkflow: runSubWorkflowFor(() => childCapabilities, childChain),

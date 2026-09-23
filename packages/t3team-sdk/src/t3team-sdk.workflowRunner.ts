@@ -11,6 +11,7 @@ import type { ExecuteBodyRequest } from "@runbook/core/runEngine";
 import { runPreparedBody } from "./t3team-sdk.bodyRunner.ts";
 import { buildWorkflowPrimitives } from "./t3team-sdk.subWorkflows.ts";
 import { createCheckpointPrimitives } from "@runbook/core/checkpoint";
+import { createReducePrimitives } from "./t3team-sdk.reducePrimitive.ts";
 import {
   createDurableWorkflowRuntime,
   type DurableWorkflowRuntime,
@@ -127,6 +128,9 @@ export async function executeWorkflowBody(
     // resume restored (absent on fresh starts and full-replay resumes).
     checkpoint,
     resume: opts.resume?.checkpoint,
+    // `accumulate` folds commit through the same `checkpoint`; a checkpoint-window resume seeds
+    // every reducer from its boundary so the fold continues from the recorded state.
+    reduce: createReducePrimitives({ checkpoint, resume: opts.resume?.checkpoint }),
     // Feed the body's capability set back so workflow() children intersect against it.
     onCapabilities: captureCapabilities,
     handleDispatch: runtime.handles,

@@ -25,6 +25,7 @@ import type {
   CheckpointPrimitives,
   CheckpointRecord,
 } from "@runbook/core/checkpoint";
+import type { AccumulateOptions, ReducePrimitives, ReducerSnapshot } from "@runbook/core/reduce";
 import type { AgentOpts, SpawnThreadOpts, Thread } from "./t3team-sdk.threadTypes.ts";
 import type { WorkflowInvokeOpts, WorkflowRef } from "./t3team-sdk.types.ts";
 import type { Signal, SignalSourceHandle, SignalSourceRef } from "./t3team-sdk.signal.ts";
@@ -129,6 +130,32 @@ export function checkpoint<State>(input: CheckpointInput<State>): Promise<Checkp
 }
 
 /**
+ * Bounded execution: fold `observation` into the reducer's current state and commit it as a
+ * checkpoint boundary; a resume continues folding from the recorded state. `fold` receives
+ * `undefined` on the reducer's first observation and must be deterministic (its result is part of
+ * the journaled boundary, so a drifting fold fails loud). `retention.ring` keeps the last N
+ * observations. Refused inside sub-workflow bodies, like `checkpoint()`.
+ */
+export function accumulate<State, Observation>(
+  reducerId: string,
+  fold: (current: State | undefined, observation: Observation) => State,
+  observation: Observation,
+  opts?: AccumulateOptions,
+): Promise<State> {
+  return fromRun<ReducePrimitives["accumulate"]>("accumulate")(reducerId, fold, observation, opts);
+}
+
+/**
+ * The reducer's latest snapshot (`current` + retained `ring`) in this drive — restored by a
+ * checkpoint-window resume or folded since; `undefined` before its first fold.
+ */
+export function reducerState<State = unknown, Observation = unknown>(
+  reducerId: string,
+): ReducerSnapshot<State, Observation> | undefined {
+  return fromRun<ReducePrimitives["reducerState"]>("reducerState")<State, Observation>(reducerId);
+}
+
+/**
  * The compact state a checkpoint-window resume restored — seed your carried state from it so the
  * body continues from the boundary instead of re-running the superseded prefix.
  * `undefined` on a fresh start, a full-replay resume, and inside sub-workflow bodies.
@@ -149,10 +176,7 @@ export function getResume(): CheckpointRecord | undefined {
  * delivers the awaited `(signal, key)`. Requires the `'source:<name>'` capability in
  * `meta.capabilities`.
  */
-export function getSignalSource<
-  Params,
-  Signals extends ReadonlyArray<Signal<unknown>>,
->(
+export function getSignalSource<Params, Signals extends ReadonlyArray<Signal<unknown>>>(
   source: SignalSourceRef<Params, Signals, unknown>,
   params: Params,
 ): Promise<SignalSourceHandle<Signals>> {
