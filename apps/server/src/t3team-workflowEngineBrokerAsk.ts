@@ -22,6 +22,7 @@ import {
   workflowWidgetAttachment,
 } from "./t3team-workflowEngineBrokerContext.ts";
 import { resolveWorkflowChildModel } from "./t3team-workflowChildModel.ts";
+import { dispatchThreadTurnStartWithRetry } from "./t3team-workflowEngineTurnStartBusyRetry.ts";
 import { workflowTurnAuthor } from "./t3team-workflowTurnAuthor.ts";
 import { workflowTurnText } from "./t3team-workflowTurnText.ts";
 
@@ -52,27 +53,30 @@ export async function handleBrokerAskVerb(core: BrokerCore, s: BrokerSend): Prom
     });
     await runPrimitive(
       () =>
-        enqueue(() =>
-          deps.dispatch({
-            type: "thread.turn.start",
-            commandId: CommandId.make(`t3team-wf:turn:${deps.newId()}`),
-            threadId: ThreadId.make(p.threadId),
-            message: {
-              messageId: MessageId.make(deps.newId()),
-              role: "user",
-              text: workflowTurnText(p),
-              attachments: [],
-              // `user` role because that is how a provider receives turn input — NOT because a
-              // person wrote it. The author says so: it marks the start as automated for decider
-              // turn admission AND is the only signal a client has for telling nine paragraphs of
-              // machine instructions apart from something the user typed.
-              t3teamExt: { author },
-            },
-            modelSelection,
-            runtimeMode: deps.runtimeMode,
-            interactionMode: deps.interactionMode,
-            createdAt: deps.nowIso(),
-          }),
+        dispatchThreadTurnStartWithRetry(
+          enqueue,
+          () =>
+            deps.dispatch({
+              type: "thread.turn.start",
+              commandId: CommandId.make(`t3team-wf:turn:${deps.newId()}`),
+              threadId: ThreadId.make(p.threadId),
+              message: {
+                messageId: MessageId.make(deps.newId()),
+                role: "user",
+                text: workflowTurnText(p),
+                attachments: [],
+                // `user` role because that is how a provider receives turn input — NOT because a
+                // person wrote it. The author says so: it marks the start as automated for decider
+                // turn admission AND is the only signal a client has for telling nine paragraphs of
+                // machine instructions apart from something the user typed.
+                t3teamExt: { author },
+              },
+              modelSelection,
+              runtimeMode: deps.runtimeMode,
+              interactionMode: deps.interactionMode,
+              createdAt: deps.nowIso(),
+            }),
+          deps.threadTurnBusyRetryDelay,
         ),
       liveSettlement
         ? undefined

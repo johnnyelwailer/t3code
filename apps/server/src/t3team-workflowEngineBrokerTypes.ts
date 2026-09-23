@@ -164,6 +164,12 @@ export interface WorkflowEngineBrokerDeps {
    * in the same order reproduces it). Absent in tests/older wiring — `step()` then stamps nothing.
    */
   readonly currentPhase?: () => string | undefined;
+  /**
+   * Backoff wait between `thread.turn.start` busy-retry attempts (see
+   * `t3team-workflowEngineTurnStartBusyRetry.ts`). Real `setTimeout` in production; tests inject
+   * a fast/no-op resolver so a budget-exhaustion case does not wait out the real ladder.
+   */
+  readonly threadTurnBusyRetryDelay?: (ms: number) => Promise<void>;
 }
 
 export interface ThreadCreatePayload {
