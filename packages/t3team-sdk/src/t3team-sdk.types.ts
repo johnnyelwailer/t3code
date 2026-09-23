@@ -205,4 +205,7 @@ export interface WorkflowRunOptions {
    * aborted rather than failed.
    */
   readonly abortSignal?: AbortSignal;
+  /** Resume only: re-send ONE recorded, unanswered ask by correlationId — see
+   * `@runbook/core/engineTypes` `WorkflowRunOptionsBase.refire`. */
+  readonly refire?: string;
 }

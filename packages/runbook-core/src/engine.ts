@@ -53,6 +53,7 @@ export function createWorkflowEngine<
         body: adapter.executeBody,
         events: options.events,
         abortSignal: options.abortSignal,
+        refire: options.refire,
       });
       await settleRun(settle, outcome);
       return toRunResult(runId, outcome);
@@ -66,6 +67,11 @@ export function createWorkflowEngine<
     args: I,
     options: StartWorkflowOptions<Options> = {} as StartWorkflowOptions<Options>,
   ): Promise<WorkflowResult<O>> => {
+    if (options.refire !== undefined) {
+      throw new WorkflowError(
+        `Cannot start a workflow with { refire: '${options.refire}' }: re-firing re-sends a recorded ask, and a fresh run has none. Pass it to resumeWorkflow.`,
+      );
+    }
     const runsRoot = options.runsRoot ?? adapter.defaultRunsRoot();
     const store = options.store ?? adapter.createStore(runsRoot);
     const runId = options.runId ?? adapter.newRunId();
