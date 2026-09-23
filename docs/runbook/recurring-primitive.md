@@ -58,9 +58,9 @@ exists to prevent for sub-workflows. The one conformance test for checkpoint res
 loop. The primitive is correct; the authoring pattern around it is not guarded.
 
 Note that "journaled call" is broader than it looks. `now()`, the deterministic `Date`,
-`Math.random`, `uuid`, `tools.*`, `agent`, `waitUntil`, `workflow`, `parallel` and `emit` all
-take a seq (`primitiveKinds.ts` `PRIMITIVE_KINDS`). A single `new Date()` above the loop is
-enough to trigger it.
+`Math.random`, `uuid`, `tools.*`, `agent`, `waitUntil`, `workflow`, `parallel`, `emit`, and
+`getSignalSource` all take a seq (`primitiveKinds.ts` `PRIMITIVE_KINDS`; signal registration
+journals `signal.register`). A single `new Date()` above the loop is enough to trigger it.
 
 ## Decision
 
@@ -268,7 +268,7 @@ to the body as `resume` / `getResume()`):
 | restored state | action |
 | --- | --- |
 | none | fresh: run the entry guard, run `init`, commit `E0`, continue |
-| envelope, `status: "active"` | seed `carried` / `iteration` / `nextWakeMs` from it; skip `init`; send `wait.until(nextWakeMs)` (it replays against the suffix, or suspends, or fires live if the crash hit between commit and send); then run the step |
+| envelope, `status: "active"` | validate its config fingerprint before any resumed call; seed `carried` / `iteration` / `nextWakeMs` from it; skip `init`; send `wait.until(nextWakeMs)` (it replays against the suffix, or suspends, or fires live if the crash hit between commit and send); then run the step |
 | envelope, `status: "finished"` | return `result` immediately; make no journaled call |
 | anything else | throw `RecurringResumeMismatchError` (see guard) |
 
@@ -387,7 +387,7 @@ host scheduler stub that settles `wait.until` on demand, so parking and waking a
 | # | scenario | assertions |
 | --- | --- | --- |
 | C1 | **Crash mid-iteration N.** `init` makes one tool call. Step makes two tool calls `a(i)`, `b(i)`. Crash after `a(N)` is journaled, before `b(N)`. Resume. | `init` tool exec count = **1** over the run's lifetime; `a(N)` replays (exec count 1); `b(N)` runs live once; iteration N+1 receives the carried state returned by iteration N; every `a(i)`/`b(i)` exec count = 1 |
-| C2 | **Checkpoint flush barrier and crash before wait send.** Delay the checkpoint append, kill the drive while append is pending, then release it; repeat with append failure. Also delay the finished `E_n` append. | no `wait.until` dispatch occurs before successful awaited flush; append failure propagates and no wait/post-loop side effect occurs; after durable `E_n`, post-loop work may begin; recovery after a successful flush but before wait dispatch sends the wait live once |
+| C2 | **Checkpoint flush barrier and crash before wait send.** Abruptly kill the drive while its checkpoint append is pending in a controllably delayed sink, then resolve the append; repeat with append failure. Also delay the finished `E_n` append and observe post-loop effects. | no `wait.until` dispatch occurs before successful awaited flush; append failure propagates and no wait/post-loop side effect occurs; after durable `E_n`, post-loop work may begin; recovery after a successful flush but before wait dispatch sends the wait live once |
 | C3 | **Parked resume.** Run parks at wake N; settle; resume. | materialized `bySeq` on the resume drive = **1** (the `wait.until` sent); `inspectRun.checkpoint.state.iteration` = N |
 | C4 | **Crash during `init`**, after its first of two tool calls. | no checkpoint exists; full replay; first call replays, second runs live; `E0.carried` equals `init`'s return |
 | C5 | **Entry guard.** One fixture per seq-allocating kind before entry, including `getSignalSource`, plus a queued-promise microtask that attempts a primitive dispatch after the guard. Include nonjournaled `log`/phase controls and a `getSignalSource` control. | seq-allocating prelude calls throw `RecurringScopeError` with `violation: "journaled-call-before-entry"`; the race is refused as `outstanding-journal-work` (cursor equality alone is not accepted); journal size is unchanged by refusal. `getSignalSource` trips because it allocates a seq; nonjournaled `log`/phase does not false-positive because it allocates none |
@@ -401,7 +401,7 @@ host scheduler stub that settles `wait.until` on demand, so parking and waking a
 | C13 | **Validation before journaling.** `everyMs: 0`, below the floor, non-integer; `maxIterations: 0`; `next()` returning a past or equal instant; non-JSON `carried`. | typed `WorkflowError`; for the first four nothing is journaled; for `next()` / `carried` no `wait.until` is sent |
 | C14 | **Mismatched restored state.** Resume a run whose latest checkpoint was written by a raw `checkpoint()` (constructed journal). | `RecurringResumeMismatchError`; nothing journaled |
 | C15 | **Backend parity.** C1–C3 against every `JournalStore` that implements `readReplayWindow`. | identical assertions per backend |
-| C16 | **Sent without sleeping row.** Persist `wait.until` sent durably, crash before `recordSleeping` persists, restart broker/host. | recovery scans/retries pending sent waits by stable run/seq identity (or makes send + sleeping persistence atomic), reaches one durable sleeping registration or settled wake, and cannot strand the run; restart rearm alone is insufficient |
+| C16 | **Sent without sleeping row.** Persist `wait.until` sent durably, crash before `recordSleeping` persists, restart broker/host. | Recovery MUST scan and retry pending sent waits by stable run/seq identity, or atomically persist send plus sleeping state; it reaches one durable sleeping registration or settled wake and cannot strand the run. Restart rearm of rows already marked sleeping is insufficient |
 | C17 | **Provider death during an iteration with in-flight tool calls.** Real host integration test kills provider after dispatch and before all tool resolutions, then resumes. | turn resolution is deterministic and waits for unresolved resolvable handles; recurring checkpoint stays behind unresolved work and cannot commit while they remain. The test observes possible re-execution when an exec result was never journaled; it does not assert exactly-once tool execution |
 
 C1–C3, C8, C16 and C17 together are the Phase 1 exit condition ("crash-safe commit and identical
