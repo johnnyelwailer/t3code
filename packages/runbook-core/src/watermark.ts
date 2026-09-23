@@ -120,8 +120,8 @@ export function createWatermarkPrimitives(deps: WatermarkPrimitivesDeps): Waterm
   let sources: Readonly<Record<string, WatermarkSourceState>> = isWatermarkState(restored)
     ? restored.sources
     : {};
-  /** The source whose advance is awaiting its checkpoint commit, if any. */
-  let inFlight: string | undefined;
+  /** Settles when every advance issued so far has committed or failed. */
+  let tail: Promise<void> = Promise.resolve();
 
   const watermark = <Cursor>(
     sourceKey: string,
@@ -152,46 +152,45 @@ export function createWatermarkPrimitives(deps: WatermarkPrimitivesDeps): Waterm
             `watermark('${sourceKey}').advance: cursor must not be undefined.`,
           );
         }
-        // Every boundary carries EVERY source's cursor, so an advance must build on the committed
-        // state. Two overlapping advances would let the second commit the first's cursor even if
-        // the first never became durable — refuse the overlap instead of guessing.
-        if (inFlight !== undefined) {
-          throw new WorkflowError(
-            `watermark('${sourceKey}').advance: the advance of '${inFlight}' has not committed yet. ` +
-              `Await each advance before the next one (also across parallel branches).`,
-          );
-        }
-        const previous = sources;
-        const prior = sourceState(previous, sourceKey);
-        const observedAt = deps.now();
-        // The replaced cursor joins the ring; the oldest entries past `history` are evicted.
-        const ring =
-          prior === undefined
-            ? []
-            : [...prior.diagnostics, { cursor: prior.cursor, observedAt: prior.observedAt }];
-        const diagnostics = ring.slice(Math.max(0, ring.length - retention.history));
-        const updated: Readonly<Record<string, WatermarkSourceState>> = {
-          ...previous,
-          [sourceKey]: { cursor: next, observedAt, diagnostics },
-        };
-        const state: WatermarkState = {
-          v: WATERMARK_ENVELOPE_VERSION,
-          primitive: "watermark",
-          source: sourceKey,
-          cursor: next,
-          observedAt,
-          sources: updated,
-        };
-        inFlight = sourceKey;
-        try {
-          await deps.checkpoint({ state, retention });
-        } finally {
-          inFlight = undefined;
-        }
-        // Only a committed boundary moves the cursor `current()` reports.
-        sources = updated;
+        // Every boundary carries EVERY source's cursor, so each advance must build on the last
+        // COMMITTED state: advances run one at a time, in call order. The queue position is fixed
+        // by call order alone — never by how fast a checkpoint resolves — so a replay journals
+        // the same sequence as the original run, and a failed advance never rides along.
+        const run = tail.then(() => commit(sourceKey, next, retention));
+        tail = run.catch(() => {});
+        await run;
       },
     };
+  };
+
+  /** Build the envelope on the committed state, commit it, and only then move the cursor. */
+  const commit = async (
+    sourceKey: string,
+    next: unknown,
+    retention: ReturnType<typeof normalizeCheckpointRetention>,
+  ): Promise<void> => {
+    const prior = sourceState(sources, sourceKey);
+    const observedAt = deps.now();
+    // The replaced cursor joins the ring; the oldest entries past `history` are evicted.
+    const ring =
+      prior === undefined
+        ? []
+        : [...prior.diagnostics, { cursor: prior.cursor, observedAt: prior.observedAt }];
+    const diagnostics = ring.slice(Math.max(0, ring.length - retention.history));
+    const updated: Readonly<Record<string, WatermarkSourceState>> = {
+      ...sources,
+      [sourceKey]: { cursor: next, observedAt, diagnostics },
+    };
+    const state: WatermarkState = {
+      v: WATERMARK_ENVELOPE_VERSION,
+      primitive: "watermark",
+      source: sourceKey,
+      cursor: next,
+      observedAt,
+      sources: updated,
+    };
+    await deps.checkpoint({ state, retention });
+    sources = updated;
   };
 
   const checkpoint: CheckpointPrimitives["checkpoint"] = async (input) => {

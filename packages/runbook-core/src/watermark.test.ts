@@ -239,33 +239,60 @@ describe("@runbook/core watermark primitive", () => {
     expect(again.current()).toBe(20);
   });
 
-  it("refuses an overlapping advance, so a failed advance can never ride along in a later boundary", async () => {
+  it("serializes overlapping advances, so a failed advance never rides along in a later boundary", async () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
+    let calls = 0;
     const first = drive({
-      wrapCheckpoint: () => async () => {
-        await gate;
-        throw CRASH;
+      wrapCheckpoint: (real) => async (input) => {
+        calls += 1;
+        if (calls === 1) {
+          await gate;
+          throw CRASH;
+        }
+        return await real(input);
       },
     });
     const a = first.primitives.watermark<number>("src.a");
     const b = first.primitives.watermark<number>("src.b");
     const pendingA = a.advance(1);
-    await expect(b.advance(2)).rejects.toThrow(/has not committed yet/);
+    const pendingB = b.advance(2);
     release();
     await expect(pendingA).rejects.toBe(CRASH);
-    // Neither cursor moved, and no boundary carries the uncommitted cursor of 'src.a'.
+    await pendingB;
+    // 'src.b' committed on the COMMITTED state — without the failed cursor of 'src.a'.
     expect(a.current()).toBeUndefined();
-    expect(b.current()).toBeUndefined();
-    expect(checkpoints(first.entries)).toHaveLength(0);
-    // Once the in-flight advance settles, the next advance is accepted again.
-    const second = drive({});
-    const c = second.primitives.watermark<number>("src.a");
-    await c.advance(1);
-    await c.advance(2);
-    expect(c.current()).toBe(2);
+    expect(b.current()).toBe(2);
+    const committed = checkpoints(first.entries).map(
+      (entry) => (entry.result as CheckpointRecord<WatermarkState>).state.sources,
+    );
+    expect(committed).toEqual([{ "src.b": expect.objectContaining({ cursor: 2 }) }]);
+  });
+
+  it("journals the same sequence however fast a checkpoint resolves (replay-safe ordering)", async () => {
+    const body = async (primitives: WatermarkPrimitives) => {
+      const a = primitives.watermark<number>("src.a");
+      const b = primitives.watermark<number>("src.b");
+      const pendingA = a.advance(1);
+      await Promise.resolve();
+      await b.advance(2);
+      await pendingA;
+    };
+    const kinds = async (delayTicks: number) => {
+      const run = drive({
+        wrapCheckpoint: (real) => async (input) => {
+          for (let i = 0; i < delayTicks; i++) await Promise.resolve();
+          return await real(input);
+        },
+      });
+      await body(run.primitives);
+      return run.entries.map((entry) => `${entry.seq}:${entry.kind}`);
+    };
+    const fast = await kinds(0);
+    expect(await kinds(25)).toEqual(fast);
+    expect(fast).toEqual(["1:now", "2:checkpoint", "3:now", "4:checkpoint"]);
   });
 
   it("treats a key such as __proto__ as an ordinary own key, never an inherited value", async () => {
