@@ -105,6 +105,14 @@ export function isWatermarkState(state: unknown): state is WatermarkState {
   );
 }
 
+/** Own-property lookup: a key such as `__proto__` must never read an inherited value. */
+function sourceState(
+  sources: Readonly<Record<string, WatermarkSourceState>>,
+  sourceKey: string,
+): WatermarkSourceState | undefined {
+  return Object.hasOwn(sources, sourceKey) ? sources[sourceKey] : undefined;
+}
+
 export function createWatermarkPrimitives(deps: WatermarkPrimitivesDeps): WatermarkPrimitives {
   const restored = deps.resume?.state;
   let owner: "watermark" | "checkpoint" | undefined =
@@ -112,6 +120,8 @@ export function createWatermarkPrimitives(deps: WatermarkPrimitivesDeps): Waterm
   let sources: Readonly<Record<string, WatermarkSourceState>> = isWatermarkState(restored)
     ? restored.sources
     : {};
+  /** The source whose advance is awaiting its checkpoint commit, if any. */
+  let inFlight: string | undefined;
 
   const watermark = <Cursor>(
     sourceKey: string,
@@ -133,7 +143,7 @@ export function createWatermarkPrimitives(deps: WatermarkPrimitivesDeps): Waterm
 
     return {
       current: () => {
-        const entry = sources[sourceKey];
+        const entry = sourceState(sources, sourceKey);
         return entry === undefined ? opts?.initial : (entry.cursor as Cursor);
       },
       advance: async (next: Cursor): Promise<void> => {
@@ -142,8 +152,17 @@ export function createWatermarkPrimitives(deps: WatermarkPrimitivesDeps): Waterm
             `watermark('${sourceKey}').advance: cursor must not be undefined.`,
           );
         }
+        // Every boundary carries EVERY source's cursor, so an advance must build on the committed
+        // state. Two overlapping advances would let the second commit the first's cursor even if
+        // the first never became durable — refuse the overlap instead of guessing.
+        if (inFlight !== undefined) {
+          throw new WorkflowError(
+            `watermark('${sourceKey}').advance: the advance of '${inFlight}' has not committed yet. ` +
+              `Await each advance before the next one (also across parallel branches).`,
+          );
+        }
         const previous = sources;
-        const prior = previous[sourceKey];
+        const prior = sourceState(previous, sourceKey);
         const observedAt = deps.now();
         // The replaced cursor joins the ring; the oldest entries past `history` are evicted.
         const ring =
@@ -163,15 +182,14 @@ export function createWatermarkPrimitives(deps: WatermarkPrimitivesDeps): Waterm
           observedAt,
           sources: updated,
         };
-        // Update before the await: a concurrent advance on another source builds on this one.
-        sources = updated;
+        inFlight = sourceKey;
         try {
           await deps.checkpoint({ state, retention });
-        } catch (error) {
-          // Not durable: roll back unless a later advance already built on top of it.
-          if (sources === updated) sources = previous;
-          throw error;
+        } finally {
+          inFlight = undefined;
         }
+        // Only a committed boundary moves the cursor `current()` reports.
+        sources = updated;
       },
     };
   };

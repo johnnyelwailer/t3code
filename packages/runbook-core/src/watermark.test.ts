@@ -223,7 +223,7 @@ describe("@runbook/core watermark primitive", () => {
     const cursor = first.primitives.watermark<number>("src.a");
     await cursor.advance(10);
     await expect(cursor.advance(20)).rejects.toBe(CRASH);
-    // Not durable → not current: the in-memory cursor rolls back.
+    // Not durable → not current: only a committed boundary moves the cursor.
     expect(cursor.current()).toBe(10);
     // Journal: now, checkpoint(10), now — the second boundary never committed.
     expect(first.entries.map((e) => e.kind)).toEqual(["now", CHECKPOINT_KIND, "now"]);
@@ -237,6 +237,46 @@ describe("@runbook/core watermark primitive", () => {
     await again.advance(20);
     expect(resumed.entries.map((e) => e.kind)).toEqual([CHECKPOINT_KIND]);
     expect(again.current()).toBe(20);
+  });
+
+  it("refuses an overlapping advance, so a failed advance can never ride along in a later boundary", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const first = drive({
+      wrapCheckpoint: () => async () => {
+        await gate;
+        throw CRASH;
+      },
+    });
+    const a = first.primitives.watermark<number>("src.a");
+    const b = first.primitives.watermark<number>("src.b");
+    const pendingA = a.advance(1);
+    await expect(b.advance(2)).rejects.toThrow(/has not committed yet/);
+    release();
+    await expect(pendingA).rejects.toBe(CRASH);
+    // Neither cursor moved, and no boundary carries the uncommitted cursor of 'src.a'.
+    expect(a.current()).toBeUndefined();
+    expect(b.current()).toBeUndefined();
+    expect(checkpoints(first.entries)).toHaveLength(0);
+    // Once the in-flight advance settles, the next advance is accepted again.
+    const second = drive({});
+    const c = second.primitives.watermark<number>("src.a");
+    await c.advance(1);
+    await c.advance(2);
+    expect(c.current()).toBe(2);
+  });
+
+  it("treats a key such as __proto__ as an ordinary own key, never an inherited value", async () => {
+    const first = drive({});
+    const cursor = first.primitives.watermark<number>("__proto__");
+    expect(cursor.current()).toBeUndefined();
+    await cursor.advance(1);
+    await cursor.advance(2);
+    expect(cursor.current()).toBe(2);
+    const { journal, resume } = windowResume(first.maps());
+    expect(drive({ journal, resume }).primitives.watermark("__proto__").current()).toBe(2);
   });
 
   it("owns the run's boundary: a raw checkpoint after watermark() is refused before journaling", async () => {
