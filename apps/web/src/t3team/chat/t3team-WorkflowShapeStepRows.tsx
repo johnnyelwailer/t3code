@@ -10,20 +10,23 @@
  * item renders one row per call. Those runs are journaled as independent activities with no
  * shared step identity, so retries and genuinely-independent repeats are indistinguishable from
  * the data alone; both fold by label (see `groupDynamicRuntimeRows` below).
+ *
+ * A long run can also carry many distinct entries with no repeats at all — the list itself shows
+ * only the first/last few by default and folds the rest behind an "… N earlier" affordance (see
+ * `t3team-workflowShapeStepRowsPaging.ts`); per-entry rendering lives in
+ * `t3team-workflowShapeStepRowsUnit.tsx` so this file stays about ordering and truncation.
  */
-import { T3TeamShapeStepRow } from "~/t3team/chat/t3team-messageShapeCard";
-import { T3TeamWorkflowStepDetails } from "~/t3team/chat/t3team-WorkflowStepDetails";
+import { useState } from "react";
+
+import { groupDynamicRuntimeRows } from "~/t3team/chat/t3team-workflowShapeStepGrouping";
 import {
-  groupDynamicRuntimeRows,
-  T3TeamWorkflowShapeDynamicGroupRow,
-} from "~/t3team/chat/t3team-workflowShapeStepGrouping";
+  stepUnitKey,
+  T3TeamWorkflowShapeStepUnit,
+} from "~/t3team/chat/t3team-workflowShapeStepRowsUnit";
 import {
-  displayedStepStatus,
-  RuntimeStepRow,
-  StepStatusIcon,
-  StepTrailing,
-} from "~/t3team/chat/t3team-workflowRunStepRow";
-import { TurnCountBadge } from "~/t3team/chat/t3team-workflowStepTrailing";
+  topLevelStepVisibility,
+  WORKFLOW_TOP_PAGE_SIZE,
+} from "~/t3team/chat/t3team-workflowShapeStepRowsPaging";
 import type { useT3TeamWorkflowShapeLiveState } from "~/t3team/chat/t3team-workflowShapeLiveState";
 
 type LiveState = ReturnType<typeof useT3TeamWorkflowShapeLiveState>;
@@ -45,6 +48,8 @@ export function T3TeamWorkflowShapeStepRows({
   readonly onOpenThread?: (input: { projectId: string; threadId: string }) => void;
   readonly currentThreadId?: string | undefined;
 }) {
+  const [revealedMiddleCount, setRevealedMiddleCount] = useState(0);
+
   // Render each authored phase as exactly ONE group. `reconcileT3TeamWorkflowShapeProgress` places
   // a dynamic row at its nearest-prior-matched-plan-step anchor — that is display order — while
   // the phase it reports now comes from the server's `workflowPhase` stamp. The two can disagree:
@@ -82,107 +87,59 @@ export function T3TeamWorkflowShapeStepRows({
       .map((row) => row.phase)
       .filter((phase): phase is string => phase !== null && phase !== undefined),
   );
+
+  const { truncated, headEnd, tailStart, hiddenCount } = topLevelStepVisibility(
+    orderedUnits.length,
+    revealedMiddleCount,
+  );
+
   return (
     <div className="mt-3 space-y-1.5">
       {(() => {
         let priorPlanPhase: string | null = null;
-        return orderedUnits.map((unit) => {
+        return orderedUnits.flatMap((unit, index) => {
           const firstRow = unit.kind === "row" ? unit.row : unit.rows[0]!;
           const phaseTitle = firstRow.planStep?.phase ?? firstRow.phase ?? "Current work";
           const showPhaseHeader = phaseTitle !== null && phaseTitle !== priorPlanPhase;
           if (phaseTitle !== null) priorPlanPhase = phaseTitle;
+
+          // A folded entry still updates `priorPlanPhase` above, so the tail's headers dedup
+          // correctly against phases the reader can't see, but renders nothing itself — except
+          // the affordance, once, right where the head slice ends.
+          if (truncated && index >= headEnd && index < tailStart) {
+            if (index !== headEnd) return [];
+            return [
+              <button
+                key="workflow-steps-earlier"
+                type="button"
+                data-workflow-steps-earlier={hiddenCount}
+                className="rounded px-1 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                onClick={() => setRevealedMiddleCount((count) => count + WORKFLOW_TOP_PAGE_SIZE)}
+              >
+                … {hiddenCount} earlier
+              </button>,
+            ];
+          }
+
           const phaseHeader = showPhaseHeader ? (
             <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/65">
               {phaseTitle}
             </p>
           ) : null;
-
-          if (unit.kind === "dynamic-group") {
-            return (
-              <div key={`group:${unit.rows[0]!.runtimeStep.stepId}`} className="space-y-1.5">
-                {phaseHeader}
-                <T3TeamWorkflowShapeDynamicGroupRow
-                  label={unit.label}
-                  rows={unit.rows}
-                  status={status}
-                  {...(childStatuses ? { childStatuses } : {})}
-                  {...(onOpenThread ? { onOpenThread } : {})}
-                  {...(currentThreadId ? { currentThreadId } : {})}
-                />
-              </div>
-            );
-          }
-
-          const { row, index } = unit;
-          const step = row.runtimeStep;
-          const planStep = row.planStep;
-          const rawStatus = displayedStepStatus(step, status);
-          // Two reasons an unmatched plan row's "skipped" look is misleading rather than true,
-          // both worth staying neutral about (plain row, pending-style icon, no strikethrough)
-          // rather than claiming "completed" and inventing data:
-          //  - An unmatched act ("script") plan row only looks "skipped" because no runtime
-          //    activity matched it (see `stepMatchesPlan`) — unlike an `ask` that a run can
-          //    legitimately bypass, a script step rarely gets skipped in practice, so once the
-          //    run has settled successfully it likely ran without leaving a reconcilable match.
-          //  - A dynamic-fan-out call site (`agent`/`ask` inside `parallel(items.map(...))`) has
-          //    ONE plan row but MANY runtime labels, so the plan row itself never matches even
-          //    though its phase demonstrably ran (`dynamicPhaseTitles`, above) — e.g. the
-          //    generic `agent(prompt, { label: dynamicLabel })` fallback plan row "Agent turn".
-          const dynamicPhaseRanHere =
-            planStep !== undefined &&
-            planStep.phase !== null &&
-            dynamicPhaseTitles.has(planStep.phase);
-          const effectiveStatus: typeof rawStatus =
-            rawStatus === "skipped" &&
-            status === "completed" &&
-            (planStep?.kind === "act" || dynamicPhaseRanHere)
-              ? "pending"
-              : rawStatus;
-          return (
-            <div
-              key={step?.stepId ?? `plan:${index}:${planStep?.label ?? "step"}`}
-              className="space-y-1.5"
-            >
-              {phaseHeader}
-              <T3TeamWorkflowStepDetails
-                step={step}
-                hideDetail={step?.detail === planStep?.label}
-                redactDetail={step?.stepKind === "workflow.self-heal"}
-                {...(onOpenThread ? { onOpenThread } : {})}
-                {...(currentThreadId ? { currentThreadId } : {})}
-              >
-                {planStep ? (
-                  <T3TeamShapeStepRow
-                    step={planStep}
-                    muted={index !== scheduledPlanRow && effectiveStatus === "skipped"}
-                    leading={
-                      <StepStatusIcon
-                        status={index === scheduledPlanRow ? "scheduled" : effectiveStatus}
-                      />
-                    }
-                    trailing={
-                      <>
-                        <TurnCountBadge step={step} />
-                        <StepTrailing
-                          step={step}
-                          wakeAt={index === scheduledPlanRow ? activeWaitAt : undefined}
-                          childStatuses={childStatuses}
-                        />
-                      </>
-                    }
-                    hideKindLabel={step?.stepKind === "wait.until"}
-                  />
-                ) : step ? (
-                  <RuntimeStepRow
-                    step={step}
-                    wakeAt={undefined}
-                    runStatus={status}
-                    childStatuses={childStatuses}
-                  />
-                ) : null}
-              </T3TeamWorkflowStepDetails>
-            </div>
-          );
+          return [
+            <T3TeamWorkflowShapeStepUnit
+              key={stepUnitKey(unit)}
+              unit={unit}
+              phaseHeader={phaseHeader}
+              status={status}
+              scheduledPlanRow={scheduledPlanRow}
+              activeWaitAt={activeWaitAt}
+              dynamicPhaseTitles={dynamicPhaseTitles}
+              {...(childStatuses ? { childStatuses } : {})}
+              {...(onOpenThread ? { onOpenThread } : {})}
+              {...(currentThreadId ? { currentThreadId } : {})}
+            />,
+          ];
         });
       })()}
     </div>
