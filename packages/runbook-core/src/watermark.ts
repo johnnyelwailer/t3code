@@ -63,7 +63,11 @@ export interface WatermarkState<Cursor = unknown> extends WatermarkPoint<Cursor>
 export interface WatermarkOptions<Cursor> {
   /** The cursor `current()` reports before the first durable advance. */
   readonly initial?: Cursor;
-  /** Passed to the underlying checkpoint; `history` also sizes the diagnostics ring. */
+  /**
+   * Passed to the underlying checkpoint; `history` also sizes THIS source's diagnostics ring.
+   * All sources share one boundary, so its retention metadata is that of the source that
+   * advanced last.
+   */
   readonly retention?: CheckpointRetention;
 }
 
@@ -84,6 +88,11 @@ export interface WatermarkPrimitives {
 }
 
 export interface WatermarkPrimitivesDeps {
+  /**
+   * The run's checkpoint primitive. It must take its journal seq synchronously when called
+   * (before its first `await`), as `createCheckpointPrimitives` does — an adapter that defers
+   * the call would let later journaled calls take earlier seqs.
+   */
   readonly checkpoint: CheckpointPrimitives["checkpoint"];
   /** The checkpoint record a checkpoint-window resume restored (absent on a fresh start). */
   readonly resume: CheckpointRecord | undefined;
@@ -127,8 +136,6 @@ export function createWatermarkPrimitives(deps: WatermarkPrimitivesDeps): Waterm
   let committed = initial;
   let issuedCount = 0;
   let committedCount = 0;
-  /** The first advance failure; every later advance refuses instead of building past it. */
-  let failure: unknown;
 
   const watermark = <Cursor>(
     sourceKey: string,
@@ -162,10 +169,12 @@ export function createWatermarkPrimitives(deps: WatermarkPrimitivesDeps): Waterm
    * read and the checkpoint take their seqs at CALL time — exactly like every other journaled
    * call — and a replay journals the same positions however fast a checkpoint resolves.
    *
-   * Every envelope carries every source's cursor, so it builds on all advances issued before it.
-   * A cursor that could not be journaled is refused up front; the failures left after a seq is
-   * taken (replay drift, abort, suspension) end the run. Should one be caught anyway, every later
-   * advance refuses, so no further boundary is built past an advance that never committed.
+   * `advance(next)` declares "input is processed through `next`". Every envelope carries every
+   * source's cursor, so it builds on every advance ISSUED before it, committed or not: if an
+   * earlier boundary's write failed and the body carried on, a later boundary makes that
+   * declared cursor durable. That never skips unprocessed input — the body declared it processed.
+   * The opposite choice (build only on committed cursors) would make the envelope depend on
+   * commit timing and break replay. A cursor that cannot be journaled is refused before any seq.
    */
   const advance = async (
     sourceKey: string,
@@ -179,12 +188,6 @@ export function createWatermarkPrimitives(deps: WatermarkPrimitivesDeps): Waterm
     if (invalid !== undefined) {
       throw new WorkflowError(
         `watermark('${sourceKey}').advance: cursor is not canonical JSON (${invalid.message}).`,
-      );
-    }
-    if (failure !== undefined) {
-      throw new WorkflowError(
-        `watermark('${sourceKey}').advance: an earlier advance failed, so no later cursor can ` +
-          `be committed in this run: ${failure instanceof Error ? failure.message : String(failure)}`,
       );
     }
     const prior = sourceState(issued, sourceKey);
@@ -209,12 +212,7 @@ export function createWatermarkPrimitives(deps: WatermarkPrimitivesDeps): Waterm
     };
     issued = updated;
     const position = ++issuedCount;
-    try {
-      await deps.checkpoint({ state, retention });
-    } catch (error) {
-      failure ??= error;
-      throw error;
-    }
+    await deps.checkpoint({ state, retention });
     // Commits may settle out of order; a newer envelope already contains every older one.
     if (position > committedCount) {
       committedCount = position;

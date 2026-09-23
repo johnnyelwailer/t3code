@@ -246,7 +246,7 @@ describe("@runbook/core watermark primitive", () => {
     expect(again.current()).toBe(20);
   });
 
-  it("refuses every advance after a failed one, so no boundary is built past an uncommitted cursor", async () => {
+  it("a caught boundary failure is transient: the declared cursor becomes durable with the next boundary", async () => {
     let calls = 0;
     const first = drive({
       wrapCheckpoint: (real) => async (input) => {
@@ -258,11 +258,15 @@ describe("@runbook/core watermark primitive", () => {
     const a = first.primitives.watermark<number>("src.a");
     const b = first.primitives.watermark<number>("src.b");
     await expect(a.advance(1)).rejects.toBe(CRASH);
-    await expect(b.advance(2)).rejects.toThrow(/an earlier advance failed/);
+    // Not committed → not current.
     expect(a.current()).toBeUndefined();
-    expect(b.current()).toBeUndefined();
-    // Only the failed advance's clock read is journaled; the refused one takes no seq at all.
-    expect(first.entries.map((e) => e.kind)).toEqual(["now"]);
+    // The body carries on. `advance(1)` declared 'src.a' processed through 1, so the next
+    // boundary carries it: resume reads strictly after 1 and never re-reads processed input.
+    await b.advance(2);
+    expect(a.current()).toBe(1);
+    expect(b.current()).toBe(2);
+    const last = checkpoints(first.entries).at(-1)?.result as CheckpointRecord<WatermarkState>;
+    expect(Object.keys(last.state.sources).sort()).toEqual(["src.a", "src.b"]);
   });
 
   it("refuses a cursor that cannot be journaled before it takes any seq", async () => {
