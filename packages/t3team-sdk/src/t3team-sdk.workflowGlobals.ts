@@ -21,6 +21,7 @@ import {
   PermissionDeniedError,
   ProviderUnavailableError,
   ReplayDriftError,
+  RetryExhaustedError,
   SchemaExhaustedError,
   SubWorkflowCheckpointError,
   TargetMissingError,
@@ -28,6 +29,7 @@ import {
   WorkflowError,
 } from "./t3team-sdk.errors.ts";
 import type { WorkflowPrimitives } from "./t3team-sdk.primitives.ts";
+import type { RetryPrimitives } from "./t3team-sdk.retryPrimitive.ts";
 import type { SchedulePrimitives } from "./t3team-sdk.schedulePrimitive.ts";
 import type { SignalPrimitives } from "./t3team-sdk.signalPrimitive.ts";
 import { BUILTIN_SIGNAL_GLOBALS } from "./t3team-sdk.builtinSignals.ts";
@@ -64,6 +66,7 @@ export function buildWorkflowGlobals(opts: {
   readonly resume?: CheckpointRecord | undefined;
   readonly threads: WorkflowThreadPrimitives;
   readonly schedule: SchedulePrimitives;
+  readonly retry: RetryPrimitives;
   readonly signals: SignalPrimitives;
   /** The `@runbook/core/authoring` `RunbookContext` subset a body's `run(ctx)` sees. Optional:
    * older globals shapes and legacy zero-arg bodies never reference `ctx` at all. */
@@ -108,6 +111,9 @@ export function buildWorkflowGlobals(opts: {
     // `waitUntil` (Epic 27) suspends until a wall-clock instant; gated by the `"schedule"`
     // capability (calling it without that capability throws PermissionDeniedError).
     waitUntil: opts.schedule.waitUntil,
+    // `retry` (bounded execution) re-runs an attempt with a journaled backoff between attempts;
+    // gated by `"schedule"` because the backoff is a durable `waitUntil`.
+    retry: opts.retry.retry,
     // `getSignalSource` (design 42) binds a durable source instance; gated by the
     // `"source:<name>"` capability per source.
     getSignalSource: opts.signals.getSignalSource,
@@ -140,5 +146,6 @@ export function buildWorkflowGlobals(opts: {
     TargetMissingError,
     CancelledError,
     ReplayDriftError,
+    RetryExhaustedError,
   };
 }

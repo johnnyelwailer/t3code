@@ -90,6 +90,10 @@
       "types": "./src/checkpoint.ts",
       "import": "./src/checkpoint.ts"
     },
+    "./retryBackoff": {
+      "types": "./src/retryBackoff.ts",
+      "import": "./src/retryBackoff.ts"
+    },
     "./scheduling": {
       "types": "./src/scheduling.ts",
       "import": "./src/scheduling.ts"

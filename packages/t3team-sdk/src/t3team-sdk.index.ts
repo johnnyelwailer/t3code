@@ -18,6 +18,7 @@ export {
   PermissionDeniedError,
   ProviderUnavailableError,
   ReplayDriftError,
+  RetryExhaustedError,
   SchemaExhaustedError,
   SubWorkflowCheckpointError,
   TargetMissingError,
@@ -88,6 +89,7 @@ export {
   parallel,
   phase,
   pipeline,
+  retry,
   spawnThread,
   wait,
   waitUntil,
@@ -200,6 +202,8 @@ export type {
   WorkflowThreadPrimitives,
 } from "./t3team-sdk.threadPrimitives.ts";
 export type { ModelCascadeWireEntry } from "./t3team-sdk.modelCascade.ts";
+export type { RetryClassification, RetryOptions } from "@runbook/core/retryBackoff";
+export type { RetryClassifiedFailure } from "./t3team-sdk.errors.ts";
 export type { ReplayDriftFacet, ReplayDriftReason } from "./t3team-sdk.errors.ts";
 export type { RunMeta } from "./t3team-sdk.journal.ts";
 export type { JournalEntry, JournalMaps, ResolvedEntry } from "./t3team-sdk.journalReader.ts";

@@ -23,6 +23,8 @@ import { WorkflowInputDecodeError } from "./t3team-sdk.errors.ts";
 import type { HandleDispatch } from "./t3team-sdk.handles.ts";
 import { decodeWithSchema, setNestedValue } from "./t3team-sdk.internal.ts";
 import type { WorkflowPrimitives } from "./t3team-sdk.primitives.ts";
+import type { DurableWorkflowRuntime } from "./t3team-sdk.durableRuntime.ts";
+import { createRetryPrimitives } from "./t3team-sdk.retryPrimitive.ts";
 import { createSchedulePrimitives } from "./t3team-sdk.schedulePrimitive.ts";
 import type { CheckpointPrimitives, CheckpointRecord } from "@runbook/core/checkpoint";
 import { createSignalPrimitives } from "./t3team-sdk.signalPrimitive.ts";
@@ -46,7 +48,7 @@ const fs = nodeRequire("node:fs") as { readonly readFileSync: (p: string, e: "ut
 
 /** Load + run a workflow body against `runtime`, decoding inputs/outputs against its `meta`. */
 export async function runPreparedBody(opts: {
-  readonly runtime: T.WorkflowRuntime;
+  readonly runtime: DurableWorkflowRuntime;
   readonly ref: T.WorkflowRef;
   readonly args: unknown;
   readonly toolRefs: ReadonlyArray<T.AnyToolRef>;
@@ -117,6 +119,8 @@ export async function runPreparedBody(opts: {
     broker: opts.broker ?? defaultBroker,
     capabilities,
   });
+  // `retry` (bounded execution) — its backoff is `waitUntil`, so the same `"schedule"` gate.
+  const retry = createRetryPrimitives({ runtime: opts.runtime, schedule, capabilities });
   // `getSignalSource` (design 42) — capability-gated per source (`"source:<name>"`).
   const signals = createSignalPrimitives({
     dispatch: opts.handleDispatch,
@@ -135,6 +139,7 @@ export async function runPreparedBody(opts: {
     resume: opts.resume,
     threads,
     schedule,
+    retry,
     signals,
     // The `RunbookContext` subset (`@runbook/core/authoring`) a `run(ctx)`-shaped body sees;
     // legacy bodies declare zero parameters and the loader never passes this to them.
