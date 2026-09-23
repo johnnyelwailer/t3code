@@ -256,7 +256,7 @@ describe("@runbook/core retry primitive", () => {
       { sequence: 1, attempt: 4, maxAttempts: 5, outcome: "ok" },
     ]);
     const start = harness.entries().find((entry) => entry.refId === "retry.start");
-    expect(start?.result).toEqual({ maxAttempts: 5 });
+    expect(start?.result).toEqual({ maxAttempts: 5, sequence: 1 });
 
     // Replay after settlement: the same value, zero live effects, zero live-clock reads, zero wakes.
     const replay = harness.boot({ clock: LIVE_CLOCK_FORBIDDEN, wake: "defer" });

@@ -103,7 +103,7 @@ export interface RetryPrimitivesDeps {
     readonly args: unknown;
     readonly exec: () => Promise<R>;
   }) => Promise<R>;
-  /** Existing DurablePrimitiveRuntime cursor; read right after the start entry is journaled. */
+  /** Existing DurablePrimitiveRuntime cursor; read inside the start entry's exec. */
   readonly currentSeq: () => number;
   /**
    * Existing DurablePrimitiveRuntime black box. `classify` and `backoff` run inside it, so jitter
@@ -183,13 +183,15 @@ export function createRetryPrimitives(deps: RetryPrimitivesDeps): RetryPrimitive
   ): Promise<T> => {
     validateOptions(opts);
     const { maxAttempts } = opts;
-    await deps.callPrimitive({
+    // The start entry's own seq identifies the sequence. It is read INSIDE exec, right after the
+    // seq is allocated (as checkpoint.ts does), so a concurrent sibling cannot shift it; a replay
+    // returns the journaled value.
+    const { sequence } = await deps.callPrimitive({
       kind: RETRY_KIND,
       refId: RETRY_START_REF_ID,
       args: { maxAttempts },
-      exec: async () => ({ maxAttempts }),
+      exec: async () => ({ maxAttempts, sequence: deps.currentSeq() }),
     });
-    const sequence = deps.currentSeq();
 
     // `observe` runs only on the live path; a replay returns the journaled settlement instead.
     const settle = (attempt: number, observe: () => RetryAttemptRecord) =>
