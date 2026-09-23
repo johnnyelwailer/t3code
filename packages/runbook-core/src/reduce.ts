@@ -168,9 +168,6 @@ export function createReducePrimitives(deps: ReducePrimitivesDeps): RunReducePri
     capacity: number,
     retention: CheckpointRetention,
   ): Promise<State> => {
-    // Re-checked here: a queued fold starts later than its call, and its commit must not land in
-    // a composition branch that began in between. Nothing awaits between here and the commit.
-    refuseInsideBranch(reducerId);
     const prior = reducers.get(reducerId) as ReducerSnapshot<State, Observation> | undefined;
     // The fold gets its own copy: a fold that mutates its input and then throws leaves no trace.
     const current = fold(structuredClone(prior?.current), observation);
@@ -185,6 +182,10 @@ export function createReducePrimitives(deps: ReducePrimitivesDeps): RunReducePri
       current,
       ring: capacity === 0 ? [] : [...(prior?.ring ?? []), observation].slice(-capacity),
     });
+    // Re-checked immediately before the commit, after all user code (the fold) has run: a queued
+    // fold starts later than its call, and the fold itself could have entered a composition
+    // branch. Nothing runs between this check and the checkpoint's synchronous seq allocation.
+    refuseInsideBranch(reducerId);
     await deps.checkpoint({
       state: {
         primitive: REDUCE_STATE_TAG,

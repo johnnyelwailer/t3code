@@ -331,6 +331,27 @@ describe("@runbook/core reduce primitive", () => {
     expect(commits).toHaveLength(1);
   });
 
+  it("refuses the commit when the fold itself entered a composition branch", async () => {
+    const { journal, runtime, accumulate, reducerState } = makeReducers();
+    let branchDone!: Promise<unknown>;
+    let releaseBranch!: () => void;
+    const held = new Promise<void>((resolve) => (releaseBranch = resolve));
+    await expect(
+      accumulate(
+        "total",
+        (total: number | undefined, n: number) => {
+          branchDone = runtime.runBlackBoxed(() => held); // an un-awaited parallel() in the fold
+          return (total ?? 0) + n;
+        },
+        1,
+      ),
+    ).rejects.toThrow(/inside a parallel\/pipeline branch/);
+    releaseBranch();
+    await branchDone;
+    expect(journal.entries).toHaveLength(0);
+    expect(reducerState("total")).toBeUndefined();
+  });
+
   it("keeps in memory exactly what replay restores (strict canonical JSON)", async () => {
     const { journal, accumulate, reducerState } = makeReducers();
     await expect(accumulate("seen", () => new Map([["a", 1]]), null)).rejects.toThrow(
