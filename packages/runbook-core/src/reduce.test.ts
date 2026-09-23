@@ -298,6 +298,52 @@ describe("@runbook/core reduce primitive", () => {
     expect(journal.entries).toHaveLength(2);
   });
 
+  it("allocates an idle fold's boundary seq at the call site, like a direct checkpoint()", async () => {
+    const { journal, runtime, accumulate } = makeReducers();
+    const folded = accumulate("total", sum, 1);
+    await runtime.callPrimitive({ kind: "tool", refId: "next", args: {}, exec: async () => 1 });
+    await folded;
+    expect(journal.entries.map((entry) => [entry.seq, entry.kind])).toEqual([
+      [1, "checkpoint"],
+      [2, "tool"],
+    ]);
+  });
+
+  it("re-checks for a composition branch when a queued fold finally commits", async () => {
+    let blackBoxed = false;
+    let releaseFirst!: () => void;
+    const firstHeld = new Promise<void>((resolve) => (releaseFirst = resolve));
+    const commits: unknown[] = [];
+    const { accumulate } = createReducePrimitives({
+      isBlackBoxed: () => blackBoxed,
+      checkpoint: async (input) => {
+        if (commits.push(input.state) === 1) await firstHeld;
+        return { compactedThroughSeq: 0, state: input.state, retainedHistory: 0, at: NOW_ISO };
+      },
+    });
+    const first = accumulate("total", sum, 1);
+    const queued = accumulate("total", sum, 2);
+    // A composition branch starts before the queued fold gets its turn.
+    blackBoxed = true;
+    releaseFirst();
+    expect(await first).toBe(1);
+    await expect(queued).rejects.toThrow(/inside a parallel\/pipeline branch/);
+    expect(commits).toHaveLength(1);
+  });
+
+  it("keeps in memory exactly what replay restores (strict canonical JSON)", async () => {
+    const { journal, accumulate, reducerState } = makeReducers();
+    await expect(accumulate("seen", () => new Map([["a", 1]]), null)).rejects.toThrow(
+      /not canonical JSON/,
+    );
+    expect(journal.entries).toHaveLength(0);
+    expect(reducerState("seen")).toBeUndefined();
+    // A nested `undefined` is dropped on the journal, so it is refused rather than kept in memory.
+    await expect(accumulate("shape", () => ({ a: undefined }), null)).rejects.toThrow(
+      /not canonical JSON/,
+    );
+  });
+
   it("leaves the reducer untouched when the boundary commit fails", async () => {
     let refuse = false;
     const { accumulate, reducerState } = createReducePrimitives({

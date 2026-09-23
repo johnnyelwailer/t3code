@@ -26,6 +26,7 @@
  */
 
 import type { CheckpointPrimitives, CheckpointRecord, CheckpointRetention } from "./checkpoint.ts";
+import { canonicalJsonStringify } from "./canonicalJson.ts";
 import { WorkflowError } from "./errors.ts";
 
 /** Discriminant marking a checkpoint `state` as reducer state rather than author state. */
@@ -135,9 +136,30 @@ export function createReducePrimitives(deps: ReducePrimitivesDeps): RunReducePri
     isReduceCheckpointState(restored) ? Object.entries(restored.reducers) : [],
   );
   // Fold + commit run one at a time, in call order, so concurrent calls (`Promise.all`) chain
-  // deterministically instead of racing from the same prior.
+  // deterministically instead of racing from the same prior. An idle call starts synchronously, so
+  // its boundary takes its seq at the call site exactly like a direct `checkpoint()`.
   let queue: Promise<unknown> = Promise.resolve();
   let inFlight = 0;
+
+  const refuseInsideBranch = (reducerId: string): void => {
+    if (deps.isBlackBoxed()) {
+      throw new WorkflowError(
+        `accumulate: reducer '${reducerId}' cannot fold inside a parallel/pipeline branch — branch calls are not journaled, so the fold could not be replayed. Fold the branch results after the composition returns.`,
+      );
+    }
+  };
+
+  // The in-memory snapshot is exactly what replay restores: strict canonical JSON, round-tripped.
+  // A Date, Map or class instance would survive in memory but come back different on resume.
+  const asJournaled = <Value>(reducerId: string, value: Value): Value => {
+    try {
+      return JSON.parse(canonicalJsonStringify(value, true)) as Value;
+    } catch (error) {
+      throw new WorkflowError(
+        `accumulate: reducer '${reducerId}' state is not canonical JSON — ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  };
 
   const foldAndCommit = async <State, Observation>(
     reducerId: string,
@@ -146,6 +168,9 @@ export function createReducePrimitives(deps: ReducePrimitivesDeps): RunReducePri
     capacity: number,
     retention: CheckpointRetention,
   ): Promise<State> => {
+    // Re-checked here: a queued fold starts later than its call, and its commit must not land in
+    // a composition branch that began in between. Nothing awaits between here and the commit.
+    refuseInsideBranch(reducerId);
     const prior = reducers.get(reducerId) as ReducerSnapshot<State, Observation> | undefined;
     // The fold gets its own copy: a fold that mutates its input and then throws leaves no trace.
     const current = fold(structuredClone(prior?.current), observation);
@@ -156,7 +181,7 @@ export function createReducePrimitives(deps: ReducePrimitivesDeps): RunReducePri
         `accumulate: the fold for reducer '${reducerId}' returned undefined; return a JSON value (use null for "empty").`,
       );
     }
-    const next: ReducerSnapshot<State, Observation> = structuredClone({
+    const next: ReducerSnapshot<State, Observation> = asJournaled(reducerId, {
       current,
       ring: capacity === 0 ? [] : [...(prior?.ring ?? []), observation].slice(-capacity),
     });
@@ -169,7 +194,7 @@ export function createReducePrimitives(deps: ReducePrimitivesDeps): RunReducePri
       retention,
     });
     reducers.set(reducerId, next);
-    return current;
+    return structuredClone(next.current);
   };
 
   return {
@@ -182,18 +207,13 @@ export function createReducePrimitives(deps: ReducePrimitivesDeps): RunReducePri
       if (typeof reducerId !== "string" || reducerId.length === 0) {
         throw new WorkflowError("accumulate: reducerId must be a non-empty string.");
       }
-      // Checked at the call site: that is where "inside a composition branch" is decided.
-      if (deps.isBlackBoxed()) {
-        throw new WorkflowError(
-          `accumulate: reducer '${reducerId}' cannot fold inside a parallel/pipeline branch — branch calls are not journaled, so the fold could not be replayed. Fold the branch results after the composition returns.`,
-        );
-      }
+      // Checked at the call site too: that is where "inside a composition branch" is decided.
+      refuseInsideBranch(reducerId);
       const { ring, ...retention } = opts?.retention ?? {};
       const capacity = normalizeReduceRing(ring);
+      const run = () => foldAndCommit(reducerId, fold, observation, capacity, retention);
+      const task = inFlight === 0 ? run() : queue.then(run);
       inFlight += 1;
-      const task = queue.then(() =>
-        foldAndCommit(reducerId, fold, observation, capacity, retention),
-      );
       queue = task.catch(() => undefined);
       try {
         return await task;
