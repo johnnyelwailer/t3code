@@ -654,6 +654,8 @@ describe("MessagesTimeline", () => {
 
   it("scrolls to the workflow card once per navigation request, not on every rows update", async () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    vi.stubGlobal("requestAnimationFrame", () => 0);
+    vi.stubGlobal("cancelAnimationFrame", () => {});
     const listRef = createRef<LegendListRef | null>();
     const scrollToIndex = vi.fn();
     listRef.current = {
@@ -702,27 +704,28 @@ describe("MessagesTimeline", () => {
 
     // A live workflow run keeps pushing activity: each update hands the
     // timeline a fresh `rows` identity while the request stays pending.
-    // The one-shot guard must swallow every one of them.
+    // The one-shot guard must swallow every one of them. Updates are visible
+    // messages on purpose — turn-less work entries render no row, so they
+    // would leave `rows` unchanged and never re-fire the effect.
+    const liveUpdate = (index: number) => ({
+      id: `entry-live-update-${index}`,
+      kind: "message" as const,
+      createdAt: MESSAGE_CREATED_AT,
+      message: {
+        id: MessageId.make(`live-update-${index}`),
+        role: "assistant" as const,
+        text: `Live update ${index}`,
+        turnId: null,
+        createdAt: MESSAGE_CREATED_AT,
+        updatedAt: MESSAGE_CREATED_AT,
+        streaming: false,
+      },
+    });
     await act(() => {
       renderer!.update(
         <MessagesTimeline
           {...baseProps}
-          timelineEntries={[
-            cardEntry,
-            otherEntry,
-            {
-              id: "entry-live-activity-1",
-              kind: "work" as const,
-              createdAt: MESSAGE_CREATED_AT,
-              entry: {
-                id: "work-live-activity-1",
-                createdAt: MESSAGE_CREATED_AT,
-                label: "Run command",
-                tone: "tool",
-                toolLifecycleStatus: "inProgress",
-              },
-            },
-          ]}
+          timelineEntries={[cardEntry, otherEntry, liveUpdate(1)]}
           workflowCardNavigationRequest={request}
         />,
       );
@@ -731,34 +734,7 @@ describe("MessagesTimeline", () => {
       renderer!.update(
         <MessagesTimeline
           {...baseProps}
-          timelineEntries={[
-            cardEntry,
-            otherEntry,
-            {
-              id: "entry-live-activity-1",
-              kind: "work" as const,
-              createdAt: MESSAGE_CREATED_AT,
-              entry: {
-                id: "work-live-activity-1",
-                createdAt: MESSAGE_CREATED_AT,
-                label: "Run command",
-                tone: "tool",
-                toolLifecycleStatus: "inProgress",
-              },
-            },
-            {
-              id: "entry-live-activity-2",
-              kind: "work" as const,
-              createdAt: MESSAGE_CREATED_AT,
-              entry: {
-                id: "work-live-activity-2",
-                createdAt: MESSAGE_CREATED_AT,
-                label: "Run command",
-                tone: "tool",
-                toolLifecycleStatus: "inProgress",
-              },
-            },
-          ]}
+          timelineEntries={[cardEntry, otherEntry, liveUpdate(1), liveUpdate(2)]}
           workflowCardNavigationRequest={request}
         />,
       );
