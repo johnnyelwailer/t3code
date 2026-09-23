@@ -5354,8 +5354,20 @@ function AgentSpawnMemberRow({
     agent.role && agent.role.trim().toLowerCase() !== agent.title.trim().toLowerCase()
       ? agent.role
       : null;
-  const firstLine = activity?.split("\n").find((line) => line.trim().length > 0) ?? null;
-  const body = [activity?.trim() || null, formatSubagentModelLabel(agent.model, agent.effort)]
+  // The preview line doubles as this row's header once collapsed, so keep it
+  // visible when expanded too and only add what it didn't already show —
+  // otherwise the body's <pre> repeats that same first line back verbatim.
+  const activityLines = activity?.split("\n") ?? [];
+  const firstLineIndex = activityLines.findIndex((line) => line.trim().length > 0);
+  const firstLine = firstLineIndex >= 0 ? activityLines[firstLineIndex] : null;
+  const remainingActivity =
+    firstLineIndex >= 0
+      ? activityLines
+          .slice(firstLineIndex + 1)
+          .join("\n")
+          .trim() || null
+      : null;
+  const body = [remainingActivity, formatSubagentModelLabel(agent.model, agent.effort)]
     .filter(Boolean)
     .join("\n\n");
   const canExpand = body.length > 0;
@@ -5407,9 +5419,7 @@ function AgentSpawnMemberRow({
           {statusLabel}
         </span>
       </div>
-      {!open && firstLine ? (
-        <p className="truncate text-xs text-muted-foreground">{firstLine}</p>
-      ) : null}
+      {firstLine ? <p className="truncate text-xs text-muted-foreground">{firstLine}</p> : null}
       {open ? (
         <div
           className="mt-1 cursor-default rounded-md bg-muted/40 px-3 py-2"
