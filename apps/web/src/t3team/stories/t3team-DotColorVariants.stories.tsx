@@ -259,7 +259,7 @@ function DotColorVariants({ autoCycle, reducedMotion, focus, zoom }: DotColorVar
 }
 
 const meta = {
-  title: "T3Team/Conversation/Status Dots — Color Shift Directions",
+  title: "T3Team/Chat/Status Dots — Color Shift Directions",
   component: DotColorVariants,
   args: {
     autoCycle: true,

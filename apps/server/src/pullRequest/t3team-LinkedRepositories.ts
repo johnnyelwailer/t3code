@@ -1,5 +1,7 @@
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import {
   pullRequestHostOf,
   type OrchestrationProjectShell,
@@ -9,7 +11,7 @@ import { T3TEAM_PROJECT_CONTEXT_ROOT } from "@t3tools/project-context/t3teamCont
 import { detectSourceControlProviderFromRemoteUrl } from "@t3tools/shared/sourceControl";
 
 import { WorkspacePaths } from "../workspace/WorkspacePaths.ts";
-import { repositoryIdentityOf } from "./PullRequestService.ts";
+import { sourceControlRepositorySelector } from "@t3tools/shared/sourceControl";
 
 /**
  * One of a project's linked repositories, resolved the same way the project's own remote is:
@@ -24,6 +26,14 @@ export interface LinkedRepository {
 
 const LINKED_REPOSITORIES_PATH = `${T3TEAM_PROJECT_CONTEXT_ROOT}/linked-repositories.json`;
 const SCP_REMOTE_PATTERN = /^[a-zA-Z0-9._-]+@([^:/]+):(.+)$/;
+
+/** Tolerant read of the project context's linked-repository list; non-string entries are dropped. */
+const LinkedRepositoryContextJson = Schema.Struct({
+  linkedRepositoryUrls: Schema.optional(Schema.Array(Schema.Unknown)),
+});
+const decodeLinkedRepositoryContext = Schema.decodeEffect(
+  Schema.fromJsonString(LinkedRepositoryContextJson),
+);
 
 function splitRemoteUrl(
   remoteUrl: string,
@@ -67,13 +77,9 @@ export function parseLinkedRepositoryUrls(
     );
     // The same identity a recorded remote carries, so Azure DevOps' `_git` path and the
     // owner/name fallback resolve exactly the way the project's own repository does.
-    const repository = repositoryIdentityOf({
-      repositoryIdentity: {
-        canonicalKey: `${split.host}/${split.repository}`,
-        locator: { source: "git-remote", remoteName: "origin", remoteUrl: trimmed },
-        displayName: split.repository,
-        provider: provider.kind,
-      },
+    const repository = sourceControlRepositorySelector({
+      displayName: split.repository,
+      provider: provider.kind,
     });
     if (repository === null) continue;
     const key = `${host} ${repository.toLowerCase()}`;
@@ -102,16 +108,9 @@ export function readProjectLinkedRepositories(
     const contents = yield* deps.fileSystem
       .readFileString(resolved.absolutePath)
       .pipe(Effect.orElseSucceed(() => ""));
-    let parsed: Record<string, unknown> | undefined;
-    try {
-      const value: unknown = JSON.parse(contents);
-      parsed =
-        value !== null && typeof value === "object" && !Array.isArray(value)
-          ? (value as Record<string, unknown>)
-          : undefined;
-    } catch {
-      parsed = undefined;
-    }
+    const parsed = Option.getOrUndefined(
+      yield* decodeLinkedRepositoryContext(contents).pipe(Effect.option),
+    );
     const urls = Array.isArray(parsed?.linkedRepositoryUrls)
       ? parsed!.linkedRepositoryUrls.filter((url): url is string => typeof url === "string")
       : [];

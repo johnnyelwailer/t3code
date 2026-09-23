@@ -80,6 +80,8 @@ function RealWorkingRow({
         onOpenAgents,
         onOpenAgent,
         threadActivityState: threadState === "settled" ? null : threadState,
+        unsettledTurnId: null,
+        backgroundWorktreeSetup: null,
       }}
     >
       <WorkingTimelineRow row={WORKING_ROW} />
@@ -517,7 +519,7 @@ function StateMotionDots({
 }
 
 const meta = {
-  title: "T3Team/Conversation/Status Dots — State Motion (GHE #201)",
+  title: "T3Team/Chat/Status Dots — State Motion (GHE #201)",
   component: StateMotionDots,
   args: {
     threadState: "auto" as "auto" | DotState,

@@ -6,12 +6,12 @@
 import * as Schema from "effect/Schema";
 import { Tool, Toolkit } from "effect/unstable/ai";
 
+import { OrchestrationEngineService } from "../../../orchestration/Services/OrchestrationEngine.ts";
+import { ProjectionThreadActivityRepository } from "../../../persistence/Services/ProjectionThreadActivities.ts";
 import {
-  OrchestrationEngineService,
-} from "../../../orchestration/Services/OrchestrationEngine.ts";
-import {
-  ProjectionThreadActivityRepository,
-} from "../../../persistence/Services/ProjectionThreadActivities.ts";
+  T3TEAM_WIDGET_AUTHORING_GUIDANCE,
+  T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION,
+} from "@t3tools/project-context/t3teamWidgetGuidance";
 import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
 import { T3TEAM_WORKFLOW_TAGLINE } from "../../../t3team-workflowManual.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
@@ -95,7 +95,7 @@ export const T3TEAM_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS: ReadonlySet<string> = n
   "t3team.work_item.link.draft_remove",
 ]);
 
-export class T3TeamMcpToolError extends Schema.TaggedErrorClass<T3TeamMcpToolError>()(
+export class T3TeamMcpToolError extends Schema.TaggedError<T3TeamMcpToolError>()(
   "T3TeamMcpToolError",
   { message: Schema.String },
 ) {}
@@ -192,6 +192,15 @@ export const T3TeamStartChildTool = Tool.make("t3team_start_child", {
       description:
         "Optional branch, tag, or commit to use as the base ref for the child's worktree (linked or local). Only valid with isolation='own-worktree'. When omitted, the repository default branch is used.",
     }),
+    environment: Schema.optional(
+      Schema.Struct({
+        id: Schema.String,
+        label: Schema.optional(Schema.String),
+      }),
+    ).annotate({
+      description:
+        "Optional execution environment to bind the child session to — a DIFFERENT T3 server than this one. Omit to keep the child in this environment. The thread record and handoff are stamped with the target environment; inter-agent messaging (send_message, mailbox, children ops) stays same-environment, so report-back from a cross-environment child needs a separate channel (the launch result's environment_note documents this boundary).",
+    }),
   }),
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
@@ -228,6 +237,11 @@ const CHILDREN_TOOL_DESCRIPTION =
   "the boundary drain — takes no arguments; returns dispatched (idle → digest started now), " +
   "queued (mid-turn → arrives when the turn ends), or held (suppressed → stays in the " +
   "timeline until the user re-engages)\n" +
+  "- environments: read-only discovery of the environments t3team_start_child's `environment` " +
+  "argument can target — this server's own environment (isDefault:true) plus the distinct " +
+  "cross-environment bindings already recorded on threads in this store (with label, " +
+  "bound-thread count, newest activity); every entry states its delivery boundary " +
+  "(cross-env children run on the target, visible here; messaging stays same-environment)\n" +
   "- help: exact schema for one op (op_name)";
 
 export const T3TeamChildrenTool = Tool.make("t3team_children", {
@@ -243,6 +257,7 @@ export const T3TeamChildrenTool = Tool.make("t3team_children", {
       "close",
       "sweep",
       "drain",
+      "environments",
       "help",
     ]),
     thread_id: Schema.optional(Schema.String),
@@ -529,14 +544,27 @@ export const T3TeamAskUserTool = Tool.make("t3team_ask_user", {
     "message, so do not proceed as if answered and do not ask the same question again — the " +
     "tool rejects a new ask while one is pending, naming the outstanding requestId. Use it " +
     "when you are blocked on a decision or piece of information only the user can provide. " +
-    "Field shape: 'header' is a short chip label (a few words); 'question' carries the full " +
-    "context plus the question itself and may use markdown; each option's 'description' " +
+    "Field shape: 'header' is a short chip label (a few words); 'question' must be " +
+    "self-contained — it is rendered on its own in the dock card; each option's 'description' " +
     "explains what that choice means and its trade-off, never a restatement of its label; " +
-    "mark the recommended choice with '(recommended)' in its label.",
+    "mark the recommended choice with '(recommended)' in its label. WHENEVER the question " +
+    "refers to options, proposals, or content written earlier in the thread, you MUST pass " +
+    "that earlier content in 'context' (markdown) — the dock card renders it above the " +
+    "question, truncated, so the question is intelligible without scrolling back through the " +
+    "thread. A question that points at earlier content but arrives without 'context' is " +
+    "unintelligible to the user; never make them hunt for what the question is about.",
   parameters: Schema.Struct({
     question: Schema.String.annotate({
       description:
-        "The full context plus the question itself; markdown is rendered in the composer panel.",
+        "The self-contained question; markdown is rendered in the composer panel. It must " +
+        "read on its own — anything it refers to from earlier in the thread belongs in " +
+        "'context'.",
+    }),
+    context: Schema.optional(Schema.String).annotate({
+      description:
+        "Markdown content from earlier in the thread that the question refers to (the " +
+        "options, proposal, or discussion the question is about). Rendered above the question " +
+        "in the dock card, truncated. Pass it whenever the question does not stand on its own.",
     }),
     header: Schema.optional(Schema.String).annotate({
       description: "Short chip label shown beside the question — a few words, not a sentence.",
@@ -569,14 +597,23 @@ export const T3TeamAskUserTool = Tool.make("t3team_ask_user", {
   dependencies: askUserDependencies,
 });
 
+//
+// The model-facing contract (theme variables for every color, sprite icons, fluid layout) lives
+// in @t3tools/project-context/t3teamWidgetGuidance — imported here, never restated. The tool
+// description plus the `widget_code` property description are what the agent actually sees when
+// it fills the schema; t3team-mcpToolInputSchema.test.ts locks both to the documented contract so
+// they cannot drift from the catalog snapshot again.
 export const T3TeamShowWidgetTool = Tool.make("t3team_show_widget", {
-  description:
-    "Show an inline widget in the current t3team thread. Use a small HTML or SVG fragment " +
-    "(not a complete document). The optional capabilities.tools allowlist controls which " +
-    "t3team broker tools the widget may call.",
+  description: T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION,
   parameters: Schema.Struct({
-    title: Schema.String,
-    widget_code: Schema.String,
+    title: Schema.String.annotate({
+      description:
+        "Short snake_case identifier for this widget (e.g. 'q4_revenue_chart'). Used as the artifact name.",
+    }),
+    // The full authoring contract rides the property annotation: it is the text the model reads
+    // while writing the widget body, and it is the single source of truth for the theme-token,
+    // icon-sprite, layout and CSP rules (never hard-code light or dark palette colors).
+    widget_code: Schema.String.annotate({ description: T3TEAM_WIDGET_AUTHORING_GUIDANCE }),
     format: Schema.optional(Schema.Literals(["html", "svg"])),
     loading_messages: Schema.optional(Schema.Array(Schema.String)),
     capabilities: Schema.optional(

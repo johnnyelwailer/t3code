@@ -1,5 +1,6 @@
 /* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 import { ChevronRight } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { JiraIssueTypeIcon } from "~/t3team/components/ticket/t3team-JiraIssueType";
 import { cn } from "~/t3team/lib/t3team-utils";
@@ -12,6 +13,8 @@ export type WorkItemBreadcrumbProps = {
   readonly onOpenProject?: (() => void) | undefined;
   readonly onOpenParent?: ((parentKey: string) => void) | undefined;
   readonly className?: string;
+  /** Optional element rendered immediately after the item key (e.g. the "open in Jira" link). */
+  readonly trailing?: ReactNode | undefined;
 };
 
 /**
@@ -29,6 +32,7 @@ export function WorkItemBreadcrumb({
   onOpenProject,
   onOpenParent,
   className,
+  trailing,
 }: WorkItemBreadcrumbProps) {
   return (
     <nav
@@ -57,6 +61,7 @@ export function WorkItemBreadcrumb({
       ) : null}
 
       <span className="shrink-0 font-medium tabular-nums text-foreground">{itemKey}</span>
+      {trailing}
     </nav>
   );
 }

@@ -1,5 +1,6 @@
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { useNavigate } from "@tanstack/react-router";
 import {
   ChevronDownIcon,
   FolderGit2Icon,
@@ -8,12 +9,25 @@ import {
   HistoryIcon,
   ScaleIcon,
 } from "lucide-react";
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  type Ref,
+  memo,
+  useImperativeHandle,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
+import { useCloudSessionController } from "../cloud/t3team-useCloudSessionController";
+import { runOnCloudSessions } from "./cloud/t3team-cloudSessionSplit";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
-import { useProject, useThread, useThreadShellsForProjectRefs } from "../state/entities";
+import { useProject, useThreadShell, useThreadShellsForProjectRefs } from "../state/entities";
 import {
+  dedupeRunOnEnvironments,
   type EnvMode,
   type EnvironmentOption,
   resolveContextStripLabelsCompact,
@@ -25,7 +39,10 @@ import {
   resolvePreviousWorktreeSeed,
   shouldShowEnvironmentIndicator,
 } from "./BranchToolbar.logic";
-import { BranchToolbarBranchSelector } from "./BranchToolbarBranchSelector";
+import {
+  BranchToolbarBranchSelector,
+  type BranchToolbarBranchSelectorHandle,
+} from "./BranchToolbarBranchSelector";
 import { BranchToolbarEnvironmentSelector } from "./BranchToolbarEnvironmentSelector";
 import { BranchToolbarEnvModeSelector } from "./BranchToolbarEnvModeSelector";
 import { Button } from "./ui/button";
@@ -40,13 +57,21 @@ import {
   MenuTrigger,
 } from "./ui/menu";
 import { Separator } from "./ui/separator";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { ComposerSurface } from "./chat/ComposerSurface";
-import { composerFloatingLayerProps } from "./chat/composerEventScope";
+import { useComposerMenuProps } from "./chat/composerEventScope";
 import { measureRestingComposerControls } from "./chat/restingComposerControlsMeasurement";
 import { resolveRestingComposerControlsNaturalWidth } from "./composerFooterLayout";
 import { cn } from "~/lib/utils";
 
+export interface BranchToolbarHandle {
+  openBranchPicker: () => void;
+  usePreviousWorktree: () => void;
+}
+
 interface BranchToolbarProps {
+  forceNewWorktree?: boolean;
+  ref?: Ref<BranchToolbarHandle>;
   environmentId: EnvironmentId;
   threadId: ThreadId;
   showGitControls: boolean;
@@ -69,6 +94,7 @@ interface BranchToolbarProps {
 }
 
 interface MobileRunContextSelectorProps {
+  forceNewWorktree: boolean;
   autoEnvironmentLabel?: string | undefined;
   onAutoEnvironment?: (() => void) | undefined;
   envLocked: boolean;
@@ -86,6 +112,7 @@ interface MobileRunContextSelectorProps {
 }
 
 const MobileRunContextSelector = memo(function MobileRunContextSelector({
+  forceNewWorktree,
   autoEnvironmentLabel,
   onAutoEnvironment,
   envLocked,
@@ -101,6 +128,7 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
   previousWorktreeLabel,
   onUsePreviousWorktree,
 }: MobileRunContextSelectorProps) {
+  const composerFloatingLayerProps = useComposerMenuProps();
   const activeEnvironment = useMemo(
     () => availableEnvironments?.find((env) => env.environmentId === environmentId) ?? null,
     [availableEnvironments, environmentId],
@@ -111,28 +139,43 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
       : activeWorktreePath
         ? FolderGitIcon
         : FolderIcon;
-  const workspaceLabel = envModeLocked
-    ? resolveLockedWorkspaceLabel(activeWorktreePath)
-    : effectiveEnvMode === "worktree"
-      ? resolveEnvModeLabel("worktree")
-      : resolveCurrentWorkspaceLabel(activeWorktreePath);
+  const workspaceLabel = forceNewWorktree
+    ? resolveEnvModeLabel("worktree")
+    : envModeLocked
+      ? resolveLockedWorkspaceLabel(activeWorktreePath)
+      : effectiveEnvMode === "worktree"
+        ? resolveEnvModeLabel("worktree")
+        : resolveCurrentWorkspaceLabel(activeWorktreePath);
   const isLocked = envLocked || envModeLocked;
+  const workspaceIcon = (
+    <Tooltip>
+      <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
+        <WorkspaceIcon className={cn("size-3 shrink-0", showEnvironmentIndicator && "mx-0!")} />
+      </TooltipTrigger>
+      <TooltipPopup>{workspaceLabel}</TooltipPopup>
+    </Tooltip>
+  );
   const icon = showEnvironmentIndicator ? (
     // Button's base styles apply `-mx-0.5` to descendant SVGs, which eats 4px
     // out of whatever gap we set. mx-0! cancels that so gap-0.5 reads as 2px.
     <span className="inline-flex shrink-0 items-center gap-0.5">
-      {autoEnvironmentLabel ? (
-        <ScaleIcon className="size-3 shrink-0 mx-0!" aria-hidden="true" />
-      ) : (
-        <EnvironmentMachineIcon
-          kind={activeEnvironment?.machine ?? "server"}
-          className="size-3 shrink-0 mx-0!"
-        />
-      )}
-      <WorkspaceIcon className="size-3 shrink-0 mx-0!" />
+      <Tooltip>
+        <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
+          {autoEnvironmentLabel ? (
+            <ScaleIcon className="size-3 shrink-0 mx-0!" aria-hidden="true" />
+          ) : (
+            <EnvironmentMachineIcon
+              kind={activeEnvironment?.machine ?? "server"}
+              className="size-3 shrink-0 mx-0!"
+            />
+          )}
+        </TooltipTrigger>
+        <TooltipPopup>{autoEnvironmentLabel ?? activeEnvironment?.label ?? "Run on"}</TooltipPopup>
+      </Tooltip>
+      {workspaceIcon}
     </span>
   ) : (
-    <WorkspaceIcon className="size-3 shrink-0" />
+    workspaceIcon
   );
   const triggerContent = (
     <>
@@ -143,7 +186,7 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
       >
         <span
           data-composer-label-motion
-          className="block w-full min-w-0 max-w-[240px] origin-left truncate transition-[opacity,transform] duration-180 ease-[cubic-bezier(0.32,0.72,0,1)] group-data-[compact]/composer-context:[transform:translateX(-0.25rem)_scaleX(0.95)] group-data-[compact]/composer-context:opacity-0 motion-reduce:transform-none motion-reduce:transition-opacity"
+          className="block w-full min-w-0 max-w-[240px] truncate transition-opacity duration-180 ease-[cubic-bezier(0.32,0.72,0,1)] group-data-[compact]/composer-context:opacity-0 motion-reduce:transition-none"
         >
           {autoEnvironmentLabel ??
             (showEnvironmentIndicator ? (activeEnvironment?.label ?? "Run on") : workspaceLabel)}
@@ -169,6 +212,10 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
         render={<Button variant="ghost" size="xs" />}
         className="min-w-0 max-w-[48%] flex-initial justify-start font-normal text-muted-foreground/70 text-xs! hover:text-foreground/80"
         data-composer-context-control
+        data-composer-shortcut={[
+          showEnvironmentPicker && !envLocked ? "composer.host" : "",
+          !envModeLocked ? "composer.workspace" : "",
+        ].join(" ")}
       >
         {triggerContent}
         <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
@@ -231,7 +278,7 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
               onEnvModeChange(value as EnvMode);
             }}
           >
-            <MenuRadioItem disabled={envModeLocked} value="local">
+            <MenuRadioItem disabled={envModeLocked || forceNewWorktree} value="local">
               <span className="flex min-w-0 items-center gap-1.5">
                 {activeWorktreePath ? (
                   <FolderGitIcon className="size-3" />
@@ -274,12 +321,12 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
  */
 const COMPOSER_CONTEXT_MOTION_DURATION_MS = 180;
 const COMPOSER_CONTEXT_MOTION_EASING = "cubic-bezier(0.32, 0.72, 0, 1)";
-const COMPOSER_CONTEXT_CONTROL_SELECTOR = "[data-composer-context-control]";
+const COMPOSER_CONTEXT_LABEL_SELECTOR = "[data-composer-label]";
 
 function useLabelsOverflow(element: HTMLDivElement | null): boolean {
   const [overflows, setOverflows] = useState(false);
-  const pendingControlRectsRef = useRef<Map<HTMLElement, DOMRect> | null>(null);
-  const controlAnimationsRef = useRef(new Map<HTMLElement, Animation>());
+  const pendingLabelRectsRef = useRef<Map<HTMLElement, DOMRect> | null>(null);
+  const labelAnimationsRef = useRef(new Map<HTMLElement, Animation>());
   // A render-synced mirror instead of useEffectEvent: the compiler memoizes
   // the event callback, which left observers reading the first render's null
   // element forever.
@@ -344,15 +391,9 @@ function useLabelsOverflow(element: HTMLDivElement | null): boolean {
       for (const inner of label.querySelectorAll<HTMLElement>("*")) {
         textWidth = Math.max(textWidth, inner.scrollWidth);
       }
-      if (compact) {
-        // Compact: the label is squeezed to zero width but keeps reporting
-        // the full width it would need when expanded.
-        needed += textWidth;
-      } else {
-        // Expanded: the label is in flow; only the clipped remainder is
-        // missing from the content sum.
-        needed += Math.max(0, textWidth - label.clientWidth);
-      }
+      // Subtract the visible width even during an animation. The content
+      // sum already includes it; only the hidden text needs reserving.
+      needed += Math.max(0, textWidth - label.getBoundingClientRect().width);
     }
     const nextOverflows = resolveContextStripLabelsCompact({
       compact,
@@ -360,9 +401,9 @@ function useLabelsOverflow(element: HTMLDivElement | null): boolean {
       availableWidth: available,
     });
     if (nextOverflows !== compact) {
-      pendingControlRectsRef.current = new Map(
-        Array.from(current.querySelectorAll<HTMLElement>(COMPOSER_CONTEXT_CONTROL_SELECTOR)).map(
-          (control) => [control, control.getBoundingClientRect()],
+      pendingLabelRectsRef.current = new Map(
+        Array.from(current.querySelectorAll<HTMLElement>(COMPOSER_CONTEXT_LABEL_SELECTOR)).map(
+          (label) => [label, label.getBoundingClientRect()],
         ),
       );
     }
@@ -370,28 +411,29 @@ function useLabelsOverflow(element: HTMLDivElement | null): boolean {
   }, []);
 
   useLayoutEffect(() => {
-    const previousRects = pendingControlRectsRef.current;
+    const previousRects = pendingLabelRectsRef.current;
     if (!previousRects) return;
-    pendingControlRectsRef.current = null;
+    pendingLabelRectsRef.current = null;
 
-    for (const animation of controlAnimationsRef.current.values()) {
+    for (const animation of labelAnimationsRef.current.values()) {
       animation.cancel();
     }
-    controlAnimationsRef.current.clear();
+    labelAnimationsRef.current.clear();
 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-    for (const [control, previousRect] of previousRects) {
-      if (!control.isConnected) continue;
-      const nextRect = control.getBoundingClientRect();
-      const deltaX = previousRect.left - nextRect.left;
-      const deltaY = previousRect.top - nextRect.top;
-      if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) continue;
+    for (const [label, previousRect] of previousRects) {
+      if (!label.isConnected) continue;
+      const nextWidth = label.getBoundingClientRect().width;
+      if (Math.abs(previousRect.width - nextWidth) < 0.5) continue;
 
-      const animation = control.animate(
+      // Animate the space occupied by each label so flex layout keeps the
+      // trailing controls anchored. Translating the whole group after its
+      // width snaps sends expanded text beyond the strip's right edge.
+      const animation = label.animate(
         [
-          { transform: `translate3d(${deltaX}px, ${deltaY}px, 0)` },
-          { transform: "translate3d(0, 0, 0)" },
+          { width: `${previousRect.width}px`, maxWidth: `${previousRect.width}px` },
+          { width: `${nextWidth}px`, maxWidth: `${nextWidth}px` },
         ],
         {
           duration: COMPOSER_CONTEXT_MOTION_DURATION_MS,
@@ -399,12 +441,12 @@ function useLabelsOverflow(element: HTMLDivElement | null): boolean {
           fill: "backwards",
         },
       );
-      controlAnimationsRef.current.set(control, animation);
+      labelAnimationsRef.current.set(label, animation);
       animation.addEventListener(
         "finish",
         () => {
-          if (controlAnimationsRef.current.get(control) === animation) {
-            controlAnimationsRef.current.delete(control);
+          if (labelAnimationsRef.current.get(label) === animation) {
+            labelAnimationsRef.current.delete(label);
           }
         },
         { once: true },
@@ -414,7 +456,7 @@ function useLabelsOverflow(element: HTMLDivElement | null): boolean {
 
   useEffect(
     () => () => {
-      for (const animation of controlAnimationsRef.current.values()) {
+      for (const animation of labelAnimationsRef.current.values()) {
         animation.cancel();
       }
     },
@@ -443,6 +485,8 @@ function useLabelsOverflow(element: HTMLDivElement | null): boolean {
 }
 
 export const BranchToolbar = memo(function BranchToolbar({
+  forceNewWorktree = false,
+  ref,
   environmentId,
   threadId,
   showGitControls,
@@ -463,6 +507,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   composerControlsHostRef,
   contextStripVisible = true,
 }: BranchToolbarProps) {
+  const branchSelectorRef = useRef<BranchToolbarBranchSelectorHandle>(null);
   const threadRef = useMemo(
     () => scopeThreadRef(environmentId, threadId),
     [environmentId, threadId],
@@ -470,7 +515,7 @@ export const BranchToolbar = memo(function BranchToolbar({
   const draftThread = useComposerDraftStore((store) =>
     draftId ? store.getDraftSession(draftId) : store.getDraftThreadByRef(threadRef),
   );
-  const serverThread = useThread(threadRef, { waitForShell: draftThread !== null });
+  const serverThread = useThreadShell(threadRef);
   const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
   const activeProjectRef = serverThread
     ? scopeProjectRef(serverThread.environmentId, serverThread.projectId)
@@ -479,9 +524,11 @@ export const BranchToolbar = memo(function BranchToolbar({
       : null;
   const activeProject = useProject(activeProjectRef);
   const hasActiveThread = serverThread !== null || draftThread !== null;
-  const activeWorktreePath = serverThread?.worktreePath ?? draftThread?.worktreePath ?? null;
+  const activeWorktreePath = forceNewWorktree
+    ? null
+    : (serverThread?.worktreePath ?? draftThread?.worktreePath ?? null);
   const effectiveEnvMode =
-    effectiveEnvModeOverride ??
+    (forceNewWorktree ? "worktree" : effectiveEnvModeOverride) ??
     resolveEffectiveEnvMode({
       activeWorktreePath,
       hasServerThread: serverThread !== null,
@@ -492,7 +539,8 @@ export const BranchToolbar = memo(function BranchToolbar({
   // "Previous worktree" hops a draft into the most recently active worktree
   // of this project — the "keep going where I just was" follow-up flow. Only
   // drafts can hop; started server threads have their workspace pinned.
-  const canUsePreviousWorktree = draftThread !== null && serverThread === null && !envModeLocked;
+  const canUsePreviousWorktree =
+    draftThread !== null && serverThread === null && !envModeLocked && !forceNewWorktree;
   const projectRefsForWorktreeLookup = useMemo(
     () => (canUsePreviousWorktree && activeProjectRef ? [activeProjectRef] : []),
     [canUsePreviousWorktree, activeProjectRef],
@@ -523,6 +571,25 @@ export const BranchToolbar = memo(function BranchToolbar({
     });
   }, [activeProjectRef, draftId, previousWorktreeSeed, setDraftThreadContext, threadRef]);
 
+  useImperativeHandle(
+    ref,
+    () => ({
+      openBranchPicker: () => branchSelectorRef.current?.open(),
+      usePreviousWorktree: () => {
+        if (!showGitControls || !canUsePreviousWorktree || !previousWorktreeSeed) return;
+        onUsePreviousWorktree();
+        onComposerFocusRequest?.();
+      },
+    }),
+    [
+      canUsePreviousWorktree,
+      onComposerFocusRequest,
+      onUsePreviousWorktree,
+      previousWorktreeSeed,
+      showGitControls,
+    ],
+  );
+
   const showEnvironmentPicker = Boolean(
     availableEnvironments && availableEnvironments.length > 1 && onEnvironmentChange,
   );
@@ -534,6 +601,46 @@ export const BranchToolbar = memo(function BranchToolbar({
   });
   const [stripElement, setStripElement] = useState<HTMLDivElement | null>(null);
   const labelsOverflow = useLabelsOverflow(stripElement);
+
+  // Cloud sessions shown in the "Run on" menu: everything still provisioning
+  // plus the most recent failed session (never silently forgotten). Read the
+  // split rule's doc for why ready sessions stay out of this list. Both
+  // derived values are memoised: the selector is memo'd and this strip
+  // re-renders on every keystroke, so a fresh array or callback here would
+  // defeat its memo.
+  // When there is no primary environment, no cloud affordance is passed and
+  // the menu renders exactly as it did before.
+  const cloudSessions = useCloudSessionController();
+  const pendingCloudSessions = useMemo(
+    () => (cloudSessions.available ? runOnCloudSessions(cloudSessions.sessions) : []),
+    [cloudSessions.available, cloudSessions.sessions],
+  );
+  const onCreateCloudSession = useCallback(
+    () => cloudSessions.onCreate(cloudSessions.durationSeconds),
+    [cloudSessions.durationSeconds, cloudSessions.onCreate],
+  );
+  // Unconfigured: the entry is a setup affordance, not a machine promise.
+  // The provisioning panel lives in the Connections settings, so the item
+  // leaves there — the same target the "Set up connections" link uses.
+  const navigate = useNavigate();
+  const onSetupCloudSessions = useCallback(() => {
+    void navigate({ to: "/settings/connections" });
+  }, [navigate]);
+
+  // The same machine can reach the catalog under two environment ids (its T3
+  // Connect identity and a relay id minted when a cloud session's relay link
+  // was published). The Run-on menus must not list it twice; the dedupe is
+  // scoped to these menus so no other surface's environment list changes.
+  const runOnEnvironments = useMemo(
+    () =>
+      availableEnvironments ? dedupeRunOnEnvironments(availableEnvironments, environmentId) : null,
+    [availableEnvironments, environmentId],
+  );
+  // The cloud entry is always offered whenever a primary environment exists,
+  // so the selector shows even where the environment indicator itself is
+  // hidden (single-primary desktop): that is the case it exists for.
+  const showRunOnSelector =
+    runOnEnvironments !== null && (showEnvironmentIndicator || cloudSessions.available);
 
   if (!hasActiveThread || !activeProject) return null;
 
@@ -552,12 +659,13 @@ export const BranchToolbar = memo(function BranchToolbar({
       {showGitControls ? (
         <div className="contents @3xl/composer-surface:hidden">
           <MobileRunContextSelector
+            forceNewWorktree={forceNewWorktree}
             autoEnvironmentLabel={autoEnvironmentLabel}
             onAutoEnvironment={onAutoEnvironment}
             envLocked={envLocked}
             envModeLocked={envModeLocked}
             environmentId={environmentId}
-            availableEnvironments={availableEnvironments}
+            availableEnvironments={runOnEnvironments ?? []}
             showEnvironmentPicker={showEnvironmentPicker}
             showEnvironmentIndicator={showEnvironmentIndicator}
             onEnvironmentChange={onEnvironmentChange}
@@ -569,7 +677,7 @@ export const BranchToolbar = memo(function BranchToolbar({
           />
         </div>
       ) : null}
-      {showGitControls || showEnvironmentIndicator ? (
+      {showGitControls || showEnvironmentIndicator || showRunOnSelector ? (
         <div
           className={cn(
             "min-h-7 min-w-10 items-center gap-1 sm:min-h-6",
@@ -577,15 +685,26 @@ export const BranchToolbar = memo(function BranchToolbar({
             composerControlsHostRef ? "shrink" : "flex-1",
           )}
         >
-          {showEnvironmentIndicator && availableEnvironments && (
+          {showRunOnSelector && runOnEnvironments && (
             <>
               <BranchToolbarEnvironmentSelector
                 autoEnvironmentLabel={autoEnvironmentLabel}
                 onAutoEnvironment={onAutoEnvironment}
                 envLocked={envLocked}
                 environmentId={environmentId}
-                availableEnvironments={availableEnvironments}
+                availableEnvironments={runOnEnvironments}
                 {...(showEnvironmentPicker && onEnvironmentChange ? { onEnvironmentChange } : {})}
+                {...(cloudSessions.available && cloudSessions.configured
+                  ? {
+                      pendingCloudSessions,
+                      onCreateCloudSession,
+                      onCloudSessionAction: cloudSessions.onSessionAction,
+                      onCloudMenuOpenChange: cloudSessions.onCloudMenuOpenChange,
+                    }
+                  : {})}
+                {...(cloudSessions.available && !cloudSessions.configured
+                  ? { onSetupCloudSessions }
+                  : {})}
               />
               {showGitControls ? (
                 <Separator
@@ -598,6 +717,7 @@ export const BranchToolbar = memo(function BranchToolbar({
           )}
           {showGitControls ? (
             <BranchToolbarEnvModeSelector
+              forceNewWorktree={forceNewWorktree}
               envLocked={envModeLocked}
               effectiveEnvMode={effectiveEnvMode}
               activeWorktreePath={activeWorktreePath}
@@ -623,12 +743,18 @@ export const BranchToolbar = memo(function BranchToolbar({
 
       {showGitControls ? (
         <BranchToolbarBranchSelector
+          forceNewWorktree={forceNewWorktree}
+          ref={branchSelectorRef}
           className="min-w-0 flex-initial justify-end @3xl/composer-surface:ml-auto"
           environmentId={environmentId}
           threadId={threadId}
           {...(draftId ? { draftId } : {})}
           envLocked={envLocked}
-          {...(effectiveEnvModeOverride ? { effectiveEnvModeOverride } : {})}
+          {...(forceNewWorktree
+            ? { effectiveEnvModeOverride: "worktree" }
+            : effectiveEnvModeOverride
+              ? { effectiveEnvModeOverride }
+              : {})}
           {...(activeThreadBranchOverride !== undefined ? { activeThreadBranchOverride } : {})}
           {...(onActiveThreadBranchOverrideChange ? { onActiveThreadBranchOverrideChange } : {})}
           startFromOrigin={startFromOrigin}

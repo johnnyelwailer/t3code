@@ -3,66 +3,31 @@ import type { ReactNode } from "react";
 
 import { JiraIssueTypeIcon } from "~/t3team/components/ticket/t3team-JiraIssueType";
 import { cn } from "~/t3team/lib/t3team-utils";
-import {
-  formatWorkItemDuration,
-  isWorkItemOverdue,
-  type WorkItemFieldModel,
-} from "~/t3team/workitem/t3team-workItemFieldModel";
-import { WorkItemDate } from "~/t3team/workitem/t3team-WorkItemDate";
-import {
-  WorkItemPersonAvatar,
-  WorkItemPersonChip,
-} from "~/t3team/workitem/t3team-WorkItemPersonAvatar";
-import { WorkItemPriorityChip } from "~/t3team/workitem/t3team-WorkItemPriorityIcon";
+import type { WorkItemFieldModel } from "~/t3team/workitem/t3team-workItemFieldModel";
 import { WorkItemStatusBadge } from "~/t3team/workitem/t3team-WorkItemStatusBadge";
 
 /**
  * The title band is the item's identity: what kind of thing it is, what it is called, and where it
  * sits in the workflow.
  *
- * Status appears here and nowhere else. It is the field people look for first and change most
- * often, so it belongs beside the title at every width — and putting it here means the properties
- * rail does not have to repeat it, which is one less duplicated control on a phone.
+ * Only status stays beside the title. It is the one field the properties list deliberately does not
+ * repeat — and the field people look for first and change most often — so it belongs here at every
+ * width. Everything else (assignee, priority, size, due date, reporter) lives in the properties
+ * panel; echoing it under the title was the redundancy the details row used to carry.
  */
 export function WorkItemTitleBand({
   model,
-  nowMs,
-  currentUserName,
   statusControl,
   titleControl,
-  assigneeControl,
   className,
 }: {
   readonly model: WorkItemFieldModel;
-  readonly nowMs: number;
-  readonly currentUserName?: string | undefined;
   /** Slice B replaces the static badge with a transition picker. */
   readonly statusControl?: ReactNode;
   /** Slice B replaces the static heading with an inline editor. */
   readonly titleControl?: ReactNode;
-  /** Slice B replaces the assignee chip with a search-and-assign popover. */
-  readonly assigneeControl?: ReactNode;
   readonly className?: string;
 }) {
-  /**
-   * How big is this? Teams answer that in points or in time, rarely both, and some only ever record
-   * what they have already spent. Show whichever this item actually carries, labelled so an estimate
-   * is never mistaken for time already burned — and show nothing at all rather than an empty
-   * placeholder for the teams that track none of it.
-   */
-  const estimateLabel = (() => {
-    if (model.storyPoints !== undefined) return `${model.storyPoints} pts`;
-    const estimate = formatWorkItemDuration(model.timeTracking?.originalEstimateSeconds);
-    if (estimate) return `${estimate} est`;
-    const logged = formatWorkItemDuration(model.timeTracking?.timeSpentSeconds);
-    return logged ? `${logged} logged` : undefined;
-  })();
-
-  const isAssignedToCurrentUser =
-    currentUserName !== undefined &&
-    model.assignee !== undefined &&
-    model.assignee.displayName.trim().toLowerCase() === currentUserName.trim().toLowerCase();
-
   return (
     /*
       One row from `@md` up, two rows below it — driven by flex-basis rather than by rendering the
@@ -87,46 +52,11 @@ export function WorkItemTitleBand({
       </div>
 
       {/*
-        Status shares its row with the fields people look for in the same glance: who owns it, how
-        urgent it is, its size and whether it is late. These were only in the properties list, which
-        collapses on a narrow column — so on a phone the answer to "who is on this" was two taps away.
+        Status is the only field that stays in the band; assignee, priority, size and due date all
+        live in the properties panel, so showing them here too was pure repetition.
       */}
-      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 @md/workitem:mt-0.5">
+      <div className="flex shrink-0 items-center @md/workitem:mt-0.5">
         {statusControl ?? <WorkItemStatusBadge status={model.status} />}
-
-        {/*
-          Always rendered, unassigned included. Who owns an item is a primary question, and an empty
-          space is not an answer — "nobody" is, and it is the one that prompts someone to pick it up.
-        */}
-        {assigneeControl ?? (
-          <WorkItemPersonChip person={model.assignee} isCurrentUser={isAssignedToCurrentUser} />
-        )}
-
-        {estimateLabel ? (
-          <span className="text-xs tabular-nums text-muted-foreground">{estimateLabel}</span>
-        ) : null}
-
-        <WorkItemPriorityChip priority={model.priority} />
-
-        {model.dueDateMs !== undefined ? (
-          <WorkItemDate
-            timestampMs={model.dueDateMs}
-            nowMs={nowMs}
-            emphasis={isWorkItemOverdue(model, nowMs)}
-            className="text-xs text-muted-foreground"
-          />
-        ) : null}
-
-        {/*
-          Reporter last, and as a face rather than a name. It is the least-consulted field here, and
-          spelling it out next to the size read as though that person logged the time — adjacency
-          implies a relationship the row does not intend. The name is on hover, where it is enough.
-        */}
-        {model.reporter ? (
-          <span title={`Reported by ${model.reporter.displayName}`} className="flex items-center">
-            <WorkItemPersonAvatar person={model.reporter} size="sm" />
-          </span>
-        ) : null}
       </div>
     </div>
   );

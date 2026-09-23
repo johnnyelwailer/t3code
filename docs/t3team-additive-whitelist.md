@@ -226,6 +226,26 @@ Until the new tag is pushed, the guard fails loudly on CI (missing tag), never s
 - `apps/web/src/t3team/stories/t3team-ActivityLabelPill.stories.tsx`
   - Extend the #40 stories: one story per state word, enrichment composition, flag-off, idle-cleared, and reduced-motion.
 
+## ask-user context — docked question references prior content
+
+- `packages/contracts/src/providerRuntime.ts`
+  - Optional `context` field on `UserInputQuestion` so a docked `t3team_ask_user` question can carry the content it refers to; shared with provider-native questions, but the field is optional so existing adapter payloads stay valid.
+
+## Cloud-sessions stack re-land (2026-09-15)
+
+Upstream files the cloud-sessions stack (branch `work/cloud-sessions-stack`) touches while landing on current main.
+
+- `apps/server/src/orchestration/Layers/CheckpointReactor.test.ts`
+  - Fork provenance note (#236): the checkpoint-reactor test now expects the note's model-transition payload shape.
+- `apps/server/src/serverRuntimeStartup.reconcile.test.ts`
+  - Same #236 change surfaced in the startup-reconcile test fixtures.
+- `apps/server/src/project/RepositoryIdentityResolver.ts` + `apps/server/src/project/RepositoryIdentityResolver.test.ts`
+  - #239: prefer `origin` over `upstream` when resolving the primary remote, so fork-side `gh`/git operations target the fork.
+- `apps/web/src/hooks/useTheme.ts`
+  - Expose the theme-snapshot trigger so widget iframes resnapshot on host theme flips.
+- `packages/project-context/src/t3teamWidgetGuidance.ts`
+  - Widget guidance carries the theme-token + icon-sprite contract so `t3team_show_widget` renders against the host theme.
+
 ## Allowed Unprefixed New Files
 
 Whole trees the fork owns outright. The `t3team-` prefix exists so a file added by

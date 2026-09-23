@@ -1,7 +1,8 @@
-import { ListTodoIcon } from "lucide-react";
+import { CheckIcon, CircleDotIcon, CircleIcon, ListTodoIcon } from "lucide-react";
 import { memo, type ComponentProps } from "react";
 
 import { formatDuration } from "../../session-logic";
+import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { cn } from "~/lib/utils";
 import { ComposerBanner } from "./ComposerBanner";
 
@@ -90,7 +91,7 @@ function TaskSummary({
           className={progress.completedSteps >= progress.totalSteps ? "text-success" : undefined}
           data-composer-task-progress="true"
         >
-          {progress.completedSteps}/{progress.totalSteps} complete
+          {progress.completedSteps}/{progress.totalSteps}
         </ComposerBanner.Count>
         <TaskSegments className="hidden w-20 sm:flex" steps={steps} />
         <ComposerBanner.ToggleIcon expanded={expanded} />
@@ -140,11 +141,13 @@ export const ComposerTasksContent = memo(function ComposerTasksContent({
   onToggle,
   progress,
   steps,
+  planUpdatedAt,
 }: {
   readonly expanded: boolean;
   readonly onToggle: () => void;
   readonly progress: ComposerTasksProgress;
   readonly steps: readonly ComposerTaskStep[];
+  readonly planUpdatedAt?: string | undefined;
 }) {
   return (
     <div
@@ -160,16 +163,24 @@ export const ComposerTasksContent = memo(function ComposerTasksContent({
       />
       {expanded ? (
         <ComposerBanner.Scroll data-composer-tasks-scroll="true">
+          {planUpdatedAt ? (
+            <div
+              className="px-3 pb-1 pt-1.5 text-[10px] text-muted-foreground/45"
+              data-composer-task-updated="true"
+            >
+              Updated {formatRelativeTimeLabel(planUpdatedAt)}
+            </div>
+          ) : null}
           <ComposerBanner.Children
             render={<ul role="list" />}
             aria-label={`Task list. ${progress.completedSteps} of ${progress.totalSteps} complete.`}
             data-composer-tasks-list="true"
           >
             {keyedTaskSteps(steps).map(({ key, step }) => (
-              <ComposerBanner.Row key={key} render={<li />}>
+              <ComposerBanner.Row key={key} render={<li />} className="items-start py-1 pe-2">
                 <ComposerBanner.Icon
                   className={cn(
-                    "font-mono text-[10px]",
+                    "h-4",
                     step.status === "completed"
                       ? "text-success"
                       : step.status === "inProgress"
@@ -177,10 +188,17 @@ export const ComposerTasksContent = memo(function ComposerTasksContent({
                         : "text-muted-foreground/40",
                   )}
                 >
-                  {step.status === "completed" ? "✓" : step.status === "inProgress" ? "●" : "○"}
+                  {step.status === "completed" ? (
+                    <CheckIcon />
+                  ) : step.status === "inProgress" ? (
+                    <CircleDotIcon />
+                  ) : (
+                    <CircleIcon />
+                  )}
                 </ComposerBanner.Icon>
                 <ComposerBanner.Content
                   className={cn(
+                    "block wrap-anywhere",
                     step.status === "completed"
                       ? "text-muted-foreground/55"
                       : step.status === "inProgress"
@@ -188,14 +206,12 @@ export const ComposerTasksContent = memo(function ComposerTasksContent({
                         : "text-muted-foreground/70",
                   )}
                 >
+                  <span className="sr-only">{taskStatusLabels[step.status]}: </span>
                   {step.step}
                 </ComposerBanner.Content>
                 <ComposerBanner.Actions>
-                  <span className="text-[10px] text-muted-foreground">
-                    {taskStatusLabels[step.status]}
-                  </span>
                   <span
-                    className="w-10 text-right text-[10px] text-muted-foreground/45 tabular-nums"
+                    className="w-12 text-right text-[10px]/4 text-muted-foreground/45 tabular-nums"
                     data-composer-task-duration="true"
                   >
                     {step.durationMs !== undefined

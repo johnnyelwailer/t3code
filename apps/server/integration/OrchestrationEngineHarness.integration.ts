@@ -40,6 +40,7 @@ import { makeProviderRegistryLayer } from "../src/provider/testUtils/providerReg
 import { ProviderSessionDirectoryLive } from "../src/provider/Layers/ProviderSessionDirectory.ts";
 import { ServerSettingsService } from "../src/serverSettings.ts";
 import { ProviderUsageDevError, ProviderUsageWatcher } from "../src/t3team-providerUsageWatcher.ts";
+import * as StorageCleanup from "../src/storageCleanup.ts";
 import { makeProviderServiceLive } from "../src/provider/Layers/ProviderService.ts";
 import { makeCodexAdapter } from "../src/provider/Layers/CodexAdapter.ts";
 import {
@@ -56,6 +57,7 @@ import { OrchestrationProjectionPipelineLive } from "../src/orchestration/Layers
 import { OrchestrationProjectionSnapshotQueryLive } from "../src/orchestration/Layers/ProjectionSnapshotQuery.ts";
 import * as ThreadBackgroundLiveness from "../src/orchestration/ThreadBackgroundLiveness.ts";
 import * as ThreadPlanProgress from "../src/orchestration/ThreadPlanProgress.ts";
+import * as ThreadPlanStaleness from "../src/orchestration/ThreadPlanStaleness.ts";
 import * as ThreadSilenceWatchdog from "../src/orchestration/ThreadSilenceWatchdog.ts";
 import { RuntimeReceiptBusTest } from "../src/orchestration/Layers/RuntimeReceiptBus.ts";
 import { OrchestrationReactorLive } from "../src/orchestration/Layers/OrchestrationReactor.ts";
@@ -69,6 +71,8 @@ import {
 } from "../src/orchestration/Services/OrchestrationEngine.ts";
 import { ThreadDeletionReactor } from "../src/orchestration/Services/ThreadDeletionReactor.ts";
 import * as ThreadSettlementReactor from "../src/orchestration/ThreadSettlementReactor.ts";
+import * as PullRequestSyncReactor from "../src/orchestration/PullRequestSyncReactor.ts";
+import * as ThreadPullRequestReactor from "../src/orchestration/ThreadPullRequestReactor.ts";
 import { OrchestrationReactor } from "../src/orchestration/Services/OrchestrationReactor.ts";
 import { ProjectionSnapshotQuery } from "../src/orchestration/Services/ProjectionSnapshotQuery.ts";
 import {
@@ -124,12 +128,9 @@ export function gitShowFileAtRef(cwd: string, ref: string, filePath: string): st
   return runGit(cwd, ["show", `${ref}:${filePath}`]);
 }
 
-class WaitForTimeoutError extends Schema.TaggedErrorClass<WaitForTimeoutError>()(
-  "WaitForTimeoutError",
-  {
-    description: Schema.String,
-  },
-) {}
+class WaitForTimeoutError extends Schema.TaggedError<WaitForTimeoutError>()("WaitForTimeoutError", {
+  description: Schema.String,
+}) {}
 
 function waitFor<A, E>(
   read: Effect.Effect<A, E>,
@@ -168,7 +169,7 @@ function waitFor<A, E>(
   );
 }
 
-class OrchestrationHarnessRuntimeError extends Schema.TaggedErrorClass<OrchestrationHarnessRuntimeError>()(
+class OrchestrationHarnessRuntimeError extends Schema.TaggedError<OrchestrationHarnessRuntimeError>()(
   "OrchestrationHarnessRuntimeError",
   {
     operation: Schema.String,
@@ -323,6 +324,7 @@ export const makeOrchestrationIntegrationHarness = (
     ).pipe(
       Layer.provideMerge(ThreadBackgroundLiveness.layer),
       Layer.provideMerge(ThreadPlanProgress.layer),
+      Layer.provideMerge(ThreadPlanStaleness.layer),
       Layer.provideMerge(ThreadSilenceWatchdog.layer),
     );
     const serverSettingsLayer = ServerSettingsService.layerTest();
@@ -356,7 +358,7 @@ export const makeOrchestrationIntegrationHarness = (
       Layer.provideMerge(runtimeServicesLayer),
       Layer.provideMerge(
         Layer.mock(PullRequestService.PullRequestService)({
-          refreshAfterTurn: Effect.void,
+          refreshAfterTurn: () => Effect.void,
         }),
       ),
       Layer.provideMerge(
@@ -388,6 +390,12 @@ export const makeOrchestrationIntegrationHarness = (
       Layer.provideMerge(VcsProcess.layer),
     );
     const orchestrationReactorLayer = OrchestrationReactorLive.pipe(
+      Layer.provideMerge(
+        Layer.succeed(StorageCleanup.StorageCleanup, {
+          start: () => Effect.void,
+          drain: Effect.void,
+        }),
+      ),
       Layer.provideMerge(runtimeIngestionLayer),
       Layer.provideMerge(providerCommandReactorLayer),
       Layer.provideMerge(checkpointReactorLayer),
@@ -398,9 +406,22 @@ export const makeOrchestrationIntegrationHarness = (
         }),
       ),
       Layer.provideMerge(
+        Layer.succeed(ThreadPullRequestReactor.ThreadPullRequestReactor, {
+          start: () => Effect.void,
+          drain: Effect.void,
+        }),
+      ),
+      Layer.provideMerge(
         Layer.succeed(ThreadSettlementReactor.ThreadSettlementReactor, {
           start: () => Effect.void,
           drain: Effect.void,
+        }),
+      ),
+      Layer.provideMerge(
+        Layer.succeed(PullRequestSyncReactor.PullRequestSyncReactor, {
+          start: () => Effect.void,
+          drain: Effect.void,
+          requestSync: () => Effect.void,
         }),
       ),
       Layer.provideMerge(

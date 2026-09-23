@@ -42,6 +42,8 @@ function Row({
         backgroundJobs: [],
         onOpenAgents: () => {},
         threadActivityState,
+        unsettledTurnId: null,
+        backgroundWorktreeSetup: null,
       }}
     >
       <WorkingTimelineRow row={WORKING_ROW} />
@@ -61,7 +63,7 @@ function RowPanel({ width, children }: { width: string; children: React.ReactNod
 }
 
 export default {
-  title: "T3Team/Conversation/Working Row — Long Timer (Writing for 1h 42m)",
+  title: "T3Team/Chat/Working Row — Long Timer (Writing for 1h 42m)",
   tags: ["autodocs"],
 } satisfies Meta;
 

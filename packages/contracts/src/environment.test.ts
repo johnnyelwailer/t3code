@@ -33,6 +33,16 @@ const descriptor = {
 } as const;
 
 describe("ExecutionEnvironmentDescriptor", () => {
+  it("requires an advertised required-worktree bootstrap capability", () => {
+    expect(decodeDescriptor(descriptor).capabilities.requiredWorktreeBootstrap).toBeUndefined();
+    expect(
+      decodeDescriptor({
+        ...descriptor,
+        capabilities: { ...descriptor.capabilities, requiredWorktreeBootstrap: true },
+      }).capabilities.requiredWorktreeBootstrap,
+    ).toBe(true);
+  });
+
   it("treats a missing pull-request capability as unsupported under version skew", () => {
     expect(decodeDescriptor(descriptor).capabilities.pullRequests).toBeUndefined();
   });
@@ -80,8 +90,7 @@ describe("ExecutionEnvironmentDescriptor", () => {
 
   it("preserves an advertised serverStartedAtMs boot stamp", () => {
     expect(
-      decodeDescriptor({ ...descriptor, serverStartedAtMs: 1_700_000_000_000 })
-        .serverStartedAtMs,
+      decodeDescriptor({ ...descriptor, serverStartedAtMs: 1_700_000_000_000 }).serverStartedAtMs,
     ).toBe(1_700_000_000_000);
   });
 });

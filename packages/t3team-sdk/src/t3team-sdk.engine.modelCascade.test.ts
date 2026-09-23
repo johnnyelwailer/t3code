@@ -15,6 +15,8 @@
 
 import { afterAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
+import { withAgentStepContract } from "@runbook/threads";
+
 import { hashArgs } from "./t3team-sdk.canonicalJson.ts";
 import {
   cleanupRunsRoot,
@@ -191,7 +193,11 @@ describe("durable workflow engine — model cascade", () => {
       hashArgs({ name: "Judge gate", retention: "ephemeral" as const }),
     );
     expect(journaled[1]?.argsHash).toBe(
-      hashArgs({ threadId, prompt: "judge this gate", label: "Judge gate" }),
+      hashArgs({
+        threadId,
+        prompt: withAgentStepContract("judge this gate"),
+        label: "Judge gate",
+      }),
     );
   });
 

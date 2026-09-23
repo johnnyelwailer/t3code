@@ -16,6 +16,7 @@ import {
   renderProjectMyWorkTicketExtra,
 } from "~/t3team/t3team-projectMyWorkContentHelpers";
 import { ProjectMyWorkDigestContent } from "~/t3team/t3team-ProjectMyWorkDigestContent";
+import type { DigestFilterState } from "~/t3team/t3team-projectMyWorkDigestTypes";
 import {
   ProjectMyWorkViewSwitch,
   type ProjectMyWorkLens,
@@ -47,6 +48,7 @@ export function ProjectMyWorkContent({
   parentChildGroups,
   githubActivityByWorkItem,
   jiraLastCheckedAt,
+  digestFilters,
   onTableSortByChange,
   onTableSortDirectionChange,
   onMoveTicketToStatus,
@@ -68,6 +70,7 @@ export function ProjectMyWorkContent({
   parentChildGroups: TicketHierarchy;
   githubActivityByWorkItem: ReadonlyMap<string, ReadonlyArray<GitHubWorkActivityItem>>;
   jiraLastCheckedAt?: number;
+  digestFilters?: DigestFilterState | undefined;
   onTableSortByChange: (value: ProjectMyWorkTableSortBy) => void;
   onTableSortDirectionChange: (value: ProjectMyWorkTableSortDirection) => void;
   onMoveTicketToStatus?: (ticket: ProjectTicket, targetStatus: string) => Promise<string>;
@@ -94,9 +97,17 @@ export function ProjectMyWorkContent({
 
   const renderBody = () => {
     // The digest lens has its own server-aggregated data and its own loading/empty states, so it
-    // must not wait on (or be hidden by) the legacy assigned-items fetch.
+    // must not wait on (or be hidden by) the legacy assigned-items fetch. The key forces a fresh
+    // mount (and therefore a fresh digest fetch) when the active project changes in the sidebar.
     if (lens === "digest") {
-      return <ProjectMyWorkDigestContent project={project} onOpenTicket={onOpenTicket} />;
+      return (
+        <ProjectMyWorkDigestContent
+          key={project.id}
+          project={project}
+          onOpenTicket={onOpenTicket}
+          digestFilters={digestFilters}
+        />
+      );
     }
 
     if (contentState.kind === "loading") {

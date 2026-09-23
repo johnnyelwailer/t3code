@@ -52,6 +52,8 @@ function Row({
         backgroundJobs: [],
         onOpenAgents: () => {},
         threadActivityState,
+        unsettledTurnId: null,
+        backgroundWorktreeSetup: null,
       }}
     >
       <WorkingTimelineRow row={WORKING_ROW} />
@@ -142,7 +144,7 @@ function DarkCanvas({ children }: { children: React.ReactNode }) {
 }
 
 const meta: Meta = {
-  title: "T3Team/Conversation/Working Row State Word (GHE #208)",
+  title: "T3Team/Chat/Working Row State Word (GHE #208)",
 };
 export default meta;
 type Story = StoryObj;

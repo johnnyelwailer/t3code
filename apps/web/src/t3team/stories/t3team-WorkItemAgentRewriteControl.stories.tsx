@@ -74,7 +74,7 @@ function StagedComposerPreview() {
 }
 
 const meta = {
-  title: "T3Team/Work Item Agent Rewrite Control",
+  title: "T3Team/Work Item/Agent Rewrite Control",
   parameters: { layout: "padded" },
 } satisfies Meta;
 

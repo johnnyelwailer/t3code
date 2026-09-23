@@ -10,7 +10,10 @@ import type {
   AgentSessionImportSource,
   ApprovalRequestId,
   CheckpointRef,
+  EnvironmentId,
+  MessageId,
   OrchestrationCheckpointSummary,
+  OrchestrationMessage,
   OrchestrationProject,
   OrchestrationProjectShell,
   OrchestrationReadModel,
@@ -82,6 +85,15 @@ export interface ProjectionSnapshotQueryShape {
   }) => Effect.Effect<Option.Option<OrchestrationThreadActivity>, ProjectionRepositoryError>;
 
   /**
+   * Read every activity of one kind across active (not deleted, not archived)
+   * threads, without hydrating the threads. Used at startup to find state a
+   * crashed process left behind.
+   */
+  readonly listActivitiesByKind: (
+    kind: string,
+  ) => Effect.Effect<ReadonlyArray<OrchestrationThreadActivity>, ProjectionRepositoryError>;
+
+  /**
    * Read the lightweight command snapshot used to bootstrap the in-memory
    * orchestration engine without hydrating message/activity/checkpoint bodies.
    */
@@ -117,6 +129,19 @@ export interface ProjectionSnapshotQueryShape {
    */
   readonly getArchivedShellSnapshot: () => Effect.Effect<
     OrchestrationShellSnapshot,
+    ProjectionRepositoryError
+  >;
+
+  /** Durable worktree ownership retained after thread deletion, including across restarts. */
+  readonly getDeletedWorktreeThreads: () => Effect.Effect<
+    ReadonlyArray<{
+      readonly id: ThreadId;
+      readonly projectId: ProjectId;
+      readonly branch: string;
+      readonly worktreePath: string;
+      readonly workspaceRoot: string;
+      readonly deletedAt: string;
+    }>,
     ProjectionRepositoryError
   >;
 
@@ -164,6 +189,10 @@ export interface ProjectionSnapshotQueryShape {
     projectId: ProjectId,
   ) => Effect.Effect<Option.Option<OrchestrationProjectShell>, ProjectionRepositoryError>;
 
+  readonly getProjectShells: (
+    projectIds?: ReadonlyArray<ProjectId>,
+  ) => Effect.Effect<ReadonlyArray<OrchestrationProjectShell>, ProjectionRepositoryError>;
+
   /**
    * Read the earliest active thread for a project.
    */
@@ -208,6 +237,59 @@ export interface ProjectionSnapshotQueryShape {
   >;
 
   /**
+   * The distinct cross-environment bindings recorded on threads in this store
+   * (the t3team start_child `environment` JSON column): every environment this
+   * host has ever targeted for a child session, with the newest recorded
+   * label, the number of bound threads, and when the newest one was updated.
+   * Own-environment threads never carry a binding (same-environment is a
+   * no-op), so only OTHER environments appear — the `t3team.thread.children`
+   * `environments` op merges its own environment in front of this history.
+   *
+   * Optional on the SHAPE: the live layer always provides it, but structural
+   * fakes in unrelated suites omit it; the children tool wiring degrades to a
+   * "not available in this host" error when it is absent.
+   */
+  readonly listEnvironmentBindings?: () => Effect.Effect<
+    ReadonlyArray<{
+      readonly environmentId: EnvironmentId;
+      readonly label: string | undefined;
+      readonly threadCount: number;
+      readonly latestThreadAt: string;
+    }>,
+    ProjectionRepositoryError
+  >;
+
+  /**
+   * True if the thread currently owns a non-terminal workflow run
+   * (queued/running/suspended/sleeping/watching/paused). A paused, clock-parked, or
+   * event-parked run is still "running" from the thread's point of view: it can wake and
+   * drive work. Used to refuse settling a thread that still has a live workflow orchestration.
+   */
+  readonly hasNonTerminalWorkflowRun: (
+    threadId: ThreadId,
+  ) => Effect.Effect<boolean, ProjectionRepositoryError>;
+
+  /**
+   * True if the thread has a direct child that is live: the child owns a
+   * non-terminal workflow run, or its session is actively running/starting.
+   * "Working" and "running a workflow" are the same concept here — one child
+   * that is active keeps the parent from settling. Used to refuse settling a
+   * parent while one of its sub-threads is still working.
+   */
+  readonly hasLiveChild: (threadId: ThreadId) => Effect.Effect<boolean, ProjectionRepositoryError>;
+
+  /**
+   * True if some parent has a durable, unresolved `t3team.child_wait` on this
+   * thread — i.e. a parent deterministically still needs this child's result.
+   * A registered `t3team.child_wait.registered` activity with no matching
+   * `t3team.child_wait.resolved` for the same waitId. Used to refuse settling a
+   * child while a parent has an outstanding wait on it.
+   */
+  readonly hasPendingParentWait: (
+    threadId: ThreadId,
+  ) => Effect.Effect<boolean, ProjectionRepositoryError>;
+
+  /**
    * Read the checkpoint context needed to resolve a single thread diff.
    */
   readonly getThreadCheckpointContext: (
@@ -234,7 +316,24 @@ export interface ProjectionSnapshotQueryShape {
   readonly getThreadRuntimeContext: (
     threadId: ThreadId,
   ) => Effect.Effect<
-    Option.Option<Pick<OrchestrationThreadShell, "id" | "title" | "session">>,
+    Option.Option<
+      Pick<OrchestrationThreadShell, "id" | "projectId" | "title" | "titleState" | "session">
+    >,
+    ProjectionRepositoryError
+  >;
+
+  /**
+   * Read one requested message and whether another non-compaction user message exists.
+   * Newer queued messages count too, preserving first-turn title eligibility.
+   */
+  readonly getTurnStartMessage: (input: {
+    readonly threadId: ThreadId;
+    readonly messageId: MessageId;
+  }) => Effect.Effect<
+    Option.Option<{
+      readonly message: OrchestrationMessage;
+      readonly hasOtherUserMessages: boolean;
+    }>,
     ProjectionRepositoryError
   >;
 
@@ -294,6 +393,23 @@ export interface ProjectionSnapshotQueryShape {
   readonly hasPendingTurnStart: (
     threadId: ThreadId,
   ) => Effect.Effect<boolean, ProjectionRepositoryError>;
+
+  /**
+   * List the message refs (id, role, turn) of an active thread in timeline
+   * order, without reading or decoding any message body, attachment, or
+   * context column.
+   *
+   * t3team: fork-replayed threads carry `fork:` message ids and are allowed a
+   * provider rebind / transcript bootstrap until their first live turn. Turn
+   * start must decide that from refs alone — decoding unrelated history on
+   * every turn start is exactly what upstream #10108 removed.
+   */
+  readonly listThreadMessageRefs: (
+    threadId: ThreadId,
+  ) => Effect.Effect<
+    ReadonlyArray<Pick<OrchestrationMessage, "id" | "role" | "turnId">>,
+    ProjectionRepositoryError
+  >;
 }
 
 /**

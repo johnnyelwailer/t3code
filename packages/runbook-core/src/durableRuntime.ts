@@ -1,5 +1,6 @@
 import * as DateTime from "effect/DateTime";
 
+import { WorkflowError } from "./errors.ts";
 import type { JournalEntry, ResolvedEntry } from "./journalReader.ts";
 import type { JournalSink } from "./journalStore.ts";
 import {
@@ -28,6 +29,12 @@ export interface DurableRuntimeConfig {
   readonly nowIso?: (() => string) | undefined;
   /** Absolute workflow path, included in replay-drift errors when available. */
   readonly filePath?: string | undefined;
+  /**
+   * Resume the seq counter from a checkpoint boundary instead of zero: after a checkpoint-aware
+   * resume the body re-drives the RETAINED SUFFIX, whose entries keep their original seqs, so the
+   * first live call must continue at `checkpoint seq + 1`. Absent = 0 (fresh run).
+   */
+  readonly initialSeq?: number | undefined;
   /** Host run id used to derive durable handle correlation ids. */
   readonly runId?: string | undefined;
   /** Resolved handle replies loaded from the durable store. */
@@ -56,7 +63,15 @@ export interface DurablePrimitiveRuntime extends PrimitiveRuntime {
 }
 
 export function createDurableRuntime(config: DurableRuntimeConfig): DurablePrimitiveRuntime {
-  let seq = 0;
+  if (
+    config.initialSeq !== undefined &&
+    (!Number.isInteger(config.initialSeq) || config.initialSeq < 0)
+  ) {
+    throw new WorkflowError(
+      `createDurableRuntime: initialSeq must be a non-negative integer (got ${String(config.initialSeq)}).`,
+    );
+  }
+  let seq = config.initialSeq ?? 0;
   let blackBoxDepth = 0;
   const maxRecordedSeq =
     config.journal.size === 0 ? 0 : Math.max(...Array.from(config.journal.keys()));

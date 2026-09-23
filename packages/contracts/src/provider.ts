@@ -19,9 +19,11 @@ import {
   ProviderRequestKind,
   ProviderSandboxMode,
   ProviderUserInputAnswers,
+  UserInputAttachments,
   RuntimeMode,
 } from "./orchestration.ts";
 import { ProviderInstanceId, ProviderDriverKind } from "./providerInstance.ts";
+import { ProviderJobControlRequest } from "./providerJobControl.ts";
 
 const ProviderSessionStatus = Schema.Literals([
   "connecting",
@@ -119,8 +121,15 @@ export const ProviderRespondToUserInputInput = Schema.Struct({
   threadId: ThreadId,
   requestId: ApprovalRequestId,
   answers: ProviderUserInputAnswers,
+  attachmentsByQuestionId: Schema.optional(UserInputAttachments),
 });
 export type ProviderRespondToUserInputInput = typeof ProviderRespondToUserInputInput.Type;
+
+export const ProviderJobControlInput = Schema.Struct({
+  threadId: ThreadId,
+  request: ProviderJobControlRequest,
+});
+export type ProviderJobControlInput = typeof ProviderJobControlInput.Type;
 
 export const ProviderUploadFeedbackInput = Schema.Struct({
   threadId: ThreadId,
@@ -133,7 +142,7 @@ export const ProviderUploadFeedbackResult = Schema.Struct({
 });
 export type ProviderUploadFeedbackResult = typeof ProviderUploadFeedbackResult.Type;
 
-export class ProviderUploadFeedbackError extends Schema.TaggedErrorClass<ProviderUploadFeedbackError>()(
+export class ProviderUploadFeedbackError extends Schema.TaggedError<ProviderUploadFeedbackError>()(
   "ProviderUploadFeedbackError",
   {
     threadId: ThreadId,

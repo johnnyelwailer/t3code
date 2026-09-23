@@ -3,6 +3,11 @@ import * as Data from "effect/Data";
 export class AtlassianOAuthError extends Data.TaggedError("AtlassianOAuthError")<{
   readonly message: string;
   readonly cause?: unknown;
+  /** HTTP status of the failing Atlassian response, when there was one. */
+  readonly status?: number;
+  /** The `error` / `error_description` fields of an RFC 6749 error body, when Atlassian sent one. */
+  readonly oauthError?: string;
+  readonly oauthErrorDescription?: string;
 }> {}
 
 /**
@@ -37,6 +42,28 @@ export function isDeadRefreshTokenResponse(status: number, body: string): boolea
   } catch {
     // Non-JSON body: only the exact documented description counts.
     return /refresh_token is invalid/i.test(body);
+  }
+}
+
+/**
+ * Atlassian answers token failures with an RFC 6749 JSON body such as
+ * `{"error":"unauthorized_client","error_description":"refresh_token is invalid"}`. Parsed into
+ * fields so callers can classify the failure instead of matching on the rendered message.
+ */
+export function parseOAuthErrorBody(text: string): {
+  readonly oauthError?: string;
+  readonly oauthErrorDescription?: string;
+} {
+  try {
+    const body = JSON.parse(text) as { error?: unknown; error_description?: unknown };
+    return {
+      ...(typeof body.error === "string" ? { oauthError: body.error } : {}),
+      ...(typeof body.error_description === "string"
+        ? { oauthErrorDescription: body.error_description }
+        : {}),
+    };
+  } catch {
+    return {};
   }
 }
 
@@ -186,6 +213,8 @@ export async function refreshAccessToken(
     }
     throw new AtlassianOAuthError({
       message: `Token refresh failed (${response.status}): ${text}`,
+      status: response.status,
+      ...parseOAuthErrorBody(text),
     });
   }
 

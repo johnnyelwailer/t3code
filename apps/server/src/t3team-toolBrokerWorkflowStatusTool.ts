@@ -69,6 +69,8 @@ const hintForStatus = (row: WorkflowRun): string => {
       return row.wakeAt
         ? `Sleeping until ${row.wakeAt}; the scheduler wakes it automatically.`
         : "Sleeping on a timer; the scheduler wakes it automatically.";
+    case "watching":
+      return "Parked waiting on a watched signal event; it resumes automatically when the event is delivered.";
     case "queued":
       return "Queued for engine capacity; it starts automatically once a slot frees up.";
     case "running":

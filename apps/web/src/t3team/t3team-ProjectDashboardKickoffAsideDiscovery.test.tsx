@@ -124,9 +124,7 @@ describe("ProjectDashboardKickoffAside recipe discovery", () => {
     };
     mockUseSidecarComposition.mockReturnValue({
       composition: {
-        sections: [
-          { sectionId: "quick-starts", visible: true, collapsed: false },
-        ],
+        sections: [{ sectionId: "quick-starts", visible: true, collapsed: false }],
       },
       setCollapsed: () => undefined,
       userOverrides: { sections: [] },

@@ -411,6 +411,16 @@ export type TurnCompletedPayload = typeof TurnCompletedPayload.Type;
 const TurnAbortedPayload = Schema.Struct({
   reason: TrimmedNonEmptyStringSchema,
   tokenUsage: Schema.optional(TurnTokenUsage),
+  /**
+   * Host-stamped (NOT provider-derived): the server set this when the abort
+   * settles a turn a newer sendTurn superseded — a new message replaced the
+   * in-flight turn. The pack's free-text `reason` varies per pack and must
+   * not be matched; this structured marker is the only trusted signal that
+   * the interrupted session is about to run a NEW turn. Absent on genuine
+   * user stops and on every provider-emitted event (old emitters decode
+   * unchanged).
+   */
+  superseded: Schema.optional(Schema.Boolean),
 });
 export type TurnAbortedPayload = typeof TurnAbortedPayload.Type;
 
@@ -536,6 +546,11 @@ export const UserInputQuestion = Schema.Struct({
   header: TrimmedNonEmptyStringSchema,
   question: TrimmedNonEmptyStringSchema,
   options: Schema.Array(UserInputQuestionOption),
+  // Markdown content from earlier in the thread that the question refers to
+  // (options, proposals, or discussion). Rendered above the question in the
+  // dock card so the question is intelligible on its own. Optional: the
+  // provider-native question paths never set it.
+  context: Schema.optional(TrimmedNonEmptyStringSchema),
   allowCustomAnswer: Schema.optional(Schema.Boolean),
   multiSelect: Schema.optional(Schema.Boolean).pipe(
     Schema.withConstructorDefault(Effect.succeed(false)),

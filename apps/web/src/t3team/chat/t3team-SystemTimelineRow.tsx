@@ -13,6 +13,7 @@ import {
   getT3TeamWorkflowCardAttachment,
 } from "~/t3team/chat/t3team-messageExtViews";
 import { T3TeamWidgetBlock } from "~/t3team/chat/t3team-widgetBlock";
+import { isT3TeamFullBleedWidgetRow } from "~/t3team/chat/t3team-fullBleedWidgetRow";
 import { getT3TeamWorkflowShapeAttachment } from "~/t3team/chat/t3team-messageShapeCard";
 import type { T3TeamWorkflowRunProgress } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
 import { T3TeamSystemTimelineShapeRow } from "~/t3team/chat/t3team-SystemTimelineShapeRow";
@@ -122,7 +123,7 @@ export function T3TeamSystemTimelineRow(props: {
     /<\/?[a-z][^>]*>/i.test(message.text);
   if (trustedHistoricalHtml) {
     return (
-      <div className="w-full max-w-[92%]">
+      <div className="w-full">
         <T3TeamWidgetBlock
           widget={{
             widgetId: `historical-workflow:${message.id}`,
@@ -136,14 +137,12 @@ export function T3TeamSystemTimelineRow(props: {
     );
   }
 
-  const widgetOnly =
-    widgetAttachments.length > 0 &&
-    !showMessageText &&
-    !workflowCard &&
-    genericAttachments.length === 0;
+  // Full-bleed widget rows: the row wrapper in `MessagesTimeline` (branching on the same
+  // predicate) already spans the full thread content width, so no inner width cap here.
+  const widgetOnly = isT3TeamFullBleedWidgetRow(message);
   if (widgetOnly) {
     return (
-      <div className="flex w-full max-w-[92%] flex-col items-start gap-2">
+      <div className="flex w-full flex-col items-start gap-2">
         {widgetAttachments.map((attachment) => (
           <T3TeamWidgetBlock
             key={`t3team-widget:${attachment.widget.widgetId}`}

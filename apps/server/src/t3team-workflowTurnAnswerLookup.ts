@@ -26,9 +26,24 @@ function promptMessage(thread: OrchestrationThread, promptMessageId: string): Me
 }
 
 /**
+ * The id of the thread's LATEST turn when that turn ended without completing — the projection
+ * settles a dead turn as `interrupted`/`error`. The messages it streamed were preamble: they are
+ * never a completed answer, no matter how plausible they read (a turn that died mid-stream is
+ * exactly the case that used to settle a step with its truncated text).
+ */
+function deadLatestTurnId(thread: OrchestrationThread): string | null {
+  const latest = thread.latestTurn ?? null;
+  if (latest === null || (latest.state !== "interrupted" && latest.state !== "error")) {
+    return null;
+  }
+  return String(latest.turnId);
+}
+
+/**
  * The completed assistant reply that answers `promptMessageId`, when one already exists:
  * the first non-streaming assistant message with text after the prompt, provided no newer user
  * message intervenes (a later prompt means the thread moved on and the reply may answer THAT).
+ * Messages streamed by a turn that never completed are preamble and never count.
  */
 export function findCompletedAnswer(
   thread: OrchestrationThread,
@@ -36,9 +51,11 @@ export function findCompletedAnswer(
 ): { readonly messageId: string; readonly text: string } | null {
   const prompt = promptMessage(thread, promptMessageId);
   if (prompt === undefined) return null;
+  const deadTurnId = deadLatestTurnId(thread);
   for (const message of messagesAfter(thread, prompt)) {
     if (message.role === "user") return null;
     if (message.role !== "assistant" || message.streaming) continue;
+    if (deadTurnId !== null && String(message.turnId) === deadTurnId) continue;
     const text = message.text.trim();
     if (text.length > 0) return { messageId: message.id, text };
   }

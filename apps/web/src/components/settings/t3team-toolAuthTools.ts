@@ -1,6 +1,6 @@
 import { ProviderDriverKind, type ToolAuthToolId } from "@t3tools/contracts";
 
-import { ClaudeAI, OpenAI, type Icon } from "../Icons";
+import { ClaudeAI, GitHubIcon, OpenAI, type Icon } from "../Icons";
 
 /**
  * Static per-tool metadata for the "Connected tools" card list. Mirrors the
@@ -33,13 +33,22 @@ export const TOOL_AUTH_TOOLS: ReadonlyArray<ToolAuthToolMeta> = [
     description: "Sign in with your ChatGPT account to use Codex in this sandbox.",
     icon: OpenAI,
   },
+  {
+    tool: "gh",
+    label: "GitHub",
+    description:
+      "Log in to your GHE account (nexplore.ghe.com) so git work in this sandbox uses your own identity.",
+    icon: GitHubIcon,
+  },
 ];
 
 /**
  * `ProviderDriverKind` is an open slug (custom forks can register new
- * kinds); `ToolAuthToolId` is the closed `"claude" | "codex"` union — only
- * these two tools have a sign-in flow at all. Drivers with no entry here
- * (cursor, grok, opencode, ...) must not render a connect card anywhere.
+ * kinds); `ToolAuthToolId` is the closed `"claude" | "codex" | "gh"` union —
+ * only claude and codex are provider drivers with a sign-in flow; `gh` signs
+ * in the GHE CLI but is not a provider, so no driver kind maps to it. Drivers
+ * with no entry here (cursor, grok, opencode, ...) must not render a connect
+ * card anywhere.
  */
 const TOOL_AUTH_TOOL_BY_DRIVER_KIND: ReadonlyMap<ProviderDriverKind, ToolAuthToolId> = new Map([
   [ProviderDriverKind.make("claudeAgent"), "claude"],

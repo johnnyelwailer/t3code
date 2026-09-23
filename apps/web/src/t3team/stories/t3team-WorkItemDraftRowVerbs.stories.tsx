@@ -173,7 +173,7 @@ function DraftStrip() {
 }
 
 const meta = {
-  title: "T3Team/Work Item Draft Row Verbs",
+  title: "T3Team/Work Item/Draft Row Verbs",
   parameters: { layout: "padded" },
 } satisfies Meta;
 

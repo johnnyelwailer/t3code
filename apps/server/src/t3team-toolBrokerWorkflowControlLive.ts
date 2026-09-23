@@ -11,6 +11,7 @@ import * as Option from "effect/Option";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
 import { makeWorkflowControlToolHandlers } from "./t3team-toolBrokerWorkflowControlTool.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
@@ -29,6 +30,7 @@ export const makeWorkflowControlToolsForThread = Effect.fn("makeWorkflowControlT
       yield* Effect.serviceOption(OrchestrationEngineService),
     );
     const threadQuery = Option.getOrUndefined(yield* Effect.serviceOption(ProjectionSnapshotQuery));
+    const signalStore = Option.getOrUndefined(yield* Effect.serviceOption(WorkflowSignalStore));
     if (!registry || !repo || !scheduler || !orchestration || !threadQuery) {
       return undefined;
     }
@@ -43,6 +45,8 @@ export const makeWorkflowControlToolsForThread = Effect.fn("makeWorkflowControlT
         orchestration,
         threadQuery,
       }),
+      // GHE #332: a `watching` run's pause/resume round-trip drains its bridged inbox events.
+      ...(signalStore === undefined ? {} : { signalStore }),
     });
   },
 );

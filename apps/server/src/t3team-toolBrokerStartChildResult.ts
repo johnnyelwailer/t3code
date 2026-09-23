@@ -1,4 +1,8 @@
-import type { ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
+import type {
+  ProviderInteractionMode,
+  RuntimeMode,
+  ThreadEnvironmentBinding,
+} from "@t3tools/contracts";
 
 import type {
   T3TeamStartChildIsolation,
@@ -17,6 +21,12 @@ export function buildStartChildResult(input: {
   readonly provider: string;
   readonly model: string;
   readonly requestedModel?: string;
+  /** Cross-environment binding, when the child was started with an explicit `environment`.
+   * Absent = same environment as the creating server. */
+  readonly environment?: ThreadEnvironmentBinding;
+  /** Documents the delivery boundary for a cross-environment child: inter-agent messaging
+   * stays same-environment, so report-back needs a separate channel. */
+  readonly environmentNote?: string;
   /** Set when a requested provider-agnostic `effort` could not be honored — the launch result
    * says so explicitly instead of silently downgrading. */
   readonly effortNote?: string;
@@ -43,6 +53,8 @@ export function buildStartChildResult(input: {
     runtime_mode: input.runtimeMode,
     provider: input.provider,
     model: input.model,
+    ...(input.environment ? { environment: input.environment } : {}),
+    ...(input.environmentNote ? { environment_note: input.environmentNote } : {}),
     ...(input.interactionMode === "plan"
       ? {
           plan_obligation:

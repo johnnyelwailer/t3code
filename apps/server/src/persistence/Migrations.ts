@@ -101,6 +101,19 @@ import Migration0067 from "./Migrations/046_RepairAutomaticSettlementTimestamps.
 import Migration0068 from "./Migrations/047_ProjectionProjectIcon.ts";
 import Migration0069 from "./Migrations/t3team-056_ThreadTaskRecords.ts";
 import Migration0070 from "./Migrations/t3team-057_DropThreadTaskRecords.ts";
+import Migration0071 from "./Migrations/t3team-058_ProjectionThreadEnvironment.ts";
+// New from the 2026-09-17 upstream sync (upstream 048-052). Appended above the fork's maximum id
+// rather than taking upstream's numbers, which this fork already uses — see the rule above.
+import Migration0072 from "./Migrations/048_ProjectionThreadBranchPullRequest.ts";
+import Migration0073 from "./Migrations/049_ProjectionThreadsActiveOrderKey.ts";
+import Migration0074 from "./Migrations/050_ProjectionThreadPullRequests.ts";
+import Migration0075 from "./Migrations/051_ProjectionThreadMessageContext.ts";
+import Migration0076 from "./Migrations/052_ProjectionThreadTitleState.ts";
+import Migration0077 from "./Migrations/t3team-059_SignalSources.ts";
+// Tail repair for the GHE #382 kind-index ledger collision: re-runs the
+// `idx_projection_thread_activities_kind_created` DDL for machines whose ledger
+// consumed id 60 with a different migration and therefore never ran it.
+import Migration0078 from "./Migrations/t3team-060_EnsureProjectionThreadActivitiesKindIndex.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -112,7 +125,7 @@ import Migration0070 from "./Migrations/t3team-057_DropThreadTaskRecords.ts";
  * Uses Migrator.fromRecord which parses the key format and
  * returns migrations sorted by ID.
  */
-export const migrationEntries = [
+const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
   [2, "OrchestrationCommandReceipts", Migration0002],
   [3, "CheckpointDiffBlobs", Migration0003],
@@ -183,11 +196,19 @@ export const migrationEntries = [
   [68, "ProjectionProjectIcon", Migration0068],
   [69, "ThreadTaskRecords", Migration0069],
   [70, "DropThreadTaskRecords", Migration0070],
+  [71, "ProjectionThreadEnvironment", Migration0071],
+  [72, "ProjectionThreadBranchPullRequest", Migration0072],
+  [73, "ProjectionThreadsActiveOrderKey", Migration0073],
+  [74, "ProjectionThreadPullRequests", Migration0074],
+  [75, "ProjectionThreadMessageContext", Migration0075],
+  [76, "ProjectionThreadTitleState", Migration0076],
+  [77, "SignalSources", Migration0077],
+  [78, "EnsureProjectionThreadActivitiesKindIndex", Migration0078],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
 
-export const makeMigrationLoader = (throughId?: number) =>
+const makeMigrationLoader = (throughId?: number) =>
   Migrator.fromRecord(
     Object.fromEntries(
       migrationEntries

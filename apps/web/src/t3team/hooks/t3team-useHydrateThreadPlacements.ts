@@ -119,6 +119,43 @@ export function useHydrateThreadPlacements(input: {
   // e.g. `["a\nb", "c"]` vs `["a", "b\nc"]` would otherwise both join to
   // "a\nb\nc".
   const candidateThreadIdsKey = JSON.stringify(candidateThreadIds);
+  // Content-stable key for the live lists this effect actually reads (GHE
+  // #382 follow-up). `liveThreads` and `liveProjects` are fresh arrays with
+  // fresh object identity on every shell event, so depending on them re-fired
+  // the fetch on every live update (778 POSTs in 12 min on the live
+  // machine) — the same identity-flapping this file already solved once for
+  // the candidate ids. What the effect consumes is: the candidate threads'
+  // `updatedAt` (the unresolved-id filter and the empty-answer staleness
+  // stamps) and their `retention` (which flows through the candidate ids
+  // too), plus the live projects' id/roots (project-id resolution in the
+  // merge). A primitive key over exactly that content re-runs the effect only
+  // when the fetch decision itself can change.
+  const liveThreadsKey = useMemo(
+    () =>
+      JSON.stringify(
+        (() => {
+          const byId = new Map(liveThreads.map((thread) => [thread.id as string, thread] as const));
+          return candidateThreadIds.map((threadId) => {
+            const thread = byId.get(threadId);
+            return thread === undefined
+              ? [threadId, null, null]
+              : [thread.id, thread.updatedAt, thread.retention ?? null];
+          });
+        })(),
+      ),
+    [candidateThreadIds, liveThreads],
+  );
+  const liveProjectsKey = useMemo(
+    () =>
+      JSON.stringify(
+        liveProjects.map((project) => [
+          project.id,
+          project.workspaceRoot,
+          project.repositoryIdentity?.rootPath ?? null,
+        ]),
+      ),
+    [liveProjects],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -184,19 +221,19 @@ export function useHydrateThreadPlacements(input: {
     return () => {
       cancelled = true;
     };
-    // `candidateThreadIds` is intentionally omitted: it is a freshly derived
-    // array on every render (new identity each time even when its contents
-    // are unchanged), so including it would re-run this effect — and refetch
-    // placements — on every re-render instead of only when the actual set of
-    // candidate ids changes. `candidateThreadIdsKey` is the stable,
-    // content-based dependency; the effect body still reads the up-to-date
-    // `candidateThreadIds` value via closure.
+    // `candidateThreadIds`, `liveThreads`, and `liveProjects` are
+    // intentionally omitted: each is a freshly derived value with new identity
+    // on every live event even when its content is unchanged, so including it
+    // would re-run this effect — and refetch placements — on every re-render
+    // instead of only when the actual fetch decision changes. The content
+    // keys are the stable dependencies; the effect body still reads the
+    // up-to-date values via closure.
   }, [
     backend,
     backendState.connectionStatus,
     candidateThreadIdsKey,
-    liveProjects,
-    liveThreads,
+    liveProjectsKey,
+    liveThreadsKey,
     setThreads,
     storedProjects,
   ]);

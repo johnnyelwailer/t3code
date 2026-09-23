@@ -29,15 +29,18 @@ const entry = (
   id: overrides.id,
   createdAt: overrides.createdAt ?? T0_ISO,
   detail: overrides.detail,
+  command: overrides.command,
+  label: overrides.label,
 });
 
 describe("detectBackgroundJobStart", () => {
-  it("parses id, start and hard deadline from the yield marker", () => {
+  it("parses id, start, hard deadline and pid from the yield marker", () => {
     const start = detectBackgroundJobStart(startDetail, T0 + 10_000);
     expect(start).toEqual({
       jobId: "job_a1b2c3d4",
       startedAtMs: T0,
       deadlineMs: T0 + 600_000,
+      pid: 4242,
     });
   });
 
@@ -53,6 +56,18 @@ describe("detectBackgroundJobStart", () => {
       jobId: "job_8865dcbe",
       startedAtMs: observedAtMs,
       deadlineMs: observedAtMs + 1_800_000,
+      pid: 84712,
+    });
+  });
+
+  it("omits pid when the marker reports one", () => {
+    const marker =
+      "Command still running after 10s — it is now a background job: job_a1b2c3d4 (pid ?). " +
+      "It keeps running under a 600s hard deadline owned by this thread; you do not have to wait...";
+    expect(detectBackgroundJobStart(marker, T0 + 10_000)).toEqual({
+      jobId: "job_a1b2c3d4",
+      startedAtMs: T0,
+      deadlineMs: T0 + 600_000,
     });
   });
 
@@ -163,6 +178,7 @@ describe("foldBackgroundJobs over transposed history", () => {
         jobId: "job_8865dcbe",
         startedAtMs: observedAtMs,
         deadlineMs: observedAtMs + 1_800_000,
+        pid: 84712,
         state: "running",
         startedEntryId: persistedRow.id,
         lastSeenEntryId: persistedRow.id,
@@ -206,6 +222,81 @@ describe("foldBackgroundJobs over transposed history", () => {
         T0 + 60_000,
       ),
     ).toEqual([]);
+  });
+
+  // Modern shape: the runtime sends a structured command AND a result. The
+  // row's `command` field is the shell command — adopt it so the expanded
+  // indicator can say WHAT is running, not just that something is.
+  it("adopts the row's command when the marker came from detail", () => {
+    const jobs = foldBackgroundJobs(
+      [
+        {
+          id: "bash",
+          createdAt: T0_PLUS_10S,
+          detail: startDetail,
+          command: "node scripts/quality-gate.mjs",
+        },
+      ],
+      T0 + 60_000,
+    );
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]).toMatchObject({
+      jobId: "job_a1b2c3d4",
+      pid: 4242,
+      command: "node scripts/quality-gate.mjs",
+      state: "running",
+    });
+  });
+
+  // Transposed era: `command` holds the marker text itself. Adopting it would
+  // display the yield message as if it were the shell command — it must stay
+  // inert even though the shape now carries a `command` field.
+  it("does NOT adopt the marker text as the command on transposed rows", () => {
+    const jobs = foldBackgroundJobs([persistedRow], observedAtMs + 60_000);
+    expect(jobs[0]?.command).toBeUndefined();
+    expect(jobs[0]?.label).toBeUndefined();
+  });
+
+  // The row's display label is the tool call's own human label ("Building
+  // the project") — the same text the tool card renders. Modern rows carry
+  // it; transposed history does not.
+  it("adopts the row's display label when the marker came from detail", () => {
+    const jobs = foldBackgroundJobs(
+      [
+        {
+          id: "bash",
+          createdAt: T0_PLUS_10S,
+          detail: startDetail,
+          command: "node scripts/quality-gate.mjs",
+          label: "Running the quality gate",
+        },
+      ],
+      T0 + 60_000,
+    );
+    expect(jobs[0]).toMatchObject({
+      label: "Running the quality gate",
+      command: "node scripts/quality-gate.mjs",
+    });
+  });
+
+  it("keeps the first opener's label on repeated start markers", () => {
+    const jobs = foldBackgroundJobs(
+      [
+        entry({ id: "e1", detail: startDetail, label: "First label" }),
+        entry({ id: "e2", detail: startDetail, label: "Second label" }),
+      ],
+      T0 + 60_000,
+    );
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]?.label).toBe("First label");
+  });
+
+  it("ignores a blank label instead of adopting it", () => {
+    const jobs = foldBackgroundJobs(
+      [entry({ id: "e1", detail: startDetail, label: "   " })],
+      T0 + 60_000,
+    );
+    expect(jobs[0]?.label).toBeUndefined();
   });
 });
 
@@ -305,6 +396,8 @@ describe("foldBackgroundJobs across a server restart", () => {
         // Marker reports 10s elapsed at observation, so start = observed - 10s.
         startedAtMs: startMs - 10_000,
         deadlineMs: startMs - 10_000 + 600_000,
+        // The start marker also reports the pid; the fold carries it.
+        pid: 4242,
         state: "finished",
         finishedReason: "lost-restart",
         startedEntryId: "e1",

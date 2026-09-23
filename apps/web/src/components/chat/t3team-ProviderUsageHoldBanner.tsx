@@ -65,11 +65,17 @@ export function deriveProviderUsageHoldBanner(
   for (const activity of activities) {
     const payload = holdPayload(activity);
     if (activity.kind === KIND_STARTED || activity.kind === KIND_DEFERRED) {
+      // tsgo narrows `hold` to never inside its own assignment; the cast keeps
+      // the previous-toggle read outside that write context.
+      const prevAutoResume: boolean =
+        (hold as ProviderUsageHoldBannerState | null)?.autoResume ?? true;
       hold = {
         driver: typeof payload?.driver === "string" ? payload.driver : null,
         since: activity.createdAt,
         resetsAt: typeof payload?.resetsAt === "string" ? payload.resetsAt : null,
-        autoResume: payload?.autoResume !== false,
+        // Refresh/deferred activities may omit the toggle. Preserve the
+        // user's existing choice instead of silently restoring the default.
+        autoResume: typeof payload?.autoResume === "boolean" ? payload.autoResume : prevAutoResume,
       };
     } else if (activity.kind === KIND_RELEASED) {
       hold = null;

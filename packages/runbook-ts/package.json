@@ -42,7 +42,7 @@
   "dependencies": {
     "@runbook/core": "workspace:*",
     "effect": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "~6.0.3"
   },
   "devDependencies": {
     "@types/node": "catalog:",

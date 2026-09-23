@@ -226,4 +226,22 @@ describe("ThreadBackgroundLiveness", () => {
     a.clearThreadLiveness("t");
     expect(a.getThreadBackgroundLiveness("t")).toBeNull();
   });
+
+  it("resolveShellBackgroundLiveness nulls liveness on terminal sessions only", () => {
+    const resolve = ThreadBackgroundLiveness.resolveShellBackgroundLiveness;
+    // Terminal session: a stale registry entry must not surface.
+    for (const status of ["error", "stopped", "interrupted"] as const) {
+      expect(resolve({ status }, "monitoring")).toBeNull();
+      expect(resolve({ status }, "working")).toBeNull();
+    }
+    // Non-terminal session: liveness passes through unchanged.
+    for (const status of ["running", "starting", "ready", "idle"] as const) {
+      expect(resolve({ status }, "monitoring")).toBe("monitoring");
+      expect(resolve({ status }, "working")).toBe("working");
+      expect(resolve({ status }, null)).toBeNull();
+    }
+    // No session at all: the registry entry still counts.
+    expect(resolve(null, "monitoring")).toBe("monitoring");
+    expect(resolve(undefined, "monitoring")).toBe("monitoring");
+  });
 });

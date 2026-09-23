@@ -20,6 +20,11 @@ export interface DurableRuntimeConfig {
   readonly scriptCtx: T.ScriptHandlerCtx;
   readonly scriptNames: ReadonlyMap<T.AnyScriptRef, string>;
   readonly filePath?: string;
+  /**
+   * Resume the seq counter from a checkpoint boundary (bounded execution). The run boundary seeds
+   * it from the replay window's active boundary; a fresh start omits it (counter starts at 0).
+   */
+  readonly initialSeq?: number;
   readonly nowIso: () => string;
   readonly runId?: string;
   readonly resolved?: ReadonlyMap<string, ResolvedEntry>;
@@ -47,6 +52,7 @@ export function createDurableWorkflowRuntime(config: DurableRuntimeConfig): Dura
     source: hostSource(),
     nowIso: config.nowIso,
     ...(config.filePath === undefined ? {} : { filePath: config.filePath }),
+    ...(config.initialSeq === undefined ? {} : { initialSeq: config.initialSeq }),
     ...(config.runId === undefined ? {} : { runId: config.runId }),
     ...(config.resolved === undefined ? {} : { resolved: config.resolved }),
     ...(config.events === undefined ? {} : { events: config.events }),

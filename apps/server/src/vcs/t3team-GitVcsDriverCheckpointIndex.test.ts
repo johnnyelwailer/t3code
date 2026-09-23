@@ -49,6 +49,17 @@ const failed = (exitCode: number, stderr: string): VcsProcess.VcsProcessOutput =
   stderrTruncated: false,
 });
 
+/**
+ * The service-level execute prepends `-C <cwd>`, and the checkpoint path adds
+ * `-c key=value` pairs (index/fsync config, upstream). Strip both so the fakes
+ * see the bare subcommand.
+ */
+const gitSubcommandArgs = (raw: ReadonlyArray<string>): ReadonlyArray<string> => {
+  let args = raw.slice(raw[0] === "-C" ? 2 : 0);
+  while (args[0] === "-c") args = args.slice(2);
+  return args;
+};
+
 /** Contents of each pathspec file the mocked `git add` sees. */
 const pathspecReads: string[] = [];
 
@@ -59,9 +70,14 @@ const DriverLayer = Layer.mergeAll(GitVcsDriver.vcsLayer, GitVcsDriver.layer).pi
       run: (input) =>
         Effect.sync(() => {
           // The service-level execute prepends `-C <cwd>`; strip it.
-          const args = input.args.slice(input.args[0] === "-C" ? 2 : 0);
+          const args = gitSubcommandArgs(input.args);
           if (args[0] === "rev-parse" && args[1] === "--git-common-dir") {
             return ok(".git\n");
+          }
+          // Upstream probes sparse checkout before building the temp index; an
+          // unset key is git's exit 1 with empty output (allowNonZeroExit).
+          if (args[0] === "config" && args[1] === "--bool") {
+            return failed(1, "");
           }
           if (args[0] === "rev-parse" && args[1] === "--verify") {
             return ok("head-oid\n");
@@ -164,9 +180,12 @@ const DriverLayerAllUnindexable = Layer.mergeAll(GitVcsDriver.vcsLayer, GitVcsDr
     Layer.succeed(VcsProcess.VcsProcess, {
       run: (input) =>
         Effect.sync(() => {
-          const args = input.args.slice(input.args[0] === "-C" ? 2 : 0);
+          const args = gitSubcommandArgs(input.args);
           if (args[0] === "rev-parse" && args[1] === "--git-common-dir") {
             return ok(".git\n");
+          }
+          if (args[0] === "config" && args[1] === "--bool") {
+            return failed(1, "");
           }
           if (args[0] === "rev-parse" && args[1] === "--verify") {
             return ok("head-oid\n");
@@ -291,9 +310,12 @@ const DriverLayerAddTimeout = Layer.mergeAll(GitVcsDriver.vcsLayer, GitVcsDriver
   Layer.provideMerge(
     Layer.succeed(VcsProcess.VcsProcess, {
       run: (input) => {
-        const args = input.args.slice(input.args[0] === "-C" ? 2 : 0);
+        const args = gitSubcommandArgs(input.args);
         if (args[0] === "rev-parse" && args[1] === "--git-common-dir") {
           return Effect.succeed(ok(".git\n"));
+        }
+        if (args[0] === "config" && args[1] === "--bool") {
+          return Effect.succeed(failed(1, ""));
         }
         if (args[0] === "rev-parse" && args[1] === "--verify") {
           return Effect.succeed(ok("head-oid\n"));

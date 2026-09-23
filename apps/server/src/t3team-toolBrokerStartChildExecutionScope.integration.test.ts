@@ -229,6 +229,10 @@ export function createEvalHarness(variant: EvalVariant = linkedVariant) {
 
   const projectionQueryMock: ProjectionSnapshotQueryShape = {
     getCommandReadModel: () => Effect.die("unused"),
+    listActivitiesByKind: () => Effect.die("unused"),
+    getDeletedWorktreeThreads: () => Effect.die("unused"),
+    getProjectShells: () => Effect.die("unused"),
+    getTurnStartMessage: () => Effect.die("unused"),
     getUserInputActivity: () => Effect.die("unused"),
     getImportedAgentSessionSources: () => Effect.succeed([]),
     getThreadRuntimeContext: () => Effect.succeed(Option.none()),
@@ -255,6 +259,9 @@ export function createEvalHarness(variant: EvalVariant = linkedVariant) {
     getFirstActiveThreadIdByProjectId: () => Effect.die("unused"),
     listChildThreadIdsByParent: () => Effect.die("unused"),
     listParentChildRelations: () => Effect.die("unused"),
+    hasNonTerminalWorkflowRun: () => Effect.succeed(false),
+    hasLiveChild: () => Effect.succeed(false),
+    hasPendingParentWait: () => Effect.succeed(false),
     getThreadCheckpointContext: () => Effect.die("unused"),
     getThreadDetailSnapshot: () => Effect.die("unused"),
     getFullThreadDiffContext: () => Effect.die("unused"),
@@ -277,6 +284,7 @@ export function createEvalHarness(variant: EvalVariant = linkedVariant) {
           interactionMode: "default" as const,
           branch: thread.branch,
           worktreePath: thread.worktreePath,
+          pullRequests: [],
           latestTurn: null,
           createdAt: "2026-01-01T00:00:00.000Z",
           updatedAt: "2026-01-01T00:00:00.000Z",
@@ -294,6 +302,7 @@ export function createEvalHarness(variant: EvalVariant = linkedVariant) {
     },
     threadExists: () => Effect.die("unused"),
     hasPendingTurnStart: () => Effect.die("unused"),
+    listThreadMessageRefs: () => Effect.die("unused"),
     searchThreads: () => Effect.succeed({ matches: [] }),
   };
 
