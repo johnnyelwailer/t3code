@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { hashArgs } from "./canonicalJson.ts";
+import { selectReplayWindow } from "./checkpoint.ts";
 import { createDurableRuntime } from "./durableRuntime.ts";
 import { createWorkflowEngine } from "./engine.ts";
 import type { WorkflowReference } from "./engineTypes.ts";
@@ -186,6 +187,63 @@ describe("@runbook/core opt-in re-fire of a recorded ask", () => {
     expect(host.fired).toHaveLength(1);
   });
 
+  it("fails closed when the replay parks on an earlier unanswered ask without reaching the target", async () => {
+    // Drive 1 sends asks A and B, then awaits A. Drive 2 awaits A BEFORE sending B (a replay that
+    // diverged), so it parks on A and never reaches B — it must not report that park as success.
+    const store = new MemoryJournalStore();
+    const body = { awaitFirst: false };
+    let fires = 0;
+    const engine = createWorkflowEngine<
+      WorkflowReference,
+      { store?: JournalStore; refire?: string }
+    >({
+      workflowPath: (ref) => ref.path,
+      defaultRunsRoot: () => "/unused",
+      createStore: () => store,
+      newRunId: () => "run-1",
+      nowIso,
+      executeBody: async (request) => {
+        const runtime = createDurableRuntime({
+          journal: request.journal.bySeq,
+          resolved: request.journal.byCorrelation,
+          writer: request.sink,
+          source,
+          nowIso,
+          runId: request.runId,
+          suspension: request.suspension,
+          refire: request.refire,
+        });
+        const ask = (prompt: string) =>
+          runtime.handles.send({
+            kind: "thread.turn",
+            refId: "thread.turn",
+            args: { prompt },
+            fire: async () => {
+              fires += 1;
+            },
+          });
+        const first = await ask("A");
+        if (body.awaitFirst) await runtime.handles.awaitResolution(first, undefined);
+        const second = await ask("B");
+        await runtime.handles.awaitResolution(first, undefined);
+        return await runtime.handles.awaitResolution(second, undefined);
+      },
+    });
+    const ref: WorkflowReference = { path: "two-asks.workflow.ts" };
+    expect(await engine.startWorkflow(ref, {}, { store })).toEqual({
+      runId: "run-1",
+      suspended: true,
+      correlationId: "run-1:1",
+    });
+    body.awaitFirst = true;
+    await expect(
+      engine.resumeWorkflow("run-1", ref, {}, { store, refire: "run-1:2" }),
+    ).rejects.toThrow(
+      "Run 'run-1' parked on 'run-1:1' without reaching its re-fire target 'run-1:2'",
+    );
+    expect(fires).toBe(2); // the two original fires; nothing re-sent
+  });
+
   it("refuses every non-ask kind before the body runs: no re-schedule, no re-register, no one-way re-send", async () => {
     // One unanswered `sent` entry per kind. Their fires carry side effects of their own
     // (`wait.until` schedules, `signal.wait` registers) or await no reply (one-way sends).
@@ -254,6 +312,63 @@ describe("@runbook/core opt-in re-fire of a recorded ask", () => {
     }
     expect(bodyRuns).toBe(1); // every refusal happened before the body ran
     expect(fires).toBe(5); // the original fires only — nothing was re-sent
+  });
+
+  it("names the true reason for a target compacted behind a checkpoint", async () => {
+    const line = (seq: number, kind: string, extra: Record<string, unknown>) => ({
+      seq,
+      callId: `${seq}:${kind}:${kind}`,
+      kind,
+      refId: kind,
+      argsHash: `hash-${seq}`,
+      startedAt: nowIso(),
+      endedAt: nowIso(),
+      ...extra,
+    });
+    const sent = (seq: number) =>
+      line(seq, "thread.turn", { phase: "sent", correlationId: `run-1:${seq}` });
+    const checkpoint = (seq: number) =>
+      line(seq, "checkpoint", {
+        result: { v: { compactedThroughSeq: seq, state: {}, retainedHistory: 0, at: nowIso() } },
+      });
+    const replied = toResolvedWire({
+      correlationId: "run-1:1",
+      kind: "thread.turn",
+      refId: "t",
+      reply: "ok",
+      startedAt: nowIso(),
+      endedAt: nowIso(),
+    });
+    const resumeWith = async (wires: Array<Record<string, unknown>>) => {
+      const store = new MemoryJournalStore();
+      store.wires.push(...wires);
+      await store.writeRunMeta("run-1", {
+        workflowPath: "w",
+        argsHash: hashArgs({}),
+        createdAt: nowIso(),
+      });
+      const windowed = Object.assign(store, {
+        readReplayWindow: async () => selectReplayWindow(buildJournalMaps(store.wires)),
+      });
+      return createWorkflowEngine<WorkflowReference, { store?: JournalStore; refire?: string }>({
+        workflowPath: () => "w",
+        defaultRunsRoot: () => "/unused",
+        createStore: () => windowed,
+        newRunId: () => "run-1",
+        nowIso,
+        executeBody: async () => {
+          throw new Error("the body must not run");
+        },
+      }).resumeWorkflow("run-1", { path: "w" }, {}, { store: windowed, refire: "run-1:1" });
+    };
+    // Answered, then compacted: `bySeq` no longer holds it, but the full correlation map does.
+    await expect(resumeWith([sent(1), replied, checkpoint(2), sent(3)])).rejects.toThrow(
+      "cannot re-fire ask 'run-1:1': it already has a journaled reply",
+    );
+    // Unanswered, then compacted: the replay window itself refuses to resume, naming the ask.
+    await expect(resumeWith([sent(1), checkpoint(2), sent(3)])).rejects.toThrow(
+      "the collapsed prefix still holds 1 unanswered ask(s) (run-1:1)",
+    );
   });
 
   it("refuses a refire on a fresh start", async () => {

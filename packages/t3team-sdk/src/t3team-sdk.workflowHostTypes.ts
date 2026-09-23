@@ -106,22 +106,24 @@ export interface WorkflowHostRedriveOptions {
 /**
  * The per-run control handle the host registry and host funnels drive.
  *
- * Drive serialization: `resume` and `redrive` share ONE in-flight slot per run. A call made while
- * another replay drive of the same run is still settling is DROPPED — it resolves immediately and
- * does nothing (no reply journaled, no replay, no re-fire). It is not queued, so the host must
- * serialize drives per run itself (the portal does, via its admission queue) and issue the next
- * one only after the previous call's promise settles.
+ * Drive serialization: at most ONE replay drive (a `resume` or `redrive`) runs per run at a time,
+ * and hosts need not serialize their calls. A `resume` that arrives while a drive is in flight
+ * still journals its reply immediately (first-write-wins, one retry) and resolves; the in-flight
+ * drive then runs one more plain replay before it lets go, repeating until nothing is owed, so
+ * that call's promise covers the owed work. A `redrive` that arrives while a drive is in flight is
+ * DROPPED — it is a host-initiated retry, and the host issues it again once the run is idle.
+ * Owed work is discarded once the run is cancelled, settled, or gone from the registry.
  */
 export interface WorkflowRunHost {
   readonly start: () => Promise<WorkflowLaunchStatus>;
-  /** Journal `reply` for `correlationId` and replay. Dropped while another drive is in flight
-   * (see the serialization note above). */
+  /** Journal `reply` for `correlationId` and replay — or, while another drive is in flight,
+   * journal it and leave the replay to that drive (see the serialization note above). */
   readonly resume: (correlationId: string, reply: unknown) => Promise<void>;
-  /** Replay the run WITHOUT journaling a reply, under the same guard and funnel as `resume`.
-   * Plain, it re-drives from the journal (a crash inside a script step); with `refire`, the
-   * replay re-sends that one recorded, unanswered ask with its original payload. `refire` applies
-   * to this call only — one left on the static `runOptions` is ignored by every drive. Dropped
-   * while another drive is in flight (see the serialization note above). */
+  /** Replay the run WITHOUT journaling a reply, under the same funnel as `resume`. Plain, it
+   * re-drives from the journal (a crash inside a script step); with `refire`, the replay re-sends
+   * that one recorded, unanswered ask with its original payload. `refire` applies to this call
+   * only — one left on the static `runOptions` is ignored by every drive. Dropped while another
+   * drive is in flight (see the serialization note above). */
   readonly redrive: (opts?: WorkflowHostRedriveOptions) => Promise<void>;
   readonly fail: (error: unknown) => Promise<void>;
   readonly cancel: () => void;

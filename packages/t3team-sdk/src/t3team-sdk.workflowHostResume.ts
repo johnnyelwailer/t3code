@@ -1,9 +1,11 @@
-/** The replay half of a workflow run host: retry-safe reply journal + resume, and the
- * reply-less re-drive (optionally re-firing one recorded ask). */
+/** The replay half of a workflow run host: retry-safe reply journal + resume (including a resume
+ * that lands while another drive runs), and the reply-less re-drive (optionally re-firing one
+ * recorded ask). */
 
 import { resumeWorkflow } from "./t3team-sdk.engine.ts";
 
 import type { WorkflowRef, WorkflowRunOptions } from "./t3team-sdk.types.ts";
+import type { WorkflowHostDriveSlot } from "./t3team-sdk.workflowHostDriveSlot.ts";
 import type {
   WorkflowHostLifecycle,
   WorkflowHostRegistry,
@@ -60,57 +62,83 @@ export async function redriveWorkflowRunHost(
   }
 }
 
-export async function resumeWorkflowRunHost(
-  input: WorkflowReplayHostInput & {
+/** One reply to journal, plus the host seams that decide what a duplicate write means. */
+export interface WorkflowReplyInput {
+  readonly runId: string;
+  readonly correlationId: string;
+  readonly reply: unknown;
+  readonly appendReply: (opts: {
+    readonly runId: string;
     readonly correlationId: string;
     readonly reply: unknown;
-    readonly appendReply: (opts: {
-      readonly runId: string;
-      readonly correlationId: string;
-      readonly reply: unknown;
-    }) => Promise<boolean>;
-    readonly retryResolvedReply:
-      | ((correlationId: string) => Promise<boolean> | boolean)
-      | undefined;
-    readonly onReplyJournaled: ((correlationId: string) => Promise<void> | void) | undefined;
-  },
-): Promise<void> {
-  const {
-    runId,
-    correlationId,
-    reply,
-    ref,
-    args,
-    runOptions,
-    lifecycle,
-    appendReply,
-    retryResolvedReply,
-    onReplyJournaled,
-    settle,
-  } = input;
+  }) => Promise<boolean>;
+  readonly retryResolvedReply: ((correlationId: string) => Promise<boolean> | boolean) | undefined;
+  readonly onReplyJournaled: ((correlationId: string) => Promise<void> | void) | undefined;
+}
+
+/**
+ * Journal one reply. `"journaled"` — written now, or already present and the host declares it
+ * retry-safe (`onReplyJournaled` has run); `"duplicate"` — already present and not retry-safe.
+ * Throws when the journal stays unreachable after the one retry.
+ */
+export async function journalReply(input: WorkflowReplyInput): Promise<"journaled" | "duplicate"> {
+  const { runId, correlationId, reply, appendReply } = input;
+  let wrote: boolean;
   try {
-    if ((await lifecycle?.recordActive()) === false) return;
-    let wrote: boolean;
+    wrote = await appendReply({ runId, correlationId, reply });
+  } catch (firstError) {
+    // First-write-wins makes this one retry safe even if the first write
+    // committed before a transient transport failure reached the host.
     try {
       wrote = await appendReply({ runId, correlationId, reply });
-    } catch (firstError) {
-      // First-write-wins makes this one retry safe even if the first write
-      // committed before a transient transport failure reached the host.
-      try {
-        wrote = await appendReply({ runId, correlationId, reply });
-      } catch {
-        throw firstError;
-      }
+    } catch {
+      throw firstError;
     }
-    if (!wrote) {
-      // The host distinguishes retry-safe user input from a clock wake whose
-      // previous process died after journaling its reply.
-      if (!(await retryResolvedReply?.(correlationId))) {
-        await lifecycle?.orphanIfSleeping(correlationId);
-        return;
-      }
+  }
+  // The host distinguishes retry-safe user input from a clock wake whose
+  // previous process died after journaling its reply.
+  if (!wrote && !(await input.retryResolvedReply?.(correlationId))) return "duplicate";
+  await input.onReplyJournaled?.(correlationId);
+  return "journaled";
+}
+
+/**
+ * A resume that arrived while another drive holds `slot`: journal the reply NOW so it cannot be
+ * lost, and owe the in-flight drive one replay. If the journal is unreachable, owe the whole
+ * resume instead — it retries the write after the current drive and reports a persistent
+ * failure through the normal resume funnel. Resolves once the reply is journaled (or owed).
+ */
+export async function resumeWhileBusy(input: {
+  readonly slot: WorkflowHostDriveSlot;
+  readonly reply: WorkflowReplyInput;
+  readonly resumeDrive: () => Promise<void>;
+  readonly replayDrive: () => Promise<void>;
+  readonly canDrive: () => boolean;
+}): Promise<void> {
+  const { slot, resumeDrive, replayDrive } = input;
+  let journaled: boolean;
+  try {
+    journaled = (await journalReply(input.reply)) === "journaled";
+  } catch {
+    if (slot.busy()) return slot.oweDrive(resumeDrive);
+    return input.canDrive() ? slot.run(resumeDrive) : undefined;
+  }
+  if (!journaled) return; // already answered and not retry-safe: the live drive has it
+  if (slot.busy()) return slot.oweReplay(replayDrive);
+  // The drive settled while the reply was being written: replay it ourselves.
+  if (input.canDrive()) return slot.run(replayDrive);
+}
+
+export async function resumeWorkflowRunHost(
+  input: WorkflowReplayHostInput & WorkflowReplyInput,
+): Promise<void> {
+  const { runId, correlationId, ref, args, runOptions, lifecycle, settle } = input;
+  try {
+    if ((await lifecycle?.recordActive()) === false) return;
+    if ((await journalReply(input)) === "duplicate") {
+      await lifecycle?.orphanIfSleeping(correlationId);
+      return;
     }
-    await onReplyJournaled?.(correlationId);
     await settle(await resumeWorkflow(runId, ref, args, driveOptions(runOptions)));
   } catch (error) {
     await failReplay(input, error);

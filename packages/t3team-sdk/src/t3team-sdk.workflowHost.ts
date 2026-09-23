@@ -11,9 +11,11 @@
 
 import { appendResolvedEntry } from "./t3team-sdk.broker.ts";
 import { startWorkflow } from "./t3team-sdk.engine.ts";
+import { createWorkflowHostDriveSlot } from "./t3team-sdk.workflowHostDriveSlot.ts";
 import {
   driveOptions,
   redriveWorkflowRunHost,
+  resumeWhileBusy,
   resumeWorkflowRunHost,
 } from "./t3team-sdk.workflowHostResume.ts";
 import type { AbortedResult, SuspendedResult, WorkflowRunResult } from "@runbook/core/engineTypes";
@@ -57,7 +59,6 @@ export function createWorkflowRunHost(config: CreateWorkflowRunHostConfig): Work
       }));
 
   let cancelled = false;
-  let resuming = false;
 
   const settle = async (
     result: WorkflowRunResult<unknown> | SuspendedResult | AbortedResult,
@@ -104,17 +105,10 @@ export function createWorkflowRunHost(config: CreateWorkflowRunHostConfig): Work
     }
   };
 
-  // One replay drive at a time: a concurrent resume/redrive is settling — never double-drive.
-  const exclusive = async (drive: () => Promise<void>): Promise<void> => {
-    if (registry.getRun(runId) === undefined) return;
-    if (resuming) return;
-    resuming = true;
-    try {
-      await drive();
-    } finally {
-      resuming = false;
-    }
-  };
+  // One replay drive at a time; work arriving mid-drive is owed, not lost (see the drive slot).
+  const slot = createWorkflowHostDriveSlot(
+    () => !cancelled && registry.getRun(runId) !== undefined,
+  );
   const funnel = {
     runId,
     ref,
@@ -128,20 +122,36 @@ export function createWorkflowRunHost(config: CreateWorkflowRunHostConfig): Work
     onFailed: sinks.onFailed,
   };
 
-  const resume = (correlationId: string, reply: unknown): Promise<void> =>
-    exclusive(() =>
-      resumeWorkflowRunHost({
-        ...funnel,
-        correlationId,
-        reply,
-        appendReply,
-        retryResolvedReply: config.retryResolvedReply,
-        onReplyJournaled: config.onReplyJournaled,
-      }),
-    );
+  const replyInput = (correlationId: string, reply: unknown) => ({
+    runId,
+    correlationId,
+    reply,
+    appendReply,
+    retryResolvedReply: config.retryResolvedReply,
+    onReplyJournaled: config.onReplyJournaled,
+  });
+  const resumeDrive = (correlationId: string, reply: unknown) => () =>
+    resumeWorkflowRunHost({ ...funnel, ...replyInput(correlationId, reply) });
+  const replayDrive = () => redriveWorkflowRunHost({ ...funnel, refire: undefined });
 
-  const redrive = (opts?: WorkflowHostRedriveOptions): Promise<void> =>
-    exclusive(() => redriveWorkflowRunHost({ ...funnel, refire: opts?.refire }));
+  const resume = async (correlationId: string, reply: unknown): Promise<void> => {
+    if (registry.getRun(runId) === undefined) return;
+    if (!slot.busy()) return slot.run(resumeDrive(correlationId, reply));
+    if (cancelled) return; // a stopped run takes no new work, owed or otherwise
+    return resumeWhileBusy({
+      slot,
+      reply: replyInput(correlationId, reply),
+      resumeDrive: resumeDrive(correlationId, reply),
+      replayDrive,
+      canDrive: () => !cancelled && registry.getRun(runId) !== undefined,
+    });
+  };
+
+  // A host-initiated retry: dropped while another drive is in flight (the host retries it).
+  const redrive = async (opts?: WorkflowHostRedriveOptions): Promise<void> => {
+    if (registry.getRun(runId) === undefined || slot.busy()) return;
+    return slot.run(() => redriveWorkflowRunHost({ ...funnel, refire: opts?.refire }));
+  };
 
   const fail = async (error: unknown): Promise<void> => {
     if (cancelled) return;

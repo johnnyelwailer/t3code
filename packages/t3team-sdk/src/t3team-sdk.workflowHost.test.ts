@@ -96,10 +96,18 @@ describe("durable workflow engine — shared per-run host", () => {
     expect(registry.getRun("host-ask")).toBeUndefined();
   });
 
-  it("a concurrent second resume never double-drives; a lost admission leaves the reply unresolved", async () => {
+  it("a concurrent second resume never double-drives: it journals its reply and is owed one replay; a lost admission drives nothing", async () => {
     const registry = createWorkflowHostRegistry();
     const appendResolved = vi.fn(async () => true);
-    const recordActive = vi.fn(async () => false);
+    let admitting = 0;
+    let overlapped = false;
+    const recordActive = vi.fn(async () => {
+      admitting += 1;
+      overlapped ||= admitting > 1;
+      await Promise.resolve();
+      admitting -= 1;
+      return false;
+    });
     const host = createWorkflowRunHost({
       ref: askResponseWorkflow,
       args: { question: "ship it?" },
@@ -116,8 +124,12 @@ describe("durable workflow engine — shared per-run host", () => {
       appendResolved,
     });
     await Promise.all([host.resume("host-admission:1", {}), host.resume("host-admission:1", {})]);
-    expect(recordActive).toHaveBeenCalledOnce();
-    expect(appendResolved).not.toHaveBeenCalled();
+    // First resume: admission lost before its journal write, so its reply stays unwritten.
+    // Second resume (slot busy): its reply is journaled at once, and the owed replay asks for
+    // admission AFTER the first drive — lost again, so nothing drives. Never two at once.
+    expect(appendResolved).toHaveBeenCalledOnce();
+    expect(recordActive).toHaveBeenCalledTimes(2);
+    expect(overlapped).toBe(false);
   });
 
   it("retries a transient reply-journal failure without losing the suspended ask", async () => {

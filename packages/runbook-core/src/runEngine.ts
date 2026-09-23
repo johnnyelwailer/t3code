@@ -117,6 +117,12 @@ function refireTargetFor(
   if (correlationId === undefined) return undefined;
   const refuse = (why: string) =>
     new WorkflowError(`Run '${runId}' cannot re-fire ask '${correlationId}': ${why}`);
+  // Replies first: `byCorrelation` is the FULL map even behind a checkpoint, while `bySeq` is only
+  // the retained suffix — so an answered ask compacted away still gets its true reason here. (An
+  // UNanswered compacted ask never gets this far: the replay window refuses to resume past it.)
+  if (journal.byCorrelation.has(correlationId)) {
+    throw refuse("it already has a journaled reply; resume without refire to replay it.");
+  }
   const sent = Array.from(journal.bySeq.values()).find(
     (entry) => entry.phase === "sent" && entry.correlationId === correlationId,
   );
@@ -125,9 +131,6 @@ function refireTargetFor(
     throw refuse(
       `it is a '${sent.kind}' entry; only ${[...REFIRABLE_ASK_KINDS].join(" / ")} asks can be re-sent (any other fire has side effects of its own, or awaits no reply).`,
     );
-  }
-  if (journal.byCorrelation.has(correlationId)) {
-    throw refuse("it already has a journaled reply; resume without refire to replay it.");
   }
   return createRefireTarget(correlationId);
 }

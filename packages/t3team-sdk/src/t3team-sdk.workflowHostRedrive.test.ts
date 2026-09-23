@@ -98,7 +98,7 @@ describe("durable workflow engine — host redrive", () => {
     expect(run.onCompleted).toHaveBeenCalledOnce();
   });
 
-  it("is guarded like resume: one drive at a time, and a lost admission drives nothing", async () => {
+  it("a redrive issued while a drive is in flight is dropped (a host retry), and a lost admission drives nothing", async () => {
     const recordActive = vi.fn(async () => false);
     const run = parkedAskHost("host-redrive-admission", { recordActive });
     await Promise.all([
