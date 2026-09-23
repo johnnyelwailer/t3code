@@ -18,6 +18,7 @@
 
 import {
   buildJournalMaps,
+  selectReplayWindow,
   type JournalEntry,
   type JournalMaps,
   type JournalStore,
@@ -37,6 +38,13 @@ interface EntryJsonRow {
 }
 interface SeqRow {
   readonly seq: number;
+}
+interface CandidateRow {
+  readonly seq: number;
+  readonly entryJson: string;
+}
+interface CountRow {
+  readonly n: number;
 }
 
 /** Parse the seq out of a `"<runId>:<seq>"` correlationId (the SDK's documented scheme). */
@@ -101,6 +109,97 @@ export function buildSqliteJournalStore(sql: SqlClient.SqlClient): JournalStore 
           ORDER BY seq ASC, phase ASC
         `,
       ).then((rows) => buildJournalMaps(rows.map((row) => JSON.parse(row.entryJson) as unknown))),
+
+    /**
+     * Checkpoint-aware replay window (bounded execution, phase 2). Returns the entries a resume
+     * actually needs — the suffix strictly after the latest VALID checkpoint, the FULL correlation
+     * map (at-least-once delivery), and the lifetime totals — instead of materializing the whole
+     * journal. It feeds the rows to the shared {@link selectReplayWindow} so the selection rule is
+     * identical to the filesystem reference; only the *materialization cost* is backend-specific.
+     *
+     * Bounded, deterministic, no live-clock reads. `json_extract` keeps the checkpoint scan
+     * O(checkpoints); the suffix/prefix/correlation reads touch only the rows a resume needs.
+     */
+    readReplayWindow: async (runId) => {
+      // Latest VALID checkpoint (the same rule selectReplayWindow applies over the checkpoint rows
+      // below, so it can never diverge from the reference projection).
+      const checkpointRows = await Effect.runPromise(
+        sql<CandidateRow>`
+          SELECT seq AS "seq", entry_json AS "entryJson"
+          FROM workflow_journal
+          WHERE run_id = ${runId}
+            AND phase = 'call'
+            AND json_extract(entry_json, '$.kind') = 'checkpoint'
+            AND json_extract(entry_json, '$.refId') = 'checkpoint'
+          ORDER BY seq DESC
+        `,
+      );
+      const boundarySeq = selectReplayWindow(
+        buildJournalMaps(checkpointRows.map((row) => JSON.parse(row.entryJson) as unknown)),
+      ).checkpoint?.seq;
+
+      // Bounded materialization: the bySeq suffix strictly after the boundary (or the whole journal
+      // when no valid checkpoint exists — a pre-checkpoint run stays a full-replay run), the FULL
+      // `resolved` correlation map, and the prefix `sent` rows used only for unsettled-ask
+      // detection (they are not part of the returned bySeq).
+      const suffixRows =
+        boundarySeq === undefined
+          ? await Effect.runPromise(
+              sql<EntryJsonRow>`
+                SELECT entry_json AS "entryJson"
+                FROM workflow_journal
+                WHERE run_id = ${runId} AND phase IN ('call', 'sent')
+                ORDER BY seq ASC, phase ASC
+              `,
+            )
+          : await Effect.runPromise(
+              sql<EntryJsonRow>`
+                SELECT entry_json AS "entryJson"
+                FROM workflow_journal
+                WHERE run_id = ${runId} AND phase IN ('call', 'sent') AND seq > ${boundarySeq}
+                ORDER BY seq ASC, phase ASC
+              `,
+            );
+      const prefixSentRows =
+        boundarySeq === undefined
+          ? []
+          : await Effect.runPromise(
+              sql<EntryJsonRow>`
+                SELECT entry_json AS "entryJson"
+                FROM workflow_journal
+                WHERE run_id = ${runId} AND phase = 'sent' AND seq < ${boundarySeq}
+                ORDER BY seq ASC
+              `,
+            );
+      const resolvedRows = await Effect.runPromise(
+        sql<EntryJsonRow>`
+          SELECT entry_json AS "entryJson"
+          FROM workflow_journal
+          WHERE run_id = ${runId} AND phase = 'resolved'
+        `,
+      );
+      const totalRow = await Effect.runPromise(
+        sql<CountRow>`
+          SELECT COUNT(*) AS "n"
+          FROM workflow_journal
+          WHERE run_id = ${runId} AND phase IN ('call', 'sent')
+        `,
+      );
+      const totalEntries = Number(totalRow[0]?.n ?? 0);
+
+      // selectReplayWindow strips the prefix from the returned bySeq, so the materialized window
+      // stays O(checkpoint suffix + pending work) while the selection rule stays the reference's.
+      const partial = buildJournalMaps([
+        ...checkpointRows.map((row) => JSON.parse(row.entryJson) as unknown),
+        ...suffixRows.map((row) => JSON.parse(row.entryJson) as unknown),
+        ...prefixSentRows.map((row) => JSON.parse(row.entryJson) as unknown),
+      ]);
+      const byCorrelation = buildJournalMaps(
+        resolvedRows.map((row) => JSON.parse(row.entryJson) as unknown),
+      ).byCorrelation;
+      const window = selectReplayWindow({ bySeq: partial.bySeq, byCorrelation });
+      return { ...window, totalEntries };
+    },
 
     readRunMeta: (runId): Promise<RunMeta | undefined> =>
       Effect.runPromise(
