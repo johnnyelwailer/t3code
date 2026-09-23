@@ -90,6 +90,10 @@
       "types": "./src/checkpoint.ts",
       "import": "./src/checkpoint.ts"
     },
+    "./watermark": {
+      "types": "./src/watermark.ts",
+      "import": "./src/watermark.ts"
+    },
     "./scheduling": {
       "types": "./src/scheduling.ts",
       "import": "./src/scheduling.ts"

@@ -22,6 +22,7 @@ export {
   SubWorkflowCheckpointError,
   TargetMissingError,
   TimeoutError,
+  WatermarkScopeError,
   WorkflowError,
   WorkflowInputDecodeError,
   WorkflowLoadError,
@@ -91,9 +92,11 @@ export {
   spawnThread,
   wait,
   waitUntil,
+  watermark,
   withBodyApi,
   workflow,
 } from "./t3team-sdk.engineApi.ts";
+export type { Watermark, WatermarkOptions, WatermarkState } from "@runbook/core/watermark";
 export { emit } from "./t3team-sdk.emit.ts";
 // Signal sources (design 42): the shared signal/source vocabulary + built-in Tier A/B
 // catalog declarations. `defineSignalSource` (the effectful producer half) lives on the

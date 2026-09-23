@@ -10,6 +10,8 @@
  *   • `"user"`     → `askUser` / `notifyUser` / `showWidget` on a thread
  *                                                     (t3team-sdk.threadPrimitives.ts)
  *   • `"schedule"` → `waitUntil`                       (t3team-sdk.schedulePrimitive.ts)
+ *   • `"source:<name>"` → `getSignalSource(<built-in source>)` (t3team-sdk.signalPrimitive.ts)
+ *                    and `watermark("<name>")`        (t3team-sdk.watermarkPrimitive.ts)
  *   • tool group   → `tools.<id>` at its call site     (t3team-sdk.capabilityGating.ts)
  *
  * Everything else — `agent`, `spawnThread`, `askAgent`, `notifyAgent`, `thread`, `workflow()`,
@@ -25,6 +27,7 @@
  */
 import type * as TsApi from "typescript";
 
+import { BUILTIN_SIGNAL_GLOBALS } from "./t3team-sdk.builtinSignals.ts";
 import { finding, memberChain, type WorkflowAuditFinding } from "./t3team-sdk.staticAuditTypes.ts";
 import {
   collectWorkflowBodyBindings,
@@ -34,6 +37,33 @@ import {
 
 /** Thread verbs gated by the `"user"` capability, per createThreadPrimitives. */
 const USER_VERBS = new Set(["askUser", "notifyUser", "showWidget"]);
+
+/** Built-in source declaration export name → source name (`ScmChangeRequestWatch` → `scm.…`). */
+const BUILTIN_SOURCE_NAMES: ReadonlyMap<string, string> = new Map(
+  Object.entries(BUILTIN_SIGNAL_GLOBALS).flatMap(([exportName, value]) => {
+    const ref = value as { readonly kind?: unknown; readonly name?: unknown };
+    return ref.kind === "signalSource" && typeof ref.name === "string"
+      ? [[exportName, ref.name] as const]
+      : [];
+  }),
+);
+
+/**
+ * The source a `getSignalSource`/`watermark` call binds, when it is knowable statically: a
+ * built-in source declaration for `getSignalSource`, a string literal key for `watermark`.
+ * Anything else (an author-defined source, a computed key) stays silent — miss > false alarm.
+ */
+function staticSourceName(
+  ts: typeof TsApi,
+  verb: "getSignalSource" | "watermark",
+  arg: TsApi.Expression | undefined,
+  bindings: WorkflowBodyBindings,
+): string | undefined {
+  if (arg === undefined) return undefined;
+  if (verb === "watermark") return ts.isStringLiteralLike(arg) ? arg.text : undefined;
+  const exportName = resolveVerb(ts, arg, bindings);
+  return exportName === null ? undefined : BUILTIN_SOURCE_NAMES.get(exportName);
+}
 
 export interface CapabilityScanOptions {
   /** Normalized `meta.capabilities` (see normalizeCapabilities). */
@@ -99,8 +129,16 @@ function scanCallSites(
       const callee = node.expression;
       // Resolved by binding so `import { waitUntil as at }` is still gated (bare-name matching
       // missed it, and the runtime gate would then be the only thing left).
-      if (resolveVerb(ts, callee, bindings) === "waitUntil" && !declared.has("schedule")) {
-        into.push(missing(ts, sf, node, "schedule", "`waitUntil(…)`"));
+      const resolved = resolveVerb(ts, callee, bindings);
+      if (resolved === "waitUntil") {
+        if (!declared.has("schedule")) {
+          into.push(missing(ts, sf, node, "schedule", "`waitUntil(…)`"));
+        }
+      } else if (resolved === "getSignalSource" || resolved === "watermark") {
+        const name = staticSourceName(ts, resolved, node.arguments[0], bindings);
+        if (name !== undefined && !declared.has(`source:${name}`)) {
+          into.push(missing(ts, sf, node, `source:${name}`, `\`${resolved}(${name})\``));
+        }
       } else if (ts.isPropertyAccessExpression(callee)) {
         const verb = callee.name.text;
         if (USER_VERBS.has(verb) && !declared.has("user")) {

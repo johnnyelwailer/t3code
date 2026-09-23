@@ -15,6 +15,7 @@ import type {
   CheckpointPrimitives,
   CheckpointRecord,
 } from "@runbook/core/checkpoint";
+import type { WatermarkPrimitives } from "@runbook/core/watermark";
 import type { DurableWorkflowRuntime } from "./t3team-sdk.durableRuntime.ts";
 import { WorkflowError, SubWorkflowCheckpointError } from "./t3team-sdk.errors.ts";
 import { runPreparedBody } from "./t3team-sdk.bodyRunner.ts";
@@ -113,6 +114,11 @@ export function buildWorkflowPrimitives(opts: {
   ): Promise<CheckpointRecord<State>> => {
     throw new SubWorkflowCheckpointError();
   };
+  // `watermark` commits its cursor as a checkpoint boundary, so it is refused the same way —
+  // at the `watermark(key)` call, before any cursor can be read or advanced.
+  const subWorkflowWatermark: WatermarkPrimitives["watermark"] = () => {
+    throw new SubWorkflowCheckpointError("watermark()");
+  };
   const shared = {
     callPrimitive: runtime.callPrimitive,
     runBlackBoxed: runtime.runBlackBoxed,
@@ -155,6 +161,7 @@ export function buildWorkflowPrimitives(opts: {
         toolRefs: opts.toolRefs,
         scripts: opts.scripts,
         checkpoint: subWorkflowCheckpoint,
+        watermark: subWorkflowWatermark,
         primitives: createWorkflowPrimitives({
           ...shared,
           runSubWorkflow: runSubWorkflowFor(() => childCapabilities, childChain),
