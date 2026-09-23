@@ -11,6 +11,12 @@ export const T3TEAM_TIMERS_MANUAL = `DURABLE TIMERS — t3team agent-orchestrati
 Import waitUntil(epochMs) and now() from "@t3team/sdk". Add the schedule capability.
 Do not import timer libraries, poll, use setTimeout, run a shell sleep, or rely on external cron.
 
+If a built-in signal source covers the event you are waiting for (a change-request merge, a
+check-suite conclusion, a review, a work-item field change), use getSignalSource/waitFor instead
+of a while-loop + waitUntil poll — call t3team_help("agent-orchestration") for the
+EVENT-DRIVEN WAITS section. The patterns below are for work that is genuinely periodic — there is
+no discrete event to wait on, only a recurring interval.
+
 One-shot wait (short waits of seconds show "Scheduled" / a due time in the orchestration UI):
 
   export const meta = {
@@ -22,7 +28,7 @@ One-shot wait (short waits of seconds show "Scheduled" / a due time in the orche
   await thread.notifyUser('Thirty seconds passed.')
   return { reminded: true }
 
-Recurring pattern (the orchestration loop is the schedule):
+Recurring pattern, for genuinely periodic work only (the orchestration loop is the schedule):
 
   export const meta = {
     name: 'daily-review',

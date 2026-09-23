@@ -179,6 +179,12 @@ One-off reminder:
     return { reminded: true }
   }
 
+If a built-in signal source covers the event you are polling for, use getSignalSource/waitFor
+instead of a while-loop + waitUntil poll (below). Polling loops are for work that is inherently
+periodic (no discrete triggering event) — a check-suite conclusion, a merge, or a work-item field
+change is a discrete event, and polling for one wastes an agent turn per interval waiting for
+something a signal source already delivers durably.
+
 Recurring interval pattern (the loop is the schedule):
 
   export const meta = {
@@ -202,6 +208,45 @@ restart the interval or lose the timer. If the server was down past the deadline
 recovery resumes the run instead of waiting another full interval. For a fixed wall-clock
 calendar schedule, compute the next epoch deadline with replay-safe pure arithmetic from now(),
 then pass it to waitUntil.
+
+EVENT-DRIVEN WAITS (SIGNAL SOURCES)
+Import getSignalSource and the built-in source/signal refs you need from "@t3team/sdk". Bind a
+source once, then wait for the specific signal it emits:
+
+  export const meta = {
+    name: 'wait-for-checks',
+    capabilities: ['source:scm.change-request.checks'],
+  } as const
+  export default async function run() {
+    const checks = await getSignalSource(ScmChangeRequestChecks, {
+      projectId: 'p1',
+      repository: 'owner/repo',
+      number: 42,
+    })
+    const result = await checks.waitFor(ScmChangeRequestChecksConcluded, { key: '42' })
+    return { conclusion: result.conclusion }
+  }
+
+getSignalSource(source, params) binds a source instance; handle.waitFor(signal, { key }) parks
+the run until that (signal, key) is delivered and returns its typed payload. Both calls are
+durable: replay never re-binds or re-waits, so a restart resumes exactly where the run parked.
+
+Built-in sources today (design 42 §7): scm.change-request.watch (merged / closed / draft-ready),
+scm.change-request.checks (check-suite conclusion), scm.change-request.review (review activity),
+work-item.updates (field changes on one work item). Each requires its matching capability —
+"source:<sourceName>" — in meta.capabilities, the same call-site gate shape as waitUntil's
+"schedule".
+
+Guarantees: binding the same (source, params) twice in one run reuses the SAME running instance
+(instance dedup); awaiting the same (signal, key) twice shares one journal handle so a single
+delivery wakes both awaits (key dedup); a delivery that lands while the run is not parked is held
+in a durable inbox and replayed to the next matching waitFor (no lost wakeups); every bind is
+capability-gated before the broker is touched.
+
+Author-defined sources (defineSignalSource from "@t3team/sdk/source") are not host-startable yet:
+binding one fails loud at getSignalSource() time with an error naming the built-in catalog,
+rather than parking the run forever with nothing to ever wake it. Use a built-in source until
+that lands.
 
 RULES
 - No Node APIs (no fs, path, process) and no require(). Import the API above from "@t3team/sdk".
