@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { createDurableRuntime } from "./durableRuntime.ts";
-import { RetryExhaustedError, WorkflowError } from "./errors.ts";
+import { ReplayDriftError, RetryExhaustedError, WorkflowError } from "./errors.ts";
 import { WorkflowSuspended } from "./handles.ts";
 import { buildJournalMaps } from "./journalReader.ts";
 import type { JournalEntry } from "./journalReader.ts";
@@ -56,8 +56,7 @@ const makeHarness = () => {
     const { retry } = createRetryPrimitives({
       callPrimitive: runtime.callPrimitive,
       currentSeq: runtime.currentSeq,
-      recorded: runtime.recorded,
-      skipRecorded: runtime.skipRecorded,
+      runBlackBoxed: runtime.runBlackBoxed,
       hostNow: runtime.hostNow,
       waitUntil,
     });
@@ -125,18 +124,20 @@ describe("@runbook/core retry primitive", () => {
     expect(first.wakes).toEqual([{ correlationId: "run-retry:4", deadline: T0 + 1_000 }]);
     expect(calls).toEqual([1]);
 
-    // Resume before the wake: the live clock must not be read, the settled attempt must not be
-    // re-driven, and the SAME wake (same correlation, unchanged deadline) is awaited — not re-fired.
+    // Resume before the wake: the live clock must not be read, the settled attempt's throwing tool
+    // must not re-fire (its replay is a gap the journaled settlement resolves), and the SAME wake
+    // (same correlation, unchanged deadline) is awaited — not re-fired.
     const beforeWake = harness.boot({ clock: LIVE_CLOCK_FORBIDDEN, wake: "defer" });
     await expect(body(beforeWake)).rejects.toBeInstanceOf(WorkflowSuspended);
-    expect(calls).toEqual([1]);
+    expect(toolFires).toBe(1);
     expect(beforeWake.wakes).toEqual([]);
 
     // The host delivers the wake; the next resume runs attempt 2 — and only attempt 2 — live.
     harness.deliverWake("run-retry:4");
     const resumed = harness.boot({ clock: () => T0 + 5_000, wake: "defer" });
     await expect(body(resumed)).resolves.toBe("ok-2");
-    expect(calls).toEqual([1, 2]);
+    // Attempt 1 is re-driven in replay (fn sees attempt 1 again) but fires nothing live.
+    expect(calls).toEqual([1, 1, 1, 2]);
     expect(toolFires).toBe(2);
     expect(resumed.wakes).toEqual([]);
 
@@ -153,18 +154,22 @@ describe("@runbook/core retry primitive", () => {
         failure: { classification: "retryable", name: "Error", message: "upstream 503" },
         deadline: T0 + 1_000,
       },
-      { sequence: 1, attempt: 2, maxAttempts: 3, outcome: "ok", value: "ok-2" },
+      { sequence: 1, attempt: 2, maxAttempts: 3, outcome: "ok" },
     ]);
   });
 
   it("throws a typed RetryExhaustedError with the last classified failure after maxAttempts", async () => {
     const harness = makeHarness();
-    const run = harness.boot({ clock: () => T0, wake: "now" });
+    // The host clock advances 10 s per attempt, so each deadline must come from the clock AT that
+    // attempt's failure, not from the sequence start.
+    let clock = T0;
+    const run = harness.boot({ clock: () => clock, wake: "now" });
     const seen: number[] = [];
     const error = await run
       .retry(
         async (attempt) => {
           seen.push(attempt);
+          clock = T0 + attempt * 10_000;
           throw new TypeError(`bad ${attempt}`);
         },
         { maxAttempts: 3, backoff },
@@ -184,72 +189,147 @@ describe("@runbook/core retry primitive", () => {
     expect((exhausted as { cause?: unknown }).cause).toBeInstanceOf(TypeError);
     expect(seen).toEqual([1, 2, 3]);
     // Two backoffs between three attempts, each deadline from its own attempt's backoff.
-    expect(run.wakes.map((wake) => wake.deadline)).toEqual([T0 + 1_000, T0 + 2_000]);
+    expect(run.wakes.map((wake) => wake.deadline)).toEqual([T0 + 11_000, T0 + 22_000]);
 
-    // Replay after exhaustion raises the same typed error without re-running any attempt.
+    // Replay after exhaustion raises the same typed error from the journal: no live clock read,
+    // no wake re-requested, and the classifier is not consulted again.
     const replay = harness.boot({ clock: LIVE_CLOCK_FORBIDDEN, wake: "defer" });
     const replayed = await replay
       .retry(
         async (attempt) => {
-          seen.push(attempt);
-          throw new TypeError("must not run");
+          throw new TypeError(`bad ${attempt}`);
         },
-        { maxAttempts: 3, backoff },
+        {
+          maxAttempts: 3,
+          backoff,
+          classify: () => {
+            throw new Error("replay consulted the classifier");
+          },
+        },
       )
       .catch((thrown: unknown) => thrown);
     expect(replayed).toBeInstanceOf(RetryExhaustedError);
     expect((replayed as RetryExhaustedError).lastFailure).toEqual(exhausted.lastFailure);
-    expect(seen).toEqual([1, 2, 3]);
+    expect(replay.wakes).toEqual([]);
   });
 
-  it("replays a settled sequence as its bounded final outcome, not every attempt", async () => {
+  it("keeps only the bound and the last failure, and replays a settled sequence without firing", async () => {
     const harness = makeHarness();
     const run = harness.boot({ clock: () => T0, wake: "now" });
     const opts: RetryOptions = { maxAttempts: 5, backoff };
-    const fn = async (attempt: number) => {
+    let fires = 0;
+    const fn = (runtime: Run["runtime"]) => async (attempt: number) => {
+      await runtime.callPrimitive({
+        kind: "tool",
+        refId: "call",
+        args: { attempt },
+        exec: async () => {
+          fires += 1;
+          return attempt;
+        },
+      });
       if (attempt < 4) throw new Error(`fail ${attempt}`);
       return { attempt };
     };
-    await expect(run.retry(fn, opts)).resolves.toEqual({ attempt: 4 });
-    const recordedSeqs = harness.entries().map((entry) => entry.seq);
+    await expect(run.retry(fn(run.runtime), opts)).resolves.toEqual({ attempt: 4 });
+    expect(fires).toBe(4);
 
-    // The final settlement carries the bound and the LAST failure only — no per-attempt history.
+    // Every settlement is bounded: the configured bound plus at most the LAST failure — no
+    // accumulated attempt history, and no journaled copy of the success value.
     const settlements = harness.entries().filter((entry) => entry.refId === RETRY_ATTEMPT_REF_ID);
-    expect(settlements.at(-1)?.result).toEqual({
-      sequence: 1,
-      attempt: 4,
-      maxAttempts: 5,
-      outcome: "ok",
-      value: { attempt: 4 },
-    });
-    expect(settlements.at(-2)?.result).toMatchObject({
-      attempt: 3,
-      failure: { message: "fail 3" },
-    });
+    expect(settlements.map((entry) => entry.result)).toEqual([
+      expect.objectContaining({
+        attempt: 1,
+        outcome: "retry",
+        failure: expect.objectContaining({ message: "fail 1" }),
+      }),
+      expect.objectContaining({
+        attempt: 2,
+        outcome: "retry",
+        failure: expect.objectContaining({ message: "fail 2" }),
+      }),
+      expect.objectContaining({
+        attempt: 3,
+        outcome: "retry",
+        failure: expect.objectContaining({ message: "fail 3" }),
+      }),
+      { sequence: 1, attempt: 4, maxAttempts: 5, outcome: "ok" },
+    ]);
+    const start = harness.entries().find((entry) => entry.refId === "retry.start");
+    expect(start?.result).toEqual({ maxAttempts: 5 });
 
-    // Replay touches exactly two retry entries — the bound and the final outcome — and none of
-    // the intermediate attempts or backoff wakes.
+    // Replay after settlement: the same value, zero live effects, zero live-clock reads, zero wakes.
     const replay = harness.boot({ clock: LIVE_CLOCK_FORBIDDEN, wake: "defer" });
-    const replayedCalls: string[] = [];
-    const observed = createRetryPrimitives({
-      callPrimitive: (call) => {
-        replayedCalls.push(call.refId);
-        return replay.runtime.callPrimitive(call);
-      },
-      currentSeq: replay.runtime.currentSeq,
-      recorded: replay.runtime.recorded,
-      skipRecorded: replay.runtime.skipRecorded,
-      hostNow: replay.runtime.hostNow,
-      waitUntil: () => {
-        throw new Error("a settled sequence must not re-await a backoff");
-      },
-    });
-    const replayFn = async (attempt: number): Promise<{ attempt: number }> => {
-      throw new Error(`attempt ${attempt} re-ran`);
+    await expect(replay.retry(fn(replay.runtime), opts)).resolves.toEqual({ attempt: 4 });
+    expect(fires).toBe(4);
+    expect(replay.wakes).toEqual([]);
+  });
+
+  it("keeps a jittered backoff replay-deterministic", async () => {
+    const harness = makeHarness();
+    const jitter = (run: Run) => (attempt: number) => 1_000 * attempt + run.runtime.random() * 10;
+    const body = (run: Run) =>
+      run.retry(
+        async (attempt) => {
+          if (attempt === 1) throw new Error("flaky");
+          return attempt;
+        },
+        { maxAttempts: 2, backoff: jitter(run) },
+      );
+    const first = harness.boot({ clock: () => T0, wake: "now" });
+    await expect(body(first)).resolves.toBe(2);
+    // The jitter draw is black-boxed inside the settlement: no seq of its own.
+    expect(harness.entries().map((entry) => entry.kind)).not.toContain("random");
+
+    const replay = harness.boot({ clock: LIVE_CLOCK_FORBIDDEN, wake: "defer" });
+    await expect(body(replay)).resolves.toBe(2);
+  });
+
+  it("rebuilds closure state a settled attempt wrote, on replay", async () => {
+    const harness = makeHarness();
+    const body = async (run: Run) => {
+      const seen: string[] = [];
+      await run.retry(
+        async (attempt) => {
+          const reply = await run.runtime.callPrimitive({
+            kind: "tool",
+            refId: "fetch",
+            args: { attempt },
+            exec: async () => `reply-${attempt}`,
+          });
+          seen.push(reply);
+          if (attempt === 1) throw new Error("rejected");
+        },
+        { maxAttempts: 2, backoff: () => 0 },
+      );
+      return seen;
     };
-    await expect(observed.retry(replayFn, opts)).resolves.toEqual({ attempt: 4 });
-    expect(replayedCalls).toEqual(["retry.start", "retry.attempt"]);
-    expect(replay.runtime.currentSeq()).toBe(Math.max(...recordedSeqs));
+    const first = harness.boot({ clock: () => T0, wake: "now" });
+    await expect(body(first)).resolves.toEqual(["reply-1", "reply-2"]);
+    const replay = harness.boot({ clock: LIVE_CLOCK_FORBIDDEN, wake: "defer" });
+    await expect(body(replay)).resolves.toEqual(["reply-1", "reply-2"]);
+  });
+
+  it("keeps real drift inside a settled attempt loud", async () => {
+    const harness = makeHarness();
+    const body = (run: Run, refId: string) =>
+      run.retry(
+        async (attempt) => {
+          await run.runtime.callPrimitive({
+            kind: "tool",
+            refId,
+            args: { attempt },
+            exec: async () => attempt,
+          });
+          if (attempt === 1) throw new Error("rejected");
+          return attempt;
+        },
+        { maxAttempts: 2, backoff: () => 0 },
+      );
+    await expect(body(harness.boot({ clock: () => T0, wake: "now" }), "v1")).resolves.toBe(2);
+    // The body was edited: the settled attempt's call changed identity. Not a gap — must throw.
+    const replay = harness.boot({ clock: LIVE_CLOCK_FORBIDDEN, wake: "defer" });
+    await expect(body(replay, "v2")).rejects.toBeInstanceOf(ReplayDriftError);
   });
 
   it("short-circuits on a fatal classification without backing off", async () => {
@@ -278,6 +358,47 @@ describe("@runbook/core retry primitive", () => {
       message: "invalid input",
     });
     expect(seen).toEqual([1]);
+    expect(run.wakes).toEqual([]);
+  });
+
+  it("stops at a fatal classification on a later attempt, and replays it from the journal", async () => {
+    const harness = makeHarness();
+    const body = (run: Run) =>
+      run.retry(
+        async (attempt) => {
+          throw attempt === 1 ? new Error("transient") : new RangeError("permanent");
+        },
+        {
+          maxAttempts: 5,
+          backoff,
+          classify: (thrown) => (thrown instanceof RangeError ? "fatal" : "retryable"),
+        },
+      );
+    const first = harness.boot({ clock: () => T0, wake: "now" });
+    const error = await body(first).catch((thrown: unknown) => thrown);
+    expect(error).toBeInstanceOf(RetryExhaustedError);
+    expect((error as RetryExhaustedError).attempts).toBe(2);
+    expect((error as RetryExhaustedError).lastFailure.classification).toBe("fatal");
+    expect(first.wakes).toHaveLength(1);
+
+    const replay = harness.boot({ clock: LIVE_CLOCK_FORBIDDEN, wake: "defer" });
+    const replayed = await body(replay).catch((thrown: unknown) => thrown);
+    expect((replayed as RetryExhaustedError).attempts).toBe(2);
+    expect(replay.wakes).toEqual([]);
+  });
+
+  it("exhausts immediately at maxAttempts 1 without a wake", async () => {
+    const harness = makeHarness();
+    const run = harness.boot({ clock: () => T0, wake: "now" });
+    const error = await run
+      .retry(
+        async () => {
+          throw new Error("once");
+        },
+        { maxAttempts: 1, backoff },
+      )
+      .catch((thrown: unknown) => thrown);
+    expect((error as RetryExhaustedError).attempts).toBe(1);
     expect(run.wakes).toEqual([]);
   });
 
@@ -367,49 +488,12 @@ describe("@runbook/core retry primitive", () => {
         throw new Error("must not journal");
       },
       currentSeq: () => 0,
-      recorded: new Map(),
-      skipRecorded: () => {},
+      runBlackBoxed: (fn) => fn(),
       hostNow: () => T0,
       waitUntil: async () => {},
       isAllowed: () => false,
       denied: () => denied,
     });
     expect(() => retry(async () => 1, { maxAttempts: 1, backoff })).toThrow(denied);
-  });
-});
-
-describe("@runbook/core durable runtime skipRecorded", () => {
-  it("only moves forward over recorded ground", async () => {
-    const runtime = createDurableRuntime({
-      journal: new Map([
-        [
-          1,
-          {
-            seq: 1,
-            callId: "1:tool:a",
-            kind: "tool",
-            refId: "a",
-            argsHash: "x",
-            result: 1,
-            startedAt: ISO,
-            endedAt: ISO,
-          },
-        ],
-      ]),
-      writer: {
-        append: () => {},
-        appendResolved: () => {},
-        flush: async () => {},
-        dispose: () => {},
-      },
-      source: { now: () => T0, random: () => 0.5, uuid: () => "u" },
-    });
-    expect(() => runtime.skipRecorded(2)).toThrow(WorkflowError);
-    runtime.skipRecorded(1);
-    expect(runtime.currentSeq()).toBe(1);
-    expect(() => runtime.skipRecorded(0)).toThrow(WorkflowError);
-    await runtime.runBlackBoxed(async () => {
-      expect(() => runtime.skipRecorded(1)).toThrow(/black-boxed/);
-    });
   });
 });

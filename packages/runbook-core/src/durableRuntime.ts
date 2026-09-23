@@ -60,15 +60,6 @@ export interface DurablePrimitiveRuntime extends PrimitiveRuntime {
   readonly hostUuid: () => string;
   readonly handles: HandleDispatch;
   readonly suspension: SuspensionLatch;
-  /** The recorded journal this runtime replays against (seq-keyed; a checkpoint window's suffix). */
-  readonly recorded: ReadonlyMap<number, JournalEntry>;
-  /**
-   * Advance the seq cursor over an already-RECORDED, settled span so a primitive that journaled
-   * its own settlement (see `retryBackoff.ts`) does not re-drive work the journal already holds.
-   * The next call takes `throughSeq + 1`. Forward-only, bounded by the recorded journal, and
-   * refused inside a black box (where calls take no seq): it can skip replay, never live work.
-   */
-  readonly skipRecorded: (throughSeq: number) => void;
 }
 
 export function createDurableRuntime(config: DurableRuntimeConfig): DurablePrimitiveRuntime {
@@ -131,20 +122,6 @@ export function createDurableRuntime(config: DurableRuntimeConfig): DurablePrimi
     suspension,
   });
 
-  const skipRecorded = (throughSeq: number): void => {
-    if (blackBoxDepth > 0) {
-      throw new WorkflowError(
-        "skipRecorded: a black-boxed region takes no seqs, so it has none to skip.",
-      );
-    }
-    if (!Number.isInteger(throughSeq) || throughSeq < seq || throughSeq > maxRecordedSeq) {
-      throw new WorkflowError(
-        `skipRecorded: target seq ${String(throughSeq)} must be an integer between the cursor (${seq}) and the last recorded seq (${maxRecordedSeq}).`,
-      );
-    }
-    seq = throughSeq;
-  };
-
   return {
     callPrimitive,
     now,
@@ -157,7 +134,5 @@ export function createDurableRuntime(config: DurableRuntimeConfig): DurablePrimi
     hostUuid: config.source.uuid,
     handles,
     suspension,
-    recorded: config.journal,
-    skipRecorded,
   };
 }

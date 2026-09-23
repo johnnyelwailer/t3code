@@ -26,7 +26,7 @@ import { auditWorkflowSourceStatic } from "./t3team-sdk.staticAudit.ts";
 /**
  * `retry` through the REAL SDK surface: fixture bodies that import it from `@t3team/sdk`, the
  * engine's run loop, a filesystem journal, and a host broker. The core contract (journal shape,
- * replay jump, retention) is pinned in `@runbook/core/retryBackoff.test.ts`; these pin the wiring.
+ * replay rule, retention) is pinned in `@runbook/core/retryBackoff.test.ts`; these pin the wiring.
  */
 const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-retry-"));
 afterAll(() => NodeFS.rmSync(runsRoot, { recursive: true, force: true }));
@@ -71,18 +71,20 @@ const wakesOf = (broker: ReturnType<typeof hostBroker>) =>
   broker.sent.filter((envelope) => envelope.kind === "wait.until");
 
 describe("retry through a real workflow body", () => {
-  it("survives a crash at each backoff deadline and never re-drives a settled attempt", async () => {
+  it("survives a crash at each backoff deadline and never re-fires a settled attempt", async () => {
     const runId = "run-retry-e2e";
     const opts = { runsRoot, tools: [], scripts: probeScripts, runId };
 
     // Process 1: attempt 1's agent answers "bad"; the body parks on the first backoff wake.
     const first = hostBroker();
     const parked1 = await startWorkflow(retryAgent, {}, { ...opts, broker: first });
+    expect(wakesOf(first)).toHaveLength(1);
     const [wake1] = wakesOf(first);
     expect(parked1).toMatchObject({ runId, suspended: true, correlationId: wake1?.correlationId });
 
     // The scheduler delivers wake 1; process 2 runs attempt 2, whose script THROWS, and parks on
-    // wake 2. Attempt 1 is not re-driven: its agent turn is not re-sent, its probe does not re-run.
+    // wake 2. Attempt 1 replays from the journal: its agent turn is not re-sent, its probe does not
+    // re-run.
     await appendResolvedEntry({
       runsRoot,
       runId,
@@ -91,6 +93,7 @@ describe("retry through a real workflow body", () => {
     });
     const second = hostBroker();
     const parked2 = await resumeWorkflow(runId, retryAgent, {}, { ...opts, broker: second });
+    expect(wakesOf(second)).toHaveLength(1);
     const [wake2] = wakesOf(second);
     expect(parked2).toMatchObject({ suspended: true, correlationId: wake2?.correlationId });
     expect(second.sent.map((envelope) => envelope.kind)).toEqual(["wait.until"]);

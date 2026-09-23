@@ -118,18 +118,21 @@ Implemented in `packages/runbook-core/src/retryBackoff.ts` as
 
 - one `retry.start` entry (args: the attempt bound), then one `retry.attempt` settlement per
   attempt carrying its outcome, the last classified failure, and — for a retryable failure — the
-  backoff deadline, computed from the host clock inside the live settlement only;
+  backoff deadline. `classify` and `backoff` run black-boxed inside the live settlement only, so
+  jitter takes no seq and a replay never reads the live clock;
 - the delay is the existing durable `waitUntil`, so the SDK gates `retry` on `"schedule"`;
 - attempts run inline in the run's sequence (like `workflow()`), so `fn` may call `agent()` or
-  `workflow()` and an unfinished attempt resumes part-way;
-- on replay the sequence jumps to its latest settlement through
-  `DurablePrimitiveRuntime.skipRecorded`, so a settled attempt is never re-driven — including one
-  whose own primitive threw and left no journal line — and a settled sequence replays as two
-  entries;
+  `workflow()`; a replay re-drives each attempt against the journal, so its effects replay
+  instead of re-firing, its closure writes are rebuilt, and an unfinished attempt resumes part-way;
+- a primitive that threw inside an attempt left no journal line, so its replay raises a gap drift.
+  Inside a settled attempt that gap is resolved by the journaled settlement; anywhere else, and for
+  any changed call identity or args, drift stays loud;
 - giving up raises `RetryExhaustedError` with `attempts`, `maxAttempts`, and `lastFailure`.
 
-Do not call `checkpoint()` inside `fn`: a boundary inside an open retry sequence would strand the
-sequence's start entry in the superseded prefix.
+Settlements never accumulate an attempt history. Pruning a settled sequence's attempt detail is a
+journal-backend capability, as it is for `checkpoint`. Do not call `checkpoint()` inside `fn`, and
+do not use `retry` inside `parallel()`/`pipeline()`: the backoff `waitUntil` cannot durably park
+in a black box, exactly as for a bare `waitUntil` there.
 
 Already-completed fan-out items do not require a new primitive: recorded `sent` / `resolved` pairs
 already prevent replay from repeating a completed dispatch. Checkpointing only collapses the

@@ -12,33 +12,39 @@
  *   classified failure, and — for a retryable failure — the backoff DEADLINE. The deadline is
  *   computed from the host clock inside the live settlement only, so a replayed body reads the
  *   journaled value and never the live clock.
- * - **replay rule** — resume the current attempt or delay; never rerun a settled attempt. On
- *   replay the sequence jumps straight to its latest settlement (`skipRecorded`), so settled
- *   attempts are not re-driven at all: their effects are not re-fired, and an attempt whose own
- *   primitive threw (which leaves no journal line of its own) cannot drift on replay. The delay
- *   is the existing durable `waitUntil`, so a crash mid-backoff resumes the SAME wake.
- * - **retention** — each settlement carries only the LAST classified failure; the final one is
- *   the bounded outcome, and a settled sequence replays as two entries, however many attempts it
- *   took.
+ * - **replay rule** — resume the current attempt or delay; never rerun a settled attempt's
+ *   effects. Attempts run INLINE in the run's journal sequence, the way `workflow()` runs a
+ *   sub-workflow, so a replay re-drives each attempt against the journal: its effects replay from
+ *   their recorded entries (nothing re-fires), closures the attempt writes are rebuilt, and an
+ *   unfinished attempt resumes part-way. The one thing a re-drive cannot replay is a primitive
+ *   that THREW — it consumed a seq but journaled nothing, so its replay raises a gap drift. Inside
+ *   a settled attempt that gap is expected: the attempt's journaled settlement is the authority,
+ *   and replaying it realigns the sequence. Outside one (no settlement recorded) the gap is real
+ *   drift and is re-raised. The delay is the existing durable `waitUntil`, so a crash mid-backoff
+ *   resumes the SAME wake.
+ * - **retention** — each settlement carries only the bound and the LAST classified failure, never
+ *   an attempt history; the final settlement is the bounded outcome. Physically pruning a settled
+ *   sequence's attempt detail is a journal-backend capability, as it is for `checkpoint`.
  *
- * An attempt runs INLINE in the run's journal sequence — the way `workflow()` runs a
- * sub-workflow, not black-boxed the way `parallel()` is — so `fn` may call `agent()`,
- * `workflow()`, tools or `waitUntil` and each stays individually durable: an unfinished attempt
- * resumes part-way. Inside a black box (`parallel()`/`pipeline()`) nothing takes a seq, so there
- * is nothing to skip and `retry` degrades to a plain in-memory loop.
+ * `fn` may call `agent()`, `workflow()`, tools or `waitUntil`; each stays individually durable.
+ * Inside `parallel()`/`pipeline()` (black boxes: nothing is journaled) the backoff `waitUntil`
+ * cannot durably park, so `retry` there has the same limits as `waitUntil` there.
  */
 
 import {
   JournalSchemaError,
   JournalSerializeError,
+  PermissionDeniedError,
   ReplayDriftError,
   RetryExhaustedError,
+  SubWorkflowCheckpointError,
   WorkflowAborted,
   WorkflowError,
+  WorkflowInputDecodeError,
+  WorkflowLoadError,
   type RetryClassifiedFailure,
 } from "./errors.ts";
 import { WorkflowSuspended } from "./handles.ts";
-import type { JournalEntry } from "./journalReader.ts";
 import type { SchedulePrimitives } from "./scheduling.ts";
 
 /** The journal kind every retry entry occupies on the existing `PrimitiveCall` surface. */
@@ -66,9 +72,12 @@ interface RetryAttemptBase {
   readonly maxAttempts: number;
 }
 
-/** The journaled settlement of one attempt. */
-export type RetryAttemptRecord<T = unknown> =
-  | (RetryAttemptBase & { readonly outcome: "ok"; readonly value?: T })
+/**
+ * The journaled settlement of one attempt. A success records no value: a replay re-drives the
+ * attempt, so its value (and anything it wrote to closures) comes back from the attempt itself.
+ */
+export type RetryAttemptRecord =
+  | (RetryAttemptBase & { readonly outcome: "ok" })
   | (RetryAttemptBase & {
       readonly outcome: "retry";
       readonly failure: RetryClassifiedFailure;
@@ -92,11 +101,14 @@ export interface RetryPrimitivesDeps {
     readonly args: unknown;
     readonly exec: () => Promise<R>;
   }) => Promise<R>;
+  /** Existing DurablePrimitiveRuntime cursor; read right after the start entry is journaled. */
   readonly currentSeq: () => number;
-  /** The recorded journal the runtime replays against. */
-  readonly recorded: ReadonlyMap<number, JournalEntry>;
-  /** Advance the cursor over a recorded span (DurablePrimitiveRuntime.skipRecorded). */
-  readonly skipRecorded: (throughSeq: number) => void;
+  /**
+   * Existing DurablePrimitiveRuntime black box. `classify` and `backoff` run inside it, so jitter
+   * (`Math.random`) or a clock read in them takes no seq of its own — the settlement they produce
+   * is the one journaled result, and a replay that skips them stays aligned.
+   */
+  readonly runBlackBoxed: <R>(fn: () => Promise<R>) => Promise<R>;
   /** Host clock — read only inside a live settlement; the deadline it yields is journaled. */
   readonly hostNow: () => number;
   /** The durable delay (scheduling.ts). */
@@ -106,17 +118,31 @@ export interface RetryPrimitivesDeps {
 }
 
 /**
- * Engine control and integrity signals are never an attempt's failure: a suspension must park the
- * run, an abort must settle it, and drift/journal faults mean the run itself is broken.
+ * Failures that are never an attempt's to classify: engine control signals (a suspension must park
+ * the run, an abort must settle it), journal integrity faults, and deterministic refusals that no
+ * amount of waiting fixes. They propagate unchanged.
  */
-function isControlSignal(error: unknown): boolean {
+function propagatesUnclassified(error: unknown): boolean {
   return (
     error instanceof WorkflowSuspended ||
     error instanceof WorkflowAborted ||
-    error instanceof ReplayDriftError ||
     error instanceof JournalSchemaError ||
-    error instanceof JournalSerializeError
+    error instanceof JournalSerializeError ||
+    error instanceof PermissionDeniedError ||
+    error instanceof SubWorkflowCheckpointError ||
+    error instanceof WorkflowInputDecodeError ||
+    error instanceof WorkflowLoadError ||
+    (error instanceof ReplayDriftError && !isGapDrift(error))
   );
+}
+
+/**
+ * The drift a re-driven attempt raises at a primitive that threw on the original run (a consumed
+ * seq with no journal line). Only this shape is resolved by the attempt's settlement; a changed
+ * call identity or changed args inside an attempt is real drift and stays loud.
+ */
+function isGapDrift(error: unknown): error is ReplayDriftError {
+  return error instanceof ReplayDriftError && error.expected.presence === "gap";
 }
 
 function describeFailure(
@@ -138,63 +164,44 @@ function validateOptions(opts: RetryOptions): void {
   }
 }
 
-/** True when a journaled result decodes as a structurally valid `RetryAttemptRecord`. */
-export function isRetryAttemptRecord(result: unknown): result is RetryAttemptRecord {
-  if (typeof result !== "object" || result === null) return false;
-  const record = result as Record<string, unknown>;
-  if (!Number.isInteger(record.sequence) || !Number.isInteger(record.attempt)) return false;
-  if (!Number.isInteger(record.maxAttempts)) return false;
-  if (record.outcome === "ok") return true;
-  if (typeof record.failure !== "object" || record.failure === null) return false;
-  if (record.outcome === "retry") return typeof record.deadline === "number";
-  return record.outcome === "exhausted" || record.outcome === "fatal";
+/** A re-driven attempt ended differently from its journaled settlement. */
+function outcomeDrift(seq: number, recorded: string, observed: string): ReplayDriftError {
+  return new ReplayDriftError({
+    seq,
+    reason: "call",
+    expected: { kind: RETRY_KIND, outcome: recorded },
+    observed: { kind: RETRY_KIND, outcome: observed },
+  });
 }
 
 export function createRetryPrimitives(deps: RetryPrimitivesDeps): RetryPrimitives {
-  /** The highest-seq settlement journaled for `sequence`, if the journal holds one. */
-  const latestSettlement = (
-    sequence: number,
-  ): { readonly seq: number; readonly record: RetryAttemptRecord } | undefined => {
-    let latest: { readonly seq: number; readonly record: RetryAttemptRecord } | undefined;
-    for (const entry of deps.recorded.values()) {
-      if (entry.seq <= sequence) continue;
-      if (entry.kind !== RETRY_KIND || entry.refId !== RETRY_ATTEMPT_REF_ID) continue;
-      if (!isRetryAttemptRecord(entry.result) || entry.result.sequence !== sequence) continue;
-      if (latest === undefined || entry.seq > latest.seq) {
-        latest = { seq: entry.seq, record: entry.result };
-      }
-    }
-    return latest;
-  };
-
   const retryImpl = async <T>(
     fn: (attempt: number) => Promise<T>,
     opts: RetryOptions,
   ): Promise<T> => {
     validateOptions(opts);
     const { maxAttempts } = opts;
-    let live = false;
     await deps.callPrimitive({
       kind: RETRY_KIND,
       refId: RETRY_START_REF_ID,
       args: { maxAttempts },
-      exec: async () => {
-        live = true;
-        return { maxAttempts };
-      },
+      exec: async () => ({ maxAttempts }),
     });
     const sequence = deps.currentSeq();
 
-    const settle = (attempt: number, observe: () => RetryAttemptRecord<T>) =>
-      deps.callPrimitive<RetryAttemptRecord<T>>({
+    // `observe` runs only on the live path; a replay returns the journaled settlement instead.
+    const settle = (attempt: number, observe: () => RetryAttemptRecord) =>
+      deps.callPrimitive<RetryAttemptRecord>({
         kind: RETRY_KIND,
         refId: RETRY_ATTEMPT_REF_ID,
         args: { sequence, attempt, maxAttempts },
-        exec: async () => observe(),
+        exec: () => deps.runBlackBoxed(async () => observe()),
       });
 
     const settleFailure = (attempt: number, error: unknown) =>
-      settle(attempt, () => {
+      settle(attempt, (): RetryAttemptRecord => {
+        // Reaching here live means no settlement was journaled: the gap is not a settled failure.
+        if (isGapDrift(error)) throw error;
         const classification = opts.classify?.(error) ?? "retryable";
         const failure = describeFailure(error, classification);
         const base = { sequence, attempt, maxAttempts, failure };
@@ -209,52 +216,32 @@ export function createRetryPrimitives(deps: RetryPrimitivesDeps): RetryPrimitive
         return { ...base, outcome: "retry", deadline: deps.hostNow() + delay };
       });
 
-    const exhausted = (record: RetryAttemptRecord<T>, cause?: unknown): RetryExhaustedError => {
-      if (record.outcome === "ok" || record.outcome === "retry") {
-        throw new WorkflowError(`retry: attempt ${record.attempt} did not end the sequence.`);
-      }
-      return new RetryExhaustedError({
-        attempts: record.attempt,
-        maxAttempts,
-        lastFailure: record.failure,
-        cause,
-      });
-    };
-
-    let attempt = 1;
-    if (!live) {
-      // Replay: jump to the latest settlement instead of re-driving every settled attempt.
-      const latest = latestSettlement(sequence);
-      if (latest !== undefined) {
-        deps.skipRecorded(latest.seq - 1);
-        const record = await settle(latest.record.attempt, () => {
-          throw new WorkflowError("retry: a recorded settlement was asked to re-execute.");
-        });
-        if (record.outcome === "ok") return record.value as T;
-        if (record.outcome !== "retry") throw exhausted(record);
-        await deps.waitUntil(record.deadline);
-        attempt = record.attempt + 1;
-      }
-    }
-
-    for (; ; attempt += 1) {
+    for (let attempt = 1; ; attempt += 1) {
       let value: T;
       try {
         value = await fn(attempt);
       } catch (error) {
-        if (isControlSignal(error)) throw error;
+        if (propagatesUnclassified(error)) throw error;
         const record = await settleFailure(attempt, error);
-        if (record.outcome !== "retry") throw exhausted(record, error);
-        await deps.waitUntil(record.deadline);
-        continue;
+        if (record.outcome === "ok") throw outcomeDrift(deps.currentSeq(), "ok", "failed");
+        if (record.outcome === "retry") {
+          await deps.waitUntil(record.deadline);
+          continue;
+        }
+        throw new RetryExhaustedError({
+          attempts: record.attempt,
+          maxAttempts,
+          lastFailure: record.failure,
+          cause: isGapDrift(error) ? undefined : error,
+        });
       }
-      await settle(attempt, () => ({
+      const record = await settle(attempt, () => ({
         sequence,
         attempt,
         maxAttempts,
         outcome: "ok",
-        ...(value === undefined ? {} : { value }),
       }));
+      if (record.outcome !== "ok") throw outcomeDrift(deps.currentSeq(), record.outcome, "ok");
       return value;
     }
   };

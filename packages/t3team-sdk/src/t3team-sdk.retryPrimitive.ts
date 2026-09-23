@@ -18,8 +18,7 @@ export function createRetryPrimitives(deps: {
   return createGenericRetryPrimitives({
     callPrimitive: deps.runtime.callPrimitive,
     currentSeq: deps.runtime.currentSeq,
-    recorded: deps.runtime.recorded,
-    skipRecorded: deps.runtime.skipRecorded,
+    runBlackBoxed: deps.runtime.runBlackBoxed,
     hostNow: deps.runtime.hostNow,
     // The backoff delay IS `waitUntil`, so retry is gated by the same `"schedule"` capability —
     // up front, not at the first failure, so the static scan and the runtime agree.
