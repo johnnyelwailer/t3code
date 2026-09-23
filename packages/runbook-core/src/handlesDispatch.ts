@@ -56,6 +56,7 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
       dismissed: settle.dismissed ?? false,
       reply: settle.reply,
       ...(settle.by === undefined ? {} : { by: settle.by }),
+      startedAt: ts, // the journaled line's own time, so this run and its replay agree
     });
   };
 

@@ -49,14 +49,28 @@ class SignallingStore extends FsJournalStore {
 type Send = (envelope: MessageEnvelope, host: WorkflowRunHost) => Promise<void>;
 
 /** A host whose broker never answers inline; `send` may act mid-drive. `log` is the timeline. */
-function makeHost(runId: string, ref: typeof askResponseWorkflow | typeof e2eReviewWorkflow) {
+function makeHost(
+  runId: string,
+  ref: typeof askResponseWorkflow | typeof e2eReviewWorkflow,
+  seams: {
+    /** Wraps the real journal write (e.g. to fail AFTER it committed). */
+    readonly append?: (write: () => Promise<boolean>, attempt: number) => Promise<boolean>;
+    readonly onReplyJournaled?: (correlationId: string) => Promise<void>;
+  } = {},
+) {
+  let appendAttempts = 0;
+  const orphanIfSleeping = vi.fn(async (_correlationId: string) => {});
   const log: string[] = [];
   const sent: MessageEnvelope[] = [];
   const hook: { send: Send } = { send: async () => {} };
   const store = new SignallingStore(runsRoot);
   const appendResolved = vi.fn(
     async (opts: { runId: string; correlationId: string; reply: unknown }) => {
-      const wrote = await appendResolvedEntry({ store, ...opts });
+      const write = () => appendResolvedEntry({ store, ...opts });
+      appendAttempts += 1;
+      const wrote = await (seams.append === undefined
+        ? write()
+        : seams.append(write, appendAttempts));
       log.push(`journaled ${opts.correlationId}`);
       return wrote;
     },
@@ -67,10 +81,12 @@ function makeHost(runId: string, ref: typeof askResponseWorkflow | typeof e2eRev
     releaseActive: () => {},
     recordCompleted: async () => {},
     recordFailed: async () => {},
-    orphanIfSleeping: async () => {},
+    orphanIfSleeping,
   };
   const onCompleted = vi.fn(async (_result: { readonly result: unknown }) => {});
-  const onFailed = vi.fn(async () => {});
+  const onFailed = vi.fn(
+    async (_detail: { readonly phase: string; readonly error: unknown }) => {},
+  );
   let host!: WorkflowRunHost;
   host = createWorkflowRunHost({
     ref,
@@ -93,8 +109,9 @@ function makeHost(runId: string, ref: typeof askResponseWorkflow | typeof e2eRev
     lifecycle,
     sinks: { onCompleted, onFailed },
     appendResolved,
+    ...(seams.onReplyJournaled === undefined ? {} : { onReplyJournaled: seams.onReplyJournaled }),
   });
-  return { host, log, sent, hook, store, appendResolved, onCompleted, onFailed };
+  return { host, log, sent, hook, store, appendResolved, onCompleted, onFailed, orphanIfSleeping };
 }
 
 describe("durable workflow engine — replies that land mid-drive", () => {
@@ -179,5 +196,49 @@ describe("durable workflow engine — replies that land mid-drive", () => {
       approved: true,
     });
     expect(run.onFailed).not.toHaveBeenCalled();
+  });
+
+  it("a failing onReplyJournaled after a durable append still replays: error reported once, run completes", async () => {
+    const sinkDown = new Error("reply sink down");
+    const onReplyJournaled = vi.fn(async () => {
+      throw sinkDown;
+    });
+    const run = makeHost("host-callback-fails", askResponseWorkflow, { onReplyJournaled });
+    expect(await run.host.start()).toBe("suspended");
+    run.hook.send = async (envelope, host) => {
+      if (envelope.redelivery === true) await host.resume(envelope.correlationId, "yes");
+    };
+    await run.host.redrive({ refire: "host-callback-fails:1" });
+
+    expect(run.appendResolved).toHaveBeenCalledOnce(); // written once, never re-sent
+    expect(onReplyJournaled).toHaveBeenCalledOnce();
+    expect(run.onFailed).toHaveBeenCalledOnce();
+    expect(run.onFailed.mock.calls[0]?.[0]).toEqual({ phase: "resume", error: sinkDown });
+    expect(run.orphanIfSleeping).not.toHaveBeenCalled();
+    expect(run.onCompleted).toHaveBeenCalledOnce();
+    expect(run.onCompleted.mock.calls[0]?.[0].result).toEqual({ answer: "yes" });
+  });
+
+  it("an append that committed but threw is owed as a whole resume that replays its own reply", async () => {
+    // Attempt 1 commits, then the transport fails; attempt 2 fails outright. The journal looked
+    // unreachable, so the whole resume is owed — and its retry finds THIS reply already stored.
+    const run = makeHost("host-append-committed", askResponseWorkflow, {
+      append: async (write, attempt) => {
+        if (attempt === 1) await write();
+        if (attempt <= 2) throw new Error("transport reset");
+        return write();
+      },
+    });
+    expect(await run.host.start()).toBe("suspended");
+    run.hook.send = async (envelope, host) => {
+      if (envelope.redelivery === true) await host.resume(envelope.correlationId, "yes");
+    };
+    await run.host.redrive({ refire: "host-append-committed:1" });
+
+    expect(run.appendResolved).toHaveBeenCalledTimes(3); // two failed attempts + the owed retry
+    expect(run.orphanIfSleeping).not.toHaveBeenCalled();
+    expect(run.onFailed).not.toHaveBeenCalled();
+    expect(run.onCompleted).toHaveBeenCalledOnce();
+    expect(run.onCompleted.mock.calls[0]?.[0].result).toEqual({ answer: "yes" });
   });
 });

@@ -353,6 +353,8 @@
     "packages/runbook-core/src/handles.ts",
     "packages/runbook-core/src/handlesDispatch.ts",
     "packages/runbook-core/src/index.ts",
+    "packages/runbook-core/src/journal.test.ts",
+    "packages/runbook-core/src/journalReader.ts",
     "packages/runbook-core/src/journalStore.ts",
     "packages/runbook-core/src/primitiveKinds.ts",
     "packages/runbook-core/src/runEngine.ts",
