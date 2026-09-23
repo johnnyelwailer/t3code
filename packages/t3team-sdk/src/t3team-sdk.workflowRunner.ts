@@ -112,11 +112,18 @@ export async function executeWorkflowBody(
     scripts,
     nowIso,
   });
-  const checkpoint = createCheckpointPrimitives({
-    callPrimitive: runtime.callPrimitive,
-    currentSeq: runtime.currentSeq,
-    nowIso,
-  }).checkpoint;
+  // `accumulate` folds commit through the run's checkpoint; the reducer-aware `checkpoint` it
+  // returns is the one the body binds (a plain boundary is refused once a reducer is active), and a
+  // checkpoint-window resume seeds every reducer from its boundary.
+  const { checkpoint, ...reduce } = createReducePrimitives({
+    checkpoint: createCheckpointPrimitives({
+      callPrimitive: runtime.callPrimitive,
+      currentSeq: runtime.currentSeq,
+      nowIso,
+    }).checkpoint,
+    resume: opts.resume?.checkpoint,
+    isBlackBoxed: runtime.isBlackBoxed,
+  });
   return await runPreparedBody({
     runtime,
     ref: opts.ref,
@@ -128,9 +135,7 @@ export async function executeWorkflowBody(
     // resume restored (absent on fresh starts and full-replay resumes).
     checkpoint,
     resume: opts.resume?.checkpoint,
-    // `accumulate` folds commit through the same `checkpoint`; a checkpoint-window resume seeds
-    // every reducer from its boundary so the fold continues from the recorded state.
-    reduce: createReducePrimitives({ checkpoint, resume: opts.resume?.checkpoint }),
+    reduce,
     // Feed the body's capability set back so workflow() children intersect against it.
     onCapabilities: captureCapabilities,
     handleDispatch: runtime.handles,

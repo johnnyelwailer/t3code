@@ -134,7 +134,9 @@ export function checkpoint<State>(input: CheckpointInput<State>): Promise<Checkp
  * checkpoint boundary; a resume continues folding from the recorded state. `fold` receives
  * `undefined` on the reducer's first observation and must be deterministic (its result is part of
  * the journaled boundary, so a drifting fold fails loud). `retention.ring` keeps the last N
- * observations. Refused inside sub-workflow bodies, like `checkpoint()`.
+ * observations. `reducerId` is the reducer's identity: calls with the same id fold into one state.
+ * Refused inside sub-workflow bodies and parallel/pipeline branches; once a reducer is active, a
+ * plain `checkpoint()` is refused (its boundary would drop the reducer state).
  */
 export function accumulate<State, Observation>(
   reducerId: string,

@@ -4,13 +4,17 @@ import {
   createReducePrimitives as createGenericReducePrimitives,
   type ReducePrimitives,
   type ReducePrimitivesDeps,
+  type RunReducePrimitives,
 } from "@runbook/core/reduce";
 import { SubWorkflowCheckpointError } from "./t3team-sdk.errors.ts";
 
 export type { ReducePrimitives };
 
-/** The top-level body's reducers: every fold commits through the run's `checkpoint`. */
-export function createReducePrimitives(deps: ReducePrimitivesDeps): ReducePrimitives {
+/**
+ * The top-level body's reducers: every fold commits through the run's `checkpoint`, and the
+ * returned reducer-aware `checkpoint` is what the body binds as its own.
+ */
+export function createReducePrimitives(deps: ReducePrimitivesDeps): RunReducePrimitives {
   return createGenericReducePrimitives(deps);
 }
 

@@ -18,7 +18,8 @@ const SOURCE = { now: () => 1_700_000_000_000, random: () => 0.5, uuid: () => "u
 const NOW_ISO = "2026-09-01T00:00:00.000Z";
 const CRASH = Symbol("simulated host crash");
 const RING = 3;
-type LoopArgs = { readonly k: number; readonly crashAfter?: number };
+type CrashPoint = "after-observation" | "mid-commit";
+type LoopArgs = { readonly k: number; readonly crashAfter?: number; readonly crashAt?: CrashPoint };
 type Metrics = { readonly n: number; readonly total: number; readonly max: number };
 
 /** The external data source a poller observes: deterministic, so two runs see the same stream. */
@@ -32,7 +33,8 @@ const foldMetrics = (current: Metrics | undefined, observation: number): Metrics
 /**
  * The accumulate crash-resume scenario end to end on the REAL engine + filesystem journal:
  * each iteration observes (a journaled step) and folds the observation into a reducer (a
- * checkpoint boundary). The host "crashes" BETWEEN an observation and its fold commit; a
+ * checkpoint boundary). The host "crashes" BETWEEN an observation and its fold commit — either
+ * before `accumulate` runs, or after its fold ran but before the boundary is journaled; a
  * `resumeWorkflow` re-drives the SAME run through the checkpoint-aware window, restores the
  * reducer from its boundary, and must fold to exactly what an uninterrupted run folds.
  */
@@ -61,11 +63,17 @@ describe("@runbook/core engine accumulate resume", () => {
           currentSeq: runtime.currentSeq,
           nowIso: () => NOW_ISO,
         });
+        const { k, crashAfter, crashAt } = req.args as LoopArgs;
+        let commits = 0;
         const { accumulate, reducerState } = createReducePrimitives({
-          checkpoint,
+          // Mid-commit crash: the fold for `crashAfter` has run, its boundary never reaches the journal.
+          checkpoint: async (input) => {
+            if (drive === 1 && crashAt === "mid-commit" && commits++ === crashAfter) throw CRASH;
+            return await checkpoint(input);
+          },
           resume: req.resume?.checkpoint,
+          isBlackBoxed: runtime.isBlackBoxed,
         });
-        const { k, crashAfter } = req.args as LoopArgs;
         const observe = async (i: number): Promise<number> =>
           await runtime.callPrimitive({
             kind: "tool",
@@ -80,7 +88,7 @@ describe("@runbook/core engine accumulate resume", () => {
         for (let i = reducerState<Metrics>("metrics")?.current.n ?? 0; i < k; i++) {
           const observation = await observe(i);
           // Simulated hard crash AFTER the observation is journaled, BEFORE its fold commits.
-          if (drive === 1 && crashAfter === i) throw CRASH;
+          if (drive === 1 && crashAt === "after-observation" && crashAfter === i) throw CRASH;
           await accumulate("metrics", foldMetrics, observation, { retention: { ring: RING } });
         }
         return reducerState<Metrics, number>("metrics");
@@ -103,9 +111,13 @@ describe("@runbook/core engine accumulate resume", () => {
     return run;
   };
 
-  it.each([0, 7, K - 1])(
-    "crash after observation %i, then resume, folds the same state as an uninterrupted run",
-    async (crashAt) => {
+  it.each(
+    (["after-observation", "mid-commit"] as const).flatMap((point) =>
+      [0, 7, K - 1].map((index) => [point, index] as const),
+    ),
+  )(
+    "crash %s at observation %i, then resume, folds the same state as an uninterrupted run",
+    async (crashPoint, crashAt) => {
       const expected = await uninterrupted();
       expect(expected.result).toEqual({
         current: Array.from({ length: K }, (_, i) => observationAt(i)).reduce(
@@ -115,11 +127,11 @@ describe("@runbook/core engine accumulate resume", () => {
         ring: [K - 3, K - 2, K - 1].map(observationAt),
       });
 
-      const runId = `run-reduce-crash-${crashAt}`;
+      const runId = `run-reduce-crash-${crashPoint}-${crashAt}`;
       const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "runbook-reduce-"));
       const counters = { observeExecs: [] as number[] };
       const engine = makeEngine(runId, counters);
-      const args = { k: K, crashAfter: crashAt };
+      const args = { k: K, crashAfter: crashAt, crashAt: crashPoint };
 
       await expect(engine.startWorkflow(ref, args, { runId, runsRoot })).rejects.toBe(CRASH);
       const store = new FsJournalStore(runsRoot);

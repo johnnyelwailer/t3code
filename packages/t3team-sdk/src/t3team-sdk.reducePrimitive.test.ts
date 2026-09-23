@@ -8,9 +8,11 @@ import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import type * as Poller from "./__fixtures__/t3team-sdk.accumulatePoller.workflow.ts";
 import type * as GuardParent from "./__fixtures__/t3team-sdk.subAccumulateGuardParent.workflow.ts";
+import type * as ThenCheckpoint from "./__fixtures__/t3team-sdk.accumulateThenCheckpoint.workflow.ts";
 import {
   FsJournalStore,
   SubWorkflowCheckpointError,
+  WorkflowError,
   defineTool,
   defineToolGroup,
   defineWorkflow,
@@ -59,6 +61,9 @@ const tools = [observeTool, probeTool];
 
 const poller = defineWorkflow<typeof Poller>(
   "./__fixtures__/t3team-sdk.accumulatePoller.workflow.ts",
+);
+const thenCheckpoint = defineWorkflow<typeof ThenCheckpoint>(
+  "./__fixtures__/t3team-sdk.accumulateThenCheckpoint.workflow.ts",
 );
 const guardParent = defineWorkflow<typeof GuardParent>(
   "./__fixtures__/t3team-sdk.subAccumulateGuardParent.workflow.ts",
@@ -127,5 +132,19 @@ describe("accumulate through a real workflow body", () => {
       (entry) => entry.kind === "checkpoint",
     );
     expect(checkpointEntries, "no boundary may be journaled").toHaveLength(0);
+  });
+
+  it("refuses a plain checkpoint() in the body once a reducer is active", async () => {
+    const error = await startWorkflow(
+      thenCheckpoint,
+      {},
+      { runsRoot, tools: [], runId: "run-acc-then-checkpoint" },
+    ).catch((thrown: unknown) => thrown);
+
+    expect(error).toBeInstanceOf(WorkflowError);
+    expect((error as Error).message).toMatch(/cannot follow accumulate/);
+    // Only the reducer's boundary reached the journal.
+    const entries = await new FsJournalStore(runsRoot).readEntries("run-acc-then-checkpoint");
+    expect([...entries.bySeq.values()].map((entry) => entry.kind)).toEqual(["checkpoint"]);
   });
 });

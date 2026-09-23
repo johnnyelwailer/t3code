@@ -17,6 +17,12 @@
  * The fold itself is ordinary body code: it runs on every drive (live and replay), and its output
  * is part of the journaled checkpoint args, so a fold that is not deterministic fails loud as
  * replay drift instead of silently diverging.
+ *
+ * Three rules keep "resume folds what an uninterrupted run folds" true:
+ *
+ * - folds commit one at a time and a boundary records committed snapshots only;
+ * - a fold inside a black-boxed composition branch is refused (branch calls are not journaled);
+ * - a plain `checkpoint()` is refused once a reducer is active (its boundary would drop them).
  */
 
 import type { CheckpointPrimitives, CheckpointRecord, CheckpointRetention } from "./checkpoint.ts";
@@ -53,7 +59,8 @@ export interface ReduceCheckpointState {
 export interface ReducePrimitives {
   /**
    * Fold `observation` into the reducer's current state and commit the result as a checkpoint
-   * boundary. `fold` receives `undefined` on the reducer's first observation.
+   * boundary. `fold` receives `undefined` on the reducer's first observation. `reducerId` IS the
+   * reducer's identity: every call with the same id folds into the same state.
    */
   readonly accumulate: <State, Observation>(
     reducerId: string,
@@ -75,6 +82,20 @@ export interface ReducePrimitivesDeps {
   readonly checkpoint: CheckpointPrimitives["checkpoint"];
   /** The checkpoint a checkpoint-window resume restored. Absent on fresh and full-replay drives. */
   readonly resume?: CheckpointRecord | undefined;
+  /**
+   * True while a composition branch runs black-boxed (`DurablePrimitiveRuntime.isBlackBoxed`).
+   * Primitive calls there are not journaled, so a fold there could not be replayed: refused.
+   */
+  readonly isBlackBoxed: () => boolean;
+}
+
+/**
+ * The reducer set plus the run's reducer-aware `checkpoint`. A host binds THIS `checkpoint` as the
+ * body's checkpoint: a plain boundary carries author state only, so committing one while a reducer
+ * is active would make a resume from it silently restart that reducer — it is refused instead.
+ */
+export interface RunReducePrimitives extends ReducePrimitives {
+  readonly checkpoint: CheckpointPrimitives["checkpoint"];
 }
 
 /** Validate the optional ring capacity before anything is folded or journaled. */
@@ -105,14 +126,51 @@ export function isReduceCheckpointState(state: unknown): state is ReduceCheckpoi
   );
 }
 
-export function createReducePrimitives(deps: ReducePrimitivesDeps): ReducePrimitives {
-  // Continue folding from the recorded state: a checkpoint-window resume seeds every reducer
-  // from its boundary. A plain `checkpoint()` boundary carries author state only — reducers
-  // restart from `undefined` across it, exactly as any carried variable the author left out.
+export function createReducePrimitives(deps: ReducePrimitivesDeps): RunReducePrimitives {
+  // Continue folding from the recorded state: a checkpoint-window resume seeds every reducer from
+  // its boundary. The map only ever holds COMMITTED snapshots, so a boundary never records a fold
+  // that is still in flight (or that failed).
   const restored = deps.resume?.state;
   const reducers = new Map<string, ReducerSnapshot>(
     isReduceCheckpointState(restored) ? Object.entries(restored.reducers) : [],
   );
+  // Fold + commit run one at a time, in call order, so concurrent calls (`Promise.all`) chain
+  // deterministically instead of racing from the same prior.
+  let queue: Promise<unknown> = Promise.resolve();
+  let inFlight = 0;
+
+  const foldAndCommit = async <State, Observation>(
+    reducerId: string,
+    fold: (current: State | undefined, observation: Observation) => State,
+    observation: Observation,
+    capacity: number,
+    retention: CheckpointRetention,
+  ): Promise<State> => {
+    const prior = reducers.get(reducerId) as ReducerSnapshot<State, Observation> | undefined;
+    // The fold gets its own copy: a fold that mutates its input and then throws leaves no trace.
+    const current = fold(structuredClone(prior?.current), observation);
+    // `undefined` is not canonical JSON: the boundary would record no `current`, fail to decode on
+    // resume, and silently restart every reducer. `undefined` stays the "no state yet" input.
+    if (current === undefined) {
+      throw new WorkflowError(
+        `accumulate: the fold for reducer '${reducerId}' returned undefined; return a JSON value (use null for "empty").`,
+      );
+    }
+    const next: ReducerSnapshot<State, Observation> = structuredClone({
+      current,
+      ring: capacity === 0 ? [] : [...(prior?.ring ?? []), observation].slice(-capacity),
+    });
+    await deps.checkpoint({
+      state: {
+        primitive: REDUCE_STATE_TAG,
+        reducerId,
+        reducers: { ...Object.fromEntries(reducers), [reducerId]: next },
+      },
+      retention,
+    });
+    reducers.set(reducerId, next);
+    return current;
+  };
 
   return {
     accumulate: async <State, Observation>(
@@ -124,35 +182,38 @@ export function createReducePrimitives(deps: ReducePrimitivesDeps): ReducePrimit
       if (typeof reducerId !== "string" || reducerId.length === 0) {
         throw new WorkflowError("accumulate: reducerId must be a non-empty string.");
       }
+      // Checked at the call site: that is where "inside a composition branch" is decided.
+      if (deps.isBlackBoxed()) {
+        throw new WorkflowError(
+          `accumulate: reducer '${reducerId}' cannot fold inside a parallel/pipeline branch — branch calls are not journaled, so the fold could not be replayed. Fold the branch results after the composition returns.`,
+        );
+      }
       const { ring, ...retention } = opts?.retention ?? {};
       const capacity = normalizeReduceRing(ring);
-      const prior = reducers.get(reducerId) as ReducerSnapshot<State, Observation> | undefined;
-      const next: ReducerSnapshot<State, Observation> = {
-        current: fold(prior?.current, observation),
-        ring: capacity === 0 ? [] : [...(prior?.ring ?? []), observation].slice(-capacity),
-      };
-      // Advance before the commit so interleaved folds (under `parallel`) chain instead of
-      // racing from the same prior; roll back only if nothing folded on top in the meantime.
-      reducers.set(reducerId, next);
+      inFlight += 1;
+      const task = queue.then(() =>
+        foldAndCommit(reducerId, fold, observation, capacity, retention),
+      );
+      queue = task.catch(() => undefined);
       try {
-        await deps.checkpoint({
-          state: {
-            primitive: REDUCE_STATE_TAG,
-            reducerId,
-            reducers: Object.fromEntries(reducers),
-          },
-          retention,
-        });
-      } catch (error) {
-        if (reducers.get(reducerId) === next) {
-          if (prior === undefined) reducers.delete(reducerId);
-          else reducers.set(reducerId, prior);
-        }
-        throw error;
+        return await task;
+      } finally {
+        inFlight -= 1;
       }
-      return next.current;
     },
-    reducerState: <State = unknown, Observation = unknown>(reducerId: string) =>
-      reducers.get(reducerId) as ReducerSnapshot<State, Observation> | undefined,
+    reducerState: <State = unknown, Observation = unknown>(reducerId: string) => {
+      const snapshot = reducers.get(reducerId);
+      return snapshot === undefined
+        ? undefined
+        : (structuredClone(snapshot) as ReducerSnapshot<State, Observation>);
+    },
+    checkpoint: async (input) => {
+      if (reducers.size > 0 || inFlight > 0) {
+        throw new WorkflowError(
+          "checkpoint: a plain checkpoint() cannot follow accumulate() in the same run — its boundary carries author state only, so a resume from it would silently restart every reducer. Carry that state in a reducer instead.",
+        );
+      }
+      return deps.checkpoint(input);
+    },
   };
 }

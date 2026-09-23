@@ -55,6 +55,8 @@ export interface DurableRuntimeConfig {
 export interface DurablePrimitiveRuntime extends PrimitiveRuntime {
   readonly currentSeq: () => number;
   readonly runBlackBoxed: <R>(fn: () => Promise<R>) => Promise<R>;
+  /** True while a composition branch runs black-boxed: primitive calls there are not journaled. */
+  readonly isBlackBoxed: () => boolean;
   readonly hostNow: () => number;
   readonly hostRandom: () => number;
   readonly hostUuid: () => string;
@@ -129,6 +131,7 @@ export function createDurableRuntime(config: DurableRuntimeConfig): DurablePrimi
     uuid,
     currentSeq: () => seq,
     runBlackBoxed,
+    isBlackBoxed: () => blackBoxDepth > 0,
     hostNow: config.source.now,
     hostRandom: config.source.random,
     hostUuid: config.source.uuid,

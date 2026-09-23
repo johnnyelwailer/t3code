@@ -70,7 +70,12 @@ const makeReducers = (
     currentSeq: runtime.currentSeq,
     nowIso,
   });
-  return { journal, runtime, ...createReducePrimitives({ checkpoint, resume: opts.resume }) };
+  const reduce = createReducePrimitives({
+    checkpoint,
+    resume: opts.resume,
+    isBlackBoxed: runtime.isBlackBoxed,
+  });
+  return { journal, runtime, ...reduce };
 };
 
 const sum = (total: number | undefined, n: number): number => (total ?? 0) + n;
@@ -133,6 +138,7 @@ describe("@runbook/core reduce primitive", () => {
     // `ring` is the reducer's own knob: the checkpoint sees only its own retention vocabulary.
     const inputs: unknown[] = [];
     const spied = createReducePrimitives({
+      isBlackBoxed: () => false,
       checkpoint: async (input) => {
         inputs.push(input.retention);
         return { compactedThroughSeq: 0, state: input.state, retainedHistory: 0, at: NOW_ISO };
@@ -143,7 +149,7 @@ describe("@runbook/core reduce primitive", () => {
     expect(inputs).toEqual([{}, { superseded: "prune" }]);
   });
 
-  it("rejects an invalid ring or reducer identity before folding or journaling", async () => {
+  it("rejects an invalid ring, reducer identity, or undefined fold result before journaling", async () => {
     const { journal, accumulate, reducerState } = makeReducers();
     const fold = () => {
       throw new Error("fold must not run");
@@ -155,6 +161,8 @@ describe("@runbook/core reduce primitive", () => {
       WorkflowError,
     );
     await expect(accumulate("", fold, 1)).rejects.toBeInstanceOf(WorkflowError);
+    // A fold result of `undefined` could not be restored on resume: refused before journaling.
+    await expect(accumulate("total", () => undefined, 1)).rejects.toThrow(/returned undefined/);
     expect(journal.entries).toHaveLength(0);
     expect(reducerState("total")).toBeUndefined();
     expect(normalizeReduceRing(undefined)).toBe(0);
@@ -212,16 +220,88 @@ describe("@runbook/core reduce primitive", () => {
     ).rejects.toThrow(/replay drift|args/i);
   });
 
-  it("restarts reducers across a plain checkpoint boundary (author state only)", async () => {
+  it("refuses a plain checkpoint() once a reducer is active (it would drop reducer state)", async () => {
+    const { journal, accumulate, checkpoint } = makeReducers();
+    // Before any fold a plain boundary is fine: no reducer can be lost by resuming from it.
+    await checkpoint({ state: { i: 0 } });
+    await accumulate("total", sum, 5);
+    await expect(checkpoint({ state: { i: 1 } })).rejects.toThrow(/cannot follow accumulate/);
+    expect(journal.entries.map((entry) => entry.seq)).toEqual([1, 2]);
+
+    // A resume from a plain boundary therefore never had an active reducer to restore.
     const resumed = makeReducers({
       resume: { compactedThroughSeq: 0, state: { i: 3 }, retainedHistory: 0, at: NOW_ISO },
     });
     expect(resumed.reducerState("total")).toBeUndefined();
   });
 
-  it("rolls the reducer back when the boundary commit fails", async () => {
+  it("refuses a fold inside a black-boxed composition branch (it could not be replayed)", async () => {
+    const { journal, runtime, accumulate, reducerState } = makeReducers();
+    await expect(runtime.runBlackBoxed(() => accumulate("total", sum, 1))).rejects.toThrow(
+      /inside a parallel\/pipeline branch/,
+    );
+    expect(journal.entries).toHaveLength(0);
+    expect(reducerState("total")).toBeUndefined();
+  });
+
+  it("serializes concurrent folds and never records an uncommitted fold in a boundary", async () => {
+    const committed: unknown[] = [];
+    let releaseFirst!: () => void;
+    const firstHeld = new Promise<void>((resolve) => (releaseFirst = resolve));
+    let calls = 0;
+    const { accumulate, reducerState } = createReducePrimitives({
+      isBlackBoxed: () => false,
+      checkpoint: async (input) => {
+        calls += 1;
+        if (calls === 1) {
+          await firstHeld;
+          throw new WorkflowError("host crashed mid-commit");
+        }
+        committed.push(input.state);
+        return { compactedThroughSeq: 0, state: input.state, retainedHistory: 0, at: NOW_ISO };
+      },
+    });
+    const b = accumulate("b", sum, 1);
+    const a = accumulate("a", sum, 1);
+    // `a` waits for `b`'s commit instead of snapshotting `b`'s in-flight fold.
+    await Promise.resolve();
+    expect(calls).toBe(1);
+    releaseFirst();
+    await expect(b).rejects.toThrow("mid-commit");
+    expect(await a).toBe(1);
+    expect(committed).toEqual([
+      { primitive: "reduce", reducerId: "a", reducers: { a: { current: 1, ring: [] } } },
+    ]);
+    expect(reducerState("b")).toBeUndefined();
+  });
+
+  it("leaves no trace when a fold mutates its input and throws", async () => {
+    const { journal, accumulate, reducerState } = makeReducers();
+    await accumulate("count", (c: { n: number } | undefined) => ({ n: (c?.n ?? 0) + 1 }), null);
+    await expect(
+      accumulate(
+        "count",
+        (c: { n: number } | undefined) => {
+          if (c !== undefined) c.n += 100;
+          throw new Error("fold failed");
+        },
+        null,
+      ),
+    ).rejects.toThrow("fold failed");
+    expect(reducerState("count")).toEqual({ current: { n: 1 }, ring: [] });
+    // Neither can a caller mutate the recorded snapshot through what it was handed.
+    const handed = reducerState<{ n: number }>("count");
+    if (handed !== undefined) (handed.current as { n: number }).n = 42;
+    expect(
+      await accumulate("count", (c: { n: number } | undefined) => ({ n: (c?.n ?? 0) + 1 }), null),
+    ).toEqual({ n: 2 });
+    expect(journal.entries).toHaveLength(2);
+  });
+
+  it("leaves the reducer untouched when the boundary commit fails", async () => {
     let refuse = false;
     const { accumulate, reducerState } = createReducePrimitives({
+      isBlackBoxed: () => false,
       checkpoint: async (input) => {
         if (refuse) throw new WorkflowError("commit refused");
         return { compactedThroughSeq: 0, state: input.state, retainedHistory: 0, at: NOW_ISO };
