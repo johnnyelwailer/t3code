@@ -2,9 +2,12 @@ import type { WorkflowReference } from "./engineTypes.ts";
 import type { WorkflowEventSink } from "./events.ts";
 import { WorkflowAborted, WorkflowError } from "./errors.ts";
 import {
+  createRefireTarget,
   createSuspensionLatch,
+  REFIRABLE_ASK_KINDS,
   WorkflowSuspended,
   type ArmedSuspension,
+  type RefireTarget,
   type SuspensionLatch,
 } from "./handles.ts";
 import type { JournalMaps } from "./journalReader.ts";
@@ -70,6 +73,12 @@ export interface ExecuteBodyRequest<Ref extends WorkflowReference, Options> {
    * caught the suspension signal from completing the run with a fabricated value.
    */
   readonly suspension: SuspensionLatch;
+  /**
+   * Present only when the host asked this resume to re-fire one recorded, unanswered ask. Hand it
+   * to the durable runtime (like {@link suspension}): the runtime consumes it at the target's seq,
+   * and this boundary fails the run if the body returns or parks without having done so.
+   */
+  readonly refire?: RefireTarget | undefined;
 }
 
 /** Host-specific body loading, capability binding, and execution behind the core run loop. */
@@ -96,14 +105,46 @@ function outcomeForArmedSuspension(armed: ArmedSuspension): RunOutcome {
 }
 
 /**
- * Execute one body inside the generic durability barrier.
- *
- * The body may use any host-specific loader, tool catalog, or broker, but it receives the
- * already-loaded replay maps and one ordered sink. Core catches the identity-based durable
- * suspension signal and the first-class abort signal, and always flushes/disposes the sink
- * before returning an outcome.
+ * Validate a requested re-fire against the journal BEFORE the body runs, so a stale, mistyped or
+ * unsafe target fails before any live side effect: it must name a recorded `sent` entry of an
+ * ask kind ({@link REFIRABLE_ASK_KINDS}) with no reply.
  */
-export async function executeWorkflowRun<Ref extends WorkflowReference, Options>(opts: {
+function refireTargetFor(
+  runId: string,
+  journal: JournalMaps,
+  correlationId: string | undefined,
+): RefireTarget | undefined {
+  if (correlationId === undefined) return undefined;
+  const refuse = (why: string) =>
+    new WorkflowError(`Run '${runId}' cannot re-fire ask '${correlationId}': ${why}`);
+  const sent = Array.from(journal.bySeq.values()).find(
+    (entry) => entry.phase === "sent" && entry.correlationId === correlationId,
+  );
+  if (sent === undefined) throw refuse("the journal has no recorded ask with that correlationId.");
+  if (!REFIRABLE_ASK_KINDS.has(sent.kind)) {
+    throw refuse(
+      `it is a '${sent.kind}' entry; only ${[...REFIRABLE_ASK_KINDS].join(" / ")} asks can be re-sent (any other fire has side effects of its own, or awaits no reply).`,
+    );
+  }
+  if (journal.byCorrelation.has(correlationId)) {
+    throw refuse("it already has a journaled reply; resume without refire to replay it.");
+  }
+  return createRefireTarget(correlationId);
+}
+
+/** Fail closed: a requested re-fire that the replay never reached must not park or complete. */
+function assertRefireConsumed(
+  runId: string,
+  refire: RefireTarget | undefined,
+  outcome: RunOutcome,
+) {
+  if (refire === undefined || refire.consumed() || outcome.kind === "aborted") return;
+  throw new WorkflowError(
+    `Run '${runId}' ${outcome.kind === "completed" ? "completed" : `parked on '${outcome.correlationId}'`} without reaching its re-fire target '${refire.correlationId}'. The replay took a different path than the journal recorded; nothing was re-sent.`,
+  );
+}
+
+export interface ExecuteWorkflowRunRequest<Ref extends WorkflowReference, Options> {
   readonly runId: string;
   readonly ref: Ref;
   readonly args: unknown;
@@ -113,13 +154,39 @@ export async function executeWorkflowRun<Ref extends WorkflowReference, Options>
   readonly body: WorkflowBodyExecutor<Ref, Options>;
   readonly events?: WorkflowEventSink | undefined;
   readonly abortSignal?: AbortSignal | undefined;
-}): Promise<RunOutcome> {
+  /** Correlation id of one recorded, unanswered ask to re-send (see `WorkflowRunOptionsBase`). */
+  readonly refire?: string | undefined;
+}
+
+/**
+ * Execute one body inside the generic durability barrier.
+ *
+ * The body may use any host-specific loader, tool catalog, or broker, but it receives the
+ * already-loaded replay maps and one ordered sink. Core catches the identity-based durable
+ * suspension signal and the first-class abort signal, and always flushes/disposes the sink
+ * before returning an outcome. A requested re-fire is checked against the journal before the body
+ * runs, and must have been consumed by the time the body returns or parks.
+ */
+export async function executeWorkflowRun<Ref extends WorkflowReference, Options>(
+  opts: ExecuteWorkflowRunRequest<Ref, Options>,
+): Promise<RunOutcome> {
   const store = opts.store;
   const readWindow = store.readReplayWindow;
   const window: { readonly journal: JournalMaps; readonly resume: RunResume | undefined } =
     typeof readWindow === "function"
       ? await readReplayWindowChecked(readWindow.bind(store), opts.runId)
       : { journal: await store.readEntries(opts.runId), resume: undefined };
+  const refire = refireTargetFor(opts.runId, window.journal, opts.refire);
+  const outcome = await executeBodyOnce(opts, window, refire);
+  assertRefireConsumed(opts.runId, refire, outcome);
+  return outcome;
+}
+
+async function executeBodyOnce<Ref extends WorkflowReference, Options>(
+  opts: ExecuteWorkflowRunRequest<Ref, Options>,
+  window: { readonly journal: JournalMaps; readonly resume: RunResume | undefined },
+  refire: RefireTarget | undefined,
+): Promise<RunOutcome> {
   const sink = createStoreSink(opts.store, opts.runId);
   const suspension = createSuspensionLatch();
   try {
@@ -133,6 +200,7 @@ export async function executeWorkflowRun<Ref extends WorkflowReference, Options>
       sink,
       options: opts.options,
       suspension,
+      ...(refire === undefined ? {} : { refire }),
       ...(window.resume === undefined ? {} : { resume: window.resume }),
       ...(opts.events === undefined ? {} : { events: opts.events }),
       ...(opts.abortSignal === undefined ? {} : { abortSignal: opts.abortSignal }),

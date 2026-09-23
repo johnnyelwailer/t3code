@@ -1,11 +1,26 @@
 import { hashArgs } from "./canonicalJson.ts";
-import { CancelledError, WorkflowAborted } from "./errors.ts";
+import { CancelledError, WorkflowAborted, WorkflowError } from "./errors.ts";
 import { emitSafe } from "./events.ts";
 import type { PrimitiveKind } from "./runtimeTypes.ts";
-import type { HandleDispatch, HandleSeat, HandleSendCall, ReplyResolver } from "./handles.ts";
+import type {
+  FireDelivery,
+  HandleDispatch,
+  HandleSeat,
+  HandleSendCall,
+  ReplyResolver,
+} from "./handles.ts";
 import { assertJournalMatch, gapDrift } from "./replayDrift.ts";
 
 const noopResolver: ReplyResolver = { resolve: () => {}, reject: () => {} };
+
+/**
+ * The only journal kinds a `RefireTarget` may name: the model/user asks, whose fire is a pure
+ * re-send of the payload. Every other resolvable kind's fire has a side effect of its own that a
+ * second call would duplicate (`wait.until` re-schedules, `signal.wait` re-registers,
+ * `model.resolve` settles itself), and one-way sends never await a reply. Same vocabulary as
+ * `checkpoint.ts`'s `RESOLVABLE_SENT_KINDS`.
+ */
+export const REFIRABLE_ASK_KINDS: ReadonlySet<string> = new Set(["thread.turn", "user.input"]);
 
 export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
   // Unique synthetic ids for black-boxed sends (inside parallel/pipeline). These execute live
@@ -72,6 +87,69 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
       seat.setResolved({ correlationId, kind, refId, dismissed: true, reply: undefined }),
   });
 
+  /** True iff `correlationId` is the run's still-pending opt-in re-fire (see RefireTarget). */
+  const isRefireTarget = (correlationId: string): boolean =>
+    seat.refire !== undefined &&
+    !seat.refire.consumed() &&
+    seat.refire.correlationId === correlationId;
+
+  const refireRefused = (correlationId: string, why: string): WorkflowError =>
+    new WorkflowError(`Cannot re-fire ask '${correlationId}': ${why}`);
+
+  /** Fire a journaled ask and observe it — shared by the live path and the re-fire. */
+  const fireObserved = async (
+    atSeq: number,
+    correlationId: string,
+    call: HandleSendCall,
+    delivery?: FireDelivery,
+  ): Promise<void> => {
+    const resolver = makeResolver(correlationId, call.kind, call.refId);
+    await (delivery === undefined
+      ? call.fire(correlationId, resolver)
+      : call.fire(correlationId, resolver, delivery));
+    // A broker may itself have driven a nested body that suspended (an intercepting broker does);
+    // refuse to hand this correlationId back once the run is parked.
+    seat.suspension.assertNotSuspended();
+    emitSafe(seat.events, {
+      type: "primitive.completed",
+      runId: seat.runId,
+      seq: atSeq,
+      kind: call.kind,
+      refId: call.refId,
+      at: seat.nowIso(),
+    });
+  };
+
+  /**
+   * The opt-in re-fire of a recorded ask: same seq, same correlationId, payload proven identical
+   * by the caller's `assertJournalMatch`. NOTHING is journaled here — the original `sent` entry
+   * stays the ask's only intent line, and the resolver writes the `resolved` entry when (if) the
+   * reply lands, so a crash before the reply leaves the ask open for another re-fire.
+   */
+  const refireRecorded = async (
+    atSeq: number,
+    correlationId: string,
+    call: HandleSendCall,
+  ): Promise<string> => {
+    if (!REFIRABLE_ASK_KINDS.has(call.kind)) {
+      throw refireRefused(correlationId, `'${call.kind}' is not a re-sendable ask kind.`);
+    }
+    if (seat.resolvedFor(correlationId) !== undefined) {
+      throw refireRefused(correlationId, "it already has a journaled reply; replay it instead.");
+    }
+    seat.refire?.consume();
+    emitSafe(seat.events, {
+      type: "primitive.started",
+      runId: seat.runId,
+      seq: atSeq,
+      kind: call.kind,
+      refId: call.refId,
+      at: seat.nowIso(),
+    });
+    await fireObserved(atSeq, correlationId, call, { redelivery: true });
+    return correlationId;
+  };
+
   const send = async (call: HandleSendCall): Promise<string> => {
     // Sticky suspension, checked FIRST — before the black-box branch, before the abort check, and
     // above all before takeSeq: a body that caught the signal and looped must not consume another
@@ -79,6 +157,12 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
     seat.suspension.assertNotSuspended();
     if (seat.isBlackBoxed()) {
       const id = `${seat.runId}:blackbox:${(blackboxSeq += 1)}`;
+      if (isRefireTarget(id)) {
+        throw refireRefused(
+          id,
+          "it was sent inside parallel()/pipeline(), which never journals its sends — the branch re-runs live on resume.",
+        );
+      }
       await call.fire(id, inMemoryResolver(id, call.kind, call.refId));
       return id;
     }
@@ -90,9 +174,14 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
     const argsHash = hashArgs(call.args);
     const recorded = seat.recordedAt(currentSeq);
     if (recorded !== undefined) {
+      // The hash check stays exactly as on every replay: for a re-fire it is what proves the
+      // payload handed to the broker again is byte-identical to the one first sent.
       assertJournalMatch(currentSeq, recorded, call.kind, call.refId, argsHash, seat.filePath);
-      // Replay: the side effect already fired — do NOT re-fire the broker.
-      return recorded.correlationId ?? correlationId;
+      const recordedId = recorded.correlationId ?? correlationId;
+      // Replay: the side effect already fired — do NOT re-fire the broker, unless the host named
+      // this very ask as the run's one-shot re-fire target.
+      if (!isRefireTarget(recordedId)) return recordedId;
+      return await refireRecorded(currentSeq, recordedId, call);
     }
     if (currentSeq <= seat.maxRecordedSeq)
       gapDrift(currentSeq, call.kind, call.refId, seat.filePath);
@@ -106,7 +195,8 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
     });
     // Journal the durable dispatch intent (stable correlationId) BEFORE firing: a crash between
     // intent and fire leaves a pending correlation the host retries with the SAME id, and the
-    // idempotent broker dedupes. Core never re-fires a recorded sent entry on replay.
+    // idempotent broker dedupes. Core never re-fires a recorded sent entry on replay, except the
+    // host's explicit one-shot RefireTarget — and that fire carries `redelivery: true`.
     const ts = seat.nowIso();
     seat.writer.append({
       seq: currentSeq,
@@ -120,18 +210,7 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
       startedAt: ts,
       endedAt: ts,
     });
-    await call.fire(correlationId, makeResolver(correlationId, call.kind, call.refId));
-    // A broker may itself have driven a nested body that suspended (an intercepting broker does);
-    // refuse to hand this correlationId back once the run is parked.
-    seat.suspension.assertNotSuspended();
-    emitSafe(seat.events, {
-      type: "primitive.completed",
-      runId: seat.runId,
-      seq: currentSeq,
-      kind: call.kind,
-      refId: call.refId,
-      at: seat.nowIso(),
-    });
+    await fireObserved(currentSeq, correlationId, call);
     return correlationId;
   };
 
@@ -150,7 +229,11 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
     const recorded = seat.recordedAt(currentSeq);
     if (recorded !== undefined) {
       assertJournalMatch(currentSeq, recorded, call.kind, call.refId, argsHash, seat.filePath);
-      return recorded.correlationId ?? correlationId; // replay: do NOT re-fire
+      const recordedId = recorded.correlationId ?? correlationId;
+      if (isRefireTarget(recordedId)) {
+        throw refireRefused(recordedId, "it is a one-way send, which never awaits a reply.");
+      }
+      return recordedId; // replay: do NOT re-fire
     }
     if (currentSeq <= seat.maxRecordedSeq)
       gapDrift(currentSeq, call.kind, call.refId, seat.filePath);

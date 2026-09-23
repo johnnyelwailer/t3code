@@ -1,4 +1,5 @@
-/** The retry-safe reply journal + replay half of a workflow run host. */
+/** The replay half of a workflow run host: retry-safe reply journal + resume, and the
+ * reply-less re-drive (optionally re-firing one recorded ask). */
 
 import { resumeWorkflow } from "./t3team-sdk.engine.ts";
 
@@ -9,22 +10,14 @@ import type {
   WorkflowLaunchStatus,
 } from "./t3team-sdk.workflowHostTypes.ts";
 
-export async function resumeWorkflowRunHost(input: {
+/** What every replay drive (resume and redrive) needs: the run, and the settle/failure funnel. */
+export interface WorkflowReplayHostInput {
   readonly runId: string;
-  readonly correlationId: string;
-  readonly reply: unknown;
   readonly ref: WorkflowRef;
   readonly args: unknown;
   readonly runOptions: WorkflowRunOptions;
   readonly registry: WorkflowHostRegistry;
   readonly lifecycle: WorkflowHostLifecycle | undefined;
-  readonly appendReply: (opts: {
-    readonly runId: string;
-    readonly correlationId: string;
-    readonly reply: unknown;
-  }) => Promise<boolean>;
-  readonly retryResolvedReply: ((correlationId: string) => Promise<boolean> | boolean) | undefined;
-  readonly onReplyJournaled: ((correlationId: string) => Promise<void> | void) | undefined;
   readonly settle: (
     result: Awaited<ReturnType<typeof resumeWorkflow>>,
   ) => Promise<WorkflowLaunchStatus>;
@@ -34,7 +27,54 @@ export async function resumeWorkflowRunHost(input: {
     readonly phase: "resume";
     readonly error: unknown;
   }) => Promise<void>;
-}): Promise<void> {
+}
+
+/**
+ * The options one drive runs with. `refire` is scoped to the single `redrive({ refire })` call
+ * that asked for it: a `refire` left on the host's static run options is dropped, or it would
+ * re-apply to every start, resume and plain redrive of the run.
+ */
+export function driveOptions(runOptions: WorkflowRunOptions, refire?: string): WorkflowRunOptions {
+  const { refire: _static, ...base } = runOptions;
+  return refire === undefined ? base : { ...base, refire };
+}
+
+/** The shared failure funnel of a replay drive. */
+async function failReplay(input: WorkflowReplayHostInput, error: unknown): Promise<void> {
+  if (input.registry.getRun(input.runId) === undefined) return;
+  if (await input.repairAttempt(error)) return;
+  if (input.isCancelled() || input.registry.getRun(input.runId) === undefined) return;
+  await input.onFailed({ phase: "resume", error });
+}
+
+/** Replay without journaling a reply; with `refire`, re-send that one recorded ask. */
+export async function redriveWorkflowRunHost(
+  input: WorkflowReplayHostInput & { readonly refire: string | undefined },
+): Promise<void> {
+  const { runId, ref, args, runOptions, lifecycle, settle, refire } = input;
+  try {
+    if ((await lifecycle?.recordActive()) === false) return;
+    await settle(await resumeWorkflow(runId, ref, args, driveOptions(runOptions, refire)));
+  } catch (error) {
+    await failReplay(input, error);
+  }
+}
+
+export async function resumeWorkflowRunHost(
+  input: WorkflowReplayHostInput & {
+    readonly correlationId: string;
+    readonly reply: unknown;
+    readonly appendReply: (opts: {
+      readonly runId: string;
+      readonly correlationId: string;
+      readonly reply: unknown;
+    }) => Promise<boolean>;
+    readonly retryResolvedReply:
+      | ((correlationId: string) => Promise<boolean> | boolean)
+      | undefined;
+    readonly onReplyJournaled: ((correlationId: string) => Promise<void> | void) | undefined;
+  },
+): Promise<void> {
   const {
     runId,
     correlationId,
@@ -42,15 +82,11 @@ export async function resumeWorkflowRunHost(input: {
     ref,
     args,
     runOptions,
-    registry,
     lifecycle,
     appendReply,
     retryResolvedReply,
     onReplyJournaled,
     settle,
-    repairAttempt,
-    isCancelled,
-    onFailed,
   } = input;
   try {
     if ((await lifecycle?.recordActive()) === false) return;
@@ -75,11 +111,8 @@ export async function resumeWorkflowRunHost(input: {
       }
     }
     await onReplyJournaled?.(correlationId);
-    await settle(await resumeWorkflow(runId, ref, args, runOptions));
+    await settle(await resumeWorkflow(runId, ref, args, driveOptions(runOptions)));
   } catch (error) {
-    if (registry.getRun(runId) === undefined) return;
-    if (await repairAttempt(error)) return;
-    if (isCancelled() || registry.getRun(runId) === undefined) return;
-    await onFailed({ phase: "resume", error });
+    await failReplay(input, error);
   }
 }
