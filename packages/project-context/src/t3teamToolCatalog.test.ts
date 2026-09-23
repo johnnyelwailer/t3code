@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /// <reference types="node" />
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
@@ -32,6 +31,7 @@ describe("t3teamToolCatalog", () => {
   it("lists the implemented tools in catalog order", () => {
     expect(listImplementedT3TeamToolCatalogEntries().map((tool) => tool.id)).toEqual([
       "t3team.runtime.models",
+      "t3team.runtime.provider_usage",
       "t3team.widget.show",
       "t3team.backlog.set_assignee_filter",
       "t3team.view.read",
@@ -40,10 +40,13 @@ describe("t3teamToolCatalog", () => {
       "t3team.orchestration.run",
       "t3team.orchestration.status",
       "t3team.orchestration.resume",
+      "t3team.orchestration.pause",
+      "t3team.orchestration.stop",
       "t3team.thread.rename",
       "t3team.thread.search",
       "t3team.thread.search_source",
       "t3team.thread.read_message",
+      "t3team.thread.ask_user",
       "t3team.thread.start_child",
       "t3team.thread.children",
       "t3team.work_item.refresh_context_bundle",
@@ -65,6 +68,7 @@ describe("t3teamToolCatalog", () => {
   it("defaults thread tool selection from the catalog", () => {
     expect(DEFAULT_T3TEAM_THREAD_TOOL_IDS).toEqual([
       "t3team.runtime.models",
+      "t3team.runtime.provider_usage",
       "t3team.widget.show",
       "t3team.view.read",
       "t3team.recipe.list",
@@ -72,10 +76,13 @@ describe("t3teamToolCatalog", () => {
       "t3team.orchestration.run",
       "t3team.orchestration.status",
       "t3team.orchestration.resume",
+      "t3team.orchestration.pause",
+      "t3team.orchestration.stop",
       "t3team.thread.rename",
       "t3team.thread.search",
       "t3team.thread.search_source",
       "t3team.thread.read_message",
+      "t3team.thread.ask_user",
       "t3team.thread.start_child",
       "t3team.thread.children",
       "t3team.work_item.refresh_context_bundle",

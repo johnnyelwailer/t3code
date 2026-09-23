@@ -117,6 +117,19 @@ export function T3TeamWorkflowDecisionAffordance({
   }
 
   if (affordance.kind === "form") {
+    // Answered: the reply's own bubble is suppressed (it is card-sourced), so the card is the one
+    // place the submitted values are stated — as the "key: value" summary the submit produced,
+    // never as a dead disabled form or a JSON blob.
+    if (answeredChoice !== undefined) {
+      return (
+        <p
+          className="text-sm text-foreground/90 [overflow-wrap:anywhere]"
+          data-workflow-decision-status="answered-form-summary"
+        >
+          {answeredChoice}
+        </p>
+      );
+    }
     return (
       <T3TeamWorkflowDecisionForm
         fields={affordance.fields}

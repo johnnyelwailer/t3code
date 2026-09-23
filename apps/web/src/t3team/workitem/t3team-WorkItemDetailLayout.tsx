@@ -13,10 +13,11 @@ import { useWorkItemLayoutMode } from "~/t3team/workitem/t3team-useWorkItemLayou
  * "desktop" while the content actually has 400px because the agent panel is open.
  *
  * The description is the only block with unbounded length: some projects write thousands of words,
- * which would push child items, links and the whole conversation off the bottom of the page. So
- * from 72rem those sit in their own column *beside* the description rather than after it — nothing
- * important can be buried by prose. Below that width two columns would be too narrow to read, and
- * the sticky section nav is what keeps everything one click away instead.
+ * which would push the reference sections off the bottom of the page. So from 72rem the view splits
+ * into two columns. The description and the conversation (comments) stay together on the left — the
+ * two things a reader works through — while the bounded reference material (child items, links,
+ * files) sits on the right. Below the split width there is a single column, and the sticky section
+ * nav keeps everything one click away instead.
  */
 export function WorkItemDetailLayout({
   titleBand,
@@ -29,9 +30,9 @@ export function WorkItemDetailLayout({
   readonly titleBand: ReactNode;
   readonly sectionNav: ReactNode;
   readonly properties: ReactNode;
-  /** The description. Unbounded length, so it never precedes anything that matters. */
+  /** The description and the conversation (comments): the left column at the split. */
   readonly primary: ReactNode;
-  /** Children, links, attachments, conversation — bounded, and never buried by the description. */
+  /** Child items, links, attachments, supplemental: the bounded reference lane, right at the split. */
   readonly secondary: ReactNode;
   readonly className?: string;
 }) {
@@ -52,6 +53,7 @@ export function WorkItemDetailLayout({
           {hasRail ? (
             <div className="grid min-w-0 items-start gap-5 @4xl/workitem:grid-cols-[minmax(0,1fr)_17rem] @6xl/workitem:grid-cols-[minmax(0,1fr)_19rem] @6xl/workitem:gap-6">
               <div className={cn("grid min-w-0 gap-5", isSplit && "grid-cols-2 gap-6")}>
+                {/* Left: description + conversation. Right: the bounded reference lane. */}
                 <div className="flex min-w-0 flex-col gap-5">{primary}</div>
                 <div className="flex min-w-0 flex-col gap-5">{secondary}</div>
               </div>

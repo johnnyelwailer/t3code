@@ -58,7 +58,7 @@ export function T3TeamSidecarSectionFrame({
           <div className="flex items-center gap-1.5">
             <button
               type="button"
-              className="inline-flex size-7 items-center justify-center rounded-md border border-border/60 text-muted-foreground transition-colors hover:bg-accent/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+              className="inline-flex size-7 items-center justify-center rounded-md border border-border/60 text-muted-foreground opacity-0 transition-colors transition-opacity group-hover/sidecar-header:opacity-100 group-focus-within/sidecar-header:opacity-100 hover:bg-accent/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
               aria-expanded={!collapsed}
               aria-label={`${collapsed ? "Expand" : "Collapse"} ${title}`}
               title={collapsed ? "Expand section" : "Collapse section"}

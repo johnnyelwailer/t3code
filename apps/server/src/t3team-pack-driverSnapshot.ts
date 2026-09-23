@@ -29,7 +29,10 @@ const toModels = (snapshot: PackProviderSnapshot): ReadonlyArray<ServerProviderM
   snapshot.models.map((model) => ({
     slug: model.slug,
     name: model.name,
-    isCustom: model.isCustom ?? true,
+    // A pack's declared models are that provider's built-ins. Defaulting to
+    // custom made the web picker drop them all after upstream #9075 started
+    // rebuilding custom rows from Settings (GHE nexi-distribution#394).
+    isCustom: model.isCustom ?? false,
     capabilities: null,
   }));
 
@@ -141,12 +144,21 @@ export const makePackProviderSnapshot = (input: SnapshotInput): ServerProviderSh
     );
   });
   return {
-    maintenanceCapabilities: makeManualOnlyProviderMaintenanceCapabilities({
-      provider: input.driverKind,
-      packageName: null,
-    }),
+    // Pack providers are not package-managed: maintenance is manual-only, so the
+    // capabilities are static (no cached resolution like the built-in drivers).
+    resolveMaintenance: () =>
+      Effect.succeed(
+        makeManualOnlyProviderMaintenanceCapabilities({
+          provider: input.driverKind,
+          packageName: null,
+        }),
+      ),
     getSnapshot,
     refresh: getSnapshot,
+    // Pack providers publish no rate-limit telemetry and hold no snapshot
+    // state between reads, so there is nothing to fold a runtime limit update
+    // into: the next getSnapshot/refresh recomputes from the pack instance.
+    applyUsageLimits: () => Effect.void,
     get streamChanges() {
       return Stream.empty as Stream.Stream<ServerProvider>;
     },

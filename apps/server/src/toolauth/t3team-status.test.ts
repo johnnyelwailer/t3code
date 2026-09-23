@@ -11,6 +11,7 @@ import { TestClock } from "effect/testing";
 
 import * as ProcessRunner from "../processRunner.ts";
 import { CLAUDE, CODEX, FAKE } from "./t3team-adapters.ts";
+import { GH, ghAdapter } from "./t3team-ghAdapter.ts";
 import { probeStatus } from "./t3team-status.ts";
 
 /** Every test gets its own scratch `$HOME` — never the real `~/.claude` or `~/.codex`. */
@@ -321,6 +322,105 @@ it.layer(NodeServices.layer)("toolauth status probe", (it) => {
         try {
           const state = yield* probe(CODEX, homeDir, () => okTextResult("You are not logged in"));
           expect(state.phase).toBe("idle");
+        } finally {
+          removeTempHome(homeDir);
+        }
+      }),
+    );
+  });
+
+  describe("GitHub — verbatim `gh auth status` output, GHE host specific", () => {
+    // A spawn failure the way a missing `gh` binary would surface through
+    // the ProcessRunner seam — only the failure matters, not the payload.
+    const ghProbeSpawnFailure = new ProcessRunner.ProcessSpawnError({
+      command: "gh",
+      argumentCount: 2,
+      cause: new Error("ENOENT"),
+    });
+
+    // Verbatim (trimmed) `gh auth status` on a machine logged in to both
+    // nexplore.ghe.com and github.com (gh 2.96.0).
+    const GHE_AND_GITHUB_OUTPUT = [
+      "nexplore.ghe.com",
+      "  ✓ Logged in to nexplore.ghe.com account pj (keyring)",
+      "  - Active account: true",
+      "",
+      "github.com",
+      "  ✓ Logged in to github.com account johnnyelwailer (keyring)",
+      "  - Active account: true",
+    ].join("\n");
+
+    it.effect("reports connected and names the GHE account, not the github.com one", () =>
+      Effect.gen(function* () {
+        const homeDir = makeTempHome();
+        try {
+          const state = yield* probe(GH, homeDir, () => okTextResult(GHE_AND_GITHUB_OUTPUT));
+          expect(state.phase).toBe("connected");
+          expect(state.account).toBe("pj");
+        } finally {
+          removeTempHome(homeDir);
+        }
+      }),
+    );
+
+    it.effect(
+      "being logged in to github.com does NOT count — the panel is about the GHE host",
+      () =>
+        Effect.gen(function* () {
+          const homeDir = makeTempHome();
+          try {
+            const state = yield* probe(GH, homeDir, () =>
+              okTextResult(
+                "github.com\n  ✓ Logged in to github.com account johnnyelwailer (keyring)",
+              ),
+            );
+            expect(state.phase).toBe("idle");
+            expect(state.account).toBeUndefined();
+          } finally {
+            removeTempHome(homeDir);
+          }
+        }),
+    );
+
+    it.effect("falls back to the hosts.yml hint when the probe cannot run", () =>
+      Effect.gen(function* () {
+        const homeDir = makeTempHome();
+        try {
+          writeCredentialFile(homeDir, GH.status.credentialPath, {
+            "nexplore.ghe.com": { oauth_token: "x" },
+          });
+          const state = yield* probe(GH, homeDir, () => Effect.fail(ghProbeSpawnFailure));
+          expect(state.phase).toBe("connected");
+        } finally {
+          removeTempHome(homeDir);
+        }
+      }),
+    );
+
+    it.effect("reports idle when the probe fails and no hosts.yml exists", () =>
+      Effect.gen(function* () {
+        const homeDir = makeTempHome();
+        try {
+          const state = yield* probe(GH, homeDir, () => Effect.fail(ghProbeSpawnFailure));
+          expect(state.phase).toBe("idle");
+        } finally {
+          removeTempHome(homeDir);
+        }
+      }),
+    );
+
+    it.effect("adapts the probe and account extraction to a non-default host", () =>
+      Effect.gen(function* () {
+        const homeDir = makeTempHome();
+        try {
+          const other = ghAdapter("github.corp.example");
+          const state = yield* probe(other, homeDir, () =>
+            okTextResult(
+              "github.corp.example\n  ✓ Logged in to github.corp.example account pj (keyring)",
+            ),
+          );
+          expect(state.phase).toBe("connected");
+          expect(state.account).toBe("pj");
         } finally {
           removeTempHome(homeDir);
         }

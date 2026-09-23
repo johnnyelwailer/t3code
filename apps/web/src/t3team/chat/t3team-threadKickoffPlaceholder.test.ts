@@ -93,31 +93,26 @@ describe("shouldShowThreadKickoffPlaceholder", () => {
       availableContextKeys: ["project.summary", "ticket.summary"],
     });
 
-    expect(quickStarts.find((recipe) => recipe.id === "create-recipe")?.workflow).toMatchObject({
+    expect(quickStarts.find((recipe) => recipe.id === "describe-rewrite")?.workflow).toMatchObject({
       kind: "recipe",
       source: "bundled",
-      workflowPath: "/tmp/project-alpha/.t3team/recipes/create-recipe/workflow.ts",
+      workflowPath: "/tmp/project-alpha/.t3team/recipes/describe-rewrite/workflow.ts",
     });
   });
 
   it("does not treat prompt-only quick starts as guided workflow launches", () => {
-    const createRecipe = buildT3TeamSidecarRecipeQuickStarts({
-      surface: "project.dashboard",
+    const manageRecipes = buildT3TeamSidecarRecipeQuickStarts({
+      surface: "workitem.detail.sidepanel",
       project: createProject("engineering-copilot"),
       profileId: "engineering-copilot",
-      selectedWorkLabel: "Project Alpha",
-      dashboardMode: "backlog",
-      currentViewSummary: {
-        itemCount: 6,
-        bugCount: 1,
-        primaryBugLabel: "IES-100",
-      },
-      availableContextKeys: ["project.summary"],
-    }).find((recipe) => recipe.id === "create-contextual-recipe");
+      selectedWorkLabel: "PROJ-123",
+      resourceKind: "ticket",
+      availableContextKeys: ["project.summary", "ticket.summary"],
+    }).find((recipe) => recipe.id === "manage-project-recipes");
 
-    expect(createRecipe?.workflow).toBeUndefined();
-    expect(isWaitingForKickoffInput(createRecipe?.workflow, false)).toBe(false);
-    expect(isWaitingForKickoffInput(createRecipe?.workflow, true)).toBe(false);
+    expect(manageRecipes?.workflow).toBeUndefined();
+    expect(isWaitingForKickoffInput(manageRecipes?.workflow, false)).toBe(false);
+    expect(isWaitingForKickoffInput(manageRecipes?.workflow, true)).toBe(false);
   });
 
   it("renders kickoff content in a scrollable card", () => {

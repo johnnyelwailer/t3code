@@ -103,6 +103,28 @@ export class WorkflowRunNotFoundError extends WorkflowError {
 }
 
 /**
+ * Raised when `checkpoint()` is called from inside a SUB-workflow body. A sub-workflow journals
+ * into the same run sequence as its parent and shares the run's checkpoint primitive, so a
+ * boundary committed there would move the run's SHARED replay window: a crash mid-sub-workflow
+ * would re-drive the TOP-level body from the child's boundary, no longer at its journaled seqs —
+ * the pre-loop setup and the child prefix would re-fire live (external effects double-execute)
+ * or fail drift, silently breaking the no-refire guarantee. Checkpoints are only valid in the
+ * top-level run body.
+ */
+export class SubWorkflowCheckpointError extends WorkflowError {
+  constructor() {
+    super(
+      "checkpoint() is not valid inside a sub-workflow body: checkpoints are only valid in the " +
+        "top-level run body. A sub-workflow journals into the same run sequence as its parent and " +
+        "shares the run's checkpoint primitive, so a boundary committed here would move the run's " +
+        "shared replay window and silently break the no-refire guarantee on crash-resume. Move the " +
+        "checkpoint to the top-level body.",
+    );
+    this.name = "SubWorkflowCheckpointError";
+  }
+}
+
+/**
  * Raised when a primitive's recorded result cannot be re-encoded to the journal before the line
  * is written — the handler returned a value that is not canonical-JSON (bigint/function/symbol).
  * The side effect has *already* happened, so this makes the hazard visible at the call site.

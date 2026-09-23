@@ -2,10 +2,13 @@
 /**
  * GHE sidebar-row refine — the sub-runs chip on the sidebar thread row.
  * Three states, one handle:
- *   1. running > 0            → the ACTIVE count chip ("3"); settled/terminal
- *      children belong to the #304 "Settled (N)" fold, not the count.
- *   2. running = 0, total > 0 → a MUTED "Settled N" chip — the parent still has
- *      a visible handle to open AND collapse its sub-runs section (the #304
+ *   1. running > 0            → the ACTIVE count chip ("3"), the number in the
+ *      working-row hue; settled/terminal children belong to the #304
+ *      "Settled (N)" fold, not the count.
+ *   2. running = 0, total > 0 → a MUTED count chip (the bare total — the word
+ *      "Settled" was dropped because the fold can hold terminal-but-not-
+ *      yet-settled children, so it miscounted) — the parent still has a
+ *      visible handle to open AND collapse its sub-runs section (the #304
  *      fold row lives inside that section; without the chip, a section
  *      expanded back when children ran would sit under the row forever).
  *   3. total = 0 / unknown    → renders NO chip (no stale total, no empty
@@ -117,41 +120,50 @@ describe("InboxSubRunsChip — 3-state, one handle", () => {
     expect(chip!.getAttribute("data-t3team-sub-runs-chip-state")).toBe("active");
   });
 
-  it("state 1: the active dot speaks the working-row 4-state color, never the primary accent", () => {
+  it("state 1: the active number speaks the working-row 4-state color, never the primary accent", () => {
     seedFromThreads([makeThread("active-1", "running", "parent")]);
     const { chip } = renderChip("parent");
     expect(chip).not.toBeNull();
-    const dot = chip!.querySelector("span[aria-hidden]");
-    expect(dot).not.toBeNull();
-    const classes = dot!.className;
-    // sky = "in motion" (same hue as the Working pill), not bg-primary.
-    expect(classes).toContain("bg-sky-500");
-    expect(classes).not.toContain("bg-primary");
+    // No dot any more: the number itself carries the state color.
+    expect(chip!.querySelector("span.rounded-full")).toBeNull();
+    const count = Array.from(chip!.querySelectorAll("span")).find(
+      (span) => span.textContent === "1",
+    );
+    expect(count, "the count span renders").not.toBeUndefined();
+    const classes = count!.className;
+    // sky text = "in motion" (same hue as the Working pill), not the accent.
+    expect(classes).toContain("text-sky-600");
+    expect(classes).not.toContain("text-primary");
   });
 
-  it("state 2: 0 active + 189 settled → muted 'Settled 189' chip (the handle back)", () => {
+  it("state 2: 0 active + 189 settled → muted bare '189' chip, no 'Settled' word", () => {
     seedFromThreads([
       ...Array.from({ length: 189 }, (_, i) => makeThread(`settled-${i}`, "idle", "parent")),
     ]);
     const { chip } = renderChip("parent");
     expect(chip, "settled-only parent still gets a visible handle").not.toBeNull();
-    expect(chip!.textContent).toContain("Settled 189");
+    expect(chip!.textContent).toContain("189");
+    expect(chip!.textContent).not.toContain("Settled");
     expect(chip!.getAttribute("data-t3team-sub-runs-chip-state")).toBe("settled");
     const label = chip!.getAttribute("aria-label") ?? "";
-    expect(label).toContain("Settled 189 sub-runs");
+    expect(label).toContain("189 sub-runs");
     // Muted: the fold row's own dim level, dimmer than the active chip's text.
     expect(chip!.className).toContain("text-sidebar-muted-foreground/60");
     expect(chip!.className).not.toContain("hover:text-sidebar-foreground");
-    // No working dot: settled work is reachable, not live.
-    expect(chip!.querySelector("span.rounded-full")).toBeNull();
+    // No state color on the number when nothing is running.
+    const count = Array.from(chip!.querySelectorAll("span")).find(
+      (span) => span.textContent === "189",
+    );
+    expect(count!.className).not.toContain("text-sky");
   });
 
-  it("state 2: singular settles read 'Settled 1 sub-run'", () => {
+  it("state 2: singular settles read '1 sub-run'", () => {
     seedFromThreads([makeThread("settled-1", "completed", "parent")]);
     const { chip } = renderChip("parent");
     expect(chip).not.toBeNull();
-    expect(chip!.textContent).toContain("Settled 1");
-    expect(chip!.getAttribute("aria-label")).toContain("Settled 1 sub-run");
+    expect(chip!.textContent).toContain("1");
+    expect(chip!.textContent).not.toContain("Settled");
+    expect(chip!.getAttribute("aria-label")).toContain("1 sub-run");
   });
 
   it("state 2: clicking the chip toggles the section (expand, then collapse again)", () => {

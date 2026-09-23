@@ -16,6 +16,7 @@ import {
   OrchestrationThread,
   ProjectId,
   ProviderInstanceId,
+  ServerProvider,
   ThreadId,
 } from "@t3tools/contracts";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
@@ -31,6 +32,10 @@ import type { OrchestrationEngineShape } from "./orchestration/Services/Orchestr
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import type { ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import {
+  ProviderRegistry,
+  type ProviderRegistryShape,
+} from "./provider/Services/ProviderRegistry.ts";
 import { t3teamThreadForkRouteLayer } from "./t3team-thread-fork-routes.ts";
 import { T3TeamThreadToolContextStore } from "./t3team-threadToolContextStore.ts";
 
@@ -43,6 +48,24 @@ const modelSelection: ModelSelection = {
   model: "test-model",
 };
 
+const claudeSelection: ModelSelection = {
+  instanceId: ProviderInstanceId.make("claude"),
+  model: "claude-opus-4",
+};
+
+const nexploreSelection: ModelSelection = {
+  instanceId: ProviderInstanceId.make("nexplore"),
+  model: "gpt-5",
+};
+
+const claudeSnapshot = [
+  {
+    instanceId: ProviderInstanceId.make("claude"),
+    displayName: "Claude",
+    models: [{ slug: "claude-opus-4", name: "Opus 4" }],
+  },
+] as unknown as ReadonlyArray<ServerProvider>;
+
 const makeMessage = (id: string, text: string) => ({
   id: MessageId.make(id),
   role: "user" as const,
@@ -53,12 +76,15 @@ const makeMessage = (id: string, text: string) => ({
   updatedAt: CREATED_AT,
 });
 
-const makeParentThread = (messageTexts: ReadonlyArray<string>): OrchestrationThread =>
+const makeParentThread = (
+  messageTexts: ReadonlyArray<string>,
+  parentModelSelection: ModelSelection | null = modelSelection,
+): OrchestrationThread =>
   ({
     id: PARENT_THREAD_ID,
     projectId: PROJECT_ID,
     title: "Parent thread",
-    modelSelection,
+    modelSelection: parentModelSelection,
     runtimeMode: "full-access",
     interactionMode: "default",
     branch: null,
@@ -74,7 +100,10 @@ const makeParentThread = (messageTexts: ReadonlyArray<string>): OrchestrationThr
     session: null,
   }) as unknown as OrchestrationThread;
 
-const makeQueryMock = (parentThread: OrchestrationThread | undefined) => {
+const makeQueryMock = (
+  parentThread: OrchestrationThread | undefined,
+  defaultModelSelection: ModelSelection | null = modelSelection,
+) => {
   // Partial mock: only the two reads the fork route performs. Precedent:
   // relay/AgentAwarenessRelay.test.ts casts partial query mocks the same way.
   const query = {
@@ -84,7 +113,7 @@ const makeQueryMock = (parentThread: OrchestrationThread | undefined) => {
           id: PROJECT_ID,
           title: "Project One",
           workspaceRoot: "/workspace/project-1",
-          defaultModelSelection: modelSelection,
+          defaultModelSelection,
           scripts: [],
           createdAt: CREATED_AT,
           updatedAt: CREATED_AT,
@@ -99,6 +128,8 @@ const makeQueryMock = (parentThread: OrchestrationThread | undefined) => {
 const makeOrchestrationMock = (commands: OrchestrationCommand[]) => {
   const orchestration: OrchestrationEngineShape = {
     readEvents: () => Stream.empty,
+    readThreadEvents: () => Stream.empty,
+    getThreadReplayStats: () => Effect.die("unused"),
     dispatch: (command) =>
       Effect.succeed({ sequence: 1 }).pipe(
         Effect.tap(
@@ -108,6 +139,7 @@ const makeOrchestrationMock = (commands: OrchestrationCommand[]) => {
         ),
       ),
     streamDomainEvents: Stream.empty,
+    subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
     latestSequence: Effect.succeed(0),
   };
   return Layer.succeed(OrchestrationEngineService, orchestration);
@@ -118,8 +150,26 @@ const contextStoreLayer = Layer.succeed(T3TeamThreadToolContextStore, {
   put: () => Effect.succeed(undefined),
 });
 
-const runFork = (parentThread: OrchestrationThread | undefined, body: Record<string, unknown>) => {
+/** Tagged registry failure: simulates a ProviderRegistry snapshot read that fails. */
+class RegistryDown extends Error {
+  readonly _tag = "RegistryDown";
+}
+
+const runFork = (
+  parentThread: OrchestrationThread | undefined,
+  body: Record<string, unknown>,
+  options: {
+    defaultModelSelection?: ModelSelection | null;
+    providerSnapshots?: ReadonlyArray<ServerProvider>;
+    providerRegistryFails?: boolean;
+  } = {},
+) => {
   const commands: OrchestrationCommand[] = [];
+  const providerRegistry = {
+    getProviders: options.providerRegistryFails
+      ? Effect.fail(new RegistryDown())
+      : Effect.succeed(options.providerSnapshots ?? []),
+  } as unknown as ProviderRegistryShape;
   const routeTestLayer = HttpRouter.serve(t3teamThreadForkRouteLayer, {
     disableListenLog: true,
     disableLogger: true,
@@ -127,9 +177,10 @@ const runFork = (parentThread: OrchestrationThread | undefined, body: Record<str
     Layer.provideMerge(
       Layer.mergeAll(
         NodeHttpServer.layerTest,
-        makeQueryMock(parentThread),
+        makeQueryMock(parentThread, options.defaultModelSelection),
         makeOrchestrationMock(commands),
         contextStoreLayer,
+        Layer.succeed(ProviderRegistry, providerRegistry),
       ),
     ),
   );
@@ -252,5 +303,109 @@ describe("POST /api/t3team/thread/fork", () => {
     // Fewer messages than the parent, with a real gap.
     expect(headTexts.length + tailTexts.length).toBeLessThan(10);
     expect(headTexts.length + tailTexts.length + (noteExt?.omittedMessageCount ?? 0)).toBe(10);
+  });
+
+  const noteOf = (commands: OrchestrationCommand[]) =>
+    commands.find(
+      (command) =>
+        (command as { type?: string }).type === "thread.message.upsert" &&
+        (command as { message: { role: string } }).message.role === "system",
+    ) as
+      | {
+          message: {
+            text: string;
+            t3teamExt?: {
+              forkSource?: {
+                threadId?: string;
+                omittedMessageCount?: number;
+                parentSelection?: { instanceId?: string; model?: string };
+                childSelection?: { instanceId?: string; model?: string };
+              };
+            };
+          };
+        }
+      | undefined;
+
+  it("states the inherited model selection in the note and machine-readable ext", async () => {
+    const big = "x".repeat(40_000);
+    const result = await runFork(
+      makeParentThread(
+        Array.from({ length: 10 }, () => big),
+        claudeSelection,
+      ),
+      { threadId: "thread-parent" },
+      { providerSnapshots: claudeSnapshot },
+    );
+    expect(result.status).toBe(200);
+    const note = noteOf(result.commands);
+    expect(note?.message.text).toContain(
+      "This thread was forked from \u201cParent thread\u201d (model selection unchanged: Claude (Opus 4)). ",
+    );
+    const forkSource = note?.message.t3teamExt?.forkSource;
+    expect(forkSource?.parentSelection).toEqual({
+      instanceId: "claude",
+      model: "claude-opus-4",
+    });
+    expect(forkSource?.childSelection).toEqual({
+      instanceId: "claude",
+      model: "claude-opus-4",
+    });
+  });
+
+  it("omits the transition when the parent has no selection and records the child selection", async () => {
+    const big = "x".repeat(40_000);
+    const result = await runFork(
+      makeParentThread(
+        Array.from({ length: 10 }, () => big),
+        null,
+      ),
+      { threadId: "thread-parent" },
+      { defaultModelSelection: nexploreSelection },
+    );
+    expect(result.status).toBe(200);
+    const note = noteOf(result.commands);
+    // No guessable "from" side: the first sentence keeps its original shape.
+    expect(note?.message.text).toContain("This thread was forked from \u201cParent thread\u201d. ");
+    expect(note?.message.text).not.toContain("→");
+    const forkSource = note?.message.t3teamExt?.forkSource;
+    expect(forkSource?.parentSelection).toBeUndefined();
+    expect(forkSource?.childSelection).toEqual({ instanceId: "nexplore", model: "gpt-5" });
+  });
+
+  it("falls back to instance ids and model slugs when names are unresolvable", async () => {
+    const big = "x".repeat(40_000);
+    const result = await runFork(
+      makeParentThread(
+        Array.from({ length: 10 }, () => big),
+        claudeSelection,
+      ),
+      { threadId: "thread-parent" },
+    );
+    expect(result.status).toBe(200);
+    const note = noteOf(result.commands);
+    expect(note?.message.text).toContain(
+      "This thread was forked from \u201cParent thread\u201d (model selection unchanged: claude (claude-opus-4)). ",
+    );
+  });
+
+  it("degrades to fallback labels and still forks when the registry read fails", async () => {
+    const big = "x".repeat(40_000);
+    const result = await runFork(
+      makeParentThread(
+        Array.from({ length: 10 }, () => big),
+        claudeSelection,
+      ),
+      { threadId: "thread-parent" },
+      { providerRegistryFails: true },
+    );
+    expect(result.status).toBe(200);
+    const note = noteOf(result.commands);
+    expect(note?.message.text).toContain(
+      "This thread was forked from \u201cParent thread\u201d (model selection unchanged: claude (claude-opus-4)). ",
+    );
+    expect(note?.message.t3teamExt?.forkSource?.childSelection).toEqual({
+      instanceId: "claude",
+      model: "claude-opus-4",
+    });
   });
 });

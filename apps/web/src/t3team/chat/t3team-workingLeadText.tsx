@@ -55,7 +55,7 @@ export function formatWorkingTimer(startIso: string, endIso: string): string | n
   }
 
   const hours = Math.floor(elapsedSeconds / 3600);
-  const minutes = Math.floor(elapsedSeconds % 3600 / 60);
+  const minutes = Math.floor((elapsedSeconds % 3600) / 60);
   const seconds = elapsedSeconds % 60;
 
   if (hours > 0) {
@@ -119,7 +119,10 @@ export const WorkingLeadText = ({
 
   return (
     <span className="t3team-aci-lead">
-      <SplitFlipText text={stateWord} className={`${wordClass ?? ""} t3team-aci-lead-word`.trim()} />
+      <SplitFlipText
+        text={stateWord}
+        className={`${wordClass ?? ""} t3team-aci-lead-word`.trim()}
+      />
       <span className={`t3team-aci-lead-join ${shimmerClass ?? ""}`.trim()}> for </span>
       <SplitFlipText
         text={time}

@@ -84,7 +84,11 @@ describe("T3TeamActiveAgentsIndicator", () => {
     act(() => {
       root = createRoot(container);
       root.render(
-        <T3TeamActiveAgentsIndicator entries={ENTRIES} onOpenAgents={onOpenAgents} onOpenAgent={onOpenAgent} />,
+        <T3TeamActiveAgentsIndicator
+          entries={ENTRIES}
+          onOpenAgents={onOpenAgents}
+          onOpenAgent={onOpenAgent}
+        />,
       );
     });
     const dots = container.querySelectorAll<HTMLElement>(".t3team-aci-cell");

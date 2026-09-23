@@ -67,11 +67,15 @@ export const SUB_RUN_LIFECYCLE_RANK: Record<ProjectThread["status"], number> = {
 };
 
 /**
- * GHE #304 — the split the sub-run rosters render from: the visible list shows
- * ONLY running sub-runs (a terminal thread — even a fresh failed one — is
- * roster noise, not "active"); every non-running sub-run (settled, terminal,
- * or idle) collapses into ONE dim fold row ("Settled (N)") instead of
- * per-thread chrome. Shared by the Agents panel sub-run tree and the sidebar
+ * GHE #304 — the split the sub-run rosters render from. Visible list = every
+ * sub-run that has NOT actually settled (running AND terminal-but-not-yet-
+ * settled — a fresh completed/failed/stopped child keeps its row with its
+ * true terminal status). ONLY threads whose shell carries
+ * `settledOverride === "settled"` (a real `thread.settled` event: user
+ * settle, auto-settle, or the 48h child-settle TTL sweep) collapse into the
+ * ONE dim "Settled (N)" fold row. The fold therefore matches the normal
+ * auto-settle lifecycle instead of claiming "settled" the moment a child
+ * stops running. Shared by the Agents panel sub-run tree and the sidebar
  * sub-run list so the two rosters can never disagree about what is active.
  */
 export type SubRunPartition = {
@@ -83,7 +87,7 @@ export function partitionSubRunThreads(threads: ReadonlyArray<ProjectThread>): S
   const running: ProjectThread[] = [];
   const folded: ProjectThread[] = [];
   for (const thread of threads) {
-    (thread.status === "running" ? running : folded).push(thread);
+    (thread.settled ? folded : running).push(thread);
   }
   return { running, folded };
 }

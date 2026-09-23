@@ -5,6 +5,7 @@ import {
   ComposerPromptEditor,
   type ComposerPromptEditorHandle,
 } from "~/components/ComposerPromptEditor";
+import { EMPTY_COMPOSER_CONTEXT_RECORDS } from "~/components/composerContextPresentation";
 import { ComposerCommandMenu } from "~/components/chat/ComposerCommandMenu";
 import { useTheme } from "~/hooks/useTheme";
 import { t3teamComposerMenuOptionDomId } from "~/t3team/composer/t3team-composerMenuKeyboard";
@@ -74,9 +75,8 @@ export function KickoffComposerEditor(props: KickoffComposerEditorProps) {
         editorRef={props.editorRef}
         value={props.text}
         cursor={props.cursor}
-        terminalContexts={[]}
+        contextRecords={EMPTY_COMPOSER_CONTEXT_RECORDS}
         skills={props.skills}
-        onRemoveTerminalContext={() => {}}
         onChange={(nextValue, nextCursor, expandedCursor, cursorAdjacentToMention) => {
           props.onChangeText(nextValue, nextCursor);
           commandMenu.handleEditorChange(nextValue, expandedCursor, cursorAdjacentToMention);

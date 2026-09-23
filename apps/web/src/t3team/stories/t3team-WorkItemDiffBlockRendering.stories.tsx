@@ -56,7 +56,7 @@ function Frame({ children }: { readonly children: React.ReactNode }) {
 }
 
 const meta = {
-  title: "T3Team/Work Item Diff Block Rendering",
+  title: "T3Team/Work Item/Diff Block Rendering",
   parameters: { layout: "padded" },
 } satisfies Meta;
 

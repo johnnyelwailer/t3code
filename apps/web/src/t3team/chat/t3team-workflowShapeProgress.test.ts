@@ -167,7 +167,9 @@ describe("reconcileT3TeamWorkflowShapeProgress", () => {
     expect(dynamicRows).toHaveLength(3);
     expect(dynamicRows.map((row) => row.phase)).toEqual(["Review", "Review", "Review"]);
 
-    const mergeRow = result.rows.find((row) => row.runtimeStep?.detail === "Merge into ranked report");
+    const mergeRow = result.rows.find(
+      (row) => row.runtimeStep?.detail === "Merge into ranked report",
+    );
     expect(mergeRow?.planStep?.label).toBe("Merge into ranked report");
   });
 

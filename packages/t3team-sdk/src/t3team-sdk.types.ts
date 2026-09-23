@@ -81,6 +81,7 @@ export interface T3TeamToolHandlerClient {
     readonly workflowPath?: string;
     readonly args?: unknown;
     readonly intent: WorkflowRunIntent;
+    readonly replaceRunId?: string;
   }) => Promise<unknown>;
   /** Dispatch a broker-owned host tool by id. Present only on a thread-bound run; the HOST decides
    * which ids it will accept, so this is a transport, not a widening of the tool surface. */

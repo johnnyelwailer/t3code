@@ -13,7 +13,7 @@ import {
   truncateStopReason,
   watchdogStallReason,
 } from "./t3team-threadTransientTurnRetry.ts";
-import { retryDirectiveSeconds } from "./provider/Layers/claude-gateway-retry.ts";
+import { retryDirectiveSeconds } from "./provider/Layers/t3team-claude-gateway-retry.ts";
 
 describe("transientTurnRetryDelayMs", () => {
   it("honors a gateway retry_after_seconds directive with a small cushion", () => {

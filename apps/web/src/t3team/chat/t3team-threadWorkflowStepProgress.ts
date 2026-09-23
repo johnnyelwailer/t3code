@@ -50,8 +50,13 @@ export interface T3TeamWorkflowRunProgress {
   readonly runId: string;
   /** Executed step entries in journal-seq order (run-level entry excluded). */
   readonly steps: ReadonlyArray<T3TeamWorkflowStepEntry>;
-  /** The run-level terminal status (stepId `run:<runId>`), when emitted. */
-  readonly run: { readonly phase: ProjectRecipeWorkflowStepPhase; readonly error?: string } | null;
+  /** The run-level terminal status (stepId `run:<runId>`), when emitted. `updatedAt` is when
+   * that status was emitted — for a `paused` run, when it was paused (GHE #403 §2). */
+  readonly run: {
+    readonly phase: ProjectRecipeWorkflowStepPhase;
+    readonly error?: string;
+    readonly updatedAt?: string;
+  } | null;
 }
 
 /** Parse the numeric journal seq from a stepId of the form `<runId>:<seq>`. */
@@ -66,7 +71,7 @@ function parseStepSeq(stepId: string): number | null {
 interface MutableRunProgress {
   runId: string;
   stepsById: Map<string, T3TeamWorkflowStepEntry>;
-  run: { phase: ProjectRecipeWorkflowStepPhase; error?: string } | null;
+  run: { phase: ProjectRecipeWorkflowStepPhase; error?: string; updatedAt?: string } | null;
 }
 
 /** Derive per-run live step progress from a thread's activities. */
@@ -94,6 +99,7 @@ export function deriveT3TeamWorkflowStepRuns(
       run.run = {
         phase: payload.phase,
         ...(payload.error === undefined ? {} : { error: payload.error }),
+        ...(activity.createdAt === undefined ? {} : { updatedAt: activity.createdAt }),
       };
       continue;
     }

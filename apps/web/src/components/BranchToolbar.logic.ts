@@ -1,4 +1,4 @@
-import type { EnvironmentId, VcsRef, ProjectId } from "@t3tools/contracts";
+import type { EnvironmentId, EnvironmentMachineKind, VcsRef, ProjectId } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { toSortableTimestamp } from "../lib/threadSort";
 export {
@@ -11,6 +11,13 @@ export interface EnvironmentOption {
   projectId: ProjectId;
   label: string;
   isPrimary: boolean;
+  machine: EnvironmentMachineKind;
+  /**
+   * True when the environment's connection is in the `connected` phase.
+   * Used by `dedupeRunOnEnvironments` as the tie-break between two rows for
+   * the same machine: the live one wins over a stale duplicate.
+   */
+  connected?: boolean;
 }
 
 export const EnvMode = Schema.Literals(["local", "worktree"]);
@@ -54,12 +61,84 @@ export function shouldShowEnvironmentIndicator(input: {
   return input.activeEnvironment !== null && !input.activeEnvironment.isPrimary;
 }
 
+/**
+ * Collapses "Run on" rows that are the same machine reachable under two
+ * environment ids.
+ *
+ * How the duplicate arises: a ready cloud session publishes its relay
+ * environment, so the machine can sit in the environment catalog twice — the
+ * id the T3 Connect registry minted for it, and a second id minted when its
+ * relay link was (re)published. The catalog only carries `environmentId` and
+ * the server-provided label for each entry, so the strongest identity two
+ * rows of the same machine share is the pair (machine kind, normalized
+ * label); `environmentId` itself is exactly what differs. Primary rows never
+ * compete (there is one primary), and a row that is the thread's active
+ * environment is always kept — replacing its duplicate if the duplicate was
+ * seen first — so the trigger never points at a filtered-out id. When the
+ * active-environment rule does not decide, the connected row beats a stale
+ * one: a duplicate that is not `connected` is exactly the registry entry for
+ * a machine whose relay link has since been republished, and keeping it would
+ * hide the live machine from the menu.
+ *
+ * Known limit: two genuinely different machines with the same machine kind
+ * and the same label would collapse into one row. That is rarer than the
+ * duplicate the menu has to prevent, and the row kept is a live one either
+ * way.
+ */
+export function dedupeRunOnEnvironments(
+  environments: readonly EnvironmentOption[],
+  activeEnvironmentId: EnvironmentId,
+): EnvironmentOption[] {
+  const result: EnvironmentOption[] = [];
+  const fingerprintIndex = new Map<string, number>();
+  for (const environment of environments) {
+    if (environment.isPrimary) {
+      result.push(environment);
+      continue;
+    }
+    const fingerprint = `${environment.machine}\u0000${environment.label.trim().toLowerCase()}`;
+    const existingIndex = fingerprintIndex.get(fingerprint);
+    if (existingIndex === undefined) {
+      fingerprintIndex.set(fingerprint, result.length);
+      result.push(environment);
+      continue;
+    }
+    const existing = result[existingIndex];
+    if (existing !== undefined) {
+      const connectedWins = environment.connected === true && existing.connected !== true;
+      if (environment.environmentId === activeEnvironmentId || connectedWins) {
+        result[existingIndex] = environment;
+      }
+    }
+  }
+  return result;
+}
+
 export function shouldShowComposerContextStrip(input: {
   hasActiveProject: boolean;
   isGitRepo: boolean;
   showEnvironmentIndicator: boolean;
+  /** A collapsed composer's controls currently fit in their measured strip host. */
+  hostsRestingComposerControls: boolean;
 }): boolean {
-  return input.hasActiveProject && (input.isGitRepo || input.showEnvironmentIndicator);
+  return (
+    input.hasActiveProject &&
+    (input.isGitRepo || input.showEnvironmentIndicator || input.hostsRestingComposerControls)
+  );
+}
+
+// Labels collapse to icons when the strip's content no longer fits. A small
+// hysteresis on the way back out keeps the boundary from flapping.
+const CONTEXT_STRIP_COMPACT_EXPAND_HYSTERESIS_PX = 16;
+
+export function resolveContextStripLabelsCompact(input: {
+  compact: boolean;
+  neededWidth: number;
+  availableWidth: number;
+}): boolean {
+  return input.compact
+    ? input.neededWidth > input.availableWidth - CONTEXT_STRIP_COMPACT_EXPAND_HYSTERESIS_PX
+    : input.neededWidth > input.availableWidth;
 }
 
 export function resolveEnvModeLabel(mode: EnvMode): string {

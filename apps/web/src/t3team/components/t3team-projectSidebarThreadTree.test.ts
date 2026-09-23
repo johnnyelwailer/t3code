@@ -89,16 +89,27 @@ describe("buildProjectSidebarThreadTree", () => {
 describe("partitionSubRunThreads / sortFoldedSubRunThreads (GHE #304 fold)", () => {
   const at = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60_000).toISOString();
 
-  it("splits on running vs non-running — everything else folds, even a fresh error", () => {
+  it("folds ONLY actually-settled threads — terminal-but-not-settled children stay visible", () => {
     const threads = [
       createThread({ id: "run-1", status: "running" }),
       createThread({ id: "err-1", status: "error" }),
       createThread({ id: "idle-1", status: "idle" }),
       createThread({ id: "done-1", status: "completed" }),
+      createThread({ id: "set-1", status: "completed", settled: true }),
+      createThread({ id: "set-2", status: "error", settled: true }),
     ];
     const { running, folded } = partitionSubRunThreads(threads);
-    expect(running.map((t) => t.id)).toEqual(["run-1"]);
-    expect(folded.map((t) => t.id)).toEqual(["err-1", "idle-1", "done-1"]);
+    expect(running.map((t) => t.id)).toEqual(["run-1", "err-1", "idle-1", "done-1"]);
+    expect(folded.map((t) => t.id)).toEqual(["set-1", "set-2"]);
+  });
+
+  it("a fresh terminal child (no thread.settled event) does NOT fold — the instant-settle bug", () => {
+    const { running, folded } = partitionSubRunThreads([
+      createThread({ id: "done-1", status: "completed" }),
+      createThread({ id: "stopped-1", status: "completed" }),
+    ]);
+    expect(running.map((t) => t.id)).toEqual(["done-1", "stopped-1"]);
+    expect(folded).toHaveLength(0);
   });
 
   it("an empty fleet partitions to two empty sides (no fold row)", () => {

@@ -45,7 +45,7 @@ function DemoPanel({
 }
 
 const meta = {
-  title: "T3Team/Child Issue Create Form",
+  title: "T3Team/Work Item/Child Issue Create Form",
   parameters: { layout: "padded" },
 } satisfies Meta;
 

@@ -69,6 +69,7 @@ const BASE_THREAD: OrchestrationThread = {
   interactionMode: "default",
   branch: "main",
   worktreePath: null,
+  pullRequests: [],
   latestTurn: null,
   createdAt: "2026-04-01T00:00:00.000Z",
   updatedAt: "2026-04-01T00:00:00.000Z",
@@ -89,6 +90,7 @@ function testSession(client: WsRpcProtocolClient): RpcSession.RpcSession {
   return {
     client,
     initialConfig: Effect.succeed({} as never),
+    subscribeServerConfig: () => Stream.empty,
     ready: Effect.void,
     probe: Effect.void,
     closed: Effect.never,

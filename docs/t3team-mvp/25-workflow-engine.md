@@ -42,6 +42,10 @@ Treat this doc as authoritative for:
 - capability gating via `meta.capabilities`,
 - how recipes thread typed orchestration references into views.
 
+Long-lived runs need one additional contract: [Bounded Execution](../runbook/bounded-execution.md)
+defines checkpoint boundaries, replay windows, and retention without changing this epic's
+TypeScript author model or introducing a second runtime.
+
 ## Why now
 
 The current orchestration runtime is a forward-only cursor over a persisted step list (see
@@ -1181,7 +1185,7 @@ longer a `recipe.json` / step-union path.
 
 The engine already has a **reactive** repair path: `t3team-workflowSelfHeal.ts`,
 `t3team-workflowEngineRepair.ts`, and `t3team-workflowRepair{Generate,Guardrails,Policy,Prompt}.ts`,
-with a distribution-tunable `t3team-pack-workflowRepairPolicy.ts`. It fires *after* a run fails,
+with a distribution-tunable `t3team-pack-workflowRepairPolicy.ts`. It fires _after_ a run fails,
 hands a no-tools structured repair model the failure plus `T3TEAM_WORKFLOW_MANUAL`, and retries.
 
 The intent is a **proactive** counterpart that reuses the same machinery:
@@ -1197,14 +1201,14 @@ Why this is worth having, from live QA on 2026-08-29: `precheckWorkflowSource`
 (`t3team-workflowSourcePrecheck.ts`) is the only gate today, it runs **only** for inline `source`
 (never for `workflowPath`), and it checks exactly two things — that `export const meta` is present
 and that the TypeScript parses. A file carrying `import { readFileSync } from "node:fs"`, a `meta`
-declared *after* the default export, and an `agent()` call with no `capabilities` passed both
+declared _after_ the default export, and an `agent()` call with no `capabilities` passed both
 checks and died at runtime with a bare `ReferenceError: readFileSync is not defined`. Each of those
 violates a rule the manual states explicitly, and none is cheaply expressible as a static check —
 which is exactly the shape a cheap-model conformance pass handles well.
 
 ## Self-build from prompt, not only self-repair (design intent — PJ, 2026-08-29, not built)
 
-Extends the pre-run review phase above. Today an orchestration is authored *inline* by the calling
+Extends the pre-run review phase above. Today an orchestration is authored _inline_ by the calling
 agent and the engine only ever repairs it reactively. The intent is that the builder can also
 **self-build from a prompt**, the same way `widget.show` should (Epic 24 § Widget composition
 default).
@@ -1214,7 +1218,7 @@ structure it wants instead of emitting 60–110 lines of TypeScript into its own
 
 **Risk, stated by PJ** — vision drift: the full idea may not survive the prompt lens.
 
-**Mitigation that already exists.** `t3team.orchestration.run` already *requires*
+**Mitigation that already exists.** `t3team.orchestration.run` already _requires_
 `intent: { goal, expectedOutcome, guardrails }` — non-blank goal and expectedOutcome, at least one
 non-blank guardrail (`packages/t3team-sdk/src/tools/t3team-sdk.workflow.ts`). That is already a
 structured contract for carrying intent through a lens, rather than free prose, and a prompt-built
@@ -1245,8 +1249,8 @@ to resolve what it found.
 
 **Why.** A delivery run failed its QA gate, posted a 4460-character wall of prose through
 `notifyUser`, and ended. Two blockers, both real, both already root-caused, both small — and the run
-handed the whole routing decision back to the user. PJ, on reading it: *"a super verbose ugly
-formatted report that i honestly dont want to read"*. Separately he asked the launching agent to
+handed the whole routing decision back to the user. PJ, on reading it: _"a super verbose ugly
+formatted report that i honestly dont want to read"_. Separately he asked the launching agent to
 summarise it and was told the pipeline was still running, because `notifyUser` messages were
 `visibleToAgent: false` (fixed since). Three failures, one shape: the run produced knowledge and had
 no reliable way to deliver it to whoever needed it.
@@ -1257,11 +1261,11 @@ not build a report-specific composer; a report is the second caller of the one a
 
 **Decisions (PJ, 2026-08-29):**
 
-- **It is an `agent()` call.** *"the report is just like a specialized form of an agent() call. it's
-  also replayed"* — so it needs no new determinism machinery: journaled and replayed like any other
+- **It is an `agent()` call.** _"the report is just like a specialized form of an agent() call. it's
+  also replayed"_ — so it needs no new determinism machinery: journaled and replayed like any other
   agent step, and a replayed run re-renders rather than re-composes.
-- **The reporter chooses the length.** *"reporter decides how long it must be.. as long as
-  necessary"* — no `expectedLength` parameter and no cap. Brevity is the composer's editorial
+- **The reporter chooses the length.** _"reporter decides how long it must be.. as long as
+  necessary"_ — no `expectedLength` parameter and no cap. Brevity is the composer's editorial
   judgement, supervised by its own iteration loop, not a number imposed by the caller. That is the
   point of moving composition off the orchestration author: a specialised, supervised writer does
   not need to be told to be short.
@@ -1276,10 +1280,10 @@ not build a report-specific composer; a report is the second caller of the one a
 **Routing.** "Who resolves this" is already a choice of recipient in
 `t3team-workflowEngineBrokerNotify.ts`, so no new transport is needed:
 
-| recipient | message role | effect |
-| --------- | ------------ | ------ |
+| recipient | message role | effect                                |
+| --------- | ------------ | ------------------------------------- |
 | `agent`   | `user`       | turn input — the agent wakes and acts |
-| `user`    | `system`     | note — no turn, a human resolves |
+| `user`    | `system`     | note — no turn, a human resolves      |
 
 In the motivating run the correct route was arguably `agent`: two small fixes, both diagnosed, in a
 worktree the agent still had.
@@ -1342,6 +1346,8 @@ decides whether a human is needed. Small migration, large payoff.
 
 ## References
 
+- [Bounded Execution](../runbook/bounded-execution.md) — checkpointing, bounded replay, and
+  retention for long-lived runs built on this engine's journal and replay contract.
 - [Epic 16: Action Recipes](./16-action-recipes.md) — recipe shape, discovery, surfaces,
   applicability, kickoff UX.
 - [Epic 19: Workspace Miniapps](./19-workspace-miniapps.md) — View placements and the

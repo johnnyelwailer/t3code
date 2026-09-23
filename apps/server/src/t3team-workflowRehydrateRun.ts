@@ -27,6 +27,7 @@ import type {
   WorkflowRun,
   WorkflowRunRepositoryShape,
 } from "./persistence/Services/WorkflowRuns.ts";
+import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import { makeWorkflowRunLifecycle } from "./t3team-workflowEngineDurability.ts";
 import {
@@ -49,10 +50,14 @@ export type WorkflowRunRehydratorDeps = {
   readonly rearmScheduler: () => Promise<void>;
   readonly toolBroker: HostDraftToolBroker | undefined;
   readonly nowIso: () => string;
+  /** Durable signal-source state (GHE #332); absent when the host did not wire it (tests).
+   * Restored runs replay new `signal.wait`/`signal.register` verbs against it. */
+  readonly signalStore?: WorkflowSignalStoreShape | undefined;
 };
 
 export function makeWorkflowRunRehydrator(deps: WorkflowRunRehydratorDeps) {
-  const { repo, store, registry, runsRoot, dispatch, rearmScheduler, toolBroker, nowIso } = deps;
+  const { repo, store, registry, runsRoot, dispatch, rearmScheduler, toolBroker, nowIso, signalStore } =
+    deps;
 
   const hostToolClientFor = (run: WorkflowRun) => {
     const grant = run.hostToolGrant;
@@ -102,6 +107,7 @@ export function makeWorkflowRunRehydrator(deps: WorkflowRunRehydratorDeps) {
       nowIso,
       store,
       lifecycle,
+      ...(signalStore === undefined ? {} : { signalStore }),
     };
   };
 

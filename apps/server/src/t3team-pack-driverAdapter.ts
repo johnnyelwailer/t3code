@@ -36,6 +36,7 @@ import type {
   ProviderThreadSnapshot,
 } from "./provider/Services/ProviderAdapter.ts";
 import { packEventsToStream } from "./t3team-pack-driverEvents.ts";
+import { makePackJobControl } from "./t3team-pack-driverJobControl.ts";
 import { readPackMcpSession } from "./t3team-pack-driverMcp.ts";
 
 const decodeSession = Schema.decodeUnknownEffect(ProviderSession);
@@ -78,6 +79,12 @@ export const makePackProviderAdapter = (input: {
       ),
     );
 
+  const jobControl = makePackJobControl({
+    packInstance,
+    driverKind,
+    method: packInstance.jobControl,
+  });
+
   const events = Stream.unwrap(
     // `Effect.sync` so a synchronous throw from `events()` becomes a defect we
     // catch into a logged, empty stream rather than escaping as an unhandled
@@ -97,7 +104,14 @@ export const makePackProviderAdapter = (input: {
 
   return {
     provider: driverKind,
-    capabilities: { sessionModelSwitch: "unsupported" },
+    // `jobControl` is advertised only when the pack instance actually carries
+    // the method — absence means "not supported", and the client hides its
+    // affordances on that capability, never on a swallowed call.
+    capabilities: {
+      sessionModelSwitch: "unsupported",
+      ...(jobControl !== undefined ? { jobControl: true } : {}),
+    },
+    ...(jobControl !== undefined ? { jobControl } : {}),
     startSession: (startInput: ProviderSessionStartInput) =>
       attempt("startSession", () =>
         packInstance.startSession({

@@ -284,7 +284,9 @@ export type ControlProjectRecipeWorkflowRequest = typeof ControlProjectRecipeWor
 
 export const ControlProjectRecipeWorkflowResponse = Schema.Struct({
   ok: Schema.Boolean,
-  status: Schema.Literals(["suspended", "sleeping", "paused", "cancelled"]),
+  // "running" = a failed-run retry claimed the run and re-drives from its journal (GHE #344);
+  // "suspended" = the retry re-issued a failed agent turn that now parks for an answer (GHE #403).
+  status: Schema.Literals(["suspended", "sleeping", "paused", "cancelled", "running"]),
 });
 export type ControlProjectRecipeWorkflowResponse = typeof ControlProjectRecipeWorkflowResponse.Type;
 

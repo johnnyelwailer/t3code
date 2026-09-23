@@ -46,10 +46,20 @@ export function T3TeamActorTimelineRow(props: {
   const senderProjectId = author?.projectId;
   const urgency = actor?.urgency ?? "normal";
 
+  // Title the card with the SUBJECT when present (the sender's short summary,
+  // or the auto-derived one persisted on the message): without it the card
+  // would show a clamp of the FULL body, and expanding would reveal the same
+  // body — there would be nothing to title it with.
+  const subject =
+    actor?.summary !== undefined && actor.summary.length > 0
+      ? actor.summary.replaceAll(/\s+/g, " ").trim()
+      : "";
   const summarySource =
-    message.t3teamExt?.displayText && message.t3teamExt.displayText.length > 0
-      ? message.t3teamExt.displayText
-      : message.text;
+    subject !== ""
+      ? subject
+      : message.t3teamExt?.displayText && message.t3teamExt.displayText.length > 0
+        ? message.t3teamExt.displayText
+        : message.text;
   const normalizedPreview = summarySource.replaceAll(/\s+/g, " ").trim();
   const summary =
     normalizedPreview.length <= 120

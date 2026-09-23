@@ -124,4 +124,119 @@ describe("useHydrateThreadPlacements effect scheduling", () => {
 
     rendered.unmount();
   });
+
+  it("does not re-request ids the server already answered with no placement (GHE #382)", async () => {
+    const otherThread = { ...LIVE_THREAD, id: "thread-other" } as Thread;
+    let liveThreads: ReadonlyArray<Thread> = [LIVE_THREAD];
+    const host = document.createElement("div");
+    let root: Root;
+    let setLive: (threads: ReadonlyArray<Thread>) => void = () => {};
+
+    function Probe() {
+      const [threads, setThreads] = useState(liveThreads);
+      setLive = setThreads;
+      useHydrateThreadPlacements({
+        threads: EMPTY_PROJECT_THREADS,
+        setThreads: NOOP_SET_THREADS,
+        storedProjects: EMPTY_STORED_PROJECTS,
+        liveProjects: EMPTY_PROJECTS,
+        liveThreads: threads,
+      });
+      return null;
+    }
+
+    act(() => {
+      root = createRoot(host);
+      root.render(createElement(Probe));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(listThreadPlacements).toHaveBeenCalledTimes(1);
+    expect(listThreadPlacements).toHaveBeenLastCalledWith({
+      threadIds: [ThreadId.make("thread-missing")],
+    });
+
+    // A new live thread changes the candidate set. The already-answered id
+    // must be dropped from the request; only the new id goes to the server.
+    liveThreads = [LIVE_THREAD, otherThread];
+    act(() => setLive(liveThreads));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(listThreadPlacements).toHaveBeenCalledTimes(2);
+    expect(listThreadPlacements).toHaveBeenLastCalledWith({
+      threadIds: [ThreadId.make("thread-other")],
+    });
+
+    act(() => root.unmount());
+  });
+
+  it("ignores live-array identity flapping and only re-fetches on content change (GHE #382)", async () => {
+    // The shell derives `liveThreads`/`liveProjects` fresh on every live
+    // event — new array and object identity even when nothing changed. The
+    // fetch decision may only depend on the content, or every live update
+    // re-fires the placements POST (the 778-POST-in-12-min flapping on the
+    // live machine).
+    let liveThreads: ReadonlyArray<Thread> = [LIVE_THREAD];
+    let liveProjects: ReadonlyArray<Project> = [];
+    const host = document.createElement("div");
+    let root: Root;
+    let setLive: (threads: ReadonlyArray<Thread>) => void = () => {};
+    let setProjects: (projects: ReadonlyArray<Project>) => void = () => {};
+
+    function Probe() {
+      const [threads, setThreadsState] = useState(liveThreads);
+      const [projects, setProjectsState] = useState(liveProjects);
+      setLive = setThreadsState;
+      setProjects = setProjectsState;
+      useHydrateThreadPlacements({
+        threads: EMPTY_PROJECT_THREADS,
+        setThreads: NOOP_SET_THREADS,
+        storedProjects: EMPTY_STORED_PROJECTS,
+        liveProjects: projects,
+        liveThreads: threads,
+      });
+      return null;
+    }
+
+    act(() => {
+      root = createRoot(host);
+      root.render(createElement(Probe));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(listThreadPlacements).toHaveBeenCalledTimes(1);
+
+    // Fresh array identity, identical content: no re-fetch.
+    act(() => setLive([LIVE_THREAD]));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(listThreadPlacements).toHaveBeenCalledTimes(1);
+
+    // A fresh `liveProjects` array with identical content: still no re-fetch.
+    liveProjects = [];
+    act(() => setProjects(liveProjects));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(listThreadPlacements).toHaveBeenCalledTimes(1);
+
+    // A real content change (the thread's `updatedAt` advanced) makes the id
+    // eligible again: the effect must fire.
+    act(() =>
+      setLive([{ ...LIVE_THREAD, updatedAt: "2026-05-22T11:00:00.000Z" }] as Thread[]),
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(listThreadPlacements).toHaveBeenCalledTimes(2);
+    expect(listThreadPlacements).toHaveBeenLastCalledWith({
+      threadIds: [ThreadId.make("thread-missing")],
+    });
+
+    act(() => root.unmount());
+  });
 });

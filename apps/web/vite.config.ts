@@ -1,18 +1,19 @@
 import * as NodeZlib from "node:zlib";
 
-import tailwindcss from "@tailwindcss/vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import babel from "@rolldown/plugin-babel";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import compression from "compression";
 import { defineProject, type TestProjectInlineConfiguration } from "vite-plus/test/config";
 import "vite-plus/test/config";
-import type { Connect, Plugin, ViteUserConfig } from "vite-plus";
+import { defineConfig, type Connect, type Plugin } from "vite-plus";
 import pkg from "./package.json" with { type: "json" };
 
 import { DEV_PROXIED_PATH_PREFIXES } from "@t3tools/shared/devProxy";
 
 import { loadRepoEnv } from "../../scripts/lib/public-config";
+import { thirdPartyLicensesPlugin } from "../../scripts/lib/third-party-licenses";
+import { tailwindPlugins } from "./vite/tailwind";
 
 const repoEnv = loadRepoEnv();
 Object.assign(process.env, repoEnv);
@@ -55,6 +56,29 @@ const configuredAtlassianOAuthRedirectUri =
   process.env.VITE_ATLASSIAN_OAUTH_REDIRECT_URI?.trim() ||
   process.env.T3TEAM_ATLASSIAN_OAUTH_REDIRECT_URI?.trim() ||
   "";
+// Build guard: a pinned desktop release listens on the default backend port
+// (3773, see DEFAULT_DESKTOP_BACKEND_PORT in apps/desktop/src/app/DesktopBackendPort.ts).
+// A baked redirect URI pointing at a different origin would desync the Atlassian
+// OAuth callback from the live listener — the resolver prefers the live desktop
+// base URL, but the baked value is still the fallback while the bridge has no
+// live URL, so a stale one must never ship. Refuse the build instead.
+const pinnedDesktopBackendPort = process.env.VITE_DESKTOP_PIN_BACKEND_PORT?.trim() === "1";
+if (pinnedDesktopBackendPort && configuredAtlassianOAuthRedirectUri) {
+  let redirectOrigin = "";
+  try {
+    redirectOrigin = new URL(configuredAtlassianOAuthRedirectUri).origin;
+  } catch {
+    redirectOrigin = "<unparseable>";
+  }
+  if (redirectOrigin !== "http://127.0.0.1:3773") {
+    throw new Error(
+      `VITE_ATLASSIAN_OAUTH_REDIRECT_URI (${configuredAtlassianOAuthRedirectUri}) does not match the ` +
+        "pinned desktop backend origin (http://127.0.0.1:3773). Unset VITE_ATLASSIAN_OAUTH_REDIRECT_URI " +
+        "(or T3TEAM_ATLASSIAN_OAUTH_REDIRECT_URI) so the desktop resolver uses the live backend origin, " +
+        "or point it at http://127.0.0.1:3773/oauth/callback.",
+    );
+  }
+}
 const configuredHostedAppUrl = (() => {
   const explicitHostedAppUrl = process.env.VITE_HOSTED_APP_URL?.trim();
   if (explicitHostedAppUrl) {
@@ -95,6 +119,7 @@ const unitTestProject = {
     // run, those async tests can exceed Vitest's default 5s budget.
     hookTimeout: 15_000,
     testTimeout: 15_000,
+    setupFiles: ["../../packages/shared/src/testing/longTempDir.ts"],
   },
 } satisfies TestProjectInlineConfiguration;
 
@@ -166,139 +191,151 @@ const configuredAllowedHosts = (process.env.T3CODE_DEV_ALLOWED_HOSTS ?? "")
   .filter((entry) => entry.length > 0);
 const allowedHosts = [".ts.net", ...configuredAllowedHosts];
 
-// Typing this config is a standing fight with the checker, and every option loses differently:
-//   - `defineConfig(config)` trips tsgo's instantiation-depth limit (vite-plus-core 0.2.2
-//     overloads, both function and object form).
-//   - `const config: ViteUserConfig` trips the same limit after the 2026-08 upstream sync grew
-//     the object (assetsInclude / devCompressionPlugin / server.warmup).
-//   - leaving it inferred makes the default export unnameable (TS2883), because the plugin array
-//     element type resolves into rolldown's own `Plugin` under a pnpm-hashed path.
-// So: infer locally (cheap), and widen once at the export boundary. The individual option values
-// are still checked where they are constructed; only the whole-object comparison is skipped.
-const config = {
-  assetsInclude: ["**/*.wasm"],
-  plugins: [
-    devCompressionPlugin(),
-    tanstackRouter(),
-    react(),
-    babel({
-      // We need to be explicit about the parser options after moving to @vitejs/plugin-react v6.0.0
-      // This is because the babel plugin only automatically parses typescript and jsx based on relative paths (e.g. "**/*.ts")
-      // whereas the previous version of the plugin parsed all files with a .ts extension.
-      // This is causing our packages/ directory to fail to parse, as they are not relative to the CWD.
-      parserOpts: { plugins: ["typescript", "jsx"] },
-      presets: [reactCompilerPreset()],
-    }),
-    tailwindcss(),
-  ],
-  optimizeDeps: {
-    include: [
-      "@clerk/clerk-js",
-      "@clerk/react/internal",
-      "@pierre/diffs",
-      "@pierre/diffs/editor",
-      "@pierre/diffs/react",
-      "@pierre/diffs/worker/worker.js",
-      "effect/Array",
-      "effect/Order",
-      "react-dom/client",
+export default defineConfig(() => {
+  return {
+    assetsInclude: ["**/*.wasm"],
+    plugins: [
+      devCompressionPlugin(),
+      thirdPartyLicensesPlugin({
+        bundleName: "web",
+        configFile: new URL("../../third-party-licenses.config.json", import.meta.url),
+        packageManifests: [
+          { bundle: "web", path: new URL("./package.json", import.meta.url) },
+          { bundle: "server", path: new URL("../server/package.json", import.meta.url) },
+          { bundle: "desktop", path: new URL("../desktop/package.json", import.meta.url) },
+        ],
+      }),
+      // Route components load as split chunks so settings, pull-request, and
+      // usage code stay out of the cold-start payload; the router prefetches
+      // them on navigation intent (see getRouter's defaultPreload).
+      tanstackRouter({ autoCodeSplitting: true }),
+      react(),
+      babel({
+        // We need to be explicit about the parser options after moving to @vitejs/plugin-react v6.0.0
+        // This is because the babel plugin only automatically parses typescript and jsx based on relative paths (e.g. "**/*.ts")
+        // whereas the previous version of the plugin parsed all files with a .ts extension.
+        // This is causing our packages/ directory to fail to parse, as they are not relative to the CWD.
+        parserOpts: { plugins: ["typescript", "jsx"] },
+        presets: [reactCompilerPreset()],
+      }),
+      tailwindPlugins(bundledDev),
     ],
-  },
-  define: {
-    // In dev mode, tell the web app where the WebSocket server lives
-    "import.meta.env.VITE_WS_URL": JSON.stringify(configuredWsUrl ?? ""),
-    // Pinned explicitly rather than left to Vite's automatic VITE_ exposure:
-    // under single-origin dev this must stay empty even when a `.env`
-    // supplies it, so the client falls back to window.location.origin.
-    "import.meta.env.VITE_HTTP_URL": JSON.stringify(configuredHttpUrl ?? ""),
-    "import.meta.env.VITE_T3CODE_RELAY_URL": JSON.stringify(configuredRelayUrl),
-    "import.meta.env.VITE_CLERK_PUBLISHABLE_KEY": JSON.stringify(configuredClerkPublishableKey),
-    "import.meta.env.VITE_CLERK_JWT_TEMPLATE": JSON.stringify(configuredClerkJwtTemplate),
-    "import.meta.env.VITE_CLERK_CLI_OAUTH_CLIENT_ID": JSON.stringify(
-      configuredClerkCliOAuthClientId,
-    ),
-    "import.meta.env.VITE_RELAY_OTLP_TRACES_URL": JSON.stringify(configuredRelayTracingUrl),
-    "import.meta.env.VITE_RELAY_OTLP_TRACES_DATASET": JSON.stringify(configuredRelayTracingDataset),
-    "import.meta.env.VITE_RELAY_OTLP_TRACES_TOKEN": JSON.stringify(configuredRelayTracingToken),
-    "import.meta.env.VITE_HOSTED_APP_URL": JSON.stringify(configuredHostedAppUrl ?? ""),
-    "import.meta.env.VITE_HOSTED_APP_CHANNEL": JSON.stringify(configuredHostedAppChannel),
-    "import.meta.env.APP_VERSION": JSON.stringify(configuredAppVersion),
-    __ATLASSIAN_CLIENT_ID__: JSON.stringify(configuredAtlassianClientId),
-    __ATLASSIAN_SITE_URL__: JSON.stringify(configuredAtlassianSiteUrl),
-    __ATLASSIAN_OAUTH_REDIRECT_URI__: JSON.stringify(configuredAtlassianOAuthRedirectUri),
-  },
-  resolve: {
-    tsconfigPaths: true,
-    dedupe: ["react", "react-dom"],
-  },
-  experimental: {
-    bundledDev,
-  },
-  server: {
-    host,
-    port,
-    strictPort: true,
-    allowedHosts,
-    // Transform the whole module graph at server start instead of on the
-    // first request. Without this, a cold worktree discovers and transforms
-    // modules one import-level at a time while the browser waits — which
-    // over a tailnet origin turns into minutes of waterfall.
-    warmup: {
-      clientFiles: ["./src/main.tsx"],
+    optimizeDeps: {
+      include: [
+        "@clerk/clerk-js",
+        "@clerk/react/internal",
+        "@pierre/diffs",
+        "@pierre/diffs/editor",
+        "@pierre/diffs/react",
+        "@pierre/diffs/worker/worker.js",
+        "effect/Array",
+        "effect/Order",
+        "react-dom/client",
+      ],
     },
-    ...(devProxyTarget
-      ? {
-          // One entry per shared prefix; the server's dev catch-all 404s the
-          // same list, so the two sides cannot drift. `/ws` is the app's own
-          // socket — Vite's HMR socket is matched separately and exactly
-          // (path "/" plus a vite-hmr subprotocol), so the two upgrade
-          // handlers don't collide.
-          proxy: Object.fromEntries(
-            DEV_PROXIED_PATH_PREFIXES.map((prefix) => [
-              prefix,
-              {
-                target: devProxyTarget,
-                changeOrigin: true,
-                ...(prefix === "/ws" ? { ws: true } : {}),
-                // t3team: /oauth/callback is a RENDERER route (the Atlassian
-                // callback page); in prod the server SPA-fallbacks it, but the
-                // dev proxy would 404 it against the backend. Serve the SPA —
-                // the router reads the real location, so index.html suffices.
-                ...(prefix === "/oauth"
-                  ? {
-                      bypass: (req: { url?: string | undefined }) =>
-                        req.url?.startsWith("/oauth/callback") ? "/index.html" : undefined,
-                    }
-                  : {}),
-              },
-            ]),
-          ),
-        }
-      : {}),
-    // Electron's BrowserWindow needs the HMR socket pinned to an explicit
-    // host to connect reliably; dev:desktop is the only mode that sets HOST.
-    // Everywhere else, leaving this unset lets the client derive it from the
-    // page origin, which is what makes HMR work over Tailscale/LAN instead of
-    // failing an attempt against the wrong machine's localhost first.
-    // (Vite 8 logs connection state via console.debug — enable "Verbose".)
-    ...(explicitHost
-      ? {
-          hmr: {
-            protocol: "ws",
-            host: explicitHost,
-            clientPort: port,
-          },
-        }
-      : {}),
-  },
-  build: {
-    outDir: "dist",
-    emptyOutDir: true,
-    sourcemap: buildSourcemap,
-  },
-  test: {
-    projects: [defineProject(unitTestProject)],
-  },
-};
-
-export default config as unknown as ViteUserConfig;
+    define: {
+      // In dev mode, tell the web app where the WebSocket server lives
+      "import.meta.env.VITE_WS_URL": JSON.stringify(configuredWsUrl ?? ""),
+      // Pinned explicitly rather than left to Vite's automatic VITE_ exposure:
+      // under single-origin dev this must stay empty even when a `.env`
+      // supplies it, so the client falls back to window.location.origin.
+      "import.meta.env.VITE_HTTP_URL": JSON.stringify(configuredHttpUrl ?? ""),
+      "import.meta.env.VITE_T3CODE_RELAY_URL": JSON.stringify(configuredRelayUrl),
+      "import.meta.env.VITE_CLERK_PUBLISHABLE_KEY": JSON.stringify(configuredClerkPublishableKey),
+      "import.meta.env.VITE_CLERK_JWT_TEMPLATE": JSON.stringify(configuredClerkJwtTemplate),
+      "import.meta.env.VITE_CLERK_CLI_OAUTH_CLIENT_ID": JSON.stringify(
+        configuredClerkCliOAuthClientId,
+      ),
+      "import.meta.env.VITE_RELAY_OTLP_TRACES_URL": JSON.stringify(configuredRelayTracingUrl),
+      "import.meta.env.VITE_RELAY_OTLP_TRACES_DATASET": JSON.stringify(
+        configuredRelayTracingDataset,
+      ),
+      "import.meta.env.VITE_RELAY_OTLP_TRACES_TOKEN": JSON.stringify(configuredRelayTracingToken),
+      "import.meta.env.VITE_HOSTED_APP_URL": JSON.stringify(configuredHostedAppUrl ?? ""),
+      "import.meta.env.VITE_HOSTED_APP_CHANNEL": JSON.stringify(configuredHostedAppChannel),
+      "import.meta.env.APP_VERSION": JSON.stringify(configuredAppVersion),
+      __ATLASSIAN_CLIENT_ID__: JSON.stringify(configuredAtlassianClientId),
+      __ATLASSIAN_SITE_URL__: JSON.stringify(configuredAtlassianSiteUrl),
+      __ATLASSIAN_OAUTH_REDIRECT_URI__: JSON.stringify(configuredAtlassianOAuthRedirectUri),
+    },
+    resolve: {
+      tsconfigPaths: true,
+      dedupe: ["react", "react-dom"],
+    },
+    experimental: {
+      bundledDev,
+    },
+    server: {
+      host,
+      port,
+      strictPort: true,
+      allowedHosts,
+      // Transform the whole module graph at server start instead of on the
+      // first request. Without this, a cold worktree discovers and transforms
+      // modules one import-level at a time while the browser waits — which
+      // over a tailnet origin turns into minutes of waterfall.
+      warmup: {
+        clientFiles: ["./src/main.tsx"],
+      },
+      ...(devProxyTarget
+        ? {
+            // One entry per shared prefix; the server's dev catch-all 404s the
+            // same list, so the two sides cannot drift. `/ws` is the app's own
+            // socket and `/api` carries the device hub's stream sockets —
+            // Vite's HMR socket is matched separately and exactly (path "/"
+            // plus a vite-hmr subprotocol), so the upgrade handlers don't
+            // collide.
+            proxy: Object.fromEntries(
+              DEV_PROXIED_PATH_PREFIXES.map((prefix) => [
+                prefix,
+                {
+                  target: devProxyTarget,
+                  changeOrigin: true,
+                  ...(prefix === "/ws" || prefix === "/api" ? { ws: true } : {}),
+                  // t3team: /oauth/callback is a RENDERER route (the Atlassian
+                  // callback page); in prod the server SPA-fallbacks it, but the
+                  // dev proxy would 404 it against the backend. Serve the SPA —
+                  // the router reads the real location, so index.html suffices.
+                  ...(prefix === "/oauth"
+                    ? {
+                        bypass: (req: { url?: string | undefined }) =>
+                          req.url?.startsWith("/oauth/callback") ? "/index.html" : undefined,
+                      }
+                    : {}),
+                },
+              ]),
+            ),
+          }
+        : {}),
+      // Electron's BrowserWindow needs the HMR socket pinned to an explicit
+      // host to connect reliably; dev:desktop is the only mode that sets HOST.
+      // Everywhere else, leaving this unset lets the client derive it from the
+      // page origin, which is what makes HMR work over Tailscale/LAN instead of
+      // failing an attempt against the wrong machine's localhost first.
+      // (Vite 8 logs connection state via console.debug — enable "Verbose".)
+      ...(explicitHost
+        ? {
+            hmr: {
+              protocol: "ws",
+              host: explicitHost,
+              clientPort: port,
+            },
+          }
+        : {}),
+    },
+    // @tailwindcss/vite only emits a CSS sourcemap when devSourcemap is on; without it
+    // rolldown flags the transform as SOURCEMAP_BROKEN on every sourcemapped build.
+    css: {
+      devSourcemap: buildSourcemap !== false,
+    },
+    build: {
+      outDir: "dist",
+      emptyOutDir: true,
+      manifest: true,
+      sourcemap: buildSourcemap,
+    },
+    test: {
+      projects: [defineProject(unitTestProject)],
+    },
+  };
+});

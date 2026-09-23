@@ -1,3 +1,4 @@
+// @effect-diagnostics globalTimers:off -- host debounce timer, not Effect Schedule.
 /**
  * The composer's model call, and the guarantee that it cannot eat the report.
  *

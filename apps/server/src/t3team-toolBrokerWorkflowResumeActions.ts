@@ -16,13 +16,16 @@ import type {
   WorkflowRun,
   WorkflowRunRepositoryShape,
 } from "./persistence/Services/WorkflowRuns.ts";
+import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
 import type {
   ResumeWorkflowHandlerArgs,
   WorkflowResumeToolValue,
 } from "./t3team-toolBrokerWorkflowResumeTool.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
+import type { InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
 import { replaceEphemeralWorkflowSourceAtomically } from "./t3team-workflowEphemeralSource.ts";
+import { pausedResumeBlocker, restorePausedRunContinuation } from "./t3team-workflowResumePausedTurn.ts";
 import { precheckWorkflowSource } from "./t3team-workflowSourcePrecheck.ts";
 
 export interface WorkflowResumeToolDeps<E = string> {
@@ -39,6 +42,12 @@ export interface WorkflowResumeToolDeps<E = string> {
     { readonly project: { readonly workspaceRoot: string | null | undefined } },
     E
   >;
+  /** Re-issues a failed run's retained `thread.turn` step (GHE #403). Absent when the broker's
+   * environment has no thread query / engine dispatch; the failed-step resume then reports so. */
+  readonly turnRedrive?: InterruptedTurnRetry | undefined;
+  /** Durable signal-source state (GHE #332); absent in test/broker layers without the engine —
+   * the signal-park resume then skips the inbox drain (there is no inbox to drain there). */
+  readonly signalStore?: WorkflowSignalStoreShape | undefined;
 }
 
 export const nowIso = (): string => DateTime.formatIso(DateTime.nowUnsafe());
@@ -117,21 +126,25 @@ export const makeResumePausedRun =
       if (run.pendingCorrelationId === null) {
         return yield* Effect.fail("Paused workflow has no continuation to resume.");
       }
-      if (deps.registry.getRun(run.runId) === undefined) {
-        return yield* Effect.fail(
-          "Workflow controller is not ready. Restart the server and try again.",
-        );
-      }
+      const blocker = pausedResumeBlocker(deps, run);
+      if (blocker !== null) return yield* Effect.fail(blocker);
       yield* deps.runRepository
         .resumePaused({ runId: run.runId, updatedAt: nowIso() })
         .pipe(Effect.mapError(errorMessage));
       workflowAdmissionQueue.resume(run.runId);
-      if (run.pendingKind !== null && run.pendingThreadId !== null) {
-        deps.registry.setPending(run.pendingThreadId, {
-          runId: run.runId,
-          correlationId: run.pendingCorrelationId,
-          kind: run.pendingKind,
-        });
+      // Same sequence as the card's Resume (GHE #332): one of the three continuations — thread
+      // ask, clock, or event park — restored with its matching follow-through.
+      // `R = never` contract: an event-park drain warning (best-effort) is not logged here —
+      // the run lands in `watching` either way and the next live event re-delivers the wake.
+      const { status } = yield* restorePausedRunContinuation({
+        registry: deps.registry,
+        run,
+        rearmScheduler: deps.rearmScheduler,
+        nowIso,
+        ...(deps.turnRedrive === undefined ? {} : { turnRedrive: deps.turnRedrive }),
+        ...(deps.signalStore === undefined ? {} : { signalStore: deps.signalStore }),
+      });
+      if (status === "suspended") {
         return {
           ok: true as const,
           runId: run.runId,
@@ -139,8 +152,7 @@ export const makeResumePausedRun =
           hint: "Restored the pending ask; the run resumes automatically when it resolves.",
         };
       }
-      if (run.wakeAt !== null) {
-        yield* Effect.promise(() => deps.rearmScheduler());
+      if (status === "sleeping") {
         return {
           ok: true as const,
           runId: run.runId,
@@ -148,5 +160,10 @@ export const makeResumePausedRun =
           hint: `Timer re-armed; the scheduler wakes the run at ${run.wakeAt}.`,
         };
       }
-      return yield* Effect.fail("Paused workflow has no continuation to resume.");
+      return {
+        ok: true as const,
+        runId: run.runId,
+        status: "watching" as const,
+        hint: "Restored the event park; the run wakes when its awaited signal event lands.",
+      };
     });

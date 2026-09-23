@@ -1,5 +1,8 @@
 import { EMPTY_OBJECT_INPUT_SCHEMA, type T3TeamToolCatalogEntry } from "./t3teamToolCatalogCore.ts";
-import { T3TEAM_WIDGET_AUTHORING_GUIDANCE } from "./t3teamWidgetGuidance.ts";
+import {
+  T3TEAM_WIDGET_AUTHORING_GUIDANCE,
+  T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION,
+} from "./t3teamWidgetGuidance.ts";
 
 const START_CHILD_INPUT_SCHEMA = {
   type: "object",
@@ -75,6 +78,25 @@ const START_CHILD_INPUT_SCHEMA = {
         "Optional branch, tag, or commit to use as the base ref for the child's worktree (linked or local). Only valid with isolation='own-worktree'. When omitted, the repository default branch is used.",
       minLength: 1,
     },
+    environment: {
+      type: "object",
+      additionalProperties: false,
+      description:
+        "Optional execution environment to bind the child session to — a DIFFERENT T3 server than this one. Omit to keep the child in this environment (the default). The thread record and handoff are stamped with the target environment, and the launch result carries an environment_note documenting the delivery boundary: inter-agent messaging (send_message, mailbox, children ops) only reaches threads in THIS environment, so report-back from a cross-environment child needs a separate channel.",
+      properties: {
+        id: {
+          type: "string",
+          description: "EnvironmentId of the target environment (a non-empty string).",
+          minLength: 1,
+        },
+        label: {
+          type: "string",
+          description: "Optional human-readable name of the target environment.",
+          minLength: 1,
+        },
+      },
+      required: ["id"],
+    },
   },
   required: ["name", "isolation"],
 } as const;
@@ -131,6 +153,57 @@ const WIDGET_SHOW_INPUT_SCHEMA = {
   required: ["title", "widget_code"],
 } as const;
 
+const ASK_USER_INPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    question: {
+      type: "string",
+      description:
+        "The full context plus the question itself; markdown is rendered in the composer panel.",
+      minLength: 1,
+    },
+    header: {
+      type: "string",
+      description: "Short chip label shown beside the question — a few words, not a sentence.",
+    },
+    options: {
+      type: "array",
+      description:
+        "Optional answer choices offered as buttons. Each option is a string (label only) or " +
+        "{label, description} where description explains the choice's trade-off — never just " +
+        "the label again. The user can also type a free-form answer.",
+      items: {
+        anyOf: [
+          { type: "string" },
+          {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              label: { type: "string", minLength: 1 },
+              description: {
+                type: "string",
+                description:
+                  "What this choice means and its trade-off — never a restatement of the label.",
+              },
+            },
+            required: ["label"],
+          },
+        ],
+      },
+    },
+    multiSelect: {
+      type: "boolean",
+      description: "When true (with options), the user may pick several options.",
+    },
+    allowFreeText: {
+      type: "boolean",
+      description: "When false, the user may only pick from the listed options (requires options).",
+    },
+  },
+  required: ["question"],
+} as const;
+
 export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
   "t3team.runtime.models": {
     id: "t3team.runtime.models",
@@ -147,12 +220,34 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     defaultEnabled: true,
     inputSchema: EMPTY_OBJECT_INPUT_SCHEMA,
   },
+  "t3team.runtime.provider_usage": {
+    id: "t3team.runtime.provider_usage",
+    label: "Read provider usage limits",
+    title: "Sample live provider plan-limit windows",
+    description:
+      "Read the provider's LIVE rolling plan-limit windows (how much of the 5-hour / weekly quota is used, when it resets, and the severity verdict) by sampling each configured provider instance on demand. Call it when you need to know how close a provider is to a rate-limit wall before delegating long work to it, or when a provider start fails with a rate-limit error. Unsampleable instances are reported in `unavailable` with a reason instead of failing the call.",
+    capabilities: ["read"],
+    kind: "read",
+    surfaces: ["thread"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        provider_instance_id: {
+          type: "string",
+          description:
+            "Optional provider INSTANCE id to sample (as returned by t3team.runtime.models). Omit to sample all enabled instances with a live-limit source.",
+        },
+      },
+    },
+  },
   "t3team.widget.show": {
     id: "t3team.widget.show",
     label: "Show widget",
     title: "Show an inline widget in the chat timeline",
-    description:
-      "Show a widget inline in the current thread's chat timeline. Single entry point for all widget fidelities, selected via 'format': html/svg render instantly in a sandboxed iframe with live light/dark theme CSS variables plus the sendPrompt/callTool bridge; mdx (future) renders trusted whitelisted first-party components inline; tsx (future) composes a full design-system-native React view (slower). The widget body is persisted as a durable artifact. Use only provided theme variables for colors. Make the widget fluid and responsive across mobile and wide panes, keep it compact with progressive disclosure, keep the background transparent, and avoid top-level padding. Render icons from the host-injected sprite (<use href=\"#t3w-icon-NAME\">, class t3w-icon) rather than emoji or an external icon dependency.",
+    description: T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION,
     capabilities: ["write"],
     kind: "view-state",
     surfaces: ["thread"],
@@ -320,6 +415,60 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       required: ["runId"],
     },
   },
+  "t3team.orchestration.pause": {
+    id: "t3team.orchestration.pause",
+    label: "Pause orchestration run",
+    title: "Pause an agent orchestration run at its current waiting point",
+    description:
+      "Pause a run launched via t3team.orchestration.run at its current waiting point (a parked " +
+      "agent turn, user decision, or timer) — the same control as the card's Pause button. The " +
+      "run keeps its continuation; resume it with t3team.orchestration.resume. Scoped to the " +
+      "calling thread's own runs. Returns {runId, status: 'paused', hint}.",
+    capabilities: ["write"],
+    kind: "thread",
+    surfaces: ["thread"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        runId: {
+          type: "string",
+          description: "Run id of the waiting or scheduled run to pause.",
+          minLength: 1,
+        },
+      },
+      required: ["runId"],
+    },
+  },
+  "t3team.orchestration.stop": {
+    id: "t3team.orchestration.stop",
+    label: "Stop orchestration run",
+    title: "Stop an agent orchestration run for good",
+    description:
+      "Stop a run launched via t3team.orchestration.run: cancels it, interrupts its child agent " +
+      "turns, and frees its capacity — the same control as the card's Stop action. Use it on a " +
+      "superseded or stuck run BEFORE launching a replacement, so two runs never work the same " +
+      "queue. Scoped to the calling thread's own runs. Returns {runId, status: 'cancelled', hint}.",
+    capabilities: ["write"],
+    kind: "thread",
+    surfaces: ["thread"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        runId: {
+          type: "string",
+          description: "Run id of the live run to stop.",
+          minLength: 1,
+        },
+      },
+      required: ["runId"],
+    },
+  },
   "t3team.thread.rename": {
     id: "t3team.thread.rename",
     label: "Rename thread",
@@ -348,7 +497,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     label: "Search this thread",
     title: "Search this thread's transcript",
     description:
-      "Search the messages of the CURRENT thread (its own transcript) — e.g. to recover a prior decision or context that scrolled out of the context window. Pass a case-insensitive 'query' substring, an optional 'limit' (default 10, max 25), and an optional 'role' filter ('user' | 'assistant' | 'actor'). Returns each matching message with its 1-based position, role, a snippet around the match, and message_id (pass message_id to t3team.thread.read_message for the full body).",
+      "Search the CURRENT thread — its messages AND its tool activity (commands and their output, file reads, tool calls) — e.g. to recover a decision, a requirement or a result that scrolled out of the context window. Compacted and truncated spans stay searchable. Pass a case-insensitive 'query' substring; a multi-word query that matches nothing verbatim is retried requiring every word (reported as matchMode). Newest matches come first unless 'order' is 'oldest'. Page with 'offset' when the result reports hasMore. Narrow with 'scope' or 'role'. Each match carries its 1-based position within its own stream, a snippet around the match, and either message_id (pass to t3team.thread.read_message for the full body) or activity_id. An activity records only the first 500 characters of a tool result. Optionally pass 'question' to get a direct answer ('why did that fail?', 'what did we decide about X?') instead of only locations: a bounded slice of the transcript is read by a fast model and the result adds 'answer', 'citations' and 'spanUsed'. Combine 'question' with 'query' (cheap default: the matches plus their immediate neighbours) or with 'fromPosition'/'toPosition' for an explicit span. If the model is unavailable the search results still come back, with 'answerError'.",
     capabilities: ["read"],
     kind: "thread",
     surfaces: ["thread"],
@@ -360,21 +509,54 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       properties: {
         query: {
           type: "string",
-          description: "Case-insensitive substring to search for in this thread's messages.",
+          description: "Case-insensitive substring to search for in this thread's transcript.",
           minLength: 1,
+        },
+        question: {
+          type: "string",
+          description:
+            "Ask a question about this thread and get a direct answer instead of only match locations. Answered strictly from the selected transcript span.",
+          minLength: 1,
+        },
+        fromPosition: {
+          type: "number",
+          description:
+            "With 'question': start of an explicit transcript span (inclusive, 1-based position). An explicit span unlocks a much larger budget than the default.",
+        },
+        toPosition: {
+          type: "number",
+          description:
+            "With 'question': end of an explicit transcript span (inclusive, 1-based position).",
         },
         limit: {
           type: "number",
           description: "Maximum number of matches to return (default 10, max 25).",
         },
+        offset: {
+          type: "number",
+          description:
+            "Skip this many matches before returning, in the requested order. Use the offset the previous result's hint reports when hasMore is true.",
+        },
+        scope: {
+          type: "string",
+          description:
+            "Restrict the search to one stream: 'messages', 'activities' (tool calls and command output), or 'all' (default).",
+          enum: ["all", "messages", "activities"],
+        },
+        order: {
+          type: "string",
+          description: "'recent' (default) returns the newest matches first; 'oldest' reverses it.",
+          enum: ["recent", "oldest"],
+        },
         role: {
           type: "string",
           description:
-            "Optional role filter: only return messages from this role ('user', 'assistant', or 'actor').",
-          enum: ["user", "assistant", "actor"],
+            "Optional filter on a message role ('user', 'assistant', 'actor') or an activity kind (e.g. 'bash'). An unknown value returns no matches.",
         },
       },
-      required: ["query"],
+      // Either 'query' or 'question' is required; the handler enforces it,
+      // because JSON Schema `required` cannot express the choice here.
+      required: [],
     },
   },
   "t3team.thread.search_source": {
@@ -382,7 +564,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     label: "Search fork source thread",
     title: "Search the fork source thread",
     description:
-      "Search the FULL transcript of the thread this thread was forked from — including the middle messages a truncated fork omitted. Only works in a forked thread. Pass a case-insensitive 'query' substring and an optional 'limit' (default 10, max 25). Returns each matching message with its 1-based position, role, and a snippet around the match.",
+      "Search the FULL transcript of the thread this thread was forked from — its messages and its tool activity — including the middle a truncated fork omitted. Only works in a forked thread. Pass a case-insensitive 'query' substring; a multi-word query that matches nothing verbatim is retried requiring every word (reported as matchMode). Newest matches come first unless 'order' is 'oldest'. Page with 'offset' when the result reports hasMore. Narrow with 'scope'. Each match carries its 1-based position within its own stream, a snippet around the match, and either message_id or activity_id.",
     capabilities: ["read"],
     kind: "thread",
     surfaces: ["thread"],
@@ -395,12 +577,28 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
         query: {
           type: "string",
           description:
-            "Case-insensitive substring to search for in the original thread's messages.",
+            "Case-insensitive substring to search for in the original thread's transcript.",
           minLength: 1,
         },
         limit: {
           type: "number",
           description: "Maximum number of matches to return (default 10, max 25).",
+        },
+        offset: {
+          type: "number",
+          description:
+            "Skip this many matches before returning, in the requested order. Use the offset the previous result's hint reports when hasMore is true.",
+        },
+        scope: {
+          type: "string",
+          description:
+            "Restrict the search to one stream: 'messages', 'activities' (tool calls and command output), or 'all' (default).",
+          enum: ["all", "messages", "activities"],
+        },
+        order: {
+          type: "string",
+          description: "'recent' (default) returns the newest matches first; 'oldest' reverses it.",
+          enum: ["recent", "oldest"],
         },
       },
       required: ["query"],
@@ -430,12 +628,25 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       required: ["message_id"],
     },
   },
+  "t3team.thread.ask_user": {
+    id: "t3team.thread.ask_user",
+    label: "Ask user a question",
+    title: "Ask the user a structured question",
+    description:
+      "Ask the user a structured question that docks in their composer and stays open until they answer or dismiss it — it survives the turn ending and session/app restarts. The tool returns immediately; the answer arrives in a later turn as a user message, so do not proceed as if answered and do not re-ask (the tool rejects a new ask while one is pending, naming the outstanding requestId). Field shape: 'header' is a short chip label (a few words); 'question' carries the full context plus the question itself and may use markdown; each option's 'description' explains what that choice means and its trade-off, never a restatement of its label; mark the recommended choice with '(recommended)' in its label. Works for any agent thread — in particular for harnesses whose model ships no native question tool.",
+    capabilities: ["write"],
+    kind: "thread",
+    surfaces: ["thread"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: ASK_USER_INPUT_SCHEMA,
+  },
   "t3team.thread.start_child": {
     id: "t3team.thread.start_child",
     label: "Start child session",
     title: "Start child session",
     description:
-      "Create a child t3team session from the current thread and optionally start it immediately. isolation is required: 'shared' keeps the child in the project's shared checkout without repo_full_name; 'own-worktree' prepares a dedicated scoped worktree — of the linked repository named by repo_full_name when the project has linked repos, or of the local repository when it does not.",
+      "Create a child t3team session from the current thread and optionally start it immediately. isolation is required: 'shared' keeps the child in the project's shared checkout without repo_full_name; 'own-worktree' prepares a dedicated scoped worktree — of the linked repository named by repo_full_name when the project has linked repos, or of the local repository when it does not. Optional 'environment' binds the child session to a DIFFERENT execution environment (another T3 server): the record and handoff are stamped with it, but inter-agent messaging stays same-environment (the launch result's environment_note documents that boundary).",
     capabilities: ["write"],
     kind: "thread",
     surfaces: ["thread"],
@@ -454,6 +665,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       "- wait: durably resume this turn when a child reaches a terminal state (on: terminal|completed|failed; timeout in ms)\n" +
       "- stop: halt a child's running turn\n" +
       "- close: mark a child done from this side\n" +
+      "- environments: read-only — which environments start_child's environment arg can target (own environment + recorded cross-environment bindings; every entry states its delivery boundary)\n" +
       "- help: exact schema for one op (op_name)",
     capabilities: ["write"],
     kind: "thread",
@@ -466,8 +678,9 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       properties: {
         op: {
           type: "string",
-          description: "The operation to perform: list, status, wait, stop, close, or help.",
-          enum: ["list", "status", "wait", "stop", "close", "help"],
+          description:
+            "The operation to perform: list, status, wait, stop, close, environments, or help.",
+          enum: ["list", "status", "wait", "stop", "close", "environments", "help"],
         },
         thread_id: {
           type: "string",

@@ -1,5 +1,3 @@
-/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
-/* oxlint-disable react/no-array-index-key -- Mirrors the static shape card's list rendering. */
 /**
  * Live plan-card overlay (recipe UX "no black box" slice). Renders the same plan chrome as
  * {@link ./t3team-messageShapeCard.tsx} but overlays each step with its live runtime status
@@ -56,7 +54,7 @@ export function T3TeamWorkflowShapeLiveCard({
   onControlWorkflow?: (input: {
     workflowRunId: string;
     action: "pause" | "resume" | "stop";
-  }) => Promise<{ readonly status: "suspended" | "sleeping" | "paused" | "cancelled" }>;
+  }) => Promise<{ readonly status: "suspended" | "sleeping" | "paused" | "cancelled" | "running" }>;
   onOpenThread?: (input: { projectId: string; threadId: string }) => void;
   /** The thread this card is rendered in — a step that ran here is not a navigable child. */
   currentThreadId?: string | undefined;
@@ -76,6 +74,7 @@ export function T3TeamWorkflowShapeLiveCard({
     queued,
     canPause,
     canResume,
+    isRetry,
     canStop,
     control,
     controlPending,
@@ -96,7 +95,11 @@ export function T3TeamWorkflowShapeLiveCard({
           Queued · starts when capacity is free
         </div>
       ) : null}
-      <T3TeamWorkflowRunControlStatus pending={controlPending} error={controlError} />
+      <T3TeamWorkflowRunControlStatus
+        pending={controlPending}
+        error={controlError}
+        isRetry={isRetry}
+      />
       {/*
         Two rows, not one: the title, the slug, and the live status were all fighting for the
         same line — the title clamped to two lines and still truncated, the slug interrupted it,
@@ -115,9 +118,24 @@ export function T3TeamWorkflowShapeLiveCard({
       */}
       <div className="mb-2 flex min-w-0 flex-col items-start gap-1 @sm/workflow-live-card:flex-row @sm/workflow-live-card:items-center @sm/workflow-live-card:justify-between">
         <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-          {shape.description && shape.name ? <T3TeamWorkflowNameChip name={shape.name} /> : null}
+          {/*
+            Below the narrow-container breakpoint the row stacks instead of a squeezed single
+            line, and the slug + status were what overflowed past the card's own edge. There the
+            machine slug is dropped (hidden, not deleted — the tooltip and the wide layout keep
+            it) so only the live status shows; at >=sm the card is wide enough for both on one
+            row and the slug reappears. The "·" separator hides with it so a lone dot never dangles.
+          */}
+          {shape.description && shape.name ? (
+            <T3TeamWorkflowNameChip
+              name={shape.name}
+              className="hidden @sm/workflow-live-card:inline"
+            />
+          ) : null}
           {shape.description && shape.name && showLiveStatus ? (
-            <span aria-hidden className="shrink-0 text-muted-foreground/50">
+            <span
+              aria-hidden
+              className="hidden shrink-0 text-muted-foreground/50 @sm/workflow-live-card:inline"
+            >
               ·
             </span>
           ) : null}
@@ -139,6 +157,7 @@ export function T3TeamWorkflowShapeLiveCard({
           <T3TeamWorkflowRunControls
             canPause={canPause}
             canResume={canResume}
+            isRetry={isRetry}
             canStop={canStop}
             pending={controlPending}
             className="flex items-center gap-1"
@@ -172,7 +191,19 @@ export function T3TeamWorkflowShapeLiveCard({
       )}
 
       {progress.run ? (
-        <RunStatusBanner run={progress.run} {...(outcomeSummary ? { outcomeSummary } : {})} />
+        <RunStatusBanner
+          run={progress.run}
+          {...(outcomeSummary ? { outcomeSummary } : {})}
+          // The durable row's `updatedAt` is the pause instant (nothing else writes a paused
+          // row); the pause activity's timestamp is the fallback for a card without run status.
+          pausedAt={
+            workflowRunStatus?.status === "paused"
+              ? workflowRunStatus.updatedAt
+              : progress.run.updatedAt
+          }
+          {...(canResume && onControlWorkflow ? { onResume: () => void control("resume") } : {})}
+          resumePending={controlPending === "resume"}
+        />
       ) : null}
     </div>
   );

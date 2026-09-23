@@ -2,7 +2,6 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
-import * as Schema from "effect/Schema";
 import * as EffectOption from "effect/Option";
 import { HttpRouter } from "effect/unstable/http";
 import {
@@ -23,11 +22,9 @@ import {
   ensureWorkspaceGitRepository,
   ensureWorkspaceGitignore,
   detectMetaRepository,
-  syncLinkedRepository,
   writeReferenceManifest,
 } from "./t3team-project-repository-services.ts";
 import {
-  deriveReferenceDirectoryName,
   HIDDEN_T3TEAM_DIR,
   META_REPOSITORY_GITIGNORE_ENTRIES,
   MANIFEST_FILE_NAME,
@@ -39,21 +36,15 @@ import {
 import {
   type BootstrapWorkspaceRequest,
   type BootstrapWorkspaceResponse,
-  type LinkedRepositoryBootstrapResult,
   type MetaRepositoryBootstrapResult,
   type ReferenceManifestFile,
 } from "./t3team-project-repository-utils.ts";
 import { repositoryLookupCandidates } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
 import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
-
-/** Tolerant read of the `linkedRepositories` array from a persisted reference manifest, used
- * to preserve entries when re-bootstrapping an adopted meta-repo (GHE #42). */
-const ReferenceManifestLinkedRepositoriesJson = Schema.Struct({
-  linkedRepositories: Schema.optional(Schema.Array(Schema.Unknown)),
-});
-const decodeReferenceManifestLinkedRepositories = Schema.decodeEffect(
-  Schema.fromJsonString(ReferenceManifestLinkedRepositoriesJson),
-);
+import {
+  readPreservedLinkedRepositories,
+  syncLinkedRepositoriesForBootstrap,
+} from "./t3team-project-repository-routesBootstrap.ts";
 
 export const t3teamProjectWorkspaceBootstrapRouteLayer = HttpRouter.add(
   "POST",
@@ -179,31 +170,11 @@ export const t3teamProjectWorkspaceBootstrapRouteLayer = HttpRouter.add(
           repositoryLookupCandidates(url).includes(candidate),
         ),
     );
-    const linkedRepositories: LinkedRepositoryBootstrapResult[] = [];
-    for (const [index, url] of linkedRepositoryUrls.entries()) {
-      const result = yield* syncLinkedRepository({
-        workspaceRoot,
-        referencesRoot,
-        url,
-        index,
-      }).pipe(
-        Effect.catch((error) =>
-          Effect.succeed({
-            url,
-            localPath: path.join(
-              referencesRoot,
-              `${String(index + 1).padStart(2, "0")}-${deriveReferenceDirectoryName(url)}`,
-            ),
-            status: "failed",
-            error:
-              error instanceof T3TeamAtlassianError
-                ? error.message
-                : "Failed to sync linked repository reference.",
-          } satisfies LinkedRepositoryBootstrapResult),
-        ),
-      );
-      linkedRepositories.push(result);
-    }
+    const linkedRepositories = yield* syncLinkedRepositoriesForBootstrap({
+      workspaceRoot,
+      referencesRoot,
+      urls: linkedRepositoryUrls,
+    });
 
     const response: BootstrapWorkspaceResponse = {
       workspaceRoot,
@@ -220,26 +191,15 @@ export const t3teamProjectWorkspaceBootstrapRouteLayer = HttpRouter.add(
     // An adopted meta-repo may already carry a reference manifest from an earlier
     // bootstrap (linked repositories registered after adoption): preserve those entries so
     // re-bootstrapping never drops them.
-    const preservedManifestPath = path.join(referencesRoot, MANIFEST_FILE_NAME);
-    const preservedManifestExists = yield* fileSystem
-      .exists(preservedManifestPath)
-      .pipe(Effect.orElseSucceed(() => false));
+    const preservedEntries = yield* readPreservedLinkedRepositories(
+      path.join(referencesRoot, MANIFEST_FILE_NAME),
+    );
     let nextManifest = manifest;
-    if (preservedManifestExists) {
-      const preservedRaw = yield* fileSystem
-        .readFileString(preservedManifestPath)
-        .pipe(Effect.orElseSucceed(() => ""));
-      const preserved = yield* decodeReferenceManifestLinkedRepositories(preservedRaw).pipe(
-        Effect.orElseSucceed(() => ({ linkedRepositories: [] })),
-      );
-      const preservedEntries = (preserved.linkedRepositories ??
-        []) as ReadonlyArray<LinkedRepositoryBootstrapResult>;
-      if (preservedEntries.length > 0) {
-        nextManifest = {
-          ...manifest,
-          linkedRepositories: [...preservedEntries, ...linkedRepositories],
-        };
-      }
+    if (preservedEntries.length > 0) {
+      nextManifest = {
+        ...manifest,
+        linkedRepositories: [...preservedEntries, ...linkedRepositories],
+      };
     }
 
     yield* writeReferenceManifest(referencesRoot, nextManifest);

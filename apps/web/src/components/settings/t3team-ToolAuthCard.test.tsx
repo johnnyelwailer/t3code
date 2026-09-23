@@ -7,6 +7,7 @@ import { TOOL_AUTH_TOOLS } from "./t3team-toolAuthTools";
 
 const CLAUDE_META = TOOL_AUTH_TOOLS.find((meta) => meta.tool === "claude")!;
 const CODEX_META = TOOL_AUTH_TOOLS.find((meta) => meta.tool === "codex")!;
+const GH_META = TOOL_AUTH_TOOLS.find((meta) => meta.tool === "gh")!;
 
 const noop = () => {};
 
@@ -90,6 +91,28 @@ describe("ToolAuthCard", () => {
     expect(markup).toContain("font-mono");
     expect(markup).toContain("Copy device code");
     expect(markup).not.toContain("<input");
+  });
+
+  it("awaiting-open (GitHub/GHE): the device page link and the one-time code, so the user opens it in their own browser", () => {
+    const markup = renderCard(
+      {
+        tool: "gh",
+        phase: "awaiting-open",
+        url: "https://nexplore.ghe.com/login/device",
+        displayCode: "B4A0-AA8E",
+      },
+      GH_META,
+    );
+    expect(markup).toContain('href="https://nexplore.ghe.com/login/device"');
+    expect(markup).toContain("B4A0-AA8E");
+    expect(markup).toContain("Open sign-in page");
+    expect(markup).not.toContain("<input");
+  });
+
+  it("connected (GitHub/GHE): names the GHE account the probe reported", () => {
+    const markup = renderCard({ tool: "gh", phase: "connected", account: "pj" }, GH_META);
+    expect(markup).toContain("Signed in as pj");
+    expect(markup).toContain("Reconnect");
   });
 
   it("awaiting-code (Claude only): exactly one input field and a Verify button", () => {

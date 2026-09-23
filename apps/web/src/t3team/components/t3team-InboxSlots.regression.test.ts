@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - regression guard reads component source from disk.
 /**
  * Static regression guard: per-row sidebar slots must NOT subscribe to
  * `useProjectStore` (directly or through the hooks that wrap it).
@@ -18,15 +19,15 @@
  * This guard runs on every CI pass and prevents the pattern from silently
  * re-appearing during a future refactor or upstream sync.
  */
-import * as fs from "node:fs";
-import * as path from "node:path";
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
 
 import { describe, expect, it } from "vite-plus/test";
 
-const INBOX_SLOTS_PATH = path.resolve(import.meta.dirname, "t3team-InboxSlots.tsx");
+const INBOX_SLOTS_PATH = NodePath.resolve(import.meta.dirname, "t3team-InboxSlots.tsx");
 
 describe("InboxSlots per-row store subscription regression guard", () => {
-  const source = fs.readFileSync(INBOX_SLOTS_PATH, "utf8");
+  const source = NodeFS.readFileSync(INBOX_SLOTS_PATH, "utf8");
 
   it("does not import useT3TeamChildThreadRelations (would create per-row useProjectStore subscription)", () => {
     expect(source).not.toContain("useT3TeamChildThreadRelations");

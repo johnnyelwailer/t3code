@@ -319,7 +319,7 @@ function Frame({
 }
 
 const meta = {
-  title: "T3Team/Work Item Draft Review",
+  title: "T3Team/Work Item/Draft Review",
   parameters: { layout: "padded" },
 } satisfies Meta;
 

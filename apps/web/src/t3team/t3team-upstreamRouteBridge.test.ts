@@ -27,6 +27,9 @@ describe("translateUpstreamPath", () => {
       "/pair",
       "/connect",
       "/connect_/callback",
+      // FirstRunGate owns the onboarding wizard's navigation; bouncing
+      // /welcome onto /t3team is an infinite redirect loop.
+      "/welcome",
       "/pull-requests",
       "/projects/my-project-key",
       "/usage",

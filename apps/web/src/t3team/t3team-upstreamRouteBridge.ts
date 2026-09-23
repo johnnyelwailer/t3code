@@ -23,6 +23,12 @@ export type UpstreamRouteTranslation =
 const PASSTHROUGH_PREFIXES = [
   "/t3team",
   "/settings",
+  // The first-run wizard renders outside the Team shell and is owned by
+  // FirstRunGate's own navigation. Translating /welcome away makes the gate
+  // (which bounces back to /welcome) and this bridge redirect to /t3team
+  // forever — an infinite navigation loop that floods the onboarding theme
+  // mount/cleanup with theme changes and pins the app on the splash.
+  "/welcome",
   // Upstream top-level pages that render in upstream's own shell — the bridge must not
   // translate them away (a bounced /pull-requests makes the whole PR page a dead button).
   "/pull-requests",

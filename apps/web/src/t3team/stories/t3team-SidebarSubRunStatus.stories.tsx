@@ -16,10 +16,10 @@
  * CSS classes from the app stylesheet).
  */
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { CircleCheckIcon } from "lucide-react";
 
-import { ThreadActivityMorphIcon } from "~/components/ThreadActivityStatus";
+import { ThreadActivityMorphIcon } from "~/components/t3team-ThreadActivityStatus";
 import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay";
 
 /* production inset vars (src/index.css) so the verbatim inset classes work */
@@ -28,7 +28,7 @@ const INSET_VARS = {
   "--sidebar-row-content-inset": "0.625rem",
 } as unknown as CSSProperties;
 
-function SectionTitle({ children }: { children: string }) {
+function SectionTitle({ children }: { children: ReactNode }) {
   return (
     <div className="mb-1.5 flex items-center gap-2 px-0.5">
       <span className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">▸</span>

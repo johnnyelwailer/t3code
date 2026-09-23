@@ -19,7 +19,6 @@ import { useBundledSidecarRecipeLaunch } from "~/t3team/t3team-useBundledSidecar
 export function ProjectDashboardKickoffAside({
   project,
   dashboardMode,
-  projectThreads,
   activeThread,
   providers,
   isConnected,
@@ -149,10 +148,6 @@ export function ProjectDashboardKickoffAside({
                   ? { selectedRecipeId: selectedRecipe.recipe.id }
                   : {}),
               };
-            }
-
-            if (sectionId === "recent-conversations") {
-              return { threads: projectThreads };
             }
 
             return undefined;

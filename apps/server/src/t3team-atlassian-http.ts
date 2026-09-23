@@ -18,8 +18,19 @@ function atlassianTimeoutError(message: string) {
 
 export class T3TeamAtlassianError extends Data.TaggedError("T3TeamAtlassianError")<{
   readonly message: string;
+  /**
+   * Machine-readable classification the client can branch on without parsing the message, e.g.
+   * `jira_session_expired`. Absent for ordinary failures.
+   */
+  readonly code?: string;
   readonly cause?: unknown;
 }> {}
+
+/**
+ * The server dropped the account's dead refresh token and the user must sign in again. The client
+ * turns this into its "Your Jira session expired. Sign in again." state instead of a raw error.
+ */
+export const JIRA_SESSION_EXPIRED_CODE = "jira_session_expired";
 
 export function toAtlassianError(message: string) {
   return (cause: unknown) =>
@@ -66,6 +77,8 @@ export function badRequestJson(message: string) {
 }
 
 export function errorResponse(error: unknown) {
+  const isSessionExpired =
+    error instanceof T3TeamAtlassianError && error.code === JIRA_SESSION_EXPIRED_CODE;
   const message =
     error instanceof T3TeamAtlassianError
       ? error.message
@@ -74,8 +87,9 @@ export function errorResponse(error: unknown) {
         : "Atlassian request failed.";
   return Effect.succeed(
     HttpServerResponse.jsonUnsafe(
-      { error: message },
-      { status: 502, headers: browserApiCorsHeaders },
+      isSessionExpired ? { error: message, code: JIRA_SESSION_EXPIRED_CODE } : { error: message },
+      // 401 rather than 502: the upstream is fine, this account's session is what is dead.
+      { status: isSessionExpired ? 401 : 502, headers: browserApiCorsHeaders },
     ),
   );
 }

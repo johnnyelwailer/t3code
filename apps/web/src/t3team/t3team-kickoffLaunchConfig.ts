@@ -7,7 +7,7 @@ import type {
   ServerProvider,
 } from "@t3tools/contracts";
 
-import { getProviderInteractionModeToggle } from "~/providerModels";
+import { getProviderInteractionModeToggle } from "~/t3team/t3team-providerModels";
 import {
   deriveProviderInstanceEntries,
   applyProviderInstanceSettings,

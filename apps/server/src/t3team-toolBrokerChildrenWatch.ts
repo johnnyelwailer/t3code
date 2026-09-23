@@ -40,44 +40,77 @@ export function opWatch(
   }
 
   return loadTarget(deps, threadId).pipe(
-    Effect.flatMap((detail) => {
-      const watchId = deps.newId();
-      const payload = {
-        watchId,
-        targetThreadId: detail.id,
-        targetTitle: detail.title,
-        timeoutMs,
-      };
-      return deps
-        .appendActivity(deps.callerThreadId, {
+    Effect.flatMap((detail) =>
+      Effect.gen(function* () {
+        const watchId = deps.newId();
+        const payload = {
+          watchId,
+          targetThreadId: detail.id,
+          targetTitle: detail.title,
+          timeoutMs,
+        };
+        // Upsert: cancel semantics are per (watcher, target) - a re-watch must
+        // durably cancel any still-pending watch of this thread on the same
+        // target, or the old watch keeps notifying on every terminal stop
+        // (the terminal-notify ledger dedups by watchId, so two registered
+        // watches notify twice for one stop).
+        const callerDetail = yield* deps.loadThreadDetail(deps.callerThreadId);
+        if (
+          callerDetail !== undefined &&
+          hasPendingSilenceWatch(callerDetail.activities, detail.id)
+        ) {
+          yield* deps.appendActivity(deps.callerThreadId, {
+            kind: THREAD_SILENCE_WATCH_CANCELLED_KIND,
+            summary: `Superseded the previous silence watch on ${detail.title}`,
+            payload: { targetThreadId: detail.id },
+          });
+        }
+        yield* deps.appendActivity(deps.callerThreadId, {
           kind: THREAD_SILENCE_WATCH_REGISTERED_KIND,
           summary: `Watching ${detail.title} for silence (${Math.round(timeoutMs / 1000)}s)`,
           payload,
-        })
-        .pipe(
-          Effect.map(() =>
-            okResult({
-              ok: true,
-              status: "watching",
-              watchId,
-              targetThreadId: detail.id,
-              targetTitle: detail.title,
-              timeoutMs,
-              note:
-                "This thread will be notified when the target has had no activity for that long, " +
-                "re-notified at each multiple of the timeout while it stays silent. The notification " +
-                "flags whether a tool call was still in progress (legitimate long operation vs. the " +
-                "real stuck signal). If the target reaches a terminal state the watch closes with a " +
-                "stopped note. Cancel with children({ op: 'unwatch', thread_id }).",
-            }),
-          ),
-          Effect.catch((error) =>
-            Effect.succeed(errorResult(`Failed to register the silence watch: ${error}`)),
-          ),
-        );
-    }),
+        });
+        return okResult({
+          ok: true,
+          status: "watching",
+          watchId,
+          targetThreadId: detail.id,
+          targetTitle: detail.title,
+          timeoutMs,
+          note:
+            "This thread will be notified when the target has had no activity for that long, " +
+            "re-notified at each multiple of the timeout while it stays silent. The notification " +
+            "flags whether a tool call was still in progress (legitimate long operation vs. the " +
+            "real stuck signal). If the target reaches a terminal state the watch closes with a " +
+            "stopped note. Cancel with children({ op: 'unwatch', thread_id }).",
+        });
+      }).pipe(Effect.catch((error) => Effect.succeed(errorResult(error)))),
+    ),
     Effect.catch((error) => Effect.succeed(errorResult(error))),
   );
+}
+
+/**
+ * True when the caller's persisted activity log (sequence order) still holds a
+ * pending silence watch on `targetThreadId`: a `watch.registered` activity
+ * with no later `watch.cancelled` for that target - the same fact the
+ * reactor's replay derives, so the tool sees what the durable log says.
+ */
+function hasPendingSilenceWatch(
+  activities: ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>,
+  targetThreadId: unknown,
+): boolean {
+  let pending = false;
+  for (const activity of activities) {
+    const payload =
+      typeof activity.payload === "object" && activity.payload !== null
+        ? (activity.payload as { readonly targetThreadId?: unknown })
+        : null;
+    if (payload === null || payload.targetThreadId !== targetThreadId) continue;
+    if (activity.kind === THREAD_SILENCE_WATCH_REGISTERED_KIND) pending = true;
+    else if (activity.kind === THREAD_SILENCE_WATCH_CANCELLED_KIND) pending = false;
+  }
+  return pending;
 }
 
 export function opUnwatch(

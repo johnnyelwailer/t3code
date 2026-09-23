@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import * as NodeOS from "node:os";
 import * as Effect from "effect/Effect";
 import * as Path from "effect/Path";
