@@ -310,6 +310,49 @@ describe("@runbook/core retry primitive", () => {
     await expect(body(replay)).resolves.toEqual(["reply-1", "reply-2"]);
   });
 
+  it("resolves a gap inside a nested retry and resumes at every wake without re-firing", async () => {
+    const harness = makeHarness();
+    const fires: string[] = [];
+    // Outer attempt o runs an inner retry whose first attempt's tool THROWS (a gap), then the
+    // outer attempt itself fails once. Every wake defers, so each resume is a crash point.
+    const body = (run: Run) =>
+      run.retry(
+        async (outer) => {
+          await run.retry(
+            async (inner) =>
+              run.runtime.callPrimitive({
+                kind: "tool",
+                refId: "inner",
+                args: { outer, inner },
+                exec: async () => {
+                  fires.push(`o${outer}i${inner}`);
+                  if (inner === 1) throw new Error("inner 503");
+                  return inner;
+                },
+              }),
+            { maxAttempts: 2, backoff: () => 1_000 },
+          );
+          if (outer === 1) throw new Error("outer rejected");
+          return outer;
+        },
+        { maxAttempts: 2, backoff: () => 5_000 },
+      );
+
+    let outcome: unknown;
+    for (let resumes = 0; resumes < 10; resumes += 1) {
+      const run = harness.boot({ clock: () => T0, wake: "defer" });
+      outcome = await body(run).catch((error: unknown) => error);
+      if (!(outcome instanceof WorkflowSuspended)) break;
+      harness.deliverWake(outcome.correlationId);
+    }
+    expect(outcome).toBe(2);
+    expect(fires).toEqual(["o1i1", "o1i2", "o2i1", "o2i2"]);
+
+    const replay = harness.boot({ clock: LIVE_CLOCK_FORBIDDEN, wake: "defer" });
+    await expect(body(replay)).resolves.toBe(2);
+    expect(fires).toHaveLength(4);
+  });
+
   it("keeps real drift inside a settled attempt loud", async () => {
     const harness = makeHarness();
     const body = (run: Run, refId: string) =>

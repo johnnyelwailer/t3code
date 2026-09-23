@@ -20,8 +20,10 @@
  *   that THREW — it consumed a seq but journaled nothing, so its replay raises a gap drift. Inside
  *   a settled attempt that gap is expected: the attempt's journaled settlement is the authority,
  *   and replaying it realigns the sequence. Outside one (no settlement recorded) the gap is real
- *   drift and is re-raised. The delay is the existing durable `waitUntil`, so a crash mid-backoff
- *   resumes the SAME wake.
+ *   drift and is re-raised. This holds when the failure escapes `fn`; an `fn` that catches and
+ *   absorbs a primitive's failure sees the gap drift in its own catch on replay, the same hazard as
+ *   a bare body catching one. The delay is the existing durable `waitUntil`, so a crash
+ *   mid-backoff resumes the SAME wake.
  * - **retention** — each settlement carries only the bound and the LAST classified failure, never
  *   an attempt history; the final settlement is the bounded outcome. Physically pruning a settled
  *   sequence's attempt detail is a journal-backend capability, as it is for `checkpoint`.

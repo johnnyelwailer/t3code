@@ -126,7 +126,9 @@ Implemented in `packages/runbook-core/src/retryBackoff.ts` as
   instead of re-firing, its closure writes are rebuilt, and an unfinished attempt resumes part-way;
 - a primitive that threw inside an attempt left no journal line, so its replay raises a gap drift.
   Inside a settled attempt that gap is resolved by the journaled settlement; anywhere else, and for
-  any changed call identity or args, drift stays loud;
+  any changed call identity or args, drift stays loud. This holds when the failure escapes `fn`:
+  an `fn` that catches and absorbs a primitive's failure sees the gap drift in its own catch on
+  replay, the same hazard as a bare body catching one;
 - giving up raises `RetryExhaustedError` with `attempts`, `maxAttempts`, and `lastFailure`.
 
 Settlements never accumulate an attempt history. Pruning a settled sequence's attempt detail is a
