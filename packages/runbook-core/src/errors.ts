@@ -110,17 +110,44 @@ export class WorkflowRunNotFoundError extends WorkflowError {
  * the pre-loop setup and the child prefix would re-fire live (external effects double-execute)
  * or fail drift, silently breaking the no-refire guarantee. Checkpoints are only valid in the
  * top-level run body.
+ *
+ * `verb` names the refused call: `watermark()` commits its cursor as a checkpoint boundary, so it
+ * is refused in a sub-workflow for the same reason.
  */
 export class SubWorkflowCheckpointError extends WorkflowError {
-  constructor() {
+  constructor(verb: "checkpoint()" | "watermark()" = "checkpoint()") {
     super(
-      "checkpoint() is not valid inside a sub-workflow body: checkpoints are only valid in the " +
+      `${verb} is not valid inside a sub-workflow body: checkpoints are only valid in the ` +
         "top-level run body. A sub-workflow journals into the same run sequence as its parent and " +
         "shares the run's checkpoint primitive, so a boundary committed here would move the run's " +
         "shared replay window and silently break the no-refire guarantee on crash-resume. Move the " +
-        "checkpoint to the top-level body.",
+        `${verb} call to the top-level body.`,
     );
     this.name = "SubWorkflowCheckpointError";
+  }
+}
+
+/**
+ * Raised when a body mixes `watermark()` with a raw `checkpoint()`. Both commit the run's ONE
+ * replay boundary, and a resume restores only the latest one: a raw checkpoint after a watermark
+ * advance would drop every durable cursor (the next resume re-reads already processed input), and
+ * a watermark advance after a raw checkpoint would replace the author's compact state. So a run's
+ * boundary has one owner, fixed by the first of the two calls (or by the state a resume restored).
+ */
+export class WatermarkScopeError extends WorkflowError {
+  readonly owner: "watermark" | "checkpoint";
+  constructor(owner: "watermark" | "checkpoint") {
+    super(
+      owner === "watermark"
+        ? "checkpoint() is not valid in a body that uses watermark(): the watermark owns this run's " +
+            "checkpoint boundary, and a raw checkpoint would replace every durable cursor. Carry " +
+            "the extra state outside the checkpoint, or drop the watermark."
+        : "watermark() is not valid in a body that commits raw checkpoint() boundaries: the run's " +
+            "boundary already carries the author's compact state, and a watermark advance would " +
+            "replace it. Use either checkpoint() or watermark() in one run body, not both.",
+    );
+    this.name = "WatermarkScopeError";
+    this.owner = owner;
   }
 }
 

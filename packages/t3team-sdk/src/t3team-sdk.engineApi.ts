@@ -25,6 +25,7 @@ import type {
   CheckpointPrimitives,
   CheckpointRecord,
 } from "@runbook/core/checkpoint";
+import type { Watermark, WatermarkOptions, WatermarkPrimitives } from "@runbook/core/watermark";
 import type { AgentOpts, SpawnThreadOpts, Thread } from "./t3team-sdk.threadTypes.ts";
 import type { WorkflowInvokeOpts, WorkflowRef } from "./t3team-sdk.types.ts";
 import type { Signal, SignalSourceHandle, SignalSourceRef } from "./t3team-sdk.signal.ts";
@@ -144,15 +145,25 @@ export function getResume(): CheckpointRecord | undefined {
 }
 
 /**
+ * A durable cursor over a data source (bounded execution). `current()` is the cursor a resume
+ * restored (else `opts.initial`); `advance(next)` commits it as the run's checkpoint boundary, so
+ * the next resume reads strictly after it. Requires the `'source:<sourceKey>'` capability, and
+ * owns the run's boundary: a body that uses `watermark` cannot also call a raw `checkpoint()`.
+ */
+export function watermark<Cursor>(
+  sourceKey: string,
+  opts?: WatermarkOptions<Cursor>,
+): Watermark<Cursor> {
+  return fromRun<WatermarkPrimitives["watermark"]>("watermark")(sourceKey, opts);
+}
+
+/**
  * Bind a source instance and get the consumer handle (design 42). Journals the durable
  * `signal.register` binding, then parks on `handle.waitFor(signal, { key })` until the host
  * delivers the awaited `(signal, key)`. Requires the `'source:<name>'` capability in
  * `meta.capabilities`.
  */
-export function getSignalSource<
-  Params,
-  Signals extends ReadonlyArray<Signal<unknown>>,
->(
+export function getSignalSource<Params, Signals extends ReadonlyArray<Signal<unknown>>>(
   source: SignalSourceRef<Params, Signals, unknown>,
   params: Params,
 ): Promise<SignalSourceHandle<Signals>> {
