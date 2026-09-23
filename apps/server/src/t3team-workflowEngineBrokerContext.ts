@@ -9,6 +9,7 @@
 import { T3TeamMessageExternalResourceRef } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import type { MessageBroker } from "@t3team/sdk";
+import type { ModelRouting } from "@t3tools/shared/t3team-modelRouting";
 
 import {
   buildT3TeamWidgetAttachment,
@@ -36,6 +37,8 @@ export type BrokerCore = {
     phase: "started" | "waiting" | "completed",
     detail?: string,
     threadId?: string,
+    /** Auto-latest requested-vs-effective record for a step that asked for a model. */
+    modelRouting?: ModelRouting,
   ) => void;
 };
 
