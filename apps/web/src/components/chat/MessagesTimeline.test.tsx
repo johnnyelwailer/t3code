@@ -14,6 +14,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { create, type ReactTestRenderer } from "react-test-renderer";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { LegendListRef, MaintainScrollAtEndOptions } from "@legendapp/list/react";
+import type {
+  AgentPanelModel,
+  RuntimeSubagent,
+} from "@t3tools/client-runtime/state/subagentRuntime";
 import { shouldUseRestingComposerLayout } from "../composerFooterLayout";
 import { useComposerFocusState } from "./useComposerFocusState";
 
@@ -463,6 +467,97 @@ describe("MessagesTimeline", () => {
       }
     },
   );
+
+  it("expanding a subagent spawn member row does not repeat its preview line as the body (header-dupe regression)", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    vi.stubGlobal("requestAnimationFrame", () => 0);
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+    const FIRST_LINE = "Searching the repo for the regression";
+    const REMAINING_LINE = "checked 12 files so far";
+    const subagent: RuntimeSubagent = {
+      id: "agent-a",
+      kind: "subagent",
+      title: "Explore",
+      role: null,
+      model: "claude-sonnet-5",
+      effort: null,
+      status: "running",
+      activationCount: 1,
+      usage: null,
+      progress: `${FIRST_LINE}\n${REMAINING_LINE}`,
+      lastToolName: null,
+      result: null,
+      error: null,
+      outputFile: null,
+      parentAgentId: null,
+      agentIndex: null,
+      phaseIndex: null,
+      phaseTitle: null,
+      attempt: null,
+      workflowName: null,
+      phases: [],
+      runHandles: null,
+      recentActivity: [],
+      firstSeenAt: MESSAGE_CREATED_AT,
+      startedAt: MESSAGE_CREATED_AT,
+      completedAt: null,
+      updatedAt: MESSAGE_CREATED_AT,
+    };
+    const agentPanelModel: AgentPanelModel = {
+      workflows: [],
+      directAgents: [subagent],
+      runningCount: 1,
+      waitingCount: 0,
+      idleCount: 0,
+      settledCount: 0,
+      totalTokens: 0,
+      hasAgents: true,
+      liveCount: 1,
+    };
+    let renderer: ReactTestRenderer | undefined;
+    try {
+      await act(() => {
+        renderer = create(
+          <MessagesTimeline
+            {...buildProps()}
+            agentPanelModel={agentPanelModel}
+            timelineEntries={[
+              {
+                id: "spawn-entry",
+                kind: "work",
+                createdAt: MESSAGE_CREATED_AT,
+                entry: {
+                  id: "spawn-work",
+                  createdAt: MESSAGE_CREATED_AT,
+                  label: "Ran 1 subagent",
+                  tone: "tool",
+                  agentSpawn: { workflowId: null, agentTaskIds: ["agent-a"] },
+                },
+              },
+            ]}
+          />,
+        );
+      });
+      // Expand the spawn group row first so the member row mounts.
+      const groupToggle = renderer!.root.findByProps({ "aria-expanded": false });
+      await act(() => groupToggle.props.onClick());
+      // Collapsed member row: only the one-line preview is visible.
+      const collapsedMarkup = JSON.stringify(renderer!.toJSON());
+      expect(collapsedMarkup).toContain(FIRST_LINE);
+      expect(collapsedMarkup).not.toContain(REMAINING_LINE);
+      // Expand the member row itself.
+      const memberToggle = renderer!.root.findByProps({ "aria-expanded": false });
+      await act(() => memberToggle.props.onClick());
+      const expandedMarkup = JSON.stringify(renderer!.toJSON());
+      // The preview line stays as the row's persistent header, and the newly
+      // revealed body shows only what wasn't already shown — not the same
+      // first line repeated back inside the expanded body.
+      expect(expandedMarkup.split(FIRST_LINE).length - 1).toBe(1);
+      expect(expandedMarkup).toContain(REMAINING_LINE);
+    } finally {
+      await act(() => renderer?.unmount());
+    }
+  });
 
   it.each([
     { toolLifecycleStatus: "inProgress", isAtEnd: true },
