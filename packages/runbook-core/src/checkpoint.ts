@@ -95,7 +95,9 @@ export interface CheckpointPrimitivesDeps {
 }
 
 /** The ring a record carries, or — for a record journaled before rings were recorded — its own
- * entry alone (a legacy record knows its boundary as `compactedThroughSeq + 1`). */
+ * entry alone (a legacy record knows its boundary as `compactedThroughSeq + 1`). Journals written
+ * before the recorded-ring field retain at most the boundary entry; new checkpoints build the
+ * full ring from there. */
 function recordedRing(record: CheckpointRecord): ReadonlyArray<HistoryEntry> {
   return (
     record.history ?? [{ seq: record.compactedThroughSeq + 1, state: record.state, at: record.at }]

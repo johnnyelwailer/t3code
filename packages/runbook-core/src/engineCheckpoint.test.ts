@@ -51,6 +51,7 @@ describe("@runbook/core engine checkpoint resume", () => {
           callPrimitive: runtime.callPrimitive,
           currentSeq: runtime.currentSeq,
           nowIso: () => NOW_ISO,
+          // Core seam injection: the SDK-level crash/resume test covers runner wiring end to end.
           ...(req.resume === undefined ? {} : { resumeFrom: req.resume.checkpoint }),
         });
         let state =
