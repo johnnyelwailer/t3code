@@ -16,6 +16,7 @@ export * from "./status.ts";
 export * from "./journal.ts";
 export * from "./journalReader.ts";
 export * from "./journalStore.ts";
+export * from "./journalStoreConformance.ts";
 export * from "./journalWriter.ts";
 export * from "./handles.ts";
 export * from "./handlesDispatch.ts";
