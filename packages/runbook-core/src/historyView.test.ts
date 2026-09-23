@@ -92,8 +92,41 @@ describe("@runbook/core history(n) view", () => {
         }),
       ),
       toWire(entry(4, "checkpoint", checkpointRecord(3, { i: 3 }, 2))),
+      // A malformed recorded ring makes the record an invalid boundary, not a partial ring.
+      toWire(entry(5, "checkpoint", { ...checkpointRecord(4, { i: 4 }, 2), history: "nope" })),
     ]);
     expect(selectHistoryView(maps, 5).map((h) => h.state)).toEqual([{ i: 1 }, { i: 3 }]);
+  });
+
+  it("reads the ACTIVE record's recorded ring, never the earlier checkpoints", () => {
+    // Superseded checkpoints pruned: only the active boundary survives, carrying its ring.
+    const ring = [
+      { seq: 16, state: { i: 7 }, at: NOW_ISO },
+      { seq: 18, state: { i: 8 }, at: NOW_ISO },
+      { seq: 20, state: { i: 9 }, at: NOW_ISO },
+    ];
+    const maps = buildJournalMaps([
+      toWire(entry(20, "checkpoint", { ...checkpointRecord(19, { i: 9 }, 3), history: ring })),
+    ]);
+    expect(selectHistoryView(maps, 3)).toEqual(ring);
+    expect(selectHistoryView(maps, 2)).toEqual(ring.slice(1));
+  });
+
+  it("falls back to scanning when the active record predates recorded rings", () => {
+    // Journal lines in shuffled seq order: the fallback must sort by seq, not append order.
+    const lines = [4, 1, 3, 2].map((seq) =>
+      toWire(entry(seq, "checkpoint", checkpointRecord(seq - 1, { i: seq }, 3))),
+    );
+    expect(selectHistoryView(buildJournalMaps(lines), 3).map((h) => h.seq)).toEqual([2, 3, 4]);
+  });
+
+  it("excludes a checkpoint-kind entry whose refId is not the checkpoint identity", () => {
+    const maps = buildJournalMaps([
+      toWire(entry(1, "checkpoint", checkpointRecord(0, { i: 0 }, 3))),
+      toWire({ ...entry(2, "checkpoint", checkpointRecord(1, { i: 1 }, 3)), refId: "other" }),
+      toWire(entry(3, "checkpoint", checkpointRecord(2, { i: 2 }, 3))),
+    ]);
+    expect(selectHistoryView(maps, 3).map((h) => h.state)).toEqual([{ i: 0 }, { i: 2 }]);
   });
 
   it("rejects a negative or non-integer n", () => {

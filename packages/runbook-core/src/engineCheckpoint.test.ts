@@ -51,6 +51,7 @@ describe("@runbook/core engine checkpoint resume", () => {
           callPrimitive: runtime.callPrimitive,
           currentSeq: runtime.currentSeq,
           nowIso: () => NOW_ISO,
+          ...(req.resume === undefined ? {} : { resumeFrom: req.resume.checkpoint }),
         });
         let state =
           req.resume === undefined
@@ -132,31 +133,29 @@ describe("@runbook/core engine checkpoint resume", () => {
     const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "runbook-ck-history-"));
     const engine = makeEngine({ agentExecs: [], materializedBySeq: [] });
     const ref = { path: "bounded-loop.workflow.ts" };
-    const args = { k: K, crashAfter: CRASH_AT, history: 3 };
+    const args = { k: K, crashAfter: CRASH_AT, history: 6 };
 
     await expect(engine.startWorkflow(ref, args, { runId: "run-ck-1", runsRoot })).rejects.toBe(
       CRASH,
     );
     const store = new FsJournalStore(runsRoot);
-    // Mid-run: the ring holds the latest 3 committed iterations (i=4..6 after steps 3..5).
+    // Drive 1 committed checkpoints at seqs 2,4,..,12 (states i=1..6) before crashing on agent
+    // step 6 (seq 13). The boundary is seq 12; its recorded ring holds all six.
     const midRun = await inspectRun(store, "run-ck-1");
-    expect(midRun.history?.map((h) => h.state)).toEqual([
-      { i: 4, total: sum(1, 4) },
-      { i: 5, total: sum(1, 5) },
-      { i: 6, total: sum(1, 6) },
-    ]);
+    expect(midRun.checkpointSeq).toBe(2 * CRASH_AT);
+    expect(midRun.history?.map((h) => h.seq)).toEqual([2, 4, 6, 8, 10, 12]);
 
     await engine.resumeWorkflow("run-ck-1", ref, args, { runsRoot });
     const status = await inspectRun(store, "run-ck-1");
-    // The ring spans the resume boundary: iterations committed by both drives, oldest first,
-    // each entry keyed by the checkpoint that closed it.
+    // Drive 2 commits seqs 14..20 (states i=7..10). A 6-slot ring ending at seq 20 MUST reach
+    // back across the resume to drive 1's seqs 10 and 12 — a post-resume-only view holds 4.
     expect(status.entryCount).toBe(2 * K);
-    expect(status.history?.map((h) => h.state)).toEqual([
-      { i: 8, total: sum(1, 8) },
-      { i: 9, total: sum(1, 9) },
-      { i: 10, total: sum(1, 10) },
-    ]);
-    expect(status.history?.map((h) => h.seq)).toEqual([2 * K - 4, 2 * K - 2, 2 * K]);
+    expect(status.history?.map((h) => h.seq)).toEqual([10, 12, 14, 16, 18, 20]);
+    expect(status.history?.map((h) => h.state)).toEqual(
+      Array.from({ length: 6 }, (_, n) => ({ i: n + 5, total: sum(1, n + 5) })),
+    );
+    // Read from the active record alone: the ring is recorded, not rescanned.
+    expect(status.checkpoint?.history).toEqual(status.history);
     expect(status.history?.at(-1)?.state).toEqual(status.checkpoint?.state);
   }, 60_000);
 });

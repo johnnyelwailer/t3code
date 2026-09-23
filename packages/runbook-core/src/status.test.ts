@@ -158,4 +158,31 @@ describe("@runbook/core journal-derived run status", () => {
     await store.appendEntry("run-2", entry(1, "tool"));
     expect((await inspectRun(store, "run-2")).history).toBeUndefined();
   });
+
+  it("serves the recorded ring from the active record alone", async () => {
+    const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "runbook-status-"));
+    roots.push(runsRoot);
+    const store = new FsJournalStore(runsRoot);
+    await store.writeRunMeta("run-1", META);
+    // The superseded prefix is gone (pruned): a scan would find nothing but the boundary.
+    const ring = [4, 6, 8].map((seq) => ({ seq, state: { i: seq / 2 }, at: NOW }));
+    await store.appendEntry(
+      "run-1",
+      entry(8, "tool", {
+        callId: "8:checkpoint:checkpoint",
+        kind: "checkpoint",
+        refId: "checkpoint",
+        result: {
+          compactedThroughSeq: 7,
+          state: { i: 4 },
+          retainedHistory: 3,
+          at: NOW,
+          history: ring,
+        },
+      }),
+    );
+    const status = await inspectRun(store, "run-1");
+    expect(status.checkpointSeq).toBe(8);
+    expect(status.history).toEqual(ring);
+  });
 });

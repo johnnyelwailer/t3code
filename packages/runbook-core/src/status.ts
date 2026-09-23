@@ -11,8 +11,8 @@
 import type { ArtifactRecord } from "./artifacts.ts";
 import type { RunMeta } from "./journal.ts";
 import type { JournalStore } from "./journalStore.ts";
-import { selectReplayWindow, type CheckpointRecord } from "./checkpoint.ts";
-import { selectHistoryView, type HistoryEntry } from "./historyView.ts";
+import { selectReplayWindow, type CheckpointRecord, type HistoryEntry } from "./checkpoint.ts";
+import { selectHistoryView } from "./historyView.ts";
 import type { UsageRecord, UsageTotals } from "./usage.ts";
 import { summarizeUsage } from "./usage.ts";
 
