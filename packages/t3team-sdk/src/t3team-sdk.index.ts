@@ -39,6 +39,15 @@ export {
 export { createStoreSink, defaultRunsRoot, FsJournalStore } from "./t3team-sdk.journalStore.ts";
 export { buildJournalMaps, insertWireEntry } from "./t3team-sdk.journalReader.ts";
 export { toResolvedWire, toWire } from "./t3team-sdk.journalWriter.ts";
+// Bounded-execution replay-window surface (checkpoint primitive): the shared selection rule a
+// database backend's `readReplayWindow` must honor, plus the host-agnostic conformance suite.
+export { selectReplayWindow, runReplayWindowConformance } from "@runbook/core";
+export type {
+  ReplayWindow,
+  ReplayWindowCheckpoint,
+  ReplayWindowConformanceReport,
+  ReplayWindowConformanceStore,
+} from "@runbook/core";
 export { models } from "./t3team-sdk.models.ts";
 export {
   buildScriptTree,
