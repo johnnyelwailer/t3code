@@ -1,22 +1,13 @@
-/** The replay half of a workflow run host: resume (journal the reply, then replay) and the
- * reply-less re-drive (optionally re-firing one recorded ask), behind one failure funnel. The
- * reply journal itself lives in `t3team-sdk.workflowHostReply.ts`. */
+/** The replay half of a workflow run host: retry-safe reply journal + resume, and the
+ * reply-less re-drive (optionally re-firing one recorded ask). */
 
 import { resumeWorkflow } from "./t3team-sdk.engine.ts";
 
 import type { WorkflowRef, WorkflowRunOptions } from "./t3team-sdk.types.ts";
-import { createWorkflowHostDriveSlot } from "./t3team-sdk.workflowHostDriveSlot.ts";
-import {
-  journalReply,
-  resumeWhileBusy,
-  type WorkflowReplyInput,
-} from "./t3team-sdk.workflowHostReply.ts";
 import type {
   WorkflowHostLifecycle,
-  WorkflowHostRedriveOptions,
   WorkflowHostRegistry,
   WorkflowLaunchStatus,
-  WorkflowRunHost,
 } from "./t3team-sdk.workflowHostTypes.ts";
 
 /** What every replay drive (resume and redrive) needs: the run, and the settle/failure funnel. */
@@ -70,59 +61,58 @@ export async function redriveWorkflowRunHost(
 }
 
 export async function resumeWorkflowRunHost(
-  input: WorkflowReplayHostInput & WorkflowReplyInput,
+  input: WorkflowReplayHostInput & {
+    readonly correlationId: string;
+    readonly reply: unknown;
+    readonly appendReply: (opts: {
+      readonly runId: string;
+      readonly correlationId: string;
+      readonly reply: unknown;
+    }) => Promise<boolean>;
+    readonly retryResolvedReply:
+      | ((correlationId: string) => Promise<boolean> | boolean)
+      | undefined;
+    readonly onReplyJournaled: ((correlationId: string) => Promise<void> | void) | undefined;
+  },
 ): Promise<void> {
-  const { runId, correlationId, ref, args, runOptions, lifecycle, settle } = input;
+  const {
+    runId,
+    correlationId,
+    reply,
+    ref,
+    args,
+    runOptions,
+    lifecycle,
+    appendReply,
+    retryResolvedReply,
+    onReplyJournaled,
+    settle,
+  } = input;
   try {
     if ((await lifecycle?.recordActive()) === false) return;
-    if ((await journalReply(input)) === "duplicate") {
-      await lifecycle?.orphanIfSleeping(correlationId);
-      return;
+    let wrote: boolean;
+    try {
+      wrote = await appendReply({ runId, correlationId, reply });
+    } catch (firstError) {
+      // First-write-wins makes this one retry safe even if the first write
+      // committed before a transient transport failure reached the host.
+      try {
+        wrote = await appendReply({ runId, correlationId, reply });
+      } catch {
+        throw firstError;
+      }
     }
+    if (!wrote) {
+      // The host distinguishes retry-safe user input from a clock wake whose
+      // previous process died after journaling its reply.
+      if (!(await retryResolvedReply?.(correlationId))) {
+        await lifecycle?.orphanIfSleeping(correlationId);
+        return;
+      }
+    }
+    await onReplyJournaled?.(correlationId);
     await settle(await resumeWorkflow(runId, ref, args, driveOptions(runOptions)));
   } catch (error) {
     await failReplay(input, error);
   }
-}
-
-/**
- * The host's `resume` and `redrive` entry points over ONE drive slot (see the serialization note
- * on `WorkflowRunHost`): a resume on a free slot journals and replays; on a busy slot it journals
- * and owes the in-flight drive a replay (`resumeWhileBusy`); a busy redrive is dropped.
- */
-export function createWorkflowReplayEntryPoints(input: {
-  readonly funnel: WorkflowReplayHostInput;
-  readonly seams: Omit<WorkflowReplyInput, "runId" | "correlationId" | "reply">;
-}): Pick<WorkflowRunHost, "resume" | "redrive"> {
-  const { funnel, seams } = input;
-  const { runId, registry } = funnel;
-  const canDrive = () => !funnel.isCancelled() && registry.getRun(runId) !== undefined;
-  const slot = createWorkflowHostDriveSlot(canDrive);
-  const replayDrive = () => redriveWorkflowRunHost({ ...funnel, refire: undefined });
-
-  const resume = async (correlationId: string, reply: unknown): Promise<void> => {
-    if (registry.getRun(runId) === undefined) return;
-    const ownReply = { ...seams, runId, correlationId, reply };
-    if (!slot.busy()) return slot.run(() => resumeWorkflowRunHost({ ...funnel, ...ownReply }));
-    if (funnel.isCancelled()) return; // a stopped run takes no new work, owed or otherwise
-    return resumeWhileBusy({
-      slot,
-      reply: ownReply,
-      // Owed only when this resume's own append failed: an append that failed but still
-      // committed makes the retry find THIS reply already present — safe to replay, never an orphan.
-      resumeDrive: () =>
-        resumeWorkflowRunHost({ ...funnel, ...ownReply, retryResolvedReply: () => true }),
-      replayDrive,
-      report: (error) => failReplay(funnel, error),
-      canDrive,
-    });
-  };
-
-  // A host-initiated retry: dropped while another drive is in flight (the host retries it).
-  const redrive = async (opts?: WorkflowHostRedriveOptions): Promise<void> => {
-    if (registry.getRun(runId) === undefined || slot.busy()) return;
-    return slot.run(() => redriveWorkflowRunHost({ ...funnel, refire: opts?.refire }));
-  };
-
-  return { resume, redrive };
 }

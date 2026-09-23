@@ -11,10 +11,15 @@
 
 import { appendResolvedEntry } from "./t3team-sdk.broker.ts";
 import { startWorkflow } from "./t3team-sdk.engine.ts";
-import { createWorkflowReplayEntryPoints, driveOptions } from "./t3team-sdk.workflowHostResume.ts";
+import {
+  driveOptions,
+  redriveWorkflowRunHost,
+  resumeWorkflowRunHost,
+} from "./t3team-sdk.workflowHostResume.ts";
 import type { AbortedResult, SuspendedResult, WorkflowRunResult } from "@runbook/core/engineTypes";
 import type {
   CreateWorkflowRunHostConfig,
+  WorkflowHostRedriveOptions,
   WorkflowLaunchStatus,
   WorkflowRunHost,
 } from "./t3team-sdk.workflowHostTypes.ts";
@@ -52,6 +57,7 @@ export function createWorkflowRunHost(config: CreateWorkflowRunHostConfig): Work
       }));
 
   let cancelled = false;
+  let resuming = false;
 
   const settle = async (
     result: WorkflowRunResult<unknown> | SuspendedResult | AbortedResult,
@@ -98,25 +104,44 @@ export function createWorkflowRunHost(config: CreateWorkflowRunHostConfig): Work
     }
   };
 
-  const { resume, redrive } = createWorkflowReplayEntryPoints({
-    funnel: {
-      runId,
-      ref,
-      args,
-      runOptions,
-      registry,
-      lifecycle,
-      settle,
-      repairAttempt,
-      isCancelled: () => cancelled,
-      onFailed: sinks.onFailed,
-    },
-    seams: {
-      appendReply,
-      retryResolvedReply: config.retryResolvedReply,
-      onReplyJournaled: config.onReplyJournaled,
-    },
-  });
+  // One replay drive at a time: a concurrent resume/redrive is settling — never double-drive.
+  const exclusive = async (drive: () => Promise<void>): Promise<void> => {
+    if (registry.getRun(runId) === undefined) return;
+    if (resuming) return;
+    resuming = true;
+    try {
+      await drive();
+    } finally {
+      resuming = false;
+    }
+  };
+  const funnel = {
+    runId,
+    ref,
+    args,
+    runOptions,
+    registry,
+    lifecycle,
+    settle,
+    repairAttempt,
+    isCancelled: () => cancelled,
+    onFailed: sinks.onFailed,
+  };
+
+  const resume = (correlationId: string, reply: unknown): Promise<void> =>
+    exclusive(() =>
+      resumeWorkflowRunHost({
+        ...funnel,
+        correlationId,
+        reply,
+        appendReply,
+        retryResolvedReply: config.retryResolvedReply,
+        onReplyJournaled: config.onReplyJournaled,
+      }),
+    );
+
+  const redrive = (opts?: WorkflowHostRedriveOptions): Promise<void> =>
+    exclusive(() => redriveWorkflowRunHost({ ...funnel, refire: opts?.refire }));
 
   const fail = async (error: unknown): Promise<void> => {
     if (cancelled) return;
