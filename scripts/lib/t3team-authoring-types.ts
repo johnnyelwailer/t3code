@@ -74,6 +74,11 @@ export const readAuthoringTypeDependencySpecs = Effect.fn(
   // The compiler ships as a trimmed copy (see stageAuthoringTypes); declare it
   // with the catalog range so the manifest stays honest about what is staged.
   specs["typescript"] = input.workspaceCatalog["typescript"] ?? "*";
+  // effect's declaration graph (TYPECHECKER_DTS_DIRECTORIES re-injects
+  // node_modules/effect into app.asar). Since the desktop main process is
+  // bundled, the staged install carries only native externals, so effect
+  // reaches the stage's top-level node_modules only if it is declared here.
+  specs["effect"] = input.workspaceCatalog["effect"] ?? "*";
   return specs;
 });
 
