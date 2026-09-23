@@ -11,7 +11,8 @@
 import type { ArtifactRecord } from "./artifacts.ts";
 import type { RunMeta } from "./journal.ts";
 import type { JournalStore } from "./journalStore.ts";
-import { selectReplayWindow, type CheckpointRecord } from "./checkpoint.ts";
+import { selectReplayWindow, type CheckpointRecord, type HistoryEntry } from "./checkpoint.ts";
+import { selectHistoryView } from "./historyView.ts";
 import type { UsageRecord, UsageTotals } from "./usage.ts";
 import { summarizeUsage } from "./usage.ts";
 
@@ -30,6 +31,11 @@ export interface RunStatus {
   readonly checkpointSeq?: number;
   /** The committed compact state of the active boundary (bounded read, not the full history). */
   readonly checkpoint?: CheckpointRecord;
+  /**
+   * The active boundary's `history(n)` ring — its latest `retainedHistory` iteration outputs,
+   * oldest first. Present alongside {@link RunStatus.checkpoint}; empty when retention is 0.
+   */
+  readonly history?: ReadonlyArray<HistoryEntry>;
   /**
    * How many seq-keyed entries a checkpoint-aware resume would materialize — the bounded working
    * set. Equals {@link RunStatus.entryCount} for pre-checkpoint runs.
@@ -87,7 +93,11 @@ export async function inspectRun(store: JournalStore, runId: string): Promise<Ru
     usage: summarizeUsage(usage),
     ...(window.checkpoint === undefined
       ? {}
-      : { checkpointSeq: window.checkpoint.seq, checkpoint: window.checkpoint.record }),
+      : {
+          checkpointSeq: window.checkpoint.seq,
+          checkpoint: window.checkpoint.record,
+          history: selectHistoryView(entries, window.checkpoint.record.retainedHistory),
+        }),
     materializedEntryCount: window.materializedEntries,
   };
 }

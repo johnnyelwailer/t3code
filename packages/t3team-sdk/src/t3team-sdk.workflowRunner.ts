@@ -115,6 +115,7 @@ export async function executeWorkflowBody(
     callPrimitive: runtime.callPrimitive,
     currentSeq: runtime.currentSeq,
     nowIso,
+    ...(opts.resume?.checkpoint === undefined ? {} : { resumeFrom: opts.resume.checkpoint }),
   }).checkpoint;
   return await runPreparedBody({
     runtime,
