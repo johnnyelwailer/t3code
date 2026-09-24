@@ -62,10 +62,11 @@ const makeAutomationHarness = Effect.fn("TestPreviewAutomation.makeHarness")(fun
   const supervisorState = yield* SubscriptionRef.make<SupervisorConnectionState>(
     AVAILABLE_CONNECTION_STATE,
   );
+  const activeSession = yield* SubscriptionRef.make(Option.some(session));
   const supervisor = EnvironmentSupervisor.EnvironmentSupervisor.of({
     target: TARGET,
     state: supervisorState,
-    session: yield* SubscriptionRef.make(Option.some(session)),
+    session: activeSession,
     prepared: yield* SubscriptionRef.make<Option.Option<PreparedConnection>>(Option.none()),
     connect: Effect.void,
     disconnect: Effect.void,
@@ -104,7 +105,8 @@ const makeAutomationHarness = Effect.fn("TestPreviewAutomation.makeHarness")(fun
     }
     return yield* Effect.die(new Error(`never saw ${connectionId}`));
   });
-  return { awaitConnection, connections, registry, requestsAtom };
+  const replaceSession = SubscriptionRef.set(activeSession, Option.some({ ...session }));
+  return { awaitConnection, connections, registry, replaceSession, requestsAtom, unmount };
 });
 
 describe("preview automation host registration", () => {
@@ -121,6 +123,36 @@ describe("preview automation host registration", () => {
         yield* harness.awaitConnection("connection-2");
         expect(harness.connections).toHaveLength(2);
         expect(AsyncResult.isSuccess(harness.registry.get(harness.requestsAtom))).toBe(true);
+      }),
+    ),
+  );
+
+  it.live("does not renew a stream the client cancelled itself", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const harness = yield* makeAutomationHarness();
+        yield* harness.awaitConnection("connection-1");
+
+        // Local interruption (the switchMap / dispose path) is not a server end.
+        harness.unmount();
+        yield* Effect.sleep("600 millis");
+        expect(harness.connections).toHaveLength(1);
+      }),
+    ),
+  );
+
+  it.live("does not renew on the old session when the session is replaced", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const harness = yield* makeAutomationHarness();
+        yield* harness.awaitConnection("connection-1");
+
+        // switchMap interrupts the old inner stream: exactly one new connect,
+        // for the new session, and no zombie renewal of the old one.
+        yield* harness.replaceSession;
+        yield* harness.awaitConnection("connection-2");
+        yield* Effect.sleep("600 millis");
+        expect(harness.connections).toHaveLength(2);
       }),
     ),
   );
