@@ -187,12 +187,20 @@ interface SubscriptionOptions<TTag extends EnvironmentSubscriptionRpcTag> {
    * otherwise reopen hundreds of streams in the same tick and drown the
    * server's event loop (GHE #382 storm).
    */
-  readonly beforeSubscribe?: (
-    session: RpcSession,
-  ) => Effect.Effect<void, never, never> | undefined;  readonly onExpectedFailure?: (
+  readonly beforeSubscribe?: (session: RpcSession) => Effect.Effect<void, never, never> | undefined;
+  readonly onExpectedFailure?: (
     cause: Cause.Cause<EnvironmentRpcStreamFailure<TTag>>,
   ) => Effect.Effect<void, never, never>;
   readonly retryExpectedFailureAfter?: Duration.Input;
+  /**
+   * Resubscribes to the same session after this delay when the server ends
+   * the stream — cleanly, or by interrupting it (a server-side
+   * `Queue.shutdown` reaches the client as an interrupt-only failure).
+   * Without it both are terminal until the next session change: right for
+   * finite streams, wrong for registrations the server may evict and expect
+   * the client to renew.
+   */
+  readonly resubscribeOnServerEndAfter?: Duration.Input;
   readonly resubscribe?: Stream.Stream<unknown, never, never>;
   /**
    * Classifies an expected failure as terminal (e.g. the subscribed resource
@@ -244,8 +252,23 @@ function subscribeDynamicMapped<TTag extends EnvironmentSubscriptionRpcTag, A>(
                 EnvironmentRpcStreamFailure<TTag>
               >;
               const subscribeToSession = (): Stream.Stream<A, EnvironmentRpcStreamFailure<TTag>> =>
-                Stream.suspend(() =>
-                  Stream.unwrap(
+                Stream.suspend(() => {
+                  // Set only when the server ended the stream, never by a
+                  // handled failure: those keep their own retry/terminal policy.
+                  let serverEnded = false;
+                  const resubscribeOnServerEnd = options?.resubscribeOnServerEndAfter;
+                  const renewAfterServerEnd =
+                    resubscribeOnServerEnd === undefined
+                      ? Stream.empty
+                      : Stream.suspend(() =>
+                          serverEnded
+                            ? Stream.fromEffect(Effect.sleep(resubscribeOnServerEnd)).pipe(
+                                Stream.drain,
+                                Stream.concat(subscribeToSession()),
+                              )
+                            : Stream.empty,
+                        );
+                  return Stream.unwrap(
                     Effect.gen(function* () {
                       const input = yield* makeInput(session);
                       // Stagger hook: after the input is built (the caller may
@@ -260,6 +283,11 @@ function subscribeDynamicMapped<TTag extends EnvironmentSubscriptionRpcTag, A>(
                         input,
                       });
                       return mapStream(session, method(input)).pipe(
+                        Stream.onEnd(
+                          Effect.sync(() => {
+                            serverEnded = true;
+                          }),
+                        ),
                         Stream.ensuring(completeObservation),
                       );
                     }),
@@ -277,6 +305,10 @@ function subscribeDynamicMapped<TTag extends EnvironmentSubscriptionRpcTag, A>(
                         : Effect.void,
                     ),
                     Stream.catchCause((cause) => {
+                      if (resubscribeOnServerEnd !== undefined && Cause.hasInterruptsOnly(cause)) {
+                        serverEnded = true;
+                        return Stream.empty;
+                      }
                       const hasOnlyExpectedFailures =
                         cause.reasons.length > 0 &&
                         cause.reasons.every((reason) => reason._tag === "Fail");
@@ -318,8 +350,9 @@ function subscribeDynamicMapped<TTag extends EnvironmentSubscriptionRpcTag, A>(
                       }
                       return Stream.failCause(cause);
                     }),
-                  ),
-                );
+                    Stream.concat(renewAfterServerEnd),
+                  );
+                });
               return subscribeToSession();
             },
           }),
