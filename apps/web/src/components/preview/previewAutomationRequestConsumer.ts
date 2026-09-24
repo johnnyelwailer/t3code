@@ -44,6 +44,18 @@ export function createPreviewAutomationRequestConsumerAtom<E>(options: {
     let requestsVersion = 0;
 
     const consume = (result: AutomationStreamResult<E>) => {
+      if (AsyncResult.isFailure(result)) {
+        // The request stream is gone, so the broker no longer knows this
+        // connection. Forget it: no stale focusHost fires, and the next
+        // `connected` event is adopted as a fresh connection.
+        activeConnectionId = null;
+        connectionExplicitlyAnnounced = false;
+        if (reportedConnectionId !== null) {
+          reportedConnectionId = null;
+          get.set(options.connectionAtom, null);
+        }
+        return;
+      }
       if (!AsyncResult.isSuccess(result)) return;
       const event = result.value;
       if (event.type === "connected") {
