@@ -3,6 +3,14 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./t3team-structuredOutput": {
+      "types": "./src/t3team-structuredOutput.ts",
+      "import": "./src/t3team-structuredOutput.ts"
+    },
+    "./t3team-structuredOutputText": {
+      "types": "./src/t3team-structuredOutputText.ts",
+      "import": "./src/t3team-structuredOutputText.ts"
+    },
     "./t3team-githubActivity": {
       "types": "./src/t3team-githubActivity.ts",
       "import": "./src/t3team-githubActivity.ts"

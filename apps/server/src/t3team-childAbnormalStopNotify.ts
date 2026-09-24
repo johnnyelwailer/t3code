@@ -25,6 +25,8 @@
  * @module t3team-childAbnormalStopNotify
  */
 import { CommandId, MessageId, NonNegativeInt, ThreadId } from "@t3tools/contracts";
+import { parseStructuredOutput } from "@t3tools/shared/t3team-structuredOutput";
+import { renderStructuredOutputText } from "@t3tools/shared/t3team-structuredOutputText";
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -87,6 +89,12 @@ export function buildAbnormalStopDetail(input: {
   const reason = input.lastError?.trim();
   const state = input.childStatus?.trim();
   if (!reason && !state) return null;
+  const structured = reason ? renderStructuredOutputText(parseStructuredOutput(reason)) : null;
+  if (structured !== null) {
+    const lines: string[] = [`Reason: ${structured}`];
+    if (state) lines.push(`Last known state: ${state}`);
+    return lines.join("\n");
+  }
   const parts: string[] = [];
   if (reason) parts.push(`Reason: ${reason}`);
   if (state) parts.push(`Last known state: ${state}`);

@@ -26,6 +26,7 @@ import {
 } from "@t3tools/client-runtime/state/thread-settled";
 import { resolveSettledThreadTimestamp } from "@t3tools/client-runtime/state/thread-sort";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
+import { StructuredOutputView } from "./t3team-StructuredOutputView";
 import {
   parseScopedThreadKey,
   scopeProjectRef,
@@ -460,7 +461,11 @@ function SidebarThreadTooltip({
           {thread.session?.lastError ? (
             <div className="flex min-w-0 items-start gap-2 text-red-600 dark:text-red-400">
               <CircleAlertIcon className="size-3 shrink-0 stroke-current" />
-              <div className="min-w-0 break-words">{thread.session.lastError}</div>
+              <StructuredOutputView
+                raw={thread.session.lastError}
+                compact
+                className="min-w-0"
+              />
             </div>
           ) : null}
         </div>
