@@ -49,6 +49,11 @@ export interface HandleSendCall {
   readonly refId: string;
   /** Canonical-JSON args; hashed into the `sent` entry for drift detection. */
   readonly args: unknown;
+  /** Earlier encodings of this SAME call, from before a wording change to a library-derived
+   * payload. A recorded `sent` entry whose hash matches one of these replays as a match instead
+   * of a drift, so journals written by the previous version keep resuming. Only ever `args` is
+   * journaled or fired. */
+  readonly legacyArgs?: ReadonlyArray<unknown>;
   /** Fire the side effect (the live path, or a {@link RefireTarget} re-fire). Receives the
    * deterministic `correlationId`, a resolver the broker may call to settle synchronously, and —
    * only on a re-fire — the {@link FireDelivery} marker. */

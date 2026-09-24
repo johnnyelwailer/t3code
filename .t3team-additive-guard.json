@@ -363,6 +363,7 @@
     "packages/runbook-prompts/src/registry.ts",
     "packages/runbook-prompts/src/resolvePromptCascade.test.ts",
     "packages/runbook-prompts/src/resolvePromptCascade.ts",
+    "packages/runbook-threads/src/askVerb.test.ts",
     "packages/runbook-threads/src/askVerb.ts",
     "packages/runbook-threads/src/broker.ts",
     "packages/shared/package.json",
