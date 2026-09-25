@@ -57,3 +57,8 @@ export function stopConfirmMessage(consumer: ResourcePressureConsumer): string {
     "any agent or terminal running in it ends."
   );
 }
+
+export const SWEEP_CONFIRM_MESSAGE =
+  "Run the storage sweep now? It applies your configured cleanup rules (worktree cleanup, " +
+  "browser artifacts, rotated logs) immediately instead of at the next hourly pass. " +
+  "Nothing outside those rules is removed.";

@@ -249,7 +249,7 @@ import {
   ResourceTelemetryRetryResult,
   ResourceTelemetrySnapshot,
 } from "./resourceTelemetry.ts";
-import { ResourcePressureReport } from "./t3team-resourcePressure.ts";
+import { ResourcePressureReport, ResourcePressureSweepResult } from "./t3team-resourcePressure.ts";
 import {
   UsageLimitSourceError,
   ProviderConsumeResetCreditInput,
@@ -396,6 +396,7 @@ export const WS_METHODS = {
   serverRetryResourceTelemetry: "server.retryResourceTelemetry",
   serverSignalProcess: "server.signalProcess",
   serverGetResourcePressure: "server.getResourcePressure",
+  serverSweepStorageNow: "server.sweepStorageNow",
   serverReportClientActivity: "server.reportClientActivity",
   serverReportHostPowerState: "server.reportHostPowerState",
   serverGetBackgroundPolicy: "server.getBackgroundPolicy",
@@ -677,6 +678,13 @@ const WsServerRefreshUsageRatesRpc = Rpc.make(WS_METHODS.serverRefreshUsageRates
 const WsServerGetResourcePressureRpc = Rpc.make(WS_METHODS.serverGetResourcePressure, {
   payload: Schema.Struct({}),
   success: ResourcePressureReport,
+  error: EnvironmentAuthorizationError,
+});
+
+// Runs the existing policy-driven storage sweep (worktree cleanup rules) now.
+const WsServerSweepStorageNowRpc = Rpc.make(WS_METHODS.serverSweepStorageNow, {
+  payload: Schema.Struct({}),
+  success: ResourcePressureSweepResult,
   error: EnvironmentAuthorizationError,
 });
 
@@ -1504,6 +1512,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerRefreshUsageRatesRpc,
   WsServerSignalProcessRpc,
   WsServerGetResourcePressureRpc,
+  WsServerSweepStorageNowRpc,
   WsServerReportClientActivityRpc,
   WsServerReportHostPowerStateRpc,
   WsServerGetBackgroundPolicyRpc,

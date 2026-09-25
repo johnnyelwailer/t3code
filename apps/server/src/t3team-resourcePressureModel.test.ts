@@ -1,4 +1,3 @@
-import type { ResourceTelemetryProcess, ResourceTelemetrySnapshot } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -14,39 +13,13 @@ import {
   isResourcePressureEnabled,
   resolveResourcePressureIntervalMs,
 } from "./t3team-resourcePressureFlag.ts";
+import { processEntry, telemetry } from "./t3team-resourcePressureTestFixtures.ts";
 
 const GIB = 1024 ** 3;
 const host = (availableGib: number, totalGib = 16) => ({
   totalMemoryBytes: totalGib * GIB,
   availableMemoryBytes: availableGib * GIB,
 });
-
-function processEntry(
-  pid: number,
-  residentBytes: number,
-  category: ResourceTelemetryProcess["category"],
-): ResourceTelemetryProcess {
-  return {
-    identity: { pid, startTimeMs: pid * 10 },
-    ppid: 1,
-    childPids: [],
-    depth: 1,
-    name: `proc-${pid}`,
-    command: `/bin/proc-${pid}`,
-    status: "Run",
-    category,
-    cpuPercent: 3,
-    residentBytes,
-  } as unknown as ResourceTelemetryProcess;
-}
-
-function telemetry(processes: ReadonlyArray<ResourceTelemetryProcess>): ResourceTelemetrySnapshot {
-  const rss = processes.reduce((sum, entry) => sum + entry.residentBytes, 0);
-  return {
-    processes,
-    groups: { allT3: { currentRssBytes: rss, processCount: processes.length } },
-  } as unknown as ResourceTelemetrySnapshot;
-}
 
 describe("classifyPressure", () => {
   it("is ok with plenty of memory and a small app tree", () => {
@@ -124,7 +97,7 @@ describe("applyHysteresis", () => {
 
 describe("topConsumers / buildPressureSnapshot", () => {
   const snapshotTelemetry = telemetry([
-    processEntry(10, 1 * GIB, "server"),
+    processEntry(10, 1 * GIB, "server", 1),
     processEntry(11, 5 * GIB, "provider-root"),
     processEntry(12, 2 * GIB, "electron-renderer"),
     processEntry(13, 3 * GIB, "server-child"),
@@ -149,6 +122,8 @@ describe("topConsumers / buildPressureSnapshot", () => {
         reasons: [],
         serverPid: 10,
         sampleIntervalMs: 20_000,
+        accumulation: null,
+        processDataStale: false,
       });
     expect(build("ok").stopSpawning).toBe(false);
     expect(build("warn").stopSpawning).toBe(false);

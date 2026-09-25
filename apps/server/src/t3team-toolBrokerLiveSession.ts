@@ -21,6 +21,7 @@ import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
 import { buildRuntimeModelCatalog } from "./t3team-runtimeModelCatalog.ts";
 import { makeReadProviderUsage } from "./t3team-toolBrokerProviderUsage.ts";
 import { makeReadResourcePressure } from "./t3team-toolBrokerResourcePressure.ts";
+import { gateSpawnOnPressure, gateWorkflowRunTools } from "./t3team-resourcePressureGate.ts";
 import { type BindSessionDeps } from "./t3team-toolBrokerLiveSessionDeps.ts";
 
 export type { BindSessionDeps } from "./t3team-toolBrokerLiveSessionDeps.ts";
@@ -83,7 +84,13 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
         readView: () => loadThreadView(threadId, resolvedToolContext),
         renameThread: (title) => renameThread(threadId, title),
         renameThreadResult: (title) => ({ ok: true, threadId, title }),
-        startChild: (toolArgs) => startChildThread(threadId, toolArgs),
+        // Dispatch backoff: refused while resource pressure says stopSpawning.
+        startChild: (toolArgs) =>
+          gateSpawnOnPressure(
+            resourcePressure,
+            "a child session",
+            startChildThread(threadId, toolArgs),
+          ),
         manageChildren: (toolArgs, callerThreadId) => manageChildren(toolArgs, callerThreadId),
         readRuntimeModels: () =>
           Effect.gen(function* () {
@@ -154,7 +161,12 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
           }),
         recipeTools: recipeToolsForThread(threadId),
         ...(workflowTools.workflowRunToolsForThread
-          ? { workflowRunTools: workflowTools.workflowRunToolsForThread(threadId) }
+          ? {
+              workflowRunTools: gateWorkflowRunTools(
+                resourcePressure,
+                workflowTools.workflowRunToolsForThread(threadId),
+              ),
+            }
           : {}),
         ...(workflowTools.workflowStatusToolsForThread
           ? { workflowStatusTools: workflowTools.workflowStatusToolsForThread(threadId) }

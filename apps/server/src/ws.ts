@@ -108,6 +108,8 @@ import { T3TeamThreadEngagement } from "./t3team-threadEngagement.ts";
 import { isThreadResubscribeStaggerEnabled } from "./t3team-threadResubscribeStaggerFlag.ts";
 import { isResourcePressureEnabled } from "./t3team-resourcePressureFlag.ts";
 import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
+import { sweepStorageNow } from "./t3team-resourcePressureSweep.ts";
+import { StorageCleanup } from "./storageCleanup.ts";
 import {
   observeRpcEffect as instrumentRpcEffect,
   observeRpcStream as instrumentRpcStream,
@@ -705,6 +707,7 @@ const makeWsRpcLayer = (
       const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
       const hostResources = yield* HostResources.HostResources;
       const resourcePressure = yield* ResourcePressureMonitor;
+      const storageCleanup = yield* Effect.serviceOption(StorageCleanup);
       const processResourceMonitor = yield* ProcessResourceMonitor.ProcessResourceMonitor;
       const resourceTelemetry = yield* ResourceTelemetry.ResourceTelemetry;
       const usage = yield* UsageService.UsageService;
@@ -2718,6 +2721,10 @@ const makeWsRpcLayer = (
           }),
         [WS_METHODS.serverGetResourcePressure]: (_input) =>
           observeRpcEffect(WS_METHODS.serverGetResourcePressure, resourcePressure.report, {
+            "rpc.aggregate": "server",
+          }),
+        [WS_METHODS.serverSweepStorageNow]: (_input) =>
+          observeRpcEffect(WS_METHODS.serverSweepStorageNow, sweepStorageNow(storageCleanup), {
             "rpc.aggregate": "server",
           }),
         [WS_METHODS.serverSignalProcess]: (input) =>

@@ -47,6 +47,20 @@ export function buildAgentResourcePressurePayload(report: ResourcePressureReport
       availableMiB: mib(snapshot.availableMemoryBytes),
     },
     appTree: { rssMiB: mib(snapshot.appTreeRssBytes), processCount: snapshot.appTreeProcessCount },
+    // The app itself vs what it spawned vs everything else on the host.
+    appProper: {
+      rssMiB: mib(snapshot.classes.appProper.rssBytes),
+      serverMiB: mib(snapshot.classes.appProper.serverRssBytes),
+      rendererMiB: mib(snapshot.classes.appProper.rendererRssBytes),
+    },
+    appSpawned: {
+      rssMiB: mib(snapshot.classes.appSpawned.rssBytes),
+      agentSessions: snapshot.classes.appSpawned.agentSessionCount,
+      agentSpawnedProcesses: snapshot.classes.appSpawned.agentSpawnedProcessCount,
+    },
+    restOfMachineMiB: mib(snapshot.classes.restOfMachineBytes),
+    worktreeThreads: snapshot.accumulation?.worktreeThreadCount ?? null,
+    processDataStale: snapshot.processDataStale,
     topProcesses: snapshot.topConsumers.slice(0, AGENT_TOP_PROCESS_COUNT).map((consumer) => ({
       pid: consumer.pid,
       name: consumer.name,

@@ -5,7 +5,7 @@
  *
  * @module ResourcePressureEventRepository
  */
-import type { ResourcePressureEvent } from "@t3tools/contracts";
+import type { ResourcePressureAccumulation, ResourcePressureEvent } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 
@@ -25,6 +25,8 @@ export interface ResourcePressureEventRepositoryShape {
   readonly listRecent: (input: {
     readonly limit: number;
   }) => Effect.Effect<ReadonlyArray<ResourcePressureEvent>, ProjectionRepositoryError>;
+  /** Read-only COUNT over projection_threads: live threads owning a worktree. */
+  readonly readAccumulation: Effect.Effect<ResourcePressureAccumulation, ProjectionRepositoryError>;
 }
 
 export class ResourcePressureEventRepository extends Context.Service<

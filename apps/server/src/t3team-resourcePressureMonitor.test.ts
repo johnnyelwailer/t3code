@@ -6,6 +6,7 @@ import type {
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import { assert, describe, it } from "@effect/vitest";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { ChildProcessSpawner } from "effect/unstable/process";
@@ -46,6 +47,7 @@ const telemetrySnapshot = {
     },
   ],
   groups: { allT3: { currentRssBytes: 7 * GIB, processCount: 1 } },
+  readAt: DateTime.makeUnsafe(0),
 } as unknown as ResourceTelemetrySnapshot;
 
 const events: ResourcePressureEvent[] = [];
@@ -67,6 +69,7 @@ const stubs = Layer.mergeAll(
     append: (event: ResourcePressureEventInput) =>
       Effect.sync(() => void events.unshift({ ...event, id: events.length + 1 })),
     listRecent: ({ limit }) => Effect.succeed(events.slice(0, limit)),
+    readAccumulation: Effect.succeed({ worktreeThreadCount: 45, archivedWorktreeThreadCount: 30 }),
   }),
   Layer.succeed(HostProcessPlatform, "linux"),
   Layer.succeed(
@@ -105,24 +108,46 @@ describe("ResourcePressureMonitor", () => {
       assert.strictEqual(report.recentEvents[0]?.toLevel, "critical");
       assert.strictEqual(report.recentEvents[0]?.topProcessName, "claude");
 
+      assert.strictEqual(report.snapshot?.processDataStale, false);
+      assert.strictEqual(report.snapshot?.accumulation?.worktreeThreadCount, 45);
+
       const payload = buildAgentResourcePressurePayload(report, 31_000);
       assert.deepStrictEqual(Object.keys(payload).toSorted(), [
+        "appProper",
+        "appSpawned",
         "appTree",
         "enabled",
         "host",
         "level",
         "osLevel",
+        "processDataStale",
         "reasons",
         "recentEvents",
         "recommendation",
+        "restOfMachineMiB",
         "sampleAgeSeconds",
         "stopSpawning",
         "topProcesses",
+        "worktreeThreads",
       ]);
-      assert.deepStrictEqual((payload as { topProcesses: unknown }).topProcesses, [
+      const full = payload as {
+        topProcesses: unknown;
+        sampleAgeSeconds: number;
+        appSpawned: { rssMiB: number; agentSessions: number; agentSpawnedProcesses: number };
+        restOfMachineMiB: number;
+      };
+      assert.deepStrictEqual(full.topProcesses, [
         { pid: 4242, name: "claude", category: "provider-root", rssMiB: 7168, cpuPercent: 12 },
       ]);
-      assert.strictEqual((payload as { sampleAgeSeconds: number }).sampleAgeSeconds, 30);
+      // TestClock: the sample is stamped at 0, the agent reads at 31 s.
+      assert.strictEqual(full.sampleAgeSeconds, 31);
+      assert.deepStrictEqual(full.appSpawned, {
+        rssMiB: 7168,
+        agentSessions: 1,
+        agentSpawnedProcesses: 0,
+      });
+      // used = 16 - 4 = 12 GiB; T3 tree = 7 GiB; the rest of the machine = 5 GiB.
+      assert.strictEqual(full.restOfMachineMiB, 5 * 1024);
     }).pipe(Effect.scoped, Effect.provide(stubs)),
   );
 
@@ -179,6 +204,11 @@ sqlLayer("ResourcePressureEventRepository (sqlite)", (it) => {
       assert.strictEqual(recent[0]?.occurredAt, RESOURCE_PRESSURE_EVENT_RETENTION + 1);
       assert.deepStrictEqual(recent[0]?.reasons, ["host memory 6% available"]);
       assert.strictEqual(recent[0]?.topProcessName, null);
+      // The accumulation COUNT runs against the real projection_threads schema.
+      assert.deepStrictEqual(yield* repo.readAccumulation, {
+        worktreeThreadCount: 0,
+        archivedWorktreeThreadCount: 0,
+      });
     }),
   );
 });

@@ -96,6 +96,31 @@ const makeResourcePressureEventRepository = Effect.gen(function* () {
       `,
   });
 
+  const accumulationRow = SqlSchema.findAll({
+    Request: Schema.Struct({}),
+    Result: Schema.Struct({
+      worktreeThreadCount: Schema.Number,
+      archivedWorktreeThreadCount: Schema.Number,
+    }),
+    execute: () =>
+      sql`
+        SELECT
+          COUNT(*) AS "worktreeThreadCount",
+          COALESCE(SUM(CASE WHEN archived_at IS NOT NULL THEN 1 ELSE 0 END), 0)
+            AS "archivedWorktreeThreadCount"
+        FROM projection_threads
+        WHERE worktree_path IS NOT NULL AND deleted_at IS NULL
+      `,
+  });
+
+  const readAccumulation: ResourcePressureEventRepositoryShape["readAccumulation"] =
+    accumulationRow({}).pipe(
+      Effect.map((rows) => rows[0] ?? { worktreeThreadCount: 0, archivedWorktreeThreadCount: 0 }),
+      Effect.mapError(
+        toPersistenceSqlError("ResourcePressureEventRepository.readAccumulation:query"),
+      ),
+    );
+
   const append: ResourcePressureEventRepositoryShape["append"] = (event) =>
     insertRow(event).pipe(
       Effect.andThen(pruneRows({ keep: RESOURCE_PRESSURE_EVENT_RETENTION })),
@@ -107,7 +132,7 @@ const makeResourcePressureEventRepository = Effect.gen(function* () {
       Effect.mapError(toPersistenceSqlError("ResourcePressureEventRepository.listRecent:query")),
     );
 
-  return ResourcePressureEventRepository.of({ append, listRecent });
+  return ResourcePressureEventRepository.of({ append, listRecent, readAccumulation });
 });
 
 export const ResourcePressureEventRepositoryLive = Layer.effect(

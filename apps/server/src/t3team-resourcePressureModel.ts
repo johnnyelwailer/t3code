@@ -23,6 +23,7 @@
  */
 import type {
   OsMemoryPressureLevel,
+  ResourcePressureAccumulation,
   ResourcePressureConsumer,
   ResourcePressureLevel,
   ResourcePressureSnapshot,
@@ -30,6 +31,7 @@ import type {
 } from "@t3tools/contracts";
 
 import { canSignalCategory } from "./diagnostics/ProcessDiagnostics.ts";
+import { bucketByClass, descendsFrom, indexByPid } from "./t3team-resourcePressureClasses.ts";
 
 export const HOST_WARN_AVAILABLE_FRACTION = 0.15;
 export const HOST_CRITICAL_AVAILABLE_FRACTION = 0.07;
@@ -69,6 +71,8 @@ export function classifyPressure(input: {
   readonly host: HostMemoryReading;
   readonly osLevel: OsMemoryPressureLevel | null;
   readonly appTreeRssBytes: number;
+  /** On darwin the vm_stat fraction is never used, even when the kernel read failed. */
+  readonly darwin?: boolean;
 }): { readonly level: ResourcePressureLevel; readonly reasons: ReadonlyArray<string> } {
   const reasons: string[] = [];
   let level: ResourcePressureLevel = "ok";
@@ -79,7 +83,9 @@ export function classifyPressure(input: {
   const total = input.host.totalMemoryBytes;
   if (input.osLevel === "critical") raise("critical", "macOS reports critical memory pressure");
   else if (input.osLevel === "warn") raise("warn", "macOS reports memory pressure (warn)");
-  if (input.osLevel === null && total > 0) {
+  if (input.osLevel === null && input.darwin === true) {
+    reasons.push("macOS memory-pressure level unavailable this sample");
+  } else if (input.osLevel === null && total > 0) {
     const available = input.host.availableMemoryBytes / total;
     const reason = `host memory ${percent(available)} available`;
     if (available < HOST_CRITICAL_AVAILABLE_FRACTION) raise("critical", reason);
@@ -113,12 +119,17 @@ export function applyHysteresis(
     : { level: previous.level, lowerStreak };
 }
 
-/** Largest-RSS processes of the T3 tree, flagged with whether a signal would be accepted. */
+/**
+ * Largest-RSS processes of the T3 tree. `signalable` requires BOTH the server's
+ * signal policy (backend-descendant category) AND a ppid chain in this scan
+ * that ends at the server — never a name or pattern.
+ */
 export function topConsumers(
   telemetry: ResourceTelemetrySnapshot,
   serverPid: number,
   limit: number = TOP_CONSUMER_COUNT,
 ): ReadonlyArray<ResourcePressureConsumer> {
+  const byPid = indexByPid(telemetry);
   return [...telemetry.processes]
     .sort((left, right) => right.residentBytes - left.residentBytes)
     .slice(0, limit)
@@ -131,7 +142,10 @@ export function topConsumers(
       category: entry.category,
       residentBytes: entry.residentBytes,
       cpuPercent: entry.cpuPercent,
-      signalable: entry.identity.pid !== serverPid && canSignalCategory(entry.category),
+      signalable:
+        entry.identity.pid !== serverPid &&
+        canSignalCategory(entry.category) &&
+        descendsFrom(entry.identity.pid, serverPid, byPid),
     }));
 }
 
@@ -145,6 +159,8 @@ export function buildPressureSnapshot(input: {
   readonly reasons: ReadonlyArray<string>;
   readonly serverPid: number;
   readonly sampleIntervalMs: number;
+  readonly accumulation: ResourcePressureAccumulation | null;
+  readonly processDataStale: boolean;
 }): ResourcePressureSnapshot {
   return {
     sampledAt: input.sampledAt,
@@ -155,6 +171,9 @@ export function buildPressureSnapshot(input: {
     availableMemoryBytes: input.host.availableMemoryBytes,
     appTreeRssBytes: input.telemetry.groups.allT3.currentRssBytes,
     appTreeProcessCount: input.telemetry.groups.allT3.processCount,
+    classes: bucketByClass({ telemetry: input.telemetry, ...input.host }),
+    accumulation: input.accumulation,
+    processDataStale: input.processDataStale,
     topConsumers: topConsumers(input.telemetry, input.serverPid),
     stopSpawning: input.level === "critical",
     recommendation: RECOMMENDATIONS[input.level],

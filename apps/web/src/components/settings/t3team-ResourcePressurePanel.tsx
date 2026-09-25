@@ -1,14 +1,16 @@
 /**
  * Memory-pressure view inside Settings → Diagnostics (flag
  * `NEXI_FF_RESOURCE_PRESSURE`, advertised as `ServerConfig.resourcePressure`;
- * the parent mounts this only when it is on). Shows the level, host + app
- * totals, the top T3 processes, the persisted pressure history, and one safe
- * action: stop a process by its exact PID + start time, after confirmation.
+ * the parent mounts this only when it is on). Shows the level, the machine /
+ * app / spawned / rest-of-machine split, the top T3 processes, worktree
+ * accumulation, the persisted pressure history, and two safe actions: stop a
+ * process by its exact PID + start time, and run the configured storage sweep
+ * now — both after confirmation.
  */
 import type { EnvironmentId, ResourcePressureConsumer } from "@t3tools/contracts";
 import { GaugeIcon } from "lucide-react";
 import * as Option from "effect/Option";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 
 import { cn } from "../../lib/utils";
@@ -16,51 +18,41 @@ import { ensureLocalApi } from "../../localApi";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { formatRelativeTime } from "../../timestampFormat";
 import { Button } from "../ui/button";
 import { RefreshIcon } from "../ui/refresh-icon";
 import { toastManager } from "../ui/toast";
-import { SettingsSection, useRelativeTimeTick } from "./settingsLayout";
+import { SettingsSection } from "./settingsLayout";
 import {
   PRESSURE_LEVEL_LABEL,
   PRESSURE_LEVEL_TONE,
-  availablePercent,
-  canOfferStop,
-  describePressureEvent,
-  formatPressureBytes,
   panelRefreshIntervalMs,
   stopConfirmMessage,
+  SWEEP_CONFIRM_MESSAGE,
 } from "./t3team-ResourcePressurePanel.logic";
+import {
+  Ago,
+  PressureEventList,
+  PressureStats,
+  TopProcessList,
+} from "./t3team-ResourcePressureParts";
 
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
-function Ago({ at }: { at: number }) {
-  useRelativeTimeTick();
-  const relative = formatRelativeTime(new Date(at).toISOString());
-  return (
-    <span className="tabular-nums">
-      {relative ? `${relative.value} ${relative.suffix ?? ""}` : "—"}
-    </span>
-  );
-}
-
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="min-w-0 rounded-lg border border-border/60 px-3 py-2">
-      <div className="text-[11px] text-muted-foreground/70">{label}</div>
-      <div className="truncate font-mono text-sm tabular-nums">{value}</div>
-      {hint ? <div className="truncate text-[11px] text-muted-foreground/60">{hint}</div> : null}
-    </div>
-  );
-}
+const confirmAction = (message: string) =>
+  ensureLocalApi()
+    .dialogs.confirm(message, { variant: "destructive" })
+    .catch(() => false);
 
 export function ResourcePressurePanel({ environmentId }: { environmentId: EnvironmentId }) {
   const query = useEnvironmentQuery(
     serverEnvironment.resourcePressure({ environmentId, input: {} }),
   );
   const signalProcess = useAtomCommand(serverEnvironment.signalProcess, { reportFailure: false });
-  const [stoppingPid, setStoppingPid] = useState<number | null>(null);
+  const sweepStorage = useAtomCommand(serverEnvironment.sweepStorageNow, { reportFailure: false });
+  const [busy, setBusy] = useState(false);
+  // Guards the whole confirm → act sequence, so a double click cannot queue a second action.
+  const busyRef = useRef(false);
   const snapshot = query.data?.snapshot ?? null;
   const { refresh } = query;
   const intervalMs = panelRefreshIntervalMs(snapshot?.sampleIntervalMs);
@@ -71,37 +63,55 @@ export function ResourcePressurePanel({ environmentId }: { environmentId: Enviro
     return () => clearInterval(timer);
   }, [refresh, intervalMs]);
 
-  const stop = useCallback(
-    async (consumer: ResourcePressureConsumer) => {
-      if (!canOfferStop(consumer) || stoppingPid !== null) return;
-      const confirmed = await ensureLocalApi()
-        .dialogs.confirm(stopConfirmMessage(consumer), { variant: "destructive" })
-        .catch(() => false);
-      if (!confirmed) return;
-      setStoppingPid(consumer.pid);
-      const result = await signalProcess({
-        environmentId,
-        input: { pid: consumer.pid, startTimeMs: consumer.startTimeMs, signal: "SIGINT" },
-      });
-      setStoppingPid(null);
-      const message =
-        result._tag === "Failure"
-          ? errorMessage(squashAtomCommandFailure(result))
-          : result.value.signaled
-            ? null
-            : Option.getOrElse(result.value.message, () => "The process was not signaled.");
-      if (message !== null) {
-        toastManager.add({
-          type: "error",
-          title: `Could not stop ${consumer.pid}`,
-          description: message,
-        });
+  const runGuarded = async (
+    confirmMessage: string,
+    act: () => Promise<string | null>,
+    failTitle: string,
+  ) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      if (!(await confirmAction(confirmMessage))) return;
+      const failure = await act();
+      if (failure !== null) {
+        toastManager.add({ type: "error", title: failTitle, description: failure });
       }
       refresh();
-    },
-    [environmentId, refresh, signalProcess, stoppingPid],
-  );
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  };
 
+  const stop = (consumer: ResourcePressureConsumer) =>
+    void runGuarded(
+      stopConfirmMessage(consumer),
+      async () => {
+        const result = await signalProcess({
+          environmentId,
+          input: { pid: consumer.pid, startTimeMs: consumer.startTimeMs, signal: "SIGINT" },
+        });
+        if (result._tag === "Failure") return errorMessage(squashAtomCommandFailure(result));
+        return result.value.signaled
+          ? null
+          : Option.getOrElse(result.value.message, () => "The process was not signaled.");
+      },
+      `Could not stop ${consumer.pid}`,
+    );
+
+  const sweep = () =>
+    void runGuarded(
+      SWEEP_CONFIRM_MESSAGE,
+      async () => {
+        const result = await sweepStorage({ environmentId, input: {} });
+        if (result._tag === "Failure") return errorMessage(squashAtomCommandFailure(result));
+        return result.value.swept ? null : result.value.message;
+      },
+      "Storage sweep did not run",
+    );
+
+  const accumulation = snapshot?.accumulation ?? null;
   return (
     <SettingsSection
       title="Memory pressure"
@@ -133,71 +143,25 @@ export function ResourcePressurePanel({ environmentId }: { environmentId: Enviro
       {query.error ? <p className="text-xs text-destructive">{query.error}</p> : null}
       {snapshot ? (
         <div className="space-y-3">
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <Stat
-              label="System memory available"
-              value={`${formatPressureBytes(snapshot.availableMemoryBytes)} of ${formatPressureBytes(snapshot.totalMemoryBytes)}`}
-              hint={`${availablePercent(snapshot.availableMemoryBytes, snapshot.totalMemoryBytes)}% free`}
-            />
-            <Stat
-              label="Nexi Work (all processes)"
-              value={formatPressureBytes(snapshot.appTreeRssBytes)}
-              hint={`${snapshot.appTreeProcessCount} processes`}
-            />
-            <Stat label="macOS memory pressure" value={snapshot.osLevel ?? "not available"} />
-          </div>
+          <PressureStats snapshot={snapshot} />
           <p className="text-xs text-muted-foreground">
             {snapshot.recommendation}
             {snapshot.reasons.length > 0 ? ` (${snapshot.reasons.join("; ")})` : ""}
           </p>
-          <ul className="divide-y divide-border/50 rounded-lg border border-border/60 text-xs">
-            {snapshot.topConsumers.map((consumer) => (
-              <li
-                key={`${consumer.pid}:${consumer.startTimeMs}`}
-                className="flex items-center gap-3 px-3 py-1.5"
-              >
-                <span className="min-w-0 flex-1 truncate" title={consumer.command}>
-                  {consumer.name || consumer.command || "unknown"}
-                  <span className="ml-2 text-muted-foreground/60">
-                    {consumer.category} · pid {consumer.pid}
-                  </span>
-                </span>
-                <span className="font-mono tabular-nums">
-                  {formatPressureBytes(consumer.residentBytes)}
-                </span>
-                <span className="w-12 text-right font-mono tabular-nums text-muted-foreground">
-                  {Math.round(consumer.cpuPercent)}%
-                </span>
-                {canOfferStop(consumer) ? (
-                  <Button
-                    size="micro"
-                    variant="ghost"
-                    disabled={stoppingPid !== null}
-                    onClick={() => void stop(consumer)}
-                  >
-                    Stop…
-                  </Button>
-                ) : (
-                  <span className="w-12" />
-                )}
-              </li>
-            ))}
-          </ul>
+          <TopProcessList consumers={snapshot.topConsumers} stopping={busy} onStop={stop} />
+          <div className="flex items-center justify-between gap-3 text-xs">
+            <span className="text-muted-foreground">
+              {accumulation === null
+                ? "Worktree count unavailable"
+                : `${accumulation.worktreeThreadCount} threads own a worktree · ${accumulation.archivedWorktreeThreadCount} archived`}
+            </span>
+            <Button size="micro" variant="outline" disabled={busy} onClick={sweep}>
+              Sweep now…
+            </Button>
+          </div>
         </div>
       ) : null}
-      {query.data && query.data.recentEvents.length > 0 ? (
-        <div className="space-y-1 text-xs">
-          <div className="text-[11px] text-muted-foreground/70">Recent pressure changes</div>
-          {query.data.recentEvents.map((event) => (
-            <div key={event.id} className="flex gap-3">
-              <span className="w-24 shrink-0 text-muted-foreground/60">
-                <Ago at={event.occurredAt} />
-              </span>
-              <span className="min-w-0 truncate">{describePressureEvent(event)}</span>
-            </div>
-          ))}
-        </div>
-      ) : null}
+      <PressureEventList events={query.data?.recentEvents ?? []} />
     </SettingsSection>
   );
 }

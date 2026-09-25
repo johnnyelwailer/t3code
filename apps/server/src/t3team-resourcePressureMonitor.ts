@@ -41,14 +41,8 @@ import {
   isResourcePressureEnabled,
   resolveResourcePressureIntervalMs,
 } from "./t3team-resourcePressureFlag.ts";
-import {
-  applyHysteresis,
-  buildPressureSnapshot,
-  classifyPressure,
-  INITIAL_HYSTERESIS,
-  parseDarwinPressureLevel,
-  type HysteresisState,
-} from "./t3team-resourcePressureModel.ts";
+import { parseDarwinPressureLevel, type HysteresisState } from "./t3team-resourcePressureModel.ts";
+import { makeSampleOnce } from "./t3team-resourcePressureSample.ts";
 
 /** Recent transitions returned with every report. */
 export const RESOURCE_PRESSURE_REPORT_EVENT_LIMIT = 20;
@@ -77,7 +71,15 @@ const makeEnabled = (sampleIntervalMs: number) =>
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 
     const latest = yield* Ref.make<ResourcePressureSnapshot | null>(null);
-    const hysteresis = yield* Ref.make<HysteresisState>(INITIAL_HYSTERESIS);
+    // Resume from the last journaled level so a restart mid-episode does not
+    // record a phantom "ok -> critical" transition.
+    const lastEvent = yield* events
+      .listRecent({ limit: 1 })
+      .pipe(Effect.catch(() => Effect.succeed([])));
+    const hysteresis = yield* Ref.make<HysteresisState>({
+      level: lastEvent[0]?.toLevel ?? "ok",
+      lowerStreak: 0,
+    });
 
     const readOsLevel: Effect.Effect<OsMemoryPressureLevel | null> =
       platform !== "darwin"
@@ -95,55 +97,16 @@ const makeEnabled = (sampleIntervalMs: number) =>
               Effect.catch(() => Effect.succeed(null)),
             );
 
-    const sampleOnce = Effect.gen(function* () {
-      const [host, osLevel, snapshot] = yield* Effect.all(
-        [
-          hostResources.read,
-          readOsLevel,
-          telemetry.refresh.pipe(Effect.catch(() => telemetry.latest)),
-        ],
-        { concurrency: "unbounded" },
-      );
-      const appTreeRssBytes = snapshot.groups.allT3.currentRssBytes;
-      const candidate = classifyPressure({ host, osLevel, appTreeRssBytes });
-      const previous = yield* Ref.get(hysteresis);
-      const next = applyHysteresis(previous, candidate.level);
-      yield* Ref.set(hysteresis, next);
-      const published = buildPressureSnapshot({
-        sampledAt: host.sampledAt,
-        host,
-        osLevel,
-        telemetry: snapshot,
-        level: next.level,
-        reasons: candidate.reasons,
-        serverPid: process.pid,
-        sampleIntervalMs,
-      });
-      yield* Ref.set(latest, published);
-      if (next.level === previous.level) return;
-      const top = published.topConsumers[0];
-      yield* Effect.logWarning("resource pressure level changed", {
-        from: previous.level,
-        to: next.level,
-        reasons: candidate.reasons,
-      });
-      yield* events
-        .append({
-          occurredAt: published.sampledAt,
-          fromLevel: previous.level,
-          toLevel: next.level,
-          availableMemoryBytes: published.availableMemoryBytes,
-          totalMemoryBytes: published.totalMemoryBytes,
-          appTreeRssBytes: published.appTreeRssBytes,
-          reasons: candidate.reasons,
-          topProcessName: top?.name ?? null,
-          topProcessRssBytes: top?.residentBytes ?? 0,
-        })
-        .pipe(
-          Effect.catch((error) =>
-            Effect.logWarning("resource pressure event not persisted", { cause: error.message }),
-          ),
-        );
+    const sampleOnce = makeSampleOnce({
+      hostResources,
+      telemetry,
+      events,
+      readOsLevel,
+      darwin: platform === "darwin",
+      serverPid: process.pid,
+      sampleIntervalMs,
+      latest,
+      hysteresis,
     });
 
     yield* Effect.gen(function* () {

@@ -1109,6 +1109,11 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:signal-process",
       tag: WS_METHODS.serverSignalProcess,
     }),
+    // Runs the existing storage-cleanup sweep now (flag NEXI_FF_RESOURCE_PRESSURE).
+    sweepStorageNow: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:sweep-storage-now",
+      tag: WS_METHODS.serverSweepStorageNow,
+    }),
     refreshUsageRates: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:refresh-usage-rates",
       tag: WS_METHODS.serverRefreshUsageRates,

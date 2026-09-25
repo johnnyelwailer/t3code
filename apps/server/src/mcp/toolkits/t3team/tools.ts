@@ -135,7 +135,7 @@ export const T3TeamProviderUsageTool = Tool.make("t3team_provider_usage", {
 
 export const T3TeamResourcePressureTool = Tool.make("t3team_resource_pressure", {
   description:
-    "Read this host's current memory pressure: level (ok | warn | critical), host and T3 app-tree memory, the top memory-consuming T3 processes, recent pressure transitions, and a stopSpawning flag. Call it before starting children, orchestrations or background jobs; when stopSpawning is true, do not start new work — let running work finish. Returns enabled:false when the host has resource-pressure monitoring turned off.",
+    "Read this host's current memory pressure: level (ok | warn | critical), machine memory, the Nexi Work app itself (server + window), the agents/terminals it spawned, the rest of the machine, worktree count, top memory-consuming T3 processes, recent pressure transitions, and a stopSpawning flag. Call it before starting children, orchestrations or background jobs; while stopSpawning is true the host refuses t3team_start_child and orchestration runs — let running work finish. Returns enabled:false when the host has resource-pressure monitoring turned off.",
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
   dependencies,
