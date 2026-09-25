@@ -22,7 +22,9 @@ import {
   type JournalMaps,
   type JournalStore,
   type ResolvedWireInput,
+  type ReplayWindow,
   type RunMeta,
+  selectReplayWindow,
   toResolvedWire,
   toWire,
 } from "@t3team/sdk";
@@ -60,6 +62,20 @@ export function buildSqliteJournalStore(sql: SqlClient.SqlClient): JournalStore 
     return rows.length > 0 ? Number(rows[0]!.seq) : seqFromCorrelationId(correlationId);
   };
 
+  // Shared by `readEntries` and `readReplayWindow`: the window is derived from the SAME rows
+  // through the shared reference selection (`selectReplayWindow`), so a row-level backend
+  // cannot drift from the contract's selection rule. No new tables or columns — phase one
+  // bounds the READ, not the storage.
+  const readEntries = (runId: string): Promise<JournalMaps> =>
+    Effect.runPromise(
+      sql<EntryJsonRow>`
+        SELECT entry_json AS "entryJson"
+        FROM workflow_journal
+        WHERE run_id = ${runId} AND phase != 'meta'
+        ORDER BY seq ASC, phase ASC
+      `,
+    ).then((rows) => buildJournalMaps(rows.map((row) => JSON.parse(row.entryJson) as unknown)));
+
   return {
     appendEntry: (runId, entry: JournalEntry) =>
       Effect.runPromise(
@@ -92,15 +108,10 @@ export function buildSqliteJournalStore(sql: SqlClient.SqlClient): JournalStore 
       );
     },
 
-    readEntries: (runId): Promise<JournalMaps> =>
-      Effect.runPromise(
-        sql<EntryJsonRow>`
-          SELECT entry_json AS "entryJson"
-          FROM workflow_journal
-          WHERE run_id = ${runId} AND phase != 'meta'
-          ORDER BY seq ASC, phase ASC
-        `,
-      ).then((rows) => buildJournalMaps(rows.map((row) => JSON.parse(row.entryJson) as unknown))),
+    readEntries,
+
+    readReplayWindow: async (runId): Promise<ReplayWindow> =>
+      selectReplayWindow(await readEntries(runId)),
 
     readRunMeta: (runId): Promise<RunMeta | undefined> =>
       Effect.runPromise(

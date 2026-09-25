@@ -2,8 +2,12 @@
 
 import * as NodeModule from "node:module";
 
+export { selectReplayWindow } from "@runbook/core/checkpoint";
 export { createStoreSink, FsJournalStore } from "@runbook/core/journalStore";
+export { runReplayWindowConformance } from "@runbook/core/journalStoreConformance";
+export type { ReplayWindow } from "@runbook/core/checkpoint";
 export type { JournalSink, JournalStore } from "@runbook/core/journalStore";
+export type { ReplayWindowConformanceReport } from "@runbook/core/journalStoreConformance";
 
 const nodeRequire = NodeModule.createRequire(import.meta.url);
 const path = nodeRequire("node:path") as {

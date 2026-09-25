@@ -75,6 +75,7 @@
     "apps/server/src/persistence/Layers/ProjectionThreadMessages.ts",
     "apps/server/src/persistence/Layers/ProjectionThreads.ts",
     "apps/server/src/persistence/Layers/Sqlite.ts",
+    "apps/server/src/persistence/Layers/SqliteJournalStore.ts",
     "apps/server/src/persistence/Layers/WorkflowRuns.ts",
     "apps/server/src/persistence/Migrations.ts",
     "apps/server/src/persistence/Migrations/035_ProjectionThreadTitleRegeneration.test.ts",
