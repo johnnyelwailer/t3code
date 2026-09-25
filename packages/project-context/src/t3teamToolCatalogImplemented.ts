@@ -243,19 +243,6 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       },
     },
   },
-  "t3team.runtime.resource_pressure": {
-    id: "t3team.runtime.resource_pressure",
-    label: "Read resource pressure",
-    title: "Read host memory pressure and top consumers",
-    description:
-      "Read this host's current memory pressure (ok | warn | critical): machine memory, the Nexi Work app itself (server + window RSS), the agents/terminals it spawned, the rest of the machine, worktree count, the top memory-consuming T3 processes, recent pressure transitions and a `stopSpawning` flag. Call it before starting children, orchestrations or background jobs; while `stopSpawning` is true the host refuses start_child and orchestration.run. Reads the latest bounded sample (never triggers a scan). Returns enabled:false when the host has NEXI_FF_RESOURCE_PRESSURE off.",
-    capabilities: ["read"],
-    kind: "read",
-    surfaces: ["thread"],
-    status: "implemented",
-    defaultEnabled: true,
-    inputSchema: EMPTY_OBJECT_INPUT_SCHEMA,
-  },
   "t3team.widget.show": {
     id: "t3team.widget.show",
     label: "Show widget",

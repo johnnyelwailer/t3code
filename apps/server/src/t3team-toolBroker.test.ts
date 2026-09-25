@@ -194,10 +194,6 @@ describe("T3TeamToolBrokerLive", () => {
       "t3team.widget.show": expect.objectContaining({ name: "t3team.widget.show" }),
       "t3team.recipe.list": expect.objectContaining({ name: "t3team.recipe.list" }),
       "t3team.recipe.validate": expect.objectContaining({ name: "t3team.recipe.validate" }),
-      // Always bound; with NEXI_FF_RESOURCE_PRESSURE off it answers enabled:false.
-      "t3team.runtime.resource_pressure": expect.objectContaining({
-        name: "t3team.runtime.resource_pressure",
-      }),
     });
   });
 

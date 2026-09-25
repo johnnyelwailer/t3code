@@ -586,7 +586,7 @@ export const ServerConfig = Schema.Struct({
   threadResubscribeStagger: Schema.optionalKey(Schema.Boolean),
   /**
    * Whether the resource-pressure model (sampler, `server.getResourcePressure`,
-   * agent tool, diagnostics panel) is active. Runtime feature flag (env
+   * auto-pause, per-thread cleanup, diagnostics panel) is active. Runtime feature flag (env
    * `NEXI_FF_RESOURCE_PRESSURE`, default off); absent on older servers.
    */
   resourcePressure: Schema.optionalKey(Schema.Boolean),

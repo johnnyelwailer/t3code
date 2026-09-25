@@ -21,8 +21,7 @@ import {
 import * as HostResources from "./resourceTelemetry/HostResources.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import { DISABLED_REPORT, makeResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
-import { buildAgentResourcePressurePayload } from "./t3team-toolBrokerResourcePressure.ts";
-import { callT3TeamRuntimeReadTool } from "./t3team-toolBrokerRuntimeReadTools.ts";
+import { PRESSURE_ADVISORY, pressureLine } from "./t3team-resourcePressureToolLine.ts";
 
 const GIB = 1024 ** 3;
 const calls = { host: 0, telemetry: 0 };
@@ -103,7 +102,9 @@ describe("ResourcePressureMonitor", () => {
       const report = yield* monitor.report;
       assert.strictEqual(report.enabled, true);
       assert.strictEqual(report.snapshot?.level, "critical");
-      assert.strictEqual(report.snapshot?.stopSpawning, true);
+      // The sampled critical level fed the auto-pause state machine: new turns now hold.
+      assert.strictEqual(report.autoPause?.phase, "pausing");
+      assert.deepStrictEqual(report.autoPause?.threads, []);
       assert.strictEqual(report.recentEvents.length, 1);
       assert.strictEqual(report.recentEvents[0]?.toLevel, "critical");
       assert.strictEqual(report.recentEvents[0]?.topProcessName, "claude");
@@ -111,68 +112,28 @@ describe("ResourcePressureMonitor", () => {
       assert.strictEqual(report.snapshot?.processDataStale, false);
       assert.strictEqual(report.snapshot?.accumulation?.worktreeThreadCount, 45);
 
-      const payload = buildAgentResourcePressurePayload(report, 31_000);
-      assert.deepStrictEqual(Object.keys(payload).toSorted(), [
-        "appProper",
-        "appSpawned",
-        "appTree",
-        "enabled",
-        "host",
-        "level",
-        "osLevel",
-        "processDataStale",
-        "reasons",
-        "recentEvents",
-        "recommendation",
-        "restOfMachineMiB",
-        "sampleAgeSeconds",
-        "stopSpawning",
-        "topProcesses",
-        "worktreeThreads",
-      ]);
-      const full = payload as {
-        topProcesses: unknown;
-        sampleAgeSeconds: number;
-        appSpawned: { rssMiB: number; agentSessions: number; agentSpawnedProcesses: number };
-        restOfMachineMiB: number;
-      };
-      assert.deepStrictEqual(full.topProcesses, [
-        { pid: 4242, name: "claude", category: "provider-root", rssMiB: 7168, cpuPercent: 12 },
-      ]);
-      // TestClock: the sample is stamped at 0, the agent reads at 31 s.
-      assert.strictEqual(full.sampleAgeSeconds, 31);
-      assert.deepStrictEqual(full.appSpawned, {
-        rssMiB: 7168,
-        agentSessions: 1,
-        agentSpawnedProcesses: 0,
-      });
+      const snapshot = report.snapshot!;
+      assert.strictEqual(snapshot.topConsumers[0]?.pid, 4242);
+      assert.strictEqual(snapshot.classes.appSpawned.agentSessionCount, 1);
       // used = 16 - 4 = 12 GiB; T3 tree = 7 GiB; the rest of the machine = 5 GiB.
-      assert.strictEqual(full.restOfMachineMiB, 5 * 1024);
+      assert.strictEqual(snapshot.classes.restOfMachineBytes, 5 * GIB);
+      // What agents see instead of polling: the pushed line on pressure-impacting results.
+      assert.strictEqual(
+        pressureLine(snapshot),
+        "[host] memory pressure: critical · app tree 7.0 GiB · machine: 25% available · " +
+          `critical: ${PRESSURE_ADVISORY.critical}`,
+      );
     }).pipe(Effect.scoped, Effect.provide(stubs)),
   );
 
-  it("agent payload explains disabled and not-yet-sampled states", () => {
-    assert.strictEqual(buildAgentResourcePressurePayload(DISABLED_REPORT, 0).enabled, false);
-    const pending = buildAgentResourcePressurePayload(
-      { enabled: true, snapshot: null, recentEvents: [] },
-      0,
-    );
-    assert.deepStrictEqual(pending, {
-      enabled: true,
-      message: "No resource sample yet; retry shortly.",
-    });
-  });
-
-  it.effect("runtime read tool is not enabled when no handler is bound (flag off)", () =>
+  it.effect("flag off exposes no auto-pause, so the turn gate and tool wrapper are no-ops", () =>
     Effect.gen(function* () {
-      const result = yield* callT3TeamRuntimeReadTool({
-        tool: "t3team.runtime.resource_pressure",
-        scopeLabel: "for this thread.",
-        toolArgs: {},
-        runtimeReadTools: {},
+      const monitor = yield* makeResourcePressureMonitor({
+        enabled: false,
+        sampleIntervalMs: 20_000,
       });
-      assert.strictEqual(result.isError, true);
-    }),
+      assert.strictEqual(monitor.autoPause, undefined);
+    }).pipe(Effect.scoped, Effect.provide(stubs)),
   );
 });
 

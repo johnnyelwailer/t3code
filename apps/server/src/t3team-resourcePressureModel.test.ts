@@ -111,7 +111,7 @@ describe("topConsumers / buildPressureSnapshot", () => {
     expect(topConsumers(snapshotTelemetry, 10, 2)).toHaveLength(2);
   });
 
-  it("sets stopSpawning only at critical", () => {
+  it("publishes no spawn-refusal flag; critical recommends the turn-boundary pause", () => {
     const build = (level: "ok" | "warn" | "critical") =>
       buildPressureSnapshot({
         sampledAt: 1,
@@ -125,11 +125,12 @@ describe("topConsumers / buildPressureSnapshot", () => {
         accumulation: null,
         processDataStale: false,
       });
-    expect(build("ok").stopSpawning).toBe(false);
-    expect(build("warn").stopSpawning).toBe(false);
+    for (const level of ["ok", "warn", "critical"] as const) {
+      expect(build(level)).not.toHaveProperty("stopSpawning");
+    }
     const critical = build("critical");
-    expect(critical.stopSpawning).toBe(true);
     expect(critical.recommendation).toBe(RECOMMENDATIONS.critical);
+    expect(critical.recommendation).toContain("held at their next turn boundary");
     expect(critical.appTreeRssBytes).toBe(11 * GIB);
     expect(critical.appTreeProcessCount).toBe(4);
   });

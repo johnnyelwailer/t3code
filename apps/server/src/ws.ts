@@ -109,6 +109,11 @@ import { isThreadResubscribeStaggerEnabled } from "./t3team-threadResubscribeSta
 import { isResourcePressureEnabled } from "./t3team-resourcePressureFlag.ts";
 import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
 import { sweepStorageNow } from "./t3team-resourcePressureSweep.ts";
+import {
+  executeThreadCleanup,
+  previewThreadCleanup,
+  type ThreadCleanupDeps,
+} from "./t3team-resourcePressureThreadCleanup.ts";
 import { StorageCleanup } from "./storageCleanup.ts";
 import {
   observeRpcEffect as instrumentRpcEffect,
@@ -710,6 +715,14 @@ const makeWsRpcLayer = (
       const storageCleanup = yield* Effect.serviceOption(StorageCleanup);
       const processResourceMonitor = yield* ProcessResourceMonitor.ProcessResourceMonitor;
       const resourceTelemetry = yield* ResourceTelemetry.ResourceTelemetry;
+      const threadCleanupDeps: ThreadCleanupDeps = {
+        enabled: isResourcePressureEnabled(),
+        serverPid: process.pid,
+        telemetry: resourceTelemetry,
+        providers: providerService,
+        signal: processDiagnostics.signal,
+        engine: orchestrationEngine,
+      };
       const usage = yield* UsageService.UsageService;
       const relayClient = yield* RelayClient.RelayClient;
       const cloudSessions = yield* CloudSessionService;
@@ -2727,6 +2740,18 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.serverSweepStorageNow, sweepStorageNow(storageCleanup), {
             "rpc.aggregate": "server",
           }),
+        [WS_METHODS.serverPreviewThreadResourceCleanup]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverPreviewThreadResourceCleanup,
+            previewThreadCleanup(threadCleanupDeps, input.threadId),
+            { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.serverCleanupThreadResources]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverCleanupThreadResources,
+            executeThreadCleanup(threadCleanupDeps, input),
+            { "rpc.aggregate": "server" },
+          ),
         [WS_METHODS.serverSignalProcess]: (input) =>
           observeRpcEffect(WS_METHODS.serverSignalProcess, processDiagnostics.signal(input), {
             "rpc.aggregate": "server",

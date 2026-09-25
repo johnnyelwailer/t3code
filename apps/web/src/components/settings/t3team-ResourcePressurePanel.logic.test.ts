@@ -2,6 +2,7 @@ import type { ResourcePressureConsumer, ResourcePressureEvent } from "@t3tools/c
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  autoPauseStateLabel,
   availablePercent,
   canOfferStop,
   describePressureEvent,
@@ -55,5 +56,16 @@ describe("ResourcePressurePanel logic", () => {
       topProcessRssBytes: 5 * GIB,
     };
     expect(describePressureEvent(event)).toBe("OK → Critical · app 7.0 GB · top: claude 5.0 GB");
+  });
+
+  it("labels where the auto-pause state machine is for paused threads", () => {
+    const view = { cooldownMs: 60_000, threads: [] };
+    expect(autoPauseStateLabel({ ...view, phase: "pausing", resumesAt: null }, 0)).toBe(
+      "holding while critical",
+    );
+    expect(autoPauseStateLabel({ ...view, phase: "cooldown", resumesAt: 60_000 }, 15_500)).toBe(
+      "resuming in 45 s",
+    );
+    expect(autoPauseStateLabel({ ...view, phase: "running", resumesAt: null }, 0)).toBe("resuming");
   });
 });

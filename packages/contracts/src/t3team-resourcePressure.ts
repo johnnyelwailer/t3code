@@ -2,8 +2,9 @@
  * Resource pressure: a bounded, server-side memory-pressure model over the
  * existing resource telemetry (native `t3-resource-monitor` process tree +
  * host memory). One read answers "how short is this machine on memory, what
- * is eating it, and should agents stop spawning work?" for both the agent
- * tool (`t3team.runtime.resource_pressure`) and the diagnostics settings view.
+ * is eating it, and which threads are paused for it?" for the diagnostics
+ * settings view. Agents never poll it: the host pushes a compact pressure line
+ * into pressure-impacting tool results and a one-time note into the next turn.
  *
  * Runtime feature flag: env `NEXI_FF_RESOURCE_PRESSURE` (default off). The
  * server advertises it as `ServerConfig.resourcePressure`; with the flag off
@@ -90,8 +91,6 @@ export const ResourcePressureSnapshot = Schema.Struct({
   /** True when the process scan failed and the last telemetry snapshot was reused. */
   processDataStale: Schema.Boolean,
   topConsumers: Schema.Array(ResourcePressureConsumer),
-  /** Agents should not start new children/workflows/jobs while true. */
-  stopSpawning: Schema.Boolean,
   recommendation: Schema.String,
   sampleIntervalMs: PositiveInt,
 });
@@ -112,11 +111,39 @@ export const ResourcePressureEvent = Schema.Struct({
 });
 export type ResourcePressureEvent = typeof ResourcePressureEvent.Type;
 
+/** A thread whose turns the host holds at a turn boundary while pressure is critical. */
+export const ResourcePressurePausedThread = Schema.Struct({
+  threadId: Schema.String,
+  pausedAt: NonNegativeInt,
+  /** Turn starts held for this thread since it paused. */
+  heldTurnCount: NonNegativeInt,
+});
+export type ResourcePressurePausedThread = typeof ResourcePressurePausedThread.Type;
+
+/**
+ * Auto-pause state machine: `running` (turns start normally) → `pausing`
+ * (critical: new turn starts are held) → `cooldown` (below critical, held
+ * turns wait out the cooldown window) → `running` (held turns resume).
+ */
+export const ResourcePressureAutoPausePhase = Schema.Literals(["running", "pausing", "cooldown"]);
+export type ResourcePressureAutoPausePhase = typeof ResourcePressureAutoPausePhase.Type;
+
+export const ResourcePressureAutoPauseView = Schema.Struct({
+  phase: ResourcePressureAutoPausePhase,
+  cooldownMs: PositiveInt,
+  /** When the cooldown ends and held turns resume; null outside `cooldown`. */
+  resumesAt: Schema.NullOr(NonNegativeInt),
+  threads: Schema.Array(ResourcePressurePausedThread),
+});
+export type ResourcePressureAutoPauseView = typeof ResourcePressureAutoPauseView.Type;
+
 export const ResourcePressureReport = Schema.Struct({
   enabled: Schema.Boolean,
   /** Null until the first sample completes (or always, when disabled). */
   snapshot: Schema.NullOr(ResourcePressureSnapshot),
   recentEvents: Schema.Array(ResourcePressureEvent),
+  /** Absent when disabled. */
+  autoPause: Schema.optionalKey(ResourcePressureAutoPauseView),
 });
 export type ResourcePressureReport = typeof ResourcePressureReport.Type;
 

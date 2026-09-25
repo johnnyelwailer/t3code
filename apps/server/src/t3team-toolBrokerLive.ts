@@ -55,8 +55,6 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     "t3team.widget.show",
     "t3team.recipe.list",
     "t3team.recipe.validate",
-    // Flag NEXI_FF_RESOURCE_PRESSURE off: the monitor answers enabled:false, samples nothing.
-    "t3team.runtime.resource_pressure",
   ] as const;
   const query = yield* ProjectionSnapshotQuery;
   const orchestration = yield* OrchestrationEngineService;

@@ -10,11 +10,6 @@ import * as Effect from "effect/Effect";
 
 import type { T3TeamToolCallResult } from "./t3team-toolBroker.ts";
 import {
-  callT3TeamRuntimeReadTool,
-  isT3TeamRuntimeReadTool,
-  type T3TeamRuntimeReadTools,
-} from "./t3team-toolBrokerRuntimeReadTools.ts";
-import {
   errorResult,
   foldResult,
   okResult,
@@ -107,7 +102,7 @@ export function tryDispatchThreadScopedToolCall(input: {
     callerThreadId: ThreadId,
   ) => Effect.Effect<T3TeamToolCallResult>;
   readonly readRuntimeModels?: () => Effect.Effect<T3TeamToolCallResult>;
-  readonly runtimeReadTools?: T3TeamRuntimeReadTools;
+  readonly readProviderUsage?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
 }): Effect.Effect<T3TeamToolCallResult, never> | undefined {
   const { tool, scopeLabel, toolArgs } = input;
   if (tool === "t3team.thread.start_child") {
@@ -168,9 +163,11 @@ export function tryDispatchThreadScopedToolCall(input: {
     }
     return input.readRuntimeModels();
   }
-  if (isT3TeamRuntimeReadTool(tool)) {
-    const { runtimeReadTools } = input;
-    return callT3TeamRuntimeReadTool({ tool, scopeLabel, toolArgs, runtimeReadTools });
+  if (tool === "t3team.runtime.provider_usage") {
+    if (!input.readProviderUsage) {
+      return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${scopeLabel}.`));
+    }
+    return input.readProviderUsage(toolArgs);
   }
   return undefined;
 }

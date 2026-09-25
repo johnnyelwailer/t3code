@@ -30,7 +30,6 @@ import type { T3TeamWorkflowControlToolHandlers } from "./t3team-toolBrokerWorkf
 import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshService.ts";
 import type { T3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
 import { resolveT3TeamCanonicalToolId } from "./t3team-toolBrokerLegacyToolIds.ts";
-import type { T3TeamRuntimeReadTools } from "./t3team-toolBrokerRuntimeReadTools.ts";
 import {
   tryDispatchThreadScopedToolCall,
   tryDispatchWorkflowToolCall,
@@ -64,8 +63,8 @@ export function dispatchT3TeamToolCall(input: {
     callerThreadId: ThreadId,
   ) => Effect.Effect<T3TeamToolCallResult>;
   readRuntimeModels?: () => Effect.Effect<T3TeamToolCallResult>;
-  /** Host-runtime reads (provider plan limits, memory pressure). */
-  runtimeReadTools?: T3TeamRuntimeReadTools;
+  /** Live plan-limit samples for the configured provider instances. */
+  readProviderUsage?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   publishDraft?: T3TeamDraftMutationPublisher;
 }): ReturnType<T3TeamToolBinding["callTool"]> {
   const { server, toolArgs, state } = input;
@@ -125,7 +124,7 @@ export function dispatchT3TeamToolCall(input: {
     ...(input.readMessageThread ? { readMessageThread: input.readMessageThread } : {}),
     ...(input.manageChildren ? { manageChildren: input.manageChildren } : {}),
     ...(input.readRuntimeModels ? { readRuntimeModels: input.readRuntimeModels } : {}),
-    ...(input.runtimeReadTools ? { runtimeReadTools: input.runtimeReadTools } : {}),
+    ...(input.readProviderUsage ? { readProviderUsage: input.readProviderUsage } : {}),
   });
   if (threadScopedToolCall !== undefined) {
     return threadScopedToolCall;

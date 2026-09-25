@@ -20,9 +20,8 @@ import { setBacklogAssigneeFilterForContext } from "./t3team-toolBrokerBacklogFi
 import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
 import { buildRuntimeModelCatalog } from "./t3team-runtimeModelCatalog.ts";
 import { makeReadProviderUsage } from "./t3team-toolBrokerProviderUsage.ts";
-import { makeReadResourcePressure } from "./t3team-toolBrokerResourcePressure.ts";
-import { gateSpawnOnPressure, gateWorkflowRunTools } from "./t3team-resourcePressureGate.ts";
 import { type BindSessionDeps } from "./t3team-toolBrokerLiveSessionDeps.ts";
+import { withPressureLines } from "./t3team-resourcePressureToolLine.ts";
 
 export type { BindSessionDeps } from "./t3team-toolBrokerLiveSessionDeps.ts";
 
@@ -70,7 +69,8 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
         return undefined;
       }
 
-      return createT3TeamThreadToolBinding({
+      // Pressure-impacting tool results carry the memory-pressure line (flag off = untouched).
+      const binding = createT3TeamThreadToolBinding({
         showWidget: bindShowWidget({
           threadId,
           loadThreadProject: () => loadThreadProject(threadId),
@@ -84,13 +84,7 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
         readView: () => loadThreadView(threadId, resolvedToolContext),
         renameThread: (title) => renameThread(threadId, title),
         renameThreadResult: (title) => ({ ok: true, threadId, title }),
-        // Dispatch backoff: refused while resource pressure says stopSpawning.
-        startChild: (toolArgs) =>
-          gateSpawnOnPressure(
-            resourcePressure,
-            "a child session",
-            startChildThread(threadId, toolArgs),
-          ),
+        startChild: (toolArgs) => startChildThread(threadId, toolArgs),
         manageChildren: (toolArgs, callerThreadId) => manageChildren(toolArgs, callerThreadId),
         readRuntimeModels: () =>
           Effect.gen(function* () {
@@ -107,13 +101,7 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
               ),
             ),
           ),
-        runtimeReadTools: {
-          "t3team.runtime.provider_usage": (toolArgs) =>
-            makeReadProviderUsage({ serverSettings })(toolArgs),
-          ...(resourcePressure
-            ? { "t3team.runtime.resource_pressure": makeReadResourcePressure(resourcePressure) }
-            : {}),
-        },
+        readProviderUsage: (toolArgs) => makeReadProviderUsage({ serverSettings })(toolArgs),
         setBacklogAssigneeFilter: (mode) =>
           setBacklogAssigneeFilterForContext(resolvedToolContext, mode),
         refreshContextBundle: contextRefresh,
@@ -161,12 +149,7 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
           }),
         recipeTools: recipeToolsForThread(threadId),
         ...(workflowTools.workflowRunToolsForThread
-          ? {
-              workflowRunTools: gateWorkflowRunTools(
-                resourcePressure,
-                workflowTools.workflowRunToolsForThread(threadId),
-              ),
-            }
+          ? { workflowRunTools: workflowTools.workflowRunToolsForThread(threadId) }
           : {}),
         ...(workflowTools.workflowStatusToolsForThread
           ? { workflowStatusTools: workflowTools.workflowStatusToolsForThread(threadId) }
@@ -178,5 +161,6 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
           ? { workflowControlTools: workflowTools.workflowControlToolsForThread(threadId) }
           : {}),
       });
+      return withPressureLines(binding, resourcePressure);
     });
 }

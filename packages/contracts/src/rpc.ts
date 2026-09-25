@@ -251,6 +251,12 @@ import {
 } from "./resourceTelemetry.ts";
 import { ResourcePressureReport, ResourcePressureSweepResult } from "./t3team-resourcePressure.ts";
 import {
+  ResourcePressureCleanupExecuteInput,
+  ResourcePressureCleanupInput,
+  ResourcePressureCleanupPlan,
+  ResourcePressureCleanupResult,
+} from "./t3team-resourcePressureCleanup.ts";
+import {
   UsageLimitSourceError,
   ProviderConsumeResetCreditInput,
   ProviderConsumeResetCreditResult,
@@ -397,6 +403,8 @@ export const WS_METHODS = {
   serverSignalProcess: "server.signalProcess",
   serverGetResourcePressure: "server.getResourcePressure",
   serverSweepStorageNow: "server.sweepStorageNow",
+  serverPreviewThreadResourceCleanup: "server.previewThreadResourceCleanup",
+  serverCleanupThreadResources: "server.cleanupThreadResources",
   serverReportClientActivity: "server.reportClientActivity",
   serverReportHostPowerState: "server.reportHostPowerState",
   serverGetBackgroundPolicy: "server.getBackgroundPolicy",
@@ -685,6 +693,22 @@ const WsServerGetResourcePressureRpc = Rpc.make(WS_METHODS.serverGetResourcePres
 const WsServerSweepStorageNowRpc = Rpc.make(WS_METHODS.serverSweepStorageNow, {
   payload: Schema.Struct({}),
   success: ResourcePressureSweepResult,
+  error: EnvironmentAuthorizationError,
+});
+
+// One thread's agent session + background jobs: preview (PIDs and why), then act on the confirmed set.
+const WsServerPreviewThreadResourceCleanupRpc = Rpc.make(
+  WS_METHODS.serverPreviewThreadResourceCleanup,
+  {
+    payload: ResourcePressureCleanupInput,
+    success: ResourcePressureCleanupPlan,
+    error: EnvironmentAuthorizationError,
+  },
+);
+
+const WsServerCleanupThreadResourcesRpc = Rpc.make(WS_METHODS.serverCleanupThreadResources, {
+  payload: ResourcePressureCleanupExecuteInput,
+  success: ResourcePressureCleanupResult,
   error: EnvironmentAuthorizationError,
 });
 
@@ -1513,6 +1537,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerSignalProcessRpc,
   WsServerGetResourcePressureRpc,
   WsServerSweepStorageNowRpc,
+  WsServerPreviewThreadResourceCleanupRpc,
+  WsServerCleanupThreadResourcesRpc,
   WsServerReportClientActivityRpc,
   WsServerReportHostPowerStateRpc,
   WsServerGetBackgroundPolicyRpc,

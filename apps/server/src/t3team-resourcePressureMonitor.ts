@@ -14,8 +14,11 @@
  *
  * One sample per period (default 20 s, clamped to [10 s, 120 s]); samples never
  * overlap because the loop is sequential. Level transitions (after hysteresis)
- * are appended to the durable `resource_pressure_events` journal and logged.
- * With the flag off the layer forks nothing and reports `enabled: false`.
+ * are appended to the durable `resource_pressure_events` journal and logged,
+ * and every sampled level feeds the auto-pause state machine
+ * (`t3team-resourcePressureAutoPause.ts`) that holds turn starts while
+ * critical. With the flag off the layer forks nothing, reports
+ * `enabled: false` and exposes no auto-pause (the turn gate is a no-op).
  *
  * @module t3team-resourcePressureMonitor
  */
@@ -43,12 +46,18 @@ import {
 } from "./t3team-resourcePressureFlag.ts";
 import { parseDarwinPressureLevel, type HysteresisState } from "./t3team-resourcePressureModel.ts";
 import { makeSampleOnce } from "./t3team-resourcePressureSample.ts";
+import {
+  makeResourcePressureAutoPause,
+  type ResourcePressureAutoPauseShape,
+} from "./t3team-resourcePressureAutoPause.ts";
 
 /** Recent transitions returned with every report. */
 export const RESOURCE_PRESSURE_REPORT_EVENT_LIMIT = 20;
 
 export interface ResourcePressureMonitorShape {
   readonly report: Effect.Effect<ResourcePressureReport>;
+  /** Present only with the flag on. */
+  readonly autoPause?: ResourcePressureAutoPauseShape;
 }
 
 export class ResourcePressureMonitor extends Context.Service<
@@ -71,6 +80,7 @@ const makeEnabled = (sampleIntervalMs: number) =>
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 
     const latest = yield* Ref.make<ResourcePressureSnapshot | null>(null);
+    const autoPause = yield* makeResourcePressureAutoPause();
     // Resume from the last journaled level so a restart mid-episode does not
     // record a phantom "ok -> critical" transition.
     const lastEvent = yield* events
@@ -116,6 +126,8 @@ const makeEnabled = (sampleIntervalMs: number) =>
             Effect.logWarning("resource pressure sample failed", { cause: Cause.pretty(cause) }),
           ),
         );
+        const sampled = yield* Ref.get(latest);
+        if (sampled !== null) yield* autoPause.observe(sampled.level, sampled.sampledAt);
         yield* Effect.sleep(Duration.millis(sampleIntervalMs));
       }
     }).pipe(Effect.forkScoped);
@@ -124,10 +136,11 @@ const makeEnabled = (sampleIntervalMs: number) =>
       const recentEvents = yield* events
         .listRecent({ limit: RESOURCE_PRESSURE_REPORT_EVENT_LIMIT })
         .pipe(Effect.catch(() => Effect.succeed([])));
-      return { enabled: true, snapshot: yield* Ref.get(latest), recentEvents };
+      const snapshot = yield* Ref.get(latest);
+      return { enabled: true, snapshot, recentEvents, autoPause: yield* autoPause.view };
     });
 
-    return ResourcePressureMonitor.of({ report });
+    return ResourcePressureMonitor.of({ report, autoPause });
   });
 
 /** Disabled = a constant report: no fiber, no sample, no service or journal access. */

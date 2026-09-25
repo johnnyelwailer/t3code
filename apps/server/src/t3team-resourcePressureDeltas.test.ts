@@ -1,6 +1,5 @@
 import type {
   ResourcePressureEvent,
-  ResourcePressureReport,
   ResourcePressureSnapshot,
   ResourceTelemetrySnapshot,
 } from "@t3tools/contracts";
@@ -12,7 +11,6 @@ import * as Ref from "effect/Ref";
 
 import type { ResourcePressureEventRepositoryShape } from "./persistence/Services/t3team-ResourcePressureEvents.ts";
 import { bucketByClass, descendsFrom, indexByPid } from "./t3team-resourcePressureClasses.ts";
-import { gateSpawnOnPressure } from "./t3team-resourcePressureGate.ts";
 import {
   classifyPressure,
   topConsumers,
@@ -94,47 +92,9 @@ describe("darwin kernel-read failure", () => {
   });
 });
 
-const critical = { stopSpawning: true, reasons: ["macOS reports critical memory pressure"] };
-const report = (snapshot: object | null, enabled = true) => ({
-  report: Effect.succeed({
-    enabled,
-    snapshot: snapshot as ResourcePressureSnapshot | null,
-    recentEvents: [],
-  } satisfies ResourcePressureReport),
-});
-
-describe("dispatch backoff (spec delta 2)", () => {
-  it.effect("refuses a spawn while stopSpawning, admits otherwise", () =>
-    Effect.gen(function* () {
-      const refused = yield* gateSpawnOnPressure(
-        report(critical),
-        "a child session",
-        Effect.succeed("spawned"),
-      ).pipe(Effect.flip);
-      assert.include(String(refused), "Not starting a child session");
-      assert.include(String(refused), "macOS reports critical");
-      const admitted = yield* gateSpawnOnPressure(
-        report({ stopSpawning: false, reasons: [] }),
-        "a child session",
-        Effect.succeed("spawned"),
-      );
-      assert.strictEqual(admitted, "spawned");
-      assert.strictEqual(
-        yield* gateSpawnOnPressure(report(critical, false), "x", Effect.succeed("spawned")),
-        "spawned",
-        "flag off never blocks",
-      );
-      assert.strictEqual(
-        yield* gateSpawnOnPressure(report(null), "x", Effect.succeed("spawned")),
-        "spawned",
-      );
-      assert.strictEqual(
-        yield* gateSpawnOnPressure(undefined, "x", Effect.succeed("spawned")),
-        "spawned",
-      );
-    }),
-  );
-});
+// Spec delta 2 (dispatch backoff) is no longer a refusal: spawns always run, their results carry
+// the pressure line, and critical pressure holds turns at the boundary. See
+// t3team-resourcePressurePush.test.ts and t3team-resourcePressureAutoPause.test.ts.
 
 describe("sweep now (spec delta 5)", () => {
   it.effect("runs the existing storage sweep only when enabled and available", () =>

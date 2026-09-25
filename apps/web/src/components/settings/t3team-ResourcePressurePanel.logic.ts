@@ -1,4 +1,5 @@
 import type {
+  ResourcePressureAutoPauseView,
   ResourcePressureConsumer,
   ResourcePressureEvent,
   ResourcePressureLevel,
@@ -56,6 +57,15 @@ export function stopConfirmMessage(consumer: ResourcePressureConsumer): string {
     `${formatPressureBytes(consumer.residentBytes)})? It receives SIGINT (like Ctrl-C) and can clean up; ` +
     "any agent or terminal running in it ends."
   );
+}
+
+/** Where the auto-pause state machine is, for the paused-thread rows. */
+export function autoPauseStateLabel(view: ResourcePressureAutoPauseView, nowMs: number): string {
+  if (view.phase === "pausing") return "holding while critical";
+  if (view.phase === "cooldown" && view.resumesAt !== null) {
+    return `resuming in ${Math.max(0, Math.ceil((view.resumesAt - nowMs) / 1000))} s`;
+  }
+  return "resuming";
 }
 
 export const SWEEP_CONFIRM_MESSAGE =

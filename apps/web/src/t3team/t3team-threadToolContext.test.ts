@@ -121,11 +121,6 @@ describe("createT3TeamTurnToolContext", () => {
           capabilities: ["read"],
         },
         {
-          id: "t3team.runtime.resource_pressure",
-          label: "Read resource pressure",
-          capabilities: ["read"],
-        },
-        {
           id: "t3team.widget.show",
           label: "Show widget",
           capabilities: ["write"],

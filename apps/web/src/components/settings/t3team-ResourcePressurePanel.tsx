@@ -3,9 +3,10 @@
  * `NEXI_FF_RESOURCE_PRESSURE`, advertised as `ServerConfig.resourcePressure`;
  * the parent mounts this only when it is on). Shows the level, the machine /
  * app / spawned / rest-of-machine split, the top T3 processes, worktree
- * accumulation, the persisted pressure history, and two safe actions: stop a
- * process by its exact PID + start time, and run the configured storage sweep
- * now — both after confirmation.
+ * accumulation, the auto-paused threads, the persisted pressure history, and
+ * three safe actions: stop a process by its exact PID + start time, clean up
+ * one paused thread's agent session + jobs, and run the configured storage
+ * sweep now — all after confirmation.
  */
 import type { EnvironmentId, ResourcePressureConsumer } from "@t3tools/contracts";
 import { GaugeIcon } from "lucide-react";
@@ -35,6 +36,7 @@ import {
   PressureStats,
   TopProcessList,
 } from "./t3team-ResourcePressureParts";
+import { PausedThreadList } from "./t3team-ResourcePressurePausedThreads";
 
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
@@ -148,6 +150,7 @@ export function ResourcePressurePanel({ environmentId }: { environmentId: Enviro
             {snapshot.recommendation}
             {snapshot.reasons.length > 0 ? ` (${snapshot.reasons.join("; ")})` : ""}
           </p>
+          <PausedThreadList environmentId={environmentId} autoPause={query.data?.autoPause} />
           <TopProcessList consumers={snapshot.topConsumers} stopping={busy} onStop={stop} />
           <div className="flex items-center justify-between gap-3 text-xs">
             <span className="text-muted-foreground">

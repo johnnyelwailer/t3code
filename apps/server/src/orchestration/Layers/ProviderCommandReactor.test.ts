@@ -76,6 +76,12 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Clock from "effect/Clock";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { ProviderUsageDevError, ProviderUsageWatcher } from "../../t3team-providerUsageWatcher.ts";
+import {
+  makeResourcePressureAutoPause,
+  type ResourcePressureAutoPauseShape,
+} from "../../t3team-resourcePressureAutoPause.ts";
+import { DISABLED_REPORT, ResourcePressureMonitor } from "../../t3team-resourcePressureMonitor.ts";
+import { NOTE_HEADER } from "../../t3team-resourcePressureTurnGate.ts";
 import { ServerActivation } from "../../serverActivation.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import * as GitWorkflowService from "../../git/GitWorkflowService.ts";
@@ -192,6 +198,7 @@ describe("ProviderCommandReactor", () => {
       session: ProviderSession,
     ) => Effect.Effect<ProviderSession, ProviderServiceError>;
     readonly tryHandlePromptCommandEffect?: ProviderAuthService["Service"]["tryHandlePromptCommand"];
+    readonly resourcePressureAutoPause?: ResourcePressureAutoPauseShape;
   }) {
     const now = "2026-01-01T00:00:00.000Z";
     const baseDir =
@@ -470,6 +477,15 @@ describe("ProviderCommandReactor", () => {
       Layer.provideMerge(reactorOrchestrationLayer),
       Layer.provideMerge(projectionSnapshotLayer),
       Layer.provideMerge(Layer.succeed(ProviderService, service)),
+      // Memory-pressure monitor: no auto-pause (= flag off) unless a test opts in.
+      Layer.provideMerge(
+        Layer.succeed(ResourcePressureMonitor, {
+          report: Effect.succeed(DISABLED_REPORT),
+          ...(input?.resourcePressureAutoPause
+            ? { autoPause: input.resourcePressureAutoPause }
+            : {}),
+        }),
+      ),
       Layer.provide(Layer.mock(ProviderAuthService, { tryHandlePromptCommand })),
       Layer.provideMerge(makeProviderRegistryLayer(providerSnapshots as never)),
       Layer.provideMerge(
@@ -864,6 +880,51 @@ describe("ProviderCommandReactor", () => {
       );
     }),
   );
+
+  it("memory pressure: holds a new turn while critical, replays it with one note after cooldown", async () => {
+    const autoPause = await Effect.runPromise(makeResourcePressureAutoPause(1_000));
+    const harness = await createHarness({ resourcePressureAutoPause: autoPause });
+    const turnStart = (id: string, text: string) =>
+      Effect.runPromise(
+        harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make(`cmd-${id}`),
+          threadId: ThreadId.make("thread-1"),
+          message: { messageId: asMessageId(id), role: "user", text, attachments: [] },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt: "2026-01-01T00:00:00.000Z",
+        }),
+      );
+    const pausedThreads = async () =>
+      (await Effect.runPromise(autoPause.view)).threads.map((thread) => thread.threadId);
+
+    const now = () => Effect.runPromise(Clock.currentTimeMillis);
+    await Effect.runPromise(autoPause.observe("critical", await now()));
+    await turnStart("held-message", "build it");
+    await waitFor(async () => (await pausedThreads()).length === 1);
+    // Drained = the turn start was fully processed (a sent turn would have built its input by now).
+    await harness.drain();
+    expect(await pausedThreads()).toEqual(["thread-1"]);
+    expect(harness.sendTurn).not.toHaveBeenCalled();
+
+    // Below critical for the (test) cooldown: the held turn replays, prefixed by exactly one note.
+    await Effect.runPromise(autoPause.observe("ok", await now()));
+    await Effect.runPromise(autoPause.observe("ok", (await now()) + 1_000));
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+    const replayed = String(
+      (harness.sendTurn.mock.calls[0]?.[0] as { readonly input?: string } | undefined)?.input,
+    );
+    expect(replayed.startsWith(`${NOTE_HEADER}\nPaused `)).toBe(true);
+    expect(replayed).toContain("s for memory pressure; current level ok.");
+    expect(replayed.endsWith("build it")).toBe(true);
+    expect(await pausedThreads()).toEqual([]);
+
+    // The next turn carries no repeated note.
+    await turnStart("next-message", "and test it");
+    await waitFor(() => harness.sendTurn.mock.calls.length === 2);
+    expect(harness.sendTurn.mock.calls[1]?.[0]).toMatchObject({ input: "and test it" });
+  });
 
   it("reacts to thread.turn.start by ensuring session and sending provider turn", async () => {
     const harness = await createHarness();

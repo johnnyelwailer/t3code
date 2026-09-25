@@ -406,6 +406,7 @@ import {
   deriveProviderUsageWarningBanner,
   ProviderUsageHoldToggle,
 } from "./chat/t3team-ProviderUsageHoldBanner";
+import { useResourcePressureBannerItem } from "./chat/t3team-ResourcePressureThreadBanner";
 import { shouldSuppressT3TeamProviderStatus } from "~/t3team/chat/t3team-providerStatusSeverity";
 import {
   dismissThreadErrorBannerForSession,
@@ -2845,6 +2846,13 @@ export default function ChatView(props: ChatViewProps) {
     }
   }, [providerUsageHold?.autoResume, providerUsageHold, providerUsageHoldAutoResumeOverride]);
   const providerUsageHoldHttpBaseUrl = useEnvironmentHttpBaseUrl(environmentId);
+  // Memory-pressure pause badge + per-thread cleanup (flag NEXI_FF_RESOURCE_PRESSURE).
+  const resourcePressureBanner = useResourcePressureBannerItem({
+    enabled: serverConfig?.resourcePressure === true,
+    environmentId,
+    threadId: activeThreadId,
+    activities: activeThread?.activities ?? EMPTY_ACTIVITIES,
+  });
 
   const systemComposerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
     const items: ComposerBannerStackItem[] = [];
@@ -3053,10 +3061,12 @@ export default function ChatView(props: ChatViewProps) {
       });
     }
     if (autoBalanceUpdateBanner) items.push(autoBalanceUpdateBanner);
+    if (resourcePressureBanner) items.push(resourcePressureBanner);
     return items;
   }, [
     automaticEnvironment,
     autoBalanceUpdateBanner,
+    resourcePressureBanner,
     activeEnvironmentUnavailableState,
     activeThreadId,
     providerUsageHold,

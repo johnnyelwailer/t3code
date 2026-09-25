@@ -46,7 +46,7 @@ export const RECOMMENDATIONS: Record<ResourcePressureLevel, string> = {
   ok: "Resources are fine; no action needed.",
   warn: "Memory is getting short. Avoid starting parallel children or heavy background jobs; prefer finishing current work first.",
   critical:
-    "Memory is critically short. Do not start new children, workflows or background jobs. Let running work finish, or ask the user to stop the top consumers.",
+    "Memory is critically short. New turns are held at their next turn boundary and resume automatically after pressure clears; stop the top consumers or clean up a thread's resources to recover sooner.",
 };
 
 export interface HostMemoryReading {
@@ -175,7 +175,6 @@ export function buildPressureSnapshot(input: {
     accumulation: input.accumulation,
     processDataStale: input.processDataStale,
     topConsumers: topConsumers(input.telemetry, input.serverPid),
-    stopSpawning: input.level === "critical",
     recommendation: RECOMMENDATIONS[input.level],
     sampleIntervalMs: input.sampleIntervalMs,
   };

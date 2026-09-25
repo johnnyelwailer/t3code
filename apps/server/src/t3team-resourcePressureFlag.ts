@@ -1,7 +1,8 @@
 /**
  * Runtime feature flag: the resource-pressure model (memory-pressure sampler,
- * persisted pressure events, `server.getResourcePressure`, the agent tool
- * `t3team.runtime.resource_pressure` and the diagnostics panel).
+ * persisted pressure events, `server.getResourcePressure`, the pressure line on
+ * pressure-impacting tool results, the turn notes, auto-pause at the turn
+ * boundary, per-thread cleanup and the diagnostics panel).
  *
  * The server advertises the flag to clients through `ServerConfig.resourcePressure`.
  *

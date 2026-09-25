@@ -32,7 +32,6 @@ describe("t3teamToolCatalog", () => {
     expect(listImplementedT3TeamToolCatalogEntries().map((tool) => tool.id)).toEqual([
       "t3team.runtime.models",
       "t3team.runtime.provider_usage",
-      "t3team.runtime.resource_pressure",
       "t3team.widget.show",
       "t3team.backlog.set_assignee_filter",
       "t3team.view.read",
@@ -70,7 +69,6 @@ describe("t3teamToolCatalog", () => {
     expect(DEFAULT_T3TEAM_THREAD_TOOL_IDS).toEqual([
       "t3team.runtime.models",
       "t3team.runtime.provider_usage",
-      "t3team.runtime.resource_pressure",
       "t3team.widget.show",
       "t3team.view.read",
       "t3team.recipe.list",
