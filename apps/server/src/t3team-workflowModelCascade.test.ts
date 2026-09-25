@@ -181,3 +181,25 @@ describe("resolveWorkflowModelCascade — live catalog", () => {
     expect(choice.reason).toContain("no provider registry wired");
   });
 });
+
+describe("resolveModelCascade — auto-latest routing", () => {
+  const openai = provider("openai", [{ slug: "gpt-6-sol" }, { slug: "gpt-6-astra" }]);
+  const entries = [{ instanceId: "openai", model: "gpt-5.6-sol" }];
+
+  it("routes a stale rung to the newest same-tier model and says so in the journaled reason", () => {
+    const choice = resolveModelCascade({
+      base,
+      entries,
+      providers: [openai],
+      autoLatestModel: true,
+    });
+    expect(choice.selection?.model).toBe("gpt-6-sol");
+    expect(choice.reason).toContain("(auto-latest from gpt-5.6-sol)");
+  });
+
+  it("flag off: a model the instance does not own still falls through", () => {
+    const choice = resolveModelCascade({ base, entries, providers: [openai] });
+    expect(choice.selection).toBeUndefined();
+    expect(choice.reason).toContain("gpt-5.6-sol");
+  });
+});

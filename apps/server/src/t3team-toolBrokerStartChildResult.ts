@@ -3,6 +3,7 @@ import type {
   RuntimeMode,
   ThreadEnvironmentBinding,
 } from "@t3tools/contracts";
+import type { ModelRouting } from "@t3tools/shared/t3team-modelRouting";
 
 import type {
   T3TeamStartChildIsolation,
@@ -30,6 +31,8 @@ export function buildStartChildResult(input: {
   /** Set when a requested provider-agnostic `effort` could not be honored — the launch result
    * says so explicitly instead of silently downgrading. */
   readonly effortNote?: string;
+  /** Auto-latest routing record (`NEXI_FF_AUTO_LATEST_MODEL`): requested vs effective slug. */
+  readonly modelRouting?: ModelRouting;
   readonly setupScriptStatus: "not-requested" | "no-script" | "started" | "failed";
   readonly requestedKickoffMode?: T3TeamStartChildKickoffMode;
   readonly reasoningEffort?: string;
@@ -65,9 +68,12 @@ export function buildStartChildResult(input: {
             "child to let it implement.",
         }
       : {}),
-    ...(input.requestedModel && input.requestedModel !== input.model
+    // A routed model is explained by `model_routing`; `model_normalized_from` stays for
+    // alias/casing normalization only.
+    ...(input.requestedModel && input.requestedModel !== input.model && !input.modelRouting?.routed
       ? { model_normalized_from: input.requestedModel }
       : {}),
+    ...(input.modelRouting ? { model_routing: input.modelRouting } : {}),
     ...(input.effortNote ? { effort_note: input.effortNote } : {}),
     setup_script_status: input.setupScriptStatus,
     navigate_to: { target: "project_session", project_session_id: input.childThreadId },

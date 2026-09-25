@@ -2,7 +2,9 @@ import { ProviderInstanceId, type ModelSelection, type ServerProvider } from "@t
 import * as Effect from "effect/Effect";
 
 import type { AgentEffort } from "@t3team/sdk";
+import { type ModelRouting, resolveModelRouting } from "@t3tools/shared/t3team-modelRouting";
 
+import { isAutoLatestModelEnabled } from "./t3team-autoLatestModelFlag.ts";
 import {
   buildStartChildModelSelection,
   type T3TeamStartChildArgs,
@@ -37,10 +39,18 @@ export type ResolveStartChildModelSelectionInput = {
    * (same one workflow child turns use). Ignored when `reasoningEffort` is also set. */
   readonly effort?: AgentEffort | undefined;
   readonly providers: ReadonlyArray<ServerProvider>;
+  /** Auto-latest routing of `requestedModel` against the target provider's catalog; the
+   * effectful callers pass the live `NEXI_FF_AUTO_LATEST_MODEL` flag. Absent = off. */
+  readonly autoLatestModel?: boolean | undefined;
 };
 
 export type ResolveStartChildModelSelectionResult =
-  | { readonly ok: true; readonly value: ModelSelection }
+  | {
+      readonly ok: true;
+      readonly value: ModelSelection;
+      /** Requested-vs-effective record; present whenever a model was explicitly requested. */
+      readonly modelRouting?: ModelRouting;
+    }
   | { readonly ok: false; readonly message: string };
 
 /**
@@ -63,23 +73,33 @@ export function resolveStartChildModelSelection(
     input.reasoningEffort
       ? selection
       : applyWorkflowEffort(selection, input.effort, input.providers);
+  // Auto-latest routing runs against the TARGET provider's live catalog, before any slug
+  // validation, so a stale-but-routable slug resolves instead of failing.
+  const route = (target: ServerProvider | undefined): ModelRouting | undefined =>
+    input.requestedModel
+      ? resolveModelRouting(input.requestedModel, target?.models.map((m) => m.slug) ?? [], {
+          flagOn: input.autoLatestModel === true,
+        })
+      : undefined;
   const requested = input.requestedProvider?.trim();
   if (!requested) {
     const target = input.providers.find(
       (provider) => provider.instanceId === input.parentModelSelection.instanceId,
     );
+    const modelRouting = route(target);
     return {
       ok: true,
       value: withTier(
         buildStartChildModelSelection(
           input.parentModelSelection,
           {
-            ...(input.requestedModel ? { model: input.requestedModel } : {}),
+            ...(modelRouting ? { model: modelRouting.effective } : {}),
             ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
           },
           target,
         ),
       ),
+      ...(modelRouting ? { modelRouting } : {}),
     };
   }
 
@@ -101,7 +121,8 @@ export function resolveStartChildModelSelection(
     };
   }
 
-  const slug = resolveSlug(target, input.requestedModel, input.parentModelSelection.model);
+  const modelRouting = route(target);
+  const slug = resolveSlug(target, modelRouting?.effective, input.parentModelSelection.model);
   if (!slug.ok) return slug;
 
   const base: ModelSelection = {
@@ -118,6 +139,7 @@ export function resolveStartChildModelSelection(
         target,
       ),
     ),
+    ...(modelRouting ? { modelRouting } : {}),
   };
 }
 
@@ -135,6 +157,7 @@ export function resolveStartChildModelSelection(
 export type ResolveChildModelResult = {
   readonly modelSelection: ModelSelection;
   readonly effortNote?: string;
+  readonly modelRouting?: ModelRouting;
 };
 
 export function resolveChildModel(
@@ -157,6 +180,7 @@ export function resolveChildModel(
       ...(args.reasoningEffort ? { reasoningEffort: args.reasoningEffort } : {}),
       ...(args.effort ? { effort: args.effort } : {}),
       providers,
+      autoLatestModel: isAutoLatestModelEnabled(),
     });
     if (!result.ok) return yield* Effect.fail(result.message);
     const effortNote =
@@ -167,6 +191,7 @@ export function resolveChildModel(
     return {
       modelSelection: result.value,
       ...(effortNote ? { effortNote } : {}),
+      ...(result.modelRouting ? { modelRouting: result.modelRouting } : {}),
     };
   });
 }

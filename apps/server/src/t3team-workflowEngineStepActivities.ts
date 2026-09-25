@@ -39,6 +39,7 @@ export interface WorkflowStepSentInput {
    * from the nearest matched plan row — see `reconcileT3TeamWorkflowShapeProgress`.
    */
   readonly workflowPhase?: string;
+  readonly modelRouting?: ProjectRecipeWorkflowStepActivityPayload["modelRouting"]; // see schema
 }
 
 export interface WorkflowStepActivityEmitter {
@@ -76,6 +77,7 @@ interface SentStepRecord {
    * rather than reading a live tracker that (by the time a reply resolves) may belong to a
    * different point in the replayed body — see `WorkflowStepSentInput.workflowPhase`. */
   readonly workflowPhase: string | undefined;
+  readonly modelRouting: WorkflowStepSentInput["modelRouting"];
 }
 
 export function createWorkflowStepActivityEmitter(opts: {
@@ -127,6 +129,7 @@ export function createWorkflowStepActivityEmitter(opts: {
         createdAt,
         threadId: input.threadId,
         workflowPhase: input.workflowPhase,
+        modelRouting: input.modelRouting,
       });
       return append(
         input.correlationId,
@@ -140,6 +143,7 @@ export function createWorkflowStepActivityEmitter(opts: {
           projectId: opts.projectId,
           ...(input.threadId === undefined ? {} : { threadId: input.threadId }),
           ...(input.workflowPhase === undefined ? {} : { workflowPhase: input.workflowPhase }),
+          ...(input.modelRouting === undefined ? {} : { modelRouting: input.modelRouting }),
         },
         input.detail ?? "Workflow activity",
         createdAt,
@@ -171,6 +175,7 @@ export function createWorkflowStepActivityEmitter(opts: {
           // SDK host's `resume` (`t3team-sdk.workflowHost`). Absent after a process
           // restart (the in-memory map is empty), same as `detail`/`stepKind` above.
           ...(sent?.workflowPhase === undefined ? {} : { workflowPhase: sent.workflowPhase }),
+          ...(sent?.modelRouting === undefined ? {} : { modelRouting: sent.modelRouting }),
           ...(durationMs === undefined ? {} : { durationMs }),
         },
         `Workflow step ${phase}: ${sent?.detail ?? sent?.stepKind ?? correlationId}`,

@@ -61,7 +61,7 @@ export function makeStartChildThread(input: {
         workflowLaunchThreadId: input.services.workflowLaunchThreadForChild?.(thread.id),
       });
       const { listProviders } = input.services;
-      const { modelSelection, effortNote } = yield* resolveChildModel(
+      const { modelSelection, effortNote, modelRouting } = yield* resolveChildModel(
         baseModelSelection,
         args,
         listProviders,
@@ -198,6 +198,7 @@ export function makeStartChildThread(input: {
         ...(environmentNote ? { environmentNote } : {}),
         ...(args.model ? { requestedModel: args.model } : {}),
         ...(effortNote ? { effortNote } : {}),
+        ...(modelRouting ? { modelRouting } : {}),
         setupScriptStatus,
         ...(requestedKickoffMode ? { requestedKickoffMode } : {}),
         ...(reasoningEffort ? { reasoningEffort } : {}),
