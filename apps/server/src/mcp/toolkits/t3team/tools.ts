@@ -37,6 +37,7 @@ const askUserDependencies = [
 export const T3TEAM_MCP_CANONICAL_TOOL_MAP = {
   t3team_models: "t3team.runtime.models",
   t3team_provider_usage: "t3team.runtime.provider_usage",
+  t3team_resource_pressure: "t3team.runtime.resource_pressure",
   t3team_rename_thread: "t3team.thread.rename",
   t3team_search_thread: "t3team.thread.search",
   t3team_search_source: "t3team.thread.search_source",
@@ -127,6 +128,14 @@ export const T3TeamProviderUsageTool = Tool.make("t3team_provider_usage", {
         "Optional provider INSTANCE id to sample (as returned by t3team_models). Omit to sample all enabled instances with a live-limit source.",
     }),
   }),
+  success: Schema.Unknown,
+  failure: T3TeamMcpToolError,
+  dependencies,
+});
+
+export const T3TeamResourcePressureTool = Tool.make("t3team_resource_pressure", {
+  description:
+    "Read this host's current memory pressure: level (ok | warn | critical), host and T3 app-tree memory, the top memory-consuming T3 processes, recent pressure transitions, and a stopSpawning flag. Call it before starting children, orchestrations or background jobs; when stopSpawning is true, do not start new work — let running work finish. Returns enabled:false when the host has resource-pressure monitoring turned off.",
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
   dependencies,
@@ -697,6 +706,7 @@ export const T3TeamRecipeValidateTool = Tool.make("t3team_recipe_validate", {
 export const T3TeamToolkit = Toolkit.make(
   T3TeamModelsTool,
   T3TeamProviderUsageTool,
+  T3TeamResourcePressureTool,
   T3TeamRenameThreadTool,
   T3TeamSearchThreadTool,
   T3TeamSearchSourceTool,

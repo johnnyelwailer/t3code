@@ -30,6 +30,8 @@ import { T3TeamContextRefreshService } from "./t3team-contextRefreshService.ts";
 import { makeT3TeamWidgetShowBinder } from "./t3team-toolBrokerWidgetShow.ts";
 import { makeBindSession } from "./t3team-toolBrokerLiveSession.ts";
 import { ServerSettingsService } from "./serverSettings.ts";
+import { isResourcePressureEnabled } from "./t3team-resourcePressureFlag.ts";
+import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
 
 const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () {
   // Host tools every provider may call without an explicit `surface:"t3team"`
@@ -54,7 +56,9 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     "t3team.widget.show",
     "t3team.recipe.list",
     "t3team.recipe.validate",
-  ] as const;
+    // Flag NEXI_FF_RESOURCE_PRESSURE: off = the tool is not bound at all.
+    ...(isResourcePressureEnabled() ? (["t3team.runtime.resource_pressure"] as const) : []),
+  ];
   const query = yield* ProjectionSnapshotQuery;
   const orchestration = yield* OrchestrationEngineService;
   const contextStore = yield* T3TeamThreadToolContextStore;
@@ -70,6 +74,9 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
   );
   const providerRegistry = Option.getOrUndefined(yield* Effect.serviceOption(ProviderRegistry));
   const serverSettings = Option.getOrUndefined(yield* Effect.serviceOption(ServerSettingsService));
+  const resourcePressure = isResourcePressureEnabled()
+    ? Option.getOrUndefined(yield* Effect.serviceOption(ResourcePressureMonitor))
+    : undefined;
   const workflowRegistry = Option.getOrUndefined(
     yield* Effect.serviceOption(T3TeamWorkflowEngineRegistry),
   );
@@ -153,6 +160,7 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     query,
     providerRegistry,
     serverSettings,
+    resourcePressure,
     contextRefresh,
     dispatchCommand,
     bindShowWidget,

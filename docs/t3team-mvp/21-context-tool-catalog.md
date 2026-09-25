@@ -581,6 +581,7 @@ Useful tools:
 ```text
 t3team.runtime.models
 t3team.runtime.provider_usage
+t3team.runtime.resource_pressure
 t3team.view.read
 t3team.recipe.list
 t3team.recipe.validate
@@ -631,6 +632,14 @@ instance (Claude via the Anthropic OAuth usage endpoint, Codex via the app-serve
 `account/rateLimits/read`) how much of its 5-hour and weekly quota is used, when the window
 resets, and the severity verdict against the host thresholds. Instances that cannot be
 sampled come back in `unavailable` with a reason, so one bad provider never hides the rest.
+
+`t3team.runtime.resource_pressure` (runtime flag `NEXI_FF_RESOURCE_PRESSURE`, default off; not
+bound at all when off) returns the host's memory-pressure level (`ok` / `warn` / `critical`),
+host and T3 app-tree memory, the top memory-consuming T3 processes, recent persisted pressure
+transitions and a `stopSpawning` flag (true at `critical`). It reads the server's latest bounded
+sample (every 20 s by default; `T3TEAM_RESOURCE_PRESSURE_INTERVAL_MS`, clamped 10–120 s) and
+never triggers a scan. Orchestrating agents call it before starting children, orchestrations or
+background jobs and back off while `stopSpawning` is true.
 
 `t3team.task.write` / `t3team.task.list` are the durable per-thread **task journal**: the
 agent's own plan, persisted in `thread_task_records` (migration t3team-056) so it survives

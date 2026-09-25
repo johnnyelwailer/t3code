@@ -201,6 +201,7 @@ import {
   t3teamThreadProviderHoldControlRouteLayer,
 } from "./t3team-thread-provider-hold-route.ts";
 import { T3TeamProviderUsageWatcherLive } from "./t3team-providerUsageWatcher.ts";
+import { ResourcePressureMonitorLive } from "./t3team-resourcePressureMonitor.ts";
 import { ProviderUsageHoldRepositoryLive } from "./persistence/Layers/t3team-ProviderUsageHolds.ts";
 import {
   t3teamGitHubAssetRouteLayer,
@@ -296,6 +297,10 @@ const ResourceDiagnosticsLayerLive = Layer.mergeAll(
   ResourceTelemetryLayerLive,
   ProcessDiagnostics.layer.pipe(Layer.provide(ResourceTelemetryLayerLive)),
   ProcessResourceMonitor.layer.pipe(Layer.provide(ResourceTelemetryLayerLive)),
+  // Flag NEXI_FF_RESOURCE_PRESSURE: off = a constant "disabled" report, no fiber.
+  ResourcePressureMonitorLive.pipe(
+    Layer.provide(Layer.mergeAll(HostResources.layer, ResourceTelemetryLayerLive)),
+  ),
 );
 
 const RelayClientLive = Layer.unwrap(
@@ -652,7 +657,11 @@ const RuntimeCoreDependenciesLive = mountT3TeamBrokerBeforeRuntimeServices(
     // must be satisfied by a LATER step: PRS by the mergeAll below, SqlClient by PersistenceLayerLive.
     Layer.provideMerge(WorkflowSignalSourcesLive),
     Layer.provideMerge(
-      Layer.mergeAll(SourceControlProviderRegistryLayerLive, PullRequestServiceLive, GitHubCli.layer),
+      Layer.mergeAll(
+        SourceControlProviderRegistryLayerLive,
+        PullRequestServiceLive,
+        GitHubCli.layer,
+      ),
     ),
     Layer.provideMerge(GitLayerLive),
     Layer.provideMerge(VcsLayerLive),
@@ -699,7 +708,9 @@ const RuntimeCoreDependenciesLive = mountT3TeamBrokerBeforeRuntimeServices(
     // (tool broker, workflow-engine durability) already spend two of them. Going over the cap
     // makes the whole layer resolve to `never`, which surfaces far away as `any` requirement
     // channels in bin.ts / t3team-server.ts rather than here.
-    Layer.provideMerge(Layer.mergeAll(NativeAppIconResolver.layer, ProjectFaviconResolverLayerLive)),
+    Layer.provideMerge(
+      Layer.mergeAll(NativeAppIconResolver.layer, ProjectFaviconResolverLayerLive),
+    ),
     Layer.provideMerge(RepositoryIdentityResolverLayerLive),
     Layer.provideMerge(ServerEnvironmentLayerLive),
     Layer.provideMerge(AuthLayerLive),

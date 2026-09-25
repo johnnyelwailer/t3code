@@ -114,6 +114,7 @@ import Migration0077 from "./Migrations/t3team-059_SignalSources.ts";
 // `idx_projection_thread_activities_kind_created` DDL for machines whose ledger
 // consumed id 60 with a different migration and therefore never ran it.
 import Migration0078 from "./Migrations/t3team-060_EnsureProjectionThreadActivitiesKindIndex.ts";
+import Migration0079 from "./Migrations/t3team-061_ResourcePressureEvents.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -204,6 +205,7 @@ const migrationEntries = [
   [76, "ProjectionThreadTitleState", Migration0076],
   [77, "SignalSources", Migration0077],
   [78, "EnsureProjectionThreadActivitiesKindIndex", Migration0078],
+  [79, "ResourcePressureEvents", Migration0079],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

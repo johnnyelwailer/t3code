@@ -121,6 +121,11 @@ describe("createT3TeamTurnToolContext", () => {
           capabilities: ["read"],
         },
         {
+          id: "t3team.runtime.resource_pressure",
+          label: "Read resource pressure",
+          capabilities: ["read"],
+        },
+        {
           id: "t3team.widget.show",
           label: "Show widget",
           capabilities: ["write"],
@@ -184,6 +189,11 @@ describe("createT3TeamTurnToolContext", () => {
           id: "t3team.thread.read_message",
           label: "Read inter-agent message",
           capabilities: ["read"],
+        },
+        {
+          id: "t3team.thread.ask_user",
+          label: "Ask user a question",
+          capabilities: ["write"],
         },
         {
           id: "t3team.thread.start_child",

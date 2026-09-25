@@ -106,6 +106,8 @@ import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSna
 import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionReactor.ts";
 import { T3TeamThreadEngagement } from "./t3team-threadEngagement.ts";
 import { isThreadResubscribeStaggerEnabled } from "./t3team-threadResubscribeStaggerFlag.ts";
+import { isResourcePressureEnabled } from "./t3team-resourcePressureFlag.ts";
+import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
 import {
   observeRpcEffect as instrumentRpcEffect,
   observeRpcStream as instrumentRpcStream,
@@ -702,6 +704,7 @@ const makeWsRpcLayer = (
       const sessions = yield* SessionStore.SessionStore;
       const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
       const hostResources = yield* HostResources.HostResources;
+      const resourcePressure = yield* ResourcePressureMonitor;
       const processResourceMonitor = yield* ProcessResourceMonitor.ProcessResourceMonitor;
       const resourceTelemetry = yield* ResourceTelemetry.ResourceTelemetry;
       const usage = yield* UsageService.UsageService;
@@ -1886,6 +1889,8 @@ const makeWsRpcLayer = (
             // session change cannot reopen hundreds of thread streams at once
             // (GHE #382 disconnect storm).
             threadResubscribeStagger: isThreadResubscribeStaggerEnabled(),
+            // Runtime feature flag (env NEXI_FF_RESOURCE_PRESSURE, default off).
+            resourcePressure: isResourcePressureEnabled(),
           };
         });
 
@@ -2709,6 +2714,10 @@ const makeWsRpcLayer = (
           }),
         [WS_METHODS.serverRetryResourceTelemetry]: (_input) =>
           observeRpcEffect(WS_METHODS.serverRetryResourceTelemetry, resourceTelemetry.retry, {
+            "rpc.aggregate": "server",
+          }),
+        [WS_METHODS.serverGetResourcePressure]: (_input) =>
+          observeRpcEffect(WS_METHODS.serverGetResourcePressure, resourcePressure.report, {
             "rpc.aggregate": "server",
           }),
         [WS_METHODS.serverSignalProcess]: (input) =>

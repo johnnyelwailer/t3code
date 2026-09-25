@@ -249,6 +249,7 @@ import {
   ResourceTelemetryRetryResult,
   ResourceTelemetrySnapshot,
 } from "./resourceTelemetry.ts";
+import { ResourcePressureReport } from "./t3team-resourcePressure.ts";
 import {
   UsageLimitSourceError,
   ProviderConsumeResetCreditInput,
@@ -394,6 +395,7 @@ export const WS_METHODS = {
   serverGetResourceTelemetryHistory: "server.getResourceTelemetryHistory",
   serverRetryResourceTelemetry: "server.retryResourceTelemetry",
   serverSignalProcess: "server.signalProcess",
+  serverGetResourcePressure: "server.getResourcePressure",
   serverReportClientActivity: "server.reportClientActivity",
   serverReportHostPowerState: "server.reportHostPowerState",
   serverGetBackgroundPolicy: "server.getBackgroundPolicy",
@@ -668,6 +670,13 @@ const WsServerGetUsageSummaryRpc = Rpc.make(WS_METHODS.serverGetUsageSummary, {
 const WsServerRefreshUsageRatesRpc = Rpc.make(WS_METHODS.serverRefreshUsageRates, {
   payload: Schema.Struct({}),
   success: UsagePricing,
+  error: EnvironmentAuthorizationError,
+});
+
+// Memory-pressure model over resource telemetry (flag NEXI_FF_RESOURCE_PRESSURE).
+const WsServerGetResourcePressureRpc = Rpc.make(WS_METHODS.serverGetResourcePressure, {
+  payload: Schema.Struct({}),
+  success: ResourcePressureReport,
   error: EnvironmentAuthorizationError,
 });
 
@@ -1494,6 +1503,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetUsageSummaryRpc,
   WsServerRefreshUsageRatesRpc,
   WsServerSignalProcessRpc,
+  WsServerGetResourcePressureRpc,
   WsServerReportClientActivityRpc,
   WsServerReportHostPowerStateRpc,
   WsServerGetBackgroundPolicyRpc,

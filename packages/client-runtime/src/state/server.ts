@@ -1040,6 +1040,13 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.serverGetResourceTelemetryHistory,
       staleTimeMs: 5_000,
     }),
+    // Reads the server's latest bounded pressure sample (flag NEXI_FF_RESOURCE_PRESSURE);
+    // never triggers a scan, so refreshes are cheap.
+    resourcePressure: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:resource-pressure",
+      tag: WS_METHODS.serverGetResourcePressure,
+      staleTimeMs: 5_000,
+    }),
     // A cold transcript scan is measured in seconds, so keep the result around
     // long enough that switching windows or re-rendering does not rescan.
     usageSummary: createEnvironmentRpcQueryAtomFamily(runtime, {

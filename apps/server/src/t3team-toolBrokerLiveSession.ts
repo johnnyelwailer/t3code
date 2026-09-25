@@ -20,6 +20,7 @@ import { setBacklogAssigneeFilterForContext } from "./t3team-toolBrokerBacklogFi
 import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
 import { buildRuntimeModelCatalog } from "./t3team-runtimeModelCatalog.ts";
 import { makeReadProviderUsage } from "./t3team-toolBrokerProviderUsage.ts";
+import { makeReadResourcePressure } from "./t3team-toolBrokerResourcePressure.ts";
 import { type BindSessionDeps } from "./t3team-toolBrokerLiveSessionDeps.ts";
 
 export type { BindSessionDeps } from "./t3team-toolBrokerLiveSessionDeps.ts";
@@ -31,6 +32,7 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
     query,
     providerRegistry,
     serverSettings,
+    resourcePressure,
     contextRefresh,
     dispatchCommand,
     bindShowWidget,
@@ -98,7 +100,13 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
               ),
             ),
           ),
-        readProviderUsage: (toolArgs) => makeReadProviderUsage({ serverSettings })(toolArgs),
+        runtimeReadTools: {
+          "t3team.runtime.provider_usage": (toolArgs) =>
+            makeReadProviderUsage({ serverSettings })(toolArgs),
+          ...(resourcePressure
+            ? { "t3team.runtime.resource_pressure": makeReadResourcePressure(resourcePressure) }
+            : {}),
+        },
         setBacklogAssigneeFilter: (mode) =>
           setBacklogAssigneeFilterForContext(resolvedToolContext, mode),
         refreshContextBundle: contextRefresh,

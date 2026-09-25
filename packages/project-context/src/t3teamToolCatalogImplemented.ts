@@ -243,6 +243,19 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       },
     },
   },
+  "t3team.runtime.resource_pressure": {
+    id: "t3team.runtime.resource_pressure",
+    label: "Read resource pressure",
+    title: "Read host memory pressure and top consumers",
+    description:
+      "Read this host's current memory pressure (ok | warn | critical), host and T3 app-tree memory, the top memory-consuming T3 processes, recent pressure transitions and a `stopSpawning` flag. Call it before starting children, orchestrations or background jobs; when `stopSpawning` is true, do not start new work. Reads the latest bounded sample (never triggers a scan). Only bound when the host enables NEXI_FF_RESOURCE_PRESSURE.",
+    capabilities: ["read"],
+    kind: "read",
+    surfaces: ["thread"],
+    status: "implemented",
+    defaultEnabled: true,
+    inputSchema: EMPTY_OBJECT_INPUT_SCHEMA,
+  },
   "t3team.widget.show": {
     id: "t3team.widget.show",
     label: "Show widget",

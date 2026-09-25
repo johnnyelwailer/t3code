@@ -23,6 +23,7 @@ import type { T3TeamWorkflowResumeToolHandlers } from "./t3team-toolBrokerWorkfl
 import type { T3TeamWorkflowControlToolHandlers } from "./t3team-toolBrokerWorkflowControlTool.ts";
 import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshService.ts";
 import type { T3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
+import type { T3TeamRuntimeReadTools } from "./t3team-toolBrokerRuntimeReadTools.ts";
 
 export type CreateBindingInput<
   TRenameError = never,
@@ -71,7 +72,7 @@ export type CreateBindingInput<
     callerThreadId: ThreadId,
   ) => Effect.Effect<T3TeamToolCallResult>;
   readonly readRuntimeModels?: () => Effect.Effect<T3TeamToolCallResult>;
-  readonly readProviderUsage?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
+  readonly runtimeReadTools?: T3TeamRuntimeReadTools;
   readonly publishDraft?: T3TeamDraftMutationPublisher;
 };
 export function createToolSurface<
@@ -150,7 +151,7 @@ export function createToolSurface<
           }
         : {}),
       ...(input.readRuntimeModels ? { readRuntimeModels: input.readRuntimeModels } : {}),
-      ...(input.readProviderUsage ? { readProviderUsage: input.readProviderUsage } : {}),
+      ...(input.runtimeReadTools ? { runtimeReadTools: input.runtimeReadTools } : {}),
       ...(input.publishDraft ? { publishDraft: input.publishDraft } : {}),
     });
 
