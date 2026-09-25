@@ -249,6 +249,13 @@ import {
   ResourceTelemetryRetryResult,
   ResourceTelemetrySnapshot,
 } from "./resourceTelemetry.ts";
+import { ResourcePressureReport, ResourcePressureSweepResult } from "./t3team-resourcePressure.ts";
+import {
+  ResourcePressureCleanupExecuteInput,
+  ResourcePressureCleanupInput,
+  ResourcePressureCleanupPlan,
+  ResourcePressureCleanupResult,
+} from "./t3team-resourcePressureCleanup.ts";
 import {
   UsageLimitSourceError,
   ProviderConsumeResetCreditInput,
@@ -394,6 +401,10 @@ export const WS_METHODS = {
   serverGetResourceTelemetryHistory: "server.getResourceTelemetryHistory",
   serverRetryResourceTelemetry: "server.retryResourceTelemetry",
   serverSignalProcess: "server.signalProcess",
+  serverGetResourcePressure: "server.getResourcePressure",
+  serverSweepStorageNow: "server.sweepStorageNow",
+  serverPreviewThreadResourceCleanup: "server.previewThreadResourceCleanup",
+  serverCleanupThreadResources: "server.cleanupThreadResources",
   serverReportClientActivity: "server.reportClientActivity",
   serverReportHostPowerState: "server.reportHostPowerState",
   serverGetBackgroundPolicy: "server.getBackgroundPolicy",
@@ -668,6 +679,36 @@ const WsServerGetUsageSummaryRpc = Rpc.make(WS_METHODS.serverGetUsageSummary, {
 const WsServerRefreshUsageRatesRpc = Rpc.make(WS_METHODS.serverRefreshUsageRates, {
   payload: Schema.Struct({}),
   success: UsagePricing,
+  error: EnvironmentAuthorizationError,
+});
+
+// Memory-pressure model over resource telemetry (flag NEXI_FF_RESOURCE_PRESSURE).
+const WsServerGetResourcePressureRpc = Rpc.make(WS_METHODS.serverGetResourcePressure, {
+  payload: Schema.Struct({}),
+  success: ResourcePressureReport,
+  error: EnvironmentAuthorizationError,
+});
+
+// Runs the existing policy-driven storage sweep (worktree cleanup rules) now.
+const WsServerSweepStorageNowRpc = Rpc.make(WS_METHODS.serverSweepStorageNow, {
+  payload: Schema.Struct({}),
+  success: ResourcePressureSweepResult,
+  error: EnvironmentAuthorizationError,
+});
+
+// One thread's agent session + background jobs: preview (PIDs and why), then act on the confirmed set.
+const WsServerPreviewThreadResourceCleanupRpc = Rpc.make(
+  WS_METHODS.serverPreviewThreadResourceCleanup,
+  {
+    payload: ResourcePressureCleanupInput,
+    success: ResourcePressureCleanupPlan,
+    error: EnvironmentAuthorizationError,
+  },
+);
+
+const WsServerCleanupThreadResourcesRpc = Rpc.make(WS_METHODS.serverCleanupThreadResources, {
+  payload: ResourcePressureCleanupExecuteInput,
+  success: ResourcePressureCleanupResult,
   error: EnvironmentAuthorizationError,
 });
 
@@ -1494,6 +1535,10 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetUsageSummaryRpc,
   WsServerRefreshUsageRatesRpc,
   WsServerSignalProcessRpc,
+  WsServerGetResourcePressureRpc,
+  WsServerSweepStorageNowRpc,
+  WsServerPreviewThreadResourceCleanupRpc,
+  WsServerCleanupThreadResourcesRpc,
   WsServerReportClientActivityRpc,
   WsServerReportHostPowerStateRpc,
   WsServerGetBackgroundPolicyRpc,

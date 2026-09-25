@@ -46,6 +46,8 @@ export * from "./device.ts";
 export * from "./preview.ts";
 export * from "./previewAutomation.ts";
 export * from "./resourceTelemetry.ts";
+export * from "./t3team-resourcePressure.ts";
+export * from "./t3team-resourcePressureCleanup.ts";
 export * from "./t3team-toolauth.ts";
 export * from "./t3team-localProviderKinds.ts";
 export * from "./usage.ts";

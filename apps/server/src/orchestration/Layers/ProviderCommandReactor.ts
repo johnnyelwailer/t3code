@@ -66,6 +66,11 @@ import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
 import { ProviderUsageWatcher } from "../../t3team-providerUsageWatcher.ts";
 import { loadRestartWakeSteer } from "../../t3team-restartWakeSteer.ts";
+import { ResourcePressureMonitor } from "../../t3team-resourcePressureMonitor.ts";
+import {
+  composeTurnText,
+  makeResourcePressureTurnGate,
+} from "../../t3team-resourcePressureTurnGate.ts";
 const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
 const isProviderAdapterValidationError = Schema.is(ProviderAdapterValidationError);
 const isProviderWorkspaceMissingError = Schema.is(ProviderWorkspaceMissingError);
@@ -440,6 +445,12 @@ const make = Effect.gen(function* () {
       .settings;
   });
   const providerUsageWatcher = yield* ProviderUsageWatcher;
+  // Memory-pressure auto-pause at the turn boundary (flag NEXI_FF_RESOURCE_PRESSURE; off = no-op).
+  const pressureGate = makeResourcePressureTurnGate({
+    autoPause: Option.getOrUndefined(yield* Effect.serviceOption(ResourcePressureMonitor))
+      ?.autoPause,
+    engine: orchestrationEngine,
+  });
   const serverCommandId = (tag: string) =>
     crypto.randomUUIDv4.pipe(Effect.map((uuid) => CommandId.make(`server:${tag}:${uuid}`)));
   const serverEventId = () => crypto.randomUUIDv4.pipe(Effect.map(EventId.make));
@@ -1773,6 +1784,12 @@ const make = Effect.gen(function* () {
       turnsAfterCompaction.set(event.payload.threadId, queued);
       return;
     }
+    // Memory pressure critical: hold this NEW turn (in-flight turns finish) in the same queue; the
+    // gate replays it once pressure stays below critical for the cooldown.
+    if (!resumed && (yield* pressureGate.holdTurn(event.payload.threadId))) {
+      turnsAfterCompaction.set(event.payload.threadId, [event]);
+      return;
+    }
     // Same classifier as turn admission (t3team-deciderTurnAdmission):
     // automated dispatchers stamp an author/actor ext; a typed user message
     // never carries one. Providers may prioritize interactive turns on it.
@@ -1788,10 +1805,12 @@ const make = Effect.gen(function* () {
     const restartWakeSteer = isUserTurn
       ? yield* loadRestartWakeSteer({ thread, query: projectionSnapshotQuery })
       : null;
+    // At most one memory-pressure note per escalation / resume (agent context only).
+    const pressureNote = yield* pressureGate.takeNote(event.payload.threadId);
     const sendTurnRequest = yield* buildSendTurnRequestForThread({
       threadId: event.payload.threadId,
       messageText: projectComposerContextForProvider({
-        text: restartWakeSteer !== null ? `${restartWakeSteer}\n\n${message.text}` : message.text,
+        text: composeTurnText([pressureNote, restartWakeSteer], message.text),
         records: message.context?.records ?? [],
       }),
       ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
@@ -2290,6 +2309,26 @@ const make = Effect.gen(function* () {
     // Subscribe before returning, even while event handling waits for server activation.
     const domainEvents = yield* orchestrationEngine.subscribeDomainEvents;
     yield* forkParked(Stream.runForEach(domainEvents, processEvent));
+    // Replay held turns of threads the memory-pressure auto-pause resumed (unless compacting).
+    yield* forkParked(
+      pressureGate.runResumes((threadId) =>
+        compactingThreadIds.has(threadId)
+          ? Effect.void
+          : resumeTurnsAfterCompaction(threadId).pipe(
+              // A rejected replay would leave the queue behind and park every later turn: report
+              // the held messages as not sent and clear it instead.
+              Effect.catchCause(() =>
+                cancelTurnsAfterCompaction(
+                  threadId,
+                  "The memory-pressure pause ended but this message could not be resumed. Send it again to continue.",
+                ),
+              ),
+              Effect.ignore({ log: true, message: "failed to replay pressure-held turns" }),
+              Effect.forkScoped,
+              Effect.asVoid,
+            ),
+      ),
+    );
 
     // Earlier events do not replay. Clear interrupted requests by their captured
     // IDs, then schedule persisted refinements after subscribing to their events.

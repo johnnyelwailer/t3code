@@ -21,6 +21,7 @@ import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
 import { buildRuntimeModelCatalog } from "./t3team-runtimeModelCatalog.ts";
 import { makeReadProviderUsage } from "./t3team-toolBrokerProviderUsage.ts";
 import { type BindSessionDeps } from "./t3team-toolBrokerLiveSessionDeps.ts";
+import { withPressureLines } from "./t3team-resourcePressureToolLine.ts";
 
 export type { BindSessionDeps } from "./t3team-toolBrokerLiveSessionDeps.ts";
 
@@ -31,6 +32,7 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
     query,
     providerRegistry,
     serverSettings,
+    resourcePressure,
     contextRefresh,
     dispatchCommand,
     bindShowWidget,
@@ -67,7 +69,8 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
         return undefined;
       }
 
-      return createT3TeamThreadToolBinding({
+      // Pressure-impacting tool results carry the memory-pressure line (flag off = untouched).
+      const binding = createT3TeamThreadToolBinding({
         showWidget: bindShowWidget({
           threadId,
           loadThreadProject: () => loadThreadProject(threadId),
@@ -158,5 +161,6 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
           ? { workflowControlTools: workflowTools.workflowControlToolsForThread(threadId) }
           : {}),
       });
+      return withPressureLines(binding, resourcePressure);
     });
 }

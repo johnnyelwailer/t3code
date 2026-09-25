@@ -1040,6 +1040,13 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.serverGetResourceTelemetryHistory,
       staleTimeMs: 5_000,
     }),
+    // Reads the server's latest bounded pressure sample (flag NEXI_FF_RESOURCE_PRESSURE);
+    // never triggers a scan, so refreshes are cheap.
+    resourcePressure: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:resource-pressure",
+      tag: WS_METHODS.serverGetResourcePressure,
+      staleTimeMs: 5_000,
+    }),
     // A cold transcript scan is measured in seconds, so keep the result around
     // long enough that switching windows or re-rendering does not rescan.
     usageSummary: createEnvironmentRpcQueryAtomFamily(runtime, {
@@ -1101,6 +1108,20 @@ export function createServerEnvironmentAtoms<R, E>(
     signalProcess: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:signal-process",
       tag: WS_METHODS.serverSignalProcess,
+    }),
+    // Runs the existing storage-cleanup sweep now (flag NEXI_FF_RESOURCE_PRESSURE).
+    sweepStorageNow: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:sweep-storage-now",
+      tag: WS_METHODS.serverSweepStorageNow,
+    }),
+    // One thread's agent session + background jobs: the plan (PIDs and why), then the confirmed act.
+    previewThreadResourceCleanup: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:preview-thread-resource-cleanup",
+      tag: WS_METHODS.serverPreviewThreadResourceCleanup,
+    }),
+    cleanupThreadResources: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:cleanup-thread-resources",
+      tag: WS_METHODS.serverCleanupThreadResources,
     }),
     refreshUsageRates: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:refresh-usage-rates",

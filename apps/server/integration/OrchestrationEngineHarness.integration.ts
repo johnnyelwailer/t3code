@@ -394,6 +394,7 @@ export const makeOrchestrationIntegrationHarness = (
         Layer.succeed(StorageCleanup.StorageCleanup, {
           start: () => Effect.void,
           drain: Effect.void,
+          sweepNow: Effect.void,
         }),
       ),
       Layer.provideMerge(runtimeIngestionLayer),

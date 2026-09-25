@@ -632,6 +632,24 @@ instance (Claude via the Anthropic OAuth usage endpoint, Codex via the app-serve
 resets, and the severity verdict against the host thresholds. Instances that cannot be
 sampled come back in `unavailable` with a reason, so one bad provider never hides the rest.
 
+Memory pressure (runtime flag `NEXI_FF_RESOURCE_PRESSURE`, default off) has **no agent tool**: agents
+do not poll it, the host pushes it. The server samples every 20 s by default
+(`T3TEAM_RESOURCE_PRESSURE_INTERVAL_MS`, clamped 10–120 s) and:
+
+- appends one compact line (level, T3 app-tree RSS, machine verdict, one advisory) to every result
+  of `t3team.thread.start_child` and `t3team.orchestration.run` / `.resume` — in `content` and, for
+  object results, as `structuredContent.hostResourcePressure`;
+- prepends one host note to a thread's next turn after each escalation to `warn`/`critical`
+  ("avoid spawning new agents/jobs; finish in-flight work and end the turn");
+- never refuses a spawn. At `critical` it **auto-pauses** threads at their next turn boundary: turns
+  in flight finish, new turn starts are held; once pressure stays below `critical` for the cooldown
+  (60 s, `AUTO_PAUSE_COOLDOWN_MS`) the held turns resume with exactly one note ("Paused N s for
+  memory pressure; current level X").
+
+The thread shows a paused banner; Settings → Diagnostics lists auto-paused threads, and both offer a
+confirmed per-thread cleanup (SIGINT to the thread's lineage-verified job PIDs, then the agent
+session stop — never worktrees).
+
 `t3team.task.write` / `t3team.task.list` are the durable per-thread **task journal**: the
 agent's own plan, persisted in `thread_task_records` (migration t3team-056) so it survives
 context compaction. Each record carries a 1-based `position`, an imperative `subject`, an

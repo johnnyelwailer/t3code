@@ -35,6 +35,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
 import { ExpandableText } from "./ExpandableText";
 import { ResourceTelemetryDiagnostics } from "./ResourceTelemetryDiagnostics";
+import { ResourcePressurePanel } from "./t3team-ResourcePressurePanel";
 import { SettingsPageContainer, SettingsSection, useRelativeTimeTick } from "./settingsLayout";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useSettingsScope } from "./SettingsScopeContext";
@@ -968,6 +969,10 @@ export function DiagnosticsSettingsPanel() {
 
   return (
     <SettingsPageContainer width="expanded" className="gap-10">
+      {/* Flag NEXI_FF_RESOURCE_PRESSURE (server-advertised); absent/false = no panel. */}
+      {environmentId !== null && environment?.serverConfig?.resourcePressure === true ? (
+        <ResourcePressurePanel environmentId={environmentId} />
+      ) : null}
       <ResourceTelemetryDiagnostics environmentId={environmentId} />
 
       <SettingsSection

@@ -585,6 +585,12 @@ export const ServerConfig = Schema.Struct({
    */
   threadResubscribeStagger: Schema.optionalKey(Schema.Boolean),
   /**
+   * Whether the resource-pressure model (sampler, `server.getResourcePressure`,
+   * auto-pause, per-thread cleanup, diagnostics panel) is active. Runtime feature flag (env
+   * `NEXI_FF_RESOURCE_PRESSURE`, default off); absent on older servers.
+   */
+  resourcePressure: Schema.optionalKey(Schema.Boolean),
+  /**
    * Whether thread detail reads accept a turn window (`turnLimit`/
    * `beforeCursor`) and return `page` metadata. Clients must not send window
    * fields to servers that don't advertise this.

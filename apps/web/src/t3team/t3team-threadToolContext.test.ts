@@ -186,6 +186,11 @@ describe("createT3TeamTurnToolContext", () => {
           capabilities: ["read"],
         },
         {
+          id: "t3team.thread.ask_user",
+          label: "Ask user a question",
+          capabilities: ["write"],
+        },
+        {
           id: "t3team.thread.start_child",
           label: "Start child session",
           capabilities: ["write"],
