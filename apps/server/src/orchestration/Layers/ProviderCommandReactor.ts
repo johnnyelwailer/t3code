@@ -2250,14 +2250,6 @@ const make = Effect.gen(function* () {
         yield* processSessionStopRequested(event);
         return;
       case "thread.settled": {
-        // Only a user-initiated settle tears the provider session down. Automated
-        // settles (`server:auto-settle`, the t3team child-settle sweeper) are
-        // bookkeeping, and on 0.0.42 startup they stopped 12 live sessions across
-        // 133 threads at once (nexi-distribution#396). `server:` is the
-        // command-id convention the event store uses for actor kind "server".
-        if (event.commandId !== null && event.commandId.startsWith("server:")) {
-          return;
-        }
         const thread = yield* projectionSnapshotQuery.getThreadShellById(event.payload.threadId);
         // A thread re-engaged before this event ran keeps its shells and session.
         if (Option.isNone(thread) || thread.value.settledOverride !== "settled") {
@@ -2266,6 +2258,14 @@ const make = Effect.gen(function* () {
         // Idle shells close so they stop holding the worktree. A terminal that
         // runs a command (a dev server, an editor) stays for the user to close.
         yield* terminalManager.closeIdle({ threadId: event.payload.threadId });
+        // Only a user-initiated settle tears the provider session down. Automated
+        // settles (`server:auto-settle`, the t3team child-settle sweeper) are
+        // bookkeeping, and on 0.0.42 startup they stopped 12 live sessions across
+        // 133 threads at once (nexi-distribution#396). `server:` is the
+        // command-id convention the event store uses for actor kind "server".
+        if (event.commandId !== null && event.commandId.startsWith("server:")) {
+          return;
+        }
         if (thread.value.session == null || thread.value.session.status === "stopped") {
           return;
         }

@@ -5014,6 +5014,10 @@ describe("ProviderCommandReactor", () => {
       expect(thread?.settledOverride).toBe("settled");
       expect(thread?.session?.status).toBe("ready");
       expect(stopSessionCalls).toBe(0);
+      // Idle shells still close so they stop holding the worktree.
+      expect(harness.closeIdleTerminals).toHaveBeenCalledWith({
+        threadId: ThreadId.make("thread-1"),
+      });
     }),
   );
 

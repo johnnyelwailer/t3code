@@ -30,6 +30,7 @@ import {
   revokeBlobPreviewUrl,
 } from "../ChatView.logic";
 import { toastManager } from "../ui/toast";
+import { runQueuedTurnStartHooks } from "~/t3team/chat/t3team-queuedTurnStartHooks";
 import { fileAttachmentCapabilityBlockReason } from "./composerAttachmentFiles";
 import { ATTACHMENT_ONLY_BOOTSTRAP_PROMPT } from "./composerPromptHistory";
 
@@ -176,12 +177,33 @@ export async function sendQueuedMessage(
     // Servers from before inline context drop the records, so their turns
     // carry the payload in the text instead.
     const inlineContext = readConfig()?.environment.capabilities.inlineMessageContext === true;
+    const messageId = newMessageId();
+    const handledByHost = await runQueuedTurnStartHooks(threadKey, {
+      threadId,
+      messageId,
+      messageText: text,
+      modelSelection: sendSettings.modelSelection,
+      titleSeed: shell?.title ?? text,
+      runtimeMode: sendSettings.runtimeMode,
+      interactionMode: sendSettings.interactionMode,
+      createdAt,
+      hasAttachments: attachments.length > 0,
+    });
+    const finishSend = () => {
+      queue.finishSend(threadKey, message.id);
+      if (useUploads) releaseDraftAttachments(attachments);
+      for (const image of message.images) revokeBlobPreviewUrl(image.previewUrl);
+    };
+    if (handledByHost) {
+      finishSend();
+      return;
+    }
     await run(threadEnvironment.startTurn, {
       environmentId,
       input: {
         threadId,
         message: {
-          messageId: newMessageId(),
+          messageId,
           role: "user",
           text:
             context !== undefined && !inlineContext
@@ -196,9 +218,7 @@ export async function sendQueuedMessage(
         createdAt,
       },
     });
-    queue.finishSend(threadKey, message.id);
-    if (useUploads) releaseDraftAttachments(attachments);
-    for (const image of message.images) revokeBlobPreviewUrl(image.previewUrl);
+    finishSend();
   } catch (error) {
     if (!queue.failSend(threadKey, message.id)) return;
     const title = readThreadShell(threadRef)?.title;

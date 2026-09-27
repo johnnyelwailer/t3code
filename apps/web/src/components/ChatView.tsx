@@ -414,6 +414,7 @@ import {
 } from "./chat/t3team-ProviderUsageHoldBanner";
 import { useResourcePressureBannerItem } from "./chat/t3team-ResourcePressureThreadBanner";
 import { shouldSuppressT3TeamProviderStatus } from "~/t3team/chat/t3team-providerStatusSeverity";
+import { useRegisterQueuedTurnStartHooks } from "~/t3team/chat/t3team-queuedTurnStartHooks";
 import {
   dismissThreadErrorBannerForSession,
   getThreadErrorBannerKey,
@@ -2138,6 +2139,10 @@ export default function ChatView(props: ChatViewProps) {
     [activeThreadEnvironmentId, activeThreadId],
   );
   const activeThreadKey = activeThreadRef ? scopedThreadKey(activeThreadRef) : null;
+  useRegisterQueuedTurnStartHooks(isServerThread ? activeThreadKey : null, {
+    beforeDispatchTurnStart,
+    dispatchTurnStartOverride,
+  });
   const activeThreadShell = useThreadShell(isServerThread ? activeThreadRef : null);
   const [timelineAnchor, setTimelineAnchor] = useState<{
     readonly threadKey: string | null;
