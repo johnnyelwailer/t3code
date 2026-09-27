@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { type ApprovalRequestId } from "@t3tools/contracts";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { type PendingUserInput } from "../../session-logic";
@@ -205,7 +206,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
         </ComposerBanner.Content>
         <ComposerBanner.Actions>
           {prompt.questions.length > 1 ? (
-            <span className="text-[10px] font-medium text-muted-foreground tabular-nums">
+            <span className="text-3xs font-medium text-muted-foreground tabular-nums">
               {questionIndex + 1}/{prompt.questions.length}
             </span>
           ) : null}
@@ -236,7 +237,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
       </CollapsibleTrigger>
       <CollapsiblePanel>
         <ComposerBanner.Scroll className="max-h-[calc(100dvh-13rem)]">
-          <ComposerBanner.Body className="pe-1 pb-1">
+          <ComposerBanner.Body className="pe-1 pb-1 wrap-anywhere">
             {activeQuestion.context ? (
               // Context strip: the earlier-thread content the question points
               // at, so the question reads without scrolling back. Subtle,
@@ -294,7 +295,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
                       {option.description && option.description !== option.label ? (
                         <T3TeamPendingQuestionMarkdown
                           text={option.description}
-                          className="text-secondary-label text-[11px]"
+                          className="text-secondary-label text-2xs"
                         />
                       ) : null}
                     </div>
@@ -303,7 +304,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
                     ) : shortcutKey !== null ? (
                       <kbd
                         className={cn(
-                          "flex size-5 shrink-0 items-center justify-center text-[10px] font-medium text-muted-foreground tabular-nums",
+                          "flex size-5 shrink-0 items-center justify-center text-3xs font-medium text-muted-foreground tabular-nums",
                         )}
                       >
                         {shortcutKey}

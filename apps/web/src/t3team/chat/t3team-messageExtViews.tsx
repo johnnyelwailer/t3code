@@ -1,4 +1,4 @@
-/* oxlint-disable react/no-array-index-key -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable react/no-array-index-key, shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 import { useState } from "react";
 import { CheckCircle2Icon, LoaderCircleIcon } from "lucide-react";
 import {

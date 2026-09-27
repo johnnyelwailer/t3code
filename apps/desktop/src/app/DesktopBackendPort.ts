@@ -51,7 +51,7 @@ export type DesktopBackendPortSelection = {
 export const resolveDesktopBackendPort = Effect.fn("resolveDesktopBackendPort")(function* (
   configuredPort: Option.Option<number>,
   pinDefaultPort: boolean,
-): Effect.Effect<DesktopBackendPortSelection> {
+) {
   if (Option.isSome(configuredPort)) {
     return {
       port: configuredPort.value,

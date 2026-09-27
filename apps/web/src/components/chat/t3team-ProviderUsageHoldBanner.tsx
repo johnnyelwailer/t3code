@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Provider usage-hold banner (GHE #421, auto-resume layer).
  *

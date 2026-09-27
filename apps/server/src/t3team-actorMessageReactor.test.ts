@@ -41,11 +41,11 @@ import {
   resolveActorMessageDebounceMs,
   T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS,
 } from "./t3team-actorMessageReactorLimits.ts";
-import { ACTOR_STANDING_INSTRUCTION, buildActorReactionDigestInput } from "./t3team-actorReactionInput.ts";
 import {
-  T3TeamThreadEngagement,
-  T3TeamThreadEngagementLive,
-} from "./t3team-threadEngagement.ts";
+  ACTOR_STANDING_INSTRUCTION,
+  buildActorReactionDigestInput,
+} from "./t3team-actorReactionInput.ts";
+import { T3TeamThreadEngagement, T3TeamThreadEngagementLive } from "./t3team-threadEngagement.ts";
 
 const DEBOUNCE_ENV = "T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS";
 const ORIGINAL_DEBOUNCE = process.env[DEBOUNCE_ENV];
@@ -158,11 +158,10 @@ const turnAt = (dispatches: TurnStart[], index: number): TurnStart => {
 };
 
 /** The digest base for `entries` (first-digest briefing = + standing suffix). */
-const digestText = (
-  entries: ReadonlyArray<T3TeamActorMailboxEntry>,
-  briefed: boolean,
-): string =>
-  briefed ? buildActorReactionDigestInput(entries) : `${buildActorReactionDigestInput(entries)}\n\n${ACTOR_STANDING_INSTRUCTION}`;
+const digestText = (entries: ReadonlyArray<T3TeamActorMailboxEntry>, briefed: boolean): string =>
+  briefed
+    ? buildActorReactionDigestInput(entries)
+    : `${buildActorReactionDigestInput(entries)}\n\n${ACTOR_STANDING_INSTRUCTION}`;
 
 /** Advance the test clock until `count` dispatches landed (or virtual time runs out). */
 const waitForDispatches = (dispatches: TurnStart[], count: number) =>
@@ -221,32 +220,34 @@ describe("T3TeamActorMessageReactorLive (coalescing)", () => {
     }),
   );
 
-  it.effect("keeps single-message delivery semantics: one digest entry, messageIds always set", () =>
-    Effect.gen(function* () {
-      const dispatches: TurnStart[] = [];
-      const engine = makeEngine(Stream.fromIterable([delivery("m1")]), dispatches);
+  it.effect(
+    "keeps single-message delivery semantics: one digest entry, messageIds always set",
+    () =>
+      Effect.gen(function* () {
+        const dispatches: TurnStart[] = [];
+        const engine = makeEngine(Stream.fromIterable([delivery("m1")]), dispatches);
 
-      yield* Effect.scoped(
-        Effect.gen(function* () {
-          yield* Layer.build(makeLayer(engine));
-          yield* waitForDispatches(dispatches, 1);
-          yield* settle(dispatches);
-        }),
-      );
+        yield* Effect.scoped(
+          Effect.gen(function* () {
+            yield* Layer.build(makeLayer(engine));
+            yield* waitForDispatches(dispatches, 1);
+            yield* settle(dispatches);
+          }),
+        );
 
-      expect(dispatches).toHaveLength(1);
-      const turn = turnAt(dispatches, 0);
-      // The single-entry digest base + first-digest standing protocol, and the
-      // B4 matching key (messageIds) present even for one entry.
-      expect(turn.message.text).toBe(digestText([entryFor("m1")], false));
-      expect(turn.message.t3teamExt?.actor).toEqual({
-        senderThreadId: "sender-m1",
-        urgency: "normal",
-        hopCount: 1,
-        rootThreadId: "root",
-        messageIds: ["m1"],
-      });
-    }),
+        expect(dispatches).toHaveLength(1);
+        const turn = turnAt(dispatches, 0);
+        // The single-entry digest base + first-digest standing protocol, and the
+        // B4 matching key (messageIds) present even for one entry.
+        expect(turn.message.text).toBe(digestText([entryFor("m1")], false));
+        expect(turn.message.t3teamExt?.actor).toEqual({
+          senderThreadId: "sender-m1",
+          urgency: "normal",
+          hopCount: 1,
+          rootThreadId: "root",
+          messageIds: ["m1"],
+        });
+      }),
   );
 
   it.effect("a delivery after the window flushes the NEXT batch without re-briefing", () =>
@@ -351,59 +352,62 @@ describe("T3TeamActorMessageReactorLive (coalescing)", () => {
     }),
   );
 
-  it.effect("typing in thread A holds A's digest while thread B drains on its normal boundary", () => {
-    // Per-thread scoping of the typing signal: the user works in thread A
-    // while background orchestrators deliver to threads A and B. B's digest
-    // MUST still land on its normal boundary; A's holds — and keeps holding
-    // across many windows while typing is fresh (no cap), then lands once
-    // the typing signal lapses.
-    const dispatches: TurnStart[] = [];
-    const engine = makeEngine(
-      Stream.fromIterable([
-        delivery("m-a", "normal", "thread-a"),
-        delivery("m-b", "normal", "thread-b"),
-      ]),
-      dispatches,
-    );
-    return Effect.gen(function* () {
-      const engagement = yield* T3TeamThreadEngagement;
+  it.effect(
+    "typing in thread A holds A's digest while thread B drains on its normal boundary",
+    () => {
+      // Per-thread scoping of the typing signal: the user works in thread A
+      // while background orchestrators deliver to threads A and B. B's digest
+      // MUST still land on its normal boundary; A's holds — and keeps holding
+      // across many windows while typing is fresh (no cap), then lands once
+      // the typing signal lapses.
+      const dispatches: TurnStart[] = [];
+      const engine = makeEngine(
+        Stream.fromIterable([
+          delivery("m-a", "normal", "thread-a"),
+          delivery("m-b", "normal", "thread-b"),
+        ]),
+        dispatches,
+      );
+      return Effect.gen(function* () {
+        const engagement = yield* T3TeamThreadEngagement;
 
-      // t=10ms: both drains are mid-window; the user types in A.
-      yield* TestClock.adjust("10 millis");
-      yield* engagement.noteTyping("thread-a");
-      // t=50ms: B's window elapsed, B is not engaged → B claims NOW.
-      yield* TestClock.adjust("40 millis");
-      yield* Effect.yieldNow;
-      expect(dispatches).toHaveLength(1);
-      expect(dispatches[0]?.threadId).toBe(ThreadId.make("thread-b"));
-      expect(dispatches[0]?.message.t3teamExt?.actor?.messageIds).toEqual(["m-b"]);
-      // A is STILL held: its re-check saw the fresh typing heartbeat (t=10).
-      // Keep typing fresh well past the 15s lapse window to prove the
-      // back-off has no hard cap while the signal is alive.
-      yield* TestClock.adjust("4950 millis"); // t=5s
-      yield* engagement.noteTyping("thread-a");
-      expect(dispatches).toHaveLength(1);
-      yield* TestClock.adjust("5000 millis"); // t=10s
-      yield* engagement.noteTyping("thread-a");
-      expect(dispatches).toHaveLength(1);
-      yield* TestClock.adjust("5000 millis"); // t=15s
-      yield* engagement.noteTyping("thread-a");
-      expect(dispatches).toHaveLength(1);
-      // t=20s: the last heartbeat (t=15s) is still inside the lapse window →
-      // A must still be held, many windows in.
-      yield* TestClock.adjust("5000 millis");
-      expect(dispatches).toHaveLength(1);
-      // t=25.05s: still inside the lapse window (10.05s < 15s) → still held.
-      yield* TestClock.adjust("5050 millis");
-      expect(dispatches).toHaveLength(1);
-      // t=30.1s: the t=15s heartbeat has lapsed (lapse at t=30s) → A claims
-      // on its next window re-check.
-      yield* TestClock.adjust("5050 millis");
-      yield* Effect.yieldNow;
-      expect(dispatches).toHaveLength(2);
-      expect(dispatches[1]?.threadId).toBe(ThreadId.make("thread-a"));
-      expect(dispatches[1]?.message.t3teamExt?.actor?.messageIds).toEqual(["m-a"]);
-      yield* settle(dispatches);
-    }).pipe(Effect.provide(makeLayer(engine)));
-  });
+        // t=10ms: both drains are mid-window; the user types in A.
+        yield* TestClock.adjust("10 millis");
+        yield* engagement.noteTyping("thread-a");
+        // t=50ms: B's window elapsed, B is not engaged → B claims NOW.
+        yield* TestClock.adjust("40 millis");
+        yield* Effect.yieldNow;
+        expect(dispatches).toHaveLength(1);
+        expect(dispatches[0]?.threadId).toBe(ThreadId.make("thread-b"));
+        expect(dispatches[0]?.message.t3teamExt?.actor?.messageIds).toEqual(["m-b"]);
+        // A is STILL held: its re-check saw the fresh typing heartbeat (t=10).
+        // Keep typing fresh well past the 15s lapse window to prove the
+        // back-off has no hard cap while the signal is alive.
+        yield* TestClock.adjust("4950 millis"); // t=5s
+        yield* engagement.noteTyping("thread-a");
+        expect(dispatches).toHaveLength(1);
+        yield* TestClock.adjust("5000 millis"); // t=10s
+        yield* engagement.noteTyping("thread-a");
+        expect(dispatches).toHaveLength(1);
+        yield* TestClock.adjust("5000 millis"); // t=15s
+        yield* engagement.noteTyping("thread-a");
+        expect(dispatches).toHaveLength(1);
+        // t=20s: the last heartbeat (t=15s) is still inside the lapse window →
+        // A must still be held, many windows in.
+        yield* TestClock.adjust("5000 millis");
+        expect(dispatches).toHaveLength(1);
+        // t=25.05s: still inside the lapse window (10.05s < 15s) → still held.
+        yield* TestClock.adjust("5050 millis");
+        expect(dispatches).toHaveLength(1);
+        // t=30.1s: the t=15s heartbeat has lapsed (lapse at t=30s) → A claims
+        // on its next window re-check.
+        yield* TestClock.adjust("5050 millis");
+        yield* Effect.yieldNow;
+        expect(dispatches).toHaveLength(2);
+        expect(dispatches[1]?.threadId).toBe(ThreadId.make("thread-a"));
+        expect(dispatches[1]?.message.t3teamExt?.actor?.messageIds).toEqual(["m-a"]);
+        yield* settle(dispatches);
+      }).pipe(Effect.provide(makeLayer(engine)));
+    },
+  );
 });

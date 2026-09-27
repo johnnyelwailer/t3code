@@ -230,6 +230,7 @@ export function createEvalHarness(variant: EvalVariant = linkedVariant) {
   const projectionQueryMock: ProjectionSnapshotQueryShape = {
     getCommandReadModel: () => Effect.die("unused"),
     listActivitiesByKind: () => Effect.die("unused"),
+    listThreadsWithPullRequests: () => Effect.die("unused"),
     getDeletedWorktreeThreads: () => Effect.die("unused"),
     getProjectShells: () => Effect.die("unused"),
     getTurnStartMessage: () => Effect.die("unused"),

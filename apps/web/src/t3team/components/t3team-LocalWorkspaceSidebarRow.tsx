@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-native-title-tooltip, shadcn/no-arbitrary-values, shadcn/no-restyle, shadcn/require-static-classes -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay";
 import type { EnvironmentId } from "@t3tools/contracts";

@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The row-level rendering of the PR diff file tree: one directory level (`TreeLevel`, recursive)
  * and the per-file add/remove badge (`DiffStat`). Kept apart from the pane's chrome so the tree

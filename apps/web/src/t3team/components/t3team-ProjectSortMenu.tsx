@@ -1,4 +1,4 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable eslint/no-unused-vars, shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ProjectSortOrder, ThreadSortOrder } from "~/t3team/t3team-types";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import {

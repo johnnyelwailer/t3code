@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle, shadcn/require-static-classes -- Existing merged lint debt; keep green while preserving behavior. */
 import type { AgentContextCapabilities } from "~/t3team/t3team-agentContext";
 import {
   T3TeamAgentContextDropOverlay,

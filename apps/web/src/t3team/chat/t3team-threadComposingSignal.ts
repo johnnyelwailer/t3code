@@ -21,15 +21,8 @@
  * NEVER block typing or message sending.
  */
 
-import {
-  EnvironmentId,
-  ORCHESTRATION_WS_METHODS,
-  ThreadId,
-} from "@t3tools/contracts";
-import {
-  createEnvironmentRpcCommand,
-  runAtomCommand,
-} from "@t3tools/client-runtime/state/runtime";
+import { EnvironmentId, ORCHESTRATION_WS_METHODS, ThreadId } from "@t3tools/contracts";
+import { createEnvironmentRpcCommand, runAtomCommand } from "@t3tools/client-runtime/state/runtime";
 
 import { connectionAtomRuntime } from "~/connection/runtime";
 import { appAtomRegistry } from "~/rpc/atomRegistry";

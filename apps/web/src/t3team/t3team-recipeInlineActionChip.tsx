@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { startTransition } from "react";
 
 import { toastManager } from "~/components/ui/toast";

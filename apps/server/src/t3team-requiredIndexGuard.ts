@@ -76,8 +76,6 @@ export const assertRequiredIndexesLive = Effect.fn("t3team.requiredIndexGuard.as
       missingIndexes: missing.map((index) => index.name),
       usedBy: missing.map((index) => index.usedBy),
     });
-    return yield* Effect.fail(
-      new MissingRequiredIndexError(missing.map((index) => index.name)),
-    );
+    return yield* Effect.fail(new MissingRequiredIndexError(missing.map((index) => index.name)));
   },
 );

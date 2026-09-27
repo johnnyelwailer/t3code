@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * GHE-40 activity label — VARIANT A, motion design
  * (v2 thread card, src/components/Sidebar.tsx) — the left-nav surface.

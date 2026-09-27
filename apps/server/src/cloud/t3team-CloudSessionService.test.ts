@@ -1,6 +1,4 @@
-import {
-  CloudSessionFailedError,
-} from "@t3tools/contracts";
+import { CloudSessionFailedError } from "@t3tools/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Clock from "effect/Clock";
 import * as ConfigProvider from "effect/ConfigProvider";

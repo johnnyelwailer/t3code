@@ -11,20 +11,20 @@ import { seedT3TeamFixtureProject } from "../t3team-fixtureProjectSeed.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 import { projectLocationFlags, resolveCliAuthConfig } from "./config.ts";
 
-const fixtureFlag = Flag.string("fixture").pipe(
+const fixtureFlag = Flag.String("fixture").pipe(
   Flag.withDescription("Path to the fixture directory (metadata.json + work-items/*.json)."),
 );
 
-const workspaceFlag = Flag.string("workspace").pipe(
+const workspaceFlag = Flag.String("workspace").pipe(
   Flag.withDescription("Workspace root the fixture project is ingested into."),
 );
 
-const accountFlag = Flag.string("account").pipe(
+const accountFlag = Flag.String("account").pipe(
   Flag.withDescription("Fixture account name; the account id becomes `fixture:<name>`."),
   Flag.withDefault("demo"),
 );
 
-const jsonFlag = Flag.boolean("json").pipe(
+const jsonFlag = Flag.Boolean("json").pipe(
   Flag.withDescription("Emit JSON instead of human-readable output."),
   Flag.withDefault(false),
 );

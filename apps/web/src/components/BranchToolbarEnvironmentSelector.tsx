@@ -154,7 +154,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       <Tooltip>
         <TooltipTrigger
           render={<span />}
-          className="inline-flex h-7 min-w-0 max-w-full items-center gap-1 border border-transparent px-[calc(--spacing(2)-1px)] font-normal text-muted-foreground/70 text-xs sm:h-6"
+          className="inline-flex h-7 min-w-0 max-w-full items-center gap-1 border border-transparent px-1.75 font-normal text-muted-foreground/70 text-xs sm:h-6"
           data-composer-context-control
         >
           <EnvironmentMachineIcon
@@ -167,7 +167,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
           >
             <span
               data-composer-label-motion
-              className="block w-full min-w-0 max-w-[240px] truncate transition-opacity duration-180 ease-[cubic-bezier(0.32,0.72,0,1)] group-data-[compact]/composer-context:opacity-0 motion-reduce:transition-none"
+              className="block w-full min-w-0 max-w-[240px] truncate transition-opacity duration-180 ease-drawer group-data-[compact]/composer-context:opacity-0 motion-reduce:transition-none"
             >
               {activeEnvironment?.label ?? "Run on"}
             </span>
@@ -193,7 +193,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
             <SelectTrigger
               variant="ghost"
               size="xs"
-              className="min-w-0 max-w-full font-normal text-xs!"
+              className="min-w-0 max-w-full"
               aria-label="Run on"
               data-composer-shortcut="composer.host"
               data-composer-context-control
@@ -214,7 +214,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
           >
             <span
               data-composer-label-motion
-              className="block w-full min-w-0 max-w-[240px] truncate transition-opacity duration-180 ease-[cubic-bezier(0.32,0.72,0,1)] group-data-[compact]/composer-context:opacity-0 motion-reduce:transition-none"
+              className="block w-full min-w-0 max-w-[240px] truncate transition-opacity duration-180 ease-drawer group-data-[compact]/composer-context:opacity-0 motion-reduce:transition-none"
             >
               {onEnvironmentChange !== undefined ? (
                 <SelectValue />
@@ -226,11 +226,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
         </TooltipTrigger>
         <TooltipPopup>{autoEnvironmentLabel ?? activeEnvironment?.label ?? "Run on"}</TooltipPopup>
       </Tooltip>
-      <SelectPopup
-        alignItemWithTrigger={false}
-        popupClassName="min-w-40"
-        {...composerFloatingLayerProps}
-      >
+      <SelectPopup alignItemWithTrigger={false} {...composerFloatingLayerProps}>
         <SelectGroup>
           <SelectGroupLabel>Run on</SelectGroupLabel>
           {onAutoEnvironment && (

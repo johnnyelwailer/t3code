@@ -120,19 +120,12 @@ describe("durable workflow engine — signal sources (design 42)", () => {
 
     // Journal: ONE register (the binding fact) + ONE wait per awaited (signal, key).
     const { bySeq } = readJournalEntries(journalFilePath(runsRoot, result.runId));
-    const sentKinds = [...bySeq.values()]
-      .sort((a, b) => a.seq - b.seq)
-      .map((e) => e.kind);
+    const sentKinds = [...bySeq.values()].sort((a, b) => a.seq - b.seq).map((e) => e.kind);
     expect(sentKinds).toEqual(["signal.register", "signal.wait", "signal.wait"]);
 
     // Replay of the completed run: the payload decodes from the journal, no envelope re-fires.
     const brokerSentCount = broker.sent.length;
-    const replayed = await resumeWorkflow(
-      result.runId,
-      signalTwoWaitsWorkflow,
-      args,
-      base,
-    );
+    const replayed = await resumeWorkflow(result.runId, signalTwoWaitsWorkflow, args, base);
     if (isSuspended(replayed)) throw new Error("a completed run must not re-suspend on replay");
     expect(replayed.result).toEqual(result.result);
     expect(broker.sent.length).toBe(brokerSentCount);

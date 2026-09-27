@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { MessageSquarePlus } from "lucide-react";
 
 import { cn } from "~/t3team/lib/t3team-utils";

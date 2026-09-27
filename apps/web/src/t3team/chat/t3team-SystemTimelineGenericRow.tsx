@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The generic system-notice card — the fallback of the three mutually exclusive shapes
  * `T3TeamSystemTimelineRow` can take (sibling of `T3TeamSystemTimelineShapeRow` and

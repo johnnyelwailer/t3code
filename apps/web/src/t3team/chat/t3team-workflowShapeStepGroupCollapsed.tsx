@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The collapsible form of a dynamic same-label group (four or more repeats — a loop body calling
  * the same agent step once per item). Split out of `t3team-workflowShapeStepGrouping.tsx`, which

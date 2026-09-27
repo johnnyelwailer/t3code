@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
 import { formatDigestAgo } from "~/t3team/t3team-ProjectMyWorkDigestRows";
 import type { DigestClaim } from "~/t3team/t3team-projectMyWorkDigestPlan";

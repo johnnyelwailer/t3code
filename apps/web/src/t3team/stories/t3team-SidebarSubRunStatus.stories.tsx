@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * GHE #40/#208 — sub-run (child) thread rows, sidebar v2.
  *

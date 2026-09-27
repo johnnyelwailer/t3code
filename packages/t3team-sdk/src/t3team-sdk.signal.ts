@@ -36,7 +36,10 @@ export interface Signal<Payload> {
 }
 
 /** Declare a signal once; producer, consumer, and every delivery boundary import the same ref. */
-export function defineSignal<Payload>(name: string, schema: Schema.Schema<Payload>): Signal<Payload> {
+export function defineSignal<Payload>(
+  name: string,
+  schema: Schema.Schema<Payload>,
+): Signal<Payload> {
   assertSignalName(name);
   return Object.freeze({ kind: "signal", name, schema });
 }
@@ -105,10 +108,7 @@ export interface SignalSourceRef<
 
 /** Declare a BUILT-IN (catalog) source: the shared declaration a body imports; the host
  * registers its `start` behavior under the same `name`. */
-export function builtinSignalSource<
-  const P,
-  Signals extends ReadonlyArray<Signal<unknown>>,
->(opts: {
+export function builtinSignalSource<const P, Signals extends ReadonlyArray<Signal<unknown>>>(opts: {
   readonly name: string;
   readonly params: P;
   readonly emits: Signals;

@@ -149,10 +149,7 @@ export function getResume(): CheckpointRecord | undefined {
  * delivers the awaited `(signal, key)`. Requires the `'source:<name>'` capability in
  * `meta.capabilities`.
  */
-export function getSignalSource<
-  Params,
-  Signals extends ReadonlyArray<Signal<unknown>>,
->(
+export function getSignalSource<Params, Signals extends ReadonlyArray<Signal<unknown>>>(
   source: SignalSourceRef<Params, Signals, unknown>,
   params: Params,
 ): Promise<SignalSourceHandle<Signals>> {

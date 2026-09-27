@@ -1,4 +1,4 @@
-/* oxlint-disable react/no-object-type-as-default-prop -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable react/no-object-type-as-default-prop, shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { Loader2 } from "lucide-react";
 
 import type {

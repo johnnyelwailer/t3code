@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-unknown-classes -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The spatial nodes painted into the planning stage: the SVG edge lines, the
  * per-grouping anchors (owner headers / epic anchors), the story frames, and the

@@ -79,12 +79,8 @@ export const make = Effect.gen(function* () {
   ) =>
     Deferred.await(deferred).pipe(
       Effect.timeout(timeout),
-      Effect.catchTag(
-        "TimeoutError",
-        (cause) =>
-          Effect.fail(
-            new ConnectCredentialMintError({ reason: "browser_callback_timeout", cause }),
-          ),
+      Effect.catchTag("TimeoutError", (cause) =>
+        Effect.fail(new ConnectCredentialMintError({ reason: "browser_callback_timeout", cause })),
       ),
     );
 
@@ -106,7 +102,9 @@ export const make = Effect.gen(function* () {
       // the in-flight one instead of opening a second sign-in.
       const slot = yield* Ref.modify(
         inFlight,
-        (current): [
+        (
+          current,
+        ): [
           Option.Option<Deferred.Deferred<void, ConnectCredentialMintError>>,
           Option.Option<Deferred.Deferred<void, ConnectCredentialMintError>>,
         ] => (Option.isSome(current) ? [current, current] : [Option.none(), Option.some(deferred)]),

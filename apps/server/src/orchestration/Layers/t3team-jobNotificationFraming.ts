@@ -19,11 +19,7 @@
  *
  * @module t3team-jobNotificationFraming
  */
-import {
-  EventId,
-  MessageId,
-  type OrchestrationThreadActivity,
-} from "@t3tools/contracts";
+import { EventId, MessageId, type OrchestrationThreadActivity } from "@t3tools/contracts";
 
 /** Durable activity kind for a persisted (not yet consumed) job-notification marker. */
 export const JOB_NOTIFICATION_MARKER_KIND = "job-notification.pending";
@@ -49,9 +45,7 @@ export interface JobNotificationMarker {
  * arbitrary keys in `metadata`), so every field is shape-checked and anything
  * malformed yields `undefined` (no marker, no activity).
  */
-export function parseJobNotificationMarker(
-  record: unknown,
-): JobNotificationMarker | undefined {
+export function parseJobNotificationMarker(record: unknown): JobNotificationMarker | undefined {
   if (record === null || typeof record !== "object" || Array.isArray(record)) {
     return undefined;
   }
@@ -66,9 +60,7 @@ export function parseJobNotificationMarker(
     return undefined;
   }
   const requestId =
-    typeof entry.requestId === "string" && entry.requestId.length > 0
-      ? entry.requestId
-      : undefined;
+    typeof entry.requestId === "string" && entry.requestId.length > 0 ? entry.requestId : undefined;
   return { atIso, text: trimmedText, ...(requestId !== undefined ? { requestId } : {}) };
 }
 
@@ -101,7 +93,9 @@ export interface JobNotificationClaim {
  * completion, so it claims that one (the rest expire via the recency window).
  */
 export function findClaimableJobNotificationMarker(
-  activities: ReadonlyArray<Pick<OrchestrationThreadActivity, "id" | "kind" | "payload">> | undefined,
+  activities:
+    | ReadonlyArray<Pick<OrchestrationThreadActivity, "id" | "kind" | "payload">>
+    | undefined,
   nowIso: string,
 ): JobNotificationClaim | undefined {
   if (activities === undefined || activities.length === 0) {

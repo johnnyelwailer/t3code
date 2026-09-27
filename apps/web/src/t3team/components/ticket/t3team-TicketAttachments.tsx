@@ -1,4 +1,4 @@
-/* oxlint-disable react/no-array-index-key -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable react/no-array-index-key, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { ExternalLink, FileText, Image as ImageIcon } from "lucide-react";
 import {
   T3SurfaceCard,

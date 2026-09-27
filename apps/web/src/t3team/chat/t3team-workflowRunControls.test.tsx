@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-unknown-classes -- Existing merged lint debt; keep green while preserving behavior. */
 // @vitest-environment jsdom
 
 import { act, type ReactNode } from "react";

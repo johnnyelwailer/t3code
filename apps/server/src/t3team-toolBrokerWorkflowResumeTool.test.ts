@@ -210,74 +210,76 @@ it.effect("paused: restores the parked pending ask into the registry", () =>
   }).pipe(Effect.provide(TestLayer)),
 );
 
-it.effect("paused on a signal park: resume lands in watching and drains the bridged inbox event", () =>
-  Effect.gen(function* () {
-    const repo = yield* WorkflowRunRepository;
-    const registry = yield* T3TeamWorkflowEngineRegistry;
-    const signalStore = yield* WorkflowSignalStore;
-    const handlers = yield* makeHandlers;
-    const runId = "paused-signal-run";
-    yield* repo.upsert(baseRow(runId));
-    // Park the row on a signal event (design 42): clears the thread + timer columns, records
-    // the awaited (signal, key) tuple and the park's correlation.
-    yield* repo.setWatching({
-      runId,
-      correlationId: `${runId}:w`,
-      watchSourceName: "scm.change-request.watch",
-      watchParamsHash: "hash-1",
-      watchSignalName: "scm.pull-request.merged",
-      watchSignalKey: "42",
-      updatedAt: nowIso(),
-    });
-    // Pause exactly the way the control route's CAS does.
-    yield* repo.casSetStatus({
-      runId,
-      status: "paused",
-      updatedAt: nowIso(),
-      expectedStatuses: ["watching"],
-    });
-    // An event the delivery port bridged to the durable inbox while the run was paused.
-    yield* signalStore.insertInboxEntry({
-      sourceName: "scm.change-request.watch",
-      paramsHash: "hash-1",
-      signalName: "scm.pull-request.merged",
-      key: "42",
-      payload: { merged: true },
-      createdAt: nowIso(),
-    });
-    // The controller a boot rehydration (or live launch) would have registered.
-    const resumed: Array<{ correlationId: string; reply: unknown }> = [];
-    registry.registerRun(runId, {
-      resume: (correlationId, reply) => {
-        resumed.push({ correlationId, reply });
-        return Promise.resolve();
-      },
-      cancel: () => {},
-    });
+it.effect(
+  "paused on a signal park: resume lands in watching and drains the bridged inbox event",
+  () =>
+    Effect.gen(function* () {
+      const repo = yield* WorkflowRunRepository;
+      const registry = yield* T3TeamWorkflowEngineRegistry;
+      const signalStore = yield* WorkflowSignalStore;
+      const handlers = yield* makeHandlers;
+      const runId = "paused-signal-run";
+      yield* repo.upsert(baseRow(runId));
+      // Park the row on a signal event (design 42): clears the thread + timer columns, records
+      // the awaited (signal, key) tuple and the park's correlation.
+      yield* repo.setWatching({
+        runId,
+        correlationId: `${runId}:w`,
+        watchSourceName: "scm.change-request.watch",
+        watchParamsHash: "hash-1",
+        watchSignalName: "scm.pull-request.merged",
+        watchSignalKey: "42",
+        updatedAt: nowIso(),
+      });
+      // Pause exactly the way the control route's CAS does.
+      yield* repo.casSetStatus({
+        runId,
+        status: "paused",
+        updatedAt: nowIso(),
+        expectedStatuses: ["watching"],
+      });
+      // An event the delivery port bridged to the durable inbox while the run was paused.
+      yield* signalStore.insertInboxEntry({
+        sourceName: "scm.change-request.watch",
+        paramsHash: "hash-1",
+        signalName: "scm.pull-request.merged",
+        key: "42",
+        payload: { merged: true },
+        createdAt: nowIso(),
+      });
+      // The controller a boot rehydration (or live launch) would have registered.
+      const resumed: Array<{ correlationId: string; reply: unknown }> = [];
+      registry.registerRun(runId, {
+        resume: (correlationId, reply) => {
+          resumed.push({ correlationId, reply });
+          return Promise.resolve();
+        },
+        cancel: () => {},
+      });
 
-    const value = yield* handlers.resumeWorkflowRun({ runId });
-    // The regression (GHE #332 re-review): this used to fail with
-    // "Paused workflow has no continuation to resume." — a signal park has neither a pending
-    // thread nor a wake_at, so neither old resume branch matched.
-    assert.strictEqual(value.status, "watching");
-    const row = Option.getOrThrow(yield* repo.getById({ runId }));
-    assert.strictEqual(row.status, "watching");
-    // The bridged event was consumed and delivered to the parked correlation (first-wins: a
-    // second take of the same tuple finds nothing).
-    assert.deepStrictEqual(resumed, [{ correlationId: `${runId}:w`, reply: { merged: true } }]);
-    assert.strictEqual(
-      Option.isNone(
-        yield* signalStore.takeOpenInboxEntry({
-          sourceName: "scm.change-request.watch",
-          paramsHash: "hash-1",
-          signalName: "scm.pull-request.merged",
-          key: "42",
-          deliveredAt: nowIso(),
-        }),
-      ),
-      true,
-    );
-  }).pipe(Effect.provide(TestLayer)),
+      const value = yield* handlers.resumeWorkflowRun({ runId });
+      // The regression (GHE #332 re-review): this used to fail with
+      // "Paused workflow has no continuation to resume." — a signal park has neither a pending
+      // thread nor a wake_at, so neither old resume branch matched.
+      assert.strictEqual(value.status, "watching");
+      const row = Option.getOrThrow(yield* repo.getById({ runId }));
+      assert.strictEqual(row.status, "watching");
+      // The bridged event was consumed and delivered to the parked correlation (first-wins: a
+      // second take of the same tuple finds nothing).
+      assert.deepStrictEqual(resumed, [{ correlationId: `${runId}:w`, reply: { merged: true } }]);
+      assert.strictEqual(
+        Option.isNone(
+          yield* signalStore.takeOpenInboxEntry({
+            sourceName: "scm.change-request.watch",
+            paramsHash: "hash-1",
+            signalName: "scm.pull-request.merged",
+            key: "42",
+            deliveredAt: nowIso(),
+          }),
+        ),
+        true,
+      );
+    }).pipe(Effect.provide(TestLayer)),
 );
 
 const failingSource = `import { Schema } from "effect";

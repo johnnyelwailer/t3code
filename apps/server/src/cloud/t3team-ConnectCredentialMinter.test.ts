@@ -123,10 +123,7 @@ const makeMinterLayer = (
     Layer.provide(configLayer),
     Layer.provide(NodeServices.layer),
   );
-  const launcherMock = Layer.succeed(
-    ExternalLauncher.ExternalLauncher,
-    { launchBrowser } as never,
-  );
+  const launcherMock = Layer.succeed(ExternalLauncher.ExternalLauncher, { launchBrowser } as never);
   const cliLayer = CliTokenManager.layer.pipe(
     Layer.provide(secretsLayer),
     Layer.provide(http),
@@ -171,10 +168,7 @@ const launchAndRedirect =
       yield* Effect.gen(function* () {
         const client = yield* HttpClient.HttpClient;
         yield* client.execute(HttpClientRequest.get(target));
-      }).pipe(
-        Effect.provide(FetchHttpClient.layer),
-        Effect.retry(Schedule.recurs(200)),
-      );
+      }).pipe(Effect.provide(FetchHttpClient.layer), Effect.retry(Schedule.recurs(200)));
     });
 
 describe("ConnectCredentialMinter", () => {
@@ -209,7 +203,10 @@ describe("ConnectCredentialMinter", () => {
       assert.equal(exchange.url, "https://clerk.example.test/oauth/token");
       assert.equal(exchange.params.get("grant_type"), "authorization_code");
       assert.equal(exchange.params.get("code"), "clerk-code-123");
-      assert.equal(exchange.params.get("redirect_uri"), `http://127.0.0.1:${LOOPBACK_PORT}/callback`);
+      assert.equal(
+        exchange.params.get("redirect_uri"),
+        `http://127.0.0.1:${LOOPBACK_PORT}/callback`,
+      );
       assert.equal(exchange.params.get("client_id"), "oauth_client_test");
       assert.isNotNull(exchange.params.get("code_verifier"));
 

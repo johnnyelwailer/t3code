@@ -15,7 +15,10 @@ import {
 } from "./t3team-threadToolContextStore.ts";
 
 const layer = it.layer(
-  Layer.mergeAll(NodeSqliteClient.layerMemory(), T3TeamThreadToolContextStoreLive),
+  Layer.mergeAll(
+    NodeSqliteClient.layer({ filename: ":memory:" }),
+    T3TeamThreadToolContextStoreLive,
+  ),
 );
 
 function insertThread(threadId: string, retention: "ephemeral" | "retained" | null = null) {

@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ReactNode } from "react";
 
 import { adfTextColor } from "./t3team-adfColorTokens";

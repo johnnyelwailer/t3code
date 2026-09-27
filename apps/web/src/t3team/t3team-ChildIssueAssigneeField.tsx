@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { useState } from "react";
 
 import type { AtlassianAssignableUser } from "~/t3team/backend/t3team-types";

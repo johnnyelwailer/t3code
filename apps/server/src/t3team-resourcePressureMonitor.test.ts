@@ -138,7 +138,9 @@ describe("ResourcePressureMonitor", () => {
 });
 
 const sqlLayer = it.layer(
-  ResourcePressureEventRepositoryLive.pipe(Layer.provideMerge(NodeSqliteClient.layerMemory())),
+  ResourcePressureEventRepositoryLive.pipe(
+    Layer.provideMerge(NodeSqliteClient.layer({ filename: ":memory:" })),
+  ),
 );
 
 sqlLayer("ResourcePressureEventRepository (sqlite)", (it) => {

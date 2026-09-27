@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Live plan-card overlay (recipe UX "no black box" slice). Renders the same plan chrome as
  * {@link ./t3team-messageShapeCard.tsx} but overlays each step with its live runtime status

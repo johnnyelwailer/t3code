@@ -73,11 +73,12 @@ export type ProjectThread = {
       | "running"
       | "suspended"
       | "sleeping"
+      | "watching"
       | "paused"
       | "completed"
       | "failed"
       | "cancelled";
-    readonly pendingKind: "thread.turn" | "user.input" | null;
+    readonly pendingKind: "thread.turn" | "user.input" | "signal.wait" | null;
     readonly wakeAt: string | null;
     readonly updatedAt: string;
   };

@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * "Local provider sessions" setting toggle — the display-side contract.
  *

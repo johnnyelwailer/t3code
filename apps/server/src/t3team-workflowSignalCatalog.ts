@@ -31,20 +31,14 @@ import {
   WORKFLOW_SIGNAL_POLL_MS,
 } from "./t3team-workflowSignalSourceScm.ts";
 import { startWorkItemSignalInstance } from "./t3team-workflowSignalSourceWorkItem.ts";
-import type {
-  PullRequestActivity,
-  PullRequestDetail,
-  PullRequestRef,
-} from "@t3tools/contracts";
+import type { PullRequestActivity, PullRequestDetail, PullRequestRef } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import type { PullRequestError } from "./pullRequest/PullRequestService.ts";
 
 /** The minimal PullRequestService surface the Tier A instances poll (detail + activity). */
 export interface ScmPollSurface {
   readonly detail: (ref: PullRequestRef) => Effect.Effect<PullRequestDetail, PullRequestError>;
-  readonly activity: (
-    ref: PullRequestRef,
-  ) => Effect.Effect<PullRequestActivity, PullRequestError>;
+  readonly activity: (ref: PullRequestRef) => Effect.Effect<PullRequestActivity, PullRequestError>;
 }
 
 /** One catalog entry: the host's `start` behavior for a built-in source name. */
@@ -173,9 +167,7 @@ export function makeWorkflowSignalSourceCatalog(input: {
 /** Boot cross-check (design 42 §7): every SDK catalog declaration the host CANNOT start is a
  * loud boot failure — a rename on either side must break here, not leave a body parked on a
  * source that never starts. */
-export function assertCatalogCoversDeclarations(
-  catalog: WorkflowSignalSourceCatalog,
-): void {
+export function assertCatalogCoversDeclarations(catalog: WorkflowSignalSourceCatalog): void {
   const missing = [...BUILTIN_SIGNAL_SOURCES]
     .map((declaration) => declaration.name)
     .filter((name) => !catalog.sourceNames.has(name));

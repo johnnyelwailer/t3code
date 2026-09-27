@@ -24,12 +24,7 @@ const steps: readonly ComposerTaskStep[] = [
 describe("ComposerTasksBadge plan staleness label", () => {
   it("keeps the collapsed badge free of the last-updated time", () => {
     const markup = renderToStaticMarkup(
-      <ComposerTasksBadge
-        expanded={false}
-        onToggle={() => {}}
-        progress={progress}
-        steps={steps}
-      />,
+      <ComposerTasksBadge expanded={false} onToggle={() => {}} progress={progress} steps={steps} />,
     );
 
     expect(markup).not.toContain("data-composer-task-updated");

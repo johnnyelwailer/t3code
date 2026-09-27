@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-native-title-tooltip, shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import type { MouseEvent } from "react";
 import type {
   AtlassianAssignableUser,

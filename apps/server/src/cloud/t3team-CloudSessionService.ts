@@ -69,7 +69,7 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
   const { repoRef, machineLabel } = yield* resolveFleetConfig();
 
   // `gh` needs a cwd; irrelevant for `gh api --hostname`, but the process starts somewhere.
-  const cwd = yield* Config.string("HOME").pipe(Config.withDefault("/"));
+  const cwd = yield* Config.String("HOME").pipe(Config.withDefault("/"));
 
   // The gh-execution half (run / listRunsFor / resolveLogin) lives in
   // `t3team-CloudSessionGh`; here we only orchestrate list/create/cancel on top.

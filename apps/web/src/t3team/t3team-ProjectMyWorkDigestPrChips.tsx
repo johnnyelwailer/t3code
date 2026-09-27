@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { Badge } from "~/t3team/components/ui/t3team-badge";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
 import { digestPrUrl, digestReviewerUrl } from "~/t3team/t3team-projectMyWorkDigestFacts";

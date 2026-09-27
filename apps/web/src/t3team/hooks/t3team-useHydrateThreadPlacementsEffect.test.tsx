@@ -226,9 +226,7 @@ describe("useHydrateThreadPlacements effect scheduling", () => {
 
     // A real content change (the thread's `updatedAt` advanced) makes the id
     // eligible again: the effect must fire.
-    act(() =>
-      setLive([{ ...LIVE_THREAD, updatedAt: "2026-05-22T11:00:00.000Z" }] as Thread[]),
-    );
+    act(() => setLive([{ ...LIVE_THREAD, updatedAt: "2026-05-22T11:00:00.000Z" }] as Thread[]));
     await act(async () => {
       await Promise.resolve();
     });

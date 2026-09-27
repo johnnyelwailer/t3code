@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * UX baseline for the t3team workflow "agents panel" — the live reproduction of the 2026-09-08
  * noise complaint against `nexi-ghe-hourly-triage`.

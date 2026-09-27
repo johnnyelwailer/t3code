@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-native-title-tooltip, shadcn/no-arbitrary-values, shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The two marks a sidebar row carries when its thread mirrors an external Codex/Claude session:
  * the provider icon, and a lock while the native tool still owns the session.

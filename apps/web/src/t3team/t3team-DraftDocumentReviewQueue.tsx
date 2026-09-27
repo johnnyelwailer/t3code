@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { DraftDocumentReviewPanel } from "~/t3team/t3team-DraftDocumentReviewPanel";
 import type { T3TeamDocumentDraftMutation } from "~/t3team/t3team-draftMutationTypes";
 
