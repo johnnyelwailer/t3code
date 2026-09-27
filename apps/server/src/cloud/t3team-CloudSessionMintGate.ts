@@ -45,7 +45,7 @@ export const dispatchCredentialHandoff = Effect.fn("cloud.session.dispatch_crede
     readonly mintTimeout: Duration.Duration;
   }) {
     // Flag off: no handoff at all — the legacy path takes over.
-    if (!input.enabled) return;
+    if (!input.enabled) return null;
 
     let mintAttempted = false;
     const existing = yield* input.readCredential.pipe(
@@ -67,7 +67,7 @@ export const dispatchCredentialHandoff = Effect.fn("cloud.session.dispatch_crede
       mintAttempted = true;
     }
 
-    yield* runCredentialHandoff({
+    return yield* runCredentialHandoff({
       repoRef: input.repoRef,
       sessionTag: input.sessionTag,
       run: input.run,

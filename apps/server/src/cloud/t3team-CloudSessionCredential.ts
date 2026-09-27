@@ -10,6 +10,7 @@ import {
   type CloudSessionRepoRef,
   type GhInvocation,
 } from "./t3team-githubActionsSessionClient.ts";
+import { parseCreatedPayloadIssue } from "./t3team-CloudSessionPayloadCleanup.ts";
 
 /**
  * The creator-side half of per-user T3 Connect credential handoff.
@@ -19,8 +20,9 @@ import {
  * token, so a multi-hour session keeps refreshing rather than dying at the
  * access token's expiry. Delivery is a tag-keyed GitHub payload issue on the
  * fleet repo: the VM's `session.yml` reads the body once, seeds it into
- * `T3CODE_HOME`, and deletes the issue (in bash — this module never deletes).
- * It never logs the credential, only the issue number.
+ * `T3CODE_HOME`, and closes + scrubs the issue; the creator then deletes it
+ * (`t3team-CloudSessionPayloadCleanup`). It never logs the credential, only
+ * the issue number.
  *
  * The whole write is feature-flagged (owner rule): when the flag is off the
  * legacy shared-repo-secret path in `session.yml` remains the fallback.
@@ -136,7 +138,7 @@ export const runCredentialHandoff = Effect.fn("cloud.session.credential_handoff"
       CliTokenManager.CloudCliTokenManagerError
     >;
   }) {
-    if (!input.enabled) return;
+    if (!input.enabled) return null;
 
     // A stored credential that cannot be read or refreshed is treated as absent:
     // the user's remediation is the same either way — sign in (again). This keeps
@@ -174,5 +176,7 @@ export const runCredentialHandoff = Effect.fn("cloud.session.credential_handoff"
     if (issueNumber !== null) {
       yield* Effect.logInfo("Cloud session credential payload written to issue " + issueNumber);
     }
+    // Handed back so the creator can delete the spent payload later.
+    return parseCreatedPayloadIssue(result.stdout);
   },
 );
