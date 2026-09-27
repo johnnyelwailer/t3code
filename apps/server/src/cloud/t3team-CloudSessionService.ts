@@ -19,6 +19,7 @@ import { resolveFleetConfig } from "./t3team-CloudSessionFleet.ts";
 import { ConnectCredentialMinter } from "./t3team-ConnectCredentialMinter.ts";
 import { dispatchAndDiscoverSession } from "./t3team-CloudSessionDispatch.ts";
 import { dispatchCredentialHandoff } from "./t3team-CloudSessionMintGate.ts";
+import { makePayloadIssueCleanup } from "./t3team-CloudSessionPayloadCleanup.ts";
 import { makeSessionTag, projectCloudSession } from "./t3team-CloudSessionProjection.ts";
 
 /**
@@ -73,6 +74,7 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
   // The gh-execution half (run / listRunsFor / resolveLogin) lives in
   // `t3team-CloudSessionGh`; here we only orchestrate list/create/cancel on top.
   const gh = makeSessionGh(github, repoRef, cwd);
+  const payloadCleanup = yield* makePayloadIssueCleanup(repoRef, gh.run);
 
   const list: CloudSessionService["Service"]["list"] = Effect.gen(function* () {
     // Hard isolation: resolve who the caller is BEFORE fetching, and scope the
@@ -81,11 +83,17 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
     const login = yield* gh.resolveLogin;
     const runs = yield* gh.listRunsFor(login);
     const nowMs = yield* Clock.currentTimeMillis;
-    const sessions = yield* Effect.forEach(
+    const projected = yield* Effect.forEach(
       runs.slice(0, SESSION_DISPLAY_LIMIT),
-      (item) => projectCloudSession(item, nowMs, machineLabel, repoRef, gh.run),
+      (run) =>
+        projectCloudSession(run, nowMs, machineLabel, repoRef, gh.run).pipe(
+          Effect.map((session) => ({ run, session })),
+        ),
       { concurrency: 4 },
     );
+    // Delete the credential payloads of sessions that have spent them.
+    yield* payloadCleanup.sweep(projected);
+    const sessions = projected.map((entry) => entry.session);
     return { sessions, configured: true } satisfies CloudSessionListResult;
   }).pipe(
     // A server with no `gh` at all cannot ever start a session, so report it as
@@ -120,7 +128,7 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
       // has no usable T3 Connect credential yet, the mint (a browser
       // round-trip, zero manual steps) gets a bounded chance to finish here;
       // otherwise the user is told their sign-in is pending in the browser.
-      yield* dispatchCredentialHandoff({
+      const payloadIssue = yield* dispatchCredentialHandoff({
         repoRef,
         sessionTag,
         run: gh.run,
@@ -129,6 +137,7 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
         mint: minter.mint,
         mintTimeout: CREATE_MINT_WAIT,
       });
+      if (payloadIssue !== null) yield* payloadCleanup.track(sessionTag, payloadIssue);
 
       return yield* dispatchAndDiscoverSession({
         repoRef,
