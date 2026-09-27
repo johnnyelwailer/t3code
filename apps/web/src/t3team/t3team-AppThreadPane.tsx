@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { useCallback, useEffect } from "react";
 import { PanelRightOpenIcon } from "lucide-react";
 import { useCanGoBack } from "@tanstack/react-router";

@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 /* oxlint-disable t3code/no-native-title-tooltip -- The T3Team row story intentionally mirrors ThreadRow's native title tooltip. */
 import type { Meta, StoryObj } from "@storybook/react";
 

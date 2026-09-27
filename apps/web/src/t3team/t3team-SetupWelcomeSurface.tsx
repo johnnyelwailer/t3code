@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-raw-colors, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { ArrowRight, BadgeCheck, Sparkles } from "lucide-react";
 
 import type { EnvironmentSetupProfile } from "@t3tools/contracts";

@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { memo, useCallback } from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
 

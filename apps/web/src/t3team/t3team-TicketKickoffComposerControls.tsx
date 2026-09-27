@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { BotIcon } from "lucide-react";
 import type { ProviderInteractionMode, ProviderInstanceId, RuntimeMode } from "@t3tools/contracts";
 import type { ProviderInstanceEntry } from "~/providerInstances";

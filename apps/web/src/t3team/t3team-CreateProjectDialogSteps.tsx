@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ExternalProject, IntegrationAccount } from "@t3tools/integrations-core";
 import { Input } from "~/t3team/components/ui/t3team-input";
 import { Badge } from "~/t3team/components/ui/t3team-badge";

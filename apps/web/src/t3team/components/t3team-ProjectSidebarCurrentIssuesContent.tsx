@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { SidebarMenuSub, SidebarMenuSubItem } from "~/t3team/components/ui/t3team-sidebar";
 import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";

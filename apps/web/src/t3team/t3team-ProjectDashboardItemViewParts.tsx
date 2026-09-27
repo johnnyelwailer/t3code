@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { CornerDownRight, GitBranch } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 

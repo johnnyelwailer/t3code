@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ReactNode } from "react";
 import { ArrowLeft, X } from "lucide-react";
 

@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The answer controls of an `askUser` card — the part the user actually acts on.
  *

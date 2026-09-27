@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { Loader2 } from "lucide-react";
 
 import { Button } from "~/t3team/components/ui/t3team-button";

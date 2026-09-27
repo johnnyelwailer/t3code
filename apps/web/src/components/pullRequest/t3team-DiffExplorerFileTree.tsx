@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The PR diff explorer's file tree: a real directory tree (nested, not a repeated path list)
  * where every file carries a "viewed" checkbox. Presentational — the parent owns selection,

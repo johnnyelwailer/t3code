@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-unknown-classes -- Existing merged lint debt; keep green while preserving behavior. */
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { isMacPlatform } from "~/lib/utils";

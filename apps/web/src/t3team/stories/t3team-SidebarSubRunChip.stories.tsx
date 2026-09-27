@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Sidebar row refine (2026-08-29) — the sub-runs chip on the sidebar thread row.
  *

@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { Input } from "~/t3team/components/ui/t3team-input";

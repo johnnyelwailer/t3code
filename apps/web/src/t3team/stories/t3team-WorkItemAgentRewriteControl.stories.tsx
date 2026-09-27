@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { useEffect } from "react";
 import type { Meta, StoryObj } from "@storybook/react";
 

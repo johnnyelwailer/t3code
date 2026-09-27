@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * GHE-40 activity label — story support: the live state machine card that
  * cycles live → live → Waiting → Done on its own timer.

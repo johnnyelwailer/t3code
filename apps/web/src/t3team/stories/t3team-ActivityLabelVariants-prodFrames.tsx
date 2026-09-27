@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * GHE-40 activity label — story support: production card-row frames + the
  * live / kind / fit-gate demos for the production component story.

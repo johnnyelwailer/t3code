@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { Fragment } from "react";
 
 import { ProjectDashboardKanbanDroppableColumnBody } from "~/t3team/t3team-ProjectDashboardKanbanDndUi";

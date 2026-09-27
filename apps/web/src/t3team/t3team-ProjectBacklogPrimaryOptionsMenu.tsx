@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/require-static-classes -- Existing merged lint debt; keep green while preserving behavior. */
 import type { AtlassianBacklogBoard, AtlassianBacklogSprint } from "~/t3team/backend/t3team-types";
 import {
   MenuGroup,

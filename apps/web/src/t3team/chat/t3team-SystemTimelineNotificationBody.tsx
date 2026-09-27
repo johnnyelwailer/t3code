@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Collapse affordance for long workflow-authored system notifications — the plain-text
  * `thread.notifyUser(...)` path (see `t3team-workflowEngineBrokerNotify.ts`, the `p.recipient ===

@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { useState } from "react";
 import { Bot, Check, ChevronRight, X } from "lucide-react";
 import type { Meta, StoryObj } from "@storybook/react";

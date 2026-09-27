@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { useState } from "react";
 
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";

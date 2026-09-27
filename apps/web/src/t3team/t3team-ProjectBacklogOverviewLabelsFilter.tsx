@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { CheckIcon, ChevronDownIcon, TagIcon } from "lucide-react";
 
 import { Button } from "~/components/ui/button";

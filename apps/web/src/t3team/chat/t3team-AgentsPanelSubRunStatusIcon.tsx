@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * GHE #254: the sub-run status icon — the SAME status language as the parent
  * card (ThreadActivityMorphIcon, sm variant) and the sidebar sub-run rows

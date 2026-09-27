@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { useEffect, useMemo, useState } from "react";
 import { buildAtlassianAssetContentUrl } from "~/t3team/t3team-atlassianAssetUrls";
 

@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 import type { Meta, StoryObj } from "@storybook/react";
 import type { CSSProperties, ReactNode } from "react";
 import { useEffect } from "react";

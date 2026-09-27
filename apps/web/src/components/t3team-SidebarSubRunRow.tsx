@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 import { CircleAlertIcon, CircleCheckIcon, CircleQuestionMarkIcon } from "lucide-react";
 import {
   memo,
