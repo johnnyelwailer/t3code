@@ -15,6 +15,13 @@ describe("videoMimeType", () => {
     );
   });
 
+  it("never treats an audio file with a video container extension as a video", () => {
+    // Voice notes record as audio/webm; the .webm extension must not re-route
+    // them through the video pipeline (that used to render two players).
+    expect(videoMimeType({ name: "voice-note.webm", mimeType: "audio/webm" })).toBeNull();
+    expect(videoMimeType({ name: "voice-note.mp4", mimeType: "audio/mp4" })).toBeNull();
+  });
+
   it.each(["README", "report.pdf", "file.constructor", "file.__proto__"])(
     "does not mistake %s for a video",
     (name) => {

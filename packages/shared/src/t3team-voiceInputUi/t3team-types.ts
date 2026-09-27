@@ -5,6 +5,7 @@
  * ComposerVoiceInput's `languages` / `initialLanguage` props); these
  * defaults reproduce the shipped UX. UI copy is German.
  */
+import type { RecordedVoiceAudio } from "./t3team-audioCapture.ts";
 
 /** Composer-level state machine. */
 export type VoiceState = "idle" | "waiting" | "recording" | "denied";
@@ -70,6 +71,12 @@ export interface VoiceInputOptions {
    * re-rendering (e.g. writing a CSS variable or shadow).
    */
   onLevel?: (level: number) => void;
+  /**
+   * Raw audio capture: when provided the mic stream is also recorded and
+   * the finished blob is reported exactly once per stop (null when nothing
+   * was recorded or when cancelled).
+   */
+  onRecorded?: (recording: RecordedVoiceAudio | null) => void;
   initialLanguage: string;
 }
 

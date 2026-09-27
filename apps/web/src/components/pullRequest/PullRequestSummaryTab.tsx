@@ -475,6 +475,7 @@ export function PullRequestSummaryTab({
   fixCheckLabel = "Fix",
   onFixFinding,
   onRefresh,
+  afterContent,
 }: {
   environmentId: EnvironmentId;
   threadRef: ScopedThreadRef | null;
@@ -488,6 +489,12 @@ export function PullRequestSummaryTab({
   fixCheckLabel?: string;
   onFixFinding?: (finding: PullRequestFinding) => void;
   onRefresh: () => void;
+  /**
+   * A surface extension rendered at the end of the document, beneath the conversation — the
+   * place a host surface adds "run a workflow on this pull request" without reaching into the
+   * summary's own sections.
+   */
+  afterContent?: ReactNode;
 }) {
   // Keyed by the pull request, so opening another one starts at the end of its conversation
   // rather than wherever the last one had been read back to.
@@ -1069,6 +1076,7 @@ export function PullRequestSummaryTab({
           </>
         )}
       </Section>
+      {afterContent}
     </div>
   );
 }

@@ -125,6 +125,8 @@ import {
   type ChatMessage,
   type ChatFileAttachment,
   type ChatImageAttachment,
+  isAudioAttachment,
+  isBrowserPreviewAttachment,
   isFileAttachment,
   isImageAttachment,
   isVideoAttachment,
@@ -138,6 +140,7 @@ import {
 import { PREFERRED_HIGHLIGHTER } from "../../lib/syntaxHighlighting";
 import ChatMarkdown, { ChatMarkdownAssetImage } from "../ChatMarkdown";
 import { T3Wordmark } from "../T3Wordmark";
+import { MessageAudioPlayer } from "./MessageAudioPlayer";
 import {
   BotIcon,
   BrainIcon,
@@ -174,6 +177,7 @@ import { useAssetUrlRefresh, useAssetUrls, useAssetUrlState } from "../../assets
 import { MediaVideoPlayer } from "../media/MediaVideoPlayer";
 import { getVirtualizedScrollFadeClassName } from "../ui/scroll-area";
 import {
+  buildAttachmentAudioAsset,
   buildAttachmentVideoAsset,
   buildAttachmentVideoPreview,
   buildExpandedImagePreview,
@@ -2455,6 +2459,106 @@ function MessageAuthorHeading({ children }: { children: string }) {
   return <h3 className="sr-only select-none">{children}</h3>;
 }
 
+function UserFileAttachmentRow({ file }: { readonly file: ChatFileAttachment }) {
+  const ctx = use(TimelineRowCtx);
+  const opensInPreview = isBrowserPreviewAttachment(file);
+  const fileIdentity = (
+    <>
+      <PierreEntryIcon pathValue={file.name} kind="file" theme={ctx.resolvedTheme} />
+      <span className="min-w-0 flex-1 truncate">{file.name}</span>
+    </>
+  );
+  if (opensInPreview && file.downloadable !== false) {
+    return (
+      <div className="flex min-w-0 items-center gap-1">
+        <button
+          type="button"
+          aria-label={`Preview ${file.name}`}
+          onClick={() => ctx.onFileOpen(file)}
+          className="focus-visible:ring-ring/70 flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md py-1 text-left text-sm hover:underline focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
+        >
+          {fileIdentity}
+          <EyeIcon className="size-4 shrink-0" />
+        </button>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                size="icon-xs"
+                variant="ghost-muted"
+                aria-label={`Download ${file.name}`}
+                onClick={() => ctx.onFileDownload(file)}
+              />
+            }
+          >
+            <DownloadIcon />
+          </TooltipTrigger>
+          <TooltipPopup side="top">Download {file.name}</TooltipPopup>
+        </Tooltip>
+      </div>
+    );
+  }
+
+  const content = (
+    <>
+      {fileIdentity}
+      {file.downloadable === false ? null : (
+        <DownloadIcon className="size-4 shrink-0" />
+      )}
+    </>
+  );
+  return file.previewUrl && !opensInPreview ? (
+    <a
+      href={file.previewUrl}
+      download={file.name}
+      className="flex min-w-0 items-center gap-2 rounded-md py-1 text-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+    >
+      {content}
+    </a>
+  ) : file.downloadable === false ? (
+    <div className="flex min-w-0 items-center gap-2 py-1 text-sm">{content}</div>
+  ) : (
+    <button
+      type="button"
+      aria-label={`${opensInPreview ? "Preview" : "Download"} ${file.name}`}
+      onClick={() => ctx.onFileOpen(file)}
+      className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md py-1 text-left text-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+    >
+      {content}
+    </button>
+  );
+}
+
+function UserAudioAttachment({ file }: { readonly file: ChatFileAttachment }) {
+  const ctx = use(TimelineRowCtx);
+  const asset = useMemo(
+    () =>
+      file.downloadable === false
+        ? null
+        : buildAttachmentAudioAsset(ctx.activeThreadEnvironmentId, file),
+    [ctx.activeThreadEnvironmentId, file.downloadable, file.id, file.mimeType, file.name],
+  );
+  const resource = asset?.resource ?? null;
+  const assetUrl = useAssetUrlState(ctx.activeThreadEnvironmentId, resource);
+  const src = assetUrl._tag === "Success" ? assetUrl.url : (file.previewUrl || null);
+
+  // A local blob preview belongs to this row's attachment; release it when
+  // the row goes away so the object URL never outlives the player.
+  const localPreviewUrl = file.previewUrl?.startsWith("blob:") ? file.previewUrl : null;
+  useEffect(() => {
+    if (localPreviewUrl === null) return;
+    return () => URL.revokeObjectURL(localPreviewUrl);
+  }, [localPreviewUrl]);
+
+  // Before the upload lands (or on servers without attachment storage) the
+  // row stays inert instead of rendering a dead player.
+  if (src === null) {
+    return <UserFileAttachmentRow file={file} />;
+  }
+
+  return <MessageAudioPlayer src={src} label={file.name} />;
+}
+
 function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
   const { onImageExpand, onFileOpen } = ctx;
@@ -2483,8 +2587,15 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
     () => (row.message.attachments ?? []).filter(isFileAttachment),
     [row.message.attachments],
   );
-  const userVideos = userFiles.filter(isVideoAttachment);
-  const otherUserFiles = userFiles.filter((file) => !isVideoAttachment(file));
+  // A real audio/* mime wins over the video extension fallback (voice
+  // recordings arrive as audio/webm, which would otherwise double-render).
+  const userVideos = userFiles.filter(
+    (file) => isVideoAttachment(file) && !isAudioAttachment(file),
+  );
+  const userAudios = userFiles.filter(isAudioAttachment);
+  const otherUserFiles = userFiles.filter(
+    (file) => !isVideoAttachment(file) && !isAudioAttachment(file),
+  );
   const unknownAttachments = (row.message.attachments ?? []).filter(
     (attachment) => !isImageAttachment(attachment) && !isFileAttachment(attachment),
   );
@@ -2681,8 +2792,11 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             ))}
           </div>
         )}
-        {unchippedFiles.length > 0 || unknownAttachments.length > 0 ? (
+        {unchippedFiles.length > 0 || userAudios.length > 0 || unknownAttachments.length > 0 ? (
           <div className="mb-2 flex flex-col gap-1">
+            {userAudios.map((file) => (
+              <UserAudioAttachment key={file.id} file={file} />
+            ))}
             {unchippedFiles.map((file) => {
               const fileIdentity = (
                 <>

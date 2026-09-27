@@ -115,6 +115,7 @@ export function resetBars(bars: WaveformBars, barCount: number): void {
 export function attachAudioLevel(
   audioCtx: AudioContext,
   barCount: number,
+  onStream?: (stream: MediaStream) => void,
 ): Promise<() => WaveformFrame> {
   const getUserMedia = () =>
     navigator.mediaDevices.getUserMedia({ audio: true }).catch((error: unknown) => {
@@ -125,6 +126,9 @@ export function attachAudioLevel(
       throw error;
     });
   return getUserMedia().then((stream): (() => WaveformFrame) => {
+    // Expose the raw stream to the caller (e.g. MediaRecorder capture) BEFORE
+    // the analyser source attaches, so no recorded byte is skipped.
+    onStream?.(stream);
     const source = audioCtx.createMediaStreamSource(stream);
     const analyser = audioCtx.createAnalyser();
     analyser.fftSize = 128;

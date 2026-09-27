@@ -35,7 +35,7 @@ export function RecordingPill({
         aria-label={denied ? "Mikrofon nicht verfügbar" : "Spracherkennung starten"}
         title={denied ? "Mikrofon-Zugriff verweigert — Erlaubnis im Browser erteilen" : undefined}
         className={
-          "flex h-9 w-9 items-center justify-center rounded-full border border-border/60 text-foreground transition-all hover:bg-accent" +
+          "flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-border/60 text-foreground transition-all hover:bg-accent" +
           (denied ? " opacity-50" : disabled ? " opacity-40" : "")
         }
       >
@@ -54,7 +54,7 @@ export function RecordingPill({
         type="button"
         onClick={onToggle}
         aria-label="Aufnahme beenden"
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-l-full"
+        className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-l-full"
       >
         {children}
       </button>
@@ -64,7 +64,7 @@ export function RecordingPill({
         onClick={() => setMenuOpen((open) => !open)}
         aria-label="Stop-Modus"
         aria-expanded={menuOpen}
-        className="flex h-9 w-7 shrink-0 items-center justify-center rounded-r-full transition-colors hover:bg-red-500/15"
+        className="flex h-9 w-7 shrink-0 cursor-pointer items-center justify-center rounded-r-full transition-colors hover:bg-red-500/15"
       >
         <svg
           width="11"
@@ -84,7 +84,7 @@ export function RecordingPill({
               key={mode}
               type="button"
               className={
-                "flex w-full items-center gap-2 whitespace-nowrap rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors" +
+                "flex w-full cursor-pointer items-center gap-2 whitespace-nowrap rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors" +
                 (stopMode === mode
                   ? " bg-accent text-foreground"
                   : " text-muted-foreground hover:bg-accent/50 hover:text-foreground")

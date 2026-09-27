@@ -18,6 +18,8 @@ export interface VoiceBarsOptions {
   onFrameError?: (error: unknown) => void;
   /** Called exactly once when the analyser takes over from the CSS loop. */
   onAudioActive?: () => void;
+  /** Observes the live mic stream once the analyser connects (e.g. for audio capture). */
+  onStream?: (stream: MediaStream) => void;
   /**
    * CSS fallback frame provider (typically
    * `() => frameFromClock(clock(), barCount)`).
@@ -63,7 +65,7 @@ export function startVoiceBars(options: VoiceBarsOptions): () => void {
   cssRunning = animate(options.cssFrame);
   if (options.audioContext) {
     const audioCtx = options.audioContext;
-    attachAudioLevel(audioCtx, barCount)
+    attachAudioLevel(audioCtx, barCount, options.onStream)
       .then(async (frame) => {
         if (audioCtx.state !== "running") {
           // Suspended context produces flat analyser data (no level for the

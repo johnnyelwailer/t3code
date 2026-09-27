@@ -1781,7 +1781,7 @@ export default function ChatView(props: ChatViewProps) {
     (store) => store.setLogicalProjectDraftThreadId,
   );
   const promptRef = useRef("");
-  const composerImagesRef = useRef<ComposerImageAttachment[]>([]);
+  const composerImagesRef = useRef<ComposerAttachment[]>([]);
   const composerFilesRef = useRef<ComposerFileAttachment[]>([]);
   const composerTerminalContextsRef = useRef<TerminalContextDraft[]>([]);
   const localComposerRef = useRef<ChatComposerHandle | null>(null);
@@ -8684,6 +8684,9 @@ export default function ChatView(props: ChatViewProps) {
             sizeBytes: attachment.sizeBytes,
             downloadable: false,
             ...(attachment.source ? { source: attachment.source } : {}),
+            // Audio keeps its local object URL so the timeline row can play
+            // it back before the upload lands.
+            ...(attachment.previewUrl ? { previewUrl: attachment.previewUrl } : {}),
           },
     );
     const shouldAnchorFirstMessage =

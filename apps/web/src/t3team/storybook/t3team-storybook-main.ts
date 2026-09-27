@@ -136,9 +136,17 @@ const config: StorybookConfig = {
         tailwindcss(),
       ],
       resolve: {
-        alias: {
-          "~": srcDir,
-        },
+        alias: [
+          // The PR detail stories mount the real PullRequestDetailPanel: its read path resolves
+          // to sample data instead of a live environment (stories render fixtures, not a server).
+          // Anchored on srcDir, not import.meta.url: the launch script copies this config into
+          // a temp dir, so a module-relative path would point at the temp dir's neighbour.
+          {
+            find: /^~\/state\/pullRequests$/,
+            replacement: `${srcDir}/state/pullRequests.storyMock.ts`,
+          },
+          { find: "~", replacement: srcDir },
+        ],
       },
       server: {
         // The launcher passes `--host 127.0.0.1`; accept both loopback names so

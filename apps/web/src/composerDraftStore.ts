@@ -3535,6 +3535,11 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
           if (threadKey.length === 0) {
             return;
           }
+          const removedFile =
+            get().draftsByThreadKey[threadKey]?.files.find((file) => file.id === fileId);
+          if (removedFile) {
+            revokeObjectPreviewUrl(removedFile.previewUrl);
+          }
           set((state) => {
             const current = state.draftsByThreadKey[threadKey];
             if (!current?.files.some((file) => file.id === fileId)) {
@@ -4074,6 +4079,9 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
             }
             for (const image of current.images) {
               revokeObjectPreviewUrl(image.previewUrl);
+            }
+            for (const file of current.files) {
+              revokeObjectPreviewUrl(file.previewUrl);
             }
             const nextDraft: ComposerThreadDraftState = {
               ...current,

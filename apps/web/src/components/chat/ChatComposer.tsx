@@ -257,8 +257,16 @@ import { useEnvironmentQuery } from "~/state/query";
 import { useDebouncedValue } from "~/state/queries";
 import { ProviderModelPicker } from "./ProviderModelPicker";
 import { ComposerVoiceInput } from "./t3team-ComposerVoiceInput";
+import type {
+  ComposerVoiceInputHandle,
+  ComposerVoiceInputProps,
+} from "@t3tools/shared/voiceInputUi";
 import { isElectron } from "../../env";
 import { resolveModelPickerSelectedModel } from "./ModelPickerContent";
+import { waitForVoiceAttachment } from "./t3team-voiceCommitWait";
+
+/** The shared voice input's state machine (idle | waiting | recording | denied). */
+type ComposerVoiceState = Parameters<NonNullable<ComposerVoiceInputProps["onStateChange"]>>[0];
 import { type ComposerCommandItem, ComposerCommandMenu } from "./ComposerCommandMenu";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
 import { useComposerPathSearch } from "../../lib/composerPathSearchState";
@@ -1439,7 +1447,7 @@ export interface ChatComposerProps {
 
   // Refs the parent needs kept in sync
   promptRef: React.RefObject<string>;
-  composerImagesRef: React.RefObject<ComposerImageAttachment[]>;
+  composerImagesRef: React.RefObject<ComposerAttachment[]>;
   composerFilesRef: React.RefObject<ComposerFileAttachment[]>;
   composerTerminalContextsRef: React.RefObject<TerminalContextDraft[]>;
   composerRef: React.RefObject<ChatComposerHandle | null>;
@@ -3153,8 +3161,12 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     selectedProvider,
   ]);
 
+  // The send refs carry the FULL attachment union: live file attachments
+  // (paperclip files, voice notes) sit in the draft's images array with
+  // type "file", and the send path hands them to the files channel. Filtering
+  // to images here would strand them before the send ever sees them.
   useEffect(() => {
-    composerImagesRef.current = composerImages.filter(isComposerImageAttachment);
+    composerImagesRef.current = composerImages;
   }, [composerImages, composerImagesRef]);
 
   useEffect(() => {
@@ -3897,8 +3909,66 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     showPlanFollowUpPrompt,
   ]);
 
+  // ------------------------------------------------------------------
+  // Voice recording: commit-pending bookkeeping
+  // ------------------------------------------------------------------
+  // This host attaches the RAW recording instead of inserting a transcript,
+  // so onRecorded (fired ~tens of ms after stop(), when the MediaRecorder
+  // flushes) is the single source of the attachment. While a recording is in
+  // flight, commitPromiseRef is pending; the onRecorded handler (below, next
+  // to addComposerAttachments) resolves it.
+  const voiceRef = useRef<ComposerVoiceInputHandle>(null);
+  const voiceStateRef = useRef<ComposerVoiceState>("idle");
+  const [voiceState, setVoiceState] = useState<ComposerVoiceState>("idle");
+  const commitResolveRef = useRef<(() => void) | null>(null);
+  const commitPromiseRef = useRef<Promise<void> | null>(null);
+
+  const onVoiceStateChange = useCallback((state: ComposerVoiceState) => {
+    voiceStateRef.current = state;
+    setVoiceState(state);
+    if (state === "waiting") {
+      // A recording is starting: its commit (the flushed audio attachment)
+      // will land asynchronously — remember how to wait for it.
+      if (commitPromiseRef.current === null) {
+        commitPromiseRef.current = new Promise((resolve) => {
+          commitResolveRef.current = resolve;
+        });
+      }
+    } else if (state === "denied") {
+      // Start failed or permission was denied: nothing will ever flush.
+      commitResolveRef.current = null;
+      commitPromiseRef.current = null;
+    }
+  }, []);
+
   const submitComposer = useCallback(
-    (event?: { preventDefault: () => void }, intent: ComposerSubmissionIntent = "foreground") => {
+    async (event?: { preventDefault: () => void }, intent: ComposerSubmissionIntent = "foreground") => {
+      // A voice recording in flight must commit its audio attachment before
+      // the send reads the composer refs: stop it, wait for the MediaRecorder
+      // flush (onRecorded), then wait for the attachment to sync into the
+      // send refs — the store write is same-tick, but the refs need one render.
+      if (commitPromiseRef.current !== null) {
+        event?.preventDefault();
+        const preStopAttachmentIds = new Set(
+          [...composerImagesRef.current, ...composerFilesRef.current].map(
+            (attachment) => attachment.id,
+          ),
+        );
+        voiceRef.current?.stop();
+        await Promise.race([
+          commitPromiseRef.current,
+          new Promise((resolve) => window.setTimeout(resolve, 1200)),
+        ]);
+        await waitForVoiceAttachment(preStopAttachmentIds, {
+          observe: () =>
+            [...composerImagesRef.current, ...composerFilesRef.current].map(
+              (attachment) => attachment.id,
+            ),
+          nextFrame: (callback) => {
+            window.requestAnimationFrame(() => callback());
+          },
+        });
+      }
       if (noProviderAvailable || isSendDisabled) {
         event?.preventDefault();
         return;
@@ -3953,6 +4023,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       activePendingProgress,
       attachmentTargetKey,
       blurMobileComposerAfterSend,
+      composerFilesRef,
+      composerImagesRef,
       isSendDisabled,
       noProviderAvailable,
       onSend,
@@ -3967,7 +4039,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       modifierKey: true,
       isDraftThread: routeKind === "draft",
     });
-    submitComposer(undefined, intent ?? "foreground");
+    void submitComposer(undefined, intent ?? "foreground");
   }, [isMobileViewport, routeKind, submitComposer]);
   const compactThreadContext = useCallback(() => {
     if (
@@ -4143,7 +4215,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           })
         : null;
     if (submissionIntent) {
-      submitComposer(undefined, submissionIntent);
+      void submitComposer(undefined, submissionIntent);
       return true;
     }
     // Native task splitting preserves marks and chips on both sides of the caret.
@@ -5485,6 +5557,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           mimeType: fileMimeType,
           sizeBytes: attachmentFile.size,
           file: attachmentFile,
+          // Audio keeps a local object URL so the timeline row can play it back
+          // before the upload lands.
+          previewUrl: attachmentFile.type.startsWith("audio/")
+            ? URL.createObjectURL(attachmentFile)
+            : "",
           ...(options?.source ? { source: options.source } : {}),
         });
       }
@@ -5638,6 +5715,27 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     void confirmation.then((confirmed) => {
       if (confirmed) removeComposerImageFromDraft(imageId);
     });
+  };
+
+  /**
+   * Voice commit (record-attach mode): the callback fires exactly once on
+   * every stop — with the recording on commit, with null on cancel (Esc) or
+   * when no audio was captured — ~tens of ms after stop(), when the
+   * MediaRecorder flushes. It resolves the commit-pending promise, then
+   * attaches the raw audio through the one write path.
+   */
+  const handleVoiceRecorded = (recording: {
+    blob: Blob;
+    mimeType: string;
+    durationMs: number;
+  } | null) => {
+    commitResolveRef.current?.();
+    commitResolveRef.current = null;
+    commitPromiseRef.current = null;
+    if (recording === null || recording.blob.size === 0) return;
+    // "audio/mp4" (Safari) → .m4a, everything else → .webm.
+    const name = recording.mimeType.includes("mp4") ? "voice-note.m4a" : "voice-note.webm";
+    void addComposerAttachments([new File([recording.blob], name, { type: recording.mimeType })]);
   };
 
   // ------------------------------------------------------------------
@@ -6521,7 +6619,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   onPointerDown={(event) => event.preventDefault()}
                   onClick={(event) => {
                     event.stopPropagation();
-                    submitComposer();
+                    void submitComposer();
                   }}
                 >
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -7132,7 +7230,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                         <TooltipPopup>Attach files</TooltipPopup>
                       </Tooltip>
                       <ComposerVoiceInput
-                        onTranscript={(text) => insertComposerTextAtEnd(text)}
+                        ref={voiceRef}
+                        onTranscript={() => {
+                          // This host attaches the raw recording instead of
+                          // inserting the transcript; the audio is the content.
+                        }}
+                        onRecorded={handleVoiceRecorded}
+                        onStateChange={onVoiceStateChange}
+                        onAutoSubmit={() => void submitComposer()}
                         disabled={
                           isConnecting || isComposerApprovalState || projectSelectionRequired
                         }
@@ -7162,7 +7267,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       projectSelectionRequired
                     }
                     isPreparingWorktree={isPreparingWorktree}
-                    hasSendableContent={composerSendState.hasSendableContent}
+                    hasSendableContent={
+                      composerSendState.hasSendableContent || voiceState === "recording"
+                    }
                     preserveComposerFocusOnPointerDown={isMobileViewport || isComposerResting}
                     hasChildThreads={hasChildThreads}
                     showSendWhileRunning={isMobileViewport}

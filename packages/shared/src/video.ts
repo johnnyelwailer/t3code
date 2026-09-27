@@ -19,6 +19,9 @@ export function videoMimeType(attachment: {
 }): string | null {
   const mimeType = attachment.mimeType.split(";", 1)[0]?.trim().toLowerCase() ?? "";
   if (mimeType.startsWith("video/")) return mimeType;
+  // An explicit audio MIME is authoritative: a .webm/.mp4 extension belongs
+  // to the container, not to the modality (voice notes are audio/webm).
+  if (mimeType.startsWith("audio/")) return null;
   // The name is only evidence when nothing recorded what this is. A definite type already
   // answers the question, and a `.mp4` on a PDF must not override it.
   if (mimeType !== "" && !GENERIC_MIME_TYPES.has(mimeType)) return null;

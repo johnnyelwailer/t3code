@@ -27,6 +27,11 @@ export interface VoiceInputControlsDeps {
   readonly autoStopRef: { current: SilenceAutoStopLike | null };
   readonly barsStopRef: { current: (() => void) | null };
   readonly audioCtxRef: { current: AudioContext | null };
+  /**
+   * Live raw-audio capture handle (structural: no import from the capture
+   * module, which keeps it out of the Effect-lint scope).
+   */
+  readonly captureRef: { current: { stop: () => Promise<unknown> } | null };
   readonly accumulatedRef: { current: string };
   readonly autoResumeRef: { current: boolean };
   readonly startRecording: () => void;
@@ -52,6 +57,7 @@ export function useVoiceInputControls(
     autoStopRef,
     barsStopRef,
     audioCtxRef,
+    captureRef,
     accumulatedRef,
     autoResumeRef,
     startRecording,
@@ -62,6 +68,7 @@ export function useVoiceInputControls(
   useEffect(() => {
     return () => {
       autoResumeRef.current = false;
+      void captureRef.current?.stop();
       sessionRef.current?.stop();
       sessionRef.current = null;
       barsStopRef.current?.();

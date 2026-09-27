@@ -4217,6 +4217,15 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
           }),
           ...authoringTypeDependencies,
           "@t3team/pack-api": packApiVersion,
+          // effect is only a transitive dependency of the server (it is bundled
+          // into the runtime), so a staged pnpm install links it solely into the
+          // virtual store and the hidden hoist — never a top-level
+          // node_modules/effect. The packaged typechecker closure
+          // (TYPECHECKER_DTS_DIRECTORIES) and the afterPack .d.ts re-injection
+          // both resolve effect/Schema from that top-level path, and the curated
+          // authoring copies walk up to it. Declaring it directly forces the
+          // top-level link the staged install would otherwise skip.
+          "effect": workspaceCatalog["effect"] ?? "*",
         };
 
   const stagePatchedDependencies = createStagePatchedDependencies(

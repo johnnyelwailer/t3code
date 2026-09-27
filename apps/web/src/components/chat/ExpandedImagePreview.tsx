@@ -153,6 +153,21 @@ export function buildAttachmentVideoPreview(
   };
 }
 
+export function buildAttachmentAudioAsset(
+  environmentId: EnvironmentId,
+  attachment: ChatFileAttachment,
+): NonNullable<MediaActionSource["asset"]> {
+  return {
+    environmentId,
+    resource: {
+      _tag: "attachment" as const,
+      attachmentId: attachment.id,
+      fileName: attachment.name,
+      mimeType: attachment.mimeType,
+    },
+  };
+}
+
 export function expandedImageKey(preview: ExpandedImagePreview): string {
   const item = preview.images[preview.index];
   const asset = item?.actionsSource?.asset;

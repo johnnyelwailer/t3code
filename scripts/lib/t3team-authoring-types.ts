@@ -71,15 +71,12 @@ export const readAuthoringTypeDependencySpecs = Effect.fn(
     );
     specs[name] = (JSON.parse(manifestRaw) as { readonly version: string }).version;
   }
-  // The compiler ships as a trimmed copy of the typescript @runbook/ts resolves
-  // (see stageAuthoringTypes); declare that range, not the catalog's, so the
-  // manifest stays honest about what is staged. The catalog moved to the
-  // native typescript 7, which has no lib/typescript.d.ts for the asar hook.
-  const runbookTsManifest = JSON.parse(
-    yield* fs.readFileString(path.join(input.repoRoot, "packages", "runbook-ts", "package.json")),
-  ) as { readonly dependencies?: Record<string, string> };
-  specs["typescript"] =
-    runbookTsManifest.dependencies?.["typescript"] ?? input.workspaceCatalog["typescript"] ?? "*";
+  // The compiler ships as a trimmed copy of the version runbook-ts resolves
+  // (NOT the catalog version, which is a different compiler line whose .pnpm
+  // copy lacks lib/typescript.d.ts): electron-builder's pnpm pass re-links the
+  // staged node_modules/typescript to its .pnpm copy, so the manifest must
+  // declare the version that copy still carries the afterPack hook's files in.
+  specs["typescript"] = (yield* resolvePackagedTypeScript({ repoRoot: input.repoRoot })).version;
   // effect's declaration graph (TYPECHECKER_DTS_DIRECTORIES re-injects
   // node_modules/effect into app.asar). Since the desktop main process is
   // bundled, the staged install carries only native externals, so effect
@@ -90,6 +87,28 @@ export const readAuthoringTypeDependencySpecs = Effect.fn(
 
 // Replace the staged install's authoring-type entries with curated real-file
 // copies and fail the build if the curation is incomplete.
+/**
+ * The exact typescript the packaged typechecker loads at runtime: runbook-ts's
+ * createRequire fallback resolves it from its own dependency pin, which may be
+ * a different compiler line than the workspace catalog. Shared by the manifest
+ * spec (readAuthoringTypeDependencySpecs) and the curated copy
+ * (stageAuthoringTypes) so the two never drift apart.
+ */
+export const resolvePackagedTypeScript = Effect.fn("desktopArtifact.resolvePackagedTypeScript")(
+  function* (input: { readonly repoRoot: string }) {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const typescriptEntry = NodeModule.createRequire(
+      path.join(input.repoRoot, "packages", "runbook-ts", "package.json"),
+    ).resolve("typescript");
+    const typescriptLibDir = path.dirname(typescriptEntry);
+    const manifest = JSON.parse(
+      yield* fs.readFileString(path.join(path.dirname(typescriptLibDir), "package.json")),
+    ) as { readonly version: string };
+    return { typescriptLibDir, version: manifest.version };
+  },
+);
+
 export const stageAuthoringTypes = Effect.fn("desktopArtifact.stageAuthoringTypes")(
   function* (input: {
     readonly repoRoot: string;
@@ -148,10 +167,7 @@ export const stageAuthoringTypes = Effect.fn("desktopArtifact.stageAuthoringType
       // asar. The lib/*.d.ts type libraries are NOT copied here: the inlined
       // compiler (the primary path) finds them beside the emitted chunks
       // (apps/server's t3team-typescriptLibPackPlugin ships dist/lib/).
-      const typescriptEntry = NodeModule.createRequire(
-        path.join(input.repoRoot, "packages", "runbook-ts", "package.json"),
-      ).resolve("typescript");
-      const typescriptLibDir = path.dirname(typescriptEntry);
+      const { typescriptLibDir } = yield* resolvePackagedTypeScript({ repoRoot: input.repoRoot });
       const targetDir = path.join(input.nodeModulesDir, "typescript");
       yield* fs.remove(targetDir).pipe(Effect.orElseSucceed(() => undefined));
       yield* fs.makeDirectory(path.join(targetDir, "lib"), { recursive: true });

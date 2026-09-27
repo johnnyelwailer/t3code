@@ -14,14 +14,23 @@
     // presentational RecordingBar.tsx stay in Effect-lint scope.
     "src/t3team-voiceInputUi.tsx",
     "src/t3team-voiceInputUi/t3team-useVoiceInput.ts",
+    // Raw audio capture + its timers/recorded-audio helpers use browser
+    // globals (MediaRecorder, window.setTimeout, Date.now) for the same
+    // reason; the consuming apps typecheck them under their own tsconfigs.
+    "src/t3team-voiceInputUi/t3team-audioCapture.ts",
+    "src/t3team-voiceInputUi/t3team-recordingTimers.ts",
     // Same scope: the component render test imports the browser voice UI
     // modules above (excluded here) and uses react-dom/server.
     "src/t3team-voiceInputUi.test.ts",
+    "src/t3team-voiceInputUi.attach.test.ts",
     // recognition.ts uses setTimeout (language-switch delay) and is imported
     // by its own test — both stay out of Effect-lint scope for the same
     // reason; the tests still run under vitest.
     "src/t3team-voiceInputUi/t3team-recognition.ts",
     "src/t3team-voiceInputUi/t3team-recognition.test.ts",
-    "src/t3team-voiceInputUi/t3team-recognitionLanguage.test.ts"
+    "src/t3team-voiceInputUi/t3team-recognitionLanguage.test.ts",
+    // Drives the hook through a fake React dispatcher + browser-global
+    // stubs (MediaRecorder, AudioContext, navigator.mediaDevices).
+    "src/t3team-voiceInputUi/t3team-useVoiceInput.test.ts"
   ]
 }

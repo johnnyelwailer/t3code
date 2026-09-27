@@ -1375,6 +1375,144 @@ describe("MessagesTimeline", () => {
     expect(markup).not.toContain("<video");
     expect(markup).toContain(">pending-demo.mp4</div>");
   });
+  it("renders audio file attachments as a compact playable row", () => {
+    const entry = {
+      ...buildUserTimelineEntry("Play the recording."),
+      message: {
+        ...buildUserTimelineEntry("Play the recording").message,
+        attachments: [
+          {
+            type: "file" as const,
+            id: "attachment-voice-memo",
+            name: "voice-memo.webm",
+            mimeType: "audio/webm",
+            sizeBytes: 42,
+            previewUrl: "https://environment.test/api/assets/voice-memo.webm",
+          },
+        ],
+      },
+    };
+
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline {...buildProps()} timelineEntries={[entry]} />,
+    );
+
+    expect(markup).toContain('<button type="button" aria-label="Play voice-memo.webm"');
+    expect(markup).toContain('aria-label="Seek voice-memo.webm"');
+    expect(markup).toContain(
+      'src="https://environment.test/api/assets/voice-memo.webm"',
+    );
+    expect(markup).toContain("voice-memo.webm");
+    // Custom compact player: no native browser chrome, and never a <video>.
+    expect(markup).not.toContain("controls");
+    expect(markup).not.toContain("<video");
+  });
+
+  it("keeps an audio attachment inert while its bytes are unavailable", () => {
+    const entry = {
+      ...buildUserTimelineEntry("Play the recording."),
+      message: {
+        ...buildUserTimelineEntry("Play the recording").message,
+        attachments: [
+          {
+            type: "file" as const,
+            id: "optimistic-voice-memo",
+            name: "pending-memo.mp4",
+            mimeType: "audio/mp4",
+            sizeBytes: 42,
+            downloadable: false,
+          },
+        ],
+      },
+    };
+
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline {...buildProps()} timelineEntries={[entry]} />,
+    );
+
+    expect(markup).not.toContain("<audio");
+    expect(markup).toContain("pending-memo.mp4");
+    expect(markup).not.toContain('aria-label="Download pending-memo.mp4"');
+    expect(markup).not.toContain("<a href=");
+  });
+
+  it("releases the local object URL when the audio row unmounts", async () => {
+    const originalRevokeObjectUrl: typeof URL.revokeObjectURL = URL.revokeObjectURL;
+    const revokeSpy = vi.fn();
+    URL.revokeObjectURL = revokeSpy;
+    // The test renderer runs Base UI Tooltip effects that touch DOM globals
+    // the SSR stubs do not define; fake them so instanceof checks stay inert.
+    const globalScope = globalThis as unknown as Record<string, unknown>;
+    const windowStub = globalThis.window as unknown as Record<string, unknown> | undefined;
+    const savedGlobals = new Map<string, unknown>();
+    for (const name of ["Element", "Node", "HTMLElement", "SVGElement"]) {
+      savedGlobals.set(name, globalScope[name]);
+      globalScope[name] = class {};
+      if (windowStub) windowStub[name] = globalScope[name];
+    }
+    // PierreEntryIcon's insertion effect injects its SVG sprite; report the
+    // sprite as already present so it skips the document mutation.
+    const documentStub = globalThis.document as unknown as
+      | Record<string, unknown>
+      | undefined;
+    const originalGetElementById = documentStub?.["getElementById"];
+    if (documentStub) documentStub["getElementById"] = () => ({});
+    const entry = {
+      ...buildUserTimelineEntry("Play the recording."),
+      message: {
+        ...buildUserTimelineEntry("Play the recording").message,
+        attachments: [
+          {
+            type: "file" as const,
+            id: "optimistic-voice-memo",
+            name: "voice-memo.webm",
+            mimeType: "audio/webm",
+            sizeBytes: 42,
+            downloadable: false,
+            previewUrl: "blob:local-voice",
+          },
+        ],
+      },
+    };
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+    const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
+    globalThis.requestAnimationFrame = (callback: FrameRequestCallback) => {
+      callback(0);
+      return 0;
+    };
+    globalThis.cancelAnimationFrame = () => {};
+    let renderer: ReactTestRenderer | undefined;
+    try {
+      await act(() => {
+        renderer = create(<MessagesTimeline {...buildProps()} timelineEntries={[entry]} />);
+      });
+      expect(JSON.stringify(renderer!.toJSON())).toContain("blob:local-voice");
+      await act(() => {
+        renderer!.unmount();
+      });
+      expect(revokeSpy).toHaveBeenCalledWith("blob:local-voice");
+    } finally {
+      globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+      globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
+      URL.revokeObjectURL = originalRevokeObjectUrl;
+      for (const [name, original] of savedGlobals) {
+        if (original === undefined) {
+          delete globalScope[name];
+        } else {
+          globalScope[name] = original;
+        }
+        if (windowStub) delete windowStub[name];
+      }
+      if (documentStub) {
+        if (originalGetElementById === undefined) {
+          delete documentStub["getElementById"];
+        } else {
+          documentStub["getElementById"] = originalGetElementById;
+        }
+      }
+    }
+  });
+
   it("renders an ordinary file with preview and download controls without creating its URL in advance", () => {
     const entry = {
       ...buildUserTimelineEntry("Read the report."),

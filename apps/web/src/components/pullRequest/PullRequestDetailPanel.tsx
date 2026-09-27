@@ -44,6 +44,7 @@ import {
   lazy,
   Suspense,
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useEffectEvent,
@@ -483,6 +484,10 @@ export function PullRequestDetailPanel({
   onViewChange,
   onBack,
   onSelectPullRequest,
+  headerExtension,
+  stripExtension,
+  contentExtension,
+  extensionTabs,
 }: {
   environmentId: EnvironmentId;
   shortcutsEnabled: boolean;
@@ -538,6 +543,23 @@ export function PullRequestDetailPanel({
    * expects to land on it, with this one still open behind.
    */
   onBack?: (() => void) | undefined;
+  /**
+   * A surface extension rendered into the header actions, before the checkout control. The
+   * panel owns its own actions; a host surface may add one more (a recipe launcher, say)
+   * without reaching into the header layout.
+   */
+  headerExtension?: ReactNode;
+  /** Rendered on the right of the tab strip, after the per-tab status chrome. */
+  stripExtension?: ReactNode;
+  /** Rendered at the end of the summary document, beneath the conversation. */
+  contentExtension?: ReactNode;
+  /**
+   * Tabs appended after Code. They do not participate in the panel's URL view state: a link
+   * lands on a built-in tab, and the extension the reader opens there is theirs.
+   */
+  extensionTabs?: ReadonlyArray<
+    Readonly<{ readonly id: string; readonly label: string; readonly content: ReactNode }>
+  >;
 }) {
   const environmentConfigs = useServerConfigs();
   const projects = useProjects();
@@ -567,6 +589,9 @@ export function PullRequestDetailPanel({
       : null;
   const [threadPickerOpen, setThreadPickerOpen] = useState(false);
   const [tab, setTab] = useState<DetailTab>(() => initialView?.tab ?? "summary");
+  // An extension tab the reader opened; null while a built-in tab is showing. It is panel-local
+  // on purpose: a link can only land on a built-in tab, so the extension is never in the URL.
+  const [extensionTabId, setExtensionTabId] = useState<string | null>(null);
   // The file a link asked for: read on the panel's own mount so a later URL change
   // pointing elsewhere cannot steer the focused file away from what the reader selected.
   const [initialFile] = useState(() => initialView?.file ?? null);
@@ -1718,6 +1743,7 @@ export function PullRequestDetailPanel({
           </div>
         </div>
         <div className="mr-4 flex h-7 shrink-0 items-center justify-end gap-1">
+          {headerExtension}
           {detail ? (
             <TooltipProvider delay={150} closeDelay={150} timeout={400}>
               {!nativeStack && supportsStackActions && nativeStackQuery.error ? (
@@ -2500,10 +2526,18 @@ export function PullRequestDetailPanel({
               className="shrink-0"
               size="segmented"
               variant="segmented"
-              value={[tab]}
+              value={extensionTabId !== null ? [`ext:${extensionTabId}`] : [tab]}
               onValueChange={(next) => {
-                const nextTab = visibleTabs.find((item) => item.value === next[0])?.value;
-                if (nextTab) setTab(nextTab);
+                const value = next[0];
+                if (value?.startsWith("ext:")) {
+                  setExtensionTabId(value.slice("ext:".length));
+                  return;
+                }
+                const nextTab = visibleTabs.find((item) => item.value === value)?.value;
+                if (nextTab) {
+                  setTab(nextTab);
+                  setExtensionTabId(null);
+                }
               }}
             >
               {visibleTabs.map((item) => (
@@ -2513,6 +2547,11 @@ export function PullRequestDetailPanel({
                   onPointerEnter={item.value === "code" ? () => void loadCodeTab() : undefined}
                   onFocus={item.value === "code" ? () => void loadCodeTab() : undefined}
                 >
+                  {item.label}
+                </Toggle>
+              ))}
+              {(extensionTabs ?? []).map((item) => (
+                <Toggle key={item.id} value={`ext:${item.id}`}>
                   {item.label}
                 </Toggle>
               ))}
@@ -2646,6 +2685,7 @@ export function PullRequestDetailPanel({
                 </Button>
               </div>
             ) : null}
+            {stripExtension}
           </nav>
         ) : null}
       </div>
@@ -2700,6 +2740,7 @@ export function PullRequestDetailPanel({
                   fixCheckLabel={handoffLabels.fixCheck}
                   onFixFinding={startFixFinding}
                   onRefresh={refreshDetail}
+                  afterContent={contentExtension}
                 />
               </div>
             ) : null}
@@ -2744,6 +2785,11 @@ export function PullRequestDetailPanel({
                     onActiveFileChange={setActiveFile}
                   />
                 </Suspense>
+              </div>
+            ) : null}
+            {extensionTabId !== null ? (
+              <div className="absolute inset-0 overflow-y-auto">
+                {extensionTabs?.find((item) => item.id === extensionTabId)?.content ?? null}
               </div>
             ) : null}
           </PullRequestMarkdownContext>

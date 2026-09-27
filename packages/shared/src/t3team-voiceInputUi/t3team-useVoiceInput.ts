@@ -2,8 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { startVoiceBars } from "./t3team-audioLevel.ts";
 import { frameFromClock } from "./t3team-waveform.ts";
-import { VoiceRecognitionSession } from "./t3team-recognition.ts";
+import { createRecordingSession } from "./t3team-recordingSession.ts";
 import { SilenceAutoStop } from "./t3team-autoSend.ts";
+import {
+  pickVoiceMime,
+  startAudioCapture,
+  type AudioCaptureHandle,
+} from "./t3team-audioCapture.ts";
 import {
   BAR_COUNT,
   type StopMode,
@@ -12,6 +17,8 @@ import {
   type VoiceInputOptions,
 } from "./t3team-types.ts";
 import { useVoiceInputControls } from "./t3team-useVoiceInputControls.ts";
+import { scheduleAutoResume, startSilenceWatch } from "./t3team-recordingTimers.ts";
+import { VoiceRecognitionSession } from "./t3team-recognition.ts";
 
 export type { VoiceInput, VoiceInputOptions } from "./t3team-types.ts";
 
@@ -22,9 +29,8 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
     onAutoSubmit,
     onStateChange,
     initialLanguage,
-    onLevel,
+    onLevel, onRecorded,
   } = options;
-
   const [state, setState] = useState<VoiceState>("idle");
   const [supported, setSupported] = useState(true);
   const [currentLang, setCurrentLang] = useState(initialLanguage);
@@ -35,6 +41,7 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
   const autoStopRef = useRef<SilenceAutoStop | null>(null);
   const barsStopRef = useRef<(() => void) | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const captureRef = useRef<AudioCaptureHandle | null>(null);
   const accumulatedRef = useRef("");
   const barElsRef = useRef<Array<HTMLSpanElement | null>>([]);
   const autoResumeRef = useRef(false);
@@ -59,6 +66,8 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
   const stopRecording = useCallback(
     (cancelled: boolean, autoSubmit?: boolean) => {
       if (stateRef.current === "idle") return;
+      const capture = captureRef.current;
+      captureRef.current = null;
       window.clearInterval(silenceTimerRef.current);
       silenceTimerRef.current = 0;
       transition("idle");
@@ -75,25 +84,24 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
       const text = accumulatedRef.current;
       accumulatedRef.current = "";
       onLevel?.(0);
-      if (cancelled) return;
+      if (cancelled) {
+        void capture?.stop(); // discard the in-progress recording
+        if (onRecorded !== undefined) onRecorded(null);
+        return;
+      }
       if (!text) console.info("[voice-input] Aufnahme beendet, kein Transkript erhalten");
       onTranscript(text);
+      if (onRecorded !== undefined) {
+        if (capture) void capture.stop().then((rec) => onRecorded(rec));
+        else onRecorded(null);
+      }
       if (autoSubmit) {
         onAutoSubmit?.();
-        // Stay in voice mode: right after the auto-send, start listening
-        // again (new session, new silence clock). Only a manual tap or Esc
-        // actually leaves voice mode. The ref breaks the callback cycle
-        // between stopRecording and startRecording.
-        autoResumeRef.current = true;
-        window.setTimeout(() => {
-          if (!autoResumeRef.current) return;
-          autoResumeRef.current = false;
-          if (stateRef.current !== "idle") return;
-          startRecordingRef.current();
-        }, 150);
+        // Stay in voice mode after the auto-send (see scheduleAutoResume).
+        scheduleAutoResume({ stateRef, autoResumeRef, startRecordingRef });
       }
     },
-    [onLevel, onTranscript, onAutoSubmit, transition],
+    [onLevel, onTranscript, onAutoSubmit, onRecorded, transition],
   );
 
   // Start: permission state, then recognition + waveform.
@@ -104,15 +112,9 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
     const autoStop = new SilenceAutoStop(stopMode);
     autoStopRef.current = autoStop;
 
-    const session = new VoiceRecognitionSession(currentLang, {
-      onFinalChunk: (chunk) => {
-        // Final chunks arrive word-by-word without separators — join with a
-        // single space so "hallo" + "welt" reads "hallo welt".
-        accumulatedRef.current = accumulatedRef.current
-          ? `${accumulatedRef.current} ${chunk}`
-          : chunk;
-        onPartialTranscript?.(accumulatedRef.current);
-      },
+    const session = createRecordingSession(currentLang, {
+      accumulatedRef,
+      onPartialTranscript,
       onPermissionDenied: () => {
         console.warn("[voice-input] Mikrofon-Zugriff verweigert");
         stopRecording(true);
@@ -135,30 +137,24 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
     audioCtxRef.current = audioCtx;
 
     if (!session.start()) {
-      if (audioCtx) audioCtx.close().catch(() => {});
-      audioCtxRef.current = null;
-      transition("denied");
-      return;
+      if (onRecorded === undefined) {
+        if (audioCtx) audioCtx.close().catch(() => {});
+        audioCtxRef.current = null;
+        transition("denied");
+        return;
+      }
     }
     autoStop.prime(Date.now());
     transition("recording");
 
-    // Silence auto-stop runs on a 250ms timer, NOT on the rAF loop: rAF is
-    // throttled or paused when the tab loses focus, and auto-send must keep
-    // working even when the user alt-tabs away mid-recording.
     window.clearInterval(silenceTimerRef.current);
-    silenceTimerRef.current = window.setInterval(() => {
-      if (stateRef.current !== "recording") return;
-      if (autoStop.observe(levelNowRef.current, Date.now())) {
-        if (accumulatedRef.current.trim()) {
-          // Something was said: commit + send, then stay in voice mode.
-          stopRecording(false, true);
-        } else {
-          // Nothing to send yet: keep listening, reset the silence clock.
-          autoStop.prime(Date.now());
-        }
-      }
-    }, 250);
+    silenceTimerRef.current = startSilenceWatch({
+      stateRef,
+      levelNowRef,
+      autoStop,
+      hasContent: () => accumulatedRef.current.trim() !== "" || !!captureRef.current?.hasAudio(),
+      onCommit: () => stopRecording(false, true),
+    });
 
     barsStopRef.current = startVoiceBars({
       audioContext: audioCtx,
@@ -175,17 +171,21 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
       onAudioActive: () => {
         console.info("[voice-input] Audio-Analyse aktiv — Bars & Glow reagieren auf die Stimme");
       },
+      onStream: (stream) => {
+        if (onRecorded !== undefined) captureRef.current = startAudioCapture(stream);
+      },
     });
-  }, [currentLang, onLevel, onPartialTranscript, stopMode, stopRecording, transition]);
+  }, [currentLang, onLevel, onPartialTranscript, onRecorded, stopMode, stopRecording, transition]);
   startRecordingRef.current = startRecording;
 
-  // Support detection.
+  // Support detection: usable via STT OR via raw audio capture (attach mode).
   useEffect(() => {
-    setSupported(VoiceRecognitionSession.isSupported());
-  }, []);
-
-  // switchLang / pickStopMode / toggle / stop + Esc handling + unmount
-  // teardown live in useVoiceInputControls (guard LOC ceiling).
+    setSupported(
+      VoiceRecognitionSession.isSupported() ||
+        (onRecorded !== undefined && pickVoiceMime() !== null),
+    );
+  }, [onRecorded]);
+  // switchLang / pickStopMode / toggle / stop + Esc + unmount: useVoiceInputControls.
   const { switchLang, pickStopMode, toggle, stop } = useVoiceInputControls(
     {
       state,
@@ -194,6 +194,7 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
       autoStopRef,
       barsStopRef,
       audioCtxRef,
+      captureRef,
       accumulatedRef,
       autoResumeRef,
       startRecording,

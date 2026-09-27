@@ -10,6 +10,9 @@
  *   - recording: ONE connected red-tinted pill — circle with 6 live bars
  *     (slow idle drift, voice adds amplitude) + attached chevron tab
  *     opening the stop-mode menu; language chips to its left
+ *   - optional onRecorded ("attach mode"): the mic stream is also captured
+ *     as raw audio, with or without STT — the finished blob is reported
+ *     exactly once per stop, and the STT-only language chips are hidden
  *   - tap the circle again (or Esc) to stop; transcript appends to the draft
  *   - optional onLevel callback lets the app drive composer-level effects
  *     (e.g. a reactive glow) without re-rendering
@@ -19,6 +22,7 @@
  *   recognition.ts      - Web Speech stream lifecycle
  *   waveform.ts         - level frames + bar animation loop
  *   audioLevel.ts       - mic analyser wiring + start-with-fallback
+ *   audioCapture.ts     - raw MediaRecorder capture of the mic stream
  *   autoSend.ts         - silence -> auto-send decision
  *   LanguageChips.tsx   - language switcher (presentational)
  *   RecordingPill.tsx   - connected record/stop pill + stop-mode menu
@@ -30,6 +34,7 @@ import { LanguageChips } from "./t3team-voiceInputUi/t3team-LanguageChips.tsx";
 import { RecordingPill } from "./t3team-voiceInputUi/t3team-RecordingPill.tsx";
 import { VoiceBars } from "./t3team-voiceInputUi/t3team-VoiceBars.tsx";
 import { useVoiceInput } from "./t3team-voiceInputUi/t3team-useVoiceInput.ts";
+import type { RecordedVoiceAudio } from "./t3team-voiceInputUi/t3team-audioCapture.ts";
 import {
   DEFAULT_LANGUAGE_CODE,
   DEFAULT_VOICE_LANGUAGES,
@@ -68,6 +73,13 @@ export interface ComposerVoiceInputProps {
    * Fires every animation frame — handle without re-rendering.
    */
   onLevel?: (level: number) => void;
+  /**
+   * Raw audio capture ("attach mode"): when provided the mic stream is also
+   * recorded and the finished blob is reported exactly once per stop
+   * (null when nothing was recorded or when cancelled). The STT-only
+   * language chips are hidden in this mode.
+   */
+  onRecorded?: (recording: RecordedVoiceAudio | null) => void;
   disabled?: boolean;
   className?: string;
   /** Language chips shown while recording (default: DE/FR/EN). */
@@ -85,6 +97,7 @@ export function ComposerVoiceInput({
   onAutoSubmit,
   onStateChange,
   onLevel,
+  onRecorded,
   disabled = false,
   className,
   languages = DEFAULT_VOICE_LANGUAGES,
@@ -97,6 +110,7 @@ export function ComposerVoiceInput({
     ...(onAutoSubmit !== undefined ? { onAutoSubmit } : {}),
     ...(onStateChange !== undefined ? { onStateChange } : {}),
     ...(onLevel !== undefined ? { onLevel } : {}),
+    ...(onRecorded !== undefined ? { onRecorded } : {}),
     initialLanguage,
   });
 
@@ -112,7 +126,7 @@ export function ComposerVoiceInput({
       data-voice-input
       data-state={voice.state}
     >
-      {isRecording && (
+      {isRecording && onRecorded === undefined && (
         <LanguageChips
           languages={languages}
           currentLang={voice.currentLang}
