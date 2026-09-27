@@ -27,7 +27,7 @@ import {
 import LegacyThreadSidebar from "./LegacySidebar";
 import ThreadSidebar from "./Sidebar";
 import { SettingsSidebarNav } from "./settings/SettingsSidebarNav";
-import { SidebarChromeHeader } from "./sidebar/SidebarChrome";
+import { InboxHeader } from "~/t3team/components/t3team-InboxSlots";
 import {
   resolveSidebarStageFocusRingOffsetClass,
   useSidebarStageBackdropVariant,
@@ -262,7 +262,8 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
         >
           {isOnSettings ? (
             <>
-              <SidebarChromeHeader isElectron={isElectron} />
+              {/* t3team: the Team header (pack brand + app name), as the thread sidebar renders. */}
+              <InboxHeader />
               <SettingsSidebarNav pathname={pathname} />
             </>
           ) : legacySidebarEnabled ? (
