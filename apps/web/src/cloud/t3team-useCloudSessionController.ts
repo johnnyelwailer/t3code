@@ -1,4 +1,3 @@
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type { CloudSession } from "@t3tools/contracts";
 import { CLOUD_SESSION_REFRESH_INTERVAL_MS } from "@t3tools/client-runtime/state/cloud-sessions";
 import { useCallback, useMemo, useState } from "react";
@@ -114,7 +113,7 @@ export function useCloudSessionController() {
             });
             refreshCloudSessionList();
           } else {
-            reportCloudSessionCreateFailure(squashAtomCommandFailure(result));
+            reportCloudSessionCreateFailure(result);
           }
         })
         .finally(() => setCreatePending(false));
