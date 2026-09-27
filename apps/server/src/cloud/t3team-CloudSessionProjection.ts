@@ -8,6 +8,7 @@ import {
   cloudSessionElapsedSeconds,
   deriveCloudSessionPhase,
 } from "./t3team-cloudSessionPhase.ts";
+import { environmentIdFromSteps } from "./t3team-cloudSessionEnvironmentStep.ts";
 import {
   jobStepsInvocation,
   type CloudSessionRepoRef,
@@ -99,11 +100,11 @@ export const projectCloudSession = (
           Effect.orElseSucceed((): readonly WorkflowJobStep[] | null => null),
         );
     const phase = deriveCloudSessionPhase(sessionRun, steps);
-    // The relay environment id is minted on the machine the session runs on
-    // and is not exposed through any GHA run field this projection reads, so
-    // the server cannot yet pin it; the field rides back as `undefined` until
-    // the fleet surfaces it, and the client then correlates from the relay
-    // rather than guessing.
+    // The relay environment id is minted on the session's machine, which
+    // publishes it as a marker step name; pin it only on `ready` (the contract
+    // allows it nowhere else). A workflow that predates the marker leaves it
+    // `undefined`, and the client then correlates from the relay instead.
+    const environmentId = phase === "ready" ? environmentIdFromSteps(steps) : undefined;
     const settled = sessionRun.status === "completed";
     return {
       sessionId: String(sessionRun.id),
@@ -119,6 +120,7 @@ export const projectCloudSession = (
           ? (sessionRun.conclusion ?? "The session stopped before it became reachable.")
           : null,
       detailsUrl: sessionRun.htmlUrl === "" ? null : sessionRun.htmlUrl,
+      ...(environmentId !== undefined ? { environmentId } : {}),
       // Only a settled run has a real "how long did it run" figure; a live
       // session would be reporting its age, not its duration.
       ...(settled ? { durationSeconds: cloudSessionDurationSeconds(sessionRun) } : {}),
