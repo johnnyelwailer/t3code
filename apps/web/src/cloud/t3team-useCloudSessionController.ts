@@ -1,16 +1,13 @@
 import type { CloudSession } from "@t3tools/contracts";
-import { CLOUD_SESSION_REFRESH_INTERVAL_MS } from "@t3tools/client-runtime/state/cloud-sessions";
 import { useCallback, useMemo, useState } from "react";
 
 import { environmentCatalog } from "~/connection/catalog";
-import { appAtomRegistry } from "~/rpc/atomRegistry";
 import {
   cloudSessionEnvironment,
   useCloudSessions,
   usePrimaryEnvironmentId,
 } from "~/state/t3team-cloudSessions";
 import { useAtomCommand } from "~/state/use-atom-command";
-import { relayEnvironmentDiscovery } from "~/state/relay";
 import { useRelayEnvironmentDiscovery } from "~/state/environments";
 import { DEFAULT_CLOUD_SESSION_DURATION_SECONDS } from "~/components/cloud/t3team-CloudSessionProvisionPanel";
 import { toastManager } from "~/components/ui/toast";
@@ -20,8 +17,8 @@ import {
   mergeLocalCloudSession,
   type LocalCloudSession,
 } from "~/components/cloud/t3team-cloudSessionSplit";
-import { useCloudSessionListPolling } from "./t3team-cloudSessionPolling";
 import { showCloudSessionFailureToast } from "./t3team-cloudSessionToast";
+import { useCloudSessionListRefresh } from "./t3team-useCloudSessionListRefresh";
 import { useCloudSessionConnect } from "./t3team-useCloudSessionConnect";
 import { useCloudSessionEnvironmentExit } from "./t3team-useCloudSessionEnvironmentExit";
 import { reportCloudSessionCreateFailure } from "./t3team-cloudSessionFailure";
@@ -63,21 +60,9 @@ export function useCloudSessionController() {
   const registerRelayEnvironment = useAtomCommand(environmentCatalog.register, {
     reportFailure: false,
   });
-  const refreshRelayEnvironments = useAtomCommand(relayEnvironmentDiscovery.refresh, {
-    reportFailure: false,
-  });
-  const refreshCloudSessionList = useCallback(() => {
-    if (environmentId === null) return;
-    appAtomRegistry.refresh(cloudSessionEnvironment.list({ environmentId, input: {} }));
-  }, [environmentId]);
-  const pollTick = useCallback(() => {
-    refreshCloudSessionList();
-    void refreshRelayEnvironments();
-  }, [refreshCloudSessionList, refreshRelayEnvironments]);
-  useCloudSessionListPolling(
-    pollTick,
+  const { refreshCloudSessionList, refreshRelayEnvironments } = useCloudSessionListRefresh(
+    environmentId,
     cloudMenuOpen || panelVisible,
-    CLOUD_SESSION_REFRESH_INTERVAL_MS,
   );
 
   const exit = useCloudSessionEnvironmentExit({
@@ -101,7 +86,9 @@ export function useCloudSessionController() {
     (seconds: number) => {
       if (environmentId === null || createPending) return;
       setRelayIdsBefore(
-        new Set([...relayDiscovered.values()].map((entry) => String(entry.environment.environmentId))),
+        new Set(
+          [...relayDiscovered.values()].map((entry) => String(entry.environment.environmentId)),
+        ),
       );
       setCreatePending(true);
       void createSession({ environmentId, input: { durationSeconds: seconds } })
