@@ -219,15 +219,17 @@ describe("makeChildWaitReactor abnormal-stop notification", () => {
     }),
   );
 
-  it.effect("writes NO marker on a top-level thread (no handoff parent) — the report has no recipient", () =>
-    Effect.gen(function* () {
-      // Owner-reported regression: a parentless thread that failed still got
-      // the "Abnormal stop reported to parent" marker on its own timeline.
-      const h = makeHarness(new Map([[CHILD, childDetail({ activities: [] })]]));
-      yield* h.reactor.handleEvent(sessionSet("error", "provider timeout"));
-      yield* settle();
-      expect(h.dispatches, "no actor message, no marker").toHaveLength(0);
-    }),
+  it.effect(
+    "writes NO marker on a top-level thread (no handoff parent) — the report has no recipient",
+    () =>
+      Effect.gen(function* () {
+        // Owner-reported regression: a parentless thread that failed still got
+        // the "Abnormal stop reported to parent" marker on its own timeline.
+        const h = makeHarness(new Map([[CHILD, childDetail({ activities: [] })]]));
+        yield* h.reactor.handleEvent(sessionSet("error", "provider timeout"));
+        yield* settle();
+        expect(h.dispatches, "no actor message, no marker").toHaveLength(0);
+      }),
   );
 
   it.effect("does NOT add a standalone message when a matching wait resolves", () =>
@@ -541,8 +543,7 @@ describe("makeChildWaitReactor turn-supersede interrupt (nudge mid-turn)", () =>
         h.dispatches.some(
           (c) =>
             c.type === "thread.activity.append" &&
-            (c as { activity?: { kind?: string } }).activity?.kind ===
-              "t3team.child_wait.resolved",
+            (c as { activity?: { kind?: string } }).activity?.kind === "t3team.child_wait.resolved",
         ),
         "no resolved marker",
       ).toBe(false);
@@ -570,16 +571,18 @@ describe("makeChildWaitReactor turn-supersede interrupt (nudge mid-turn)", () =>
         const h = makeHarness();
         yield* h.reactor.handleEvent(sessionSet("interrupted", "first stop", 1));
         yield* settle();
-        expect(texts(h.dispatches).filter((m) => m.includes("[Child stopped abnormally]")))
-          .toHaveLength(1);
+        expect(
+          texts(h.dispatches).filter((m) => m.includes("[Child stopped abnormally]")),
+        ).toHaveLength(1);
         // The nudge: a new turn starts (epoch boundary)…
         yield* h.reactor.handleEvent(sessionSet("running", null, 2));
         // …and the pack's supersede-interrupt for the replaced turn lands.
         yield* h.reactor.handleEvent(sessionSet("interrupted", null, 3, undefined, true));
         yield* settle();
         // The superseded interrupt must not have notified.
-        expect(texts(h.dispatches).filter((m) => m.includes("[Child stopped abnormally]")))
-          .toHaveLength(1);
+        expect(
+          texts(h.dispatches).filter((m) => m.includes("[Child stopped abnormally]")),
+        ).toHaveLength(1);
         // A genuine stop on the NEW turn still notifies (the gate re-armed the
         // once-per-epoch ledger instead of consuming it).
         yield* h.reactor.handleEvent(sessionSet("interrupted", "second stop", 4));

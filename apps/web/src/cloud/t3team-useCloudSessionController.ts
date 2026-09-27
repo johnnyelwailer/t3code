@@ -102,7 +102,9 @@ export function useCloudSessionController() {
     (seconds: number) => {
       if (environmentId === null || createPending) return;
       setRelayIdsBefore(
-        new Set([...relayDiscovered.values()].map((entry) => String(entry.environment.environmentId))),
+        new Set(
+          [...relayDiscovered.values()].map((entry) => String(entry.environment.environmentId)),
+        ),
       );
       setCreatePending(true);
       void createSession({ environmentId, input: { durationSeconds: seconds } })

@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { isMacPlatform } from "~/lib/utils";
-import { cssNumberPx, FADE_OPACITY, FADE_WIDTH_PX, NexploreTitlebarFade } from "./t3team-NexploreTitlebarFade";
+import {
+  cssNumberPx,
+  FADE_OPACITY,
+  FADE_WIDTH_PX,
+  NexploreTitlebarFade,
+} from "./t3team-NexploreTitlebarFade";
 
 /**
  * Nexplore stage art — the brand-refresh "2FORM" language: a FLAT ground in one duo colour and
@@ -56,7 +61,10 @@ function clamp(value: number, min: number, max: number): number {
  * edge. Children are read generically rather than by selector, so a header that gains a control
  * later is accounted for without touching this file.
  */
-function measureFreeGap(host: HTMLElement, selfContainer: Element | null): { start: number; end: number } {
+function measureFreeGap(
+  host: HTMLElement,
+  selfContainer: Element | null,
+): { start: number; end: number } {
   const hostRect = host.getBoundingClientRect();
   const occupied: Array<[number, number]> = [];
   for (const child of host.children) {
@@ -119,7 +127,8 @@ export function T3TeamNexploreStripArt() {
     const wash = isMacPlatform(navigator.platform);
     const hostStyle = getComputedStyle(host);
     const fadeOpacity = cssNumberPx(hostStyle, "--stage-nx-fade-opacity", FADE_OPACITY);
-    const fadeWidthUnits = cssNumberPx(hostStyle, "--stage-nx-fade-width", FADE_WIDTH_PX) * unitsPerPx;
+    const fadeWidthUnits =
+      cssNumberPx(hostStyle, "--stage-nx-fade-width", FADE_WIDTH_PX) * unitsPerPx;
 
     // The orb keeps its size and SINKS when the gap tightens — it never shrinks. It fits the gap
     // outright while the gap is at least its diameter; below that it must clear the band entirely.
@@ -135,7 +144,9 @@ export function T3TeamNexploreStripArt() {
       cx: ((gap.start + gap.end) / 2) * unitsPerPx,
       cy: cyPx * unitsPerPx,
       r: ORB_RADIUS_PX * unitsPerPx,
-      wash, fadeOpacity, fadeWidthUnits,
+      wash,
+      fadeOpacity,
+      fadeWidthUnits,
     });
   }, []);
 
@@ -162,12 +173,12 @@ export function T3TeamNexploreStripArt() {
     >
       <rect width="100%" height={STRIP_HEIGHT} style={{ fill: GROUND_FILL }} />
       <g className="stage-nexplore-orbs">
-        {orb ? (
-          <circle cx={orb.cx} cy={orb.cy} r={orb.r} style={{ fill: ORB_FILL.orb }} />
-        ) : null}
+        {orb ? <circle cx={orb.cx} cy={orb.cy} r={orb.r} style={{ fill: ORB_FILL.orb }} /> : null}
       </g>
       {/* Left-edge traffic-light wash (macOS + light appearance only; see t3team-NexploreTitlebarFade). */}
-      {orb?.wash ? <NexploreTitlebarFade opacity={orb.fadeOpacity} widthUnits={orb.fadeWidthUnits} /> : null}
+      {orb?.wash ? (
+        <NexploreTitlebarFade opacity={orb.fadeOpacity} widthUnits={orb.fadeWidthUnits} />
+      ) : null}
     </svg>
   );
 }

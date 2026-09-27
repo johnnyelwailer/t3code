@@ -19,12 +19,7 @@
  *
  * @module t3team-terminalNotifyDedup
  */
-import {
-  CommandId,
-  EventId,
-  ThreadId,
-  type OrchestrationEvent,
-} from "@t3tools/contracts";
+import { CommandId, EventId, ThreadId, type OrchestrationEvent } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -85,16 +80,24 @@ export interface TerminalNotifyLedger {
   }) => Effect.Effect<void>;
 }
 
-export function makeTerminalNotifyLedger(options: TerminalNotifyLedgerOptions): TerminalNotifyLedger {
+export function makeTerminalNotifyLedger(
+  options: TerminalNotifyLedgerOptions,
+): TerminalNotifyLedger {
   // Resume is tracked per observed thread; a key's state remembers which thread
   // it observes so two keys sharing a target share its epoch.
   const resumeByThread = new Map<string, number>();
-  const notifiedByKey = new Map<string, { readonly notifiedSeq: number; readonly resumeThreadId: string }>();
+  const notifiedByKey = new Map<
+    string,
+    { readonly notifiedSeq: number; readonly resumeThreadId: string }
+  >();
 
   const stateFor = (key: string): TerminalNotifyState | undefined => {
     const entry = notifiedByKey.get(key);
     if (entry === undefined) return undefined;
-    return { notifiedSeq: entry.notifiedSeq, lastResumeSeq: resumeByThread.get(entry.resumeThreadId) ?? 0 };
+    return {
+      notifiedSeq: entry.notifiedSeq,
+      lastResumeSeq: resumeByThread.get(entry.resumeThreadId) ?? 0,
+    };
   };
 
   const foldEvent = (event: OrchestrationEvent): void => {
@@ -109,10 +112,18 @@ export function makeTerminalNotifyLedger(options: TerminalNotifyLedgerOptions): 
     const activity = event.payload.activity;
     if (activity.kind !== options.markerKind) return;
     const payload = activity.payload as
-      | { readonly dedupKey?: unknown; readonly resumeThreadId?: unknown; readonly eventSequence?: unknown }
+      | {
+          readonly dedupKey?: unknown;
+          readonly resumeThreadId?: unknown;
+          readonly eventSequence?: unknown;
+        }
       | null
       | undefined;
-    if (!payload || typeof payload.dedupKey !== "string" || typeof payload.eventSequence !== "number")
+    if (
+      !payload ||
+      typeof payload.dedupKey !== "string" ||
+      typeof payload.eventSequence !== "number"
+    )
       return;
     const resumeThreadId =
       typeof payload.resumeThreadId === "string" ? payload.resumeThreadId : event.payload.threadId;
@@ -129,7 +140,15 @@ export function makeTerminalNotifyLedger(options: TerminalNotifyLedgerOptions): 
     rehydrate: (events) => {
       for (const event of events) foldEvent(event);
     },
-    notify: ({ key, markerThreadId, resumeThreadId, terminalSeq, markerPayload, doNotify, markerSummary }) =>
+    notify: ({
+      key,
+      markerThreadId,
+      resumeThreadId,
+      terminalSeq,
+      markerPayload,
+      doNotify,
+      markerSummary,
+    }) =>
       Effect.gen(function* () {
         if (!terminalNotifyNeedsNotify(stateFor(key), terminalSeq)) return;
         yield* doNotify;
@@ -145,7 +164,12 @@ export function makeTerminalNotifyLedger(options: TerminalNotifyLedgerOptions): 
               tone: "info",
               kind: options.markerKind,
               summary: markerSummary ?? options.markerSummary,
-              payload: { dedupKey: key, resumeThreadId, eventSequence: terminalSeq, ...markerPayload },
+              payload: {
+                dedupKey: key,
+                resumeThreadId,
+                eventSequence: terminalSeq,
+                ...markerPayload,
+              },
               turnId: null,
               createdAt: nowIso,
             },
@@ -153,7 +177,10 @@ export function makeTerminalNotifyLedger(options: TerminalNotifyLedgerOptions): 
           })
           .pipe(
             Effect.catchCause((cause) =>
-              Effect.logWarning("terminal-notify dedup marker failed", { key, cause: Cause.pretty(cause) }),
+              Effect.logWarning("terminal-notify dedup marker failed", {
+                key,
+                cause: Cause.pretty(cause),
+              }),
             ),
           );
       }),

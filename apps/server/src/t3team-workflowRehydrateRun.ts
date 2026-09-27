@@ -56,8 +56,17 @@ export type WorkflowRunRehydratorDeps = {
 };
 
 export function makeWorkflowRunRehydrator(deps: WorkflowRunRehydratorDeps) {
-  const { repo, store, registry, runsRoot, dispatch, rearmScheduler, toolBroker, nowIso, signalStore } =
-    deps;
+  const {
+    repo,
+    store,
+    registry,
+    runsRoot,
+    dispatch,
+    rearmScheduler,
+    toolBroker,
+    nowIso,
+    signalStore,
+  } = deps;
 
   const hostToolClientFor = (run: WorkflowRun) => {
     const grant = run.hostToolGrant;

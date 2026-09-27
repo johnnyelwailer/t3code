@@ -76,10 +76,8 @@ const makeCloudSessionHarness = Effect.fn("TestCloudSessions.makeHarness")(funct
     disconnect: Effect.void,
     retryNow: Effect.void,
   } satisfies EnvironmentSupervisor.EnvironmentSupervisor["Service"]);
-  const run: EnvironmentRegistry.EnvironmentRegistry["Service"]["run"] = (
-    _environmentId,
-    effect,
-  ) => Effect.provideService(effect, EnvironmentSupervisor.EnvironmentSupervisor, supervisor);
+  const run: EnvironmentRegistry.EnvironmentRegistry["Service"]["run"] = (_environmentId, effect) =>
+    Effect.provideService(effect, EnvironmentSupervisor.EnvironmentSupervisor, supervisor);
   const followStream: EnvironmentRegistry.EnvironmentRegistry["Service"]["followStream"] = (
     _environmentId,
     stream,
@@ -97,37 +95,35 @@ const makeCloudSessionHarness = Effect.fn("TestCloudSessions.makeHarness")(funct
 });
 
 describe("cloud session atoms", () => {
-  it.effect(
-    "does not re-poll the session list on a timer while it stays subscribed",
-    () =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
-          try {
-            const harness = yield* makeCloudSessionHarness();
-            const atoms = createCloudSessionAtoms(harness.runtime);
-            const registry = AtomRegistry.make();
-            const unmount = registry.mount(
-              atoms.list({ environmentId: CLOUD_ENVIRONMENT.environmentId, input: {} }),
-            );
-            yield* Effect.addFinalizer(() =>
-              Effect.sync(() => {
-                unmount();
-                registry.dispose();
-              }),
-            );
+  it.effect("does not re-poll the session list on a timer while it stays subscribed", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+        try {
+          const harness = yield* makeCloudSessionHarness();
+          const atoms = createCloudSessionAtoms(harness.runtime);
+          const registry = AtomRegistry.make();
+          const unmount = registry.mount(
+            atoms.list({ environmentId: CLOUD_ENVIRONMENT.environmentId, input: {} }),
+          );
+          yield* Effect.addFinalizer(() =>
+            Effect.sync(() => {
+              unmount();
+              registry.dispose();
+            }),
+          );
 
-            yield* harness.firstRpcStarted.await;
-            // Far longer than the old 5s interval: with the timer removed, the
-            // one mount-time RPC is the only RPC a subscribed list ever sends.
-            vi.advanceTimersByTime(60_000);
-            for (let i = 0; i < 5; i += 1) yield* drainMacrotasks;
+          yield* harness.firstRpcStarted.await;
+          // Far longer than the old 5s interval: with the timer removed, the
+          // one mount-time RPC is the only RPC a subscribed list ever sends.
+          vi.advanceTimersByTime(60_000);
+          for (let i = 0; i < 5; i += 1) yield* drainMacrotasks;
 
-            expect(harness.rpcMethodCalls).toEqual([WS_METHODS.cloudSessionList]);
-          } finally {
-            vi.useRealTimers();
-          }
-        }),
-      ),
+          expect(harness.rpcMethodCalls).toEqual([WS_METHODS.cloudSessionList]);
+        } finally {
+          vi.useRealTimers();
+        }
+      }),
+    ),
   );
 });

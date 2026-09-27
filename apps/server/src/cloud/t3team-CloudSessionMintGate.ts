@@ -29,64 +29,64 @@ export const CONNECT_SIGN_IN_PENDING_TEXT =
  *   `connect_sign_in_pending`: a sign-in IS in flight, and the user's next
  *   step is to confirm it in the browser, not to start one.
  */
-export const dispatchCredentialHandoff = Effect.fn(
-  "cloud.session.dispatch_credential_handoff",
-)(function* (input: {
-  readonly repoRef: CloudSessionRepoRef;
-  readonly sessionTag: string;
-  readonly run: CredentialGhExecutor;
-  readonly enabled: boolean;
-  readonly readCredential: Effect.Effect<
-    Option.Option<CliTokenManager.PersistedToken>,
-    CliTokenManager.CloudCliTokenManagerError
-  >;
-  readonly mint: (input?: {
-    readonly timeout?: Duration.Duration;
-  }) => Effect.Effect<void, ConnectCredentialMintError>;
-  readonly mintTimeout: Duration.Duration;
-}) {
-  // Flag off: no handoff at all — the legacy path takes over.
-  if (!input.enabled) return;
+export const dispatchCredentialHandoff = Effect.fn("cloud.session.dispatch_credential_handoff")(
+  function* (input: {
+    readonly repoRef: CloudSessionRepoRef;
+    readonly sessionTag: string;
+    readonly run: CredentialGhExecutor;
+    readonly enabled: boolean;
+    readonly readCredential: Effect.Effect<
+      Option.Option<CliTokenManager.PersistedToken>,
+      CliTokenManager.CloudCliTokenManagerError
+    >;
+    readonly mint: (input?: {
+      readonly timeout?: Duration.Duration;
+    }) => Effect.Effect<void, ConnectCredentialMintError>;
+    readonly mintTimeout: Duration.Duration;
+  }) {
+    // Flag off: no handoff at all — the legacy path takes over.
+    if (!input.enabled) return;
 
-  let mintAttempted = false;
-  const existing = yield* input.readCredential.pipe(
-    Effect.orElseSucceed((): Option.Option<CliTokenManager.PersistedToken> => Option.none()),
-  );
-  if (Option.isNone(existing)) {
-    yield* input.mint({ timeout: input.mintTimeout }).pipe(
-      Effect.tapError((error) =>
-        Effect.logWarning("The in-app T3 Connect mint did not finish in time", {
-          reason: error.reason,
-        }),
-      ),
-      Effect.asVoid,
-      // The mint failure is ABSORBED here on purpose: create answers with the
-      // handoff's (rewritten) pending-sign-in error, not the mint's internals.
-      // The round-trip keeps running in the background; a retry rides it.
-      Effect.orElseSucceed((): undefined => undefined),
+    let mintAttempted = false;
+    const existing = yield* input.readCredential.pipe(
+      Effect.orElseSucceed((): Option.Option<CliTokenManager.PersistedToken> => Option.none()),
     );
-    mintAttempted = true;
-  }
-
-  yield* runCredentialHandoff({
-    repoRef: input.repoRef,
-    sessionTag: input.sessionTag,
-    run: input.run,
-    enabled: true,
-    readCredential: input.readCredential,
-  }).pipe(
-    Effect.catchIf(
-      (error) =>
-        mintAttempted &&
-        error._tag === "CloudSessionFailedError" &&
-        error.reason === "connect_sign_in_required",
-      () =>
-        Effect.fail(
-          new CloudSessionFailedError({
-            reason: "connect_sign_in_pending",
-            message: CONNECT_SIGN_IN_PENDING_TEXT,
+    if (Option.isNone(existing)) {
+      yield* input.mint({ timeout: input.mintTimeout }).pipe(
+        Effect.tapError((error) =>
+          Effect.logWarning("The in-app T3 Connect mint did not finish in time", {
+            reason: error.reason,
           }),
         ),
-    ),
-  );
-});
+        Effect.asVoid,
+        // The mint failure is ABSORBED here on purpose: create answers with the
+        // handoff's (rewritten) pending-sign-in error, not the mint's internals.
+        // The round-trip keeps running in the background; a retry rides it.
+        Effect.orElseSucceed((): undefined => undefined),
+      );
+      mintAttempted = true;
+    }
+
+    yield* runCredentialHandoff({
+      repoRef: input.repoRef,
+      sessionTag: input.sessionTag,
+      run: input.run,
+      enabled: true,
+      readCredential: input.readCredential,
+    }).pipe(
+      Effect.catchIf(
+        (error) =>
+          mintAttempted &&
+          error._tag === "CloudSessionFailedError" &&
+          error.reason === "connect_sign_in_required",
+        () =>
+          Effect.fail(
+            new CloudSessionFailedError({
+              reason: "connect_sign_in_pending",
+              message: CONNECT_SIGN_IN_PENDING_TEXT,
+            }),
+          ),
+      ),
+    );
+  },
+);

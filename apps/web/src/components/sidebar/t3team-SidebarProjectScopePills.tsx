@@ -38,9 +38,7 @@ function useMeasuredWidth(): [RefObject<HTMLDivElement | null>, number] {
 // Same props as the thread rows pass, so a disc shows exactly the icon its threads show
 // (favicon, chosen icon, or the automatic per-project fallback).
 function GroupIcon({ group }: { group: SidebarProjectSnapshot }) {
-  return (
-    <ProjectFavicon project={group} className="size-4 shrink-0" />
-  );
+  return <ProjectFavicon project={group} className="size-4 shrink-0" />;
 }
 
 /**

@@ -115,8 +115,7 @@ describe("makeSignalDeliveryPort", () => {
         },
       },
       registry: {
-        getRun: (runId) =>
-          controllers.get(runId) as unknown as WorkflowRegisteredRun | undefined,
+        getRun: (runId) => controllers.get(runId) as unknown as WorkflowRegisteredRun | undefined,
       },
       nowIso: () => NOW,
     });

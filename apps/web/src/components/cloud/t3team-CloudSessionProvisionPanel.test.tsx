@@ -206,10 +206,12 @@ describe("CloudSessionProvisionPanel", () => {
     try {
       const node = render(
         <CloudSessionProvisionPanel
-          sessions={[session({ sessionId: "a-preparing", phase: "preparing", elapsedSeconds: 155 })]}
+          sessions={[
+            session({ sessionId: "a-preparing", phase: "preparing", elapsedSeconds: 155 }),
+          ]}
           onCreate={() => {}}
           onSessionAction={() => {}}
-        />
+        />,
       );
 
       expect(node.textContent).toContain("Installing dependencies and building · 2m 35s");
@@ -237,7 +239,7 @@ describe("CloudSessionProvisionPanel", () => {
           ]}
           onCreate={() => {}}
           onSessionAction={() => {}}
-        />
+        />,
       );
 
       expandHistory(node);

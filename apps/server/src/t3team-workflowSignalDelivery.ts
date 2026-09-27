@@ -65,9 +65,7 @@ export interface SignalDeliveryInput {
 export interface WorkflowSignalDeliveryShape {
   /** Deliver one event to every parked run on the tuple; to the durable inbox when none is.
    * Returns the number of runs woken (0 when the event went to the inbox instead). */
-  readonly emit: (
-    input: SignalDeliveryInput,
-  ) => Effect.Effect<number, ProjectionRepositoryError>;
+  readonly emit: (input: SignalDeliveryInput) => Effect.Effect<number, ProjectionRepositoryError>;
 }
 
 /** T3TeamWorkflowSignalDelivery - service tag for the signal delivery port. */
@@ -93,8 +91,8 @@ export function makeSignalDeliveryPort(deps: {
   readonly emit: (input: SignalDeliveryInput) => Effect.Effect<number, ProjectionRepositoryError>;
 } {
   const nowIso = deps.nowIso ?? (() => DateTime.formatIso(DateTime.nowUnsafe()));
-  const emit: ReturnType<typeof makeSignalDeliveryPort>["emit"] =
-    Effect.fn("workflowSignal.emit")(function* (input) {
+  const emit: ReturnType<typeof makeSignalDeliveryPort>["emit"] = Effect.fn("workflowSignal.emit")(
+    function* (input) {
       const watching = yield* deps.repo.listByStatus({ status: "watching" });
       const parked = watching.filter(
         (run) =>
@@ -165,7 +163,8 @@ export function makeSignalDeliveryPort(deps: {
         woken += 1;
       }
       return woken;
-    });
+    },
+  );
 
   return { emit };
 }

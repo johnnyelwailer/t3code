@@ -31,10 +31,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import type { ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
 import { summarizeActorMessageForDelivery } from "./t3team-actorReactionInputSummarize.ts";
-import {
-  renderAutomatedBurstBlock,
-  splitAutomatedBurst,
-} from "./t3team-actorBurstFold.ts";
+import { renderAutomatedBurstBlock, splitAutomatedBurst } from "./t3team-actorBurstFold.ts";
 import { loadT3TeamThreadDescendants } from "./t3team-threadStopCascade.ts";
 
 /**

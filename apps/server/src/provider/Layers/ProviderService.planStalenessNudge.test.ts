@@ -18,12 +18,7 @@ import type {
   ProviderTurnStartResult,
   ProviderUserInputAnswers,
 } from "@t3tools/contracts";
-import {
-  ProviderDriverKind,
-  ProviderInstanceId,
-  ThreadId,
-  TurnId,
-} from "@t3tools/contracts";
+import { ProviderDriverKind, ProviderInstanceId, ThreadId, TurnId } from "@t3tools/contracts";
 import { it, assert, afterAll } from "@effect/vitest";
 
 import * as Effect from "effect/Effect";
@@ -131,7 +126,8 @@ const makeCapturingAdapter = (): ProviderAdapterShape<ProviderAdapterError> => {
       }),
     listSessions: (): Effect.Effect<ReadonlyArray<ProviderSession>> =>
       Effect.sync(() => Array.from(sessions.values())),
-    hasSession: (threadId: ThreadId): Effect.Effect<boolean> => Effect.succeed(sessions.has(threadId)),
+    hasSession: (threadId: ThreadId): Effect.Effect<boolean> =>
+      Effect.succeed(sessions.has(threadId)),
     readThread: (
       threadId: ThreadId,
     ): Effect.Effect<
@@ -162,8 +158,13 @@ NodeFS.mkdirSync(PROJECT_CWD, { recursive: true });
 
 const adapter = makeCapturingAdapter();
 const registry = makeAdapterRegistryMock({ [CODEX_DRIVER]: adapter });
-const providerAdapterLayer = Layer.succeed(ProviderAdapterRegistry.ProviderAdapterRegistry, registry);
-const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(Layer.provide(SqlitePersistenceMemory));
+const providerAdapterLayer = Layer.succeed(
+  ProviderAdapterRegistry.ProviderAdapterRegistry,
+  registry,
+);
+const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
+  Layer.provide(SqlitePersistenceMemory),
+);
 const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
 // One shared in-memory counter instance: the provider layer reads it via
 // serviceOption (provider-only runtimes omit it entirely), and the test body
@@ -177,7 +178,11 @@ const layer = it.layer(
       Layer.provide(providerAdapterLayer),
       Layer.provide(directoryLayer),
       Layer.provide(ServerSettings.ServerSettingsService.layerTest()),
-      Layer.provide(ServerConfig.layerTest(process.cwd(), process.cwd()).pipe(Layer.provide(NodeServices.layer))),
+      Layer.provide(
+        ServerConfig.layerTest(process.cwd(), process.cwd()).pipe(
+          Layer.provide(NodeServices.layer),
+        ),
+      ),
       Layer.provideMerge(AnalyticsService.layerTest),
       Layer.provide(
         Layer.succeed(

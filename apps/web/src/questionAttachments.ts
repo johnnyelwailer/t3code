@@ -51,7 +51,8 @@ export function clearQuestionAttachmentDraft(key: DraftId): void {
   if (draft) {
     releaseDraftAttachments([...draft.images, ...draft.files]);
     for (const image of draft.images) {
-      if (image.previewUrl && image.previewUrl.startsWith("blob:")) URL.revokeObjectURL(image.previewUrl);
+      if (image.previewUrl && image.previewUrl.startsWith("blob:"))
+        URL.revokeObjectURL(image.previewUrl);
     }
   }
   store.clearComposerContent(key);
