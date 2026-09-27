@@ -15,7 +15,7 @@ interface IntentRow {
   readonly intent_json: string | null;
 }
 
-const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
+const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layer({ filename: ":memory:" })));
 
 layer("t3team-051_WorkflowRunIntent", (it) => {
   it.effect("adds a nullable intent_json TEXT column to workflow_runs", () =>

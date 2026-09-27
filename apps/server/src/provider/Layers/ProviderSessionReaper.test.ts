@@ -242,6 +242,7 @@ describe("ProviderSessionReaper", () => {
           getSnapshot: () => Effect.die("unused"),
           getShellSnapshot: () => Effect.die("unused"),
           getDeletedWorktreeThreads: () => Effect.die("unused"),
+          listThreadsWithPullRequests: () => Effect.die("unused"),
           getArchivedShellSnapshot: () => Effect.die("unused"),
           getSnapshotSequence: () =>
             Effect.succeed({ snapshotSequence: input.readModel.snapshotSequence }),
@@ -595,7 +596,6 @@ describe("ProviderSessionReaper", () => {
     expect(harness.stoppedThreadIds.has(idleThreadIdA)).toBe(true);
     expect(harness.stoppedThreadIds.has(idleThreadIdB)).toBe(true);
   });
-
 
   it.each([true, false])(
     "uses the binding idle window when the session is older or missing, hasSession=%s",

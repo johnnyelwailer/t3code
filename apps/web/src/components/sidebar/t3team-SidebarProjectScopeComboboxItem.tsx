@@ -24,7 +24,6 @@ export function T3TeamSidebarProjectScopeComboboxItem({
       hideIndicator
       value={item}
       className="h-8 min-h-8 py-0 font-medium"
-      contentClassName="flex min-w-0 items-center gap-2"
       onContextMenu={(event) => {
         if (project) onProjectSettings(event, project);
       }}

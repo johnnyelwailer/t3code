@@ -63,7 +63,7 @@ export const runT3TeamServerCommand = (
         }),
       ),
     );
-    const workspacePacksDir = yield* Config.string("T3TEAM_PACKS_DIR").pipe(Config.option);
+    const workspacePacksDir = yield* Config.String("T3TEAM_PACKS_DIR").pipe(Config.option);
     const packDiagnostic = yield* Effect.promise(() =>
       inspectConfiguredWorkspacePacks(Option.getOrUndefined(workspacePacksDir)),
     );

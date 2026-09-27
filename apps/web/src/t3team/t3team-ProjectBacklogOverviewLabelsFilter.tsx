@@ -55,8 +55,7 @@ export function ProjectBacklogOverviewLabelsFilter({
       <ComboboxPopup align="start" side="bottom" className="w-[15rem]">
         <div className="border-b p-1">
           <ComboboxInput
-            className="[&_input]:font-sans rounded-md"
-            inputClassName="ring-0"
+            className="[&_input]:font-sans rounded-md ring-0"
             placeholder="Search labels..."
             showTrigger={false}
             size="sm"
@@ -65,13 +64,7 @@ export function ProjectBacklogOverviewLabelsFilter({
         <ComboboxEmpty>No matching labels.</ComboboxEmpty>
         <ComboboxList className="max-h-56">
           {options.map((option) => (
-            <ComboboxItem
-              key={option.value}
-              value={option.value}
-              className="text-xs"
-              contentClassName="flex min-w-0 items-center gap-2"
-              hideIndicator
-            >
+            <ComboboxItem key={option.value} value={option.value} className="text-xs" hideIndicator>
               <span className="truncate">{option.value}</span>
               <span className="ml-auto text-[10px] text-muted-foreground">{option.count}</span>
               {selectedSet.has(option.value) ? <CheckIcon className="size-3.5" /> : null}

@@ -13,7 +13,7 @@ import {
   REQUIRED_HOT_QUERY_INDEXES,
 } from "./t3team-requiredIndexGuard.ts";
 
-const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
+const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layer({ filename: ":memory:" })));
 
 class AssertionFailure extends Error {
   override readonly name = "AssertionFailure" as const;
@@ -29,9 +29,7 @@ layer("t3team-requiredIndexGuard", (it) => {
       REQUIRED_HOT_QUERY_INDEXES[0]!,
     ]);
     assert.deepStrictEqual(
-      findMissingRequiredIndexes(
-        new Set(REQUIRED_HOT_QUERY_INDEXES.map((index) => index.name)),
-      ),
+      findMissingRequiredIndexes(new Set(REQUIRED_HOT_QUERY_INDEXES.map((index) => index.name))),
       [],
     );
   });
@@ -53,9 +51,7 @@ layer("t3team-requiredIndexGuard", (it) => {
 
       const outcome = yield* Effect.result(assertRequiredIndexesLive());
       if (!Result.isFailure(outcome)) {
-        return yield* Effect.fail(
-          new AssertionFailure("missing index must fail the assertion"),
-        );
+        return yield* Effect.fail(new AssertionFailure("missing index must fail the assertion"));
       }
       const error = outcome.failure;
       assert.isTrue(error instanceof MissingRequiredIndexError, "typed guard error expected");
