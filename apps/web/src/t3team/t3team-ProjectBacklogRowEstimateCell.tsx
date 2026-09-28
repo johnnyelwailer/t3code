@@ -1,7 +1,6 @@
-/* oxlint-disable t3code/no-native-title-tooltip, shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 import { Minus, Plus } from "lucide-react";
 
-import { Input } from "~/t3team/components/ui/t3team-input";
 import { cn } from "~/t3team/lib/t3team-utils";
 import { ProjectBacklogEstimateReadonlyValue } from "~/t3team/t3team-ProjectBacklogEstimateReadonly";
 import { Badge } from "~/t3team/components/ui/t3team-badge";
@@ -50,8 +49,8 @@ export function ProjectBacklogRowEstimateCell({
 
   const label = cell.presentation.label;
   const readonlyClassName = compact
-    ? "inline-flex h-7 min-w-[5.25rem] items-center justify-center gap-1 px-2 text-[11px] font-medium tabular-nums text-foreground/85"
-    : "inline-flex h-8 min-w-[6rem] items-center justify-center gap-1 px-2 text-[12px] font-medium tabular-nums text-foreground/85";
+    ? "inline-flex h-7 min-w-21 items-center justify-center gap-1 px-2 text-2xs font-medium tabular-nums text-foreground/85"
+    : "inline-flex h-8 min-w-24 items-center justify-center gap-1 px-2 text-xs font-medium tabular-nums text-foreground/85";
 
   if (!cell.available) {
     return (
@@ -75,7 +74,7 @@ export function ProjectBacklogRowEstimateCell({
   return (
     <div className="min-w-0">
       {compact ? null : (
-        <div className="mb-1 text-[9px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+        <div className="mb-1 text-3xs font-medium uppercase tracking-widest text-muted-foreground">
           {label}
         </div>
       )}
@@ -86,7 +85,7 @@ export function ProjectBacklogRowEstimateCell({
         title={cell.error ?? undefined}
         className={cn(
           "cursor-text items-center rounded-md border transition-colors",
-          compact ? "inline-flex h-7 min-w-[5.25rem] gap-1 px-1.5" : "inline-flex h-8 px-2",
+          compact ? "inline-flex h-7 min-w-21 gap-1 px-1.5" : "inline-flex h-8 px-2",
           cell.error
             ? "border-destructive bg-background/90"
             : quiet
@@ -98,17 +97,14 @@ export function ProjectBacklogRowEstimateCell({
               : "border-border/70 bg-background/90",
         )}
       >
-        <Input
+        {/* A bare field inside the fork-owned box above, which draws the chrome — not a restyled Input. */}
+        <input
           aria-label={`${label} for ${ticket.ref.displayId}`}
           aria-invalid={cell.error ? true : undefined}
           aria-errormessage={cell.error ? `${ticket.id}-estimate-error` : undefined}
-          unstyled
           className={cn(
-            "border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0",
-            "[&_[data-slot=input]]:bg-transparent [&_[data-slot=input]]:px-0 [&_[data-slot=input]]:text-right [&_[data-slot=input]]:tabular-nums",
-            compact
-              ? "h-full w-11 [&_[data-slot=input]]:h-full [&_[data-slot=input]]:text-[11px] [&_[data-slot=input]]:font-medium [&_[data-slot=input]]:leading-none"
-              : "h-6 w-14 [&_[data-slot=input]]:h-6 [&_[data-slot=input]]:text-[12px]",
+            "min-w-0 bg-transparent px-0 text-right tabular-nums outline-none placeholder:font-normal placeholder:text-placeholder disabled:opacity-64",
+            compact ? "h-full w-11 text-2xs font-medium leading-none" : "h-6 w-14 text-xs",
           )}
           inputMode="decimal"
           type={compact ? "text" : "number"}
@@ -135,7 +131,7 @@ export function ProjectBacklogRowEstimateCell({
         />
 
         {cell.presentation.valueSuffix ? (
-          <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+          <span className="shrink-0 text-3xs font-medium uppercase tracking-widest text-muted-foreground">
             {cell.presentation.valueSuffix}
           </span>
         ) : null}

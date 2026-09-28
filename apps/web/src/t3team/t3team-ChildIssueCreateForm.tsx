@@ -1,4 +1,4 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. (awaiting ui variant: Textarea size="compact") */
 import type {
   AtlassianAssignableUser,
   AtlassianChildIssueType,
@@ -65,8 +65,7 @@ export function ChildIssueCreateForm({
             aria-label={`Child issue title for ${parentDisplayId}`}
             autoFocus
             disabled={saving}
-            size="sm"
-            className="border-border/80 bg-background text-[12px]"
+            size="compact"
             value={draft.summary}
             onChange={(event) => onDraftChange({ ...draft, summary: event.target.value })}
             placeholder={`New child issue under ${parentDisplayId}`}
@@ -94,7 +93,7 @@ export function ChildIssueCreateForm({
         <Textarea
           rows={2}
           disabled={saving}
-          className="text-[12px]"
+          className="text-xs"
           value={draft.description}
           onChange={(event) => onDraftChange({ ...draft, description: event.target.value })}
           placeholder="Add a description (optional)"

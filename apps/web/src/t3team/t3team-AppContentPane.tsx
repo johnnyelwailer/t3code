@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { SidebarInset, useSidebar } from "~/t3team/components/ui/t3team-sidebar";
 import { useLocalProviderSessionThreadFilter } from "~/t3team/hooks/t3team-useLocalProviderSessionThreadFilter";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
@@ -54,7 +53,7 @@ export function AppContentPane({
 
   return (
     <T3TeamInlineRecipeLaunchProvider>
-      <SidebarInset className="h-full min-h-0 overflow-hidden bg-background text-foreground">
+      <SidebarInset className="h-full min-h-0 overflow-hidden">
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <AppMainContent
             view={resolvedView}

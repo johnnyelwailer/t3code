@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { memo, useCallback } from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
 
@@ -72,7 +71,7 @@ export const ProjectBacklogTableHeader = memo(function ProjectBacklogTableHeader
   }
 
   return (
-    <thead className="sticky top-0 z-10 border-b border-border/60 bg-background/95 text-[10px] uppercase tracking-[0.12em] text-muted-foreground/72 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+    <thead className="sticky top-0 z-10 border-b border-border/60 bg-background/95 text-3xs uppercase tracking-widest text-muted-foreground/72 backdrop-blur supports-[backdrop-filter]:bg-background/85">
       <tr>
         <th className="px-3 py-1.5">{renderSortButton("Issue", "title")}</th>
         {visibleTableColumns.map((column) => (

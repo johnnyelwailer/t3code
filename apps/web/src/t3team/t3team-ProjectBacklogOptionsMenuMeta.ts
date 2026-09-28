@@ -10,13 +10,12 @@ export const projectBacklogFocusFilterOptions: ReadonlyArray<{
   { value: "with-subtasks", label: "With subtasks" },
 ];
 
-export const twoColumnRadioGroupClassName = "grid gap-0.5 sm:grid-cols-2";
-export const singleColumnRadioGroupClassName = "grid gap-1";
-export const stackedRadioGroupClassName = "grid max-h-72 gap-1 overflow-y-auto";
-export const radioItemClassName = "min-h-8 rounded-md py-1.5 text-[12px]";
-export const menuShortcutClassName =
-  "max-w-[9rem] truncate text-right font-normal tracking-normal text-muted-foreground/80";
-export const menuSubPopupClassName = "min-w-[15rem] border-border/80";
+/**
+ * The current value a sub-menu trigger shows at its end. A plain span, as upstream's
+ * PullRequestListFilters does it — MenuShortcut is for key hints and owns that look.
+ */
+export const menuValueClassName =
+  "ms-auto min-w-0 max-w-36 truncate text-right text-xs text-muted-foreground/80";
 
 export function getSelectedBacklogOptionLabel<TValue extends string>(
   options: ReadonlyArray<{ value: TValue; label: string }>,

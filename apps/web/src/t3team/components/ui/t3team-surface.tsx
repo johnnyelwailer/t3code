@@ -3,7 +3,7 @@ import type { ComponentPropsWithoutRef } from "react";
 import { Card, CardContent } from "~/t3team/components/ui/t3team-card";
 import { cn } from "~/t3team/lib/t3team-utils";
 
-type SurfaceTone = "default" | "muted" | "danger";
+type SurfaceTone = "default" | "muted" | "danger" | "primary";
 
 type PanelTone = "default" | "muted" | "soft" | "inset" | "dashed";
 
@@ -13,6 +13,8 @@ const cardToneClasses: Record<SurfaceTone, string> = {
   // Blur like the surfaces it sits on: at /8 opacity the wizard's hero art bleeds
   // straight through the banner and the text fights it without a backdrop filter.
   danger: "border-destructive/35 bg-destructive/8 supports-[backdrop-filter]:backdrop-blur",
+  // Agent-proposed content awaiting review.
+  primary: "border-primary/25 bg-primary/4",
 };
 
 const panelToneClasses: Record<PanelTone, string> = {
