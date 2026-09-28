@@ -94,8 +94,6 @@ import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
 import * as ServerSettings from "../../serverSettings.ts";
 import * as ProjectionSnapshotQuery from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
-import * as ThreadPlanStaleness from "../../orchestration/ThreadPlanStaleness.ts";
-import { renderPlanStalenessNudge } from "../../orchestration/planStalenessNudge.ts";
 const isModelSelection = Schema.is(ModelSelection);
 const encodePromptJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
@@ -575,11 +573,6 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const projectionQuery = yield* Effect.serviceOption(
     ProjectionSnapshotQuery.ProjectionSnapshotQuery,
-  );
-  // Optional: provider-only runtimes may omit the orchestration side, where
-  // the plan-staleness counter lives; without it no nudge is ever appended.
-  const threadPlanStaleness = yield* Effect.serviceOption(
-    ThreadPlanStaleness.ThreadPlanStalenessService,
   );
   const issueMcpCredential =
     options?.issueMcpCredential ?? McpSessionRegistry.issueActiveMcpCredential;
@@ -2215,20 +2208,6 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         ? { input: inputTextWithAttachmentContext }
         : {}),
     };
-    // Plan-staleness nudge: when the thread's task list has gone stale
-    // (PLAN_STALENESS_NUDGE_THRESHOLD+ tool activities since the last plan
-    // write), append the reminder line to THIS turn's input so the model sees
-    // it once, on the turn it starts. Textless continuation turns carry no
-    // input, so they append nothing; the nudge is never persisted — it is
-    // provider-bound only.
-    const planStalenessNudge =
-      input.input === undefined || Option.isNone(threadPlanStaleness)
-        ? undefined
-        : renderPlanStalenessNudge(threadPlanStaleness.value.getPlanAge(input.threadId));
-    const turnInput =
-      input.input !== undefined && planStalenessNudge !== undefined
-        ? { ...input, input: `${input.input}\n\n${planStalenessNudge}` }
-        : input;
     yield* Effect.annotateCurrentSpan({
       "provider.operation": "send-turn",
       "provider.thread_id": input.threadId,
@@ -2302,7 +2281,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
             if (supersededTurnId !== undefined) {
               yield* markTurnSuperseded(input.threadId, supersededTurnId);
             }
-            const turn = yield* routed.adapter.sendTurn(turnInput).pipe(
+            const turn = yield* routed.adapter.sendTurn(input).pipe(
               // Provider rejected the nudge: no new turn started, and the
               // tracked turn is still the in-flight one. Disarm the marker so
               // a later GENUINE stop of that turn stays a terminal stop
