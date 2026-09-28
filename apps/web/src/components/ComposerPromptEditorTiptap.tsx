@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { Extension, Node, wrappingInputRule, type JSONContent } from "@tiptap/core";
 import { TaskList } from "@tiptap/extension-task-list";
 import { ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
@@ -1299,7 +1298,7 @@ function ComposerPromptEditorTiptapInner(props: ComposerPromptEditorProps) {
           <div
             className={cn(
               // t3team: `inherit` (not --font-sans) is the deliberate composer font fallback.
-              "relative flow-root [font-family:var(--font-composer,inherit)] text-(length:--font-size-prompt,var(--text-sm)) max-sm:pointer-coarse:text-(length:--font-size-prompt-touch)",
+              "relative flow-root font-(family-name:--font-composer,inherit) text-(length:--font-size-prompt,var(--text-sm)) max-sm:pointer-coarse:text-(length:--font-size-prompt-touch)",
               containerClassName,
             )}
           >

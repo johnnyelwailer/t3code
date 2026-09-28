@@ -1,4 +1,4 @@
-/* oxlint-disable shadcn/no-restyle, shadcn/require-static-classes -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable shadcn/no-restyle, shadcn/require-static-classes -- Existing merged lint debt; keep green while preserving behavior. (awaiting ui variant: Card tone translucent|muted|destructive; CardPanel size sm) */
 import type { ComponentPropsWithoutRef } from "react";
 import { Card, CardContent } from "~/t3team/components/ui/t3team-card";
 import { cn } from "~/t3team/lib/t3team-utils";
@@ -40,11 +40,15 @@ export function T3SurfaceCard({
   return <Card className={cn(cardToneClasses[tone], className)} {...props} />;
 }
 
+/** `compact` is the tighter strip inset for a banner in a section, not a panel. */
 export function T3SurfaceCardContent({
+  density = "default",
   className,
   ...props
-}: ComponentPropsWithoutRef<typeof CardContent>) {
-  return <CardContent className={cn("p-4", className)} {...props} />;
+}: ComponentPropsWithoutRef<typeof CardContent> & { density?: "default" | "compact" }) {
+  return (
+    <CardContent className={cn(density === "compact" ? "p-2.5" : "p-4", className)} {...props} />
+  );
 }
 
 export function T3SurfacePanel({

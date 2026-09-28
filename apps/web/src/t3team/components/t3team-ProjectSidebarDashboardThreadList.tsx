@@ -1,6 +1,5 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { useMemo } from "react";
-import { SidebarMenuSub } from "~/t3team/components/ui/t3team-sidebar";
+import { T3SidebarSubList } from "~/t3team/components/ui/t3team-sidebar-row";
 import type { ProjectThread, ViewState } from "~/t3team/t3team-types";
 import { ProjectSidebarThreadTreeRows } from "./t3team-ProjectSidebarThreadTreeRows";
 import { buildProjectSidebarThreadTree } from "./t3team-projectSidebarThreadTree";
@@ -31,7 +30,7 @@ export function ProjectSidebarDashboardThreadList({
   }
 
   return (
-    <SidebarMenuSub className="mx-1 -mt-0.5 mb-1 w-full translate-x-0 gap-0.5 overflow-hidden px-1.5 py-0.5">
+    <T3SidebarSubList className="mx-1 -mt-0.5 mb-1 w-full overflow-hidden">
       <ProjectSidebarThreadTreeRows
         projectId={projectId}
         roots={threadTree.rootThreads}
@@ -43,6 +42,6 @@ export function ProjectSidebarDashboardThreadList({
         onDeleteThread={onDeleteThread}
         onRenameThread={onRenameThread}
       />
-    </SidebarMenuSub>
+    </T3SidebarSubList>
   );
 }

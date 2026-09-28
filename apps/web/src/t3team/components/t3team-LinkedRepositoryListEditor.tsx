@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import { Input } from "~/t3team/components/ui/t3team-input";
@@ -104,11 +103,9 @@ export function LinkedRepositoryListEditor({
                         <span className="block truncate text-xs font-medium">
                           {parseRepositoryLabel(url)}
                         </span>
-                        <span className="block truncate text-[11px] text-muted-foreground">
-                          {url}
-                        </span>
+                        <span className="block truncate text-2xs text-muted-foreground">{url}</span>
                       </span>
-                      <span className="text-[11px] text-muted-foreground">
+                      <span className="text-2xs text-muted-foreground">
                         {isLinked ? "Use" : "Add"}
                       </span>
                     </button>

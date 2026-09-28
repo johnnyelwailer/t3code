@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { SearchIcon, SettingsIcon } from "lucide-react";
 import {
   SidebarFooter,
@@ -85,14 +84,12 @@ export function ProjectSidebarLayout({
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <div className="flex min-h-full w-full min-w-0 flex-col gap-0">
-            <SidebarGroup className="px-2 pt-2 pb-1">
+            {/* The group's own inset is p-2; the pull-up keeps the search row 4px closer to
+                the projects group below, as it sat before. */}
+            <SidebarGroup className="-mb-1">
               <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarMenuButton
-                    size="sm"
-                    className="gap-2 px-2 py-1.5 text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-0"
-                    onClick={onOpenSearch}
-                  >
+                  <SidebarMenuButton size="sm" onClick={onOpenSearch}>
                     <SearchIcon className="size-3.5" />
                     <span className="flex-1 truncate text-left text-xs">Search</span>
                   </SidebarMenuButton>
@@ -157,20 +154,23 @@ export function ProjectSidebarLayout({
         </div>
 
         <SidebarSeparator className="shrink-0" />
-        <SidebarFooter className="shrink-0 p-2">
+        {/* The footer's own inset is py-1; the margin restores the 8px it sat in before. */}
+        <SidebarFooter className="my-1 shrink-0">
           <SidebarMenu>
-            <SidebarMenuItem className="flex items-center gap-1">
-              <SidebarMenuButton
-                size="sm"
-                className="min-w-0 flex-1 gap-2 px-2 py-1.5 text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
-                onClick={onOpenSettings}
-                disabled={!onOpenSettings}
-                aria-disabled={!onOpenSettings}
-              >
-                <SettingsIcon className="size-3.5" />
-                <span className="text-xs">Settings</span>
-              </SidebarMenuButton>
-              <T3TeamLeftSidebarHeaderToggle />
+            <SidebarMenuItem>
+              <div className="flex items-center gap-1">
+                <SidebarMenuButton
+                  size="sm"
+                  className="min-w-0 flex-1"
+                  onClick={onOpenSettings}
+                  disabled={!onOpenSettings}
+                  aria-disabled={!onOpenSettings}
+                >
+                  <SettingsIcon className="size-3.5" />
+                  <span className="text-xs">Settings</span>
+                </SidebarMenuButton>
+                <T3TeamLeftSidebarHeaderToggle />
+              </div>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>

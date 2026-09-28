@@ -181,7 +181,7 @@ describe("SidebarSubRunRow status treatment", () => {
 describe("SidebarSubRunRow — child-ask surfacing (pendingUserInput)", () => {
   it("a running child with a docked question shows the amber question mark INSTEAD of the running ring", () => {
     render(createThread({ status: "running", pendingUserInput: true }));
-    const mark = container!.querySelector("button .text-amber-600");
+    const mark = container!.querySelector("button .text-warning-foreground");
     expect(mark, "amber question-mark wrapper present").not.toBeNull();
     expect(mark!.querySelector("svg"), "question-mark icon rendered").not.toBeNull();
     // the mark outranks the lifecycle glyph: no dashed running ring
@@ -190,17 +190,20 @@ describe("SidebarSubRunRow — child-ask surfacing (pendingUserInput)", () => {
 
   it("an idle child with a docked question also shows the amber mark (not the faded idle ring)", () => {
     render(createThread({ status: "idle", pendingUserInput: true }));
-    expect(container!.querySelector("button .text-amber-600"), "amber mark present").not.toBeNull();
+    expect(
+      container!.querySelector("button .text-warning-foreground"),
+      "amber mark present",
+    ).not.toBeNull();
     expect(ringSvg(), "idle ring suppressed in favor of the question mark").toBeNull();
   });
 
   it("no amber mark when the flag is absent or false (lifecycle glyphs untouched)", () => {
     render(createThread({ status: "running" }));
-    expect(container!.querySelector("button .text-amber-600")).toBeNull();
+    expect(container!.querySelector("button .text-warning-foreground")).toBeNull();
     expect(ringSvg(), "running ring still rendered").not.toBeNull();
 
     render(createThread({ status: "running", pendingUserInput: false }));
-    expect(container!.querySelector("button .text-amber-600")).toBeNull();
+    expect(container!.querySelector("button .text-warning-foreground")).toBeNull();
     expect(ringSvg(), "running ring still rendered").not.toBeNull();
   });
 });

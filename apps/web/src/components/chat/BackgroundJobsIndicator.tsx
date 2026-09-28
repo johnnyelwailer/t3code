@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { useEffect, useMemo, useState } from "react";
 import { LoaderCircle, SquareTerminal, X } from "lucide-react";
 
@@ -180,7 +179,7 @@ export function BackgroundJobsRunningIndicator({
             onShowOutput={(job) => setOutputJob(job.jobId)}
           />
           {cancelError !== null ? (
-            <div className="mt-1 text-[.7rem] text-destructive">{cancelError}</div>
+            <div className="mt-1 text-2xs text-destructive">{cancelError}</div>
           ) : null}
           {outputJob !== null && threadId !== undefined && controller !== undefined ? (
             <BackgroundJobOutputPanel
@@ -308,9 +307,7 @@ export function BackgroundJobList({
               </span>
             </div>
             {job.pid !== undefined ? (
-              <div className="text-[.65rem] tabular-nums text-muted-foreground/60">
-                pid {job.pid}
-              </div>
+              <div className="text-3xs tabular-nums text-muted-foreground/60">pid {job.pid}</div>
             ) : null}
           </li>
         );
@@ -331,7 +328,7 @@ export function BackgroundJobRunningBadge({ job }: { readonly job: BackgroundJob
   const age = formatDuration(now - job.startedAtMs);
   return (
     <span
-      className="flex shrink-0 items-center gap-1 text-[.7rem] text-muted-foreground tabular-nums"
+      className="flex shrink-0 items-center gap-1 text-2xs text-muted-foreground tabular-nums"
       role="status"
     >
       <span

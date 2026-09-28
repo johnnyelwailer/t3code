@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import type { CloudSession } from "@t3tools/contracts";
 import { useCallback, useEffect, useState } from "react";
 
@@ -51,10 +50,10 @@ export function CloudSessionRowsSkeleton() {
     <div className={ITEM_ROW_CLASSNAME}>
       <div className={ITEM_ROW_INNER_CLASSNAME}>
         <div className="min-w-0 flex-1 space-y-2">
-          <Skeleton className="h-4 w-40 rounded-full" />
-          <Skeleton className="h-3 w-56 rounded-full" />
+          <Skeleton shape="pill" className="h-4 w-40" />
+          <Skeleton shape="pill" className="h-3 w-56" />
         </div>
-        <Skeleton className="h-7 w-20 rounded-md" />
+        <Skeleton className="h-7 w-20" />
       </div>
     </div>
   );

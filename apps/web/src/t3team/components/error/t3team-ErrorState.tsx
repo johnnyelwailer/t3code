@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { AlertTriangle, RotateCw } from "lucide-react";
 
 import { Button } from "~/t3team/components/ui/t3team-button";
@@ -89,7 +88,7 @@ export function T3TeamErrorState({
       >
         <T3SurfaceCard tone="danger" className="w-full max-w-md">
           {/* Tighter than the default card padding — this is a strip in a section, not a panel. */}
-          <T3SurfaceCardContent className="p-2.5">{body}</T3SurfaceCardContent>
+          <T3SurfaceCardContent density="compact">{body}</T3SurfaceCardContent>
         </T3SurfaceCard>
       </div>
     );
@@ -98,7 +97,7 @@ export function T3TeamErrorState({
   return (
     <T3SurfaceCard role="alert" tone="danger" className={className}>
       {/* Tighter than the default card padding — this is a strip in a section, not a panel. */}
-      <T3SurfaceCardContent className="p-2.5">{body}</T3SurfaceCardContent>
+      <T3SurfaceCardContent density="compact">{body}</T3SurfaceCardContent>
     </T3SurfaceCard>
   );
 }
