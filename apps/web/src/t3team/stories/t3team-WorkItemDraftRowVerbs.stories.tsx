@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. (awaiting ui variant: Textarea size="compact") */
 import { useState } from "react";
 import { ArrowRight, Bot, Check, ChevronRight, MessageSquare, X } from "lucide-react";
 import type { Meta, StoryObj } from "@storybook/react";
@@ -105,7 +104,7 @@ function ScalarDraftRow({ row }: { readonly row: ScalarRow }) {
           <Textarea
             rows={2}
             placeholder="Tell the agent what to change — it proposes again from your note."
-            className="text-xs"
+            size="compact"
             aria-label="Comment to the agent"
           />
           <div className="mt-1.5 flex justify-end gap-1.5">
