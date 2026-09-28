@@ -280,7 +280,6 @@ import {
 } from "./project/t3team-ProjectMachineDiscovery.ts";
 import { layer as CloudSessionMachinesLayer } from "./cloud/t3team-CloudSessionMachine.ts";
 import * as CloudCliTokenManager from "./cloud/CliTokenManager.ts";
-import * as ConnectCredentialMinter from "./cloud/t3team-ConnectCredentialMinter.ts";
 import {
   sameUsageLimitCommandCoverage,
   withUsageLimitsCommands,
@@ -3410,8 +3409,11 @@ export const layer = Layer.unwrap(
                   // credential to the VM, so it needs the CLI token manager.
                   Layer.provide(CloudCliTokenManager.layer),
                   // The create path mints the caller's credential in-app
-                  // before the handoff; the minter layer is self-contained.
-                  Layer.provide(ConnectCredentialMinter.layer),
+                  // before the handoff. It uses the SERVER's minter
+                  // (server.ts), not a per-connection copy: this layer's
+                  // scope closes right after setup, which would kill the
+                  // sign-in, and one shared minter keeps create and the
+                  // background top-up from opening two sign-ins at once.
                   // A session for a project runs in its machine; the resolver reads the
                   // project's checkouts (discovery, provided below) and the user's gh login.
                   Layer.provide(

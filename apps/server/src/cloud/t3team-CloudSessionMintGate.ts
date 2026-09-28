@@ -24,10 +24,11 @@ const CONNECT_SIGN_IN_PENDING_TEXT =
  * - no usable credential → attempt the in-app mint (the browser round-trip)
  *   with a bounded wait. create NEVER hangs: the wait is bounded, and the
  *   round-trip outlives this call, so the user's retry rides it. When the
- *   mint did not finish, the handoff fails with the bare
- *   `connect_sign_in_required` — which is rewritten to
- *   `connect_sign_in_pending`: a sign-in IS in flight, and the user's next
- *   step is to confirm it in the browser, not to start one.
+ *   mint is still waiting on the browser, the handoff's bare
+ *   `connect_sign_in_required` is rewritten to `connect_sign_in_pending`: a
+ *   sign-in IS in flight, and the user's next step is to confirm it in the
+ *   browser. A mint that failed outright (no OAuth config, refused exchange)
+ *   keeps `connect_sign_in_required` — there is no browser tab to confirm.
  */
 export const dispatchCredentialHandoff = Effect.fn("cloud.session.dispatch_credential_handoff")(
   function* (input: {
@@ -47,24 +48,29 @@ export const dispatchCredentialHandoff = Effect.fn("cloud.session.dispatch_crede
     // Flag off: no handoff at all — the legacy path takes over.
     if (!input.enabled) return null;
 
-    let mintAttempted = false;
+    // True only while a sign-in is really still open in the user's browser.
+    let signInPending = false;
     const existing = yield* input.readCredential.pipe(
       Effect.orElseSucceed((): Option.Option<CliTokenManager.PersistedToken> => Option.none()),
     );
     if (Option.isNone(existing)) {
       yield* input.mint({ timeout: input.mintTimeout }).pipe(
         Effect.tapError((error) =>
-          Effect.logWarning("The in-app T3 Connect mint did not finish in time", {
+          Effect.logWarning("The in-app T3 Connect mint did not finish", {
             reason: error.reason,
+          }),
+        ),
+        Effect.tapError((error) =>
+          Effect.sync(() => {
+            signInPending = error.reason === "browser_callback_timeout";
           }),
         ),
         Effect.asVoid,
         // The mint failure is ABSORBED here on purpose: create answers with the
-        // handoff's (rewritten) pending-sign-in error, not the mint's internals.
-        // The round-trip keeps running in the background; a retry rides it.
+        // handoff's error, not the mint's internals. The round-trip keeps
+        // running in the background; a retry rides it.
         Effect.orElseSucceed((): undefined => undefined),
       );
-      mintAttempted = true;
     }
 
     return yield* runCredentialHandoff({
@@ -76,7 +82,7 @@ export const dispatchCredentialHandoff = Effect.fn("cloud.session.dispatch_crede
     }).pipe(
       Effect.catchIf(
         (error) =>
-          mintAttempted &&
+          signInPending &&
           error._tag === "CloudSessionFailedError" &&
           error.reason === "connect_sign_in_required",
         () =>
