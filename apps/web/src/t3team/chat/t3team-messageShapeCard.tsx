@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-native-title-tooltip, shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-native-title-tooltip --Existing merged lint debt; keep green while preserving behavior. */
 /* oxlint-disable react/no-array-index-key -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The play-as-shape "plan" card (recipe-UX design pass) — renders the `t3team.workflow.shape`
@@ -132,7 +132,7 @@ export function T3TeamShapeStepRow({
       {!hideKindLabel && step.kind !== "agent" ? (
         <span
           className={cn(
-            "shrink-0 rounded-full border border-border/55 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+            "shrink-0 rounded-full border border-border/55 px-1.5 py-0.5 text-3xs font-medium uppercase tracking-wide",
             meta.text,
           )}
         >
@@ -158,7 +158,7 @@ export function T3TeamWorkflowShapeCard({ shape }: { shape: ProjectRecipeWorkflo
           {groups.map((group, index) => (
             <div key={`group:${index}:${group.title ?? "_"}`} className="space-y-1.5">
               {group.title ? (
-                <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/65">
+                <p className="text-3xs font-medium uppercase tracking-widest text-muted-foreground/65">
                   {group.title}
                 </p>
               ) : null}

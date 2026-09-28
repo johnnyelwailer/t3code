@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Live plan-card overlay (recipe UX "no black box" slice). Renders the same plan chrome as
  * {@link ./t3team-messageShapeCard.tsx} but overlays each step with its live runtime status
@@ -118,7 +117,7 @@ export function T3TeamWorkflowShapeLiveCard({
         meta text against the controls — full width for each instead of both truncating at once.
       */}
       <div className="mb-2 flex min-w-0 flex-col items-start gap-1 @sm/workflow-live-card:flex-row @sm/workflow-live-card:items-center @sm/workflow-live-card:justify-between">
-        <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+        <div className="flex min-w-0 items-center gap-1.5 text-2xs font-medium text-muted-foreground">
           {/*
             Below the narrow-container breakpoint the row stacks instead of a squeezed single
             line, and the slug + status were what overflowed past the card's own edge. There the

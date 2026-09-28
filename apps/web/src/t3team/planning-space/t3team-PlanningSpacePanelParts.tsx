@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-native-title-tooltip, shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-native-title-tooltip --Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Shared building blocks for the planning panel family (§7): hour formatting,
  * planning-state label/colour maps, the panel action contract, and the two
@@ -57,14 +57,14 @@ export function HourStepper({
       <button
         type="button"
         aria-label="Decrease estimate"
-        className="flex size-5 items-center justify-center rounded border border-border/70 text-[11px] text-muted-foreground hover:text-foreground"
+        className="flex size-5 items-center justify-center rounded border border-border/70 text-2xs text-muted-foreground hover:text-foreground"
         onClick={() => onChange(steppedHours(seconds, -1))}
       >
         <Minus className="size-3" />
       </button>
       <span
         className={`min-w-7 text-center tabular-nums text-primary ${
-          compact ? "text-[10px]" : "text-[12px]"
+          compact ? "text-3xs" : "text-xs"
         }`}
       >
         {formatHours(seconds)}
@@ -72,7 +72,7 @@ export function HourStepper({
       <button
         type="button"
         aria-label="Increase estimate"
-        className="flex size-5 items-center justify-center rounded border border-border/70 text-[11px] text-muted-foreground hover:text-foreground"
+        className="flex size-5 items-center justify-center rounded border border-border/70 text-2xs text-muted-foreground hover:text-foreground"
         onClick={() => onChange(steppedHours(seconds, 1))}
       >
         <Plus className="size-3" />
@@ -98,7 +98,7 @@ export function OwnerAffordance({
       data-owner-affordance="true"
       data-story-id={storyId}
       {...(subtaskId !== undefined ? { "data-subtask-id": subtaskId } : {})}
-      className={`inline-flex items-center gap-1.5 rounded-md border border-border/70 px-2 py-0.5 text-[11px] hover:border-primary/60 ${
+      className={`inline-flex items-center gap-1.5 rounded-md border border-border/70 px-2 py-0.5 text-2xs hover:border-primary/60 ${
         active ? "ring-2 ring-primary" : ""
       }`}
       title={

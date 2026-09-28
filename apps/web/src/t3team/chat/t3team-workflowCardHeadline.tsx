@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The workflow card's headline and demoted slug chip — split out of
  * `t3team-messageShapeCard.tsx` (both {@link ./t3team-messageShapeCard.tsx}'s static card and
@@ -34,7 +33,7 @@ export function T3TeamWorkflowNameChip({ name, className }: { name: string; clas
         render={
           <span
             className={cn(
-              "min-w-0 max-w-[24ch] truncate font-mono text-[10px] text-muted-foreground/70",
+              "min-w-0 max-w-[24ch] truncate font-mono text-3xs text-muted-foreground/70",
               className,
             )}
           />

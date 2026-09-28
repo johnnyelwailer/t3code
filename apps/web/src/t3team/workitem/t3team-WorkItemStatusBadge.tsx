@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { Badge } from "~/t3team/components/ui/t3team-badge";
 import { cn } from "~/t3team/lib/t3team-utils";
 import type { WorkItemStatus } from "~/t3team/workitem/t3team-workItemFieldModel";
@@ -30,7 +29,7 @@ export function WorkItemStatusBadge({
   });
 
   return (
-    <Badge variant={workItemStatusBadgeVariant(tone)} className={cn("gap-1.5", className)}>
+    <Badge variant={workItemStatusBadgeVariant(tone)} className={className}>
       <span
         aria-hidden="true"
         className={cn("size-1.5 rounded-full", workItemStatusDotClassName[tone])}

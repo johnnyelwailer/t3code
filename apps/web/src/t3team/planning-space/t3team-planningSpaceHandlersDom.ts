@@ -45,7 +45,7 @@ export function createPlanningSpaceDomHandlers(
         id,
         record.kind,
         record.el,
-        record.el.querySelector(":scope > .t3ps-inner"),
+        record.el.querySelector(':scope > [data-t3ps~="inner"]'),
       );
     }
     engine.pruneNodes(keepIds);
@@ -85,7 +85,7 @@ export function createPlanningSpaceDomHandlers(
           c.nodeEls.current.set(key, { kind, el });
           const engine = c.engineRef.current;
           if (engine) {
-            engine.registerNode(key, kind, el, el.querySelector(":scope > .t3ps-inner"));
+            engine.registerNode(key, kind, el, el.querySelector(':scope > [data-t3ps~="inner"]'));
           }
         } else {
           c.nodeEls.current.delete(key);

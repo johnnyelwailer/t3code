@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-unknown-classes -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The spatial nodes painted into the planning stage: the SVG edge lines, the
  * per-grouping anchors (owner headers / epic anchors), the story frames, and the
@@ -41,13 +40,14 @@ export function PlanningSpaceStageNodes({ c }: { c: PlanningSpaceController }) {
           const name = isUnassigned ? "Unassigned" : (vm.ownerNames.get(anchorId) ?? anchorId);
           const color = isUnassigned ? "#8a8a93" : ownerColor(anchorId);
           return (
-            <div key={anchorId} ref={nodeRef(`anchor:${anchorId}`, "owner")} className="t3ps-node">
+            <div key={anchorId} ref={nodeRef(`anchor:${anchorId}`, "owner")} data-t3ps="node">
               <div
-                className="t3ps-inner t3ps-anchor flex items-center gap-2 rounded-md px-1.5 py-1"
+                className="flex items-center gap-2 rounded-md px-1.5 py-1"
+                data-t3ps="inner anchor"
                 data-owner-header={anchorId}
               >
                 <span
-                  className="flex size-6 items-center justify-center rounded-full text-[9px] font-medium text-background"
+                  className="flex size-6 items-center justify-center rounded-full text-3xs font-medium text-background"
                   style={{
                     background: isUnassigned ? "transparent" : color,
                     border: isUnassigned ? `1.5px dashed ${color}` : "none",
@@ -56,7 +56,7 @@ export function PlanningSpaceStageNodes({ c }: { c: PlanningSpaceController }) {
                 >
                   {isUnassigned ? "?" : initialsOf(name)}
                 </span>
-                <span className="whitespace-nowrap text-[12px] text-foreground/90">{name}</span>
+                <span className="whitespace-nowrap text-xs text-foreground/90">{name}</span>
               </div>
             </div>
           );
@@ -65,22 +65,27 @@ export function PlanningSpaceStageNodes({ c }: { c: PlanningSpaceController }) {
         if (!epic) return null;
         const color = epicColor(anchorId, vm.data.epicOrder);
         return (
-          <div key={anchorId} ref={nodeRef(`anchor:${anchorId}`, "epic")} className="t3ps-node">
-            <div className="t3ps-inner">
+          <div key={anchorId} ref={nodeRef(`anchor:${anchorId}`, "epic")} data-t3ps="node">
+            <div data-t3ps="inner">
               <div
-                className="t3ps-anchor relative flex size-14 items-center justify-center rounded-full border-[1.5px] text-[11px]"
+                className="relative flex size-14 items-center justify-center rounded-full border-2 text-2xs"
+                data-t3ps="anchor"
                 data-epic-anchor={anchorId}
                 style={{ borderColor: color, color }}
               >
                 {formatHours(epic.totalHoursSeconds)}
-                <div className="t3ps-elabel pointer-events-none absolute bottom-[60px] left-1/2 -translate-x-1/2 text-center">
+                <div
+                  className="pointer-events-none absolute bottom-[60px] left-1/2 -translate-x-1/2 text-center"
+                  data-t3ps="elabel"
+                >
                   <div
-                    className="t3ps-ename line-clamp-2 text-[12px] font-medium leading-snug"
+                    className="line-clamp-2 text-xs font-medium leading-snug"
+                    data-t3ps="ename"
                     style={{ color }}
                   >
                     {epic.title}
                   </div>
-                  <div className="t3ps-estat mt-0.5 text-[9.5px] text-muted-foreground">
+                  <div className="mt-0.5 text-3xs text-muted-foreground" data-t3ps="estat">
                     {epic.storyIds.length} items · {formatHours(epic.totalHoursSeconds)} ·{" "}
                     {epic.readyCount} ready
                   </div>
@@ -104,7 +109,7 @@ export function PlanningSpaceStageNodes({ c }: { c: PlanningSpaceController }) {
       ))}
 
       {c.allMode ? (
-        <div className="t3ps-allov absolute inset-0 z-20 bg-background/95">
+        <div className="absolute inset-0 z-20 bg-background/95" data-t3ps="allov">
           {vm.allTiles.map((tile) => {
             const epic = vm.epicById.get(tile.epicId);
             if (!epic) return null;
@@ -123,13 +128,10 @@ export function PlanningSpaceStageNodes({ c }: { c: PlanningSpaceController }) {
                   borderColor: `${color}66`,
                 }}
               >
-                <span
-                  className="line-clamp-2 text-[12px] font-medium leading-snug"
-                  style={{ color }}
-                >
+                <span className="line-clamp-2 text-xs font-medium leading-snug" style={{ color }}>
                   {epic.title}
                 </span>
-                <span className="mt-auto text-[10.5px] tabular-nums text-muted-foreground">
+                <span className="mt-auto text-2xs tabular-nums text-muted-foreground">
                   {epic.storyIds.length} items · {formatHours(epic.totalHoursSeconds)} ·{" "}
                   {epic.readyCount} ready
                 </span>
@@ -149,7 +151,7 @@ export function PlanningSpaceStageNodes({ c }: { c: PlanningSpaceController }) {
               </button>
             );
           })}
-          <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10.5px] text-muted-foreground">
+          <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-2xs text-muted-foreground">
             Epic overview — double-click a tile to enter its cluster
           </span>
         </div>
