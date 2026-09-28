@@ -48,6 +48,7 @@ import {
   SYNTHETIC_CLAUDE_STANDARD_MODEL,
   SYNTHETIC_CLAUDE_THINKING_MODEL,
 } from "../ClaudeModelCatalog.testFixtures.ts";
+import { BUNDLED_CLAUDE_MODEL_CATALOG, type ClaudeModelCatalog } from "../ClaudeModelCatalog.ts";
 import { ProviderAdapterProcessError, ProviderAdapterValidationError } from "../Errors.ts";
 import type { ClaudeAdapterShape } from "../Services/ClaudeAdapter.ts";
 import type { ClaudeScopedLimitNames } from "./claudeUsageLimits.ts";
@@ -174,6 +175,8 @@ function makeHarness(config?: {
   readonly environment?: ClaudeAdapterLiveOptions["environment"];
   readonly getSessionMessages?: ClaudeAdapterLiveOptions["getSessionMessages"];
   readonly forkSession?: ClaudeAdapterLiveOptions["forkSession"];
+  /** Real-model tests use the bundled catalog, the production default. */
+  readonly modelCatalog?: ClaudeModelCatalog;
 }) {
   const query = new FakeClaudeQuery();
   const queries = [query];
@@ -188,7 +191,7 @@ function makeHarness(config?: {
     ...(config?.environment ? { environment: config.environment } : {}),
     ...(config?.instanceId ? { instanceId: config.instanceId } : {}),
     ...(config?.scopedLimitNames ? { scopedLimitNames: config.scopedLimitNames } : {}),
-    modelCatalog: Effect.succeed(SYNTHETIC_CLAUDE_MODEL_CATALOG),
+    modelCatalog: Effect.succeed(config?.modelCatalog ?? SYNTHETIC_CLAUDE_MODEL_CATALOG),
     ...(config?.getSessionMessages ? { getSessionMessages: config.getSessionMessages } : {}),
     ...(config?.forkSession ? { forkSession: config.forkSession } : {}),
     createQuery: (input) => {
@@ -636,7 +639,7 @@ describe("ClaudeAdapterLive", () => {
   });
 
   it.effect("forwards Claude thinking toggle for models that support it", () => {
-    const harness = makeHarness();
+    const harness = makeHarness({ modelCatalog: BUNDLED_CLAUDE_MODEL_CATALOG });
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
       yield* adapter.startSession({
@@ -659,7 +662,7 @@ describe("ClaudeAdapterLive", () => {
   });
 
   it.effect("preserves xhigh effort for Claude Fable 5.1", () => {
-    const harness = makeHarness();
+    const harness = makeHarness({ modelCatalog: BUNDLED_CLAUDE_MODEL_CATALOG });
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
       yield* adapter.startSession({
@@ -682,7 +685,7 @@ describe("ClaudeAdapterLive", () => {
   });
 
   it.effect("preserves xhigh effort for Claude Fable 5", () => {
-    const harness = makeHarness();
+    const harness = makeHarness({ modelCatalog: BUNDLED_CLAUDE_MODEL_CATALOG });
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
       yield* adapter.startSession({
@@ -705,7 +708,7 @@ describe("ClaudeAdapterLive", () => {
   });
 
   it.effect("preserves xhigh effort for Claude Opus 5", () => {
-    const harness = makeHarness();
+    const harness = makeHarness({ modelCatalog: BUNDLED_CLAUDE_MODEL_CATALOG });
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
       yield* adapter.startSession({
@@ -728,7 +731,7 @@ describe("ClaudeAdapterLive", () => {
   });
 
   it.effect("falls back to default effort when unsupported max is requested for Sonnet 4.6", () => {
-    const harness = makeHarness();
+    const harness = makeHarness({ modelCatalog: BUNDLED_CLAUDE_MODEL_CATALOG });
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
       yield* adapter.startSession({
@@ -774,7 +777,7 @@ describe("ClaudeAdapterLive", () => {
   });
 
   it.effect("forwards Claude thinking toggle into SDK settings for Haiku 4.5", () => {
-    const harness = makeHarness();
+    const harness = makeHarness({ modelCatalog: BUNDLED_CLAUDE_MODEL_CATALOG });
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
       yield* adapter.startSession({
