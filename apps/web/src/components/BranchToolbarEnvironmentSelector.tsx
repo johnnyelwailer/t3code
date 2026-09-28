@@ -50,6 +50,8 @@ export interface BranchToolbarEnvironmentSelectorProps {
    * one-click "New cloud session". Absent hides the action item entirely.
    */
   onCreateCloudSession?: () => void;
+  /** The duration "New cloud session" will run for (e.g. "4h"), shown on the item. */
+  cloudSessionDurationLabel?: string;
   /**
    * Present when a primary environment exists but the server has no provider
    * configured yet: the menu offers "Set up cloud sessions", which leaves for
@@ -80,6 +82,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   onEnvironmentChange,
   pendingCloudSessions,
   onCreateCloudSession,
+  cloudSessionDurationLabel,
   onSetupCloudSessions,
   onCloudSessionAction,
   onCloudMenuOpenChange,
@@ -317,6 +320,9 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                 <span className="inline-flex items-center gap-1.5">
                   <CloudIcon className="size-3" aria-hidden="true" />
                   New cloud session
+                  {cloudSessionDurationLabel ? (
+                    <span className="text-muted-foreground">· {cloudSessionDurationLabel}</span>
+                  ) : null}
                 </span>
               </button>
             </SelectGroup>

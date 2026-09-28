@@ -56,6 +56,9 @@ export function CloudSessionProvisionPanel({
   pendingSessionId = null,
   pendingKind = null,
   pendingLabel = null,
+  historyUrl = null,
+  onSessionForget,
+  canForgetSession,
   empty = null,
 }: {
   readonly sessions: ReadonlyArray<CloudSession>;
@@ -73,6 +76,12 @@ export function CloudSessionProvisionPanel({
   readonly pendingKind?: "connect" | "cancel" | "stop" | null;
   /** Label for the in-flight primary button (Connect/Cancel); defaults to "Working…". */
   readonly pendingLabel?: string | null;
+  /** The provider's page with every session, linked from the capped history. */
+  readonly historyUrl?: string | null;
+  /** Forget a ready machine's saved connection (the panel owns the lifecycle). */
+  readonly onSessionForget?: ((session: CloudSession) => void) | undefined;
+  /** Whether that session's machine is saved here, so Forget would do something. */
+  readonly canForgetSession?: ((session: CloudSession) => boolean) | undefined;
   readonly empty?: ReactNode;
 }) {
   const handleCreate = useCallback(() => {
@@ -152,19 +161,13 @@ export function CloudSessionProvisionPanel({
           <>
             {activeSessions.length === 0
               ? (empty ?? (
+                  // Text only: the header's "New session" is the one start
+                  // affordance, and it sits beside the duration it will use.
                   <div className="px-3 py-8 text-center sm:px-4">
                     <p className="text-muted-foreground text-xs">No active cloud sessions.</p>
                     <p className="text-muted-foreground/80 text-xs">
-                      Start one — it will appear here as soon as it is ready.
+                      Start one with New session — it will appear here as soon as it is ready.
                     </p>
-                    <Button
-                      size="sm"
-                      className="mt-3"
-                      disabled={createPending}
-                      onClick={handleCreate}
-                    >
-                      {createPending ? "Starting…" : "New session"}
-                    </Button>
                   </div>
                 ))
               : activeSessions.map((session) => {
@@ -175,6 +178,7 @@ export function CloudSessionProvisionPanel({
                       session={session}
                       onAction={onSessionAction}
                       onSecondaryAction={onSessionSecondaryAction}
+                      onForget={canForgetSession?.(session) ? onSessionForget : undefined}
                       actionPending={isThisPending && pendingKind !== "stop"}
                       secondaryActionPending={isThisPending && pendingKind === "stop"}
                       pendingLabel={pendingLabel}
@@ -185,6 +189,7 @@ export function CloudSessionProvisionPanel({
               <CloudSessionHistoryDisclosure
                 sessions={historySessions}
                 hiddenCount={hiddenHistoryCount}
+                historyUrl={historyUrl}
               />
             )}
           </>

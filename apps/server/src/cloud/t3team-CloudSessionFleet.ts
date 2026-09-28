@@ -43,3 +43,13 @@ export const resolveFleetConfig = Effect.fn("cloud.session_service.fleet")(funct
   );
   return { repoRef, machineLabel } satisfies CloudSessionFleetConfig;
 });
+
+/**
+ * The provider's page listing every run of the session workflow, filtered to
+ * one login — the full history the client caps at a handful of rows. Built
+ * from the fleet config because no single run's `html_url` names the workflow.
+ */
+export function workflowHistoryUrl(repoRef: CloudSessionRepoRef, login: string): string {
+  const base = `https://${repoRef.host}/${repoRef.owner}/${repoRef.repo}/actions/workflows/${encodeURIComponent(repoRef.workflowFileName)}`;
+  return `${base}?query=${encodeURIComponent(`actor:${login}`)}`;
+}

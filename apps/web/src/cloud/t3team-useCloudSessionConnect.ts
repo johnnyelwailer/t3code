@@ -36,24 +36,11 @@ export function useCloudSessionConnect(input: {
   primaryEnvironmentId: EnvironmentId | null;
   environmentIdsBefore: ReadonlySet<string> | null;
   register: RegisterRelay;
-  /**
-   * Fires once, when a session's machine is actually registered, with the
-   * session->environment link. Finding 8's "Stop this machine" affordance
-   * consumes this to match a saved machine back to its live session.
-   */
-  onRegistered?: (sessionId: string, environmentId: EnvironmentId) => void;
 }): {
   readonly connectPendingSessionId: string | null;
   readonly requestConnect: (sessionId: string) => void;
 } {
-  const {
-    sessions,
-    relayCandidates,
-    primaryEnvironmentId,
-    environmentIdsBefore,
-    register,
-    onRegistered,
-  } = input;
+  const { sessions, relayCandidates, primaryEnvironmentId, environmentIdsBefore, register } = input;
   const [connectRequestId, setConnectRequestId] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
   const firedForRef = useRef<string | null>(null);
@@ -95,7 +82,6 @@ export function useCloudSessionConnect(input: {
       .then((result) => {
         if (result._tag === "Success") {
           toastManager.add({ type: "success", title: `Connected to ${target.label}.` });
-          onRegistered?.(connectRequestId, target.environmentId);
         } else if (!isAtomCommandInterrupted(result)) {
           toastManager.add({
             type: "error",
@@ -111,7 +97,6 @@ export function useCloudSessionConnect(input: {
     primaryEnvironmentId,
     environmentIdsBefore,
     register,
-    onRegistered,
   ]);
 
   const requestConnect = useCallback((sessionId: string) => {

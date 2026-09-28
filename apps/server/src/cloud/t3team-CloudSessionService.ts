@@ -15,7 +15,8 @@ import * as CliTokenManager from "./CliTokenManager.ts";
 import { cancelRunInvocation } from "./t3team-githubActionsSessionClient.ts";
 import { isSessionCredentialIssueEnabled } from "./t3team-CloudSessionCredential.ts";
 import { makeSessionGh } from "./t3team-CloudSessionGh.ts";
-import { resolveFleetConfig } from "./t3team-CloudSessionFleet.ts";
+import { resolveFleetConfig, workflowHistoryUrl } from "./t3team-CloudSessionFleet.ts";
+import { makeFailureReasonCache } from "./t3team-cloudSessionFailureReason.ts";
 import { ConnectCredentialMinter } from "./t3team-ConnectCredentialMinter.ts";
 import { dispatchAndDiscoverSession } from "./t3team-CloudSessionDispatch.ts";
 import { dispatchCredentialHandoff } from "./t3team-CloudSessionMintGate.ts";
@@ -75,6 +76,7 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
   // `t3team-CloudSessionGh`; here we only orchestrate list/create/cancel on top.
   const gh = makeSessionGh(github, repoRef, cwd);
   const payloadCleanup = yield* makePayloadIssueCleanup(repoRef, gh.run);
+  const failureReasons = makeFailureReasonCache();
 
   const list: CloudSessionService["Service"]["list"] = Effect.gen(function* () {
     // Hard isolation: resolve who the caller is BEFORE fetching, and scope the
@@ -86,7 +88,7 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
     const projected = yield* Effect.forEach(
       runs.slice(0, SESSION_DISPLAY_LIMIT),
       (run) =>
-        projectCloudSession(run, nowMs, machineLabel, repoRef, gh.run).pipe(
+        projectCloudSession(run, nowMs, machineLabel, repoRef, gh.run, failureReasons).pipe(
           Effect.map((session) => ({ run, session })),
         ),
       { concurrency: 4 },
@@ -94,7 +96,8 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
     // Delete the credential payloads of sessions that have spent them.
     yield* payloadCleanup.sweep(projected);
     const sessions = projected.map((entry) => entry.session);
-    return { sessions, configured: true } satisfies CloudSessionListResult;
+    const historyUrl = workflowHistoryUrl(repoRef, login);
+    return { sessions, configured: true, historyUrl } satisfies CloudSessionListResult;
   }).pipe(
     // A server with no `gh` at all cannot ever start a session, so report it as
     // unconfigured and let the client offer setup.

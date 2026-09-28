@@ -1,4 +1,7 @@
+import type { CloudSession } from "@t3tools/contracts";
 import { useEffect } from "react";
+
+import { isCloudSessionProvisionPending } from "~/components/cloud/t3team-cloudSessionProvisionPresentation";
 
 /**
  * Polling the cloud session list while a surface that shows it is active.
@@ -14,6 +17,27 @@ import { useEffect } from "react";
 
 /** Floor between two list refreshes, across every surface and trigger. */
 export const CLOUD_SESSION_MIN_REFRESH_GAP_MS = 5_000;
+
+/**
+ * Cadence while nothing is provisioning. Only a pending session changes phase
+ * every few seconds; a list of ready or finished sessions moves on the scale of
+ * minutes, so polling it at the busy cadence just spends GHE calls.
+ */
+export const CLOUD_SESSION_IDLE_REFRESH_INTERVAL_MS = 30_000;
+
+/**
+ * The poll interval for a session list: the busy cadence (never below the
+ * shared floor) while any session is still provisioning, the idle one otherwise.
+ */
+export function cloudSessionPollIntervalMs(
+  sessions: readonly Pick<CloudSession, "phase">[],
+  busyIntervalMs: number,
+): number {
+  const busy = sessions.some((session) => isCloudSessionProvisionPending(session.phase));
+  return busy
+    ? Math.max(busyIntervalMs, CLOUD_SESSION_MIN_REFRESH_GAP_MS)
+    : CLOUD_SESSION_IDLE_REFRESH_INTERVAL_MS;
+}
 
 /** Whether the window is hidden, and a way to hear when that changes. */
 export interface CloudSessionPollingVisibility {
@@ -36,7 +60,7 @@ const documentVisibility = (): CloudSessionPollingVisibility =>
  * A per-key minimum gap: `acquire(key)` is true (and starts a new gap) only
  * when at least `minGapMs` passed since the last successful acquire.
  */
-export function createRefreshGate(minGapMs: number, now: () => number = Date.now) {
+export function createRefreshGate(minGapMs: number, now: () => number = () => Date.now()) {
   const lastAt = new Map<string, number>();
   return (key: string): boolean => {
     const at = now();

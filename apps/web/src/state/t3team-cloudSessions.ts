@@ -19,15 +19,23 @@ export interface CloudSessionListState {
    * from "no sessions": one means offer setup, the other means offer a button.
    */
   readonly configured: boolean;
+  /** The provider's full-history page for this user; null when not offered. */
+  readonly historyUrl: string | null;
 }
 
 const NO_ENVIRONMENT: CloudSessionListState = {
   sessions: [],
   loading: false,
   configured: true,
+  historyUrl: null,
 };
 
-const LOADING: CloudSessionListState = { sessions: [], loading: true, configured: true };
+const LOADING: CloudSessionListState = {
+  sessions: [],
+  loading: true,
+  configured: true,
+  historyUrl: null,
+};
 
 /**
  * Cloud sessions on the primary environment.
@@ -50,6 +58,7 @@ export const cloudSessionListAtom = Atom.make<CloudSessionListState>((get) => {
     sessions: value.value.sessions,
     loading: false,
     configured: value.value.configured,
+    historyUrl: value.value.historyUrl ?? null,
   };
 }).pipe(Atom.withLabel("web-cloud-sessions"));
 
