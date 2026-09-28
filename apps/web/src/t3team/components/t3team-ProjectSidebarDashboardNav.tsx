@@ -1,17 +1,13 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle, shadcn/require-static-classes -- Existing merged lint debt; keep green while preserving behavior. */
 import { ChevronRightIcon } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
-import { SidebarMenuSubButton } from "~/t3team/components/ui/t3team-sidebar";
+import { T3SidebarSubRow } from "~/t3team/components/ui/t3team-sidebar-row";
 import {
   T3TeamAgentContextDropOverlay,
   useT3TeamAgentContextDropTarget,
 } from "~/t3team/t3team-agentContextDrag";
 import { useT3TeamPinnedSidebarStore } from "~/t3team/t3team-pinnedSidebarStore";
 import { useT3TeamSidebarNavPreferencesStore } from "~/t3team/t3team-sidebarNavPreferencesStore";
-import {
-  getSidebarStandaloneButtonClassName,
-  type SidebarItemState,
-} from "./t3team-projectSidebarItemState";
+import type { SidebarItemState } from "./t3team-projectSidebarItemState";
 
 type ProjectSidebarDashboardNavProps = {
   backlogState: SidebarItemState;
@@ -105,31 +101,24 @@ export function ProjectSidebarDashboardNav({
     <>
       <div className="mx-1 mt-1 mb-1.5 flex w-full flex-col gap-0.5 overflow-hidden px-1.5 py-0.5">
         <div className="w-full">
-          <SidebarMenuSubButton
-            size="sm"
-            isActive={backlogState.isSelected}
-            className={`h-7 w-full translate-x-0 justify-start px-2 text-left text-[11px] ${getSidebarStandaloneButtonClassName(
-              backlogState,
-            )}`}
-            onClick={onSelectBacklog}
-          >
+          <T3SidebarSubRow size="xs" isActive={backlogState.isSelected} onClick={onSelectBacklog}>
             <span className="truncate">Backlog</span>
-          </SidebarMenuSubButton>
+          </T3SidebarSubRow>
         </div>
 
         {backlogContent}
 
         <div className="group/my-work-row relative w-full" {...dropProps}>
-          <SidebarMenuSubButton
-            size="sm"
+          <T3SidebarSubRow
+            size="xs"
+            hoverGroup="my-work-row"
             isActive={myWorkState.isSelected}
-            className={`h-7 w-full translate-x-0 justify-start px-2 pr-7 text-left text-[11px] group-hover/my-work-row:bg-accent group-hover/my-work-row:text-foreground group-focus-within/my-work-row:bg-accent group-focus-within/my-work-row:text-foreground ${getSidebarStandaloneButtonClassName(
-              myWorkState,
-            )}`}
+            // Keeps the label clear of the expand toggle overlaid on the row's end.
+            className="pr-7"
             onClick={onSelectMyWork}
           >
             <span className="truncate">My work</span>
-          </SidebarMenuSubButton>
+          </T3SidebarSubRow>
           <T3TeamAgentContextDropOverlay
             active={isPinDropActive}
             label="Drop to pin this item in My work"

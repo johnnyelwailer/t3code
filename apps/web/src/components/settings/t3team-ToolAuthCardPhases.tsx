@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 "use client";
 
 import { CheckIcon, CopyIcon, ExternalLinkIcon } from "lucide-react";
@@ -47,9 +46,9 @@ export function InstallingPhase({ label, installLog }: InstallingPhaseProps) {
         Installing {label}…
       </div>
       {progressLine ? (
-        <p className="truncate font-mono text-[11px] text-muted-foreground/70">{progressLine}</p>
+        <p className="truncate font-mono text-2xs text-muted-foreground/70">{progressLine}</p>
       ) : null}
-      <p className="text-[11px] text-muted-foreground/70">
+      <p className="text-2xs text-muted-foreground/70">
         Signing in starts automatically once the install finishes.
       </p>
     </div>
@@ -102,7 +101,7 @@ export function AwaitingOpenPhase({ label, url, displayCode, onCancel }: Awaitin
           </Button>
         </div>
       ) : null}
-      <Button size="xs" variant="ghost" className="w-fit text-muted-foreground" onClick={onCancel}>
+      <Button size="xs" variant="ghost-muted" className="w-fit" onClick={onCancel}>
         Cancel
       </Button>
     </div>

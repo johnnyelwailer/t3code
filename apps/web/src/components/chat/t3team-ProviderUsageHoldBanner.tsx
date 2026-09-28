@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Provider usage-hold banner (GHE #421, auto-resume layer).
  *
@@ -182,7 +181,7 @@ export function ProviderUsageHoldToggle(props: {
           >
             <span
               className={`relative inline-flex h-3.5 w-6 shrink-0 items-center rounded-full transition-colors ${
-                props.autoResume ? "bg-emerald-500/80" : "bg-muted-foreground/30"
+                props.autoResume ? "bg-success/80" : "bg-muted-foreground/30"
               }`}
               aria-hidden="true"
             >
@@ -192,7 +191,7 @@ export function ProviderUsageHoldToggle(props: {
                 }`}
               />
             </span>
-            <span className="text-[10px] text-muted-foreground">auto-resume</span>
+            <span className="text-3xs text-muted-foreground">auto-resume</span>
           </button>
         }
       />

@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { APP_DISPLAY_NAME } from "~/t3team/t3team-branding";
@@ -146,7 +145,7 @@ export function T3TeamCommandPalette(props: T3TeamCommandPaletteProps) {
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandDialogPopup
         aria-label={`${APP_DISPLAY_NAME} search`}
-        className="overflow-hidden p-0"
+        className="overflow-hidden"
         finalFocus={() => false}
         onBackdropPointerDown={() => {
           onOpenChange(false);

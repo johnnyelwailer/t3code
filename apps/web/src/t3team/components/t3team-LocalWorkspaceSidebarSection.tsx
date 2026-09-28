@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { FolderPlusIcon } from "lucide-react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { SidebarGroup, SidebarMenu, SidebarMenuItem } from "~/t3team/components/ui/t3team-sidebar";
@@ -46,9 +45,9 @@ export function LocalWorkspaceSidebarSection({
   );
 
   return (
-    <SidebarGroup className="px-2 py-2">
+    <SidebarGroup>
       <div className="group/workspaces-header mb-1 flex items-center justify-between pl-2 pr-1.5">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+        <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground/60">
           Local workspaces
         </span>
         <div className="flex items-center gap-1 opacity-0 transition-opacity duration-150 pointer-events-none group-hover/workspaces-header:opacity-100 group-hover/workspaces-header:pointer-events-auto group-focus-within/workspaces-header:opacity-100 group-focus-within/workspaces-header:pointer-events-auto">
@@ -79,7 +78,7 @@ export function LocalWorkspaceSidebarSection({
             activityLabelsEnabled,
           });
           return (
-            <SidebarMenuItem key={project.id} className="mb-2 rounded-md last:mb-0">
+            <SidebarMenuItem key={project.id} className="mb-2 last:mb-0">
               <LocalWorkspaceSidebarRow
                 project={project}
                 projectThreads={projectThreads}
@@ -101,7 +100,7 @@ export function LocalWorkspaceSidebarSection({
         })}
 
         {looseWorkspaceProjects.length === 0 ? (
-          <div className="px-2 py-1 text-[10px] text-muted-foreground/50">No local workspaces</div>
+          <div className="px-2 py-1 text-3xs text-muted-foreground/50">No local workspaces</div>
         ) : null}
       </SidebarMenu>
     </SidebarGroup>

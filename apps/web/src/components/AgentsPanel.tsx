@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-unknown-classes -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Agents right-panel surface: the fleet view over the native subagent fold.
  * The chat carries one expandable row per spawn batch and links here.
@@ -528,7 +527,7 @@ export function AgentsPanel({
   }
 
   return (
-    <div className="t3team-agp flex h-full min-h-0 flex-col">
+    <div data-t3team-agents-panel="" className="flex h-full min-h-0 flex-col">
       <ScrollArea className="min-h-0 flex-1">
         {model.hasAgents ? (
           <div className="flex flex-col gap-2 p-2">

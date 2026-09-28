@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { useEffect, useMemo, useState } from "react";
 import { buildAtlassianAssetContentUrl } from "~/t3team/t3team-atlassianAssetUrls";
 
@@ -150,7 +149,7 @@ export function ProjectAvatar({
 
   return (
     <div className={fallbackClassName} style={{ background: color }} aria-hidden="true">
-      <span className="text-[10px] font-semibold text-white">{shortKey}</span>
+      <span className="text-3xs font-semibold text-white">{shortKey}</span>
     </div>
   );
 }

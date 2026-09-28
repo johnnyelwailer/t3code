@@ -1,5 +1,4 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
-import { SidebarMenuSub } from "~/t3team/components/ui/t3team-sidebar";
+import { T3SidebarSubList } from "~/t3team/components/ui/t3team-sidebar-row";
 
 import { ProjectSidebarThreadOverflowToggle } from "./t3team-ProjectSidebarThreadOverflowToggle";
 import { ProjectSidebarThreadRowItem } from "./t3team-ProjectSidebarThreadRow";
@@ -33,7 +32,7 @@ export function ProjectSidebarProjectThreadSection({
 }: ProjectSidebarProjectThreadSectionProps) {
   const activeThreadId = readActiveThreadIdFromView(view);
   return (
-    <SidebarMenuSub className="mx-1 mt-1 mb-1.5 w-full translate-x-0 gap-0.5 overflow-hidden px-1.5 py-0.5">
+    <T3SidebarSubList className="mx-1 mt-1 mb-1.5 w-full overflow-hidden">
       {visibleThreads.map((thread) => (
         <ProjectSidebarThreadRowItem
           key={thread.id}
@@ -52,6 +51,6 @@ export function ProjectSidebarProjectThreadSection({
           onToggle={() => onExpandedThreadListChange(!expandedThreadList)}
         />
       ) : null}
-    </SidebarMenuSub>
+    </T3SidebarSubList>
   );
 }

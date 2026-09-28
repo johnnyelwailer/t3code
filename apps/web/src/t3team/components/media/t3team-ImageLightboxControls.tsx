@@ -1,12 +1,7 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { ChevronLeft, ChevronRight, ExternalLink, Maximize, Minimize } from "lucide-react";
 
 import { Button } from "~/t3team/components/ui/t3team-button";
-import { cn } from "~/t3team/lib/t3team-utils";
 import type { T3TeamLightboxZoom } from "./t3team-imageLightboxState";
-
-const NAV_BUTTON_CLASS =
-  "absolute top-1/2 z-10 -translate-y-1/2 bg-background/70 text-foreground backdrop-blur-sm hover:bg-background/90";
 
 /** The two edge-anchored arrow buttons, shown only when the gallery has more than one image. */
 export function T3TeamImageLightboxNav({
@@ -20,20 +15,20 @@ export function T3TeamImageLightboxNav({
     <>
       <Button
         type="button"
-        variant="ghost"
+        variant="glass"
         size="icon"
         aria-label="Previous image"
-        className={cn(NAV_BUTTON_CLASS, "start-3")}
+        className="absolute start-3 top-1/2 z-10 -translate-y-1/2"
         onClick={onPrev}
       >
         <ChevronLeft />
       </Button>
       <Button
         type="button"
-        variant="ghost"
+        variant="glass"
         size="icon"
         aria-label="Next image"
-        className={cn(NAV_BUTTON_CLASS, "end-3")}
+        className="absolute end-3 top-1/2 z-10 -translate-y-1/2"
         onClick={onNext}
       >
         <ChevronRight />

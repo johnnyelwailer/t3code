@@ -1,10 +1,9 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle, shadcn/require-static-classes -- Existing merged lint debt; keep green while preserving behavior. */
 import type { AgentContextCapabilities } from "~/t3team/t3team-agentContext";
 import {
   T3TeamAgentContextDropOverlay,
   useT3TeamAgentContextDrag,
 } from "~/t3team/t3team-agentContextDrag";
-import { SidebarMenuSubButton } from "~/t3team/components/ui/t3team-sidebar";
+import { T3SidebarSubRow } from "~/t3team/components/ui/t3team-sidebar-row";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
 import { JiraIssueTypeIcon } from "~/t3team/components/ticket/t3team-JiraIssueType";
 import { TicketCardDetailsTooltip } from "~/t3team/t3team-TicketCardDetailsTooltip";
@@ -15,11 +14,7 @@ import { LinkExternalIcon } from "@primer/octicons-react";
 import { EllipsisIcon, MessageSquareIcon } from "lucide-react";
 
 import { useProjectSidebarNavItemDnd } from "./t3team-useProjectSidebarNavItemDnd";
-import {
-  getSidebarSurfaceClassName,
-  getSidebarWrappedButtonClassName,
-  type SidebarItemState,
-} from "./t3team-projectSidebarItemState";
+import type { SidebarItemState } from "./t3team-projectSidebarItemState";
 import { useAutoScrollIntoView } from "./t3team-useAutoScrollIntoView";
 
 export function PinnedTicketRow({
@@ -56,7 +51,7 @@ export function PinnedTicketRow({
 
   return (
     <div
-      className={`group/pinned-ticket relative ${getSidebarSurfaceClassName(state)}`}
+      className="group/pinned-ticket relative"
       onContextMenu={onContextMenu}
       {...dropProps}
       draggable={dragProps.draggable}
@@ -71,13 +66,13 @@ export function PinnedTicketRow({
       <Tooltip>
         <TooltipTrigger
           render={
-            <SidebarMenuSubButton
+            <T3SidebarSubRow
               ref={rowRef}
-              size="sm"
+              size="two-line"
+              hoverGroup="pinned-ticket"
               isActive={state.isSelected}
-              className={`h-auto min-h-8 w-full cursor-grab flex-col items-start px-2 py-1 pr-7 group-hover/pinned-ticket:bg-accent group-hover/pinned-ticket:text-foreground group-focus-within/pinned-ticket:bg-accent group-focus-within/pinned-ticket:text-foreground active:cursor-grabbing ${getSidebarWrappedButtonClassName(
-                state,
-              )}`}
+              // Keeps the id clear of the actions button overlaid on the row's end.
+              className="-translate-x-px cursor-grab pr-7 active:cursor-grabbing"
               onClick={() => onSelectTicket(projectId, ticket.id)}
             />
           }
@@ -87,10 +82,10 @@ export function PinnedTicketRow({
               issueType={ticket.issueType}
               issueTypeIconUrl={ticket.issueTypeIconUrl ?? ticket.ref.issueTypeIconUrl}
             />
-            <span className="truncate text-[11px] font-medium">{ticket.ref.displayId}</span>
-            <span className="ml-1 text-[10px] text-muted-foreground/75">{ticket.status}</span>
+            <span className="truncate text-2xs font-medium">{ticket.ref.displayId}</span>
+            <span className="ml-1 text-3xs text-muted-foreground/75">{ticket.status}</span>
           </div>
-          <div className="w-full truncate text-[10px] leading-tight text-muted-foreground/70">
+          <div className="w-full truncate text-3xs leading-tight text-muted-foreground/70">
             {ticket.ref.title}
           </div>
         </TooltipTrigger>
@@ -131,36 +126,34 @@ export function PinnedTicketFallbackRow({
   const rowRef = useAutoScrollIntoView<HTMLAnchorElement>(state.isOpen);
 
   return (
-    <div className={`group/pinned-ticket relative ${getSidebarSurfaceClassName(state)}`}>
-      <SidebarMenuSubButton
+    <div className="group/pinned-ticket relative">
+      <T3SidebarSubRow
         ref={rowRef}
-        size="sm"
+        size="two-line"
         isActive={state.isSelected}
-        className={`h-auto min-h-8 w-full flex-col items-start px-2 py-1 ${getSidebarWrappedButtonClassName(
-          state,
-        )}`}
+        className="-translate-x-px"
         onClick={() => onSelectTicket(projectId, ticketId)}
       >
         <div className="flex w-full items-center gap-1">
           <MessageSquareIcon className="size-3 shrink-0 text-muted-foreground/70" />
-          <span className="truncate text-[11px] font-medium">{ticketDisplayId}</span>
-          <span className="ml-1 text-[10px] text-muted-foreground/75">Thread</span>
+          <span className="truncate text-2xs font-medium">{ticketDisplayId}</span>
+          <span className="ml-1 text-3xs text-muted-foreground/75">Thread</span>
         </div>
-        <div className="w-full truncate text-[10px] leading-tight text-muted-foreground/70">
+        <div className="w-full truncate text-3xs leading-tight text-muted-foreground/70">
           {title}
         </div>
-      </SidebarMenuSubButton>
+      </T3SidebarSubRow>
     </div>
   );
 }
 
 export function PinnedGitHubActivityRow({
   item,
-  state,
   onContextMenu,
   getItemDragCapabilities,
 }: {
   item: GitHubWorkActivityItem;
+  /** Accepted for parity with the other pinned rows; an activity row is never selected. */
   state: SidebarItemState;
   onContextMenu: (event: React.MouseEvent) => void;
   getItemDragCapabilities?: (item: GitHubWorkActivityItem) => AgentContextCapabilities;
@@ -174,30 +167,31 @@ export function PinnedGitHubActivityRow({
 
   return (
     <div
-      className={`group/pinned-ticket relative ${getSidebarSurfaceClassName(state)}`}
+      className="group/pinned-ticket relative"
       onContextMenu={onContextMenu}
       draggable={dragProps.draggable}
       onDragStart={dragProps.onDragStart}
       onDragEnd={dragProps.onDragEnd}
     >
-      <SidebarMenuSubButton
-        size="sm"
-        className="h-auto min-h-8 w-full flex-col items-start px-2 py-1"
+      <T3SidebarSubRow
+        size="two-line"
+        tone="rail"
+        className="-translate-x-px"
         render={linkTarget ? <a href={linkTarget} target="_blank" rel="noreferrer" /> : <div />}
       >
         <div className="flex w-full items-center gap-1">
           <visual.Icon className={`size-3 shrink-0 ${visual.iconClassName}`} />
-          <span className="truncate text-[11px] font-medium">
+          <span className="truncate text-2xs font-medium">
             {item.subjectTitle ?? item.repository}
           </span>
           {linkTarget ? (
             <LinkExternalIcon className="ml-auto size-3 shrink-0 text-muted-foreground/70" />
           ) : null}
         </div>
-        <div className="w-full truncate text-[10px] leading-tight text-muted-foreground/70">
+        <div className="w-full truncate text-3xs leading-tight text-muted-foreground/70">
           {item.repository}
         </div>
-      </SidebarMenuSubButton>
+      </T3SidebarSubRow>
     </div>
   );
 }

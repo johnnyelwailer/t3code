@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Memory-pressure banner on a thread (flag `NEXI_FF_RESOURCE_PRESSURE`,
  * advertised as `ServerConfig.resourcePressure`; off = no query, no item).
@@ -51,7 +50,7 @@ export function useResourcePressureBannerItem(input: {
     id: "resource-pressure",
     variant: paused !== null || level === "critical" ? "warning" : "info",
     priority: paused !== null ? "urgent" : "notice",
-    icon: <span className="size-1.5 rounded-full bg-amber-500" aria-hidden="true" />,
+    icon: <span className="size-1.5 rounded-full bg-warning" aria-hidden="true" />,
     title:
       paused !== null
         ? "Paused · memory pressure — resumes automatically once it clears"

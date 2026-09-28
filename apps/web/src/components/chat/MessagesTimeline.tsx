@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { ArrowUpIcon, ClockIcon } from "lucide-react";
 import { ReadOnlySourcePreview } from "../files/AttachmentFilePreview";
 import { useRightPanelStore } from "~/rightPanelStore";
@@ -2954,7 +2953,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
   return (
     <>
       {isReactionTurn ? (
-        <div className="mb-1 flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground/70">
+        <div className="mb-1 flex items-center gap-1.5 px-1 text-2xs text-muted-foreground/70">
           <ZapIcon className="size-3 shrink-0" aria-hidden />
           <span>Background activity — reacted to an inter-agent message</span>
         </div>
@@ -3301,19 +3300,21 @@ export function WorkingTimelineRow({ row }: { row: Extract<TimelineRow, { kind: 
 
 /**
  * Continue offer in the working-indicator slot: a bare text button, styled
- * like agent-side status — no background, no banner (PJ).
+ * like agent-side status — no background, no banner (PJ). The `link` variant
+ * takes its colour from the row, so the row carries the primary tint.
  */
 function ResumeTimelineRow() {
   const shared = use(TimelineRowCtx);
   if (!shared.onResumeThread) return null;
   return (
-    <div className="py-1">
+    <div className="py-1 text-primary">
       <Button
         size="xs"
-        variant="ghost"
+        variant="link"
         disabled={shared.isResumingThread}
         onClick={() => shared.onResumeThread?.()}
-        className="-ml-1.5 h-6 px-1.5 font-medium text-[13px] text-primary hover:bg-muted/55"
+        // Pulls the label back onto the timeline's text edge past the button's own inset.
+        className="-ml-[calc(--spacing(2)-1px)]"
       >
         {shared.isResumingThread ? "Continuing..." : "Continue"}
       </Button>
@@ -3328,7 +3329,7 @@ function ResumeTimelineRow() {
 function ThreadErrorTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "thread-error" }> }) {
   const shared = use(TimelineRowCtx);
   return (
-    <div className="flex min-w-0 items-baseline gap-1.5 py-1 text-[13px]">
+    <div className="flex min-w-0 items-baseline gap-1.5 py-1 text-xs">
       <Tooltip>
         <TooltipTrigger
           render={<span className="min-w-0 truncate leading-6 text-destructive/90" />}
@@ -3338,15 +3339,18 @@ function ThreadErrorTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "th
         <TooltipPopup>{row.error}</TooltipPopup>
       </Tooltip>
       {shared.onResumeThread ? (
-        <Button
-          size="xs"
-          variant="ghost"
-          disabled={shared.isResumingThread}
-          onClick={() => shared.onResumeThread?.()}
-          className="h-auto shrink-0 self-baseline border-none px-1 py-0 font-medium text-[13px] leading-6 text-primary hover:bg-muted/55"
-        >
-          {shared.isResumingThread ? "Retrying..." : "Retry"}
-        </Button>
+        // The `link` variant takes its colour from this wrapper.
+        <span className="shrink-0 self-baseline text-primary">
+          <Button
+            size="xs"
+            variant="link"
+            disabled={shared.isResumingThread}
+            onClick={() => shared.onResumeThread?.()}
+            className="h-auto"
+          >
+            {shared.isResumingThread ? "Retrying..." : "Retry"}
+          </Button>
+        </span>
       ) : null}
     </div>
   );
