@@ -27,6 +27,13 @@ export const PROVIDER_USAGE_DEADLINE_CHECK_MS = 30_000;
 /** Grace after the provider-reported reset moment before the pending turn is replayed. */
 export const PROVIDER_USAGE_RESUME_GRACE_MS = 90_000;
 
+/** Replay dispatches tried per hold before the user is asked to resend. */
+export const PROVIDER_USAGE_MAX_REPLAY_ATTEMPTS = 3;
+
+/** Hysteresis: a warning clears only below this, critical drops only below the next. */
+export const PROVIDER_USAGE_WARNING_CLEAR_PERCENT = 75;
+export const PROVIDER_USAGE_CRITICAL_CLEAR_PERCENT = 95;
+
 /** Activity kinds the web banner derives from (open activity vocabulary). */
 export const PROVIDER_USAGE_HOLD_ACTIVITY_KINDS = {
   started: "provider.usage-hold.started",
@@ -83,11 +90,23 @@ export class ProviderUsageWatcher extends Context.Service<
   ProviderUsageWatcherShape
 >()("t3/t3team-providerUsageWatcherTypes/ProviderUsageWatcher") {}
 
+/** In-memory mirror of one active hold row — enough to decide without a DB read. */
+export interface HeldThread {
+  readonly instanceId: string | null;
+  readonly since: string;
+  readonly resetsAt: string | null;
+}
+
 /** Mutable in-memory state. The hold rows are the durable truth; this is a cache. */
 export interface ProviderUsageWatcherState {
   readonly instances: Map<string, InstanceUsageEntry>;
-  /** Threads with an active hold row (rehydrated at boot) — spares a DB read per turn. */
-  readonly heldThreads: Set<string>;
+  /**
+   * Active holds by thread id (rehydrated at boot), so the hot snapshot
+   * stream and every turn outcome decide from memory, not a DB read.
+   */
+  readonly heldThreads: Map<string, HeldThread>;
+  /** Failed replay dispatches per thread, bounded by {@link PROVIDER_USAGE_MAX_REPLAY_ATTEMPTS}. */
+  readonly replayFailures: Map<string, number>;
 }
 
 /** Everything the extracted watcher steps need. Built once by the layer. */

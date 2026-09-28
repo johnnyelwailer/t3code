@@ -38,7 +38,7 @@ import {
  * A reset moment already in the past is stale data, not a schedule — the
  * hold then waits for a fresh below-critical snapshot instead.
  */
-const holdResetsAt = (
+export const holdResetsAt = (
   limits: ServerProviderUsageLimits | undefined,
   nowMs: number,
 ): string | null => {
@@ -79,10 +79,15 @@ export const recordHold = Effect.fn("providerUsageWatcher.recordHold")(function*
       updatedAt: now,
     })
     .pipe(Effect.orDie);
-  deps.state.heldThreads.add(input.threadId);
+  deps.state.replayFailures.delete(input.threadId);
   const row = Option.getOrUndefined(
     yield* deps.holds.getByThreadId({ threadId: ThreadId.make(input.threadId) }).pipe(Effect.orDie),
   );
+  deps.state.heldThreads.set(input.threadId, {
+    instanceId: input.providerInstanceId,
+    since: row?.since ?? now,
+    resetsAt: input.resetsAt,
+  });
   yield* deps.appendActivity(
     input.threadId,
     PROVIDER_USAGE_HOLD_ACTIVITY_KINDS.started,

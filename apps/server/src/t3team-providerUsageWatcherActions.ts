@@ -1,7 +1,8 @@
 /**
- * Release steps of the provider usage watcher (GHE #421): claim a hold's
- * release, replay its pending turn once when that is still correct, and
- * append the matching thread activities.
+ * Release step of the provider usage watcher (GHE #421): claim a hold's
+ * release, replay its pending turn once when that is still correct, restore
+ * the hold when the replay could not be dispatched, and append the matching
+ * thread activities.
  *
  * @module t3team-providerUsageWatcherActions
  */
@@ -16,7 +17,7 @@ import type { OrchestrationEngineShape } from "./orchestration/Services/Orchestr
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import {
   PROVIDER_USAGE_HOLD_ACTIVITY_KINDS,
-  PROVIDER_USAGE_RESUME_GRACE_MS,
+  PROVIDER_USAGE_MAX_REPLAY_ATTEMPTS,
   type ProviderUsageHoldActivityKind,
   type ProviderUsageWatcherDeps,
 } from "./t3team-providerUsageWatcherTypes.ts";
@@ -68,18 +69,36 @@ const isReplayable = (thread: OrchestrationThread, messageId: string): boolean =
   return latest.state !== "running" && latest.state !== "completed";
 };
 
-/** Deadline for a hold: its reset moment plus grace; null when no reset moment is known. */
-const holdDeadlineMs = (hold: Pick<HoldRow, "resetsAt">): number | null => {
-  if (hold.resetsAt === null) return null;
-  const at = Date.parse(hold.resetsAt);
-  return Number.isFinite(at) ? at + PROVIDER_USAGE_RESUME_GRACE_MS : null;
-};
+/** Put a claimed hold back exactly as it was, so the next check retries it. */
+const restoreHold = Effect.fn("providerUsageWatcher.restoreHold")(function* (
+  deps: ProviderUsageWatcherDeps,
+  claimed: HoldRow,
+) {
+  yield* deps.holds
+    .upsertActiveHold({
+      ...claimed,
+      releasedAt: null,
+      releaseReason: null,
+      updatedAt: yield* nowIso,
+    })
+    .pipe(Effect.orDie);
+  deps.state.heldThreads.set(claimed.threadId, {
+    instanceId: claimed.providerInstanceId,
+    since: claimed.since,
+    resetsAt: claimed.resetsAt,
+  });
+});
 
 /**
  * RELEASE one hold. The conditional `markReleased` is the claim: only the
  * caller that flips the row goes on, so a hold is replayed at most once even
  * when a deadline tick and a recovery snapshot race. `replay: false` clears
  * the hold without re-driving (the thread was answered some other way).
+ *
+ * A replay whose dispatch fails puts the hold back for the next check; after
+ * {@link PROVIDER_USAGE_MAX_REPLAY_ATTEMPTS} failures the hold is released
+ * with a visible activity asking the user to resend. Returns whether the hold
+ * ended released.
  */
 export const releaseHold = Effect.fn("providerUsageWatcher.releaseHold")(function* (
   deps: ProviderUsageWatcherDeps,
@@ -93,7 +112,7 @@ export const releaseHold = Effect.fn("providerUsageWatcher.releaseHold")(functio
   );
   deps.state.heldThreads.delete(row.threadId);
   if (claimed === undefined) return false;
-  let resumed = false;
+  let outcome: "resumed" | "skipped" | "gave-up" = "skipped";
   const messageId = claimed.pendingTurnMessageId;
   if (input.replay && claimed.autoResume && messageId !== null) {
     const thread = Option.getOrUndefined(
@@ -102,7 +121,7 @@ export const releaseHold = Effect.fn("providerUsageWatcher.releaseHold")(functio
         .pipe(Effect.orElseSucceed(() => Option.none())),
     );
     if (thread !== undefined && isReplayable(thread, messageId)) {
-      resumed = yield* deps.engine
+      const dispatched = yield* deps.engine
         .dispatch({
           type: "thread.turn.resume",
           commandId: CommandId.make(t3teamRandomUUID()),
@@ -113,40 +132,37 @@ export const releaseHold = Effect.fn("providerUsageWatcher.releaseHold")(functio
         .pipe(
           Effect.as(true),
           Effect.catchCause((cause) =>
-            Effect.logWarning("provider usage watcher: pending turn replay rejected", {
+            Effect.logWarning("provider usage watcher: pending turn replay failed", {
               threadId: claimed.threadId,
               cause: Cause.pretty(cause),
             }).pipe(Effect.as(false)),
           ),
         );
+      const failures = dispatched ? 0 : (deps.state.replayFailures.get(claimed.threadId) ?? 0) + 1;
+      if (!dispatched && failures < PROVIDER_USAGE_MAX_REPLAY_ATTEMPTS) {
+        deps.state.replayFailures.set(claimed.threadId, failures);
+        yield* restoreHold(deps, claimed);
+        return false;
+      }
+      outcome = dispatched ? "resumed" : "gave-up";
     }
   }
+  deps.state.replayFailures.delete(claimed.threadId);
   yield* deps.appendActivity(
     claimed.threadId,
     PROVIDER_USAGE_HOLD_ACTIVITY_KINDS.released,
-    resumed
+    outcome === "resumed"
       ? "Usage window reset — the turn was sent again automatically"
-      : "Usage limit cleared — nothing was re-sent",
+      : outcome === "gave-up"
+        ? "Auto-resume failed — send the message again"
+        : "Usage limit cleared — nothing was re-sent",
     {
       providerInstanceId: claimed.providerInstanceId,
       driver: claimed.provider,
-      resumed,
+      resumed: outcome === "resumed",
       autoResume: claimed.autoResume,
-      reason: input.reason,
+      reason: outcome === "gave-up" ? "auto-resume-failed" : input.reason,
     },
   );
   return true;
-});
-
-/** Release (with replay) every active hold whose deadline has passed. */
-export const releaseDue = Effect.fn("providerUsageWatcher.releaseDue")(function* (
-  deps: ProviderUsageWatcherDeps,
-) {
-  const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
-  for (const row of yield* deps.holds.listActive().pipe(Effect.orDie)) {
-    const deadline = holdDeadlineMs(row);
-    if (deadline !== null && nowMs >= deadline) {
-      yield* releaseHold(deps, row, { reason: "reset", replay: true });
-    }
-  }
 });

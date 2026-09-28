@@ -37,7 +37,8 @@ import { ProviderUsageHoldRepository } from "./persistence/Services/t3team-Provi
 import { ProviderUsageHoldRepositoryLive } from "./persistence/Layers/t3team-ProviderUsageHolds.ts";
 import { ProviderRegistry } from "./provider/Services/ProviderRegistry.ts";
 import { ProviderService } from "./provider/Services/ProviderService.ts";
-import { makeAppendActivity, releaseDue } from "./t3team-providerUsageWatcherActions.ts";
+import { makeAppendActivity } from "./t3team-providerUsageWatcherActions.ts";
+import { releaseDue } from "./t3team-providerUsageWatcherDeadline.ts";
 import { forceExhaust, forceRecover, getDevState } from "./t3team-providerUsageWatcherDevHooks.ts";
 import { onRuntimeEvent } from "./t3team-providerUsageWatcherFailures.ts";
 import { applyProviders } from "./t3team-providerUsageWatcherLimits.ts";
@@ -76,11 +77,15 @@ export const makeProviderUsageWatcher = Effect.fn("makeProviderUsageWatcher")(fu
     engine: input.engine,
     query: input.query,
     holds: input.holds,
-    state: { instances: new Map(), heldThreads: new Set() },
+    state: { instances: new Map(), heldThreads: new Map(), replayFailures: new Map() },
     appendActivity: makeAppendActivity(input.engine),
   };
   for (const row of yield* input.holds.listActive().pipe(Effect.orDie)) {
-    deps.state.heldThreads.add(row.threadId);
+    deps.state.heldThreads.set(row.threadId, {
+      instanceId: row.providerInstanceId,
+      since: row.since,
+      resetsAt: row.resetsAt,
+    });
   }
   return {
     applyProviders: (providers) => guarded("snapshot", serial(applyProviders(deps, providers))),

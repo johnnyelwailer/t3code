@@ -14,24 +14,51 @@ import {
   hasUsageData,
   providerUsageSeverity,
   sessionUsageWindow,
+  ThreadId,
+  type ProviderUsageSeverity,
   type ServerProvider,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import { releaseHold } from "./t3team-providerUsageWatcherActions.ts";
 import {
+  PROVIDER_USAGE_CRITICAL_CLEAR_PERCENT,
   PROVIDER_USAGE_HOLD_ACTIVITY_KINDS,
+  PROVIDER_USAGE_WARNING_CLEAR_PERCENT,
   type InstanceUsageEntry,
   type ProviderUsageWatcherDeps,
 } from "./t3team-providerUsageWatcherTypes.ts";
 
-const instanceUsageEntry = (provider: ServerProvider): InstanceUsageEntry => {
+/**
+ * Severity with hysteresis, so a window hovering at a threshold does not
+ * flap: a warning clears only below 75%, critical drops only below 95%.
+ * Rising always follows the plain 80/100 thresholds.
+ */
+export const severityWithHysteresis = (
+  usedPercent: number,
+  previous: ProviderUsageSeverity | null | undefined,
+): ProviderUsageSeverity => {
+  const plain = providerUsageSeverity(usedPercent);
+  if (previous === "critical" && plain !== "critical") {
+    if (usedPercent >= PROVIDER_USAGE_CRITICAL_CLEAR_PERCENT) return "critical";
+  }
+  if ((previous === "critical" || previous === "warning") && plain === "normal") {
+    if (usedPercent >= PROVIDER_USAGE_WARNING_CLEAR_PERCENT) return "warning";
+  }
+  return plain;
+};
+
+const instanceUsageEntry = (
+  provider: ServerProvider,
+  previous: InstanceUsageEntry | undefined,
+): InstanceUsageEntry => {
   const limits = provider.usageLimits;
   const session = sessionUsageWindow(limits);
   return {
     driver: provider.driver,
     limits,
-    severity: session === null ? null : providerUsageSeverity(session.usedPercent),
+    severity:
+      session === null ? null : severityWithHysteresis(session.usedPercent, previous?.severity),
     exhausted: exhaustedUsageWindows(limits).length > 0,
   };
 };
@@ -89,14 +116,24 @@ const releaseRecovered = Effect.fn("providerUsageWatcher.releaseRecovered")(func
   recoveredEdge: boolean,
 ) {
   if (!hasUsageData(entry.limits) || entry.exhausted) return;
-  // Cheap skip on the hot path (Codex republishes on every token tick).
-  if (deps.state.heldThreads.size === 0) return;
+  // Hot path (Codex republishes on every token tick): decide from the
+  // in-memory mirror; only a hold that is actually due touches the DB.
   const checkedAtMs = Date.parse(entry.limits.checkedAt);
-  for (const row of yield* deps.holds.listActive().pipe(Effect.orDie)) {
-    if (row.providerInstanceId !== instanceId) continue;
-    if (!(checkedAtMs > Date.parse(row.since))) continue;
-    if (row.resetsAt !== null && !recoveredEdge) continue;
-    yield* releaseHold(deps, row, { reason: "recovered", replay: true });
+  const due = [...deps.state.heldThreads].filter(
+    ([, held]) =>
+      held.instanceId === instanceId &&
+      checkedAtMs > Date.parse(held.since) &&
+      (held.resetsAt === null || recoveredEdge),
+  );
+  for (const [threadId] of due) {
+    yield* releaseHold(
+      deps,
+      { threadId: ThreadId.make(threadId) },
+      {
+        reason: "recovered",
+        replay: true,
+      },
+    );
   }
 });
 
@@ -106,11 +143,11 @@ export const applyProviders = Effect.fn("providerUsageWatcher.applyProviders")(f
 ) {
   for (const provider of providers) {
     const instanceId = provider.instanceId;
-    const entry = instanceUsageEntry(provider);
+    const previous = deps.state.instances.get(instanceId);
+    const entry = instanceUsageEntry(provider, previous);
     // Missing data is not news: keep the last real reading and what the
     // threads were last told, and never release or warn on it.
     if (!hasUsageData(entry.limits)) continue;
-    const previous = deps.state.instances.get(instanceId);
     deps.state.instances.set(instanceId, entry);
     if (entry.severity !== null && entry.severity !== (previous?.severity ?? "normal")) {
       yield* notifyInstanceThreads(deps, instanceId, entry);
