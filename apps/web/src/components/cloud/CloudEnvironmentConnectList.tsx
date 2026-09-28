@@ -35,6 +35,7 @@ import { Skeleton } from "../ui/skeleton";
 import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "../ui/tooltip";
 import { presentSavedCloudEnvironmentConnection } from "./cloudEnvironmentConnectionPresentation";
+import { shouldAutoSelectDiscoveredComputer } from "../onboarding/t3team-onboardingComputerSelection";
 
 const EMPTY_DISCOVERY_REFRESH_INTERVAL_MS = 5_000;
 
@@ -203,6 +204,9 @@ export function CloudEnvironmentConnectRows({
       }
       if (seen.has(id)) continue;
       seen.add(id);
+      // An offline or failing relay is listed but left unticked: it must not
+      // hold Continue hostage. The user can still tick it explicitly.
+      if (!shouldAutoSelectDiscoveredComputer(availability)) continue;
       selection.onChange(id, true);
       if (!savedById.has(id)) {
         void connectEnvironment(environment).then((connected) => {

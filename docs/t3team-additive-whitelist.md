@@ -249,6 +249,15 @@ Upstream files the cloud-sessions stack (branch `work/cloud-sessions-stack`) tou
 - `packages/project-context/src/t3teamWidgetGuidance.ts`
   - Widget guidance carries the theme-token + icon-sprite contract so `t3team_show_widget` renders against the host theme.
 
+## Cloud-sessions UI fixes (2026-09-28)
+
+- `apps/web/src/components/onboarding/WelcomeWizard.tsx`
+  - Onboarding no longer auto-ticks an unreachable computer, and one does not block Continue; the rules live in `t3team-onboardingComputerSelection.ts`.
+- `apps/web/src/components/onboarding/WelcomeWizard.test.tsx`
+  - Covers the rule above, and repairs the `publicConfig` mock that upstream's `lib/runtime` import broke (the whole suite failed on `853cf6d3e6`).
+- `apps/web/src/components/cloud/CloudEnvironmentConnectList.tsx`
+  - The same rule for discovered T3 Connect computers: an offline relay is listed but not auto-ticked.
+
 ## Allowed Unprefixed New Files
 
 Whole trees the fork owns outright. The `t3team-` prefix exists so a file added by
