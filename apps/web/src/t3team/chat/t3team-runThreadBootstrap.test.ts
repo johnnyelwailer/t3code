@@ -10,10 +10,28 @@ import { useT3TeamAddToChatStore } from "~/t3team/t3team-addToChatStore";
 import { registerContextAttachmentRequest } from "~/t3team/t3team-contextAttachmentSync";
 import type { T3TeamTurnToolContext } from "~/t3team/t3team-threadToolContext";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
+import { runT3TeamEnvironmentCommand } from "~/t3team/t3team-environmentCommands";
+import { threadEnvironment } from "~/state/threads";
 
-// Every bootstrap command must go to the environment that owns the thread (a
+vi.mock("~/t3team/t3team-environmentCommands", () => ({
+  runT3TeamEnvironmentCommand: vi.fn(async () => undefined),
+}));
+vi.mock("~/state/threads", () => ({
+  threadEnvironment: {
+    create: { label: "thread:create" },
+    startTurn: { label: "thread:startTurn" },
+    updateMetadata: { label: "thread:updateMetadata" },
+  },
+}));
+vi.mock("~/state/projects", () => ({
+  projectEnvironment: { create: { label: "project:create" } },
+}));
+
+const runCommand = vi.mocked(runT3TeamEnvironmentCommand);
+
+// Every bootstrap command goes to the environment that owns the thread (a
 // cloud session's thread does not exist on the primary server).
-const ROUTED_TO_THREAD_ENVIRONMENT = { environmentId: "env-1" };
+const onThreadEnvironment = (input: unknown) => ({ environmentId: "env-1", input });
 
 function createBackend(): BackendApi {
   return {
@@ -25,7 +43,6 @@ function createBackend(): BackendApi {
     },
     connect: vi.fn(async () => undefined),
     disconnect: vi.fn(async () => undefined),
-    dispatchCommand: vi.fn(async () => undefined),
     forkThread: vi.fn(async () => ({ ok: true as const, childThreadId: "child-thread" })),
     launchRecipeWorkflow: vi.fn(async () => ({ ok: true })),
     submitRecipeCardAction: vi.fn(async () => ({ ok: true })),
@@ -91,6 +108,8 @@ function createRequest(): AddToChatRequest {
 }
 
 beforeEach(() => {
+  runCommand.mockReset();
+  runCommand.mockResolvedValue(undefined);
   useT3TeamAddToChatStore.setState({
     pendingByProjectId: {},
     pendingByKickoffKey: {},
@@ -198,26 +217,27 @@ describe("runThreadBootstrap", () => {
       threadId: "thread-1",
       toolContext: TEST_TOOL_CONTEXT,
     });
-    expect(backend.dispatchCommand).toHaveBeenCalledTimes(1);
-    expect(backend.dispatchCommand).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "thread.turn.start",
-        message: expect.objectContaining({
-          text: "### Added Context: Open PR\n\nTell me something about this",
-          t3teamExt: expect.objectContaining({
-            displayText: "Tell me something about this",
-            attachments: [
-              expect.objectContaining({
-                kind: "resource",
-                resource: expect.objectContaining({
-                  text: "### Added Context: Open PR",
+    expect(runCommand).toHaveBeenCalledTimes(1);
+    expect(runCommand).toHaveBeenCalledWith(
+      threadEnvironment.startTurn,
+      onThreadEnvironment(
+        expect.objectContaining({
+          message: expect.objectContaining({
+            text: "### Added Context: Open PR\n\nTell me something about this",
+            t3teamExt: expect.objectContaining({
+              displayText: "Tell me something about this",
+              attachments: [
+                expect.objectContaining({
+                  kind: "resource",
+                  resource: expect.objectContaining({
+                    text: "### Added Context: Open PR",
+                  }),
                 }),
-              }),
-            ],
+              ],
+            }),
           }),
         }),
-      }),
-      ROUTED_TO_THREAD_ENVIRONMENT,
+      ),
     );
     expect(useT3TeamAddToChatStore.getState().threadAttachmentsByThreadId["thread-1"]).toBe(
       undefined,
@@ -268,24 +288,26 @@ describe("runThreadBootstrap", () => {
       toolContext: TEST_TOOL_CONTEXT,
     });
     expect(backend.projectWorkspace.writeContextFiles).toHaveBeenCalledTimes(1);
-    expect(backend.dispatchCommand).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expect.objectContaining({
-          text: expect.stringContaining("Open PR"),
-          t3teamExt: expect.objectContaining({
-            displayText: "Tell me something about this",
-            attachments: [
-              expect.objectContaining({
-                kind: "resource",
-                resource: expect.objectContaining({
-                  text: expect.stringContaining("Open PR"),
+    expect(runCommand).toHaveBeenCalledWith(
+      threadEnvironment.startTurn,
+      onThreadEnvironment(
+        expect.objectContaining({
+          message: expect.objectContaining({
+            text: expect.stringContaining("Open PR"),
+            t3teamExt: expect.objectContaining({
+              displayText: "Tell me something about this",
+              attachments: [
+                expect.objectContaining({
+                  kind: "resource",
+                  resource: expect.objectContaining({
+                    text: expect.stringContaining("Open PR"),
+                  }),
                 }),
-              }),
-            ],
+              ],
+            }),
           }),
         }),
-      }),
-      ROUTED_TO_THREAD_ENVIRONMENT,
+      ),
     );
     expect(useT3TeamAddToChatStore.getState().threadAttachmentsByThreadId["thread-2"]).toBe(
       undefined,
@@ -324,12 +346,10 @@ describe("runThreadBootstrap", () => {
       onInitialUserMessageSent: undefined,
     });
 
-    expect(backend.dispatchCommand).toHaveBeenNthCalledWith(
+    expect(runCommand).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({
-        type: "thread.create",
-      }),
-      ROUTED_TO_THREAD_ENVIRONMENT,
+      threadEnvironment.create,
+      onThreadEnvironment(expect.objectContaining({ threadId: expect.any(String) })),
     );
     expect(backend.launchRecipeWorkflow).toHaveBeenCalledWith({
       threadId: "thread-3",
@@ -422,15 +442,16 @@ describe("runThreadBootstrap", () => {
     });
 
     expect(backend.launchRecipeWorkflow).not.toHaveBeenCalled();
-    expect(backend.dispatchCommand).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "thread.turn.start",
-        threadId: "thread-3b",
-        message: expect.objectContaining({
-          text: "T-shirt-size PROJ-100 using Jira, code, and precedent work.",
+    expect(runCommand).toHaveBeenCalledWith(
+      threadEnvironment.startTurn,
+      onThreadEnvironment(
+        expect.objectContaining({
+          threadId: "thread-3b",
+          message: expect.objectContaining({
+            text: "T-shirt-size PROJ-100 using Jira, code, and precedent work.",
+          }),
         }),
-      }),
-      ROUTED_TO_THREAD_ENVIRONMENT,
+      ),
     );
   });
 
@@ -506,19 +527,16 @@ describe("runThreadBootstrap", () => {
     });
 
     expect(backend.launchRecipeWorkflow).not.toHaveBeenCalled();
-    expect(backend.dispatchCommand).toHaveBeenCalledWith(
-      expect.objectContaining({ type: "thread.create" }),
-      ROUTED_TO_THREAD_ENVIRONMENT,
+    expect(runCommand).toHaveBeenCalledWith(
+      threadEnvironment.create,
+      onThreadEnvironment(expect.anything()),
     );
-    expect(backend.dispatchCommand).not.toHaveBeenCalledWith(
-      expect.objectContaining({ type: "thread.turn.start" }),
-      expect.anything(),
-    );
+    expect(runCommand).not.toHaveBeenCalledWith(threadEnvironment.startTurn, expect.anything());
   });
 
   it("continues recipe launch when retrying after the thread already exists", async () => {
     const backend = createBackend();
-    vi.mocked(backend.dispatchCommand).mockRejectedValueOnce(
+    runCommand.mockRejectedValueOnce(
       new Error("Thread 'thread-4' already exists and cannot be created twice."),
     );
 

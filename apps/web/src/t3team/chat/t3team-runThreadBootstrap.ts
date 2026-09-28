@@ -57,7 +57,6 @@ export async function runThreadBootstrap({
   onInitialUserMessageSent,
 }: RunThreadBootstrapInput) {
   await ensureThreadBootstrapProject({
-    backend,
     environmentId,
     projectWorkspaceRoot,
     shouldEnsureProject,
@@ -96,7 +95,6 @@ export async function runThreadBootstrap({
   }
 
   await dispatchThreadBootstrapCreateWithRecovery({
-    backend,
     action,
     state,
     environmentId,

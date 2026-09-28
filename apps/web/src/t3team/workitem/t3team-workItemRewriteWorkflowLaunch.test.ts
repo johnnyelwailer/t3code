@@ -9,6 +9,19 @@ import {
   buildWorkItemRewriteWorkflow,
   launchWorkItemRewriteOnThread,
 } from "./t3team-workItemRewriteWorkflowLaunch";
+import { runT3TeamEnvironmentCommand } from "~/t3team/t3team-environmentCommands";
+
+vi.mock("~/t3team/t3team-environmentCommands", () => ({
+  runT3TeamEnvironmentCommand: vi.fn(async () => undefined),
+}));
+vi.mock("~/state/threads", () => ({
+  threadEnvironment: {
+    create: { label: "thread.create" },
+    startTurn: { label: "thread.turn.start" },
+  },
+}));
+
+const runCommand = vi.mocked(runT3TeamEnvironmentCommand);
 
 const WORKSPACE_ROOT = "/tmp/project-alpha";
 
@@ -116,10 +129,10 @@ describe("launchWorkItemRewriteOnThread", () => {
  */
 describe("kickoff handoff", () => {
   it("launches the recipe and never starts a model turn", async () => {
-    const dispatchCommand = vi.fn().mockResolvedValue(undefined);
+    runCommand.mockReset();
+    runCommand.mockResolvedValue(undefined);
     const launchRecipeWorkflow = vi.fn().mockResolvedValue({ ok: true });
     const backend = {
-      dispatchCommand,
       launchRecipeWorkflow,
       syncThreadToolContext: vi.fn().mockResolvedValue(undefined),
     } as unknown as BackendApi;
@@ -157,8 +170,8 @@ describe("kickoff handoff", () => {
     expect(launched.launch.recipePath).toBe(`${WORKSPACE_ROOT}/.t3team/recipes/describe-rewrite`);
     expect(launched.launch.parameters).toMatchObject({ issueIdOrKey: "PROJ-42" });
 
-    const dispatchedTypes = dispatchCommand.mock.calls.map(
-      (call) => (call[0] as unknown as { type: string }).type,
+    const dispatchedTypes = runCommand.mock.calls.map(
+      (call) => (call[0] as unknown as { label: string }).label,
     );
     expect(dispatchedTypes).toContain("thread.create");
     expect(dispatchedTypes).not.toContain("thread.turn.start");

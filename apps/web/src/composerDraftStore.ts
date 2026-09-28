@@ -1494,6 +1494,24 @@ function resolveComposerThreadId(
   return state.draftThreadsByThreadKey[normalizedTarget]?.threadId ?? null;
 }
 
+/** Like `resolveComposerThreadId`, plus the environment the thread lives on. */
+function resolveComposerThreadRef(
+  state: ComposerThreadLookupState,
+  target: ComposerThreadTarget,
+): { readonly environmentId: EnvironmentId; readonly threadId: ThreadId } | null {
+  const normalizedTarget = normalizeComposerTarget(state, target);
+  if (!normalizedTarget) {
+    return null;
+  }
+  if (typeof normalizedTarget !== "string") {
+    return { environmentId: normalizedTarget.environmentId, threadId: normalizedTarget.threadId };
+  }
+  const draftThread = state.draftThreadsByThreadKey[normalizedTarget];
+  return draftThread
+    ? { environmentId: draftThread.environmentId as EnvironmentId, threadId: draftThread.threadId }
+    : null;
+}
+
 function getComposerDraftState(
   state: Pick<ComposerDraftStoreState, "draftsByThreadKey" | "draftThreadsByThreadKey">,
   target: ComposerThreadTarget,
@@ -3034,7 +3052,7 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
           // only targets have no server thread (null) and are skipped. The
           // signal is fire-and-forget and per-thread — it can never block this
           // write or affect another thread.
-          reportThreadComposing(resolveComposerThreadId(get(), threadRef));
+          reportThreadComposing(resolveComposerThreadRef(get(), threadRef));
           set((state) => {
             const existing = state.draftsByThreadKey[threadKey] ?? createEmptyThreadDraft();
             const nextDraft: ComposerThreadDraftState = {

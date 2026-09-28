@@ -1,10 +1,4 @@
-import type {
-  ClientOrchestrationCommand,
-  EnvironmentId,
-  ServerConfig,
-  ServerProvider,
-  ThreadId,
-} from "@t3tools/contracts";
+import type { ServerConfig, ServerProvider, ThreadId } from "@t3tools/contracts";
 import type {
   ProjectWorkspaceRefreshWorkItemContextResult,
   ProjectWorkspaceRefreshWorkItemSliceContextResult,
@@ -41,15 +35,6 @@ export interface BackendApi {
   readonly state: BackendState;
   readonly connect: () => Promise<void>;
   readonly disconnect: () => Promise<void>;
-  /**
-   * `environmentId` is the environment that owns the command's thread or
-   * project; omitted means the primary server. A remote thread's commands
-   * must name its environment, or the primary rejects them.
-   */
-  readonly dispatchCommand: (
-    command: ClientOrchestrationCommand,
-    target?: { readonly environmentId?: EnvironmentId | null },
-  ) => Promise<void>;
   readonly forkThread: (input: {
     readonly threadId: string;
     readonly title?: string;

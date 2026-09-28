@@ -13,8 +13,19 @@ const backendRef: { current: BackendApi | null } = { current: null };
 vi.mock("~/t3team/backend/t3team-index", () => ({
   useBackend: () => backendRef.current,
 }));
+vi.mock("~/t3team/t3team-environmentCommands", () => ({
+  runT3TeamEnvironmentCommand: vi.fn(async () => undefined),
+  primaryEnvironmentIdOrThrow: () => "primary-env",
+}));
+vi.mock("~/state/projects", () => ({
+  projectEnvironment: { update: { label: "project:update" } },
+}));
 
+import { projectEnvironment } from "~/state/projects";
+import { runT3TeamEnvironmentCommand } from "~/t3team/t3team-environmentCommands";
 import { useRepairProjectBinding } from "./t3team-useRepairProjectBinding";
+
+const runCommand = vi.mocked(runT3TeamEnvironmentCommand);
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -64,14 +75,12 @@ function renderRepair(project: ProjectShellProject) {
 }
 
 describe("useRepairProjectBinding", () => {
-  let dispatchCommand: ReturnType<typeof vi.fn<BackendApi["dispatchCommand"]>>;
-
   beforeEach(() => {
-    dispatchCommand = vi.fn<BackendApi["dispatchCommand"]>().mockResolvedValue(undefined);
+    runCommand.mockReset();
+    runCommand.mockResolvedValue(undefined);
     const baseBackend = createMockBackend();
     backendRef.current = {
       ...baseBackend,
-      dispatchCommand,
       atlassian: {
         ...baseBackend.atlassian,
         listAccounts: vi.fn().mockResolvedValue([]),
@@ -88,7 +97,7 @@ describe("useRepairProjectBinding", () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(dispatchCommand).not.toHaveBeenCalled();
+    expect(runCommand).not.toHaveBeenCalled();
 
     act(() => {
       rendered.value().setSelectedAccount(account);
@@ -101,16 +110,19 @@ describe("useRepairProjectBinding", () => {
     act(() => {
       rendered.value().setSelectedProject(iesSandbox);
     });
-    expect(dispatchCommand).not.toHaveBeenCalled();
+    expect(runCommand).not.toHaveBeenCalled();
 
     const result: { current: ProjectShellProject | null } = { current: null };
     await act(async () => {
       result.current = await rendered.value().confirmRepair();
     });
 
-    expect(dispatchCommand).toHaveBeenCalledTimes(1);
-    const command = dispatchCommand.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
-    expect(command.type).toBe("project.meta.update");
+    expect(runCommand).toHaveBeenCalledTimes(1);
+    const [sent, request] = runCommand.mock.calls[0]!;
+    // Work-project bindings live on this machine.
+    expect(sent).toBe(projectEnvironment.update);
+    expect((request as { environmentId: string }).environmentId).toBe("primary-env");
+    const command = (request as { input: Record<string, unknown> }).input;
     expect(command.projectId).toBe("proj-1");
     expect(command.source).toEqual({
       provider: "atlassian",
@@ -124,7 +136,7 @@ describe("useRepairProjectBinding", () => {
   });
 
   it("surfaces a duplicate-binding failure without silently updating the stored project", async () => {
-    dispatchCommand.mockRejectedValue(
+    runCommand.mockRejectedValue(
       new Error(
         "Orchestration command invariant failed (project.meta.update): externalProjectId is already bound to project 'other-project'",
       ),

@@ -9,11 +9,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ScopedThreadRef, T3TeamMessageWidgetAttachment } from "@t3tools/contracts";
-import { CommandId, MessageId } from "@t3tools/contracts";
 
 import { useThemeSnapshot } from "~/hooks/useTheme";
 import { useBackend } from "~/t3team/backend/t3team-BackendContext";
 import { useThread } from "~/state/entities";
+import { sendT3TeamThreadTurn } from "~/t3team/chat/t3team-sendThreadTurn";
 import {
   claimWidgetPromptSlot,
   isWidgetCallId,
@@ -97,33 +97,21 @@ export function useT3TeamWidgetBlockController(input: {
         console.warn(`[t3team-widget:${widget.widgetId}] sendPrompt dropped: rate limited.`);
         return;
       }
-      if (!backend || !thread || !threadRef) return;
+      if (!thread || !threadRef) return;
       const transport = buildT3TeamWidgetPromptTransport({
         widgetId: widget.widgetId,
         widgetTitle: widget.title,
         text: trimmed,
       });
-      await backend.dispatchCommand(
-        {
-          type: "thread.turn.start",
-          commandId: CommandId.make(`web:t3team-widget:turn:${randomWidgetNonce()}`),
-          threadId: threadRef.threadId,
-          message: {
-            messageId: MessageId.make(randomWidgetNonce()),
-            role: "user",
-            text: transport.text,
-            attachments: [],
-            t3teamExt: transport.t3teamExt,
-          },
-          modelSelection: thread.modelSelection,
-          runtimeMode: thread.runtimeMode,
-          interactionMode: thread.interactionMode,
-          createdAt: new Date().toISOString(),
-        },
-        { environmentId: threadRef.environmentId },
-      );
+      // The one threadId-addressable send path; the server reads model and modes off the thread.
+      await sendT3TeamThreadTurn({
+        environmentId: threadRef.environmentId,
+        threadId: threadRef.threadId,
+        text: transport.text,
+        t3teamExt: transport.t3teamExt,
+      });
     },
-    [backend, thread, threadRef, widget.widgetId, widget.title],
+    [thread, threadRef, widget.widgetId, widget.title],
   );
 
   const callTool = useCallback(

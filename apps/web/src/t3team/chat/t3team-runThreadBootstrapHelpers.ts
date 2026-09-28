@@ -1,21 +1,23 @@
 import {
   EnvironmentId,
+  ProjectId,
+  ThreadId,
   type ModelSelection,
   type ProviderInteractionMode,
   type RuntimeMode,
 } from "@t3tools/contracts";
 
-import type { BackendApi } from "~/t3team/backend/t3team-types";
+import { projectEnvironment } from "~/state/projects";
+import { threadEnvironment } from "~/state/threads";
 import { isDuplicateThreadCreateError } from "~/t3team/chat/t3team-duplicateThreadCreateError";
 import {
   recordThreadBootstrapEvent,
   type ThreadBootstrapAction,
 } from "~/t3team/chat/t3team-threadBootstrapInstrumentation";
 import type { ThreadBootstrapDispatchState } from "~/t3team/chat/t3team-threadBootstrapPlan";
-import { randomUUID } from "~/lib/utils";
+import { runT3TeamEnvironmentCommand } from "~/t3team/t3team-environmentCommands";
 
 export async function ensureThreadBootstrapProject(input: {
-  backend: BackendApi;
   environmentId: string;
   projectWorkspaceRoot: string | undefined;
   shouldEnsureProject: boolean;
@@ -31,7 +33,7 @@ export async function ensureThreadBootstrapProject(input: {
   // root — which pollutes a user's own repository when the project is a loose local workspace.
   // Scaffolding is owned by the work-project create + sync paths (gated on isWorkProject); thread
   // start only ensures the project record exists. The workspace directory itself is created by the
-  // `project.create` dispatch below via `createWorkspaceRootIfMissing`.
+  // `project.create` command below via `createWorkspaceRootIfMissing`.
   if (!input.projectWorkspaceRoot || !input.shouldEnsureProject) {
     return;
   }
@@ -44,11 +46,10 @@ export async function ensureThreadBootstrapProject(input: {
   });
 
   try {
-    await input.backend.dispatchCommand(
-      {
-        type: "project.create",
-        commandId: randomUUID() as any,
-        projectId: input.canonicalProjectId as any,
+    await runT3TeamEnvironmentCommand(projectEnvironment.create, {
+      environmentId: EnvironmentId.make(input.environmentId),
+      input: {
+        projectId: ProjectId.make(input.canonicalProjectId),
         title: input.projectTitle,
         workspaceRoot: input.projectWorkspaceRoot,
         createWorkspaceRootIfMissing: true,
@@ -56,8 +57,7 @@ export async function ensureThreadBootstrapProject(input: {
         createdAt: input.createdAt,
         source: { provider: "local" },
       },
-      { environmentId: EnvironmentId.make(input.environmentId) },
-    );
+    });
     recordThreadBootstrapEvent("thread-bootstrap.project-create.success", {
       threadId: input.threadId,
       canonicalProjectId: input.canonicalProjectId,
@@ -71,7 +71,6 @@ export async function ensureThreadBootstrapProject(input: {
 }
 
 export async function dispatchThreadBootstrapCreate(input: {
-  backend: BackendApi;
   action: ThreadBootstrapAction;
   state: ThreadBootstrapDispatchState;
   environmentId: string;
@@ -92,12 +91,11 @@ export async function dispatchThreadBootstrapCreate(input: {
     title: input.title,
   });
 
-  await input.backend.dispatchCommand(
-    {
-      type: "thread.create",
-      commandId: randomUUID() as any,
-      threadId: input.threadId as any,
-      projectId: input.canonicalProjectId as any,
+  await runT3TeamEnvironmentCommand(threadEnvironment.create, {
+    environmentId: EnvironmentId.make(input.environmentId),
+    input: {
+      threadId: ThreadId.make(input.threadId),
+      projectId: ProjectId.make(input.canonicalProjectId),
       title: input.title,
       modelSelection: input.kickoffModelSelection,
       runtimeMode: input.kickoffRuntimeMode,
@@ -106,8 +104,7 @@ export async function dispatchThreadBootstrapCreate(input: {
       worktreePath: null,
       createdAt: input.createdAt,
     },
-    { environmentId: EnvironmentId.make(input.environmentId) },
-  );
+  });
   recordThreadBootstrapEvent("thread-bootstrap.thread-create.success", {
     environmentId: input.environmentId,
     threadId: input.threadId,

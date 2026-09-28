@@ -18,6 +18,23 @@ import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { clearThreadBootstrapDispatchStates } from "~/t3team/chat/t3team-threadBootstrapDispatchRegistry";
 import { useThreadBootstrap } from "~/t3team/chat/t3team-useThreadBootstrap";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
+import { runT3TeamEnvironmentCommand } from "~/t3team/t3team-environmentCommands";
+
+vi.mock("~/t3team/t3team-environmentCommands", () => ({
+  runT3TeamEnvironmentCommand: vi.fn(async () => undefined),
+}));
+vi.mock("~/state/threads", () => ({
+  threadEnvironment: {
+    create: { label: "thread.create" },
+    startTurn: { label: "thread.turn.start" },
+    updateMetadata: { label: "thread.meta.update" },
+  },
+}));
+vi.mock("~/state/projects", () => ({
+  projectEnvironment: { create: { label: "project.create" } },
+}));
+
+const runCommand = vi.mocked(runT3TeamEnvironmentCommand);
 
 const KICKOFF_MESSAGE = "Prepare a concise status update.";
 
@@ -70,10 +87,16 @@ function createTrackedBackend(): TrackedBackend {
     return undefined;
   });
   const launchRecipeWorkflow = vi.fn(async () => ({ ok: true, mode: "thread" as const }));
+  // Every upstream environment command the bootstrap runs lands here as `{ type, ...input }`,
+  // routed to the thread's environment — the same shape the old single-server dispatch had.
+  runCommand.mockImplementation(async (command, request) => {
+    const { environmentId, input } = request as { environmentId: string; input: object };
+    expect(environmentId).toBe("env-1");
+    return dispatchCommand({ type: (command as { label: string }).label, ...input });
+  });
 
   const backend = {
     ...createMockBackend(),
-    dispatchCommand,
     launchRecipeWorkflow,
     syncThreadToolContext: vi.fn(async () => undefined),
   } as unknown as BackendApi;

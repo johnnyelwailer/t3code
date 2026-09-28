@@ -1,8 +1,5 @@
-import { type ClientOrchestrationCommand } from "@t3tools/contracts";
-
 import { resolveInitialPrimaryEnvironmentDescriptor } from "~/environments/primary";
 import { readPrimaryServerConfig } from "~/t3team/t3team-serverState";
-import { runT3TeamOrchestrationDispatch } from "~/t3team/t3team-orchestrationDispatch";
 import type { BackendApi, BackendState } from "./t3team-types";
 import {
   createAtlassianBackendApi,
@@ -50,13 +47,6 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
   async function disconnect() {
     const nextState = state as Writable<BackendState>;
     nextState.connectionStatus = "connecting";
-  }
-
-  async function dispatch(
-    command: ClientOrchestrationCommand,
-    target?: Parameters<BackendApi["dispatchCommand"]>[1],
-  ) {
-    await runT3TeamOrchestrationDispatch(command, target);
   }
 
   async function forkThread(input: Parameters<BackendApi["forkThread"]>[0]) {
@@ -136,7 +126,6 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     },
     connect,
     disconnect,
-    dispatchCommand: dispatch,
     forkThread,
     launchRecipeWorkflow,
     submitRecipeCardAction,

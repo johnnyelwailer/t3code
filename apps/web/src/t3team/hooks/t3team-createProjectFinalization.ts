@@ -2,9 +2,15 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 
 import type { T3TeamProfile } from "@t3tools/t3team-skill-packs";
 
+import { ProjectId } from "@t3tools/contracts";
+
+import { projectEnvironment } from "~/state/projects";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
+import {
+  primaryEnvironmentIdOrThrow,
+  runT3TeamEnvironmentCommand,
+} from "~/t3team/t3team-environmentCommands";
 import { syncProjectWorkspaceContext } from "~/t3team/t3team-projectWorkspaceSync";
-import { randomUUID } from "~/lib/utils";
 import { getConfiguredDefaultModelSelection } from "~/t3team-configuredDefaultModelSelection";
 
 import { applyWorkspaceBootstrapToProject } from "./t3team-createProjectBootstrap";
@@ -24,16 +30,19 @@ export async function finalizeCreatedProject(input: {
   }
 
   try {
-    await input.backend.dispatchCommand({
-      type: "project.create",
-      commandId: randomUUID() as any,
-      projectId: input.project.id as any,
-      title: input.project.title,
-      workspaceRoot: input.project.workspace.rootPath,
-      createWorkspaceRootIfMissing: true,
-      defaultModelSelection: getConfiguredDefaultModelSelection(),
-      createdAt: new Date().toISOString(),
-      source: toSourceBindingCommand(input.project.source),
+    // Work projects are created on this machine: the workspace bootstrap below goes through a
+    // primary-server HTTP route.
+    await runT3TeamEnvironmentCommand(projectEnvironment.create, {
+      environmentId: primaryEnvironmentIdOrThrow(),
+      input: {
+        projectId: ProjectId.make(input.project.id),
+        title: input.project.title,
+        workspaceRoot: input.project.workspace.rootPath,
+        createWorkspaceRootIfMissing: true,
+        defaultModelSelection: getConfiguredDefaultModelSelection(),
+        createdAt: new Date().toISOString(),
+        source: toSourceBindingCommand(input.project.source),
+      },
     });
   } catch (error) {
     if (isDuplicateProjectBindingError(error)) {

@@ -1,11 +1,16 @@
 import {
   EnvironmentId,
+  MessageId,
+  ProjectId,
+  ThreadId,
   type ModelSelection,
   type ProviderInteractionMode,
   type RuntimeMode,
 } from "@t3tools/contracts";
 
+import { threadEnvironment } from "~/state/threads";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
+import { runT3TeamEnvironmentCommand } from "~/t3team/t3team-environmentCommands";
 import { dispatchThreadBootstrapCreateWithRecovery } from "~/t3team/chat/t3team-runThreadBootstrapHelpers";
 import {
   appendContextAttachmentsToPrompt,
@@ -88,7 +93,6 @@ export async function runThreadBootstrapKickoff(input: RunThreadBootstrapKickoff
   // inside `thread.turn.start`'s own `bootstrap.createThread`.
   if (hasWorkflowLaunchPath(input.kickoffWorkflow)) {
     await dispatchThreadBootstrapCreateWithRecovery({
-      backend: input.backend,
       action: input.action,
       state: input.state,
       environmentId: input.environmentId,
@@ -147,13 +151,12 @@ export async function runThreadBootstrapKickoff(input: RunThreadBootstrapKickoff
     return;
   }
 
-  await input.backend.dispatchCommand(
-    {
-      type: "thread.turn.start",
-      commandId: randomUUID() as any,
-      threadId: input.threadId as any,
+  await runT3TeamEnvironmentCommand(threadEnvironment.startTurn, {
+    environmentId: EnvironmentId.make(input.environmentId),
+    input: {
+      threadId: ThreadId.make(input.threadId),
       message: {
-        messageId: randomUUID() as any,
+        messageId: MessageId.make(randomUUID()),
         role: "user",
         text: bootstrapMessage,
         attachments: [],
@@ -165,7 +168,7 @@ export async function runThreadBootstrapKickoff(input: RunThreadBootstrapKickoff
       interactionMode: input.kickoffInteractionMode,
       bootstrap: {
         createThread: {
-          projectId: input.canonicalProjectId as any,
+          projectId: ProjectId.make(input.canonicalProjectId),
           title: input.title,
           modelSelection: input.kickoffModelSelection,
           runtimeMode: input.kickoffRuntimeMode,
@@ -177,8 +180,7 @@ export async function runThreadBootstrapKickoff(input: RunThreadBootstrapKickoff
       },
       createdAt: input.createdAt,
     },
-    { environmentId: EnvironmentId.make(input.environmentId) },
-  );
+  });
   finalizeThreadBootstrapKickoff({
     environmentId: input.environmentId,
     threadId: input.threadId,

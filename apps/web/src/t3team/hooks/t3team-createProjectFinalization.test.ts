@@ -1,8 +1,34 @@
-import { describe, expect, it, vi } from "vite-plus/test";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { ProjectShellProject } from "@t3tools/project-context";
+import { projectEnvironment } from "~/state/projects";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { finalizeCreatedProject } from "~/t3team/hooks/t3team-createProjectFinalization";
+import { runT3TeamEnvironmentCommand } from "~/t3team/t3team-environmentCommands";
+
+vi.mock("~/t3team/t3team-environmentCommands", () => ({
+  runT3TeamEnvironmentCommand: vi.fn(async () => undefined),
+  primaryEnvironmentIdOrThrow: () => "primary-env",
+}));
+vi.mock("~/state/projects", () => ({
+  projectEnvironment: { create: { label: "project:create" } },
+}));
+
+const runCommand = vi.mocked(runT3TeamEnvironmentCommand);
+
+beforeEach(() => {
+  runCommand.mockReset();
+  runCommand.mockResolvedValue(undefined);
+});
+
+/** The single `project.create` sent, asserting it went to this machine (work projects live here). */
+function createdProjectInput(): { source?: unknown } {
+  expect(runCommand).toHaveBeenCalledTimes(1);
+  const [command, request] = runCommand.mock.calls[0]!;
+  expect(command).toBe(projectEnvironment.create);
+  expect((request as { environmentId: string }).environmentId).toBe("primary-env");
+  return (request as { input: { source?: unknown } }).input;
+}
 
 /**
  * Defect-1 regression: the Jira/work-source binding must reach the server on `project.create`.
@@ -12,12 +38,11 @@ import { finalizeCreatedProject } from "~/t3team/hooks/t3team-createProjectFinal
  * `apps/web/src/t3team/t3team-projectSourceBinding.ts` and `t3team-projectStoreUtils.ts`.
  */
 
-function createBackend(dispatchCommand: BackendApi["dispatchCommand"]): BackendApi {
+function createBackend(): BackendApi {
   return {
     state: { connectionStatus: "connected", serverConfig: null, providers: [], error: null },
     connect: vi.fn(async () => undefined),
     disconnect: vi.fn(async () => undefined),
-    dispatchCommand,
     forkThread: vi.fn(async () => ({ ok: true as const, childThreadId: "child-thread" })),
     launchRecipeWorkflow: vi.fn(async () => ({ ok: true })),
     submitRecipeCardAction: vi.fn(async () => ({ ok: true })),
@@ -83,8 +108,7 @@ function createLocalProject(): ProjectShellProject {
 
 describe("finalizeCreatedProject", () => {
   it("dispatches project.create carrying the work-source binding (Defect 1)", async () => {
-    const dispatchCommand = vi.fn().mockResolvedValue(undefined);
-    const backend = createBackend(dispatchCommand);
+    const backend = createBackend();
 
     await finalizeCreatedProject({
       backend,
@@ -93,9 +117,7 @@ describe("finalizeCreatedProject", () => {
       setupProfileId: "product-partner",
     });
 
-    expect(dispatchCommand).toHaveBeenCalledTimes(1);
-    const dispatched = dispatchCommand.mock.calls[0]?.[0] as { source?: unknown };
-    expect(dispatched.source).toEqual({
+    expect(createdProjectInput().source).toEqual({
       provider: "atlassian",
       accountId: "acc-1",
       externalProjectId: "10001",
@@ -104,8 +126,7 @@ describe("finalizeCreatedProject", () => {
   });
 
   it("dispatches project.create with a local binding for a loose workspace", async () => {
-    const dispatchCommand = vi.fn().mockResolvedValue(undefined);
-    const backend = createBackend(dispatchCommand);
+    const backend = createBackend();
 
     await finalizeCreatedProject({
       backend,
@@ -114,18 +135,14 @@ describe("finalizeCreatedProject", () => {
       setupProfileId: "product-partner",
     });
 
-    expect(dispatchCommand).toHaveBeenCalledTimes(1);
-    const dispatched = dispatchCommand.mock.calls[0]?.[0] as { source?: unknown };
-    expect(dispatched.source).toEqual({ provider: "local" });
+    expect(createdProjectInput().source).toEqual({ provider: "local" });
   });
 
   it("surfaces a friendly message when the binding is already claimed", async () => {
-    const dispatchCommand = vi.fn(async () => {
-      throw new Error(
-        "Work source 'atlassian:acc-1/10001' is already bound to project 'project-other'.",
-      );
-    });
-    const backend = createBackend(dispatchCommand);
+    runCommand.mockRejectedValueOnce(
+      new Error("Work source 'atlassian:acc-1/10001' is already bound to project 'project-other'."),
+    );
+    const backend = createBackend();
 
     await expect(
       finalizeCreatedProject({

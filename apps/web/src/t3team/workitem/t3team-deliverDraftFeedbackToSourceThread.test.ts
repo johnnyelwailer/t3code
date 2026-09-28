@@ -1,13 +1,25 @@
-import { beforeEach, describe, expect, it } from "vite-plus/test";
-import type { ClientOrchestrationCommand } from "@t3tools/contracts";
+import { EnvironmentId } from "@t3tools/contracts";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { BackendApi } from "~/t3team/backend/t3team-types";
+import { sendT3TeamThreadTurn } from "~/t3team/chat/t3team-sendThreadTurn";
+import { environmentIdOfThread } from "~/t3team/chat/t3team-threadEnvironmentLookup";
 import { useT3TeamDraftMutationStore } from "~/t3team/t3team-draftMutationStore";
 import type { T3TeamDraftMutation } from "~/t3team/t3team-draftMutationTypes";
 import {
   buildDraftFeedbackText,
   deliverDraftFeedbackToSourceThread,
 } from "./t3team-deliverDraftFeedbackToSourceThread";
+
+vi.mock("~/t3team/chat/t3team-sendThreadTurn", () => ({
+  sendT3TeamThreadTurn: vi.fn(async () => undefined),
+}));
+vi.mock("~/t3team/chat/t3team-threadEnvironmentLookup", () => ({
+  environmentIdOfThread: vi.fn(() => null),
+}));
+
+const sendTurn = vi.mocked(sendT3TeamThreadTurn);
+const threadEnvironmentOf = vi.mocked(environmentIdOfThread);
+const THREAD_ENV = EnvironmentId.make("thread-env");
 
 const draft: T3TeamDraftMutation = {
   id: "jira-draft:m1",
@@ -19,27 +31,17 @@ const draft: T3TeamDraftMutation = {
   patch: { assigneeAccountId: "abc-123" },
 };
 
-function fakeBackend(input?: { readonly rejectWith?: string }) {
-  const commands: ClientOrchestrationCommand[] = [];
-  const backend = {
-    async dispatchCommand(command: ClientOrchestrationCommand) {
-      if (input?.rejectWith) throw new Error(input.rejectWith);
-      commands.push(command);
-    },
-  } as unknown as BackendApi;
-  return { backend, commands };
-}
-
 describe("deliverDraftFeedbackToSourceThread", () => {
   beforeEach(() => {
     useT3TeamDraftMutationStore.setState({ drafts: [draft] });
+    sendTurn.mockReset();
+    sendTurn.mockResolvedValue(undefined);
+    threadEnvironmentOf.mockReset();
+    threadEnvironmentOf.mockReturnValue(THREAD_ENV);
   });
 
-  it("sends the feedback as a turn on the proposing thread", async () => {
-    const { backend, commands } = fakeBackend();
-
+  it("sends the feedback as a turn on the proposing thread, on that thread's environment", async () => {
     await deliverDraftFeedbackToSourceThread({
-      backend,
       sourceThreadId: draft.sourceThreadId,
       draftId: draft.id,
       issueIdOrKey: "PROJ-42",
@@ -47,19 +49,20 @@ describe("deliverDraftFeedbackToSourceThread", () => {
       feedback: "Wrong person — it should go to Sam.",
     });
 
-    expect(commands).toHaveLength(1);
-    expect(commands[0]).toMatchObject({ type: "thread.turn.start", threadId: "thread-1" });
-    const text = (commands[0] as { message: { text: string } }).message.text;
-    expect(text).toContain("Wrong person — it should go to Sam.");
-    expect(text).toContain("PROJ-42");
+    expect(threadEnvironmentOf).toHaveBeenCalledWith("thread-1");
+    expect(sendTurn).toHaveBeenCalledTimes(1);
+    const sent = sendTurn.mock.calls[0]![0];
+    expect(sent.environmentId).toBe(THREAD_ENV);
+    expect(sent.threadId).toBe("thread-1");
+    expect(sent.text).toContain("Wrong person — it should go to Sam.");
+    expect(sent.text).toContain("PROJ-42");
     expect(useT3TeamDraftMutationStore.getState().drafts[0]).not.toHaveProperty("error");
   });
 
   it("records why the agent was not told when delivery fails", async () => {
-    const { backend } = fakeBackend({ rejectWith: "already has a turn in progress" });
+    sendTurn.mockRejectedValueOnce(new Error("already has a turn in progress"));
 
     await deliverDraftFeedbackToSourceThread({
-      backend,
       sourceThreadId: draft.sourceThreadId,
       draftId: draft.id,
       issueIdOrKey: "PROJ-42",
@@ -73,11 +76,23 @@ describe("deliverDraftFeedbackToSourceThread", () => {
     expect(stored.error).toContain("already has a turn in progress");
   });
 
-  it("does nothing when the draft has no proposing thread", async () => {
-    const { backend, commands } = fakeBackend();
+  it("records it as undelivered when no connected environment has the thread", async () => {
+    threadEnvironmentOf.mockReturnValue(null);
 
     await deliverDraftFeedbackToSourceThread({
-      backend,
+      sourceThreadId: draft.sourceThreadId,
+      draftId: draft.id,
+      issueIdOrKey: "PROJ-42",
+      field: "assignee",
+      feedback: "Wrong person.",
+    });
+
+    expect(sendTurn).not.toHaveBeenCalled();
+    expect(useT3TeamDraftMutationStore.getState().drafts[0]!.error).toContain("not connected");
+  });
+
+  it("does nothing when the draft has no proposing thread", async () => {
+    await deliverDraftFeedbackToSourceThread({
       sourceThreadId: undefined,
       draftId: draft.id,
       issueIdOrKey: "PROJ-42",
@@ -85,7 +100,7 @@ describe("deliverDraftFeedbackToSourceThread", () => {
       feedback: "Wrong person.",
     });
 
-    expect(commands).toEqual([]);
+    expect(sendTurn).not.toHaveBeenCalled();
   });
 });
 

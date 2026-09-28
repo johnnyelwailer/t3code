@@ -124,7 +124,6 @@ export function WorkItemDescriptionDraftDiff({
       .join("\n\n");
     returnDraftWithFeedback(draft!.id, feedback);
     void deliverDraftFeedbackToSourceThread({
-      backend,
       sourceThreadId: draft!.sourceThreadId,
       draftId: draft!.id,
       issueIdOrKey: draft!.target.issueIdOrKey,

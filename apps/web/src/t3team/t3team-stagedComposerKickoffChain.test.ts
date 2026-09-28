@@ -26,6 +26,23 @@ import {
   WORK_ITEM_REWRITE_COMMENTS_PARAMETER,
   WORK_ITEM_REWRITE_INSTRUCTIONS_PARAMETER,
 } from "~/t3team/workitem/t3team-workItemRewriteWorkflowLaunch";
+import { runT3TeamEnvironmentCommand } from "~/t3team/t3team-environmentCommands";
+
+vi.mock("~/t3team/t3team-environmentCommands", () => ({
+  runT3TeamEnvironmentCommand: vi.fn(async () => undefined),
+}));
+vi.mock("~/state/threads", () => ({
+  threadEnvironment: {
+    create: { label: "thread.create" },
+    startTurn: { label: "thread.turn.start" },
+    updateMetadata: { label: "thread.meta.update" },
+  },
+}));
+vi.mock("~/state/projects", () => ({
+  projectEnvironment: { create: { label: "project.create" } },
+}));
+
+const runCommand = vi.mocked(runT3TeamEnvironmentCommand);
 
 const WORKSPACE_ROOT = "/tmp/project-alpha";
 const RECIPE_PATH = `${WORKSPACE_ROOT}/.t3team/recipes/describe-rewrite`;
@@ -73,16 +90,18 @@ function createLocalThread(kickoff: ReturnType<typeof composerSubmit>): ProjectT
   });
 }
 
+/** The upstream environment commands the bootstrap sent, by label (e.g. "thread.create"). */
+function sentCommandTypes(): string[] {
+  return runCommand.mock.calls.map((call) => (call[0] as { label: string }).label);
+}
+
 function backendSpy() {
-  const dispatchCommand = vi.fn().mockResolvedValue(undefined);
   const launchRecipeWorkflow = vi.fn().mockResolvedValue({ ok: true });
   const syncThreadToolContext = vi.fn().mockResolvedValue(undefined);
   return {
-    dispatchCommand,
     launchRecipeWorkflow,
     syncThreadToolContext,
     backend: {
-      dispatchCommand,
       launchRecipeWorkflow,
       syncThreadToolContext,
     } as unknown as BackendApi,
@@ -136,6 +155,8 @@ async function bootstrapMountedThread(thread: ProjectThread, backend: BackendApi
 describe("composer submit with a staged rewrite and no existing thread", () => {
   beforeEach(() => {
     clearThreadBootstrapDispatchStates();
+    runCommand.mockReset();
+    runCommand.mockResolvedValue(undefined);
   });
 
   it("carries the workflow onto the local thread so the bootstrap can plan a kickoff", () => {
@@ -155,9 +176,7 @@ describe("composer submit with a staged rewrite and no existing thread", () => {
     const plan = await bootstrapMountedThread(thread, spy.backend);
     expect(plan.action).toBe("kickoff");
 
-    const dispatchedTypes = spy.dispatchCommand.mock.calls.map(
-      (call) => (call[0] as { type: string }).type,
-    );
+    const dispatchedTypes = sentCommandTypes();
     // The regression: the thread the launch needs must actually be created.
     expect(dispatchedTypes).toContain("thread.create");
     // ...and no model turn, ever, on this path.
@@ -193,9 +212,6 @@ describe("composer submit with a staged rewrite and no existing thread", () => {
     // The bootstrap is legitimately still hanging on the enrichment call...
     expect(settled).toBe("pending");
     // ...but the thread the user is staring at exists, instead of "Creating conversation" forever.
-    const dispatchedTypes = spy.dispatchCommand.mock.calls.map(
-      (call) => (call[0] as { type: string }).type,
-    );
-    expect(dispatchedTypes).toContain("thread.create");
+    expect(sentCommandTypes()).toContain("thread.create");
   });
 });
