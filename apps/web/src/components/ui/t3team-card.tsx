@@ -5,10 +5,26 @@ import { useRender } from "@base-ui/react/use-render";
 
 import { cn } from "~/lib/utils";
 
-function Card({ className, render, ...props }: useRender.ComponentProps<"div">) {
+/**
+ * `tone` covers the fork's translucent surfaces that sit on hero art and
+ * dashboard backdrops: `translucent` and `muted` let the backdrop through,
+ * `destructive` blurs it so the text stays readable over the art.
+ */
+type CardTone = "default" | "translucent" | "muted" | "destructive";
+
+function Card({
+  className,
+  render,
+  tone = "default",
+  ...props
+}: useRender.ComponentProps<"div"> & { tone?: CardTone }) {
   const defaultProps = {
     className: cn(
       "relative flex flex-col rounded-2xl border bg-card not-dark:bg-clip-padding text-card-foreground shadow-xs/5 before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-2xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
+      tone === "translucent" && "border-border/80 bg-card/78",
+      tone === "muted" && "border-border/80 bg-muted/25",
+      tone === "destructive" &&
+        "border-destructive/35 bg-destructive/8 supports-[backdrop-filter]:backdrop-blur",
       className,
     ),
     "data-slot": "card",
@@ -147,10 +163,18 @@ function CardAction({ className, render, ...props }: useRender.ComponentProps<"d
   });
 }
 
-function CardPanel({ className, render, ...props }: useRender.ComponentProps<"div">) {
+/** `sm` is a panel inside a denser surface; `compact` is a banner strip, not a panel. */
+function CardPanel({
+  className,
+  render,
+  size = "default",
+  ...props
+}: useRender.ComponentProps<"div"> & { size?: "default" | "sm" | "compact" }) {
   const defaultProps = {
     className: cn(
       "flex-1 p-6 in-[[data-slot=card]:has(>[data-slot=card-header]:not(.border-b))]:pt-0 in-[[data-slot=card]:has(>[data-slot=card-footer]:not(.border-t))]:pb-0",
+      size === "sm" && "p-4",
+      size === "compact" && "p-2.5",
       className,
     ),
     "data-slot": "card-panel",

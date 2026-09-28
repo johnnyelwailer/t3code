@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. (awaiting ui variant: Textarea size="compact") */
 import { useState } from "react";
 import { ArrowRight, ChevronRight } from "lucide-react";
 
@@ -111,7 +110,7 @@ export function WorkItemDraftStripRow({ row }: { readonly row: WorkItemDraftStri
             value={feedback}
             onChange={(event) => setFeedback(event.target.value)}
             placeholder="Tell the agent what to change — it proposes again from your note."
-            className="text-xs"
+            size="compact"
             aria-label={`Comment on proposed ${row.fieldLabel}`}
           />
           <div className="mt-1.5 flex justify-end gap-1.5">

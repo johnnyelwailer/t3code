@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. (awaiting ui variant: Textarea size="compact") */
 /**
  * The one inline "leave a note" popout used across the work item surfaces.
  *
@@ -50,7 +49,7 @@ export function T3TeamCommentPopoutCard({
         value={body}
         onChange={(event) => setBody(event.target.value)}
         placeholder={placeholder}
-        className="text-xs"
+        size="compact"
         aria-label={ariaLabel}
       />
       <div className="mt-1.5 flex justify-end gap-1.5">
