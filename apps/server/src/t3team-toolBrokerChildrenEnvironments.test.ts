@@ -127,57 +127,66 @@ describe("buildChildrenEnvironmentEntries", () => {
 // ── opEnvironments ───────────────────────────────────────────────────────────
 
 describe("opEnvironments", () => {
-  it("default case: own environment only, with the discovery hint", async () => {
-    const deps = mkDeps({ localEnvironmentId: "env-local" });
-    const result = await Effect.runPromise(opEnvironments(deps, {}));
-    const payload = result.structuredContent as {
-      ok: boolean;
-      op?: string;
-      environments: Array<{ environmentId: string; isDefault: boolean }>;
-      hint?: string;
-      delivery_boundary: string;
-    };
-    assert.strictEqual(payload.ok, true);
-    assert.strictEqual(payload.op, "environments");
-    assert.strictEqual(payload.environments.length, 1);
-    assert.strictEqual(payload.environments[0]?.environmentId, "env-local");
-    assert.strictEqual(payload.environments[0]?.isDefault, true);
-    assert.ok(payload.hint?.includes("No other environments"), "hint present in the default case");
-    assert.ok(payload.delivery_boundary.includes("separate channel"));
-  });
+  it.effect("default case: own environment only, with the discovery hint", () =>
+    Effect.gen(function* () {
+      const deps = mkDeps({ localEnvironmentId: "env-local" });
+      const result = yield* opEnvironments(deps, {});
+      const payload = result.structuredContent as {
+        ok: boolean;
+        op?: string;
+        environments: Array<{ environmentId: string; isDefault: boolean }>;
+        hint?: string;
+        delivery_boundary: string;
+      };
+      assert.strictEqual(payload.ok, true);
+      assert.strictEqual(payload.op, "environments");
+      assert.strictEqual(payload.environments.length, 1);
+      assert.strictEqual(payload.environments[0]?.environmentId, "env-local");
+      assert.strictEqual(payload.environments[0]?.isDefault, true);
+      assert.ok(
+        payload.hint?.includes("No other environments"),
+        "hint present in the default case",
+      );
+      assert.ok(payload.delivery_boundary.includes("separate channel"));
+    }),
+  );
 
-  it("cross-env entries: no hint, history entries not default", async () => {
-    const deps = mkDeps({
-      localEnvironmentId: "env-local",
-      history: [
-        {
-          environmentId: "env-remote",
-          label: "GHA runner",
-          threadCount: 4,
-          latestThreadAt: "2026-09-13T00:00:00.000Z",
-        },
-      ],
-    });
-    const result = await Effect.runPromise(opEnvironments(deps, {}));
-    const payload = result.structuredContent as {
-      ok: boolean;
-      environments: Array<{ environmentId: string; isDefault: boolean; childrenCount: number }>;
-      hint?: string;
-    };
-    assert.strictEqual(payload.ok, true);
-    assert.strictEqual(payload.environments.length, 2);
-    assert.strictEqual(payload.environments[1]?.isDefault, false);
-    assert.strictEqual(payload.environments[1]?.childrenCount, 4);
-    assert.strictEqual(payload.hint, undefined);
-  });
+  it.effect("cross-env entries: no hint, history entries not default", () =>
+    Effect.gen(function* () {
+      const deps = mkDeps({
+        localEnvironmentId: "env-local",
+        history: [
+          {
+            environmentId: "env-remote",
+            label: "GHA runner",
+            threadCount: 4,
+            latestThreadAt: "2026-09-13T00:00:00.000Z",
+          },
+        ],
+      });
+      const result = yield* opEnvironments(deps, {});
+      const payload = result.structuredContent as {
+        ok: boolean;
+        environments: Array<{ environmentId: string; isDefault: boolean; childrenCount: number }>;
+        hint?: string;
+      };
+      assert.strictEqual(payload.ok, true);
+      assert.strictEqual(payload.environments.length, 2);
+      assert.strictEqual(payload.environments[1]?.isDefault, false);
+      assert.strictEqual(payload.environments[1]?.childrenCount, 4);
+      assert.strictEqual(payload.hint, undefined);
+    }),
+  );
 
-  it("history read failure surfaces as a tool error", async () => {
-    const deps = mkDeps({ localEnvironmentId: "env-local", historyError: "store offline" });
-    const result = await Effect.runPromise(opEnvironments(deps, {}));
-    assert.strictEqual(result.isError, true);
-    assert.match(
-      String((result.structuredContent as { error?: unknown }).error),
-      /Failed to list target environments: store offline/,
-    );
-  });
+  it.effect("history read failure surfaces as a tool error", () =>
+    Effect.gen(function* () {
+      const deps = mkDeps({ localEnvironmentId: "env-local", historyError: "store offline" });
+      const result = yield* opEnvironments(deps, {});
+      assert.strictEqual(result.isError, true);
+      assert.match(
+        String((result.structuredContent as { error?: unknown }).error),
+        /Failed to list target environments: store offline/,
+      );
+    }),
+  );
 });

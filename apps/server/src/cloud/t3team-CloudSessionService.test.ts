@@ -1,13 +1,12 @@
 import { CloudSessionFailedError } from "@t3tools/contracts";
 import { assert, describe, it } from "@effect/vitest";
-import * as Clock from "effect/Clock";
 import * as ConfigProvider from "effect/ConfigProvider";
-import * as DateTime from "effect/DateTime";
-import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
 import * as VcsProcess from "../vcs/VcsProcess.ts";
@@ -50,27 +49,16 @@ const GhPayloadIssueJson = Schema.Struct({ title: Schema.String, body: Schema.St
 const decodeGhPayloadIssue = Schema.decodeSync(Schema.fromJsonString(GhPayloadIssueJson));
 
 /**
- * A real-time clock. `it.effect` installs a fake clock that never advances on
- * its own, which would hang the discovery poll's `Effect.sleep`; this one
- * actually waits so the poll can make its (single, matching) attempt.
+ * Runs a create that reaches the dispatch. `it.effect` installs a TestClock that
+ * never advances on its own, so the discovery poll's one-second `Effect.sleep`
+ * is released by advancing it; the poll then makes its (single, matching) attempt.
  */
-const realClock: Clock.Clock = {
-  currentTimeMillisUnsafe: () => DateTime.toEpochMillis(DateTime.nowUnsafe()),
-  currentTimeMillis: Effect.succeed(0),
-  currentTimeNanosUnsafe: () => 0n,
-  currentTimeNanos: Effect.succeed(0n),
-  monotonicTimeNanosUnsafe: () => 0n,
-  monotonicTimeNanos: Effect.succeed(0n),
-  sleep: (duration: Duration.Duration) =>
-    Effect.callback<void, never>((resume) => {
-      // Effect.sleep would resolve against the ambient clock — this very clock — so
-      // bridge to the default runtime, whose clock is the real system one.
-      void Effect.runPromise(Effect.sleep(duration)).then(
-        () => resume(Effect.void),
-        (error) => resume(Effect.die(error)),
-      );
-    }),
-};
+const runPastDiscoveryPoll = <A, E>(create: Effect.Effect<A, E>) =>
+  Effect.gen(function* () {
+    const fiber = yield* Effect.forkChild(create);
+    yield* TestClock.adjust("1 second");
+    return yield* Fiber.join(fiber);
+  });
 
 /**
  * A stateful fake gh: records every call, captures the dispatch tag, and hands
@@ -148,24 +136,18 @@ describe("CloudSessionService.create credential handoff", () => {
       });
       // Empty env: handoff flag unset → default ON; fleet config → its defaults.
       const configLayer = ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }));
-      // A real clock: the discovery poll sleeps between attempts, and the
-      // harness default is a fake clock that never advances on its own.
-      const providers = Layer.mergeAll(
-        ghMock,
-        cloudCliMock,
-        minterMock,
-        configLayer,
-        Layer.succeed(Clock.Clock, realClock),
-      );
+      const providers = Layer.mergeAll(ghMock, cloudCliMock, minterMock, configLayer);
       // Expose the service AND its runtime dependencies to the create effect.
       const full = Layer.mergeAll(
         CloudSessionService.layer.pipe(Layer.provide(providers)),
         providers,
       );
 
-      const session = yield* Effect.service(CloudSessionService.CloudSessionService).pipe(
-        Effect.flatMap((svc) => svc.create({ durationSeconds: 3600 })),
-        Effect.provide(full),
+      const session = yield* runPastDiscoveryPoll(
+        Effect.service(CloudSessionService.CloudSessionService).pipe(
+          Effect.flatMap((svc) => svc.create({ durationSeconds: 3600 })),
+          Effect.provide(full),
+        ),
       );
 
       // The handoff ran first (payload issue), the dispatch second.
@@ -210,13 +192,7 @@ describe("CloudSessionService.create credential handoff", () => {
           ),
       });
       const configLayer = ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }));
-      const providers = Layer.mergeAll(
-        ghMock,
-        cloudCliMock,
-        minterMock,
-        configLayer,
-        Layer.succeed(Clock.Clock, realClock),
-      );
+      const providers = Layer.mergeAll(ghMock, cloudCliMock, minterMock, configLayer);
       const full = Layer.mergeAll(
         CloudSessionService.layer.pipe(Layer.provide(providers)),
         providers,
@@ -266,21 +242,17 @@ describe("CloudSessionService.create credential handoff", () => {
         mint: (input) => Effect.sync(() => mintCalls.push(input)).pipe(Effect.asVoid),
       });
       const configLayer = ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }));
-      const providers = Layer.mergeAll(
-        ghMock,
-        cloudCliMock,
-        minterMock,
-        configLayer,
-        Layer.succeed(Clock.Clock, realClock),
-      );
+      const providers = Layer.mergeAll(ghMock, cloudCliMock, minterMock, configLayer);
       const full = Layer.mergeAll(
         CloudSessionService.layer.pipe(Layer.provide(providers)),
         providers,
       );
 
-      const session = yield* Effect.service(CloudSessionService.CloudSessionService).pipe(
-        Effect.flatMap((svc) => svc.create({ durationSeconds: 3600 })),
-        Effect.provide(full),
+      const session = yield* runPastDiscoveryPoll(
+        Effect.service(CloudSessionService.CloudSessionService).pipe(
+          Effect.flatMap((svc) => svc.create({ durationSeconds: 3600 })),
+          Effect.provide(full),
+        ),
       );
 
       // The mint ran, then the handoff delivered the fresh credential.
@@ -302,9 +274,8 @@ describe("CloudSessionService.create credential handoff", () => {
 
 /**
  * Provider layers for a service wired to a fake gh, mirroring the create test:
- * empty env → handoff flag ON, default fleet config, a real clock so any poll
- * can sleep. `getExisting` is `none` because these tests never reach the
- * credential handoff.
+ * empty env → handoff flag ON, default fleet config. `getExisting` is `none`
+ * because these tests never reach the credential handoff.
  */
 const providersFor = (
   execute: (input: {
@@ -326,13 +297,7 @@ const providersFor = (
     mint: () => Effect.die("the mint must not run in the list tests"),
   });
   const configLayer = ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }));
-  return Layer.mergeAll(
-    ghMock,
-    cloudCliMock,
-    minterMock,
-    configLayer,
-    Layer.succeed(Clock.Clock, realClock),
-  );
+  return Layer.mergeAll(ghMock, cloudCliMock, minterMock, configLayer);
 };
 
 describe("CloudSessionService.list per-user isolation", () => {

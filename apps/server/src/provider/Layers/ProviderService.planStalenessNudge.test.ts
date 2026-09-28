@@ -57,9 +57,9 @@ const asTurnId = (value: string): TurnId => TurnId.make(value);
 
 const capturedSendTurnInputs: Array<unknown> = [];
 
-const makeCapturingAdapter = (): ProviderAdapterShape<ProviderAdapterError> => {
+const makeCapturingAdapter = Effect.gen(function* () {
   const sessions = new Map<ThreadId, ProviderSession>();
-  const runtimeEventPubSub = Effect.runSync(PubSub.unbounded<ProviderRuntimeEvent>());
+  const runtimeEventPubSub = yield* PubSub.unbounded<ProviderRuntimeEvent>();
 
   const startSession = (
     input: ProviderSessionStartInput,
@@ -149,18 +149,18 @@ const makeCapturingAdapter = (): ProviderAdapterShape<ProviderAdapterError> => {
   };
 
   return adapter;
-};
+});
 
 const fixtureCwdRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "plan-staleness-nudge-"));
 afterAll(() => NodeFS.rmSync(fixtureCwdRoot, { recursive: true, force: true }));
 const PROJECT_CWD = NodePath.join(fixtureCwdRoot, "project");
 NodeFS.mkdirSync(PROJECT_CWD, { recursive: true });
 
-const adapter = makeCapturingAdapter();
-const registry = makeAdapterRegistryMock({ [CODEX_DRIVER]: adapter });
-const providerAdapterLayer = Layer.succeed(
+const providerAdapterLayer = Layer.effect(
   ProviderAdapterRegistry.ProviderAdapterRegistry,
-  registry,
+  Effect.map(makeCapturingAdapter, (adapter) =>
+    makeAdapterRegistryMock({ [CODEX_DRIVER]: adapter }),
+  ),
 );
 const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
   Layer.provide(SqlitePersistenceMemory),

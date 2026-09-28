@@ -28,7 +28,7 @@
  * Usage: node apps/server/scripts/t3team-replay-task-records-to-plans.ts [--dry-run] [--base-dir DIR] (default ~/.t3)
  */
 import * as NodeOS from "node:os";
-import { parseArgs } from "node:util";
+import * as NodeUtil from "node:util";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import * as Effect from "effect/Effect";
@@ -44,7 +44,7 @@ import {
 import { makeTaskReplayConfig, runLiveReplay } from "./t3team-replay-task-records-run.ts";
 
 const program = Effect.gen(function* () {
-  const { values } = parseArgs({
+  const { values } = NodeUtil.parseArgs({
     allowPositionals: false,
     strict: true,
     options: {

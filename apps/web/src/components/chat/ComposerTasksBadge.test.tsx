@@ -28,7 +28,9 @@ describe("ComposerTasksBadge plan staleness label", () => {
     );
 
     expect(markup).not.toContain("data-composer-task-updated");
-    expect(markup).toContain("1/2 complete");
+    // Upstream #12165 compacted the visible count to "1/2"; the full phrase moved to the label.
+    expect(markup).toMatch(/data-composer-task-progress="true">1\/2</);
+    expect(markup).toContain('aria-label="Tasks: 1 of 2 complete.');
   });
 
   it("shows the relative last-updated time in the expanded panel header", () => {

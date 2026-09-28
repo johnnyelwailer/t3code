@@ -1498,11 +1498,12 @@ describe("deriveMessagesTimelineRows", () => {
       worktreeSetup: { ...snapshot, phase: "failed" },
       queuedMessages: [queuedMessage("q1", "later")],
     });
+    // Fork GHE #236 (2f659c95a8): the working row pins after the latest entry.
     expect(withMessages.map((row) => row.kind)).toEqual([
       "message",
       "worktree-setup",
-      "working",
       "message",
+      "working",
       "thinking",
       "queued-message",
     ]);
@@ -1671,6 +1672,15 @@ describe("deriveMessagesTimelineRows", () => {
             tone: "tool",
             agentSpawn,
           },
+          // Fork #241: prose never folds, so the turn needs real tool work
+          // for a "Worked for" fold to exist next to the spawn row.
+          {
+            id: "settled-tool",
+            createdAt: "2026-01-01T00:00:04Z",
+            turnId: firstMessage.turnId,
+            label: "Read file",
+            tone: "tool",
+          },
         ],
       );
     const direct = entriesWith({ workflowId: null, agentTaskIds: ["agent-a", "agent-b"] });
@@ -1689,7 +1699,14 @@ describe("deriveMessagesTimelineRows", () => {
         liveAgentTaskIds,
         ...(expandedTurnIds ? { expandedTurnIds } : {}),
       }).map((row) => row.id);
-    const unfolded = ["turn-fold:turn-1", "spawn-entry", "assistant-final-entry"];
+    // Fork #241 (5d2f8b1b89): prose never folds, so the first message stays
+    // visible and the fold anchors at the hidden tool, after the spawn row.
+    const unfolded = [
+      "assistant-first-entry",
+      "spawn-entry",
+      "turn-fold:turn-1",
+      "assistant-final-entry",
+    ];
 
     const activeRows = (
       timelineEntries: typeof direct,
@@ -1760,9 +1777,10 @@ describe("deriveMessagesTimelineRows", () => {
     expect(derive(direct, undefined)).toEqual(unfolded);
     // Expanding the turn reveals the other work without duplicating the batch.
     expect(derive(direct, new Set(), new Set(["turn-1" as TurnId]))).toEqual([
-      "turn-fold:turn-1",
       "assistant-first-entry",
       "spawn-entry",
+      "turn-fold:turn-1",
+      "settled-tool",
       "assistant-final-entry",
     ]);
   });
@@ -2443,8 +2461,9 @@ describe("deriveMessagesTimelineRows", () => {
       supportsConversationRollback: false,
     } satisfies Parameters<typeof deriveMessagesTimelineRows>[0];
     const initial = deriveMessagesTimelineRowsWithState(input);
-    expect(initial.rows.map((row) => row.kind)).toEqual(["working", "activity-group"]);
-    expect(initial.rows.at(-1)).toMatchObject({
+    // Fork GHE #236 (2f659c95a8): the working row pins after the latest entry.
+    expect(initial.rows.map((row) => row.kind)).toEqual(["activity-group", "working"]);
+    expect(initial.rows[0]).toMatchObject({
       id: "live-activity-row",
       entries,
       expanded: false,
@@ -2475,7 +2494,7 @@ describe("deriveMessagesTimelineRows", () => {
       expect(updatedStable.byId.get("working-indicator-row")).toBe(
         stable.byId.get("working-indicator-row"),
       );
-      expect(initial.rows.at(-1)).toMatchObject({ entries });
+      expect(initial.rows[0]).toMatchObject({ entries });
     }
   });
 
@@ -2506,8 +2525,9 @@ describe("deriveMessagesTimelineRows", () => {
         supportsConversationRollback: false,
       } satisfies Parameters<typeof deriveMessagesTimelineRows>[0];
       const rows = deriveMessagesTimelineRows(input);
-      expect(rows.map((row) => row.kind)).toEqual(["working", "activity-group"]);
-      expect(rows.at(-1)).toMatchObject({
+      // Fork GHE #236 (2f659c95a8): the working row pins after the latest entry.
+      expect(rows.map((row) => row.kind)).toEqual(["activity-group", "working"]);
+      expect(rows[0]).toMatchObject({
         id: "live-activity-row",
         entries,
         active: true,
@@ -2517,7 +2537,7 @@ describe("deriveMessagesTimelineRows", () => {
         ...input,
         expandedWorkGroupIds: new Set(["activity-group:thought-first"]),
       });
-      expect(expanded.at(-1)).toMatchObject({ id: "live-activity-row", entries, expanded: true });
+      expect(expanded.at(-2)).toMatchObject({ id: "live-activity-row", entries, expanded: true });
     }
   });
 
@@ -2633,8 +2653,9 @@ describe("deriveMessagesTimelineRows", () => {
       supportsConversationRollback: false,
     } satisfies Parameters<typeof deriveMessagesTimelineRows>[0];
     const rows = deriveMessagesTimelineRows(input);
-    expect(rows.map((row) => row.kind)).toEqual(["working", "activity-group"]);
-    expect(rows.at(-1)).toMatchObject({
+    // Fork GHE #236 (2f659c95a8): the working row pins after the latest entry.
+    expect(rows.map((row) => row.kind)).toEqual(["activity-group", "working"]);
+    expect(rows[0]).toMatchObject({
       id: "live-activity-row",
       entries: [thought, ...tools],
       active: true,
@@ -2678,8 +2699,9 @@ describe("deriveMessagesTimelineRows", () => {
         turnDiffSummaries: [],
         supportsConversationRollback: false,
       });
-      expect(rows.map((row) => row.kind)).toEqual(["working", "activity-group", "thinking"]);
-      expect(rows[1]).toMatchObject({ id: "activity-group:reasoning-entry", active: false });
+      // Fork GHE #236 (2f659c95a8): the working row pins after the latest entry.
+      expect(rows.map((row) => row.kind)).toEqual(["activity-group", "working", "thinking"]);
+      expect(rows[0]).toMatchObject({ id: "activity-group:reasoning-entry", active: false });
       expect(rows[2]).toMatchObject({ id: "live-activity-row" });
     },
   );
