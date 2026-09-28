@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 import { useId } from "react";
 
 import { useTheme } from "~/hooks/useTheme";
@@ -50,8 +49,8 @@ export function NexploreTitlebarFade({
           y2="0"
           gradientUnits="userSpaceOnUse"
         >
-          <stop offset="0" stopColor="#ffffff" stopOpacity={opacity} />
-          <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+          <stop offset="0" style={{ stopColor: "var(--color-white)" }} stopOpacity={opacity} />
+          <stop offset="1" style={{ stopColor: "var(--color-white)" }} stopOpacity="0" />
         </linearGradient>
       </defs>
       <rect width="100%" height="100%" fill={`url(#${gradientId})`} />

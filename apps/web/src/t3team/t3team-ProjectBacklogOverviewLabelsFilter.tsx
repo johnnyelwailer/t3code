@@ -1,14 +1,13 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { CheckIcon, ChevronDownIcon, TagIcon } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import {
   Combobox,
   ComboboxEmpty,
-  ComboboxInput,
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
+  ComboboxSearchInput,
   ComboboxStatus,
   ComboboxTrigger,
 } from "~/components/ui/combobox";
@@ -44,7 +43,7 @@ export function ProjectBacklogOverviewLabelsFilter({
     >
       <ComboboxTrigger
         render={<Button variant="outline" size="xs" />}
-        className="w-[10rem] justify-between gap-1.5 font-normal"
+        className="w-40 justify-between"
         aria-label="Filter backlog by labels"
       >
         <span className="flex min-w-0 items-center gap-1.5">
@@ -53,21 +52,14 @@ export function ProjectBacklogOverviewLabelsFilter({
         </span>
         <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />
       </ComboboxTrigger>
-      <ComboboxPopup align="start" side="bottom" className="w-[15rem]">
-        <div className="border-b p-1">
-          <ComboboxInput
-            className="[&_input]:font-sans rounded-md ring-0"
-            placeholder="Search labels..."
-            showTrigger={false}
-            size="sm"
-          />
-        </div>
+      <ComboboxPopup align="start" side="bottom" className="w-60">
+        <ComboboxSearchInput placeholder="Search labels..." />
         <ComboboxEmpty>No matching labels.</ComboboxEmpty>
         <ComboboxList className="max-h-56">
           {options.map((option) => (
-            <ComboboxItem key={option.value} value={option.value} className="text-xs" hideIndicator>
+            <ComboboxItem key={option.value} value={option.value} hideIndicator>
               <span className="truncate">{option.value}</span>
-              <span className="ml-auto text-[10px] text-muted-foreground">{option.count}</span>
+              <span className="ml-auto text-3xs text-muted-foreground">{option.count}</span>
               {selectedSet.has(option.value) ? <CheckIcon className="size-3.5" /> : null}
             </ComboboxItem>
           ))}

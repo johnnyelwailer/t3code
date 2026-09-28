@@ -2,13 +2,19 @@ import type { ComponentPropsWithoutRef } from "react";
 import { Card, CardContent } from "~/t3team/components/ui/t3team-card";
 import { cn } from "~/t3team/lib/t3team-utils";
 
-type SurfaceTone = "default" | "muted" | "danger";
+type SurfaceTone = "default" | "muted" | "danger" | "primary";
 
 type PanelTone = "default" | "muted" | "soft" | "inset" | "dashed";
 
 // The looks live in the fork's Card `tone` variant; `danger` blurs its backdrop because at
-// /8 opacity the wizard's hero art would bleed straight through the banner text.
-const cardTones = { default: "translucent", muted: "muted", danger: "destructive" } as const;
+// /8 opacity the wizard's hero art would bleed straight through the banner text, and
+// `primary` marks agent-proposed content awaiting review.
+const cardTones = {
+  default: "translucent",
+  muted: "muted",
+  danger: "destructive",
+  primary: "primary",
+} as const;
 
 const panelToneClasses: Record<PanelTone, string> = {
   default: "rounded-lg border border-border/75 bg-card/76",

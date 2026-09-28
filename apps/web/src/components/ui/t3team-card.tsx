@@ -10,7 +10,7 @@ import { cn } from "~/lib/utils";
  * dashboard backdrops: `translucent` and `muted` let the backdrop through,
  * `destructive` blurs it so the text stays readable over the art.
  */
-type CardTone = "default" | "translucent" | "muted" | "destructive";
+type CardTone = "default" | "translucent" | "muted" | "destructive" | "primary";
 
 function Card({
   className,
@@ -25,6 +25,7 @@ function Card({
       tone === "muted" && "border-border/80 bg-muted/25",
       tone === "destructive" &&
         "border-destructive/35 bg-destructive/8 supports-[backdrop-filter]:backdrop-blur",
+      tone === "primary" && "border-primary/25 bg-primary/4",
       className,
     ),
     "data-slot": "card",

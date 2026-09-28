@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { useMemo, useState } from "react";
 import { Sidebar, SidebarProvider, SidebarRail } from "~/t3team/components/ui/t3team-sidebar";
 import { AppContentPane } from "~/t3team/t3team-AppContentPane";
@@ -108,7 +107,7 @@ export function App({
       <Sidebar
         side="left"
         collapsible="offcanvas"
-        className="min-h-0 overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
+        className="min-h-0 overflow-hidden"
         resizable={{
           minWidth: T3TEAM_LEFT_SIDEBAR_MIN_WIDTH,
           shouldAcceptWidth: ({ nextWidth, wrapper }) =>
