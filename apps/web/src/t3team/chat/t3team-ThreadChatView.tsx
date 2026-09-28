@@ -136,6 +136,7 @@ export function ThreadChatView({
   });
   const composerState = useThreadChatComposerState({
     backend,
+    environmentId,
     projectId,
     threadId,
     ...(ticketId ? { ticketId } : {}),

@@ -11,6 +11,10 @@ import { registerContextAttachmentRequest } from "~/t3team/t3team-contextAttachm
 import type { T3TeamTurnToolContext } from "~/t3team/t3team-threadToolContext";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
 
+// Every bootstrap command must go to the environment that owns the thread (a
+// cloud session's thread does not exist on the primary server).
+const ROUTED_TO_THREAD_ENVIRONMENT = { environmentId: "env-1" };
+
 function createBackend(): BackendApi {
   return {
     state: {
@@ -213,6 +217,7 @@ describe("runThreadBootstrap", () => {
           }),
         }),
       }),
+      ROUTED_TO_THREAD_ENVIRONMENT,
     );
     expect(useT3TeamAddToChatStore.getState().threadAttachmentsByThreadId["thread-1"]).toBe(
       undefined,
@@ -280,6 +285,7 @@ describe("runThreadBootstrap", () => {
           }),
         }),
       }),
+      ROUTED_TO_THREAD_ENVIRONMENT,
     );
     expect(useT3TeamAddToChatStore.getState().threadAttachmentsByThreadId["thread-2"]).toBe(
       undefined,
@@ -323,6 +329,7 @@ describe("runThreadBootstrap", () => {
       expect.objectContaining({
         type: "thread.create",
       }),
+      ROUTED_TO_THREAD_ENVIRONMENT,
     );
     expect(backend.launchRecipeWorkflow).toHaveBeenCalledWith({
       threadId: "thread-3",
@@ -423,6 +430,7 @@ describe("runThreadBootstrap", () => {
           text: "T-shirt-size PROJ-100 using Jira, code, and precedent work.",
         }),
       }),
+      ROUTED_TO_THREAD_ENVIRONMENT,
     );
   });
 
@@ -500,9 +508,11 @@ describe("runThreadBootstrap", () => {
     expect(backend.launchRecipeWorkflow).not.toHaveBeenCalled();
     expect(backend.dispatchCommand).toHaveBeenCalledWith(
       expect.objectContaining({ type: "thread.create" }),
+      ROUTED_TO_THREAD_ENVIRONMENT,
     );
     expect(backend.dispatchCommand).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: "thread.turn.start" }),
+      expect.anything(),
     );
   });
 

@@ -103,22 +103,25 @@ export function useT3TeamWidgetBlockController(input: {
         widgetTitle: widget.title,
         text: trimmed,
       });
-      await backend.dispatchCommand({
-        type: "thread.turn.start",
-        commandId: CommandId.make(`web:t3team-widget:turn:${randomWidgetNonce()}`),
-        threadId: threadRef.threadId,
-        message: {
-          messageId: MessageId.make(randomWidgetNonce()),
-          role: "user",
-          text: transport.text,
-          attachments: [],
-          t3teamExt: transport.t3teamExt,
+      await backend.dispatchCommand(
+        {
+          type: "thread.turn.start",
+          commandId: CommandId.make(`web:t3team-widget:turn:${randomWidgetNonce()}`),
+          threadId: threadRef.threadId,
+          message: {
+            messageId: MessageId.make(randomWidgetNonce()),
+            role: "user",
+            text: transport.text,
+            attachments: [],
+            t3teamExt: transport.t3teamExt,
+          },
+          modelSelection: thread.modelSelection,
+          runtimeMode: thread.runtimeMode,
+          interactionMode: thread.interactionMode,
+          createdAt: new Date().toISOString(),
         },
-        modelSelection: thread.modelSelection,
-        runtimeMode: thread.runtimeMode,
-        interactionMode: thread.interactionMode,
-        createdAt: new Date().toISOString(),
-      });
+        { environmentId: threadRef.environmentId },
+      );
     },
     [backend, thread, threadRef, widget.widgetId, widget.title],
   );

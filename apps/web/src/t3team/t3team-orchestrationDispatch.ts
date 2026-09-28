@@ -1,4 +1,8 @@
-import { ORCHESTRATION_WS_METHODS, type ClientOrchestrationCommand } from "@t3tools/contracts";
+import {
+  ORCHESTRATION_WS_METHODS,
+  type ClientOrchestrationCommand,
+  type EnvironmentId,
+} from "@t3tools/contracts";
 import {
   createEnvironmentRpcCommand,
   runAtomCommand,
@@ -14,10 +18,17 @@ export const dispatchOrchestrationCommand = createEnvironmentRpcCommand(connecti
   tag: ORCHESTRATION_WS_METHODS.dispatchCommand,
 });
 
+/**
+ * Sends one orchestration command to the environment that owns its thread or
+ * project. Callers that know it must pass it: a thread on a remote environment
+ * (a cloud session) does not exist on the primary server, which rejects the
+ * command with "Project … does not exist". Without one, the primary is used.
+ */
 export async function runT3TeamOrchestrationDispatch(
   command: ClientOrchestrationCommand,
+  target?: { readonly environmentId?: EnvironmentId | null },
 ): Promise<void> {
-  const environmentId = appAtomRegistry.get(primaryEnvironmentIdAtom);
+  const environmentId = target?.environmentId ?? appAtomRegistry.get(primaryEnvironmentIdAtom);
   if (environmentId === null) {
     throw new Error("Primary environment is not available. Finish server pairing and retry.");
   }

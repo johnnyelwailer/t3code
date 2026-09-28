@@ -119,6 +119,7 @@ export function runThreadBootstrapEffect(input: RunThreadBootstrapEffectInput): 
     // `initialBranch` has a value, rather than leaving the thread branchless forever.
     maybeBackfillKickoffBranch({
       backend,
+      environmentId,
       threadId,
       initialBranch,
       hasServerThread: serverThread != null,

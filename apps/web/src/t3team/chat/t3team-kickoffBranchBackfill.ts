@@ -1,3 +1,5 @@
+import { EnvironmentId } from "@t3tools/contracts";
+
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import type { ThreadBootstrapDispatchState } from "~/t3team/chat/t3team-threadBootstrapPlan";
 import { recordT3TeamThreadDebug } from "~/t3team/chat/t3team-threadDebug";
@@ -13,12 +15,13 @@ import { randomUUID } from "~/lib/utils";
  */
 export function maybeBackfillKickoffBranch(input: {
   backend: BackendApi;
+  environmentId: string;
   threadId: string;
   initialBranch: string | undefined;
   hasServerThread: boolean;
   state: ThreadBootstrapDispatchState;
 }): void {
-  const { backend, threadId, initialBranch, hasServerThread, state } = input;
+  const { backend, environmentId, threadId, initialBranch, hasServerThread, state } = input;
 
   // Only fires for a thread THIS hook dispatched with an unresolved branch (`dispatchedBranch ===
   // null`). `undefined` means nothing was dispatched here (e.g. a server thread that showed up
@@ -38,13 +41,16 @@ export function maybeBackfillKickoffBranch(input: {
 
   state.branchBackfillSent = true;
   void backend
-    .dispatchCommand({
-      type: "thread.meta.update",
-      commandId: randomUUID() as any,
-      threadId: threadId as any,
-      branch: initialBranch,
-      expectedBranch: null,
-    })
+    .dispatchCommand(
+      {
+        type: "thread.meta.update",
+        commandId: randomUUID() as any,
+        threadId: threadId as any,
+        branch: initialBranch,
+        expectedBranch: null,
+      },
+      { environmentId: EnvironmentId.make(environmentId) },
+    )
     .then(() => {
       state.dispatchedBranch = initialBranch;
     })

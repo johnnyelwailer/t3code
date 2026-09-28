@@ -52,8 +52,11 @@ export function createT3Backend(wsBaseUrl: string): BackendApi {
     nextState.connectionStatus = "connecting";
   }
 
-  async function dispatch(command: ClientOrchestrationCommand) {
-    await runT3TeamOrchestrationDispatch(command);
+  async function dispatch(
+    command: ClientOrchestrationCommand,
+    target?: Parameters<BackendApi["dispatchCommand"]>[1],
+  ) {
+    await runT3TeamOrchestrationDispatch(command, target);
   }
 
   async function forkThread(input: Parameters<BackendApi["forkThread"]>[0]) {

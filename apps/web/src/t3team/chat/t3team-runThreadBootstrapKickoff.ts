@@ -1,8 +1,12 @@
-import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  type ModelSelection,
+  type ProviderInteractionMode,
+  type RuntimeMode,
+} from "@t3tools/contracts";
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
-import { isDuplicateThreadCreateError } from "~/t3team/chat/t3team-duplicateThreadCreateError";
-import { dispatchThreadBootstrapCreate } from "~/t3team/chat/t3team-runThreadBootstrapHelpers";
+import { dispatchThreadBootstrapCreateWithRecovery } from "~/t3team/chat/t3team-runThreadBootstrapHelpers";
 import {
   appendContextAttachmentsToPrompt,
   prepareThreadContextAttachments,
@@ -19,33 +23,6 @@ import { useT3TeamAddToChatStore } from "~/t3team/t3team-addToChatStore";
 import { buildContextAttachmentMessageExt } from "~/t3team/t3team-messageContextAttachments";
 import type { T3TeamTurnToolContext } from "~/t3team/t3team-threadToolContext";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
-
-type DispatchThreadBootstrapCreateWithRecoveryInput = {
-  backend: BackendApi;
-  action: ThreadBootstrapAction;
-  state: ThreadBootstrapDispatchState;
-  environmentId: string;
-  threadId: string;
-  canonicalProjectId: string;
-  title: string;
-  kickoffModelSelection: ModelSelection;
-  kickoffRuntimeMode: RuntimeMode;
-  kickoffInteractionMode: ProviderInteractionMode;
-  kickoffBranch: string | null;
-  createdAt: string;
-};
-
-export async function dispatchThreadBootstrapCreateWithRecovery(
-  input: DispatchThreadBootstrapCreateWithRecoveryInput,
-) {
-  try {
-    await dispatchThreadBootstrapCreate(input);
-  } catch (error) {
-    if (!isDuplicateThreadCreateError(error)) {
-      throw error;
-    }
-  }
-}
 
 type RunThreadBootstrapKickoffInput = {
   backend: BackendApi;
@@ -170,35 +147,38 @@ export async function runThreadBootstrapKickoff(input: RunThreadBootstrapKickoff
     return;
   }
 
-  await input.backend.dispatchCommand({
-    type: "thread.turn.start",
-    commandId: randomUUID() as any,
-    threadId: input.threadId as any,
-    message: {
-      messageId: randomUUID() as any,
-      role: "user",
-      text: bootstrapMessage,
-      attachments: [],
-      ...(t3teamMessageExt ? { t3teamExt: t3teamMessageExt } : {}),
-    },
-    modelSelection: input.kickoffModelSelection,
-    titleSeed: input.title,
-    runtimeMode: input.kickoffRuntimeMode,
-    interactionMode: input.kickoffInteractionMode,
-    bootstrap: {
-      createThread: {
-        projectId: input.canonicalProjectId as any,
-        title: input.title,
-        modelSelection: input.kickoffModelSelection,
-        runtimeMode: input.kickoffRuntimeMode,
-        interactionMode: input.kickoffInteractionMode,
-        branch: input.kickoffBranch,
-        worktreePath: null,
-        createdAt: input.createdAt,
+  await input.backend.dispatchCommand(
+    {
+      type: "thread.turn.start",
+      commandId: randomUUID() as any,
+      threadId: input.threadId as any,
+      message: {
+        messageId: randomUUID() as any,
+        role: "user",
+        text: bootstrapMessage,
+        attachments: [],
+        ...(t3teamMessageExt ? { t3teamExt: t3teamMessageExt } : {}),
       },
+      modelSelection: input.kickoffModelSelection,
+      titleSeed: input.title,
+      runtimeMode: input.kickoffRuntimeMode,
+      interactionMode: input.kickoffInteractionMode,
+      bootstrap: {
+        createThread: {
+          projectId: input.canonicalProjectId as any,
+          title: input.title,
+          modelSelection: input.kickoffModelSelection,
+          runtimeMode: input.kickoffRuntimeMode,
+          interactionMode: input.kickoffInteractionMode,
+          branch: input.kickoffBranch,
+          worktreePath: null,
+          createdAt: input.createdAt,
+        },
+      },
+      createdAt: input.createdAt,
     },
-    createdAt: input.createdAt,
-  });
+    { environmentId: EnvironmentId.make(input.environmentId) },
+  );
   finalizeThreadBootstrapKickoff({
     environmentId: input.environmentId,
     threadId: input.threadId,

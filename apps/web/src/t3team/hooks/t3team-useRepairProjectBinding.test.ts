@@ -109,7 +109,7 @@ describe("useRepairProjectBinding", () => {
     });
 
     expect(dispatchCommand).toHaveBeenCalledTimes(1);
-    const [command] = dispatchCommand.mock.calls[0] as [Record<string, unknown>];
+    const command = dispatchCommand.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
     expect(command.type).toBe("project.meta.update");
     expect(command.projectId).toBe("proj-1");
     expect(command.source).toEqual({

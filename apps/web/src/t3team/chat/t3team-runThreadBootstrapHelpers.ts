@@ -1,6 +1,12 @@
-import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  type ModelSelection,
+  type ProviderInteractionMode,
+  type RuntimeMode,
+} from "@t3tools/contracts";
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
+import { isDuplicateThreadCreateError } from "~/t3team/chat/t3team-duplicateThreadCreateError";
 import {
   recordThreadBootstrapEvent,
   type ThreadBootstrapAction,
@@ -10,6 +16,7 @@ import { randomUUID } from "~/lib/utils";
 
 export async function ensureThreadBootstrapProject(input: {
   backend: BackendApi;
+  environmentId: string;
   projectWorkspaceRoot: string | undefined;
   shouldEnsureProject: boolean;
   state: ThreadBootstrapDispatchState;
@@ -37,17 +44,20 @@ export async function ensureThreadBootstrapProject(input: {
   });
 
   try {
-    await input.backend.dispatchCommand({
-      type: "project.create",
-      commandId: randomUUID() as any,
-      projectId: input.canonicalProjectId as any,
-      title: input.projectTitle,
-      workspaceRoot: input.projectWorkspaceRoot,
-      createWorkspaceRootIfMissing: true,
-      defaultModelSelection: input.kickoffModelSelection,
-      createdAt: input.createdAt,
-      source: { provider: "local" },
-    });
+    await input.backend.dispatchCommand(
+      {
+        type: "project.create",
+        commandId: randomUUID() as any,
+        projectId: input.canonicalProjectId as any,
+        title: input.projectTitle,
+        workspaceRoot: input.projectWorkspaceRoot,
+        createWorkspaceRootIfMissing: true,
+        defaultModelSelection: input.kickoffModelSelection,
+        createdAt: input.createdAt,
+        source: { provider: "local" },
+      },
+      { environmentId: EnvironmentId.make(input.environmentId) },
+    );
     recordThreadBootstrapEvent("thread-bootstrap.project-create.success", {
       threadId: input.threadId,
       canonicalProjectId: input.canonicalProjectId,
@@ -82,23 +92,39 @@ export async function dispatchThreadBootstrapCreate(input: {
     title: input.title,
   });
 
-  await input.backend.dispatchCommand({
-    type: "thread.create",
-    commandId: randomUUID() as any,
-    threadId: input.threadId as any,
-    projectId: input.canonicalProjectId as any,
-    title: input.title,
-    modelSelection: input.kickoffModelSelection,
-    runtimeMode: input.kickoffRuntimeMode,
-    interactionMode: input.kickoffInteractionMode,
-    branch: input.kickoffBranch,
-    worktreePath: null,
-    createdAt: input.createdAt,
-  });
+  await input.backend.dispatchCommand(
+    {
+      type: "thread.create",
+      commandId: randomUUID() as any,
+      threadId: input.threadId as any,
+      projectId: input.canonicalProjectId as any,
+      title: input.title,
+      modelSelection: input.kickoffModelSelection,
+      runtimeMode: input.kickoffRuntimeMode,
+      interactionMode: input.kickoffInteractionMode,
+      branch: input.kickoffBranch,
+      worktreePath: null,
+      createdAt: input.createdAt,
+    },
+    { environmentId: EnvironmentId.make(input.environmentId) },
+  );
   recordThreadBootstrapEvent("thread-bootstrap.thread-create.success", {
     environmentId: input.environmentId,
     threadId: input.threadId,
     canonicalProjectId: input.canonicalProjectId,
     title: input.title,
   });
+}
+
+/** `thread.create` that treats "already exists" as done, so a retried launch can continue. */
+export async function dispatchThreadBootstrapCreateWithRecovery(
+  input: Parameters<typeof dispatchThreadBootstrapCreate>[0],
+) {
+  try {
+    await dispatchThreadBootstrapCreate(input);
+  } catch (error) {
+    if (!isDuplicateThreadCreateError(error)) {
+      throw error;
+    }
+  }
 }
