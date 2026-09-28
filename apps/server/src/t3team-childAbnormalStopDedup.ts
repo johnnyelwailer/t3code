@@ -27,7 +27,7 @@ import {
 import { makeTerminalNotifyLedger } from "./t3team-terminalNotifyDedup.ts";
 
 /** Durable "already notified" marker kind, appended on the child thread. */
-export const CHILD_ABNORMAL_STOP_NOTIFIED_KIND = "t3team.child_abnormal_stop_notified";
+const CHILD_ABNORMAL_STOP_NOTIFIED_KIND = "t3team.child_abnormal_stop_notified";
 
 /**
  * The marker's human line, outcome-aware: a clean finish must never read like

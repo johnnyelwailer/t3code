@@ -37,9 +37,9 @@ import { providerForAccount, providerForPersistedAuths } from "./t3team-atlassia
 import * as ServerConfig from "./config.ts";
 
 /** The periodic sweep cadence: catch orphaned instances + GC without hammering the DB. */
-export const WORKFLOW_SIGNAL_SWEEP_MS = 60_000;
+const WORKFLOW_SIGNAL_SWEEP_MS = 60_000;
 /** Delivered inbox entries older than this are GC'd by the sweep (design 42 §7: entries expire). */
-export const WORKFLOW_SIGNAL_INBOX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const WORKFLOW_SIGNAL_INBOX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** The ambient services the Atlassian auth read needs (provided by the app composition). */
 type AtlassianAuthServices =

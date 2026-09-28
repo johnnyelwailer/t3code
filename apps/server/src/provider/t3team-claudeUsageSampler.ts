@@ -22,40 +22,41 @@ import {
   type ProviderUsageThresholds,
 } from "./t3team-providerUsageSampler.ts";
 
-export const CLAUDE_USAGE_ENDPOINT = "https://api.anthropic.com/api/oauth/usage";
+const CLAUDE_USAGE_ENDPOINT = "https://api.anthropic.com/api/oauth/usage";
 
 /**
  * Fetches and pre-validates the Anthropic OAuth usage body. Kept as a named
  * Effect so samplers can swap it in tests (the unit tests inject a mocked
  * response here rather than touching the wire).
  */
-export const fetchClaudeUsageBody = Effect.fn("providerUsageSampler.fetchClaudeUsageBody")(
-  function* (accessToken: string, providerInstanceId?: ProviderInstanceId) {
-    const client = yield* HttpClient.HttpClient;
-    const request = HttpClientRequest.get(CLAUDE_USAGE_ENDPOINT).pipe(
-      HttpClientRequest.setHeader("authorization", `Bearer ${accessToken}`),
-    );
-    const response = yield* client.execute(request).pipe(
-      Effect.timeout(PROVIDER_USAGE_SAMPLE_TIMEOUT_MS),
-      Effect.mapError(
-        (error) =>
-          new ProviderUsageSamplerError({
-            provider: PROVIDER_USAGE_CLAUDE_DRIVER,
-            providerInstanceId,
-            reason: `Anthropic usage request failed (${String(error)}).`,
-          }),
-      ),
-    );
-    if (response.status < 200 || response.status >= 300) {
-      return yield* new ProviderUsageSamplerError({
-        provider: PROVIDER_USAGE_CLAUDE_DRIVER,
-        providerInstanceId,
-        reason: `Anthropic usage endpoint returned HTTP ${String(response.status)}.`,
-      });
-    }
-    return (yield* response.json) as ClaudeUsageBody;
-  },
-);
+const fetchClaudeUsageBody = Effect.fn("providerUsageSampler.fetchClaudeUsageBody")(function* (
+  accessToken: string,
+  providerInstanceId?: ProviderInstanceId,
+) {
+  const client = yield* HttpClient.HttpClient;
+  const request = HttpClientRequest.get(CLAUDE_USAGE_ENDPOINT).pipe(
+    HttpClientRequest.setHeader("authorization", `Bearer ${accessToken}`),
+  );
+  const response = yield* client.execute(request).pipe(
+    Effect.timeout(PROVIDER_USAGE_SAMPLE_TIMEOUT_MS),
+    Effect.mapError(
+      (error) =>
+        new ProviderUsageSamplerError({
+          provider: PROVIDER_USAGE_CLAUDE_DRIVER,
+          providerInstanceId,
+          reason: `Anthropic usage request failed (${String(error)}).`,
+        }),
+    ),
+  );
+  if (response.status < 200 || response.status >= 300) {
+    return yield* new ProviderUsageSamplerError({
+      provider: PROVIDER_USAGE_CLAUDE_DRIVER,
+      providerInstanceId,
+      reason: `Anthropic usage endpoint returned HTTP ${String(response.status)}.`,
+    });
+  }
+  return (yield* response.json) as ClaudeUsageBody;
+});
 
 export type ClaudeUsageBodyFetcher = (
   accessToken: string,

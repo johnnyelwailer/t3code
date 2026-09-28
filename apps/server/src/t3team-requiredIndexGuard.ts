@@ -53,7 +53,7 @@ export const findMissingRequiredIndexes = (
 ): readonly RequiredHotQueryIndex[] =>
   REQUIRED_HOT_QUERY_INDEXES.filter((index) => !presentIndexes.has(index.name));
 
-export const readPresentIndexNames = Effect.fn("t3team.requiredIndexGuard.read")(function* () {
+const readPresentIndexNames = Effect.fn("t3team.requiredIndexGuard.read")(function* () {
   const sql = yield* SqlClient.SqlClient;
   const rows = yield* sql<{ readonly name: string | null }>`
     SELECT name FROM sqlite_master WHERE type = 'index'

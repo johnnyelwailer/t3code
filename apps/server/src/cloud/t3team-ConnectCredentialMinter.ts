@@ -39,7 +39,7 @@ import {
  */
 
 /** How long a mint may wait for the browser round-trip before giving up. */
-export const CONNECT_MINT_DEFAULT_TIMEOUT = Duration.minutes(10);
+const CONNECT_MINT_DEFAULT_TIMEOUT = Duration.minutes(10);
 
 export class ConnectCredentialMinter extends Context.Service<
   ConnectCredentialMinter,

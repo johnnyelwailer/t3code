@@ -22,7 +22,7 @@ import type { T3TeamToolBinding, T3TeamToolCallResult } from "./t3team-toolBroke
 import { resolveT3TeamCanonicalToolId } from "./t3team-toolBrokerLegacyToolIds.ts";
 import type { ResourcePressureMonitorShape } from "./t3team-resourcePressureMonitor.ts";
 
-export const PRESSURE_IMPACTING_TOOL_IDS: ReadonlySet<string> = new Set([
+const PRESSURE_IMPACTING_TOOL_IDS: ReadonlySet<string> = new Set([
   "t3team.thread.start_child",
   "t3team.orchestration.run",
   "t3team.orchestration.resume",
@@ -77,10 +77,7 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
  * `hostResourcePressure` key) or, for errors, only the first text item (the line is folded
  * into it); in-process callers read `content` (the line is one more text item).
  */
-export function attachPressureLine(
-  result: T3TeamToolCallResult,
-  line: string,
-): T3TeamToolCallResult {
+function attachPressureLine(result: T3TeamToolCallResult, line: string): T3TeamToolCallResult {
   if (result.isError === true) {
     const [first, ...rest] = result.content;
     const text = first === undefined ? line : `${first.text}\n${line}`;

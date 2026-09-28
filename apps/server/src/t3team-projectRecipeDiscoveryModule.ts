@@ -50,7 +50,7 @@ import {
 } from "./t3team-projectRecipeOrigin.ts";
 
 /** A `recipe.ts` module loaded fine but did not default-export a `defineRecipe(...)` result. */
-export class T3TeamRecipeModuleShapeError extends Data.TaggedError("T3TeamRecipeModuleShapeError")<{
+class T3TeamRecipeModuleShapeError extends Data.TaggedError("T3TeamRecipeModuleShapeError")<{
   readonly message: string;
 }> {}
 

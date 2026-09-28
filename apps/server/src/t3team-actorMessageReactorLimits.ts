@@ -47,7 +47,7 @@ export function resolveActorMessageDebounceMs(): number {
  * stays queued and flushes as the next batch after this turn settles.
  * Distribution-tunable via `T3TEAM_ACTOR_MESSAGE_BATCH_MAX`.
  */
-export const T3TEAM_ACTOR_MESSAGE_BATCH_MAX = 10;
+const T3TEAM_ACTOR_MESSAGE_BATCH_MAX = 10;
 const T3TEAM_ACTOR_MESSAGE_BATCH_MAX_ENV = "T3TEAM_ACTOR_MESSAGE_BATCH_MAX";
 
 /** Resolve the per-turn batch cap, honoring the env override. */

@@ -54,7 +54,7 @@ function nowIso(): string {
   return DateTime.formatIso(DateTime.nowUnsafe());
 }
 
-export const rehydrateSuspendedWorkflowRunsCore = Effect.fn("rehydrateSuspendedWorkflowRuns")(
+const rehydrateSuspendedWorkflowRunsCore = Effect.fn("rehydrateSuspendedWorkflowRuns")(
   function* () {
     const repo = yield* WorkflowRunRepository;
     // The signal delivery port's orphan branch treats "no controller registered yet" as

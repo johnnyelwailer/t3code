@@ -33,12 +33,12 @@ import type {
 import { canSignalCategory } from "./diagnostics/ProcessDiagnostics.ts";
 import { bucketByClass, descendsFrom, indexByPid } from "./t3team-resourcePressureClasses.ts";
 
-export const HOST_WARN_AVAILABLE_FRACTION = 0.15;
-export const HOST_CRITICAL_AVAILABLE_FRACTION = 0.07;
-export const APP_WARN_TOTAL_FRACTION = 0.25;
-export const APP_CRITICAL_TOTAL_FRACTION = 0.4;
+const HOST_WARN_AVAILABLE_FRACTION = 0.15;
+const HOST_CRITICAL_AVAILABLE_FRACTION = 0.07;
+const APP_WARN_TOTAL_FRACTION = 0.25;
+const APP_CRITICAL_TOTAL_FRACTION = 0.4;
 export const DEESCALATE_SAMPLES = 2;
-export const TOP_CONSUMER_COUNT = 8;
+const TOP_CONSUMER_COUNT = 8;
 
 const RANK: Record<ResourcePressureLevel, number> = { ok: 0, warn: 1, critical: 2 };
 

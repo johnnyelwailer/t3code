@@ -1017,12 +1017,6 @@ export function shouldCreateNewThreadInCurrentProject(
   return shiftKey || projectGroupCount <= 1;
 }
 
-/**
- * Fork-era import name, kept as an alias: search now covers titles and
- * linked pull request terms alike.
- */
-export const searchSidebarThreadsByTitle = searchSidebarThreads;
-
 export function filterSidebarProjectScopeItems<TItem extends { readonly value: string }>(input: {
   items: readonly TItem[];
   query: string;

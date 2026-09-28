@@ -18,7 +18,6 @@ import {
 export {
   buildT3TeamContextBlobRelativePath,
   hashT3TeamContextBytes,
-  T3TEAM_CONTEXT_BLOB_ROOT,
 } from "./t3team-context-blob-store-utils.ts";
 
 export function writeT3TeamContextCasFile(input: {

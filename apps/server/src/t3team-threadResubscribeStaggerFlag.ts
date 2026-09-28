@@ -13,7 +13,7 @@
  */
 
 /** Environment override for the resubscribe-stagger flag. `1`/`true` on, `0`/`false` off. */
-export const THREAD_RESUB_STAGGER_FLAG_ENV = "NEXI_FF_THREAD_RESUB_STAGGER";
+const THREAD_RESUB_STAGGER_FLAG_ENV = "NEXI_FF_THREAD_RESUB_STAGGER";
 
 /**
  * Is staggered thread resubscription enabled? Unrecognized values default ON:

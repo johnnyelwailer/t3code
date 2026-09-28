@@ -36,7 +36,7 @@ import { splitCloudSessions } from "./t3team-cloudSessionSplit";
  * to exist — everything else (which repo, which branch, which secrets) is
  * already fixed by the workspace pack.
  */
-export const CLOUD_SESSION_DURATION_CHOICES = [
+const CLOUD_SESSION_DURATION_CHOICES = [
   { seconds: 3600, label: "1 hour" },
   { seconds: 4 * 3600, label: "4 hours" },
   { seconds: 8 * 3600, label: "8 hours" },

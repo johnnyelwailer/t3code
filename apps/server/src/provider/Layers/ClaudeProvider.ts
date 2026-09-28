@@ -446,7 +446,7 @@ function formatClaudeOpus47UpgradeMessage(version: string | null): string {
   return `Claude Code ${versionLabel} is too old for Claude Opus 4.7. Upgrade to v${MINIMUM_CLAUDE_OPUS_4_7_VERSION} or newer to access it.`;
 }
 
-export function getClaudeModelCapabilities(model: string | null | undefined): ModelCapabilities {
+function getClaudeModelCapabilities(model: string | null | undefined): ModelCapabilities {
   const slug = model?.trim();
   return (
     BUILT_IN_MODELS.find((candidate) => candidate.slug === slug)?.capabilities ??
@@ -454,7 +454,7 @@ export function getClaudeModelCapabilities(model: string | null | undefined): Mo
   );
 }
 
-export function resolveClaudeEffort(
+function resolveClaudeEffort(
   caps: ModelCapabilities,
   raw: string | null | undefined,
 ): string | undefined {
@@ -477,7 +477,7 @@ export function resolveClaudeEffort(
  * because it is a prompt-prefix mode, and older model compatibility mappings
  * are preserved for current Claude Code behavior.
  */
-export function normalizeClaudeCliEffort(
+function normalizeClaudeCliEffort(
   effort: string | null | undefined,
   model: string | null | undefined,
 ): string | undefined {
@@ -503,11 +503,11 @@ export function normalizeClaudeCliEffort(
   return effort;
 }
 
-export function isClaudeUltracodeEffort(effort: string | null | undefined): boolean {
+function isClaudeUltracodeEffort(effort: string | null | undefined): boolean {
   return effort === "ultracode";
 }
 
-export function resolveClaudeContextWindow(
+function resolveClaudeContextWindow(
   modelSelection: ModelSelection | undefined,
 ): string | undefined {
   const caps = getClaudeModelCapabilities(modelSelection?.model);
@@ -521,7 +521,7 @@ export function resolveClaudeContextWindow(
   return typeof value === "string" ? value : undefined;
 }
 
-export function resolveClaudeApiModelId(modelSelection: ModelSelection): string {
+function resolveClaudeApiModelId(modelSelection: ModelSelection): string {
   switch (resolveClaudeContextWindow(modelSelection)) {
     case "1m":
       return `${modelSelection.model}[1m]`;

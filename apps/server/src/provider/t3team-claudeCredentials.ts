@@ -26,8 +26,8 @@ import {
   isProviderUsageSamplerError,
 } from "./t3team-providerUsageSampler.ts";
 
-export const CLAUDE_KEYCHAIN_SERVICE = "Claude Code-credentials";
-export const CLAUDE_CREDENTIALS_FILE_NAME = ".credentials.json";
+const CLAUDE_KEYCHAIN_SERVICE = "Claude Code-credentials";
+const CLAUDE_CREDENTIALS_FILE_NAME = ".credentials.json";
 
 export interface ClaudeCredentials {
   readonly accessToken: string;

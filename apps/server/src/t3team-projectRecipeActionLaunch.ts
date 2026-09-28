@@ -22,7 +22,7 @@ import {
 import { importRecipeModuleRef } from "./t3team-projectRecipeDiscoveryModule.ts";
 
 /** The launch named an action that cannot be resolved to one of the recipe's declared workflows. */
-export class T3TeamRecipeActionResolutionError extends Data.TaggedError(
+class T3TeamRecipeActionResolutionError extends Data.TaggedError(
   "T3TeamRecipeActionResolutionError",
 )<{
   readonly message: string;

@@ -110,10 +110,7 @@ function buildRecipeExpressionContext(
   };
 }
 
-export function evaluateExpression(
-  expression: string,
-  context: ProjectRecipeRenderContext,
-): unknown {
+function evaluateExpression(expression: string, context: ProjectRecipeRenderContext): unknown {
   const expressionContext = buildRecipeExpressionContext(context);
   const evaluator = new Function(
     "ctx",

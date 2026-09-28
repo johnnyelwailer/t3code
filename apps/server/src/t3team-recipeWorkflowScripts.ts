@@ -26,7 +26,7 @@ import { resolveRecipeActions, resolveRecipeWorkflowPath } from "./t3team-projec
 import { importRecipeModuleRef } from "./t3team-projectRecipeDiscoveryModule.ts";
 
 /** The recipe module registered scripts but they cannot back this launch. */
-export class T3TeamRecipeScriptResolutionError extends Data.TaggedError(
+class T3TeamRecipeScriptResolutionError extends Data.TaggedError(
   "T3TeamRecipeScriptResolutionError",
 )<{
   readonly message: string;

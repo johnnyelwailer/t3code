@@ -26,9 +26,9 @@ export const JOB_NOTIFICATION_MARKER_KIND = "job-notification.pending";
 /** Durable activity kind recording which marker a forced turn consumed. */
 export const JOB_NOTIFICATION_CLAIMED_KIND = "job-notification.claimed";
 /** Markers older than this are stale: their forced turn already happened (or was lost). */
-export const JOB_NOTIFICATION_MARKER_MAX_AGE_MS = 5 * 60 * 1000;
+const JOB_NOTIFICATION_MARKER_MAX_AGE_MS = 5 * 60 * 1000;
 /** Tolerated marker-vs-host clock skew before a "future" marker is accepted. */
-export const JOB_NOTIFICATION_MARKER_CLOCK_SKEW_MS = 60 * 1000;
+const JOB_NOTIFICATION_MARKER_CLOCK_SKEW_MS = 60 * 1000;
 
 /** The marker the pack stamps on `thread.metadata.updated` at job completion. */
 export interface JobNotificationMarker {

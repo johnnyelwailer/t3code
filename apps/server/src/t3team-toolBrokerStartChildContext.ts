@@ -89,7 +89,7 @@ export const hasLinkedRepositoryStartChildServices = (
   services.gitWorkflow !== undefined &&
   services.sourceControlProviders !== undefined;
 
-export const hasProjectSetupScriptRunner = (
+const hasProjectSetupScriptRunner = (
   services: Partial<T3TeamStartChildServices>,
 ): services is Pick<T3TeamStartChildServices, "projectSetupScriptRunner"> =>
   services.projectSetupScriptRunner !== undefined;
@@ -147,7 +147,7 @@ export const resolveStartChildSetupScript = (input: {
     };
   });
 
-export const startProjectSetupScript = (input: {
+const startProjectSetupScript = (input: {
   readonly services: Pick<T3TeamStartChildServices, "projectSetupScriptRunner">;
   readonly threadId: import("@t3tools/contracts").ThreadId;
   readonly projectId: string;

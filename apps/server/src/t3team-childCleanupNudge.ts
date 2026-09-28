@@ -38,7 +38,7 @@ export function childCleanupNudgeCooldownMs(): number {
   return envPositive("T3TEAM_CHILD_CLEANUP_NUDGE_COOLDOWN_MS", CHILD_CLEANUP_NUDGE_COOLDOWN_MS);
 }
 
-export function formatAgeMs(ms: number): string {
+function formatAgeMs(ms: number): string {
   if (ms < 60_000) return `${Math.max(1, Math.round(ms / 1_000))}s`;
   if (ms < 60 * 60_000) return `${Math.round(ms / 60_000)}m`;
   if (ms < 24 * 60 * 60_000) return `${Math.round(ms / 3_600_000)}h`;

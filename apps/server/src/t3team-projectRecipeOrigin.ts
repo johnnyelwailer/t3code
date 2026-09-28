@@ -53,12 +53,12 @@ const PACK_SCOPE_PRECEDENCE: Readonly<Record<string, number>> = {
   "remote-managed": 5,
 };
 
-export function originPrecedence(recipe: RecipeOriginLabelled): number {
+function originPrecedence(recipe: RecipeOriginLabelled): number {
   if (recipe.source !== "pack") return 100;
   return PACK_SCOPE_PRECEDENCE[recipe.packScope ?? "distribution"] ?? 1;
 }
 
-export function describeOrigin(recipe: RecipeOriginLabelled): string {
+function describeOrigin(recipe: RecipeOriginLabelled): string {
   return recipe.source === "pack"
     ? `pack ${recipe.packId ?? "unknown"} (${recipe.packScope ?? "distribution"})`
     : "project-local";

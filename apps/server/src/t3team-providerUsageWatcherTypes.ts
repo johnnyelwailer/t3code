@@ -25,7 +25,7 @@ import {
 export const PROVIDER_USAGE_SWEEP_INTERVAL_MS = 60_000;
 
 /** Grace after the provider-reported reset moment before the time-based recovery fires. */
-export const PROVIDER_USAGE_RECOVER_GRACE_MS = 90_000;
+const PROVIDER_USAGE_RECOVER_GRACE_MS = 90_000;
 
 export const isUsageDriver = (driver: string): boolean =>
   driver === PROVIDER_USAGE_CLAUDE_DRIVER || driver === PROVIDER_USAGE_CODEX_DRIVER;

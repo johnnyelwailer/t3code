@@ -676,7 +676,7 @@ function linkedPullRequestsEqual(
   );
 }
 
-export function threadChangeRequestSnapshotsEqual(
+function threadChangeRequestSnapshotsEqual(
   left: ThreadChangeRequestSnapshot,
   right: ThreadChangeRequestSnapshot,
 ): boolean {
@@ -790,7 +790,7 @@ export function nextThreadChangeRequestSnapshot(input: {
  * survives that metadata changing to the newly checked-out branch. Open PRs
  * are never retained — their state can still change.
  */
-export function resolveDisplayedThreadPr(input: {
+function resolveDisplayedThreadPr(input: {
   threadBranch: string | null;
   gitStatus: VcsStatusResult | null;
   snapshot: ThreadChangeRequestSnapshot | null | undefined;
@@ -882,10 +882,7 @@ export function resolveDisplayedThreadPrProvider(input: {
   return undefined;
 }
 
-export function settledPrHoverColorClass(
-  state: NonNullable<ThreadPr>["state"],
-  isDraft = false,
-): string {
+function settledPrHoverColorClass(state: NonNullable<ThreadPr>["state"], isDraft = false): string {
   switch (state) {
     case "open":
       if (isDraft) {

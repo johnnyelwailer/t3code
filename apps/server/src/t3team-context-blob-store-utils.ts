@@ -1,6 +1,6 @@
 import * as NodeCrypto from "node:crypto";
 
-export const T3TEAM_CONTEXT_BLOB_ROOT = ".t3team/context/_blobs";
+const T3TEAM_CONTEXT_BLOB_ROOT = ".t3team/context/_blobs";
 
 export function hashT3TeamContextBytes(bytes: Uint8Array): string {
   return NodeCrypto.createHash("sha256").update(bytes).digest("hex");

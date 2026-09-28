@@ -12,7 +12,7 @@ import type { ConnectCredentialMintError } from "./t3team-ConnectCredentialMintE
 import type { CloudSessionRepoRef } from "./t3team-githubActionsSessionClient.ts";
 
 /** Friendly copy for the `connect_sign_in_pending` failure. */
-export const CONNECT_SIGN_IN_PENDING_TEXT =
+const CONNECT_SIGN_IN_PENDING_TEXT =
   "T3 Connect sign-in is finishing in your browser. Confirm it there, then try again.";
 
 /**

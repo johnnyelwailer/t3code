@@ -59,7 +59,7 @@ export interface CodexRateLimitsBody {
 }
 
 /** Source label for header-based sampling (vs. the app-server JSON-RPC). */
-export const CODEX_HEADERS_USAGE_SOURCE = "gateway-response-headers";
+const CODEX_HEADERS_USAGE_SOURCE = "gateway-response-headers";
 
 /**
  * Maps rate-limit headers from a gateway model response onto a
@@ -71,7 +71,7 @@ export const CODEX_HEADERS_USAGE_SOURCE = "gateway-response-headers";
  *
  * Returns `null` when no recognizable rate-limit data is present.
  */
-export const mapCodexRateLimitHeaders = (
+const mapCodexRateLimitHeaders = (
   headers: Record<string, string>,
   input: {
     readonly provider: ProviderDriverKind;

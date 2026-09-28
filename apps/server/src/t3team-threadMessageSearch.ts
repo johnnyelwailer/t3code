@@ -20,8 +20,8 @@
  * wins whenever it hits, so a literal query never changes meaning.
  */
 
-export const T3TEAM_THREAD_SEARCH_DEFAULT_MATCH_LIMIT = 10;
-export const T3TEAM_THREAD_SEARCH_MAX_MATCH_LIMIT = 25;
+const T3TEAM_THREAD_SEARCH_DEFAULT_MATCH_LIMIT = 10;
+const T3TEAM_THREAD_SEARCH_MAX_MATCH_LIMIT = 25;
 const SNIPPET_RADIUS_CHARS = 200;
 
 /**
@@ -107,7 +107,7 @@ export function normalizeThreadSearchOrder(order: unknown): ThreadSearchOrder {
   return order === "oldest" || order === "recent" ? order : "recent";
 }
 
-export function buildThreadSearchSnippet(text: string, queryLower: string): string {
+function buildThreadSearchSnippet(text: string, queryLower: string): string {
   const found = text.toLowerCase().indexOf(queryLower);
   // Exported helper: anchor at the start rather than slicing from a negative
   // index when the term is absent.
