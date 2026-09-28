@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * "Local provider sessions" setting toggle — the display-side contract.
  *
@@ -61,11 +60,8 @@ const noOp = () => undefined;
 
 function Section({ visibleThreads }: { visibleThreads: ProjectThread[] }) {
   return (
-    <SidebarProvider
-      className="h-dvh w-[360px] overflow-hidden bg-sidebar text-sidebar-foreground"
-      defaultOpen
-    >
-      <div className="px-2 pt-4">
+    <SidebarProvider className="h-dvh w-[360px] overflow-hidden" defaultOpen>
+      <div className="h-full w-full bg-sidebar px-2 pt-4 text-sidebar-foreground">
         <div className="mb-2 flex items-center gap-2 rounded-md bg-accent/60 px-2 py-1.5 text-xs font-medium">
           <span className="truncate">my-project</span>
         </div>

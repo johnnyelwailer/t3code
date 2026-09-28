@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import type { Meta, StoryObj } from "@storybook/react";
 import type { EnvironmentAppearance, EnvironmentSetupProfile } from "@t3tools/contracts";
 import { useEffect, useState } from "react";
@@ -68,8 +67,8 @@ function PaletteTile({ name, value }: { name: string; value: string }) {
         className="size-5 shrink-0 rounded-sm border border-border/60"
         style={{ background: value }}
       />
-      <span className="truncate text-[11px] text-muted-foreground">{name}</span>
-      <span className="ml-auto font-mono text-[10px] text-foreground/70">{value}</span>
+      <span className="truncate text-2xs text-muted-foreground">{name}</span>
+      <span className="ml-auto font-mono text-3xs text-foreground/70">{value}</span>
     </div>
   );
 }

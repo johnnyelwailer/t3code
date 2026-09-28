@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-raw-colors, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { ArrowRight, BadgeCheck, Sparkles } from "lucide-react";
 
 import type { EnvironmentSetupProfile } from "@t3tools/contracts";
@@ -79,13 +78,13 @@ export function T3TeamSetupWelcomeSurface({
   // way to scroll up to it. `safe` falls back to flex-start exactly in that case.
   return (
     <div className="relative flex flex-1 [align-items:safe_center] justify-center overflow-auto p-4 sm:p-6">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-52 bg-[radial-gradient(44rem_22rem_at_top,color-mix(in_srgb,var(--color-sky-400)_22%,transparent),transparent)] opacity-80" />
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(140deg,color-mix(in_srgb,var(--background)_88%,white)_0%,var(--background)_42%,color-mix(in_srgb,var(--background)_94%,var(--color-amber-100))_100%)] dark:bg-[linear-gradient(140deg,color-mix(in_srgb,var(--background)_92%,black)_0%,var(--background)_42%,color-mix(in_srgb,var(--background)_94%,var(--color-sky-950))_100%)]" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-52 t3team-welcome-glow opacity-80" />
+      <div className="pointer-events-none absolute inset-0 t3team-welcome-wash" />
 
-      <section className="relative mx-auto w-full max-w-6xl overflow-hidden rounded-[2rem] border border-border/70 bg-card/85 p-4 shadow-2xl shadow-black/10 backdrop-blur sm:p-6 xl:p-8">
-        <div className="pointer-events-none absolute -left-10 top-14 size-40 rounded-full bg-sky-400/20 blur-3xl motion-safe:animate-pulse" />
+      <section className="relative mx-auto w-full max-w-6xl overflow-hidden rounded-4xl border border-border/70 bg-card/85 p-4 shadow-2xl shadow-black/10 backdrop-blur sm:p-6 xl:p-8">
+        <div className="pointer-events-none absolute -left-10 top-14 size-40 rounded-full bg-info/20 blur-3xl motion-safe:animate-pulse" />
         <div
-          className="pointer-events-none absolute right-0 top-0 size-52 rounded-full bg-amber-300/20 blur-3xl motion-safe:animate-pulse"
+          className="pointer-events-none absolute right-0 top-0 size-52 rounded-full bg-warning/20 blur-3xl motion-safe:animate-pulse"
           style={{ animationDelay: "900ms" }}
         />
 
@@ -95,7 +94,7 @@ export function T3TeamSetupWelcomeSurface({
         >
           <div className="space-y-6">
             <div className="inline-flex items-center gap-2 rounded-full bg-background/80 px-3 py-1 text-xs font-medium text-foreground/80 shadow-sm backdrop-blur-sm">
-              <Sparkles className="size-3.5 text-sky-500" />
+              <Sparkles className="size-3.5 text-info" />
               {chipLabel}
             </div>
 
@@ -109,7 +108,7 @@ export function T3TeamSetupWelcomeSurface({
               <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
                 {headingText}
               </h1>
-              <p className="max-w-xl text-sm leading-6 text-muted-foreground sm:text-[15px]">
+              <p className="max-w-xl text-sm leading-6 text-muted-foreground sm:text-base">
                 {sublineText}
               </p>
             </div>
@@ -123,7 +122,7 @@ export function T3TeamSetupWelcomeSurface({
                   key={item.step}
                   className="rounded-2xl border border-border/65 bg-background/75 p-4 shadow-sm backdrop-blur-sm"
                 >
-                  <div className="text-[11px] font-semibold tracking-[0.22em] text-muted-foreground uppercase">
+                  <div className="text-2xs font-semibold tracking-widest text-muted-foreground uppercase">
                     {item.step}
                   </div>
                   <h2 className="mt-2 text-sm font-semibold text-foreground">{item.title}</h2>
@@ -135,12 +134,12 @@ export function T3TeamSetupWelcomeSurface({
             </div>
 
             <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-              <Button className="w-full gap-2 sm:w-auto" onClick={onCreate}>
+              <Button className="w-full sm:w-auto" onClick={onCreate}>
                 Set up first project
                 <ArrowRight className="size-4" />
               </Button>
               <div className="inline-flex min-w-0 items-center gap-2 rounded-full bg-background/75 px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-sm">
-                <BadgeCheck className="size-3.5 text-emerald-500" />
+                <BadgeCheck className="size-3.5 text-success" />
                 Selected profile: {selectedProfile?.title ?? "Project Partner"}
               </div>
             </div>

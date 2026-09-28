@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react";
 
@@ -186,7 +185,7 @@ export const RealController: Story = {
       <p className="text-xs text-muted-foreground">
         In the app this is built from the backend URL:
       </p>
-      <pre className="overflow-x-auto rounded-md bg-black/85 p-2 font-mono text-[.7rem] text-white/85">
+      <pre className="overflow-x-auto rounded-md bg-black/85 p-2 font-mono text-2xs text-white/85">
         {`createThreadJobsController(resolveHttpBaseUrl(resolveWsBaseUrl()))
 // POST /api/t3team/thread/jobs
 // { supported: false }  → hide the affordances

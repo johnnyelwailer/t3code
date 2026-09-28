@@ -6,6 +6,7 @@
 @import "./t3team-index-aciStates.css";
 @import "./t3team-index-aciStateMotion.css";
 @import "./t3team-index-aciLead.css";
+@import "./t3team-index-setupWelcome.css";
 
 /* Jira rich-text (ADF) lists: nested markers cycle like .chat-markdown's. */
 @utility t3team-adf-bullets {

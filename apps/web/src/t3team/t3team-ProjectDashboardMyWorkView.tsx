@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { useMemo } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
@@ -192,7 +191,7 @@ export function ProjectDashboardMyWorkView({
       </section>
 
       {githubActivity.loading ? (
-        <p className="text-[11px] text-muted-foreground">Refreshing GitHub activity...</p>
+        <p className="text-2xs text-muted-foreground">Refreshing GitHub activity...</p>
       ) : null}
     </div>
   );

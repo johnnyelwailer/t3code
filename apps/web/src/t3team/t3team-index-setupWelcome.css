@@ -1,0 +1,29 @@
+/* The setup welcome surface's backdrop art (t3team-SetupWelcomeSurface.tsx): a sky glow
+ * at the top edge over a diagonal wash that tints the page background warm in light mode
+ * and cool in dark mode. Artwork, not a theme surface, so the palette colors are fixed. */
+@utility t3team-welcome-glow {
+  background-image: radial-gradient(
+    44rem 22rem at top,
+    color-mix(in srgb, var(--color-sky-400) 22%, transparent),
+    transparent
+  );
+}
+
+@utility t3team-welcome-wash {
+  background-image: linear-gradient(
+    140deg,
+    color-mix(in srgb, var(--background) 88%, white) 0%,
+    var(--background) 42%,
+    color-mix(in srgb, var(--background) 94%, var(--color-amber-100)) 100%
+  );
+
+  /* Same selector as the app's `dark` custom variant. */
+  &:is(.dark, .dark *) {
+    background-image: linear-gradient(
+      140deg,
+      color-mix(in srgb, var(--background) 92%, black) 0%,
+      var(--background) 42%,
+      color-mix(in srgb, var(--background) 94%, var(--color-sky-950)) 100%
+    );
+  }
+}

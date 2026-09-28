@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { Input } from "~/t3team/components/ui/t3team-input";
 import { ProjectMyWorkOptionsMenu } from "~/t3team/t3team-ProjectMyWorkOptionsMenu";
 import type {
@@ -77,7 +76,7 @@ export function ProjectMyWorkFilterBar({
         value={query}
         onChange={(event) => onQueryChange(event.target.value)}
         placeholder="Search your assigned work"
-        className="h-8 w-full border-border/80 bg-background/95 text-xs sm:w-[15rem] lg:w-[18rem]"
+        className="w-full sm:w-60 lg:w-72"
       />
 
       <div className="ml-auto flex items-center gap-2">

@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-native-title-tooltip, shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 import { ArrowDown, ArrowUp } from "lucide-react";
 
 import { ProjectBacklogTableRowIssueCell } from "~/t3team/t3team-ProjectBacklogTableRowIssueCell";
@@ -59,14 +59,14 @@ export function ProjectMyWorkTableView({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 overflow-x-auto overflow-y-visible rounded-xl border border-border/70 bg-background/95 shadow-sm [scrollbar-gutter:stable]">
-        <table className="w-full table-fixed text-left text-[11px]" style={{ minWidth: "850px" }}>
+        <table className="w-full table-fixed text-left text-2xs" style={{ minWidth: "850px" }}>
           <colgroup>
             <col style={{ width: "420px" }} />
             <col style={{ width: "150px" }} />
             <col style={{ width: "160px" }} />
             <col style={{ width: "120px" }} />
           </colgroup>
-          <thead className="sticky top-0 z-10 border-b border-border/60 bg-background/95 text-[10px] uppercase tracking-[0.12em] text-muted-foreground/72 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+          <thead className="sticky top-0 z-10 border-b border-border/60 bg-background/95 text-3xs uppercase tracking-widest text-muted-foreground/72 backdrop-blur supports-[backdrop-filter]:bg-background/85">
             <tr>
               <th className="px-3 py-1.5">{renderSortButton("Issue", "title")}</th>
               <th className="px-3 py-1.5">{renderSortButton("Status", "status")}</th>
@@ -97,14 +97,14 @@ export function ProjectMyWorkTableView({
                     onToggleTicket={() => {}}
                     onOpenTicket={onOpenTicket}
                   />
-                  <td className="px-3 py-2 align-middle text-[11px] text-foreground/82">
+                  <td className="px-3 py-2 align-middle text-2xs text-foreground/82">
                     {ticket.status}
                   </td>
-                  <td className="px-3 py-2 align-middle text-[11px] text-foreground/82">
+                  <td className="px-3 py-2 align-middle text-2xs text-foreground/82">
                     {ticket.assignee?.trim() || "Unassigned"}
                   </td>
                   <td
-                    className="px-3 py-2 align-middle text-[11px] text-foreground/82"
+                    className="px-3 py-2 align-middle text-2xs text-foreground/82"
                     title={ticket.updatedAt}
                   >
                     {updatedLabel ? `Updated ${updatedLabel}` : "Unknown"}
