@@ -242,6 +242,46 @@ describe("CloudSessionService.create credential handoff", () => {
     }),
   );
 
+  it.effect("does not claim a sign-in is finishing when the mint could not start", () =>
+    Effect.gen(function* () {
+      // A build without T3 Connect OAuth config fails the mint at once and
+      // never opens a browser — telling the user to "confirm it there" sends
+      // them looking for a tab that does not exist.
+      const { execute } = makeGithubMock();
+      const ghMock = Layer.mock(GitHubCli.GitHubCli)({ execute });
+      const cloudCliMock = Layer.mock(CliTokenManager.CloudCliTokenManager)({
+        getExisting: Effect.succeed(Option.none()),
+      });
+      const minterMock = Layer.mock(ConnectCredentialMinter.ConnectCredentialMinter)({
+        mint: () => Effect.fail(new ConnectCredentialMintError({ reason: "connect_unavailable" })),
+      });
+      const configLayer = ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }));
+      const providers = Layer.mergeAll(
+        ghMock,
+        cloudCliMock,
+        minterMock,
+        configLayer,
+        Layer.succeed(Clock.Clock, realClock),
+      );
+      const full = Layer.mergeAll(
+        CloudSessionService.layer.pipe(Layer.provide(providers)),
+        providers,
+      );
+
+      const error = yield* Effect.service(CloudSessionService.CloudSessionService).pipe(
+        Effect.flatMap((svc) => svc.create({ durationSeconds: 3600 })),
+        Effect.provide(full),
+        Effect.flip,
+      );
+
+      assert.equal(error._tag, "CloudSessionFailedError");
+      if (Schema.is(CloudSessionFailedError)(error)) {
+        assert.equal(error.reason, "connect_sign_in_required");
+        assert.notMatch(error.message, /finishing in your browser/);
+      }
+    }),
+  );
+
   it.effect("dispatches when the mint finishes within the bounded wait", () =>
     Effect.gen(function* () {
       const { calls, execute } = makeGithubMock();

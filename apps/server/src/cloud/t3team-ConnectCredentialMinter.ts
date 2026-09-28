@@ -3,6 +3,8 @@ import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
@@ -67,6 +69,9 @@ export const make = Effect.gen(function* () {
   const configProvider = yield* ConfigProvider.ConfigProvider;
   const crypto = yield* Crypto.Crypto;
   const httpClient = yield* HttpClient.HttpClient;
+  // Round-trips run in the minter's own (server-lifetime) scope, not the
+  // caller's, so a caller that stops waiting does not tear the listener down.
+  const scope = yield* Effect.scope;
   // The one shared in-flight browser round-trip: concurrent mints (top-up
   // timer + cloud.session.create) must not open two sign-ins at once.
   const inFlight = yield* Ref.make<
@@ -117,7 +122,7 @@ export const make = Effect.gen(function* () {
       }
 
       const attempt = runConnectBrowserRoundTrip({
-        timeout,
+        timeout: CONNECT_MINT_DEFAULT_TIMEOUT,
         launchBrowser: externalLauncher.launchBrowser,
         store: cloudCli.store,
       }).pipe(
@@ -134,16 +139,41 @@ export const make = Effect.gen(function* () {
             ? error
             : new ConnectCredentialMintError({ reason: "connect_unavailable", cause: error }),
         ),
-        Effect.ensuring(Ref.set(inFlight, Option.none())),
       );
 
-      // Settle the shared deferred from the outcome, then surface it to this
-      // caller too: joiners ride the deferred, the originator re-throws.
-      const outcome = yield* attempt.pipe(Effect.result);
-      yield* outcome._tag === "Success"
-        ? Deferred.succeed(deferred, undefined).pipe(Effect.asVoid)
-        : Deferred.fail(deferred, outcome.failure);
-      return yield* outcome._tag === "Success" ? Effect.void : Effect.fail(outcome.failure);
+      // A caller may stop waiting (create gives up after 45 s and tells the
+      // user to confirm in the browser), but the sign-in must keep listening
+      // until the user does; its own 10-minute timeout bounds it. Each caller,
+      // like any joiner, waits on the deferred only as long as it asked to.
+      //
+      // One onExit frees the slot AND settles the deferred, so no new caller
+      // can slip in between and open a second sign-in. An interrupted
+      // round-trip (the minter's scope closed — or was already closed, when a
+      // short-lived layer built this minter) fails as connect_unavailable, so
+      // nobody is told a sign-in is pending that will never finish.
+      const unavailable = new ConnectCredentialMintError({ reason: "connect_unavailable" });
+      const fiber = yield* attempt.pipe(
+        Effect.onExit((exit) =>
+          Ref.set(inFlight, Option.none()).pipe(
+            Effect.andThen(
+              Exit.hasInterrupts(exit)
+                ? Deferred.fail(deferred, unavailable)
+                : Deferred.done(deferred, exit),
+            ),
+          ),
+        ),
+        Effect.forkIn(scope),
+      );
+      // A fiber forked into an already-closed scope is interrupted before it
+      // starts, so its onExit never runs: watch the fiber itself too.
+      const diedUnstarted = Fiber.await(fiber).pipe(
+        Effect.flatMap((exit) =>
+          Exit.hasInterrupts(exit)
+            ? Ref.set(inFlight, Option.none()).pipe(Effect.andThen(Effect.fail(unavailable)))
+            : Effect.never,
+        ),
+      );
+      yield* Effect.raceFirst(waitWithin(deferred, timeout), diedUnstarted);
     });
   };
 
