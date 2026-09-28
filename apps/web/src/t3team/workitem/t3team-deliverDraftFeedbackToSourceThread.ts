@@ -11,8 +11,8 @@
  */
 
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
-import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { sendT3TeamThreadTurn } from "~/t3team/chat/t3team-sendThreadTurn";
+import { environmentIdOfThread } from "~/t3team/chat/t3team-threadEnvironmentLookup";
 import { useT3TeamDraftMutationStore } from "~/t3team/t3team-draftMutationStore";
 import type { T3TeamDraftMutationField } from "~/t3team/t3team-draftMutationTypes";
 
@@ -31,7 +31,6 @@ export function buildDraftFeedbackText(input: {
 }
 
 export async function deliverDraftFeedbackToSourceThread(input: {
-  readonly backend: BackendApi | null | undefined;
   readonly sourceThreadId: string | undefined;
   readonly draftId: string;
   readonly issueIdOrKey: string;
@@ -40,14 +39,15 @@ export async function deliverDraftFeedbackToSourceThread(input: {
 }): Promise<void> {
   if (!input.sourceThreadId || input.feedback.trim().length === 0) return;
 
-  if (!input.backend) {
-    reportUndelivered(input.draftId, "The app is not connected to a server.");
+  const environmentId = environmentIdOfThread(input.sourceThreadId);
+  if (environmentId === null) {
+    reportUndelivered(input.draftId, "The thread that proposed this draft is not connected.");
     return;
   }
 
   try {
     await sendT3TeamThreadTurn({
-      backend: input.backend,
+      environmentId,
       threadId: input.sourceThreadId,
       text: buildDraftFeedbackText(input),
     });

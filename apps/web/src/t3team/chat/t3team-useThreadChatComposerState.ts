@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import type { EnvironmentId } from "@t3tools/contracts";
 
-import { usePrimaryEnvironmentId } from "~/state/environments";
 import { useThread } from "~/state/entities";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { prepareThreadContextAttachments } from "~/t3team/chat/t3team-prepareThreadContextAttachments";
@@ -24,6 +24,8 @@ const EMPTY_ATTACHMENTS: T3TeamContextAttachment[] = [];
 
 export function useThreadChatComposerState(input: {
   backend: BackendApi | null | undefined;
+  /** The environment that owns the thread's project (see `useThreadChatServerState`). */
+  environmentId: EnvironmentId | null;
   projectId: string;
   threadId: string;
   ticketId?: string;
@@ -33,7 +35,7 @@ export function useThreadChatComposerState(input: {
   hasServerLaunchActivity: boolean;
   embeddedMode?: boolean;
 }) {
-  const environmentId = usePrimaryEnvironmentId();
+  const { environmentId } = input;
   const threadRef = useMemo(
     () => (environmentId ? scopeThreadRef(environmentId, input.threadId as never) : null),
     [environmentId, input.threadId],

@@ -1,7 +1,9 @@
-import type { BackendApi } from "~/t3team/backend/t3team-types";
+import { EnvironmentId, ThreadId } from "@t3tools/contracts";
+
+import { threadEnvironment } from "~/state/threads";
 import type { ThreadBootstrapDispatchState } from "~/t3team/chat/t3team-threadBootstrapPlan";
 import { recordT3TeamThreadDebug } from "~/t3team/chat/t3team-threadDebug";
-import { randomUUID } from "~/lib/utils";
+import { runT3TeamEnvironmentCommand } from "~/t3team/t3team-environmentCommands";
 
 /**
  * Backfills the branch onto an already-dispatched thread once the workspace's git status query
@@ -12,13 +14,13 @@ import { randomUUID } from "~/lib/utils";
  * `branchBackfillSent` so it fires at most once per thread.
  */
 export function maybeBackfillKickoffBranch(input: {
-  backend: BackendApi;
+  environmentId: string;
   threadId: string;
   initialBranch: string | undefined;
   hasServerThread: boolean;
   state: ThreadBootstrapDispatchState;
 }): void {
-  const { backend, threadId, initialBranch, hasServerThread, state } = input;
+  const { environmentId, threadId, initialBranch, hasServerThread, state } = input;
 
   // Only fires for a thread THIS hook dispatched with an unresolved branch (`dispatchedBranch ===
   // null`). `undefined` means nothing was dispatched here (e.g. a server thread that showed up
@@ -37,14 +39,10 @@ export function maybeBackfillKickoffBranch(input: {
   }
 
   state.branchBackfillSent = true;
-  void backend
-    .dispatchCommand({
-      type: "thread.meta.update",
-      commandId: randomUUID() as any,
-      threadId: threadId as any,
-      branch: initialBranch,
-      expectedBranch: null,
-    })
+  void runT3TeamEnvironmentCommand(threadEnvironment.updateMetadata, {
+    environmentId: EnvironmentId.make(environmentId),
+    input: { threadId: ThreadId.make(threadId), branch: initialBranch, expectedBranch: null },
+  })
     .then(() => {
       state.dispatchedBranch = initialBranch;
     })

@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 
 import type { AtlassianBackendApi } from "~/t3team/backend/t3team-atlassianBackendTypes";
-import { useBackend } from "~/t3team/backend/t3team-BackendContext";
 import { draftContentToComparableText } from "~/t3team/t3team-draftMutationDiff";
 import { useT3TeamDraftMutationStore } from "~/t3team/t3team-draftMutationStore";
 import {
@@ -44,8 +43,6 @@ export function useWorkItemDraftStrip(input: {
 }) {
   const { issueIdOrKey, projectId, model, mutations, backend, accountId, onReload } = input;
   const draftsByField = useWorkItemDrafts({ projectId, issueIdOrKey });
-  /** Distinct from `input.backend` (Jira only): the app backend is what can address a thread. */
-  const appBackend = useBackend();
   const discardDraft = useT3TeamDraftMutationStore((state) => state.discardDraft);
   const returnDraftWithFeedback = useT3TeamDraftMutationStore(
     (state) => state.returnDraftWithFeedback,
@@ -65,7 +62,6 @@ export function useWorkItemDraftStrip(input: {
   function onComment(draft: T3TeamDraftMutation, feedback: string) {
     returnDraftWithFeedback(draft.id, feedback);
     void deliverDraftFeedbackToSourceThread({
-      backend: appBackend,
       sourceThreadId: draft.sourceThreadId,
       draftId: draft.id,
       issueIdOrKey: draft.target.issueIdOrKey,

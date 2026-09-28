@@ -4,6 +4,7 @@ import { PROJECT_RECIPE_ACTIVITY_KIND_LAUNCH } from "@t3tools/project-recipes";
 
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { useProjects, useThread } from "~/state/entities";
+import { resolveThreadChatEnvironmentId } from "~/t3team/chat/t3team-threadChatEnvironment";
 import { summarizeT3TeamServerThread } from "~/t3team/chat/t3team-threadDebug";
 import { buildThreadKickoffHistoryMessage } from "~/t3team/chat/t3team-threadKickoffHistoryMessage";
 import {
@@ -30,16 +31,20 @@ export function useThreadChatServerState({
   kickoffPending,
   kickoffWorkflow,
 }: UseThreadChatServerStateInput) {
-  const environmentId = usePrimaryEnvironmentId();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
   const liveProjects = useProjects();
   const canonicalProjectId = useMemo(
     () => resolveCanonicalProjectIdForWorkspaceRoot(projectWorkspaceRoot, projectId, liveProjects),
     [liveProjects, projectId, projectWorkspaceRoot],
   );
-  const projectExists = useMemo(
-    () => liveProjects.some((candidate) => candidate.id === canonicalProjectId),
+  const project = useMemo(
+    () => liveProjects.find((candidate) => candidate.id === canonicalProjectId) ?? null,
     [canonicalProjectId, liveProjects],
   );
+  const projectExists = project !== null;
+  // A thread lives where its project lives: a cloud session's project is on
+  // that machine, not on the primary server.
+  const environmentId = resolveThreadChatEnvironmentId(project, primaryEnvironmentId);
   const threadRef = useMemo(
     () => (environmentId ? scopeThreadRef(environmentId, threadId as never) : null),
     [environmentId, threadId],

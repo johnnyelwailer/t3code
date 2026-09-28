@@ -20,19 +20,21 @@ import {
   DEFAULT_RUNTIME_MODE,
   MessageId,
   ThreadId,
+  type EnvironmentId,
   type T3TeamMessageExt,
 } from "@t3tools/contracts";
 
 import { randomUUID } from "~/lib/utils";
-import type { BackendApi } from "~/t3team/backend/t3team-types";
+import { threadEnvironment } from "~/state/threads";
+import { runT3TeamEnvironmentCommand } from "~/t3team/t3team-environmentCommands";
 
 /**
  * Rejects when the turn could not be started — most commonly because the target thread already has
  * a turn in progress, which the server refuses. Callers must handle that rather than assume
- * delivery.
+ * delivery. `environmentId` is the environment the thread lives on.
  */
 export async function sendT3TeamThreadTurn(input: {
-  readonly backend: BackendApi;
+  readonly environmentId: EnvironmentId;
   readonly threadId: string;
   readonly text: string;
   readonly t3teamExt?: T3TeamMessageExt;
@@ -40,19 +42,21 @@ export async function sendT3TeamThreadTurn(input: {
   const text = input.text.trim();
   if (text.length === 0) return;
 
-  await input.backend.dispatchCommand({
-    type: "thread.turn.start",
-    commandId: CommandId.make(`web:t3team:turn:${randomUUID()}`),
-    threadId: ThreadId.make(input.threadId),
-    message: {
-      messageId: MessageId.make(randomUUID()),
-      role: "user",
-      text,
-      attachments: [],
-      ...(input.t3teamExt ? { t3teamExt: input.t3teamExt } : {}),
+  await runT3TeamEnvironmentCommand(threadEnvironment.startTurn, {
+    environmentId: input.environmentId,
+    input: {
+      commandId: CommandId.make(`web:t3team:turn:${randomUUID()}`),
+      threadId: ThreadId.make(input.threadId),
+      message: {
+        messageId: MessageId.make(randomUUID()),
+        role: "user",
+        text,
+        attachments: [],
+        ...(input.t3teamExt ? { t3teamExt: input.t3teamExt } : {}),
+      },
+      runtimeMode: DEFAULT_RUNTIME_MODE,
+      interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+      createdAt: new Date().toISOString(),
     },
-    runtimeMode: DEFAULT_RUNTIME_MODE,
-    interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
-    createdAt: new Date().toISOString(),
   });
 }

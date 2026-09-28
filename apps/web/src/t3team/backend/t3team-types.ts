@@ -1,9 +1,4 @@
-import type {
-  ClientOrchestrationCommand,
-  ServerConfig,
-  ServerProvider,
-  ThreadId,
-} from "@t3tools/contracts";
+import type { ServerConfig, ServerProvider, ThreadId } from "@t3tools/contracts";
 import type {
   ProjectWorkspaceRefreshWorkItemContextResult,
   ProjectWorkspaceRefreshWorkItemSliceContextResult,
@@ -40,7 +35,6 @@ export interface BackendApi {
   readonly state: BackendState;
   readonly connect: () => Promise<void>;
   readonly disconnect: () => Promise<void>;
-  readonly dispatchCommand: (command: ClientOrchestrationCommand) => Promise<void>;
   readonly forkThread: (input: {
     readonly threadId: string;
     readonly title?: string;

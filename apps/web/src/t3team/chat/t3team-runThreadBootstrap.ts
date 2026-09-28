@@ -1,11 +1,11 @@
 import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
-import { ensureThreadBootstrapProject } from "~/t3team/chat/t3team-runThreadBootstrapHelpers";
 import {
   dispatchThreadBootstrapCreateWithRecovery,
-  runThreadBootstrapKickoff,
-} from "~/t3team/chat/t3team-runThreadBootstrapKickoff";
+  ensureThreadBootstrapProject,
+} from "~/t3team/chat/t3team-runThreadBootstrapHelpers";
+import { runThreadBootstrapKickoff } from "~/t3team/chat/t3team-runThreadBootstrapKickoff";
 import { type ThreadBootstrapAction } from "~/t3team/chat/t3team-threadBootstrapInstrumentation";
 import type { ThreadBootstrapDispatchState } from "~/t3team/chat/t3team-threadBootstrapPlan";
 import type { T3TeamTurnToolContext } from "~/t3team/t3team-threadToolContext";
@@ -57,7 +57,7 @@ export async function runThreadBootstrap({
   onInitialUserMessageSent,
 }: RunThreadBootstrapInput) {
   await ensureThreadBootstrapProject({
-    backend,
+    environmentId,
     projectWorkspaceRoot,
     shouldEnsureProject,
     state,
@@ -95,7 +95,6 @@ export async function runThreadBootstrap({
   }
 
   await dispatchThreadBootstrapCreateWithRecovery({
-    backend,
     action,
     state,
     environmentId,

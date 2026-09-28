@@ -1,48 +1,58 @@
-import { describe, expect, it } from "vite-plus/test";
-import type { ClientOrchestrationCommand } from "@t3tools/contracts";
+import { EnvironmentId } from "@t3tools/contracts";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { BackendApi } from "~/t3team/backend/t3team-types";
+import { threadEnvironment } from "~/state/threads";
+import { runT3TeamEnvironmentCommand } from "~/t3team/t3team-environmentCommands";
 import { sendT3TeamThreadTurn } from "./t3team-sendThreadTurn";
 
-function fakeBackend(input?: { readonly rejectWith?: string }) {
-  const commands: ClientOrchestrationCommand[] = [];
-  const backend = {
-    async dispatchCommand(command: ClientOrchestrationCommand) {
-      if (input?.rejectWith) throw new Error(input.rejectWith);
-      commands.push(command);
-    },
-  } as unknown as BackendApi;
-  return { backend, commands };
-}
+vi.mock("~/t3team/t3team-environmentCommands", () => ({
+  runT3TeamEnvironmentCommand: vi.fn(async () => undefined),
+}));
+vi.mock("~/state/threads", () => ({
+  threadEnvironment: { startTurn: { label: "thread:startTurn" } },
+}));
+
+const runCommand = vi.mocked(runT3TeamEnvironmentCommand);
+const CLOUD_ENV = EnvironmentId.make("cloud-env");
+
+beforeEach(() => {
+  runCommand.mockReset();
+  runCommand.mockResolvedValue(undefined);
+});
 
 describe("sendT3TeamThreadTurn", () => {
-  it("starts a user turn on the addressed thread without any chat-view state", async () => {
-    const { backend, commands } = fakeBackend();
-
-    await sendT3TeamThreadTurn({ backend, threadId: "thread-9", text: "  please revise  " });
-
-    expect(commands).toHaveLength(1);
-    const command = commands[0]!;
-    expect(command.type).toBe("thread.turn.start");
-    expect(command).toMatchObject({
+  it("starts a user turn on the addressed thread, on that thread's environment", async () => {
+    await sendT3TeamThreadTurn({
+      environmentId: CLOUD_ENV,
       threadId: "thread-9",
-      message: { role: "user", text: "please revise", attachments: [] },
+      text: "  please revise  ",
+    });
+
+    expect(runCommand).toHaveBeenCalledTimes(1);
+    expect(runCommand).toHaveBeenCalledWith(threadEnvironment.startTurn, {
+      environmentId: CLOUD_ENV,
+      input: expect.objectContaining({
+        threadId: "thread-9",
+        message: expect.objectContaining({ role: "user", text: "please revise", attachments: [] }),
+      }),
     });
   });
 
   it("does nothing for empty text", async () => {
-    const { backend, commands } = fakeBackend();
+    await sendT3TeamThreadTurn({ environmentId: CLOUD_ENV, threadId: "thread-9", text: "   " });
 
-    await sendT3TeamThreadTurn({ backend, threadId: "thread-9", text: "   " });
-
-    expect(commands).toEqual([]);
+    expect(runCommand).not.toHaveBeenCalled();
   });
 
   it("rejects when the server refuses the turn, so callers cannot assume delivery", async () => {
-    const { backend } = fakeBackend({ rejectWith: "already has a turn in progress" });
+    runCommand.mockRejectedValueOnce(new Error("already has a turn in progress"));
 
     await expect(
-      sendT3TeamThreadTurn({ backend, threadId: "thread-9", text: "please revise" }),
+      sendT3TeamThreadTurn({
+        environmentId: CLOUD_ENV,
+        threadId: "thread-9",
+        text: "please revise",
+      }),
     ).rejects.toThrow("already has a turn in progress");
   });
 });

@@ -26,7 +26,6 @@ import { createEnvironmentRpcCommand, runAtomCommand } from "@t3tools/client-run
 
 import { connectionAtomRuntime } from "~/connection/runtime";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
-import { primaryEnvironmentIdAtom } from "~/state/primaryEnvironment";
 
 const noteThreadComposingCommand = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "t3team:orchestration:noteComposing",
@@ -69,12 +68,16 @@ function sendComposingBeat(threadId: string, environmentId: EnvironmentId): void
 }
 
 /**
- * Report that the user just typed in `threadId`'s composer (call on every
+ * Report that the user just typed in a thread's composer (call on every
  * prompt mutation of a real thread; draft-only composers have no server
- * thread and pass null from the caller).
+ * thread and pass null from the caller). The beat goes to the environment
+ * the thread lives on — a cloud session's thread is on that machine, not the
+ * primary.
  */
-export function reportThreadComposing(threadId: string | null | undefined): void {
-  if (threadId === undefined || threadId === null || threadId.length === 0) {
+export function reportThreadComposing(
+  thread: { readonly environmentId: EnvironmentId; readonly threadId: string } | null | undefined,
+): void {
+  if (!thread || thread.threadId.length === 0) {
     return;
   }
   // The composer only exists in the browser; keep this safe to call from
@@ -82,14 +85,7 @@ export function reportThreadComposing(threadId: string | null | undefined): void
   if (typeof window === "undefined") {
     return;
   }
-  // The heartbeat targets the SAME environment as every other t3team thread
-  // command (runT3TeamOrchestrationDispatch resolves it identically): if no
-  // environment is paired there is no server to hold — do not even track
-  // pacing state for it.
-  const environmentId = appAtomRegistry.get(primaryEnvironmentIdAtom);
-  if (environmentId === null) {
-    return;
-  }
+  const { environmentId, threadId } = thread;
   const key = environmentThreadKey(environmentId, threadId);
   let existing = beatsByEnvironmentThread.get(key);
   if (existing === undefined) {

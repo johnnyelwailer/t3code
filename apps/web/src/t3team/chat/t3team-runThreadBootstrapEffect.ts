@@ -118,7 +118,7 @@ export function runThreadBootstrapEffect(input: RunThreadBootstrapEffectInput): 
     // `null` because the workspace's git status hadn't resolved yet — backfill it now that
     // `initialBranch` has a value, rather than leaving the thread branchless forever.
     maybeBackfillKickoffBranch({
-      backend,
+      environmentId,
       threadId,
       initialBranch,
       hasServerThread: serverThread != null,

@@ -5,10 +5,15 @@ import type {
   ProjectSourceKind,
 } from "@t3tools/project-context";
 
-import { randomUUID } from "~/lib/utils";
+import { ProjectId } from "@t3tools/contracts";
+
+import { projectEnvironment } from "~/state/projects";
 import { isDuplicateProjectBindingError } from "~/t3team/chat/t3team-duplicateThreadCreateError";
+import {
+  primaryEnvironmentIdOrThrow,
+  runT3TeamEnvironmentCommand,
+} from "~/t3team/t3team-environmentCommands";
 import { toSourceBindingCommand } from "~/t3team/t3team-projectSourceBinding";
-import { useBackend } from "~/t3team/backend/t3team-index";
 import { useCreateProject } from "./t3team-useCreateProject";
 
 /**
@@ -21,7 +26,6 @@ import { useCreateProject } from "./t3team-useCreateProject";
  * confirms the rebind, even when it is fully pre-filled.
  */
 export function useRepairProjectBinding(project: ProjectShellProject) {
-  const backend = useBackend();
   const setup = useCreateProject();
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
@@ -50,7 +54,7 @@ export function useRepairProjectBinding(project: ProjectShellProject) {
   }, [setup.projects, setup.selectedProject, setup, storedExternalProjectId]);
 
   const confirmRepair = useCallback(async (): Promise<ProjectShellProject | null> => {
-    if (!backend || !setup.selectedAccount || !setup.selectedProject) return null;
+    if (!setup.selectedAccount || !setup.selectedProject) return null;
     setConfirming(true);
     setConfirmError(null);
     try {
@@ -62,11 +66,13 @@ export function useRepairProjectBinding(project: ProjectShellProject) {
         ...(setup.selectedProject.url ? { externalProjectUrl: setup.selectedProject.url } : {}),
         ...(project.source.raw !== undefined ? { raw: project.source.raw } : {}),
       };
-      await backend.dispatchCommand({
-        type: "project.meta.update",
-        commandId: randomUUID() as any,
-        projectId: project.id as any,
-        source: toSourceBindingCommand(nextSource),
+      // Work projects (and so their bindings) live on this machine; see finalizeCreatedProject.
+      await runT3TeamEnvironmentCommand(projectEnvironment.update, {
+        environmentId: primaryEnvironmentIdOrThrow(),
+        input: {
+          projectId: ProjectId.make(project.id),
+          source: toSourceBindingCommand(nextSource),
+        },
       });
       return { ...project, source: nextSource };
     } catch (error) {
@@ -81,7 +87,7 @@ export function useRepairProjectBinding(project: ProjectShellProject) {
     } finally {
       setConfirming(false);
     }
-  }, [backend, project, setup.selectedAccount, setup.selectedProject]);
+  }, [project, setup.selectedAccount, setup.selectedProject]);
 
   return { ...setup, confirming, confirmError, confirmRepair };
 }
