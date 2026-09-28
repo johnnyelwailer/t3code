@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Fork-owned section mounted inside upstream's AgentsPanel scroll container (see the marked seam
  * in `AgentsPanel.tsx`). Upstream's roster model (`RuntimeSubagent`/`AgentPanelModel`) is derived
@@ -77,7 +76,7 @@ export function T3TeamAgentsPanelForkSection({
     <div className="flex flex-col gap-2 p-2" data-t3team-agents-panel-fork-section="true">
       {subRunTree.length > 0 ? (
         <section>
-          <div className="flex items-center gap-1.5 px-1.5 pt-1 text-[.65rem] font-medium uppercase tracking-wider text-muted-foreground">
+          <div className="flex items-center gap-1.5 px-1.5 pt-1 text-3xs font-medium uppercase tracking-wider text-muted-foreground">
             <RouteIcon aria-hidden className="size-3" />
             Sub-runs
           </div>
@@ -86,7 +85,7 @@ export function T3TeamAgentsPanelForkSection({
       ) : null}
       {workflowRuns.length > 0 ? (
         <section>
-          <div className="flex items-center gap-1.5 px-1.5 pt-1 text-[.65rem] font-medium uppercase tracking-wider text-muted-foreground">
+          <div className="flex items-center gap-1.5 px-1.5 pt-1 text-3xs font-medium uppercase tracking-wider text-muted-foreground">
             <Workflow aria-hidden className="size-3" />
             Recipe workflows
           </div>

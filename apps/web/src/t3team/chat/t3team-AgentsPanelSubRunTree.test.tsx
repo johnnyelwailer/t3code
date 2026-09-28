@@ -81,7 +81,9 @@ describe("T3TeamAgentsPanelSubRunTree status language (GHE #254)", () => {
     expect(container!.textContent).toContain("Question awaiting answer");
     // …and the amber question-mark glyph outranks the lifecycle icon.
     const svgs = Array.from(container!.querySelectorAll("button svg")) as SVGSVGElement[];
-    const questionSvg = svgs.find((svg) => svg.className.baseVal.includes("text-amber-600"));
+    const questionSvg = svgs.find((svg) =>
+      svg.className.baseVal.includes("text-warning-foreground"),
+    );
     expect(questionSvg, "amber question-mark icon present").toBeTruthy();
     expect(questionSvg!.className.baseVal).toContain("size-3");
   });
@@ -92,7 +94,9 @@ describe("T3TeamAgentsPanelSubRunTree status language (GHE #254)", () => {
     render([node(createThread({ status: "completed", awaitingParent: true }))]);
     expect(container!.textContent).toContain("Plan awaiting approval");
     const svgs = Array.from(container!.querySelectorAll("button svg")) as SVGSVGElement[];
-    const pendingSvg = svgs.find((svg) => svg.className.baseVal.includes("text-amber-600"));
+    const pendingSvg = svgs.find((svg) =>
+      svg.className.baseVal.includes("text-warning-foreground"),
+    );
     expect(pendingSvg, "amber pending icon present").toBeTruthy();
   });
 

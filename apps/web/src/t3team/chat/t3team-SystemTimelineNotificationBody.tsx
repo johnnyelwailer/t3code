@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Collapse affordance for long workflow-authored system notifications — the plain-text
  * `thread.notifyUser(...)` path (see `t3team-workflowEngineBrokerNotify.ts`, the `p.recipient ===
@@ -68,11 +67,11 @@ export function T3TeamSystemTimelineNotificationBody({
           <Button
             type="button"
             size="xs"
-            variant="ghost"
+            variant="ghost-muted"
             aria-expanded={expanded}
             data-scroll-anchor-ignore
             onClick={() => setExpanded((value) => !value)}
-            className="-ml-1 h-6 rounded-md px-1.5 text-secondary-label text-xs hover:bg-muted/55 hover:text-message-foreground"
+            className="-ml-1"
           >
             {expanded ? "Show less" : "Show full message"}
           </Button>

@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The Description section header's `Rewrite` affordance.
  *
@@ -37,7 +36,7 @@ export function WorkItemAgentRewriteControl(props: UseWorkItemAgentRewriteInput)
         <Bot className="size-3.5" />
         Rewrite
         {stagedCommentCount > 0 ? (
-          <span className="rounded bg-accent px-1 text-[10px] font-semibold text-accent-foreground">
+          <span className="rounded bg-accent px-1 text-3xs font-semibold text-accent-foreground">
             {stagedCommentCount}
           </span>
         ) : null}

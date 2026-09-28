@@ -1,0 +1,33 @@
+/* Fork styles that fork components use on any route. Imported by
+ * apps/web/src/index.css — so they load app-wide and shadcn/no-unknown-classes
+ * (which reads index.css and its imports) knows the class names — and by
+ * t3team-index.css, the only stylesheet the Storybook canvas loads. */
+@import "./t3team-index-aciDots.css";
+@import "./t3team-index-aciStates.css";
+@import "./t3team-index-aciStateMotion.css";
+@import "./t3team-index-aciLead.css";
+
+/* Jira rich-text (ADF) lists: nested markers cycle like .chat-markdown's. */
+@utility t3team-adf-bullets {
+  list-style-type: disc;
+
+  & ul {
+    list-style-type: circle;
+  }
+
+  & ul ul {
+    list-style-type: square;
+  }
+}
+
+@utility t3team-adf-numbers {
+  list-style-type: decimal;
+
+  & ol {
+    list-style-type: lower-alpha;
+  }
+
+  & ol ol {
+    list-style-type: lower-roman;
+  }
+}

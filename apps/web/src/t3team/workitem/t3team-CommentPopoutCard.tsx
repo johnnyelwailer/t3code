@@ -1,4 +1,4 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. (awaiting ui variant: Textarea size="compact") */
 /**
  * The one inline "leave a note" popout used across the work item surfaces.
  *
@@ -40,7 +40,7 @@ export function T3TeamCommentPopoutCard({
   return (
     <div className="rounded-lg border border-border bg-popover p-2 shadow-lg">
       {quote ? (
-        <p className="mb-1.5 line-clamp-2 border-l-2 border-primary/50 pl-2 text-[11px] italic text-muted-foreground">
+        <p className="mb-1.5 line-clamp-2 border-l-2 border-primary/50 pl-2 text-2xs italic text-muted-foreground">
           {quote}
         </p>
       ) : null}

@@ -1,4 +1,4 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. (awaiting ui variant: Textarea size="compact") */
 import { useState } from "react";
 import { ArrowRight, ChevronRight } from "lucide-react";
 
@@ -104,7 +104,7 @@ export function WorkItemDraftStripRow({ row }: { readonly row: WorkItemDraftStri
       </div>
 
       {commenting ? (
-        <div className="mt-2 pl-[4.5rem]">
+        <div className="mt-2 pl-18">
           <Textarea
             rows={2}
             autoFocus
@@ -124,9 +124,7 @@ export function WorkItemDraftStripRow({ row }: { readonly row: WorkItemDraftStri
           </div>
         </div>
       ) : row.summary && !row.reviewInPlace ? (
-        <p className="mt-0.5 pl-[4.5rem] text-[11px] leading-4 text-muted-foreground">
-          {row.summary}
-        </p>
+        <p className="mt-0.5 pl-18 text-2xs leading-4 text-muted-foreground">{row.summary}</p>
       ) : null}
     </div>
   );
