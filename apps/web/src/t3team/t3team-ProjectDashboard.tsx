@@ -1,6 +1,7 @@
-/* oxlint-disable t3code/no-native-title-tooltip, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 import { EllipsisIcon, Link2 } from "lucide-react";
 import type { ProjectShellProject } from "@t3tools/project-context";
+import { Button } from "~/t3team/components/ui/t3team-button";
 import { ScrollArea } from "~/t3team/components/ui/t3team-scroll-area";
 import { SidebarTrigger } from "~/t3team/components/ui/t3team-sidebar";
 import { t3SurfaceBackdrops } from "~/t3team/components/ui/t3team-surface";
@@ -46,7 +47,10 @@ export function ProjectDashboard({
             {project.title}
           </h2>
           <Menu>
-            <MenuTrigger className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground">
+            <MenuTrigger
+              aria-label="Project actions"
+              render={<Button size="icon-xs" variant="ghost-muted" />}
+            >
               <EllipsisIcon className="size-3.5" />
             </MenuTrigger>
             <MenuPopup align="start" side="bottom" className="min-w-48">

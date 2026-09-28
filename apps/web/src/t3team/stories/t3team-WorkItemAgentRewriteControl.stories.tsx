@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { useEffect } from "react";
 import type { Meta, StoryObj } from "@storybook/react";
 
@@ -62,7 +61,7 @@ function StagedComposerPreview() {
 
   return (
     <div className="mt-6 max-w-sm rounded-lg border border-border bg-card p-3">
-      <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
+      <p className="mb-2 text-3xs font-medium uppercase tracking-widest text-muted-foreground/70">
         On the composer
       </p>
       <p className="text-sm font-medium text-foreground">{staged.selectedRecipe.recipe.title}</p>

@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ReactNode } from "react";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 import { JiraIssueTypeIcon } from "~/t3team/components/ticket/t3team-JiraIssueType";
@@ -74,7 +73,7 @@ export function TicketWorkItemCard({
             <div
               className={`mt-1 overflow-hidden font-medium ${
                 compact
-                  ? "mt-0.5 line-clamp-2 text-[11px] leading-3.5 break-words @md/ticket-card:text-xs @md/ticket-card:leading-4 @lg/ticket-card:line-clamp-1"
+                  ? "mt-0.5 line-clamp-2 text-2xs leading-3.5 break-words @md/ticket-card:text-xs @md/ticket-card:leading-4 @lg/ticket-card:line-clamp-1"
                   : "line-clamp-2 text-sm leading-5 break-words"
               }`}
             >
@@ -82,7 +81,7 @@ export function TicketWorkItemCard({
             </div>
             {ticket.assignee && (
               <div
-                className={`truncate text-muted-foreground ${compact ? "mt-0.5 hidden text-[11px] leading-4 @lg/ticket-card:block" : "mt-1 text-xs"}`}
+                className={`truncate text-muted-foreground ${compact ? "mt-0.5 hidden text-2xs leading-4 @lg/ticket-card:block" : "mt-1 text-xs"}`}
               >
                 Assigned to {ticket.assignee}
               </div>

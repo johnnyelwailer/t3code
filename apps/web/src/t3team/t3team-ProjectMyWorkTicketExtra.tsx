@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { renderRelativeUpdatedAt } from "~/t3team/t3team-githubActivityViewUtils";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
@@ -19,7 +18,7 @@ export function ProjectMyWorkTicketExtra({
     <>
       {!compact && updatedLabel ? (
         <div className="mt-2 flex flex-wrap items-center gap-1.5 px-1">
-          <span className="text-[10px] text-muted-foreground">Updated {updatedLabel}</span>
+          <span className="text-3xs text-muted-foreground">Updated {updatedLabel}</span>
         </div>
       ) : null}
     </>

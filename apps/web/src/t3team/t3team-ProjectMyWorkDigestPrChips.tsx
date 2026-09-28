@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { Badge } from "~/t3team/components/ui/t3team-badge";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
 import { digestPrUrl, digestReviewerUrl } from "~/t3team/t3team-projectMyWorkDigestFacts";
@@ -59,9 +58,7 @@ export function DigestReviewerStack({ reviewers }: { reviewers: readonly DigestR
         </Tooltip>
       ))}
       {rest > 0 ? (
-        <span className="-translate-y-px text-[10px] leading-none text-muted-foreground">
-          +{rest}
-        </span>
+        <span className="-translate-y-px text-3xs leading-none text-muted-foreground">+{rest}</span>
       ) : null}
     </span>
   );
@@ -76,19 +73,19 @@ export function DigestReviewerStack({ reviewers }: { reviewers: readonly DigestR
 export function DigestPrChip({ pr }: { pr: DigestChangeRequest }) {
   const state = PR_STATE[pr.state];
   return (
-    <span className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-background/70 px-1.5 py-0.5 text-[11px] text-muted-foreground ring-1 ring-border/50 hover:ring-border">
+    <span className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-background/70 px-1.5 py-0.5 text-2xs text-muted-foreground ring-1 ring-border/50 hover:ring-border">
       <a
         href={digestPrUrl(pr)}
-        className="-translate-y-px font-mono text-[10.5px] leading-none text-muted-foreground hover:text-foreground hover:underline"
+        className="-translate-y-px font-mono text-3xs leading-none text-muted-foreground hover:text-foreground hover:underline"
       >
         {pr.repo}#{pr.number}
       </a>
-      <Badge size="sm" variant={state.variant} className="text-[10px] leading-none">
+      <Badge size="sm" variant={state.variant}>
         {state.label}
       </Badge>
       <DigestReviewerStack reviewers={pr.reviewers} />
       {pr.unhandledComments && pr.unhandledComments > 0 ? (
-        <span className="-translate-y-px text-[10px] leading-none text-muted-foreground">
+        <span className="-translate-y-px text-3xs leading-none text-muted-foreground">
           {pr.unhandledComments} comments
         </span>
       ) : null}

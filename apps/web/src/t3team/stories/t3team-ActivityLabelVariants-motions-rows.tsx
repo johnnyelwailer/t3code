@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * GHE-40 activity label — story support: sub-run child rows + the settled
  * "Done" card.
@@ -39,10 +38,10 @@ export function SubRunRow({
     <li role="presentation" className="list-none">
       <button
         type="button"
-        className="flex h-7 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md pe-2.5 ps-[calc(var(--sidebar-content-inset)+1rem)] text-left text-xs outline-none text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+        className="flex h-7 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md pe-2.5 ps-6 text-left text-xs outline-none text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
       >
         {state === "running" ? (
-          <span className="shrink-0 text-sky-600 dark:text-sky-400">
+          <span className="shrink-0 text-info-foreground">
             <MorphIcon solid={false} size="sm" pulse />
           </span>
         ) : (
@@ -56,7 +55,7 @@ export function SubRunRow({
           <Tooltip>
             <TooltipTrigger
               render={
-                <span className="min-w-0 flex-1 truncate font-medium text-sky-600 dark:text-sky-400">
+                <span className="min-w-0 flex-1 truncate font-medium text-info-foreground">
                   <span className="t3team-label-shimmer">{flipLabel}</span>
                 </span>
               }
@@ -71,7 +70,7 @@ export function SubRunRow({
           <Tooltip>
             <TooltipTrigger
               render={
-                <span className="shrink-0 font-medium text-sky-600 dark:text-sky-400">
+                <span className="shrink-0 font-medium text-info-foreground">
                   <span className="t3team-label-shimmer">{dockLabel}</span>
                 </span>
               }
@@ -79,9 +78,7 @@ export function SubRunRow({
             <TooltipPopup side="top">{title}</TooltipPopup>
           </Tooltip>
         ) : null}
-        <span className="shrink-0 text-[0.6875rem] text-muted-foreground/55 tabular-nums">
-          {time}
-        </span>
+        <span className="shrink-0 text-2xs text-muted-foreground/55 tabular-nums">{time}</span>
       </button>
     </li>
   );
@@ -95,7 +92,7 @@ export function DoneCard() {
       tabIndex={0}
       className="group/sidebar-row relative w-full cursor-pointer overflow-hidden rounded-md bg-transparent text-sidebar-foreground outline-none select-none hover:bg-sidebar-row-hover"
     >
-      <div className="relative z-10 px-[var(--sidebar-row-content-inset)] py-[var(--sidebar-content-inset)]">
+      <div className="relative z-10 px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)">
         <div className="flex h-5 min-w-0 items-center gap-1.5">
           <ProjectFavicon
             project={{
@@ -111,7 +108,7 @@ export function DoneCard() {
             {PROJECT_TITLE}
           </span>
           <span className="ml-auto flex shrink-0 items-center justify-end text-xs">
-            <span className="inline-flex items-center gap-1 font-medium text-emerald-700 dark:text-emerald-300">
+            <span className="inline-flex items-center gap-1 font-medium text-success-foreground">
               <CircleCheckIcon aria-hidden className="size-4 shrink-0" />
               <span role="status">Done</span>
             </span>

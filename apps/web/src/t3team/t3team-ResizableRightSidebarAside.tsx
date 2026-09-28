@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-native-title-tooltip, shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 import { PanelRightCloseIcon, PanelRightOpenIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 
@@ -65,7 +65,7 @@ export function ResizableRightSidebarAside({
 
         <div
           className={cn(
-            "box-border h-full min-h-0 pt-[var(--workspace-topbar-height)]",
+            "box-border h-full min-h-0 pt-(--workspace-topbar-height)",
             isCollapsed ? "pointer-events-none opacity-0" : "opacity-100",
           )}
         >

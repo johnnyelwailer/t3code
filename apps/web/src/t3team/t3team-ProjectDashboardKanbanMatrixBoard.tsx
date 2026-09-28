@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { Fragment } from "react";
 
 import { ProjectDashboardKanbanDroppableColumnBody } from "~/t3team/t3team-ProjectDashboardKanbanDndUi";
@@ -83,7 +82,7 @@ export function ProjectDashboardKanbanMatrixBoard({
                   data-shell-ticket={plan.ticketId}
                   data-shell-role="single-lane"
                   data-shell-depth={shellDepth}
-                  className="pointer-events-none relative z-10 rounded-[1.35rem] border-[1.5px] border-border bg-background shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+                  className="pointer-events-none relative z-10 rounded-3xl border-2 border-border bg-background inset-shadow-2xs inset-shadow-white/6"
                   style={{
                     gridColumn: plan.columnIndex + 1,
                     gridRow: `${PROJECT_DASHBOARD_KANBAN_MATRIX_HEADER_ROWS + plan.rowStart} / span ${plan.rowSpan}`,
@@ -102,7 +101,7 @@ export function ProjectDashboardKanbanMatrixBoard({
                 data-shell-ticket={plan.ticketId}
                 data-shell-role="spanning"
                 data-shell-depth={shellDepth}
-                className="pointer-events-none relative z-10 rounded-[1.35rem] border-[1.5px] border-border bg-background shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+                className="pointer-events-none relative z-10 rounded-3xl border-2 border-border bg-background inset-shadow-2xs inset-shadow-white/6"
                 style={{
                   gridColumn: `${plan.columnIndex + 1} / span ${plan.columnSpan}`,
                   gridRow: `${PROJECT_DASHBOARD_KANBAN_MATRIX_HEADER_ROWS + plan.rowStart} / span ${plan.rowSpan}`,
