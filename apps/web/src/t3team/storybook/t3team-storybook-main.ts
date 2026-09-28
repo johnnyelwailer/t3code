@@ -126,6 +126,18 @@ const config: StorybookConfig = {
         (dep) => dep !== "@clerk/clerk-js",
       );
     }
+    // The inherited app config also runs the third-party license manifest plugin, which
+    // audits every bundled package — including Storybook itself, whose packages ship no
+    // license file — and fails the build. The manifest belongs to the shipped app only.
+    config.plugins = (config.plugins ?? []).flat(Infinity).filter(
+      (plugin) =>
+        !(
+          plugin &&
+          typeof plugin === "object" &&
+          "name" in plugin &&
+          plugin.name === "t3code:third-party-licenses"
+        ),
+    );
     return mergeConfig(config, {
       plugins: [
         t3teamStorybookResolver(srcDir),
