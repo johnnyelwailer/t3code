@@ -2,9 +2,10 @@
 /**
  * Provider usage-hold banner (GHE #421, auto-resume layer).
  *
- * Renders below the latest message as a composer-banner item when the
- * server's provider-usage watcher has held this thread's provider rolling
- * window. The state is derived from the thread's persisted activity trail
+ * Renders below the latest message as a composer-banner item when a turn on
+ * this thread hit its provider instance's usage limit and the server holds
+ * it for an automatic re-send after the window resets (sends are never
+ * blocked). The state is derived from the thread's persisted activity trail
  * (`provider.usage-hold.*` kinds), so it survives reloads and shows up on
  * every connected client — no extra transport.
  *
@@ -15,12 +16,12 @@
  *
  * @module chat/ProviderUsageHoldBanner
  */
+import { formatDuration } from "@t3tools/shared/usageLimits";
 import * as React from "react";
 
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 
 const KIND_STARTED = "provider.usage-hold.started";
-const KIND_DEFERRED = "provider.usage-hold.deferred";
 const KIND_RELEASED = "provider.usage-hold.released";
 const KIND_AUTO_RESUME_SET = "provider.usage-hold.auto-resume-set";
 const KIND_WARNING = "provider.usage.warning";
@@ -65,7 +66,7 @@ export function deriveProviderUsageHoldBanner(
   let hold: ProviderUsageHoldBannerState | null = null;
   for (const activity of activities) {
     const payload = holdPayload(activity);
-    if (activity.kind === KIND_STARTED || activity.kind === KIND_DEFERRED) {
+    if (activity.kind === KIND_STARTED) {
       // tsgo narrows `hold` to never inside its own assignment; the cast keeps
       // the previous-toggle read outside that write context.
       const prevAutoResume: boolean =
@@ -110,8 +111,8 @@ export function deriveProviderUsageWarningBanner(
       };
     } else if (activity.kind === KIND_WARNING_CLEARED) {
       warning = null;
-    } else if (activity.kind === KIND_STARTED || activity.kind === KIND_DEFERRED) {
-      // Critical hold supersedes the warning.
+    } else if (activity.kind === KIND_STARTED) {
+      // A hold supersedes the warning.
       warning = null;
     } else if (activity.kind === KIND_RELEASED) {
       // Hold released — the warning may reappear on the next sweep, but we
@@ -122,18 +123,17 @@ export function deriveProviderUsageWarningBanner(
   return warning;
 }
 
-/** Human reset moment: "in 43m" while it is in the future, else the clock time. */
+/**
+ * Human reset moment, phrased like the Usage → Limits view (shared
+ * `formatDuration`): "resets in 2h 13m" while it is in the future.
+ */
 export function describeHoldReset(resetsAt: string, nowMs: number): string {
   const targetMs = Date.parse(resetsAt);
   if (Number.isNaN(targetMs)) return "reset time unknown";
   const deltaMs = targetMs - nowMs;
   if (deltaMs <= 0) return "resuming…";
-  const minutes = Math.round(deltaMs / 60_000);
-  if (minutes < 1) return "resets shortly";
-  if (minutes < 60) return `resets in ~${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return rest === 0 ? `resets in ~${hours}h` : `resets in ~${hours}h ${rest}m`;
+  if (deltaMs < 60_000) return "resets shortly";
+  return `resets in ${formatDuration(deltaMs)}`;
 }
 
 export function ProviderUsageHoldToggle(props: {

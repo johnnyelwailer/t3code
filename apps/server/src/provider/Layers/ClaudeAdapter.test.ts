@@ -2936,6 +2936,8 @@ describe("ClaudeAdapterLive", () => {
         payload.errorMessage,
         "Claude usage limit reached. Send the message again once the limit resets.",
       );
+      // The structured marker the usage watcher keys its auto-resume on.
+      assert.equal(payload.failureKind, "usage_limit");
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
       Effect.provide(harness.layer),
@@ -3021,6 +3023,10 @@ describe("ClaudeAdapterLive", () => {
       assert.equal(errors[0]?.payload.message, expected);
       assert.equal(completedTurn(events).state, "failed");
       assert.equal(completedTurn(events).errorMessage, expected);
+      assert.equal(
+        completedTurn(events).failureKind,
+        expected === usageLimitMessage ? "usage_limit" : undefined,
+      );
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
       Effect.provide(harness.layer),

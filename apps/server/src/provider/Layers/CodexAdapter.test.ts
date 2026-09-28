@@ -3086,6 +3086,7 @@ usageLimitLayer("CodexAdapterLive usage limits", (it) => {
         }
         if (event.type === "turn.completed") {
           NodeAssert.equal(event.payload.errorMessage, expected);
+          NodeAssert.equal(event.payload.failureKind, "usage_limit");
         }
       }
     }),

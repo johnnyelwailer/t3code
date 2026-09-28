@@ -223,9 +223,9 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
   "t3team.runtime.provider_usage": {
     id: "t3team.runtime.provider_usage",
     label: "Read provider usage limits",
-    title: "Sample live provider plan-limit windows",
+    title: "Read provider usage-limit windows per instance",
     description:
-      "Read the provider's LIVE rolling plan-limit windows (how much of the 5-hour / weekly quota is used, when it resets, and the severity verdict) by sampling each configured provider instance on demand. Call it when you need to know how close a provider is to a rate-limit wall before delegating long work to it, or when a provider start fails with a rate-limit error. Unsampleable instances are reported in `unavailable` with a reason instead of failing the call.",
+      "Read each provider INSTANCE's usage-limit windows (session / weekly / monthly: usedPercent, resetsAt, severity normal|warning|critical) from the host's live provider snapshots, plus accounts reported by configured usage hubs. Call it when you need to know how close an account is to its limit before delegating long work to it, or when a turn failed with a usage-limit error. Instances without data say why in `unavailable` instead of failing the call.",
     capabilities: ["read"],
     kind: "read",
     surfaces: ["thread"],
@@ -238,7 +238,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
         provider_instance_id: {
           type: "string",
           description:
-            "Optional provider INSTANCE id to sample (as returned by t3team.runtime.models). Omit to sample all enabled instances with a live-limit source.",
+            "Optional provider INSTANCE id (as returned by t3team.runtime.models). Omit to list every enabled instance and hub account.",
         },
       },
     },

@@ -1,45 +1,40 @@
 /**
- * Act/release steps of the provider usage-limit watcher (GHE #421, phase 2):
- * pause every session thread of an exhausted driver, release the held threads
- * when the window recovers, and append the matching thread activities. Split
- * out of `t3team-providerUsageWatcher.ts` for the additive LOC budget.
+ * Release steps of the provider usage watcher (GHE #421): claim a hold's
+ * release, replay its pending turn once when that is still correct, and
+ * append the matching thread activities.
  *
  * @module t3team-providerUsageWatcherActions
  */
-import {
-  CommandId,
-  EventId,
-  ProviderDriverKind,
-  ProviderInstanceId,
-  ThreadId,
-} from "@t3tools/contracts";
+import { CommandId, EventId, ThreadId, type OrchestrationThread } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
+import type { ProviderUsageHold as HoldRow } from "./persistence/Services/t3team-ProviderUsageHolds.ts";
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import {
   PROVIDER_USAGE_HOLD_ACTIVITY_KINDS,
-  type ProviderUsageInstanceHold,
+  PROVIDER_USAGE_RESUME_GRACE_MS,
+  type ProviderUsageHoldActivityKind,
   type ProviderUsageWatcherDeps,
-  type ProviderUsageWatcherState,
 } from "./t3team-providerUsageWatcherTypes.ts";
 
-/**
- * The watcher is advisory: an internal failure (settings read, repo query,
- * session listing) must never block turn dispatch or crash the loop, so
- * fallible calls degrade to defects that the loop's `catchCause` logs.
- */
+export const nowIso = DateTime.now.pipe(Effect.map(DateTime.formatIso));
+
+/** Activity appends are best-effort: a failed append never fails the watcher step. */
 export const makeAppendActivity =
-  (input: { readonly engine: OrchestrationEngineShape; readonly nowIso: () => string }) =>
+  (engine: Pick<OrchestrationEngineShape, "dispatch">) =>
   (
     threadId: string,
-    kind: (typeof PROVIDER_USAGE_HOLD_ACTIVITY_KINDS)[keyof typeof PROVIDER_USAGE_HOLD_ACTIVITY_KINDS],
+    kind: ProviderUsageHoldActivityKind,
     summary: string,
     payload: unknown,
   ): Effect.Effect<void> =>
-    input.engine
-      .dispatch({
+    Effect.gen(function* () {
+      const createdAt = yield* nowIso;
+      yield* engine.dispatch({
         type: "thread.activity.append",
         commandId: CommandId.make(t3teamRandomUUID()),
         threadId: ThreadId.make(threadId),
@@ -50,130 +45,108 @@ export const makeAppendActivity =
           summary,
           payload,
           turnId: null,
-          createdAt: input.nowIso(),
+          createdAt,
         },
-        createdAt: input.nowIso(),
-      })
-      .pipe(Effect.catchCause(() => Effect.void));
+        createdAt,
+      });
+    }).pipe(Effect.ignoreCause);
 
 /**
- * PAUSE every thread that would run on `driver`: one hold row per
- * session thread of that driver (auto-resume ON by default) plus one
- * `provider.usage-hold.started` activity each.
+ * A pending turn is replayed only while it is still the thread's open ask:
+ * it is the latest user message, and no turn requested after it is running
+ * or already completed (answered — also true after a restart).
  */
-export const actForDriver = Effect.fn("providerUsageWatcher.actForDriver")(function* (
-  deps: ProviderUsageWatcherDeps,
-  hold: ProviderUsageInstanceHold,
-) {
-  let created = 0;
-  const threadIds = yield* deps.holds
-    .listActiveSessionThreadsForDriver({ provider: ProviderDriverKind.make(hold.driver) })
-    .pipe(Effect.orDie);
-  for (const row of threadIds) {
-    yield* deps.holds
-      .upsertActiveHold({
-        threadId: ThreadId.make(row.threadId),
-        provider: ProviderDriverKind.make(hold.driver),
-        providerInstanceId:
-          hold.instanceIds[0] !== undefined ? ProviderInstanceId.make(hold.instanceIds[0]!) : null,
-        since: hold.since,
-        resetsAt: hold.resetsAt,
-        autoResume: true,
-        pendingTurnMessageId: null,
-        releasedAt: null,
-        releaseReason: null,
-        updatedAt: deps.nowIso(),
-      })
-      .pipe(Effect.orDie);
-    created += 1;
-    yield* deps.appendActivity(
-      row.threadId,
-      PROVIDER_USAGE_HOLD_ACTIVITY_KINDS.started,
-      `Provider usage limit reached — ${hold.driver} window exhausted, turns paused`,
-      {
-        driver: hold.driver,
-        since: hold.since,
-        resetsAt: hold.resetsAt,
-        autoResume: true,
-        percentUsed: hold.percentUsed,
-      },
-    );
+const isReplayable = (thread: OrchestrationThread, messageId: string): boolean => {
+  const message = thread.messages.find((candidate) => candidate.id === messageId);
+  if (message === undefined) return false;
+  const lastUser = thread.messages.findLast((candidate) => candidate.role === "user");
+  if (lastUser?.id !== messageId) return false;
+  const latest = thread.latestTurn;
+  if (latest === null || Date.parse(latest.requestedAt) < Date.parse(message.createdAt)) {
+    return true;
   }
-  return created;
-});
+  return latest.state !== "running" && latest.state !== "completed";
+};
+
+/** Deadline for a hold: its reset moment plus grace; null when no reset moment is known. */
+const holdDeadlineMs = (hold: Pick<HoldRow, "resetsAt">): number | null => {
+  if (hold.resetsAt === null) return null;
+  const at = Date.parse(hold.resetsAt);
+  return Number.isFinite(at) ? at + PROVIDER_USAGE_RESUME_GRACE_MS : null;
+};
 
 /**
- * RELEASE the held threads of `driver`: mark the rows released and, for
- * the auto-resume-ON threads with a pending turn, re-drive that turn
- * through the existing `thread.turn.resume` command (the same command
- * the #403 re-drive and the Continue button use). A decider rejection
- * (e.g. the pending message is no longer the thread's last user message
- * because the user typed a newer one during the hold) is swallowed: the
- * user's newer message carries its own pending turn and will be replayed.
+ * RELEASE one hold. The conditional `markReleased` is the claim: only the
+ * caller that flips the row goes on, so a hold is replayed at most once even
+ * when a deadline tick and a recovery snapshot race. `replay: false` clears
+ * the hold without re-driving (the thread was answered some other way).
  */
-export const releaseDriver = Effect.fn("providerUsageWatcher.releaseDriver")(function* (
+export const releaseHold = Effect.fn("providerUsageWatcher.releaseHold")(function* (
   deps: ProviderUsageWatcherDeps,
-  driver: string,
-  reason: string,
+  row: Pick<HoldRow, "threadId">,
+  input: { readonly reason: string; readonly replay: boolean },
 ) {
-  deps.state.heldDrivers.delete(driver);
-  const rows = (yield* deps.holds.listActive().pipe(Effect.orDie)).filter(
-    (row) => row.provider === ProviderDriverKind.make(driver),
+  const claimed = Option.getOrUndefined(
+    yield* deps.holds
+      .markReleased({ threadId: row.threadId, reason: input.reason, now: yield* nowIso })
+      .pipe(Effect.orDie),
   );
-  let released = 0;
-  for (const row of rows) {
-    const resumed = row.autoResume === true && row.pendingTurnMessageId !== null;
-    if (resumed) {
-      yield* deps.engine
+  deps.state.heldThreads.delete(row.threadId);
+  if (claimed === undefined) return false;
+  let resumed = false;
+  const messageId = claimed.pendingTurnMessageId;
+  if (input.replay && claimed.autoResume && messageId !== null) {
+    const thread = Option.getOrUndefined(
+      yield* deps.query
+        .getThreadDetailById(claimed.threadId)
+        .pipe(Effect.orElseSucceed(() => Option.none())),
+    );
+    if (thread !== undefined && isReplayable(thread, messageId)) {
+      resumed = yield* deps.engine
         .dispatch({
           type: "thread.turn.resume",
           commandId: CommandId.make(t3teamRandomUUID()),
-          threadId: row.threadId,
-          messageId: row.pendingTurnMessageId!,
-          createdAt: deps.nowIso(),
+          threadId: claimed.threadId,
+          messageId,
+          createdAt: yield* nowIso,
         })
         .pipe(
+          Effect.as(true),
           Effect.catchCause((cause) =>
             Effect.logWarning("provider usage watcher: pending turn replay rejected", {
-              threadId: row.threadId,
+              threadId: claimed.threadId,
               cause: Cause.pretty(cause),
-            }),
+            }).pipe(Effect.as(false)),
           ),
         );
     }
-    yield* deps.holds
-      .markReleased({ threadId: row.threadId, reason, now: deps.nowIso() })
-      .pipe(Effect.orDie);
-    released += 1;
-    yield* deps.appendActivity(
-      row.threadId,
-      PROVIDER_USAGE_HOLD_ACTIVITY_KINDS.released,
-      resumed
-        ? `Provider window reset — ${driver} work resumed automatically`
-        : `Provider window reset — ${driver} work stays paused until you resume it`,
-      { driver, resumed, autoResume: row.autoResume },
-    );
   }
-  return released;
+  yield* deps.appendActivity(
+    claimed.threadId,
+    PROVIDER_USAGE_HOLD_ACTIVITY_KINDS.released,
+    resumed
+      ? "Usage window reset — the turn was sent again automatically"
+      : "Usage limit cleared — nothing was re-sent",
+    {
+      providerInstanceId: claimed.providerInstanceId,
+      driver: claimed.provider,
+      resumed,
+      autoResume: claimed.autoResume,
+      reason: input.reason,
+    },
+  );
+  return true;
 });
 
-/** Rebuild the in-memory held set from the persisted rows (host restart). */
-export const rehydrateHeldSet = (
-  state: ProviderUsageWatcherState,
-  rows: ReadonlyArray<{
-    readonly provider: string;
-    readonly since: string;
-    readonly resetsAt: string | null;
-  }>,
-): void => {
-  for (const row of rows) {
-    const existing = state.heldDrivers.get(row.provider);
-    state.heldDrivers.set(row.provider, {
-      driver: row.provider,
-      since: existing?.since ?? row.since,
-      resetsAt: existing?.resetsAt ?? row.resetsAt,
-      instanceIds: existing?.instanceIds ?? [],
-      percentUsed: 100,
-    });
+/** Release (with replay) every active hold whose deadline has passed. */
+export const releaseDue = Effect.fn("providerUsageWatcher.releaseDue")(function* (
+  deps: ProviderUsageWatcherDeps,
+) {
+  const nowMs = DateTime.toEpochMillis(yield* DateTime.now);
+  for (const row of yield* deps.holds.listActive().pipe(Effect.orDie)) {
+    const deadline = holdDeadlineMs(row);
+    if (deadline !== null && nowMs >= deadline) {
+      yield* releaseHold(deps, row, { reason: "reset", replay: true });
+    }
   }
-};
+});
