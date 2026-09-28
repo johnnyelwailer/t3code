@@ -30,11 +30,18 @@ export type CloudSessionPhase =
  * cleanup does not un-start the server; if only success counted, the phase
  * would fall back to `preparing` and the UI would show a session marching
  * backwards, which reads as a bug even though the run is simply dying.
+ *
+ * Skipped must NOT count. GitHub reports a step it skipped as
+ * completed/skipped, and after an early failure every later step is skipped
+ * while the run still reads in_progress for a few seconds — counting those
+ * called a dead session "ready".
  */
 function reached(step: WorkflowJobStep | undefined): boolean {
   // Skipped is not reached. A standby's "Redeem the session's secrets" is
   // completed-and-skipped while it waits for a claim; counting that as progress
-  // told the user their machine was already building.
+  // told the user their machine was already building. The same trap marks a
+  // dead session "ready" when early failure skips later steps (e.g. "Hold the
+  // session") while the run still reads in_progress.
   if (step === undefined || step.conclusion === "skipped") return false;
   return step.status === "in_progress" || step.status === "completed";
 }
