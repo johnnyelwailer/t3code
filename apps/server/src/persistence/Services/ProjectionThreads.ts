@@ -70,7 +70,7 @@ export const ProjectionThread = Schema.Struct({
   activityState: Schema.optional(Schema.NullOr(Schema.String)),
   activityStateUpdatedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   // Read-only here: `upsert` never writes these; the projector keeps them
-  // current through `refreshOpenChildWaitCount` / `setLocalSessionInstanceId`.
+  // current through `refreshT3TeamShellFacts` / `setLocalSessionInstanceId`.
   openChildWaitCount: Schema.optional(NonNegativeInt),
   localSessionInstanceId: Schema.optional(Schema.NullOr(Schema.String)),
 });
@@ -106,8 +106,12 @@ export interface ProjectionThreadRepositoryShape {
     readonly updatedAt: IsoDateTime;
   }) => Effect.Effect<void, ProjectionRepositoryError>;
 
-  /** Recount the thread's open `t3team.child_wait` registrations from its activities. */
-  readonly refreshOpenChildWaitCount: (
+  /**
+   * Recompute both t3team shell facts from the thread's own activities and messages: the open
+   * `t3team.child_wait` count and the instance of its earliest `local:<instanceId>:` message.
+   * Needed wherever those tables are rewritten (thread re-created under the same id, revert).
+   */
+  readonly refreshT3TeamShellFacts: (
     input: GetProjectionThreadInput,
   ) => Effect.Effect<void, ProjectionRepositoryError>;
 

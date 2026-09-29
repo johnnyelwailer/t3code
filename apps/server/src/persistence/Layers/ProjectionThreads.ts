@@ -224,8 +224,9 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
             AND (child_status_updated_at IS NULL OR child_status_updated_at <= ${updatedAt})`,
   });
 
-  // Same open-set as `hasOpenChildWaits` (packages/shared/t3team-childWaitFacts).
-  const refreshOpenChildWaitCountRow = SqlSchema.void({
+  // Open set as `hasOpenChildWaits` (packages/shared/t3team-childWaitFacts); the instance is the
+  // `<instanceId>` segment of the earliest `local:<instanceId>:…` message, validated on read.
+  const refreshT3TeamShellFactsRow = SqlSchema.void({
     Request: GetProjectionThreadInput,
     execute: ({ threadId }) =>
       sql`UPDATE projection_threads
@@ -242,6 +243,13 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
                   AND json_extract(res.payload_json, '$.waitId') =
                     json_extract(r.payload_json, '$.waitId')
               )
+          ),
+          local_session_instance_id = (
+            SELECT substr(m.message_id, 7, instr(substr(m.message_id, 7), ':') - 1)
+            FROM projection_thread_messages AS m
+            WHERE m.thread_id = ${threadId} AND m.message_id LIKE 'local:%:%'
+            ORDER BY m.created_at ASC, m.message_id ASC
+            LIMIT 1
           )
           WHERE thread_id = ${threadId}`,
   });
@@ -272,12 +280,12 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
       Effect.mapError(toPersistenceSqlError("ProjectionThreadRepository.updateChildStatus:query")),
     );
 
-  const refreshOpenChildWaitCount: ProjectionThreadRepositoryShape["refreshOpenChildWaitCount"] = (
+  const refreshT3TeamShellFacts: ProjectionThreadRepositoryShape["refreshT3TeamShellFacts"] = (
     input,
   ) =>
-    refreshOpenChildWaitCountRow(input).pipe(
+    refreshT3TeamShellFactsRow(input).pipe(
       Effect.mapError(
-        toPersistenceSqlError("ProjectionThreadRepository.refreshOpenChildWaitCount:query"),
+        toPersistenceSqlError("ProjectionThreadRepository.refreshT3TeamShellFacts:query"),
       ),
     );
 
@@ -294,7 +302,7 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
     upsert,
     getById,
     updateChildStatus,
-    refreshOpenChildWaitCount,
+    refreshT3TeamShellFacts,
     setLocalSessionInstanceId,
   } satisfies ProjectionThreadRepositoryShape;
 });

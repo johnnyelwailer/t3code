@@ -1,4 +1,7 @@
-import { type OrchestrationThreadShell, ProviderInstanceId } from "@t3tools/contracts";
+import {
+  findLocalProviderKindByInstanceId,
+  type OrchestrationThreadShell,
+} from "@t3tools/contracts";
 
 import type { ProjectionThread } from "../persistence/Services/ProjectionThreads.ts";
 
@@ -12,10 +15,14 @@ import type { ProjectionThread } from "../persistence/Services/ProjectionThreads
 export function readT3TeamThreadShellFacts(
   row: Pick<ProjectionThread, "openChildWaitCount" | "localSessionInstanceId">,
 ): Pick<OrchestrationThreadShell, "hasOpenChildWait" | "localSessionInstanceId"> {
+  // The column holds the raw `local:<instanceId>:` segment; only an instance this fork can adopt
+  // sessions from reaches the shell.
+  const localSession =
+    row.localSessionInstanceId != null
+      ? findLocalProviderKindByInstanceId(row.localSessionInstanceId)
+      : undefined;
   return {
     ...((row.openChildWaitCount ?? 0) > 0 ? { hasOpenChildWait: true } : {}),
-    ...(row.localSessionInstanceId != null
-      ? { localSessionInstanceId: ProviderInstanceId.make(row.localSessionInstanceId) }
-      : {}),
+    ...(localSession !== undefined ? { localSessionInstanceId: localSession.instanceId } : {}),
   };
 }

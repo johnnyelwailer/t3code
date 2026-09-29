@@ -219,3 +219,75 @@ describe("useHydrateThreadPlacements effect scheduling", () => {
     act(() => root.unmount());
   });
 });
+
+describe("useHydrateThreadPlacements after a fetched placement", () => {
+  it("re-derives the parent's waiting fact without waiting for the next shell change", async () => {
+    const parent = makeLiveThreadShell({
+      id: ThreadId.make("thread-parent"),
+      projectId: ProjectId.make("live-project"),
+    });
+    const child = makeLiveThreadShell({
+      id: ThreadId.make("thread-child"),
+      projectId: ProjectId.make("live-project"),
+      session: { status: "running" } as never,
+      latestTurn: { state: "running" } as never,
+    });
+    const liveThreads: ReadonlyArray<ThreadShell> = [parent, child];
+    // A fresh browser: local state has the rows but no placement yet.
+    const initialThreads: ProjectThread[] = [
+      {
+        id: "thread-parent",
+        projectId: "live-project",
+        title: "Parent",
+        status: "idle",
+        lastMessageAt: "2026-09-29T10:00:00.000Z",
+        createdAt: "2026-09-29T10:00:00.000Z",
+      },
+      {
+        id: "thread-child",
+        projectId: "live-project",
+        title: "Child",
+        status: "running",
+        lastMessageAt: "2026-09-29T10:00:00.000Z",
+        createdAt: "2026-09-29T10:00:00.000Z",
+      },
+    ];
+    backendRef.current = {
+      ...createMockBackend(),
+      listThreadPlacements: vi.fn<BackendApi["listThreadPlacements"]>().mockResolvedValue([
+        {
+          threadId: ThreadId.make("thread-child"),
+          parentThreadId: ThreadId.make("thread-parent"),
+        },
+      ]),
+    };
+    let latest: ProjectThread[] = initialThreads;
+    function Probe() {
+      const [threads, setThreads] = useState(initialThreads);
+      latest = threads;
+      useHydrateThreadPlacements({
+        threads,
+        setThreads,
+        storedProjects: EMPTY_STORED_PROJECTS,
+        liveProjects: EMPTY_PROJECTS,
+        liveThreads,
+      });
+      return null;
+    }
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    act(() => root.render(createElement(Probe)));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(latest).toContainEqual(
+      expect.objectContaining({ id: "thread-child", parentThreadId: "thread-parent" }),
+    );
+    expect(latest).toContainEqual(
+      expect.objectContaining({ id: "thread-parent", waitingOnChildren: true }),
+    );
+    act(() => root.unmount());
+  });
+});

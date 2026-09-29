@@ -8,7 +8,11 @@ import type { T3TeamThreadPlacement } from "~/t3team/backend/t3team-types";
 import { upsertProjectThreadLocalState } from "~/t3team/t3team-threadToolContext";
 import type { ProjectThread } from "~/t3team/t3team-types";
 
-import { mapLiveThreadToProjectThread, resolveStoredProjectId } from "./t3team-threadBridge";
+import {
+  mapLiveThreadToProjectThread,
+  resolveStoredProjectId,
+  syncLiveThreadMetadataToLocalState,
+} from "./t3team-threadBridge";
 
 export function readMissingThreadPlacementIds(input: {
   threads: ReadonlyArray<ProjectThread>;
@@ -195,13 +199,20 @@ export function useHydrateThreadPlacements(input: {
           return;
         }
 
+        // Re-derive the live facts that key on placement (`waitingOnChildren` reads the
+        // local parentThreadId): the sync effect only re-runs on the next shell change.
         setThreads((currentThreads) =>
-          mergeFetchedThreadPlacements({
-            threads: currentThreads,
+          syncLiveThreadMetadataToLocalState({
+            threads: mergeFetchedThreadPlacements({
+              threads: currentThreads,
+              storedProjects,
+              liveProjects,
+              liveThreads,
+              placements,
+            }),
             storedProjects,
             liveProjects,
             liveThreads,
-            placements,
           }),
         );
       })

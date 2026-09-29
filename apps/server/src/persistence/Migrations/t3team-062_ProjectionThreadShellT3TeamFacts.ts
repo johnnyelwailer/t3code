@@ -7,8 +7,9 @@ import * as Effect from "effect/Effect";
  *
  * - `open_child_wait_count`: registered `t3team.child_wait` waits on this thread
  *   without a matching `resolved` (same open-set as `hasOpenChildWaits`).
- * - `local_session_instance_id`: the instance a mirrored native local session
- *   resumes on, from the `local:<instanceId>:` message-id prefix the sync writes.
+ * - `local_session_instance_id`: the `<instanceId>` segment of the earliest
+ *   `local:<instanceId>:` message id the native-session sync writes (validated
+ *   against t3team-localProviderKinds when the shell is read).
  *
  * Both are backfilled here; the projector keeps them current afterwards.
  */
@@ -40,19 +41,15 @@ export default Effect.gen(function* () {
   `;
   yield* sql`
     UPDATE projection_threads
-    SET local_session_instance_id = CASE
-      WHEN EXISTS (
-        SELECT 1 FROM projection_thread_messages AS m
-        WHERE m.thread_id = projection_threads.thread_id AND m.message_id LIKE 'local:codex:%'
-      ) THEN 'codex'
-      WHEN EXISTS (
-        SELECT 1 FROM projection_thread_messages AS m
-        WHERE m.thread_id = projection_threads.thread_id AND m.message_id LIKE 'local:claudeAgent:%'
-      ) THEN 'claudeAgent'
-      ELSE NULL
-    END
+    SET local_session_instance_id = (
+      SELECT substr(m.message_id, 7, instr(substr(m.message_id, 7), ':') - 1)
+      FROM projection_thread_messages AS m
+      WHERE m.thread_id = projection_threads.thread_id AND m.message_id LIKE 'local:%:%'
+      ORDER BY m.created_at ASC, m.message_id ASC
+      LIMIT 1
+    )
     WHERE thread_id IN (
-      SELECT thread_id FROM projection_thread_messages WHERE message_id LIKE 'local:%'
+      SELECT thread_id FROM projection_thread_messages WHERE message_id LIKE 'local:%:%'
     )
   `;
 });

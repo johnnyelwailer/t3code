@@ -6,6 +6,7 @@ import {
   ProjectId,
   ProviderInstanceId,
   ThreadId,
+  TurnId,
 } from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
@@ -78,7 +79,12 @@ function threadCreated(threadId: ThreadId) {
   };
 }
 
-function childWait(threadId: ThreadId, kind: "registered" | "resolved", waitId: string) {
+function childWait(
+  threadId: ThreadId,
+  kind: "registered" | "resolved",
+  waitId: string,
+  turnId: string | null = null,
+) {
   return {
     ...envelope(threadId, `wait-${kind}-${waitId}`),
     type: "thread.activity-appended" as const,
@@ -90,7 +96,7 @@ function childWait(threadId: ThreadId, kind: "registered" | "resolved", waitId: 
         kind: `t3team.child_wait.${kind}`,
         summary: `Child wait ${kind}`,
         payload: { waitId, childThreadId: "child-thread" },
-        turnId: null,
+        turnId: turnId === null ? null : TurnId.make(turnId),
         createdAt: at,
       },
     },
@@ -111,6 +117,22 @@ function messageSent(threadId: ThreadId, messageId: string) {
       createdAt: at,
       updatedAt: at,
     },
+  };
+}
+
+function threadDeleted(threadId: ThreadId) {
+  return {
+    ...envelope(threadId, `delete-${threadId}`),
+    type: "thread.deleted" as const,
+    payload: { threadId, deletedAt: at },
+  };
+}
+
+function threadReverted(threadId: ThreadId, turnCount: number) {
+  return {
+    ...envelope(threadId, `revert-${threadId}-${turnCount}`),
+    type: "thread.reverted" as const,
+    payload: { threadId, turnCount },
   };
 }
 
@@ -165,6 +187,36 @@ layer("thread shell t3team facts", (it) => {
       yield* project(threadCreated(unknown));
       yield* project(messageSent(unknown, "local:someoneElse:native:0"));
       assert.strictEqual((yield* readShell(unknown)).localSessionInstanceId, undefined);
+    }),
+  );
+
+  it.effect("a thread re-created under the same id does not inherit the old facts", () =>
+    Effect.gen(function* () {
+      const threadId = ThreadId.make("thread-recreated");
+      yield* project(threadCreated(threadId));
+      yield* project(childWait(threadId, "registered", "wait-old"));
+      yield* project(messageSent(threadId, "local:codex:native-old:0"));
+      const before = yield* readShell(threadId);
+      assert.strictEqual(before.hasOpenChildWait, true);
+      assert.strictEqual(before.localSessionInstanceId, ProviderInstanceId.make("codex"));
+
+      yield* project(threadDeleted(threadId));
+      yield* project({ ...threadCreated(threadId), eventId: EventId.make("evt-recreate") });
+      const after = yield* readShell(threadId);
+      assert.strictEqual(after.hasOpenChildWait, undefined);
+      assert.strictEqual(after.localSessionInstanceId, undefined);
+    }),
+  );
+
+  it.effect("a revert that drops a child-wait registration clears the flag", () =>
+    Effect.gen(function* () {
+      const threadId = ThreadId.make("thread-reverted");
+      yield* project(threadCreated(threadId));
+      yield* project(childWait(threadId, "registered", "wait-in-turn", "turn-reverted"));
+      assert.strictEqual((yield* readShell(threadId)).hasOpenChildWait, true);
+
+      yield* project(threadReverted(threadId, 0));
+      assert.strictEqual((yield* readShell(threadId)).hasOpenChildWait, undefined);
     }),
   );
 });

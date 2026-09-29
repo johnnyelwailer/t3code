@@ -659,6 +659,11 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             childStatus: null,
             childStatusUpdatedAt: null,
           });
+          // A re-created id must not inherit the old incarnation's t3team shell facts; the
+          // message and activity projectors have already cleared its rows in this transaction.
+          yield* projectionThreadRepository.refreshT3TeamShellFacts({
+            threadId: event.payload.threadId,
+          });
           return;
 
         case "thread.archived": {
@@ -1103,7 +1108,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             (event.payload.activity.kind === CHILD_WAIT_REGISTERED_KIND ||
               event.payload.activity.kind === CHILD_WAIT_RESOLVED_KIND)
           ) {
-            yield* projectionThreadRepository.refreshOpenChildWaitCount({
+            yield* projectionThreadRepository.refreshT3TeamShellFacts({
               threadId: event.payload.threadId,
             });
           }
@@ -1178,6 +1183,9 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             updatedAt: event.occurredAt,
           });
           yield* refreshThreadShellSummary(event.payload.threadId);
+          yield* projectionThreadRepository.refreshT3TeamShellFacts({
+            threadId: event.payload.threadId,
+          });
           return;
         }
 
