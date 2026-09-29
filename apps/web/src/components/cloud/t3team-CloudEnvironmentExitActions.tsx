@@ -43,7 +43,7 @@ export function CloudEnvironmentExitActions({
             render={
               <span
                 tabIndex={0}
-                className="rounded-full border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                className="rounded-full border border-border px-1.5 py-0.5 text-3xs font-medium text-muted-foreground"
               />
             }
           >

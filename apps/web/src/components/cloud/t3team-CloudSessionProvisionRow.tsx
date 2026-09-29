@@ -5,6 +5,7 @@ import { cn } from "~/lib/utils";
 import { ConnectionStatusDot } from "../ConnectionStatusDot";
 import { ITEM_ROW_CLASSNAME, ITEM_ROW_INNER_CLASSNAME } from "../settings/itemRows";
 import { Skeleton } from "../ui/skeleton";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { CloudSessionRowActions } from "./t3team-CloudSessionRowActions";
 import {
   cloudSessionToneDotClassName,
@@ -135,22 +136,29 @@ export function CloudSessionRow({
           </span>
           <div className="min-w-0 flex-1 space-y-1.5">
             <div className="truncate font-medium text-sm">{presentation.title}</div>
-            <div
-              title={presentation.detail}
-              className={cn(
-                "truncate text-xs",
-                presentation.tone === "error" ? "text-destructive" : "text-muted-foreground",
-              )}
-            >
-              {presentation.liveElapsed ? (
-                <CloudSessionLiveDetail
-                  detail={presentation.detail}
-                  elapsedSeconds={session.elapsedSeconds}
-                />
-              ) : (
-                presentation.detail
-              )}
-            </div>
+            {/* The detail truncates; the tooltip carries the full sentence. */}
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <div
+                    className={cn(
+                      "truncate text-xs",
+                      presentation.tone === "error" ? "text-destructive" : "text-muted-foreground",
+                    )}
+                  />
+                }
+              >
+                {presentation.liveElapsed ? (
+                  <CloudSessionLiveDetail
+                    detail={presentation.detail}
+                    elapsedSeconds={session.elapsedSeconds}
+                  />
+                ) : (
+                  presentation.detail
+                )}
+              </TooltipTrigger>
+              <TooltipPopup>{presentation.detail}</TooltipPopup>
+            </Tooltip>
             {presentation.progress === null ? null : (
               <CloudSessionProgressBar progress={presentation.progress} />
             )}
