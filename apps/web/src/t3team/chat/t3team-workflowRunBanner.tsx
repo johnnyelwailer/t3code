@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Run-level chrome for a live workflow card: the terminal banner, and the self-heal strip.
  *
@@ -63,7 +62,7 @@ export function RunStatusBanner({
           ? "border-destructive/40 bg-destructive/10 text-destructive"
           : paused || cancelled
             ? "border-border bg-muted/30 text-muted-foreground"
-            : "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+            : "border-success/40 bg-success/10 text-success-foreground",
       )}
     >
       {failed ? (
@@ -129,7 +128,7 @@ export function RepairStatusStrip({
     needsAttention
       ? "border-destructive/40 bg-destructive/10 text-destructive"
       : ready
-        ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+        ? "border-success/40 bg-success/10 text-success-foreground"
         : "border-primary/25 bg-primary/5 text-foreground/80",
   );
   const content = (

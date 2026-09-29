@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
@@ -143,7 +142,7 @@ export const ProjectBacklogTableView = memo(function ProjectBacklogTableView({
         className="min-h-0 flex-1 overflow-auto overscroll-contain rounded-none border-0 border-t border-border/70 bg-background/95 shadow-none scrollbar-gutter-stable"
       >
         <table
-          className="w-full table-fixed text-left text-[11px]"
+          className="w-full table-fixed text-left text-2xs"
           style={{ minWidth: `${tableMinWidth}px` }}
         >
           <ProjectBacklogTableColGroup visibleColumns={visibleColumns} />

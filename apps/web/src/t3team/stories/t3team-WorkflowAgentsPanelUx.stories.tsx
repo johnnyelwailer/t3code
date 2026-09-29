@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * UX baseline for the t3team workflow "agents panel" — the live reproduction of the 2026-09-08
  * noise complaint against `nexi-ghe-hourly-triage`.
@@ -457,7 +456,7 @@ function VariantA_AdaptiveTree() {
           <span className="min-w-0 flex-1 truncate text-sm font-medium">
             Hourly GHE triage cycle
           </span>
-          <span className="shrink-0 font-mono text-[.7rem] text-muted-foreground tabular-nums">
+          <span className="shrink-0 font-mono text-2xs text-muted-foreground tabular-nums">
             {elapsed}
           </span>
           <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground/70 transition-transform group-hover:translate-x-0.5" />
@@ -482,10 +481,10 @@ function VariantB_Panel() {
       <div className="group flex items-center gap-2 px-1.5 py-1.5 hover:bg-muted/35 cursor-pointer">
         <span className="size-2 rounded-full bg-success animate-pulse" />
         <span className="min-w-0 flex-1 truncate text-sm font-medium">Recipe workflows</span>
-        <span className="shrink-0 rounded-sm bg-success/15 px-1.5 py-0.5 text-[.65rem] font-medium text-success">
+        <span className="shrink-0 rounded-sm bg-success/15 px-1.5 py-0.5 text-3xs font-medium text-success">
           Working
         </span>
-        <span className="shrink-0 font-mono text-[.7rem] text-muted-foreground tabular-nums">
+        <span className="shrink-0 font-mono text-2xs text-muted-foreground tabular-nums">
           {elapsed}
         </span>
         <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground/70 transition-transform group-hover:translate-x-0.5" />
@@ -508,10 +507,10 @@ function VariantC_Panel() {
       <div className="group flex items-center gap-1.5 px-1.5 py-1 hover:bg-muted/35 cursor-pointer">
         <span className="size-2 rounded-full bg-success animate-pulse" />
         <span className="text-xs font-medium">Recipe workflows</span>
-        <span className="text-[.65rem] text-muted-foreground">·</span>
-        <span className="text-[.7rem] text-muted-foreground tabular-nums">1 agent</span>
-        <span className="text-[.65rem] text-muted-foreground">·</span>
-        <span className="text-[.7rem] text-muted-foreground tabular-nums">{elapsed}</span>
+        <span className="text-3xs text-muted-foreground">·</span>
+        <span className="text-2xs text-muted-foreground tabular-nums">1 agent</span>
+        <span className="text-3xs text-muted-foreground">·</span>
+        <span className="text-2xs text-muted-foreground tabular-nums">{elapsed}</span>
         <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground/70 transition-transform group-hover:translate-x-0.5" />
       </div>
     </div>
@@ -662,7 +661,7 @@ function ComplexRow({
     status === "Failed"
       ? "bg-destructive/15 text-destructive"
       : status === "Needs attention"
-        ? "bg-amber-500/15 text-amber-600"
+        ? "bg-warning/15 text-warning-foreground"
         : "bg-success/15 text-success";
   return (
     <div
@@ -673,11 +672,11 @@ function ComplexRow({
     >
       <span className={cn("size-2.5 shrink-0 rounded-full", dotClass)} />
       <span className="min-w-0 flex-1 truncate text-xs font-medium">{label}</span>
-      <span className={cn("shrink-0 rounded-sm px-1 py-px text-[.6rem] font-medium", statusBadge)}>
+      <span className={cn("shrink-0 rounded-sm px-1 py-px text-3xs font-medium", statusBadge)}>
         {status}
       </span>
       {elapsed && (
-        <span className="shrink-0 font-mono text-[.65rem] text-muted-foreground tabular-nums">
+        <span className="shrink-0 font-mono text-3xs text-muted-foreground tabular-nums">
           {elapsed}
         </span>
       )}
@@ -693,15 +692,13 @@ function ComplexAdaptiveTree() {
         <span className="text-xs font-semibold uppercase tracking-wide text-foreground/80">
           nexi-ghe-triage-orchestrator
         </span>
-        <span className="ml-auto text-[10px] tabular-nums text-muted-foreground/70">
-          1/4 settled
-        </span>
+        <span className="ml-auto text-3xs tabular-nums text-muted-foreground/70">1/4 settled</span>
       </div>
       <div className="flex items-center gap-1.5 px-1.5 py-0.5">
-        <span className="text-[10px] font-medium tracking-wide text-muted-foreground/80 uppercase">
+        <span className="text-3xs font-medium tracking-wide text-muted-foreground/80 uppercase">
           Triage & Plan
         </span>
-        <span className="text-[10px] tabular-nums text-muted-foreground/50">
+        <span className="text-3xs tabular-nums text-muted-foreground/50">
           0 active · 1 done · 1 failed
         </span>
       </div>
@@ -720,10 +717,10 @@ function ComplexAdaptiveTree() {
         indented
       />
       <div className="mt-1 flex items-center gap-1.5 px-1.5 py-0.5">
-        <span className="text-[10px] font-medium tracking-wide text-muted-foreground/80 uppercase">
+        <span className="text-3xs font-medium tracking-wide text-muted-foreground/80 uppercase">
           Implementation
         </span>
-        <span className="text-[10px] tabular-nums text-muted-foreground/50">2 active · 0 done</span>
+        <span className="text-3xs tabular-nums text-muted-foreground/50">2 active · 0 done</span>
       </div>
       <ComplexRow
         label="Fix provider death settle"
@@ -735,7 +732,7 @@ function ComplexAdaptiveTree() {
       <ComplexRow
         label="Refactor tool broker"
         status="Needs attention"
-        dotClass="bg-amber-500"
+        dotClass="bg-warning"
         elapsed="12m 44s"
         indented
       />
@@ -754,20 +751,20 @@ function ComplexOneLine() {
         indented={false}
       />
       <div
-        className="ml-3 flex gap-2.5 text-[10px] text-muted-foreground/70"
+        className="ml-3 flex gap-2.5 text-3xs text-muted-foreground/70"
         style={{ marginInlineStart: 6 }}
       >
         <span className="text-success">● 2 working</span>
         <span className="text-destructive">✕ 1 failed</span>
-        <span className="text-amber-600">⚠ 1 needs attention</span>
+        <span className="text-warning-foreground">⚠ 1 needs attention</span>
       </div>
       <div
-        className="ml-3 flex gap-2.5 text-[10px] text-muted-foreground/70"
+        className="ml-3 flex gap-2.5 text-3xs text-muted-foreground/70"
         style={{ marginInlineStart: 6 }}
       >
         <span className="text-success">● 2 working</span>
         <span className="text-destructive">✕ 1 failed</span>
-        <span className="text-amber-600">⚠ 1 needs attention</span>
+        <span className="text-warning-foreground">⚠ 1 needs attention</span>
       </div>
     </div>
   );
@@ -779,17 +776,17 @@ function ComplexCounts() {
       <div className="group flex items-center gap-1.5 px-1.5 py-1 hover:bg-muted/35 cursor-pointer">
         <span className="size-2 rounded-full bg-success animate-pulse" />
         <span className="text-xs font-medium">nexi-ghe-triage-orchestrator</span>
-        <span className="text-[.65rem] text-muted-foreground">·</span>
-        <span className="text-[.7rem] text-muted-foreground tabular-nums">4 agents</span>
-        <span className="text-[.65rem] text-muted-foreground">·</span>
-        <span className="text-[.7rem] text-muted-foreground tabular-nums">
+        <span className="text-3xs text-muted-foreground">·</span>
+        <span className="text-2xs text-muted-foreground tabular-nums">4 agents</span>
+        <span className="text-3xs text-muted-foreground">·</span>
+        <span className="text-2xs text-muted-foreground tabular-nums">
           {fmtElapsed(COMPLEX_ELAPSED_MS)}
         </span>
         <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground/70 transition-transform group-hover:translate-x-0.5" />
       </div>
-      <div className="ml-3 flex gap-2 text-[10px]">
+      <div className="ml-3 flex gap-2 text-3xs">
         <span className="text-destructive">✕ 1</span>
-        <span className="text-amber-600">⚠ 1</span>
+        <span className="text-warning-foreground">⚠ 1</span>
         <span className="text-success">● 2</span>
       </div>
     </div>

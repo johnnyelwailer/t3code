@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { CheckIcon, CircleDotIcon, CircleIcon, ListTodoIcon } from "lucide-react";
 import { memo, type ComponentProps } from "react";
 
@@ -166,7 +165,7 @@ export const ComposerTasksContent = memo(function ComposerTasksContent({
         <ComposerBanner.Scroll data-composer-tasks-scroll="true">
           {planUpdatedAt ? (
             <div
-              className="px-3 pb-1 pt-1.5 text-[10px] text-muted-foreground/45"
+              className="px-3 pb-1 pt-1.5 text-3xs text-muted-foreground/45"
               data-composer-task-updated="true"
             >
               Updated {formatRelativeTimeLabel(planUpdatedAt)}

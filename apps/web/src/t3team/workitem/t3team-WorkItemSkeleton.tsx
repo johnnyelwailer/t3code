@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { Skeleton } from "~/t3team/components/ui/t3team-skeleton";
 import { cn } from "~/t3team/lib/t3team-utils";
 
@@ -27,7 +26,7 @@ export function WorkItemSkeleton({
       {Array.from({ length: Math.max(1, lines) }, (_, index) => (
         <Skeleton
           key={index}
-          className="h-3.5 rounded"
+          className="h-3.5"
           style={{ width: index === lines - 1 ? "58%" : widths[index % widths.length] }}
         />
       ))}

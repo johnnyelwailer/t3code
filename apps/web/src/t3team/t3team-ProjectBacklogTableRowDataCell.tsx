@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-native-title-tooltip, shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 import type { AtlassianAssignableUser } from "~/t3team/backend/t3team-types";
 import { JiraIssueTypeIcon } from "~/t3team/components/ticket/t3team-JiraIssueType";
 import { Badge } from "~/t3team/components/ui/t3team-badge";
@@ -46,7 +46,7 @@ export function ProjectBacklogTableRowDataCell({
 }) {
   if (columnId === "status") {
     return (
-      <td className="px-3 py-1.5 align-middle text-[11px] text-foreground/85">
+      <td className="px-3 py-1.5 align-middle text-2xs text-foreground/85">
         <span className="inline-flex min-h-7 items-center">{ticket.status}</span>
       </td>
     );
@@ -86,7 +86,7 @@ export function ProjectBacklogTableRowDataCell({
     const parentLabel = parentTicket?.ref.displayId ?? ticket.parentId;
 
     return (
-      <td className="px-3 py-1.5 align-middle text-[11px] leading-tight">
+      <td className="px-3 py-1.5 align-middle text-2xs leading-tight">
         {parentLabel ? (
           <div className="min-w-0" title={parentTicket?.ref.title ?? parentLabel}>
             <div className="truncate font-mono text-foreground/80">{parentLabel}</div>
@@ -105,7 +105,7 @@ export function ProjectBacklogTableRowDataCell({
     return (
       <td className="px-3 py-1.5 align-middle">
         <span
-          className="inline-flex min-h-7 items-center rounded-md border border-border/60 bg-muted/25 px-2 text-[11px] tabular-nums text-foreground/85"
+          className="inline-flex min-h-7 items-center rounded-md border border-border/60 bg-muted/25 px-2 text-2xs tabular-nums text-foreground/85"
           title={getAbsoluteUpdatedLabel(ticket.updatedAt)}
         >
           {formatRelativeTime(ticket.updatedAt)}
@@ -119,7 +119,7 @@ export function ProjectBacklogTableRowDataCell({
     const issueTypeIconUrl = ticket.issueTypeIconUrl ?? ticket.ref.issueTypeIconUrl;
 
     return (
-      <td className="px-3 py-1.5 align-middle text-[11px]">
+      <td className="px-3 py-1.5 align-middle text-2xs">
         <span className="inline-flex min-w-0 items-center gap-2">
           <JiraIssueTypeIcon
             issueType={issueType}

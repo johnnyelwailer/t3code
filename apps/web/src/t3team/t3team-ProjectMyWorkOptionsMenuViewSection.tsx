@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import {
   MenuCheckboxItem,
   MenuGroup,
@@ -56,7 +55,7 @@ export function ProjectMyWorkOptionsMenuViewSection({
 
         <MenuSub>
           <MenuSubTrigger>Mode</MenuSubTrigger>
-          <MenuSubPopup className="min-w-[14rem] border-border/80 bg-background/95">
+          <MenuSubPopup className="min-w-56">
             <MenuRadioGroup
               value={viewMode}
               onValueChange={(value) => onViewModeChange(value as ProjectMyWorkViewMode)}
@@ -72,7 +71,7 @@ export function ProjectMyWorkOptionsMenuViewSection({
         {viewMode !== "kanban" ? (
           <MenuSub>
             <MenuSubTrigger>Grouping</MenuSubTrigger>
-            <MenuSubPopup className="min-w-[14rem] border-border/80 bg-background/95">
+            <MenuSubPopup className="min-w-56">
               <MenuRadioGroup
                 value={groupMode}
                 onValueChange={(value) => onGroupModeChange(value as "flat" | "hierarchy")}
@@ -86,7 +85,7 @@ export function ProjectMyWorkOptionsMenuViewSection({
 
         <MenuSub>
           <MenuSubTrigger>Status focus</MenuSubTrigger>
-          <MenuSubPopup className="min-w-[14rem] border-border/80 bg-background/95">
+          <MenuSubPopup className="min-w-56">
             <MenuRadioGroup
               value={statusCategory}
               onValueChange={(value) =>
@@ -103,7 +102,7 @@ export function ProjectMyWorkOptionsMenuViewSection({
 
         <MenuSub>
           <MenuSubTrigger>Sort items</MenuSubTrigger>
-          <MenuSubPopup className="min-w-[14rem] border-border/80 bg-background/95">
+          <MenuSubPopup className="min-w-56">
             <MenuRadioGroup value={tableSortBy} onValueChange={onTableSortByChange}>
               <MenuRadioItem value="updated">Last updated</MenuRadioItem>
               <MenuRadioItem value="title">Title</MenuRadioItem>
@@ -114,11 +113,10 @@ export function ProjectMyWorkOptionsMenuViewSection({
         </MenuSub>
 
         <MenuItem
-          className="min-h-8 rounded-md py-1.5 text-[12px]"
           onClick={() => onTableSortDirectionChange(tableSortDirection === "asc" ? "desc" : "asc")}
         >
           Sort direction
-          <span className="ml-auto text-[11px] text-muted-foreground">
+          <span className="ml-auto text-2xs text-muted-foreground">
             {tableSortDirection === "asc" ? "Ascending" : "Descending"}
           </span>
         </MenuItem>
@@ -143,7 +141,7 @@ export function ProjectMyWorkOptionsMenuViewSection({
 
           <MenuSub>
             <MenuSubTrigger>Status lanes</MenuSubTrigger>
-            <MenuSubPopup className="min-w-[15rem] border-border/80 bg-background/95">
+            <MenuSubPopup className="min-w-60">
               <MenuGroup>
                 <MenuGroupLabel>Visible lanes</MenuGroupLabel>
                 {kanbanLaneOptions.length > 0 ? (
@@ -157,7 +155,7 @@ export function ProjectMyWorkOptionsMenuViewSection({
                     >
                       <span className="flex w-full items-center gap-2">
                         <span>{option.title}</span>
-                        <span className="ml-auto text-[11px] text-muted-foreground">
+                        <span className="ml-auto text-2xs text-muted-foreground">
                           {option.count}
                         </span>
                       </span>

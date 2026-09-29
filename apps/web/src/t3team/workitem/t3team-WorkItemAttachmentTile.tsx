@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-native-title-tooltip, shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-native-title-tooltip --Existing merged lint debt; keep green while preserving behavior. */
 import { Archive, File, FileCode, FileText, Film, Image as ImageIcon, Music } from "lucide-react";
 import { useState } from "react";
 
@@ -106,7 +106,7 @@ export function WorkItemAttachmentTile({
 
       <div className="min-w-0 space-y-0.5 p-2">
         <p className="truncate text-xs font-medium text-foreground">{name}</p>
-        <div className="flex min-w-0 items-center gap-1 text-[0.6875rem] text-muted-foreground">
+        <div className="flex min-w-0 items-center gap-1 text-2xs text-muted-foreground">
           {sizeText ? <span className="shrink-0">{sizeText}</span> : null}
           {attachment.author ? (
             <span className="hidden min-w-0 truncate @lg/workitem:inline">

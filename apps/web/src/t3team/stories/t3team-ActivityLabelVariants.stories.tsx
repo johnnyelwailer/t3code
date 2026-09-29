@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * GHE-40 activity label — VARIANT A, motion design
  * (v2 thread card, src/components/Sidebar.tsx) — the left-nav surface.
@@ -77,17 +76,19 @@ function RailLabel({
   note?: string;
 }) {
   return (
-    <div className="w-[150px] shrink-0 border-l border-dashed border-zinc-500/40 py-1 pl-3">
+    <div className="w-[150px] shrink-0 border-l border-dashed border-border py-1 pl-3">
       <div className="flex items-center gap-1.5">
-        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+        <span className="shrink-0 text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
           {keyLabel}
         </span>
-        <span className="rounded-sm bg-emerald-500/10 px-1 py-px text-[9px] font-medium uppercase tracking-wide text-emerald-400">
+        <span className="rounded-sm bg-success/10 px-1 py-px text-3xs font-medium uppercase tracking-wide text-success-foreground">
           decided
         </span>
       </div>
-      <div className="mt-0.5 text-[10px] leading-snug text-zinc-400">{caption}</div>
-      {note ? <div className="mt-1 text-[10px] leading-snug text-sky-400/80">{note}</div> : null}
+      <div className="mt-0.5 text-3xs leading-snug text-muted-foreground">{caption}</div>
+      {note ? (
+        <div className="mt-1 text-3xs leading-snug text-info-foreground/80">{note}</div>
+      ) : null}
     </div>
   );
 }
@@ -101,13 +102,15 @@ export default {
 
 type Story = StoryObj;
 
-const DIVIDER = <div className="h-px bg-zinc-200/70 dark:bg-zinc-700/50" />;
+const DIVIDER = <div className="h-px bg-border" />;
 
 function SectionTitle({ children }: { children: ReactNode }) {
   return (
     <div className="mb-1.5 flex items-center gap-2 px-0.5">
-      <span className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">▸</span>
-      <span className="text-xs font-medium text-zinc-300">{children}</span>
+      <span className="text-3xs font-semibold uppercase tracking-widest text-muted-foreground">
+        ▸
+      </span>
+      <span className="text-xs font-medium text-foreground">{children}</span>
     </div>
   );
 }
@@ -191,7 +194,7 @@ export const PlacementVariants: Story = {
           </div>
         </div>
 
-        <div className="px-1 pb-1 text-[11px] leading-relaxed text-zinc-500">
+        <div className="px-1 pb-1 text-2xs leading-relaxed text-muted-foreground">
           Dashed rail = story annotation, not part of the UI. All motion respects{" "}
           <code className="font-mono">prefers-reduced-motion</code>.
         </div>

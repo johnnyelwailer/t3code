@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { BotIcon } from "lucide-react";
 import type { ProviderInteractionMode, ProviderInstanceId, RuntimeMode } from "@t3tools/contracts";
 import type { ProviderInstanceEntry } from "~/providerInstances";
@@ -89,8 +88,7 @@ export function TicketKickoffComposerControls({
             <>
               <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
               <Button
-                variant="ghost"
-                className="shrink-0 whitespace-nowrap px-2 text-muted-foreground/70 hover:text-foreground/80 sm:px-3"
+                variant="ghost-muted"
                 size="sm"
                 type="button"
                 onClick={() => setInteractionMode((mode) => (mode === "plan" ? "default" : "plan"))}
@@ -107,7 +105,6 @@ export function TicketKickoffComposerControls({
             <SelectTrigger
               variant="ghost"
               size="sm"
-              className="font-medium"
               aria-label="Runtime mode"
               title={runtimeOption.description}
             >
@@ -119,7 +116,7 @@ export function TicketKickoffComposerControls({
                 const option = runtimeModeConfig[mode];
                 const OptionIcon = option.icon;
                 return (
-                  <SelectItem key={mode} value={mode} className="min-w-64 py-2">
+                  <SelectItem key={mode} value={mode} className="min-w-64">
                     <div className="grid min-w-0 gap-0.5">
                       <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
                         <OptionIcon className="size-3.5 shrink-0 text-muted-foreground" />

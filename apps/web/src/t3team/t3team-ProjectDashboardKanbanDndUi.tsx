@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import {
   closestCorners,
   pointerWithin,
@@ -53,10 +52,10 @@ export function ProjectDashboardKanbanDroppableLane({
         className={`flex h-full flex-col border-border/85 p-2 @container/kanban-lane ${dragging && isOver ? "bg-primary/5 ring-1 ring-primary/40" : ""}`}
       >
         <div className="mb-2 flex items-center justify-between border-b border-border/85 pb-2">
-          <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <h4 className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
             {title}
           </h4>
-          <span className="text-[11px] text-muted-foreground">{count}</span>
+          <span className="text-2xs text-muted-foreground">{count}</span>
         </div>
         <div className="min-h-[12rem] flex-1">{children}</div>
       </T3SurfacePanel>
@@ -92,10 +91,10 @@ export function ProjectDashboardKanbanDroppableColumnBody({
         className={`flex h-full min-h-[12rem] flex-col rounded-xl border-border/85 p-2 @container/kanban-lane ${dragging && isOver ? "bg-primary/5 ring-1 ring-primary/40" : ""}`}
       >
         <div className="mb-2 flex items-center justify-between border-b border-border/85 pb-2">
-          <h4 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <h4 className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
             {title}
           </h4>
-          <span className="text-[11px] text-muted-foreground">{count}</span>
+          <span className="text-2xs text-muted-foreground">{count}</span>
         </div>
         <div className="min-h-[12rem] flex-1" />
       </T3SurfacePanel>

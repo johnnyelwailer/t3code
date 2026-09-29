@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Memory-pressure view inside Settings → Diagnostics (flag
  * `NEXI_FF_RESOURCE_PRESSURE`, advertised as `ServerConfig.resourcePressure`;
@@ -120,7 +119,7 @@ export function ResourcePressurePanel({ environmentId }: { environmentId: Enviro
       title="Memory pressure"
       icon={<GaugeIcon className="size-4 text-muted-foreground" />}
       headerAction={
-        <div className="flex items-center gap-2 text-[11px] text-muted-foreground/60">
+        <div className="flex items-center gap-2 text-2xs text-muted-foreground/60">
           {snapshot ? (
             <span
               className={cn(

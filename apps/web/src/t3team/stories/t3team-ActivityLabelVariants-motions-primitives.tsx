@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * GHE-40 activity label — story support: motion primitives (dynamic-width
  * container, morph icon, fit-gate avail helper, project sizer) + the shared
@@ -52,7 +51,7 @@ export function StatusWidth({
   return (
     <span
       ref={ref}
-      className="relative inline-block whitespace-nowrap transition-[width] duration-400 ease-in-out [transition-delay:0.42s]"
+      className="relative inline-block whitespace-nowrap transition-[width] duration-400 ease-in-out delay-420"
       style={width ? { width: `${width}px` } : undefined}
     >
       {/* hidden measurement copy of the final layout (same gaps) */}

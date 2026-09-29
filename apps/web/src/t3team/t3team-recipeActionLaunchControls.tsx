@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import {
   createContext,
   useContext,
@@ -141,7 +140,7 @@ export function LaunchOptionGroup(props: {
 
   return (
     <div className="space-y-1.5">
-      <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/70">
+      <div className="text-2xs font-medium uppercase tracking-widest text-muted-foreground/70">
         {props.label}
       </div>
       <ToggleGroup
@@ -183,13 +182,13 @@ export function LaunchTextInput(props: {
 
   return (
     <label className="block space-y-1.5">
-      <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/70">
+      <span className="text-2xs font-medium uppercase tracking-widest text-muted-foreground/70">
         {props.label}
       </span>
       <Input
         value={value}
         placeholder={props.placeholder}
-        className="h-8 text-xs"
+        size="compact"
         onChange={(event) => setValue(event.target.value)}
       />
     </label>

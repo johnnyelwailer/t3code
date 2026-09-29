@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { useState } from "react";
 import { Bot, Check, ChevronRight, X } from "lucide-react";
 import type { Meta, StoryObj } from "@storybook/react";
@@ -47,12 +46,14 @@ function VariantInline() {
     <Row>
       <span className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-primary/50 bg-primary/5 py-0.5 pl-1.5 pr-1">
         <Bot className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
-        <Badge variant="secondary" className="gap-1.5 opacity-60">
-          <span aria-hidden="true" className="size-1.5 rounded-full bg-muted-foreground/50" />
-          To Do
-        </Badge>
+        <span className="inline-flex opacity-60">
+          <Badge variant="secondary">
+            <span aria-hidden="true" className="size-1.5 rounded-full bg-muted-foreground/50" />
+            To Do
+          </Badge>
+        </span>
         <ChevronRight className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <Badge variant="info" className="gap-1.5">
+        <Badge variant="info">
           <span aria-hidden="true" className="size-1.5 rounded-full bg-info" />
           In Review
         </Badge>
@@ -71,7 +72,7 @@ function VariantMarker() {
     <div className="flex flex-col gap-3">
       <Row>
         <span className="relative inline-flex">
-          <Badge variant="secondary" className="gap-1.5">
+          <Badge variant="secondary">
             <span aria-hidden="true" className="size-1.5 rounded-full bg-muted-foreground/50" />
             To Do
           </Badge>
@@ -120,7 +121,7 @@ function VariantBatch() {
   return (
     <div className="flex flex-col gap-3">
       <Row>
-        <Badge variant="secondary" className="gap-1.5">
+        <Badge variant="secondary">
           <span aria-hidden="true" className="size-1.5 rounded-full bg-muted-foreground/50" />
           To Do
         </Badge>
@@ -222,7 +223,7 @@ function VariantSinglePanel() {
     <div className="relative flex flex-col gap-2">
       <Row>
         <Marked active={open === "status"} onOpen={() => setOpen("status")}>
-          <Badge variant="secondary" className="gap-1.5">
+          <Badge variant="secondary">
             <span aria-hidden="true" className="size-1.5 rounded-full bg-muted-foreground/50" />
             To Do
           </Badge>
@@ -278,7 +279,7 @@ function VariantSinglePanel() {
                   </span>
                   <AcceptDismiss />
                 </div>
-                <p className="mt-0.5 pl-[4.5rem] text-[11px] leading-4 text-muted-foreground">
+                <p className="mt-0.5 pl-18 text-2xs leading-4 text-muted-foreground">
                   {proposal.why}
                 </p>
               </div>

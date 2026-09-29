@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-native-title-tooltip, shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-native-title-tooltip --Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The right-hand end of a runtime step row: when a scheduled step is due, and a child thread's status.
  *
@@ -22,7 +22,7 @@ export function StepDuration({ step }: { step: T3TeamWorkflowStepEntry | undefin
     return null;
   }
   return (
-    <span data-step-duration className="shrink-0 text-[11px] text-muted-foreground/70">
+    <span data-step-duration className="shrink-0 text-2xs text-muted-foreground/70">
       {formatDuration(step.durationMs)}
     </span>
   );
@@ -37,7 +37,7 @@ export function TurnCountBadge({ step }: { step: T3TeamWorkflowStepEntry | undef
   return (
     <span
       data-step-turn-count={step.turnCount}
-      className="shrink-0 rounded-full border border-border/55 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground/80"
+      className="shrink-0 rounded-full border border-border/55 px-1.5 py-0.5 text-3xs font-medium text-muted-foreground/80"
     >
       {step.turnCount} turns
     </span>
@@ -57,7 +57,7 @@ export function StepDue({
   if (wakeAt === undefined || wakeAt === null) return null;
   const due = formatWorkflowStepDue(wakeAt ?? undefined);
   return due ? (
-    <span data-step-due className="shrink-0 text-[11px] text-muted-foreground/70">
+    <span data-step-due className="shrink-0 text-2xs text-muted-foreground/70">
       {due}
     </span>
   ) : null;
@@ -100,7 +100,7 @@ export function StepTrailing({
     return (
       <span
         data-step-child-status={childStatus}
-        className="max-w-[45%] shrink-0 truncate text-right text-[11px] font-normal text-muted-foreground/70"
+        className="max-w-[45%] shrink-0 truncate text-right text-2xs font-normal text-muted-foreground/70"
         title={normalized.detail ?? childStatus}
       >
         {normalized.label}

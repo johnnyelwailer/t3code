@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * GHE-40 activity label — story support: production card-row frames + the
  * live / kind / fit-gate demos for the production component story.
@@ -44,9 +43,9 @@ export function ProdFrame({
     <div
       ref={rowRef}
       data-testid="prod-row-card"
-      className="rounded-lg border border-zinc-200/70 bg-white shadow-sm dark:border-zinc-700/40 dark:bg-zinc-900"
+      className="rounded-lg border border-border bg-card shadow-sm"
     >
-      <div className="relative h-[4.875rem] px-[var(--sidebar-row-content-inset)] py-[var(--sidebar-content-inset)]">
+      <div className="relative h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)">
         <span
           ref={sizerRef}
           aria-hidden
@@ -109,7 +108,7 @@ export function ProdLiveDemo() {
           timer={<span className="font-mono tabular-nums">4m 12s</span>}
           avail={avail}
           spinTick={spin}
-          className="text-sky-600 dark:text-sky-400"
+          className="text-info-foreground"
         />
       )}
     </ProdFrame>
@@ -124,13 +123,7 @@ export function ProdKindDemo() {
   }, []);
   return done ? (
     <ProdFrame title={PROD_TITLES.short}>
-      {() => (
-        <ThreadActivityStatus
-          kind="done"
-          label="Done"
-          className="text-emerald-700 dark:text-emerald-300"
-        />
-      )}
+      {() => <ThreadActivityStatus kind="done" label="Done" className="text-success-foreground" />}
     </ProdFrame>
   ) : (
     <ProdFrame title={PROD_TITLES.short}>
@@ -140,7 +133,7 @@ export function ProdKindDemo() {
           label="All tests green"
           timer={<span className="font-mono tabular-nums">12m 04s</span>}
           avail={avail}
-          className="text-sky-600 dark:text-sky-400"
+          className="text-info-foreground"
         />
       )}
     </ProdFrame>
@@ -156,7 +149,7 @@ export function ProdFitGateDemo() {
           label="Running the full checkout matrix across worktrees"
           timer={<span className="font-mono tabular-nums">1h 02m</span>}
           avail={avail}
-          className="text-sky-600 dark:text-sky-400"
+          className="text-info-foreground"
         />
       )}
     </ProdFrame>

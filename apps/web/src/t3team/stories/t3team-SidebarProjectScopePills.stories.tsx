@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Sidebar project scope pills (2026-09-14) — the one-click alternative to the "All projects"
  * dropdown, behind the `t3teamProjectScopePillsEnabled` setting (on by default).
@@ -76,7 +75,7 @@ function HeaderRow({ width, initialScope }: { width: number; initialScope: strin
           <FolderPlusIcon className="size-4" />
         </SidebarMenuButton>
       </div>
-      <div className="px-1 text-[10px] text-muted-foreground">
+      <div className="px-1 text-3xs text-muted-foreground">
         {width}px · {GROUPS.find((g) => g.projectKey === scope)?.displayName ?? "All projects"}
       </div>
     </div>

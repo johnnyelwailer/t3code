@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-raw-colors, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import type { EnvironmentAppearance } from "@t3tools/contracts";
 
 import { isElectron } from "~/env";
@@ -8,7 +7,7 @@ import {
   useSidebarStageBackdropVariant,
 } from "~/components/SidebarStageBackdrop";
 import { T3TeamLeftSidebarHeaderToggle } from "~/t3team/t3team-LeftSidebarHeaderToggle";
-import { SidebarHeader, SidebarTrigger } from "~/t3team/components/ui/t3team-sidebar";
+import { SidebarTrigger } from "~/t3team/components/ui/t3team-sidebar";
 import { isNexploreBrand, PackBrandIdentity } from "~/t3team/components/t3team-PackBrandIdentity";
 
 type ProjectSidebarHeaderProps = {
@@ -46,9 +45,10 @@ export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHead
   });
 
   return (
-    <SidebarHeader
+    // The titlebar row, not a padded SidebarHeader: it aligns to the window controls.
+    <div
       className={cn(
-        "group/sidebar-header @container/sidebar-header relative h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center px-3 py-0 md:px-0",
+        "group/sidebar-header @container/sidebar-header relative flex h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center gap-2 px-3 md:px-0",
         isElectron && "drag-region",
       )}
     >
@@ -90,12 +90,11 @@ export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHead
         />
       </div>
       <SidebarTrigger
-        className={cn(
-          "relative z-10 ms-auto mr-[var(--sidebar-content-inset)] shrink-0",
-          onBackdrop &&
-            "[--control-icon-color:white] text-white focus-visible:ring-white/90 focus-visible:ring-offset-blue-700 [:hover,[data-pressed]]:bg-white/15",
-        )}
+        // Over the stage artwork: the media viewer's control-on-imagery treatment, as upstream's
+        // SidebarChromeHeader does. The layout classes undo that variant's absolute centring.
+        variant={onBackdrop ? "media-navigation" : "ghost"}
+        className="relative top-auto z-10 ms-auto mr-[var(--sidebar-content-inset)] shrink-0 translate-y-0"
       />
-    </SidebarHeader>
+    </div>
   );
 }

@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { CheckCircle2, ShieldAlert } from "lucide-react";
 import { Input } from "~/t3team/components/ui/t3team-input";
 import {
@@ -48,7 +47,7 @@ export function GitHubAuthHostPicker({ discovery }: { discovery: GitHubDiscovery
 
   return (
     <div className="space-y-1.5">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
         Search one host
       </div>
       <Select
@@ -84,7 +83,7 @@ export function GitHubRepositoryDiscoveryAuthFields({
     <div className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
             Host
           </div>
           <Input
@@ -94,7 +93,7 @@ export function GitHubRepositoryDiscoveryAuthFields({
           />
         </div>
         <div className="space-y-1.5">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
             Account
           </div>
           <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-2 text-sm">

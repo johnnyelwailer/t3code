@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { useMemo, useState } from "react";
 import { Link2, X } from "lucide-react";
 import type { ProjectShellProject } from "@t3tools/project-context";
@@ -6,7 +5,8 @@ import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import { GitHubRepositoryDiscoverySection } from "~/t3team/components/t3team-GitHubRepositoryDiscoverySection";
 import { LinkedRepositoryListEditor } from "~/t3team/components/t3team-LinkedRepositoryListEditor";
 import { Button } from "~/t3team/components/ui/t3team-button";
-import { Card, CardContent } from "~/t3team/components/ui/t3team-card";
+import { Card } from "~/t3team/components/ui/t3team-card";
+import { T3SurfaceCardContent } from "~/t3team/components/ui/t3team-surface";
 import { ScrollArea } from "~/t3team/components/ui/t3team-scroll-area";
 import { splitRepositoryInput } from "~/t3team/components/t3team-linkedRepositories";
 import { useBackend } from "~/t3team/backend/t3team-index";
@@ -93,32 +93,36 @@ export function ManageProjectRepositoriesDialog({
         <ScrollArea className="min-h-0 flex-1">
           <div className="space-y-4 p-4">
             <Card>
-              <CardContent className="space-y-3 p-4">
+              <T3SurfaceCardContent>
                 <GitHubRepositoryDiscoverySection
                   projectKey={project.source.externalProjectKey ?? undefined}
                   projectTitle={project.title ?? undefined}
                   linkedRepositoryUrls={linkedRepositoryUrls}
                   onVisibleSuggestionsChange={handleDiscoveredRepositoryUrlsChange}
                 />
-              </CardContent>
+              </T3SurfaceCardContent>
             </Card>
 
             <Card>
-              <CardContent className="space-y-3 p-4">
-                <h3 className="text-sm font-semibold">Linked repositories</h3>
-                <LinkedRepositoryListEditor
-                  repositoryUrls={linkedRepositoryUrls}
-                  newRepositoryUrl={newRepositoryUrl}
-                  setNewRepositoryUrl={setNewRepositoryUrl}
-                  onAddRepository={addRepository}
-                  onRemoveRepository={removeRepository}
-                  onAddSearchableOption={(url) =>
-                    setLinkedRepositoryUrls((current) => normalizeRepositoryUrls([...current, url]))
-                  }
-                  searchableRepositoryOptions={discoveredRepositoryUrls}
-                  helpText="Saving updates this project and refreshes workspace references."
-                />
-              </CardContent>
+              <T3SurfaceCardContent>
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold">Linked repositories</h3>
+                  <LinkedRepositoryListEditor
+                    repositoryUrls={linkedRepositoryUrls}
+                    newRepositoryUrl={newRepositoryUrl}
+                    setNewRepositoryUrl={setNewRepositoryUrl}
+                    onAddRepository={addRepository}
+                    onRemoveRepository={removeRepository}
+                    onAddSearchableOption={(url) =>
+                      setLinkedRepositoryUrls((current) =>
+                        normalizeRepositoryUrls([...current, url]),
+                      )
+                    }
+                    searchableRepositoryOptions={discoveredRepositoryUrls}
+                    helpText="Saving updates this project and refreshes workspace references."
+                  />
+                </div>
+              </T3SurfaceCardContent>
             </Card>
 
             {saveError ? (

@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import type { Meta, StoryObj } from "@storybook/react";
 import { ProviderDriverKind, ProviderInstanceId, type ServerProvider } from "@t3tools/contracts";
 import type * as React from "react";
@@ -134,7 +133,7 @@ export const Gallery: Story = {
     <div className="flex flex-col gap-4">
       {GALLERY_STATES.map(({ label, props }) => (
         <div key={label} className="flex flex-col gap-1.5">
-          <span className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
+          <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
             {label}
           </span>
           <PickerListAreaFrame>

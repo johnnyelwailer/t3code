@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 import { useEffect, useState } from "react";
 import { AlertCircleIcon, CheckCircle2Icon, Clock3Icon, DownloadIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
@@ -58,9 +57,7 @@ function resolveActiveItem(
 function SyncMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md border border-border/60 bg-background/70 px-2 py-1.5">
-      <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70">
-        {label}
-      </div>
+      <div className="text-3xs uppercase tracking-widest text-muted-foreground/70">{label}</div>
       <div className="mt-0.5 text-xs font-medium text-foreground/90">{value}</div>
     </div>
   );
@@ -70,15 +67,15 @@ function SyncItemRow({ item }: { item: T3TeamContextAttachmentSyncItem }) {
   return (
     <div className="flex items-start gap-2 rounded-md border border-border/50 bg-background/65 px-2 py-1.5">
       {item.status === "completed" ? (
-        <CheckCircle2Icon className="mt-0.5 size-3.5 shrink-0 text-emerald-500/80" />
+        <CheckCircle2Icon className="mt-0.5 size-3.5 shrink-0 text-success/80" />
       ) : item.status === "active" ? (
-        <DownloadIcon className="mt-0.5 size-3.5 shrink-0 -rotate-6 animate-[pulse_2.8s_ease-in-out_infinite] text-sky-500/85" />
+        <DownloadIcon className="mt-0.5 size-3.5 shrink-0 -rotate-6 animate-status-pulse text-info/85" />
       ) : (
         <span className="mt-[5px] inline-flex size-2 shrink-0 rounded-full bg-muted-foreground/30" />
       )}
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[11px] font-medium text-foreground/90">{item.label}</div>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground/75">
+        <div className="truncate text-2xs font-medium text-foreground/90">{item.label}</div>
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-3xs text-muted-foreground/75">
           {item.detail ? <span className="truncate">{item.detail}</span> : null}
           {typeof item.sizeBytes === "number" ? <span>{formatBytes(item.sizeBytes)}</span> : null}
         </div>
@@ -128,11 +125,11 @@ export function ContextAttachmentSyncTooltip({
   return (
     <div className="w-80 space-y-3">
       <div className="space-y-1">
-        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/75">
+        <div className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-widest text-muted-foreground/75">
           {attachment.syncStatus === "error" ? (
             <AlertCircleIcon className="size-3.5 text-destructive/80" />
           ) : (
-            <DownloadIcon className="size-3.5 -rotate-6 text-sky-500/85" />
+            <DownloadIcon className="size-3.5 -rotate-6 text-info/85" />
           )}
           <span>
             {attachment.syncStatus === "error"
@@ -148,22 +145,22 @@ export function ContextAttachmentSyncTooltip({
       <div className="rounded-lg border border-border/70 bg-background/80 p-3">
         <div className="mb-2 flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-medium text-foreground/90">
+            <div className="text-2xs font-medium text-foreground/90">
               {attachment.syncPhase ?? "Syncing context"}
             </div>
-            <div className="mt-0.5 text-[11px] text-muted-foreground/75">
+            <div className="mt-0.5 text-2xs text-muted-foreground/75">
               {attachment.syncInfo?.currentItemLabel ??
                 activeItem?.label ??
                 "Waiting for next step"}
             </div>
             {(attachment.syncInfo?.currentItemDetail ?? activeItem?.detail) ? (
-              <div className="mt-0.5 truncate text-[10px] text-muted-foreground/65">
+              <div className="mt-0.5 truncate text-3xs text-muted-foreground/65">
                 {attachment.syncInfo?.currentItemDetail ?? activeItem?.detail}
               </div>
             ) : null}
           </div>
           {attachment.syncInfo?.startedAt ? (
-            <div className="flex shrink-0 items-center gap-1 rounded-md border border-border/60 bg-background/70 px-2 py-1 text-[10px] text-muted-foreground/75">
+            <div className="flex shrink-0 items-center gap-1 rounded-md border border-border/60 bg-background/70 px-2 py-1 text-3xs text-muted-foreground/75">
               <Clock3Icon className="size-3" />
               <span>{formatElapsed(attachment.syncInfo.startedAt, now)}</span>
             </div>
@@ -174,7 +171,7 @@ export function ContextAttachmentSyncTooltip({
           <div
             className={cn(
               "h-full rounded-full transition-[width] duration-300",
-              attachment.syncStatus === "error" ? "bg-destructive/75" : "bg-sky-500/75",
+              attachment.syncStatus === "error" ? "bg-destructive/75" : "bg-info/75",
             )}
             style={{ width: `${progressPercent ?? 12}%` }}
           />
@@ -188,7 +185,7 @@ export function ContextAttachmentSyncTooltip({
 
       {items.length > 0 ? (
         <div className="space-y-1.5">
-          <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/70">
+          <div className="text-3xs uppercase tracking-widest text-muted-foreground/70">
             Planned Work
           </div>
           <div className="space-y-1.5">
@@ -196,7 +193,7 @@ export function ContextAttachmentSyncTooltip({
               <SyncItemRow key={item.id} item={item} />
             ))}
             {items.length > 6 ? (
-              <div className="px-1 text-[10px] text-muted-foreground/65">
+              <div className="px-1 text-3xs text-muted-foreground/65">
                 +{items.length - 6} more item{items.length - 6 === 1 ? "" : "s"}
               </div>
             ) : null}
@@ -205,7 +202,7 @@ export function ContextAttachmentSyncTooltip({
       ) : null}
 
       {attachment.syncError ? (
-        <div className="rounded-md border border-destructive/30 bg-destructive/8 px-2.5 py-2 text-[11px] leading-5 text-destructive/90">
+        <div className="rounded-md border border-destructive/30 bg-destructive/8 px-2.5 py-2 text-2xs leading-5 text-destructive/90">
           {attachment.syncError}
         </div>
       ) : null}

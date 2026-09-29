@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { ExternalLink } from "lucide-react";
 
 import { Button } from "~/t3team/components/ui/t3team-button";
@@ -72,7 +71,7 @@ export function ConnectAtlassianTokenForm({
           </Button>
         ) : null}
         <Button
-          className="w-full justify-center gap-2 sm:w-auto"
+          className="w-full justify-center sm:w-auto"
           onClick={onSubmit}
           disabled={submitting || !canSubmit}
         >

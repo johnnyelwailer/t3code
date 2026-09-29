@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 import { useLoadBalancedEnvironment } from "../hooks/useLoadBalancedEnvironment";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
 import type { UsageLimitSourceSnapshots } from "@t3tools/contracts";
@@ -2894,7 +2893,7 @@ export default function ChatView(props: ChatViewProps) {
           id: "provider-usage-hold",
           variant: "warning",
           priority: "urgent",
-          icon: <span className="size-1.5 rounded-full bg-amber-500" aria-hidden="true" />,
+          icon: <span className="size-1.5 rounded-full bg-warning" aria-hidden="true" />,
           title:
             providerUsageHold.resetsAt !== null
               ? `Usage limit · ${describeHoldReset(providerUsageHold.resetsAt, Date.now())}`
@@ -2918,7 +2917,7 @@ export default function ChatView(props: ChatViewProps) {
         id: "provider-usage-warning",
         variant: "info",
         priority: "notice",
-        icon: <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />,
+        icon: <span className="size-1.5 rounded-full bg-success" aria-hidden="true" />,
         title:
           providerUsageWarning.resetsAt !== null
             ? `Usage ${Math.round(providerUsageWarning.percentUsed)}% · ${describeHoldReset(providerUsageWarning.resetsAt, Date.now())}`

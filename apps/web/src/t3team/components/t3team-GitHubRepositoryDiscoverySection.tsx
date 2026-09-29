@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-raw-colors, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Github, RefreshCw } from "lucide-react";
 import { GitHubRepositoryDiscoveryAdvancedOptions } from "~/t3team/components/t3team-GitHubRepositoryDiscoveryAdvancedOptions";
@@ -91,18 +90,18 @@ export function GitHubRepositoryDiscoverySection({
 
       <div className="space-y-3">
         {showAuthSkeleton ? (
-          <Skeleton className="h-8 w-full rounded-lg" />
+          <Skeleton shape="card" className="h-8 w-full" />
         ) : isAuthenticated ? (
           <>
             <div className="flex flex-wrap items-center gap-1.5 text-xs" aria-live="polite">
               <span className="mr-1 inline-flex items-center gap-1.5 font-medium text-foreground">
-                <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                <CheckCircle2 className="size-3.5 text-success-foreground" />
                 Connected
               </span>
               {connectedAccounts.map((account) => (
                 <span
                   key={account}
-                  className="rounded-full bg-muted/70 px-2 py-1 text-[11px] text-muted-foreground"
+                  className="rounded-full bg-muted/70 px-2 py-1 text-2xs text-muted-foreground"
                 >
                   {account}
                 </span>
@@ -123,15 +122,15 @@ export function GitHubRepositoryDiscoverySection({
             ) : null}
 
             {discovery.suggestedUrls.length > 0 ? (
-              <div className="divide-y divide-emerald-200/70 border-y border-emerald-200/80 bg-emerald-50/45 dark:divide-emerald-900/70 dark:border-emerald-900/70 dark:bg-emerald-950/20">
+              <div className="divide-y divide-success/25 border-y border-success/30 bg-success/5 dark:bg-success/8">
                 {discovery.suggestedUrls.map((url) => (
                   <div key={url} className="flex items-center gap-2.5 px-2.5 py-2.5">
-                    <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    <CheckCircle2 className="size-4 shrink-0 text-success-foreground" />
                     <span className="min-w-0 flex-1 truncate text-xs font-medium">
                       {url.replace(/^https?:\/\//, "")}
                     </span>
                     {linkedRepositoryUrls.includes(url) ? (
-                      <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300">
+                      <span className="shrink-0 rounded-full bg-success/12 px-2 py-1 text-3xs font-medium text-success-foreground dark:bg-success/20">
                         Added
                       </span>
                     ) : null}
@@ -175,7 +174,7 @@ export function GitHubRepositoryDiscoverySection({
         ) : (
           <>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <StatusIcon className="size-3.5 text-amber-600 dark:text-amber-400" />
+              <StatusIcon className="size-3.5 text-warning-foreground" />
               <span>{status.label}</span>
             </div>
             <GitHubRepositoryDiscoveryAdvancedOptions
