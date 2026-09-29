@@ -120,6 +120,7 @@ import Migration0079 from "./Migrations/t3team-061_ResourcePressureEvents.ts";
 import Migration0080 from "./Migrations/053_PullRequestFilesViewed.ts";
 import Migration0081 from "./Migrations/054_ProjectionThreadsAutoSettleDisabledAt.ts";
 import Migration0082 from "./Migrations/t3team-062_ProjectionThreadShellT3TeamFacts.ts";
+import Migration0083 from "./Migrations/t3team-063_OrchestrationEventsTypeSequenceIndex.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -214,6 +215,7 @@ const migrationEntries = [
   [80, "PullRequestFilesViewed", Migration0080],
   [81, "ProjectionThreadsAutoSettleDisabledAt", Migration0081],
   [82, "ProjectionThreadShellT3TeamFacts", Migration0082],
+  [83, "OrchestrationEventsTypeSequenceIndex", Migration0083],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

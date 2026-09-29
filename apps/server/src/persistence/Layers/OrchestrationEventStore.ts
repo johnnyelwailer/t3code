@@ -29,6 +29,7 @@ import {
   OrchestrationEventStore,
   type OrchestrationEventStoreShape,
 } from "../Services/OrchestrationEventStore.ts";
+import { makeReadMatching } from "./t3team-OrchestrationEventStoreReadMatching.ts";
 
 const encodeProjectIcon = Schema.encodeSync(ProjectIconOverride);
 const decodeEvent = Schema.decodeUnknownEffect(OrchestrationEvent);
@@ -496,6 +497,7 @@ const makeEventStore = Effect.gen(function* () {
     readAggregateRange,
     getAggregateReplayStats,
     readAll: () => readFromSequence(0, Number.MAX_SAFE_INTEGER),
+    readMatching: makeReadMatching({ sql, rowSchema: OrchestrationEventPersistedRowSchema }),
     hasEventAfter,
   } satisfies OrchestrationEventStoreShape;
 });

@@ -34,6 +34,7 @@ import { OrchestrationEngineService } from "./orchestration/Services/Orchestrati
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { sessionStatusToWaitOutcome } from "./t3team-childWait.ts";
 import { findHandoffParentThreadId } from "./t3team-childAbnormalStopNotify.ts";
+import { readEventsMatching } from "./orchestration/t3team-eventReplayFilter.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import {
   buildCleanupNudgeText,
@@ -41,6 +42,7 @@ import {
   childCleanupNudgeCooldownMs,
   CHILD_CLEANUP_NUDGED_KIND,
   collectLastCleanupNudges,
+  CLEANUP_NUDGE_REPLAY_FILTERS,
   cleanupNudgeDue,
   terminalUnsettledChildStats,
   type CleanupNudgeStats,
@@ -186,7 +188,7 @@ export const T3TeamChildCleanupNudgeReactorLive = Layer.effectDiscard(
     // terminal backlog crosses the threshold is nudged once (cooldown-aware),
     // so a restart never re-silent-izes a parent that already has one.
     const replayed: ReadonlyArray<OrchestrationEvent> = yield* Stream.runCollect(
-      engine.readEvents(0, Number.MAX_SAFE_INTEGER),
+      readEventsMatching(engine, CLEANUP_NUDGE_REPLAY_FILTERS),
     ).pipe(Effect.map((chunk) => Array.from(chunk)));
     for (const [parentThreadId, record] of collectLastCleanupNudges(replayed)) {
       lastByParent.set(parentThreadId, record);
