@@ -24,6 +24,7 @@ import {
   makeChildAbnormalStopNotifier,
   type ChildTerminalOutcome,
 } from "./t3team-childAbnormalStopNotify.ts";
+import type { ProviderUsageNotificationReader } from "./t3team-providerUsageNotification.ts";
 import { makeTerminalNotifyLedger } from "./t3team-terminalNotifyDedup.ts";
 
 /** Durable "already notified" marker kind, appended on the child thread. */
@@ -60,6 +61,7 @@ export interface AbnormalStopGuards {
 export function makeAbnormalStopGuards(deps: {
   readonly engine: OrchestrationEngineShape;
   readonly query: ProjectionSnapshotQueryShape;
+  readonly usageLine?: ProviderUsageNotificationReader;
 }): AbnormalStopGuards {
   const notify = makeChildAbnormalStopNotifier(deps);
   const ledger = makeTerminalNotifyLedger({
