@@ -2878,12 +2878,12 @@ export default function ChatView(props: ChatViewProps) {
 
   const systemComposerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
     const items: ComposerBannerStackItem[] = [];
-    // Provider usage-hold banner (GHE #421): while the watcher has held this
-    // thread's provider window, turns on it are paused server-side. The banner
-    // sits below the latest message with the per-thread auto-resume toggle.
+    // Provider usage-hold banner (GHE #421): a turn on this thread hit its
+    // provider instance's usage limit and waits for an automatic re-send after
+    // the reset (sends are never blocked). Carries the auto-resume toggle.
     if (providerUsageHold !== null && activeThreadId !== null) {
-      // If the reset moment has already passed, the watcher will release
-      // within one sweep (60s) and the `released` activity clears the hold.
+      // If the reset moment has already passed, the watcher releases within
+      // its grace + one deadline check and the `released` activity clears it.
       // Don't flash a transient "resuming" state at the user.
       const resetPassed =
         providerUsageHold.resetsAt !== null && Date.parse(providerUsageHold.resetsAt) < Date.now();
@@ -2911,7 +2911,7 @@ export default function ChatView(props: ChatViewProps) {
       }
     }
     // Provider usage warning banner (GHE #421): informational, no pause, no toggle.
-    // Shows when the sampler reports ≥80% but below critical.
+    // Shows when the instance's session window is at or above 80%.
     if (providerUsageWarning !== null && providerUsageHold === null) {
       items.push({
         id: "provider-usage-warning",

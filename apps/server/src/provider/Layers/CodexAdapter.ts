@@ -72,8 +72,6 @@ import {
 } from "./CodexSessionRuntime.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 import { resolveCodexLaunchArgs } from "./codexLaunchArgs.ts";
-import { setLatestCodexRateLimits } from "../t3team-codexUsageSampler.ts";
-import type { CodexRateLimitsBody } from "../t3team-providerUsageMappers.ts";
 import {
   type CodexRateLimitSnapshot,
   codexRateLimitsToUpdate,
@@ -2013,8 +2011,6 @@ function mapToRuntimeEvents(
     if (!limits) {
       return [];
     }
-    // Store the snapshot for the usage watcher's sampler.
-    setLatestCodexRateLimits(event.payload as CodexRateLimitsBody);
     return [
       {
         type: "account.rate-limits.updated",
@@ -2429,6 +2425,8 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
                   payload: {
                     ...runtimeEvent.payload,
                     ...(usageLimitMessage ? { errorMessage: usageLimitMessage } : {}),
+                    // Codex's structured `usageLimitExceeded` error info.
+                    ...(usageLimitError ? { failureKind: "usage_limit" as const } : {}),
                     tokenUsage: completeCodexTurnTokenUsage(
                       turnTokenUsage,
                       String(runtimeEvent.turnId),

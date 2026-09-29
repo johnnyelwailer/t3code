@@ -120,11 +120,11 @@ const T3TeamModelsTool = Tool.make("t3team_models", {
 
 const T3TeamProviderUsageTool = Tool.make("t3team_provider_usage", {
   description:
-    "Sample the live provider plan-limit windows (5-hour / weekly quota: percent used, reset time, severity) for the configured provider instances on demand. Call it to check how close a provider is to a rate-limit wall before delegating long work to it. Optional provider_instance_id filters to one instance; omit to sample all enabled instances with a live-limit source. Unsampleable instances are reported in unavailable with a reason.",
+    "Read the provider usage-limit windows (session / weekly / monthly quota: usedPercent, resetsAt, severity normal|warning|critical) per provider INSTANCE (one account each), plus accounts reported by configured usage hubs. Values come from the host's live provider snapshots (periodic probe + in-turn rate-limit updates), with checkedAt per instance. Call it to check how close an account is to its limit before delegating long work to it. Optional provider_instance_id filters to one instance. An instance without data says why in unavailable.",
   parameters: Schema.Struct({
     provider_instance_id: Schema.optional(Schema.String).annotate({
       description:
-        "Optional provider INSTANCE id to sample (as returned by t3team_models). Omit to sample all enabled instances with a live-limit source.",
+        "Optional provider INSTANCE id (as returned by t3team_models). Omit to list every enabled instance and hub account.",
     }),
   }),
   success: Schema.Unknown,

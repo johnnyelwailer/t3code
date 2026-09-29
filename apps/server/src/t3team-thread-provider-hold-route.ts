@@ -10,10 +10,10 @@
  *    update the banner without a refetch.
  *
  *  • `POST /api/t3team/provider-usage/dev-force` +
- *    `GET  /api/t3team/provider-usage/dev-state` — dev hooks that run the
- *    watcher's exact act/release paths with a synthetic exhausted sample, so
- *    the pause → banner → toggle → auto-resume cycle can be verified live
- *    without burning a real subscription window. Off unless
+ *    `GET  /api/t3team/provider-usage/dev-state` — dev hooks that hold one
+ *    thread's latest turn as a usage-limited failure would, and release it
+ *    through the real replay path, so the banner → toggle → auto-resume
+ *    cycle can be verified live without burning a real window. Off unless
  *    `T3TEAM_PROVIDER_USAGE_DEV_FORCE=1`.
  *
  * @module t3team-thread-provider-hold-route
@@ -79,8 +79,8 @@ export const t3teamThreadProviderHoldControlRouteLayer = HttpRouter.add(
           tone: "info",
           kind: PROVIDER_USAGE_HOLD_ACTIVITY_KINDS.autoResumeSet,
           summary: input.autoResume
-            ? "Auto-resume enabled — this thread resumes when the provider window resets"
-            : "Auto-resume disabled — this thread stays paused until you resume it",
+            ? "Auto-resume enabled — the turn is sent again when the usage window resets"
+            : "Auto-resume disabled — the turn is not re-sent when the usage window resets",
           payload: { autoResume: input.autoResume },
           turnId: null,
           createdAt: nowIso(),
@@ -97,7 +97,6 @@ export const t3teamThreadProviderHoldControlRouteLayer = HttpRouter.add(
 
 interface DevForceInput {
   readonly mode?: "exhaust" | "recover";
-  readonly provider?: string;
   readonly providerInstanceId?: string;
   readonly resetsInMs?: number;
   readonly threadId?: string;
@@ -116,14 +115,17 @@ export const t3teamProviderUsageDevRouteLayer = HttpRouter.add(
         .pipe(Effect.mapError((error) => new T3TeamAtlassianError({ message: error.message })));
       return okJson({ ok: true, ...result });
     }
+    const threadId = input.threadId?.trim() ?? "";
+    if (!threadId) {
+      return yield* new T3TeamAtlassianError({ message: "threadId is required to force a hold." });
+    }
     const result = yield* watcher
       .forceExhaust({
-        ...(input.provider !== undefined ? { provider: input.provider } : {}),
+        threadId,
         ...(input.providerInstanceId !== undefined
           ? { providerInstanceId: input.providerInstanceId }
           : {}),
         ...(input.resetsInMs !== undefined ? { resetsInMs: input.resetsInMs } : {}),
-        ...(input.threadId !== undefined ? { threadId: input.threadId } : {}),
       })
       .pipe(Effect.mapError((error) => new T3TeamAtlassianError({ message: error.message })));
     return okJson({ ok: true, ...result });
@@ -140,7 +142,7 @@ export const t3teamProviderUsageDevStateRouteLayer = HttpRouter.add(
   Effect.gen(function* () {
     const watcher = yield* ProviderUsageWatcher;
     const state = yield* watcher.getDevState();
-    if (state.held.length === 0 && state.holds.length === 0) {
+    if (state.holds.length === 0) {
       // Nothing held: make the disabled-state visible so a misconfigured curl
       // is not mistaken for "enabled but idle".
       const settingsGate =

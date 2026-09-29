@@ -18,7 +18,7 @@ import type { OrchestrationDispatchError } from "./orchestration/Errors.ts";
 import type { ProjectionRepositoryError } from "./persistence/Errors.ts";
 import type { ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import type { ProviderRegistryShape } from "./provider/Services/ProviderRegistry.ts";
-import type { ServerSettingsService } from "./serverSettings.ts";
+import type { UsageLimitSources } from "./usage/UsageLimitSources.ts";
 import type { ResourcePressureMonitorShape } from "./t3team-resourcePressureMonitor.ts";
 import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshService.ts";
 import type { T3TeamThreadToolContextStoreShape } from "./t3team-threadToolContextStore.ts";
@@ -38,7 +38,7 @@ export interface BindSessionDeps {
   readonly genericThreadToolIds: readonly string[];
   readonly query: ProjectionSnapshotQueryShape;
   readonly providerRegistry: ProviderRegistryShape | undefined;
-  readonly serverSettings: ServerSettingsService["Service"] | undefined;
+  readonly usageLimitSources: UsageLimitSources["Service"] | undefined;
   readonly resourcePressure: ResourcePressureMonitorShape | undefined;
   readonly contextRefresh: T3TeamContextRefreshServiceShape;
   readonly dispatchCommand: (

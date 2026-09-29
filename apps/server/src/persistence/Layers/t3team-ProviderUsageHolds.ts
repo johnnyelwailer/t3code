@@ -34,42 +34,29 @@ const makeProviderUsageHoldRepository = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const activeReads = makeProviderUsageHoldActiveReads(sql);
 
-  // Re-arming an existing (or released) row must preserve the user-owned
-  // fields: the auto-resume toggle, the pending turn, and the original
-  // `since` timestamp. The watcher refreshes the provider-facing fields only.
+  // An active row keeps the user-owned toggle and its original `since`; a
+  // released row is re-armed from the new values.
   const upsertActiveHold = SqlSchema.void({
     Request: ProviderUsageHold,
     execute: (row) =>
       sql`
         INSERT INTO provider_usage_holds (
-          thread_id,
-          provider,
-          provider_instance_id,
-          since,
-          resets_at,
-          auto_resume,
-          pending_turn_message_id,
-          released_at,
-          release_reason,
-          updated_at
+          thread_id, provider, provider_instance_id, since, resets_at, auto_resume,
+          pending_turn_message_id, released_at, release_reason, updated_at
         )
         VALUES (
-          ${row.threadId},
-          ${row.provider},
-          ${row.providerInstanceId},
-          ${row.since},
-          ${row.resetsAt},
-          ${row.autoResume ? 1 : 0},
-          ${row.pendingTurnMessageId},
-          NULL,
-          NULL,
-          ${row.updatedAt}
+          ${row.threadId}, ${row.provider}, ${row.providerInstanceId}, ${row.since},
+          ${row.resetsAt}, ${row.autoResume ? 1 : 0}, ${row.pendingTurnMessageId},
+          NULL, NULL, ${row.updatedAt}
         )
         ON CONFLICT (thread_id)
         DO UPDATE SET
           provider = excluded.provider,
           provider_instance_id = excluded.provider_instance_id,
           resets_at = excluded.resets_at,
+          pending_turn_message_id = excluded.pending_turn_message_id,
+          since = CASE WHEN released_at IS NULL THEN since ELSE excluded.since END,
+          auto_resume = CASE WHEN released_at IS NULL THEN auto_resume ELSE excluded.auto_resume END,
           updated_at = excluded.updated_at,
           released_at = NULL,
           release_reason = NULL
@@ -100,33 +87,6 @@ const makeProviderUsageHoldRepository = Effect.gen(function* () {
   const upsert: ProviderUsageHoldRepositoryShape["upsertActiveHold"] = (row) =>
     upsertActiveHold(row).pipe(
       Effect.mapError(toPersistenceSqlError("ProviderUsageHoldRepository.upsertActiveHold:query")),
-    );
-
-  const setPendingTurnRow = SqlSchema.void({
-    Request: Schema.Struct({
-      threadId: Schema.String,
-      messageId: Schema.String,
-      now: Schema.String,
-    }),
-    execute: ({ threadId, messageId, now }) =>
-      sql`
-        UPDATE provider_usage_holds
-        SET pending_turn_message_id = ${messageId},
-            updated_at = ${now}
-        WHERE thread_id = ${threadId}
-          AND released_at IS NULL
-      `,
-  });
-
-  const setPendingTurn: ProviderUsageHoldRepositoryShape["setPendingTurn"] = (input) =>
-    setPendingTurnRow({
-      threadId: input.threadId,
-      messageId: input.messageId,
-      now: input.now,
-    }).pipe(
-      Effect.andThen(() => getHoldRow({ threadId: input.threadId })),
-      Effect.map((option) => toHoldOption(option)),
-      Effect.mapError(toPersistenceSqlError("ProviderUsageHoldRepository.setPendingTurn:query")),
     );
 
   const setAutoResumeRow = SqlSchema.void({
@@ -162,12 +122,15 @@ const makeProviderUsageHoldRepository = Effect.gen(function* () {
       Effect.mapError(toPersistenceSqlError("ProviderUsageHoldRepository.getByThreadId:query")),
     );
 
-  const markReleasedRow = SqlSchema.void({
+  // Conditional update + RETURNING: only the caller whose update flipped the
+  // row sees it back, which makes the release a claim.
+  const markReleasedRow = SqlSchema.findAll({
     Request: Schema.Struct({
       threadId: Schema.String,
       reason: Schema.String,
       now: Schema.String,
     }),
+    Result: Schema.Struct({ threadId: Schema.String }),
     execute: ({ threadId, reason, now }) =>
       sql`
         UPDATE provider_usage_holds
@@ -176,6 +139,7 @@ const makeProviderUsageHoldRepository = Effect.gen(function* () {
             updated_at = ${now}
         WHERE thread_id = ${threadId}
           AND released_at IS NULL
+        RETURNING thread_id AS "threadId"
       `,
   });
 
@@ -185,19 +149,21 @@ const makeProviderUsageHoldRepository = Effect.gen(function* () {
       reason: input.reason,
       now: input.now,
     }).pipe(
-      Effect.andThen(() => getHoldRow({ threadId: input.threadId })),
-      Effect.map((option) => toHoldOption(option)),
+      Effect.flatMap((claimed) =>
+        claimed.length === 0
+          ? Effect.succeedNone
+          : getHoldRow({ threadId: input.threadId }).pipe(Effect.map(toHoldOption)),
+      ),
       Effect.mapError(toPersistenceSqlError("ProviderUsageHoldRepository.markReleased:query")),
     );
 
   return {
     upsertActiveHold: upsert,
-    setPendingTurn,
     setAutoResume,
     getByThreadId,
     listActive: activeReads.listActive,
     markReleased,
-    listActiveSessionThreadsForDriver: activeReads.listActiveSessionThreadsForDriver,
+    listActiveSessionThreadsForInstance: activeReads.listActiveSessionThreadsForInstance,
   } satisfies ProviderUsageHoldRepositoryShape;
 });
 
