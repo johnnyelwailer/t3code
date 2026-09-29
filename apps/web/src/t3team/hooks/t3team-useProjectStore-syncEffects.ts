@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
-import type { Project, Thread } from "~/types";
+import type { Project, ThreadShell } from "~/types";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import { persistStoredThreads } from "./t3team-projectThreadPersistence";
 import {
@@ -21,7 +21,7 @@ export function useProjectStoreSyncEffects({
   threadsHydrated: boolean;
   storedProjects: ProjectShellProject[];
   liveProjects: ReadonlyArray<Project>;
-  liveThreads: ReadonlyArray<Thread>;
+  liveThreads: ReadonlyArray<ThreadShell>;
   setThreads: Dispatch<SetStateAction<ProjectThread[]>>;
 }) {
   useEffect(() => {

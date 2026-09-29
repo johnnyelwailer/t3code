@@ -78,6 +78,7 @@ import { projectActivityPayload } from "../ActivityPayloadProjection.ts";
 import * as RepositoryIdentityResolver from "../../project/RepositoryIdentityResolver.ts";
 import { ORCHESTRATION_PROJECTOR_NAMES } from "./ProjectionPipeline.ts";
 import { queryProjectSourceBindingsByProjectId } from "./t3team-projectSourceBindingSnapshotRows.ts";
+import { readT3TeamThreadShellFacts } from "../t3team-threadShellFacts.ts";
 import {
   ProjectionSnapshotQuery,
   type ProjectionEventReplayStats,
@@ -688,6 +689,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           pending_approval_count AS "pendingApprovalCount",
           pending_user_input_count AS "pendingUserInputCount",
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
+          open_child_wait_count AS "openChildWaitCount",
+          local_session_instance_id AS "localSessionInstanceId",
           deleted_at AS "deletedAt",
           activity_label AS "activityLabel",
           activity_label_updated_at AS "activityLabelUpdatedAt",
@@ -742,6 +745,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           pending_approval_count AS "pendingApprovalCount",
           pending_user_input_count AS "pendingUserInputCount",
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
+          open_child_wait_count AS "openChildWaitCount",
+          local_session_instance_id AS "localSessionInstanceId",
           deleted_at AS "deletedAt",
           activity_label AS "activityLabel",
           activity_label_updated_at AS "activityLabelUpdatedAt",
@@ -824,6 +829,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           pending_approval_count AS "pendingApprovalCount",
           pending_user_input_count AS "pendingUserInputCount",
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
+          open_child_wait_count AS "openChildWaitCount",
+          local_session_instance_id AS "localSessionInstanceId",
           deleted_at AS "deletedAt",
           activity_label AS "activityLabel",
           activity_label_updated_at AS "activityLabelUpdatedAt",
@@ -1579,6 +1586,8 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           pending_approval_count AS "pendingApprovalCount",
           pending_user_input_count AS "pendingUserInputCount",
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
+          open_child_wait_count AS "openChildWaitCount",
+          local_session_instance_id AS "localSessionInstanceId",
           deleted_at AS "deletedAt",
           activity_label AS "activityLabel",
           activity_label_updated_at AS "activityLabelUpdatedAt",
@@ -3329,6 +3338,7 @@ pending_approval_requests AS (
                       hasPendingApprovals: row.pendingApprovalCount > 0,
                       hasPendingUserInput: row.pendingUserInputCount > 0,
                       hasActionableProposedPlan: row.hasActionableProposedPlan > 0,
+                      ...readT3TeamThreadShellFacts(row),
                       backgroundLiveness: resolveShellBackgroundLiveness(
                         sessionByThread.get(row.threadId) ?? null,
                         threadBackgroundLiveness.getThreadBackgroundLiveness(row.threadId),
@@ -3543,6 +3553,7 @@ pending_approval_requests AS (
                   hasPendingApprovals: row.pendingApprovalCount > 0,
                   hasPendingUserInput: row.pendingUserInputCount > 0,
                   hasActionableProposedPlan: row.hasActionableProposedPlan > 0,
+                  ...readT3TeamThreadShellFacts(row),
                   backgroundLiveness: resolveShellBackgroundLiveness(
                     sessionByThread.get(row.threadId) ?? null,
                     threadBackgroundLiveness.getThreadBackgroundLiveness(row.threadId),
@@ -4009,6 +4020,7 @@ pending_approval_requests AS (
         hasPendingApprovals: threadRow.value.pendingApprovalCount > 0,
         hasPendingUserInput: threadRow.value.pendingUserInputCount > 0,
         hasActionableProposedPlan: threadRow.value.hasActionableProposedPlan > 0,
+        ...readT3TeamThreadShellFacts(threadRow.value),
         backgroundLiveness: resolveShellBackgroundLiveness(
           session,
           threadBackgroundLiveness.getThreadBackgroundLiveness(threadRow.value.threadId),

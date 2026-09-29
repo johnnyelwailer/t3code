@@ -38,7 +38,6 @@ function makeThread(
     projectId: "project-1",
     ...(parentThreadId !== undefined ? { parentThreadId } : {}),
     title: `thread ${id}`,
-    messageCount: 1,
     lastMessageAt: "2026-08-29T12:00:00.000Z",
     createdAt: "2026-08-29T11:00:00.000Z",
     status,

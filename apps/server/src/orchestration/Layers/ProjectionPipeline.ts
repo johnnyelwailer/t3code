@@ -1,12 +1,17 @@
 import {
   ApprovalRequestId,
   isImportedAgentSessionMessageId,
+  readLocalProviderSessionInstanceId,
   UserInputAttachmentAnswerPayload,
   type ChatAttachment,
   type OrchestrationEvent,
   type OrchestrationSessionStatus,
   ThreadId,
 } from "@t3tools/contracts";
+import {
+  CHILD_WAIT_REGISTERED_KIND,
+  CHILD_WAIT_RESOLVED_KIND,
+} from "@t3tools/shared/t3team-childWaitFacts";
 import { compareDateTimeStrings } from "@t3tools/shared/dateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -1064,6 +1069,15 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
                 ? event.payload.createdAt
                 : previousLatest,
           });
+          const localSessionInstanceId = readLocalProviderSessionInstanceId(
+            event.payload.messageId,
+          );
+          if (localSessionInstanceId !== undefined) {
+            yield* projectionThreadRepository.setLocalSessionInstanceId({
+              threadId: event.payload.threadId,
+              instanceId: localSessionInstanceId,
+            });
+          }
           return;
         }
 
@@ -1083,6 +1097,15 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           });
           if (shouldRefreshThreadShellSummary(event)) {
             yield* refreshThreadShellSummary(event.payload.threadId);
+          }
+          if (
+            event.type === "thread.activity-appended" &&
+            (event.payload.activity.kind === CHILD_WAIT_REGISTERED_KIND ||
+              event.payload.activity.kind === CHILD_WAIT_RESOLVED_KIND)
+          ) {
+            yield* projectionThreadRepository.refreshOpenChildWaitCount({
+              threadId: event.payload.threadId,
+            });
           }
           return;
         }

@@ -36,7 +36,6 @@ function makeStoredThread(overrides: Partial<ProjectThread> = {}): ProjectThread
     title: "Ticket kickoff 1",
     status: "idle",
     lastMessageAt: "2026-05-22T10:00:00.000Z",
-    messageCount: 0,
     createdAt: "2026-05-22T10:00:00.000Z",
     kickoffPending: true,
     kickoffMessage: "Investigate the issue",

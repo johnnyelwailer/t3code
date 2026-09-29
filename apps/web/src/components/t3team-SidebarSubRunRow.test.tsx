@@ -31,7 +31,6 @@ function createThread(overrides: Partial<ProjectThread> = {}): ProjectThread {
     projectId: overrides.projectId ?? "project-1",
     title: overrides.title ?? "Sub-run thread",
     status: overrides.status ?? "running",
-    messageCount: overrides.messageCount ?? 0,
     lastMessageAt: overrides.lastMessageAt ?? new Date().toISOString(),
     createdAt: overrides.createdAt ?? new Date().toISOString(),
     ...overrides,

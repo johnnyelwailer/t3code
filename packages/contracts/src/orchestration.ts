@@ -1147,6 +1147,19 @@ export const OrchestrationThreadShell = Schema.Struct({
   childStatus: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   childStatusUpdatedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   /**
+   * t3team: this thread registered a `t3team_children` wait that is still open
+   * (`t3team.child_wait.registered` without its `resolved`). The DECLARED
+   * waiting fact, projected here so list rows never need the activity log.
+   * Optional so old servers/clients interop; absent = no open wait.
+   */
+  hasOpenChildWait: Schema.optional(Schema.Boolean),
+  /**
+   * t3team: the instance a mirrored native local session resumes on (its
+   * messages carry `local:<instanceId>:` ids, see t3team-localProviderKinds).
+   * Absent for app-managed threads. Drives the external-session mark on rows.
+   */
+  localSessionInstanceId: Schema.optional(ProviderInstanceId),
+  /**
    * Native background work alive after the turn settles: "working" while
    * subagents/workflows run, "monitoring" when watch loops are the only
    * live work. Optional so old servers/clients interop; absent = none.

@@ -2,10 +2,9 @@
 import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { ProjectId, ThreadId } from "@t3tools/contracts";
-import type { EnvironmentId } from "@t3tools/contracts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { Project, Thread } from "~/types";
+import type { Project, ThreadShell } from "~/types";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import { createMockBackend } from "~/t3team/backend/t3team-mockBackend";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
@@ -17,42 +16,24 @@ vi.mock("~/t3team/backend/t3team-index", () => ({
   useBackendState: () => ({ connectionStatus: "connected" as const }),
 }));
 
+import { makeLiveThreadShell } from "./t3team-threadBridge.testSupport";
 import { useHydrateThreadPlacements } from "./t3team-useHydrateThreadPlacements";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-const LIVE_THREAD: Thread = {
-  id: "thread-missing",
-  environmentId: "env-local" as EnvironmentId,
-  codexThreadId: null,
+const LIVE_THREAD: ThreadShell = makeLiveThreadShell({
+  id: ThreadId.make("thread-missing"),
   projectId: ProjectId.make("live-project"),
-  title: "Investigate regression",
-  modelSelection: { instanceId: "codex", model: "gpt-5-codex" },
-  runtimeMode: "full-access",
-  interactionMode: "default",
-  session: null,
-  messages: [],
-  proposedPlans: [],
-  error: null,
-  createdAt: "2026-05-22T09:00:00.000Z",
-  archivedAt: null,
-  updatedAt: "2026-05-22T10:00:00.000Z",
-  latestTurn: null,
-  pendingSourceProposedPlan: undefined,
-  branch: null,
-  worktreePath: null,
-  turnDiffSummaries: [],
-  activities: [],
-} as unknown as Thread;
+});
 
 // Held at module scope (not recreated inside the component) so re-renders
 // exercise the real-world case: the caller's arrays are referentially
 // stable across an unrelated re-render, and only `candidateThreadIds` (a
 // value freshly derived every render inside the hook) would otherwise
 // differ.
-const LIVE_THREADS: ReadonlyArray<Thread> = [LIVE_THREAD];
+const LIVE_THREADS: ReadonlyArray<ThreadShell> = [LIVE_THREAD];
 const EMPTY_PROJECT_THREADS: ProjectThread[] = [];
 const EMPTY_PROJECTS: Project[] = [];
 const EMPTY_STORED_PROJECTS: ReadonlyArray<never> = [];
@@ -126,11 +107,11 @@ describe("useHydrateThreadPlacements effect scheduling", () => {
   });
 
   it("does not re-request ids the server already answered with no placement (GHE #382)", async () => {
-    const otherThread = { ...LIVE_THREAD, id: "thread-other" } as Thread;
-    let liveThreads: ReadonlyArray<Thread> = [LIVE_THREAD];
+    const otherThread = { ...LIVE_THREAD, id: ThreadId.make("thread-other") };
+    let liveThreads: ReadonlyArray<ThreadShell> = [LIVE_THREAD];
     const host = document.createElement("div");
     let root: Root;
-    let setLive: (threads: ReadonlyArray<Thread>) => void = () => {};
+    let setLive: (threads: ReadonlyArray<ThreadShell>) => void = () => {};
 
     function Probe() {
       const [threads, setThreads] = useState(liveThreads);
@@ -178,11 +159,11 @@ describe("useHydrateThreadPlacements effect scheduling", () => {
     // fetch decision may only depend on the content, or every live update
     // re-fires the placements POST (the 778-POST-in-12-min flapping on the
     // live machine).
-    let liveThreads: ReadonlyArray<Thread> = [LIVE_THREAD];
+    let liveThreads: ReadonlyArray<ThreadShell> = [LIVE_THREAD];
     let liveProjects: ReadonlyArray<Project> = [];
     const host = document.createElement("div");
     let root: Root;
-    let setLive: (threads: ReadonlyArray<Thread>) => void = () => {};
+    let setLive: (threads: ReadonlyArray<ThreadShell>) => void = () => {};
     let setProjects: (projects: ReadonlyArray<Project>) => void = () => {};
 
     function Probe() {
@@ -226,7 +207,7 @@ describe("useHydrateThreadPlacements effect scheduling", () => {
 
     // A real content change (the thread's `updatedAt` advanced) makes the id
     // eligible again: the effect must fire.
-    act(() => setLive([{ ...LIVE_THREAD, updatedAt: "2026-05-22T11:00:00.000Z" }] as Thread[]));
+    act(() => setLive([{ ...LIVE_THREAD, updatedAt: "2026-05-22T11:00:00.000Z" }]));
     await act(async () => {
       await Promise.resolve();
     });

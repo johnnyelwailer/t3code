@@ -69,6 +69,10 @@ export const ProjectionThread = Schema.Struct({
   activityLabelUpdatedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   activityState: Schema.optional(Schema.NullOr(Schema.String)),
   activityStateUpdatedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
+  // Read-only here: `upsert` never writes these; the projector keeps them
+  // current through `refreshOpenChildWaitCount` / `setLocalSessionInstanceId`.
+  openChildWaitCount: Schema.optional(NonNegativeInt),
+  localSessionInstanceId: Schema.optional(Schema.NullOr(Schema.String)),
 });
 export type ProjectionThread = typeof ProjectionThread.Type;
 
@@ -100,6 +104,17 @@ export interface ProjectionThreadRepositoryShape {
     readonly threadId: ThreadId;
     readonly status: string;
     readonly updatedAt: IsoDateTime;
+  }) => Effect.Effect<void, ProjectionRepositoryError>;
+
+  /** Recount the thread's open `t3team.child_wait` registrations from its activities. */
+  readonly refreshOpenChildWaitCount: (
+    input: GetProjectionThreadInput,
+  ) => Effect.Effect<void, ProjectionRepositoryError>;
+
+  /** Record the mirrored native session's instance id; the first one recorded wins. */
+  readonly setLocalSessionInstanceId: (input: {
+    readonly threadId: ThreadId;
+    readonly instanceId: string;
   }) => Effect.Effect<void, ProjectionRepositoryError>;
 }
 
