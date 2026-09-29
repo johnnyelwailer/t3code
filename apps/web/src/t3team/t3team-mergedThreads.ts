@@ -6,6 +6,32 @@ import type { EnvironmentThread } from "@t3tools/client-runtime/state/shell";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { useThreadRefs, useThreadShells } from "~/state/entities";
 import { environmentThreadDetails } from "~/state/threads";
+import { indexT3TeamChildParentThreads } from "~/t3team/hooks/t3team-threadHandoffMetadata";
+
+/**
+ * Child threads learned from their parents' `t3team.handoff.started` activities, keyed
+ * `environmentId:threadId`. Only grows: a thread that was handed off to stays a child.
+ *
+ * A known child merges from its shell alone. Reading its detail atom here opened a full
+ * thread-detail stream per child that expired after the retention TTL and reopened on the
+ * next shell update — 40–48 subscribe/drop cycles a minute with a few dozen threads
+ * (measured 2026-09-28), scaling with every orchestration fan-out. A child's live state
+ * (session, latest turn, childStatus, activity label, actionable plan) already arrives on
+ * the shell stream.
+ */
+const knownChildThreadKeys = new Set<string>();
+
+export function resetKnownChildThreadsForTests(): void {
+  knownChildThreadKeys.clear();
+}
+
+function rememberChildren(threads: ReadonlyArray<EnvironmentThread>): void {
+  for (const thread of threads) {
+    for (const childThreadId of indexT3TeamChildParentThreads([thread]).keys()) {
+      knownChildThreadKeys.add(`${thread.environmentId}:${childThreadId}`);
+    }
+  }
+}
 
 /**
  * Merged (shell + detail) thread list.
@@ -36,20 +62,21 @@ export function useMergedThreads(): ReadonlyArray<EnvironmentThread> {
   // `threadShellsAtom`, so `shells` is always at least as fresh as `refs`;
   // iterating it directly makes the live shell list the memo's real input
   // (refs stays a dep for the empty/membership cases).
-  return useMemo(
-    () =>
-      shells.flatMap((shell) => {
-        const thread = mergeEnvironmentThread(
-          appAtomRegistry.get(
+  return useMemo(() => {
+    const merged = shells.flatMap((shell) => {
+      const isKnownChild = knownChildThreadKeys.has(`${shell.environmentId}:${shell.id}`);
+      const detail = isKnownChild
+        ? null
+        : appAtomRegistry.get(
             environmentThreadDetails.detailAtom({
               environmentId: shell.environmentId,
               threadId: shell.id,
             }),
-          ),
-          shell,
-        );
-        return thread ? [thread] : [];
-      }),
-    [refs, shells],
-  );
+          );
+      const thread = mergeEnvironmentThread(detail, shell);
+      return thread ? [thread] : [];
+    });
+    rememberChildren(merged);
+    return merged;
+  }, [refs, shells]);
 }
