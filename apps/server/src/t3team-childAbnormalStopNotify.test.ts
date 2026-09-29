@@ -84,6 +84,7 @@ const runNotifier = (
   input: TerminalInput = { outcome: "failed", lastError: "provider timeout" },
   dispatchError?: Error,
   parent?: OrchestrationThread,
+  usageLine?: () => Effect.Effect<string>,
 ): { dispatches: OrchestrationCommand[]; effect: Effect.Effect<void> } => {
   const dispatches: OrchestrationCommand[] = [];
   const engine = {
@@ -99,7 +100,11 @@ const runNotifier = (
       return Effect.succeed(found === undefined ? Option.none() : Option.some(found));
     },
   } as unknown as ProjectionSnapshotQueryShape;
-  const notifier = makeChildAbnormalStopNotifier({ engine, query });
+  const notifier = makeChildAbnormalStopNotifier({
+    engine,
+    query,
+    ...(usageLine ? { usageLine } : {}),
+  });
   return { dispatches, effect: notifier({ childThreadId: "child-1", ...input }) };
 };
 
@@ -112,6 +117,20 @@ const EXPECTED_HEAD =
   "[Child stopped abnormally] Child «Implement the thing» (thread child-1) stopped abnormally ";
 
 describe("makeChildAbnormalStopNotifier", () => {
+  it.effect("appends usage context on a usage-limit stop", () =>
+    Effect.gen(function* () {
+      const { dispatches, effect } = runNotifier(
+        childThread({ modelSelection: { instanceId: "claudeAgent", model: "opus" } } as never),
+        { outcome: "failed", lastError: "usage limit reached" },
+        undefined,
+        undefined,
+        () => Effect.succeed("\n[provider-usage] claudeAgent: 83% of 5h window"),
+      );
+      yield* effect;
+      expect(actorMessage(dispatches[0]!).text).toContain("usage limit reached");
+      expect(actorMessage(dispatches[0]!).text).toContain("\n[provider-usage] claudeAgent:");
+    }),
+  );
   it.effect("dispatches one actor message to the handoff parent with the detail", () =>
     Effect.gen(function* () {
       const { dispatches, effect } = runNotifier(childThread());
@@ -180,6 +199,20 @@ const parentThread = (
   }) as unknown as OrchestrationThread;
 
 describe("makeChildAbnormalStopNotifier silent-completion (outcome: completed)", () => {
+  it.effect("appends usage context on normal silent completion", () =>
+    Effect.gen(function* () {
+      const { dispatches, effect } = runNotifier(
+        childThread({ modelSelection: { instanceId: "claudeAgent", model: "opus" } } as never),
+        { outcome: "completed", lastError: null },
+        undefined,
+        parentThread(),
+        () => Effect.succeed("\n[provider-usage] claudeAgent: 83% of 5h window"),
+      );
+      yield* effect;
+      expect(actorMessage(dispatches[0]!).text).toContain("[Child completed silently]");
+      expect(actorMessage(dispatches[0]!).text).toContain("\n[provider-usage] claudeAgent:");
+    }),
+  );
   it.effect("notifies the parent when a child completes and the parent received nothing", () =>
     Effect.gen(function* () {
       const { dispatches, effect } = runNotifier(

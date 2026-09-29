@@ -34,12 +34,14 @@ import {
   type ChildWaitRecord,
 } from "./t3team-childWait.ts";
 import { type ChildWaitIndex } from "./t3team-childWaitIndex.ts";
+import type { ProviderUsageNotificationReader } from "./t3team-providerUsageNotification.ts";
 
 export interface ChildWaitResolveDeps {
   readonly engine: OrchestrationEngineShape;
   readonly query: ProjectionSnapshotQueryShape;
   readonly index: ChildWaitIndex;
   readonly rearm: () => Promise<void>;
+  readonly usageLine?: ProviderUsageNotificationReader;
 }
 
 export type ResolveWait = (
@@ -76,7 +78,16 @@ export const makeResolveWait =
         `[Child wait ${outcomeLabel}] You were waiting (wait ${record.waitId}) on ` +
         `child «${fromTitle}» (thread ${record.childThreadId}); it ${outcomeLabel}.` +
         (detail ? ` ${detail}.` : "") +
-        ` Continue with the result.`;
+        ` Continue with the result.` +
+        (outcome === "timeout"
+          ? ""
+          : yield* (
+              deps.usageLine?.({
+                provider: child?.modelSelection?.instanceId,
+                parentThreadId: record.parentThreadId,
+                projectId: String(fromProjectId),
+              }) ?? Effect.succeed("")
+            ));
       yield* deps.engine
         .dispatch({
           type: "thread.actor.message",
