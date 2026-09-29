@@ -27,7 +27,6 @@ import { resumeIncompleteT3TeamContextBackgroundJobs } from "./t3team-contextRef
 import { WorkspacePaths } from "./workspace/WorkspacePaths.ts";
 
 export {
-  T3TeamContextRefreshError,
   type T3TeamContextRefreshInput,
   type T3TeamContextProjectRefreshInput,
   type T3TeamContextProjectRefreshResult,

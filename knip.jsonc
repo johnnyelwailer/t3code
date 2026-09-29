@@ -15,7 +15,6 @@
     "apps/server/__fixtures__/t3team-hostDraftTool.workflow.ts",
     "apps/server/__fixtures__/t3team-hostDraftToolUndeclared.workflow.ts",
     "apps/server/scripts/t3team-dev-entry.mjs",
-    "apps/server/scripts/t3team-providerUsageLiveCheck.ts",
     "apps/server/src/t3team-provider-tool-injection-codex-cli.ts",
     "apps/server/src/t3team-provider-tool-injection-codex-utils.ts",
     "apps/server/src/t3team-provider-tool-injection-opencode-config.ts",
@@ -113,6 +112,8 @@
         "scripts/evaluate-thread-titles.ts",
         "scripts/measure-pr-preview.ts",
         "src/provider/testFixtures/*.mjs",
+        // One-off operator script, run by path (it imports its -run/-mapping/-layers siblings).
+        "scripts/t3team-replay-task-records-to-plans.ts",
       ],
       // Keep the transitive Effect runtime pinned for standalone npm installs.
       // The Vite+ web build prerequisite.
@@ -192,6 +193,11 @@
     "packages/*": {
       // These workspace packages are private to this monorepo.
       "includeEntryExports": true,
+    },
+    "packages/t3team-sdk": {
+      // Operator-run e2e driver (`node e2e/t3team-sdk.boundedExecution.e2e.ts start|resume`);
+      // it loads the workflow module by path, not by import.
+      "entry": ["e2e/t3team-sdk.boundedExecution.e2e.ts", "e2e/*.workflow.ts"],
     },
     "packages/client-runtime": {
       // Fork debt baseline (2026-09-09): exports consumed only by fork modules that are

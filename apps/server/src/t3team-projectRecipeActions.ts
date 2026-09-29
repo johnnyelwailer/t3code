@@ -93,7 +93,7 @@ export function resolveRecipeDefaultPrompt(
 }
 
 /** Names of the recipe's named actions, in declaration order (excludes `defaultAction`). */
-export function recipeActionNames(ref: AnyRecipeRef): ReadonlyArray<string> {
+function recipeActionNames(ref: AnyRecipeRef): ReadonlyArray<string> {
   return Object.keys(ref.actions ?? {});
 }
 
@@ -164,7 +164,7 @@ export function resolveRecipeActionPath(input: {
 }
 
 /** Whether `workflowPath` is one of the recipe's declared action workflows (identity, not directory). */
-export function isDeclaredRecipeWorkflow(input: {
+function isDeclaredRecipeWorkflow(input: {
   readonly pathService: Path.Path;
   readonly recipePath: string;
   readonly ref: AnyRecipeRef;

@@ -353,6 +353,14 @@ const TurnCompletedPayload = Schema.Struct({
   totalCostUsd: Schema.optional(Schema.Number),
   errorMessage: Schema.optional(TrimmedNonEmptyStringSchema),
   tokenUsage: Schema.optional(TurnTokenUsage),
+  /**
+   * Adapter-stamped from the provider's STRUCTURED failure data (Claude's
+   * rejected rate-limit window / `rate_limit` assistant error, Codex's
+   * `usageLimitExceeded`), never from message text: the turn failed because
+   * the account's usage or rate limit rejected it. Absent on every other
+   * outcome, and on emitters that cannot tell.
+   */
+  failureKind: Schema.optional(Schema.Literal("usage_limit")),
 });
 export type TurnCompletedPayload = typeof TurnCompletedPayload.Type;
 

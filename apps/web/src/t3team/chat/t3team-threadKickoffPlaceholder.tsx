@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 import { CheckCircle2Icon, LoaderCircleIcon, WandSparklesIcon } from "lucide-react";
 
 import { Badge } from "~/components/ui/badge";
@@ -111,7 +110,7 @@ function renderRecipeWorkflowCard(input: {
         {steps.map((step) => (
           <div key={step.label} className="flex items-center gap-2 text-sm text-muted-foreground">
             {step.complete === true ? (
-              <CheckCircle2Icon className="size-4 text-emerald-600" />
+              <CheckCircle2Icon className="size-4 text-success-foreground" />
             ) : step.active === true ? (
               <LoaderCircleIcon className="size-4 animate-spin text-primary" />
             ) : (
@@ -123,7 +122,7 @@ function renderRecipeWorkflowCard(input: {
       </div>
 
       <div className="mt-3 rounded-xl border border-border/60 bg-background/70 px-3 py-2.5">
-        <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+        <p className="text-2xs font-medium uppercase tracking-widest text-muted-foreground">
           Launch instruction
         </p>
         <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-foreground">
@@ -143,7 +142,7 @@ export function ThreadKickoffPlaceholder({
   return (
     <div className="border-b border-border/60 bg-muted/20 px-4 py-3 sm:px-6">
       <div className="mx-auto max-w-3xl">
-        <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+        <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
           Kickoff queued locally
         </p>
         {workflow?.kind === "recipe" ? (

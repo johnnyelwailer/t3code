@@ -49,7 +49,6 @@ import {
   ThreadBackgroundLivenessService,
 } from "../ThreadBackgroundLiveness.ts";
 import { ThreadPlanProgressService } from "../ThreadPlanProgress.ts";
-import { ThreadPlanStalenessService } from "../ThreadPlanStaleness.ts";
 import { ThreadSilenceWatchdogService } from "../ThreadSilenceWatchdog.ts";
 import {
   findClaimableJobNotificationMarker,
@@ -1092,7 +1091,6 @@ export function runtimeEventToActivities(
 const make = Effect.gen(function* () {
   const threadBackgroundLiveness = yield* ThreadBackgroundLivenessService;
   const threadPlanProgress = yield* ThreadPlanProgressService;
-  const threadPlanStaleness = yield* ThreadPlanStalenessService;
   const threadSilenceWatchdog = yield* ThreadSilenceWatchdogService;
 
   const crypto = yield* Crypto.Crypto;
@@ -2691,7 +2689,6 @@ const make = Effect.gen(function* () {
       } else if (!conflictsWithActiveTurn) {
         if (event.type === "turn.plan.updated") {
           threadPlanProgress.recordPlanProgress(thread.id, event.payload.plan);
-          threadPlanStaleness.recordPlanWrite(thread.id);
         } else if (isTerminalTurn && shouldApplyThreadLifecycle) {
           threadPlanProgress.clearThreadPlanProgress(thread.id);
         }
@@ -2736,12 +2733,10 @@ const make = Effect.gen(function* () {
       // Thread silence watchdog (GHE #63): in-progress tool items feed the
       // pending-tool distinction (silence WITH a pending tool call is a
       // legitimate long operation); session death drops the thread's state.
-      // Plan staleness: each tool start ages the thread's plan by one.
       if (event.type === "item.started" || event.type === "item.completed") {
         if (isToolLifecycleItemType(event.payload.itemType)) {
           if (event.type === "item.started") {
             threadSilenceWatchdog.recordToolItemStarted(thread.id);
-            threadPlanStaleness.recordToolActivity(thread.id);
           } else {
             threadSilenceWatchdog.recordToolItemCompleted(thread.id);
           }

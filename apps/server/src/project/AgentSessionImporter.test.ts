@@ -19,7 +19,6 @@ import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as ProviderUsageWatcher from "../t3team-providerUsageWatcher.ts";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -571,16 +570,6 @@ const integrationLayer = Layer.mergeAll(
   integrationRuntimeRepository,
   ProviderSessionDirectoryLive.pipe(Layer.provide(integrationRuntimeRepository)),
   Layer.succeed(AgentSessionScanner.AgentSessionScanner, integrationScanner),
-  // Fork-only requirement leaked by the reactor chain inside OrchestrationEngineLive;
-  // the import flow never exercises the hold logic, so a quiet fake suffices.
-  Layer.succeed(ProviderUsageWatcher.ProviderUsageWatcher, {
-    sweep: () => Effect.void,
-    checkThreadHeld: () => Effect.succeed(Option.none()),
-    recordDeferredTurn: () => Effect.void,
-    forceExhaust: () => Effect.die("unused"),
-    forceRecover: () => Effect.die("unused"),
-    getDevState: () => Effect.succeed({ held: [], holds: [], lastSampledAt: null }),
-  }),
 ).pipe(
   Layer.provide(ThreadBackgroundLiveness.layer),
   Layer.provide(ThreadPlanProgress.layer),

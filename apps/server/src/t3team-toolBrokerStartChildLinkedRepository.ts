@@ -8,7 +8,7 @@ import {
   type LinkedRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
 
-export function normalizeRepositoryLookupKey(value: string): string {
+function normalizeRepositoryLookupKey(value: string): string {
   const trimmed = value.trim().replace(/\.git$/i, "");
   const sshMatch = /^git@([^:]+):(.+)$/i.exec(trimmed);
   if (sshMatch) {

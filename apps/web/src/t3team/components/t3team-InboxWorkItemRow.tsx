@@ -13,10 +13,11 @@
  * would reorder the stream. Pinned/assigned rows are a short list, so a hook instance per row is
  * the cheaper trade.
  */
-import { GitPullRequestIcon, EllipsisIcon } from "lucide-react";
+import { EllipsisIcon } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
+import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import { T3TeamAgentContextDropOverlay } from "~/t3team/t3team-agentContextDrag";
 import { useTicketAgentContext } from "~/t3team/hooks/t3team-useTicketAgentContext";
 import type { InboxWorkItemRow as InboxWorkItemRowData } from "~/t3team/t3team-inboxWorkItems";
@@ -97,7 +98,7 @@ export function InboxWorkItemRow({
         <span className="min-w-0 flex-1 truncate text-xs text-sidebar-foreground">{row.title}</span>
         {row.pullRequestCount > 0 ? (
           <span className="flex shrink-0 items-center gap-0.5 text-xs text-sidebar-muted-foreground">
-            <GitPullRequestIcon className="size-3" />
+            <PullRequestGlyph.pullRequest className="size-3" />
             {row.pullRequestCount}
           </span>
         ) : null}

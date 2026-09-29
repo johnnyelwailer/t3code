@@ -325,8 +325,9 @@ describe("full-bleed widget row width in the timeline", () => {
     ]);
 
     const fullWidthWrapper = '<div class="mx-auto w-full min-w-0" data-timeline-root="true">';
+    // Upstream #11594 (chat width setting) moved the column cap from max-w-3xl to a variable.
     const narrowWrapper =
-      '<div class="mx-auto w-full min-w-0 max-w-3xl overflow-x-clip" data-timeline-root="true">';
+      '<div class="mx-auto w-full min-w-0 max-w-(--chat-max-width) overflow-x-clip" data-timeline-root="true">';
 
     // Exactly one full-width (no cap, no clip) row wrapper — the widget row's.
     const firstFull = markup.indexOf(fullWidthWrapper);
@@ -353,7 +354,7 @@ describe("full-bleed widget row width in the timeline", () => {
 
     const fullWidthWrapper = '<div class="mx-auto w-full min-w-0" data-timeline-root="true">';
     const narrowWrapper =
-      '<div class="mx-auto w-full min-w-0 max-w-3xl overflow-x-clip" data-timeline-root="true">';
+      '<div class="mx-auto w-full min-w-0 max-w-(--chat-max-width) overflow-x-clip" data-timeline-root="true">';
     expect(markup.indexOf(fullWidthWrapper)).toBe(-1);
     expect(markup.indexOf(narrowWrapper)).toBeGreaterThan(-1);
   }, 10000);

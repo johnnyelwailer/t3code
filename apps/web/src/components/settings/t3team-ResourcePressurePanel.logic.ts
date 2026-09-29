@@ -6,7 +6,7 @@ import type {
 } from "@t3tools/contracts";
 
 /** The panel re-reads the server's latest sample at the sample period, never faster than 10 s. */
-export const MIN_PANEL_REFRESH_MS = 10_000;
+const MIN_PANEL_REFRESH_MS = 10_000;
 
 export function panelRefreshIntervalMs(sampleIntervalMs: number | null | undefined): number {
   return Math.max(MIN_PANEL_REFRESH_MS, sampleIntervalMs ?? 20_000);

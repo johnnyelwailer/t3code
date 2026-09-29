@@ -13,8 +13,8 @@ import { getPackProfilesForResolver } from "./t3team-pack-setupProfileOverlay.ts
 export const T3TEAM_PROJECT_SETUP_VERSION = 1;
 export const T3TEAM_PROJECT_AGENTS_PATH = "AGENTS.md";
 export const T3TEAM_PROJECT_CLAUDE_PATH = "CLAUDE.md";
-export const T3TEAM_PROJECT_SETUP_ROOT = ".t3team/setup";
-export const T3TEAM_PROJECT_PROFILES_DIR = `${T3TEAM_PROJECT_SETUP_ROOT}/profiles`;
+const T3TEAM_PROJECT_SETUP_ROOT = ".t3team/setup";
+const T3TEAM_PROJECT_PROFILES_DIR = `${T3TEAM_PROJECT_SETUP_ROOT}/profiles`;
 export const T3TEAM_PROJECT_CONTEXT_ROOT = ".t3team/context";
 export const T3TEAM_PROJECT_SKILLS_ROOT = ".t3team/skills";
 export const T3TEAM_PROJECT_RECIPES_ROOT = ".t3team/recipes";
@@ -43,7 +43,7 @@ export type T3TeamProjectSetupProfileManifest = T3TeamProjectProfileManifest;
 export const DEFAULT_T3TEAM_PROJECT_SETUP_PROFILE_ID: T3TeamProjectSetupProfileId =
   DEFAULT_T3TEAM_PROFILE_ID;
 
-export const T3TEAM_PROJECT_SETUP_PROFILES = T3TEAM_PROFILES;
+const T3TEAM_PROJECT_SETUP_PROFILES = T3TEAM_PROFILES;
 
 export function resolveT3TeamProjectSetupProfileId(
   profileId: string | undefined,

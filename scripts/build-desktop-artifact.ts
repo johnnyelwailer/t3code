@@ -26,6 +26,7 @@ import gnomeCaptureBundle from "../apps/desktop/gnome-extension/bundle.json" wit
 import serverPackageJson from "../apps/server/package.json" with { type: "json" };
 
 import { applyWebBrandAssets } from "./apply-web-brand-assets.ts";
+import { applyDistributionWebIcons } from "./lib/t3team-distributionWebIcons.ts";
 import {
   BRAND_ASSET_PATHS,
   resolveWebAssetBrandForChannel,
@@ -4058,6 +4059,17 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   const webAssetBrand = resolveDesktopWebAssetBrand(appVersion);
   yield* applyWebBrandAssets(webAssetBrand, "apps/server/dist/client");
   yield* Effect.log(`[desktop-artifact] Applied ${webAssetBrand} web client branding.`);
+  const distributionWebIcons = yield* applyDistributionWebIcons({
+    repoRoot,
+    targetDirectory: "apps/server/dist/client",
+    iconPng: options.iconPng ?? process.env.T3CODE_DESKTOP_ICON_PNG,
+    iconIco: process.env.T3CODE_DESKTOP_ICON_ICO,
+  });
+  if (distributionWebIcons > 0) {
+    yield* Effect.log(
+      `[desktop-artifact] Applied distribution web icons (${distributionWebIcons}).`,
+    );
+  }
   yield* validateBundledClientAssets(path.dirname(bundledClientEntry));
 
   yield* fs.makeDirectory(path.join(stageAppDir, "apps/desktop"), { recursive: true });

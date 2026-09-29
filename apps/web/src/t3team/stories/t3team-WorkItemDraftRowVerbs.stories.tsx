@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { useState } from "react";
 import { ArrowRight, Bot, Check, ChevronRight, MessageSquare, X } from "lucide-react";
 import type { Meta, StoryObj } from "@storybook/react";
@@ -101,11 +100,11 @@ function ScalarDraftRow({ row }: { readonly row: ScalarRow }) {
       </div>
 
       {mode === "comment" ? (
-        <div className="mt-2 pl-[4.5rem]">
+        <div className="mt-2 pl-18">
           <Textarea
             rows={2}
             placeholder="Tell the agent what to change — it proposes again from your note."
-            className="text-xs"
+            size="compact"
             aria-label="Comment to the agent"
           />
           <div className="mt-1.5 flex justify-end gap-1.5">
@@ -118,7 +117,7 @@ function ScalarDraftRow({ row }: { readonly row: ScalarRow }) {
           </div>
         </div>
       ) : (
-        <p className="mt-0.5 pl-[4.5rem] text-[11px] leading-4 text-muted-foreground">{row.why}</p>
+        <p className="mt-0.5 pl-18 text-2xs leading-4 text-muted-foreground">{row.why}</p>
       )}
     </div>
   );

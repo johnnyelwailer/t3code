@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The sub-run tree for the t3team Agents panel (see `t3team-AgentsPanelForkSection.tsx`):
  * compact single-line rows, status-priority order, idle threads collapsed into one
@@ -76,10 +75,10 @@ function SubRunRow({
           awaitingParent={thread.awaitingParent === true}
         />
         <span className="min-w-0 flex-1 truncate text-sm">{thread.title}</span>
-        <span className="shrink-0 font-mono text-[.7rem] text-muted-foreground/80">
+        <span className="shrink-0 font-mono text-2xs text-muted-foreground/80">
           {resolveSubRunStatusLabel(thread, { activityLabelsEnabled })}
         </span>
-        <span className="shrink-0 font-mono text-[.7rem] tabular-nums text-muted-foreground/60">
+        <span className="shrink-0 font-mono text-2xs tabular-nums text-muted-foreground/60">
           {formatRelativeTime(thread.lastMessageAt)}
         </span>
       </button>
@@ -178,7 +177,7 @@ function SettledSubRunDisclosure({
               >
                 <SubRunStatusIcon status={thread.status} className="size-2.5" />
                 <span className="min-w-0 flex-1 truncate">{thread.title}</span>
-                <span className="shrink-0 font-mono text-[.65rem] tabular-nums text-muted-foreground/60">
+                <span className="shrink-0 font-mono text-3xs tabular-nums text-muted-foreground/60">
                   {formatRelativeTime(thread.lastMessageAt)}
                 </span>
               </button>

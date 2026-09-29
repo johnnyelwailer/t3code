@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-unknown-classes -- Existing merged lint debt; keep green while preserving behavior. */
 import type { Meta, StoryObj } from "@storybook/react";
 import { useEffect, useRef, useState } from "react";
 
@@ -90,11 +89,11 @@ function Dot({
  *  state name underneath. */
 function StateRow({ scope }: { scope: string }) {
   return (
-    <div className="sdv2-row">
+    <div data-sdv2="row">
       {STATES.map((state, i) => (
-        <div key={state ?? "base"} className="sdv2-col">
+        <div key={state ?? "base"} data-sdv2="col">
           <Dot state={state} index={i} className={scope} />
-          <span className="sdv2-state-label">{STATE_LABELS[state ?? "base"]}</span>
+          <span data-sdv2="state-label">{STATE_LABELS[state ?? "base"]}</span>
         </div>
       ))}
     </div>
@@ -118,11 +117,11 @@ function FlipDemo({ scope, autoCycle }: { scope: string; autoCycle: boolean }) {
   const states = PHASES.map((_, i) => PHASES[(phase + i) % 3] ?? "working");
 
   return (
-    <div className="sdv2-row" data-sdv2-flip={scope}>
+    <div data-sdv2="row" data-sdv2-flip={scope}>
       {states.map((state, i) => (
-        <div key={i} className="sdv2-col">
+        <div key={i} data-sdv2="col">
           <Dot state={state} index={i + 4} className={scope} />
-          <span className="sdv2-state-label">{state}</span>
+          <span data-sdv2="state-label">{state}</span>
         </div>
       ))}
     </div>
@@ -153,9 +152,9 @@ function VariantCard({
     >
       <div className="mb-1 flex items-baseline gap-2">
         <span className="text-xs font-semibold text-foreground">{`${letter}. ${name}`}</span>
-        <span className="text-[10px] text-muted-foreground/80">{technique}</span>
+        <span className="text-3xs text-muted-foreground/80">{technique}</span>
       </div>
-      <div className="mb-2 text-[10px] leading-relaxed text-muted-foreground">{paletteNote}</div>
+      <div className="mb-2 text-3xs leading-relaxed text-muted-foreground">{paletteNote}</div>
       {children}
     </div>
   );
@@ -249,7 +248,7 @@ function DotColorVariants({ autoCycle, reducedMotion, focus, zoom }: DotColorVar
         ))}
       </div>
 
-      <div className="text-[10px] text-muted-foreground/70">
+      <div className="text-3xs text-muted-foreground/70">
         All four variants paint the production dot DOM — shared keyframes, the waiting ring, and the
         dead-center alignment from the GHE #201 alignment-test story are inherited untouched
         (variants change paint only).{" "}

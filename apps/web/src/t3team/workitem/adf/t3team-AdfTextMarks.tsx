@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ReactNode } from "react";
 
 import { adfTextColor } from "./t3team-adfColorTokens";
@@ -44,8 +43,9 @@ export function T3TeamAdfMarkedText({
   }
 
   const subsup = markAttrString(findMark(marks, "subsup"), "type");
-  if (subsup === "sub") content = <sub className="text-[0.75em]">{content}</sub>;
-  else if (subsup === "sup") content = <sup className="text-[0.75em]">{content}</sup>;
+  // Preflight already sizes sub/sup at 75% of the surrounding text.
+  if (subsup === "sub") content = <sub>{content}</sub>;
+  else if (subsup === "sup") content = <sup>{content}</sup>;
 
   if (findMark(marks, "underline") !== undefined) {
     content = <u className="underline underline-offset-2">{content}</u>;

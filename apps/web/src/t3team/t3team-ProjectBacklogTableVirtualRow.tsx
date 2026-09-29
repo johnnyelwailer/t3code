@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { memo } from "react";
 import type { CSSProperties, MouseEvent } from "react";
 
@@ -83,7 +82,7 @@ export const ProjectBacklogTableVirtualRowView = memo(function ProjectBacklogTab
       style={style}
     >
       <table
-        className="w-full table-fixed text-left text-[11px]"
+        className="w-full table-fixed text-left text-2xs"
         style={{ minWidth: `${tableMinWidth}px` }}
       >
         <ProjectBacklogTableColGroup visibleColumns={visibleColumns} />

@@ -100,7 +100,7 @@ export class T3TeamMcpToolError extends Schema.TaggedError<T3TeamMcpToolError>()
   { message: Schema.String },
 ) {}
 
-export const T3TeamRenameThreadTool = Tool.make("t3team_rename_thread", {
+const T3TeamRenameThreadTool = Tool.make("t3team_rename_thread", {
   description: "Rename the current t3team thread.",
   parameters: Schema.Struct({ title: Schema.String }),
   success: Schema.Unknown,
@@ -108,7 +108,7 @@ export const T3TeamRenameThreadTool = Tool.make("t3team_rename_thread", {
   dependencies,
 });
 
-export const T3TeamModelsTool = Tool.make("t3team_models", {
+const T3TeamModelsTool = Tool.make("t3team_models", {
   description:
     "Read the current thread's true model selection and the live provider instances/models " +
     "available to this runtime. Call before setting an exact provider or model; never guess " +
@@ -118,13 +118,13 @@ export const T3TeamModelsTool = Tool.make("t3team_models", {
   dependencies,
 });
 
-export const T3TeamProviderUsageTool = Tool.make("t3team_provider_usage", {
+const T3TeamProviderUsageTool = Tool.make("t3team_provider_usage", {
   description:
-    "Sample the live provider plan-limit windows (5-hour / weekly quota: percent used, reset time, severity) for the configured provider instances on demand. Call it to check how close a provider is to a rate-limit wall before delegating long work to it. Optional provider_instance_id filters to one instance; omit to sample all enabled instances with a live-limit source. Unsampleable instances are reported in unavailable with a reason.",
+    "Read the provider usage-limit windows (session / weekly / monthly quota: usedPercent, resetsAt, severity normal|warning|critical) per provider INSTANCE (one account each), plus accounts reported by configured usage hubs. Values come from the host's live provider snapshots (periodic probe + in-turn rate-limit updates), with checkedAt per instance. Call it to check how close an account is to its limit before delegating long work to it. Optional provider_instance_id filters to one instance. An instance without data says why in unavailable.",
   parameters: Schema.Struct({
     provider_instance_id: Schema.optional(Schema.String).annotate({
       description:
-        "Optional provider INSTANCE id to sample (as returned by t3team_models). Omit to sample all enabled instances with a live-limit source.",
+        "Optional provider INSTANCE id (as returned by t3team_models). Omit to list every enabled instance and hub account.",
     }),
   }),
   success: Schema.Unknown,
@@ -132,7 +132,7 @@ export const T3TeamProviderUsageTool = Tool.make("t3team_provider_usage", {
   dependencies,
 });
 
-export const T3TeamStartChildTool = Tool.make("t3team_start_child", {
+const T3TeamStartChildTool = Tool.make("t3team_start_child", {
   description:
     "Create a child t3team session from the current thread. `isolation` is required and decides where the child works: 'shared' runs it in the project's shared checkout (no new branch), 'own-worktree' gives it a dedicated branch + worktree — of the linked repo named by `repo_full_name`, or of the project's own repository when the project workspace IS a git repository (monorepo-as-metarepo) or a plain local workspace. Use `effort` " +
     "('light' | 'standard' | 'high') to ask for a thinking tier WITHOUT naming a provider or " +
@@ -244,7 +244,7 @@ const CHILDREN_TOOL_DESCRIPTION =
   "(cross-env children run on the target, visible here; messaging stays same-environment)\n" +
   "- help: exact schema for one op (op_name)";
 
-export const T3TeamChildrenTool = Tool.make("t3team_children", {
+const T3TeamChildrenTool = Tool.make("t3team_children", {
   description: CHILDREN_TOOL_DESCRIPTION,
   parameters: Schema.Struct({
     op: Schema.Literals([
@@ -278,7 +278,7 @@ export const T3TeamChildrenTool = Tool.make("t3team_children", {
 // Search the CURRENT thread's transcript (case-insensitive substring). Read-only;
 // routes to the t3team.thread.search broker tool. Complements t3team_search_source
 // (fork source) and t3team_read_message (full body by message id).
-export const T3TeamSearchThreadTool = Tool.make("t3team_search_thread", {
+const T3TeamSearchThreadTool = Tool.make("t3team_search_thread", {
   description:
     "Search the CURRENT thread — its messages AND its tool activity (commands and their " +
     "output, file reads, tool calls) — e.g. to recover a decision, a requirement or a " +
@@ -316,7 +316,7 @@ export const T3TeamSearchThreadTool = Tool.make("t3team_search_thread", {
 // Search the full transcript of the thread this one was forked from (the fork
 // provenance note identifies the source). Read-only; routes to the
 // t3team.thread.search_source broker tool.
-export const T3TeamSearchSourceTool = Tool.make("t3team_search_source", {
+const T3TeamSearchSourceTool = Tool.make("t3team_search_source", {
   description:
     "Search the FULL transcript of the thread this thread was forked from — its messages " +
     "and its tool activity — including the middle a truncated fork omitted. Only works in " +
@@ -342,7 +342,7 @@ export const T3TeamSearchSourceTool = Tool.make("t3team_search_source", {
 // inter-agent bodies are summarized on delivery; the summary marker carries
 // the message id, which this tool takes. Read-only; routes to the
 // t3team.thread.read_message broker tool.
-export const T3TeamReadMessageTool = Tool.make("t3team_read_message", {
+const T3TeamReadMessageTool = Tool.make("t3team_read_message", {
   description:
     "Read the FULL body of a previously delivered inter-agent message in this thread. Long " +
     "inter-agent message bodies are summarized on delivery; the marker in the delivered " +
@@ -360,7 +360,7 @@ export const T3TeamReadMessageTool = Tool.make("t3team_read_message", {
 // (not the bound-thread callTool dispatch), which records a first-class actor
 // message and drives the recipient thread to react. The sender is the calling
 // thread; the recipient reacts and can reply back the same way.
-export const T3TeamSendMessageTool = Tool.make("t3team_send_message", {
+const T3TeamSendMessageTool = Tool.make("t3team_send_message", {
   description:
     "Send a message to another agent's thread. This is a one-shot handoff: use it ONLY when " +
     "you have content the recipient does not already have and can act on. Allowed messages: " +
@@ -419,7 +419,7 @@ const orchestrationRunDescription =
   "per turn: while a run this thread launched is still active, a second call is refused — pass " +
   "`replaceRunId` to stop that run and launch the replacement instead.";
 
-export const T3TeamOrchestrationRunTool = Tool.make("t3team_orchestration_run", {
+const T3TeamOrchestrationRunTool = Tool.make("t3team_orchestration_run", {
   description: orchestrationRunDescription,
   parameters: orchestrationRunParameters,
   success: Schema.Unknown,
@@ -436,7 +436,7 @@ const orchestrationStatusDescription =
   "runId to list recent runs.";
 const orchestrationStatusParameters = Schema.Struct({ runId: Schema.optional(Schema.String) });
 
-export const T3TeamOrchestrationStatusTool = Tool.make("t3team_orchestration_status", {
+const T3TeamOrchestrationStatusTool = Tool.make("t3team_orchestration_status", {
   description: orchestrationStatusDescription,
   parameters: orchestrationStatusParameters,
   success: Schema.Unknown,
@@ -460,7 +460,7 @@ const orchestrationResumeParameters = Schema.Struct({
   source: Schema.optional(Schema.String),
 });
 
-export const T3TeamOrchestrationResumeTool = Tool.make("t3team_orchestration_resume", {
+const T3TeamOrchestrationResumeTool = Tool.make("t3team_orchestration_resume", {
   description: orchestrationResumeDescription,
   parameters: orchestrationResumeParameters,
   success: Schema.Unknown,
@@ -473,7 +473,7 @@ export const T3TeamOrchestrationResumeTool = Tool.make("t3team_orchestration_res
 // tools. Stop a superseded run BEFORE launching its replacement, never beside it.
 const orchestrationControlParameters = Schema.Struct({ runId: Schema.String });
 
-export const T3TeamOrchestrationPauseTool = Tool.make("t3team_orchestration_pause", {
+const T3TeamOrchestrationPauseTool = Tool.make("t3team_orchestration_pause", {
   description:
     "Pause one of your agent-orchestration runs at its current waiting point (a parked agent " +
     "turn, user decision, or timer). Pass the `runId` from t3team_orchestration_run/" +
@@ -485,7 +485,7 @@ export const T3TeamOrchestrationPauseTool = Tool.make("t3team_orchestration_paus
   dependencies,
 });
 
-export const T3TeamOrchestrationStopTool = Tool.make("t3team_orchestration_stop", {
+const T3TeamOrchestrationStopTool = Tool.make("t3team_orchestration_stop", {
   description:
     "Stop one of your agent-orchestration runs for good: cancels it, interrupts its child agent " +
     "turns, and frees its capacity. Use this on a superseded or stuck run BEFORE launching a " +
@@ -503,7 +503,7 @@ export const T3TeamOrchestrationStopTool = Tool.make("t3team_orchestration_stop"
 const deprecated = (replacement: string) =>
   `DEPRECATED alias for ${replacement} — use that name instead. `;
 
-export const T3TeamWorkflowRunTool = Tool.make("t3team_workflow_run", {
+const T3TeamWorkflowRunTool = Tool.make("t3team_workflow_run", {
   description: deprecated("t3team_orchestration_run") + orchestrationRunDescription,
   parameters: orchestrationRunParameters,
   success: Schema.Unknown,
@@ -511,7 +511,7 @@ export const T3TeamWorkflowRunTool = Tool.make("t3team_workflow_run", {
   dependencies,
 });
 
-export const T3TeamWorkflowStatusTool = Tool.make("t3team_workflow_status", {
+const T3TeamWorkflowStatusTool = Tool.make("t3team_workflow_status", {
   description: deprecated("t3team_orchestration_status") + orchestrationStatusDescription,
   parameters: orchestrationStatusParameters,
   success: Schema.Unknown,
@@ -519,7 +519,7 @@ export const T3TeamWorkflowStatusTool = Tool.make("t3team_workflow_status", {
   dependencies,
 });
 
-export const T3TeamWorkflowResumeTool = Tool.make("t3team_workflow_resume", {
+const T3TeamWorkflowResumeTool = Tool.make("t3team_workflow_resume", {
   description: deprecated("t3team_orchestration_resume") + orchestrationResumeDescription,
   parameters: orchestrationResumeParameters,
   success: Schema.Unknown,
@@ -536,7 +536,7 @@ export const T3TeamWorkflowResumeTool = Tool.make("t3team_workflow_resume", {
 // immediately; the answer arrives in a later turn as a user message. The
 // handler appends the user-input.requested activity directly and refuses to
 // ask a second question while one is pending.
-export const T3TeamAskUserTool = Tool.make("t3team_ask_user", {
+const T3TeamAskUserTool = Tool.make("t3team_ask_user", {
   description:
     "Ask the user a structured question. The question docks in the user's composer and stays " +
     "open until they answer or dismiss it — it survives this turn ending and session/app " +
@@ -633,7 +633,7 @@ export const T3TeamShowWidgetTool = Tool.make("t3team_show_widget", {
 // discovered the others — including `timers`, which documents the durable routine
 // loop it needed. One named example reads as the whole menu. Keep this list in sync
 // with TOPICS in t3team-help.ts.
-export const T3TeamHelpTool = Tool.make("t3team_help", {
+const T3TeamHelpTool = Tool.make("t3team_help", {
   description:
     "Get t3team reference docs on demand. Omit `topic` to list available topics, or pass a " +
     "slug: 'agent-orchestration' (authoring a t3team_orchestration_run body), 'timers' " +
@@ -658,7 +658,7 @@ export const T3TeamHelpTool = Tool.make("t3team_help", {
 // like every sibling, so it needs `McpInvocationContext` + `T3TeamToolBroker` in scope —
 // as `Tool.dynamic` that was a type error (R was `T3TeamToolBroker | McpInvocationContext`,
 // expected `never`). It takes no arguments, which `Schema.Struct({})` expresses.
-export const T3TeamRecipeListTool = Tool.make("t3team_recipe_list", {
+const T3TeamRecipeListTool = Tool.make("t3team_recipe_list", {
   description:
     "List every saved recipe orchestration you can run — both the project's own and the ones " +
     "shipped by installed packs. Each entry carries {id, title, recipePath, workflowPath?, " +
@@ -678,7 +678,7 @@ export const T3TeamRecipeListTool = Tool.make("t3team_recipe_list", {
 // existing on-disk recipe (`path`) or inline source (`source`, the same body
 // passed to t3team_orchestration_run). Routes to the t3team.recipe.validate
 // broker tool; never writes or executes anything.
-export const T3TeamRecipeValidateTool = Tool.make("t3team_recipe_validate", {
+const T3TeamRecipeValidateTool = Tool.make("t3team_recipe_validate", {
   description:
     "Statically validate an agent orchestration before running it: pass `source` (inline " +
     "orchestration TypeScript — same body you would pass to t3team_orchestration_run) or `path` " +

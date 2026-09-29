@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-native-title-tooltip, shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-native-title-tooltip --Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Story detail panel (spec §7): the quick-edit + navigation companion for bands 0–4 (per-item
  * singleton; camera never moves). Subtask/epic panels and shared parts live in the sibling modules.
@@ -71,8 +71,8 @@ export function PlanningSpacePanel({
       className="absolute bottom-3 right-3 top-3 z-30 flex w-72 flex-col gap-2.5 overflow-y-auto rounded-lg border border-border bg-background/95 p-3"
     >
       <div className="flex items-center gap-2">
-        <span className="font-mono text-[10px] text-muted-foreground">{story.key}</span>
-        <span className="truncate text-[10px]" style={{ color: STATE_COLOR[story.planningState] }}>
+        <span className="font-mono text-3xs text-muted-foreground">{story.key}</span>
+        <span className="truncate text-3xs" style={{ color: STATE_COLOR[story.planningState] }}>
           {STATE_LABEL[story.planningState]}
         </span>
         <button
@@ -84,18 +84,18 @@ export function PlanningSpacePanel({
           <X className="size-3.5" />
         </button>
       </div>
-      <div className="text-[13px] leading-snug text-foreground">{story.title}</div>
+      <div className="text-sm leading-snug text-foreground">{story.title}</div>
       <div className="flex items-center gap-2">
-        <span className="w-14 text-[10.5px] text-muted-foreground">Effort</span>
-        <span className="text-[12px] tabular-nums text-primary">
+        <span className="w-14 text-2xs text-muted-foreground">Effort</span>
+        <span className="text-xs tabular-nums text-primary">
           {story.aggregateHoursSeconds > 0
             ? `Σ ${formatHours(story.aggregateHoursSeconds)}`
             : formatHours(story.ownHoursSeconds)}
         </span>
-        <span className="text-[9.5px] text-muted-foreground">aggregate — edit on subtasks</span>
+        <span className="text-3xs text-muted-foreground">aggregate — edit on subtasks</span>
       </div>
       <div className="flex items-center gap-2">
-        <span className="w-14 text-[10.5px] text-muted-foreground">Owner</span>
+        <span className="w-14 text-2xs text-muted-foreground">Owner</span>
         <OwnerAffordance
           storyId={story.id}
           ownerName={story.ownerName}
@@ -103,10 +103,10 @@ export function PlanningSpacePanel({
         />
       </div>
       <div className="flex items-center gap-2">
-        <span className="w-14 text-[10.5px] text-muted-foreground">Sprint</span>
+        <span className="w-14 text-2xs text-muted-foreground">Sprint</span>
         <button
           type="button"
-          className={`rounded-md border px-2 py-0.5 text-[11px] ${
+          className={`rounded-md border px-2 py-0.5 text-2xs ${
             story.inSprint
               ? "border-primary/70 text-primary"
               : "border-border/70 text-muted-foreground hover:text-foreground"
@@ -117,7 +117,7 @@ export function PlanningSpacePanel({
         </button>
         <button
           type="button"
-          className={`rounded-md border px-2 py-0.5 text-[11px] ${
+          className={`rounded-md border px-2 py-0.5 text-2xs ${
             !story.inSprint
               ? "border-primary/70 text-primary"
               : "border-border/70 text-muted-foreground hover:text-foreground"
@@ -127,12 +127,12 @@ export function PlanningSpacePanel({
           Outside
         </button>
       </div>
-      <div className="text-[10.5px] text-muted-foreground">Navigate</div>
+      <div className="text-2xs text-muted-foreground">Navigate</div>
       <div className="flex flex-wrap gap-1.5">
         {epic ? (
           <button
             type="button"
-            className="inline-flex items-center gap-1 rounded-md border border-border/70 px-2 py-0.5 text-[10.5px] text-primary hover:border-primary/60"
+            className="inline-flex items-center gap-1 rounded-md border border-border/70 px-2 py-0.5 text-2xs text-primary hover:border-primary/60"
             onClick={actions.onFrameEpic}
             title={epic.title}
           >
@@ -142,18 +142,18 @@ export function PlanningSpacePanel({
         ) : null}
         <button
           type="button"
-          className="inline-flex items-center gap-1 rounded-md border border-border/70 px-2 py-0.5 text-[10.5px] text-muted-foreground hover:text-foreground"
+          className="inline-flex items-center gap-1 rounded-md border border-border/70 px-2 py-0.5 text-2xs text-muted-foreground hover:text-foreground"
           onClick={actions.onRevealInSpace}
         >
           <Crosshair className="size-3" />
           Reveal in space
         </button>
       </div>
-      <div className="text-[10.5px] text-muted-foreground">Description</div>
-      <div className="line-clamp-4 whitespace-pre-wrap text-[11px] leading-relaxed text-foreground/80">
+      <div className="text-2xs text-muted-foreground">Description</div>
+      <div className="line-clamp-4 whitespace-pre-wrap text-2xs leading-relaxed text-foreground/80">
         {story.description ?? "No description yet."}
       </div>
-      <div className="text-[10.5px] text-muted-foreground">
+      <div className="text-2xs text-muted-foreground">
         Subtasks · {story.subtasks.length} · Σ {formatHours(story.aggregateHoursSeconds)}
       </div>
       <div className="flex flex-col gap-1">
@@ -171,7 +171,7 @@ export function PlanningSpacePanel({
             />
             <button
               type="button"
-              className="min-w-0 flex-1 truncate text-left text-[10.5px] text-foreground/85 hover:text-foreground"
+              className="min-w-0 flex-1 truncate text-left text-2xs text-foreground/85 hover:text-foreground"
               onClick={() => actions.onOpenSubtask(item.id)}
               title={item.title}
             >
@@ -201,7 +201,7 @@ export function PlanningSpacePanel({
         onChange={(event) => setDraftTitle(event.target.value)}
         onKeyDown={(event) => event.key === "Enter" && submitSubtask()}
         placeholder="Add subtask… (Enter creates)"
-        className="h-7 rounded-md border border-border/70 bg-background px-2 text-[11px] text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-1 focus:ring-primary/50"
+        className="h-7 rounded-md border border-border/70 bg-background px-2 text-2xs text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-1 focus:ring-primary/50"
       />
     </div>
   );

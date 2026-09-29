@@ -41,9 +41,7 @@ export function isCloudSessionProvisionPending(phase: CloudSessionProvisionPhase
  * overruns its estimate is not a failure, so the bar saturates rather than
  * resetting or flipping to an error.
  */
-export const CLOUD_SESSION_PHASE_TYPICAL_SECONDS: Readonly<
-  Record<CloudSessionProvisionPhase, number>
-> = {
+const CLOUD_SESSION_PHASE_TYPICAL_SECONDS: Readonly<Record<CloudSessionProvisionPhase, number>> = {
   requested: 4,
   queued: 10,
   preparing: 121,
@@ -55,7 +53,7 @@ export const CLOUD_SESSION_PHASE_TYPICAL_SECONDS: Readonly<
 };
 
 /** Total typical seconds from dispatch to a connectable environment. */
-export const CLOUD_SESSION_TYPICAL_TOTAL_SECONDS = CLOUD_SESSION_PROVISION_PHASES.filter(
+const CLOUD_SESSION_TYPICAL_TOTAL_SECONDS = CLOUD_SESSION_PROVISION_PHASES.filter(
   isCloudSessionProvisionPending,
 ).reduce((total, phase) => total + CLOUD_SESSION_PHASE_TYPICAL_SECONDS[phase], 0);
 
@@ -91,7 +89,7 @@ export function formatDuration(totalSeconds: number): string {
  * Fraction of the typical total that has elapsed, clamped to [0, 1]. Saturates
  * at 1 for a slow-but-healthy session rather than implying it has stalled.
  */
-export function cloudSessionProgress(elapsedSeconds: number): number {
+function cloudSessionProgress(elapsedSeconds: number): number {
   if (CLOUD_SESSION_TYPICAL_TOTAL_SECONDS <= 0) return 0;
   return Math.min(1, Math.max(0, elapsedSeconds / CLOUD_SESSION_TYPICAL_TOTAL_SECONDS));
 }

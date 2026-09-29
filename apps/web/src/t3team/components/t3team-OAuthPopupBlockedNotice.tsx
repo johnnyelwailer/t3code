@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { ExternalLink } from "lucide-react";
 
 import { Button } from "~/t3team/components/ui/t3team-button";
@@ -44,34 +43,36 @@ export function OAuthPopupBlockedNotice({
 }) {
   return (
     <T3SurfaceCard tone="muted" role="status">
-      <T3SurfaceCardContent className="flex flex-col gap-3">
-        <div>
-          <p className="text-sm font-medium text-foreground">Finish signing in to Atlassian</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {expired
-              ? "That link expired. Use one of the buttons below to get a fresh one."
-              : "Open the sign-in window again, or copy the link into the browser you're already " +
-                "signed in to."}
-          </p>
-        </div>
+      <T3SurfaceCardContent>
+        <div className="flex flex-col gap-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">Finish signing in to Atlassian</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {expired
+                ? "That link expired. Use one of the buttons below to get a fresh one."
+                : "Open the sign-in window again, or copy the link into the browser you're already " +
+                  "signed in to."}
+            </p>
+          </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            size="xs"
-            render={<a href={signinUrl} target="_blank" rel="noreferrer external" />}
-            onClick={onLinkUsed}
-          >
-            <ExternalLink className="size-3.5" />
-            Sign in to Atlassian
-          </Button>
-
-          <CopyLinkButton value={signinUrl} label="Copy sign-in link" onCopied={onLinkUsed} />
-
-          {onCancel ? (
-            <Button size="xs" variant="ghost" onClick={onCancel}>
-              Cancel
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="xs"
+              render={<a href={signinUrl} target="_blank" rel="noreferrer external" />}
+              onClick={onLinkUsed}
+            >
+              <ExternalLink className="size-3.5" />
+              Sign in to Atlassian
             </Button>
-          ) : null}
+
+            <CopyLinkButton value={signinUrl} label="Copy sign-in link" onCopied={onLinkUsed} />
+
+            {onCancel ? (
+              <Button size="xs" variant="ghost" onClick={onCancel}>
+                Cancel
+              </Button>
+            ) : null}
+          </div>
         </div>
       </T3SurfaceCardContent>
     </T3SurfaceCard>

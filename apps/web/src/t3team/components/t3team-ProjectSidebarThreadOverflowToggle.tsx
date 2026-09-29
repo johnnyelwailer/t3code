@@ -1,5 +1,5 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
-import { SidebarMenuSubButton, SidebarMenuSubItem } from "~/t3team/components/ui/t3team-sidebar";
+import { SidebarMenuSubItem } from "~/t3team/components/ui/t3team-sidebar";
+import { T3SidebarSubRow } from "~/t3team/components/ui/t3team-sidebar-row";
 
 type ProjectSidebarThreadOverflowToggleProps = {
   expanded: boolean;
@@ -12,13 +12,9 @@ export function ProjectSidebarThreadOverflowToggle({
 }: ProjectSidebarThreadOverflowToggleProps) {
   return (
     <SidebarMenuSubItem className="w-full">
-      <SidebarMenuSubButton
-        size="sm"
-        className="h-6 w-full translate-x-0 justify-start px-2 text-left text-[10px] text-muted-foreground/60 hover:bg-accent hover:text-muted-foreground/80"
-        onClick={onToggle}
-      >
+      <T3SidebarSubRow size="micro" tone="muted" onClick={onToggle}>
         <span>{expanded ? "Show less" : "Show more"}</span>
-      </SidebarMenuSubButton>
+      </T3SidebarSubRow>
     </SidebarMenuSubItem>
   );
 }

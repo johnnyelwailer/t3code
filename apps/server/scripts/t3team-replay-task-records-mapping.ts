@@ -28,7 +28,7 @@ export const decodePlanActivityPayload = Schema.decodeEffect(
 );
 
 /** Same mapping the removed journal tool used: closed states read completed. */
-export const toPlanStatus = (status: string): PlanStep["status"] =>
+const toPlanStatus = (status: string): PlanStep["status"] =>
   status === "in_progress"
     ? "inProgress"
     : status === "completed" || status === "cancelled"

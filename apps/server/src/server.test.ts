@@ -936,26 +936,25 @@ const buildAppUnderTest = (options?: {
             ...options?.layers?.providerRegistry,
           }),
           // The provider-usage hold routes need these two services. Fakes keep the
-          // watcher's sweep loop (a real forked fiber sampling live plan limits) out
-          // of the test runtime; the route tests exercise the HTTP surface only.
+          // watcher's forked stream/deadline fibers out of the test runtime; the
+          // route tests exercise the HTTP surface only.
           Layer.succeed(ProviderUsageWatcher, {
-            sweep: () => Effect.void,
-            checkThreadHeld: () => Effect.succeed(Option.none()),
-            recordDeferredTurn: () => Effect.void,
+            applyProviders: () => Effect.void,
+            onRuntimeEvent: () => Effect.void,
+            releaseDue: () => Effect.void,
             forceExhaust: () =>
               Effect.fail(new ProviderUsageDevError({ message: "not available in this test" })),
             forceRecover: () =>
               Effect.fail(new ProviderUsageDevError({ message: "not available in this test" })),
-            getDevState: () => Effect.succeed({ held: [], holds: [], lastSampledAt: null }),
+            getDevState: () => Effect.succeed({ instances: [], holds: [] }),
           }),
           Layer.succeed(ProviderUsageHoldRepository, {
             upsertActiveHold: () => Effect.void,
-            setPendingTurn: () => Effect.succeed(Option.none()),
             setAutoResume: () => Effect.succeed(Option.none()),
             getByThreadId: () => Effect.succeed(Option.none()),
             listActive: () => Effect.succeed([]),
             markReleased: () => Effect.succeed(Option.none()),
-            listActiveSessionThreadsForDriver: () => Effect.succeed([]),
+            listActiveSessionThreadsForInstance: () => Effect.succeed([]),
           }),
           Layer.mock(ProviderService.ProviderService)({
             uploadFeedback: () => Effect.die("Provider feedback is not stubbed in this test"),

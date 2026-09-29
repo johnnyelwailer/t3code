@@ -122,10 +122,11 @@ export function mapLiveThreadToProjectThread(
     ...(deriveThreadAwaitingParent({
       interactionMode: thread.interactionMode,
       latestTurn: thread.latestTurn,
-      hasActionableProposedPlan: threadHasActionableProposedPlan(
-        thread.latestTurn,
-        thread.proposedPlans,
-      ),
+      // The shell's flag covers a child merged from its shell alone (no proposedPlans;
+      // mergeEnvironmentThread spreads the shell, whose type carries the flag).
+      hasActionableProposedPlan:
+        ("hasActionableProposedPlan" in thread && thread.hasActionableProposedPlan === true) ||
+        threadHasActionableProposedPlan(thread.latestTurn, thread.proposedPlans),
     })
       ? { awaitingParent: true }
       : {}),

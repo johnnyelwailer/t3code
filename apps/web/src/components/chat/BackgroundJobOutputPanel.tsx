@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { ProviderJobControlResult } from "@t3tools/contracts";
@@ -130,8 +129,9 @@ export function BackgroundJobOutputPanel({
       <div className="flex items-center gap-2 border-b border-white/10 px-2 py-1">
         <span
           className={cn(
-            "text-[.65rem] tabular-nums",
-            settled ? "text-emerald-300/80" : "text-amber-300/80",
+            // Mid-tone status tokens: this terminal surface stays black in both themes.
+            "text-3xs tabular-nums",
+            settled ? "text-success/80" : "text-warning/80",
           )}
         >
           {settled ? "settled" : "live"}
@@ -152,7 +152,7 @@ export function BackgroundJobOutputPanel({
       ) : (
         <pre
           ref={preRef}
-          className="max-h-64 overflow-y-auto px-2 py-1.5 font-mono text-[.7rem] leading-relaxed whitespace-pre-wrap break-all text-white/85"
+          className="max-h-64 overflow-y-auto px-2 py-1.5 font-mono text-2xs leading-relaxed whitespace-pre-wrap break-all text-white/85"
         >
           {lines.length === 0 && !settled ? (
             <span className="text-white/40">waiting for output…</span>
@@ -165,7 +165,7 @@ export function BackgroundJobOutputPanel({
         </pre>
       )}
       {error !== null && !unknownJob ? (
-        <div className="border-t border-white/10 px-2 py-1 font-mono text-[.65rem] text-rose-300/90">
+        <div className="border-t border-white/10 px-2 py-1 font-mono text-3xs text-destructive/90">
           {error} — retrying
         </div>
       ) : null}

@@ -48,7 +48,7 @@ export function parseCreatedPayloadIssue(stdout: string): PayloadIssueRef | null
     : null;
 }
 
-export function deleteIssueInvocation(ref: CloudSessionRepoRef, nodeId: string): GhInvocation {
+function deleteIssueInvocation(ref: CloudSessionRepoRef, nodeId: string): GhInvocation {
   return {
     args: [
       ...apiArgs(ref, "graphql"),
@@ -60,10 +60,7 @@ export function deleteIssueInvocation(ref: CloudSessionRepoRef, nodeId: string):
   };
 }
 
-export function closeAndScrubIssueInvocation(
-  ref: CloudSessionRepoRef,
-  issueNumber: number,
-): GhInvocation {
+function closeAndScrubIssueInvocation(ref: CloudSessionRepoRef, issueNumber: number): GhInvocation {
   return {
     args: [
       ...apiArgs(ref, `repos/${ref.owner}/${ref.repo}/issues/${issueNumber}`),

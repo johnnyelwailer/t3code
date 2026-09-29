@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
 import { useLoadBalancedEnvironment } from "../hooks/useLoadBalancedEnvironment";
 import { visibleThreadPullRequests } from "@t3tools/shared/threadPullRequests";
 import type { UsageLimitSourceSnapshots } from "@t3tools/contracts";
@@ -2879,12 +2878,12 @@ export default function ChatView(props: ChatViewProps) {
 
   const systemComposerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
     const items: ComposerBannerStackItem[] = [];
-    // Provider usage-hold banner (GHE #421): while the watcher has held this
-    // thread's provider window, turns on it are paused server-side. The banner
-    // sits below the latest message with the per-thread auto-resume toggle.
+    // Provider usage-hold banner (GHE #421): a turn on this thread hit its
+    // provider instance's usage limit and waits for an automatic re-send after
+    // the reset (sends are never blocked). Carries the auto-resume toggle.
     if (providerUsageHold !== null && activeThreadId !== null) {
-      // If the reset moment has already passed, the watcher will release
-      // within one sweep (60s) and the `released` activity clears the hold.
+      // If the reset moment has already passed, the watcher releases within
+      // its grace + one deadline check and the `released` activity clears it.
       // Don't flash a transient "resuming" state at the user.
       const resetPassed =
         providerUsageHold.resetsAt !== null && Date.parse(providerUsageHold.resetsAt) < Date.now();
@@ -2894,7 +2893,7 @@ export default function ChatView(props: ChatViewProps) {
           id: "provider-usage-hold",
           variant: "warning",
           priority: "urgent",
-          icon: <span className="size-1.5 rounded-full bg-amber-500" aria-hidden="true" />,
+          icon: <span className="size-1.5 rounded-full bg-warning" aria-hidden="true" />,
           title:
             providerUsageHold.resetsAt !== null
               ? `Usage limit · ${describeHoldReset(providerUsageHold.resetsAt, Date.now())}`
@@ -2912,13 +2911,13 @@ export default function ChatView(props: ChatViewProps) {
       }
     }
     // Provider usage warning banner (GHE #421): informational, no pause, no toggle.
-    // Shows when the sampler reports ≥80% but below critical.
+    // Shows when the instance's session window is at or above 80%.
     if (providerUsageWarning !== null && providerUsageHold === null) {
       items.push({
         id: "provider-usage-warning",
         variant: "info",
         priority: "notice",
-        icon: <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />,
+        icon: <span className="size-1.5 rounded-full bg-success" aria-hidden="true" />,
         title:
           providerUsageWarning.resetsAt !== null
             ? `Usage ${Math.round(providerUsageWarning.percentUsed)}% · ${describeHoldReset(providerUsageWarning.resetsAt, Date.now())}`

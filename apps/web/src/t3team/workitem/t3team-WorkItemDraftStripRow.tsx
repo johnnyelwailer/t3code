@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { useState } from "react";
 import { ArrowRight, ChevronRight } from "lucide-react";
 
@@ -104,14 +103,14 @@ export function WorkItemDraftStripRow({ row }: { readonly row: WorkItemDraftStri
       </div>
 
       {commenting ? (
-        <div className="mt-2 pl-[4.5rem]">
+        <div className="mt-2 pl-18">
           <Textarea
             rows={2}
             autoFocus
             value={feedback}
             onChange={(event) => setFeedback(event.target.value)}
             placeholder="Tell the agent what to change — it proposes again from your note."
-            className="text-xs"
+            size="compact"
             aria-label={`Comment on proposed ${row.fieldLabel}`}
           />
           <div className="mt-1.5 flex justify-end gap-1.5">
@@ -124,9 +123,7 @@ export function WorkItemDraftStripRow({ row }: { readonly row: WorkItemDraftStri
           </div>
         </div>
       ) : row.summary && !row.reviewInPlace ? (
-        <p className="mt-0.5 pl-[4.5rem] text-[11px] leading-4 text-muted-foreground">
-          {row.summary}
-        </p>
+        <p className="mt-0.5 pl-18 text-2xs leading-4 text-muted-foreground">{row.summary}</p>
       ) : null}
     </div>
   );

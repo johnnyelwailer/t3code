@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { useMemo } from "react";
 
 import type { AddToChatTarget } from "~/t3team/hooks/t3team-useAddToChat";
@@ -33,7 +32,7 @@ export function useAddToChatComposerDropTarget(target?: AddToChatTarget) {
         <T3TeamAgentContextDropOverlay
           active={isActive}
           label="Drop to add this item to the chat"
-          className="rounded-[20px]"
+          className="rounded-3xl"
         />
       ),
     }),

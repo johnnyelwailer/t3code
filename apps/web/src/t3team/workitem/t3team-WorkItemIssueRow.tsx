@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-native-title-tooltip, shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-native-title-tooltip --Existing merged lint debt; keep green while preserving behavior. */
 import { JiraIssueTypeIcon } from "~/t3team/components/ticket/t3team-JiraIssueType";
 import { cn } from "~/t3team/lib/t3team-utils";
 import type { ProjectTicket } from "~/t3team/t3team-types";
@@ -53,7 +53,7 @@ export function WorkItemIssueRow({
   const content = (
     <>
       {relationLabel ? (
-        <span className="shrink-0 text-[0.6875rem] text-muted-foreground @md/issue-list:w-24">
+        <span className="shrink-0 text-2xs text-muted-foreground @md/issue-list:w-24">
           {relationLabel}
         </span>
       ) : null}

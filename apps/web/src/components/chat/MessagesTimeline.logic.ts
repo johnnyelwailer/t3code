@@ -855,8 +855,9 @@ function deriveTurnFolds(input: {
       }
       // Prose is conversation, not tool activity: the "Worked for ..." fold
       // collapses only `kind:"work"` rows, so intermediate assistant (or user)
-      // messages keep rendering when the turn settles.
-      if (entry.kind === "message") {
+      // messages keep rendering when the turn settles. Reasoning traces are
+      // activity, not prose, and fold with the tool work (see above).
+      if (entry.kind === "message" && !isReasoning) {
         continue;
       }
       // Agent-spawn CTA rows never fold: workflows outlive their launching

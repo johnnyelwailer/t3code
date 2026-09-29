@@ -28,8 +28,7 @@ import {
 } from "./t3team-projectRecipeDiscoveryShared.ts";
 import { originFields, type ProjectRecipeOrigin } from "./t3team-projectRecipeOrigin.ts";
 
-export const errorMessage = (error: unknown) =>
-  error instanceof Error ? error.message : String(error);
+const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 export type MutableListResult = {
   recipes: RecipeListEntry[];

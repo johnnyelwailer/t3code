@@ -28,7 +28,7 @@ const AGENT_ROOTS: ReadonlySet<ResourceTelemetryProcessCategory> = new Set([
   "terminal-root",
 ]);
 
-export const isAppProper = (category: ResourceTelemetryProcessCategory): boolean =>
+const isAppProper = (category: ResourceTelemetryProcessCategory): boolean =>
   APP_PROPER.has(category);
 
 /** Guard against malformed ppid cycles; real trees are far shallower. */

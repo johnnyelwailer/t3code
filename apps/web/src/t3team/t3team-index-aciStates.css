@@ -1,0 +1,139 @@
+/* State-textured active-agent dots (thinking / writing / working / waiting /
+ * settled): per-state colour, hue wander, state-change swing. Imported
+ * through t3team-index-global.css. */
+
+/* ===========================================================================
+ * GHE #201 follow-up — state-textured agent dots.
+ *
+ * Each indicator dot carries its own state (data-t3team-state, derived in
+ * t3team-activeAgentsCore): thinking = cool wave, writing = cooler slower
+ * wave, working = warm snappy pulse, waiting = muted breath + ring,
+ * settled = dim still. Dots rest at scale(1.5); each state keyframe grows
+ * around that rest so the dot swells instead of flickering at 4px.
+ *
+ * Color: a very subtle per-dot hue wander at rest (±6° over 15s, phase
+ * offset by the dot index); the bigger one-shot swing (±30° + brightness
+ * pop) fires on STATE CHANGE via the .t3team-aci-shift keyed remount in
+ * the indicator.
+ *
+ * Proximity: the S-bend + snap transforms are written on .t3team-aci-cell
+ * by the indicator's rAF loop (createSBendPhysics) — only the will-change
+ * hint and the eased scale transition live in CSS.
+ * ========================================================================= */
+
+.t3team-aci-cell {
+  cursor: pointer;
+  will-change: transform;
+  /* eased growth when the snap capture fires / anticipation shrink */
+  transition: scale 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  /* subtle per-dot hue wander (phase offset by --t3team-aci-i) */
+  animation: t3team-aci-hue-wander 15s ease-in-out infinite alternate;
+  animation-delay: calc(var(--t3team-aci-i, 0) * -3.1s);
+}
+
+@keyframes t3team-aci-hue-wander {
+  from {
+    filter: hue-rotate(calc(var(--t3team-aci-i, 0) * -7deg - 6deg));
+  }
+  to {
+    filter: hue-rotate(calc(var(--t3team-aci-i, 0) * -7deg + 6deg));
+  }
+}
+
+/* Status-change swing: one-shot hue swing + brightness pop that settles
+   back into the subtle wander (replays on the keyed remount).
+
+   display:inline-flex is load-bearing: this span is a flex item of the
+   cell, so it is blockified, and its natural height would be a FULL text
+   line box (inherited line-height, ~22.75px at 14px). The inline-block
+   dot inside then sits on that line's baseline — measured 3.125px off the
+   cell's optical center in the GHE #201 alignment-test story. Making the
+   wrapper a flex container sized to the dot (and centering the dot in it)
+   removes the baseline from the equation; the cell's items-center then
+   centers the dot exactly. The waiting ring's ::before (anchored to this
+   span's 50%/50%) is aligned as a consequence. */
+.t3team-aci-shift {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  animation: t3team-aci-state-shift 1.1s ease-out;
+}
+
+@keyframes t3team-aci-state-shift {
+  0% {
+    filter: hue-rotate(-30deg) brightness(1.25);
+  }
+  55% {
+    filter: hue-rotate(10deg) brightness(1.08);
+  }
+  100% {
+    filter: none;
+  }
+}
+
+.t3team-aci-cell[data-t3team-state] .t3team-aci-dot {
+  /* a status change crossfades the color (0.9s spring) instead of
+     snapping; keep the base opacity/transform transitions */
+  transition:
+    background 0.9s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.9s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 6s linear,
+    transform 140ms ease;
+}
+
+.t3team-aci-cell[data-t3team-state="thinking"] .t3team-aci-dot {
+  background: #38bdf8;
+  animation: t3team-aci-wave 1.6s ease-in-out infinite;
+  box-shadow: 0 0 5px 0 rgb(56 189 248 / 0.35);
+}
+
+.dark .t3team-aci-cell[data-t3team-state="thinking"] .t3team-aci-dot {
+  background: #7dd3fc;
+}
+
+.t3team-aci-cell[data-t3team-state="writing"] .t3team-aci-dot {
+  background: #818cf8;
+  animation: t3team-aci-wave 1.75s ease-in-out infinite;
+  box-shadow: 0 0 5px 0 rgb(129 140 248 / 0.35);
+}
+
+.dark .t3team-aci-cell[data-t3team-state="writing"] .t3team-aci-dot {
+  background: #a5b4fc;
+}
+
+.t3team-aci-cell[data-t3team-state="working"] .t3team-aci-dot {
+  background: #f59e0b;
+  animation: t3team-aci-snap 1.05s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  box-shadow: 0 0 6px 0 rgb(245 158 11 / 0.4);
+}
+
+.dark .t3team-aci-cell[data-t3team-state="working"] .t3team-aci-dot {
+  background: #fbbf24;
+}
+
+.t3team-aci-cell[data-t3team-state="waiting"] .t3team-aci-dot {
+  background: #94a3b8;
+  animation: t3team-aci-breathe 3.2s ease-in-out infinite;
+}
+
+.dark .t3team-aci-cell[data-t3team-state="waiting"] .t3team-aci-dot {
+  background: #cbd5e1;
+}
+
+.t3team-aci-cell[data-t3team-state="settled"] .t3team-aci-dot {
+  background: #a3a3a3;
+  animation: none;
+  opacity: 0.4;
+  transform: scale(1.5);
+}
+
+.dark .t3team-aci-cell[data-t3team-state="settled"] .t3team-aci-dot {
+  background: #737373;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t3team-aci-cell,
+  .t3team-aci-shift {
+    animation: none !important;
+  }
+}

@@ -42,7 +42,6 @@ export {
   type T3TeamTempoUserCapacity,
 } from "./t3team-tempoCapacityMath.ts";
 export { loadTempoToken, saveTempoToken } from "./t3team-tempoTokenStore.ts";
-export { invalidateT3TeamTempoIssueKeyCache } from "./t3team-tempoIssueKeyCache.ts";
 
 const TEMPO_BASE_URL = "https://api.tempo.io/4";
 const TEMPO_PAGE_LIMIT = 200;

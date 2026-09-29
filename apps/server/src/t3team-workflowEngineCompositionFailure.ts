@@ -21,7 +21,7 @@ export type WorkflowCompositionBranchFailure = Parameters<
  * its structural position instead of inventing one — see `CompositionBranchFailure`'s own doc in
  * `@runbook/core/composition` for why `stageIndex` only exists for `pipeline`.
  */
-export function describeCompositionBranchLabel(failure: WorkflowCompositionBranchFailure): string {
+function describeCompositionBranchLabel(failure: WorkflowCompositionBranchFailure): string {
   if (failure.compositionKind === "parallel") {
     return `Parallel branch ${failure.index + 1} of ${failure.total} failed`;
   }

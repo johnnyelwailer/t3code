@@ -29,7 +29,7 @@ import { makeWorkflowToolsForThread } from "./t3team-toolBrokerWorkflowToolsWiri
 import { T3TeamContextRefreshService } from "./t3team-contextRefreshService.ts";
 import { makeT3TeamWidgetShowBinder } from "./t3team-toolBrokerWidgetShow.ts";
 import { makeBindSession } from "./t3team-toolBrokerLiveSession.ts";
-import { ServerSettingsService } from "./serverSettings.ts";
+import { UsageLimitSources } from "./usage/UsageLimitSources.ts";
 import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
 
 const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () {
@@ -70,7 +70,7 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     yield* Effect.serviceOption(ProjectSetupScriptRunner),
   );
   const providerRegistry = Option.getOrUndefined(yield* Effect.serviceOption(ProviderRegistry));
-  const serverSettings = Option.getOrUndefined(yield* Effect.serviceOption(ServerSettingsService));
+  const usageLimitSources = Option.getOrUndefined(yield* Effect.serviceOption(UsageLimitSources));
   const resourcePressure = Option.getOrUndefined(
     yield* Effect.serviceOption(ResourcePressureMonitor),
   );
@@ -156,7 +156,7 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     genericThreadToolIds,
     query,
     providerRegistry,
-    serverSettings,
+    usageLimitSources,
     resourcePressure,
     contextRefresh,
     dispatchCommand,

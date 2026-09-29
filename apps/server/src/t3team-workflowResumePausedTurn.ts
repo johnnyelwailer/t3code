@@ -83,7 +83,7 @@ export const restorePausedRunContinuation = Effect.fn("restorePausedRunContinuat
  * Re-register the row's pending ask and, for a `thread.turn`, re-drive it at once. Callers have
  * already flipped the row out of `paused` and released the admission queue.
  */
-export const restorePausedPendingAsk = Effect.fn("restorePausedPendingAsk")(function* (
+const restorePausedPendingAsk = Effect.fn("restorePausedPendingAsk")(function* (
   deps: ResumePausedTurnDeps,
   run: WorkflowRun,
 ) {

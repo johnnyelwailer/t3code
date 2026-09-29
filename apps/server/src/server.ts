@@ -220,7 +220,6 @@ import {
 } from "./t3team-thread-provider-hold-route.ts";
 import { T3TeamProviderUsageWatcherLive } from "./t3team-providerUsageWatcher.ts";
 import { ResourcePressureMonitorLive } from "./t3team-resourcePressureMonitor.ts";
-import { ProviderUsageHoldRepositoryLive } from "./persistence/Layers/t3team-ProviderUsageHolds.ts";
 import {
   t3teamGitHubAssetRouteLayer,
   t3teamGitHubInboxRouteLayer,
@@ -353,8 +352,8 @@ const ReactorLayerLive = Layer.empty.pipe(
   Layer.provideMerge(OrchestrationReactorLive),
   Layer.provideMerge(ProviderRuntimeIngestionLive),
   Layer.provideMerge(ProviderCommandReactorLive),
-  // The turn-start gate (GHE #421) runs inside the provider command reactor, so the
-  // watcher's in-memory held set + hold rows must satisfy ITS requirements.
+  // The ONE provider usage watcher (GHE #421). Provided here, once; the hold
+  // control/dev routes read this same instance from the runtime services.
   Layer.provideMerge(T3TeamProviderUsageWatcherLive),
   Layer.provideMerge(CheckpointReactorLive),
   Layer.provideMerge(StorageCleanup.layer),
@@ -831,14 +830,9 @@ export const makeRoutesLayer = Layer.mergeAll(
     t3teamThreadToolContextRouteLayer,
     t3teamMyWorkDigestRouteLayer,
     t3teamWidgetToolCallRouteLayer,
-    Layer.mergeAll(
-      t3teamThreadProviderHoldControlRouteLayer,
-      t3teamProviderUsageDevRouteLayer,
-      t3teamProviderUsageDevStateRouteLayer,
-    ).pipe(
-      Layer.provideMerge(T3TeamProviderUsageWatcherLive),
-      Layer.provideMerge(ProviderUsageHoldRepositoryLive),
-    ),
+    t3teamThreadProviderHoldControlRouteLayer,
+    t3teamProviderUsageDevRouteLayer,
+    t3teamProviderUsageDevStateRouteLayer,
   ),
   McpHttpServer.layer.pipe(Layer.provide(McpSessionRegistry.layer)),
   // Last, so no route layer can replace the server's one TracerDisabledWhen.
@@ -863,7 +857,7 @@ class ServerDistributionActivationError extends Schema.TaggedError<ServerDistrib
   }
 }
 
-export const makeServerLayer = Layer.unwrap(
+const makeServerLayer = Layer.unwrap(
   Effect.gen(function* () {
     const config = yield* ServerConfig.ServerConfig;
     const activation = yield* Deferred.make<void>();

@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
 import { formatDigestAgo } from "~/t3team/t3team-ProjectMyWorkDigestRows";
 import type { DigestClaim } from "~/t3team/t3team-projectMyWorkDigestPlan";
@@ -93,7 +92,7 @@ export function DigestAgentDots({
           return <span key={claim.threadId}>{tooltip}</span>;
         })}
       </span>
-      {rest > 0 ? <span className="ml-1 text-[10px] text-muted-foreground">+{rest}</span> : null}
+      {rest > 0 ? <span className="ml-1 text-3xs text-muted-foreground">+{rest}</span> : null}
     </span>
   );
 }

@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-unknown-classes -- Existing merged lint debt; keep green while preserving behavior. */
 import { useEffect, useState } from "react";
 import { formatActiveAgentLabel, useActiveAgentHover } from "~/t3team/chat/t3team-activeAgentsCore";
 

@@ -31,7 +31,7 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
     genericThreadToolIds,
     query,
     providerRegistry,
-    serverSettings,
+    usageLimitSources,
     resourcePressure,
     contextRefresh,
     dispatchCommand,
@@ -101,7 +101,8 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
               ),
             ),
           ),
-        readProviderUsage: (toolArgs) => makeReadProviderUsage({ serverSettings })(toolArgs),
+        readProviderUsage: (toolArgs) =>
+          makeReadProviderUsage({ providerRegistry, usageLimitSources })(toolArgs),
         setBacklogAssigneeFilter: (mode) =>
           setBacklogAssigneeFilterForContext(resolvedToolContext, mode),
         refreshContextBundle: contextRefresh,

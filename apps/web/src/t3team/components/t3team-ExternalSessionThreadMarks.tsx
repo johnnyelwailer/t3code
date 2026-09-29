@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-native-title-tooltip, shadcn/no-arbitrary-values, shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The two marks a sidebar row carries when its thread mirrors an external Codex/Claude session:
  * the provider icon, and a lock while the native tool still owns the session.
@@ -53,7 +53,7 @@ export function ExternalSessionActiveLock({ active }: { readonly active: boolean
   if (!active) return null;
   return (
     <LockIcon
-      className="size-3 shrink-0 animate-[pulse_3s_ease-in-out_infinite] text-amber-500"
+      className="size-3 shrink-0 animate-status-pulse-slow text-warning"
       aria-label="Active external session, read-only"
     />
   );

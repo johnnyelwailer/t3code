@@ -8,7 +8,7 @@
  */
 import { T3TEAM_CHILD_OPS, type T3TeamChildOp } from "./t3team-toolBrokerChildrenTypes.ts";
 
-export const T3TEAM_CHILDREN_OP_USAGE: Record<T3TeamChildOp, string> = {
+const T3TEAM_CHILDREN_OP_USAGE: Record<T3TeamChildOp, string> = {
   list: `children({ op: "list", all?: boolean, include_settled?: boolean }) — this thread's child sessions with live state (name, state, provider+model, created/last-activity, worktree+branch when isolated, last-message summary; awaitingUserInput when a question is docked in the child's composer; awaitingParent when a plan-mode child presented its plan and stopped, waiting on your approval — the turn IS completed, the plan is not yet implemented). A thread whose own work is settled but which still has live (non-terminal, non-settled) children reads state "waiting" instead of "completed"/"idle". all:true lists the whole project instead. Settled children are EXCLUDED by default; include_settled:true lists them with a settled:true marker.`,
   status: `children({ op: "status", thread_id }) — one thread's current turn state, in-progress work, elapsed time, awaitingUserInput when a question is docked in its composer, awaitingParent when a plan-mode thread's plan is still unimplemented, waitingDeclared when a child wait this thread registered (op: wait) is still pending (the DECLARED blocking state; the DERIVED live-children fact is state "waiting"), and a recent activity tail.`,
   wait: `children({ op: "wait", thread_id, on?: "terminal"|"completed"|"failed", timeout?: number }) — durably resume this turn when the target thread reaches a terminal state (default on:"terminal"); a dead child resolves as failed. timeout is milliseconds.`,

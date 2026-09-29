@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { useEffect, useState } from "react";
 import { MessageSquarePlus, X } from "lucide-react";
 
@@ -126,7 +125,7 @@ export function T3TeamDiffCommentThread({
           className="flex items-start gap-2 rounded-md border border-border/70 bg-muted/30 px-2.5 py-1.5"
         >
           <div className="min-w-0 flex-1">
-            <p className="truncate border-l-2 border-primary/50 pl-2 text-[11px] italic text-muted-foreground">
+            <p className="truncate border-l-2 border-primary/50 pl-2 text-2xs italic text-muted-foreground">
               {comment.quote}
             </p>
             <p className="mt-1 text-xs leading-5 text-foreground">{comment.body}</p>

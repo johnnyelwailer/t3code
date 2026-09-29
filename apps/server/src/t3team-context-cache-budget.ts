@@ -14,9 +14,7 @@ export type T3TeamContextCacheBudget = {
   readonly hardStop: boolean;
 };
 
-export class T3TeamContextCacheBudgetError extends Data.TaggedError(
-  "T3TeamContextCacheBudgetError",
-)<{
+class T3TeamContextCacheBudgetError extends Data.TaggedError("T3TeamContextCacheBudgetError")<{
   readonly path: string;
   readonly cause: unknown;
 }> {}

@@ -38,7 +38,6 @@ import { ProviderAdapterRegistry } from "../src/provider/Services/ProviderAdapte
 import { makeProviderRegistryLayer } from "../src/provider/testUtils/providerRegistryMock.ts";
 import { ProviderSessionDirectoryLive } from "../src/provider/Layers/ProviderSessionDirectory.ts";
 import { ServerSettingsService } from "../src/serverSettings.ts";
-import { ProviderUsageDevError, ProviderUsageWatcher } from "../src/t3team-providerUsageWatcher.ts";
 import * as StorageCleanup from "../src/storageCleanup.ts";
 import { makeProviderServiceLive } from "../src/provider/Layers/ProviderService.ts";
 import { makeCodexAdapter } from "../src/provider/Layers/CodexAdapter.ts";
@@ -56,7 +55,6 @@ import { OrchestrationProjectionPipelineLive } from "../src/orchestration/Layers
 import { OrchestrationProjectionSnapshotQueryLive } from "../src/orchestration/Layers/ProjectionSnapshotQuery.ts";
 import * as ThreadBackgroundLiveness from "../src/orchestration/ThreadBackgroundLiveness.ts";
 import * as ThreadPlanProgress from "../src/orchestration/ThreadPlanProgress.ts";
-import * as ThreadPlanStaleness from "../src/orchestration/ThreadPlanStaleness.ts";
 import * as ThreadSilenceWatchdog from "../src/orchestration/ThreadSilenceWatchdog.ts";
 import { RuntimeReceiptBusTest } from "../src/orchestration/Layers/RuntimeReceiptBus.ts";
 import { OrchestrationReactorLive } from "../src/orchestration/Layers/OrchestrationReactor.ts";
@@ -321,7 +319,6 @@ export const makeOrchestrationIntegrationHarness = (
     ).pipe(
       Layer.provideMerge(ThreadBackgroundLiveness.layer),
       Layer.provideMerge(ThreadPlanProgress.layer),
-      Layer.provideMerge(ThreadPlanStaleness.layer),
       Layer.provideMerge(ThreadSilenceWatchdog.layer),
     );
     const serverSettingsLayer = ServerSettingsService.layerTest();
@@ -438,18 +435,6 @@ export const makeOrchestrationIntegrationHarness = (
       Layer.provide(persistenceLayer),
       Layer.provideMerge(RepositoryIdentityResolver.layer),
       Layer.provideMerge(ServerSettingsService.layerTest()),
-      Layer.provideMerge(
-        Layer.succeed(ProviderUsageWatcher, {
-          sweep: () => Effect.void,
-          checkThreadHeld: () => Effect.succeed(Option.none()),
-          recordDeferredTurn: () => Effect.void,
-          forceExhaust: () =>
-            Effect.fail(new ProviderUsageDevError({ message: "not available in this harness" })),
-          forceRecover: () =>
-            Effect.fail(new ProviderUsageDevError({ message: "not available in this harness" })),
-          getDevState: () => Effect.succeed({ held: [], holds: [], lastSampledAt: null }),
-        }),
-      ),
       Layer.provideMerge(ServerConfig.layerTest(workspaceDir, rootDir)),
       Layer.provideMerge(NodeServices.layer),
       Layer.provideMerge(

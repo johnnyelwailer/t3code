@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ExternalProject } from "@t3tools/integrations-core";
 import { ChevronDown } from "lucide-react";
 
@@ -41,7 +40,7 @@ export function RepositoriesStep({
     <section className="space-y-3.5">
       <div className="flex items-baseline justify-between gap-3 px-1">
         <h3 className="text-base font-semibold tracking-tight">Link a repository</h3>
-        <span className="text-[11px] text-muted-foreground">Optional</span>
+        <span className="text-2xs text-muted-foreground">Optional</span>
       </div>
 
       <GitHubRepositoryDiscoverySection
@@ -60,17 +59,19 @@ export function RepositoriesStep({
           </span>
           <ChevronDown className="size-3.5 text-muted-foreground" />
         </CollapsibleTrigger>
-        <CollapsibleContent className="pt-2">
-          <LinkedRepositoryListEditor
-            repositoryUrls={linkedRepositoryUrls}
-            newRepositoryUrl={newRepositoryUrl}
-            setNewRepositoryUrl={setNewRepositoryUrl}
-            onAddRepository={onAddRepository}
-            onRemoveRepository={onRemoveRepository}
-            onAddSearchableOption={(url) => onAddRepositories([url])}
-            searchableRepositoryOptions={discoveredRepositoryUrls}
-            emptyMessage="Add GitHub or GHE repositories to give agents context from code."
-          />
+        <CollapsibleContent>
+          <div className="pt-2">
+            <LinkedRepositoryListEditor
+              repositoryUrls={linkedRepositoryUrls}
+              newRepositoryUrl={newRepositoryUrl}
+              setNewRepositoryUrl={setNewRepositoryUrl}
+              onAddRepository={onAddRepository}
+              onRemoveRepository={onRemoveRepository}
+              onAddSearchableOption={(url) => onAddRepositories([url])}
+              searchableRepositoryOptions={discoveredRepositoryUrls}
+              emptyMessage="Add GitHub or GHE repositories to give agents context from code."
+            />
+          </div>
         </CollapsibleContent>
       </Collapsible>
     </section>

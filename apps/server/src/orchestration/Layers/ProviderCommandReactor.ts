@@ -65,7 +65,6 @@ import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { getConfiguredTextGenerationModelSelection } from "../../t3team-configuredDefaultModelSelection.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
-import { ProviderUsageWatcher } from "../../t3team-providerUsageWatcher.ts";
 import { loadRestartWakeSteer } from "../../t3team-restartWakeSteer.ts";
 import { ResourcePressureMonitor } from "../../t3team-resourcePressureMonitor.ts";
 import {
@@ -336,7 +335,7 @@ function buildForkTranscriptBootstrapInput(input: {
   );
 }
 
-export function providerErrorLabel(value: string | undefined): string {
+function providerErrorLabel(value: string | undefined): string {
   const normalized = value?.trim();
   return normalized && normalized.length > 0 ? normalized : "unknown";
 }
@@ -448,7 +447,6 @@ const make = Effect.gen(function* () {
     return resolveProjectSettings(settings, Option.isSome(thread) ? thread.value.projectId : null)
       .settings;
   });
-  const providerUsageWatcher = yield* ProviderUsageWatcher;
   // Memory-pressure auto-pause at the turn boundary (flag NEXI_FF_RESOURCE_PRESSURE; off = no-op).
   const pressureGate = makeResourcePressureTurnGate({
     autoPause: Option.getOrUndefined(yield* Effect.serviceOption(ResourcePressureMonitor))
@@ -1628,30 +1626,6 @@ const make = Effect.gen(function* () {
     }).pipe(Effect.catchCause((cause) => recoverTurnStartFailure(cause).pipe(Effect.as(true))));
     if (authCommandHandled) {
       return;
-    }
-
-    // Provider usage hold gate (GHE #421, auto-resume layer): when this
-    // thread's provider rolling window is exhausted, record the deferral so
-    // the watcher's auto-resume path can re-dispatch `thread.turn.resume`
-    // when the window recovers. This is ADVISORY — the turn still proceeds;
-    // the provider itself will 429 if actually rate-limited. The banner is
-    // informational, not a barrier.
-    const hold = yield* providerUsageWatcher
-      .checkThreadHeld({
-        threadId: thread.id,
-        providerInstanceId: thread.modelSelection.instanceId ?? null,
-        sessionProviderName: thread.session?.providerName ?? null,
-      })
-      .pipe(Effect.map(Option.getOrUndefined));
-    if (hold !== undefined) {
-      yield* providerUsageWatcher.recordDeferredTurn({
-        threadId: thread.id,
-        messageId: event.payload.messageId,
-        driver: hold.driver,
-        providerInstanceId: thread.modelSelection.instanceId ?? null,
-        resetsAt: hold.resetsAt,
-        now: event.payload.createdAt,
-      });
     }
 
     yield* ensureThreadWorktree(thread);

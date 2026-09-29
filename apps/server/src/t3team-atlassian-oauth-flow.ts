@@ -57,7 +57,7 @@ function requiredClientId(): string {
  * against whichever *registered* URI a tampered client names. Local origins only, which is the
  * only shape this desktop/dev app legitimately calls back to.
  */
-export function isAllowedAtlassianRedirectUri(value: string): boolean {
+function isAllowedAtlassianRedirectUri(value: string): boolean {
   try {
     const url = new URL(value);
     if (url.protocol !== "http:" && url.protocol !== "https:") return false;

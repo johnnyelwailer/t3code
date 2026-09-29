@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Fork styles every route needs (active-agents indicator, rich-text lists). */
+@import "./t3team/t3team-index-global.css";
 
 @custom-variant dark (&:is(.dark, .dark *));
 @custom-variant light (&:not(.dark, .dark *));

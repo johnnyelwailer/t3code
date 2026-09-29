@@ -19,7 +19,7 @@ type ThreadAgentRow = {
 };
 
 /** Stored per-thread provider + model for the given threads. */
-export function readDigestThreadAgentRows(threadIds: ReadonlyArray<string>) {
+function readDigestThreadAgentRows(threadIds: ReadonlyArray<string>) {
   return Effect.gen(function* () {
     if (threadIds.length === 0) return [] as ThreadAgentRow[];
     const sql = yield* SqlClient.SqlClient;
@@ -40,7 +40,7 @@ export function readDigestThreadAgentRows(threadIds: ReadonlyArray<string>) {
  * The last-resort inference, straight from the message-id prefix
  * (`local:codex:…` / `local:claudeAgent:…`) — the same rule the client uses.
  */
-export function inferDigestThreadAgents(threadIds: ReadonlyArray<string>) {
+function inferDigestThreadAgents(threadIds: ReadonlyArray<string>) {
   return Effect.gen(function* () {
     if (threadIds.length === 0) return new Map<string, string>();
     const sql = yield* SqlClient.SqlClient;

@@ -1,17 +1,13 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle, shadcn/require-static-classes -- Existing merged lint debt; keep green while preserving behavior. */
 import type { MouseEvent, RefObject } from "react";
 
-import { SidebarMenuSubButton } from "~/t3team/components/ui/t3team-sidebar";
+import { T3SidebarSubRow } from "~/t3team/components/ui/t3team-sidebar-row";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
 import { JiraIssueTypeIcon } from "~/t3team/components/ticket/t3team-JiraIssueType";
 import { TicketCardDetailsTooltip } from "~/t3team/t3team-TicketCardDetailsTooltip";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
 import { ProjectSidebarTicketEntryActions } from "./t3team-ProjectSidebarTicketEntryActions";
-import {
-  getSidebarWrappedButtonClassName,
-  type SidebarItemState,
-} from "./t3team-projectSidebarItemState";
+import type { SidebarItemState } from "./t3team-projectSidebarItemState";
 
 export function ProjectSidebarTicketCard({
   ticket,
@@ -35,13 +31,12 @@ export function ProjectSidebarTicketCard({
       <Tooltip>
         <TooltipTrigger
           render={
-            <SidebarMenuSubButton
-              size="sm"
+            <T3SidebarSubRow
+              size="two-line"
               ref={rowRef}
+              hoverGroup="ticket-card"
               isActive={state.isSelected}
-              className={`h-auto min-h-8 w-full cursor-grab flex-col items-start py-1 group-hover/ticket-card:bg-accent group-hover/ticket-card:text-foreground group-focus-within/ticket-card:bg-accent group-focus-within/ticket-card:text-foreground active:cursor-grabbing ${getSidebarWrappedButtonClassName(
-                state,
-              )}`}
+              className="-translate-x-px cursor-grab active:cursor-grabbing"
               onClick={onSelectTicket}
             />
           }
@@ -51,10 +46,10 @@ export function ProjectSidebarTicketCard({
               issueType={ticket.issueType}
               issueTypeIconUrl={ticket.issueTypeIconUrl ?? ticket.ref.issueTypeIconUrl}
             />
-            <span className="truncate text-[11px] font-medium">{ticket.ref.displayId}</span>
-            <span className="ml-1 text-[10px] text-muted-foreground/75">{ticket.status}</span>
+            <span className="truncate text-2xs font-medium">{ticket.ref.displayId}</span>
+            <span className="ml-1 text-3xs text-muted-foreground/75">{ticket.status}</span>
           </div>
-          <div className="w-full truncate text-[10px] leading-tight text-muted-foreground/70">
+          <div className="w-full truncate text-3xs leading-tight text-muted-foreground/70">
             {ticket.ref.title}
           </div>
         </TooltipTrigger>

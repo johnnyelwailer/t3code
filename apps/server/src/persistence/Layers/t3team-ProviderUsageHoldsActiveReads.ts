@@ -1,7 +1,7 @@
 /**
  * "List" read operations of the provider-usage hold SQLite repository
  * (split out of `t3team-ProviderUsageHolds.ts`): listing active holds and
- * listing the active session threads for a driver. Built from a `SqlClient`
+ * listing the active session threads for a provider instance. Built from a `SqlClient`
  * so the repository generator can compose them alongside the write path.
  *
  * @module t3team.persistence.Layers.ProviderUsageHoldsActiveReads
@@ -40,14 +40,14 @@ export const makeProviderUsageHoldActiveReads = (sql: SqlClient.SqlClient) => {
       `,
   });
 
-  const activeSessionThreadsForDriver = SqlSchema.findAll({
-    Request: Schema.Struct({ provider: Schema.String }),
+  const activeSessionThreadsForInstance = SqlSchema.findAll({
+    Request: Schema.Struct({ providerInstanceId: Schema.String }),
     Result: Schema.Struct({ threadId: Schema.String }),
-    execute: ({ provider }) =>
+    execute: ({ providerInstanceId }) =>
       sql`
         SELECT DISTINCT s.thread_id AS "threadId"
         FROM projection_thread_sessions s
-        WHERE s.provider_name = ${provider}
+        WHERE s.provider_instance_id = ${providerInstanceId}
           AND s.status != 'stopped'
         ORDER BY s.updated_at DESC
       `,
@@ -59,15 +59,15 @@ export const makeProviderUsageHoldActiveReads = (sql: SqlClient.SqlClient) => {
       Effect.mapError(toPersistenceSqlError("ProviderUsageHoldRepository.listActive:query")),
     );
 
-  const listActiveSessionThreadsForDriver: ProviderUsageHoldRepositoryShape["listActiveSessionThreadsForDriver"] =
+  const listActiveSessionThreadsForInstance: ProviderUsageHoldRepositoryShape["listActiveSessionThreadsForInstance"] =
     (input) =>
-      activeSessionThreadsForDriver({ provider: input.provider }).pipe(
+      activeSessionThreadsForInstance({ providerInstanceId: input.providerInstanceId }).pipe(
         Effect.mapError(
           toPersistenceSqlError(
-            "ProviderUsageHoldRepository.listActiveSessionThreadsForDriver:query",
+            "ProviderUsageHoldRepository.listActiveSessionThreadsForInstance:query",
           ),
         ),
       );
 
-  return { listActive, listActiveSessionThreadsForDriver };
+  return { listActive, listActiveSessionThreadsForInstance };
 };

@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-native-title-tooltip, shadcn/no-arbitrary-values, shadcn/no-raw-colors -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-native-title-tooltip --Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Team rail (spec §6.6): bottom HUD with one dock per member + Unassigned.
  * Docks are group anchors per the §6.1 contract — click = spotlight,
@@ -59,7 +59,7 @@ export function PlanningSpaceRail({
         data-ps-chrome="true"
         aria-label={open ? "Collapse team row" : "Expand team row"}
         onClick={onToggle}
-        className="absolute -top-6 left-1/2 flex h-6 w-12 -translate-x-1/2 items-center justify-center text-[11px] text-muted-foreground opacity-0 transition-opacity duration-200 hover:text-foreground hover:opacity-100 group-hover/rail:opacity-100 focus-visible:opacity-100"
+        className="absolute -top-6 left-1/2 flex h-6 w-12 -translate-x-1/2 items-center justify-center text-2xs text-muted-foreground opacity-0 transition-opacity duration-200 hover:text-foreground hover:opacity-100 group-hover/rail:opacity-100 focus-visible:opacity-100"
       >
         {open ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
       </button>
@@ -74,7 +74,7 @@ export function PlanningSpaceRail({
               aria-hidden="true"
             >
               <span
-                className="text-[7px] uppercase tracking-wider text-muted-foreground/70"
+                className="text-5xs uppercase tracking-wider text-muted-foreground/70"
                 style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
               >
                 {group.role}
@@ -130,7 +130,7 @@ export function PlanningSpaceRail({
                     />
                   </svg>
                   <span
-                    className={`flex size-6 items-center justify-center rounded-full text-[8.5px] font-medium text-background ${
+                    className={`flex size-6 items-center justify-center rounded-full text-4xs font-medium text-background ${
                       isSpotlit ? "ring-2 ring-primary ring-offset-1" : ""
                     }`}
                     style={{ background: color }}
@@ -138,12 +138,12 @@ export function PlanningSpaceRail({
                     {initialsOf(owner.name)}
                   </span>
                 </span>
-                <span className="max-w-13 truncate text-[8.5px] text-foreground/85">
+                <span className="max-w-13 truncate text-4xs text-foreground/85">
                   {owner.name.split(" ")[0]}
                 </span>
                 <span
-                  className={`text-[7.5px] tabular-nums ${
-                    over ? "text-red-500" : "text-muted-foreground"
+                  className={`text-4xs tabular-nums ${
+                    over ? "text-destructive" : "text-muted-foreground"
                   }`}
                 >
                   {formatHours(owner.loadSeconds)}/{formatHours(ownerCapacity)}
@@ -161,15 +161,15 @@ export function PlanningSpaceRail({
         >
           <span className="relative flex size-10 items-center justify-center">
             <span
-              className={`flex size-6 items-center justify-center rounded-full border border-dashed border-muted-foreground text-[10px] text-muted-foreground ${
+              className={`flex size-6 items-center justify-center rounded-full border border-dashed border-muted-foreground text-3xs text-muted-foreground ${
                 spotlightOwnerId === null ? "ring-2 ring-primary ring-offset-1" : ""
               }`}
             >
               ?
             </span>
           </span>
-          <span className="text-[8.5px] text-foreground/85">None</span>
-          <span className="text-[7.5px] tabular-nums text-muted-foreground">
+          <span className="text-4xs text-foreground/85">None</span>
+          <span className="text-4xs tabular-nums text-muted-foreground">
             {unassignedCount} open
           </span>
         </div>

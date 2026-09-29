@@ -6,7 +6,7 @@
 
 import { isProviderAvailable, type ServerProvider } from "@t3tools/contracts";
 
-export const MAX_LISTED = 12;
+const MAX_LISTED = 12;
 
 export const formatList = (values: ReadonlyArray<string>): string => {
   if (values.length === 0) return "none";

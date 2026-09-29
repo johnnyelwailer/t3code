@@ -1,10 +1,9 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import type { KeyboardEvent } from "react";
 import { Check, Search, UserMinus, UserRoundCheck } from "lucide-react";
 
+import { InputGroup, InputGroupAddon, InputGroupInput } from "~/components/ui/input-group";
 import type { AtlassianAssignableUser } from "~/t3team/backend/t3team-types";
 import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
-import { Input } from "~/t3team/components/ui/t3team-input";
 import { Spinner } from "~/t3team/components/ui/t3team-spinner";
 import { cn } from "~/t3team/lib/t3team-utils";
 import { WorkItemPersonAvatar } from "~/t3team/workitem/t3team-WorkItemPersonAvatar";
@@ -44,12 +43,11 @@ export function WorkItemAssigneeResultsList({
 }) {
   return (
     <div className="p-1.5">
-      <div className="relative mb-1">
-        <Search
-          className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/70"
-          aria-hidden="true"
-        />
-        <Input
+      <InputGroup className="mb-1">
+        <InputGroupAddon>
+          <Search className="size-3.5 text-muted-foreground/70" aria-hidden="true" />
+        </InputGroupAddon>
+        <InputGroupInput
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
           onKeyDown={onQueryKeyDown}
@@ -57,12 +55,13 @@ export function WorkItemAssigneeResultsList({
           aria-label="Search assignable people"
           autoFocus
           size="sm"
-          className="pl-7 pr-7"
         />
         {searchLoading ? (
-          <Spinner className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <InputGroupAddon align="inline-end">
+            <Spinner size="sm" tone="muted" />
+          </InputGroupAddon>
         ) : null}
-      </div>
+      </InputGroup>
 
       <div role="listbox" aria-label="Assignable people" className="max-h-52 overflow-y-auto">
         {searchError ? (

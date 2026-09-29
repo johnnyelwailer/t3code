@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-native-title-tooltip, shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-native-title-tooltip --Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Capability disclosure for the play-as-shape "plan" card — the pre-execution permission
  * surface (Epic 25 §Capability gating): before an orchestration with elevated capabilities runs,
@@ -115,7 +115,7 @@ export function T3TeamShapeCapabilityChips({
   return (
     <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
       <span
-        className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/65"
+        className="flex items-center gap-1 text-3xs font-medium uppercase tracking-widest text-muted-foreground/65"
         title="This orchestration declared these capabilities; they are granted for this run."
       >
         <ShieldIcon className="size-3" />
@@ -126,7 +126,7 @@ export function T3TeamShapeCapabilityChips({
         return (
           <span
             key={`${capability.kind}:${capability.id}`}
-            className="shrink-0 rounded-full border border-border/55 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-foreground/80"
+            className="shrink-0 rounded-full border border-border/55 bg-muted/40 px-2 py-0.5 text-2xs font-medium text-foreground/80"
             title={description}
           >
             {label}

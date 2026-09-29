@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { type ApprovalRequestId } from "@t3tools/contracts";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { type PendingUserInput } from "../../session-logic";
@@ -246,12 +245,12 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
               <div className="mb-2 rounded-md bg-muted/40 px-2.5 py-1.5">
                 <T3TeamPendingQuestionMarkdown
                   text={activeQuestion.context}
-                  className="text-secondary-label text-[11px] line-clamp-4"
+                  className="text-secondary-label text-2xs line-clamp-4"
                 />
                 <Collapsible>
                   <CollapsibleTrigger
                     render={<button type="button" />}
-                    className="mt-0.5 text-[10px] font-medium text-muted-foreground"
+                    className="mt-0.5 text-3xs font-medium text-muted-foreground"
                   >
                     Show full context
                   </CollapsibleTrigger>
@@ -259,7 +258,7 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
                     <div className="pt-0.5">
                       <T3TeamPendingQuestionMarkdown
                         text={activeQuestion.context}
-                        className="text-secondary-label text-[11px]"
+                        className="text-secondary-label text-2xs"
                       />
                     </div>
                   </CollapsiblePanel>

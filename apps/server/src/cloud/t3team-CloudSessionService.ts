@@ -62,7 +62,7 @@ export class CloudSessionService extends Context.Service<
   }
 >()("t3/cloud/t3team-CloudSessionService/CloudSessionService") {}
 
-export const make = Effect.fn("cloud.session_service.make")(function* () {
+const make = Effect.fn("cloud.session_service.make")(function* () {
   const github = yield* GitHubCli.GitHubCli;
   const cloudCli = yield* CliTokenManager.CloudCliTokenManager;
   const minter = yield* ConnectCredentialMinter;

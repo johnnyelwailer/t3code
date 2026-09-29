@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { EllipsisIcon, Sparkles } from "lucide-react";
 
 import { Badge } from "~/t3team/components/ui/t3team-badge";
@@ -15,8 +14,6 @@ export type DigestArrangement =
   | { readonly state: "paused"; readonly plan: DigestPlan }
   | { readonly state: "error"; readonly plan?: DigestPlan; readonly message: string };
 
-const MENU_ITEM_CLASS = "min-h-8 rounded-md py-1.5 text-[12px]";
-
 function ArrangementMenu({
   arrangement,
   onPause,
@@ -29,26 +26,18 @@ function ArrangementMenu({
   return (
     <Menu>
       <MenuTrigger
-        className="inline-flex size-8 items-center justify-center rounded-md border border-border/70 bg-background/90 text-muted-foreground hover:bg-accent/70 hover:text-foreground"
+        render={<Button variant="outline" size="icon" />}
         aria-label="Auto-arrange options"
       >
         <EllipsisIcon className="size-4" />
       </MenuTrigger>
-      <MenuPopup
-        align="end"
-        side="bottom"
-        className="min-w-[13rem] border-border/80 bg-background/95"
-      >
+      <MenuPopup align="end" side="bottom" className="min-w-52">
         {arrangement.state === "live" ? (
-          <MenuItem className={MENU_ITEM_CLASS} onClick={onPause}>
-            Pause auto-arrange
-          </MenuItem>
+          <MenuItem onClick={onPause}>Pause auto-arrange</MenuItem>
         ) : (
-          <MenuItem className={MENU_ITEM_CLASS} onClick={onResume}>
-            Resume auto-arrange
-          </MenuItem>
+          <MenuItem onClick={onResume}>Resume auto-arrange</MenuItem>
         )}
-        <MenuItem className={MENU_ITEM_CLASS}>Open workflow thread</MenuItem>
+        <MenuItem>Open workflow thread</MenuItem>
       </MenuPopup>
     </Menu>
   );
@@ -65,7 +54,7 @@ function ArrangementStatus({
 }) {
   if (arrangement.state !== "live" && arrangement.state !== "paused") return null;
   return (
-    <span className="inline-flex items-center gap-2 text-[11.5px] text-muted-foreground">
+    <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
       {arrangement.state === "live" && arrangement.refreshing ? (
         <Spinner className="size-3" />
       ) : null}

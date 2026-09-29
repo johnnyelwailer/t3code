@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-native-title-tooltip, shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 import type { MouseEvent } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
@@ -76,8 +76,8 @@ export function ProjectBacklogTableRowIssueCell({
             <span
               className={
                 row.isContextOnly
-                  ? "shrink-0 font-mono text-[11px] leading-none text-foreground/70"
-                  : "shrink-0 font-mono text-[11px] leading-none text-foreground/85"
+                  ? "shrink-0 font-mono text-2xs leading-none text-foreground/70"
+                  : "shrink-0 font-mono text-2xs leading-none text-foreground/85"
               }
             >
               {ticket.ref.displayId}

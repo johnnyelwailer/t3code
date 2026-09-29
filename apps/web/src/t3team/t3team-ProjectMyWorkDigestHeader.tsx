@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import type { DigestGraph } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import {
   DigestBurndownChart,
@@ -34,10 +33,10 @@ export function ProjectMyWorkDigestHeader({
     return (
       <header className="flex flex-wrap items-end justify-between gap-x-10 gap-y-2 border-b border-border/70 pb-4">
         <div>
-          <p className="text-[11px] tracking-wide text-muted-foreground">Digest · {scopeLabel}</p>
+          <p className="text-2xs tracking-wide text-muted-foreground">Digest · {scopeLabel}</p>
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">My Work</h1>
         </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12.5px] text-muted-foreground sm:gap-x-7">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground sm:gap-x-7">
           {graph.scope === "all"
             ? graph.projects.map((project) => (
                 <span key={project.id}>
@@ -64,7 +63,7 @@ export function ProjectMyWorkDigestHeader({
     <header className="space-y-4 border-b border-border/70 pb-4">
       <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-2">
         <div>
-          <p className="text-[11px] tracking-wide text-muted-foreground">Digest · {scopeLabel}</p>
+          <p className="text-2xs tracking-wide text-muted-foreground">Digest · {scopeLabel}</p>
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
             {sprint.name}{" "}
             <span className="font-normal text-muted-foreground">
@@ -72,7 +71,7 @@ export function ProjectMyWorkDigestHeader({
             </span>
           </h1>
         </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12.5px] text-muted-foreground sm:gap-x-7">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground sm:gap-x-7">
           <span>
             {formatDay(sprint.startDate)} – {formatDay(sprint.endDate)}
           </span>
@@ -101,7 +100,7 @@ export function ProjectMyWorkDigestHeader({
             />
           </div>
         )}
-        <div className="flex justify-between text-[10.5px] text-muted-foreground/80">
+        <div className="flex justify-between text-3xs text-muted-foreground/80">
           <span>{formatDay(sprint.startDate)}</span>
           <span>
             {pct} % elapsed · today {formatDay(new Date(nowMs).toISOString())}
@@ -110,7 +109,7 @@ export function ProjectMyWorkDigestHeader({
         </div>
       </div>
       {sprint.goal.length > 0 ? (
-        <ul className="flex flex-wrap gap-x-6 gap-y-1 text-[12.5px] text-muted-foreground">
+        <ul className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
           {sprint.goal.map((line) => (
             <li
               key={line}

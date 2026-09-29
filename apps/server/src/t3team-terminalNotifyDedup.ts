@@ -38,7 +38,7 @@ export interface TerminalNotifyState {
  * this key, or the observed thread resumed after the last report (a new epoch).
  * Two terminal events for the SAME stop share an epoch and dedup to one.
  */
-export function terminalNotifyNeedsNotify(
+function terminalNotifyNeedsNotify(
   state: TerminalNotifyState | undefined,
   terminalSeq: number,
 ): boolean {

@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ReactNode } from "react";
 
 import { Badge } from "~/t3team/components/ui/t3team-badge";
@@ -70,7 +69,7 @@ export function WorkItemPropertyChips({
   return (
     <div className={cn("flex flex-wrap gap-1", className)}>
       {values.map((value) => (
-        <Badge key={value} variant="outline" size="sm" className="font-normal">
+        <Badge key={value} variant="outline" size="sm">
           {value}
         </Badge>
       ))}

@@ -52,7 +52,7 @@ import {
 } from "./t3team-resourcePressureAutoPause.ts";
 
 /** Recent transitions returned with every report. */
-export const RESOURCE_PRESSURE_REPORT_EVENT_LIMIT = 20;
+const RESOURCE_PRESSURE_REPORT_EVENT_LIMIT = 20;
 
 export interface ResourcePressureMonitorShape {
   readonly report: Effect.Effect<ResourcePressureReport>;

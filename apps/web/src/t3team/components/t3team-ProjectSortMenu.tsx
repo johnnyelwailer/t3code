@@ -1,4 +1,4 @@
-/* oxlint-disable eslint/no-unused-vars, shadcn/no-arbitrary-values, shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ProjectSortOrder, ThreadSortOrder } from "~/t3team/t3team-types";
 import { Button } from "~/t3team/components/ui/t3team-button";
 import {
@@ -81,7 +81,7 @@ export function ProjectSortMenu({
           render={
             <MenuTrigger
               aria-label="Sidebar options"
-              className="inline-flex size-5 cursor-pointer items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
+              render={<Button size="icon-micro" variant="ghost-muted" />}
             />
           }
         >
@@ -98,8 +98,8 @@ export function ProjectSortMenu({
           >
             {(Object.entries(PROJECT_SORT_LABELS) as Array<[ProjectSortOrder, string]>).map(
               ([value, label]) => (
-                <MenuRadioItem key={value} value={value} className="min-h-7 py-1 text-xs">
-                  {label}
+                <MenuRadioItem key={value} value={value} className="min-h-7">
+                  <span className="text-xs">{label}</span>
                 </MenuRadioItem>
               ),
             )}
@@ -113,8 +113,8 @@ export function ProjectSortMenu({
           >
             {(Object.entries(TICKET_VIEW_LABELS) as Array<[TicketViewMode, string]>).map(
               ([value, label]) => (
-                <MenuRadioItem key={value} value={value} className="min-h-7 py-1 text-xs">
-                  {label}
+                <MenuRadioItem key={value} value={value} className="min-h-7">
+                  <span className="text-xs">{label}</span>
                 </MenuRadioItem>
               ),
             )}
@@ -130,8 +130,8 @@ export function ProjectSortMenu({
           >
             {(Object.entries(THREAD_SORT_LABELS) as Array<[ThreadSortOrder, string]>).map(
               ([value, label]) => (
-                <MenuRadioItem key={value} value={value} className="min-h-7 py-1 text-xs">
-                  {label}
+                <MenuRadioItem key={value} value={value} className="min-h-7">
+                  <span className="text-xs">{label}</span>
                 </MenuRadioItem>
               ),
             )}
@@ -165,7 +165,7 @@ export function ProjectSortMenu({
           <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground">
             {sidebarContentMenu.title}
           </div>
-          <div className="px-2 pb-2 text-[10px] leading-4 text-muted-foreground/80">
+          <div className="px-2 pb-2 text-3xs leading-4 text-muted-foreground/80">
             {sidebarContentMenu.description}
           </div>
           {sidebarContentMenu.primaryItems.map((item) => (
@@ -178,7 +178,7 @@ export function ProjectSortMenu({
               onCheckedChange={sidebarContentToggleHandlers[item.id]}
             />
           ))}
-          <div className="px-2 pt-3 pb-1 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground/60">
+          <div className="px-2 pt-3 pb-1 text-3xs font-medium uppercase tracking-widest text-muted-foreground/60">
             {sidebarContentMenu.feedTitle}
           </div>
           {sidebarContentMenu.feedItems.map((item) => (

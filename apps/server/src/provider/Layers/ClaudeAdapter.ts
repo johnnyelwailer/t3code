@@ -2844,6 +2844,12 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           ? { totalCostUsd: result.total_cost_usd }
           : {}),
         ...(errorMessage ? { errorMessage } : {}),
+        // Structured evidence only: a rejected SDK rate-limit window or the
+        // SDK's own `rate_limit` assistant error, never the message text.
+        ...(status === "failed" &&
+        (turnState.rejectedRateLimitTypes.size > 0 || turnState.latestAssistantRateLimited)
+          ? { failureKind: "usage_limit" as const }
+          : {}),
         tokenUsage: normalizeClaudeTurnTokenUsage(result, turnState.hasSubagents, status),
       },
       providerRefs: nativeProviderRefs(context),

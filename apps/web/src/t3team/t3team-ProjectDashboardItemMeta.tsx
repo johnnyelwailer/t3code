@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { renderRelativeUpdatedAt } from "~/t3team/t3team-githubActivityViewUtils";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
@@ -22,7 +21,7 @@ export function TicketWorkItemCardMeta({
     <div className="flex min-w-0 items-center gap-1.5">
       <span
         className={`truncate font-medium text-muted-foreground ${
-          compact ? "text-[11px] @md/ticket-card:text-xs" : "text-xs"
+          compact ? "text-2xs @md/ticket-card:text-xs" : "text-xs"
         }`}
       >
         {ticket.ref.displayId}
@@ -32,7 +31,7 @@ export function TicketWorkItemCardMeta({
         childCount={childCount}
       />
       <span
-        className={`max-w-28 truncate text-[10px] text-muted-foreground/75 ${
+        className={`max-w-28 truncate text-3xs text-muted-foreground/75 ${
           compact ? "hidden @md/ticket-card:inline" : ""
         }`}
       >
@@ -40,7 +39,7 @@ export function TicketWorkItemCardMeta({
       </span>
       {ticket.priority && (
         <span
-          className={`max-w-24 truncate rounded bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground ${
+          className={`max-w-24 truncate rounded bg-muted/40 px-1.5 py-0.5 text-3xs text-muted-foreground ${
             compact ? "hidden @lg/ticket-card:inline" : ""
           }`}
         >
@@ -48,7 +47,7 @@ export function TicketWorkItemCardMeta({
         </span>
       )}
       {updatedLabel ? (
-        <span className="ml-auto hidden shrink-0 text-[10px] text-muted-foreground @lg/ticket-card:inline-flex">
+        <span className="ml-auto hidden shrink-0 text-3xs text-muted-foreground @lg/ticket-card:inline-flex">
           Updated {updatedLabel}
         </span>
       ) : null}
@@ -69,9 +68,9 @@ export function TicketWorkItemRowMeta({
     <div className="flex flex-wrap items-center gap-1.5">
       <span className="text-xs font-medium text-muted-foreground">{ticket.ref.displayId}</span>
       <ProjectDashboardTicketRelationshipBadge child={child} childCount={childCount} />
-      <span className="text-[10px] text-muted-foreground/75">{ticket.status}</span>
+      <span className="text-3xs text-muted-foreground/75">{ticket.status}</span>
       {ticket.priority && (
-        <span className="rounded bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+        <span className="rounded bg-muted/40 px-1.5 py-0.5 text-3xs text-muted-foreground">
           {ticket.priority}
         </span>
       )}

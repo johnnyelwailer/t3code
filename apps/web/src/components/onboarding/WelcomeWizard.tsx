@@ -81,6 +81,7 @@ import { Dialog } from "../ui/dialog";
 import { toastManager } from "../ui/toast";
 import { cn } from "../../lib/utils";
 import { formatRelativeTime } from "../../timestampFormat";
+import { useWelcomeWizardBrand } from "~/t3team/onboarding/t3team-welcomeWizardBrand";
 
 /**
  * First-run welcome wizard. Rendered over the workspace at `/welcome` on a
@@ -107,6 +108,7 @@ export function WelcomeWizard({
   readonly onDone: (projectRef?: ScopedProjectRef) => void | Promise<void>;
 }) {
   const completeOnboarding = useCompleteOnboarding();
+  const brand = useWelcomeWizardBrand();
   const [step, setStep] = useState<WizardStep>("connection");
   const { environments } = useEnvironments();
   const [selection, setSelection] = useState<ReadonlySet<EnvironmentId> | null>(null);
@@ -211,14 +213,16 @@ export function WelcomeWizard({
         initialFocus={() => document.getElementById("onboarding-pairing-url") ?? true}
       >
         <WizardHeader
-          title="Set up T3 Code"
+          title={`Set up ${brand.productName}`}
           identity={
-            <div className="flex items-baseline gap-1.5" role="img" aria-label="T3 Code">
-              <T3Wordmark className="h-4 w-auto shrink-0" aria-hidden />
-              <span className="text-2xl font-medium tracking-tight text-muted-foreground">
-                Code
-              </span>
-            </div>
+            brand.identity ?? (
+              <div className="flex items-baseline gap-1.5" role="img" aria-label="T3 Code">
+                <T3Wordmark className="h-4 w-auto shrink-0" aria-hidden />
+                <span className="text-2xl font-medium tracking-tight text-muted-foreground">
+                  Code
+                </span>
+              </div>
+            )
           }
         >
           <WizardSteps
@@ -369,7 +373,9 @@ function ConnectionStep({
                 <Button
                   variant="ghost"
                   size="sm-multiline"
-                  className="min-h-14 w-full justify-start"
+                  // `sm:min-h-14` too: size="sm-multiline" carries `sm:min-h-7`, which outranks a
+                  // bare `min-h-14` from the sm breakpoint up and collapsed this row to 26px.
+                  className="min-h-14 w-full justify-start sm:min-h-14"
                 />
               }
             >
@@ -424,6 +430,7 @@ function ConnectAccountOption({
   const { environments } = useEnvironments();
   const { isLoaded, isSignedIn } = useAuth({ treatPendingAsSignedOut: false });
   const { openAuthPrompt } = useT3ConnectAuthPrompt();
+  const { productName } = useWelcomeWizardBrand();
   const [expanded, setExpanded] = useState(true);
   const [discoveryReady, setDiscoveryReady] = useState(false);
   const onDiscoveryReady = useCallback(() => setDiscoveryReady(true), []);
@@ -441,7 +448,11 @@ function ConnectAccountOption({
             }
           }}
           render={
-            <Button variant="ghost" size="sm-multiline" className="min-h-14 w-full justify-start" />
+            <Button
+              variant="ghost"
+              size="sm-multiline"
+              className="min-h-14 w-full justify-start sm:min-h-14"
+            />
           }
         >
           <CloudIcon className="size-4 text-muted-foreground" />
@@ -481,7 +492,7 @@ function ConnectAccountOption({
             </p>
             <CommandBlock command="npx t3 connect" className="mt-3" />
             <p className="mt-3 text-xs text-muted-foreground">
-              Keep T3 Code running. Select the computers you want to set up above.
+              Keep {productName} running. Select the computers you want to set up above.
             </p>
           </div>
         </CollapsiblePanel>
@@ -505,6 +516,7 @@ function PairingForm({
   readonly onPaired: (environmentId: EnvironmentId) => void;
 }) {
   const connectPairingEnvironment = useAtomCommand(connectPairing, { reportFailure: false });
+  const { productName } = useWelcomeWizardBrand();
   const [pairingUrl, setPairingUrl] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const mountedRef = useRef(true);
@@ -599,7 +611,7 @@ function PairingForm({
             </p>
             <CommandBlock command="npx t3 pair" className="mt-2" />
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              Start T3 Code first, or run <code className="font-mono">npx t3 serve</code>. Add{" "}
+              Start {productName} first, or run <code className="font-mono">npx t3 serve</code>. Add{" "}
               <code className="font-mono">--tailscale</code> to use your tailnet.
             </p>
           </CollapsiblePanel>

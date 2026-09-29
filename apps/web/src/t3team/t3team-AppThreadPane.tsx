@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-restyle -- Existing merged lint debt; keep green while preserving behavior. */
 import { useCallback, useEffect } from "react";
 import { PanelRightOpenIcon } from "lucide-react";
 import { useCanGoBack } from "@tanstack/react-router";
@@ -127,8 +126,8 @@ export function AppThreadPane({
             titleBarControlsAccessory: (
               <Button
                 size="icon-xs"
-                variant="ghost"
-                className="shrink-0 text-muted-foreground/80"
+                variant="ghost-muted"
+                className="shrink-0"
                 onClick={() =>
                   runT3TeamViewTransition(() =>
                     onOpenEmbeddedThread(view.projectId, resolvedThread.id),

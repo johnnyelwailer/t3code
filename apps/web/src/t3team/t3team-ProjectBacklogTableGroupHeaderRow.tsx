@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
 import { memo, useMemo } from "react";
 
 import type { ProjectBacklogTableGroup } from "~/t3team/t3team-projectBacklogTable";
@@ -38,17 +37,17 @@ export const ProjectBacklogTableGroupHeaderRow = memo(function ProjectBacklogTab
               <ChevronDown className="size-3.5" />
             )}
             <span className="min-w-0">
-              <span className="block truncate text-[12px] font-semibold text-foreground">
+              <span className="block truncate text-xs font-semibold text-foreground">
                 {group.label}
               </span>
               {groupSecondaryText ? (
-                <span className="block truncate text-[10px] text-muted-foreground">
+                <span className="block truncate text-3xs text-muted-foreground">
                   {groupSecondaryText}
                 </span>
               ) : null}
             </span>
           </span>
-          <span className="shrink-0 rounded-full bg-background/70 px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
+          <span className="shrink-0 rounded-full bg-background/70 px-2.5 py-1 text-3xs font-medium text-muted-foreground">
             {group.matchedCount} matched
           </span>
         </button>

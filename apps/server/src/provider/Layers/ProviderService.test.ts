@@ -1305,7 +1305,13 @@ unsupportedRollback.layer("ProviderServiceLive unsupported rewind", (it) => {
         assert.instanceOf(rollbackError, ProviderValidationError);
         assert.equal(unsupportedRollback.codex.startSession.mock.calls.length, 0);
         assert.equal(unsupportedRollback.codex.rollbackThread.mock.calls.length, 0);
-        assert.deepEqual(yield* directory.getBinding(threadId), originalBinding);
+        // Fork stale-session recovery (resolveRoutableSession): a "running" binding whose adapter
+        // no longer holds the session is reset to "stopped"; nothing else about it may change.
+        const expectedBinding =
+          active || Option.isNone(originalBinding)
+            ? originalBinding
+            : Option.some({ ...originalBinding.value, status: "stopped" as const });
+        assert.deepEqual(yield* directory.getBinding(threadId), expectedBinding);
       }
     }),
   );
@@ -2350,7 +2356,8 @@ routing.layer("ProviderServiceLive routing", (it) => {
         provider: ProviderDriverKind.make("codex"),
         providerInstanceId: codexInstanceId,
         threadId: asThreadId("thread-file-attach"),
-        cwd: "/tmp/project",
+        // A real directory: the workspace-missing guard rejects a cwd that does not exist.
+        cwd: fixtureCwd("project"),
         runtimeMode: "full-access",
       });
 
@@ -2373,7 +2380,8 @@ routing.layer("ProviderServiceLive routing", (it) => {
       const turnText = turnInput.input ?? "";
       assert.equal(turnText.startsWith("read these notes"), true);
       assert.include(turnText, '[Attached file "notes.txt" is saved at: ');
-      assert.equal(turnText.endsWith(`${file.id}.bin]`), true);
+      // attachmentFileExtension keeps a safe extension from the file name ("notes.txt" -> ".txt").
+      assert.equal(turnText.endsWith(`${file.id}.txt]`), true);
 
       // File attachments reach the adapter unmodified — the adapter must not
       // inline them, only the path line carries them to the model.

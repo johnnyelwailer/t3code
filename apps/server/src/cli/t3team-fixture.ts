@@ -33,7 +33,7 @@ const jsonFlag = Flag.Boolean("json").pipe(
  * `t3team fixture seed` — ingest a fixture directory into a workspace through the same
  * refresh pipeline the live Atlassian sync uses. Scriptable for humans, agents and CI.
  */
-export const fixtureSeedCommand = Command.make("seed", {
+const fixtureSeedCommand = Command.make("seed", {
   ...projectLocationFlags,
   fixture: fixtureFlag,
   workspace: workspaceFlag,

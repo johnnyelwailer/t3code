@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-native-title-tooltip, shadcn/no-arbitrary-values -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 import { AlertCircleIcon, DownloadIcon, XIcon } from "lucide-react";
 import {
   FALLBACK_KIND_CONFIG,
@@ -68,7 +68,7 @@ export function ContextAttachmentChip({ attachment, onRemove }: ContextAttachmen
           {...(attachment.jiraIssueTypeIconUrl
             ? { issueTypeIconUrl: attachment.jiraIssueTypeIconUrl }
             : {})}
-          className="size-3.5 rounded-[3px]"
+          className="size-3.5 rounded-xs"
         />
       ) : (
         <Icon className={cn("size-3.5 shrink-0", iconClassName)} />
@@ -80,7 +80,7 @@ export function ContextAttachmentChip({ attachment, onRemove }: ContextAttachmen
         <span className="flex min-w-0 items-center gap-1.5">
           <span
             className={cn(
-              "rounded px-1 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em]",
+              "rounded px-1 py-0.5 text-3xs font-semibold uppercase tracking-widest",
               badgeClassName,
             )}
           >
@@ -103,7 +103,7 @@ export function ContextAttachmentChip({ attachment, onRemove }: ContextAttachmen
                 {attachment.syncStatus === "error" ? (
                   <AlertCircleIcon className="size-3 text-destructive/75" />
                 ) : (
-                  <DownloadIcon className="size-3 -rotate-6 animate-[pulse_3.6s_ease-in-out_infinite] text-muted-foreground/55" />
+                  <DownloadIcon className="size-3 -rotate-6 animate-status-pulse-slow text-muted-foreground/55" />
                 )}
               </TooltipTrigger>
               <TooltipPopup side="top" align="start" className="max-w-none">
@@ -112,7 +112,7 @@ export function ContextAttachmentChip({ attachment, onRemove }: ContextAttachmen
             </Tooltip>
           )}
           {detailText && (
-            <span className="truncate text-[10px] leading-tight text-muted-foreground/80">
+            <span className="truncate text-3xs leading-tight text-muted-foreground/80">
               {detailText}
             </span>
           )}

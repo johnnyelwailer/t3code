@@ -1,4 +1,3 @@
-/* oxlint-disable shadcn/no-unknown-classes -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Planning Space view (Epic 29) — the depth-zoom planning canvas. This file is
  * the thin composition root: usePlanningSpaceController owns all state,
@@ -25,7 +24,7 @@ export type {
 export function PlanningSpaceView(props: PlanningSpaceProps) {
   const c = usePlanningSpaceController(props);
   return (
-    <div className="t3ps-root flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col" data-t3ps="root">
       <style>{PLANNING_SPACE_CSS}</style>
       <PlanningSpaceToolbar c={c} />
       <div

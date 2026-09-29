@@ -22,6 +22,9 @@ const entitiesHarness = vi.hoisted(() => ({
 
 const shellHolders = vi.hoisted(() => new Map<string, { current: unknown }>());
 const detailHolders = vi.hoisted(() => new Map<string, { current: unknown }>());
+// How often each thread's detail atom was read through the registry (a read of an
+// unmounted detail atom is what opens a thread-detail stream in the real app).
+const detailReads = vi.hoisted(() => new Map<string, number>());
 
 vi.mock("~/state/entities", () => ({
   useThreadRefs: () => entitiesHarness.refs,
@@ -48,13 +51,17 @@ vi.mock("~/state/threads", () => {
     },
     environmentThreadDetails: {
       detailAtom: (ref: { environmentId: string; threadId: string }) =>
-        Atom.make<unknown>(() => holderFor(detailHolders, ref).current),
+        Atom.make<unknown>(() => {
+          const key = `${ref.environmentId}:${ref.threadId}`;
+          detailReads.set(key, (detailReads.get(key) ?? 0) + 1);
+          return holderFor(detailHolders, ref).current;
+        }),
     },
   };
 });
 
 import { resetAppAtomRegistryForTests } from "~/rpc/atomRegistry";
-import { useMergedThreads } from "./t3team-mergedThreads";
+import { resetKnownChildThreadsForTests, useMergedThreads } from "./t3team-mergedThreads";
 
 const REF = {
   environmentId: "env-test",
@@ -133,6 +140,8 @@ describe("useMergedThreads (GHE #234 live status)", () => {
     entitiesHarness.shells = [];
     shellHolders.clear();
     detailHolders.clear();
+    detailReads.clear();
+    resetKnownChildThreadsForTests();
   });
 
   it("updates child status in real time when the shell list changes with refs unchanged", () => {
@@ -182,6 +191,42 @@ describe("useMergedThreads (GHE #234 live status)", () => {
       // Same array identity (referentially stable snapshot) → same result.
       probe.bump();
       expect(probe.merged()).toBe(first);
+    } finally {
+      probe.unmount();
+    }
+  });
+
+  it("stops reading a child's detail once its parent's handoff names it (no per-child stream)", () => {
+    const child = setShell("running", "working");
+    const parent = { ...child, id: "thread-parent", title: "Parent thread" };
+    detailHolders.set("env-test:thread-parent", {
+      current: {
+        ...parent,
+        deletedAt: null,
+        messages: [],
+        proposedPlans: [],
+        checkpoints: [],
+        activities: [
+          { kind: "t3team.handoff.started", payload: { childThreadId: "thread-child" } },
+        ],
+      },
+    });
+    entitiesHarness.refs = [REF, { environmentId: "env-test", threadId: "thread-parent" }];
+    entitiesHarness.shells = [parent, child];
+
+    const probe = mountProbe();
+    try {
+      expect(detailReads.get(REF_KEY)).toBe(1);
+      // The next shell update (new array identity) must not touch the child's detail again,
+      // while the child keeps merging with its live shell state.
+      const next = setShell("interrupted", "waiting");
+      entitiesHarness.shells = [{ ...parent }, next];
+      probe.bump();
+      expect(detailReads.get(REF_KEY)).toBe(1);
+      expect(detailReads.get("env-test:thread-parent")).toBe(2);
+      const merged = probe.merged().find((thread) => thread.id === "thread-child");
+      expect(merged?.session?.status).toBe("interrupted");
+      expect(merged?.activityState).toBe("waiting");
     } finally {
       probe.unmount();
     }
