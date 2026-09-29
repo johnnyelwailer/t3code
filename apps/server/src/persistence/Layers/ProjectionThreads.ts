@@ -224,6 +224,47 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
             AND (child_status_updated_at IS NULL OR child_status_updated_at <= ${updatedAt})`,
   });
 
+  // Open set as `hasOpenChildWaits` (packages/shared/t3team-childWaitFacts); the instance is the
+  // `<instanceId>` segment of the earliest `local:<instanceId>:…` message, validated on read.
+  const refreshT3TeamShellFactsRow = SqlSchema.void({
+    Request: GetProjectionThreadInput,
+    execute: ({ threadId }) =>
+      sql`UPDATE projection_threads
+          SET open_child_wait_count = (
+            SELECT COUNT(DISTINCT json_extract(r.payload_json, '$.waitId'))
+            FROM projection_thread_activities AS r
+            WHERE r.thread_id = ${threadId}
+              AND r.kind = 't3team.child_wait.registered'
+              AND json_extract(r.payload_json, '$.waitId') IS NOT NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM projection_thread_activities AS res
+                WHERE res.thread_id = r.thread_id
+                  AND res.kind = 't3team.child_wait.resolved'
+                  AND json_extract(res.payload_json, '$.waitId') =
+                    json_extract(r.payload_json, '$.waitId')
+              )
+          ),
+          local_session_instance_id = (
+            SELECT substr(m.message_id, 7, instr(substr(m.message_id, 7), ':') - 1)
+            FROM projection_thread_messages AS m
+            WHERE m.thread_id = ${threadId} AND m.message_id LIKE 'local:%:%'
+            ORDER BY m.created_at ASC, m.message_id ASC
+            LIMIT 1
+          )
+          WHERE thread_id = ${threadId}`,
+  });
+
+  const setLocalSessionInstanceIdRow = SqlSchema.void({
+    Request: Schema.Struct({
+      threadId: GetProjectionThreadInput.fields.threadId,
+      instanceId: Schema.String,
+    }),
+    execute: ({ threadId, instanceId }) =>
+      sql`UPDATE projection_threads
+          SET local_session_instance_id = ${instanceId}
+          WHERE thread_id = ${threadId} AND local_session_instance_id IS NULL`,
+  });
+
   const upsert: ProjectionThreadRepositoryShape["upsert"] = (row) =>
     upsertProjectionThreadRow(row).pipe(
       Effect.mapError(toPersistenceSqlError("ProjectionThreadRepository.upsert:query")),
@@ -239,10 +280,30 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
       Effect.mapError(toPersistenceSqlError("ProjectionThreadRepository.updateChildStatus:query")),
     );
 
+  const refreshT3TeamShellFacts: ProjectionThreadRepositoryShape["refreshT3TeamShellFacts"] = (
+    input,
+  ) =>
+    refreshT3TeamShellFactsRow(input).pipe(
+      Effect.mapError(
+        toPersistenceSqlError("ProjectionThreadRepository.refreshT3TeamShellFacts:query"),
+      ),
+    );
+
+  const setLocalSessionInstanceId: ProjectionThreadRepositoryShape["setLocalSessionInstanceId"] = (
+    input,
+  ) =>
+    setLocalSessionInstanceIdRow(input).pipe(
+      Effect.mapError(
+        toPersistenceSqlError("ProjectionThreadRepository.setLocalSessionInstanceId:query"),
+      ),
+    );
+
   return {
     upsert,
     getById,
     updateChildStatus,
+    refreshT3TeamShellFacts,
+    setLocalSessionInstanceId,
   } satisfies ProjectionThreadRepositoryShape;
 });
 

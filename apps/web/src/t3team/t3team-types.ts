@@ -39,8 +39,8 @@ export type ProjectThread = {
   dashboardMode?: ProjectDashboardMode;
   displayMode?: ProjectThreadDisplayMode;
   title: string;
-  providerKind?: "codex" | "claudeAgent";
-  messageCount: number;
+  /** Instance id of a mirrored native local session (see t3team-localProviderKinds). */
+  providerKind?: string;
   lastMessageAt: string;
   createdAt: string;
   kickoffMessage?: string;

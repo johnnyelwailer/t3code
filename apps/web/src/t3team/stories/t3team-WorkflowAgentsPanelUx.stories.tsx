@@ -306,7 +306,6 @@ const gheChildThread: ProjectThread = {
   parentThreadId: "thread-root",
   title: "Hourly cycle",
   status: "running",
-  messageCount: 2,
   lastMessageAt: isoAgo(12_000),
   createdAt: isoAgo(45_000), // "running 45s · just now" in the user's panel
 };

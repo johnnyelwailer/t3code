@@ -69,6 +69,10 @@ export const ProjectionThread = Schema.Struct({
   activityLabelUpdatedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   activityState: Schema.optional(Schema.NullOr(Schema.String)),
   activityStateUpdatedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
+  // Read-only here: `upsert` never writes these; the projector keeps them
+  // current through `refreshT3TeamShellFacts` / `setLocalSessionInstanceId`.
+  openChildWaitCount: Schema.optional(NonNegativeInt),
+  localSessionInstanceId: Schema.optional(Schema.NullOr(Schema.String)),
 });
 export type ProjectionThread = typeof ProjectionThread.Type;
 
@@ -100,6 +104,21 @@ export interface ProjectionThreadRepositoryShape {
     readonly threadId: ThreadId;
     readonly status: string;
     readonly updatedAt: IsoDateTime;
+  }) => Effect.Effect<void, ProjectionRepositoryError>;
+
+  /**
+   * Recompute both t3team shell facts from the thread's own activities and messages: the open
+   * `t3team.child_wait` count and the instance of its earliest `local:<instanceId>:` message.
+   * Needed wherever those tables are rewritten (thread re-created under the same id, revert).
+   */
+  readonly refreshT3TeamShellFacts: (
+    input: GetProjectionThreadInput,
+  ) => Effect.Effect<void, ProjectionRepositoryError>;
+
+  /** Record the mirrored native session's instance id; the first one recorded wins. */
+  readonly setLocalSessionInstanceId: (input: {
+    readonly threadId: ThreadId;
+    readonly instanceId: string;
   }) => Effect.Effect<void, ProjectionRepositoryError>;
 }
 

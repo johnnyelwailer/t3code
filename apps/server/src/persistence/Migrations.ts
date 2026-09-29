@@ -119,6 +119,7 @@ import Migration0079 from "./Migrations/t3team-061_ResourcePressureEvents.ts";
 // rather than taking upstream's numbers, which this fork already uses — see the rule above.
 import Migration0080 from "./Migrations/053_PullRequestFilesViewed.ts";
 import Migration0081 from "./Migrations/054_ProjectionThreadsAutoSettleDisabledAt.ts";
+import Migration0082 from "./Migrations/t3team-062_ProjectionThreadShellT3TeamFacts.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -212,6 +213,7 @@ const migrationEntries = [
   [79, "ResourcePressureEvents", Migration0079],
   [80, "PullRequestFilesViewed", Migration0080],
   [81, "ProjectionThreadsAutoSettleDisabledAt", Migration0081],
+  [82, "ProjectionThreadShellT3TeamFacts", Migration0082],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

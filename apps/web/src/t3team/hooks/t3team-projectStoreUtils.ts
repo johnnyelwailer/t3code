@@ -63,7 +63,6 @@ export function buildThreadForProject(
     title: options?.title ?? "New thread",
     status: "idle",
     lastMessageAt: now,
-    messageCount: 0,
     createdAt: now,
     ...(options?.kickoffMessage !== undefined ? { kickoffMessage: options.kickoffMessage } : {}),
     ...(options?.kickoffPending !== undefined ? { kickoffPending: options.kickoffPending } : {}),
