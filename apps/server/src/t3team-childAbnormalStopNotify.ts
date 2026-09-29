@@ -38,6 +38,7 @@ import {
   childAwaitingParentApproval,
   parentReceivedFromChild,
 } from "./t3team-childSilentCompletion.ts";
+import type { ProviderUsageNotificationReader } from "./t3team-providerUsageNotification.ts";
 
 /** The abnormal terminal outcomes that warrant a parent notification. */
 export type AbnormalStopOutcome = "failed" | "aborted";
@@ -96,6 +97,7 @@ export function buildAbnormalStopDetail(input: {
 export interface ChildAbnormalStopNotifierDeps {
   readonly engine: OrchestrationEngineShape;
   readonly query: ProjectionSnapshotQueryShape;
+  readonly usageLine?: ProviderUsageNotificationReader;
 }
 
 export interface NotifyChildAbnormalStopInput {
@@ -157,6 +159,13 @@ export const makeChildAbnormalStopNotifier =
           `stopped abnormally (${outcomeLabel}). It did not complete.` +
           (detail ? ` ${detail}.` : "");
       }
+      text += yield* (
+        deps.usageLine?.({
+          provider: child.modelSelection?.instanceId,
+          parentThreadId,
+          projectId: String(child.projectId),
+        }) ?? Effect.succeed("")
+      );
       const nowIso = DateTime.formatIso(DateTime.nowUnsafe());
       yield* deps.engine
         .dispatch({
