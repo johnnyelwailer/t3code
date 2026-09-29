@@ -25,6 +25,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
+import type { OrchestrationEventReplayFilter } from "./orchestration/t3team-eventReplayFilter.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 
 /** One notified terminal state: its trigger sequence and the observed thread's last resume. */
@@ -64,6 +65,8 @@ export interface TerminalNotifyLedger {
   readonly noteResume: (threadId: string, seq: number) => void;
   /** Rebuild the in-memory map from a persisted event replay at boot. */
   readonly rehydrate: (events: ReadonlyArray<OrchestrationEvent>) => void;
+  /** The events `rehydrate` reads: resume transitions and this site's marker. */
+  readonly replayFilters: ReadonlyArray<OrchestrationEventReplayFilter>;
   /**
    * Run `doNotify` only when a notify is owed for `key` at `terminalSeq`; then
    * record it in memory and append the durable marker on `markerThreadId`.
@@ -140,6 +143,10 @@ export function makeTerminalNotifyLedger(
     rehydrate: (events) => {
       for (const event of events) foldEvent(event);
     },
+    replayFilters: [
+      { type: "thread.session-set" },
+      { type: "thread.activity-appended", activityKinds: [options.markerKind] },
+    ],
     notify: ({
       key,
       markerThreadId,

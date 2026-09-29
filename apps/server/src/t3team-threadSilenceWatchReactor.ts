@@ -25,10 +25,7 @@ import { makeTerminalNotifyLedger } from "./t3team-terminalNotifyDedup.ts";
 import { makeThreadSilenceWatchEmitter } from "./t3team-threadSilenceWatchEmit.ts";
 import type { ThreadSilenceWatchEmitter } from "./t3team-threadSilenceWatchEmitTypes.ts";
 import { makeThreadSilenceWatchIndex } from "./t3team-threadSilenceWatchIndex.ts";
-import {
-  collectPendingThreadSilenceWatches,
-  lastTerminalSequenceByThread,
-} from "./t3team-threadSilenceWatchRehydrate.ts";
+import { rehydrateThreadSilenceWatches } from "./t3team-threadSilenceWatchRehydrate.ts";
 import { shouldStopSilenceWatch } from "./t3team-silenceWatchStop.ts";
 import { makeThreadSilenceWatchTerminalClose } from "./t3team-threadSilenceWatchTerminal.ts";
 import { makeThreadSilenceWatchStopRecheck } from "./t3team-threadSilenceWatchStopRecheck.ts";
@@ -190,16 +187,7 @@ export const makeThreadSilenceWatchReactor = (
     startEventStream: () =>
       Effect.forkScoped(Stream.runForEach(deps.engine.streamDomainEvents, handleSafely)),
     startSweeper: () => sweeper.start(),
-    rehydrate: Effect.gen(function* () {
-      const replayed: ReadonlyArray<OrchestrationEvent> = yield* Stream.runCollect(
-        deps.engine.readEvents(0, Number.MAX_SAFE_INTEGER),
-      ).pipe(Effect.map((chunk) => Array.from(chunk)));
-      dedup.rehydrate(replayed);
-      const lastTerminalByThread = lastTerminalSequenceByThread(replayed);
-      for (const record of collectPendingThreadSilenceWatches(replayed)) {
-        yield* emitter.onRegistered(record, lastTerminalByThread.get(record.targetThreadId) ?? 0);
-      }
-    }),
+    rehydrate: rehydrateThreadSilenceWatches({ engine: deps.engine, dedup, emitter }),
     stop: () => sweeper.stop(),
   };
 };

@@ -26,7 +26,7 @@ class AssertionFailure extends Error {
 layer("t3team-requiredIndexGuard", (it) => {
   it("reports which declared indexes are missing", () => {
     assert.deepStrictEqual(findMissingRequiredIndexes(new Set([])), [
-      REQUIRED_HOT_QUERY_INDEXES[0]!,
+      ...REQUIRED_HOT_QUERY_INDEXES,
     ]);
     assert.deepStrictEqual(
       findMissingRequiredIndexes(new Set(REQUIRED_HOT_QUERY_INDEXES.map((index) => index.name))),

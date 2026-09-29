@@ -14,6 +14,7 @@
  */
 import { type OrchestrationEvent } from "@t3tools/contracts";
 import { stateOfShell, type SettleSweepShellLike } from "./t3team-childSettleSweeper.ts";
+import type { OrchestrationEventReplayFilter } from "./orchestration/t3team-eventReplayFilter.ts";
 
 /** Default nudge threshold: 10 unsettled terminal children. */
 export const CHILD_CLEANUP_NUDGE_AT = 10;
@@ -159,6 +160,11 @@ export function cleanupNudgeDue(input: {
  * `t3team.child_cleanup.nudged` activity per parent wins. Mirrors the
  * child-wait index rehydration pattern (collect from the replayed stream).
  */
+/** The events `collectLastCleanupNudges` reads. */
+export const CLEANUP_NUDGE_REPLAY_FILTERS: ReadonlyArray<OrchestrationEventReplayFilter> = [
+  { type: "thread.activity-appended", activityKinds: [CHILD_CLEANUP_NUDGED_KIND] },
+];
+
 export function collectLastCleanupNudges(
   events: ReadonlyArray<OrchestrationEvent>,
 ): ReadonlyMap<string, CleanupNudgeRecord> {

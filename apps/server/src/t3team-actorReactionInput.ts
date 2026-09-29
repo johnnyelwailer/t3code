@@ -26,6 +26,7 @@ import {
   buildActorReactionHeaderSingleInput,
   buildActorReactionInput,
 } from "./t3team-actorReactionFraming.ts";
+import type { OrchestrationEventReplayFilter } from "./orchestration/t3team-eventReplayFilter.ts";
 
 export {
   buildActorReactionCompressedInput,
@@ -92,6 +93,13 @@ const singleEntryBases = (entry: T3TeamActorMailboxEntry): ReadonlyArray<string>
  * work. This is the function a restart double-reaction flows through: every
  * delivery whose reaction was already admitted must be removed here.
  */
+/** The events `collectPendingActorDeliveries` reads. */
+export const PENDING_ACTOR_DELIVERY_REPLAY_FILTERS: ReadonlyArray<OrchestrationEventReplayFilter> =
+  [
+    { type: "thread.actor-message-delivered" },
+    { type: "thread.message-sent", messageRole: "user" },
+  ];
+
 export function collectPendingActorDeliveries(
   events: ReadonlyArray<OrchestrationEvent>,
   hopCap: number,

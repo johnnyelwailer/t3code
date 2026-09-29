@@ -24,7 +24,10 @@ import {
   makeChildAbnormalStopNotifier,
   type ChildTerminalOutcome,
 } from "./t3team-childAbnormalStopNotify.ts";
-import { makeTerminalNotifyLedger } from "./t3team-terminalNotifyDedup.ts";
+import {
+  makeTerminalNotifyLedger,
+  type TerminalNotifyLedger,
+} from "./t3team-terminalNotifyDedup.ts";
 
 /** Durable "already notified" marker kind, appended on the child thread. */
 const CHILD_ABNORMAL_STOP_NOTIFIED_KIND = "t3team.child_abnormal_stop_notified";
@@ -50,6 +53,7 @@ export interface AbnormalStopGuards {
   }) => Effect.Effect<void>;
   /** Rebuild the in-memory map from a persisted event replay at boot. */
   readonly rehydrate: (events: ReadonlyArray<OrchestrationEvent>) => void;
+  readonly replayFilters: TerminalNotifyLedger["replayFilters"];
 }
 
 /**
@@ -71,6 +75,7 @@ export function makeAbnormalStopGuards(deps: {
   return {
     noteResume: (childThreadId, seq) => ledger.noteResume(childThreadId, seq),
     rehydrate: (events) => ledger.rehydrate(events),
+    replayFilters: ledger.replayFilters,
     notifyAbnormalStop: ({ childThreadId, outcome, lastError, eventSequence }) =>
       Effect.gen(function* () {
         const child = Option.getOrUndefined(

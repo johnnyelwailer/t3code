@@ -33,6 +33,7 @@ import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
 import { summarizeActorMessageForDelivery } from "./t3team-actorReactionInputSummarize.ts";
 import { renderAutomatedBurstBlock, splitAutomatedBurst } from "./t3team-actorBurstFold.ts";
 import { loadT3TeamThreadDescendants } from "./t3team-threadStopCascade.ts";
+import type { OrchestrationEventReplayFilter } from "./orchestration/t3team-eventReplayFilter.ts";
 
 /**
  * A child thread that was still running when the server stopped and is now
@@ -65,6 +66,11 @@ const INTERRUPTED_SESSION_STATUSES: ReadonlySet<string> = new Set([
  * crash-interrupted work (including the #157 abnormal-stop notifications that
  * arrive live AFTER rehydrate) must be held, not auto-drained.
  */
+/** The events `collectStaleSessionThreadIdsAtRehydrate` reads. */
+export const STALE_SESSION_REPLAY_FILTERS: ReadonlyArray<OrchestrationEventReplayFilter> = [
+  { type: "thread.session-set" },
+];
+
 export function collectStaleSessionThreadIdsAtRehydrate(
   events: ReadonlyArray<OrchestrationEvent>,
 ): ReadonlySet<string> {
