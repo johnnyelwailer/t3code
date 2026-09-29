@@ -14,7 +14,6 @@ function makeHandlers() {
   return {
     onConnect: vi.fn((_environmentId: EnvironmentId) => undefined),
     onRemove: vi.fn((_environmentId: EnvironmentId) => undefined),
-    onStopCloudSession: vi.fn((_environmentId: EnvironmentId) => undefined),
   };
 }
 
@@ -31,11 +30,9 @@ function mount(props: Partial<Parameters<typeof CloudEnvironmentExitActions>[0]>
     isConnected: true,
     isConnecting: false,
     isRemoving: false,
-    canStopCloudSession: true,
-    isStoppingCloudSession: false,
+    isCloudSession: false,
     onConnect: handlers.onConnect,
     onRemove: handlers.onRemove,
-    onStopCloudSession: handlers.onStopCloudSession,
     ...props,
   };
   act(() => {
@@ -76,14 +73,20 @@ afterEach(() => {
 });
 
 describe("CloudEnvironmentExitActions", () => {
-  it("offers both 'Stop this machine' and 'Forget this environment' for a live machine", () => {
-    mount();
-    expect(byAriaLabel("Stop this machine")).not.toBeNull();
-    expect(byAriaLabel("Forget this environment")).not.toBeNull();
+  it("renders a live cloud session as a read-only connect target: Connect + chip, no stop/forget", () => {
+    const handlers = mount({ isCloudSession: true, isConnected: false });
+    expect(container?.textContent).toContain("Cloud session");
+    expect(findTextButton("Connect")).not.toBeNull();
+    click(findTextButton("Connect")!);
+    expect(handlers.onConnect).toHaveBeenCalledWith(ENV);
+    // The panel owns the lifecycle; the row offers neither verb.
+    expect(byAriaLabel("Stop this machine")).toBeNull();
+    expect(byAriaLabel("Forget this environment")).toBeNull();
   });
 
-  it("hides Stop when there is no live session behind the machine, but keeps Forget", () => {
-    mount({ canStopCloudSession: false });
+  it("keeps Forget, and no chip, for a T3 Connect machine that is not a cloud session", () => {
+    mount();
+    expect(container?.textContent).not.toContain("Cloud session");
     expect(byAriaLabel("Stop this machine")).toBeNull();
     expect(byAriaLabel("Forget this environment")).not.toBeNull();
   });
@@ -98,23 +101,14 @@ describe("CloudEnvironmentExitActions", () => {
     expect(findTextButton("Connect")).toBeNull();
   });
 
-  it("stops the machine (and nothing else) when 'Stop this machine' is clicked", () => {
-    const handlers = mount();
-    click(byAriaLabel("Stop this machine")!);
-    expect(handlers.onStopCloudSession).toHaveBeenCalledWith(ENV);
-    expect(handlers.onRemove).not.toHaveBeenCalled();
-  });
-
-  it("forgets (removes) the environment — and does not stop it — when 'Forget' is clicked", () => {
+  it("forgets (removes) the environment when 'Forget' is clicked", () => {
     const handlers = mount();
     click(byAriaLabel("Forget this environment")!);
     expect(handlers.onRemove).toHaveBeenCalledWith(ENV);
-    expect(handlers.onStopCloudSession).not.toHaveBeenCalled();
   });
 
-  it("dims both verbs while either the stop or the remove is in flight", () => {
-    mount({ isStoppingCloudSession: true });
-    expect(byAriaLabel("Stop this machine")?.disabled).toBe(true);
+  it("dims Forget while the remove is in flight", () => {
+    mount({ isRemoving: true });
     expect(byAriaLabel("Forget this environment")?.disabled).toBe(true);
   });
 });

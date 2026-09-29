@@ -62,6 +62,11 @@ import { getProviderSummary } from "../settings/providerStatus";
 import { getDriverOption } from "../settings/providerDriverMeta";
 import { TerminalViewport } from "../ThreadTerminalDrawer";
 import { CloudEnvironmentConnectRows } from "../cloud/CloudEnvironmentConnectList";
+import {
+  canContinueWithSelection,
+  setupEnvironmentIds,
+  shouldAutoSelectComputer,
+} from "./t3team-onboardingComputerSelection";
 import { ClaudeAI, OpenAI } from "../Icons";
 import { T3Wordmark } from "../T3Wordmark";
 import { Button } from "../ui/button";
@@ -114,8 +119,12 @@ export function WelcomeWizard({
   const completionErrorToastIdRef = useRef<ReturnType<typeof toastManager.add> | null>(null);
   const primaryEnvironment = usePrimaryEnvironment();
   useEffect(() => {
+    // Only a reachable computer is ticked for the user, once it connects; one
+    // they toggled themselves is already in the set and never re-ticked.
     const newComputers = environments.filter(
-      (environment) => !autoSelectedComputers.current.has(environment.environmentId),
+      (environment) =>
+        !autoSelectedComputers.current.has(environment.environmentId) &&
+        shouldAutoSelectComputer(environment),
     );
     if (newComputers.length === 0) return;
     for (const environment of newComputers) {
@@ -234,21 +243,16 @@ export function WelcomeWizard({
               selectedIds={selectedIds}
               autoSelectedComputers={autoSelectedComputers.current}
               onSelectionChange={setSelection}
-              onToggleEnvironment={(environmentId, checked) =>
+              onToggleEnvironment={(environmentId, checked) => {
+                autoSelectedComputers.current.add(environmentId);
                 setSelection((current) => {
                   const next = new Set(current ?? selectedIds);
                   if (checked) next.add(environmentId);
                   else next.delete(environmentId);
                   return next;
-                })
-              }
-              onContinue={() =>
-                startSetup(
-                  environments
-                    .filter((environment) => selectedIds.has(environment.environmentId))
-                    .map((environment) => environment.environmentId),
-                )
-              }
+                });
+              }}
+              onContinue={() => startSetup(setupEnvironmentIds(selectedIds, environments))}
               onPaired={(environmentId) => {
                 setSelection(new Set([...selectedIds, environmentId]));
               }}
@@ -295,14 +299,7 @@ function ConnectionStep({
   );
   const [pairingOpen, setPairingOpen] = useState(expandPairingInitially);
   const [isPairing, setIsPairing] = useState(false);
-  const ready =
-    selectedIds.size > 0 &&
-    [...selectedIds].every((id) =>
-      environments.some(
-        (environment) =>
-          environment.environmentId === id && environment.connection.phase === "connected",
-      ),
-    );
+  const ready = canContinueWithSelection(selectedIds, environments);
   const continueRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (
@@ -332,6 +329,7 @@ function ConnectionStep({
               <Checkbox
                 checked={selectedIds.has(environment.environmentId)}
                 onCheckedChange={(checked) => {
+                  autoSelectedComputers.add(environment.environmentId);
                   const next = new Set(selectedIds);
                   if (checked) next.add(environment.environmentId);
                   else next.delete(environment.environmentId);

@@ -157,7 +157,7 @@ export function presentCloudSession(session: CloudSession): CloudSessionProvisio
         detail: session.failureReason ?? "The session stopped before it became reachable.",
         tone: "error",
         progress: null,
-        actionLabel: "Retry",
+        actionLabel: "Start another", // a fresh session, not a replay of this one
         secondaryActionLabel: null,
         liveElapsed: false,
       };

@@ -82,6 +82,12 @@ export const CloudSessionListResultSchema = Schema.Struct({
    * offer setup instead of rendering a permanently empty list.
    */
   configured: Schema.Boolean,
+  /**
+   * Where a human can browse every one of their sessions on the provider — the
+   * escape hatch for the capped history the client shows. Optional: providers
+   * without such a page, and older servers, omit it.
+   */
+  historyUrl: Schema.optional(Schema.String),
 });
 export type CloudSessionListResult = typeof CloudSessionListResultSchema.Type;
 

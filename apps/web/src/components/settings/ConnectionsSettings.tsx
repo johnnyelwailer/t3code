@@ -34,6 +34,7 @@ import {
   type AuthPairingLink,
   type AuthPairingCredentialResult,
   type AdvertisedEndpoint,
+  type CloudSession,
   type DesktopDiscoveredSshHost,
   type DesktopSshEnvironmentTarget,
   type DesktopServerExposureState,
@@ -145,6 +146,7 @@ import {
 import { hasCloudPublicConfig } from "~/cloud/publicConfig";
 import { useCloudLinkController } from "~/cloud/useCloudLinkController";
 import { useCloudSessionController } from "~/cloud/t3team-useCloudSessionController";
+import { savedEnvironmentForCloudSession } from "~/cloud/t3team-cloudSessionEnvironmentMatch";
 import { authEnvironment } from "~/state/auth";
 import { environmentCatalog } from "~/connection/catalog";
 import {
@@ -1432,9 +1434,8 @@ type SavedBackendListRowProps = {
   removingEnvironmentId: EnvironmentId | null;
   onSetEnabled: (environmentId: EnvironmentId, enabled: boolean) => void;
   onRemove: (environment: EnvironmentPresentation) => void;
-  canStopCloudSession: boolean;
-  onStopCloudSession: (environmentId: EnvironmentId) => void;
-  isStoppingCloudSession: boolean;
+  /** A live cloud session's machine: a read-only connect target (the panel owns it). */
+  isCloudSession: boolean;
 };
 
 /**
@@ -1484,9 +1485,7 @@ function SavedBackendListRow({
   removingEnvironmentId,
   onSetEnabled,
   onRemove,
-  canStopCloudSession,
-  onStopCloudSession,
-  isStoppingCloudSession,
+  isCloudSession,
 }: SavedBackendListRowProps) {
   const environmentId = environment.environmentId;
   const unsupported = environment.connection.phase === "unsupported";
@@ -1627,11 +1626,9 @@ function SavedBackendListRow({
           isConnected={isConnected}
           isConnecting={environment.connection.phase === "connecting"}
           isRemoving={isRemoving}
-          canStopCloudSession={canStopCloudSession}
-          isStoppingCloudSession={isStoppingCloudSession}
+          isCloudSession={isCloudSession}
           onConnect={() => onSetEnabled(environmentId, true)}
           onRemove={() => onRemove(environment)}
-          onStopCloudSession={onStopCloudSession}
         />
       ) : (
         <>
@@ -2585,6 +2582,21 @@ export function ConnectionsSettings() {
       }
     },
     [removeEnvironment],
+  );
+
+  // The cloud panel owns a session's "Forget": the same confirmed removal the
+  // saved-backend row used, offered only when the machine was actually saved.
+  const forgetCloudSession = useCallback(
+    (session: CloudSession) => {
+      const saved = savedEnvironmentForCloudSession(session, listedEnvironments);
+      if (saved !== null) void handleRemoveSavedBackend(saved);
+    },
+    [handleRemoveSavedBackend, listedEnvironments],
+  );
+  const canForgetCloudSession = useCallback(
+    (session: CloudSession) =>
+      savedEnvironmentForCloudSession(session, listedEnvironments) !== null,
+    [listedEnvironments],
   );
 
   const visibleDesktopPairingLinks = desktopPairingLinks;
@@ -3795,11 +3807,7 @@ export function ConnectionsSettings() {
             removingEnvironmentId={removingSavedEnvironmentId}
             onSetEnabled={handleSetSavedBackendEnabled}
             onRemove={handleRemoveSavedBackend}
-            canStopCloudSession={cloudSessions.hasLiveCloudSession(environment.environmentId)}
-            onStopCloudSession={cloudSessions.stopEnvironment}
-            isStoppingCloudSession={
-              cloudSessions.stoppingEnvironmentId === environment.environmentId
-            }
+            isCloudSession={cloudSessions.hasLiveCloudSession(environment.environmentId)}
           />
         ))}
         {cloudSessions.available ? (
@@ -3816,6 +3824,9 @@ export function ConnectionsSettings() {
               pendingSessionId={cloudSessions.pendingSessionId}
               pendingKind={cloudSessions.pendingKind}
               pendingLabel={cloudSessions.pendingLabel}
+              historyUrl={cloudSessions.historyUrl}
+              onSessionForget={forgetCloudSession}
+              canForgetSession={canForgetCloudSession}
             />
           ) : (
             <div className={ITEM_ROW_CLASSNAME}>

@@ -11,6 +11,12 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   toast: vi.fn(),
   projects: [] as Array<{ id: string; environmentId: string; workspaceRoot: string }>,
+  // Computers besides the primary; reset per test.
+  extraEnvironments: [] as Array<{
+    environmentId: string;
+    label: string;
+    connection: { phase: string };
+  }>,
 }));
 vi.mock("../../state/agentSessions", () => ({ agentSessionImport: "import" }));
 vi.mock("../../state/projects", () => ({ projectEnvironment: { create: "create" } }));
@@ -34,7 +40,7 @@ vi.mock("../../state/environments", () => {
     connection: { phase: "connected" },
   };
   return {
-    useEnvironments: () => ({ environments: [environment] }),
+    useEnvironments: () => ({ environments: [environment, ...mocks.extraEnvironments] }),
     usePrimaryEnvironment: () => environment,
   };
 });
@@ -72,7 +78,11 @@ vi.mock("../../onboarding/useProjectScans", () => ({
 vi.mock("../../connection/onboarding", () => ({ connectPairing: vi.fn() }));
 vi.mock("../../state/terminal", () => ({ terminalEnvironment: {} }));
 vi.mock("../clerk/useT3ConnectAuthPrompt", () => ({ useT3ConnectAuthPrompt: vi.fn() }));
-vi.mock("../../cloud/publicConfig", () => ({ hasCloudPublicConfig: () => false }));
+// Partial: `lib/runtime` reads the rest of the module at import time.
+vi.mock("../../cloud/publicConfig", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../cloud/publicConfig")>()),
+  hasCloudPublicConfig: () => false,
+}));
 vi.mock("../ThreadTerminalDrawer", () => ({ TerminalViewport: () => null }));
 vi.mock("../cloud/CloudEnvironmentConnectList", () => ({
   CloudEnvironmentConnectRows: () => null,
@@ -101,6 +111,7 @@ beforeEach(() => {
     value: () => [],
   });
   mocks.projects = [{ id: "test-project", environmentId: "test-env", workspaceRoot: "/project" }];
+  mocks.extraEnvironments = [];
   mocks.complete.mockResolvedValue(undefined);
   mocks.refresh.mockResolvedValue(undefined);
   mocks.importThreads.mockResolvedValue({
@@ -150,6 +161,27 @@ it("enters the workspace after a partial import and warns after navigation finis
   expect(mocks.toast.mock.invocationCallOrder[0]).toBeGreaterThan(
     onDone.mock.invocationCallOrder[0]!,
   );
+});
+
+it("leaves an unreachable computer unticked and never blocks Continue on it", async () => {
+  mocks.extraEnvironments = [
+    { environmentId: "offline-env", label: "Offline box", connection: { phase: "error" } },
+  ];
+  await act(async () => root.render(<WelcomeWizard localAvailable onDone={vi.fn()} />));
+
+  const offlineRow = [...document.querySelectorAll("label")].find((label) =>
+    label.textContent?.includes("Offline box"),
+  );
+  const offlineCheckbox = offlineRow?.querySelector('[role="checkbox"]');
+  expect(offlineCheckbox?.getAttribute("aria-checked")).toBe("false");
+
+  // Ticking it explicitly is allowed, and still does not block Continue.
+  await act(async () => (offlineCheckbox as HTMLElement).click());
+  expect(offlineCheckbox?.getAttribute("aria-checked")).toBe("true");
+  const continueButton = [...document.querySelectorAll("button")].find(
+    (element) => element.textContent?.trim() === "Continue",
+  );
+  expect(continueButton?.disabled).toBe(false);
 });
 
 it.each([

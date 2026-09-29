@@ -1,4 +1,4 @@
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { CloudSession, EnvironmentId } from "@t3tools/contracts";
 import { CLOUD_SESSION_REFRESH_INTERVAL_MS } from "@t3tools/client-runtime/state/cloud-sessions";
 import { useCallback } from "react";
 
@@ -9,6 +9,7 @@ import { useAtomCommand } from "~/state/use-atom-command";
 
 import {
   acquireCloudSessionListRefresh,
+  cloudSessionPollIntervalMs,
   useCloudSessionListPolling,
 } from "./t3team-cloudSessionPolling";
 
@@ -17,7 +18,11 @@ import {
  * refresh, the relay discovery refresh, and the polling that drives both while
  * a surface showing the list is `active`.
  */
-export function useCloudSessionListRefresh(environmentId: EnvironmentId | null, active: boolean) {
+export function useCloudSessionListRefresh(
+  environmentId: EnvironmentId | null,
+  active: boolean,
+  sessions: readonly CloudSession[],
+) {
   const refreshRelayEnvironments = useAtomCommand(relayEnvironmentDiscovery.refresh, {
     reportFailure: false,
   });
@@ -31,6 +36,9 @@ export function useCloudSessionListRefresh(environmentId: EnvironmentId | null, 
     refreshCloudSessionList();
     void refreshRelayEnvironments();
   }, [refreshCloudSessionList, refreshRelayEnvironments]);
-  useCloudSessionListPolling(pollTick, active, CLOUD_SESSION_REFRESH_INTERVAL_MS);
+  // Busy cadence only while something is provisioning; a change of cadence
+  // restarts the poll, so a fresh create is picked up at once.
+  const intervalMs = cloudSessionPollIntervalMs(sessions, CLOUD_SESSION_REFRESH_INTERVAL_MS);
+  useCloudSessionListPolling(pollTick, active, intervalMs);
   return { refreshCloudSessionList, refreshRelayEnvironments } as const;
 }

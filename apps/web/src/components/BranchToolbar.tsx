@@ -23,6 +23,7 @@ import {
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
 import { useCloudSessionController } from "../cloud/t3team-useCloudSessionController";
 import { runOnCloudSessions } from "./cloud/t3team-cloudSessionSplit";
+import { formatHoldDuration } from "./cloud/t3team-cloudSessionHoldFormat";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useProject, useThreadShell, useThreadShellsForProjectRefs } from "../state/entities";
 import {
@@ -716,6 +717,7 @@ export const BranchToolbar = memo(function BranchToolbar({
                   ? {
                       pendingCloudSessions,
                       onCreateCloudSession,
+                      cloudSessionDurationLabel: formatHoldDuration(cloudSessions.durationSeconds),
                       onCloudSessionAction: cloudSessions.onSessionAction,
                       onCloudMenuOpenChange: cloudSessions.onCloudMenuOpenChange,
                     }
