@@ -125,6 +125,14 @@ layer("OrchestrationEventStore.readMatching", (it) => {
         expected.map((event) => event.sequence),
       );
       assert.deepStrictEqual(Array.from(yield* Stream.runCollect(store.readMatching!([]))), []);
+      // Reactors union their collectors' filters, so the same class can be asked for twice.
+      const overlapping = Array.from(
+        yield* Stream.runCollect(store.readMatching!([...filters, ...filters])),
+      );
+      assert.deepStrictEqual(
+        overlapping.map((event) => event.sequence),
+        expected.map((event) => event.sequence),
+      );
     }),
   );
 });

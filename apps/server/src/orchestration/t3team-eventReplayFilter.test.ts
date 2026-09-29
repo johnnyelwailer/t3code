@@ -1,4 +1,6 @@
 import type { OrchestrationEvent } from "@t3tools/contracts";
+import { assert, it as effectIt } from "@effect/vitest";
+import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -32,6 +34,7 @@ import {
   lastTerminalSequenceByThread,
   PENDING_SILENCE_WATCH_REPLAY_FILTERS,
 } from "../t3team-threadSilenceWatchRehydrate.ts";
+import { makeTerminalNotifyLedger } from "../t3team-terminalNotifyDedup.ts";
 import { matchesEventReplayFilters } from "./t3team-eventReplayFilter.ts";
 
 const at = "2026-09-29T10:00:00.000Z";
@@ -135,4 +138,67 @@ describe("startup rehydrate replay filters", () => {
         .filter((sequence) => ![2, 3, 4].includes(sequence)),
     );
   });
+});
+
+describe("terminal-notify ledger replay filters", () => {
+  // The ledger's state is internal; observe it the way production does, through
+  // whether `notify` still owes a report after rehydrating.
+  const owes = (events: ReadonlyArray<OrchestrationEvent>, key: string, resumeThreadId: string) =>
+    Effect.gen(function* () {
+      const ledger = makeTerminalNotifyLedger({
+        engine: { dispatch: () => Effect.succeed({ sequence: 0 }) } as never,
+        markerKind: "t3team.test_marker",
+        markerCommandPrefix: "test",
+        markerSummary: "test",
+      });
+      ledger.rehydrate(events);
+      let notified = false;
+      yield* ledger.notify({
+        key,
+        markerThreadId: "parent",
+        resumeThreadId,
+        terminalSeq: 100,
+        markerPayload: {},
+        doNotify: Effect.sync(() => {
+          notified = true;
+        }),
+      });
+      return notified;
+    });
+
+  const ledgerLog: ReadonlyArray<OrchestrationEvent> = [
+    ...log,
+    activity(30, "parent", "t3team.test_marker", {
+      dedupKey: "quiet",
+      resumeThreadId: "c2",
+      eventSequence: 40,
+    }),
+    activity(31, "parent", "t3team.test_marker", {
+      dedupKey: "resumed",
+      resumeThreadId: "child",
+      eventSequence: 0,
+    }),
+  ];
+
+  const ledgerFilters = makeTerminalNotifyLedger({
+    engine: {} as never,
+    markerKind: "t3team.test_marker",
+    markerCommandPrefix: "test",
+    markerSummary: "test",
+  }).replayFilters;
+  const slice = ledgerLog.filter((candidate) =>
+    matchesEventReplayFilters(candidate, ledgerFilters),
+  );
+
+  for (const [name, key, thread, expected] of [
+    ["an already-reported key", "quiet", "c2", false],
+    ["a key whose thread resumed after its report", "resumed", "child", true],
+  ] as const) {
+    effectIt.effect(`folds ${name} the same from its filtered slice`, () =>
+      Effect.gen(function* () {
+        assert.strictEqual(yield* owes(ledgerLog, key, thread), expected);
+        assert.strictEqual(yield* owes(slice, key, thread), expected);
+      }),
+    );
+  }
 });

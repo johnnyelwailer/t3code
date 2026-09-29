@@ -40,10 +40,8 @@ export function makeReadMatching<Row>(input: {
     return sql`event_type = ${filter.type}`;
   };
 
-  return (filters) => {
-    if (filters.length === 0) return Stream.empty;
-    const matching = sql.or(filters.map(clause));
-    const readPage = SqlSchema.findAll({
+  const readPage = (filter: OrchestrationEventReplayFilter) =>
+    SqlSchema.findAll({
       Request: Schema.Struct({ sequenceExclusive: Schema.Number }),
       Result: input.rowSchema,
       execute: ({ sequenceExclusive }) => sql`
@@ -60,13 +58,14 @@ export function makeReadMatching<Row>(input: {
           payload_json AS "payload",
           metadata_json AS "metadata"
         FROM orchestration_events
-        WHERE sequence > ${sequenceExclusive} AND ${matching}
+        WHERE sequence > ${sequenceExclusive} AND ${clause(filter)}
         ORDER BY sequence ASC
         LIMIT ${PAGE_SIZE}
       `,
     });
-    return Stream.paginate(0, (cursor) =>
-      readPage({ sequenceExclusive: cursor }).pipe(
+  const readFilter = (filter: OrchestrationEventReplayFilter) =>
+    Stream.paginate(0, (cursor: number) =>
+      readPage(filter)({ sequenceExclusive: cursor }).pipe(
         Effect.mapError((cause): OrchestrationEventStoreError =>
           Schema.isSchemaError(cause)
             ? toPersistenceDecodeError("OrchestrationEventStore.readMatching:decodeRows")(cause)
@@ -92,5 +91,24 @@ export function makeReadMatching<Row>(input: {
         }),
       ),
     );
+
+  // One index-ordered query per filter, merged by sequence. OR-ing the clauses
+  // into one statement made SQLite collect and sort every branch on every page
+  // (a rare activity kind re-scanned all activity payloads per page: ~12 s of
+  // blocking reads at boot). The merged set is the matches, not the log.
+  return (filters) => {
+    const distinct = [
+      ...new Map(filters.map((filter) => [JSON.stringify(filter), filter])).values(),
+    ];
+    return Stream.fromEffect(
+      Effect.forEach(distinct, (filter) => Stream.runCollect(readFilter(filter))).pipe(
+        Effect.map((chunks) => {
+          const bySequence = new Map<number, OrchestrationEvent>();
+          for (const chunk of chunks)
+            for (const event of chunk) bySequence.set(event.sequence, event);
+          return [...bySequence.values()].sort((left, right) => left.sequence - right.sequence);
+        }),
+      ),
+    ).pipe(Stream.flatMap((events) => Stream.fromIterable(events)));
   };
 }
