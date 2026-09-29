@@ -685,7 +685,6 @@ describe("ProviderSessionReaper", () => {
     );
 
     await startReaper();
-    // oxlint-disable-next-line t3code/no-manual-effect-runtime-in-tests -- Existing merged lint debt; keep green while preserving behavior.
     await Effect.runPromise(drainFibers);
 
     expect(harness.stopSession).not.toHaveBeenCalled();
