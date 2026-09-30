@@ -26,6 +26,12 @@ import {
 } from "~/t3team/hooks/t3team-integrationPolling";
 import { readCachedAtlassianCurrentUserDisplayName } from "~/t3team/hooks/t3team-useAtlassianCurrentUserDisplayName";
 import { payloadToDigestGraph, type DigestViewer } from "./t3team-digestGraphMappers";
+import {
+  createDigestPendingRetry,
+  digestScopeSignature,
+  readInitialDigestState,
+  writeCachedDigestGraph,
+} from "./t3team-digestGraphCache";
 import { readLastVisitAt, writeLastVisitAt } from "./t3team-digestLastVisit";
 import { toDigestProjectEntries } from "./t3team-digestProjectEntries";
 import type { DigestGraph } from "~/t3team/t3team-projectMyWorkDigestPlan";
@@ -41,21 +47,20 @@ import type {
 
 export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWorkDigestGraphResult {
   const backend = useBackend();
-  const [graph, setGraph] = useState<DigestGraph | null>(null);
-  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
-  const [error, setError] = useState<string | undefined>(undefined);
-  const [viewerUnresolved, setViewerUnresolved] = useState(false);
-  const [sessionExpired, setSessionExpired] = useState(false);
-
   const projects = input.projects;
   const scope = input.scope ?? "project";
   const enabled = input.enabled ?? true;
 
   const entries = useMemo(() => toDigestProjectEntries(projects), [projects]);
-
-  const scopeKey = entries
-    .map((entry) => `${entry.account.id}:${entry.externalProjectId}`)
-    .join("|");
+  const resetSignature = digestScopeSignature(scope, entries);
+  // The last graph for this scope paints at once; the poller revalidates it underneath.
+  const [initial] = useState(() => readInitialDigestState(resetSignature));
+  const [graph, setGraph] = useState<DigestGraph | null>(initial.graph);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">(initial.status);
+  const [error, setError] = useState<string | undefined>(undefined);
+  const [viewerUnresolved, setViewerUnresolved] = useState(initial.viewerUnresolved);
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const [pendingRetry] = useState(createDigestPendingRetry);
   const fingerprintRef = useRef<string | undefined>(undefined);
   const lastCheckedAtRef = useRef<number | undefined>(undefined);
   // Bumped when the scope signature changes so an in-flight load from the
@@ -63,15 +68,15 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
   const generationRef = useRef(0);
 
   // Scope changed since the last render: reset in place (React's "adjust state
-  // on prop change" pattern) instead of an effect, so no stale graph paints first.
-  const resetSignature = `${scope}|${scopeKey}`;
+  // on prop change" pattern) instead of an effect, so no other scope's graph paints first.
   const [renderedSignature, setRenderedSignature] = useState(resetSignature);
   if (renderedSignature !== resetSignature) {
+    const cached = readInitialDigestState(resetSignature);
     setRenderedSignature(resetSignature);
-    setGraph(null);
-    setStatus("loading");
+    setGraph(cached.graph);
+    setStatus(cached.status);
     setError(undefined);
-    setViewerUnresolved(false);
+    setViewerUnresolved(cached.viewerUnresolved);
     setSessionExpired(false);
   }
 
@@ -110,6 +115,7 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
 
       if (result.unchanged) {
         fingerprintRef.current = result.fingerprint;
+        pendingRetry.update(undefined, () => void loadRef.current(scope, entries));
         return;
       }
 
@@ -138,7 +144,12 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
         entries,
         viewer,
       });
-      setViewerUnresolved(result.value.viewer?.unresolved === true);
+      const unresolved = result.value.viewer?.unresolved === true;
+      writeCachedDigestGraph(digestScopeSignature(scope, entries), nextGraph, unresolved);
+      // Change requests still being read server-side: pick them up in a moment, not a poll later.
+      const crPending = result.value.changeRequestsPending === true;
+      pendingRetry.update(crPending, () => void loadRef.current(scope, entries));
+      setViewerUnresolved(unresolved);
       setSessionExpired(false);
       setGraph(nextGraph);
       setStatus("ready");
@@ -182,6 +193,7 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
     });
     return () => {
       poller.dispose();
+      pendingRetry.dispose();
       // Unmount or scope change: results still in flight must not land.
       generationRef.current += 1;
     };

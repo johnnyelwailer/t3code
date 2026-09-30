@@ -14,7 +14,9 @@ import * as Effect from "effect/Effect";
 
 import { readDigestThreadAgents } from "./t3team-myworkDigestAgents.ts";
 import { loadDigestBurndownContext } from "./t3team-myworkDigestBurndownBackfill.ts";
-import { loadPrEntries, toDigestPrEntries } from "./t3team-myworkDigestPr.ts";
+import { toDigestPrEntries } from "./t3team-myworkDigestPr.ts";
+import { loadDigestPrEntries } from "./t3team-myworkDigestPrCache.ts";
+import { kickDigestMirrorSync, prioritizeViewerSprint } from "./t3team-myworkDigestFreshness.ts";
 import {
   readDigestDecisionQuestions,
   readDigestEstimateUnit,
@@ -48,14 +50,10 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
     const nowMs = yield* Clock.currentTimeMillis;
     const nowIso = DateTime.formatIso(DateTime.makeUnsafe(nowMs));
     const requestedViewerName = input.viewer?.name?.trim() || undefined;
-    // The mirror-resolved name (the assignee Jira stamped on the viewer's own items) wins over
-    // the client's requested name: it is the exact string `ticket.assignee` carries, so the
-    // client's `isMine` join matches. The requested name is only a fallback for a project whose
-    // mirror had no assigned rows to read the name from.
-    let resolvedViewerName: string | undefined = undefined;
     // Set when any project could not resolve the viewer (no Jira session): the
     // client shows "sign in" instead of a misleading empty digest.
     let viewerUnresolved = false;
+    let changeRequestsPending = false;
     const appProjectIds = [
       ...new Set(
         projects
@@ -95,6 +93,7 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
             accountId: project.account.id,
             externalProjectId: project.externalProjectId,
           };
+          yield* kickDigestMirrorSync(project);
           const viewer = yield* readDigestViewerTickets({
             project,
             identity,
@@ -102,16 +101,14 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
           });
           const { tickets, viewerName } = viewer;
           if (viewer.unresolved) viewerUnresolved = true;
-          if (viewerName !== undefined && resolvedViewerName === undefined) {
-            resolvedViewerName = viewerName;
-          }
-          const sprints = yield* readDigestSprints(identity);
+          const sprints = prioritizeViewerSprint(yield* readDigestSprints(identity), tickets);
           const estimateUnit = yield* readDigestEstimateUnit(identity);
           const transitions = yield* readDigestStatusTransitionsSince({
             ...identity,
             sinceMs: nowMs - DIGEST_TRANSITION_LOOKBACK_MS,
           });
-          const prRead = yield* loadPrEntries(appProjectId);
+          const { read: prRead, pending } = yield* loadDigestPrEntries(appProjectId);
+          if (pending) changeRequestsPending = true;
 
           // Burndown history: the sprint's backfilled changelog rows; when the
           // backfill has not run yet this round it is kicked in the background
@@ -188,9 +185,14 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
           return source;
         }),
       ),
+      // Projects are independent reads; one slow host must not serialize the rest.
+      { concurrency: "unbounded" },
     );
 
-    if (resolvedViewerName === undefined) resolvedViewerName = requestedViewerName;
+    // The mirror-resolved name (the exact string `ticket.assignee` carries, so the client's
+    // `isMine` join matches) wins; the client's requested name is only the fallback.
+    const resolvedViewerName =
+      sources.find((source) => source.viewerName !== undefined)?.viewerName ?? requestedViewerName;
     const payload = assembleMyWorkDigestPayload({ scope: input.scope, sources });
     return {
       ...payload,
@@ -198,6 +200,7 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
         ...(resolvedViewerName !== undefined ? { name: resolvedViewerName } : {}),
         ...(viewerUnresolved ? { unresolved: true as const } : {}),
       },
+      ...(changeRequestsPending ? { changeRequestsPending: true as const } : {}),
     };
   });
 }
