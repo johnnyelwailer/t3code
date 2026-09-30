@@ -2771,6 +2771,48 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         ["child-created-178", "child-started-178"],
       );
 
+      // A child named by both directions, and by repeated handoff rows, is listed once;
+      // a non-string childThreadId still matches its thread (TEXT comparison).
+      yield* insertThread("178", "2026-06-01T00:00:06.000Z");
+      const insertActivity = (
+        activityId: string,
+        threadId: string,
+        kind: string,
+        payload: string,
+      ) =>
+        sql`
+          INSERT INTO projection_thread_activities (
+            activity_id, thread_id, turn_id, tone, kind, summary, payload_json, created_at
+          )
+          VALUES (${activityId}, ${threadId}, NULL, 'info', ${kind}, 'handoff', ${payload},
+            '2026-06-01T00:00:06.000Z')
+        `;
+      yield* insertActivity(
+        "activity-started-again-178",
+        "parent-178",
+        "t3team.handoff.started",
+        '{"childThreadId":"child-started-178"}',
+      );
+      yield* insertActivity(
+        "activity-created-both-178",
+        "child-started-178",
+        "t3team.handoff.created",
+        '{"parentThreadId":"parent-178"}',
+      );
+      yield* insertActivity(
+        "activity-started-numeric-178",
+        "parent-178",
+        "t3team.handoff.started",
+        '{"childThreadId":178}',
+      );
+      assert.deepStrictEqual(
+        (yield* snapshotQuery.listChildThreadIdsByParent(
+          ThreadId.make("parent-178"),
+          asProjectId("project-178"),
+        )).map((id) => String(id)),
+        ["child-created-178", "child-started-178", "178"],
+      );
+
       // A thread with no children at all lists none.
       assert.deepStrictEqual(
         (yield* snapshotQuery.listChildThreadIdsByParent(

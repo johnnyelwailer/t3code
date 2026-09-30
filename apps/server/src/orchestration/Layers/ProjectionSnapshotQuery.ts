@@ -1438,7 +1438,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           WHERE a.kind = 't3team.handoff.created'
             AND json_extract(a.payload_json, '$.parentThreadId') = ${parentThreadId}
           UNION
-          SELECT json_extract(a.payload_json, '$.childThreadId')
+          -- TEXT, as the old "= t.thread_id" comparison coerced it, so a
+          -- non-string id in a payload still matches the same thread.
+          SELECT CAST(json_extract(a.payload_json, '$.childThreadId') AS TEXT)
           FROM projection_thread_activities AS a
           WHERE a.thread_id = ${parentThreadId}
             AND a.kind = 't3team.handoff.started'
