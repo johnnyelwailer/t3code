@@ -18,6 +18,7 @@ import {
   AtlassianAuthError,
   AtlassianMirrorSourceUnavailableError,
   AtlassianNetworkError,
+  type JiraBoardConfigurationResponse,
   type JiraIssue,
   type JiraIssueLinkType,
 } from "./client.ts";
@@ -97,7 +98,14 @@ export type AtlassianBacklogSelection = {
   readonly selectedSprintId?: string;
   readonly selectedFilterId?: string;
   readonly selectedFilterJql?: string;
+  /** Board/sprint/quick-filter reads were refused for a missing OAuth scope;
+   * the catalog above is the issue-derived fallback and needs a re-consent. */
+  readonly boardScopeMissing?: true;
 };
+
+function isMissingScopeError(error: unknown): boolean {
+  return error instanceof AtlassianAuthError && error.missingScope === true;
+}
 
 function normalizeOptionalId(value: unknown): string | undefined {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -1132,6 +1140,10 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     ]);
     const listedBoards = projectBoards.boards;
     const selectedFilter = selectBacklogSavedFilter(savedFilters, input.filterId?.trim());
+    let boardScopeMissing = projectBoards.missingScope === true;
+    const noteMissingScope = (error: unknown) => {
+      if (isMissingScopeError(error)) boardScopeMissing = true;
+    };
     const participationPreference =
       input.boardId?.trim() || input.sprintId?.trim()
         ? undefined
@@ -1171,6 +1183,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
         ...(selectedSprint ? { selectedSprintId: selectedSprint.id } : {}),
         ...(selectedFilter ? { selectedFilterId: selectedFilter.id } : {}),
         ...(selectedFilter ? { selectedFilterJql: selectedFilter.jql } : {}),
+        ...(boardScopeMissing ? { boardScopeMissing: true as const } : {}),
       };
     }
 
@@ -1180,6 +1193,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     // filter clauses there would silently return unfiltered data.)
     const quickFilters = await this.listBacklogQuickFilters(entry, selectedBoard.id).catch(
       (error: unknown) => {
+        noteMissingScope(error);
         // A silent [] is indistinguishable from a board that simply has no
         // filters, so leave a trace. This package is Promise-based (no
         // Effect logger in scope), so console is the trace.
@@ -1193,14 +1207,33 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     );
 
     const boardSprints = (
-      await entry.client.listBoardSprints(selectedBoard.id).catch(() => ({ values: [] }))
+      await entry.client.listBoardSprints(selectedBoard.id).catch((error: unknown) => {
+        noteMissingScope(error);
+        return { values: [] };
+      })
     ).values
       .map((sprint) => toBacklogSprint(sprint))
       .filter((sprint): sprint is AtlassianBacklogSprint => sprint !== undefined)
       .toSorted(compareBacklogSprints);
     const boardConfiguration = await entry.client
       .getBoardConfiguration(selectedBoard.id)
-      .catch(() => ({ columnConfig: { columns: [] as const } }));
+      .catch((error: unknown): JiraBoardConfigurationResponse => {
+        noteMissingScope(error);
+        return { columnConfig: { columns: [] } };
+      });
+    // Without an explicit saved filter the backlog shows what the board shows:
+    // the board's own filter, exactly as Jira's backlog page does.
+    const boardFilterId = boardConfiguration.filter?.id;
+    const boardFilterJql =
+      !selectedFilter && boardFilterId !== undefined
+        ? await entry.client
+            .getFilter(String(boardFilterId))
+            .then((filter) => filter.jql)
+            .catch((error: unknown) => {
+              noteMissingScope(error);
+              return undefined;
+            })
+        : undefined;
     const selectedBoardColumns = (boardConfiguration.columnConfig?.columns ?? [])
       .map((column) => toBacklogBoardColumn(column))
       .filter((column): column is AtlassianBacklogBoardColumn => column !== undefined);
@@ -1222,7 +1255,12 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
       ...(selectedBoardColumns && selectedBoardColumns.length > 0 ? { selectedBoardColumns } : {}),
       ...(selectedSprint ? { selectedSprintId: selectedSprint.id } : {}),
       ...(selectedFilter ? { selectedFilterId: selectedFilter.id } : {}),
-      ...(selectedFilter ? { selectedFilterJql: selectedFilter.jql } : {}),
+      ...(selectedFilter?.jql
+        ? { selectedFilterJql: selectedFilter.jql }
+        : boardFilterJql
+          ? { selectedFilterJql: boardFilterJql }
+          : {}),
+      ...(boardScopeMissing ? { boardScopeMissing: true as const } : {}),
     };
   }
 
@@ -1945,6 +1983,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
   ): Promise<{
     boards: ReadonlyArray<AtlassianBacklogBoard>;
     defaultBoardId?: string;
+    missingScope?: true;
   }> {
     const projectIdentifiers = [...new Set([project.key.trim(), project.id.trim()])].filter(
       (identifier) => identifier.length > 0,
@@ -1952,9 +1991,13 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
 
     const listedBoardsById = new Map<string, AtlassianBacklogBoard>();
     let defaultBoardId: string | undefined;
+    let missingScope = false;
 
     for (const projectIdentifier of projectIdentifiers) {
-      const response = await client.listBoards(projectIdentifier).catch(() => ({ values: [] }));
+      const response = await client.listBoards(projectIdentifier).catch((error: unknown) => {
+        if (isMissingScopeError(error)) missingScope = true;
+        return { values: [] };
+      });
       for (const board of response.values) {
         const listedBoard = toBacklogBoard(board);
         if (!listedBoard) {
@@ -1983,6 +2026,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     return {
       boards: [...listedBoardsById.values()],
       ...(defaultBoardId ? { defaultBoardId } : {}),
+      ...(missingScope ? { missingScope: true as const } : {}),
     };
   }
 
