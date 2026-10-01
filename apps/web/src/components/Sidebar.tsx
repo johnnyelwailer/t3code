@@ -2861,6 +2861,18 @@ export default function Sidebar() {
     },
     [isMobile, router, setOpenMobile],
   );
+  // t3team: right-click / context-menu key on a scope pill opens that project's settings.
+  const handlePillProjectSettings = useCallback(
+    (
+      event: ReactMouseEvent<HTMLElement> | ReactKeyboardEvent<HTMLInputElement>,
+      projectGroup: SidebarProjectSnapshot,
+    ) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openProjectSettings(projectGroup);
+    },
+    [openProjectSettings],
+  );
   // Anchor for the scope popup: the header search field, not its icon trigger.
   const headerSearchRef = useRef<HTMLDivElement | null>(null);
   // Safari can send a click after Ctrl+click opens settings. Ignore that one
@@ -5150,6 +5162,17 @@ export default function Sidebar() {
               activeSearchResultIndex={activeSearchResultIndex}
               onClearSearch={clearThreadSearch}
             />
+            {/* t3team: one-click recent-project pills under the search row; the
+                header's project button stays as the "more" picker. Lost in the
+                2026-09-18 upstream sync, which replaced the old header. */}
+            {projectScopePillsEnabled && projectGroups.length > 0 ? (
+              <T3TeamSidebarProjectScopePills
+                groups={projectGroups}
+                activeScopeKey={projectScopeKey}
+                onSelectScope={setProjectScopeKey}
+                onProjectContextMenu={handlePillProjectSettings}
+              />
+            ) : null}
           </SidebarGroup>
         }
       >
