@@ -833,14 +833,15 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     }
 
     const projectKey = project.key.replace(/"/g, '\\"');
-    const backlogJqlParts = [`project = "${projectKey}"`, "statusCategory != Done"];
+    // Mirrors the Jira board backlog: a sprint lists every issue it holds,
+    // including finished ones; the unplanned backlog hides Done work.
+    const requestedSprintId = input.sprintId?.trim();
+    const backlogJqlParts = requestedSprintId
+      ? [`project = "${projectKey}"`, buildSprintJqlClause(requestedSprintId)]
+      : [`project = "${projectKey}"`, "statusCategory != Done"];
     const filterJql = stripJqlOrderBy(input.filterJql);
     if (filterJql) {
       backlogJqlParts.unshift(`(${filterJql})`);
-    }
-    const requestedSprintId = input.sprintId?.trim();
-    if (requestedSprintId) {
-      backlogJqlParts.push(buildSprintJqlClause(requestedSprintId));
     }
     const requestedQuickFilterIds = (input.quickFilterIds ?? [])
       .map((id) => id.trim())
@@ -855,7 +856,8 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
         }
       }
     }
-    const backlogJql = `${backlogJqlParts.join(" AND ")} ORDER BY updated DESC`;
+    // Rank is the board's own order; clients treat list position as the rank.
+    const backlogJql = `${backlogJqlParts.join(" AND ")} ORDER BY Rank ASC`;
     const [estimateField, sprintField] = await Promise.all([
       this.resolveEstimateField(entry.client),
       this.resolveSprintField(entry.client),
