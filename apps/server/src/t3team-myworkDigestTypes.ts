@@ -138,6 +138,8 @@ export type T3TeamMyWorkDigestPayload = {
    * `unresolved` when a project had no Jira identity (stale or missing token).
    */
   readonly viewer?: { readonly name?: string; readonly unresolved?: true };
+  /** A first change-request read is still running; the client re-polls soon for it. */
+  readonly changeRequestsPending?: true;
 };
 
 /**
