@@ -160,6 +160,7 @@ import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as CloudManagedEndpointRuntime from "./cloud/ManagedEndpointRuntime.ts";
 import * as AgentAwarenessRelay from "./relay/AgentAwarenessRelay.ts";
 import * as CloudCliTokenManager from "./cloud/CliTokenManager.ts";
+import * as ConnectCredentialMinter from "./cloud/t3team-ConnectCredentialMinter.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
@@ -1338,6 +1339,11 @@ const buildAppUnderTest = (options?: {
             hasCredential: Effect.succeed(false),
             clear: Effect.void,
             ...options?.layers?.cloudCliTokenManager,
+          }),
+        ),
+        Layer.provide(
+          Layer.mock(ConnectCredentialMinter.ConnectCredentialMinter)({
+            mint: () => Effect.die(new Error("Unexpected in-app T3 Connect credential mint.")),
           }),
         ),
         Layer.updateService(PairingGrantStore.PairingGrantStore, (grants) => {
