@@ -128,7 +128,10 @@ function runMetadataRefresh(input: T3TeamAtlassianBacklogMetadataRefreshRequest)
       sprints: resolved.sprints,
       savedFilters: resolved.savedFilters,
       quickFilters: resolved.quickFilters,
-      capabilities,
+      capabilities: {
+        ...capabilities,
+        ...(resolved.boardScopeMissing ? { boardScopeMissing: true as const } : {}),
+      },
       ...(resolved.selectedBoardId ? { selectedBoardId: resolved.selectedBoardId } : {}),
       ...(resolved.selectedSprintId ? { selectedSprintId: resolved.selectedSprintId } : {}),
       ...(resolved.selectedFilterId ? { selectedFilterId: resolved.selectedFilterId } : {}),
