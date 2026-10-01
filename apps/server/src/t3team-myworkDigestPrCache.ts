@@ -25,9 +25,9 @@ import type { PullRequestService } from "./pullRequest/PullRequestService.ts";
 import { loadPrEntries, type PrReadResult } from "./t3team-myworkDigestPr.ts";
 
 /** How long a cold first read may hold the digest before it ships without change requests. */
-export const DIGEST_PR_FIRST_READ_WAIT = Duration.millis(1_200);
+const DIGEST_PR_FIRST_READ_WAIT = Duration.millis(1_200);
 /** A cached read younger than this serves without a background refresh. */
-export const DIGEST_PR_FRESH_MS = 30_000;
+const DIGEST_PR_FRESH_MS = 30_000;
 /** App projects whose last read is kept; the least recently read is dropped past this. */
 const MAX_CACHED_READS = 64;
 
