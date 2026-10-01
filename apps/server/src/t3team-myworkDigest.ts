@@ -84,8 +84,9 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
       })),
     );
 
-    const sources = yield* Effect.all(
-      projects.map((project) =>
+    const sources = yield* Effect.forEach(
+      projects,
+      (project) =>
         Effect.gen(function* () {
           const appProjectId = project.appProjectId?.trim() || undefined;
           const identity: T3TeamBacklogCacheIdentity = {
@@ -184,7 +185,6 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
           };
           return source;
         }),
-      ),
       // Projects are independent reads; one slow host must not serialize the rest.
       { concurrency: "unbounded" },
     );

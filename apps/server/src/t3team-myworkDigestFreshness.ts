@@ -32,7 +32,7 @@ export function kickDigestMirrorSync(project: T3TeamMyWorkDigestProjectInput) {
       account: project.account,
       externalProjectId: project.externalProjectId,
     });
-  }).pipe(Effect.catch(() => Effect.void));
+  }).pipe(Effect.ignore);
 }
 
 type SprintStampedTicket = BacklogResourceRef & {
