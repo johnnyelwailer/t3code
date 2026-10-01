@@ -1429,25 +1429,25 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     execute: ({ parentThreadId, projectId }) =>
       sql`
         SELECT t.thread_id AS "threadId"
-        FROM projection_threads AS t
+        FROM (
+          -- The parent's child set, resolved once. Correlated EXISTS per project
+          -- thread re-parsed every handoff payload for every thread: ~0.4 s per
+          -- call on a 436-thread project, 50 calls in the first 11 s of boot.
+          SELECT a.thread_id AS child_thread_id
+          FROM projection_thread_activities AS a
+          WHERE a.kind = 't3team.handoff.created'
+            AND json_extract(a.payload_json, '$.parentThreadId') = ${parentThreadId}
+          UNION
+          -- TEXT, as the old "= t.thread_id" comparison coerced it, so a
+          -- non-string id in a payload still matches the same thread.
+          SELECT CAST(json_extract(a.payload_json, '$.childThreadId') AS TEXT)
+          FROM projection_thread_activities AS a
+          WHERE a.thread_id = ${parentThreadId}
+            AND a.kind = 't3team.handoff.started'
+        ) AS children
+        JOIN projection_threads AS t ON t.thread_id = children.child_thread_id
         WHERE t.project_id = ${projectId}
           AND t.deleted_at IS NULL
-          AND (
-            EXISTS (
-              SELECT 1
-              FROM projection_thread_activities AS a
-              WHERE a.thread_id = t.thread_id
-                AND a.kind = 't3team.handoff.created'
-                AND json_extract(a.payload_json, '$.parentThreadId') = ${parentThreadId}
-            )
-            OR EXISTS (
-              SELECT 1
-              FROM projection_thread_activities AS a
-              WHERE a.thread_id = ${parentThreadId}
-                AND a.kind = 't3team.handoff.started'
-                AND json_extract(a.payload_json, '$.childThreadId') = t.thread_id
-            )
-          )
         ORDER BY t.updated_at DESC, t.thread_id ASC
       `,
   });

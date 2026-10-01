@@ -4,7 +4,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { toPersistenceSqlError } from "./persistence/Errors.ts";
 import {
-  readCachedBacklogIssueRows,
+  readCachedBacklogIssueRowsByIds,
   readCachedBacklogViewRow,
   serializeBacklogCacheJson,
 } from "./t3team-atlassian-backlog-cacheQueries.ts";
@@ -55,10 +55,11 @@ export const writeCachedT3TeamAtlassianBacklog = Effect.fn("t3team.atlassianBack
         const liveIds = new Set(input.response.page.items.map((item) => item.id));
         const tailIds = (existingIds ?? []).filter((id) => !liveIds.has(id));
         if (tailIds.length > 0) {
-          const issueRows = yield* readCachedBacklogIssueRows({
+          const issueRows = yield* readCachedBacklogIssueRowsByIds({
             provider: input.provider,
             accountId: input.accountId,
             externalProjectId: input.externalProjectId,
+            issueIds: tailIds,
           });
           const issuesById = new Map(
             issueRows.map((row) => [row.issueId, parseJson<BacklogResourceRef>(row.resourceJson)]),

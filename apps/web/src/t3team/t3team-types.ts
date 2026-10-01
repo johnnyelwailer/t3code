@@ -180,6 +180,8 @@ export type ProjectTicket = {
   sprintCompleteDate?: string;
   updatedAt: string;
   labels?: ReadonlyArray<string>;
+  /** Position in the provider's board order (Jira Rank); set for backlog tickets only. */
+  boardRank?: number;
 };
 
 export type ProjectBacklogSubtaskCreateInput = {
