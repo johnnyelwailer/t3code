@@ -81,7 +81,7 @@ export function pendingCloudSession(
 const isRunSettled = (run: WorkflowRunSummary): boolean => run.status === "completed";
 
 /** `session.yml` appends this to `run-name` in broker mode; the run list shows nothing else of it. */
-export const BROKER_RUN_NAME_MARKER = "· broker";
+const BROKER_RUN_NAME_MARKER = "· broker";
 
 /**
  * Project one provisioning run into the `CloudSession` the client renders.
