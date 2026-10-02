@@ -13,6 +13,7 @@ import * as VcsProcess from "../vcs/VcsProcess.ts";
 import * as GitHubCli from "../sourceControl/GitHubCli.ts";
 import * as CliTokenManager from "./CliTokenManager.ts";
 import * as ConnectCredentialMinter from "./t3team-ConnectCredentialMinter.ts";
+import * as NexiBrokerService from "./t3team-NexiBrokerService.ts";
 import { ConnectCredentialMintError } from "./t3team-ConnectCredentialMintError.ts";
 import * as CloudSessionService from "./t3team-CloudSessionService.ts";
 
@@ -136,7 +137,13 @@ describe("CloudSessionService.create credential handoff", () => {
       });
       // Empty env: handoff flag unset → default ON; fleet config → its defaults.
       const configLayer = ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }));
-      const providers = Layer.mergeAll(ghMock, cloudCliMock, minterMock, configLayer);
+      const providers = Layer.mergeAll(
+        ghMock,
+        cloudCliMock,
+        minterMock,
+        configLayer,
+        NexiBrokerService.layerDisabled,
+      );
       // Expose the service AND its runtime dependencies to the create effect.
       const full = Layer.mergeAll(
         CloudSessionService.layer.pipe(Layer.provide(providers)),
@@ -192,7 +199,13 @@ describe("CloudSessionService.create credential handoff", () => {
           ),
       });
       const configLayer = ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }));
-      const providers = Layer.mergeAll(ghMock, cloudCliMock, minterMock, configLayer);
+      const providers = Layer.mergeAll(
+        ghMock,
+        cloudCliMock,
+        minterMock,
+        configLayer,
+        NexiBrokerService.layerDisabled,
+      );
       const full = Layer.mergeAll(
         CloudSessionService.layer.pipe(Layer.provide(providers)),
         providers,
@@ -242,7 +255,13 @@ describe("CloudSessionService.create credential handoff", () => {
         mint: (input) => Effect.sync(() => mintCalls.push(input)).pipe(Effect.asVoid),
       });
       const configLayer = ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }));
-      const providers = Layer.mergeAll(ghMock, cloudCliMock, minterMock, configLayer);
+      const providers = Layer.mergeAll(
+        ghMock,
+        cloudCliMock,
+        minterMock,
+        configLayer,
+        NexiBrokerService.layerDisabled,
+      );
       const full = Layer.mergeAll(
         CloudSessionService.layer.pipe(Layer.provide(providers)),
         providers,
@@ -297,7 +316,13 @@ const providersFor = (
     mint: () => Effect.die("the mint must not run in the list tests"),
   });
   const configLayer = ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} }));
-  return Layer.mergeAll(ghMock, cloudCliMock, minterMock, configLayer);
+  return Layer.mergeAll(
+    ghMock,
+    cloudCliMock,
+    minterMock,
+    configLayer,
+    NexiBrokerService.layerDisabled,
+  );
 };
 
 describe("CloudSessionService.list per-user isolation", () => {
@@ -355,6 +380,84 @@ describe("CloudSessionService.list per-user isolation", () => {
       }
       // Fail-closed: no runs fetch happened at all.
       assert.isFalse(calls.some((c) => c.args.join(" ").includes("/runs")));
+    }),
+  );
+});
+
+const isCloudSessionFailed = Schema.is(CloudSessionFailedError);
+
+describe("CloudSessionService.create over the Nexi broker", () => {
+  const brokerMock = (
+    requestGrant: (login: string) => Effect.Effect<string, CloudSessionFailedError>,
+  ) =>
+    Layer.succeed(NexiBrokerService.NexiBrokerService, {
+      enabled: true,
+      status: Effect.die("unused"),
+      signIn: Effect.die("unused"),
+      signOut: Effect.void,
+      requestGrant,
+      attach: () => Effect.die("unused"),
+    });
+  const providersWith = (
+    execute: ReturnType<typeof makeGithubMock>["execute"],
+    broker: ReturnType<typeof brokerMock>,
+  ) =>
+    Layer.mergeAll(
+      Layer.mock(GitHubCli.GitHubCli)({ execute }),
+      Layer.mock(CliTokenManager.CloudCliTokenManager)({
+        getExisting: Effect.succeed(Option.none()),
+      }),
+      Layer.mock(ConnectCredentialMinter.ConnectCredentialMinter)({
+        mint: () => Effect.die("broker mode must never mint a T3 Connect credential"),
+      }),
+      ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })),
+      broker,
+    );
+  const create = (providers: ReturnType<typeof providersWith>) =>
+    Effect.service(CloudSessionService.CloudSessionService).pipe(
+      Effect.flatMap((svc) => svc.create({ durationSeconds: 3600 })),
+      Effect.provide(
+        Layer.mergeAll(CloudSessionService.layer.pipe(Layer.provide(providers)), providers),
+      ),
+    );
+
+  it.effect("dispatches with a grant for the caller's login and skips the T3 Connect handoff", () =>
+    Effect.gen(function* () {
+      const { calls, execute } = makeGithubMock();
+      const grantedFor: string[] = [];
+      const providers = providersWith(
+        execute,
+        brokerMock((login) => Effect.sync(() => (grantedFor.push(login), "grant-xyz"))),
+      );
+      yield* runPastDiscoveryPoll(create(providers));
+      assert.deepEqual(grantedFor, ["pj"]);
+      const joined = calls.map((call) => call.args.join(" "));
+      assert.isFalse(
+        joined.some((args) => args.includes("repos/hive/nx-nexi/issues")),
+        "no credential payload issue",
+      );
+      const dispatch = calls.find((call) => call.args.join(" ").includes("/dispatches"));
+      assert.include(dispatch?.stdin ?? "", '"broker_grant":"grant-xyz"');
+    }),
+  );
+
+  it.effect("signed out: fails with broker_sign_in_required before dispatching anything", () =>
+    Effect.gen(function* () {
+      const { calls, execute } = makeGithubMock();
+      const signedOut = new CloudSessionFailedError({
+        reason: "broker_sign_in_required",
+        message: "Sign in",
+      });
+      const failure = yield* Effect.flip(
+        create(
+          providersWith(
+            execute,
+            brokerMock(() => Effect.fail(signedOut)),
+          ),
+        ),
+      );
+      assert.isTrue(isCloudSessionFailed(failure) && failure.reason === "broker_sign_in_required");
+      assert.isFalse(calls.some((call) => call.args.join(" ").includes("/dispatches")));
     }),
   );
 });

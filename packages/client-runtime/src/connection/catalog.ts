@@ -4,6 +4,7 @@ import * as Schema from "effect/Schema";
 
 import {
   BearerConnectionTarget,
+  BrokerConnectionTarget,
   PrimaryConnectionTarget,
   RelayConnectionTarget,
   SshConnectionTarget,
@@ -86,8 +87,16 @@ export class SshConnectionRegistration extends Schema.TaggedClass<SshConnectionR
   },
 ) {}
 
+export class BrokerConnectionRegistration extends Schema.TaggedClass<BrokerConnectionRegistration>()(
+  "BrokerConnectionRegistration",
+  {
+    target: BrokerConnectionTarget,
+  },
+) {}
+
 export const ConnectionRegistration = Schema.Union([
   RelayConnectionRegistration,
+  BrokerConnectionRegistration,
   BearerConnectionRegistration,
   SshConnectionRegistration,
 ]);
@@ -114,6 +123,7 @@ export function connectionRegistrationCatalogEntry(
   switch (registration._tag) {
     case "PrimaryConnectionRegistration":
     case "RelayConnectionRegistration":
+    case "BrokerConnectionRegistration":
       return {
         target: registration.target,
         profile: Option.none(),

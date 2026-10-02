@@ -8,6 +8,7 @@ import {
   SshEnvironmentGateway,
 } from "@t3tools/client-runtime/platform";
 import {
+  BrokerEnvironmentGateway,
   ConnectionBlockedError,
   ConnectionTransientError,
   Connectivity,
@@ -192,6 +193,19 @@ const capabilitiesLayer = Layer.effectContext(
               }),
             ),
           disconnect: () => Effect.void,
+        }),
+      ),
+      Context.add(
+        BrokerEnvironmentGateway,
+        BrokerEnvironmentGateway.of({
+          // The loopback forwarder lives in the desktop app's local server.
+          attach: () =>
+            Effect.fail(
+              new ConnectionBlockedError({
+                reason: "unsupported",
+                detail: "Nexi broker cloud sessions connect from the desktop app.",
+              }),
+            ),
         }),
       ),
     );

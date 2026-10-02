@@ -1,4 +1,5 @@
 import {
+  AuthAccessTokenType,
   EnvironmentId,
   ORCHESTRATION_PROTOCOL_VERSION,
   type DesktopSshEnvironmentTarget,
@@ -25,6 +26,7 @@ import {
 import * as ConnectionCredentialStore from "./credentialStore.ts";
 import {
   BearerConnectionTarget,
+  BrokerConnectionTarget,
   ConnectionTransientError,
   PrimaryConnectionTarget,
   RelayConnectionTarget,
@@ -32,6 +34,7 @@ import {
   type ConnectionTarget,
 } from "./model.ts";
 import * as ConnectionProfileStore from "./profileStore.ts";
+import { BrokerEnvironmentGateway } from "./t3team-brokerConnection.ts";
 import { remoteHttpClientLayer } from "../rpc/http.ts";
 import {
   GitHubRoutingPermissions,
@@ -80,6 +83,9 @@ const makeDependencies = Effect.fn("TestConnectionResolver.makeDependencies")((o
   readonly authorizeDpop?: RemoteEnvironmentAuthorization.RemoteEnvironmentAuthorization["Service"]["authorizeDpop"];
   readonly primaryBearerToken?: string;
   readonly prepareSsh?: ClientCapabilities.SshEnvironmentGateway["Service"]["prepare"];
+  readonly attachBroker?: BrokerEnvironmentGateway["Service"]["attach"];
+  /** Bodies POSTed to `/oauth/token`, in order. */
+  readonly tokenExchanges?: Array<string>;
   readonly descriptorProtocolVersion?: number | null | undefined;
 }) => {
   const profiles = new Map(
@@ -146,8 +152,21 @@ const makeDependencies = Effect.fn("TestConnectionResolver.makeDependencies")((o
   });
 
   const dependencies = Layer.mergeAll(
-    remoteHttpClientLayer((() =>
-      Promise.resolve(
+    remoteHttpClientLayer((async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.endsWith("/oauth/token")) {
+        options?.tokenExchanges?.push(
+          input instanceof Request ? await input.text() : String(init?.body ?? ""),
+        );
+        return Response.json({
+          access_token: "broker-bearer",
+          issued_token_type: AuthAccessTokenType,
+          token_type: "Bearer",
+          expires_in: 3600,
+          scope: "orchestration:read",
+        });
+      }
+      return Promise.resolve(
         Response.json({
           environmentId: ENVIRONMENT_ID,
           label: "Compatible environment",
@@ -160,7 +179,8 @@ const makeDependencies = Effect.fn("TestConnectionResolver.makeDependencies")((o
               : { orchestrationProtocolVersion: options.descriptorProtocolVersion }),
           capabilities: { repositoryIdentity: true },
         }),
-      )) satisfies typeof fetch),
+      );
+    }) satisfies typeof fetch),
     Layer.succeed(
       ConnectionProfileStore.ConnectionProfileStore,
       options?.profileStore ?? profileStore,
@@ -181,12 +201,83 @@ const makeDependencies = Effect.fn("TestConnectionResolver.makeDependencies")((o
     ),
     Layer.succeed(RemoteEnvironmentAuthorization.RemoteEnvironmentAuthorization, remote),
     Layer.succeed(ClientCapabilities.SshEnvironmentGateway, ssh),
+    Layer.succeed(
+      BrokerEnvironmentGateway,
+      BrokerEnvironmentGateway.of({
+        attach:
+          options?.attachBroker ??
+          (() =>
+            Effect.succeed({
+              httpBaseUrl: "http://127.0.0.1:4020",
+              wsBaseUrl: "ws://127.0.0.1:4020",
+              pairingCredential: "broker-pairing",
+            })),
+      }),
+    ),
   );
 
   return Effect.succeed(ConnectionResolver.layer.pipe(Layer.provide(dependencies)));
 });
 
 describe("ConnectionResolver", () => {
+  it.effect("connects a broker session: attach, pairing → bearer exchange, then bearer auth", () =>
+    Effect.gen(function* () {
+      const attached = yield* Ref.make<ReadonlyArray<string>>([]);
+      const bearerInputs = yield* Ref.make<
+        ReadonlyArray<{ token: string; method: string; url: string }>
+      >([]);
+      const tokenExchanges: Array<string> = [];
+      const layer = yield* makeDependencies({
+        tokenExchanges,
+        attachBroker: (input) =>
+          Ref.update(attached, (values) => [
+            ...values,
+            `${input.sessionId}:${input.expectedEnvironmentId}`,
+          ]).pipe(
+            Effect.as({
+              httpBaseUrl: "http://127.0.0.1:4020",
+              wsBaseUrl: "ws://127.0.0.1:4020",
+              pairingCredential: "broker-pairing",
+            }),
+          ),
+        authorizeBearer: (input) =>
+          Ref.update(bearerInputs, (values) => [
+            ...values,
+            {
+              token: input.bearerToken,
+              method: input.connectionMethod ?? "",
+              url: input.httpBaseUrl,
+            },
+          ]).pipe(
+            Effect.as({
+              environmentId: input.expectedEnvironmentId,
+              label: "Cloud session",
+              httpBaseUrl: input.httpBaseUrl,
+              socketUrl: "ws://127.0.0.1:4020/ws?wsTicket=broker",
+              httpAuthorization: { _tag: "Bearer" as const, token: input.bearerToken },
+            }),
+          ),
+      });
+      const resolver = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(layer));
+      const target = new BrokerConnectionTarget({
+        environmentId: ENVIRONMENT_ID,
+        label: "Cloud session",
+        sessionId: "290877467",
+      });
+
+      const prepared = yield* resolver.prepare(catalogEntry(target));
+      expect(prepared.httpAuthorization).toEqual({ _tag: "Bearer", token: "broker-bearer" });
+      expect(yield* Ref.get(attached)).toEqual([`290877467:${ENVIRONMENT_ID}`]);
+      expect(tokenExchanges.length).toBe(1);
+      expect(
+        new URLSearchParams(tokenExchanges[0]).get("subject_token") ?? tokenExchanges[0],
+      ).toContain("broker-pairing");
+      expect(yield* Ref.get(bearerInputs)).toEqual([
+        { token: "broker-bearer", method: "relay", url: "http://127.0.0.1:4020" },
+      ]);
+    }),
+  );
+
   it.effect("blocks an incompatible host during discovery before opening orchestration RPC", () =>
     Effect.gen(function* () {
       const brokerLayer = yield* makeDependencies({

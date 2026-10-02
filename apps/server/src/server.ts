@@ -154,6 +154,8 @@ import {
 import * as CloudCliTokenManager from "./cloud/CliTokenManager.ts";
 import * as CloudCliState from "./cloud/CliState.ts";
 import * as ConnectCredentialMinter from "./cloud/t3team-ConnectCredentialMinter.ts";
+import * as NexiBrokerAuth from "./cloud/t3team-NexiBrokerAuth.ts";
+import * as NexiBrokerService from "./cloud/t3team-NexiBrokerService.ts";
 import { runConnectCredentialTopUp } from "./cloud/t3team-ConnectCredentialTopUp.ts";
 import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
 import * as DesktopAppUpdate from "./desktopUpdate/DesktopAppUpdate.ts";
@@ -199,6 +201,7 @@ import { t3teamAtlassianIssueContentRouteLayer } from "./t3team-atlassian-issue-
 import { t3teamAtlassianOAuthExchangeRouteLayer } from "./t3team-atlassian-oauth-routes.ts";
 import { t3teamAtlassianOAuthFlowRouteLayer } from "./t3team-atlassian-oauth-flowRoutes.ts";
 import { t3teamTempoRouteLayer } from "./t3team-tempo-routes.ts";
+import { t3teamCloudBrokerRouteLayer } from "./t3team-cloud-broker-routes.ts";
 import { t3teamProjectWorkspaceDiscoverRecipesRouteLayer } from "./t3team-project-workspace-recipe-routes.ts";
 import { t3teamProjectWorkspaceWriteContextFilesRouteLayer } from "./t3team-project-workspace-write-routes.ts";
 import {
@@ -746,6 +749,12 @@ const RuntimeCoreDependenciesLive = mountT3TeamBrokerBeforeRuntimeServices(
         // ExternalLauncher instances the CLI flow uses, so minted and CLI
         // credentials land in one shared secret.
         ConnectCredentialMinter.layer,
+        // Server-lifetime, not per connection: the Entra sign-in in flight and the loopback
+        // forwarders of attached broker sessions are shared by the RPCs and the HTTP routes.
+        NexiBrokerService.layer.pipe(
+          Layer.provideMerge(NexiBrokerAuth.layer),
+          Layer.provide(ServerSecretStore.layer),
+        ),
         CloudManagedEndpointRuntimeLive,
       ),
     ),
@@ -808,6 +817,7 @@ export const makeRoutesLayer = Layer.mergeAll(
     t3teamAtlassianResourceRouteLayer,
     t3teamAtlassianResourcesRouteLayer,
     t3teamTempoRouteLayer,
+    t3teamCloudBrokerRouteLayer,
   ),
   Layer.mergeAll(
     t3teamGitHubAssetRouteLayer,

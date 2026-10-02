@@ -35,6 +35,7 @@ import type {
   RelayConnectionTarget,
   SshConnectionTarget,
 } from "./model.ts";
+import { makeBrokerResolver } from "./t3team-brokerConnection.ts";
 import { ConnectionBlockedError, type ConnectionAttemptError } from "./model.ts";
 import * as ConnectionProfileStore from "./profileStore.ts";
 import {
@@ -243,6 +244,7 @@ export const make = Effect.gen(function* () {
   const bearer = yield* makeBearerBroker();
   const relay = yield* makeRelayBroker();
   const ssh = yield* makeSshBroker();
+  const broker = yield* makeBrokerResolver();
   const httpClient = yield* HttpClient.HttpClient;
 
   const prepare = Effect.fn("clientRuntime.connection.broker.prepare")(function* (
@@ -263,6 +265,8 @@ export const make = Effect.gen(function* () {
           return relay(target);
         case "SshConnectionTarget":
           return ssh({ ...entry, target });
+        case "BrokerConnectionTarget":
+          return broker(target);
       }
     })();
     const descriptor = yield* fetchRemoteEnvironmentDescriptor({

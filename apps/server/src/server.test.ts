@@ -160,6 +160,7 @@ import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as CloudManagedEndpointRuntime from "./cloud/ManagedEndpointRuntime.ts";
 import * as AgentAwarenessRelay from "./relay/AgentAwarenessRelay.ts";
 import * as CloudCliTokenManager from "./cloud/CliTokenManager.ts";
+import * as NexiBrokerService from "./cloud/t3team-NexiBrokerService.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
@@ -1331,6 +1332,7 @@ const buildAppUnderTest = (options?: {
             }),
           ),
         ),
+        Layer.provide(NexiBrokerService.layerDisabled),
         Layer.provide(
           Layer.mock(CloudCliTokenManager.CloudCliTokenManager)({
             get: Effect.die(new Error("Unexpected T3 Connect CLI authorization request.")),
@@ -4981,6 +4983,62 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
       assert.equal(response.status, 401);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("cloud-broker routes hand nothing to unauthenticated callers", () =>
+    Effect.gen(function* () {
+      yield* buildAppUnderTest();
+      const status = yield* HttpClient.get("/api/t3team/cloud-broker/status");
+      assert.equal(status.status, 401);
+      const attach = yield* HttpClient.post("/api/t3team/cloud-broker/attach", {
+        body: yield* HttpBody.json({ sessionId: "42" }),
+      });
+      assert.equal(attach.status, 401);
+      assert.notInclude(yield* attach.text, "pairingCredential");
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("cloud-broker attach needs relay:write; status answers relay:read", () =>
+    Effect.gen(function* () {
+      yield* buildAppUnderTest();
+      const reader = yield* exchangeAccessToken(defaultDesktopBootstrapToken, {
+        scope: "relay:read",
+      });
+      assert.equal(reader.response.status, 200);
+      const bearer = { authorization: `Bearer ${reader.body.access_token ?? ""}` };
+      const status = yield* HttpClient.get("/api/t3team/cloud-broker/status", { headers: bearer });
+      assert.equal(status.status, 200);
+      // This test server has no broker configured, so the status says so instead of failing.
+      assert.include(yield* status.text, '"enabled":false');
+      const attach = yield* HttpClient.post("/api/t3team/cloud-broker/attach", {
+        headers: bearer,
+        body: yield* HttpBody.json({ sessionId: "42" }),
+      });
+      assert.equal(attach.status, 401);
+      const owner = yield* HttpClient.post("/api/t3team/cloud-broker/attach", {
+        headers: { cookie: yield* getAuthenticatedSessionCookieHeader() },
+        body: yield* HttpBody.json({ sessionId: "42" }),
+      });
+      assert.equal(owner.status, 409);
+      assert.include(yield* owner.text, "broker_unavailable");
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect(
+    "cloud-broker POSTs from another origin are refused even with a valid session cookie",
+    () =>
+      Effect.gen(function* () {
+        yield* buildAppUnderTest();
+        const cookie = yield* getAuthenticatedSessionCookieHeader();
+        const crossSite = yield* HttpClient.post("/api/t3team/cloud-broker/sign-out", {
+          headers: { cookie, origin: "http://localhost:9999" },
+        });
+        assert.equal(crossSite.status, 401);
+        const noOrigin = yield* HttpClient.post("/api/t3team/cloud-broker/sign-out", {
+          headers: { cookie },
+        });
+        assert.equal(noOrigin.status, 200);
+      }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
   it.effect("returns only pairing metadata to access-read HTTP sessions", () =>

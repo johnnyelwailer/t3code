@@ -80,6 +80,9 @@ export function pendingCloudSession(
  */
 const isRunSettled = (run: WorkflowRunSummary): boolean => run.status === "completed";
 
+/** `session.yml` appends this to `run-name` in broker mode; the run list shows nothing else of it. */
+export const BROKER_RUN_NAME_MARKER = "· broker";
+
 /**
  * Project one provisioning run into the `CloudSession` the client renders.
  */
@@ -130,6 +133,7 @@ export const projectCloudSession = (
       failureReason,
       detailsUrl: sessionRun.htmlUrl === "" ? null : sessionRun.htmlUrl,
       ...(environmentId !== undefined ? { environmentId } : {}),
+      transport: sessionRun.name.includes(BROKER_RUN_NAME_MARKER) ? "nexi_broker" : "t3_connect",
       // Only a settled run has a real "how long did it run" figure; a live
       // session would be reporting its age, not its duration.
       ...(settled ? { durationSeconds: cloudSessionDurationSeconds(sessionRun) } : {}),

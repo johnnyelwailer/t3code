@@ -22,6 +22,7 @@ import { dispatchAndDiscoverSession } from "./t3team-CloudSessionDispatch.ts";
 import { dispatchCredentialHandoff } from "./t3team-CloudSessionMintGate.ts";
 import { makePayloadIssueCleanup } from "./t3team-CloudSessionPayloadCleanup.ts";
 import { makeSessionTag, projectCloudSession } from "./t3team-CloudSessionProjection.ts";
+import { NexiBrokerService } from "./t3team-NexiBrokerService.ts";
 
 /**
  * Starts and tracks *cloud sessions*: full Nexi workspaces provisioned on
@@ -66,6 +67,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
   const github = yield* GitHubCli.GitHubCli;
   const cloudCli = yield* CliTokenManager.CloudCliTokenManager;
   const minter = yield* ConnectCredentialMinter;
+  const broker = yield* NexiBrokerService;
   const handoffEnabled = yield* isSessionCredentialIssueEnabled();
   const { repoRef, machineLabel } = yield* resolveFleetConfig();
 
@@ -127,19 +129,26 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       // session, and then cancelling yours kills theirs.
       const sessionTag = yield* makeSessionTag;
 
+      // Broker mode: a grant only a run this login dispatched can redeem replaces the whole T3
+      // Connect handoff. Fails with `broker_sign_in_required` before any dispatch when signed out.
+      const brokerGrant = broker.enabled ? yield* broker.requestGrant(login) : null;
+
       // Credential handoff, with the in-app mint fallback: if this machine
       // has no usable T3 Connect credential yet, the mint (a browser
       // round-trip, zero manual steps) gets a bounded chance to finish here;
       // otherwise the user is told their sign-in is pending in the browser.
-      const payloadIssue = yield* dispatchCredentialHandoff({
-        repoRef,
-        sessionTag,
-        run: gh.run,
-        enabled: handoffEnabled,
-        readCredential: cloudCli.getExisting,
-        mint: minter.mint,
-        mintTimeout: CREATE_MINT_WAIT,
-      });
+      const payloadIssue =
+        brokerGrant !== null
+          ? null
+          : yield* dispatchCredentialHandoff({
+              repoRef,
+              sessionTag,
+              run: gh.run,
+              enabled: handoffEnabled,
+              readCredential: cloudCli.getExisting,
+              mint: minter.mint,
+              mintTimeout: CREATE_MINT_WAIT,
+            });
       if (payloadIssue !== null) yield* payloadCleanup.track(sessionTag, payloadIssue);
 
       return yield* dispatchAndDiscoverSession({
@@ -150,6 +159,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
         run: gh.run,
         listRuns: gh.listRunsFor(login),
         discoveryAttempts: DISPATCH_DISCOVERY_ATTEMPTS,
+        brokerGrant,
       });
     });
 
