@@ -172,6 +172,7 @@ import { openLinkPullRequestDialog } from "./pullRequest/LinkPullRequestDialog";
 import { ProjectContentSearchDialog } from "./search/ProjectContentSearchDialog";
 import { toggleThemeEditorForTheme } from "./settings/themeEditorStore";
 import { searchSettings, SETTINGS_SECTION_LABELS } from "./settings/settingsSearch";
+import { environmentTransportLabel } from "./settings/EnvironmentRow";
 import {
   COMMAND_PALETTE_META_ICON_CLASS,
   CommandPaletteMetaDot,
@@ -272,6 +273,8 @@ interface AddProjectEnvironmentOption {
   readonly isPrimary: boolean;
   readonly isConnected: boolean;
   readonly status: string;
+  /** Subtitle when connected; the environment id unless the transport has a name. */
+  readonly detail: string;
 }
 
 interface LocalProviderWorkspace {
@@ -1008,6 +1011,11 @@ function OpenCommandPaletteDialog(props: {
         machine: resolveEnvironmentMachineKind(environment.serverConfig),
         isConnected: canCreateProjectInEnvironment(environment.connection.phase),
         status: connectionStatusText(environment.connection),
+        detail: isPrimary
+          ? "This device"
+          : environment.entry.target._tag === "BrokerConnectionTarget"
+            ? environmentTransportLabel(environment)
+            : environment.environmentId,
       };
     });
 
@@ -1729,11 +1737,7 @@ function OpenCommandPaletteDialog(props: {
       value: `action:add-project:environment:${option.environmentId}`,
       searchTerms: [option.label, option.environmentId, option.isPrimary ? "this device" : ""],
       title: option.label,
-      description: option.isConnected
-        ? option.isPrimary
-          ? "This device"
-          : option.environmentId
-        : option.status,
+      description: option.isConnected ? option.detail : option.status,
       disabled: !option.isConnected,
       icon: <EnvironmentMachineIcon kind={option.machine} className={ITEM_ICON_CLASS} />,
       keepOpen: true,

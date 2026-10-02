@@ -204,7 +204,15 @@ const ATLASSIAN_ENV_KEYS = [
   "T3WORK_ATLASSIAN_SITE_URL",
 ];
 
-const ATLASSIAN_ENV_KEYS_SET = new Set(ATLASSIAN_ENV_KEYS);
+/** The Nexi broker cloud-session config the distribution ships in Resources/.env (public identifiers). */
+const NEXI_BROKER_ENV_KEYS = [
+  "T3CODE_NEXI_BROKER_URL",
+  "T3CODE_NEXI_BROKER_TENANT",
+  "T3CODE_NEXI_BROKER_APP",
+  "NEXI_FF_CLOUD_BROKER",
+];
+
+const ATLASSIAN_ENV_KEYS_SET = new Set([...ATLASSIAN_ENV_KEYS, ...NEXI_BROKER_ENV_KEYS]);
 
 function parseEnvLine(line: string): [key: string, value: string] | null {
   const trimmed = line.trim();

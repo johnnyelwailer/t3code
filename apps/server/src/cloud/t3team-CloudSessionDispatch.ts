@@ -36,6 +36,8 @@ export const dispatchAndDiscoverSession = Effect.fn("cloud.session.dispatch_and_
     readonly listRuns: ListRuns;
     /** One-second polls before giving up (the session is then "pending"). */
     readonly discoveryAttempts: number;
+    /** Set when the session is reached through the Nexi broker instead of T3 Connect. */
+    readonly brokerGrant?: string | null;
   }) {
     const marker = sessionTagMarker(input.sessionTag);
 
@@ -43,6 +45,7 @@ export const dispatchAndDiscoverSession = Effect.fn("cloud.session.dispatch_and_
       dispatchSessionInvocation(input.repoRef, {
         hold_minutes: String(Math.max(1, Math.round(input.durationSeconds / 60))),
         session_tag: input.sessionTag,
+        ...(input.brokerGrant ? { broker_grant: input.brokerGrant } : {}),
       }),
     );
 
@@ -62,7 +65,10 @@ export const dispatchAndDiscoverSession = Effect.fn("cloud.session.dispatch_and_
     const discovered = yield* pollForTaggedRun(input.discoveryAttempts);
 
     if (discovered === null) {
-      return pendingCloudSession(input.sessionTag, input.durationSeconds, input.machineLabel);
+      return {
+        ...pendingCloudSession(input.sessionTag, input.durationSeconds, input.machineLabel),
+        transport: input.brokerGrant ? ("nexi_broker" as const) : ("t3_connect" as const),
+      };
     }
     return yield* projectCloudSession(
       discovered,

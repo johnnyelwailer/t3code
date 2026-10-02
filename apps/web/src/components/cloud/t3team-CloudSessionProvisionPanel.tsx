@@ -2,7 +2,10 @@ import type { CloudSession } from "@t3tools/contracts";
 import { type ReactNode, useCallback, useMemo } from "react";
 
 import { Button } from "../ui/button";
-import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import {
+  CloudSessionDurationSelect,
+  DEFAULT_CLOUD_SESSION_DURATION_SECONDS,
+} from "./t3team-CloudSessionDurationSelect";
 import { CloudSessionHistoryDisclosure } from "./t3team-CloudSessionHistoryDisclosure";
 import { CloudSessionRow, CloudSessionRowsSkeleton } from "./t3team-CloudSessionProvisionRow";
 import {
@@ -30,19 +33,10 @@ import { splitCloudSessions } from "./t3team-cloudSessionSplit";
  * separate, replaceable layer.
  */
 
-/**
- * Session lengths offered in the panel. The provisioning job holds the machine
- * for the chosen span and then stops itself, so this is the only knob that has
- * to exist — everything else (which repo, which branch, which secrets) is
- * already fixed by the workspace pack.
- */
-export const CLOUD_SESSION_DURATION_CHOICES = [
-  { seconds: 3600, label: "1 hour" },
-  { seconds: 4 * 3600, label: "4 hours" },
-  { seconds: 8 * 3600, label: "8 hours" },
-] as const;
-
-export const DEFAULT_CLOUD_SESSION_DURATION_SECONDS = 4 * 3600;
+export {
+  CLOUD_SESSION_DURATION_CHOICES,
+  DEFAULT_CLOUD_SESSION_DURATION_SECONDS,
+} from "./t3team-CloudSessionDurationSelect";
 
 export function CloudSessionProvisionPanel({
   sessions,
@@ -60,6 +54,7 @@ export function CloudSessionProvisionPanel({
   onSessionForget,
   canForgetSession,
   empty = null,
+  banner = null,
 }: {
   readonly sessions: ReadonlyArray<CloudSession>;
   readonly loading?: boolean;
@@ -83,27 +78,12 @@ export function CloudSessionProvisionPanel({
   /** Whether that session's machine is saved here, so Forget would do something. */
   readonly canForgetSession?: ((session: CloudSession) => boolean) | undefined;
   readonly empty?: ReactNode;
+  /** Shown under the header, e.g. the Nexplore sign-in the broker needs. */
+  readonly banner?: ReactNode;
 }) {
   const handleCreate = useCallback(() => {
     onCreate(durationSeconds);
   }, [onCreate, durationSeconds]);
-
-  const handleDurationChange = useCallback(
-    (value: string | null) => {
-      if (value === null) return;
-      onDurationChange?.(Number(value));
-    },
-    [onDurationChange],
-  );
-
-  const durationItems = useMemo(
-    () =>
-      CLOUD_SESSION_DURATION_CHOICES.map((choice) => ({
-        value: String(choice.seconds),
-        label: choice.label,
-      })),
-    [],
-  );
 
   const pendingCount = sessions.filter((session) =>
     isCloudSessionProvisionPending(session.phase),
@@ -128,28 +108,16 @@ export function CloudSessionProvisionPanel({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span className="text-muted-foreground text-xs">Runs for</span>
-          <Select
-            modal={false}
-            value={String(durationSeconds)}
-            onValueChange={handleDurationChange}
-            items={durationItems}
-          >
-            <SelectTrigger size="sm" className="w-24 min-w-0" aria-label="Runs for">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectPopup>
-              {durationItems.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectPopup>
-          </Select>
+          <CloudSessionDurationSelect
+            durationSeconds={durationSeconds}
+            onDurationChange={onDurationChange}
+          />
           <Button size="sm" disabled={createPending} onClick={handleCreate}>
             {createPending ? "Starting…" : "New session"}
           </Button>
         </div>
       </header>
+      {banner}
 
       <div className="space-y-1">
         {loading ? (

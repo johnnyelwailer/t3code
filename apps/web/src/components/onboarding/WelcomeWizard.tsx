@@ -82,6 +82,8 @@ import { toastManager } from "../ui/toast";
 import { cn } from "../../lib/utils";
 import { formatRelativeTime } from "../../timestampFormat";
 import { useWelcomeWizardBrand } from "~/t3team/onboarding/t3team-welcomeWizardBrand";
+import { WelcomeCloudSignInOption } from "./t3team-WelcomeCloudSignInOption";
+import { OnboardingReadyAgents } from "./t3team-OnboardingReadyAgents";
 
 /**
  * First-run welcome wizard. Rendered over the workspace at `/welcome` on a
@@ -358,11 +360,15 @@ function ConnectionStep({
       ) : null}
       <div className="mt-4 space-y-2">
         {cloudEnabled ? (
-          <ConnectAccountOption
-            autoSelectedComputers={autoSelectedComputers}
-            disabled={isPairing}
-            selectedIds={selectedIds}
-            onToggleEnvironment={onToggleEnvironment}
+          <WelcomeCloudSignInOption
+            fallback={
+              <ConnectAccountOption
+                autoSelectedComputers={autoSelectedComputers}
+                disabled={isPairing}
+                selectedIds={selectedIds}
+                onToggleEnvironment={onToggleEnvironment}
+              />
+            }
           />
         ) : null}
         <div className="rounded-lg border border-border bg-background">
@@ -707,6 +713,7 @@ function ConnectedAgentsStep({
     <section>
       <h2 className="mb-2 text-sm font-medium">{machineLabel}</h2>
       <div className="space-y-1.5">
+        <OnboardingReadyAgents providers={providers} excludeDrivers={PRIMARY_AGENT_DRIVERS} />
         {primaryAgents.map(({ driver, provider }) => (
           <AgentCard
             key={driver}

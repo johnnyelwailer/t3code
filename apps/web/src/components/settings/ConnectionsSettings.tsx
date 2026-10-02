@@ -178,6 +178,7 @@ import {
 } from "../ServerUpdateAction";
 import { CloudEnvironmentConnectRows } from "../cloud/CloudEnvironmentConnectList";
 import { CloudSessionProvisionPanel } from "../cloud/t3team-CloudSessionProvisionPanel";
+import { CloudBrokerSignInBanner } from "../cloud/t3team-CloudBrokerSignInBanner";
 import { CloudEnvironmentExitActions } from "../cloud/t3team-CloudEnvironmentExitActions";
 import { ITEM_ROW_CLASSNAME, ITEM_ROW_INNER_CLASSNAME } from "./itemRows";
 import {
@@ -1495,7 +1496,9 @@ function SavedBackendListRow({
   // Cloud (T3 Connect) machines get the dedicated exit cluster instead of the
   // generic switch: there is no local backend to power off, and "switch off"
   // would read as "stop the machine".
-  const isCloudRelay = environment.entry.target._tag === "RelayConnectionTarget";
+  const isCloudRelay =
+    environment.entry.target._tag === "RelayConnectionTarget" ||
+    environment.entry.target._tag === "BrokerConnectionTarget";
   const errorTraceId = environment.connection.traceId;
   const { copyToClipboard: copyTraceIdToClipboard } = useCopyToClipboard<{ traceId: string }>({
     target: "trace ID",
@@ -3827,6 +3830,7 @@ export function ConnectionsSettings() {
               historyUrl={cloudSessions.historyUrl}
               onSessionForget={forgetCloudSession}
               canForgetSession={canForgetCloudSession}
+              banner={<CloudBrokerSignInBanner />}
             />
           ) : (
             <div className={ITEM_ROW_CLASSNAME}>

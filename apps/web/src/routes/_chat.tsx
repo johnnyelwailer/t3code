@@ -28,6 +28,8 @@ import { stackedThreadToast, toastManager } from "~/components/ui/toast";
 import { primaryServerKeybindingsAtom } from "~/state/server";
 import { readThreadShells } from "../state/entities";
 import { translateUpstreamPath } from "../t3team/t3team-upstreamRouteBridge";
+import { appAtomRegistry } from "../rpc/atomRegistry";
+import { primaryEnvironmentIdAtom } from "../state/primaryEnvironment";
 
 function ChatRouteGlobalShortcuts() {
   const clearSelection = useThreadSelectionStore((state) => state.clearSelection);
@@ -202,6 +204,7 @@ export const Route = createFileRoute("/_chat")({
         // unique thread id is still enough to place the thread.
         readThreadShells().find((shell) => shell.id === threadId)?.projectId ??
         null,
+      primaryEnvironmentId: appAtomRegistry.get(primaryEnvironmentIdAtom),
     });
     if (translation.kind === "target") {
       throw redirect(translation.target);

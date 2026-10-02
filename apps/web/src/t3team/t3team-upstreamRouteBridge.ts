@@ -103,6 +103,24 @@ export interface UpstreamRouteBridgeDeps {
     readonly environmentId: string;
     readonly threadId: string;
   }) => string | null;
+  /**
+   * This app's primary environment, or `null` while it is not known yet. The Team thread view and
+   * its backend talk to the primary server only, so a thread anywhere else (a cloud session, SSH,
+   * WSL) stays on upstream's environment-scoped thread route.
+   */
+  readonly primaryEnvironmentId: string | null;
+}
+
+/**
+ * Whether the Team thread view can show a thread from this environment. `false` while the primary
+ * is unknown: upstream's environment-scoped view renders any thread, and the bridge moves a primary
+ * one into the Team shell once the id resolves — a Team route, once entered, is never moved back.
+ */
+export function isTeamShellEnvironment(
+  environmentId: string,
+  primaryEnvironmentId: string | null,
+): boolean {
+  return primaryEnvironmentId !== null && environmentId === primaryEnvironmentId;
 }
 
 export function translateUpstreamPath(
@@ -119,6 +137,14 @@ export function translateUpstreamPath(
 
   const threadPath = parseUpstreamThreadPath(pathname);
   const projectId = threadPath ? deps.resolveProjectIdForThread(threadPath) : null;
+  // Only a real thread: an unresolvable `/draft/<id>` would otherwise read as environment "draft".
+  if (
+    threadPath &&
+    projectId &&
+    !isTeamShellEnvironment(threadPath.environmentId, deps.primaryEnvironmentId)
+  ) {
+    return { kind: "ignore" };
+  }
 
   // A real thread always wins, so an environment literally named "draft" keeps
   // working; only an unresolvable `/draft/<id>` is treated as a draft.
