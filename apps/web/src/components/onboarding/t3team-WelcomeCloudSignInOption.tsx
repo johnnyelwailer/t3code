@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useCloudBrokerAuth } from "~/cloud/t3team-useCloudBrokerAuth";
 
 import { Button } from "../ui/button";
+import { WelcomeCloudSessions } from "./t3team-WelcomeCloudSessions";
 
 /**
  * The welcome wizard's cloud row. With the Nexi broker configured, cloud sessions sign in with
@@ -52,6 +53,7 @@ export function WelcomeCloudSignInOption({ fallback }: { readonly fallback: Reac
       {(auth.error ?? auth.status.lastError) ? (
         <p className="px-3 pb-3 text-destructive text-xs">{auth.error ?? auth.status.lastError}</p>
       ) : null}
+      {state._tag === "SignedIn" ? <WelcomeCloudSessions /> : null}
     </div>
   );
 }

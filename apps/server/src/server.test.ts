@@ -5038,6 +5038,19 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           headers: { cookie },
         });
         assert.equal(noOrigin.status, 200);
+        // The desktop renderer (origin t3code://app) authenticates with its bearer: allowed, and
+        // answered with the environment API's CORS so the renderer can read it.
+        const desktop = yield* exchangeAccessToken(defaultDesktopBootstrapToken, {
+          scope: "relay:read relay:write",
+        });
+        const bearer = yield* HttpClient.post("/api/t3team/cloud-broker/sign-out", {
+          headers: {
+            authorization: `Bearer ${desktop.body.access_token ?? ""}`,
+            origin: "t3code://app",
+          },
+        });
+        assert.equal(bearer.status, 200);
+        assert.equal(bearer.headers["access-control-allow-origin"], "*");
       }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 

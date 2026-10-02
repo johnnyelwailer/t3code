@@ -32,7 +32,9 @@ async function request<T>(method: "GET" | "POST", path: string, body?: object): 
   try {
     response = await fetch(resolvePrimaryEnvironmentHttpUrl(`/api/t3team/cloud-broker/${path}`), {
       method,
-      credentials: "include",
+      // Bearer (desktop) or the same-origin session cookie (web), never both: a credentialed
+      // cross-origin read is refused by CORS anyway.
+      credentials: bearer ? "omit" : "include",
       headers: {
         ...(bearer ? { authorization: `Bearer ${bearer}` } : {}),
         ...(body ? { "content-type": "application/json" } : {}),

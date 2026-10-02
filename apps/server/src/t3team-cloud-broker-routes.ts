@@ -10,6 +10,7 @@ import * as Schema from "effect/Schema";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
 
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
+import { browserApiCorsHeaders } from "./httpCors.ts";
 import { NexiBrokerService } from "./cloud/t3team-NexiBrokerService.ts";
 
 /**
@@ -27,12 +28,15 @@ class BrokerRouteAuthError extends Schema.TaggedError<BrokerRouteAuthError>()(
 ) {}
 
 /**
- * Cookies here are SameSite=Lax, and every other localhost port counts as same-site — so a page
- * served by another local process could fire a credentialed POST. A browser always sends `Origin`
- * on POST; refuse one that is not this server. Non-browser callers (no `Origin`) are unaffected.
+ * CSRF guard for the cookie path. Cookies here are SameSite=Lax, and every other localhost port
+ * counts as same-site — so a page served by another local process could fire a credentialed POST.
+ * A browser always sends `Origin` on POST; refuse one that is not this server. A bearer request is
+ * exempt: no other origin can attach this client's token (the desktop renderer, origin
+ * `t3code://app`, authenticates that way).
  */
 const requireSameOrigin = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest;
+  if (request.headers.authorization !== undefined) return;
   const origin = request.headers.origin;
   if (origin === undefined) return;
   let originHost: string | null = null;
@@ -56,9 +60,13 @@ const requireScope = (scope: AuthEnvironmentScope) =>
     }
   });
 
-// No CORS headers, deliberately: these responses carry credentials and are for this origin only.
+// The environment API's CORS policy (`*`, no credentials): the desktop renderer is another origin
+// and reads these with its bearer; a cookie-authenticated cross-origin read stays impossible.
 const json = (body: unknown, status = 200) =>
-  HttpServerResponse.jsonUnsafe(body, { status, headers: { "cache-control": "no-store" } });
+  HttpServerResponse.jsonUnsafe(body, {
+    status,
+    headers: { ...browserApiCorsHeaders, "cache-control": "no-store" },
+  });
 
 const readSessionId = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest;
