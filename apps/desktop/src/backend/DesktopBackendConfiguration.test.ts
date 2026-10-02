@@ -336,6 +336,12 @@ describe("DesktopBackendConfiguration", () => {
       yield* fileSystem.makeDirectory(path.dirname(t3teamEntryPath), { recursive: true });
       yield* fileSystem.writeFileString(t3teamEntryPath, "");
       yield* fileSystem.makeDirectory(asarPacksDir, { recursive: true });
+      // The distribution ships its Nexi broker URL in Resources/.env; only allowlisted keys pass.
+      yield* fileSystem.makeDirectory(resourcesPath, { recursive: true });
+      yield* fileSystem.writeFileString(
+        path.join(resourcesPath, ".env"),
+        "T3CODE_NEXI_BROKER_URL=https://broker.example.test\nUNRELATED_BUILD_SECRET=nope\n",
+      );
 
       const config = yield* Effect.gen(function* () {
         const configuration = yield* DesktopBackendConfiguration.DesktopBackendConfiguration;
@@ -361,6 +367,8 @@ describe("DesktopBackendConfiguration", () => {
 
       assert.equal(config.entryPath, t3teamEntryPath);
       assert.equal(config.env.T3TEAM_PACKS_DIR, asarPacksDir);
+      assert.equal(config.env.T3CODE_NEXI_BROKER_URL, "https://broker.example.test");
+      assert.isUndefined(config.env.UNRELATED_BUILD_SECRET);
       const homeDirectory = baseDir;
       const expectedBrandedDir = path.join(
         homeDirectory,
