@@ -71,3 +71,31 @@ describe("ExecutionEnvironmentDescriptor", () => {
     ).toEqual({ maxUploadBytes: 50 * 1024 * 1024 });
   });
 });
+
+describe("execution environment machine version skew", () => {
+  it("preserves a known machine kind alongside fork appearance metadata", () => {
+    const decoded = decodeDescriptor({
+      ...descriptor,
+      platform: { ...descriptor.platform, machine: "mac-mini" },
+      appearance: { themeId: "nexplore", name: "Nexplore", colors: { light: {}, dark: {} } },
+      capabilities: { ...descriptor.capabilities, environmentIcon: true, usageLimitSources: true },
+    });
+    expect(decoded.platform.machine).toBe("mac-mini");
+    expect(decoded.appearance?.themeId).toBe("nexplore");
+    expect(decoded.capabilities.environmentIcon).toBe(true);
+    expect(decoded.capabilities.usageLimitSources).toBe(true);
+  });
+
+  it("ignores an unknown future machine kind without rejecting the descriptor", () => {
+    const decoded = decodeDescriptor({
+      ...descriptor,
+      platform: { ...descriptor.platform, machine: "future-workstation" },
+    });
+    expect(decoded.platform.machine).toBeUndefined();
+    expect(decoded.environmentId).toBe(descriptor.environmentId);
+  });
+
+  it("accepts older servers that omit the machine kind", () => {
+    expect(decodeDescriptor(descriptor).platform.machine).toBeUndefined();
+  });
+});
