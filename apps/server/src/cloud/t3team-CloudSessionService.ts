@@ -182,14 +182,32 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       // session at all and from cancelling another user's session.
       const login = yield* gh.resolveLogin;
       const sessionRuns = yield* gh.listRunsFor(login);
-      if (!sessionRuns.some((item) => item.id === runId)) {
+      const sessionRun = sessionRuns.find((item) => item.id === runId);
+      if (sessionRun === undefined) {
         return yield* new CloudSessionFailedError({
           reason: "unknown_session",
           message: "That session does not exist.",
         });
       }
+      // Already over (an earlier stop, or its time ran out): stopping is done, not an error.
+      // GitHub refuses to cancel a completed run, which used to surface as "GitHub CLI failed".
+      if (sessionRun.status === "completed") return;
 
-      yield* gh.run(cancelRunInvocation(repoRef, runId)).pipe(Effect.asVoid);
+      yield* gh.run(cancelRunInvocation(repoRef, runId)).pipe(
+        Effect.asVoid,
+        // It can end between the listing and the cancel; only a run still going is a failure.
+        Effect.catch((error) =>
+          gh
+            .listRunsFor(login)
+            .pipe(
+              Effect.flatMap((runs) =>
+                runs.find((item) => item.id === runId)?.status === "completed"
+                  ? Effect.void
+                  : Effect.fail(error),
+              ),
+            ),
+        ),
+      );
     });
 
   return { list, create, cancel } as const;

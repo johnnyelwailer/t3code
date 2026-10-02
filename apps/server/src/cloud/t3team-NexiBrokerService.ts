@@ -64,7 +64,7 @@ const make = Effect.fn("cloud.broker.service.make")(function* () {
   const attach: NexiBrokerService["Service"]["attach"] = (sessionId) =>
     Effect.gen(function* () {
       // The broker answers only with this user's sessions, so a session id that is not listed is
-      // either somebody else's or not registered yet — both read as "not ready" to the user.
+      // somebody else's, not registered yet, or over — the message must hold for all three.
       const sessions = yield* client.listSessions;
       // Forwarders for sessions that ended are closed here rather than on a timer: an idle app
       // spends no broker calls.
@@ -78,8 +78,7 @@ const make = Effect.fn("cloud.broker.service.make")(function* () {
       if (session === undefined || !session.environmentId) {
         return yield* new CloudSessionFailedError({
           reason: "unknown_session",
-          message:
-            "That cloud session is not reachable yet. It connects once its machine is ready.",
+          message: "That cloud session is not running: it is still starting, or it has ended.",
         });
       }
       let forwarder = forwarders.get(sessionId);

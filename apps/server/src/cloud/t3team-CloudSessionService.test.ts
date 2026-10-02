@@ -67,8 +67,16 @@ const runPastDiscoveryPoll = <A, E>(create: Effect.Effect<A, E>) =>
  * first attempt. `login` is what the `user --jq .login` identity call returns;
  * pass `""` to simulate an unresolvable identity.
  */
-const makeGithubMock = (options: { login?: string } = {}) => {
+const makeGithubMock = (
+  options: {
+    login?: string;
+    runStatus?: string;
+    /** The cancel call fails (GitHub's 409), and later listings show this status. */
+    cancelFailsThenStatus?: string;
+  } = {},
+) => {
   const login = options.login ?? "pj";
+  let cancelAttempted = false;
   const calls: Array<{ args: readonly string[]; stdin?: string | undefined }> = [];
   let tag: string | null = null;
   const execute = (input: {
@@ -78,41 +86,57 @@ const makeGithubMock = (options: { login?: string } = {}) => {
     stdin?: string;
     maxOutputBytes?: number;
   }): Effect.Effect<VcsProcess.VcsProcessOutput, GitHubCli.GitHubCliError> =>
-    Effect.sync(() => {
+    Effect.suspend(() => {
       calls.push({ args: input.args, stdin: input.stdin });
       const joined = input.args.join(" ");
-      if (joined.includes("--jq")) {
-        // The identity-resolution call: `gh api --hostname … user --jq .login`
-        // prints the bare login plus a trailing newline.
-        return ghOut(`${login}\n`);
-      }
-      if (joined.includes("repos/hive/nx-nexi/issues") && joined.includes("POST")) {
-        return ghOut(encodeGitHubIssueCreate({ number: 42 }));
-      }
-      if (joined.includes("/dispatches")) {
-        const parsed = decodeGhDispatch(input.stdin ?? "{}");
-        tag = parsed.inputs?.session_tag ?? null;
-        return ghOut("");
-      }
-      if (joined.includes("/runs")) {
-        return ghOut(
-          encodeGhWorkflowRuns({
-            workflow_runs: [
-              {
-                id: 999,
-                status: "completed",
-                conclusion: "success",
-                created_at: "2026-09-14T12:00:00Z",
-                updated_at: "2026-09-14T12:00:01Z",
-                html_url: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/999",
-                name: `hive/nx-nexi [main] [${tag}]`,
-              },
-            ],
-          }),
+      if (joined.includes("/cancel") && options.cancelFailsThenStatus !== undefined) {
+        cancelAttempted = true;
+        return Effect.fail(
+          new GitHubCli.GitHubCliCommandError({ command: "gh", cwd: "", cause: "HTTP 409" }),
         );
       }
-      return ghOut("{}");
+      return Effect.succeed(respond(joined, input.stdin));
     });
+  const respond = (joined: string, stdin: string | undefined): VcsProcess.VcsProcessOutput => {
+    if (joined.includes("--jq")) {
+      // The identity-resolution call: `gh api --hostname … user --jq .login`
+      // prints the bare login plus a trailing newline.
+      return ghOut(`${login}\n`);
+    }
+    if (joined.includes("repos/hive/nx-nexi/issues") && joined.includes("POST")) {
+      return ghOut(encodeGitHubIssueCreate({ number: 42 }));
+    }
+    if (joined.includes("/dispatches")) {
+      const parsed = decodeGhDispatch(stdin ?? "{}");
+      tag = parsed.inputs?.session_tag ?? null;
+      return ghOut("");
+    }
+    if (joined.includes("/cancel")) {
+      // GitHub answers 409 for a run that already completed; a cancel must never get here then.
+      return ghOut("{}");
+    }
+    if (joined.includes("/runs")) {
+      return ghOut(
+        encodeGhWorkflowRuns({
+          workflow_runs: [
+            {
+              id: 999,
+              status:
+                (cancelAttempted ? options.cancelFailsThenStatus : undefined) ??
+                options.runStatus ??
+                "completed",
+              conclusion: "success",
+              created_at: "2026-09-14T12:00:00Z",
+              updated_at: "2026-09-14T12:00:01Z",
+              html_url: "https://nexplore.ghe.com/hive/nx-nexi/actions/runs/999",
+              name: `hive/nx-nexi [main] [${tag}]`,
+            },
+          ],
+        }),
+      );
+    }
+    return ghOut("{}");
+  };
   return { calls, execute };
 };
 
@@ -459,6 +483,59 @@ describe("CloudSessionService.create over the Nexi broker", () => {
       );
       assert.isTrue(isCloudSessionFailed(failure) && failure.reason === "broker_sign_in_required");
       assert.isFalse(calls.some((call) => call.args.join(" ").includes("/dispatches")));
+    }),
+  );
+});
+
+describe("CloudSessionService.cancel", () => {
+  const cancelSession = (runStatus: string, cancelFailsThenStatus?: string) =>
+    Effect.gen(function* () {
+      const { calls, execute } = makeGithubMock({
+        runStatus,
+        ...(cancelFailsThenStatus !== undefined ? { cancelFailsThenStatus } : {}),
+      });
+      const providers = Layer.mergeAll(
+        Layer.mock(GitHubCli.GitHubCli)({ execute }),
+        Layer.mock(CliTokenManager.CloudCliTokenManager)({
+          getExisting: Effect.succeed(Option.none()),
+        }),
+        Layer.mock(ConnectCredentialMinter.ConnectCredentialMinter)({
+          mint: () => Effect.die("cancel never mints"),
+        }),
+        ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })),
+        NexiBrokerService.layerDisabled,
+      );
+      yield* Effect.service(CloudSessionService.CloudSessionService).pipe(
+        Effect.flatMap((svc) => svc.cancel({ sessionId: "999" })),
+        Effect.provide(CloudSessionService.layer.pipe(Layer.provide(providers))),
+      );
+      return calls.filter((call) => call.args.join(" ").includes("/cancel")).length;
+    });
+
+  it.effect("cancels a session that is still running", () =>
+    Effect.gen(function* () {
+      assert.equal(yield* cancelSession("in_progress"), 1);
+    }),
+  );
+
+  it.effect("treats stopping a session that already ended as done, not an error", () =>
+    Effect.gen(function* () {
+      // A second Stop click, or one after the session's time ran out.
+      assert.equal(yield* cancelSession("completed"), 0);
+    }),
+  );
+
+  it.effect("treats a session that ended just before the cancel as stopped", () =>
+    Effect.gen(function* () {
+      // Listed as running, then GitHub refuses the cancel because the run finished meanwhile.
+      assert.equal(yield* cancelSession("in_progress", "completed"), 1);
+    }),
+  );
+
+  it.effect("still fails when the cancel is refused for a session that keeps running", () =>
+    Effect.gen(function* () {
+      const exit = yield* Effect.exit(cancelSession("in_progress", "in_progress"));
+      assert.isTrue(exit._tag === "Failure");
     }),
   );
 });
