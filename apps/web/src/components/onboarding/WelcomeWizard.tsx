@@ -82,6 +82,7 @@ import { toastManager } from "../ui/toast";
 import { cn } from "../../lib/utils";
 import { formatRelativeTime } from "../../timestampFormat";
 import { useWelcomeWizardBrand } from "~/t3team/onboarding/t3team-welcomeWizardBrand";
+import { WelcomeCloudSignInOption } from "./t3team-WelcomeCloudSignInOption";
 
 /**
  * First-run welcome wizard. Rendered over the workspace at `/welcome` on a
@@ -358,11 +359,15 @@ function ConnectionStep({
       ) : null}
       <div className="mt-4 space-y-2">
         {cloudEnabled ? (
-          <ConnectAccountOption
-            autoSelectedComputers={autoSelectedComputers}
-            disabled={isPairing}
-            selectedIds={selectedIds}
-            onToggleEnvironment={onToggleEnvironment}
+          <WelcomeCloudSignInOption
+            fallback={
+              <ConnectAccountOption
+                autoSelectedComputers={autoSelectedComputers}
+                disabled={isPairing}
+                selectedIds={selectedIds}
+                onToggleEnvironment={onToggleEnvironment}
+              />
+            }
           />
         ) : null}
         <div className="rounded-lg border border-border bg-background">
