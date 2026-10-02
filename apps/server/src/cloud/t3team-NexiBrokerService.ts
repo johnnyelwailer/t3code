@@ -30,6 +30,8 @@ export class NexiBrokerService extends Context.Service<
     readonly attach: (
       sessionId: string,
     ) => Effect.Effect<CloudSessionAttachResult, CloudSessionFailedError>;
+    /** A fresh one-time pairing credential from the session's own server (first connect only). */
+    readonly pair: (sessionId: string) => Effect.Effect<string, CloudSessionFailedError>;
   }
 >()("t3/cloud/t3team-NexiBrokerService/NexiBrokerService") {}
 
@@ -48,6 +50,7 @@ const make = Effect.fn("cloud.broker.service.make")(function* () {
       signOut: auth.signOut,
       requestGrant: () => Effect.fail(notEnabled),
       attach: () => Effect.fail(notEnabled),
+      pair: () => Effect.fail(notEnabled),
     } satisfies NexiBrokerService["Service"];
   }
   const config = auth.config.value;
@@ -92,14 +95,12 @@ const make = Effect.fn("cloud.broker.service.make")(function* () {
         });
         forwarders.set(sessionId, forwarder);
       }
-      const pairingCredential = yield* client.mintPairing(sessionId);
       const base = `127.0.0.1:${forwarder.port}`;
       return {
         environmentId: session.environmentId,
         label: session.label ?? "Cloud session",
         httpBaseUrl: `http://${base}`,
         wsBaseUrl: `ws://${base}`,
-        pairingCredential,
       } satisfies CloudSessionAttachResult;
     });
 
@@ -114,6 +115,7 @@ const make = Effect.fn("cloud.broker.service.make")(function* () {
     }),
     requestGrant: client.requestGrant,
     attach,
+    pair: client.mintPairing,
   } satisfies NexiBrokerService["Service"];
 });
 
@@ -127,4 +129,5 @@ export const layerDisabled = Layer.succeed(NexiBrokerService, {
   signOut: Effect.void,
   requestGrant: () => Effect.fail(notEnabled),
   attach: () => Effect.fail(notEnabled),
+  pair: () => Effect.fail(notEnabled),
 });

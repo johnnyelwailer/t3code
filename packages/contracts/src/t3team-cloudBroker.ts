@@ -37,15 +37,21 @@ export const CloudSessionAttachInputSchema = Schema.Struct({
 });
 export type CloudSessionAttachInput = typeof CloudSessionAttachInputSchema.Type;
 
-/**
- * A ready broker session, made reachable on this machine: a loopback forwarder to the VM's server
- * plus a fresh one-time pairing credential minted by that server.
- */
+/** A ready broker session, made reachable on this machine through a loopback forwarder. */
 export const CloudSessionAttachResultSchema = Schema.Struct({
   environmentId: Schema.String,
   label: Schema.String,
   httpBaseUrl: Schema.String,
   wsBaseUrl: Schema.String,
-  pairingCredential: Schema.String,
 });
 export type CloudSessionAttachResult = typeof CloudSessionAttachResultSchema.Type;
+
+/**
+ * A fresh one-time pairing credential minted by the session's own server. The client exchanges it
+ * for a bearer session once and reuses that bearer on every reconnect, so pairing (a database write
+ * on the VM) is the exception, not the per-connect cost.
+ */
+export const CloudSessionPairingResultSchema = Schema.Struct({
+  pairingCredential: Schema.String,
+});
+export type CloudSessionPairingResult = typeof CloudSessionPairingResultSchema.Type;

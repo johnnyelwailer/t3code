@@ -397,6 +397,7 @@ describe("CloudSessionService.create over the Nexi broker", () => {
       signOut: Effect.void,
       requestGrant,
       attach: () => Effect.die("unused"),
+      pair: () => Effect.die("unused"),
     });
   const providersWith = (
     execute: ReturnType<typeof makeGithubMock>["execute"],

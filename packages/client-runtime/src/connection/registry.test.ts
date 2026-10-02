@@ -40,6 +40,7 @@ import {
   ConnectionTransientError,
   ConnectionBlockedError,
   BearerConnectionTarget,
+  BrokerConnectionTarget,
   PrimaryConnectionTarget,
   RelayConnectionTarget,
   SshConnectionTarget,
@@ -47,6 +48,7 @@ import {
   type PreparedConnection,
   type SupervisorConnectionState,
 } from "./model.ts";
+import { brokerCredentialKey } from "./t3team-brokerConnection.ts";
 import * as Persistence from "../platform/persistence.ts";
 import * as ConnectionProfileStore from "./profileStore.ts";
 import * as EnvironmentRegistry from "./registry.ts";
@@ -1539,6 +1541,35 @@ describe("EnvironmentRegistry", () => {
           false,
         );
         expect(yield* Ref.get(harness.disconnectedSshTargets)).toEqual([SSH_TARGET]);
+      }).pipe(Effect.provide(harness.layer));
+    }),
+  );
+
+  it.effect("forgets a cloud session's stored bearer when the session is removed", () =>
+    Effect.gen(function* () {
+      const broker = new BrokerConnectionTarget({
+        environmentId: EnvironmentId.make("environment-broker"),
+        label: "Cloud session",
+        sessionId: "290877467",
+      });
+      const kept = new BearerConnectionCredential({ token: "other-token" });
+      const harness = yield* makeHarness(
+        [broker],
+        [],
+        [
+          [brokerCredentialKey("290877467"), new BearerConnectionCredential({ token: "vm-token" })],
+          [brokerCredentialKey("111"), kept],
+        ],
+      );
+
+      yield* Effect.gen(function* () {
+        const registry = yield* EnvironmentRegistry.EnvironmentRegistry;
+        yield* registry.start;
+        yield* registry.remove(broker.environmentId);
+
+        const stored = yield* Ref.get(harness.storedCredentials);
+        expect(stored.has(brokerCredentialKey("290877467"))).toBe(false);
+        expect(stored.get(brokerCredentialKey("111"))).toEqual(kept);
       }).pipe(Effect.provide(harness.layer));
     }),
   );

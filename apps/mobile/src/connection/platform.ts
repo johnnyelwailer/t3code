@@ -197,16 +197,19 @@ const capabilitiesLayer = Layer.effectContext(
       ),
       Context.add(
         BrokerEnvironmentGateway,
-        BrokerEnvironmentGateway.of({
-          // The loopback forwarder lives in the desktop app's local server.
-          attach: () =>
-            Effect.fail(
-              new ConnectionBlockedError({
-                reason: "unsupported",
-                detail: "Nexi broker cloud sessions connect from the desktop app.",
-              }),
-            ),
-        }),
+        BrokerEnvironmentGateway.of(
+          (() => {
+            // The loopback forwarder lives in the desktop app's local server.
+            const unsupported = () =>
+              Effect.fail(
+                new ConnectionBlockedError({
+                  reason: "unsupported",
+                  detail: "Nexi broker cloud sessions connect from the desktop app.",
+                }),
+              );
+            return { attach: unsupported, pair: unsupported };
+          })(),
+        ),
       ),
     );
   }),

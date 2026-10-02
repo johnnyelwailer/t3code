@@ -4994,11 +4994,15 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         body: yield* HttpBody.json({ sessionId: "42" }),
       });
       assert.equal(attach.status, 401);
-      assert.notInclude(yield* attach.text, "pairingCredential");
+      const pairing = yield* HttpClient.post("/api/t3team/cloud-broker/pairing", {
+        body: yield* HttpBody.json({ sessionId: "42" }),
+      });
+      assert.equal(pairing.status, 401);
+      assert.notInclude(yield* pairing.text, "pairingCredential");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  it.effect("cloud-broker attach needs relay:write; status answers relay:read", () =>
+  it.effect("cloud-broker attach and pairing need relay:write; status answers relay:read", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest();
       const reader = yield* exchangeAccessToken(defaultDesktopBootstrapToken, {
@@ -5015,6 +5019,11 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         body: yield* HttpBody.json({ sessionId: "42" }),
       });
       assert.equal(attach.status, 401);
+      const readerPairing = yield* HttpClient.post("/api/t3team/cloud-broker/pairing", {
+        headers: bearer,
+        body: yield* HttpBody.json({ sessionId: "42" }),
+      });
+      assert.equal(readerPairing.status, 401);
       const owner = yield* HttpClient.post("/api/t3team/cloud-broker/attach", {
         headers: { cookie: yield* getAuthenticatedSessionCookieHeader() },
         body: yield* HttpBody.json({ sessionId: "42" }),

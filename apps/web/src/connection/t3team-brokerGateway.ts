@@ -23,9 +23,9 @@ function clientSharesServerMachine(): boolean {
   }
 }
 
-const attach = (sessionId: string) =>
+const call = <A>(run: () => Promise<A>) =>
   Effect.tryPromise({
-    try: () => cloudBrokerApi.attach(sessionId),
+    try: run,
     catch: (cause) => {
       if (
         cause instanceof CloudBrokerRequestError &&
@@ -40,22 +40,28 @@ const attach = (sessionId: string) =>
     },
   });
 
+const requireSameMachine = Effect.suspend(() =>
+  clientSharesServerMachine()
+    ? Effect.void
+    : Effect.fail(
+        new ConnectionBlockedError({
+          reason: "unsupported",
+          detail:
+            "Nexi cloud sessions connect from the Nexi Work desktop app, or a browser on the same computer.",
+        }),
+      ),
+);
+
 /**
  * Web/desktop side of `BrokerEnvironmentGateway`: this machine's server runs the loopback forwarder
- * and mints the pairing credential, so attaching is one authenticated call to it. Failures map to
- * what the connection UI already understands: sign-in problems block, everything else retries.
+ * and asks the broker for pairing credentials, so each is one authenticated call to it. Failures map
+ * to what the connection UI already understands: sign-in problems block, everything else retries.
  */
 export const webBrokerEnvironmentGateway = BrokerEnvironmentGateway.of({
   attach: (input) =>
     Effect.gen(function* () {
-      if (!clientSharesServerMachine()) {
-        return yield* new ConnectionBlockedError({
-          reason: "unsupported",
-          detail:
-            "Nexi cloud sessions connect from the Nexi Work desktop app, or a browser on the same computer.",
-        });
-      }
-      const result = yield* attach(input.sessionId);
+      yield* requireSameMachine;
+      const result = yield* call(() => cloudBrokerApi.attach(input.sessionId));
       if (String(result.environmentId) !== String(input.expectedEnvironmentId)) {
         return yield* new ConnectionBlockedError({
           reason: "configuration",
@@ -63,6 +69,11 @@ export const webBrokerEnvironmentGateway = BrokerEnvironmentGateway.of({
             "The cloud session now runs a different environment. Connect to it again from the cloud session list.",
         });
       }
-      return result;
+      return { httpBaseUrl: result.httpBaseUrl, wsBaseUrl: result.wsBaseUrl };
     }),
+  pair: (input) =>
+    requireSameMachine.pipe(
+      Effect.andThen(call(() => cloudBrokerApi.pair(input.sessionId))),
+      Effect.map((result) => result.pairingCredential),
+    ),
 });

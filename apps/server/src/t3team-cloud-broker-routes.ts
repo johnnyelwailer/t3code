@@ -15,7 +15,7 @@ import { NexiBrokerService } from "./cloud/t3team-NexiBrokerService.ts";
 
 /**
  * Nexi broker sign-in and session attach for this machine's client. Unlike the other `/api/t3team`
- * routes these hand out credentials (an attach returns a pairing credential to the user's cloud
+ * routes these hand out credentials (`pairing` returns a one-time credential for the user's cloud
  * VM), so every one authenticates the caller the way the environment API does — cookie or bearer —
  * and requires the same scopes as the cloud-session RPCs (relay:read / relay:write).
  */
@@ -110,5 +110,11 @@ export const t3teamCloudBrokerRouteLayer = Layer.mergeAll(
   ),
   route("POST", "/api/t3team/cloud-broker/attach", AuthRelayWriteScope, (broker) =>
     readSessionId.pipe(Effect.flatMap(broker.attach)),
+  ),
+  route("POST", "/api/t3team/cloud-broker/pairing", AuthRelayWriteScope, (broker) =>
+    readSessionId.pipe(
+      Effect.flatMap(broker.pair),
+      Effect.map((pairingCredential) => ({ pairingCredential })),
+    ),
   ),
 );

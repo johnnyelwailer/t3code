@@ -27,6 +27,7 @@ import * as ConnectionCredentialStore from "./credentialStore.ts";
 import {
   BearerConnectionTarget,
   BrokerConnectionTarget,
+  ConnectionBlockedError,
   ConnectionTransientError,
   PrimaryConnectionTarget,
   RelayConnectionTarget,
@@ -79,11 +80,14 @@ const makeDependencies = Effect.fn("TestConnectionResolver.makeDependencies")((o
   readonly profiles?: ReadonlyArray<ConnectionProfile>;
   readonly profileStore?: ConnectionProfileStore.ConnectionProfileStore["Service"];
   readonly credentials?: ReadonlyArray<readonly [string, ConnectionCredential]>;
+  /** The credential store's backing map, for tests that assert what was stored. */
+  readonly credentialMap?: Map<string, ConnectionCredential>;
   readonly authorizeBearer?: RemoteEnvironmentAuthorization.RemoteEnvironmentAuthorization["Service"]["authorizeBearer"];
   readonly authorizeDpop?: RemoteEnvironmentAuthorization.RemoteEnvironmentAuthorization["Service"]["authorizeDpop"];
   readonly primaryBearerToken?: string;
   readonly prepareSsh?: ClientCapabilities.SshEnvironmentGateway["Service"]["prepare"];
   readonly attachBroker?: BrokerEnvironmentGateway["Service"]["attach"];
+  readonly pairBroker?: BrokerEnvironmentGateway["Service"]["pair"];
   /** Bodies POSTed to `/oauth/token`, in order. */
   readonly tokenExchanges?: Array<string>;
   readonly descriptorProtocolVersion?: number | null | undefined;
@@ -91,7 +95,7 @@ const makeDependencies = Effect.fn("TestConnectionResolver.makeDependencies")((o
   const profiles = new Map(
     (options?.profiles ?? []).map((profile) => [profile.connectionId, profile]),
   );
-  const credentials = new Map(options?.credentials ?? []);
+  const credentials = options?.credentialMap ?? new Map(options?.credentials ?? []);
 
   const profileStore = ConnectionProfileStore.ConnectionProfileStore.of({
     get: (connectionId) => Effect.succeed(Option.fromNullishOr(profiles.get(connectionId))),
@@ -210,8 +214,8 @@ const makeDependencies = Effect.fn("TestConnectionResolver.makeDependencies")((o
             Effect.succeed({
               httpBaseUrl: "http://127.0.0.1:4020",
               wsBaseUrl: "ws://127.0.0.1:4020",
-              pairingCredential: "broker-pairing",
             })),
+        pair: options?.pairBroker ?? (() => Effect.succeed("broker-pairing")),
       }),
     ),
   );
@@ -220,61 +224,117 @@ const makeDependencies = Effect.fn("TestConnectionResolver.makeDependencies")((o
 });
 
 describe("ConnectionResolver", () => {
-  it.effect("connects a broker session: attach, pairing → bearer exchange, then bearer auth", () =>
+  const BROKER_TARGET = new BrokerConnectionTarget({
+    environmentId: ENVIRONMENT_ID,
+    label: "Cloud session",
+    sessionId: "290877467",
+  });
+  /** Broker deps that record attaches, pairings and bearer authorizations. */
+  const makeBrokerHarness = Effect.fn(function* (options?: {
+    readonly credentials?: ReadonlyArray<readonly [string, ConnectionCredential]>;
+    readonly rejectBearer?: (
+      token: string,
+    ) => ConnectionBlockedError | ConnectionTransientError | null;
+  }) {
+    const attached = yield* Ref.make<ReadonlyArray<string>>([]);
+    const pairings = yield* Ref.make(0);
+    const bearers = yield* Ref.make<ReadonlyArray<{ token: string; method: string }>>([]);
+    const tokenExchanges: Array<string> = [];
+    const credentials = new Map(options?.credentials ?? []);
+    const layer = yield* makeDependencies({
+      tokenExchanges,
+      credentialMap: credentials,
+      attachBroker: (input) =>
+        Ref.update(attached, (values) => [
+          ...values,
+          `${input.sessionId}:${input.expectedEnvironmentId}`,
+        ]).pipe(
+          Effect.as({ httpBaseUrl: "http://127.0.0.1:4020", wsBaseUrl: "ws://127.0.0.1:4020" }),
+        ),
+      pairBroker: () => Ref.update(pairings, (n) => n + 1).pipe(Effect.as("broker-pairing")),
+      authorizeBearer: (input) =>
+        Effect.gen(function* () {
+          yield* Ref.update(bearers, (values) => [
+            ...values,
+            { token: input.bearerToken, method: input.connectionMethod ?? "" },
+          ]);
+          const rejection = options?.rejectBearer?.(input.bearerToken) ?? null;
+          if (rejection) return yield* rejection;
+          return {
+            environmentId: input.expectedEnvironmentId,
+            label: "Cloud session",
+            httpBaseUrl: input.httpBaseUrl,
+            socketUrl: "ws://127.0.0.1:4020/ws?wsTicket=broker",
+            httpAuthorization: { _tag: "Bearer" as const, token: input.bearerToken },
+          };
+        }),
+    });
+    const resolver = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(layer));
+    return { resolver, credentials, attached, pairings, bearers, tokenExchanges };
+  });
+
+  it.effect("connects a broker session once by pairing, then reuses the stored bearer", () =>
     Effect.gen(function* () {
-      const attached = yield* Ref.make<ReadonlyArray<string>>([]);
-      const bearerInputs = yield* Ref.make<
-        ReadonlyArray<{ token: string; method: string; url: string }>
-      >([]);
-      const tokenExchanges: Array<string> = [];
-      const layer = yield* makeDependencies({
-        tokenExchanges,
-        attachBroker: (input) =>
-          Ref.update(attached, (values) => [
-            ...values,
-            `${input.sessionId}:${input.expectedEnvironmentId}`,
-          ]).pipe(
-            Effect.as({
-              httpBaseUrl: "http://127.0.0.1:4020",
-              wsBaseUrl: "ws://127.0.0.1:4020",
-              pairingCredential: "broker-pairing",
-            }),
-          ),
-        authorizeBearer: (input) =>
-          Ref.update(bearerInputs, (values) => [
-            ...values,
-            {
-              token: input.bearerToken,
-              method: input.connectionMethod ?? "",
-              url: input.httpBaseUrl,
-            },
-          ]).pipe(
-            Effect.as({
-              environmentId: input.expectedEnvironmentId,
-              label: "Cloud session",
-              httpBaseUrl: input.httpBaseUrl,
-              socketUrl: "ws://127.0.0.1:4020/ws?wsTicket=broker",
-              httpAuthorization: { _tag: "Bearer" as const, token: input.bearerToken },
-            }),
-          ),
-      });
-      const resolver = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(layer));
-      const target = new BrokerConnectionTarget({
-        environmentId: ENVIRONMENT_ID,
-        label: "Cloud session",
-        sessionId: "290877467",
+      const harness = yield* makeBrokerHarness();
+
+      const first = yield* harness.resolver.prepare(catalogEntry(BROKER_TARGET));
+      expect(first.httpAuthorization).toEqual({ _tag: "Bearer", token: "broker-bearer" });
+      expect(harness.tokenExchanges.length).toBe(1);
+      expect(
+        new URLSearchParams(harness.tokenExchanges[0]).get("subject_token") ??
+          harness.tokenExchanges[0],
+      ).toContain("broker-pairing");
+
+      yield* harness.resolver.prepare(catalogEntry(BROKER_TARGET));
+      expect(yield* Ref.get(harness.attached)).toEqual([
+        `290877467:${ENVIRONMENT_ID}`,
+        `290877467:${ENVIRONMENT_ID}`,
+      ]);
+      expect(yield* Ref.get(harness.pairings)).toBe(1);
+      expect(harness.tokenExchanges.length).toBe(1);
+      expect(yield* Ref.get(harness.bearers)).toEqual([
+        { token: "broker-bearer", method: "relay" },
+        { token: "broker-bearer", method: "relay" },
+      ]);
+    }),
+  );
+
+  it.effect("pairs again only when the session rejects the stored bearer", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeBrokerHarness({
+        credentials: [
+          ["nexi-broker:290877467", new BearerConnectionCredential({ token: "expired-bearer" })],
+        ],
+        rejectBearer: (token) =>
+          token === "expired-bearer"
+            ? new ConnectionBlockedError({ reason: "authentication", detail: "revoked" })
+            : null,
       });
 
-      const prepared = yield* resolver.prepare(catalogEntry(target));
+      const prepared = yield* harness.resolver.prepare(catalogEntry(BROKER_TARGET));
       expect(prepared.httpAuthorization).toEqual({ _tag: "Bearer", token: "broker-bearer" });
-      expect(yield* Ref.get(attached)).toEqual([`290877467:${ENVIRONMENT_ID}`]);
-      expect(tokenExchanges.length).toBe(1);
-      expect(
-        new URLSearchParams(tokenExchanges[0]).get("subject_token") ?? tokenExchanges[0],
-      ).toContain("broker-pairing");
-      expect(yield* Ref.get(bearerInputs)).toEqual([
-        { token: "broker-bearer", method: "relay", url: "http://127.0.0.1:4020" },
-      ]);
+      expect(yield* Ref.get(harness.pairings)).toBe(1);
+      expect(harness.credentials.get("nexi-broker:290877467")).toEqual(
+        new BearerConnectionCredential({ token: "broker-bearer" }),
+      );
+    }),
+  );
+
+  it.effect("keeps the stored bearer and does not pair when the session is only unreachable", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeBrokerHarness({
+        credentials: [
+          ["nexi-broker:290877467", new BearerConnectionCredential({ token: "good-bearer" })],
+        ],
+        rejectBearer: () => new ConnectionTransientError({ reason: "timeout", detail: "busy" }),
+      });
+
+      const error = yield* Effect.flip(harness.resolver.prepare(catalogEntry(BROKER_TARGET)));
+      expect(error._tag).toBe("ConnectionTransientError");
+      expect(yield* Ref.get(harness.pairings)).toBe(0);
+      expect(harness.credentials.get("nexi-broker:290877467")).toEqual(
+        new BearerConnectionCredential({ token: "good-bearer" }),
+      );
     }),
   );
 

@@ -2,6 +2,7 @@ import type {
   CloudBrokerStatus,
   CloudSessionAttachResult,
   CloudSessionFailureReason,
+  CloudSessionPairingResult,
 } from "@t3tools/contracts";
 
 import { readDesktopPrimaryBearerToken } from "~/environments/primary/desktopAuth";
@@ -14,6 +15,8 @@ import { resolvePrimaryEnvironmentHttpUrl } from "~/environments/primary/target"
  */
 
 const REQUEST_TIMEOUT_MS = 20_000;
+/** Pairing writes to the VM's database, which can be slow while the session is busy. */
+const PAIRING_TIMEOUT_MS = 75_000;
 
 export class CloudBrokerRequestError extends Error {
   constructor(
@@ -26,7 +29,12 @@ export class CloudBrokerRequestError extends Error {
   }
 }
 
-async function request<T>(method: "GET" | "POST", path: string, body?: object): Promise<T> {
+async function request<T>(
+  method: "GET" | "POST",
+  path: string,
+  body?: object,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<T> {
   const bearer = await readDesktopPrimaryBearerToken().catch(() => null);
   let response: Response;
   try {
@@ -40,7 +48,7 @@ async function request<T>(method: "GET" | "POST", path: string, body?: object): 
         ...(body ? { "content-type": "application/json" } : {}),
       },
       ...(body ? { body: JSON.stringify(body) } : {}),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (cause) {
     throw new CloudBrokerRequestError(
@@ -66,4 +74,6 @@ export const cloudBrokerApi = {
   signIn: () => request<CloudBrokerStatus>("POST", "sign-in"),
   signOut: () => request<{ ok: true }>("POST", "sign-out"),
   attach: (sessionId: string) => request<CloudSessionAttachResult>("POST", "attach", { sessionId }),
+  pair: (sessionId: string) =>
+    request<CloudSessionPairingResult>("POST", "pairing", { sessionId }, PAIRING_TIMEOUT_MS),
 };

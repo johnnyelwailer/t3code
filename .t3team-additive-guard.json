@@ -330,6 +330,8 @@
     "packages/client-runtime/src/connection/index.ts",
     "packages/client-runtime/src/connection/model.ts",
     "packages/client-runtime/src/connection/presentation.ts",
+    "packages/client-runtime/src/connection/registry.test.ts",
+    "packages/client-runtime/src/connection/registry.ts",
     "packages/client-runtime/src/connection/resolver.test.ts",
     "packages/client-runtime/src/connection/resolver.ts",
     "packages/client-runtime/src/operations/commands.ts",
