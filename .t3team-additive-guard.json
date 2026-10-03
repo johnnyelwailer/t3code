@@ -453,7 +453,8 @@
     "packages/contracts/src/orchestratorMcp.ts",
     "apps/server/src/mcp/OrchestratorMcpService.ts",
     "apps/server/src/mcp/toolkits/orchestrator/tools.ts",
-    "apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts"
+    "apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts",
+    "apps/server/src/orchestration-v2/RunExecutionService.ts"
   ],
   "allowedUnprefixedNewFiles": [
     ".agents/skills/merge-upstream/SKILL.md",

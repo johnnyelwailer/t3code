@@ -49,6 +49,9 @@ import { ProviderAdapterTurnStartError } from "./ProviderAdapter.ts";
 import * as ProviderEventIngestor from "./ProviderEventIngestor.ts";
 import { makeProviderFailure, makeProviderFailureTurnItem } from "./ProviderFailure.ts";
 import * as RunFinalizationService from "./RunFinalizationService.ts";
+import { TurnInactivityPolicy } from "./t3team-turnInactivityPolicy.ts";
+import { makeTurnInactivitySettlement } from "./t3team-turnInactivitySettlement.ts";
+import { makeTurnInactivityWatchdog } from "./t3team-turnInactivityWatchdog.ts";
 
 export interface ProviderEventRoutingState {
   readonly ownedThreadIds: ReadonlySet<ThreadId>;
@@ -550,6 +553,8 @@ export const layer: Layer.Layer<
     const providerEventIngestor = yield* ProviderEventIngestor.ProviderEventIngestorV2;
     const serverSettings = yield* ServerSettings.ServerSettingsService;
     const finalizationObserver = yield* RunFinalizationService.RunFinalizationObserver;
+    // t3team: host turn-inactivity budget (disabled unless server.ts provides the live policy).
+    const inactivityPolicy = yield* TurnInactivityPolicy;
 
     const writeFinalRunEvents = (input: {
       readonly run: OrchestrationV2Run;
@@ -1167,12 +1172,28 @@ export const layer: Layer.Layer<
             return true;
           });
           const filterAssistantEvent = makeAssistantStreamingFilter(responseStreamingMode);
+          // t3team: turn-inactivity watchdog + Stop backstop (t3team-turnInactivityWatchdog.ts).
+          const inactivityBudgetMs = yield* inactivityPolicy.budgetMs(input.run.providerInstanceId);
+          const watchdog =
+            inactivityBudgetMs === null
+              ? null
+              : yield* makeTurnInactivityWatchdog(inactivityBudgetMs);
+          const settlement =
+            watchdog === null ? null : yield* makeTurnInactivitySettlement(input.attempt.id);
           const providerEventFiber = yield* eventSubscription.events.pipe(
             Stream.filterEffect((event) =>
               Ref.modify(eventRouting, (state) => routeProviderEvent(event, routeIdentity, state)),
             ),
+            (routed) =>
+              settlement === null
+                ? routed
+                : Stream.merge(routed, settlement.events, { haltStrategy: "left" }),
             Stream.tap((event) =>
               Effect.gen(function* () {
+                if (watchdog !== null && settlement !== null) {
+                  yield* watchdog.touch(event);
+                  yield* settlement.observe(event);
+                }
                 let storedEventCount = 0;
                 const deliveredEvent = filterAssistantEvent(
                   event,
@@ -1325,6 +1346,7 @@ export const layer: Layer.Layer<
               ),
             ),
             Effect.ensuring(eventSubscription.close),
+            Effect.ensuring(watchdog === null ? Effect.void : watchdog.stop),
             Effect.forkDetach,
           );
 
@@ -1340,6 +1362,31 @@ export const layer: Layer.Layer<
           // its already-issued MCP credential valid even when the agent goes
           // a long time between browser-tool calls.
           yield* McpSessionRegistry.touchActiveMcpThread(input.run.threadId);
+          if (watchdog !== null && settlement !== null) {
+            yield* watchdog.start({
+              isSettled: Ref.get(rootTerminalSeen),
+              hasPendingStop: input.hasUnpairedRunInterruptRequest?.() ?? Effect.succeed(false),
+              interruptTurn: Effect.gen(function* () {
+                const providerTurnId =
+                  (yield* Ref.get(eventRouting)).rootProviderTurnId ?? input.attempt.providerTurnId;
+                if (providerTurnId === null) {
+                  return false;
+                }
+                yield* input.session.interruptTurn({
+                  providerThread: yield* Ref.get(latestProviderThread),
+                  providerTurnId,
+                  requestRuntimeRestart: true,
+                });
+                return true;
+              }),
+              settle: (failure) =>
+                Ref.get(latestTurnItemOrdinal).pipe(
+                  Effect.flatMap((ordinal) =>
+                    settlement.settle(makeFailedTerminalEvent(failure, ordinal + 1)),
+                  ),
+                ),
+            });
+          }
           const turnInput = {
             appThread: input.appThread,
             threadId: input.run.threadId,

@@ -230,6 +230,7 @@ import { t3teamProjectWorkspaceBootstrapRouteLayer } from "./t3team-project-repo
 import { t3teamThreadToolContextRouteLayer } from "./t3team-thread-tool-context-routes.ts";
 import { t3teamMyWorkDigestRouteLayer } from "./t3team-myworkDigest-routes.ts";
 import { T3TeamThreadToolContextStoreLive } from "./t3team-threadToolContextStore.ts";
+import { turnInactivityPolicyLive } from "./orchestration-v2/t3team-turnInactivityPolicy.ts";
 import { t3teamWidgetToolCallRouteLayer } from "./t3team-widget-tool-call-route.ts";
 import { T3TeamWidgetRegistryLive } from "./t3team-widgetRegistry.ts";
 import { T3TeamContextRefreshServiceLive } from "./t3team-contextRefreshService.ts";
@@ -606,6 +607,8 @@ const T3TeamToolBrokerLayerLive = T3TeamToolBrokerLive.pipe(
 );
 
 const OrchestrationV2RuntimeLayerLive = OrchestrationV2ProductionLayerLive.pipe(
+  // t3team: host turn-inactivity watchdog budget per provider instance.
+  Layer.provide(turnInactivityPolicyLive),
   Layer.provide(ProviderEventIngestor.analyticsLive),
   Layer.provide(CheckpointStoreLayerLive),
   Layer.provide(GitWorkflowLayerLive),
