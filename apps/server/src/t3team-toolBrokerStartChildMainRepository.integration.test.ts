@@ -1,8 +1,9 @@
 /**
  * Main-repository scenarios of the `t3team.thread.start_child` isolation eval: a project whose
  * main repository is a selected linked clone (the workspace IS that checkout) and whose manifest
- * does not name it yet. With `NEXI_FF_MAIN_REPOSITORY` on, omitting `repo_full_name` isolates in
- * a worktree of the main repository; with it off the existing "pass repo_full_name" error stays.
+ * does not name it yet. With `NEXI_FF_MAIN_REPOSITORY` on — including when the env is unset —
+ * omitting `repo_full_name` isolates in a worktree of the main repository; with the flag
+ * explicitly off the existing "pass repo_full_name" error stays.
  * Reuses the eval harness (and its temp-dir cleanup) of the sibling integration file.
  */
 // @effect-diagnostics nodeBuiltinImport:off - temp eval harness uses node git setup helpers.
@@ -113,13 +114,14 @@ describe("t3team.thread.start_child isolation with a selected main repository", 
     expect(commonDir).toBe(NodePath.join(NodeFS.realpathSync(mainCheckoutRoot), ".git"));
   });
 
-  it("keeps the explicit repo_full_name requirement when the flag is off", async () => {
+  it("keeps the explicit repo_full_name requirement when the flag is explicitly off", async () => {
+    process.env[MAIN_REPOSITORY_FLAG_ENV] = "0";
     const startResult = await startChild();
     expect(startResult.isError).toBe(true);
     expect(JSON.stringify(startResult.content)).toContain("pass 'repo_full_name'");
   });
-  it("disables a switched manifest default when the flag is absent", async () => {
-    delete process.env[MAIN_REPOSITORY_FLAG_ENV];
+  it("disables a switched manifest default when the flag is explicitly off", async () => {
+    process.env[MAIN_REPOSITORY_FLAG_ENV] = "false";
     const result = await startChild({
       manifestMain: {
         mainRepository: { localPath: mainCheckoutRoot, url: MAIN_URL, status: "user" },
@@ -127,6 +129,22 @@ describe("t3team.thread.start_child isolation with a selected main repository", 
     });
     expect(result.isError).toBe(true);
     expect(JSON.stringify(result.content)).toContain("pass 'repo_full_name'");
+  });
+
+  it("uses the switched main repository when the flag env is absent", async () => {
+    delete process.env[MAIN_REPOSITORY_FLAG_ENV];
+    const result = await startChild({
+      manifestMain: {
+        mainRepository: { localPath: mainCheckoutRoot, url: MAIN_URL, status: "user" },
+      },
+    });
+    expect(result.isError).toBeUndefined();
+    const structured = result.structuredContent as {
+      worktree_path: string;
+      repo_full_name?: string;
+    };
+    expect(structured.repo_full_name).toBe(MAIN_URL);
+    expect(structured.worktree_path.startsWith(mainCheckoutRoot)).toBe(true);
   });
 
   it("accepts a URL-less selected record before the manifest names it", async () => {
@@ -139,7 +157,7 @@ describe("t3team.thread.start_child isolation with a selected main repository", 
   });
 
   it("normalizes an old adopted manifest on disk and preserves flag-off isolation", async () => {
-    delete process.env[MAIN_REPOSITORY_FLAG_ENV];
+    process.env[MAIN_REPOSITORY_FLAG_ENV] = "off";
     const result = await startChild({
       manifestMain: {
         metaRepository: { localPath: mainCheckoutRoot, url: MAIN_URL, status: "adopted" },

@@ -615,12 +615,12 @@ export const ServerConfig = Schema.Struct({
   /**
    * Whether a project can designate a linked repository as its MAIN repository (picker,
    * switch-with-migration, auto-detection, `start_child` default). Runtime feature flag (env
-   * `NEXI_FF_MAIN_REPOSITORY`, default off); absent on older servers.
+   * `NEXI_FF_MAIN_REPOSITORY`, default on); absent on older servers.
    */
   mainRepository: Schema.optionalKey(Schema.Boolean),
   /**
    * Whether this server names the project state dir `.nexi` instead of `.t3team`. Runtime
-   * feature flag (env `NEXI_FF_NEXI_STATE_DIR`, default off); absent on older servers.
+   * feature flag (env `NEXI_FF_NEXI_STATE_DIR`, default on); absent on older servers.
    */
   nexiStateDir: Schema.optionalKey(Schema.Boolean),
   /**

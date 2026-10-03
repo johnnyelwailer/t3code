@@ -23,19 +23,33 @@ afterEach(() => replaceFeatureFlagDatabaseValues(new Map()));
 
 describe("feature flag layering", () => {
   test("env > DB > default, with live MAIN_REPOSITORY reads", () => {
-    expect(readFeatureFlag("MAIN_REPOSITORY", noEnv)).toBe(false);
-    replaceFeatureFlagDatabaseValues(new Map([["MAIN_REPOSITORY", true]]));
-    expect(isMainRepositoryEnabled(noEnv)).toBe(true);
-    expect(isMainRepositoryEnabled(() => "0")).toBe(false);
+    expect(readFeatureFlag("MAIN_REPOSITORY", noEnv)).toBe(true);
+    expect(readFeatureFlag("MAIN_REPOSITORY", () => "")).toBe(true);
+    expect(readFeatureFlag("MAIN_REPOSITORY", () => "  ")).toBe(true);
     replaceFeatureFlagDatabaseValues(new Map([["MAIN_REPOSITORY", false]]));
     expect(isMainRepositoryEnabled(noEnv)).toBe(false);
+    expect(isMainRepositoryEnabled(() => "")).toBe(false);
+    expect(isMainRepositoryEnabled(() => "yes")).toBe(false);
     expect(isMainRepositoryEnabled(() => "on")).toBe(true);
+    replaceFeatureFlagDatabaseValues(new Map([["MAIN_REPOSITORY", true]]));
+    expect(isMainRepositoryEnabled(() => "0")).toBe(false);
+    expect(isMainRepositoryEnabled(() => "false")).toBe(false);
+    expect(isMainRepositoryEnabled(() => "OFF")).toBe(false);
+    expect(isMainRepositoryEnabled(noEnv)).toBe(true);
     replaceFeatureFlagDatabaseValues(new Map());
-    expect(isMainRepositoryEnabled(noEnv)).toBe(false);
+    expect(isMainRepositoryEnabled(noEnv)).toBe(true);
+    expect(isMainRepositoryEnabled(() => "yes")).toBe(true);
   });
 
   test("registers both Admin switches and freezes state-dir selection for this process", () => {
     const startup = PROJECT_STATE_DIR;
+    replaceFeatureFlagDatabaseValues(new Map());
+    expect(resolveProjectStateDirName(noEnv)).toBe(".nexi");
+    expect(resolveProjectStateDirName(() => "")).toBe(".nexi");
+    expect(resolveProjectStateDirName(() => "off")).toBe(".t3team");
+    replaceFeatureFlagDatabaseValues(new Map([["NEXI_STATE_DIR", false]]));
+    expect(resolveProjectStateDirName(noEnv)).toBe(".t3team");
+    expect(resolveProjectStateDirName(() => "1")).toBe(".nexi");
     replaceFeatureFlagDatabaseValues(new Map([["NEXI_STATE_DIR", true]]));
     expect(resolveProjectStateDirName(noEnv)).toBe(".nexi");
     expect(resolveProjectStateDirName(() => "0")).toBe(".t3team");
@@ -57,7 +71,7 @@ it.layer(NodeSqliteClient.layer({ filename: ":memory:" }))("feature_flags SQL se
       const sql = yield* SqlClient.SqlClient;
       yield* initializeFeatureFlags();
       yield* initializeFeatureFlags();
-      assert.equal(readFeatureFlag("MAIN_REPOSITORY", noEnv), false);
+      assert.equal(readFeatureFlag("MAIN_REPOSITORY", noEnv), true);
       yield* setFeatureFlag("MAIN_REPOSITORY", true);
       assert.equal(readFeatureFlag("MAIN_REPOSITORY", noEnv), true);
       yield* setFeatureFlag("MAIN_REPOSITORY", false);

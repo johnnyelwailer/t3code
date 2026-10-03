@@ -2,25 +2,27 @@
  * The ONE owner of the project state dir name — the hidden directory in a project workspace
  * that holds context, setup, recipes, skills, the reference manifest and child worktrees.
  *
- * Vanilla T3 Code keeps `.t3team`; pack builds (the Nexi distribution) name it `.nexi`, behind
- * the runtime feature flag `NEXI_FF_NEXI_STATE_DIR` (`1`/`true`/`on`; default off). Every
- * state-path constant (server, web, shared packages) derives from `PROJECT_STATE_DIR`, and all
- * detection reads it.
+ * `.nexi` is the default. The physical dir is `.t3team` only when `NEXI_FF_NEXI_STATE_DIR` is
+ * explicitly off. The boolean comes from `readFeatureFlag` (env > feature_flags snapshot > code
+ * default on): explicit `0`/`false`/`off` or a snapshot value of false selects `.t3team`;
+ * otherwise the name is `.nexi`. Unset and blank env are not an override. Every state-path
+ * constant (server, web, shared packages) derives from `PROJECT_STATE_DIR`, and all detection
+ * reads it.
  *
  * The env is read through `globalThis.process` so the module stays browser-safe: a browser has
- * no env and resolves the canonical `.t3team`. Paths a client addresses with the canonical name
- * are mapped onto the physical one by the server with `toPhysicalProjectStatePath` (idempotent),
- * so the wire vocabulary stays stable across hosts. The workflow journal (`.t3team-runs/`) is a
- * separate directory and is not affected.
+ * no env and therefore resolves the default `.nexi`. Paths a client addresses with the canonical
+ * name are mapped onto the physical one by the server with `toPhysicalProjectStatePath`
+ * (idempotent), so the wire vocabulary stays stable across hosts. The workflow journal
+ * (`.t3team-runs/`) is a separate directory and is not affected.
  */
 
 import { readFeatureFlag } from "./t3teamFeatureFlags.ts";
 
-/** Canonical state dir name: vanilla builds, and the wire vocabulary clients address paths with. */
+/** Canonical state dir name: the wire vocabulary, and the physical dir when the flag is explicitly off. */
 export const T3TEAM_PROJECT_STATE_DIR = ".t3team";
 /** Pack-build state dir name. */
 export const NEXI_PROJECT_STATE_DIR = ".nexi";
-/** Environment override selecting `.nexi`. `1`/`true`/`on` on, anything else off. */
+/** Environment override. Explicit `0`/`false`/`off` selects `.t3team`; `1`/`true`/`on` selects `.nexi`. */
 export const NEXI_STATE_DIR_FLAG_ENV = "NEXI_FF_NEXI_STATE_DIR";
 
 type ReadEnv = (key: string) => string | undefined;

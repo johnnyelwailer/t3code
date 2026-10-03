@@ -9,7 +9,11 @@ persistence is SQLite (`apps/server/src/persistence/Layers/Sqlite.ts`).
 The missing-framework seam consists of:
 
 - `packages/project-context/src/t3teamFeatureFlags.ts`: registered MAIN_REPOSITORY and
-  NEXI_STATE_DIR definitions, env > DB snapshot > code default (both default off).
+  NEXI_STATE_DIR definitions, env > DB snapshot > code default (both default on).
+  Explicit env `0`/`false`/`off` disables and `1`/`true`/`on` enables (trimmed,
+  case-insensitive). Unset, blank, and unrecognized values are not an override.
+  The state dir is `.nexi` unless NEXI_STATE_DIR is explicitly off; `.t3team` is that
+  off path only. `PROJECT_STATE_DIR` is frozen by `readFeatureFlag` at module load.
 - `apps/server/src/persistence/Migrations/t3team-063_FeatureFlags.ts`: portable
   PostgreSQL/SQLite `feature_flags` DDL; registered as migration **81**, following 80.
 - `apps/server/src/t3team-featureFlagStore.ts`: parameterized SQL read/write and startup

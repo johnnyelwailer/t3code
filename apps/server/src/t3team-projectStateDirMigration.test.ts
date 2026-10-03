@@ -124,7 +124,8 @@ it.effect(
 
 it.effect("keeps an existing .nexi target and skips normalization when flag-off", () =>
   Effect.gen(function* () {
-    for (const flag of ["1", ""]) {
+    for (const flag of ["1", "0"] as const) {
+      const enabled = flag === "1";
       vi.stubEnv("NEXI_FF_NEXI_STATE_DIR", flag);
       vi.resetModules();
       const { ensureNexiProjectStateDir } = yield* Effect.promise(
@@ -132,13 +133,13 @@ it.effect("keeps an existing .nexi target and skips normalization when flag-off"
       );
       const { files, fileSystem } = memoryFs({
         "/repo/.t3team/context/a.json": "old",
-        ...(flag ? { "/repo/.nexi/context/a.json": "committed" } : {}),
+        ...(enabled ? { "/repo/.nexi/context/a.json": "committed" } : {}),
       });
       yield* ensureNexiProjectStateDir("/repo").pipe(
         Effect.provideService(FileSystem.FileSystem, fileSystem),
         Effect.provide(Path.layer),
       );
-      expect(files.get("/repo/.nexi/context/a.json")).toBe(flag ? "committed" : undefined);
+      expect(files.get("/repo/.nexi/context/a.json")).toBe(enabled ? "committed" : undefined);
     }
   }),
 );

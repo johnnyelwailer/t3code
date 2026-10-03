@@ -101,9 +101,12 @@ const makeProject = () => {
 };
 
 it.layer(TestLayer)("project main repository", (it) => {
-  it("is off unless NEXI_FF_MAIN_REPOSITORY is explicitly on", () => {
-    expect(isMainRepositoryEnabled(() => undefined)).toBe(false);
+  it("is on unless NEXI_FF_MAIN_REPOSITORY is explicitly off", () => {
+    expect(isMainRepositoryEnabled(() => undefined)).toBe(true);
+    expect(isMainRepositoryEnabled(() => "")).toBe(true);
     expect(isMainRepositoryEnabled(() => "0")).toBe(false);
+    expect(isMainRepositoryEnabled(() => "false")).toBe(false);
+    expect(isMainRepositoryEnabled(() => "off")).toBe(false);
     expect(isMainRepositoryEnabled(() => "true")).toBe(true);
   });
 
@@ -212,9 +215,9 @@ it.layer(TestLayer)("project main repository", (it) => {
       const root = makeTempRoot("t3-main-adopt-");
       initRepo(root, false);
       const adopted = { localPath: root, status: "adopted" };
-      yield* withMainRepositoryFlag(undefined);
+      yield* withMainRepositoryFlag("0");
       expect(yield* detectMainRepository({ workspaceRoot: root })).toEqual(adopted);
-      yield* withMainRepositoryFlag("1");
+      yield* withMainRepositoryFlag(undefined);
       expect(yield* detectMainRepository({ workspaceRoot: root })).toBeUndefined();
       initRepo(root, true);
       expect(yield* detectMainRepository({ workspaceRoot: root })).toEqual(adopted);

@@ -83,12 +83,37 @@ describe("NEXI_FF_NEXI_STATE_DIR", () => {
     expect(legacy.renderPreviousAgentsMd(profile)).toContain(".t3team/recipes/");
   });
 
-  it("keeps .t3team when off", async () => {
-    vi.stubEnv(NEXI_STATE_DIR_FLAG_ENV, "");
-    vi.resetModules();
-    const utils = await import("./t3team-project-repository-utils.ts");
-    const setup = await import("./t3team-projectSetupShared.ts");
-    expect(utils.HIDDEN_T3TEAM_DIR).toBe(".t3team");
-    expect(setup.T3TEAM_PROJECT_RECIPES_ROOT).toBe(".t3team/recipes");
+  it("names the physical dir .nexi when the flag is unset or blank", async () => {
+    for (const value of [undefined, "", "   "] as const) {
+      vi.stubEnv(NEXI_STATE_DIR_FLAG_ENV, value);
+      vi.resetModules();
+      const utils = await import("./t3team-project-repository-utils.ts");
+      const setup = await import("./t3team-projectSetupShared.ts");
+      expect(utils.HIDDEN_T3TEAM_DIR).toBe(".nexi");
+      expect(setup.T3TEAM_PROJECT_RECIPES_ROOT).toBe(".nexi/recipes");
+    }
+  });
+
+  it("keeps .t3team when explicitly off", async () => {
+    for (const value of ["0", "false", "off", " OFF "]) {
+      vi.stubEnv(NEXI_STATE_DIR_FLAG_ENV, value);
+      vi.resetModules();
+      const utils = await import("./t3team-project-repository-utils.ts");
+      const setup = await import("./t3team-projectSetupShared.ts");
+      const legacy = await import("./t3team-projectSetupAgentsManagedRefresh.ts");
+      const state = await import("@t3tools/project-context/t3teamProjectStateDir");
+      const packs = await import("@t3tools/t3team-skill-packs");
+      const profile = packs.listT3TeamProfiles()[0];
+      if (profile === undefined) throw new Error("expected a bundled profile");
+      expect(utils.HIDDEN_T3TEAM_DIR).toBe(".t3team");
+      expect(setup.T3TEAM_PROJECT_RECIPES_ROOT).toBe(".t3team/recipes");
+      expect(state.isNexiStateDirSelectedAtStartup()).toBe(false);
+      expect(state.toPhysicalProjectStatePath(".t3team/context/entrypoint.json")).toBe(
+        ".t3team/context/entrypoint.json",
+      );
+      expect(legacy.renderLegacyAgentsMd(profile)).toContain(
+        ".t3team/references/reference-repositories.json",
+      );
+    }
   });
 });

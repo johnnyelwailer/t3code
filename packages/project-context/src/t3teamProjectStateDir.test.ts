@@ -15,16 +15,17 @@ const env =
     key === NEXI_STATE_DIR_FLAG_ENV ? value : undefined;
 
 describe("project state dir resolver", () => {
-  it("keeps .t3team by default and for any value that is not an explicit on", () => {
-    for (const value of [undefined, "", "0", "false", "off", "yes"]) {
-      expect(isNexiStateDirEnabled(env(value))).toBe(false);
-      expect(resolveProjectStateDirName(env(value))).toBe(".t3team");
+  it("names the state dir .nexi by default and for any value that is not an explicit off", () => {
+    for (const value of [undefined, "", "   ", "yes", "1", "true", "ON", " on "]) {
+      expect(isNexiStateDirEnabled(env(value))).toBe(true);
+      expect(resolveProjectStateDirName(env(value))).toBe(".nexi");
     }
   });
 
-  it("names the state dir .nexi when NEXI_FF_NEXI_STATE_DIR is on", () => {
-    for (const value of ["1", "true", "ON", " on "]) {
-      expect(resolveProjectStateDirName(env(value))).toBe(".nexi");
+  it("names the state dir .t3team when NEXI_FF_NEXI_STATE_DIR is explicitly off", () => {
+    for (const value of ["0", "false", "off", " OFF ", "False"]) {
+      expect(isNexiStateDirEnabled(env(value))).toBe(false);
+      expect(resolveProjectStateDirName(env(value))).toBe(".t3team");
     }
   });
 

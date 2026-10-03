@@ -1954,7 +1954,7 @@ const makeWsRpcLayer = (
             // Runtime feature flag (env NEXI_FF_RESOURCE_PRESSURE, default off).
             resourcePressure: isResourcePressureEnabled(),
             // Runtime feature flags (env NEXI_FF_MAIN_REPOSITORY / NEXI_FF_NEXI_STATE_DIR,
-            // default off): project main repository, and the `.nexi` state dir name.
+            // default on): project main repository, and the `.nexi` state dir name.
             mainRepository: isMainRepositoryEnabled(),
             nexiStateDir: isNexiStateDirSelectedAtStartup(),
           };

@@ -460,7 +460,7 @@ describe("DesktopBackendConfiguration", () => {
   );
 
   it.effect(
-    "resolvePrimary sets NEXI_FF_NEXI_STATE_DIR for pack builds and leaves vanilla builds alone",
+    "resolvePrimary does not inject NEXI_FF_NEXI_STATE_DIR; extendEnv carries an explicit off",
     () =>
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
@@ -513,7 +513,7 @@ describe("DesktopBackendConfiguration", () => {
 
         delete process.env.NEXI_FF_NEXI_STATE_DIR;
         const packDefault = yield* resolvePrimary({ isPackaged: true, withPacksDir: true });
-        assert.equal(packDefault.env.NEXI_FF_NEXI_STATE_DIR, "1");
+        assert.isFalse(Object.hasOwn(packDefault.env, "NEXI_FF_NEXI_STATE_DIR"));
 
         // A packaged app with no packs directory is vanilla T3 Code.
         const vanilla = yield* resolvePrimary({ isPackaged: true, withPacksDir: false });
