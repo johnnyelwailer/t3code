@@ -95,14 +95,16 @@ const makePackDiagnostic = (input: {
     },
   }) as never;
 
+// Generic test runner: the suite passes any effect it builds and the layer below satisfies its
+// requirements; a failure still rejects the returned promise.
 const run = <A>(effect: Effect.Effect<A, any, any>) =>
   Effect.runPromise(
     Effect.scoped(
-      // @effect-diagnostics-next-line anyUnknownInErrorContext:off - Generic test runner: the suite passes any effect it builds and the layer below satisfies its requirements.
+      // @effect-diagnostics-next-line anyUnknownInErrorContext:off
       effect.pipe(
         Effect.provide(Layer.mergeAll(makeBrokerLayer(orchestrationMock), NodeServices.layer)),
       ),
-    ) as Effect.Effect<A, unknown, never>,
+    ) as Effect.Effect<A, never, never>,
   );
 
 afterEach(() => {
