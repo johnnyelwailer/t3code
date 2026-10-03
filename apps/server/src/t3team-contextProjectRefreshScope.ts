@@ -65,7 +65,7 @@ export function loadT3TeamContextProjectRefreshScope(input: {
 
     const metadataPath = yield* workspacePaths.resolveRelativePathWithinRoot({
       workspaceRoot: input.workspaceRoot,
-      relativePath: buildContextMetadataPath(".t3team/context"),
+      relativePath: buildContextMetadataPath(T3TEAM_PROJECT_CONTEXT_ROOT),
     });
     const metadata = parseJsonObject(
       yield* fileSystem
@@ -94,7 +94,7 @@ export function loadT3TeamContextProjectRefreshScope(input: {
     );
 
     const entryPointRelativePath = buildProjectContextEntryPoint(project.id);
-    const manifestRelativePath = buildContextManifestPath(".t3team/context");
+    const manifestRelativePath = buildContextManifestPath(T3TEAM_PROJECT_CONTEXT_ROOT);
     const manifestPath = yield* workspacePaths.resolveRelativePathWithinRoot({
       workspaceRoot: input.workspaceRoot,
       relativePath: manifestRelativePath,

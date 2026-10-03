@@ -337,6 +337,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(command.autoPull !== undefined ? { autoPull: command.autoPull } : {}),
           ...(command.faviconPath !== undefined ? { faviconPath: command.faviconPath } : {}),
           ...(command.projectIcon !== undefined ? { projectIcon: command.projectIcon } : {}),
+          ...(command.mainRepository !== undefined
+            ? { mainRepository: command.mainRepository }
+            : {}),
           ...(command.scripts !== undefined ? { scripts: command.scripts } : {}),
           updatedAt: occurredAt,
           ...(command.source !== undefined ? { source: command.source } : {}),

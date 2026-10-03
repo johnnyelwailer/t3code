@@ -121,6 +121,9 @@ import Migration0080 from "./Migrations/053_PullRequestFilesViewed.ts";
 import Migration0081 from "./Migrations/054_ProjectionThreadsAutoSettleDisabledAt.ts";
 import Migration0082 from "./Migrations/t3team-062_ProjectionThreadShellT3TeamFacts.ts";
 import Migration0083 from "./Migrations/t3team-063_OrchestrationEventsTypeSequenceIndex.ts";
+// Project main repository (merged after the fork took 80-83 and t3team-062/063 above).
+import Migration0084 from "./Migrations/t3team-064_ProjectionProjectsMainRepository.ts";
+import Migration0085 from "./Migrations/t3team-065_FeatureFlags.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -216,6 +219,8 @@ const migrationEntries = [
   [81, "ProjectionThreadsAutoSettleDisabledAt", Migration0081],
   [82, "ProjectionThreadShellT3TeamFacts", Migration0082],
   [83, "OrchestrationEventsTypeSequenceIndex", Migration0083],
+  [84, "ProjectionProjectsMainRepository", Migration0084],
+  [85, "FeatureFlags", Migration0085],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

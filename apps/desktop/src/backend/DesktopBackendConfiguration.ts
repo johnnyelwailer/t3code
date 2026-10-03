@@ -764,6 +764,12 @@ const resolvePrimaryStartConfig = Effect.fn("desktop.backendConfiguration.resolv
         // this keeps certificate verification enabled and adds the OS trust store.
         NODE_USE_SYSTEM_CA: process.env.NODE_USE_SYSTEM_CA?.trim() || "1",
         ...(hasBundledPacks && packsDir !== null ? { T3TEAM_PACKS_DIR: packsDir } : {}),
+        // The project state dir name is fixed when the server module loads, so
+        // pack builds must set this before the child starts. An explicit value
+        // is left for extendEnv to carry; builds without packs never write it.
+        ...(hasBundledPacks && process.env.NEXI_FF_NEXI_STATE_DIR === undefined
+          ? { NEXI_FF_NEXI_STATE_DIR: "1" }
+          : {}),
         ...atlassianEnv,
         ...(() => {
           const ca = resolveExtraCaCerts(environment.homeDirectory, environment.resourcesPath);

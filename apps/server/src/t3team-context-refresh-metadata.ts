@@ -1,5 +1,8 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
-import { buildContextMetadataPath } from "@t3tools/project-context/t3teamContextPaths";
+import {
+  buildContextMetadataPath,
+  T3TEAM_PROJECT_CONTEXT_ROOT,
+} from "@t3tools/project-context/t3teamContextPaths";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 
@@ -16,7 +19,7 @@ export function loadT3TeamContextProjectMetadata(input: {
 
     const metadataPath = yield* workspacePaths.resolveRelativePathWithinRoot({
       workspaceRoot: input.workspaceRoot,
-      relativePath: buildContextMetadataPath(".t3team/context"),
+      relativePath: buildContextMetadataPath(T3TEAM_PROJECT_CONTEXT_ROOT),
     });
     const metadata = parseT3TeamContextJsonObject(
       yield* fileSystem

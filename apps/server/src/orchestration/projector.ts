@@ -25,6 +25,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
 
+import { applyProjectMainRepositoryUpdate } from "./t3team-projectMainRepositoryUpdate.ts";
 import { toProjectorDecodeError, type OrchestrationProjectorDecodeError } from "./Errors.ts";
 import {
   MessageSentPayloadSchema,
@@ -385,7 +386,7 @@ export function projectEvent(
           projects: nextBase.projects.map((project) =>
             project.id === payload.projectId
               ? {
-                  ...project,
+                  ...applyProjectMainRepositoryUpdate(project, payload.mainRepository),
                   ...(payload.title !== undefined ? { title: payload.title } : {}),
                   ...(payload.workspaceRoot !== undefined
                     ? { workspaceRoot: payload.workspaceRoot }
