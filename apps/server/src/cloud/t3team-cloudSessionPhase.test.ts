@@ -121,6 +121,33 @@ describe("deriveCloudSessionPhase", () => {
     expect(deriveCloudSessionPhase(run(), steps)).toBe("starting");
   });
 
+  it("never calls a session ready on steps GitHub skipped after an early failure", () => {
+    // hive/nx-nexi run 278679097 (2026-09-28): step 6 failed, so GitHub marked
+    // every later step completed/skipped while the RUN still read in_progress
+    // for a few seconds. A skipped step never ran, so it must not count as
+    // reached — the panel briefly showed "Ready · Connect" for a dead run.
+    const done = (name: string, conclusion: string): WorkflowJobStep => ({
+      name,
+      status: "completed",
+      conclusion,
+    });
+    const steps: readonly WorkflowJobStep[] = [
+      done("Set up job", "success"),
+      done("Verify required T3 Connect secrets", "success"),
+      done("Install Node 24 and pnpm 11.10.0", "success"),
+      done("Install cloudflared (T3 Connect relay client)", "success"),
+      done("Checkout the t3code fork", "success"),
+      done("Checkout the Nexplore distribution (CA cert + fallback build input)", "failure"),
+      done("Install the prebuilt server bundle (fast path)", "skipped"),
+      done("Start t3 serve and wait for pairing details", "skipped"),
+      done("Capture connect status", "skipped"),
+      done("Hold the session until the handoff window", "skipped"),
+      done("Hold the session until release, then stop t3 serve", "skipped"),
+      done("Release the T3 Connect environment", "failure"),
+    ];
+    expect(deriveCloudSessionPhase(run(), steps)).toBe("preparing");
+  });
+
   it("walks the real green run through every phase in order", () => {
     // Indices into GREEN_RUN_STEPS -> the phase a client should see.
     // Step 8 (`Capture connect status`) is asserted separately: its rule turns
