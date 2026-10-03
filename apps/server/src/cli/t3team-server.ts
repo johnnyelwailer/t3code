@@ -22,6 +22,10 @@ import {
   loadPackWorkflowRepairPolicy,
 } from "../t3team-pack-host.ts";
 import { setDistributionModelPolicy } from "../t3team-configuredDefaultModelSelection.ts";
+import {
+  loadPackCompletionWakeRenderer,
+  setPackCompletionWakeRenderer,
+} from "../t3team-pack-completionWakeRenderer.ts";
 import { setPackAppearanceOverlay } from "../t3team-pack-appearanceOverlay.ts";
 import {
   loadPackSetupProfileOverlay,
@@ -139,6 +143,21 @@ export const runT3TeamServerCommand = (
           Effect.logWarning("Workspace pack model policy loading failed", { cause }).pipe(
             Effect.as(undefined),
           ),
+        ),
+      );
+      yield* Effect.tryPromise({
+        try: () => loadPackCompletionWakeRenderer(packDiagnostic),
+        catch: (cause) => new WorkspacePackLoadError({ cause }),
+      }).pipe(
+        Effect.tap((renderer) =>
+          Effect.sync(() => {
+            if (renderer !== undefined) setPackCompletionWakeRenderer(renderer);
+          }),
+        ),
+        Effect.catch((cause) =>
+          Effect.logWarning("Workspace pack completion wake renderer loading failed", {
+            cause,
+          }).pipe(Effect.as(undefined)),
         ),
       );
       yield* Effect.tryPromise({

@@ -16,6 +16,7 @@
 import type { ModelSelection } from "@t3tools/contracts";
 import {
   type AgentProviderDefinition,
+  type CompletionWakeRendererDefinition,
   type ModelPolicyDefinition,
   type PackActivationContext,
   type PackProviderDriverDefinition as PackApiProviderDriverDefinition,
@@ -39,6 +40,7 @@ import {
 
 import { setDistributionModelPolicy } from "./t3team-configuredDefaultModelSelection.ts";
 import { packAiProvidersToInstanceConfigMap } from "./t3team-pack-aiProvider.ts";
+import { setPackCompletionWakeRenderer } from "./t3team-pack-completionWakeRenderer.ts";
 import { setPackAppearanceOverlay } from "./t3team-pack-appearanceOverlay.ts";
 import { toPackProviderDriverDefinition } from "./t3team-pack-driverDefinition.ts";
 import { setPackProviderOverlay } from "./t3team-pack-providerOverlay.ts";
@@ -92,6 +94,7 @@ export const activateCompiledInDistribution = async (): Promise<void> => {
   let agentModelPolicy: WorkflowAgentModelPolicyDefinition | undefined;
   let ephemeralPolicy: WorkflowEphemeralConcurrencyPolicyDefinition | undefined;
   let modelPolicy: ModelPolicyDefinition | undefined;
+  let wakeRenderer: CompletionWakeRendererDefinition | undefined;
 
   if (activateDistribution) {
     const context: PackActivationContext = {
@@ -124,6 +127,9 @@ export const activateCompiledInDistribution = async (): Promise<void> => {
       },
       defineModelPolicy: (definition) => {
         modelPolicy = definition;
+      },
+      defineCompletionWakeRenderer: (definition) => {
+        wakeRenderer = definition;
       },
       resolveAssetDataUrl: async (relativePath) => {
         const inlined = distributionAssets[relativePath];
@@ -197,6 +203,7 @@ export const activateCompiledInDistribution = async (): Promise<void> => {
   }
   if (ephemeralPolicy) setWorkflowEphemeralConcurrencyPolicy(ephemeralPolicy);
   if (modelPolicy) setDistributionModelPolicy(modelPolicy);
+  if (wakeRenderer) setPackCompletionWakeRenderer(wakeRenderer);
   if (distributionTheme) {
     const theme = decodeThemeDefinition(resolveThemeBrand(distributionTheme, distributionAssets));
     setPackAppearanceOverlay({ ...theme, themeId: theme.id });

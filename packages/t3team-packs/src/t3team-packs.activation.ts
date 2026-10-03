@@ -52,6 +52,14 @@ export type ModelPolicyDefinition = {
   readonly textGenerationModelSelection?: PackModelSelectionDefinition;
 };
 
+/**
+ * Delegated-completion wake renderer as the pack loader sees it; the full contract
+ * (`CompletionWakeRendererDefinition`, input shape) lives in `@t3team/pack-api`.
+ */
+export type CompletionWakeRendererRegistration = {
+  readonly render: (input: never) => string | Promise<string>;
+};
+
 export type WorkflowEphemeralConcurrencyPolicyDefinition = {
   readonly maxActiveSteps: number | "unlimited";
 };
@@ -68,6 +76,7 @@ export type PackActivationContext = {
     definition: WorkflowEphemeralConcurrencyPolicyDefinition,
   ) => void;
   readonly defineModelPolicy: (definition: ModelPolicyDefinition) => void;
+  readonly defineCompletionWakeRenderer: (definition: CompletionWakeRendererRegistration) => void;
   readonly resolveAssetDataUrl: (relativePath: string, mimeType: string) => Promise<string>;
 };
 export type PackActivate = (context: PackActivationContext) => void | Promise<void>;

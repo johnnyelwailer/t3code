@@ -14,6 +14,7 @@ export const inertPackActivationContext: Omit<PackActivationContext, "pack"> = {
   defineWorkflowAgentModelPolicy: () => undefined,
   defineWorkflowEphemeralConcurrencyPolicy: () => undefined,
   defineModelPolicy: () => undefined,
+  defineCompletionWakeRenderer: () => undefined,
   resolveAssetDataUrl: async () => {
     throw new Error("Asset resolution is only available to pack activation code");
   },

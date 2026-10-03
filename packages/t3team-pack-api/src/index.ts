@@ -1,7 +1,9 @@
+import type { CompletionWakeRendererDefinition } from "./completion-wake.ts";
 import type { PackProviderDriverDefinition } from "./provider-driver.ts";
 
 export * from "./provider-driver.ts";
 export * from "./provider-orchestration.ts";
+export * from "./completion-wake.ts";
 
 export type PackAssetResolver = (relativePath: string, mimeType: string) => Promise<string>;
 
@@ -170,6 +172,7 @@ export type PackActivationContext = {
     definition: WorkflowEphemeralConcurrencyPolicyDefinition,
   ) => void;
   readonly defineModelPolicy: (definition: ModelPolicyDefinition) => void;
+  readonly defineCompletionWakeRenderer: (definition: CompletionWakeRendererDefinition) => void;
   readonly resolveAssetDataUrl: PackAssetResolver;
 };
 

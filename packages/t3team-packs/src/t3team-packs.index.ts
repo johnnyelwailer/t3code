@@ -23,6 +23,7 @@ export {
 } from "./t3team-packs.setupProfile.ts";
 export { activateWorkspacePack } from "./t3team-packs.activation.ts";
 export type {
+  CompletionWakeRendererRegistration,
   ModelPolicyDefinition,
   PackActivationContext,
   PackActivate,
