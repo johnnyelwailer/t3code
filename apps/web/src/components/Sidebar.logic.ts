@@ -641,6 +641,11 @@ type ThreadStatusInput = Pick<
    *  stable status label. */
   activityLabel?: string | null | undefined;
   activityState?: import("~/t3team/t3team-activityStateDisplay").ActivityState | null | undefined;
+  /** t3team: liveness of a workflow run launched from the thread (t3team-workflowRunLiveness). */
+  workflowRunLiveness?:
+    | import("~/t3team/t3team-workflowRunLiveness").T3TeamWorkflowRunLiveness
+    | null
+    | undefined;
 };
 
 export interface ThreadJumpHintVisibilityController {
@@ -1222,7 +1227,7 @@ export function resolveThreadStatusPill(input: {
     };
   }
 
-  if (thread.hasPendingUserInput) {
+  if (thread.hasPendingUserInput || thread.workflowRunLiveness === "input") {
     return {
       label: "Awaiting Input",
       colorClass: "text-indigo-600 dark:text-indigo-300/90",
@@ -1231,7 +1236,11 @@ export function resolveThreadStatusPill(input: {
     };
   }
 
-  if (thread.runtime?.status === "running" || thread.runtime?.status === "waiting") {
+  if (
+    thread.runtime?.status === "running" ||
+    thread.runtime?.status === "waiting" ||
+    thread.workflowRunLiveness === "working"
+  ) {
     return {
       label: "Working",
       ...(activityLabel ? { activityLabel } : {}),
@@ -1253,7 +1262,10 @@ export function resolveThreadStatusPill(input: {
     };
   }
 
-  if ((thread.pendingBackgroundTasks?.length ?? 0) > 0) {
+  if (
+    (thread.pendingBackgroundTasks?.length ?? 0) > 0 ||
+    thread.workflowRunLiveness === "waiting"
+  ) {
     return {
       label: "Waiting",
       colorClass: "text-sidebar-muted-foreground",

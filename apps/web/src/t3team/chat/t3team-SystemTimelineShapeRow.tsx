@@ -14,7 +14,9 @@ import {
 } from "~/t3team/chat/t3team-messageShapeCard";
 import { T3TeamWorkflowShapeLiveCard } from "~/t3team/chat/t3team-messageShapeCardLive";
 import type { T3TeamWorkflowRunProgress } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
-import { useT3TeamChildThreadRelationsStore } from "~/t3team/t3team-childThreadRelationsStore";
+import { useMemo } from "react";
+
+import { useT3TeamThreadFactsMap } from "~/state/t3team-threadSideStreams";
 
 export function T3TeamSystemTimelineShapeRow({
   workflowShape,
@@ -35,14 +37,16 @@ export function T3TeamSystemTimelineShapeRow({
    * `t3team-workflowRunOutcome.ts`. Only meaningful once the run has a live progress card. */
   readonly outcomeSummary?: string | undefined;
 }) {
-  // Child status is a fork thread fact; the sidebar's child relation already carries it per child.
-  const childThreadsByParentId = useT3TeamChildThreadRelationsStore(
-    (state) => state.childThreadsByParentId,
-  );
-  const childStatuses = Object.fromEntries(
-    [...childThreadsByParentId.values()]
-      .flat()
-      .flatMap((thread) => (thread.childStatus ? [[thread.id, thread.childStatus] as const] : [])),
+  // Child status is a fork thread fact of each child (step rows link to those threads).
+  const facts = useT3TeamThreadFactsMap(threadRef?.environmentId ?? null);
+  const childStatuses = useMemo(
+    () =>
+      Object.fromEntries(
+        [...facts.values()].flatMap((entry) =>
+          entry.childStatus ? [[entry.threadId, entry.childStatus] as const] : [],
+        ),
+      ),
+    [facts],
   );
   const progress =
     workflowShape.workflowRunId !== undefined

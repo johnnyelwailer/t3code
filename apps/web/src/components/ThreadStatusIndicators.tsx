@@ -44,7 +44,7 @@ import {
   useRetainedValue,
   useSidebarRowSubscriptionLease,
 } from "./Sidebar.logic";
-import { usePrimarySettings } from "~/hooks/useSettings";
+import { useT3TeamSidebarRowFacts } from "~/t3team/hooks/t3team-useSidebarRowFacts";
 import {
   activityPulseClass,
   resolveActivityPillDisplay,
@@ -935,12 +935,15 @@ export function ThreadRowLeadingStatus({
   };
   const pr = resolveDisplayedThreadPr(displayedPrInput);
   const prStatus = prStatusIndicator(pr, resolveDisplayedThreadPrProvider(displayedPrInput));
+  // t3team: fork thread facts (activity label, pre-gated by its setting; workflow run liveness).
+  const t3teamRow = useT3TeamSidebarRowFacts(thread.environmentId, thread.id);
   const threadStatus = resolveThreadStatusPill({
     thread: {
       ...thread,
       lastVisitedAt,
+      activityLabel: t3teamRow.activityLabel,
+      workflowRunLiveness: t3teamRow.liveness,
     },
-    activityLabelsEnabled: usePrimarySettings((settings) => settings.t3teamActivityLabelsEnabled),
   });
 
   const supportsMultiplePullRequests = useSupportsMultiplePullRequests(thread.environmentId);

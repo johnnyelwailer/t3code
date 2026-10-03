@@ -39,29 +39,35 @@ export function buildChildThreadRelations(
   const tree = buildProjectSidebarThreadTree(threads);
   const childThreadIds = new Set<string>();
   const subRunCountsByParentId = new Map<string, SubRunCounts>();
+  const childThreadsByParentId = new Map<string, ReadonlyArray<ProjectThread>>();
 
   for (const [parentId, children] of tree.childThreadsByParentId) {
     let running = 0;
+    const listed: ProjectThread[] = [];
     for (const child of children) {
+      // Every child stays out of the flat list; a finished ephemeral helper (fact
+      // `retention: "ephemeral"`: one-shot workflow children, repair helpers) also
+      // leaves the roster.
       childThreadIds.add(child.id);
+      if (child.retention === "ephemeral" && child.status !== "running") continue;
+      listed.push(child);
       if (child.status === "running") {
         running++;
       }
     }
-    subRunCountsByParentId.set(parentId, { total: children.length, running });
+    if (listed.length === 0) continue;
+    childThreadsByParentId.set(parentId, listed);
+    subRunCountsByParentId.set(parentId, { total: listed.length, running });
   }
 
-  return {
-    childThreadIds,
-    subRunCountsByParentId,
-    childThreadsByParentId: tree.childThreadsByParentId,
-  };
+  return { childThreadIds, subRunCountsByParentId, childThreadsByParentId };
 }
 
 /**
  * Cheap content signature over the fields that `buildChildThreadRelations` AND
  * `buildAttributionByThreadId` read: id, parentThreadId, status, title,
- * lastMessageAt, ticketId, ticketDisplayId. NOT the array
+ * lastMessageAt, ticketId, ticketDisplayId — plus what the sub-run rows render from the
+ * cached children (settled fold, pending question, retention, activity label). NOT the array
  * identity of `threads` itself, which upstream re-creates on every
  * `useProjectStore()` update (including plain thread selection). Order-independent (sorted by id) so
  * re-fetching the same threads in a different order signs identically.
@@ -72,7 +78,7 @@ export function computeChildThreadRelationsSignature(
   return threads
     .map(
       (thread) =>
-        `${thread.id}:${thread.parentThreadId ?? ""}:${thread.status}:${thread.title}:${thread.lastMessageAt}:${thread.ticketId ?? ""}:${thread.ticketDisplayId ?? ""}`,
+        `${thread.id}:${thread.parentThreadId ?? ""}:${thread.status}:${thread.title}:${thread.lastMessageAt}:${thread.ticketId ?? ""}:${thread.ticketDisplayId ?? ""}:${thread.settled === true}:${thread.pendingUserInput === true}:${thread.retention ?? ""}:${thread.activityLabel ?? ""}`,
     )
     .sort()
     .join("|");

@@ -14,8 +14,11 @@ import {
   EMPTY_T3TEAM_THREAD_FACTS,
   type T3TeamThreadFactsByThreadId,
 } from "@t3tools/client-runtime/state/thread-facts";
+import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId, T3TeamThreadFacts, ThreadId } from "@t3tools/contracts";
-import { useMemo } from "react";
+import * as Option from "effect/Option";
+import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { useCallback, useMemo } from "react";
 
 import { connectionAtomRuntime } from "../connection/runtime";
 import { useEnvironmentQueryData } from "./query";
@@ -40,6 +43,37 @@ export function useT3TeamThreadFactsMap(
     [environmentId],
   );
   return useEnvironmentQueryData(atom) ?? EMPTY_T3TEAM_THREAD_FACTS;
+}
+
+const NO_FACTS_ATOM = Atom.make(
+  AsyncResult.initial<T3TeamThreadFactsByThreadId, never>(false),
+).pipe(Atom.withLabel("environment-data:t3team:thread-facts:none"));
+
+/**
+ * One listed thread's facts (a sidebar row), read from the shared all-threads stream through a
+ * per-thread selector: the row re-renders only when ITS facts object changes, not on every
+ * sibling's activity-label update.
+ */
+export function useT3TeamListedThreadFacts(
+  environmentId: EnvironmentId | null,
+  threadId: ThreadId,
+): T3TeamThreadFacts | undefined {
+  const atom = useMemo(
+    () =>
+      environmentId === null
+        ? NO_FACTS_ATOM
+        : t3teamThreadFactsAtoms.facts({ environmentId, input: ALL_THREADS_INPUT }),
+    [environmentId],
+  );
+  const select = useCallback(
+    (result: AsyncResult.AsyncResult<T3TeamThreadFactsByThreadId, unknown>) =>
+      Option.getOrUndefined(AsyncResult.value(result))?.get(threadId),
+    [threadId],
+  );
+  return useAtomValue(
+    atom as Atom.Atom<AsyncResult.AsyncResult<T3TeamThreadFactsByThreadId, unknown>>,
+    select,
+  );
 }
 
 /**

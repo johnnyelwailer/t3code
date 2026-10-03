@@ -412,6 +412,7 @@ import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import type { ChatViewT3TeamExtensionProps } from "~/t3team/t3team-chatViewExtensions";
 import { appendContextAttachmentsToPrompt } from "~/t3team/chat/t3team-prepareThreadContextAttachments";
 import { useT3TeamTimelineArtifacts } from "~/t3team/chat/t3team-useTimelineArtifacts";
+import { useResourcePressureBannerItem } from "./chat/t3team-ResourcePressureThreadBanner";
 import { useT3TeamChatTimelineProps } from "~/t3team/chat/t3team-useChatTimelineProps";
 import { createPageScrollController, type PageScrollKey } from "./chat/pageScrollController";
 import { isTimelineScrollTarget } from "./chat/timelineScrollTarget";
@@ -3025,6 +3026,12 @@ export default function ChatView(props: ChatViewProps) {
   const serverUpdateFailureDismissed =
     serverUpdateState === dismissedServerUpdateState ||
     isServerUpdateFailureDismissed(serverUpdateState);
+  // t3team: memory-pressure notice and pause (fact `resourcePressurePaused`).
+  const resourcePressureBanner = useResourcePressureBannerItem({
+    enabled: serverConfig?.resourcePressure === true,
+    environmentId,
+    threadId: activeThreadId,
+  });
   const systemComposerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
     const items: ComposerBannerStackItem[] = [];
     const updateRunning = serverUpdateState.status === "running";
@@ -3158,10 +3165,12 @@ export default function ChatView(props: ChatViewProps) {
       });
     }
     if (autoBalanceUpdateBanner) items.push(autoBalanceUpdateBanner);
+    if (resourcePressureBanner) items.push(resourcePressureBanner);
     return items;
   }, [
     automaticEnvironment,
     autoBalanceUpdateBanner,
+    resourcePressureBanner,
     activeEnvironmentUnavailableState,
     handleReconnectActiveEnvironment,
     canDisconnectActiveEnvironment,
@@ -4137,6 +4146,12 @@ export default function ChatView(props: ChatViewProps) {
     timelineEntries,
     threadActivities: t3teamTimeline.threadActivities,
     workingRow: t3teamWorkingRow,
+    activity: {
+      isWorking,
+      waitingOnUser: hasOpenUserInput || pendingApprovals.length > 0,
+      activeRunId: activeActivityRun?.runId ?? null,
+      turnItems: serverProjection?.turnItems,
+    },
   });
   const timelineT3TeamProps = t3teamChat.timelineProps;
   const hasTimelineTopBanner = Boolean(timelineThreadError) || visibleProviderStatus !== null;
