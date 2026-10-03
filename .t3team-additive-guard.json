@@ -454,7 +454,9 @@
     "apps/server/src/mcp/OrchestratorMcpService.ts",
     "apps/server/src/mcp/toolkits/orchestrator/tools.ts",
     "apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts",
-    "apps/server/src/orchestration-v2/RunExecutionService.ts"
+    "apps/server/src/orchestration-v2/RunExecutionService.ts",
+    "packages/t3team-pack-api/src/index.ts",
+    "packages/t3team-pack-api/src/provider-driver.test.ts"
   ],
   "allowedUnprefixedNewFiles": [
     ".agents/skills/merge-upstream/SKILL.md",
