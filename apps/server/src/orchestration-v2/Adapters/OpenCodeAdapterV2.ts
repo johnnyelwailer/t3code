@@ -959,6 +959,10 @@ export function makeOpenCodeAdapterV2(
           directory: cwd,
           serverUrl: options.settings.serverUrl,
           environment: options.environment,
+          // t3team: pack/declarative OpenCode config (OPENCODE_CONFIG_CONTENT) for a spawned server.
+          ...(options.settings.configContent?.trim()
+            ? { configContent: options.settings.configContent }
+            : {}),
         });
         const client = runtime.createOpenCodeSdkClient({
           baseUrl: connection.url,

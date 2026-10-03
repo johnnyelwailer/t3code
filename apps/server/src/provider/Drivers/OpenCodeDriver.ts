@@ -293,6 +293,7 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
         serverPassword: effectiveConfig.serverPassword,
         directory: serverConfig.cwd,
         environment: processEnv,
+        ...(effectiveConfig.configContent ? { configContent: effectiveConfig.configContent } : {}),
       }).pipe(
         Effect.provideService(OpenCodeRuntime.OpenCodeRuntime, openCodeRuntime),
         Effect.provideService(

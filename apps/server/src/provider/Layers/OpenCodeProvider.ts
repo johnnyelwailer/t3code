@@ -692,7 +692,6 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
           // Fork packs ship a custom OpenCode config; the connect path spawns
           // when serverUrl resolves to a local spawn request.
           configContent: openCodeSettings.configContent,
-          environment: resolvedEnvironment,
           ...(openCodeSettings.serverPassword
             ? { serverPassword: openCodeSettings.serverPassword }
             : {}),
