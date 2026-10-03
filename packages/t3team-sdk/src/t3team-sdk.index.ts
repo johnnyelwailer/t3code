@@ -3,7 +3,6 @@ import "./t3team-sdk.globals.ts";
 export { schemaToAffordance } from "./t3team-sdk.affordance.ts";
 export { asNamedAttachments, renderAgentAttachments } from "./t3team-sdk.askAttachments.ts";
 export { appendResolvedEntry, createHostBroker, createMockBroker } from "./t3team-sdk.broker.ts";
-export { builtinTools } from "./t3team-sdk.builtins.ts";
 export { hashArgs } from "./t3team-sdk.canonicalJson.ts";
 export {
   createDurableWorkflowRuntime,
@@ -174,7 +173,6 @@ export type {
   MockBroker,
   MockBrokerOutcome,
 } from "./t3team-sdk.broker.ts";
-export type { BuiltinToolsTree } from "./t3team-sdk.builtins.ts";
 export type {
   AbortedResult,
   DurableWorkflowRuntime,

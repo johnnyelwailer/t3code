@@ -115,10 +115,6 @@ export function makeT3TeamWorkflowHostDraftToolClient(input: {
   if (launchThreadId === undefined || launchThreadId.trim().length === 0) return undefined;
 
   return {
-    // Not part of this seam's scope; the draft family is. Mirrors the SDK bridge's stub.
-    renameThread: async () => {
-      throw new Error("t3team.thread.rename is not reachable through workflow host tools.");
-    },
     callHostTool: async ({ tool, args }) => {
       // Defence in depth: the tool tree already limits WHICH ids exist, and this keeps the
       // transport from widening if a future ref is registered against the same client.
