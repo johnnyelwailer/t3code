@@ -27,11 +27,19 @@ import {
 import { makeContextRefreshLiveLayer } from "./t3team-contextRefreshTestFixtures.ts";
 import { T3TeamThreadToolContextStoreLive } from "./t3team-threadToolContextStore.ts";
 import { T3TeamToolBrokerLive } from "./t3team-toolBrokerLive.ts";
-import { T3TeamThreadArtifactsStore } from "./t3team-v2/t3team-threadArtifactsStore.ts";
+import {
+  type T3TeamThreadArtifactInput,
+  T3TeamThreadArtifactsStore,
+} from "./t3team-v2/t3team-threadArtifactsStore.ts";
 import { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
 import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
 
 export type TestDispatch = (command: OrchestrationV2ServerCommand) => Effect.Effect<unknown>;
+
+export interface BrokerLayerOptions {
+  /** Sees every thread artifact the broker writes (a published draft, a widget). */
+  readonly onArtifact?: (artifact: T3TeamThreadArtifactInput) => void;
+}
 
 const threadId = ThreadId.make("thread-1");
 const projectId = ProjectId.make("project-1");
@@ -102,7 +110,7 @@ const stubFileSystemPathLayer = Layer.mergeAll(
   stubPathLayer,
 );
 
-const v2Fakes = (dispatch: TestDispatch) =>
+const v2Fakes = (dispatch: TestDispatch, options: BrokerLayerOptions) =>
   Layer.mergeAll(
     Layer.mock(ThreadManagementService)({
       getThreadRecords: ((id: ThreadId) =>
@@ -128,11 +136,14 @@ const v2Fakes = (dispatch: TestDispatch) =>
     // Widgets and draft mutations are recorded as thread artifacts; accept every write.
     Layer.mock(T3TeamThreadArtifactsStore)({
       upsert: (input) =>
-        Effect.succeed({
-          ...input,
-          messageId: input.messageId ?? null,
-          createdAt: "2026-01-01T00:00:00.000Z",
-          updatedAt: "2026-01-01T00:00:00.000Z",
+        Effect.sync(() => {
+          options.onArtifact?.(input);
+          return {
+            ...input,
+            messageId: input.messageId ?? null,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          };
         }),
     }),
   );
@@ -140,11 +151,12 @@ const v2Fakes = (dispatch: TestDispatch) =>
 function makeBrokerLayerBase(
   dispatch: TestDispatch,
   contextRefreshLayer: Layer.Layer<T3TeamContextRefreshService, never, never>,
+  options: BrokerLayerOptions = {},
 ) {
   return T3TeamToolBrokerLive.pipe(
     Layer.provide(
       Layer.mergeAll(
-        v2Fakes(dispatch),
+        v2Fakes(dispatch, options),
         contextRefreshLayer,
         T3TeamThreadToolContextStoreLive,
         WorkspacePaths.layer.pipe(Layer.provide(stubFileSystemPathLayer)),
@@ -156,10 +168,14 @@ function makeBrokerLayerBase(
 
 const noDispatch: TestDispatch = () => Effect.void;
 
-export const makeBrokerLayer = (dispatch: TestDispatch = noDispatch) =>
+export const makeBrokerLayer = (
+  dispatch: TestDispatch = noDispatch,
+  options: BrokerLayerOptions = {},
+) =>
   makeBrokerLayerBase(
     dispatch,
     Layer.succeed(T3TeamContextRefreshService, NoopT3TeamContextRefreshService),
+    options,
   );
 
 export const makeBrokerLayerWithLiveContextRefresh = (

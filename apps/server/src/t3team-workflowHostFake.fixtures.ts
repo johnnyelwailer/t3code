@@ -13,6 +13,7 @@ import {
 } from "./t3team-workflowHost.ts";
 import type {
   WorkflowHostActivityInput,
+  WorkflowHostCreateThreadInput,
   WorkflowHostMessageInput,
   WorkflowHostPort,
   WorkflowHostStartTurnInput,
@@ -49,6 +50,7 @@ export function makeFakeWorkflowHost(options: { readonly failOn?: keyof Workflow
     host,
     calls,
     ops: () => calls.map((call) => call.op),
+    creates: (): WorkflowHostCreateThreadInput[] => inputsOf("createThread"),
     messages: (): WorkflowHostMessageInput[] => inputsOf("postMessage"),
     turns: (): WorkflowHostStartTurnInput[] => inputsOf("startTurn"),
     activities: (): WorkflowHostActivityInput[] => inputsOf("upsertActivity"),

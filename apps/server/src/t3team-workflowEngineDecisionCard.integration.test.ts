@@ -90,7 +90,8 @@ it.live("choice card: ignores stale and widget replies, resolves with the struct
     assert.deepStrictEqual(run.view.props["affordance"], choice);
     const resource = run.ext?.attachments?.[1];
     if (resource?.kind !== "resource") throw new Error("expected a resource attachment second");
-    assert.strictEqual(resource.resource.id, "BUG-7");
+    const ref = "ref" in resource.resource ? resource.resource.ref : resource.resource;
+    assert.strictEqual(ref.id, "BUG-7");
 
     assert.isNotNull(run.reject("merge-later"));
     assert.isNotNull(run.reject("hold", "choice-run:999"));
