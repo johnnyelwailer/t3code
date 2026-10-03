@@ -20,12 +20,12 @@ import type { Project } from "~/types";
 export type ProjectBindingState = "local" | "bound" | "needs-repair";
 
 /**
- * The live project's server binding: the fork extension field `source` on the V2 project shell
- * (contracts C13). The shared project type does not declare it yet, so every reader goes through
- * this one accessor; a shell without the field reads as "no binding".
+ * The live project's server binding: the fork field `source` on the V2 project shell (contracts
+ * C13). A shell without it (an upstream server, or a project with no binding) reads as "no
+ * binding".
  */
 export function readLiveProjectSourceBinding(project: Project): ProjectSourceBinding | undefined {
-  return (project as Project & { readonly source?: ProjectSourceBinding }).source;
+  return project.source;
 }
 
 /**

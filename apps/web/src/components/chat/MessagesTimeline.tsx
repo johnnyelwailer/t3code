@@ -61,6 +61,7 @@ import {
 } from "~/t3team/chat/t3team-timelineRows";
 import { useT3TeamWorkflowCardNavigation } from "~/t3team/chat/t3team-useWorkflowCardNavigation";
 import { useT3TeamOutboundSendLabel } from "~/t3team/chat/t3team-useOutboundSendLabel";
+import { t3teamDisplayedUserMessage } from "~/t3team/chat/t3team-messageFraming";
 import { getT3TeamRenderableAttachments } from "~/t3team/chat/t3team-messageExtViews";
 import { T3TeamMessageAttachmentList } from "~/t3team/chat/t3team-messageAttachmentList";
 import {
@@ -2242,7 +2243,11 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
     (attachment) => !isImageAttachment(attachment) && !isFileAttachment(attachment),
   );
   const userMessage = resolveUserMessagePresentation(row.message);
-  const resolvedContext = useMemo(() => resolveUserMessageContext(row.message), [row.message]);
+  // t3team: a send with appended work-item context shows the person's own words (ext displayText).
+  const resolvedContext = useMemo(
+    () => resolveUserMessageContext(t3teamDisplayedUserMessage(row.message)),
+    [row.message],
+  );
   const previewImages = useMemo(
     () => userImages.filter((image) => image.name.startsWith("preview-annotation-")),
     [userImages],

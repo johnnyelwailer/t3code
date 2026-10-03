@@ -25,22 +25,14 @@ import { primaryEnvironmentIdAtom } from "~/state/primaryEnvironment";
 import { projectEnvironment } from "~/state/projects";
 import { threadEnvironment } from "~/state/threads";
 
-/**
- * `source` is the project's work-source binding. It reaches the server only once project
- * mutations carry it (contracts C13); until then the stored local copy stays authoritative
- * (`reconcileStoredProjectSource`).
- */
-export type T3TeamCreateProjectInput = CreateProjectInput & {
-  readonly source?: ProjectSourceBinding;
-};
-
 export interface T3TeamUpdateProjectSourceInput {
   readonly projectId: ProjectId;
   readonly source: ProjectSourceBinding;
 }
 
 export interface T3TeamOrchestrationApi {
-  readonly createProject: (input: T3TeamCreateProjectInput) => Promise<void>;
+  /** `input.source` is the project's work-source binding; the server persists and claims it. */
+  readonly createProject: (input: CreateProjectInput) => Promise<void>;
   readonly updateProjectSource: (input: T3TeamUpdateProjectSourceInput) => Promise<void>;
   readonly createThread: (input: CreateThreadInput) => Promise<void>;
   /**

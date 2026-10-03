@@ -42,3 +42,17 @@ export function t3teamMessageExtOf(item: {
   const t3teamExt = readExt(item.context);
   return t3teamExt ? { t3teamExt } : {};
 }
+
+/**
+ * The message as its bubble shows it: a fork send that appended context (work items) to the
+ * provider prompt records the person's own words as ext `displayText`, so the bubble shows those
+ * instead of the prompt with the context dump. Copy and rollback keep reading `message.text`.
+ */
+export function t3teamDisplayedUserMessage<
+  M extends { readonly text: string; readonly t3teamExt?: T3TeamMessageExt | undefined },
+>(message: M): M {
+  const displayText = message.t3teamExt?.displayText;
+  return displayText === undefined || displayText === message.text
+    ? message
+    : { ...message, text: displayText };
+}
