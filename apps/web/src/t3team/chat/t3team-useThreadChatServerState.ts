@@ -3,6 +3,7 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { useProjects, useThreadShell } from "~/state/entities";
+import { useT3TeamThreadFacts } from "~/state/t3team-threadSideStreams";
 import { summarizeT3TeamServerThread } from "~/t3team/chat/t3team-threadDebug";
 import { buildThreadKickoffHistoryMessage } from "~/t3team/chat/t3team-threadKickoffHistoryMessage";
 import {
@@ -47,11 +48,10 @@ export function useThreadChatServerState({
   const hasServerThread = serverThread !== null;
   const serverThreadSummary = summarizeT3TeamServerThread(serverThread);
   const serverMessageCount = serverThread?.visibleItemCount ?? 0;
-  // A workflow run launched from this thread is a fork thread fact (`workflowRunStatus`), not a
-  // V2 activity. Until the facts stream feeds this hook, the client-side launch claim
-  // (`tryClaimRecipeWorkflowLaunch`) is the double-launch guard, and the kickoff placeholder
-  // clears once the run's first visible item lands.
-  const hasServerLaunchActivity = false;
+  // A workflow run launched from this thread is the fork thread fact `workflowRunStatus` (the
+  // client-side launch claim `tryClaimRecipeWorkflowLaunch` still guards the race before it lands).
+  const facts = useT3TeamThreadFacts(environmentId, threadRef?.threadId ?? null);
+  const hasServerLaunchActivity = facts?.workflowRunStatus != null;
   const useKickoffHistoryMessage = isWaitingForKickoffInput(kickoffWorkflow, kickoffPending);
   const kickoffHistoryMessage = useMemo(
     () =>

@@ -1,6 +1,8 @@
 import { useState, useCallback, useMemo } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { useProjects, useThreadShells } from "~/state/entities";
+import { usePrimaryEnvironmentId } from "~/state/environments";
+import { useT3TeamThreadFactsMap } from "~/state/t3team-threadSideStreams";
 import type { ViewState, ProjectThread, ProjectThreadDisplayMode } from "~/t3team/t3team-types";
 import { useProjectStoreActions } from "./t3team-useProjectStoreActions";
 import { useProjectStoreQueries } from "./t3team-useProjectStoreQueries";
@@ -34,6 +36,7 @@ export function useProjectStore() {
   // subagents stay hidden there too (isListedLiveThread).
   const allLiveThreads = useThreadShells();
   const liveThreads = useMemo(() => allLiveThreads.filter(isListedLiveThread), [allLiveThreads]);
+  const factsByThreadId = useT3TeamThreadFactsMap(usePrimaryEnvironmentId());
   useHydrateStoredProjects({
     setStoredProjects,
     setSelectedProjectId,
@@ -46,6 +49,7 @@ export function useProjectStore() {
     storedProjects,
     liveProjects,
     liveThreads,
+    factsByThreadId,
   });
   useProjectStoreSyncEffects({
     threads,
@@ -53,6 +57,7 @@ export function useProjectStore() {
     storedProjects,
     liveProjects,
     liveThreads,
+    factsByThreadId,
     setThreads,
   });
 

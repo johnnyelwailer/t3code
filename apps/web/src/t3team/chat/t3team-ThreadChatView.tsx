@@ -1,7 +1,14 @@
-import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
+import {
+  type ModelSelection,
+  type ProviderInteractionMode,
+  type RuntimeMode,
+  ThreadId,
+} from "@t3tools/contracts";
 import type { ProjectSource } from "@t3tools/project-context";
 import { useBackend } from "~/t3team/backend/t3team-index";
+import { useT3TeamThreadArtifacts } from "~/state/t3team-threadSideStreams";
 import { ThreadChatViewBody } from "~/t3team/chat/t3team-ThreadChatViewBody";
+import { useT3TeamDraftMutationIngest } from "~/t3team/chat/t3team-useDraftMutationIngest";
 import { useKickoffBranch } from "~/t3team/chat/t3team-useKickoffBranch";
 import { useThreadBootstrap } from "~/t3team/chat/t3team-useThreadBootstrap";
 import { useThreadChatComposerState } from "~/t3team/chat/t3team-useThreadChatComposerState";
@@ -116,6 +123,10 @@ export function ThreadChatView({
     onInitialUserMessageSent,
     serverThread,
   });
+
+  // Draft-mutation artifacts of this thread feed the work-item draft review store.
+  const artifacts = useT3TeamThreadArtifacts(environmentId, ThreadId.make(threadId));
+  useT3TeamDraftMutationIngest({ threadId, artifacts });
 
   useThreadChatDebug({
     environmentId,

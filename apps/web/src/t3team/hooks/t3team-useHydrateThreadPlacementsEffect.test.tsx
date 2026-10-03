@@ -37,6 +37,7 @@ const LIVE_THREADS: ReadonlyArray<ThreadShell> = [LIVE_THREAD];
 const EMPTY_PROJECT_THREADS: ProjectThread[] = [];
 const EMPTY_PROJECTS: Project[] = [];
 const EMPTY_STORED_PROJECTS: ReadonlyArray<never> = [];
+const NO_FACTS = new Map<string, never>();
 const NOOP_SET_THREADS = () => {};
 
 function renderProbe() {
@@ -53,6 +54,7 @@ function renderProbe() {
       storedProjects: EMPTY_STORED_PROJECTS,
       liveProjects: EMPTY_PROJECTS,
       liveThreads: LIVE_THREADS,
+      factsByThreadId: NO_FACTS,
     });
     return null;
   }
@@ -122,6 +124,7 @@ describe("useHydrateThreadPlacements effect scheduling", () => {
         storedProjects: EMPTY_STORED_PROJECTS,
         liveProjects: EMPTY_PROJECTS,
         liveThreads: threads,
+        factsByThreadId: NO_FACTS,
       });
       return null;
     }
@@ -177,6 +180,7 @@ describe("useHydrateThreadPlacements effect scheduling", () => {
         storedProjects: EMPTY_STORED_PROJECTS,
         liveProjects: projects,
         liveThreads: threads,
+        factsByThreadId: NO_FACTS,
       });
       return null;
     }
@@ -277,6 +281,7 @@ describe("useHydrateThreadPlacements after a fetched placement", () => {
         storedProjects: EMPTY_STORED_PROJECTS,
         liveProjects: EMPTY_PROJECTS,
         liveThreads,
+        factsByThreadId: NO_FACTS,
       });
       return null;
     }
