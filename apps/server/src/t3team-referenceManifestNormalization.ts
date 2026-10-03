@@ -36,6 +36,15 @@ export const readNormalizedReferenceManifest = (
   Effect.gen(function* () {
     const raw = yield* fileSystem.readFileString(manifestPath).pipe(Effect.orElseSucceed(() => ""));
     const normalized = normalizeReferenceManifestJson(raw);
-    if (normalized !== raw) yield* fileSystem.writeFileString(manifestPath, normalized);
+    if (normalized !== raw) {
+      yield* fileSystem.writeFileString(manifestPath, normalized).pipe(
+        Effect.catch((error) =>
+          Effect.logWarning("reference manifest normalization was not persisted", {
+            manifestPath,
+            error: String(error),
+          }),
+        ),
+      );
+    }
     return normalized;
   });

@@ -56,12 +56,8 @@ const isMigrationExcluded = (relativeSegments: ReadonlyArray<string>): boolean =
   return top === REFERENCES_DIR_NAME && second !== undefined && second !== MANIFEST_FILE_NAME;
 };
 
-/**
- * Copies the state dir of `fromRoot` into `toRoot`'s state dir. Best-effort and additive: an
- * existing target file always wins (a detected main repository's committed state is never
- * overwritten), unreadable entries are skipped, and the source is left untouched. Returns the
- * state-dir-relative paths that were copied.
- */
+/** Copies `fromRoot`'s state dir into `toRoot`. Existing target files win; the source is
+ * untouched. `failed` is set when a copy or context-JSON rewrite did not land. */
 const copyProjectStateDir = Effect.fn("copyProjectStateDir")(function* (input: {
   readonly fromRoot: string;
   readonly toRoot: string;
@@ -73,7 +69,8 @@ const copyProjectStateDir = Effect.fn("copyProjectStateDir")(function* (input: {
   const sourceRoot = path.join(input.fromRoot, input.sourceDir);
   const targetRoot = path.join(input.toRoot, input.targetDir);
   const copied: string[] = [];
-  if (path.resolve(sourceRoot) === path.resolve(targetRoot)) return copied;
+  let failed = false;
+  if (path.resolve(sourceRoot) === path.resolve(targetRoot)) return { copied, failed };
 
   const visit = (segments: ReadonlyArray<string>): Effect.Effect<void> =>
     Effect.gen(function* () {
@@ -96,53 +93,54 @@ const copyProjectStateDir = Effect.fn("copyProjectStateDir")(function* (input: {
         Effect.as(true),
         Effect.orElseSucceed(() => false),
       );
-      if (done) {
-        if (
-          input.sourceDir !== input.targetDir &&
-          segments[0] === "context" &&
-          target.endsWith(".json")
-        ) {
-          yield* fileSystem.readFileString(target).pipe(
-            Effect.flatMap((contents) =>
-              fileSystem.writeFileString(
-                target,
-                normalizeProjectContextStateFile(
-                  { relativePath: segments.join("/"), contents },
-                  input.targetDir,
-                ).contents,
-              ),
+      const relativePath = segments.join("/");
+      let landed = done;
+      if (
+        done &&
+        input.sourceDir !== input.targetDir &&
+        segments[0] === "context" &&
+        target.endsWith(".json")
+      ) {
+        landed = yield* fileSystem.readFileString(target).pipe(
+          Effect.flatMap((contents) =>
+            fileSystem.writeFileString(
+              target,
+              normalizeProjectContextStateFile({ relativePath, contents }, input.targetDir)
+                .contents,
             ),
-            Effect.ignore,
-          );
-        }
-        copied.push(segments.join("/"));
+          ),
+          Effect.as(true),
+          Effect.orElseSucceed(() => false),
+        );
       }
+      if (landed) copied.push(relativePath);
+      else failed = true;
     });
 
   yield* visit([]);
-  return copied;
+  return { copied, failed };
 });
 
-/** One-time additive normalization when a process selects .nexi. The existing target wins;
- * the source stays intact, including its reference clones and child worktrees. */
+/** One-time additive normalization when a process selects .nexi. An existing target wins;
+ * a failed attempt is removed so the next call retries instead of reading an empty dir. */
 export const ensureNexiProjectStateDir = Effect.fn("ensureNexiProjectStateDir")(function* (
   workspaceRoot: string,
 ) {
   if (PROJECT_STATE_DIR !== NEXI_PROJECT_STATE_DIR) return [];
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  if (yield* fileSystem.exists(path.join(workspaceRoot, NEXI_PROJECT_STATE_DIR))) return [];
+  const nexiDir = path.join(workspaceRoot, NEXI_PROJECT_STATE_DIR);
+  if (yield* fileSystem.exists(nexiDir)) return [];
   if (!(yield* fileSystem.exists(path.join(workspaceRoot, T3TEAM_PROJECT_STATE_DIR)))) return [];
-  const copied = yield* copyProjectStateDir({
+  const outcome = yield* copyProjectStateDir({
     fromRoot: workspaceRoot,
     toRoot: workspaceRoot,
     sourceDir: T3TEAM_PROJECT_STATE_DIR,
     targetDir: NEXI_PROJECT_STATE_DIR,
   });
-  yield* fileSystem.makeDirectory(path.join(workspaceRoot, NEXI_PROJECT_STATE_DIR), {
-    recursive: true,
-  });
-  return copied;
+  if (!outcome.failed && outcome.copied.length > 0) return outcome.copied;
+  yield* fileSystem.remove(nexiDir, { recursive: true, force: true }).pipe(Effect.ignore);
+  return [];
 });
 
 export const migrateProjectStateDir = Effect.fn("migrateProjectStateDir")(function* (input: {
@@ -151,9 +149,10 @@ export const migrateProjectStateDir = Effect.fn("migrateProjectStateDir")(functi
 }) {
   yield* ensureNexiProjectStateDir(input.fromRoot);
   yield* ensureNexiProjectStateDir(input.toRoot);
-  return yield* copyProjectStateDir({
+  const { copied } = yield* copyProjectStateDir({
     ...input,
     sourceDir: PROJECT_STATE_DIR,
     targetDir: PROJECT_STATE_DIR,
   });
+  return copied;
 });
