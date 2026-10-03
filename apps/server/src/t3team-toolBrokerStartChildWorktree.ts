@@ -62,18 +62,24 @@ export const resolveStartChildWorktree = (input: {
       // wrapped projects have no such entry and keep the linked-repo-only behavior.
       // A linked repository selected as the project's main repository IS the workspace checkout,
       // so it isolates exactly like an adopted one even before a bootstrap rewrote the manifest.
-      const selectedMainUrl = isMainRepositoryEnabled()
-        ? input.projectMainRepository?.url
-        : undefined;
+      const mainRepositoryEnabled = isMainRepositoryEnabled();
+      const selectedMain = mainRepositoryEnabled ? input.projectMainRepository : undefined;
       const manifestMainRepository = manifestExists
         ? yield* readMainRepositoryFromWorkspace({
             services: input.services,
             projectWorkspaceRoot: input.projectWorkspaceRoot,
           })
         : undefined;
-      const mainRepository = selectedMainUrl
-        ? { ...manifestMainRepository, url: selectedMainUrl }
-        : manifestMainRepository;
+      // Adopted monorepos predate the selection feature and retain their original behavior.
+      const mainRepository = selectedMain
+        ? {
+            localPath: selectedMain.checkoutPath,
+            status: selectedMain.selection,
+            ...(selectedMain.url ? { url: selectedMain.url } : {}),
+          }
+        : mainRepositoryEnabled || manifestMainRepository?.status === "adopted"
+          ? manifestMainRepository
+          : undefined;
       const requestedRepoIsMainRepository =
         mainRepository?.url !== undefined &&
         args.repoFullName !== undefined &&
@@ -133,4 +139,4 @@ export const resolveStartChildWorktree = (input: {
     }
 
     return { repoFullName, repoRef, branch, worktreePath };
-  });
+  }).pipe(Effect.mapError((error) => (typeof error === "string" ? error : String(error))));

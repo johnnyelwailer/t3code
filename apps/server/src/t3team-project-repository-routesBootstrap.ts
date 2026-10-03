@@ -21,6 +21,8 @@ import { syncLinkedRepository } from "./t3team-project-repository-services.ts";
 import { findLinkedRepository } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
 import { mainRepositoryFromManifestJson } from "./t3team-toolBrokerStartChildContext.ts";
 
+import { readNormalizedReferenceManifest } from "./t3team-referenceManifestNormalization.ts";
+
 /** Tolerant read of the `linkedRepositories` array from a persisted reference manifest. */
 const ReferenceManifestLinkedRepositoriesJson = Schema.Struct({
   linkedRepositories: Schema.optional(Schema.Array(Schema.Unknown)),
@@ -89,9 +91,7 @@ export type PreservedReferenceManifest = {
 export const readPreservedReferenceManifest = Effect.fn("readPreservedReferenceManifest")(
   function* (preservedManifestPath: string) {
     const fileSystem = yield* FileSystem.FileSystem;
-    const preservedRaw = yield* fileSystem
-      .readFileString(preservedManifestPath)
-      .pipe(Effect.orElseSucceed(() => ""));
+    const preservedRaw = yield* readNormalizedReferenceManifest(fileSystem, preservedManifestPath);
     if (preservedRaw.length === 0) {
       return { linkedRepositories: [] } satisfies PreservedReferenceManifest;
     }

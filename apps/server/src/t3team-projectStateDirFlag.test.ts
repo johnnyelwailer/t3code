@@ -28,6 +28,16 @@ describe("NEXI_FF_NEXI_STATE_DIR", () => {
     expect(blobs.T3TEAM_CONTEXT_BLOB_ROOT).toBe(".nexi/context/_blobs");
   });
 
+  it("advertises the startup selection after the environment changes", async () => {
+    vi.stubEnv(NEXI_STATE_DIR_FLAG_ENV, "1");
+    vi.resetModules();
+    const state = await import("@t3tools/project-context/t3teamProjectStateDir");
+    vi.stubEnv(NEXI_STATE_DIR_FLAG_ENV, "0");
+    expect(state.isNexiStateDirEnabled()).toBe(false);
+    expect(state.PROJECT_STATE_DIR).toBe(".nexi");
+    expect(state.isNexiStateDirSelectedAtStartup()).toBe(true);
+  });
+
   it("keeps .t3team when off", async () => {
     vi.stubEnv(NEXI_STATE_DIR_FLAG_ENV, "");
     vi.resetModules();

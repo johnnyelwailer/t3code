@@ -5,10 +5,17 @@
  *
  * @module t3team-projectMainRepositoryState
  */
+import {
+  NEXI_PROJECT_STATE_DIR,
+  PROJECT_STATE_DIR,
+  T3TEAM_PROJECT_STATE_DIR,
+} from "@t3tools/project-context/t3teamProjectStateDir";
 import type { ProjectMainRepositoryCandidate } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+
+import { normalizeProjectContextStateFile } from "./t3team-projectContextStatePaths.ts";
 
 import {
   CHILD_WORKTREES_DIR_NAME,
@@ -30,6 +37,7 @@ export const detectMainRepositoryCandidates = Effect.fn("detectMainRepositoryCan
       const checkoutPath = entry.localPath?.trim();
       if (entry.status === "failed" || !checkoutPath) continue;
       if (candidates.some((candidate) => candidate.checkoutPath === checkoutPath)) continue;
+      yield* ensureNexiProjectStateDir(checkoutPath);
       const isClone = yield* exists(path.join(checkoutPath, ".git"));
       if (isClone && (yield* exists(path.join(checkoutPath, HIDDEN_T3TEAM_DIR)))) {
         candidates.push({ url: entry.url, checkoutPath });
@@ -54,14 +62,16 @@ const isMigrationExcluded = (relativeSegments: ReadonlyArray<string>): boolean =
  * overwritten), unreadable entries are skipped, and the source is left untouched. Returns the
  * state-dir-relative paths that were copied.
  */
-export const migrateProjectStateDir = Effect.fn("migrateProjectStateDir")(function* (input: {
+const copyProjectStateDir = Effect.fn("copyProjectStateDir")(function* (input: {
   readonly fromRoot: string;
   readonly toRoot: string;
+  readonly sourceDir: string;
+  readonly targetDir: string;
 }) {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const sourceRoot = path.join(input.fromRoot, HIDDEN_T3TEAM_DIR);
-  const targetRoot = path.join(input.toRoot, HIDDEN_T3TEAM_DIR);
+  const sourceRoot = path.join(input.fromRoot, input.sourceDir);
+  const targetRoot = path.join(input.toRoot, input.targetDir);
   const copied: string[] = [];
   if (path.resolve(sourceRoot) === path.resolve(targetRoot)) return copied;
 
@@ -86,9 +96,64 @@ export const migrateProjectStateDir = Effect.fn("migrateProjectStateDir")(functi
         Effect.as(true),
         Effect.orElseSucceed(() => false),
       );
-      if (done) copied.push(segments.join("/"));
+      if (done) {
+        if (
+          input.sourceDir !== input.targetDir &&
+          segments[0] === "context" &&
+          target.endsWith(".json")
+        ) {
+          yield* fileSystem.readFileString(target).pipe(
+            Effect.flatMap((contents) =>
+              fileSystem.writeFileString(
+                target,
+                normalizeProjectContextStateFile(
+                  { relativePath: segments.join("/"), contents },
+                  input.targetDir,
+                ).contents,
+              ),
+            ),
+            Effect.ignore,
+          );
+        }
+        copied.push(segments.join("/"));
+      }
     });
 
   yield* visit([]);
   return copied;
+});
+
+/** One-time additive normalization when a process selects .nexi. The existing target wins;
+ * the source stays intact, including its reference clones and child worktrees. */
+export const ensureNexiProjectStateDir = Effect.fn("ensureNexiProjectStateDir")(function* (
+  workspaceRoot: string,
+) {
+  if (PROJECT_STATE_DIR !== NEXI_PROJECT_STATE_DIR) return [];
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  if (yield* fileSystem.exists(path.join(workspaceRoot, NEXI_PROJECT_STATE_DIR))) return [];
+  if (!(yield* fileSystem.exists(path.join(workspaceRoot, T3TEAM_PROJECT_STATE_DIR)))) return [];
+  const copied = yield* copyProjectStateDir({
+    fromRoot: workspaceRoot,
+    toRoot: workspaceRoot,
+    sourceDir: T3TEAM_PROJECT_STATE_DIR,
+    targetDir: NEXI_PROJECT_STATE_DIR,
+  });
+  yield* fileSystem.makeDirectory(path.join(workspaceRoot, NEXI_PROJECT_STATE_DIR), {
+    recursive: true,
+  });
+  return copied;
+});
+
+export const migrateProjectStateDir = Effect.fn("migrateProjectStateDir")(function* (input: {
+  readonly fromRoot: string;
+  readonly toRoot: string;
+}) {
+  yield* ensureNexiProjectStateDir(input.fromRoot);
+  yield* ensureNexiProjectStateDir(input.toRoot);
+  return yield* copyProjectStateDir({
+    ...input,
+    sourceDir: PROJECT_STATE_DIR,
+    targetDir: PROJECT_STATE_DIR,
+  });
 });

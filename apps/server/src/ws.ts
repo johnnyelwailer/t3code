@@ -107,7 +107,7 @@ import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionRe
 import { T3TeamThreadEngagement } from "./t3team-threadEngagement.ts";
 import { isThreadResubscribeStaggerEnabled } from "./t3team-threadResubscribeStaggerFlag.ts";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
-import { isNexiStateDirEnabled } from "@t3tools/project-context/t3teamProjectStateDir";
+import { isNexiStateDirSelectedAtStartup } from "@t3tools/project-context/t3teamProjectStateDir";
 import { isResourcePressureEnabled } from "./t3team-resourcePressureFlag.ts";
 import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
 import { sweepStorageNow } from "./t3team-resourcePressureSweep.ts";
@@ -1912,7 +1912,7 @@ const makeWsRpcLayer = (
             // Runtime feature flags (env NEXI_FF_MAIN_REPOSITORY / NEXI_FF_NEXI_STATE_DIR,
             // default off): project main repository, and the `.nexi` state dir name.
             mainRepository: isMainRepositoryEnabled(),
-            nexiStateDir: isNexiStateDirEnabled(),
+            nexiStateDir: isNexiStateDirSelectedAtStartup(),
           };
         });
 

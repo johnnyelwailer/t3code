@@ -8,6 +8,7 @@ import * as Effect from "effect/Effect";
 import * as Path from "effect/Path";
 
 import { T3TeamAtlassianError } from "./t3team-atlassian-http.ts";
+import { ensureNexiProjectStateDir } from "./t3team-projectMainRepositoryState.ts";
 
 export type BootstrapWorkspaceRequest = {
   readonly workspaceRoot: string;
@@ -99,13 +100,14 @@ export const normalizeT3TeamWorkspaceRoot = Effect.fn("normalizeT3TeamWorkspaceR
 ) {
   const path = yield* Path.Path;
   const trimmed = workspaceRoot.trim();
-  if (trimmed === "~") {
-    return NodeOS.homedir();
-  }
-  if (trimmed.startsWith("~/") || trimmed.startsWith("~\\")) {
-    return path.join(NodeOS.homedir(), trimmed.slice(2));
-  }
-  return path.resolve(trimmed);
+  const root =
+    trimmed === "~"
+      ? NodeOS.homedir()
+      : trimmed.startsWith("~/") || trimmed.startsWith("~\\")
+        ? path.join(NodeOS.homedir(), trimmed.slice(2))
+        : path.resolve(trimmed);
+  yield* ensureNexiProjectStateDir(root);
+  return root;
 });
 
 function sanitizeSlugSegment(value: string): string {
