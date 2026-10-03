@@ -4,13 +4,13 @@
  *
  * The task-journal tooling was removed from the server: the plan/task feature
  * is provider-native (every provider adapter translates its own todo tool
- * into a `turn.plan.updated` runtime event; the nexplore pack ships its own
- * plan tool and translates it the same way). The separate journal table and
+ * into a `turn.plan.updated` runtime event; a pack that ships its own plan
+ * tool translates it the same way). The separate journal table and
  * its broker tools had no remaining consumer, so the store goes.
  *
  * Ordering matters, and it is enforced by procedure, not by DDL:
- *   1. `apps/server/scripts/t3team-replay-task-records-to-plans.ts` (one-time)
- *      reads
+ *   1. The one-time `t3team-replay-task-records-to-plans.ts` script (removed
+ *      with the V2 port; see git history) read
  *      every live thread's rows from this table and re-records each list as a
  *      `turn.plan.updated` activity through the orchestration engine — the
  *      SAME command path the provider adapters use, so no events are
