@@ -1,8 +1,12 @@
+// @effect-diagnostics preferSchemaOverJson:off - fixtures assert the raw JSON bytes the state migration writes.
 // @effect-diagnostics nodeBuiltinImport:off - filesystem/CAS integration test uses temp disk helpers.
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { it } from "@effect/vitest";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import { describe, expect, vi } from "vite-plus/test";
 import { normalizeProjectContextStateFile } from "./t3team-projectContextStatePaths.ts";
 
 describe("physical context JSON paths", () => {
@@ -47,21 +51,21 @@ describe("physical context JSON paths", () => {
   });
 });
 
-it("persists the browser mirror with physical paths before CAS hashing", async () => {
-  vi.stubEnv("NEXI_FF_NEXI_STATE_DIR", "1");
-  vi.resetModules();
-  const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "nexi-context-mirror-"));
-  try {
-    const [Effect, Layer, NodeServices, persistence, workspace, writer] = await Promise.all([
-      import("effect/Effect"),
-      import("effect/Layer"),
-      import("@effect/platform-node/NodeServices"),
-      import("./persistence/Layers/Sqlite.ts"),
-      import("./workspace/WorkspacePaths.ts"),
-      import("./t3team-project-workspace-context-files.ts"),
-    ]);
-    const result = await Effect.runPromise(
-      writer
+it.effect("persists the browser mirror with physical paths before CAS hashing", () =>
+  Effect.gen(function* () {
+    vi.stubEnv("NEXI_FF_NEXI_STATE_DIR", "1");
+    vi.resetModules();
+    const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "nexi-context-mirror-"));
+    try {
+      const [NodeServices, persistence, workspace, writer] = yield* Effect.promise(() =>
+        Promise.all([
+          import("@effect/platform-node/NodeServices"),
+          import("./persistence/Layers/Sqlite.ts"),
+          import("./workspace/WorkspacePaths.ts"),
+          import("./t3team-project-workspace-context-files.ts"),
+        ]),
+      );
+      const result = yield* writer
         .writeT3TeamWorkspaceContextFiles({
           workspaceRoot: root,
           files: [
@@ -80,22 +84,24 @@ it("persists the browser mirror with physical paths before CAS hashing", async (
               workspace.layer.pipe(Layer.provide(NodeServices.layer)),
             ),
           ),
-        ),
-    );
-    expect(result.writtenFiles).toEqual([
-      ".nexi/context/entrypoint.json",
-      ".nexi/context/manifest.json",
-    ]);
-    const contents = NodeFS.readFileSync(
-      NodePath.join(root, ".nexi/context/entrypoint.json"),
-      "utf8",
-    );
-    expect(JSON.parse(contents).paths.manifest).toBe(".nexi/context/manifest.json");
-    expect(NodeFS.existsSync(NodePath.join(root, JSON.parse(contents).paths.manifest))).toBe(true);
-    expect(NodeFS.existsSync(NodePath.join(root, ".t3team"))).toBe(false);
-  } finally {
-    NodeFS.rmSync(root, { recursive: true, force: true });
-    vi.unstubAllEnvs();
-    vi.resetModules();
-  }
-});
+        );
+      expect(result.writtenFiles).toEqual([
+        ".nexi/context/entrypoint.json",
+        ".nexi/context/manifest.json",
+      ]);
+      const contents = NodeFS.readFileSync(
+        NodePath.join(root, ".nexi/context/entrypoint.json"),
+        "utf8",
+      );
+      expect(JSON.parse(contents).paths.manifest).toBe(".nexi/context/manifest.json");
+      expect(NodeFS.existsSync(NodePath.join(root, JSON.parse(contents).paths.manifest))).toBe(
+        true,
+      );
+      expect(NodeFS.existsSync(NodePath.join(root, ".t3team"))).toBe(false);
+    } finally {
+      NodeFS.rmSync(root, { recursive: true, force: true });
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    }
+  }),
+);

@@ -1,7 +1,9 @@
+// @effect-diagnostics preferSchemaOverJson:off - fixtures assert the raw JSON bytes the state migration writes.
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as PlatformError from "effect/PlatformError";
-import { describe, expect, it } from "vite-plus/test";
+import { it } from "@effect/vitest";
+import { describe, expect } from "vite-plus/test";
 import {
   normalizeReferenceManifestJson,
   readNormalizedReferenceManifest,
@@ -47,41 +49,41 @@ describe("canonical reference manifest normalization", () => {
     }
   });
 
-  it("returns the normalized manifest when the persistence write fails", async () => {
-    const raw = JSON.stringify({
-      metaRepository: { localPath: "/repo", url: " https://github.com/org/repo " },
-      project: "PROJECT",
-    });
-    let writes = 0;
-    const fileSystem = FileSystem.makeNoop({
-      readFileString: () => Effect.succeed(raw),
-      writeFileString: () => {
-        writes += 1;
-        return Effect.fail(
-          PlatformError.systemError({
-            _tag: "PermissionDenied",
-            module: "FileSystem",
-            method: "writeFileString",
-            description: "read-only",
-          }),
-        );
-      },
-    });
-    const normalized = await Effect.runPromise(
-      readNormalizedReferenceManifest(
+  it.effect("returns the normalized manifest when the persistence write fails", () =>
+    Effect.gen(function* () {
+      const raw = JSON.stringify({
+        metaRepository: { localPath: "/repo", url: " https://github.com/org/repo " },
+        project: "PROJECT",
+      });
+      let writes = 0;
+      const fileSystem = FileSystem.makeNoop({
+        readFileString: () => Effect.succeed(raw),
+        writeFileString: () => {
+          writes += 1;
+          return Effect.fail(
+            PlatformError.systemError({
+              _tag: "PermissionDenied",
+              module: "FileSystem",
+              method: "writeFileString",
+              description: "read-only",
+            }),
+          );
+        },
+      });
+      const normalized = yield* readNormalizedReferenceManifest(
         fileSystem,
         "/repo/.t3team/references/reference-repositories.json",
-      ),
-    );
-    expect(writes).toBe(1);
-    expect(JSON.parse(normalized)).toEqual({
-      mainRepository: {
-        localPath: "/repo",
-        url: "https://github.com/org/repo",
-        status: "adopted",
-      },
-      project: "PROJECT",
-    });
-    expect(mainRepositoryFromManifestJson(normalized)?.localPath).toBe("/repo");
-  });
+      );
+      expect(writes).toBe(1);
+      expect(JSON.parse(normalized)).toEqual({
+        mainRepository: {
+          localPath: "/repo",
+          url: "https://github.com/org/repo",
+          status: "adopted",
+        },
+        project: "PROJECT",
+      });
+      expect(mainRepositoryFromManifestJson(normalized)?.localPath).toBe("/repo");
+    }),
+  );
 });
