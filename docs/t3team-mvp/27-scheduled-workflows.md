@@ -10,8 +10,21 @@ does it again).
 
 A routine is just an orchestration that loops on a timer. The thread it runs in _is_ its
 visualization — it mostly sleeps, wakes on its timer, posts what it did, sleeps again.
-There is no "automations panel": a routine is a thread that lives in the sidebar, dormant
-until its next wake.
+A routine has no entry in the automations surface: it is a thread that lives in the
+sidebar, dormant until its next wake.
+
+### Routines vs. scheduled tasks
+
+Upstream T3 Code ships **scheduled tasks** (Settings → Scheduled tasks, and the thread
+details panel's automations section; `apps/server/src/scheduledTasks/ScheduledTaskService.ts`).
+A scheduled task sends one fixed prompt on a recurrence (fixed time or interval) into a bound
+or fresh thread. It has no body, no state across fires and no control flow.
+
+A routine is a workflow body: it branches, keeps state across iterations, asks the user,
+spawns child agents and decides its own next wake. The two stay distinct: use a scheduled
+task when "send this prompt every Monday" is the whole job, and a routine when each fire
+needs logic. Both wake on the same server clock (upstream's `Scheduler`), but neither is
+built on the other, and a routine never appears in the scheduled-task list.
 
 This epic is deliberately small. It builds entirely on Epic 25's durable suspension — a
 run that survives a server restart is the hard part, and it is already shipped (the
@@ -211,14 +224,17 @@ runs on domain events, the scheduler wakes them on the wall clock.
 1. **Own durable wake deadlines.** When a run suspends on `waitUntil`, its wake instant is
    recorded on the run (a `wake_at` column). The scheduler is the index of "which parked
    runs are due, and when."
-2. **Fire at the deadline.** Arm a process timer for the soonest pending `wake_at`
-   (re-arming as runs park/wake). At fire time, for the due run: `appendResolvedEntry` for
-   the wait's correlation id, then `resumeWorkflow` — the exact path the event reactor
-   uses, just clock-triggered instead of event-triggered.
-3. **Re-arm on boot.** In `serverRuntimeStartup`, alongside Epic 25's orchestration-run
-   rehydration, the scheduler queries all runs with a future (or past-due) `wake_at` and
-   re-arms them. This is the durability guarantee: a timer set before a restart still
-   fires after it. A deadline that _passed_ during downtime fires immediately on boot.
+2. **Wake at the deadline.** The wake sweep is a source on upstream's due-work `Scheduler`
+   (one server tick, every 5 s). Each tick reads the `sleeping` runs and, for every due run,
+   resolves the wait's correlation id through the run's resume closure — the exact path the
+   event reactor uses, just clock-triggered instead of event-triggered. Nothing is armed in
+   memory, so there is nothing to re-arm (`t3team-workflowSchedulerSweepLive.ts`).
+3. **Open after boot rehydration.** The sweep stays shut until Epic 25's rehydration has
+   rebuilt every sleeping run's resume closure; rehydration then opens it (the
+   `T3TeamWorkflowScheduler` gate), and opening runs one catch-up pass. This is the durability
+   guarantee: a timer set before a restart still fires after it, and a deadline that _passed_
+   during downtime fires right after boot. A due run whose closure could not be rebuilt
+   (recipe gone) is failed and its launch thread told, instead of being retried every tick.
 
 The scheduler is the only clock authority. Orchestration bodies never read the wall clock to
 decide timing (they read the journaled `now()`); the scheduler reads the real clock and
@@ -261,8 +277,8 @@ next-wake time, distinct from active and input-waiting threads.
 ## Lifecycle operations
 
 - **Run now** — resume the parked run before its `wake_at`.
-- **Pause / resume** — pause clears the scheduler's arming for that run (it stays parked,
-  not woken); resume re-arms it for its `wake_at` (or the next computed one).
+- **Pause / resume** — pause takes the run out of the `sleeping` set, so the sweep skips it
+  (it stays parked, not woken); resume puts it back with its `wake_at`.
 - **Edit cadence** — via composer, _if_ the routine reads its schedule from mutable config
   (see above). A routine that hardcodes its cadence isn't editable without changing the
   orchestration.
@@ -302,7 +318,7 @@ Builds on the shipped Epic 25 engine + durability.
 | Phase | Scope                                                                                                               | Status                                  |
 | ----- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
 | 27.1  | `waitUntil(when)` primitive — journaled deadline, records `wake_at` on the run                                      | Implemented                             |
-| 27.2  | Scheduler service — arm soonest `wake_at`, fire → resume, re-arm on boot (the core new piece)                       | Implemented                             |
+| 27.2  | Scheduler service — sweep due `wake_at` on the server tick → resume, open after boot rehydration (the core piece)   | Implemented                             |
 | 27.3  | `sleeping` status + `wake_at` column + dormant-thread UX (state pill, run history, run-now)                         | Implemented                             |
 | 27.4  | Lifecycle (pause/resume/run-now) + `"schedule"` capability + frequency floor                                        | Implemented                             |
 | 27.5  | [Continue-as-new / journal checkpointing](../runbook/bounded-execution.md) — bounded replay for long-lived routines | Deferred to the bounded-execution track |
@@ -312,9 +328,9 @@ clock, the one-off timer and the routine loop are both just `waitUntil`.
 
 ## Open questions
 
-1. **Scheduler precision vs. cost.** A single soonest-deadline process timer is cheap but
-   needs careful re-arming; a polling loop is simpler but coarse. Decide in 27.2; precision
-   beyond ~1s isn't a requirement for any routine use case here.
+1. **Scheduler precision vs. cost.** Decided: the wake sweep rides the server's 5 s
+   `Scheduler` tick and reads the deadlines from the DB each time. A run wakes at most one
+   tick late, which no routine use case here cares about, and there is no timer to re-arm.
 2. **Editable cadence ergonomics.** "Edit via composer" only works if the loop reads its
    schedule from mutable config. Do not add a v1 SDK helper yet; prove the pattern with a
    couple of real routines, then extract `routineConfig` if duplication appears.

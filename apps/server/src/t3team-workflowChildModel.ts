@@ -15,11 +15,11 @@ import {
 import { fromWorkflowModelSelection } from "./t3team-workflowModelSelection.ts";
 
 /**
- * Resolve a workflow-engine child's model selection (`thread.turn` / `thread.create`) the same
- * way `t3team.thread.start_child` does: validate a cross-provider request against the live
- * provider snapshots rather than blindly mapping `p.model` (which previously accepted any
- * `provider`/`model` string with no check that the instance was configured or the model
- * existed on it).
+ * Resolve a workflow-engine child's model selection (`thread.turn` / `thread.create`) through the
+ * fork's child-turn resolver (`t3team-toolBrokerStartChildProvider.ts`): validate a cross-provider
+ * request against the live provider snapshots rather than blindly mapping `p.model` (which
+ * previously accepted any `provider`/`model` string with no check that the instance was
+ * configured or the model existed on it).
  *
  * `effort` rides along: a provider-agnostic thinking level applied to whichever selection wins,
  * via {@link applyWorkflowEffort} (a no-op when the provider exposes neither a reasoning control

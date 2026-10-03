@@ -4,20 +4,17 @@
  * There is exactly ONE utility-model seam in this repo and this uses it rather than adding a
  * second. What it is, quoted from where it lives:
  *
- *   • `packages/contracts/src/settings.ts:721` — `textGenerationModelSelection: ModelSelection`,
- *     defaulting to `{ instanceId: ProviderInstanceId.make("codex"), model:
- *     DEFAULT_TEXT_GENERATION_MODEL, options: [{ id: "reasoningEffort", ... }] }`. Read here
- *     through `ServerSettingsService.getSettings`, the same way `GitManager.ts:2248` reads it for
- *     commit-message generation and `ProviderCommandReactor.ts:81` reads it as the last step of
- *     its model cascade.
- *   • `apps/server/src/textGeneration/TextGeneration.ts:158` — the optional `generateStructured`
- *     method on the `TextGeneration` service, dispatched per provider instance by
- *     `resolveInstance` (line 227) to `ClaudeTextGeneration` / `CodexTextGeneration` /
- *     `CursorTextGeneration` / `GrokTextGeneration` / `OpenCodeTextGeneration`. Epic 24 names this
- *     pair as the composer's model seam: *"This is the natural pattern to extend, not duplicate."*
+ *   • `textGenerationModelSelection` in the server settings (`packages/contracts/src/settings.ts`),
+ *     read here through `ServerSettingsService.getSettings`, the same way `git/GitManager.ts`
+ *     reads it for commit-message generation and the activity-label reactor reads it for its
+ *     labels. A distribution can configure its default (`t3team-configuredDefaultModelSelection.ts`).
+ *   • The optional `generateStructured` method on the `TextGeneration` service
+ *     (`apps/server/src/textGeneration/TextGeneration.ts`), dispatched per provider instance by
+ *     `resolveInstance`. Epic 24 names this pair as the composer's model seam: *"This is the
+ *     natural pattern to extend, not duplicate."*
  *
  * The same pair already backs the engine's other model call — `generateRepairStructured` in
- * `t3team-toolBrokerWorkflowRunLive.ts:69` — so the composer is the second caller of one path,
+ * `t3team-toolBrokerWorkflowRunLive.ts` — so the composer is the second caller of one path,
  * not a new one. `generateStructured` is optional on the service (a driver may not support it),
  * and both services are resolved with `Effect.serviceOption`, so a host without them yields
  * `undefined` and the composer falls back structurally instead of failing.
