@@ -78,7 +78,9 @@ describe("makeDelegatedChildRecorder", () => {
         },
       ]);
       assert.deepEqual(facts, []);
-      const view = (contexts.get(childThreadId)?.state as { view: Record<string, unknown> }).view;
+      const childContext = contexts.get(childThreadId);
+      assert.ok(childContext);
+      const view = (childContext.state as { view: Record<string, unknown> }).view;
       assert.include(view, {
         kind: "thread",
         threadId: childThreadId,

@@ -1,12 +1,9 @@
 /**
- * This host's implementation of the delegate_task preparation hook
- * (`mcp/t3team-delegatedTaskPreparation.ts`): worktree isolation (linked repo,
- * meta-repo or local repository, plus the project setup script) and the
- * `effort` / `ticketId` / `environment` extensions. Provided once to
- * `OrchestratorMcpService.layer` in `mcp/McpHttpServer.ts`.
- *
- * Side effects after the child exists (`afterCreate`) never fail the
- * delegation: each one degrades to a note in the tool result.
+ * This host's delegate_task preparation hook (`mcp/t3team-delegatedTaskPreparation.ts`):
+ * worktree isolation (linked repo, meta-repo or local repository, plus the project setup
+ * script) and the `effort` / `ticketId` / `environment` extensions. Provided once to
+ * `McpHttpServer.layer` in server.ts. Side effects after the child exists (`afterCreate`)
+ * never fail the delegation: each one degrades to a note in the tool result.
  */
 import { OrchestratorMcpFailure, type ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -27,15 +24,19 @@ import { ProviderRegistry } from "./provider/Services/ProviderRegistry.ts";
 import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
 import { T3TeamChildThreadMetadata } from "./t3team-childThreadMetadata.ts";
 import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
-import { pressureLine } from "./t3team-resourcePressureToolLine.ts";
 import {
   applyDelegationEffort,
+  delegationPressureNotes,
   parseDelegationExtensions,
   resolveEnvironmentBinding,
   T3TEAM_DELEGATION_EXTENSIONS,
 } from "./t3team-delegateTaskExtensions.ts";
 import { makeDelegatedChildRecorder } from "./t3team-delegateTaskRecordChild.ts";
-import { delegatedWorktreeKey, resolveDelegatedWorkspace } from "./t3team-delegateTaskWorkspace.ts";
+import {
+  delegatedWorktreeKey,
+  describeDelegatedWorkspace,
+  resolveDelegatedWorkspace,
+} from "./t3team-delegateTaskWorkspace.ts";
 import { startChildSetupScript } from "./t3team-toolBrokerStartChildContext.ts";
 import { T3TeamThreadToolContextStore } from "./t3team-threadToolContextStore.ts";
 import { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
@@ -54,14 +55,9 @@ const make = Effect.gen(function* () {
   const setupScripts = yield* ProjectSetupScriptRunner;
   const providers = yield* ProviderRegistry;
   const projects = yield* ProjectStoreV2;
-  const pressure = Option.getOrUndefined(yield* Effect.serviceOption(ResourcePressureMonitor));
-  // A spawn adds load: with the pressure feature on, the result carries the host's pressure line.
-  const pressureNotes =
-    pressure?.autoPause === undefined
-      ? Effect.succeed([] as ReadonlyArray<string>)
-      : pressure.report.pipe(
-          Effect.map((report) => (report.snapshot === null ? [] : [pressureLine(report.snapshot)])),
-        );
+  const pressureNotes = delegationPressureNotes(
+    Option.getOrUndefined(yield* Effect.serviceOption(ResourcePressureMonitor)),
+  );
   const workflows = Option.getOrUndefined(
     yield* Effect.serviceOption(T3TeamWorkflowEngineRegistry),
   );
@@ -119,12 +115,7 @@ const make = Effect.gen(function* () {
                 branchSeed: input.title ?? "child",
                 worktreeKey: delegatedWorktreeKey(parentThread.id, input.requestKey),
               }).pipe(Effect.mapError((message) => failure("invalid_request", message)));
-        if (workspace !== undefined) {
-          notes.push(
-            `Child works on branch ${workspace.branch} (from ${workspace.baseRef}` +
-              `${workspace.repository === null ? "" : ` of ${workspace.repository}`}) in ${workspace.worktreePath}.`,
-          );
-        }
+        if (workspace !== undefined) notes.push(describeDelegatedWorkspace(workspace));
         const environment = resolveEnvironmentBinding(
           extensions.environment,
           input.scope.environmentId,

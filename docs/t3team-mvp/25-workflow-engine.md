@@ -261,8 +261,8 @@ await agent("Judge this gate", {
 
 Rules:
 
-- **Availability** is exactly `t3team.thread.start_child`'s definition (same resolver,
-  `resolveStartChildModelSelection`): the instance exists, its driver is available, it is
+- **Availability** uses the shared child model resolver (`resolveStartChildModelSelection`):
+  the instance exists, its driver is available, it is
   installed and enabled, and it owns the requested model. A rung that fails any of these falls
   through — it is a skip, not an error.
 - **Nothing available** → the run's current/default selection is kept. A cascade is a preference

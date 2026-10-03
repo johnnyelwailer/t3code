@@ -41,7 +41,7 @@ export const resolveLocalRepositoryWorktree = (input: {
   readonly repositoryName?: string;
 }) =>
   Effect.gen(function* () {
-    const { fileSystem, path, gitWorkflow, sourceControlProviders } = input.services;
+    const { fileSystem, path, sourceControlProviders } = input.services;
     const workspaceRoot = input.projectWorkspaceRoot;
 
     const provider = yield* sourceControlProviders

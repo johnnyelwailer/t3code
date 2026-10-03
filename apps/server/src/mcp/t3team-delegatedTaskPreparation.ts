@@ -12,7 +12,7 @@
  * The default rejects `workspace.isolation: "worktree"` and every extension
  * key with `invalid_request`, so a host without a registered implementation
  * keeps upstream's behaviour exactly. A host registers ONE implementation by
- * providing this reference to `OrchestratorMcpService.layer` (McpHttpServer.ts).
+ * providing this reference to `McpHttpServer.layer` (server.ts).
  */
 import {
   type ModelSelection,

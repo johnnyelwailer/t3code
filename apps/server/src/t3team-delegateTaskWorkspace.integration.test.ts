@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Integration eval bridges Effect runtimes with real git worktrees. */
 // @effect-diagnostics nodeBuiltinImport:off - temp eval harness uses node git setup helpers.
 /**
  * delegate_task `workspace: { isolation: "worktree" }` against real git

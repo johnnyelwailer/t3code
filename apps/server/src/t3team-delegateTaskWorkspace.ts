@@ -102,3 +102,7 @@ export const delegatedWorktreeKey = (threadId: string, requestKey: string): stri
   }
   return hash.toString(16).padStart(8, "0");
 };
+
+export const describeDelegatedWorkspace = (workspace: DelegatedWorkspaceResolution): string =>
+  `Child works on branch ${workspace.branch} (from ${workspace.baseRef}` +
+  `${workspace.repository === null ? "" : ` of ${workspace.repository}`}) in ${workspace.worktreePath}.`;

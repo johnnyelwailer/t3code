@@ -16,7 +16,11 @@ import {
   type ThreadEnvironmentBinding,
 } from "@t3tools/contracts";
 
+import * as Effect from "effect/Effect";
+
 import type { DelegatedTaskExtensionOption } from "./mcp/t3team-delegatedTaskPreparation.ts";
+import type { ResourcePressureMonitorShape } from "./t3team-resourcePressureMonitor.ts";
+import { pressureLine } from "./t3team-resourcePressureToolLine.ts";
 import { applyWorkflowEffort, effortIsHonored } from "./t3team-workflowEffortOptions.ts";
 
 export const T3TEAM_DELEGATION_EXTENSIONS: ReadonlyArray<DelegatedTaskExtensionOption> = [
@@ -140,3 +144,13 @@ export function resolveEnvironmentBinding(
       "report-back from that child needs a separate channel.",
   };
 }
+
+/** A spawn adds load: with the pressure feature on, the result carries the host's pressure line. */
+export const delegationPressureNotes = (
+  monitor: ResourcePressureMonitorShape | undefined,
+): Effect.Effect<ReadonlyArray<string>> =>
+  monitor?.autoPause === undefined
+    ? Effect.succeed([])
+    : monitor.report.pipe(
+        Effect.map((report) => (report.snapshot === null ? [] : [pressureLine(report.snapshot)])),
+      );

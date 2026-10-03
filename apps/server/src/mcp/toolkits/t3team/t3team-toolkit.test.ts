@@ -130,8 +130,9 @@ it("declares every deprecated orchestration alias with a mapped replacement", ()
   );
 });
 
-for (const { deprecated, current, args } of orchestrationAliasCases) {
-  it.effect(`dispatches ${deprecated} and ${current} to the same broker tool`, () => {
+it.effect.each(orchestrationAliasCases)(
+  "dispatches $deprecated and $current to the same broker tool",
+  ({ deprecated, current, args }) => {
     const calls: Array<string> = [];
     const binding: T3TeamToolBinding = {
       threadId,
@@ -168,8 +169,8 @@ for (const { deprecated, current, args } of orchestrationAliasCases) {
       Effect.provideService(McpSchema.McpServerClient, client),
       Effect.provide(TestLayer),
     );
-  });
-}
+  },
+);
 
 it.effect("routes t3team_recipe_list through the bound broker callTool dispatch", () => {
   const calls: Array<{
