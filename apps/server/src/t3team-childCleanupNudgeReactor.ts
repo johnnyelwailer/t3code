@@ -34,7 +34,7 @@ import { OrchestrationEngineService } from "./orchestration/Services/Orchestrati
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { sessionStatusToWaitOutcome } from "./t3team-childWait.ts";
 import { findHandoffParentThreadId } from "./t3team-childAbnormalStopNotify.ts";
-import { readEventsMatching } from "./orchestration/t3team-eventReplayFilter.ts";
+import { readEventsMatching } from "./t3team-orchestration/t3team-eventReplayFilter.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import {
   buildCleanupNudgeText,

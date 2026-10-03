@@ -34,7 +34,7 @@ export {
   type ChildWaitScheduler,
   type ChildWaitSchedulerDeps,
 } from "./t3team-childWaitScheduler.ts";
-import type { OrchestrationEventReplayFilter } from "./orchestration/t3team-eventReplayFilter.ts";
+import type { OrchestrationEventReplayFilter } from "./t3team-orchestration/t3team-eventReplayFilter.ts";
 export { T3TeamChildWaitReactorLive } from "./t3team-childWaitReactor.ts";
 
 // Re-exported for downstream consumers; also used locally below (rehydration

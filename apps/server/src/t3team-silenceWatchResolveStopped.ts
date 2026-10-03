@@ -7,7 +7,7 @@ import {
   type ThreadSilenceDetectedPayload,
   type ThreadSilenceWatchRecord,
 } from "./t3team-threadSilenceWatch.ts";
-import type { ThreadSilenceActivityState } from "./orchestration/ThreadSilenceWatchdog.ts";
+import type { ThreadSilenceActivityState } from "./t3team-orchestration/t3team-threadSilenceWatchdog.ts";
 import type { TerminalNotifyLedger } from "./t3team-terminalNotifyDedup.ts";
 import type { TerminalNoticeGate } from "./t3team-terminalNoticeGate.ts";
 

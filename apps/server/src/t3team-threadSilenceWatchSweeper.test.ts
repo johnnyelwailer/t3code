@@ -1,7 +1,7 @@
 // @effect-diagnostics globalTimers:off - one test settles an async tick with a real macrotask.
 import { describe, expect, it } from "vite-plus/test";
 
-import { type ThreadSilenceActivityState } from "./orchestration/ThreadSilenceWatchdog.ts";
+import { type ThreadSilenceActivityState } from "./t3team-orchestration/t3team-threadSilenceWatchdog.ts";
 import { type ThreadSilenceWatchRecord } from "./t3team-threadSilenceWatch.ts";
 import { makeThreadSilenceWatchIndex } from "./t3team-threadSilenceWatchIndex.ts";
 import {

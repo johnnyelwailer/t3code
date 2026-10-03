@@ -25,7 +25,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
-import type { OrchestrationEventReplayFilter } from "./orchestration/t3team-eventReplayFilter.ts";
+import type { OrchestrationEventReplayFilter } from "./t3team-orchestration/t3team-eventReplayFilter.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 
 /** One notified terminal state: its trigger sequence and the observed thread's last resume. */

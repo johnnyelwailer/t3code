@@ -14,7 +14,7 @@ import * as Stream from "effect/Stream";
 import {
   matchesEventReplayFilters,
   type OrchestrationEventReplayFilter,
-} from "../../orchestration/t3team-eventReplayFilter.ts";
+} from "../../t3team-orchestration/t3team-eventReplayFilter.ts";
 import { OrchestrationEventStore } from "../Services/OrchestrationEventStore.ts";
 import { OrchestrationEventStoreLive } from "./OrchestrationEventStore.ts";
 import { SqlitePersistenceMemory } from "./Sqlite.ts";

@@ -33,7 +33,7 @@ import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
 import { summarizeActorMessageForDelivery } from "./t3team-actorReactionInputSummarize.ts";
 import { renderAutomatedBurstBlock, splitAutomatedBurst } from "./t3team-actorBurstFold.ts";
 import { loadT3TeamThreadDescendants } from "./t3team-threadStopCascade.ts";
-import type { OrchestrationEventReplayFilter } from "./orchestration/t3team-eventReplayFilter.ts";
+import type { OrchestrationEventReplayFilter } from "./t3team-orchestration/t3team-eventReplayFilter.ts";
 
 /**
  * A child thread that was still running when the server stopped and is now

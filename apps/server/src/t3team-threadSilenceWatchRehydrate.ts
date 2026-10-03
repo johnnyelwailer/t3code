@@ -20,7 +20,7 @@ import type { OrchestrationEngineShape } from "./orchestration/Services/Orchestr
 import {
   readEventsMatching,
   type OrchestrationEventReplayFilter,
-} from "./orchestration/t3team-eventReplayFilter.ts";
+} from "./t3team-orchestration/t3team-eventReplayFilter.ts";
 import type { TerminalNotifyLedger } from "./t3team-terminalNotifyDedup.ts";
 import type { ThreadSilenceWatchEmitter } from "./t3team-threadSilenceWatchEmitTypes.ts";
 

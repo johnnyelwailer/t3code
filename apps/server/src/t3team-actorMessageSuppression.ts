@@ -17,7 +17,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import type { T3TeamActorMailboxShape } from "./t3team-actorMailbox.ts";
 import { loadT3TeamThreadDescendants } from "./t3team-threadStopCascade.ts";
-import type { OrchestrationEventReplayFilter } from "./orchestration/t3team-eventReplayFilter.ts";
+import type { OrchestrationEventReplayFilter } from "./t3team-orchestration/t3team-eventReplayFilter.ts";
 
 export function isRealUserMessage(
   payload: Extract<OrchestrationEvent, { type: "thread.message-sent" }>["payload"],

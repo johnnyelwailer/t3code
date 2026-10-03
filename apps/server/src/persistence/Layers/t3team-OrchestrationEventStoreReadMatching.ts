@@ -6,7 +6,7 @@ import * as Stream from "effect/Stream";
 import type * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as SqlSchema from "effect/unstable/sql/SqlSchema";
 
-import type { OrchestrationEventReplayFilter } from "../../orchestration/t3team-eventReplayFilter.ts";
+import type { OrchestrationEventReplayFilter } from "../../t3team-orchestration/t3team-eventReplayFilter.ts";
 import {
   toPersistenceDecodeError,
   toPersistenceSqlError,

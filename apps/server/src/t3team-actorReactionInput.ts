@@ -26,7 +26,7 @@ import {
   buildActorReactionHeaderSingleInput,
   buildActorReactionInput,
 } from "./t3team-actorReactionFraming.ts";
-import type { OrchestrationEventReplayFilter } from "./orchestration/t3team-eventReplayFilter.ts";
+import type { OrchestrationEventReplayFilter } from "./t3team-orchestration/t3team-eventReplayFilter.ts";
 
 export {
   buildActorReactionCompressedInput,

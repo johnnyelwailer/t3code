@@ -4,7 +4,7 @@ import * as Stream from "effect/Stream";
 
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import type { T3TeamActorMailboxShape } from "./t3team-actorMailbox.ts";
-import { readEventsMatching } from "./orchestration/t3team-eventReplayFilter.ts";
+import { readEventsMatching } from "./t3team-orchestration/t3team-eventReplayFilter.ts";
 import {
   collectStaleSessionThreadIdsAtRehydrate,
   STALE_SESSION_REPLAY_FILTERS,

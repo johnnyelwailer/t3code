@@ -43,7 +43,7 @@ import {
   type ProjectionSnapshotQueryShape,
 } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { type OrchestrationEventStoreError } from "./persistence/Errors.ts";
-import { readEventsMatching } from "./orchestration/t3team-eventReplayFilter.ts";
+import { readEventsMatching } from "./t3team-orchestration/t3team-eventReplayFilter.ts";
 import {
   collectPendingChildWaits,
   PENDING_CHILD_WAIT_REPLAY_FILTERS,

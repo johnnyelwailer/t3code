@@ -4,7 +4,7 @@ import type * as Effect from "effect/Effect";
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import type { ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import type { ThreadBackgroundLiveness } from "./orchestration/ThreadBackgroundLiveness.ts";
-import type { ThreadSilenceActivityState } from "./orchestration/ThreadSilenceWatchdog.ts";
+import type { ThreadSilenceActivityState } from "./t3team-orchestration/t3team-threadSilenceWatchdog.ts";
 import type { TerminalNotifyLedger } from "./t3team-terminalNotifyDedup.ts";
 import type { TerminalNoticeGate } from "./t3team-terminalNoticeGate.ts";
 import type { ThreadSilenceWatchRecord } from "./t3team-threadSilenceWatch.ts";

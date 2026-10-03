@@ -14,7 +14,7 @@
  */
 import { type OrchestrationEvent } from "@t3tools/contracts";
 import { stateOfShell, type SettleSweepShellLike } from "./t3team-childSettleSweeper.ts";
-import type { OrchestrationEventReplayFilter } from "./orchestration/t3team-eventReplayFilter.ts";
+import type { OrchestrationEventReplayFilter } from "./t3team-orchestration/t3team-eventReplayFilter.ts";
 
 /** Default nudge threshold: 10 unsettled terminal children. */
 export const CHILD_CLEANUP_NUDGE_AT = 10;

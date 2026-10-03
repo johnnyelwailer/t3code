@@ -26,7 +26,7 @@ import {
   type ThreadSilenceWatchRecord,
 } from "./t3team-threadSilenceWatch.ts";
 import { type ThreadSilenceWatchIndex } from "./t3team-threadSilenceWatchIndex.ts";
-import { type ThreadSilenceActivityState } from "./orchestration/ThreadSilenceWatchdog.ts";
+import { type ThreadSilenceActivityState } from "./t3team-orchestration/t3team-threadSilenceWatchdog.ts";
 
 export interface ThreadSilenceWatchClock {
   readonly now: () => number;
