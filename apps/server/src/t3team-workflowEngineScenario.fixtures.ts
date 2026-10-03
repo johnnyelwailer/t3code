@@ -23,10 +23,10 @@ import { createWorkflowStubThread, seedWorkflowStubProject } from "./t3team-work
 export const SCENARIO_ISO = "2026-10-03T00:00:00.000Z";
 
 /** Poll an observe-only predicate (never resolves an ask) until it holds or times out. */
-export const waitUntil = (
-  predicate: () => boolean | Effect.Effect<boolean>,
+export const waitUntil = <E = never, R = never>(
+  predicate: () => boolean | Effect.Effect<boolean, E, R>,
   label: string,
-): Effect.Effect<void> =>
+): Effect.Effect<void, E, R> =>
   Effect.gen(function* () {
     for (let i = 0; i < 2000; i += 1) {
       const result = predicate();

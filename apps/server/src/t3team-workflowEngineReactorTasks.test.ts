@@ -1,239 +1,251 @@
 /**
- * The reactor's settle rules for a `thread.turn` ask whose provider turn FAILED (GHE #403 §1):
- *   • a durable ask — live or rehydrated — goes to the bounded re-drive with the provider's error;
- *   • a live (black-boxed composition) ask settles with "" so the composition's own check fires;
- *   • a silent turn on a live durable ask still fails the run outright (unchanged).
- * Driven through the production task handler with the REAL registry + turn tracker and a
- * recording stand-in for the re-drive.
+ * The reactor's settle rules, driven through the production task handler with the REAL registry,
+ * scripted V2 thread records, and a recording stand-in for the re-drive:
+ *   • a step settles only when the run its prompt started has ENDED, with that run's answer;
+ *   • a run that ended without completing re-drives a durable ask (live or rehydrated) with the
+ *     provider's error; a live composition ask settles with "" so its own check fires;
+ *   • a silent completed run fails a live durable ask outright, re-drives a rehydrated one;
+ *   • an `askUser` settles on a PERSON's message — not a widget action, not a reply pinned to
+ *     another ask, not server-written text.
  */
 import { assert, it } from "@effect/vitest";
-import { CommandId, EventId, type OrchestrationEvent, ThreadId, TurnId } from "@t3tools/contracts";
+import { MessageId, withT3TeamMessageExtContext } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
-import {
-  createWorkflowReactorTaskHandler,
-  type ThreadSessionSetEvent,
-} from "./t3team-workflowEngineReactorTasks.ts";
+import { createWorkflowReactorTaskHandler } from "./t3team-workflowEngineReactorTasks.ts";
 import {
   makeWorkflowEngineRegistry,
   type WorkflowPendingAsk,
   type WorkflowRegisteredRun,
 } from "./t3team-workflowEngineRegistry.ts";
 import { type InterruptedTurnRetry, NO_TEXT_MESSAGE } from "./t3team-workflowEngineTurnRetry.ts";
-import { createWorkflowTurnTracker } from "./t3team-workflowTurnResolution.ts";
+import type { WorkflowTurnReads } from "./t3team-workflowTurnState.ts";
+import {
+  failureItem,
+  message,
+  records,
+  STEP_THREAD as THREAD,
+  STEP_PROMPT as PROMPT,
+  AT,
+  v2Run,
+} from "./t3team-workflowTurnRecords.fixtures.ts";
 
-const THREAD = "child-thread";
 const RUN = "run-1";
 const STEP = `${RUN}:2`;
-const ISO = "2026-09-03T00:00:00.000Z";
-
-let sequence = 0;
-function sessionSet(input: {
-  readonly status: "running" | "ready" | "error";
-  readonly activeTurnId: string | null;
-  readonly lastError?: string | null;
-}): ThreadSessionSetEvent {
-  sequence += 1;
-  const event: OrchestrationEvent = {
-    type: "thread.session-set",
-    sequence,
-    eventId: EventId.make(`evt-${sequence}`),
-    aggregateKind: "thread",
-    aggregateId: ThreadId.make(THREAD),
-    occurredAt: ISO,
-    commandId: CommandId.make(`cmd-${sequence}`),
-    causationEventId: null,
-    correlationId: CommandId.make(`cmd-${sequence}`),
-    metadata: {},
-    payload: {
-      threadId: ThreadId.make(THREAD),
-      session: {
-        threadId: ThreadId.make(THREAD),
-        status: input.status,
-        providerName: "stub",
-        runtimeMode: "full-access",
-        activeTurnId: input.activeTurnId === null ? null : TurnId.make(input.activeTurnId),
-        lastError: input.lastError ?? null,
-        updatedAt: ISO,
-      },
-    },
-  };
-  return event as ThreadSessionSetEvent;
-}
-
-function harness() {
+const setup = (
+  pending: Omit<WorkflowPendingAsk, "runId" | "correlationId" | "kind">,
+  threads: WorkflowTurnReads,
+) => {
   const registry = makeWorkflowEngineRegistry();
-  const tracker = createWorkflowTurnTracker();
-  const failed: unknown[] = [];
-  const resumed: Array<{ correlationId: string; reply: unknown }> = [];
-  const redriven: Array<{ kind: "no-text" | "failed"; error?: string }> = [];
-  const settles: Array<{ threadId: string; correlationId: string }> = [];
+  const calls: string[] = [];
   const run: WorkflowRegisteredRun = {
-    resume: (correlationId, reply) => {
-      resumed.push({ correlationId, reply });
-      return Promise.resolve();
-    },
+    resume: async (_correlationId, reply) => void calls.push(`resume:${JSON.stringify(reply)}`),
     cancel: () => {},
-    fail: (error) => {
-      failed.push(error);
-      return Promise.resolve();
-    },
+    fail: async (error) =>
+      void calls.push(`fail:${error instanceof Error ? error.message : error}`),
   };
   registry.registerRun(RUN, run);
+  registry.setPending(THREAD, { runId: RUN, correlationId: STEP, kind: "thread.turn", ...pending });
   const turnRetry: InterruptedTurnRetry = {
-    settleNoText: () => {
-      redriven.push({ kind: "no-text" });
-      return Effect.void;
-    },
-    settleFailedTurn: (_threadId, _pending, _run, error) => {
-      redriven.push({ kind: "failed", error });
-      return Effect.void;
-    },
+    settleFailedTurn: (_threadId, _pending, _run, error) =>
+      Effect.sync(() => void calls.push(`redrive-failed:${error}`)),
+    settleNoText: () => Effect.sync(() => void calls.push("redrive-silent")),
     processTurnRetry: () => Effect.void,
   };
+  const attributed: string[] = [];
   const handle = createWorkflowReactorTaskHandler({
     registry,
-    tracker,
-    armSettle: (threadId, correlationId) => {
-      settles.push({ threadId, correlationId });
-      return Effect.void;
-    },
+    threads,
     turnRetry,
+    attributeAnswer: ({ messageId }) => Effect.sync(() => void attributed.push(messageId)),
   });
-  // Fold the events in, then run the settle the handler armed (in production it fires after
-  // the grace window on the same serial lane).
-  const drive = (events: ReadonlyArray<ThreadSessionSetEvent>) =>
-    Effect.gen(function* () {
-      for (const event of events) yield* handle({ kind: "event", event });
-      for (const settle of settles.splice(0)) yield* handle({ kind: "settle", ...settle });
-    });
-  return { registry, run, failed, resumed, redriven, drive };
-}
+  return { registry, calls, attributed, handle };
+};
 
-const liveAsk: WorkflowPendingAsk = { runId: RUN, correlationId: STEP, kind: "thread.turn" };
-
-it.effect("re-drives a live durable ask with the provider's error instead of failing the run", () =>
+it.effect("waits while the step's run is still running", () =>
   Effect.gen(function* () {
-    const h = harness();
-    h.registry.setPending(THREAD, liveAsk);
-
-    yield* h.drive([
-      sessionSet({ status: "running", activeTurnId: "turn-1" }),
-      sessionSet({ status: "error", activeTurnId: null, lastError: "Request timed out" }),
-    ]);
-
-    assert.deepStrictEqual(h.redriven, [{ kind: "failed", error: "Request timed out" }]);
-    assert.deepStrictEqual(h.failed, []);
-    assert.deepStrictEqual(h.resumed, []);
+    const { handle, calls, registry } = setup(
+      { promptMessageId: PROMPT },
+      records({ run: v2Run("running") }),
+    );
+    yield* handle({ kind: "check", threadId: THREAD });
+    assert.deepStrictEqual(calls, []);
+    assert.isDefined(registry.peekPending(THREAD));
   }),
 );
 
-it.effect("re-drives when the session dies before the turn ever started (gateway down)", () =>
+it.effect("settles with the ended run's final answer and attributes it", () =>
   Effect.gen(function* () {
-    const h = harness();
-    h.registry.setPending(THREAD, liveAsk);
+    const done = { ...v2Run("completed"), completedAt: AT };
+    const { handle, calls, attributed, registry } = setup(
+      {
+        promptMessageId: PROMPT,
+        author: { kind: "workflow", workflowRunId: RUN, stepId: STEP, label: "Write" },
+      },
+      records({ run: done, messages: [message({ role: "assistant", text: "The answer." })] }),
+    );
+    yield* handle({ kind: "check", threadId: THREAD });
+    assert.deepStrictEqual(calls, ['resume:"The answer."']);
+    assert.deepStrictEqual(attributed, ["m-The answer."]);
+    assert.isUndefined(registry.peekPending(THREAD));
+  }),
+);
 
-    yield* h.drive([
-      sessionSet({ status: "error", activeTurnId: null, lastError: "ECONNREFUSED" }),
-    ]);
+it.effect("re-drives a live durable ask with the provider's error when its run failed", () =>
+  Effect.gen(function* () {
+    const { handle, calls } = setup(
+      { promptMessageId: PROMPT },
+      records({ run: v2Run("failed"), turnItems: [failureItem("Gateway Timeout")] }),
+    );
+    yield* handle({ kind: "check", threadId: THREAD });
+    assert.deepStrictEqual(calls, ["redrive-failed:Gateway Timeout"]);
+  }),
+);
 
-    assert.deepStrictEqual(h.redriven, [{ kind: "failed", error: "ECONNREFUSED" }]);
-    assert.deepStrictEqual(h.failed, []);
+it.effect("re-drives a step whose run was interrupted before it completed", () =>
+  Effect.gen(function* () {
+    const { handle, calls } = setup(
+      { promptMessageId: PROMPT },
+      records({ run: v2Run("interrupted") }),
+    );
+    yield* handle({ kind: "check", threadId: THREAD });
+    assert.strictEqual(calls.length, 1);
+    assert.include(calls[0], "redrive-failed:The agent turn ended before it completed");
   }),
 );
 
 it.effect("settles a live composition ask with an empty reply so its own check fires", () =>
   Effect.gen(function* () {
-    const h = harness();
     const live: unknown[] = [];
-    h.registry.setPending(THREAD, {
-      runId: RUN,
-      correlationId: `${RUN}:blackbox:1`,
-      kind: "thread.turn",
-      resolveLive: (reply) => {
-        live.push(reply);
-        return Promise.resolve();
-      },
-    });
-
-    yield* h.drive([
-      sessionSet({ status: "running", activeTurnId: "turn-1" }),
-      sessionSet({ status: "error", activeTurnId: null, lastError: "gateway 502" }),
-    ]);
-
+    const { handle, calls } = setup(
+      { promptMessageId: PROMPT, resolveLive: async (reply) => void live.push(reply) },
+      records({ run: v2Run("failed") }),
+    );
+    yield* handle({ kind: "check", threadId: THREAD });
     assert.deepStrictEqual(live, [""]);
-    assert.deepStrictEqual(h.redriven, []);
-    assert.deepStrictEqual(h.failed, []);
+    assert.deepStrictEqual(calls, []);
   }),
 );
 
-it.effect("still fails the run outright when a live turn merely says nothing (unchanged)", () =>
+it.effect("fails the run outright when a live step's run completes silent", () =>
   Effect.gen(function* () {
-    const h = harness();
-    h.registry.setPending(THREAD, liveAsk);
-
-    yield* h.drive([
-      sessionSet({ status: "running", activeTurnId: "turn-1" }),
-      sessionSet({ status: "ready", activeTurnId: null }),
-    ]);
-
-    assert.deepStrictEqual(h.redriven, []);
-    assert.strictEqual(h.failed.length, 1);
-    assert.strictEqual((h.failed[0] as Error).message, NO_TEXT_MESSAGE);
+    const { handle, calls } = setup(
+      { promptMessageId: PROMPT },
+      records({ run: v2Run("completed") }),
+    );
+    yield* handle({ kind: "check", threadId: THREAD });
+    assert.deepStrictEqual(calls, [`fail:${NO_TEXT_MESSAGE}`]);
   }),
 );
 
-it.effect(
-  "ignores the dead session's tail writes while a re-drive is armed, then judges the new turn",
-  () =>
-    Effect.gen(function* () {
-      const h = harness();
-      // What scheduleRedrive leaves behind: the same ask, budget spent once, re-drive armed.
-      h.registry.setPending(THREAD, { ...liveAsk, turnRetries: 1, redriveArmed: true });
-
-      // The session-level transient retry's "Retrying (1/3) — …" note: status still `error`,
-      // no live turn. Must NOT count as another failed turn.
-      yield* h.drive([
-        sessionSet({ status: "error", activeTurnId: null, lastError: "Retrying (1/3) — timeout" }),
-      ]);
-      assert.deepStrictEqual(h.redriven, []);
-      assert.strictEqual(h.registry.peekPending(THREAD)?.redriveArmed, true);
-
-      // The re-driven turn starts, then dies for real: THAT is the next verdict.
-      yield* h.drive([
-        sessionSet({ status: "running", activeTurnId: "turn-2" }),
-        sessionSet({ status: "error", activeTurnId: null, lastError: "Request timed out" }),
-      ]);
-      assert.deepStrictEqual(h.redriven, [{ kind: "failed", error: "Request timed out" }]);
-    }),
-);
-
-it.effect("a runtime error that keeps the dead turn's id on the session still fails the step", () =>
+it.effect("re-drives a rehydrated ask that ended silent, finding its prompt by author stamp", () =>
   Effect.gen(function* () {
-    const h = harness();
-    h.registry.setPending(THREAD, liveAsk);
-
-    yield* h.drive([
-      sessionSet({ status: "running", activeTurnId: "turn-1" }),
-      sessionSet({ status: "error", activeTurnId: "turn-1", lastError: "provider crashed" }),
-    ]);
-
-    assert.deepStrictEqual(h.redriven, [{ kind: "failed", error: "provider crashed" }]);
-    assert.deepStrictEqual(h.failed, []);
+    const prompt = message({
+      id: MessageId.make(PROMPT),
+      runId: null,
+      role: "user",
+      text: "Write it.",
+      createdBy: "system",
+      creationSource: "server",
+      context: withT3TeamMessageExtContext({
+        author: { kind: "workflow", workflowRunId: RUN, stepId: STEP, label: "Write" },
+      })!,
+    });
+    const { handle, calls } = setup(
+      { turnRetries: 0 },
+      records({ run: v2Run("completed"), messages: [prompt] }),
+    );
+    yield* handle({ kind: "check", threadId: THREAD });
+    assert.deepStrictEqual(calls, ["redrive-silent"]);
   }),
 );
 
-it.effect("re-drives a rehydrated ask that says nothing (unchanged)", () =>
+it.effect("skips a step whose re-drive is already scheduled", () =>
   Effect.gen(function* () {
-    const h = harness();
-    h.registry.setPending(THREAD, { ...liveAsk, turnRetries: 0 });
+    const { handle, calls } = setup(
+      { promptMessageId: PROMPT, redriveScheduled: true },
+      records({ run: v2Run("failed") }),
+    );
+    yield* handle({ kind: "check", threadId: THREAD });
+    assert.deepStrictEqual(calls, []);
+  }),
+);
 
-    yield* h.drive([
-      sessionSet({ status: "running", activeTurnId: "turn-1" }),
-      sessionSet({ status: "ready", activeTurnId: null }),
-    ]);
+const userInput = () => {
+  const ctx = setup({}, records({}));
+  ctx.registry.setPending(THREAD, { runId: RUN, correlationId: STEP, kind: "user.input" });
+  return ctx;
+};
 
-    assert.deepStrictEqual(h.redriven, [{ kind: "no-text" }]);
-    assert.deepStrictEqual(h.failed, []);
+it.effect("an askUser settles on the next message a person posts", () =>
+  Effect.gen(function* () {
+    const { handle, calls, registry } = userInput();
+    const reply = message({
+      role: "user",
+      text: '{"merge":true}',
+      createdBy: "user",
+      creationSource: "web",
+    });
+    yield* handle({ kind: "user-message", threadId: THREAD, message: reply });
+    assert.deepStrictEqual(calls, ['resume:"{\\"merge\\":true}"']);
+    assert.isUndefined(registry.peekPending(THREAD));
+  }),
+);
+
+it.effect("a widget action, server text, or a reply pinned to another ask never answers", () =>
+  Effect.gen(function* () {
+    const { handle, calls, registry } = userInput();
+    const person = {
+      role: "user" as const,
+      createdBy: "user" as const,
+      creationSource: "web" as const,
+    };
+    yield* handle({
+      kind: "user-message",
+      threadId: THREAD,
+      message: message({
+        ...person,
+        text: "Approve",
+        context: withT3TeamMessageExtContext({
+          widgetReply: { widgetId: "w", widgetTitle: "Release" },
+        })!,
+      }),
+    });
+    yield* handle({
+      kind: "user-message",
+      threadId: THREAD,
+      message: message({
+        role: "user",
+        text: "framing",
+        createdBy: "system",
+        creationSource: "server",
+      }),
+    });
+    yield* handle({
+      kind: "user-message",
+      threadId: THREAD,
+      message: message({
+        ...person,
+        text: "old",
+        context: withT3TeamMessageExtContext({
+          workflowReply: { value: true, correlationId: `${RUN}:1` },
+        })!,
+      }),
+    });
+    assert.deepStrictEqual(calls, []);
+    assert.strictEqual(registry.peekPending(THREAD)?.kind, "user.input");
+
+    yield* handle({
+      kind: "user-message",
+      threadId: THREAD,
+      message: message({
+        ...person,
+        text: "Approve",
+        context: withT3TeamMessageExtContext({
+          workflowReply: { value: "approve", correlationId: STEP },
+        })!,
+      }),
+    });
+    assert.deepStrictEqual(calls, ['resume:"approve"']);
   }),
 );
