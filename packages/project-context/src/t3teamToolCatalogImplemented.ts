@@ -4,103 +4,6 @@ import {
   T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION,
 } from "./t3teamWidgetGuidance.ts";
 
-const START_CHILD_INPUT_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    name: {
-      type: "string",
-      description: "Name for the new child session.",
-      minLength: 1,
-    },
-    isolation: {
-      type: "string",
-      description:
-        "Required. Where the child works: 'shared' = the project's shared checkout, no new branch or worktree (planning, triage, synthesis, read-only review); 'own-worktree' = a dedicated branch + worktree (implementation, debugging, tests, PR work). With 'own-worktree', pass 'repo_full_name' when the project has linked repos; in a local workspace omit it to isolate in the local repository.",
-      enum: ["shared", "own-worktree"],
-    },
-    execution_scope: {
-      type: "string",
-      description:
-        "Deprecated alias for 'isolation' ('metarepo' maps to 'shared', 'repository' maps to 'own-worktree'). Use 'isolation' instead; do not pass both.",
-      enum: ["metarepo", "repository"],
-    },
-    ticket_id: {
-      type: "string",
-      description:
-        "Optional project ticket ID to attach the child session to. When this differs from the current ticket, the new session is attached directly under that ticket instead of nesting under the current thread.",
-      minLength: 1,
-    },
-    kickoff_prompt: {
-      type: "string",
-      description: "Optional first prompt sent to the child session.",
-      minLength: 1,
-    },
-    kickoff_mode: {
-      type: "string",
-      description:
-        "Optional kickoff style. 'plan' maps to plan mode; 'interactive' and 'autopilot' currently map to the default interaction mode.",
-      enum: ["plan", "interactive", "autopilot"],
-    },
-    provider: {
-      type: "string",
-      description:
-        "Optional provider INSTANCE id for cross-provider routing. Read it from t3team.runtime.models immediately before the call; never use a driver family or guessed id.",
-      minLength: 1,
-    },
-    model: {
-      type: "string",
-      description:
-        "Optional exact model slug override for the child session. Prefer omitting this to inherit; otherwise read the slug from t3team.runtime.models for the selected provider instance.",
-      minLength: 1,
-    },
-    reasoning_effort: {
-      type: "string",
-      description:
-        "Optional PROVIDER-SPECIFIC reasoning effort override for the child session. Prefer the provider-agnostic 'effort' unless you need this exact value; 'reasoning_effort' wins when both are given.",
-      enum: ["low", "medium", "high"],
-    },
-    effort: {
-      type: "string",
-      description:
-        "Optional provider-agnostic thinking tier for the child session. Ask for a tier without naming a provider or model: it is mapped onto whatever reasoning control the resolved provider/model exposes, and is ignored when it exposes none.",
-      enum: ["light", "standard", "high"],
-    },
-    repo_full_name: {
-      type: "string",
-      description:
-        "Optional, only with isolation='own-worktree'. Linked repository to open in a fresh scoped worktree, for example 'owner/repo' or 'github.com/owner/repo'. Required in projects that have linked repos; omit it in a local workspace (no linked repos) to isolate the child in a worktree of the local repository instead.",
-      minLength: 1,
-    },
-    repo_ref: {
-      type: "string",
-      description:
-        "Optional branch, tag, or commit to use as the base ref for the child's worktree (linked or local). Only valid with isolation='own-worktree'. When omitted, the repository default branch is used.",
-      minLength: 1,
-    },
-    environment: {
-      type: "object",
-      additionalProperties: false,
-      description:
-        "Optional execution environment to bind the child session to — a DIFFERENT T3 server than this one. Omit to keep the child in this environment (the default). The thread record and handoff are stamped with the target environment, and the launch result carries an environment_note documenting the delivery boundary: inter-agent messaging (send_message, mailbox, children ops) only reaches threads in THIS environment, so report-back from a cross-environment child needs a separate channel.",
-      properties: {
-        id: {
-          type: "string",
-          description: "EnvironmentId of the target environment (a non-empty string).",
-          minLength: 1,
-        },
-        label: {
-          type: "string",
-          description: "Optional human-readable name of the target environment.",
-          minLength: 1,
-        },
-      },
-      required: ["id"],
-    },
-  },
-  required: ["name", "isolation"],
-} as const;
-
 const BACKLOG_SET_ASSIGNEE_FILTER_INPUT_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -205,21 +108,6 @@ const ASK_USER_INPUT_SCHEMA = {
 } as const;
 
 export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
-  "t3team.runtime.models": {
-    id: "t3team.runtime.models",
-    label: "List runtime models",
-    title: "List live provider instances and models",
-    description:
-      "Read the current thread's true model selection and every provider instance/model from " +
-      "the live ProviderRegistry snapshots. Call this before naming an exact provider or model " +
-      "in start_child or an orchestration; never guess ids from examples or a static list.",
-    capabilities: ["read"],
-    kind: "read",
-    surfaces: ["thread"],
-    status: "implemented",
-    defaultEnabled: true,
-    inputSchema: EMPTY_OBJECT_INPUT_SCHEMA,
-  },
   "t3team.runtime.provider_usage": {
     id: "t3team.runtime.provider_usage",
     label: "Read provider usage limits",
@@ -238,7 +126,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
         provider_instance_id: {
           type: "string",
           description:
-            "Optional provider INSTANCE id (as returned by t3team.runtime.models). Omit to list every enabled instance and hub account.",
+            "Optional provider INSTANCE id (as listed by orchestrator_capabilities). Omit to list every enabled instance and hub account.",
         },
       },
     },
@@ -469,29 +357,6 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       required: ["runId"],
     },
   },
-  "t3team.thread.rename": {
-    id: "t3team.thread.rename",
-    label: "Rename thread",
-    title: "Rename current thread",
-    description: "Rename the current thread in t3team.",
-    capabilities: ["write"],
-    kind: "thread",
-    surfaces: ["thread"],
-    status: "implemented",
-    defaultEnabled: true,
-    inputSchema: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        title: {
-          type: "string",
-          description: "New thread title.",
-          minLength: 1,
-        },
-      },
-      required: ["title"],
-    },
-  },
   "t3team.thread.search": {
     id: "t3team.thread.search",
     label: "Search this thread",
@@ -564,7 +429,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     label: "Search fork source thread",
     title: "Search the fork source thread",
     description:
-      "Search the FULL transcript of the thread this thread was forked from — its messages and its tool activity — including the middle a truncated fork omitted. Only works in a forked thread. Pass a case-insensitive 'query' substring; a multi-word query that matches nothing verbatim is retried requiring every word (reported as matchMode). Newest matches come first unless 'order' is 'oldest'. Page with 'offset' when the result reports hasMore. Narrow with 'scope'. Each match carries its 1-based position within its own stream, a snippet around the match, and either message_id or activity_id.",
+      "Search the FULL transcript of the thread this thread was forked from — its messages and its tool activity — including details the fork's compacted handoff left out. Only works in a forked thread. Pass a case-insensitive 'query' substring; a multi-word query that matches nothing verbatim is retried requiring every word (reported as matchMode). Newest matches come first unless 'order' is 'oldest'. Page with 'offset' when the result reports hasMore. Narrow with 'scope'. Each match carries its 1-based position within its own stream, a snippet around the match, and either message_id or activity_id.",
     capabilities: ["read"],
     kind: "thread",
     surfaces: ["thread"],
@@ -641,32 +506,18 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     defaultEnabled: true,
     inputSchema: ASK_USER_INPUT_SCHEMA,
   },
-  "t3team.thread.start_child": {
-    id: "t3team.thread.start_child",
-    label: "Start child session",
-    title: "Start child session",
-    description:
-      "Create a child t3team session from the current thread and optionally start it immediately. isolation is required: 'shared' keeps the child in the project's shared checkout without repo_full_name; 'own-worktree' prepares a dedicated scoped worktree — of the linked repository named by repo_full_name when the project has linked repos, or of the local repository when it does not. Optional 'environment' binds the child session to a DIFFERENT execution environment (another T3 server): the record and handoff are stamped with it, but inter-agent messaging stays same-environment (the launch result's environment_note documents that boundary).",
-    capabilities: ["write"],
-    kind: "thread",
-    surfaces: ["thread"],
-    status: "implemented",
-    defaultEnabled: true,
-    inputSchema: START_CHILD_INPUT_SCHEMA,
-  },
   "t3team.thread.children": {
     id: "t3team.thread.children",
-    label: "Manage child sessions",
-    title: "Manage this thread's child sessions",
+    label: "Child-thread operations",
+    title: "Child-thread operations beyond delegate_task",
     description:
-      "Manage this thread's child sessions (STATE, not content — use send_message to talk to a child). One tool; `op` selects the operation:\n" +
-      "- list: this thread's children with live state (all:true = whole project)\n" +
-      "- status: one thread's current turn state, in-progress work, elapsed\n" +
-      "- wait: durably resume this turn when a child reaches a terminal state (on: terminal|completed|failed; timeout in ms)\n" +
-      "- stop: halt a child's running turn\n" +
-      "- close: mark a child done from this side\n" +
-      "- environments: read-only — which environments start_child's environment arg can target (own environment + recorded cross-environment bindings; every entry states its delivery boundary)\n" +
-      "- help: exact schema for one op (op_name)",
+      "Child-thread operations beyond delegate_task / task_status / task_cancel / t3_thread_*. One tool; `op` selects the operation:\n" +
+      "- watch: silence-watch a thread (notified when it has no activity for timeout ms; default 15 minutes)\n" +
+      "- unwatch: cancel this thread's silence watches on the target\n" +
+      "- sweep: settle finished threads in bulk (thread_ids and/or this thread's children older than all_older_than_hours); verify each first\n" +
+      "- drain: claim this thread's own pending inter-agent mailbox now (no arguments)\n" +
+      "- environments: read-only — which environments delegate_task's extensions.environment can target (every entry states its delivery boundary)\n" +
+      "- help: exact usage for one op (op_name)",
     capabilities: ["write"],
     kind: "thread",
     surfaces: ["thread"],
@@ -679,35 +530,30 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
         op: {
           type: "string",
           description:
-            "The operation to perform: list, status, wait, stop, close, environments, or help.",
-          enum: ["list", "status", "wait", "stop", "close", "environments", "help"],
+            "The operation to perform: watch, unwatch, sweep, drain, environments, or help.",
+          enum: ["watch", "unwatch", "sweep", "drain", "environments", "help"],
         },
         thread_id: {
           type: "string",
-          description: "Target child thread id. Required for status, wait, stop, and close.",
+          description: "Target thread id. Required for watch and unwatch.",
           minLength: 1,
         },
-        on: {
-          type: "string",
-          description: "For wait: which terminal outcome resumes this turn (default terminal).",
-          enum: ["terminal", "completed", "failed"],
+        thread_ids: {
+          type: "array",
+          description: "For sweep: explicit thread ids to settle.",
+          items: { type: "string", minLength: 1 },
         },
         timeout: {
           type: "number",
-          description: "For wait: optional timeout in milliseconds.",
+          description: "For watch: silence timeout in milliseconds.",
         },
-        all: {
-          type: "boolean",
-          description:
-            "For list: when true, list the whole project instead of this thread's children.",
-        },
-        reason: {
-          type: "string",
-          description: "For stop: optional reason recorded with the stop.",
+        all_older_than_hours: {
+          type: "number",
+          description: "For sweep: also settle this thread's finished children older than N hours.",
         },
         op_name: {
           type: "string",
-          description: "For help: which op's schema to return. Omit for all ops.",
+          description: "For help: which op's usage to return. Omit for all ops.",
         },
       },
       required: ["op"],

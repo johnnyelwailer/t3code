@@ -1,62 +1,51 @@
 /**
- * Dependency bag for the `bindSession` half of the live t3team tool broker
- * (split out of `t3team-toolBrokerLiveSession.ts` for the additive LOC
- * budget). `createT3TeamToolBroker` builds this once; `makeBindSession`
- * consumes it to construct the per-thread tool binding.
+ * Dependency bag for the `bindSession` half of the live t3team tool broker.
+ * `createT3TeamToolBroker` builds this once; `makeBindSession` consumes it to
+ * construct the per-thread tool binding.
  *
  * @module t3team-toolBrokerLiveSessionDeps
  */
-import {
-  type OrchestrationCommand,
-  type OrchestrationProjectShell,
-  type OrchestrationThread,
-  type ThreadId as ThreadIdType,
-} from "@t3tools/contracts";
-import * as Effect from "effect/Effect";
+import type { OrchestrationV2ServerCommand, ThreadId as ThreadIdType } from "@t3tools/contracts";
+import type * as Effect from "effect/Effect";
 
-import type { OrchestrationDispatchError } from "./orchestration/Errors.ts";
-import type { ProjectionRepositoryError } from "./persistence/Errors.ts";
-import type { ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import type { ProviderRegistryShape } from "./provider/Services/ProviderRegistry.ts";
-import type { UsageLimitSources } from "./usage/UsageLimitSources.ts";
-import type { ResourcePressureMonitorShape } from "./t3team-resourcePressureMonitor.ts";
 import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshService.ts";
+import type { ResourcePressureMonitorShape } from "./t3team-resourcePressureMonitor.ts";
 import type { T3TeamThreadToolContextStoreShape } from "./t3team-threadToolContextStore.ts";
+import type { T3TeamToolCallResult, T3TeamTurnToolContext } from "./t3team-toolBroker.ts";
 import type { T3TeamRecipeToolHandlers } from "./t3team-toolBrokerBindingRecipes.ts";
-import { type makeStartChildThread } from "./t3team-toolBrokerStartChild.ts";
-import { type makeManageChildrenHandler } from "./t3team-toolBrokerChildrenLive.ts";
-import { type T3TeamToolBrokerShape, type T3TeamTurnToolContext } from "./t3team-toolBroker.ts";
-import { type T3TeamWorkflowControlToolHandlers } from "./t3team-toolBrokerWorkflowControlTool.ts";
-import { type T3TeamWorkflowResumeToolHandlers } from "./t3team-toolBrokerWorkflowResumeTool.ts";
-import { type T3TeamWorkflowRunToolHandlers } from "./t3team-toolBrokerWorkflowRunTools.ts";
-import { type T3TeamWorkflowStatusToolHandlers } from "./t3team-toolBrokerWorkflowStatusTool.ts";
+import type { T3TeamThreadReads } from "./t3team-toolBrokerThreadReads.ts";
 import type { makeT3TeamShowWidget } from "./t3team-toolBrokerWidgetShow.ts";
+import type { T3TeamWorkflowControlToolHandlers } from "./t3team-toolBrokerWorkflowControlTool.ts";
+import type { T3TeamWorkflowResumeToolHandlers } from "./t3team-toolBrokerWorkflowResumeTool.ts";
+import type { T3TeamWorkflowRunToolHandlers } from "./t3team-toolBrokerWorkflowRunTools.ts";
+import type { T3TeamWorkflowStatusToolHandlers } from "./t3team-toolBrokerWorkflowStatusTool.ts";
+import type { UsageLimitSources } from "./usage/UsageLimitSources.ts";
 
 /** Everything `bindSession` needs, built once by `createT3TeamToolBroker`. */
 export interface BindSessionDeps {
   readonly contextStore: T3TeamThreadToolContextStoreShape;
   readonly genericThreadToolIds: readonly string[];
-  readonly query: ProjectionSnapshotQueryShape;
+  readonly reads: T3TeamThreadReads;
   readonly providerRegistry: ProviderRegistryShape | undefined;
   readonly usageLimitSources: UsageLimitSources["Service"] | undefined;
   readonly resourcePressure: ResourcePressureMonitorShape | undefined;
   readonly contextRefresh: T3TeamContextRefreshServiceShape;
+  /** V2 command dispatch (ThreadManagementService), errors flattened to a message. */
   readonly dispatchCommand: (
-    command: OrchestrationCommand,
-  ) => Effect.Effect<{ readonly sequence: number }, OrchestrationDispatchError>;
+    command: OrchestrationV2ServerCommand,
+  ) => Effect.Effect<unknown, string>;
   readonly bindShowWidget: <TLoadError, TDispatchError>(
     input: Omit<Parameters<typeof makeT3TeamShowWidget<TLoadError, TDispatchError>>[0], "runtime">,
-  ) => (toolArgs: unknown) => Effect.Effect<import("./t3team-toolBroker.ts").T3TeamToolCallResult>;
+  ) => (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   readonly loadThreadView: (
     threadId: ThreadIdType,
     toolContext: T3TeamTurnToolContext,
-  ) => Effect.Effect<unknown, ProjectionRepositoryError | string>;
-  readonly renameThread: (
-    threadId: ThreadIdType,
-    title: string,
-  ) => Effect.Effect<unknown, OrchestrationDispatchError>;
-  readonly startChildThread: ReturnType<typeof makeStartChildThread>;
-  readonly manageChildren: ReturnType<typeof makeManageChildrenHandler>;
+  ) => Effect.Effect<unknown, string>;
+  readonly manageChildren: (
+    toolArgs: unknown,
+    callerThreadId: ThreadIdType,
+  ) => Effect.Effect<T3TeamToolCallResult>;
   readonly recipeToolsForThread: (threadId: ThreadIdType) => T3TeamRecipeToolHandlers;
   readonly workflowTools: {
     readonly workflowRunToolsForThread?:
@@ -72,10 +61,4 @@ export interface BindSessionDeps {
       | ((threadId: ThreadIdType) => T3TeamWorkflowControlToolHandlers)
       | undefined;
   };
-  readonly loadThreadProject: (
-    threadId: ThreadIdType,
-  ) => Effect.Effect<
-    { readonly project: OrchestrationProjectShell; readonly thread: OrchestrationThread },
-    ProjectionRepositoryError | string
-  >;
 }

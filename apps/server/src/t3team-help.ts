@@ -46,9 +46,9 @@ const TOPICS: ReadonlyArray<T3TeamHelpTopic> = [
   },
   {
     slug: "model-selection",
-    title: "Exact provider/model selection for start_child and orchestration agents",
+    title: "Exact provider/model selection for delegate_task and orchestration agents",
     summary:
-      "Read live provider instances and model slugs via t3team_models before naming an exact target; never copy ids from examples or a static list.",
+      "Read live provider instances and model slugs via orchestrator_capabilities before naming an exact target; never copy ids from examples or a static list.",
     body: T3TEAM_MODEL_SELECTION_MANUAL,
   },
   {

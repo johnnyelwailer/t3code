@@ -605,6 +605,8 @@ const T3TeamToolBrokerLayerLive = T3TeamToolBrokerLive.pipe(
   Layer.provideMerge(T3TeamContextRefreshServiceLive),
   Layer.provide(WorkflowSignalSourcesLive),
   Layer.provide(ProviderRegistryLive),
+  // The broker reads thread facts; same layer reference as the runtime registers (memoized).
+  Layer.provide(T3TeamV2FoundationLive),
 );
 
 const OrchestrationV2RuntimeLayerLive = OrchestrationV2ProductionLayerLive.pipe(

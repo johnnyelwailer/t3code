@@ -10,14 +10,9 @@ import { createToolSurface, type CreateBindingInput } from "./t3team-toolBrokerB
 
 export type { CreateBindingInput } from "./t3team-toolBrokerBindingSurface.ts";
 
-export function createT3TeamThreadToolBinding<
-  TRenameError,
-  TStartChildError,
-  TReadError,
-  TBacklogAssigneeFilterError,
->(
+export function createT3TeamThreadToolBinding<TReadError, TBacklogAssigneeFilterError>(
   input: Omit<
-    CreateBindingInput<TRenameError, TStartChildError, TReadError, TBacklogAssigneeFilterError>,
+    CreateBindingInput<TReadError, TBacklogAssigneeFilterError>,
     "scopeLabel" | "prelaunchOnly"
   > & {
     readonly threadId: ThreadId;
@@ -33,14 +28,9 @@ export function createT3TeamThreadToolBinding<
   };
 }
 
-export function createT3TeamPrelaunchToolBinding<
-  TRenameError,
-  TStartChildError,
-  TReadError,
-  TBacklogAssigneeFilterError,
->(
+export function createT3TeamPrelaunchToolBinding<TReadError, TBacklogAssigneeFilterError>(
   input: Omit<
-    CreateBindingInput<TRenameError, TStartChildError, TReadError, TBacklogAssigneeFilterError>,
+    CreateBindingInput<TReadError, TBacklogAssigneeFilterError>,
     "availableToolIds" | "prelaunchOnly" | "scopeLabel"
   > & {
     readonly workspaceRoot: string;

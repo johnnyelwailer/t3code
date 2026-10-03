@@ -19,10 +19,7 @@ import { afterAll, describe, expect, it } from "vite-plus/test";
 import { ServerConfig } from "./config.ts";
 import type { GitWorkflowService } from "./git/GitWorkflowService.ts";
 import type { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
-import {
-  delegatedWorktreeKey,
-  resolveDelegatedWorkspace,
-} from "./t3team-delegateTaskWorkspace.ts";
+import { delegatedWorktreeKey, resolveDelegatedWorkspace } from "./t3team-delegateTaskWorkspace.ts";
 import {
   HIDDEN_T3TEAM_DIR,
   MANIFEST_FILE_NAME,
@@ -58,7 +55,11 @@ const writeManifest = (workspace: string, manifest: unknown) => {
   NodeFS.mkdirSync(dir, { recursive: true });
   NodeFS.writeFileSync(NodePath.join(dir, MANIFEST_FILE_NAME), JSON.stringify(manifest));
 };
-const linkedEntry = { url: `https://github.com/${LINKED}`, localPath: linkedRepo, status: "cloned" };
+const linkedEntry = {
+  url: `https://github.com/${LINKED}`,
+  localPath: linkedRepo,
+  status: "cloned",
+};
 
 initRepo(linkedRepo);
 NodeFS.mkdirSync(linkedWorkspace, { recursive: true });
@@ -66,7 +67,11 @@ writeManifest(linkedWorkspace, { linkedRepositories: [linkedEntry] });
 initRepo(localWorkspace);
 initRepo(metaWorkspace);
 writeManifest(metaWorkspace, {
-  metaRepository: { url: `https://github.com/${META}`, localPath: metaWorkspace, status: "adopted" },
+  metaRepository: {
+    url: `https://github.com/${META}`,
+    localPath: metaWorkspace,
+    status: "adopted",
+  },
   linkedRepositories: [linkedEntry],
 });
 afterAll(() => NodeFS.rmSync(root, { recursive: true, force: true }));
@@ -82,10 +87,11 @@ const resolve = (input: {
       fileSystem: yield* FileSystem.FileSystem,
       path: yield* Path.Path,
       gitWorkflow: {
-        createWorktree: (args) => driver.createWorktree(args),
-        localStatus: ({ cwd }) =>
+        createWorktree: (args: Parameters<GitWorkflowService["Service"]["createWorktree"]>[0]) =>
+          driver.createWorktree(args),
+        localStatus: ({ cwd }: { readonly cwd: string }) =>
           Effect.sync(() => ({ isRepo: true, refName: git(cwd, ["branch", "--show-current"]) })),
-      } as GitWorkflowService["Service"],
+      } as unknown as GitWorkflowService["Service"],
       sourceControlProviders: {
         resolve: () => Effect.succeed({ getDefaultBranch: () => Effect.succeed("main") }),
       } as unknown as SourceControlProviderRegistry["Service"],
@@ -125,7 +131,9 @@ describe("resolveDelegatedWorkspace", () => {
     expect(resolved.repository).toBe(LINKED);
     expect(resolved.baseRef).toBe("main");
     expect(resolved.worktreePath).toContain("child-session-worktrees");
-    expect(commonDir(resolved.worktreePath)).toBe(NodePath.join(NodeFS.realpathSync(linkedRepo), ".git"));
+    expect(commonDir(resolved.worktreePath)).toBe(
+      NodePath.join(NodeFS.realpathSync(linkedRepo), ".git"),
+    );
     expect(git(resolved.worktreePath, ["branch", "--show-current"])).toBe(resolved.branch);
   });
 

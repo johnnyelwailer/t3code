@@ -1,5 +1,5 @@
 /**
- * Pure provider/model slug resolution helpers for the start_child
+ * Pure provider/model slug resolution helpers for the fork child
  * cross-provider resolver (split out of
  * `t3team-toolBrokerStartChildProvider.ts`).
  */

@@ -80,8 +80,8 @@ export function tryDispatchWorkflowToolCall(input: {
 
 /**
  * Thread-scoped tool branches of the dispatcher (split out of
- * `t3team-toolBrokerBindingDispatch.ts`): start_child, backlog filter,
- * widget, thread search/read/children, and runtime model/usage reads.
+ * `t3team-toolBrokerBindingDispatch.ts`): backlog filter, widget, thread
+ * search/read/children, and provider usage reads.
  *
  * Returns the effect for the tool when it is one of these, otherwise
  * undefined so the caller continues to the next branch.
@@ -91,7 +91,6 @@ export function tryDispatchThreadScopedToolCall(input: {
   readonly scopeLabel: string;
   readonly toolArgs: unknown;
   readonly threadId?: ThreadId;
-  readonly startChild?: (arguments_: unknown) => Effect.Effect<unknown, string>;
   readonly setBacklogAssigneeFilter?: (mode: "current-user") => Effect.Effect<unknown, string>;
   readonly showWidget?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   readonly searchSourceThread?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
@@ -101,18 +100,9 @@ export function tryDispatchThreadScopedToolCall(input: {
     toolArgs: unknown,
     callerThreadId: ThreadId,
   ) => Effect.Effect<T3TeamToolCallResult>;
-  readonly readRuntimeModels?: () => Effect.Effect<T3TeamToolCallResult>;
   readonly readProviderUsage?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
 }): Effect.Effect<T3TeamToolCallResult, never> | undefined {
   const { tool, scopeLabel, toolArgs } = input;
-  if (tool === "t3team.thread.start_child") {
-    if (!input.startChild) {
-      return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${scopeLabel}.`));
-    }
-    return foldResult(input.startChild(toolArgs), okResult, (message) =>
-      errorResult(`Failed to start child session: ${message}`),
-    );
-  }
   if (tool === "t3team.backlog.set_assignee_filter") {
     if (!input.setBacklogAssigneeFilter) {
       return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${scopeLabel}.`));
@@ -156,12 +146,6 @@ export function tryDispatchThreadScopedToolCall(input: {
       return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${scopeLabel}.`));
     }
     return input.manageChildren(toolArgs, input.threadId);
-  }
-  if (tool === "t3team.runtime.models") {
-    if (!input.readRuntimeModels) {
-      return Effect.succeed(errorResult(`Tool '${tool}' is not enabled ${scopeLabel}.`));
-    }
-    return input.readRuntimeModels();
   }
   if (tool === "t3team.runtime.provider_usage") {
     if (!input.readProviderUsage) {

@@ -66,7 +66,8 @@ export interface DelegatedTaskPreparationShape {
   ) => Effect.Effect<DelegatedTaskPrepared, OrchestratorMcpFailure>;
 }
 
-const invalid = (message: string) => new OrchestratorMcpFailure({ code: "invalid_request", message });
+const invalid = (message: string) =>
+  new OrchestratorMcpFailure({ code: "invalid_request", message });
 
 /** Rejects what this host cannot honour; shared by the default and host implementations. */
 export const rejectUnsupportedDelegationInput = (
@@ -78,7 +79,9 @@ export const rejectUnsupportedDelegationInput = (
   }
   if (input.workspace?.isolation !== "worktree" && input.workspace !== undefined) {
     if (input.workspace.repository !== undefined || input.workspace.baseRef !== undefined) {
-      return Effect.fail(invalid("workspace.repository and workspace.baseRef need isolation=worktree."));
+      return Effect.fail(
+        invalid("workspace.repository and workspace.baseRef need isolation=worktree."),
+      );
     }
   }
   const known = new Set(supported.extensions.map((option) => option.key));

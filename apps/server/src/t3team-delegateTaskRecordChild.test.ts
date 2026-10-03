@@ -39,7 +39,7 @@ const makeDeps = (overrides: Partial<DelegatedChildRecorderDeps> = {}) => {
       listByChildThreadIds: () => Effect.succeed([]),
     },
     facts: {
-      upsert: (threadId, patch) =>
+      upsert: (threadId: string, patch: unknown) =>
         Effect.sync(() => {
           facts.push({ threadId, patch });
           return { threadId, updatedAt: "now" };
@@ -70,7 +70,12 @@ describe("makeDelegatedChildRecorder", () => {
       });
       assert.deepEqual(notes, []);
       assert.deepEqual(metadata, [
-        { childThreadId, parentThreadId: parentThread.id, placementThreadId: null, ticketId: "T-7" },
+        {
+          childThreadId,
+          parentThreadId: parentThread.id,
+          placementThreadId: null,
+          ticketId: "T-7",
+        },
       ]);
       assert.deepEqual(facts, []);
       const view = (contexts.get(childThreadId)?.state as { view: Record<string, unknown> }).view;
@@ -110,33 +115,37 @@ describe("makeDelegatedChildRecorder", () => {
     }),
   );
 
-  it.effect("writes nothing when there is no ticket or placement, and degrades failures to notes", () =>
-    Effect.gen(function* () {
-      const quiet = makeDeps({ toolContexts: undefined });
-      yield* makeDelegatedChildRecorder(quiet.deps)({
-        parentThread,
-        childThreadId,
-        title: undefined,
-        ticketId: undefined,
-        environment: undefined,
-      });
-      assert.deepEqual(quiet.metadata, []);
+  it.effect(
+    "writes nothing when there is no ticket or placement, and degrades failures to notes",
+    () =>
+      Effect.gen(function* () {
+        const quiet = makeDeps({ toolContexts: undefined });
+        yield* makeDelegatedChildRecorder(quiet.deps)({
+          parentThread,
+          childThreadId,
+          title: undefined,
+          ticketId: undefined,
+          environment: undefined,
+        });
+        assert.deepEqual(quiet.metadata, []);
 
-      const failing = makeDeps({
-        metadata: {
-          upsert: () =>
-            Effect.fail(new T3TeamChildThreadMetadataError({ operation: "upsert", cause: "db" })),
-          listByChildThreadIds: () => Effect.succeed([]),
-        },
-      });
-      const notes = yield* makeDelegatedChildRecorder(failing.deps)({
-        parentThread,
-        childThreadId,
-        title: undefined,
-        ticketId: "T-1",
-        environment: undefined,
-      });
-      assert.deepEqual(notes, ["Could not record the child's ticket; the child runs without it."]);
-    }),
+        const failing = makeDeps({
+          metadata: {
+            upsert: () =>
+              Effect.fail(new T3TeamChildThreadMetadataError({ operation: "upsert", cause: "db" })),
+            listByChildThreadIds: () => Effect.succeed([]),
+          },
+        });
+        const notes = yield* makeDelegatedChildRecorder(failing.deps)({
+          parentThread,
+          childThreadId,
+          title: undefined,
+          ticketId: "T-1",
+          environment: undefined,
+        });
+        assert.deepEqual(notes, [
+          "Could not record the child's ticket; the child runs without it.",
+        ]);
+      }),
   );
 });

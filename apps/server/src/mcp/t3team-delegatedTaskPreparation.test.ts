@@ -191,7 +191,9 @@ describe("OrchestratorMcpService delegateTask preparation hook", () => {
         const capabilities = yield* service.capabilities(scope);
         assert.isUndefined(capabilities.delegation);
       }).pipe(
-        Effect.provide(OrchestratorMcpService.layer.pipe(Layer.provide(makeDependencies(dispatched)))),
+        Effect.provide(
+          OrchestratorMcpService.layer.pipe(Layer.provide(makeDependencies(dispatched))),
+        ),
       );
     }),
   );

@@ -26,6 +26,8 @@ import { ProjectSetupScriptRunner } from "./project/ProjectSetupScriptRunner.ts"
 import { ProviderRegistry } from "./provider/Services/ProviderRegistry.ts";
 import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
 import { T3TeamChildThreadMetadata } from "./t3team-childThreadMetadata.ts";
+import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
+import { pressureLine } from "./t3team-resourcePressureToolLine.ts";
 import {
   applyDelegationEffort,
   parseDelegationExtensions,
@@ -52,7 +54,17 @@ const make = Effect.gen(function* () {
   const setupScripts = yield* ProjectSetupScriptRunner;
   const providers = yield* ProviderRegistry;
   const projects = yield* ProjectStoreV2;
-  const workflows = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamWorkflowEngineRegistry));
+  const pressure = Option.getOrUndefined(yield* Effect.serviceOption(ResourcePressureMonitor));
+  // A spawn adds load: with the pressure feature on, the result carries the host's pressure line.
+  const pressureNotes =
+    pressure?.autoPause === undefined
+      ? Effect.succeed([] as ReadonlyArray<string>)
+      : pressure.report.pipe(
+          Effect.map((report) => (report.snapshot === null ? [] : [pressureLine(report.snapshot)])),
+        );
+  const workflows = Option.getOrUndefined(
+    yield* Effect.serviceOption(T3TeamWorkflowEngineRegistry),
+  );
   const recordChild = makeDelegatedChildRecorder({
     metadata: yield* T3TeamChildThreadMetadata,
     facts: yield* T3TeamThreadFactsStore,
@@ -118,6 +130,7 @@ const make = Effect.gen(function* () {
           input.scope.environmentId,
         );
         if (environment.note !== undefined) notes.push(environment.note);
+        notes.push(...(yield* pressureNotes));
 
         const afterCreate = (childThreadId: ThreadId) =>
           Effect.gen(function* () {

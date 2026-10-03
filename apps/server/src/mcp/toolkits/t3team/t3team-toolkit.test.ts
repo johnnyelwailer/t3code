@@ -28,7 +28,7 @@ const invocation: McpInvocationContext.McpInvocationScope = {
   threadId,
   providerSessionId: "provider-session-t3team-mcp-test",
   providerInstanceId: ProviderInstanceId.make("pack-test"),
-  capabilities: new Set(),
+  capabilities: new Set(["orchestration"]),
   issuedAt: 1,
 };
 const client = McpSchema.McpServerClient.of({
@@ -63,7 +63,6 @@ it.effect("routes MCP wrappers through the bound broker callTool dispatch", () =
     },
   };
   const broker = T3TeamToolBroker.of({
-    sendMessage: () => Effect.succeed(undefined),
     bindSession: ({ threadId: boundThreadId }) =>
       Effect.succeed(boundThreadId === threadId ? binding : undefined),
     bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
@@ -81,7 +80,7 @@ it.effect("routes MCP wrappers through the bound broker callTool dispatch", () =
         title: "MCP widget",
         widget_code: "<button>Continue</button>",
         format: "html",
-        capabilities: { tools: ["t3team.thread.rename"] },
+        capabilities: { tools: ["t3team.view.read"] },
       },
     });
 
@@ -94,7 +93,7 @@ it.effect("routes MCP wrappers through the bound broker callTool dispatch", () =
           title: "MCP widget",
           widget_code: "<button>Continue</button>",
           format: "html",
-          capabilities: { tools: ["t3team.thread.rename"] },
+          capabilities: { tools: ["t3team.view.read"] },
         },
       },
     ]);
@@ -147,7 +146,6 @@ for (const { deprecated, current, args } of orchestrationAliasCases) {
       },
     };
     const broker = T3TeamToolBroker.of({
-      sendMessage: () => Effect.succeed(undefined),
       bindSession: ({ threadId: boundThreadId }) =>
         Effect.succeed(boundThreadId === threadId ? binding : undefined),
       bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
@@ -192,7 +190,6 @@ it.effect("routes t3team_recipe_list through the bound broker callTool dispatch"
     },
   };
   const broker = T3TeamToolBroker.of({
-    sendMessage: () => Effect.succeed(undefined),
     bindSession: ({ threadId: boundThreadId }) =>
       Effect.succeed(boundThreadId === threadId ? binding : undefined),
     bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
@@ -242,7 +239,6 @@ it.effect("routes t3team_recipe_validate through the bound broker callTool dispa
     },
   };
   const broker = T3TeamToolBroker.of({
-    sendMessage: () => Effect.succeed(undefined),
     bindSession: ({ threadId: boundThreadId }) =>
       Effect.succeed(boundThreadId === threadId ? binding : undefined),
     bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
@@ -273,3 +269,44 @@ it.effect("routes t3team_recipe_validate through the bound broker callTool dispa
     Effect.provide(TestLayer),
   );
 });
+
+it.effect(
+  "refuses a credential without the orchestration capability before reaching the broker",
+  () => {
+    const calls: Array<string> = [];
+    const broker = T3TeamToolBroker.of({
+      bindSession: () =>
+        Effect.sync(() => {
+          calls.push("bindSession");
+          return undefined;
+        }),
+      bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
+    });
+    const TestLayer = T3TeamToolkitRegistrationLive.pipe(
+      Layer.provideMerge(McpServer.McpServer.layer),
+      Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
+    );
+
+    return Effect.gen(function* () {
+      const server = yield* McpServer.McpServer;
+      const result = yield* server.callTool({
+        name: "t3team_children",
+        arguments: { op: "environments" },
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content).toEqual([
+        expect.objectContaining({
+          text: expect.stringContaining("does not grant orchestration capabilities"),
+        }),
+      ]);
+      expect(calls).toEqual([]);
+    }).pipe(
+      Effect.provideService(McpInvocationContext.McpInvocationContext, {
+        ...invocation,
+        capabilities: new Set<McpInvocationContext.McpCapability>(),
+      }),
+      Effect.provideService(McpSchema.McpServerClient, client),
+      Effect.provide(TestLayer),
+    );
+  },
+);
