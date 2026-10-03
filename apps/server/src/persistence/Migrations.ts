@@ -129,6 +129,7 @@ import Migration0083 from "./Migrations/t3team-063_OrchestrationEventsTypeSequen
 // skipped on every existing fork install and boot would fail on the first orchestration_v2_* query.
 import Migration0084 from "./Migrations/055_OrchestrationV2.ts";
 import Migration0085 from "./Migrations/056_RemoveRedundantProjectionIndexes.ts";
+import Migration0097 from "./Migrations/t3team-075_DropProviderUsageHolds.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -230,6 +231,7 @@ export const migrationEntries = [
   // on fork ledgers (fork ids 53/54 are never named OrchestrationV2).
   [84, "OrchestrationV2", Migration0084],
   [85, "RemoveRedundantProjectionIndexes", Migration0085],
+  [97, "DropProviderUsageHolds", Migration0097],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
