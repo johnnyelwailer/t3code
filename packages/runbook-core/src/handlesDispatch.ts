@@ -176,8 +176,20 @@ export function createHandleDispatch(seat: HandleSeat): HandleDispatch {
     const recorded = seat.recordedAt(currentSeq);
     if (recorded !== undefined) {
       // The hash check stays exactly as on every replay: for a re-fire it is what proves the
-      // payload handed to the broker again is byte-identical to the one first sent.
-      assertJournalMatch(currentSeq, recorded, call.kind, call.refId, argsHash, seat.filePath);
+      // payload handed to the broker again is byte-identical to the one first sent. The one
+      // exception is a `legacyArgs` match (a pre-rewording journal): it replays, and a re-fire of
+      // it sends the current wording of the same ask.
+      const legacyMatch =
+        recorded.argsHash !== argsHash &&
+        call.legacyArgs?.some((legacy) => hashArgs(legacy) === recorded.argsHash) === true;
+      assertJournalMatch(
+        currentSeq,
+        recorded,
+        call.kind,
+        call.refId,
+        legacyMatch ? recorded.argsHash : argsHash,
+        seat.filePath,
+      );
       const recordedId = recorded.correlationId ?? correlationId;
       // Replay: the side effect already fired — do NOT re-fire the broker, unless the host named
       // this very ask as the run's one-shot re-fire target.
