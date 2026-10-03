@@ -4130,13 +4130,15 @@ export default function ChatView(props: ChatViewProps) {
     () => ({ serverStartedAtMs, hasOpenUserInput }),
     [hasOpenUserInput, serverStartedAtMs],
   );
-  const { timelineProps: timelineT3TeamProps } = useT3TeamChatTimelineProps({
+  const t3teamChat = useT3TeamChatTimelineProps({
     environmentId,
     threadId: isServerThread ? threadId : null,
     extension: t3teamExtension,
+    timelineEntries,
     threadActivities: t3teamTimeline.threadActivities,
     workingRow: t3teamWorkingRow,
   });
+  const timelineT3TeamProps = t3teamChat.timelineProps;
   const hasTimelineTopBanner = Boolean(timelineThreadError) || visibleProviderStatus !== null;
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
   const activeThreadWorktreePath = activeThread?.worktreePath ?? null;
@@ -11185,6 +11187,7 @@ export default function ChatView(props: ChatViewProps) {
                                   />
                                 ) : null
                               }
+                              bannerLeading={t3teamChat.composerBannerLeading}
                               bannerItems={composerBannerItems}
                               // With attachments or contexts aboard the pick just inserts the
                               // text, so it sends as a prompt like the typed path would.

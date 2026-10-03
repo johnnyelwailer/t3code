@@ -1,20 +1,17 @@
 /**
  * Outbound inter-agent message visibility (GHE #209, part 2): make the
- * SENDER's side of an inter-agent `send_message` auditable in its own
- * timeline.
+ * SENDER's side of an inter-agent send auditable in its own timeline.
  *
- * Today only RECEIVED inter-agent messages render (the `actor`-role card,
- * t3team-ActorTimelineRow.tsx); an outbound `t3team_send_message` tool call
- * from this thread's agent was invisible ("sneaky") — the message itself is
- * recorded only in the target thread, so the sender's transcript carries the
- * tool call in its work log. This module derives a subtle, factual label for
+ * Received messages render in the target thread (as a mailbox digest or a
+ * message "sent by another agent"); the sender's transcript only carries the
+ * `t3_thread_send` tool call. This module derives a subtle, factual label for
  * that work entry — "Sent message to parent" / "Sent message to «child»" —
  * from sender-side data only:
  *
- *   - the thread's V2 lineage (`subagent` parent) and the live shells whose
+ *   - the thread's V2 lineage (`subagent` parent) and the shells whose
  *     lineage names this thread as parent (its direct children, with titles),
- *   - the send tool call's own persisted `to_thread_id` (from the mcp tool
- *     call's item data or its persisted detail prefix).
+ *   - the send call's own `threadId` argument (from the dynamic tool item's
+ *     input, else from the persisted detail).
  *
  * Resolution is conservative: an unresolvable target renders as
  * "another thread" — never a guessed relationship.
@@ -65,49 +62,46 @@ export function deriveActorOutboundRelations(input: {
 }
 
 /**
- * The tool name of the inter-agent send tool, with or without a provider
- * prefix (Claude reports MCP tools as `mcp__<server>__<tool>`).
+ * The upstream thread-send tool, with or without a provider prefix (Claude reports MCP tools as
+ * `mcp__<server>__<tool>`). `\b` keeps `t3_thread_send_attachments` out.
  */
-const SEND_MESSAGE_TOOL_NAME_RE = /(^|[^\p{L}\p{N}])t3team[-_]send[-_]message\b/iu;
+const SEND_TOOL_NAME_RE = /(^|[^\p{L}\p{N}])t3_thread_send\b/iu;
+
+type SendEntry = Pick<
+  WorkLogEntry,
+  "label" | "detail" | "toolTitle" | "toolData" | "projectedItem"
+>;
+
+/** The dynamic tool item behind the entry, when the projection carried it. */
+function dynamicToolItem(entry: SendEntry) {
+  const item = entry.projectedItem?.item;
+  return item?.type === "dynamic_tool" ? item : null;
+}
 
 /**
- * Is this work entry the agent's `t3team_send_message` tool call? Checked
- * against the structured item name first (when the projection carried it),
- * then the persisted label/detail prefix — the adapter persists the detail
- * as `<toolName>: <input json>`, so the tool name leads the string.
+ * Is this work entry the agent's `t3_thread_send` tool call? Checked against
+ * the structured tool name first, then the label/title/detail prefix.
  */
-export function isActorOutboundSendMessageEntry(
-  entry: Pick<WorkLogEntry, "label" | "detail" | "toolTitle" | "toolData">,
-): boolean {
-  const item = asRecord(entry.toolData);
-  if (typeof item?.name === "string" && SEND_MESSAGE_TOOL_NAME_RE.test(item.name)) {
-    return true;
-  }
-  const candidates: string[] = [];
-  if (entry.detail !== undefined && entry.detail !== null) {
-    candidates.push(entry.detail.slice(0, 120));
-  }
-  if (entry.label) candidates.push(entry.label);
-  if (entry.toolTitle) candidates.push(entry.toolTitle);
+export function isActorOutboundSendMessageEntry(entry: SendEntry): boolean {
+  const toolName = dynamicToolItem(entry)?.toolName;
+  if (typeof toolName === "string") return SEND_TOOL_NAME_RE.test(toolName);
+  const candidates = [entry.toolTitle, entry.label, entry.detail?.slice(0, 120)];
   return candidates.some(
-    (candidate) => candidate !== "" && SEND_MESSAGE_TOOL_NAME_RE.test(candidate),
+    (candidate) => candidate !== undefined && candidate !== "" && SEND_TOOL_NAME_RE.test(candidate),
   );
 }
 
 /**
- * Extract the target thread id of the send, when the persisted data carries
- * it (structured `input.to_thread_id` on the item, else the `to_thread_id`
- * argument inside the persisted detail JSON). `null` when unknown.
+ * The target thread id of the send, when the persisted data carries it (the
+ * structured `input.threadId`, else the `threadId` argument inside the
+ * persisted detail JSON). `null` when unknown.
  */
-export function extractActorOutboundTargetThreadId(
-  entry: Pick<WorkLogEntry, "detail" | "toolData">,
-): string | null {
-  const item = asRecord(entry.toolData);
-  const input = asRecord(item?.input);
-  if (typeof input?.to_thread_id === "string" && input.to_thread_id.length > 0) {
-    return input.to_thread_id;
+export function extractActorOutboundTargetThreadId(entry: SendEntry): string | null {
+  const input = asRecord(dynamicToolItem(entry)?.input ?? asRecord(entry.toolData)?.input);
+  if (typeof input?.threadId === "string" && input.threadId.length > 0) {
+    return input.threadId;
   }
-  const match = /"to_thread_id"\s*:\s*"([^"]+)"/u.exec(entry.detail ?? "");
+  const match = /"threadId"\s*:\s*"([^"]+)"/u.exec(entry.detail ?? "");
   return match?.[1] ?? null;
 }
 
@@ -120,7 +114,7 @@ export function extractActorOutboundTargetThreadId(
  *   - anything else / unknown → "Sent message to another thread"
  */
 export function describeActorOutboundSend(
-  entry: Pick<WorkLogEntry, "label" | "detail" | "toolTitle" | "toolData">,
+  entry: SendEntry,
   relations: ActorOutboundRelations,
 ): string | null {
   if (!isActorOutboundSendMessageEntry(entry)) {

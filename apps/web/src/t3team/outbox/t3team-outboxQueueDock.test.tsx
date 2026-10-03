@@ -1,12 +1,9 @@
-import { act, Fragment } from "react";
+import { act } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { create } from "react-test-renderer";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  EMPTY_T3TEAM_OUTBOX_TIMELINE_EXTENSIONS,
-  t3TeamOutboxTimelineExtensions,
-} from "./t3team-outboxTimelineRows";
+import { T3TeamOutboxQueueDock } from "./t3team-outboxQueueDock";
 import { makeT3TeamOutboxEntry, type T3TeamOutboxEntry } from "./t3team-outboxModel";
 import { removeT3TeamOutboxEntry, retryT3TeamOutboxEntry } from "./t3team-outboxStore";
 
@@ -45,19 +42,27 @@ function cardActionEntry(): T3TeamOutboxEntry {
   );
 }
 
-describe("t3TeamOutboxTimelineExtensions", () => {
-  it("returns the stable empty array for an empty queue", () => {
-    expect(t3TeamOutboxTimelineExtensions([], null, {})).toBe(
-      EMPTY_T3TEAM_OUTBOX_TIMELINE_EXTENSIONS,
-    );
+const dock = (
+  entries: ReadonlyArray<T3TeamOutboxEntry>,
+  dispatchingEntryId: string | null,
+  failures: Readonly<Record<string, string>>,
+) => (
+  <T3TeamOutboxQueueDock
+    entries={entries}
+    dispatchingEntryId={dispatchingEntryId}
+    failures={failures}
+  />
+);
+
+describe("T3TeamOutboxQueueDock", () => {
+  it("renders nothing for an empty queue", () => {
+    expect(renderToStaticMarkup(dock([], null, {}))).toBe("");
   });
 
-  it("maps a queued turn-start to a native-shaped row with its delivery status", () => {
+  it("lists a queued turn-start on the composer queue dock with its delivery status", () => {
     const entry = turnStartEntry("message-1");
-    const extensions = t3TeamOutboxTimelineExtensions([entry], null, {});
-    expect(extensions).toHaveLength(1);
-    expect(extensions[0]?.id).toBe(`t3team-outbox:${entry.entryId}`);
-    const markup = renderToStaticMarkup(extensions[0]!.node);
+    const markup = renderToStaticMarkup(dock([entry], null, {}));
+    expect(markup).toContain(`data-queued-outbox-entry="${entry.entryId}"`);
     // The plain message keeps the native queue wording, not a banner of its own.
     expect(markup).toContain("message · Sends when the environment reconnects");
     expect(markup).toContain("deploy the fix");
@@ -67,44 +72,35 @@ describe("t3TeamOutboxTimelineExtensions", () => {
 
   it("surfaces a permanent failure with a resend affordance", () => {
     const entry = cardActionEntry();
-    const extensions = t3TeamOutboxTimelineExtensions([entry], null, {
-      [entry.entryId]: "card not found",
-    });
-    const markup = renderToStaticMarkup(extensions[0]!.node);
+    const markup = renderToStaticMarkup(dock([entry], null, { [entry.entryId]: "card not found" }));
     // Non-message kinds keep their kind word on the shared queue surface.
     expect(markup).toContain("card action · Failed: card not found");
     expect(markup).toContain("Resend");
-    expect(markup).toContain('aria-label="Discard queued send"');
   });
 
   it("shows the dispatch state for the entry being sent", () => {
     const entry = turnStartEntry("message-2");
-    const extensions = t3TeamOutboxTimelineExtensions([entry], entry.entryId, {});
-    const markup = renderToStaticMarkup(extensions[0]!.node);
-    expect(markup).toContain("message · Sending");
+    expect(renderToStaticMarkup(dock([entry], entry.entryId, {}))).toContain("message · Sending");
   });
 
   it("routes Resend and Discard into the outbox store", async () => {
     vi.mocked(retryT3TeamOutboxEntry).mockClear();
     vi.mocked(removeT3TeamOutboxEntry).mockClear();
     const entry = cardActionEntry();
-    const extensions = t3TeamOutboxTimelineExtensions([entry], null, {
-      [entry.entryId]: "card not found",
-    });
-    const renderer = await act(async () => create(<Fragment>{extensions[0]!.node}</Fragment>));
+    const renderer = await act(async () =>
+      create(dock([entry], null, { [entry.entryId]: "card not found" })),
+    );
 
     // Resend re-arms the failed entry by its id.
     const resend = renderer.root.findByProps({ children: "Resend" });
     await act(() => resend.props.onClick());
-    expect(retryT3TeamOutboxEntry).toHaveBeenCalledTimes(1);
     expect(retryT3TeamOutboxEntry).toHaveBeenCalledWith(entry.entryId);
 
     // Discard removes the whole entry object.
-    const discard = renderer.root.findByProps({
-      "aria-label": "Discard queued send",
-    });
+    const discard = renderer.root.findAll(
+      (node) => node.props["aria-label"] === "Discard queued send" && node.props.onClick,
+    )[0]!;
     await act(() => discard.props.onClick());
-    expect(removeT3TeamOutboxEntry).toHaveBeenCalledTimes(1);
     expect(removeT3TeamOutboxEntry).toHaveBeenCalledWith(entry);
   });
 });

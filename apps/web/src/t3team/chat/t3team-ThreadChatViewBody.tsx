@@ -7,7 +7,7 @@ import type { ThreadBootstrapStatus } from "~/t3team/chat/t3team-useThreadBootst
 import { useThreadChatComposerState } from "~/t3team/chat/t3team-useThreadChatComposerState";
 import { ThreadKickoffPlaceholder } from "~/t3team/chat/t3team-threadKickoffPlaceholder";
 import { T3TeamThreadComposerAccessory } from "~/t3team/chat/t3team-ThreadComposerAccessory";
-import { t3TeamOutboxTimelineExtensions } from "~/t3team/outbox/t3team-outboxTimelineRows";
+import { T3TeamOutboxQueueDock } from "~/t3team/outbox/t3team-outboxQueueDock";
 import { useT3TeamOutboxStore } from "~/t3team/outbox/t3team-outboxStore";
 import { useT3TeamOutboxDrain } from "~/t3team/outbox/t3team-useOutboxDrain";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
@@ -99,14 +99,15 @@ export function ThreadChatViewBody({
   );
   const outboxEntries = useThreadOutbox(environmentId, threadId, backend);
   const outboxSnapshot = useT3TeamOutboxStore();
-  // Stable row nodes for the native queued surface: re-built only when the
-  // outbox actually changes, so composer churn does not re-render the rows.
-  const outboxTimelineExtensions = useMemo(
+  // Re-built only when the outbox actually changes, so composer churn does not re-render it.
+  const outboxDock = useMemo(
     () =>
-      t3TeamOutboxTimelineExtensions(
-        outboxEntries,
-        outboxSnapshot.dispatchingEntryId,
-        outboxSnapshot.failures,
+      outboxEntries.length === 0 ? undefined : (
+        <T3TeamOutboxQueueDock
+          entries={outboxEntries}
+          dispatchingEntryId={outboxSnapshot.dispatchingEntryId}
+          failures={outboxSnapshot.failures}
+        />
       ),
     [outboxEntries, outboxSnapshot.dispatchingEntryId, outboxSnapshot.failures],
   );
@@ -153,7 +154,7 @@ export function ThreadChatViewBody({
             dispatchWorkflowDecision={resolveWorkflowDecision}
             {...(controlWorkflow ? { onControlWorkflow: controlWorkflow } : {})}
             onOpenThread={onOpenThread}
-            queuedExtensions={outboxTimelineExtensions}
+            {...(outboxDock ? { composerBannerLeading: outboxDock } : {})}
           />
         </>
       ) : (

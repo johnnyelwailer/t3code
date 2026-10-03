@@ -60,6 +60,7 @@ import {
   useT3TeamTimelineRowsState,
 } from "~/t3team/chat/t3team-timelineRows";
 import { useT3TeamWorkflowCardNavigation } from "~/t3team/chat/t3team-useWorkflowCardNavigation";
+import { useT3TeamOutboundSendLabel } from "~/t3team/chat/t3team-useOutboundSendLabel";
 import { getT3TeamRenderableAttachments } from "~/t3team/chat/t3team-messageExtViews";
 import { T3TeamMessageAttachmentList } from "~/t3team/chat/t3team-messageAttachmentList";
 import {
@@ -5359,6 +5360,8 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
   const { workEntry, workspaceRoot, displayLabel } = props;
   const ctx = use(TimelineRowCtx);
   const { threadRef, onImageExpand, timestampFormat } = ctx;
+  // t3team (GHE #209): name the target of an outbound inter-agent send.
+  const t3teamOutboundLabel = useT3TeamOutboundSendLabel(workEntry, threadRef);
   const backgroundJob = ctx.backgroundJobStarters.get(workEntry.id) ?? null;
   const createdThread =
     workEntry.projectedItem?.item.type === "thread_created"
@@ -5450,7 +5453,9 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
       ? workEntry.toolLifecycleStatus === "inProgress"
         ? "Thinking"
         : "Thought"
-      : questionHeading || (displayLabel ?? workEntryDisplayLabel(workEntry, workspaceRoot));
+      : t3teamOutboundLabel
+        ? `→ ${t3teamOutboundLabel}`
+        : questionHeading || (displayLabel ?? workEntryDisplayLabel(workEntry, workspaceRoot));
   const answerPreview =
     workEntry.questionAnswer && hasQuestionAnswer(workEntry.questionAnswer)
       ? getQuestionAnswerPreview(workEntry.questionAnswer)

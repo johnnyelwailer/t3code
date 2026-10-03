@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
-import { ThreadId } from "@t3tools/contracts";
+import { type OrchestrationV2TurnItem, ThreadId, TurnItemId } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 
 import type { WorkLogEntry } from "~/session-logic";
 import { makeLiveThreadShell } from "~/t3team/hooks/t3team-threadBridge.testSupport";
@@ -33,9 +34,44 @@ const sendEntry = (overrides: Partial<WorkLogEntry> = {}): WorkLogEntry => ({
   label: "MCP tool call",
   tone: "tool",
   itemType: "dynamic_tool",
-  detail: `t3team_send_message: {"to_thread_id":"${PARENT_ID}","text":"done"}`,
+  detail: `t3_thread_send: {"threadId":"${PARENT_ID}","mode":"mailbox","text":"done"}`,
   ...overrides,
 });
+
+function dynamicToolEntry(toolName: string, input: Record<string, unknown>): WorkLogEntry {
+  const at = DateTime.makeUnsafe("2026-07-19T08:30:00.000Z");
+  const item: OrchestrationV2TurnItem = {
+    id: TurnItemId.make("send-item"),
+    threadId: ThreadId.make("me"),
+    runId: null,
+    nodeId: null,
+    providerThreadId: null,
+    providerTurnId: null,
+    nativeItemRef: null,
+    parentItemId: null,
+    ordinal: 0,
+    status: "completed",
+    title: null,
+    startedAt: at,
+    completedAt: at,
+    updatedAt: at,
+    type: "dynamic_tool",
+    toolName,
+    input,
+    output: null,
+  };
+  const { detail: _detail, ...entry } = sendEntry();
+  return {
+    ...entry,
+    projectedItem: {
+      position: 0,
+      visibility: "local",
+      sourceThreadId: item.threadId,
+      sourceItemId: item.id,
+      item,
+    },
+  };
+}
 
 describe("deriveActorOutboundRelations", () => {
   it("reads the parent from the thread's own subagent lineage", () => {
@@ -78,24 +114,22 @@ describe("isActorOutboundSendMessageEntry", () => {
   it("detects the provider-prefixed MCP tool name in the detail", () => {
     expect(
       isActorOutboundSendMessageEntry(
-        sendEntry({ detail: `mcp__t3team__t3team_send_message: {"to_thread_id":"${PARENT_ID}"}` }),
+        sendEntry({ detail: `mcp__t3__t3_thread_send: {"threadId":"${PARENT_ID}"}` }),
       ),
     ).toBe(true);
   });
 
-  it("detects the structured item name on toolData", () => {
+  it("detects the structured tool name of the dynamic tool item", () => {
+    expect(isActorOutboundSendMessageEntry(dynamicToolEntry("t3_thread_send", {}))).toBe(true);
     expect(
-      isActorOutboundSendMessageEntry({
-        label: "MCP tool call",
-        toolData: { name: "t3team_send_message" },
-      }),
-    ).toBe(true);
+      isActorOutboundSendMessageEntry(dynamicToolEntry("t3_thread_send_attachments", {})),
+    ).toBe(false);
   });
 
   it("does not match unrelated tool calls", () => {
     expect(
       isActorOutboundSendMessageEntry(
-        sendEntry({ detail: 'mcp__t3team__t3team_search_thread: {"query":"x"}' }),
+        sendEntry({ detail: 'mcp__t3__t3_thread_send_attachments: {"threadId":"x"}' }),
       ),
     ).toBe(false);
     expect(isActorOutboundSendMessageEntry(sendEntry({ detail: "Read File: /src/x.ts" }))).toBe(
@@ -108,20 +142,18 @@ describe("extractActorOutboundTargetThreadId", () => {
   it("prefers the structured input on the item", () => {
     expect(
       extractActorOutboundTargetThreadId(
-        sendEntry({
-          toolData: { name: "t3team_send_message", input: { to_thread_id: CHILD_A_ID } },
-        }),
+        dynamicToolEntry("t3_thread_send", { threadId: CHILD_A_ID, mode: "mailbox" }),
       ),
     ).toBe(CHILD_A_ID);
   });
 
-  it("falls back to the to_thread_id argument in the persisted detail JSON", () => {
+  it("falls back to the threadId argument in the persisted detail JSON", () => {
     expect(extractActorOutboundTargetThreadId(sendEntry())).toBe(PARENT_ID);
   });
 
   it("returns null when the target is not persisted", () => {
     expect(
-      extractActorOutboundTargetThreadId(sendEntry({ detail: "t3team_send_message: [truncated]" })),
+      extractActorOutboundTargetThreadId(sendEntry({ detail: "t3_thread_send: [truncated]" })),
     ).toBe(null);
   });
 });
@@ -141,7 +173,7 @@ describe("describeActorOutboundSend", () => {
 
   it("names the child by title when the target is a direct child", () => {
     const entry = sendEntry({
-      detail: `t3team_send_message: {"to_thread_id":"${CHILD_B_ID}","text":"hi"}`,
+      detail: `t3_thread_send: {"threadId":"${CHILD_B_ID}","text":"hi"}`,
     });
     expect(describeActorOutboundSend(entry, childRelations)).toBe("Sent message to «Child B»");
   });
@@ -153,7 +185,7 @@ describe("describeActorOutboundSend", () => {
     // Unknown target id (detail truncated) is never guessed:
     expect(
       describeActorOutboundSend(
-        sendEntry({ detail: "t3team_send_message: [truncated]" }),
+        sendEntry({ detail: "t3_thread_send: [truncated]" }),
         parentRelations,
       ),
     ).toBe("Sent message to another thread");
