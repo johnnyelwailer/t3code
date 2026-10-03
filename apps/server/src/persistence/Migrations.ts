@@ -136,6 +136,7 @@ import Migration0090 from "./Migrations/t3team-068_ChildThreadMetadata.ts";
 import Migration0091 from "./Migrations/t3team-069_LineageCutover.ts";
 import Migration0092 from "./Migrations/t3team-070_ThreadMailbox.ts";
 import Migration0097 from "./Migrations/t3team-075_DropProviderUsageHolds.ts";
+import Migration0098 from "./Migrations/t3team-076_ThreadSilenceWatches.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -243,6 +244,7 @@ export const migrationEntries = [
   [91, "LineageCutover", Migration0091],
   [92, "ThreadMailbox", Migration0092],
   [97, "DropProviderUsageHolds", Migration0097],
+  [98, "ThreadSilenceWatches", Migration0098],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

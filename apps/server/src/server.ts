@@ -251,7 +251,10 @@ import { T3TeamActivityLabelReactorLive } from "./t3team-activityLabelReactor.ts
 import { T3TeamChildSettleSweeperLive } from "./t3team-childSettleSweeper.ts";
 import { T3TeamSettleGuardsLive } from "./t3team-childSettleGuards.ts";
 import { T3TeamThreadTransientTurnRetryLive } from "./t3team-threadTransientTurnRetry.ts";
-import { T3TeamThreadSilenceWatchReactorLive } from "./t3team-threadSilenceWatchReactorLive.ts";
+import {
+  T3TeamSilenceWatchPortLive,
+  T3TeamThreadSilenceWatchReactorLive,
+} from "./t3team-threadSilenceWatchReactorLive.ts";
 import { T3TeamWorkflowEngineRehydrateLive } from "./t3team-workflowEngineRehydrate.ts";
 import { T3TeamWorkflowSignalDeliveryLive } from "./t3team-workflowSignalDelivery.ts";
 import { T3TeamWorkflowSignalReconcilerLive } from "./t3team-workflowSignalReconciler.ts";
@@ -619,6 +622,9 @@ const T3TeamToolBrokerLayerLive = T3TeamToolBrokerLive.pipe(
   // t3team: inter-agent mailbox — `children op:"drain"` port (shared instance, same reference
   // as the runtime registers) and the store `read_message` reads full bodies from.
   Layer.provide(T3TeamMailboxDrainPortLive),
+  // t3team: `children op:"watch"/"unwatch"` port of the ONE silence watch (same layer reference
+  // as the reactor mounted with the app layer).
+  Layer.provide(T3TeamSilenceWatchPortLive),
   Layer.provide(T3TeamActorMailboxStoreLive),
 );
 
