@@ -9,6 +9,7 @@ import {
   buildWorkItemRewriteWorkflow,
   launchWorkItemRewriteOnThread,
 } from "./t3team-workItemRewriteWorkflowLaunch";
+import { createRecordingOrchestrationApi } from "~/t3team/backend/t3team-orchestrationApi.testSupport";
 
 const WORKSPACE_ROOT = "/tmp/project-alpha";
 
@@ -116,10 +117,10 @@ describe("launchWorkItemRewriteOnThread", () => {
  */
 describe("kickoff handoff", () => {
   it("launches the recipe and never starts a model turn", async () => {
-    const dispatchCommand = vi.fn().mockResolvedValue(undefined);
+    const orchestration = createRecordingOrchestrationApi();
     const launchRecipeWorkflow = vi.fn().mockResolvedValue({ ok: true });
     const backend = {
-      dispatchCommand,
+      orchestration,
       launchRecipeWorkflow,
       syncThreadToolContext: vi.fn().mockResolvedValue(undefined),
     } as unknown as BackendApi;
@@ -157,10 +158,7 @@ describe("kickoff handoff", () => {
     expect(launched.launch.recipePath).toBe(`${WORKSPACE_ROOT}/.t3team/recipes/describe-rewrite`);
     expect(launched.launch.parameters).toMatchObject({ issueIdOrKey: "PROJ-42" });
 
-    const dispatchedTypes = dispatchCommand.mock.calls.map(
-      (call) => (call[0] as unknown as { type: string }).type,
-    );
-    expect(dispatchedTypes).toContain("thread.create");
-    expect(dispatchedTypes).not.toContain("thread.turn.start");
+    expect(orchestration.createThread).toHaveBeenCalled();
+    expect(orchestration.startThreadTurn).not.toHaveBeenCalled();
   });
 });

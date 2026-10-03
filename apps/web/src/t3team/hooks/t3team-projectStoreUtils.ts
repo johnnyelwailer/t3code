@@ -17,6 +17,7 @@ import {
 } from "./t3team-threadBridge";
 import {
   reconcileStoredProjectSource,
+  readLiveProjectSourceBinding,
   toProjectSource,
 } from "~/t3team/t3team-projectSourceBinding";
 
@@ -102,7 +103,9 @@ function synthesizeLooseWorkspaceProject(project: Project): ProjectShellProject 
   // externalProjectId/externalProjectKey when there is none — see Defect 1 (fix/t3team-wizard-
   // binding-invariant): a fake local-source binding masked the missing real one and broke every
   // Jira read for this project.
-  const boundSource = toProjectSource(project.source) ?? { provider: "local" as const };
+  const boundSource = toProjectSource(readLiveProjectSourceBinding(project)) ?? {
+    provider: "local" as const,
+  };
   return {
     id: project.id as never,
     title,

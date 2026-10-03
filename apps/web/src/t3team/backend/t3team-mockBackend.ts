@@ -1,4 +1,3 @@
-import type { ClientOrchestrationCommand } from "@t3tools/contracts";
 import { MockIntegrationProvider } from "@t3tools/integrations-core/mock";
 import { createMockAtlassianBackendApi } from "./t3team-mockBackendAtlassian";
 import { createMockGitHubBackendApi } from "./t3team-mockBackendGitHub";
@@ -8,6 +7,10 @@ import type { BackendApi, BackendState } from "./t3team-types";
 import type { T3TeamPollingBackend, T3TeamPollResult } from "./t3team-pollingBackend";
 
 const mockIntegrationProvider = new MockIntegrationProvider();
+
+async function settleAfterMockLatency(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 200));
+}
 
 function toMockPollResult<T>(value: T): T3TeamPollResult<T> {
   return {
@@ -48,16 +51,14 @@ export function createMockBackend(): BackendApi {
       notifyState({ ...state, connectionStatus: "disconnected", error: null });
     },
 
-    async dispatchCommand(command: ClientOrchestrationCommand) {
-      if (command.type === "thread.turn.start") {
-        void simulateMockConversation(
-          command.threadId as string,
-          (command as any).message.text,
-          emitThreadEvent,
-        );
-        return;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 200));
+    orchestration: {
+      createProject: settleAfterMockLatency,
+      updateProjectSource: settleAfterMockLatency,
+      createThread: settleAfterMockLatency,
+      updateThreadMetadata: settleAfterMockLatency,
+      async startThreadTurn(input) {
+        void simulateMockConversation(input.threadId, input.message.text, emitThreadEvent);
+      },
     },
 
     async launchRecipeWorkflow(input) {

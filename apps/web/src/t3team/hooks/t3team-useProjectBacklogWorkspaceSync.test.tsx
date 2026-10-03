@@ -9,6 +9,7 @@ import type { AtlassianBacklogResponse, BackendApi } from "~/t3team/backend/t3te
 import { resetProjectWorkspaceSyncStateForTests } from "~/t3team/t3team-projectWorkspaceSync";
 
 import { useProjectBacklog } from "./t3team-useProjectBacklog";
+import { createRecordingOrchestrationApi } from "~/t3team/backend/t3team-orchestrationApi.testSupport";
 
 function createBacklogResponse(): AtlassianBacklogResponse {
   return {
@@ -102,7 +103,7 @@ describe("useProjectBacklog workspace sync", () => {
       },
       connect: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
-      dispatchCommand: vi.fn(async () => undefined),
+      orchestration: createRecordingOrchestrationApi(),
       launchRecipeWorkflow: vi.fn(async () => ({ ok: true })),
       submitRecipeCardAction: vi.fn(async () => ({ ok: true })),
       resolveWorkflowInput: vi.fn(async () => undefined),

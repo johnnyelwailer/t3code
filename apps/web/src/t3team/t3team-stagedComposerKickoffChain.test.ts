@@ -26,6 +26,7 @@ import {
   WORK_ITEM_REWRITE_COMMENTS_PARAMETER,
   WORK_ITEM_REWRITE_INSTRUCTIONS_PARAMETER,
 } from "~/t3team/workitem/t3team-workItemRewriteWorkflowLaunch";
+import { createRecordingOrchestrationApi } from "~/t3team/backend/t3team-orchestrationApi.testSupport";
 
 const WORKSPACE_ROOT = "/tmp/project-alpha";
 const RECIPE_PATH = `${WORKSPACE_ROOT}/.t3team/recipes/describe-rewrite`;
@@ -74,15 +75,15 @@ function createLocalThread(kickoff: ReturnType<typeof composerSubmit>): ProjectT
 }
 
 function backendSpy() {
-  const dispatchCommand = vi.fn().mockResolvedValue(undefined);
+  const orchestration = createRecordingOrchestrationApi();
   const launchRecipeWorkflow = vi.fn().mockResolvedValue({ ok: true });
   const syncThreadToolContext = vi.fn().mockResolvedValue(undefined);
   return {
-    dispatchCommand,
+    orchestration,
     launchRecipeWorkflow,
     syncThreadToolContext,
     backend: {
-      dispatchCommand,
+      orchestration,
       launchRecipeWorkflow,
       syncThreadToolContext,
     } as unknown as BackendApi,
@@ -148,20 +149,17 @@ describe("composer submit with a staged rewrite and no existing thread", () => {
     expect(thread.kickoffWorkflow?.workflowPath).toBe(`${RECIPE_PATH}/workflow.ts`);
   });
 
-  it("dispatches thread.create AND reaches launchRecipeWorkflow", async () => {
+  it("creates the thread AND reaches launchRecipeWorkflow", async () => {
     const spy = backendSpy();
     const thread = createLocalThread(composerSubmit("Keep it under 150 words."));
 
     const plan = await bootstrapMountedThread(thread, spy.backend);
     expect(plan.action).toBe("kickoff");
 
-    const dispatchedTypes = spy.dispatchCommand.mock.calls.map(
-      (call) => (call[0] as { type: string }).type,
-    );
     // The regression: the thread the launch needs must actually be created.
-    expect(dispatchedTypes).toContain("thread.create");
+    expect(spy.orchestration.createThread).toHaveBeenCalled();
     // ...and no model turn, ever, on this path.
-    expect(dispatchedTypes).not.toContain("thread.turn.start");
+    expect(spy.orchestration.startThreadTurn).not.toHaveBeenCalled();
 
     expect(spy.launchRecipeWorkflow).toHaveBeenCalledTimes(1);
     const request = spy.launchRecipeWorkflow.mock.calls[0]?.[0] as {
@@ -193,9 +191,6 @@ describe("composer submit with a staged rewrite and no existing thread", () => {
     // The bootstrap is legitimately still hanging on the enrichment call...
     expect(settled).toBe("pending");
     // ...but the thread the user is staring at exists, instead of "Creating conversation" forever.
-    const dispatchedTypes = spy.dispatchCommand.mock.calls.map(
-      (call) => (call[0] as { type: string }).type,
-    );
-    expect(dispatchedTypes).toContain("thread.create");
+    expect(spy.orchestration.createThread).toHaveBeenCalled();
   });
 });

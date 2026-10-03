@@ -13,6 +13,7 @@ import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { clearCachedDigestGraphsForTests } from "./t3team-digestGraphCache";
 import { digestSprintGoals, payloadToDigestGraph } from "./t3team-digestGraphMappers";
 import { useMyWorkDigestGraph } from "./t3team-useMyWorkDigestGraph";
+import { createRecordingOrchestrationApi } from "~/t3team/backend/t3team-orchestrationApi.testSupport";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -226,7 +227,7 @@ describe("useMyWorkDigestGraph", () => {
       state: { connectionStatus: "connected", serverConfig: null, providers: [], error: null },
       connect: async () => undefined,
       disconnect: async () => undefined,
-      dispatchCommand: async () => undefined,
+      orchestration: createRecordingOrchestrationApi(),
       listThreadPlacements: async () => [],
       atlassian: {
         pollMyWorkDigest: (input: Parameters<MyWorkDigestPollFn>[0]) => holder.fn(input),
@@ -348,7 +349,7 @@ describe("useMyWorkDigestGraph", () => {
       state: { connectionStatus: "connected", serverConfig: null, providers: [], error: null },
       connect: async () => undefined,
       disconnect: async () => undefined,
-      dispatchCommand: async () => undefined,
+      orchestration: createRecordingOrchestrationApi(),
       listThreadPlacements: async () => [],
       atlassian: {} as unknown as BackendApi["atlassian"],
       github: {} as BackendApi["github"],

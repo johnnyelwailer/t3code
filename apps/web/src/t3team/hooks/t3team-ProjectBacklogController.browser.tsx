@@ -12,6 +12,7 @@ import {
 import { createProjectBacklogState } from "~/t3team/hooks/t3team-projectBacklogState";
 import { useT3TeamPersistedRouteState } from "~/t3team/hooks/t3team-usePersistedRouteState";
 import { useProjectBacklogController } from "~/t3team/hooks/t3team-useProjectBacklogController";
+import { noopT3TeamOrchestrationApi } from "~/t3team/backend/t3team-orchestrationApiNoop";
 
 type TestRouteSearch = {
   value?: string;
@@ -190,7 +191,7 @@ function createBackend(input: {
     },
     connect: async () => undefined,
     disconnect: async () => undefined,
-    dispatchCommand: async () => undefined,
+    orchestration: noopT3TeamOrchestrationApi,
     launchRecipeWorkflow: async () => ({ ok: true }),
     submitRecipeCardAction: async () => ({ ok: true }),
     resolveWorkflowInput: async () => undefined,
