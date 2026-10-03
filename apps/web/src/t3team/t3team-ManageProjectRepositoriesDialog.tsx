@@ -135,7 +135,7 @@ export function ManageProjectRepositoriesDialog({
 
             {mainRepositoryEnabled ? (
               <Card>
-                <CardContent className="p-4">
+                <T3SurfaceCardContent>
                   <MainRepositoryPicker
                     repositoryUrls={linkedRepositoryUrls}
                     candidates={readMainRepositoryCandidatesFromProject(project)}
@@ -143,7 +143,7 @@ export function ManageProjectRepositoriesDialog({
                     onChange={setMainRepositoryUrl}
                     disabled={saving}
                   />
-                </CardContent>
+                </T3SurfaceCardContent>
               </Card>
             ) : null}
 
