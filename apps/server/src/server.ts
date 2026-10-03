@@ -582,12 +582,10 @@ export const mountT3TeamBrokerBeforeRuntimeServices = <A, E, R, A2, E2, R2>(
 // journaled registrations). Chained provideMerge in DEPENDENCY ORDER — in `a.pipe(provideMerge(b))`
 // the inner accumulated layer's requirements are satisfied by b's services while b's own
 // requirements leak outward, so the reconciler (the fullest consumer) sits innermost and each
-// outer step supplies what the accumulated layer still needs. The reconciler additionally
-// carries a BOOT-ORDERING edge on `T3TeamWorkflowEngineRehydrateLive` (GHE #332 review): its
-// rehydration must finish before the boot reconcile starts source instances, and its rehydrate
-// requirements (repo / journal / registry / scheduler / orchestration / config) leak outward to
-// the mergeAll app layer, where the app already provides them (the rehydrate layer itself is a
-// mergeAll sibling, so no double execution — layers memoize by reference).
+// outer step supplies what the accumulated layer still needs. Boot rehydration must finish
+// before the boot reconcile starts source instances (GHE #332 review); the rehydrate layer runs
+// with the workflow host at the app level, and the reconciler waits for it on the shared
+// rehydrate gate rather than through a layer edge (which would pull the host in here).
 const WorkflowSignalSourcesLive = T3TeamWorkflowSignalReconcilerLive.pipe(
   Layer.provideMerge(T3TeamWorkflowSignalDeliveryLive),
   Layer.provideMerge(WorkflowSignalStoreLive),

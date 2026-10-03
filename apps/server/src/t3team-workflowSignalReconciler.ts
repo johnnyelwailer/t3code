@@ -27,7 +27,6 @@ import * as EffectFileSystem from "effect/FileSystem";
 import { AtlassianIntegrationProvider } from "@t3tools/integrations-atlassian";
 
 import { T3TeamWorkflowSignalDelivery } from "./t3team-workflowSignalDelivery.ts";
-import { T3TeamWorkflowEngineRehydrateLive } from "./t3team-workflowEngineRehydrate.ts";
 import {
   assertCatalogCoversDeclarations,
   makeWorkflowSignalSourceCatalog,
@@ -35,6 +34,10 @@ import {
 import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
 import { PullRequestService } from "./pullRequest/PullRequestService.ts";
 import { makeReconcilerCore } from "./t3team-workflowSignalReconcilerCore.ts";
+import {
+  T3TeamWorkflowSignalRehydrateGate,
+  T3TeamWorkflowSignalRehydrateGateLive,
+} from "./t3team-workflowSignalRehydrateGate.ts";
 import * as Scheduler from "./scheduling/Scheduler.ts";
 import { providerForAccount, providerForPersistedAuths } from "./t3team-atlassian-auth-store.ts";
 import * as ServerConfig from "./config.ts";
@@ -73,6 +76,11 @@ export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
     const store = yield* WorkflowSignalStore;
     const delivery = yield* T3TeamWorkflowSignalDelivery;
     const pullRequestService = yield* PullRequestService;
+    // Boot ordering (GHE #332 review): no source instance may start — and so DELIVER — before
+    // boot rehydration has rebuilt the watching-run controllers, or a first tick would hit the
+    // delivery port's orphan branch and fail a healthy parked run. Rehydration runs with the
+    // workflow host at the app level; every reconcile here waits for it through the gate.
+    const { completed: rehydrated } = yield* T3TeamWorkflowSignalRehydrateGate;
     // The work-item source's per-tick auth resolution reuses the ambient host context (the
     // same narrowing the pack driver bridge uses): the Atlassian auth read needs the services
     // the app composition provides ambiently to this layer.
@@ -109,20 +117,26 @@ export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
       log,
     });
 
-    // Boot reconcile: instances bound before this uptime come back now; each source's durable
-    // cursor bridges the host-down window (the catch-up sweep inside its start).
+    // Boot reconcile, once rehydration is done: instances bound before this uptime come back;
+    // each source's durable cursor bridges the host-down window (the catch-up inside its start).
+    let booted = false;
     yield* Effect.promise(() =>
-      core.reconcile().catch((error) => {
-        void Effect.runPromise(log("boot reconcile failed", { error: String(error) }));
-      }),
-    );
+      rehydrated
+        .then(() => core.reconcile())
+        .catch((error) => {
+          void Effect.runPromise(log("boot reconcile failed", { error: String(error) }));
+        })
+        .finally(() => {
+          booted = true;
+        }),
+    ).pipe(Effect.forkScoped);
 
     // The periodic sweep rides the server's due-work tick, gated to once per sweep interval
-    // (the first one interval after boot: the boot reconcile above just ran).
+    // (the first one interval after boot) and shut until the boot reconcile ran.
     let lastSweepMs = yield* Clock.currentTimeMillis;
     const sweepIfDue = Effect.gen(function* () {
       const nowMs = yield* Clock.currentTimeMillis;
-      if (nowMs - lastSweepMs < WORKFLOW_SIGNAL_SWEEP_MS) return;
+      if (!booted || nowMs - lastSweepMs < WORKFLOW_SIGNAL_SWEEP_MS) return;
       lastSweepMs = nowMs;
       yield* Effect.promise(() =>
         core.sweep().catch((error) => {
@@ -134,18 +148,13 @@ export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
 
     yield* Effect.addFinalizer(() => Effect.promise(() => core.stopAll()));
     return {
-      reconcile: () => core.reconcile(),
-      sweep: () => core.sweep(),
+      reconcile: () => rehydrated.then(() => core.reconcile()),
+      sweep: () => rehydrated.then(() => core.sweep()),
       stopAll: () => core.stopAll(),
     };
   }),
 ).pipe(
   Layer.provide(Scheduler.layer),
-  // Boot ordering (GHE #332 review): the source instances the boot reconcile starts must only
-  // be able to DELIVER after rehydration has rebuilt the watching-run controllers — otherwise
-  // a first tick that lands before the controllers exist hits the delivery port's orphan branch
-  // and fails a healthy parked run. Providing `T3TeamWorkflowEngineRehydrateLive` runs that
-  // layer's rehydration effect to completion before this one starts; the layer is memoized by
-  // reference, so the app's mergeAll sibling does not re-run the rehydration.
-  Layer.provide(T3TeamWorkflowEngineRehydrateLive),
+  // The same gate reference the rehydrate layer and the delivery port use (memoized: one flag).
+  Layer.provide(T3TeamWorkflowSignalRehydrateGateLive),
 );

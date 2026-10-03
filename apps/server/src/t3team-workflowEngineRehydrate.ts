@@ -1,8 +1,9 @@
 /**
  * Boot rehydration for durable workflow runs (Epic 25 §Open question 2).
  *
- * On startup — after the orchestration reactors are live, before the welcome event — every
- * `workflow_runs` row in status `suspended` is rebuilt into a live, resumable run:
+ * On startup — once the workflow reactor is live, and before the signal reconciler starts any
+ * source (it waits on the rehydrate gate) — every `workflow_runs` row in status `suspended` is
+ * rebuilt into a live, resumable run:
  *   • DATA from the DB — workflow path, launch args, project/model/mode, and the pending ask —
  *     is read off the row.
  *   • CODE from the host layers — the workflow host, the SQLite journal store, the in-memory
