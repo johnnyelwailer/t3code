@@ -3,7 +3,8 @@
  * derives the LIVE SET of source instances from the journaled registrations and reconciles it
  * against what is actually running. The reconcile / emit-boundary / cursor logic lives in
  * t3team-workflowSignalReconcilerCore.ts; this layer is the thin Effect wrapper: services, the
- * boot cross-check, the boot reconcile, the sweep cadence, and the shutdown finalizer.
+ * boot cross-check, the boot reconcile, the sweep (a due-work source on the server's
+ * `Scheduler`, run at most once per sweep interval), and the shutdown finalizer.
  *
  *   desired = { (source, params) : some live run holds a registration on it }
  *   reconcile(desired, actual) → start what is missing, stop what is orphaned
@@ -14,6 +15,7 @@
  * catch up after crashes (each source's durable cursor bridges the host-down window).
  */
 
+import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -33,6 +35,7 @@ import {
 import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
 import { PullRequestService } from "./pullRequest/PullRequestService.ts";
 import { makeReconcilerCore } from "./t3team-workflowSignalReconcilerCore.ts";
+import * as Scheduler from "./scheduling/Scheduler.ts";
 import { providerForAccount, providerForPersistedAuths } from "./t3team-atlassian-auth-store.ts";
 import * as ServerConfig from "./config.ts";
 
@@ -54,8 +57,6 @@ export interface WorkflowSignalReconcilerShape {
   readonly reconcile: () => Promise<void>;
   /** Periodic sweep: reconcile + terminal-binding purge + inbox GC. */
   readonly sweep: () => Promise<void>;
-  /** Stop the sweep timer (shutdown). */
-  readonly stop: () => void;
   /** Stop every live instance (host shutdown finalizer). */
   readonly stopAll: () => Promise<void>;
 }
@@ -100,7 +101,6 @@ export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
       catalog,
       delivery,
       store,
-      sweepMs: WORKFLOW_SIGNAL_SWEEP_MS,
       inboxCutoffIso: () =>
         DateTime.formatIso(
           DateTime.subtract(DateTime.nowUnsafe(), { milliseconds: WORKFLOW_SIGNAL_INBOX_TTL_MS }),
@@ -117,15 +117,30 @@ export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
       }),
     );
 
+    // The periodic sweep rides the server's due-work tick, gated to once per sweep interval
+    // (the first one interval after boot: the boot reconcile above just ran).
+    let lastSweepMs = yield* Clock.currentTimeMillis;
+    const sweepIfDue = Effect.gen(function* () {
+      const nowMs = yield* Clock.currentTimeMillis;
+      if (nowMs - lastSweepMs < WORKFLOW_SIGNAL_SWEEP_MS) return;
+      lastSweepMs = nowMs;
+      yield* Effect.promise(() =>
+        core.sweep().catch((error) => {
+          void Effect.runPromise(log("signal sweep failed", { error: String(error) }));
+        }),
+      );
+    });
+    yield* (yield* Scheduler.Scheduler).register("t3team-workflow-signal-sweep", sweepIfDue);
+
     yield* Effect.addFinalizer(() => Effect.promise(() => core.stopAll()));
     return {
       reconcile: () => core.reconcile(),
       sweep: () => core.sweep(),
-      stop: () => core.stop(),
       stopAll: () => core.stopAll(),
     };
   }),
 ).pipe(
+  Layer.provide(Scheduler.layer),
   // Boot ordering (GHE #332 review): the source instances the boot reconcile starts must only
   // be able to DELIVER after rehydration has rebuilt the watching-run controllers — otherwise
   // a first tick that lands before the controllers exist hits the delivery port's orphan branch

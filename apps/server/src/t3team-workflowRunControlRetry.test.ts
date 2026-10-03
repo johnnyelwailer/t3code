@@ -105,7 +105,7 @@ const fakeControlDeps = (
   repo: {} as never,
   registry: {} as never,
   rearmScheduler: () => Promise.resolve(),
-  host: {} as never,
+  host: makeFakeWorkflowHostLayer().service,
   nowIso,
   stopOrigin: "user",
   ...overrides,

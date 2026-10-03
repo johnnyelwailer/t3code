@@ -29,7 +29,7 @@ export interface PreparedWorkflowLaunchDeps {
   readonly registry: T3TeamWorkflowEngineRegistryShape;
   readonly runRepository: WorkflowRunRepositoryShape;
   readonly journalStore: JournalStore;
-  /** Scheduler poke re-arming the soonest-deadline timer after a `waitUntil` park (Epic 27). */
+  /** Scheduler poke after a `waitUntil` park (Epic 27); opens the wake sweep if still shut. */
   readonly rearmScheduler: () => Promise<void>;
   /** The thread operations the run performs (`T3TeamWorkflowHost`). */
   readonly host: WorkflowHostPort;

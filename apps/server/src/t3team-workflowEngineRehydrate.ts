@@ -18,10 +18,9 @@
  * ── Clock-parked runs (Epic 27) ──────────────────────────────────────────────
  * A run parked on `waitUntil` is in status `sleeping`, not `suspended`. It rebuilds the same
  * resume closure (so the scheduler can drive it forward), but is woken by the CLOCK, not an
- * event — so it does NOT restore a reactor pending ask; instead the scheduler re-arms its
- * `wake_at`. A deadline that passed during downtime fires immediately on the first arm. The
- * rebuilt lifecycle's `onSleep` re-pokes the scheduler so a run that sleeps again keeps the
- * soonest-deadline timer current.
+ * event — so it does NOT restore a reactor pending ask; instead the scheduler's sweep reads its
+ * `wake_at` on every tick. Rehydration opens that sweep once the closures exist, and a deadline
+ * that passed during downtime wakes on the opening catch-up pass.
  *
  * Single-instance only (Epic 25 §Out of scope): no lease/lock, so this assumes one server owns
  * these rows. A row whose pending ask is missing is logged and skipped (it cannot be resolved).
@@ -109,8 +108,11 @@ const rehydrateSuspendedWorkflowRunsCore = Effect.fn("rehydrateSuspendedWorkflow
       paused.length === 0 &&
       queued.length === 0 &&
       watching.length === 0
-    )
+    ) {
+      // Nothing to rebuild: open the scheduler's wake sweep for runs that park later.
+      yield* Effect.promise(() => scheduler.rearm());
       return;
+    }
 
     // The journal lives in the DB (store), so `runsRoot` only backs the workspace-root default
     // for tool scratch files; the server cwd matches the bootstrapped project's workspace.
@@ -231,8 +233,8 @@ const rehydrateSuspendedWorkflowRunsCore = Effect.fn("rehydrateSuspendedWorkflow
       }
     }
 
-    // Arm the single soonest-deadline timer over every rebuilt sleeping run. A past-due deadline
-    // computes a 0ms delay and fires immediately — the downtime catch-up guarantee.
+    // Open the scheduler's wake sweep now that every sleeping run's closure is rebuilt. Its
+    // catch-up pass wakes a deadline that passed during downtime — the boot guarantee.
     yield* Effect.promise(() => scheduler.rearm());
 
     yield* Effect.logInfo("rehydrated durable workflow runs", { restored, armed, woken });

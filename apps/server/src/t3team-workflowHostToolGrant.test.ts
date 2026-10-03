@@ -273,10 +273,8 @@ it.effect(
         runId: "grant-malformed-shape",
         thread: ThreadId.make("thread-malformed-shape"),
       };
-      const good = {
-        runId: "grant-malformed-sibling-good",
-        thread: ThreadId.make("thread-malformed-good"),
-      };
+      // The good sibling runs its draft on the broker fixture's one known thread.
+      const good = { runId: "grant-malformed-sibling-good", thread: threadId };
 
       // Park all three, then bypass the repo's encoder (it would reject these) with a raw write.
       yield* parkProbe({ runId: bad1.runId, granted: false, launchThreadId: bad1.thread });

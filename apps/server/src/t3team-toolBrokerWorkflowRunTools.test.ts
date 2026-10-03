@@ -2,8 +2,8 @@
 /**
  * `t3team.orchestration.run` (ephemeral workflows, slice 1) — handler-level acceptance against the
  * REAL durable engine seams: an in-memory SQLite run repo + journal store (post-039 schema with
- * `origin`), the real launch funnel, and a captured orchestration dispatch standing in for the
- * live engine. Covers: argument validation (exactly one of source/workflowPath), pure-compute
+ * `origin`), the real launch funnel, and a recording workflow host standing in for the live
+ * orchestrator. Covers: argument validation (exactly one of source/workflowPath), pure-compute
  * inline source (completed + output + persisted file), askUser suspension (decision card on the
  * calling thread + `origin='ephemeral'` row), workspace containment, and the concurrency cap.
  */
@@ -13,12 +13,7 @@ import * as NodeTimersPromises from "node:timers/promises";
 
 import { assert, describe, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import {
-  type OrchestrationCommand,
-  ProjectId,
-  ProviderInstanceId,
-  ThreadId,
-} from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -28,6 +23,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
 import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStore.ts";
 import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
@@ -105,7 +101,7 @@ const testLayer = it.layer(
   ),
 );
 
-/** Real fs/path + real durable seams over an in-memory DB; dispatch is captured. */
+/** Real fs/path + real durable seams over an in-memory DB; host calls are recorded. */
 let harnessCount = 0;
 const makeHarness = Effect.fn("makeHarness")(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
@@ -115,7 +111,7 @@ const makeHarness = Effect.fn("makeHarness")(function* () {
   const workspaceRoot = yield* fileSystem.makeTempDirectoryScoped({
     prefix: "t3team-ephemeral-run-",
   });
-  const dispatched: OrchestrationCommand[] = [];
+  const fakeHost = makeFakeWorkflowHost();
   const registry = makeWorkflowEngineRegistry();
   harnessCount += 1;
   const harnessThreadId = ThreadId.make(`${threadId}-${harnessCount}`);
@@ -127,10 +123,7 @@ const makeHarness = Effect.fn("makeHarness")(function* () {
       runRepository: repo,
       journalStore: store,
       rearmScheduler: () => Promise.resolve(),
-      dispatch: (command) => {
-        dispatched.push(command);
-        return Promise.resolve();
-      },
+      host: fakeHost.host,
     },
     loadThreadProject: () =>
       Effect.succeed({
@@ -146,7 +139,7 @@ const makeHarness = Effect.fn("makeHarness")(function* () {
     // one-launch-per-turn guard (GHE #415) would otherwise see an earlier test's still-suspended
     // run as this thread's own.
   })(harnessThreadId);
-  return { handlers, dispatched, workspaceRoot, repo, registry, threadId: harnessThreadId };
+  return { handlers, fakeHost, workspaceRoot, repo, registry, threadId: harnessThreadId };
 });
 
 testLayer("t3team.orchestration.run — ephemeral workflow tool", (it) => {
@@ -242,7 +235,7 @@ testLayer("t3team.orchestration.run — ephemeral workflow tool", (it) => {
     () =>
       Effect.scoped(
         Effect.gen(function* () {
-          const { handlers, dispatched, repo, threadId } = yield* makeHarness();
+          const { handlers, fakeHost, repo, threadId } = yield* makeHarness();
 
           const result = yield* handlers.runWorkflow({
             source: ASK_USER_SOURCE,
@@ -254,9 +247,7 @@ testLayer("t3team.orchestration.run — ephemeral workflow tool", (it) => {
           assert.strictEqual(result.handoff, "workflow-ui");
 
           // The ask posted a decision-card message into the CALLING thread and parked there.
-          const cards = dispatched.filter(
-            (command) => command.type === "thread.message.upsert" && command.threadId === threadId,
-          );
+          const cards = fakeHost.messages().filter((message) => message.threadId === threadId);
           assert.isAbove(cards.length, 0);
 
           const row = yield* waitForRunStatus(repo, result.runId, "suspended");

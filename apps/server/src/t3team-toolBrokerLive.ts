@@ -5,7 +5,6 @@
  * (`delegate_task`, `task_*`, `t3_thread_*`); this broker serves the fork's own
  * host tools.
  */
-import { type OrchestrationV2ServerCommand } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -52,8 +51,6 @@ export const T3TEAM_GENERIC_THREAD_TOOL_IDS = [
   "t3team.recipe.validate",
 ] as const;
 
-const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
-
 const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () {
   const threads = yield* ThreadManagementService;
   const reads = makeT3TeamThreadReads({ threads, projects: yield* ProjectStoreV2 });
@@ -77,14 +74,11 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     : undefined;
   bindChildProviderCatalog(providerRegistry);
 
-  const dispatchCommand = (command: OrchestrationV2ServerCommand) =>
-    threads.dispatch(command).pipe(Effect.mapError(errorText));
   const loadThreadProject = reads.loadThreadProject;
   const workflowTools = yield* makeWorkflowToolsForThread({
     fileSystem,
     path,
     loadThreadProject,
-    dispatch: (command) => Effect.runPromise(dispatchCommand(command)).then(() => undefined),
   });
   const manageChildren = yield* makeManageChildrenHandler(
     localEnvironmentId === undefined ? {} : { localEnvironmentId },

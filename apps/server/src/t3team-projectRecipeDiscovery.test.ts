@@ -334,7 +334,7 @@ export function visible(ctx) {
 export async function visible(_ctx, api) {
   const view = await api.tools.call("t3team.view.read");
   try {
-    await api.tools.call("t3team.thread.rename", { title: "Nope" });
+    await api.tools.call("t3team.backlog.set_assignee_filter", { assignee: "nobody" });
     return { visible: false };
   } catch (error) {
     return {

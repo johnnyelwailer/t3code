@@ -5,7 +5,7 @@
  * without the services the tool simply reports "not enabled". Kept out of
  * {@link ./t3team-toolBrokerLive.ts} so the broker file stays within the additive size budget.
  */
-import type { OrchestrationCommand, ThreadId } from "@t3tools/contracts";
+import type { ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
@@ -20,6 +20,7 @@ import {
   type T3TeamWorkflowRunToolHandlers,
 } from "./t3team-toolBrokerWorkflowRunTools.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import { T3TeamWorkflowHost, toWorkflowHostPort } from "./t3team-workflowHost.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 import { T3TeamWorkflowSignalReconciler } from "./t3team-workflowSignalReconciler.ts";
 import { TextGeneration } from "./textGeneration/TextGeneration.ts";
@@ -45,7 +46,6 @@ export const makeWorkflowRunToolsForThread = Effect.fn("makeWorkflowRunToolsForT
   function* (deps: {
     readonly fileSystem?: FileSystem.FileSystem | undefined;
     readonly path?: Path.Path | undefined;
-    readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
     readonly loadThreadProject: LoadThreadProjectLike;
     readonly stopRun?:
       | ((threadId: ThreadId, runId: string) => Effect.Effect<void, string>)
@@ -57,6 +57,7 @@ export const makeWorkflowRunToolsForThread = Effect.fn("makeWorkflowRunToolsForT
     const runRepository = Option.getOrUndefined(yield* Effect.serviceOption(WorkflowRunRepository));
     const journalStore = Option.getOrUndefined(yield* Effect.serviceOption(WorkflowJournalStore));
     const scheduler = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamWorkflowScheduler));
+    const host = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamWorkflowHost));
     const textGeneration = Option.getOrUndefined(yield* Effect.serviceOption(TextGeneration));
     // Durable signal-source state (GHE #332) — optional, like the other engine services above:
     // absent, a launched run simply has no signal verbs.
@@ -64,7 +65,7 @@ export const makeWorkflowRunToolsForThread = Effect.fn("makeWorkflowRunToolsForT
     const signalReconciler = Option.getOrUndefined(
       yield* Effect.serviceOption(T3TeamWorkflowSignalReconciler),
     );
-    if (!registry || !runRepository || !journalStore || !scheduler) {
+    if (!registry || !runRepository || !journalStore || !scheduler || !host) {
       return undefined;
     }
     return makeWorkflowRunToolHandlers({
@@ -77,7 +78,7 @@ export const makeWorkflowRunToolsForThread = Effect.fn("makeWorkflowRunToolsForT
         runRepository,
         journalStore,
         rearmScheduler: () => scheduler.rearm(),
-        dispatch: deps.dispatch,
+        host: toWorkflowHostPort(host),
         ...(signalStore === undefined
           ? {}
           : {

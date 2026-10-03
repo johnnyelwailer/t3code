@@ -83,5 +83,5 @@ export function makeFakeWorkflowHostLayer(
     flushHeld: () => Effect.void,
     heldThreadIds: () => [],
   };
-  return { ...fake, layer: Layer.succeed(T3TeamWorkflowHost, service) };
+  return { ...fake, service, layer: Layer.succeed(T3TeamWorkflowHost, service) };
 }

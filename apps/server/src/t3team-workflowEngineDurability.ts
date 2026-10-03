@@ -39,8 +39,8 @@ function isoFromMillis(millis: number): string {
 }
 
 /** Adapt the Effect repo into the Promise-based lifecycle the launch controller drives.
- * `onSleep` (Epic 27) is a best-effort poke fired after a clock park is recorded, so the
- * scheduler re-arms its soonest-deadline timer for the freshly-slept run. */
+ * `onSleep` (Epic 27) is a best-effort poke fired after a clock park is recorded; the
+ * scheduler's sweep then picks the deadline up from the row on its next tick. */
 export function makeWorkflowRunLifecycle(opts: {
   readonly repo: WorkflowRunRepositoryShape;
   readonly row: WorkflowRun;

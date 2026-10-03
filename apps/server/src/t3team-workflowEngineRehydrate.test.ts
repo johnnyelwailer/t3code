@@ -59,6 +59,7 @@ import {
   makeFakeWorkflowHostLayer,
 } from "./t3team-workflowHostFake.fixtures.ts";
 import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
+import { T3TeamWorkflowSchedulerSweepLive } from "./t3team-workflowSchedulerSweepLive.ts";
 
 const reviewWorkflowPath = NodeURL.fileURLToPath(
   new URL("../__fixtures__/t3team-exampleReview.workflow.ts", import.meta.url),
@@ -141,15 +142,21 @@ const WorkflowEngineDurabilityTestLive = T3TeamWorkflowSchedulerLive.pipe(
 
 // Exactly the six services `rehydrateSuspendedWorkflowRuns` requires (plus the durable signal
 // store, which the event-park rehydration drains the boot-gap inbox through when present).
-const TestLayer = Layer.mergeAll(
-  WorkflowEngineDurabilityTestLive,
-  makeFakeWorkflowHostLayer().layer,
-  ServerConfig.layerTest(cwd, { prefix: "t3-rehydrate-test-" }),
-  WorkflowSignalStoreLive.pipe(Layer.provide(SqlitePersistenceMemory)),
-).pipe(Layer.provideMerge(NodeServices.layer));
+// The scheduler's wake sweep sits on top, as server.ts mounts it with the workflow host.
+const TestLayer = T3TeamWorkflowSchedulerSweepLive.pipe(
+  Layer.provideMerge(
+    Layer.mergeAll(
+      WorkflowEngineDurabilityTestLive,
+      makeFakeWorkflowHostLayer().layer,
+      ServerConfig.layerTest(cwd, { prefix: "t3-rehydrate-test-" }),
+      WorkflowSignalStoreLive.pipe(Layer.provide(SqlitePersistenceMemory)),
+    ),
+  ),
+  Layer.provideMerge(NodeServices.layer),
+);
 
 /** Poll an in-memory predicate until it holds or times out. Used only by the sleeping-run case,
- * which waits on a REAL scheduler timer (see that test for why `it.live` is required there). */
+ * which waits on the REAL scheduler sweep (see that test for why `it.live` is required there). */
 const waitUntil = (predicate: () => boolean, label: string): Effect.Effect<void> =>
   Effect.gen(function* () {
     for (let i = 0; i < 200; i += 1) {
@@ -273,9 +280,9 @@ it.effect("skips a suspended row with no recorded pending ask instead of crashin
   }).pipe(Effect.provide(TestLayer)),
 );
 
-// `it.live` (real clock): the production scheduler layer (`T3TeamWorkflowSchedulerLive`) has no
-// clock-injection seam, so proving the past-due catch-up arm requires a real ~1s wait for the
-// `MIN_DUE_DELAY_MS` floor to fire. Under the default TestClock this would never tick.
+// `it.live` (real clock): the production sweep (`T3TeamWorkflowSchedulerSweepLive`) reads the wall
+// clock, and its boot catch-up pass runs in the background once `rearm` opens the gate, so the
+// test polls.
 it.live(
   "rehydrates a sleeping run and the scheduler's real re-arm fires the already-past-due wake",
   () =>
@@ -334,8 +341,8 @@ it.live(
       // Let real wall-clock time pass the tiny deadline before rehydrating.
       yield* Effect.sleep(Duration.millis(50));
 
-      // The real boot path: rebuilds the resume closure AND arms the real scheduler, which finds
-      // the deadline already due and fires it at the `MIN_DUE_DELAY_MS` floor, with nobody here
+      // The real boot path: rebuilds the resume closure AND opens the real scheduler, whose
+      // catch-up pass finds the deadline already due and wakes the run, with nobody here
       // calling `resume` by hand.
       yield* rehydrateSuspendedWorkflowRuns();
 

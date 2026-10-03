@@ -257,6 +257,7 @@ import { T3TeamWorkflowSignalDeliveryLive } from "./t3team-workflowSignalDeliver
 import { T3TeamWorkflowSignalReconcilerLive } from "./t3team-workflowSignalReconciler.ts";
 import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
+import { T3TeamWorkflowSchedulerSweepLive } from "./t3team-workflowSchedulerSweepLive.ts";
 import { T3TeamToolBrokerLive } from "./t3team-toolBrokerLive.ts";
 import { T3TeamV2FoundationLive } from "./t3team-v2/t3team-v2FoundationLive.ts";
 import * as T3TeamWorkflowHost from "./t3team-workflowHost.ts";
@@ -554,9 +555,9 @@ const CloudManagedEndpointRuntimeLive = Layer.mergeAll(
 // The workflow-engine singletons share one provideMerge slot (the `pipe` arity is capped):
 // the in-memory run registry (reactor's hot index) + the durable run record + the SQLite
 // journal store. Repo + store get the memoized SqlClient from PersistenceLayerLive (Epic 25
-// §Open question 2); the registry needs nothing. The scheduler (Epic 27) is layered ON TOP via
-// `provideMerge` so it shares that same registry + repo (its arm/fire path resolves runs from
-// the one registry and reads the sleeping set from the one repo).
+// §Open question 2); the registry needs nothing. The scheduler's wake gate (Epic 27) is layered
+// on top; its sweep (`T3TeamWorkflowSchedulerSweepLive`, mounted with the workflow reactor)
+// resolves runs from the one registry and reads the sleeping set from the one repo.
 const WorkflowEngineDurabilityLive = T3TeamWorkflowSchedulerLive.pipe(
   Layer.provideMerge(
     Layer.mergeAll(
@@ -1320,6 +1321,9 @@ const makeServerLayer = Layer.unwrap(
       runtimeStateLayer.pipe(Layer.provide(launcherLayer)),
       tailscaleServeLayer,
       T3TeamWorkflowEngineReactorLive,
+      // t3team: the workflow scheduler's wake sweep (a `Scheduler` source); mounted here, not with
+      // its gate, because an orphaned run's notice goes through the workflow host.
+      T3TeamWorkflowSchedulerSweepLive,
       T3TeamActorMessageReactorLive,
       T3TeamChildStatusReactorLive,
       T3TeamActivityLabelReactorLive,

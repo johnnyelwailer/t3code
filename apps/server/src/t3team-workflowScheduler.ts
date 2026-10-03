@@ -1,112 +1,76 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
-// @effect-diagnostics globalTimers:off -- the scheduler is the one component that bridges real
-// wall-clock time to the engine: it owns a single host timer (injectable for tests) armed for
-// the soonest deadline, not an Effect fiber sleep. Workflow bodies still read the journaled
-// `now()`; only the scheduler touches the real clock.
 /**
  * The workflow scheduler (Epic 27 §The scheduler service) — the clock-based peer to the event
  * reactor (`t3team-workflowEngineReactor.ts`). Where the reactor wakes a run parked on
  * `askUser` / `askAgent` when a domain event lands, the scheduler wakes a run parked on
  * `waitUntil` when the wall clock reaches its deadline.
  *
- * It owns the durable wake deadlines: `workflow_runs` rows in status `sleeping` carry a
- * `wake_at` instant and the `waitUntil` correlation they parked on. The scheduler indexes that
- * set into ONE process timer armed for the SOONEST `wake_at`; on fire it resumes every due run
- * by appending its `waitUntil` reply — the exact `registry.getRun(runId).resume(...)` path the
- * reactor uses, just clock-triggered — then re-arms for the next deadline.
+ * The deadlines are durable: `workflow_runs` rows in status `sleeping` carry a `wake_at` instant
+ * and the `waitUntil` correlation they parked on. The clock is upstream's `Scheduler` — the one
+ * due-work tick the server runs its sweeps on (usage-limit recovery, scheduled tasks, the fork's
+ * settle and mailbox sweeps). Each tick reads the sleeping set and resumes every due run by
+ * appending its `waitUntil` reply — the exact `registry.getRun(runId).resume(...)` path the
+ * reactor uses, just clock-triggered. A run therefore wakes at most one tick after its deadline.
  *
  * ── Durability ───────────────────────────────────────────────────────────────
- * The timer lives only in memory, but the deadlines live in the DB. On boot
- * (`rehydrateSuspendedWorkflowRuns`, after it rebuilds each sleeping run's resume closure)
- * {@link WorkflowScheduler.rearm} re-reads the sleeping set and re-arms. A deadline that PASSED
- * during downtime arms at the {@link MIN_DUE_DELAY_MS} floor and fires almost immediately
- * (catch-up); the floor exists so a due row whose resume is a no-op cannot hot-loop. As runs
- * park or wake at runtime, the lifecycle pokes `rearm` so the soonest-deadline timer stays
- * current.
+ * Nothing is armed in memory: every tick re-reads the DB. The service published here is the
+ * GATE: the sweep stays shut until boot rehydration (`rehydrateSuspendedWorkflowRuns`) has
+ * rebuilt each sleeping run's resume closure and calls {@link WorkflowScheduler.rearm}. Opening
+ * also runs one catch-up pass, so a deadline that passed during downtime wakes at boot. A due row
+ * with no registered closure (recipe gone, rehydration failed) is orphaned — failed, and its
+ * launch thread told — instead of re-tried on every tick.
+ *
+ * The gate and the sweep are two layers because they live at different points of the server's
+ * layer graph: the gate sits with the run registry and repository (the broker tools and routes
+ * poke it), while the sweep needs the workflow host to tell a launch thread about an orphaned
+ * run, so it is mounted with the workflow reactor (t3team-workflowSchedulerSweepLive.ts).
  *
  * Single-instance only (Epic 27 §Open question 4): no lease/leader, so this assumes one server
  * owns the sleeping rows. A replicated deployment would wake a run once per instance.
  *
- * The scheduler is the only clock authority for waking runs: workflow bodies read the journaled
- * `now()` for timing decisions; the scheduler reads the real clock and pokes the engine, which
- * keeps replay deterministic while still being time-driven.
+ * Workflow bodies read the journaled `now()` for timing decisions; only the sweep reads the real
+ * clock, which keeps replay deterministic while still being time-driven.
+ *
+ * Distinct from upstream scheduled tasks (`scheduledTasks/ScheduledTaskService.ts`): those send a
+ * fixed prompt on a recurrence. A routine here is a workflow body with its own control flow
+ * (branches, asks, child agents) that sleeps between iterations.
  */
 
-import * as NodeTimers from "node:timers";
-
 import * as Context from "effect/Context";
-import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
-import { deliverWorkflowFailure } from "./t3team-workflowCompletionMessage.ts";
-import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
-import { T3TeamWorkflowHost, toWorkflowHostPort } from "./t3team-workflowHost.ts";
-import { makeSchedulerResume, orphanSleepingRun } from "./t3team-workflowSchedulerResume.ts";
-
-/** Floor for a re-arm delay of an already-due row. A due row whose resume is a no-op (unregistered
- * run, or a reply resolved by a crashed process) would otherwise re-arm at delay 0 forever — a
- * setTimeout(0) hot loop that hammers `listSleeping`. Capping to 1s makes at most one wake attempt
- * per second while a legitimate in-flight resume settles; the orphan paths remove the dead row. */
-
-// The scheduler logic itself; re-exported so existing importers of this module keep resolving.
+// The sweep logic itself; re-exported so existing importers of this module keep resolving.
 export * from "./t3team-workflowSchedulerCore.ts";
-import {
-  makeWorkflowScheduler,
-  toSchedulerSleepingRun,
-  type SchedulerSleepingRun,
-  type WorkflowScheduler,
-} from "./t3team-workflowSchedulerCore.ts";
+import type { WorkflowScheduler } from "./t3team-workflowSchedulerCore.ts";
 
-/** The scheduler as a host service — a peer to the registry/reactor singletons. Its value is
- * the Promise-based {@link WorkflowScheduler}, so both Effect callers (boot rehydration) and
- * Promise callers (the lifecycle's sleep poke) drive the same timer. */
+/** The wake gate the run lifecycles, workflow tools and boot rehydration poke. */
+export interface WorkflowWakeGate extends WorkflowScheduler {
+  /** Settles on the first `rearm`; the sweep wakes nothing before it. */
+  readonly opened: Promise<void>;
+}
+
+export function makeWorkflowWakeGate(): WorkflowWakeGate {
+  let open: () => void = () => undefined;
+  const opened = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  return {
+    opened,
+    rearm: () => {
+      open();
+      return Promise.resolve();
+    },
+  };
+}
+
+/** The scheduler as a host service — a peer to the registry/reactor singletons. Its value is the
+ * Promise-based {@link WorkflowWakeGate}, so both Effect callers (boot rehydration) and Promise
+ * callers (the lifecycle's sleep poke) reach the same gate. */
 export class T3TeamWorkflowScheduler extends Context.Service<
   T3TeamWorkflowScheduler,
-  WorkflowScheduler
+  WorkflowWakeGate
 >()("t3/t3team-workflowScheduler/T3TeamWorkflowScheduler") {}
 
-export const T3TeamWorkflowSchedulerLive = Layer.effect(
+export const T3TeamWorkflowSchedulerLive = Layer.sync(
   T3TeamWorkflowScheduler,
-  Effect.gen(function* () {
-    const repo = yield* WorkflowRunRepository;
-    const registry = yield* T3TeamWorkflowEngineRegistry;
-    // Optional on purpose: harnesses without a workflow host still get a working
-    // scheduler — orphaned runs then only log instead of messaging.
-    const workflowHost = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamWorkflowHost));
-    const host = workflowHost === undefined ? undefined : toWorkflowHostPort(workflowHost);
-
-    const listSleeping = (): Promise<ReadonlyArray<SchedulerSleepingRun>> =>
-      Effect.runPromise(repo.listByStatus({ status: "sleeping" })).then((rows) =>
-        rows
-          .map(toSchedulerSleepingRun)
-          .filter((run): run is SchedulerSleepingRun => run !== undefined),
-      );
-
-    const resume = makeSchedulerResume({
-      getRun: (runId) => registry.getRun(runId),
-      orphan: (runId, correlationId) =>
-        orphanSleepingRun(
-          repo,
-          runId,
-          correlationId,
-          host === undefined
-            ? undefined
-            : (launchThreadId, errorText) =>
-                deliverWorkflowFailure({ launchThreadId, workflowRunId: runId, errorText, host }),
-        ),
-    });
-
-    const scheduler = makeWorkflowScheduler({
-      listSleeping,
-      resume,
-      onWarn: (message, fields) => {
-        Effect.runFork(Effect.logWarning(message, fields));
-      },
-    });
-
-    yield* Effect.addFinalizer(() => Effect.sync(() => scheduler.stop()));
-    return scheduler;
-  }),
+  makeWorkflowWakeGate,
 );
