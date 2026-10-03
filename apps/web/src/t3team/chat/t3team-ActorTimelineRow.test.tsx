@@ -15,12 +15,13 @@ describe("T3TeamActorTimelineRow", () => {
       <T3TeamActorTimelineRow
         message={{
           id: MessageId.make("actor-message-1"),
-          role: "actor",
+          role: "user",
+          createdBy: "agent",
           text: "## Result\n\n- Fixed **two** issues.",
           streaming: false,
           createdAt: "2026-07-19T12:00:00.000Z",
           updatedAt: "2026-07-19T12:00:00.000Z",
-          turnId: null,
+          runId: null,
           t3teamExt: {
             visibleToUser: true,
             displayText: "Fixed two issues and verified the result.",
@@ -57,12 +58,13 @@ describe("T3TeamActorTimelineRow", () => {
       <T3TeamActorTimelineRow
         message={{
           id: MessageId.make("actor-message-2"),
-          role: "actor",
+          role: "user",
+          createdBy: "agent",
           text: longText,
           streaming: false,
           createdAt: "2026-07-19T12:00:00.000Z",
           updatedAt: "2026-07-19T12:00:00.000Z",
-          turnId: null,
+          runId: null,
           t3teamExt: { visibleToUser: true },
         }}
       />,

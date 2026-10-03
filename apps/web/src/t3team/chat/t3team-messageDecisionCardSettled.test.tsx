@@ -19,11 +19,8 @@
  * chip, and still renders — that distinction is what the coverage below has to preserve.
  */
 
-import {
-  MessageId,
-  type OrchestrationThreadActivity,
-  type OrchestrationWorkflowRunStatus,
-} from "@t3tools/contracts";
+import { MessageId, type OrchestrationWorkflowRunStatus } from "@t3tools/contracts";
+import type { T3TeamThreadActivityRecord } from "~/t3team/chat/t3team-threadActivityRecord";
 import { PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION } from "@t3tools/project-recipes";
 import { type ReactNode, type Ref } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -85,7 +82,7 @@ function decisionMessage(id: string): ChatMessage {
     streaming: false,
     createdAt: "2026-06-09T00:00:00.000Z",
     updatedAt: "2026-06-09T00:00:00.000Z",
-    turnId: null,
+    runId: null,
     t3teamExt: {
       visibleToUser: true,
       status: "waiting-for-input",
@@ -108,15 +105,17 @@ function decisionMessage(id: string): ChatMessage {
 async function renderTimeline(
   messages: ReadonlyArray<ChatMessage>,
   workflowRunStatus?: OrchestrationWorkflowRunStatus,
-  threadActivities?: ReadonlyArray<OrchestrationThreadActivity>,
+  threadActivities?: ReadonlyArray<T3TeamThreadActivityRecord>,
 ) {
   const { MessagesTimeline } = await import("~/components/chat/MessagesTimeline");
   return renderToStaticMarkup(
     <MessagesTimeline
       {...buildT3TeamMessagesTimelineTestProps()}
-      dispatchWorkflowDecision={async () => {}}
-      {...(workflowRunStatus ? { workflowRunStatus } : {})}
-      {...(threadActivities ? { threadActivities } : {})}
+      t3team={{
+        dispatchWorkflowDecision: async () => {},
+        ...(workflowRunStatus ? { workflowRunStatus } : {}),
+        ...(threadActivities ? { threadActivities } : {}),
+      }}
       timelineEntries={messages.map((message, index) => ({
         id: `timeline-${index}`,
         kind: "message" as const,
@@ -139,7 +138,7 @@ describe("answered decision reply — the card settles, the value is stated once
       streaming: false,
       createdAt: "2026-06-09T00:00:01.000Z",
       updatedAt: "2026-06-09T00:00:01.000Z",
-      turnId: null,
+      runId: null,
       t3teamExt: { workflowReply: { value, correlationId } },
     };
   }
@@ -183,7 +182,7 @@ describe("answered decision reply — the card settles, the value is stated once
       streaming: false,
       createdAt: "2026-06-09T00:00:01.000Z",
       updatedAt: "2026-06-09T00:00:01.000Z",
-      turnId: null,
+      runId: null,
     };
 
     const markup = await renderTimeline([ask, typedReply]);
@@ -208,7 +207,7 @@ describe("answered decision reply — the card settles, the value is stated once
       streaming: false,
       createdAt: "2026-06-09T00:00:00.500Z",
       updatedAt: "2026-06-09T00:00:00.500Z",
-      turnId: null,
+      runId: null,
     };
     const reply = boolReply("hold", "hold" as unknown as boolean);
 
@@ -235,7 +234,7 @@ describe("answered decision reply — the card settles, the value is stated once
       streaming: false,
       createdAt: "2026-06-09T00:00:00.000Z",
       updatedAt: "2026-06-09T00:00:00.000Z",
-      turnId: null,
+      runId: null,
       t3teamExt: {
         visibleToUser: true,
         status: "waiting-for-input",
@@ -266,7 +265,7 @@ describe("answered decision reply — the card settles, the value is stated once
       streaming: false,
       createdAt: "2026-06-09T00:00:01.000Z",
       updatedAt: "2026-06-09T00:00:01.000Z",
-      turnId: null,
+      runId: null,
       t3teamExt: {
         workflowReply: {
           value: { severity: "high", note: "rounding bug" },
@@ -311,7 +310,7 @@ describe("answered decision reply — the card settles, the value is stated once
       streaming: false,
       createdAt: "2026-06-09T00:00:00.000Z",
       updatedAt: "2026-06-09T00:00:00.000Z",
-      turnId: null,
+      runId: null,
       t3teamExt: {
         visibleToUser: true,
         status: "waiting-for-input",
@@ -336,7 +335,7 @@ describe("answered decision reply — the card settles, the value is stated once
       streaming: false,
       createdAt: "2026-06-09T00:00:01.000Z",
       updatedAt: "2026-06-09T00:00:01.000Z",
-      turnId: null,
+      runId: null,
       t3teamExt: { workflowReply: { value: true, correlationId: "run-multi:1" } },
     };
     const secondAsk: ChatMessage = {
@@ -346,7 +345,7 @@ describe("answered decision reply — the card settles, the value is stated once
       streaming: false,
       createdAt: "2026-06-09T00:00:02.000Z",
       updatedAt: "2026-06-09T00:00:02.000Z",
-      turnId: null,
+      runId: null,
       t3teamExt: {
         visibleToUser: true,
         status: "waiting-for-input",

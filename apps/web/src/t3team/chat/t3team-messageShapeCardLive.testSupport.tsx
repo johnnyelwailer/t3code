@@ -1,5 +1,6 @@
 import type { LegendListRef } from "@legendapp/list/react";
-import { EventId, MessageId, type OrchestrationThreadActivity } from "@t3tools/contracts";
+import { EventId, MessageId } from "@t3tools/contracts";
+import type { T3TeamThreadActivityRecord } from "~/t3team/chat/t3team-threadActivityRecord";
 import {
   PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP,
   PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_SHAPE,
@@ -59,7 +60,7 @@ export const TEST_WORKFLOW_SHAPE: ProjectRecipeWorkflowShapePayload = {
 export function stepActivity(
   payload: ProjectRecipeWorkflowStepActivityPayload,
   overrides?: { createdAt?: string; sequence?: number },
-): OrchestrationThreadActivity {
+): T3TeamThreadActivityRecord {
   return {
     id: EventId.make(`t3team-wf-step:${payload.stepId}`),
     tone: payload.phase === "failed" ? "error" : "info",
@@ -93,7 +94,7 @@ export function step(
 export function runActivity(
   phase: "completed" | "failed" | "paused" | "cancelled" | "started",
   error?: string,
-): OrchestrationThreadActivity {
+): T3TeamThreadActivityRecord {
   return stepActivity(
     {
       workflowRunId: RUN_ID,
@@ -114,7 +115,7 @@ function shapeMessage(): ChatMessage {
     streaming: false,
     createdAt: "2026-07-17T09:59:00.000Z",
     updatedAt: "2026-07-17T09:59:00.000Z",
-    turnId: null,
+    runId: null,
     t3teamExt: {
       visibleToUser: true,
       attachments: [
@@ -129,7 +130,7 @@ function shapeMessage(): ChatMessage {
 }
 
 export async function renderTimeline(
-  activities: ReadonlyArray<OrchestrationThreadActivity>,
+  activities: ReadonlyArray<T3TeamThreadActivityRecord>,
   onOpenThread?: (input: { projectId: string; threadId: string }) => void,
   control?: {
     status:
@@ -148,20 +149,22 @@ export async function renderTimeline(
   return renderToStaticMarkup(
     <MessagesTimeline
       {...buildT3TeamMessagesTimelineTestProps()}
-      threadActivities={activities}
-      {...(control
-        ? {
-            workflowRunStatus: {
-              runId: RUN_ID,
-              status: control.status,
-              pendingKind: control.status === "suspended" ? ("thread.turn" as const) : null,
-              wakeAt: control.status === "sleeping" ? "2026-07-20T09:00:00.000Z" : null,
-              updatedAt: "2026-07-17T10:00:00.000Z",
-            },
-            onControlWorkflow: async () => ({ status: "paused" as const }),
-          }
-        : {})}
-      {...(onOpenThread ? { onOpenThread } : {})}
+      t3team={{
+        threadActivities: activities,
+        ...(control
+          ? {
+              workflowRunStatus: {
+                runId: RUN_ID,
+                status: control.status,
+                pendingKind: control.status === "suspended" ? ("thread.turn" as const) : null,
+                wakeAt: control.status === "sleeping" ? "2026-07-20T09:00:00.000Z" : null,
+                updatedAt: "2026-07-17T10:00:00.000Z",
+              },
+              onControlWorkflow: async () => ({ status: "paused" as const }),
+            }
+          : {}),
+        ...(onOpenThread ? { onOpenProjectThread: onOpenThread } : {}),
+      }}
       timelineEntries={[
         { id: "timeline-0", kind: "message" as const, createdAt: message.createdAt, message },
       ]}

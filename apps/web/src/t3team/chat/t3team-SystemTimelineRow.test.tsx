@@ -95,7 +95,7 @@ function workflowNotificationMessage(
     streaming: false,
     createdAt: "2026-06-20T00:00:00.000Z",
     updatedAt: "2026-06-20T00:00:00.000Z",
-    turnId: null,
+    runId: null,
     t3teamExt: {
       author: { kind: "system", workflowRunId },
       visibleToUser: true,
@@ -114,7 +114,7 @@ function decisionMessage(id: string): ChatMessage {
     streaming: false,
     createdAt: "2026-06-20T00:00:00.000Z",
     updatedAt: "2026-06-20T00:00:00.000Z",
-    turnId: null,
+    runId: null,
     t3teamExt: {
       visibleToUser: true,
       status: "waiting-for-input",
@@ -142,7 +142,7 @@ function shapeMessage(id: string): ChatMessage {
     streaming: false,
     createdAt: "2026-06-20T00:00:00.000Z",
     updatedAt: "2026-06-20T00:00:00.000Z",
-    turnId: null,
+    runId: null,
     t3teamExt: {
       visibleToUser: true,
       attachments: [
@@ -298,7 +298,7 @@ function widgetOnlyMessage(id: string): ChatMessage {
     streaming: false,
     createdAt: "2026-06-20T00:00:00.000Z",
     updatedAt: "2026-06-20T00:00:00.000Z",
-    turnId: null,
+    runId: null,
     t3teamExt: {
       visibleToUser: true,
       attachments: [

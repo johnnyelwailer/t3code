@@ -11,11 +11,8 @@
  * that work entry — "Sent message to parent" / "Sent message to «child»" —
  * from sender-side data only:
  *
- *   - the thread's `t3team.handoff.created` activity (this thread is a
- *     start-child: payload carries the parent's thread id) — same durable
- *     relation the server's findHandoffParentThreadId reads,
- *   - the thread's `t3team.handoff.started` activities (this thread's direct
- *     children: payload carries childThreadId + childTitle),
+ *   - the thread's V2 lineage (`subagent` parent) and the live shells whose
+ *     lineage names this thread as parent (its direct children, with titles),
  *   - the send tool call's own persisted `to_thread_id` (from the mcp tool
  *     call's item data or its persisted detail prefix).
  *
@@ -26,9 +23,8 @@
  *
  * @module t3team-actorOutbound
  */
-import type { OrchestrationThreadActivity } from "@t3tools/contracts";
-
 import type { WorkLogEntry } from "~/session-logic";
+import type { ThreadShell } from "~/types";
 
 /** The thread relations a sender needs to name the target of a send. */
 export interface ActorOutboundRelations {
@@ -42,46 +38,30 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+type RelationShell = Pick<ThreadShell, "id" | "title" | "lineage">;
+
+const subagentParentOf = (thread: RelationShell): string | null =>
+  thread.lineage.relationshipToParent === "subagent" ? thread.lineage.parentThreadId : null;
+
 /**
- * Derive this thread's inter-agent relations from its own durable activities.
- * Mirrors the server-side handoff-payload contract
- * (t3team-toolBrokerStartChildHandoff.ts): `t3team.handoff.created` persists
- * the child's parent id; `t3team.handoff.started` persists each direct
- * child's id + title.
+ * Derive a thread's inter-agent relations from V2 lineage: its own `subagent` parent and the live
+ * shells that name it as their `subagent` parent (its direct children, by title).
  */
-export function deriveActorOutboundRelations(
-  activities: ReadonlyArray<OrchestrationThreadActivity> | null | undefined,
-): ActorOutboundRelations {
-  let parentThreadId: string | null = null;
+export function deriveActorOutboundRelations(input: {
+  readonly thread: RelationShell | null | undefined;
+  readonly threads: ReadonlyArray<RelationShell>;
+}): ActorOutboundRelations {
   const childTitles = new Map<string, string>();
-  if (activities === null || activities === undefined) {
-    return { parentThreadId, childTitles };
+  const thread = input.thread;
+  if (!thread) {
+    return { parentThreadId: null, childTitles };
   }
-  for (let i = activities.length - 1; i >= 0; i--) {
-    const activity = activities[i]!;
-    if (activity.kind === "t3team.handoff.created" && parentThreadId === null) {
-      const payload = asRecord(activity.payload);
-      // Workflow-spawned children are owned by the run, not the launching
-      // thread — same skip the server's findHandoffParentThreadId applies.
-      if (typeof payload?.workflowRunId === "string" && payload.workflowRunId.length > 0) {
-        continue;
-      }
-      if (typeof payload?.parentThreadId === "string" && payload.parentThreadId.length > 0) {
-        parentThreadId = payload.parentThreadId;
-      }
-    } else if (activity.kind === "t3team.handoff.started") {
-      const payload = asRecord(activity.payload);
-      if (
-        typeof payload?.childThreadId === "string" &&
-        payload.childThreadId.length > 0 &&
-        typeof payload.childTitle === "string" &&
-        payload.childTitle.length > 0
-      ) {
-        childTitles.set(payload.childThreadId, payload.childTitle);
-      }
+  for (const candidate of input.threads) {
+    if (subagentParentOf(candidate) === thread.id) {
+      childTitles.set(candidate.id, candidate.title);
     }
   }
-  return { parentThreadId, childTitles };
+  return { parentThreadId: subagentParentOf(thread), childTitles };
 }
 
 /**

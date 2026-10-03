@@ -1,7 +1,4 @@
-import type {
-  AgentPanelModel,
-  RuntimeSubagent,
-} from "@t3tools/client-runtime/state/subagentRuntime";
+import type { RuntimeSubagent } from "@t3tools/client-runtime/state/subagentRuntime";
 import { useSyncExternalStore } from "react";
 import type { ProjectThread } from "~/t3team/t3team-types";
 
@@ -10,8 +7,8 @@ import type { ProjectThread } from "~/t3team/t3team-types";
  *
  * Merges the two live-agent sources of a thread:
  * - child threads that are running (`ProjectThread.status === "running"`), and
- * - in-thread subagents that are live (status `running` | `waiting`) from the
- *   agent panel model.
+ * - in-thread subagents that are live (status `running` | `waiting`), as
+ *   `projectedSubagentsToRuntime(projection.subagents)` presents them.
  *
  * One still dot per active agent (T3TeamActiveAgentsIndicator); hovering a
  * dot flips the working row's step label to that agent's live status
@@ -65,10 +62,10 @@ function subagentStatusLabel(agent: RuntimeSubagent): string {
 
 export function mergeActiveAgentsAndChildren({
   childThreads,
-  agentPanelModel,
+  subagents,
 }: {
   childThreads: readonly ProjectThread[];
-  agentPanelModel: AgentPanelModel;
+  subagents: readonly RuntimeSubagent[];
 }): readonly ActiveAgentEntry[] {
   const entries: ActiveAgentEntry[] = [];
   for (const thread of childThreads) {
@@ -93,13 +90,7 @@ export function mergeActiveAgentsAndChildren({
       dotState: deriveDotState({ label: subagentStatusLabel(agent), status: agent.status }),
     });
   };
-  for (const agent of agentPanelModel.directAgents) pushSubagent(agent);
-  for (const group of agentPanelModel.workflows) {
-    for (const phase of group.phases) {
-      for (const member of phase.members) pushSubagent(member);
-    }
-    for (const member of group.unphasedMembers) pushSubagent(member);
-  }
+  for (const agent of subagents) pushSubagent(agent);
   return entries.length > 0 ? entries : EMPTY_ACTIVE_AGENTS;
 }
 

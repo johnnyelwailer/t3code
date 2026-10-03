@@ -51,6 +51,7 @@ import {
   type ActivityState,
 } from "~/t3team/t3team-activityStateDisplay";
 import { workflowCompletionDisplayText } from "~/t3team/chat/t3team-workflowCompletionDisplayText";
+import type { T3TeamTimelineRowProps } from "~/t3team/chat/t3team-timelineRowProps";
 import {
   foldBackgroundJobs,
   type BackgroundJobState,
@@ -459,7 +460,7 @@ const TIMELINE_MAINTAIN_SCROLL_AT_END_SMOOTH = {
  * t3team extension points, grouped in ONE optional prop so upstream syncs touch a
  * single line of `MessagesTimelineProps`.
  */
-export interface MessagesTimelineT3TeamProps {
+export interface MessagesTimelineT3TeamProps extends T3TeamTimelineRowProps {
   /** GHE #201: active agents for the working row (running child threads + live subagents). */
   readonly activeAgents?: readonly ActiveAgentEntry[];
   /** GHE #201: opens the agents surface from the working-row indicator. */

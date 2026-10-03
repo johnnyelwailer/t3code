@@ -179,7 +179,6 @@ function PanelDemo({ threadId, label }: { threadId: string; label: string }) {
             pullRequestAvailable={false}
             pullRequestsAvailable={false}
             deviceAvailable={false}
-            liveAgentCount={0}
           >
             {content}
           </RightPanelTabs>
