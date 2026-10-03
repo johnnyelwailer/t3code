@@ -65,7 +65,11 @@ export const scanCheckout = Effect.fn("projectMachine.scanCheckout")(function* (
         return yield* new Rejected({ reason: `${relative} links outside the repository.` });
       }
       const info = yield* fileSystem.stat(real).pipe(Effect.orElseSucceed(() => null));
-      if (info === null || info.type !== "File") return null;
+      if (info === null) return null;
+      // Something other than a file where a definition belongs is a broken definition, not none.
+      if (info.type !== "File") {
+        return yield* new Rejected({ reason: `${relative} is not a file.` });
+      }
       if (Number(info.size) > MAX_DEFINITION_FILE_BYTES) {
         return yield* new Rejected({ reason: `${relative} is larger than 1 MB.` });
       }

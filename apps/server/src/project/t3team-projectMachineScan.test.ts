@@ -137,6 +137,24 @@ it.layer(NodeServices.layer)("scanCheckout", (it) => {
         }),
     );
 
+    it.effect("reads a space-prefixed Dockerfile name as written, never trimmed", () =>
+      Effect.gen(function* () {
+        const devcontainer = `{ "build": { "dockerfile": " Dockerfile" } }`;
+        const spaced = yield* scan({
+          ".devcontainer/devcontainer.json": devcontainer,
+          ".devcontainer/ Dockerfile": "FROM node:22\n",
+          ".devcontainer/Dockerfile": "FROM node:24\n",
+        });
+        const plainOnly = yield* scan({
+          ".devcontainer/devcontainer.json": devcontainer,
+          ".devcontainer/Dockerfile": "FROM node:24\n",
+        });
+        expect(spaced.candidates).toHaveLength(1);
+        expect(plainOnly.candidates).toEqual([]);
+        expect(plainOnly.rejected[0]?.reason).toContain("does not exist");
+      }),
+    );
+
     it.effect("rejects a blank image as no build source at all", () =>
       Effect.gen(function* () {
         const result = yield* scan({ ".devcontainer/devcontainer.json": `{ "image": "  " }` });
@@ -160,6 +178,17 @@ it.layer(NodeServices.layer)("scanCheckout", (it) => {
   });
 
   describe(".nexi/machine.json", () => {
+    it.effect("a directory where the pointer belongs is rejected and still decides alone", () =>
+      Effect.gen(function* () {
+        const result = yield* scan({
+          ".nexi/machine.json/keep": "",
+          ".devcontainer/devcontainer.json": `{ "image": "node:22" }`,
+        });
+        expect(result.candidates).toEqual([]);
+        expect(result.rejected[0]?.reason).toBe(".nexi/machine.json is not a file.");
+      }),
+    );
+
     it.effect("an unreadable pointer is rejected and still decides alone", () =>
       Effect.gen(function* () {
         const result = yield* scan({

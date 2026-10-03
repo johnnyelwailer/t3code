@@ -8,18 +8,17 @@
 import * as NodeCrypto from "node:crypto";
 
 import { fromLenientJson } from "@t3tools/shared/schemaJson";
-import { TrimmedNonEmptyString } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 
-// A blank source is no source: `"image": ""` must not pass as a buildable definition.
+// A blank source is no source: `"image": ""` must not pass as a buildable definition. Validated,
+// never trimmed — a reference is a filename, and `" Dockerfile"` is not `"Dockerfile"`.
+const NonBlank = Schema.String.check(Schema.makeFilter((value) => value.trim().length > 0));
 const DevcontainerSource = Schema.Struct({
-  image: Schema.optional(TrimmedNonEmptyString),
-  build: Schema.optional(Schema.Struct({ dockerfile: Schema.optional(TrimmedNonEmptyString) })),
+  image: Schema.optional(NonBlank),
+  build: Schema.optional(Schema.Struct({ dockerfile: Schema.optional(NonBlank) })),
   /** The spec's deprecated spelling of `build.dockerfile`. */
-  dockerFile: Schema.optional(TrimmedNonEmptyString),
-  dockerComposeFile: Schema.optional(
-    Schema.Union([TrimmedNonEmptyString, Schema.Array(TrimmedNonEmptyString)]),
-  ),
+  dockerFile: Schema.optional(NonBlank),
+  dockerComposeFile: Schema.optional(Schema.Union([NonBlank, Schema.Array(NonBlank)])),
 });
 const decodeDevcontainer = Schema.decodeUnknownResult(fromLenientJson(DevcontainerSource));
 
