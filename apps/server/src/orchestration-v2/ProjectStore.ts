@@ -16,6 +16,8 @@ import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as SqlSchema from "effect/unstable/sql/SqlSchema";
 
+import { attachProjectSourceBindings } from "../t3team-projectSourceShells.ts";
+
 export class ProjectStoreV2Error extends Schema.TaggedError<ProjectStoreV2Error>()(
   "ProjectStoreV2Error",
   {
@@ -102,6 +104,7 @@ export class ProjectStoreV2 extends Context.Service<
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+  const attachSources = attachProjectSourceBindings(sql);
   const encodeRow = Schema.encodeEffect(ProjectDbRow);
 
   const selectRows = SqlSchema.findAll({
@@ -267,10 +270,20 @@ export const make = Effect.gen(function* () {
     get,
     list,
     findActiveByWorkspaceRoot,
-    getShell: (projectId) => get(projectId).pipe(Effect.map(Option.map(toShell))),
+    getShell: (projectId) =>
+      get(projectId).pipe(
+        Effect.map(Option.map(toShell)),
+        // t3team: work-source binding badge (fork table, display only).
+        Effect.flatMap((shell) =>
+          Option.isNone(shell)
+            ? Effect.succeed(shell)
+            : attachSources([shell.value]).pipe(Effect.map((shells) => Option.some(shells[0]!))),
+        ),
+      ),
     listShells: (options) =>
       list(options?.projectIds === undefined ? undefined : { projectIds: options.projectIds }).pipe(
         Effect.map((rows) => rows.map(toShell)),
+        Effect.flatMap(attachSources),
       ),
   });
 });

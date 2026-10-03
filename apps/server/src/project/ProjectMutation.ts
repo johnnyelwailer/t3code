@@ -1,11 +1,21 @@
 import { type ProjectMutation } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
+import { ProjectSourceMutationHook } from "../t3team-projectSourceMutationHook.ts";
 import { type ProjectService } from "./ProjectService.ts";
 
 type ProjectMutations = Pick<ProjectService["Service"], "create" | "delete" | "update">;
 
 export const projectMutationOperation = Effect.fn("projectMutationOperation")(function* (
+  projects: ProjectMutations,
+  mutation: ProjectMutation,
+) {
+  // t3team: the work-source binding hook (default: runs the mutation unchanged).
+  const sourceHook = yield* ProjectSourceMutationHook;
+  return yield* sourceHook.around(mutation, runProjectMutation(projects, mutation));
+});
+
+const runProjectMutation = Effect.fn("runProjectMutation")(function* (
   projects: ProjectMutations,
   mutation: ProjectMutation,
 ) {

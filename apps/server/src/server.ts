@@ -240,6 +240,7 @@ import { T3TeamWorkflowEngineReactorLive } from "./t3team-workflowEngineReactor.
 import { T3TeamActorMessageReactorLive } from "./t3team-actorMessageReactor.ts";
 import { T3TeamActorMailboxStoreLive } from "./t3team-actorMailbox.ts";
 import { T3TeamActorMailboxLive } from "./t3team-actorMailboxService.ts";
+import { T3TeamProjectSourceBindingsLive } from "./t3team-projectSourceBindings.ts";
 import {
   T3TeamMailboxDrainPortLive,
   T3TeamThreadMailboxDeliveryLive,
@@ -715,6 +716,8 @@ const RuntimeCoreDependenciesBaseLive = Layer.mergeAll(
   ReplayMarkers.layer,
   T3TeamThreadToolContextEvictionReactorStartLive,
   T3TeamProjectSourceIconReactorStartLive,
+  // t3team: the ONE project-mutation source hook (binding table + keyed claim lock, critic C13).
+  T3TeamProjectSourceBindingsLive,
   // t3team: shared V2 foundation (facts/artifacts side stores, run-less message + lineage writers).
   T3TeamV2FoundationLive,
   // t3team: delegated-child ticket/placement store (delegate_task extension, placement readers).

@@ -2,6 +2,7 @@ import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 import { RepositoryIdentity, ThreadEnvMode } from "./environment.ts";
 import { ModelSelection } from "./modelSelection.ts";
+import { ProjectSourceBinding } from "./t3team-orchestrationExt.ts";
 import {
   CommandId,
   IsoDateTime,
@@ -195,12 +196,16 @@ export const ProjectMutation = Schema.Union([
     commandId: CommandId,
     projectId: ProjectId,
     ...ProjectCreatePayload.fields,
+    // t3team: work-source binding, persisted by the fork project-source hook (never in events).
+    source: Schema.optional(ProjectSourceBinding),
   }),
   Schema.Struct({
     type: Schema.Literal("project.update"),
     commandId: CommandId,
     projectId: ProjectId,
     ...ProjectUpdatePayload.fields,
+    // t3team: an absent source keeps the stored binding; it never clears it.
+    source: Schema.optional(ProjectSourceBinding),
   }),
   Schema.Struct({
     type: Schema.Literal("project.delete"),

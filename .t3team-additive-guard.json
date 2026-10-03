@@ -1,5 +1,9 @@
 {
   "allowedModifiedFiles": [
+    "packages/contracts/src/project.ts",
+    "packages/contracts/src/orchestrationProject.ts",
+    "apps/server/src/orchestration-v2/ProjectStore.ts",
+    "apps/server/src/project/ProjectMutation.ts",
     ".agents/skills/test-t3-app/SKILL.md",
     ".github/workflows/ci.yml",
     ".github/workflows/release.yml",

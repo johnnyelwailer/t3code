@@ -16,6 +16,7 @@ import {
   type ProjectId,
   type ProjectIconOverride,
   type ProjectScript,
+  type ProjectSourceBinding,
   type ProviderApprovalDecision,
   type ProviderInteractionMode,
   type ProviderUserInputAnswers,
@@ -46,6 +47,8 @@ export interface CreateProjectInput extends CommandMetadata {
   readonly createWorkspaceRootIfMissing?: boolean;
   readonly defaultModelSelection?: ModelSelection | null;
   readonly scripts?: ReadonlyArray<ProjectScript>;
+  /** t3team: work-source binding (servers without the fork hook ignore it). */
+  readonly source?: ProjectSourceBinding;
 }
 
 export interface UpdateProjectInput extends CommandMetadata {
@@ -58,6 +61,8 @@ export interface UpdateProjectInput extends CommandMetadata {
   readonly faviconPath?: string | null;
   readonly defaultThreadEnvMode?: ThreadEnvMode | null;
   readonly scripts?: ReadonlyArray<ProjectScript>;
+  /** t3team: work-source binding; absent keeps the stored one. */
+  readonly source?: ProjectSourceBinding;
 }
 
 export interface DeleteProjectInput extends CommandMetadata {
@@ -313,6 +318,7 @@ const mutateProject = Effect.fn("EnvironmentCommands.mutateProject")(function* (
         readonly createWorkspaceRootIfMissing?: boolean;
         readonly defaultModelSelection?: ModelSelection | null;
         readonly scripts?: ReadonlyArray<ProjectScript>;
+        readonly source?: ProjectSourceBinding;
       }
     | {
         readonly type: "project.update";
@@ -322,6 +328,7 @@ const mutateProject = Effect.fn("EnvironmentCommands.mutateProject")(function* (
         readonly workspaceRoot?: string;
         readonly defaultModelSelection?: ModelSelection | null;
         readonly scripts?: ReadonlyArray<ProjectScript>;
+        readonly source?: ProjectSourceBinding;
       }
     | {
         readonly type: "project.delete";
@@ -349,6 +356,7 @@ export const createProject = Effect.fn("EnvironmentCommands.createProject")(func
       ? {}
       : { defaultModelSelection: input.defaultModelSelection }),
     ...(input.scripts === undefined ? {} : { scripts: input.scripts }),
+    ...(input.source === undefined ? {} : { source: input.source }),
   });
 });
 
@@ -371,6 +379,7 @@ export const updateProject = Effect.fn("EnvironmentCommands.updateProject")(func
       ? {}
       : { defaultThreadEnvMode: input.defaultThreadEnvMode }),
     ...(input.scripts === undefined ? {} : { scripts: input.scripts }),
+    ...(input.source === undefined ? {} : { source: input.source }),
   });
 });
 

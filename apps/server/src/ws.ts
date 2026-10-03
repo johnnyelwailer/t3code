@@ -227,6 +227,7 @@ import {
   previewThreadCleanup,
 } from "./t3team-resourcePressureThreadCleanup.ts";
 import { makeThreadCleanupDeps } from "./t3team-resourcePressureThreadCleanupDeps.ts";
+import { projectSourceClaimMessage } from "./t3team-projectSourceBindings.ts";
 import { StorageCleanup } from "./storageCleanup.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as UsageService from "./usage/UsageService.ts";
@@ -3205,7 +3206,8 @@ const makeWsRpcLayer = (
                     message:
                       cause._tag === "ProjectNotEmptyError"
                         ? cause.message
-                        : "Failed to mutate project.",
+                        : // t3team: a work-source binding claim explains itself to the client.
+                          (projectSourceClaimMessage(cause) ?? "Failed to mutate project."),
                     cause,
                   }),
               ),
