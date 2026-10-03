@@ -251,6 +251,14 @@
       "types": "./src/state/t3team-toolauth.ts",
       "default": "./src/state/t3team-toolauth.ts"
     },
+    "./state/thread-facts": {
+      "types": "./src/state/t3team-threadFacts.ts",
+      "default": "./src/state/t3team-threadFacts.ts"
+    },
+    "./state/thread-artifacts": {
+      "types": "./src/state/t3team-threadArtifacts.ts",
+      "default": "./src/state/t3team-threadArtifacts.ts"
+    },
     "./state/threads": {
       "types": "./src/state/threads.ts",
       "default": "./src/state/threads.ts"

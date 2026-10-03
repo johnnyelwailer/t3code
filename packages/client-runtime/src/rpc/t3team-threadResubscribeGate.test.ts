@@ -227,8 +227,8 @@ describe("staggered resubscribe wiring (GHE #382)", () => {
 
       yield* Fiber.interrupt(consumers);
 
-      const firstBurst = [...delays.slice(0, STREAM_COUNT)].sort((a, b) => a - b);
-      const secondBurst = [...delays.slice(STREAM_COUNT)].sort((a, b) => a - b);
+      const firstBurst = delays.slice(0, STREAM_COUNT).sort((a, b) => a - b);
+      const secondBurst = delays.slice(STREAM_COUNT).sort((a, b) => a - b);
       const expectedProfile = Array.from({ length: STREAM_COUNT }, (value, index) =>
         index < B.maxImmediate ? 0 : (index - B.maxImmediate + 1) * B.stepMs,
       );

@@ -66,7 +66,9 @@ export type EnvironmentSubscriptionRpcTag =
   | typeof WS_METHODS.subscribeWorktreeSetup
   | typeof WS_METHODS.subscribeProjectClones
   | typeof WS_METHODS.terminalAttach
-  | typeof WS_METHODS.subscribeToolAuth;
+  | typeof WS_METHODS.subscribeToolAuth
+  | typeof WS_METHODS.t3teamSubscribeThreadFacts
+  | typeof WS_METHODS.t3teamSubscribeThreadArtifacts;
 
 export type EnvironmentStreamCommandRpcTag =
   | typeof WS_METHODS.chatGptHandoffSubscribe
