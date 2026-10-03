@@ -351,25 +351,12 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
   const setStreamError = (message: string) =>
     Ref.set(awaitingCompletion, false).pipe(
       Effect.andThen(
-        SubscriptionRef.update(state, (current) => {
-          const nextStatus =
-            current.status === "deleted" ? current.status : statusWithoutLiveData(current.data);
-          // A lost transport can retry many times per second; writing an
-          // unchanged {status, error} pair on every attempt fans out
-          // re-renders to every subscriber for no observable state change.
-          if (
-            current.status === nextStatus &&
-            Option.isSome(current.error) &&
-            current.error.value === message
-          ) {
-            return current;
-          }
-          return {
-            ...current,
-            status: nextStatus,
-            error: Option.some(message),
-          };
-        }),
+        SubscriptionRef.update(state, (current) => ({
+          ...current,
+          status:
+            current.status === "deleted" ? current.status : statusWithoutLiveData(current.data),
+          error: Option.some(message),
+        })),
       ),
     );
 

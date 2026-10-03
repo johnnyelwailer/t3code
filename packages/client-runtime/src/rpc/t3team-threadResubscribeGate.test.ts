@@ -1,4 +1,4 @@
-import { EnvironmentId, ORCHESTRATION_WS_METHODS } from "@t3tools/contracts";
+import { EnvironmentId, ORCHESTRATION_V2_WS_METHODS } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -142,7 +142,7 @@ describe("staggered resubscribe wiring (GHE #382)", () => {
       // the phase's queue list.
       let callIndex = 0;
       const client = {
-        [ORCHESTRATION_WS_METHODS.subscribeThread]: () => {
+        [ORCHESTRATION_V2_WS_METHODS.subscribeThread]: () => {
           const index = callIndex;
           callIndex += 1;
           return Stream.fromQueue(
@@ -158,7 +158,7 @@ describe("staggered resubscribe wiring (GHE #382)", () => {
 
       const streams = Array.from({ length: STREAM_COUNT }, () =>
         subscribeDynamic(
-          ORCHESTRATION_WS_METHODS.subscribeThread,
+          ORCHESTRATION_V2_WS_METHODS.subscribeThread,
           () => Effect.succeed({} as never),
           {
             // Same shape the thread-state wiring uses: take a slot in the

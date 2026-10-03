@@ -218,15 +218,6 @@ interface SubscriptionOptions<TTag extends EnvironmentSubscriptionRpcTag> {
    */
   readonly retryExpectedFailureAfter?: Duration.Input;
   readonly resubscribe?: Stream.Stream<unknown, never, never>;
-  /**
-   * Classifies an expected failure as terminal (e.g. the subscribed resource
-   * no longer exists). Terminal failures still invoke `onExpectedFailure`
-   * once, but the stream ends afterwards instead of sleeping and
-   * resubscribing — retrying a resource that will never come back just
-   * hammers the server. The outer `switchMap` over sessions still gives a
-   * fresh attempt on the next session change / application-active wakeup.
-   */
-  readonly isTerminalFailure?: (cause: Cause.Cause<unknown>) => boolean;
 }
 
 function subscribeDynamicMapped<TTag extends EnvironmentSubscriptionRpcTag, A>(
@@ -349,7 +340,6 @@ function subscribeDynamicMapped<TTag extends EnvironmentSubscriptionRpcTag, A>(
                             reason._tag === "Fail" && isEnvironmentAuthorizationError(reason.error),
                         );
                         if (
-                          options.isTerminalFailure?.(cause) ||
                           options.retryExpectedFailureAfter === undefined ||
                           isAuthorizationFailure
                         ) {
