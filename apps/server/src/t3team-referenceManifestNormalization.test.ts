@@ -1,5 +1,11 @@
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as PlatformError from "effect/PlatformError";
 import { describe, expect, it } from "vite-plus/test";
-import { normalizeReferenceManifestJson } from "./t3team-referenceManifestNormalization.ts";
+import {
+  normalizeReferenceManifestJson,
+  readNormalizedReferenceManifest,
+} from "./t3team-referenceManifestNormalization.ts";
 import { mainRepositoryFromManifestJson } from "./t3team-toolBrokerStartChildContext.ts";
 
 describe("canonical reference manifest normalization", () => {
@@ -39,5 +45,43 @@ describe("canonical reference manifest normalization", () => {
     ]) {
       expect(normalizeReferenceManifestJson(raw)).toBe(raw);
     }
+  });
+
+  it("returns the normalized manifest when the persistence write fails", async () => {
+    const raw = JSON.stringify({
+      metaRepository: { localPath: "/repo", url: " https://github.com/org/repo " },
+      project: "PROJECT",
+    });
+    let writes = 0;
+    const fileSystem = FileSystem.makeNoop({
+      readFileString: () => Effect.succeed(raw),
+      writeFileString: () => {
+        writes += 1;
+        return Effect.fail(
+          PlatformError.systemError({
+            _tag: "PermissionDenied",
+            module: "FileSystem",
+            method: "writeFileString",
+            description: "read-only",
+          }),
+        );
+      },
+    });
+    const normalized = await Effect.runPromise(
+      readNormalizedReferenceManifest(
+        fileSystem,
+        "/repo/.t3team/references/reference-repositories.json",
+      ),
+    );
+    expect(writes).toBe(1);
+    expect(JSON.parse(normalized)).toEqual({
+      mainRepository: {
+        localPath: "/repo",
+        url: "https://github.com/org/repo",
+        status: "adopted",
+      },
+      project: "PROJECT",
+    });
+    expect(mainRepositoryFromManifestJson(normalized)?.localPath).toBe("/repo");
   });
 });
