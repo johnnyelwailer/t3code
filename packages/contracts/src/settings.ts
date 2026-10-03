@@ -1224,8 +1224,6 @@ export const AgentInstructions = Schema.String.pipe(
 export type AgentInstructions = typeof AgentInstructions.Type;
 
 export const ServerSettings = Schema.Struct({
-  // Watch the official Codex and Claude profile folders and surface matching sessions.
-  showLocalProviderSessions: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   /**
    * Global "Personality / Instructions" override for agent sessions.
    * Empty (default) = the provider driver's built-in default; a non-empty
@@ -1680,7 +1678,6 @@ export const ServerSettingsPatch = Schema.Struct({
     }),
   ),
   // Server settings
-  showLocalProviderSessions: Schema.optionalKey(Schema.Boolean),
   agentInstructions: Schema.optionalKey(AgentInstructions),
   responseStreamingMode: Schema.optionalKey(ResponseStreamingMode),
   enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),

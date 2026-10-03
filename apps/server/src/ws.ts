@@ -215,6 +215,8 @@ import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as HostResources from "./resourceTelemetry/HostResources.ts";
 import { T3TeamThreadEngagement } from "./t3team-threadEngagement.ts";
+import { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
+import { T3TeamThreadArtifactsStore } from "./t3team-v2/t3team-threadArtifactsStore.ts";
 import { isThreadResubscribeStaggerEnabled } from "./t3team-threadResubscribeStaggerFlag.ts";
 import { isResourcePressureEnabled } from "./t3team-resourcePressureFlag.ts";
 import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
@@ -1175,6 +1177,14 @@ const makeWsRpcLayer = (
       const threadEngagement = Option.getOrUndefined(
         yield* Effect.serviceOption(T3TeamThreadEngagement),
       );
+      // t3team: fork side stores (optional so host/test layers without them keep working;
+      // a missing store streams an empty snapshot and the capability flag stays off).
+      const threadFacts = Option.getOrUndefined(
+        yield* Effect.serviceOption(T3TeamThreadFactsStore),
+      );
+      const threadArtifacts = Option.getOrUndefined(
+        yield* Effect.serviceOption(T3TeamThreadArtifactsStore),
+      );
       const crypto = yield* Crypto.Crypto;
       const serverCommandId = (tag: string) =>
         crypto.randomUUIDv4.pipe(
@@ -2069,6 +2079,22 @@ const makeWsRpcLayer = (
               ? Effect.succeed({ ok: true as const })
               : threadEngagement.noteTyping(input.threadId).pipe(Effect.as({ ok: true as const })),
             { "rpc.aggregate": "orchestration" },
+          ),
+        [WS_METHODS.t3teamSubscribeThreadFacts]: (input) =>
+          observeRpcStream(
+            WS_METHODS.t3teamSubscribeThreadFacts,
+            threadFacts === undefined
+              ? Stream.make({ type: "snapshot" as const, facts: [] })
+              : threadFacts.subscribe(input).pipe(Stream.orDie),
+            { "rpc.aggregate": "t3team" },
+          ),
+        [WS_METHODS.t3teamSubscribeThreadArtifacts]: (input) =>
+          observeRpcStream(
+            WS_METHODS.t3teamSubscribeThreadArtifacts,
+            threadArtifacts === undefined
+              ? Stream.make({ type: "snapshot" as const, threadId: input.threadId, artifacts: [] })
+              : threadArtifacts.subscribe(input).pipe(Stream.orDie),
+            { "rpc.aggregate": "t3team", "orchestration_v2.thread_id": input.threadId },
           ),
         [WS_METHODS.scheduledTasksList]: (_input) =>
           observeRpcEffect(WS_METHODS.scheduledTasksList, scheduledTasks.list(), {

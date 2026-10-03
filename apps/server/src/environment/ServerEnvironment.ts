@@ -263,6 +263,8 @@ export const make = Effect.gen(function* () {
         ? { serverSelfUpdateProgress: true }
         : {}),
       ...(desktopAppUpdate ? { desktopAppUpdate: true } : {}),
+      // t3team: fork side streams served by this build (t3team-v2/t3team-v2FoundationLive.ts).
+      t3team: { threadFacts: true, threadArtifacts: true },
     },
   };
 

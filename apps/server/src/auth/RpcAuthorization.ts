@@ -41,6 +41,9 @@ export const RPC_REQUIRED_SCOPES = {
   // thread command flows through. The signal is per-thread and self-clearing (typing-lapse
   // window), so the scope is the full authorization: it is strictly weaker than starting a turn.
   [WS_METHODS.orchestrationNoteComposing]: AuthOrchestrationOperateScope,
+  // t3team: fork thread facts/artifacts side streams are thread reads like subscribeThread.
+  [WS_METHODS.t3teamSubscribeThreadFacts]: AuthOrchestrationReadScope,
+  [WS_METHODS.t3teamSubscribeThreadArtifacts]: AuthOrchestrationReadScope,
   [WS_METHODS.serverProbe]: AuthOrchestrationReadScope,
   [WS_METHODS.serverGetConfig]: AuthOrchestrationReadScope,
   [WS_METHODS.serverRefreshProviders]: AuthOrchestrationOperateScope,

@@ -113,6 +113,7 @@ import {
   ThreadForkServiceV2,
 } from "./ThreadForkService.ts";
 import { planThreadDeletion } from "./ThreadDeletion.ts";
+import { T3TeamSettleGuard, settleGuardInput } from "../t3team-v2/t3team-settleGuard.ts";
 
 export class OrchestratorDispatchError extends Schema.TaggedError<OrchestratorDispatchError>()(
   "OrchestratorDispatchError",
@@ -710,6 +711,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
   const runtimePolicy = yield* RuntimePolicyV2;
   const threadForkService = yield* ThreadForkServiceV2;
   const threadDispatch = yield* ThreadCommandExecutor;
+  // t3team: fork settle guards (default allows everything; see t3team-settleGuard.ts).
+  const settleGuard = yield* T3TeamSettleGuard;
 
   const mapDispatchError =
     (command: OrchestrationV2ServerCommand) =>
@@ -2350,6 +2353,14 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       }
     }
     if (command.type === "thread.settle") {
+      const settleRejection = yield* settleGuard.check(settleGuardInput(command));
+      if (settleRejection !== null) {
+        return yield* new OrchestratorDispatchError({
+          commandId: command.commandId,
+          commandType: command.type,
+          cause: settleRejection,
+        });
+      }
       const projection = yield* loadProjectionForCommand(
         command,
         ["runs", "runtimeRequests", "messages"],

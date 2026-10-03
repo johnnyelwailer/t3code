@@ -439,7 +439,12 @@
     "apps/server/src/persistence/Migrations/056_RemoveRedundantProjectionIndexes.test.ts",
     "apps/server/src/persistence/reconcileV2PreviewMigration.test.ts",
     "apps/server/src/orchestration-v2/ProjectSettingsUpgrade.integration.test.ts",
-    "apps/server/src/orchestration-v2/legacy/LegacyV1Cutover.integration.test.ts"
+    "apps/server/src/orchestration-v2/legacy/LegacyV1Cutover.integration.test.ts",
+    "apps/server/src/orchestration-v2/Orchestrator.ts",
+    "apps/server/src/orchestration-v2/ProviderContinuationService.ts",
+    "apps/server/src/orchestration-v2/ProjectionStore.ts",
+    "apps/server/src/orchestration-v2/legacy/LegacyV1ThreadImporter.ts",
+    "apps/server/src/persistence/Errors.ts"
   ],
   "allowedUnprefixedNewFiles": [
     ".agents/skills/merge-upstream/SKILL.md",

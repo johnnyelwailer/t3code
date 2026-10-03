@@ -31,6 +31,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import * as EventSink from "../EventSink.ts";
 import { makeKeyedSerialExecutor } from "../KeyedSerialExecutor.ts";
+import { makeLegacyVisibleMessageFilter } from "./t3team-legacyHiddenMessages.ts";
 import { randomUuidV4 } from "../RandomUuid.ts";
 
 const IMPORT_EVENT_PREFIX = "migration:v1";
@@ -346,6 +347,8 @@ function chunks<A>(items: ReadonlyArray<A>, size: number): Array<ReadonlyArray<A
 
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+  // t3team: skip V1 fork framing rows hidden from the user (t3team-legacyHiddenMessages.ts).
+  const visibleOnly = yield* makeLegacyVisibleMessageFilter;
   const eventSink = yield* EventSink.EventSinkV2;
   const transcriptImports = yield* makeKeyedSerialExecutor<ThreadId>();
 
@@ -368,6 +371,7 @@ const make = Effect.gen(function* () {
       FROM projection_thread_messages
       WHERE thread_id = ${threadId}
         AND role IN ('user', 'assistant')
+        ${visibleOnly()}
       ORDER BY created_at ASC, message_id ASC
     `;
 
@@ -389,6 +393,7 @@ const make = Effect.gen(function* () {
             FROM projection_thread_messages AS earlier
             WHERE earlier.thread_id = message.thread_id
               AND earlier.role IN ('user', 'assistant')
+              ${visibleOnly("earlier")}
               AND (
                 earlier.created_at < message.created_at
                 OR (
@@ -400,6 +405,7 @@ const make = Effect.gen(function* () {
         FROM projection_thread_messages AS message
         WHERE message.thread_id = ${threadId}
           AND message.role IN ('user', 'assistant')
+          ${visibleOnly("message")}
         ORDER BY message.created_at DESC, message.message_id DESC
         LIMIT 1
       `;
@@ -419,6 +425,7 @@ const make = Effect.gen(function* () {
             FROM projection_thread_messages AS earlier
             WHERE earlier.thread_id = message.thread_id
               AND earlier.role IN ('user', 'assistant')
+              ${visibleOnly("earlier")}
               AND (
                 earlier.created_at < message.created_at
                 OR (
@@ -430,6 +437,7 @@ const make = Effect.gen(function* () {
         FROM projection_thread_messages AS message
         WHERE message.thread_id = ${threadId}
           AND message.role = 'user'
+          ${visibleOnly("message")}
         ORDER BY message.created_at DESC, message.message_id DESC
         LIMIT 1
       `;

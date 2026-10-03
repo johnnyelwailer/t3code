@@ -364,6 +364,14 @@ import {
   OrchestrationNoteComposingInput,
   OrchestrationNoteComposingResult,
 } from "./t3team-orchestrationExt.ts";
+import {
+  T3TeamSubscribeThreadFactsInput,
+  T3TeamThreadFactsStreamEvent,
+} from "./t3team-threadFacts.ts";
+import {
+  T3TeamSubscribeThreadArtifactsInput,
+  T3TeamThreadArtifactsStreamEvent,
+} from "./t3team-threadArtifacts.ts";
 import { Project, ProjectMutation, ProjectMutationError } from "./project.ts";
 
 export const WS_METHODS = {
@@ -583,6 +591,9 @@ export const WS_METHODS = {
   // t3team: per-thread composing heartbeat. Keeps its V1 wire name; V2 dropped
   // ORCHESTRATION_WS_METHODS, so the fork RPC lives here.
   orchestrationNoteComposing: "orchestration.noteComposing",
+  // t3team: fork side streams (capability-gated by `capabilities.t3team`).
+  t3teamSubscribeThreadFacts: "t3team.subscribeThreadFacts",
+  t3teamSubscribeThreadArtifacts: "t3team.subscribeThreadArtifacts",
 } as const;
 
 const WsServerUpsertKeybindingRpc = Rpc.make(WS_METHODS.serverUpsertKeybinding, {
@@ -1684,6 +1695,22 @@ const WsOrchestrationNoteComposingRpc = Rpc.make(WS_METHODS.orchestrationNoteCom
   error: EnvironmentAuthorizationError,
 });
 
+// t3team: fork thread facts side stream (snapshot, then per-thread changes).
+const WsT3TeamSubscribeThreadFactsRpc = Rpc.make(WS_METHODS.t3teamSubscribeThreadFacts, {
+  payload: T3TeamSubscribeThreadFactsInput,
+  success: T3TeamThreadFactsStreamEvent,
+  error: EnvironmentAuthorizationError,
+  stream: true,
+});
+
+// t3team: fork thread artifacts side stream (the thread's snapshot, then changes).
+const WsT3TeamSubscribeThreadArtifactsRpc = Rpc.make(WS_METHODS.t3teamSubscribeThreadArtifacts, {
+  payload: T3TeamSubscribeThreadArtifactsInput,
+  success: T3TeamThreadArtifactsStreamEvent,
+  error: EnvironmentAuthorizationError,
+  stream: true,
+});
+
 const WsSubscribeTerminalEventsRpc = Rpc.make(WS_METHODS.subscribeTerminalEvents, {
   payload: Schema.Struct({}),
   success: TerminalEvent,
@@ -2025,4 +2052,6 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2SubscribeShellRpc,
   WsOrchestrationV2SubscribeThreadRpc,
   WsOrchestrationNoteComposingRpc,
+  WsT3TeamSubscribeThreadFactsRpc,
+  WsT3TeamSubscribeThreadArtifactsRpc,
 );

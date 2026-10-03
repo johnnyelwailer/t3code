@@ -250,6 +250,7 @@ import { T3TeamWorkflowSignalReconcilerLive } from "./t3team-workflowSignalRecon
 import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
 import { T3TeamToolBrokerLive } from "./t3team-toolBrokerLive.ts";
+import { T3TeamV2FoundationLive } from "./t3team-v2/t3team-v2FoundationLive.ts";
 import * as NetService from "@t3tools/shared/Net";
 import * as RelayClient from "@t3tools/shared/relayClient";
 import { disableTailscaleServe, ensureTailscaleServe } from "@t3tools/tailscale";
@@ -690,6 +691,8 @@ const RuntimeCoreDependenciesBaseLive = Layer.mergeAll(
   ReplayMarkers.layer,
   T3TeamThreadToolContextEvictionReactorStartLive,
   T3TeamProjectSourceIconReactorStartLive,
+  // t3team: shared V2 foundation (facts/artifacts side stores, run-less message + lineage writers).
+  T3TeamV2FoundationLive,
 ).pipe(
   // t3team: the tool broker reads several capabilities through serviceOption at construction
   // time. Mount it before the runtime services so the later provideMerges expose the production

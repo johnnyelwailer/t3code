@@ -7,6 +7,10 @@ import * as IdAllocator from "./IdAllocator.ts";
 import * as ProviderContinuationRequests from "./ProviderContinuationRequests.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
 import { isUndeliveredMailboxSteer } from "./NotificationMailbox.ts";
+import {
+  DelegatedCompletionWakeRenderer,
+  renderDelegatedCompletionWake,
+} from "../t3team-v2/t3team-delegatedCompletionWakeRenderer.ts";
 
 const CONTINUATION_MESSAGE_TEXT = "Background task completed.";
 
@@ -62,6 +66,8 @@ export const workerLive = Layer.effectDiscard(
     const ids = yield* IdAllocator.IdAllocatorV2;
     const requests = yield* ProviderContinuationRequests.ProviderContinuationRequests;
     const threads = yield* ThreadManagementService.ThreadManagementService;
+    // t3team: wake text renderer (default = upstream text; see t3team-delegatedCompletionWakeRenderer.ts).
+    const wakeRenderer = yield* DelegatedCompletionWakeRenderer;
     const retryAttempts = yield* Ref.make(new Map<string, number>());
 
     const clearRetryAttempt = (key: string) =>
@@ -131,7 +137,12 @@ export const workerLive = Layer.effectDiscard(
             commandId,
             threadId: request.threadId,
             messageId: delivery.messageId,
-            text: delegatedCompletionText(delivery.taskIds),
+            text: yield* renderDelegatedCompletionWake(wakeRenderer, {
+              threadId: request.threadId,
+              parentRunId: request.delegatedCompletion.parentRunId,
+              taskIds: delivery.taskIds,
+              defaultText: delegatedCompletionText(delivery.taskIds),
+            }),
             attachments: [],
             dispatchMode: { type: "queue_after_active" },
             createdBy: "agent",

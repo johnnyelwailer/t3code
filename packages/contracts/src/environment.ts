@@ -10,6 +10,7 @@ import {
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
 import { EnvironmentAppearance, EnvironmentSetupProfile } from "./t3team-packAppearance.ts";
+import { T3TeamEnvironmentCapabilities } from "./t3team-environmentCapabilities.ts";
 export { EnvironmentAppearance, EnvironmentSetupProfile } from "./t3team-packAppearance.ts";
 
 /** Wire version for orchestration snapshots, streams, commands, and RPC payloads. */
@@ -196,6 +197,8 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
       desktop servers whose app predates the remote trigger, where clients
       must keep telling the user to update the app on that machine. */
   desktopAppUpdate: Schema.optionalKey(Schema.Boolean),
+  /** t3team: fork capability flags (t3team-environmentCapabilities.ts); absent upstream. */
+  t3team: Schema.optionalKey(T3TeamEnvironmentCapabilities),
 });
 export type ExecutionEnvironmentCapabilities = typeof ExecutionEnvironmentCapabilities.Type;
 

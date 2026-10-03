@@ -25,7 +25,7 @@ export interface ResourcePressureEventRepositoryShape {
   readonly listRecent: (input: {
     readonly limit: number;
   }) => Effect.Effect<ReadonlyArray<ResourcePressureEvent>, ProjectionRepositoryError>;
-  /** Read-only COUNT over projection_threads: live threads owning a worktree. */
+  /** Read-only COUNT over the V2 thread projection: live threads owning a worktree. */
   readonly readAccumulation: Effect.Effect<ResourcePressureAccumulation, ProjectionRepositoryError>;
 }
 
