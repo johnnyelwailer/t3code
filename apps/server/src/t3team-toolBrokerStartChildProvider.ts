@@ -1,14 +1,12 @@
 import { ProviderInstanceId, type ModelSelection, type ServerProvider } from "@t3tools/contracts";
-import * as Effect from "effect/Effect";
 
 import type { AgentEffort } from "@t3team/sdk";
 
 import {
   buildStartChildModelSelection,
-  type T3TeamStartChildArgs,
   type T3TeamStartChildReasoningEffort,
-} from "./t3team-toolBrokerStartChildArgs.ts";
-import { applyWorkflowEffort, effortIsHonored } from "./t3team-workflowEffortOptions.ts";
+} from "./t3team-toolBrokerStartChildModel.ts";
+import { applyWorkflowEffort } from "./t3team-workflowEffortOptions.ts";
 import {
   formatList,
   resolveSlug,
@@ -16,7 +14,8 @@ import {
 } from "./t3team-toolBrokerStartChildProviderSlug.ts";
 
 /**
- * Free cross-provider + model resolution for `t3team.thread.start_child`.
+ * Free cross-provider + model resolution for fork child turns (workflow children; the
+ * delegate_task path resolves its target upstream and only applies `effort` on top).
  *
  * This is a GENERIC host capability: it lets a parent agent spawn a child on a
  * DIFFERENT configured provider instance (e.g. a Claude parent spawning a Codex
@@ -119,54 +118,4 @@ export function resolveStartChildModelSelection(
       ),
     ),
   };
-}
-
-/**
- * Effectful wrapper used by the start_child flow: loads the live provider
- * snapshots (empty when the registry is absent), runs the pure resolver, and
- * fails the turn with the resolver's message when the requested provider/model
- * is invalid. Keeps `t3team-toolBrokerStartChild.ts` a single call site.
- *
- * Also surfaces an `effortNote` when a provider-agnostic `effort` was requested
- * but CANNOT be honored (the provider exposes neither a reasoning control nor
- * tier models): the downgrade then says so in the launch result instead of
- * silently running the child on whatever model it inherited.
- */
-export type ResolveChildModelResult = {
-  readonly modelSelection: ModelSelection;
-  readonly effortNote?: string;
-};
-
-export function resolveChildModel(
-  baseModelSelection: ModelSelection,
-  args: Pick<T3TeamStartChildArgs, "provider" | "model" | "reasoningEffort" | "effort">,
-  listProviders: (() => Effect.Effect<ReadonlyArray<ServerProvider>>) | undefined,
-): Effect.Effect<ResolveChildModelResult, string> {
-  return Effect.gen(function* () {
-    if (args.provider && !listProviders) {
-      return yield* Effect.fail(
-        `Provider registry is not wired into this server build; cannot resolve provider ` +
-          `instance '${args.provider}' for start_child.`,
-      );
-    }
-    const providers = listProviders ? yield* listProviders() : [];
-    const result = resolveStartChildModelSelection({
-      parentModelSelection: baseModelSelection,
-      ...(args.provider ? { requestedProvider: args.provider } : {}),
-      ...(args.model ? { requestedModel: args.model } : {}),
-      ...(args.reasoningEffort ? { reasoningEffort: args.reasoningEffort } : {}),
-      ...(args.effort ? { effort: args.effort } : {}),
-      providers,
-    });
-    if (!result.ok) return yield* Effect.fail(result.message);
-    const effortNote =
-      args.effort !== undefined && !effortIsHonored(result.value, args.effort, providers)
-        ? `effort '${args.effort}' was not honored: provider '${result.value.instanceId}' exposes ` +
-          `no reasoning control and no tier models; the child runs on model '${result.value.model}'.`
-        : undefined;
-    return {
-      modelSelection: result.value,
-      ...(effortNote ? { effortNote } : {}),
-    };
-  });
 }

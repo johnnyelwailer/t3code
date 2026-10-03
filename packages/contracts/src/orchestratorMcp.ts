@@ -166,11 +166,44 @@ export const OrchestratorMcpTerminalDelegatedTaskStatus = Schema.Literals([
 export type OrchestratorMcpTerminalDelegatedTaskStatus =
   typeof OrchestratorMcpTerminalDelegatedTaskStatus.Type;
 
+/**
+ * Where a delegated child works. `inherit` (the default) shares the parent's
+ * checkout; `worktree` gives the child its own new branch in a dedicated
+ * worktree. Hosts without workspace isolation reject `worktree`
+ * (orchestrator_capabilities reports `delegation.workspaceIsolation`).
+ */
+export const OrchestratorMcpDelegateWorkspace = Schema.Struct({
+  isolation: Schema.Literals(["inherit", "worktree"]).annotate({
+    description:
+      "inherit (default): the parent's checkout, for planning, research and review. worktree: a new branch in a dedicated worktree, for implementation, debugging, tests and PR work.",
+  }),
+  repository: Schema.optional(
+    TrimmedNonEmptyString.annotate({
+      description:
+        "isolation=worktree only: the repository to branch from when the project links several (for example owner/repo). Omit for the project's own repository.",
+    }),
+  ),
+  baseRef: Schema.optional(
+    TrimmedNonEmptyString.annotate({
+      description:
+        "isolation=worktree only: branch, tag or commit the new branch starts from. Defaults to the repository's default branch.",
+    }),
+  ),
+});
+export type OrchestratorMcpDelegateWorkspace = typeof OrchestratorMcpDelegateWorkspace.Type;
+
 export const OrchestratorMcpDelegateTaskInput = Schema.Struct({
   task: OrchestratorMcpPrompt.annotate({
     description: "Self-contained task for one delegated child agent/subagent.",
   }),
   target: Schema.optional(OrchestratorMcpTarget),
+  workspace: Schema.optional(OrchestratorMcpDelegateWorkspace),
+  extensions: Schema.optional(
+    Schema.Record(Schema.String, Schema.Unknown).annotate({
+      description:
+        "Host-specific delegation options keyed by name. orchestrator_capabilities lists the accepted keys under delegation.extensions; unknown keys are rejected.",
+    }),
+  ),
   title: Schema.optional(OrchestratorMcpTitle),
   role: Schema.optional(OrchestratorMcpTaskRole),
   mode: Schema.optional(
@@ -209,6 +242,12 @@ export const OrchestratorMcpDelegateTaskResult = Schema.Struct({
     description:
       "True only on that mode=wait call when timeoutMs elapsed. The timeout does not cancel the child. Later task_status reads return false and use status for liveness.",
   }),
+  notes: Schema.optional(
+    Schema.Array(Schema.String).annotate({
+      description:
+        "delegate_task only: how the host applied workspace and extension options (branch, worktree, setup script, adjusted options).",
+    }),
+  ),
 });
 export type OrchestratorMcpDelegateTaskResult = typeof OrchestratorMcpDelegateTaskResult.Type;
 
@@ -491,6 +530,15 @@ export const OrchestratorMcpCapabilitiesResult = Schema.Struct({
     scheduledTasks: Schema.Boolean,
     maxBatchThreads: Schema.Number,
   }),
+  /** What delegate_task accepts beyond the core fields on this host. */
+  delegation: Schema.optional(
+    Schema.Struct({
+      workspaceIsolation: Schema.Boolean,
+      extensions: Schema.Array(
+        Schema.Struct({ key: TrimmedNonEmptyString, description: Schema.String }),
+      ),
+    }),
+  ),
 });
 export type OrchestratorMcpCapabilitiesResult = typeof OrchestratorMcpCapabilitiesResult.Type;
 

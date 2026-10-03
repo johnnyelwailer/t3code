@@ -67,11 +67,11 @@ export function buildScopedChildWorktreePath(input: {
   readonly projectWorkspaceRoot: string;
   readonly repoFullName: string;
   readonly repoRef: string;
-  readonly childThreadId: string;
+  readonly worktreeKey: string;
 }): string {
   const repoDirectory = deriveReferenceDirectoryName(input.repoFullName);
   const refDirectory = sanitizeScopedPathSegment(input.repoRef) || "default";
-  const childDirectory = input.childThreadId.slice(0, 8).toLowerCase();
+  const childDirectory = input.worktreeKey.slice(0, 8).toLowerCase();
 
   return input.path.join(
     input.projectWorkspaceRoot,

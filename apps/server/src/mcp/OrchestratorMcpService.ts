@@ -70,6 +70,7 @@ import * as ThreadManagementService from "../orchestration-v2/ThreadManagementSe
 import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import type { McpInvocationScope } from "./McpInvocationContext.ts";
+import { DelegatedTaskPreparation } from "./t3team-delegatedTaskPreparation.ts";
 
 const DEFAULT_WAIT_TIMEOUT_MS = 10 * 60 * 1_000;
 const MAX_WAIT_TIMEOUT_MS = 60 * 60 * 1_000;
@@ -756,6 +757,8 @@ const make = Effect.gen(function* () {
   const providerRegistry = yield* ProviderRegistry.ProviderRegistry;
   const providerAdapters = yield* ProviderAdapterRegistry.ProviderAdapterRegistryV2;
   const scheduledTasks = yield* ScheduledTaskService.ScheduledTaskService;
+  // t3team: host hook for delegate_task workspace isolation and extension options.
+  const delegatedTaskPreparation = yield* DelegatedTaskPreparation;
 
   const requireCapability = (scope: McpInvocationScope) =>
     scope.capabilities.has("orchestration")
@@ -1351,6 +1354,15 @@ const make = Effect.gen(function* () {
             scheduledTasks: true,
             maxBatchThreads: 20,
           },
+          ...(delegatedTaskPreparation.workspaceIsolation ||
+          delegatedTaskPreparation.extensions.length > 0
+            ? {
+                delegation: {
+                  workspaceIsolation: delegatedTaskPreparation.workspaceIsolation,
+                  extensions: [...delegatedTaskPreparation.extensions],
+                },
+              }
+            : {}),
         };
       }),
     delegateTask: (scope, input) =>
@@ -1387,6 +1399,16 @@ const make = Effect.gen(function* () {
           requestKey: key,
           operation: "delegate-task",
         });
+        const prepared = yield* delegatedTaskPreparation.prepare({
+          scope,
+          parentThread: parent.thread,
+          requestKey: key,
+          title: input.title,
+          modelSelection: target.modelSelection,
+          explicitTargetOptions: input.target?.options !== undefined,
+          workspace: input.workspace,
+          extensions: input.extensions,
+        });
         const result = yield* threadManagement
           .dispatch({
             type: "delegated_task.request",
@@ -1398,13 +1420,14 @@ const make = Effect.gen(function* () {
             parentNodeId: parentRun.rootNodeId,
             task: taskPrompt(input),
             ...(input.title === undefined ? {} : { title: input.title }),
-            modelSelection: target.modelSelection,
+            modelSelection: prepared.modelSelection,
             runtimeMode,
             interactionMode,
             // Async delegations wake the parent on every child terminal; wait
             // delegations deliver through the blocking tool call, so a wake is
             // only needed if the parent settled first (timeout, disconnect).
             completionWake: input.mode === "wait" ? "settled_only" : "always",
+            ...(prepared.workspace === undefined ? {} : { workspace: prepared.workspace }),
           })
           .pipe(
             Effect.mapError((error) =>
@@ -1425,9 +1448,16 @@ const make = Effect.gen(function* () {
           );
         }
         const taskId = taskEvent.event.payload.id;
+        const childThreadId = taskEvent.event.payload.childThreadId;
+        const notes = [
+          ...prepared.notes,
+          ...(childThreadId === null ? [] : yield* prepared.afterCreate(childThreadId)),
+        ];
+        const withNotes = (taskResult: OrchestratorMcpDelegateTaskResult) =>
+          notes.length === 0 ? taskResult : { ...taskResult, notes };
 
         if (input.mode !== "wait") {
-          return yield* readTask(scope, taskId, false, true);
+          return withNotes(yield* readTask(scope, taskId, false, true));
         }
         const timeoutMs = Math.min(
           MAX_WAIT_TIMEOUT_MS,
@@ -1435,7 +1465,7 @@ const make = Effect.gen(function* () {
         );
         const waited = yield* waitForTask(scope, taskId, timeoutMs);
         if (Option.isSome(waited)) {
-          return waited.value;
+          return withNotes(waited.value);
         }
         // The blocking wait timed out, so it no longer owns delivery: upgrade
         // the task so a later terminal wakes the parent even mid-turn. Best
@@ -1476,7 +1506,7 @@ const make = Effect.gen(function* () {
               }),
             ),
           );
-        return yield* readTask(scope, taskId, true, true);
+        return withNotes(yield* readTask(scope, taskId, true, true));
       }),
     taskStatus: (scope, taskId) => readTask(scope, taskId, false, true),
     cancelTask: (scope, input) =>

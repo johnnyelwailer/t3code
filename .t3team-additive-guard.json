@@ -448,7 +448,11 @@
     "apps/server/src/orchestration-v2/ProviderAdapter.ts",
     "apps/server/src/orchestration-v2/Adapters/OpenCodeAdapterV2.ts",
     "apps/server/src/provider/opencode2/OpenCode2Server.ts",
-    "apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts"
+    "apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts",
+    "packages/contracts/src/orchestrationV2.ts",
+    "packages/contracts/src/orchestratorMcp.ts",
+    "apps/server/src/mcp/OrchestratorMcpService.ts",
+    "apps/server/src/mcp/toolkits/orchestrator/tools.ts"
   ],
   "allowedUnprefixedNewFiles": [
     ".agents/skills/merge-upstream/SKILL.md",

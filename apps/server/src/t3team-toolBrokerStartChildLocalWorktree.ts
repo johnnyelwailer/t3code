@@ -1,8 +1,7 @@
 /**
- * Local-repository worktree resolution for `t3team.thread.start_child`
- * isolation (split out of `t3team-toolBrokerStartChildContext.ts` for the
- * additive LOC budget): creates a dedicated worktree of the LOCAL repository
- * (or adopted meta-repo) at the project workspace root. Behavior unchanged.
+ * Local-repository worktree resolution for delegate_task workspace isolation
+ * (`t3team-delegateTaskWorkspace.ts`): creates a dedicated worktree of the LOCAL
+ * repository (or adopted meta-repo) at the project workspace root.
  *
  * @module t3team-toolBrokerStartChildLocalWorktree
  */
@@ -37,7 +36,7 @@ export const resolveLocalRepositoryWorktree = (input: {
   readonly projectWorkspaceRoot: string;
   readonly repoRef?: string;
   readonly sessionName: string;
-  readonly childThreadId: string;
+  readonly worktreeKey: string;
   /** Display name for the scoped worktree directory; defaults to the workspace directory name. */
   readonly repositoryName?: string;
 }) =>
@@ -95,21 +94,44 @@ export const resolveLocalRepositoryWorktree = (input: {
           ? input.repositoryName
           : path.basename(workspaceRoot),
       repoRef: baseRef,
-      childThreadId: input.childThreadId,
+      worktreeKey: input.worktreeKey,
     });
 
     yield* fileSystem.makeDirectory(path.dirname(scopedWorktreePath), { recursive: true });
 
-    const worktree = yield* gitWorkflow.createWorktree({
+    const worktree = yield* createOrReuseChildWorktree({
+      services: input.services,
       cwd: workspaceRoot,
-      refName: baseRef.trim().length > 0 ? baseRef.trim() : "main",
-      newRefName: buildChildBranchName(input.sessionName),
-      path: scopedWorktreePath,
+      baseRef,
+      sessionName: input.sessionName,
+      worktreePath: scopedWorktreePath,
     });
 
-    return {
-      repoRef: baseRef,
-      branch: worktree.worktree.refName,
-      worktreePath: worktree.worktree.path,
-    };
+    return { repoRef: baseRef, ...worktree };
   }).pipe(Effect.mapError((error) => (error instanceof Error ? error.message : String(error))));
+
+/** Creates the child's worktree on a new branch, or reuses the one a retried delegation
+ * (same request key, so same scoped path) already created. */
+export const createOrReuseChildWorktree = (input: {
+  readonly services: Pick<T3TeamStartChildLinkedRepositoryServices, "fileSystem" | "gitWorkflow">;
+  readonly cwd: string;
+  readonly baseRef: string;
+  readonly sessionName: string;
+  readonly worktreePath: string;
+}) =>
+  Effect.gen(function* () {
+    const { fileSystem, gitWorkflow } = input.services;
+    if (yield* fileSystem.exists(input.worktreePath).pipe(Effect.orElseSucceed(() => false))) {
+      const status = yield* gitWorkflow.localStatus({ cwd: input.worktreePath });
+      if (status.isRepo && status.refName !== null) {
+        return { branch: status.refName, worktreePath: input.worktreePath };
+      }
+    }
+    const worktree = yield* gitWorkflow.createWorktree({
+      cwd: input.cwd,
+      refName: input.baseRef.trim().length > 0 ? input.baseRef.trim() : "main",
+      newRefName: buildChildBranchName(input.sessionName),
+      path: input.worktreePath,
+    });
+    return { branch: worktree.worktree.refName, worktreePath: worktree.worktree.path };
+  });

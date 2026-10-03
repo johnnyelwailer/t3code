@@ -251,6 +251,8 @@ import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistr
 import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
 import { T3TeamToolBrokerLive } from "./t3team-toolBrokerLive.ts";
 import { T3TeamV2FoundationLive } from "./t3team-v2/t3team-v2FoundationLive.ts";
+import { T3TeamChildThreadMetadataLive } from "./t3team-childThreadMetadata.ts";
+import { T3TeamDelegatedTaskPreparationLive } from "./t3team-delegateTaskPreparationLive.ts";
 import * as NetService from "@t3tools/shared/Net";
 import * as RelayClient from "@t3tools/shared/relayClient";
 import { disableTailscaleServe, ensureTailscaleServe } from "@t3tools/tailscale";
@@ -693,6 +695,8 @@ const RuntimeCoreDependenciesBaseLive = Layer.mergeAll(
   T3TeamProjectSourceIconReactorStartLive,
   // t3team: shared V2 foundation (facts/artifacts side stores, run-less message + lineage writers).
   T3TeamV2FoundationLive,
+  // t3team: delegated-child ticket/placement store (delegate_task extension, placement readers).
+  T3TeamChildThreadMetadataLive,
 ).pipe(
   // t3team: the tool broker reads several capabilities through serviceOption at construction
   // time. Mount it before the runtime services so the later provideMerges expose the production
@@ -878,6 +882,8 @@ export const makeRoutesLayer = Layer.mergeAll(
   // what dispatch can actually serve.
   McpHttpServer.layer.pipe(
     Layer.provide(ProviderAdapterRegistry.layerFromProviderInstanceRegistry),
+    // t3team: delegate_task workspace isolation + extensions (DelegatedTaskPreparation hook).
+    Layer.provide(T3TeamDelegatedTaskPreparationLive),
   ),
   // Last, so no route layer can replace the server's one TracerDisabledWhen.
   untracedRequestsLayer,
