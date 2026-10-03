@@ -8,7 +8,7 @@ import {
   splitAutomatedBurst,
 } from "./t3team-actorBurstFold.ts";
 import { buildActorReactionDigestInput } from "./t3team-actorReactionInput.ts";
-import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
+import type { T3TeamActorMailboxEntry } from "./t3team-actorMailboxEntry.ts";
 
 /** Build a minimal actor mailbox entry; `summary`/`urgency` are overridable. */
 const makeEntry = (
@@ -22,16 +22,15 @@ const makeEntry = (
   } = {},
 ): T3TeamActorMailboxEntry => ({
   messageId,
+  toThreadId: "target",
   fromThreadId: over.fromThreadId ?? "watcher",
   fromTitle: over.fromTitle ?? "Silence Watch",
-  fromProjectId: "project",
   text: over.text ?? `Target «${messageId}» stopped abnormally.`,
   ...(over.summary !== undefined ? { summary: over.summary } : {}),
   urgency: over.urgency ?? "normal",
   hopCount: 1,
   rootThreadId: "root",
   createdAt: "2026-09-12T18:00:00.000Z",
-  dispatchAttempts: 0,
 });
 
 /** N distinct non-urgent entries — the deduplicated set the ledger hands down. */
@@ -161,16 +160,15 @@ const realShape = (i: number): T3TeamActorMailboxEntry => {
     `(error) while you were watching it for silence (watch w${i + 1}). The watch is closed.`;
   return {
     messageId: `r-${i + 1}`,
+    toThreadId: "target",
     fromThreadId: `fbdb-${i + 1}`,
     fromTitle: title,
-    fromProjectId: "project",
     text,
     summary: `Watched thread stopped: ${title}`,
     urgency: "normal",
     hopCount: 0,
     rootThreadId: "root",
     createdAt: "2026-09-12T18:00:00.000Z",
-    dispatchAttempts: 0,
   };
 };
 const bytes = (s: string) => new TextEncoder().encode(s).length;

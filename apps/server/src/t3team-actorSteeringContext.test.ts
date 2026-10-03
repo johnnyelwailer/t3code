@@ -1,4 +1,3 @@
-import { MessageId, TurnId, type OrchestrationMessage } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import * as DateTime from "effect/DateTime";
@@ -9,52 +8,27 @@ import {
   appendHumanSteeringInstruction,
   buildHumanSteeringInstruction,
   detectHumanSteeringState,
+  humanSteeringInstructionForThread,
   resolveSteeringMaxAgentTurns,
   resolveSteeringMaxAgeMs,
 } from "./t3team-actorSteeringContext.ts";
 
 // Fixed "now" for every test: the signal is a pure function of message
-// roles + timestamps, so one shared clock keeps the cases readable.
+// provenance + timestamps, so one shared clock keeps the cases readable.
 const NOW_MS = Date.parse("2026-07-19T09:00:00.000Z");
-// ISO-8601 UTC timestamps built via Effect DateTime (not `new Date()`, which
-// trips effect(globalDate)); yields the identical `...Z` string the module
-// round-trips through `Date.parse`.
-const iso = (offsetMs: number) => DateTime.makeUnsafe(NOW_MS + offsetMs).toJSON();
+const at = (offsetMs: number) => DateTime.makeUnsafe(NOW_MS + offsetMs);
 
-let seq = 0;
-const nextId = (prefix: string) => `${prefix}-${(seq += 1)}`;
-
-function userMessage(atOffsetMs: number, actor = false): OrchestrationMessage {
-  const createdAt = iso(atOffsetMs);
+/** A V2 user-role message; `agent` marks a digest/notification wearing the user role. */
+function userMessage(atOffsetMs: number, agent = false) {
   return {
-    id: MessageId.make(nextId("msg")),
-    text: "body",
-    role: "user",
-    turnId: TurnId.make(nextId("turn")),
-    streaming: false,
-    createdAt,
-    updatedAt: createdAt,
-    ...(actor
-      ? {
-          t3teamExt: {
-            actor: { senderThreadId: "s", urgency: "normal", hopCount: 1, rootThreadId: "r" },
-          },
-        }
-      : {}),
-  } as OrchestrationMessage;
+    role: "user" as const,
+    createdBy: agent ? ("agent" as const) : ("user" as const),
+    createdAt: at(atOffsetMs),
+  };
 }
 
-function assistantMessage(atOffsetMs: number): OrchestrationMessage {
-  const createdAt = iso(atOffsetMs);
-  return {
-    id: MessageId.make(nextId("msg")),
-    text: "body",
-    role: "assistant",
-    turnId: TurnId.make(nextId("turn")),
-    streaming: false,
-    createdAt,
-    updatedAt: createdAt,
-  } as OrchestrationMessage;
+function assistantMessage(atOffsetMs: number) {
+  return { role: "assistant" as const, createdBy: "agent" as const, createdAt: at(atOffsetMs) };
 }
 
 describe("detectHumanSteeringState", () => {
@@ -105,7 +79,7 @@ describe("detectHumanSteeringState", () => {
     });
   });
 
-  it("ignores inter-agent reaction inputs — they are not human messages", () => {
+  it("ignores agent messages wearing the user role (digests) — they are not human messages", () => {
     // Only inter-agent "user" inputs exist: no real user has spoken.
     const messages = [userMessage(-60 * 1000, true), assistantMessage(-50 * 1000)];
     expect(detectHumanSteeringState(messages, NOW_MS)).toEqual({ kind: "idle" });
@@ -219,9 +193,19 @@ describe("appendHumanSteeringInstruction", () => {
       "parent-thread",
     );
     const result = appendHumanSteeringInstruction("base context", instruction);
-    // Restart-rehydrate matching prefix-matches the stored input against the
-    // rebuilt stable base — the suffix contract makes that keep working.
     expect(result.startsWith("base context")).toBe(true);
     expect(result.endsWith(instruction)).toBe(true);
+  });
+});
+
+describe("humanSteeringInstructionForThread", () => {
+  it("combines the V2 messages and the lineage parent", () => {
+    const messages = [userMessage(-60 * 1000)];
+    expect(
+      humanSteeringInstructionForThread({ messages, parentThreadId: null, nowMillis: NOW_MS }),
+    ).toBe("");
+    expect(
+      humanSteeringInstructionForThread({ messages, parentThreadId: "parent", nowMillis: NOW_MS }),
+    ).toContain("A human is steering this thread right now");
   });
 });

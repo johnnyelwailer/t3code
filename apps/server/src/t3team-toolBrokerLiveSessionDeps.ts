@@ -14,6 +14,7 @@ import type { T3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish
 import type { ResourcePressureMonitorShape } from "./t3team-resourcePressureMonitor.ts";
 import type { T3TeamThreadToolContextStoreShape } from "./t3team-threadToolContextStore.ts";
 import type { T3TeamToolCallResult, T3TeamTurnToolContext } from "./t3team-toolBroker.ts";
+import type { ReadMessageMailboxEntry } from "./t3team-toolBrokerBindingReadMessage.ts";
 import type { T3TeamRecipeToolHandlers } from "./t3team-toolBrokerBindingRecipes.ts";
 import type { T3TeamThreadReads } from "./t3team-toolBrokerThreadReads.ts";
 import type { makeT3TeamShowWidget } from "./t3team-toolBrokerWidgetShow.ts";
@@ -35,6 +36,13 @@ export interface BindSessionDeps {
   readonly bindShowWidget: <TLoadError>(
     input: Omit<Parameters<typeof makeT3TeamShowWidget<TLoadError>>[0], "runtime">,
   ) => (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
+  /** Inter-agent mailbox lookup for `t3team.thread.read_message` (absent: tool unavailable). */
+  readonly readMailboxMessage:
+    | ((
+        threadId: ThreadIdType,
+        messageId: string,
+      ) => Effect.Effect<ReadMessageMailboxEntry | null, string>)
+    | undefined;
   /** Per-thread draft-mutation publisher (thread artifacts store). */
   readonly bindPublishDraft: (threadId: ThreadIdType) => T3TeamDraftMutationPublisher;
   readonly loadThreadView: (

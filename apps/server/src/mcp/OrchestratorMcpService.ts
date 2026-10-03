@@ -71,6 +71,7 @@ import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import type { McpInvocationScope } from "./McpInvocationContext.ts";
 import { DelegatedTaskPreparation } from "./t3team-delegatedTaskPreparation.ts";
+import { ThreadMailboxDelivery } from "./t3team-threadMailboxDelivery.ts";
 
 const DEFAULT_WAIT_TIMEOUT_MS = 10 * 60 * 1_000;
 const MAX_WAIT_TIMEOUT_MS = 60 * 60 * 1_000;
@@ -759,6 +760,8 @@ const make = Effect.gen(function* () {
   const scheduledTasks = yield* ScheduledTaskService.ScheduledTaskService;
   // t3team: host hook for delegate_task workspace isolation and extension options.
   const delegatedTaskPreparation = yield* DelegatedTaskPreparation;
+  // t3team: host hook for t3_thread_send mode "mailbox" (coalesced, never steers).
+  const threadMailbox = yield* ThreadMailboxDelivery;
 
   const requireCapability = (scope: McpInvocationScope) =>
     scope.capabilities.has("orchestration")
@@ -1871,6 +1874,28 @@ const make = Effect.gen(function* () {
           requestKey: key,
           operation: "thread-send",
         });
+        if (mode === "mailbox") {
+          if (threadMailbox.send === null) {
+            return yield* failure(
+              "invalid_request",
+              "Mailbox delivery is not available on this server.",
+            );
+          }
+          const queued = yield* threadMailbox.send({
+            senderThreadId: scope.threadId,
+            targetThreadId: input.threadId,
+            messageId,
+            text: input.message,
+            summary: input.summary,
+            urgent: input.urgent === true,
+          });
+          return {
+            threadId: input.threadId,
+            messageId,
+            delivery: "mailbox",
+            ...(queued.note === undefined ? {} : { note: queued.note }),
+          } satisfies OrchestratorMcpThreadSendResult;
+        }
         const result = yield* threadManagement
           .sendToThread({
             projectId: parent.thread.projectId,

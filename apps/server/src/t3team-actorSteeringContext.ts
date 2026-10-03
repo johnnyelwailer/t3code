@@ -9,17 +9,13 @@
  * Part 2 of #209 makes outbound inter-agent messages visible in the sender's
  * timeline.
  *
- * Injected at the same seam that wraps an inter-agent reaction turn with the
- * user-return instruction (t3team-actorReactionVisibility.ts, consumed by
- * t3team-actorMessageReaction.ts): as a well-known SUFFIX after the stable
- * framed base, so the restart-rehydrate prefix matching (which rebuilds the
- * single-entry base and prefix-matches the stored input) keeps working.
+ * Appended as a SUFFIX to an inter-agent digest run's input
+ * (t3team-actorReactionVisibility.ts, built by t3team-actorMailboxDelivery.ts).
  *
- * The trigger is DETERMINISTIC — computed from real message roles and
- * timestamps, never LLM-guessed. A message's origin is its `t3teamExt`:
- *   - `t3teamExt.actor`  → inter-agent reaction input (NOT a human)
- *   - neither            → typed by a human / system-started (same cheap
- *                          origin test t3team-actorReactionVisibility.ts uses)
+ * The trigger is DETERMINISTIC — computed from V2 message provenance and
+ * timestamps, never LLM-guessed: a human message is `role: "user"` with
+ * `createdBy: "user"` (agent and system messages wearing the user role —
+ * digests, notifications, retries — are excluded).
  *
  * The "recent" window defaults to EITHER of two sub-signals (documented
  * default: a user message within the last ~2 agent turns OR ~10 minutes):
@@ -32,8 +28,10 @@
  *
  * @module t3team-actorSteeringContext
  */
-import type { OrchestrationMessage, OrchestrationThread } from "@t3tools/contracts";
-import { findHandoffParentThreadId } from "./t3team-childAbnormalStopNotify.ts";
+import type { OrchestrationV2ConversationMessage } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
+
+type SteeringMessage = Pick<OrchestrationV2ConversationMessage, "role" | "createdBy" | "createdAt">;
 
 /** Default: a user message within the last N agent turns counts as steering. */
 export const STEERING_MAX_AGENT_TURNS_DEFAULT = 2;
@@ -88,15 +86,11 @@ export type HumanSteeringState =
     }
   | { readonly kind: "idle" };
 
-/**
- * Cheap origin test: is this a user-typed (non-inter-agent) user message?
- * Mirrors `isRealUserMessage` in t3team-actorReactionVisibility.ts over the
- * same projected `OrchestrationMessage` shape — only role + `t3teamExt`
- * origin are read, no transcript scan.
- */
-function isRealUserMessage(message: OrchestrationMessage): boolean {
-  return message.role === "user" && message.t3teamExt?.actor === undefined;
-}
+/** A message a human typed (not an agent/system message wearing the user role). */
+const isHumanMessage = (message: SteeringMessage): boolean =>
+  message.role === "user" && message.createdBy === "user";
+
+const epochMillis = (message: SteeringMessage) => DateTime.toEpochMillis(message.createdAt);
 
 /**
  * Compute the human-steering state from the thread's projected messages and a
@@ -108,7 +102,7 @@ function isRealUserMessage(message: OrchestrationMessage): boolean {
  * turns are the assistant messages at-or-after that user message.
  */
 export function detectHumanSteeringState(
-  messages: ReadonlyArray<OrchestrationMessage> | null | undefined,
+  messages: ReadonlyArray<SteeringMessage> | null | undefined,
   nowMs: number,
   options?: {
     readonly maxAgentTurns?: number;
@@ -123,8 +117,8 @@ export function detectHumanSteeringState(
 
   let lastUserAtMs = Number.NEGATIVE_INFINITY;
   for (const message of messages) {
-    if (!isRealUserMessage(message)) continue;
-    const atMs = Date.parse(message.createdAt);
+    if (!isHumanMessage(message)) continue;
+    const atMs = epochMillis(message);
     if (atMs >= lastUserAtMs) {
       lastUserAtMs = atMs;
     }
@@ -136,7 +130,7 @@ export function detectHumanSteeringState(
   let agentTurns = 0;
   for (const message of messages) {
     if (message.role !== "assistant") continue;
-    if (Date.parse(message.createdAt) >= lastUserAtMs) {
+    if (epochMillis(message) >= lastUserAtMs) {
       agentTurns += 1;
     }
   }
@@ -187,31 +181,24 @@ export function buildHumanSteeringInstruction(
 
 /**
  * Append the human-steering instruction to a turn's stable base context, or
- * return the base unchanged when there is nothing to inject. The base is kept
- * EXACTLY as produced by the caller so the restart-rehydrate prefix matching
- * (which prefix-matches the stored input against the rebuilt base) keeps
- * working; the instruction is a well-known SUFFIX appended after the base —
- * the same contract the user-return instruction in
- * t3team-actorReactionVisibility.ts follows.
+ * return the base unchanged when there is nothing to inject (a SUFFIX after
+ * the base).
  */
 export function appendHumanSteeringInstruction(baseInput: string, instruction: string): string {
   return instruction === "" ? baseInput : `${baseInput}\n\n${instruction}`;
 }
 
 /**
- * Human-steering SUFFIX for a reaction turn, computed from the thread's own
- * durable state: non-empty whenever the thread has a parent (root threads and
- * workflow-owned children have no parent → no-op). Steered turns get the
- * measured-age phrasing; idle turns get the standing anti-ping rule. Kept
- * here so the reaction dispatch stays thin — the caller only decides WHERE
- * the suffix rides in the turn input.
+ * Human-steering SUFFIX for a digest run, from the thread's own durable state:
+ * its V2 messages and its lineage parent (none → no-op).
  */
-export function humanSteeringInstructionForThread(
-  thread: Pick<OrchestrationThread, "messages" | "activities">,
-  nowMillis: number,
-): string {
+export function humanSteeringInstructionForThread(input: {
+  readonly messages: ReadonlyArray<SteeringMessage>;
+  readonly parentThreadId: string | null;
+  readonly nowMillis: number;
+}): string {
   return buildHumanSteeringInstruction(
-    detectHumanSteeringState(thread.messages, nowMillis),
-    findHandoffParentThreadId(thread.activities),
+    detectHumanSteeringState(input.messages, input.nowMillis),
+    input.parentThreadId,
   );
 }

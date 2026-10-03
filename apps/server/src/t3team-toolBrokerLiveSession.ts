@@ -83,7 +83,7 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
             scopeLabel,
             toolArgs,
             threadId: bindingThreadId,
-            loadThreadDetail: reads.loadSearchableThread,
+            ...(deps.readMailboxMessage ? { readMailboxMessage: deps.readMailboxMessage } : {}),
           }),
         searchThread: (toolArgs, bindingThreadId) =>
           callT3TeamSearchThreadTool({

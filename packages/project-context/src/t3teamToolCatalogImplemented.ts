@@ -474,7 +474,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     label: "Read inter-agent message",
     title: "Read the full body of an inter-agent message",
     description:
-      "Read the FULL body of a previously delivered inter-agent message (sent with t3team_send_message) in this thread. Long inter-agent bodies are truncated on delivery; the truncation marker in the delivered preview carries the message id. Pass that 'message_id' to retrieve the full persisted text.",
+      "Read the FULL body of a previously delivered inter-agent message (sent with t3_thread_send mode 'mailbox') in this thread. Long inter-agent bodies are truncated on delivery; the truncation marker in the delivered preview carries the message id. Pass that 'message_id' to retrieve the full persisted text.",
     capabilities: ["read"],
     kind: "thread",
     surfaces: ["thread"],

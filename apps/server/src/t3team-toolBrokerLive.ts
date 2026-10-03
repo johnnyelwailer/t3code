@@ -30,6 +30,7 @@ import { makeT3TeamThreadReads } from "./t3team-toolBrokerThreadReads.ts";
 import { makeLoadThreadView } from "./t3team-toolBrokerViewWorkspace.ts";
 import { makeT3TeamWidgetShowBinder } from "./t3team-toolBrokerWidgetShow.ts";
 import { makeT3TeamDraftMutationPublisherBinder } from "./t3team-draftMutationPublish.ts";
+import { T3TeamActorMailboxStore } from "./t3team-actorMailbox.ts";
 import { makeWorkflowToolsForThread } from "./t3team-toolBrokerWorkflowToolsWiring.ts";
 import { UsageLimitSources } from "./usage/UsageLimitSources.ts";
 
@@ -62,6 +63,8 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
   const path = Option.getOrUndefined(yield* Effect.serviceOption(Path.Path));
   const providerRegistry = Option.getOrUndefined(yield* Effect.serviceOption(ProviderRegistry));
   const usageLimitSources = Option.getOrUndefined(yield* Effect.serviceOption(UsageLimitSources));
+  // Inter-agent mailbox (t3_thread_send mode "mailbox"): `read_message` reads full bodies.
+  const mailbox = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamActorMailboxStore));
   const resourcePressure = Option.getOrUndefined(
     yield* Effect.serviceOption(ResourcePressureMonitor),
   );
@@ -97,6 +100,11 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     contextRefresh,
     bindShowWidget: yield* makeT3TeamWidgetShowBinder(),
     bindPublishDraft: yield* makeT3TeamDraftMutationPublisherBinder(),
+    readMailboxMessage:
+      mailbox === undefined
+        ? undefined
+        : (threadId, messageId) =>
+            mailbox.find(threadId, messageId).pipe(Effect.mapError((error) => error.operation)),
     loadThreadView: makeLoadThreadView(loadThreadProject, reads.loadThreadStats),
     manageChildren,
     recipeToolsForThread: makeRecipeToolHandlers({ fileSystem, path, loadThreadProject }),

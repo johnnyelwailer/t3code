@@ -21,9 +21,6 @@ const dependencies = [McpInvocationContext.McpInvocationContext, T3TeamToolBroke
 // the question on the thread directly (a V2 message-capability runtime request)
 // and returns immediately; the answer arrives later as a user message.
 const askUserDependencies = [McpInvocationContext.McpInvocationContext, T3TeamAskUserWriter];
-// t3team_send_message delivers through the inter-agent messaging port
-// (t3team-sendMessagePort.ts), not the broker.
-const sendMessageDependencies = [McpInvocationContext.McpInvocationContext];
 
 /** Canonical broker tools exposed through provider-safe MCP names. Keep this registry beside
  * the toolkit; the parity test requires every implemented catalog tool to be mapped or named
@@ -219,42 +216,6 @@ const T3TeamReadMessageTool = Tool.make("t3team_read_message", {
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
   dependencies,
-});
-
-// Cross-thread delivery through the inter-agent messaging port (not the
-// bound-thread callTool dispatch). The sender is the calling thread; the
-// recipient reacts and can reply back the same way.
-const T3TeamSendMessageTool = Tool.make("t3team_send_message", {
-  description:
-    "Send a message to another agent's thread. This is a one-shot handoff: use it ONLY when " +
-    "you have content the recipient does not already have and can act on. A delegated " +
-    "child's final result reaches its parent automatically when the child finishes — do not " +
-    "send it. Allowed messages: a follow-up task or handoff for a child, an answer to a " +
-    "question the recipient explicitly asked, or a genuine blocker that needs the " +
-    "recipient's decision. NEVER send acknowledgment, thanks, status-only, or 'noted/received' " +
-    "messages, and NEVER send incremental progress pings — report ONCE, when you are " +
-    "completely done. Solve simple blockers yourself first; escalate only when truly stuck. " +
-    "If your reply would not change what the recipient does, do not send it. The recipient " +
-    "reacts to every message automatically, so an ack triggers another turn on the other " +
-    "side. Delivery: 'summary' is the SUBJECT of the message — a very short line (a few " +
-    "words) that titles the card and the digest one-liner. Keep the " +
-    "body short (telegram " +
-    "style: state, decision, request). Provide a short 'summary' " +
-    "subject; without " +
-    "one, a subject is derived from the body's opening at delivery. Address it with the " +
-    "target thread id. Set `urgent: true` ONLY " +
-    "for a hard blocker or a question that unblocks the recipient — urgent messages wake " +
-    "an idle recipient immediately; everything else waits in the coalescing window and " +
-    "arrives as one digest.",
-  parameters: Schema.Struct({
-    to_thread_id: Schema.String,
-    text: Schema.String,
-    summary: Schema.optional(Schema.String),
-    urgent: Schema.optional(Schema.Boolean),
-  }),
-  success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
-  dependencies: sendMessageDependencies,
 });
 
 // Ephemeral agent orchestration: run a short multi-step structure immediately in
@@ -566,7 +527,6 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamReadMessageTool,
   T3TeamAskUserTool,
   T3TeamChildrenTool,
-  T3TeamSendMessageTool,
   T3TeamOrchestrationRunTool,
   T3TeamOrchestrationStatusTool,
   T3TeamOrchestrationResumeTool,

@@ -237,7 +237,12 @@ import { T3TeamWidgetRegistryLive } from "./t3team-widgetRegistry.ts";
 import { T3TeamContextRefreshServiceLive } from "./t3team-contextRefreshService.ts";
 import { T3TeamWorkflowEngineReactorLive } from "./t3team-workflowEngineReactor.ts";
 import { T3TeamActorMessageReactorLive } from "./t3team-actorMessageReactor.ts";
-import { T3TeamActorMailboxLive } from "./t3team-actorMailbox.ts";
+import { T3TeamActorMailboxStoreLive } from "./t3team-actorMailbox.ts";
+import { T3TeamActorMailboxLive } from "./t3team-actorMailboxService.ts";
+import {
+  T3TeamMailboxDrainPortLive,
+  T3TeamThreadMailboxDeliveryLive,
+} from "./t3team-actorMailboxPorts.ts";
 import { T3TeamThreadEngagementLive } from "./t3team-threadEngagement.ts";
 import { T3TeamThreadStopCascadeReactorLive } from "./t3team-threadStopCascadeReactor.ts";
 import { T3TeamChildStatusReactorLive } from "./t3team-childStatusReactor.ts";
@@ -608,6 +613,10 @@ const T3TeamToolBrokerLayerLive = T3TeamToolBrokerLive.pipe(
   Layer.provide(ProviderRegistryLive),
   // The broker reads thread facts; same layer reference as the runtime registers (memoized).
   Layer.provide(T3TeamV2FoundationLive),
+  // t3team: inter-agent mailbox — `children op:"drain"` port (shared instance, same reference
+  // as the runtime registers) and the store `read_message` reads full bodies from.
+  Layer.provide(T3TeamMailboxDrainPortLive),
+  Layer.provide(T3TeamActorMailboxStoreLive),
 );
 
 const OrchestrationV2RuntimeLayerLive = OrchestrationV2ProductionLayerLive.pipe(
@@ -708,6 +717,11 @@ const RuntimeCoreDependenciesBaseLive = Layer.mergeAll(
   T3TeamChildThreadMetadataLive,
   // t3team: t3team_ask_user questions as V2 message-capability runtime requests.
   T3TeamAskUserWriterLive,
+  // t3team: the process's ONE inter-agent mailbox (durable store + delivery) and the composing
+  // heartbeat it backs off on; ws.ts (noteComposing), the broker drain port and the
+  // t3_thread_send mailbox hook resolve to these same instances (layer references memoize).
+  T3TeamThreadEngagementLive,
+  T3TeamActorMailboxLive,
 ).pipe(
   // t3team: the tool broker reads several capabilities through serviceOption at construction
   // time. Mount it before the runtime services so the later provideMerges expose the production
@@ -895,6 +909,8 @@ export const makeRoutesLayer = Layer.mergeAll(
     Layer.provide(ProviderAdapterRegistry.layerFromProviderInstanceRegistry),
     // t3team: delegate_task workspace isolation + extensions (DelegatedTaskPreparation hook).
     Layer.provide(T3TeamDelegatedTaskPreparationLive),
+    // t3team: t3_thread_send mode "mailbox" (shared inter-agent mailbox instance).
+    Layer.provide(T3TeamThreadMailboxDeliveryLive),
   ),
   // Last, so no route layer can replace the server's one TracerDisabledWhen.
   untracedRequestsLayer,
@@ -1316,12 +1332,6 @@ const makeServerLayer = Layer.unwrap(
       Layer.provide(PullRequestServiceLive),
       Layer.provide(PullRequestProviderRegistry.layer),
       Layer.provideMerge(runtimeServicesLive),
-      // The inter-agent mailbox + engagement signals are process-wide, and both the
-      // tool broker (the `drain` op) and the actor reactor must resolve to the SAME
-      // in-memory instances — so they are provided OUTSIDE runtimeServicesLive, which
-      // materializes them once for the whole application layer.
-      Layer.provideMerge(T3TeamActorMailboxLive),
-      Layer.provideMerge(T3TeamThreadEngagementLive),
       Layer.provideMerge(
         McpSessionRegistry.layer.pipe(
           Layer.provide(ServerEnvironment.layer.pipe(Layer.provide(ServerSecretStore.layer))),

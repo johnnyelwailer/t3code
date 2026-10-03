@@ -447,17 +447,24 @@ export type OrchestratorMcpThreadReadResult = typeof OrchestratorMcpThreadReadRe
 export const OrchestratorMcpThreadSendInput = Schema.Struct({
   threadId: ThreadId,
   message: OrchestratorMcpPrompt,
-  mode: Schema.optional(Schema.Literals(["auto", "queue", "steer", "restart"])),
+  // t3team: "mailbox" is a host-registered delivery (coalesced, never steers); see the tool text.
+  mode: Schema.optional(Schema.Literals(["auto", "queue", "steer", "restart", "mailbox"])),
   clientRequestId: Schema.optional(OrchestratorMcpClientRequestId),
+  /** mode "mailbox" only: a short subject; long messages are delivered as this summary. */
+  summary: Schema.optional(TrimmedNonEmptyString.check(Schema.isMaxLength(512))),
+  /** mode "mailbox" only: wake the recipient as soon as it is idle (hard blockers only). */
+  urgent: Schema.optional(Schema.Boolean),
 });
 export type OrchestratorMcpThreadSendInput = typeof OrchestratorMcpThreadSendInput.Type;
 
 export const OrchestratorMcpThreadSendResult = Schema.Struct({
   threadId: ThreadId,
   messageId: MessageId,
-  runId: RunId,
-  status: OrchestrationV2RunStatus,
-  delivery: Schema.Literals(["started", "queued", "steered", "restarted"]),
+  /** Absent for "mailbox" delivery, which starts no run until the recipient's digest. */
+  runId: Schema.optional(RunId),
+  status: Schema.optional(OrchestrationV2RunStatus),
+  delivery: Schema.Literals(["started", "queued", "steered", "restarted", "mailbox"]),
+  note: Schema.optional(Schema.String),
 });
 export type OrchestratorMcpThreadSendResult = typeof OrchestratorMcpThreadSendResult.Type;
 

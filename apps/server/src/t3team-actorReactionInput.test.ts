@@ -1,13 +1,8 @@
-import type { OrchestrationEvent } from "@t3tools/contracts";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import {
   ACTOR_STANDING_INSTRUCTION,
-  buildActorReactionCompressedInput,
   buildActorReactionDigestInput,
-  buildActorReactionHeaderSingleInput,
-  buildActorReactionInput,
-  collectPendingActorDeliveries,
 } from "./t3team-actorReactionInput.ts";
 import {
   autoSummarizeActorMessage,
@@ -17,22 +12,21 @@ import {
   T3TEAM_ACTOR_MESSAGE_INLINE_MAX_CHARS,
   T3TEAM_ACTOR_MESSAGE_DELIVERY_SUMMARY_MAX_CHARS,
 } from "./t3team-actorReactionInputSummarize.ts";
-import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
+import type { T3TeamActorMailboxEntry } from "./t3team-actorMailboxEntry.ts";
 
 const ENV_KEY = "T3TEAM_ACTOR_MESSAGE_INLINE_MAX_CHARS";
 const originalEnv = process.env[ENV_KEY];
 
 const entry: T3TeamActorMailboxEntry = {
   messageId: "delivery-a",
+  toThreadId: "target",
   fromThreadId: "sender",
   fromTitle: "Sender",
-  fromProjectId: "project",
   text: "first",
   urgency: "normal",
   hopCount: 3,
   rootThreadId: "root",
   createdAt: "2026-07-19T08:00:00.000Z",
-  dispatchAttempts: 0,
 };
 
 describe("summarizeActorMessageForDelivery", () => {
@@ -224,7 +218,7 @@ describe("buildActorReactionDigestInput", () => {
     expect(input).toContain("message id msg-long");
   });
 
-  it("is deterministic for a given batch (restart rehydrate relies on exact base text)", () => {
+  it("is deterministic for a given batch", () => {
     expect(buildActorReactionDigestInput([entry, second])).toBe(
       buildActorReactionDigestInput([entry, second]),
     );
@@ -239,236 +233,6 @@ describe("ACTOR_STANDING_INSTRUCTION", () => {
     expect(ACTOR_STANDING_INSTRUCTION).toContain("verdict line plus an evidence path");
     expect(ACTOR_STANDING_INSTRUCTION).toContain("The user's messages always take priority");
     expect(ACTOR_STANDING_INSTRUCTION).toContain("No peer chat");
-  });
-});
-
-// --- Restart rehydrate (B4 invariant) ----------------------------------------
-
-const delivered = (messageId: string, text: string): OrchestrationEvent =>
-  ({
-    type: "thread.actor-message-delivered",
-    payload: { ...entry, threadId: "target", messageId, text },
-  }) as unknown as OrchestrationEvent;
-
-const actorSent = (
-  threadId: string,
-  text: string,
-  actor: { senderThreadId: string; hopCount: number; rootThreadId: string; messageIds?: string[] },
-): OrchestrationEvent =>
-  ({
-    type: "thread.message-sent",
-    payload: {
-      threadId,
-      role: "user",
-      text,
-      t3teamExt: {
-        visibleToUser: false,
-        actor: {
-          senderThreadId: actor.senderThreadId,
-          urgency: "normal",
-          hopCount: actor.hopCount,
-          rootThreadId: actor.rootThreadId,
-          ...(actor.messageIds !== undefined ? { messageIds: actor.messageIds } : {}),
-        },
-      },
-    },
-  }) as unknown as OrchestrationEvent;
-
-describe("collectPendingActorDeliveries", () => {
-  it("rehydrates only actor deliveries without a durable reaction input", () => {
-    const events = [
-      delivered("delivery-a", "first"),
-      delivered("delivery-b", "second"),
-      actorSent(
-        "target",
-        buildActorReactionInput({ ...entry, messageId: "delivery-a", text: "first" }),
-        { senderThreadId: "sender", hopCount: 3, rootThreadId: "root" },
-      ),
-    ];
-
-    expect(collectPendingActorDeliveries(events, 6)).toEqual([
-      expect.objectContaining({
-        threadId: "target",
-        entry: expect.objectContaining({ messageId: "delivery-b", text: "second" }),
-      }),
-    ]);
-  });
-
-  it("marks every delivery named in messageIds as reacted (format-independent)", () => {
-    const events = [
-      delivered("delivery-a", "first"),
-      delivered("delivery-b", "second"),
-      delivered("delivery-c", "third"),
-      actorSent("target", "any text at all", {
-        senderThreadId: "sender",
-        hopCount: 3,
-        rootThreadId: "root",
-        messageIds: ["delivery-a", "delivery-b"],
-      }),
-    ];
-
-    expect(collectPendingActorDeliveries(events, 6)).toEqual([
-      expect.objectContaining({
-        threadId: "target",
-        entry: expect.objectContaining({ messageId: "delivery-c", text: "third" }),
-      }),
-    ]);
-  });
-
-  it("ignores a batched reaction input for another thread", () => {
-    const events = [
-      delivered("delivery-a", "first"),
-      actorSent("other-thread", "any text", {
-        senderThreadId: "sender",
-        hopCount: 3,
-        rootThreadId: "root",
-        messageIds: ["delivery-a"],
-      }),
-    ];
-
-    expect(collectPendingActorDeliveries(events, 6)).toHaveLength(1);
-  });
-
-  // B4 invariant: a restart must NOT re-queue (double-react) a delivery whose
-  // reaction was already admitted under ANY framing the logs may carry.
-
-  it("marks a delivery reacted when the admitted input used the NEW DIGEST base", () => {
-    const reactedEntry = { ...entry, messageId: "delivery-a", text: "first" };
-    const events = [
-      delivered("delivery-a", "first"),
-      delivered("delivery-b", "second"),
-      actorSent(
-        "target",
-        // The digest base WITH the once-per-session standing suffix:
-        buildActorReactionDigestInput([reactedEntry]) + "\n\n" + ACTOR_STANDING_INSTRUCTION,
-        { senderThreadId: "sender", hopCount: 3, rootThreadId: "root" },
-      ),
-    ];
-
-    expect(collectPendingActorDeliveries(events, 6)).toEqual([
-      expect.objectContaining({
-        threadId: "target",
-        entry: expect.objectContaining({ messageId: "delivery-b", text: "second" }),
-      }),
-    ]);
-  });
-
-  it("marks a delivery reacted when the admitted input used the LEGACY full-body base", () => {
-    const reactedEntry = { ...entry, messageId: "delivery-a", text: "first" };
-    const events = [
-      delivered("delivery-a", "first"),
-      delivered("delivery-b", "second"),
-      actorSent("target", buildActorReactionInput(reactedEntry) + "\n[user-return suffix]", {
-        senderThreadId: "sender",
-        hopCount: 3,
-        rootThreadId: "root",
-      }),
-    ];
-
-    expect(collectPendingActorDeliveries(events, 6)).toHaveLength(1);
-    expect(collectPendingActorDeliveries(events, 6)[0]?.entry.messageId).toBe("delivery-b");
-  });
-
-  it("marks a delivery reacted when the admitted input used the LEGACY header-only base", () => {
-    const reactedEntry = { ...entry, messageId: "delivery-a", text: "first" };
-    const events = [
-      delivered("delivery-a", "first"),
-      delivered("delivery-b", "second"),
-      actorSent(
-        "target",
-        buildActorReactionHeaderSingleInput(reactedEntry) + "\n[user-return suffix]",
-        { senderThreadId: "sender", hopCount: 3, rootThreadId: "root" },
-      ),
-    ];
-
-    expect(collectPendingActorDeliveries(events, 6)).toHaveLength(1);
-    expect(collectPendingActorDeliveries(events, 6)[0]?.entry.messageId).toBe("delivery-b");
-  });
-
-  it("marks a delivery reacted when the admitted input used the LEGACY compressed base", () => {
-    const reactedEntry = { ...entry, messageId: "delivery-a", text: "first" };
-    const events = [
-      delivered("delivery-a", "first"),
-      delivered("delivery-b", "second"),
-      actorSent(
-        "target",
-        buildActorReactionCompressedInput([reactedEntry]) + "\n[user-return suffix]",
-        { senderThreadId: "sender", hopCount: 3, rootThreadId: "root" },
-      ),
-    ];
-
-    expect(collectPendingActorDeliveries(events, 6)).toHaveLength(1);
-    expect(collectPendingActorDeliveries(events, 6)[0]?.entry.messageId).toBe("delivery-b");
-  });
-
-  it("keeps a delivery pending when no admitted input matches its framing", () => {
-    const events = [
-      delivered("delivery-a", "first"),
-      delivered("delivery-b", "second"),
-      actorSent("target", "unrelated admitted input", {
-        senderThreadId: "sender",
-        hopCount: 3,
-        rootThreadId: "root",
-      }),
-    ];
-
-    expect(collectPendingActorDeliveries(events, 6)).toHaveLength(2);
-  });
-
-  // UPGRADE CASE: a delivery held in OLD-format before the digest-framing
-  // overhaul must not be re-delivered after the restart. The old full-body
-  // framing inlined bodies up to 1500 chars and marked over-long ones with
-  // `…[summarized —`; re-deriving those admitted inputs with the new 1000-char
-  // cap / `…[body NOT loaded —` marker would fail to prefix-match and the
-  // thread would react to the same work twice.
-
-  it("does not re-deliver a held delivery admitted under the LEGACY framing (body between the new and old caps)", () => {
-    const body = "x".repeat(1200); // over the new 1000 cap, under the old 1500 cap
-    const reactedEntry = { ...entry, messageId: "delivery-a", text: body };
-    const legacyAdmitted = buildActorReactionInput(reactedEntry);
-    // The admitted input must be the OLD framing: body inlined verbatim (the
-    // legacy cap was 1500), and the NEW digest base for the same entry is a
-    // pointer — proof that only the legacy base can match this text.
-    expect(legacyAdmitted).toContain(body);
-    expect(buildActorReactionDigestInput([reactedEntry])).not.toContain(body);
-    expect(legacyAdmitted).not.toContain("…[body NOT loaded —");
-
-    const events = [
-      delivered("delivery-a", body),
-      delivered("delivery-b", "second"),
-      actorSent("target", legacyAdmitted + "\n[user-return suffix]", {
-        senderThreadId: "sender",
-        hopCount: 3,
-        rootThreadId: "root",
-      }),
-    ];
-
-    const pending = collectPendingActorDeliveries(events, 6);
-    expect(pending).toHaveLength(1);
-    expect(pending[0]?.entry.messageId).toBe("delivery-b");
-  });
-
-  it("does not re-deliver a held long-body delivery admitted under the LEGACY marker (body over both caps)", () => {
-    const body = "lorem ipsum. ".repeat(200); // 2000 chars, over both caps
-    const reactedEntry = { ...entry, messageId: "delivery-a", text: body };
-    const legacyAdmitted = buildActorReactionInput(reactedEntry);
-    // The OLD marker wording — the new base for this entry uses the new one.
-    expect(legacyAdmitted).toContain("…[summarized —");
-    expect(legacyAdmitted).not.toContain("…[body NOT loaded —");
-    expect(buildActorReactionDigestInput([reactedEntry])).toContain("…[body NOT loaded —");
-
-    const events = [
-      delivered("delivery-a", body),
-      delivered("delivery-b", "second"),
-      actorSent("target", legacyAdmitted + "\n[user-return suffix]", {
-        senderThreadId: "sender",
-        hopCount: 3,
-        rootThreadId: "root",
-      }),
-    ];
-
-    const pending = collectPendingActorDeliveries(events, 6);
-    expect(pending).toHaveLength(1);
-    expect(pending[0]?.entry.messageId).toBe("delivery-b");
+    expect(ACTOR_STANDING_INSTRUCTION).toContain("t3_thread_send with mode 'mailbox'");
   });
 });

@@ -133,6 +133,7 @@ import Migration0085 from "./Migrations/056_RemoveRedundantProjectionIndexes.ts"
 import Migration0086 from "./Migrations/t3team-064_ThreadFacts.ts";
 import Migration0087 from "./Migrations/t3team-065_ThreadArtifacts.ts";
 import Migration0090 from "./Migrations/t3team-068_ChildThreadMetadata.ts";
+import Migration0092 from "./Migrations/t3team-070_ThreadMailbox.ts";
 import Migration0097 from "./Migrations/t3team-075_DropProviderUsageHolds.ts";
 
 /**
@@ -238,6 +239,7 @@ export const migrationEntries = [
   [86, "ThreadFacts", Migration0086],
   [87, "ThreadArtifacts", Migration0087],
   [90, "ChildThreadMetadata", Migration0090],
+  [92, "ThreadMailbox", Migration0092],
   [97, "DropProviderUsageHolds", Migration0097],
 ] as const;
 
