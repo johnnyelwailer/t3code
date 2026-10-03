@@ -36,7 +36,13 @@ export {
   t3teamRecipeRead,
   t3teamThreadWrite,
 } from "./t3team-sdk.groups.ts";
-export { createStoreSink, defaultRunsRoot, FsJournalStore } from "./t3team-sdk.journalStore.ts";
+export {
+  createStoreSink,
+  defaultRunsRoot,
+  FsJournalStore,
+  runReplayWindowConformance,
+  selectReplayWindow,
+} from "./t3team-sdk.journalStore.ts";
 export { buildJournalMaps, insertWireEntry } from "./t3team-sdk.journalReader.ts";
 export { toResolvedWire, toWire } from "./t3team-sdk.journalWriter.ts";
 export { models } from "./t3team-sdk.models.ts";
@@ -204,7 +210,12 @@ export type { ModelCascadeWireEntry } from "./t3team-sdk.modelCascade.ts";
 export type { ReplayDriftFacet, ReplayDriftReason } from "./t3team-sdk.errors.ts";
 export type { RunMeta } from "./t3team-sdk.journal.ts";
 export type { JournalEntry, JournalMaps, ResolvedEntry } from "./t3team-sdk.journalReader.ts";
-export type { JournalSink, JournalStore } from "./t3team-sdk.journalStore.ts";
+export type {
+  JournalSink,
+  JournalStore,
+  ReplayWindow,
+  ReplayWindowConformanceReport,
+} from "./t3team-sdk.journalStore.ts";
 export type { ResolvedWireInput } from "./t3team-sdk.journalWriter.ts";
 export type { WorkflowMeta } from "./t3team-sdk.loader.ts";
 export type { CapabilityScanOptions } from "./t3team-sdk.capabilityScan.ts";

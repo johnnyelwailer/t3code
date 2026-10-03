@@ -30,6 +30,10 @@
       "types": "./src/journalStore.ts",
       "import": "./src/journalStore.ts"
     },
+    "./journalStoreConformance": {
+      "types": "./src/journalStoreConformance.ts",
+      "import": "./src/journalStoreConformance.ts"
+    },
     "./journalWriter": {
       "types": "./src/journalWriter.ts",
       "import": "./src/journalWriter.ts"
