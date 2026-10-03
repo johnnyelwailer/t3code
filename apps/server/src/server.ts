@@ -254,6 +254,7 @@ import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
 import { T3TeamToolBrokerLive } from "./t3team-toolBrokerLive.ts";
 import { T3TeamV2FoundationLive } from "./t3team-v2/t3team-v2FoundationLive.ts";
 import { T3TeamChildThreadMetadataLive } from "./t3team-childThreadMetadata.ts";
+import { T3TeamAskUserWriterLive } from "./mcp/toolkits/t3team/t3team-askUserWriter.ts";
 import { T3TeamDelegatedTaskPreparationLive } from "./t3team-delegateTaskPreparationLive.ts";
 import * as NetService from "@t3tools/shared/Net";
 import * as RelayClient from "@t3tools/shared/relayClient";
@@ -705,6 +706,8 @@ const RuntimeCoreDependenciesBaseLive = Layer.mergeAll(
   T3TeamV2FoundationLive,
   // t3team: delegated-child ticket/placement store (delegate_task extension, placement readers).
   T3TeamChildThreadMetadataLive,
+  // t3team: t3team_ask_user questions as V2 message-capability runtime requests.
+  T3TeamAskUserWriterLive,
 ).pipe(
   // t3team: the tool broker reads several capabilities through serviceOption at construction
   // time. Mount it before the runtime services so the later provideMerges expose the production

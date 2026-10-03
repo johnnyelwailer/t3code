@@ -6,7 +6,6 @@
 import * as Schema from "effect/Schema";
 import { Tool, Toolkit } from "effect/unstable/ai";
 
-import { ThreadManagementService } from "../../../orchestration-v2/ThreadManagementService.ts";
 import {
   T3TEAM_WIDGET_AUTHORING_GUIDANCE,
   T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION,
@@ -14,13 +13,14 @@ import {
 import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
 import { T3TEAM_WORKFLOW_TAGLINE } from "../../../t3team-workflowManual.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
+import { T3TeamAskUserWriter } from "./t3team-askUserWriter.ts";
 
 const dependencies = [McpInvocationContext.McpInvocationContext, T3TeamToolBroker];
 
 // t3team_ask_user does not route through the t3team broker: the handler records
-// the question on the thread directly and returns immediately; the answer arrives
-// later as a user message. Its services are those of the V2 thread runtime.
-const askUserDependencies = [McpInvocationContext.McpInvocationContext, ThreadManagementService];
+// the question on the thread directly (a V2 message-capability runtime request)
+// and returns immediately; the answer arrives later as a user message.
+const askUserDependencies = [McpInvocationContext.McpInvocationContext, T3TeamAskUserWriter];
 // t3team_send_message delivers through the inter-agent messaging port
 // (t3team-sendMessagePort.ts), not the broker.
 const sendMessageDependencies = [McpInvocationContext.McpInvocationContext];
@@ -399,8 +399,8 @@ const T3TeamWorkflowResumeTool = Tool.make("t3team_workflow_resume", {
 // their composer until they answer or dismiss it (durable message-mode
 // question — survives the turn ending and restarts). The tool returns
 // immediately; the answer arrives in a later turn as a user message. The
-// handler appends the user-input.requested activity directly and refuses to
-// ask a second question while one is pending.
+// handler records a V2 message-capability runtime request on the active run
+// and refuses to ask a second question while one is pending.
 const T3TeamAskUserTool = Tool.make("t3team_ask_user", {
   description:
     "Ask the user a structured question. The question docks in the user's composer and stays " +
