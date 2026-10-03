@@ -26,6 +26,8 @@ import {
   type T3TeamStartChildLinkedRepositoryServices,
 } from "./t3team-toolBrokerStartChildContext.ts";
 
+import { readNormalizedReferenceManifest } from "./t3team-referenceManifestNormalization.ts";
+
 /** Creates a dedicated worktree of the LOCAL repository (or submodule) at the project
  * workspace root — the isolation path for workspaces without a linked-repository manifest, and
  * for adopted main repositories (monorepo projects, GHE #42) whose sub-work happens in worktrees of
@@ -74,9 +76,10 @@ export const resolveLocalRepositoryWorktree = (input: {
       .pipe(Effect.orElseSucceed(() => false));
     let gitignoreEntries: ReadonlyArray<string> | undefined;
     if (mainRepositoryManifestExists) {
-      const manifestText = yield* fileSystem
-        .readFileString(mainRepositoryManifestPath)
-        .pipe(Effect.orElseSucceed(() => ""));
+      const manifestText = yield* readNormalizedReferenceManifest(
+        fileSystem,
+        mainRepositoryManifestPath,
+      );
       if (mainRepositoryFromManifestJson(manifestText)) {
         gitignoreEntries = MAIN_REPOSITORY_GITIGNORE_ENTRIES;
       }

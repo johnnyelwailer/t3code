@@ -45,15 +45,15 @@ const mainVariant: EvalVariant = {
   },
 };
 
-function initMainCheckout() {
-  if (NodeFS.existsSync(mainCheckoutRoot)) return;
-  initGitRepo(mainCheckoutRoot);
+function initMainCheckout(manifestMain?: Record<string, unknown>) {
+  if (!NodeFS.existsSync(mainCheckoutRoot)) initGitRepo(mainCheckoutRoot);
   const manifestDir = NodePath.join(mainCheckoutRoot, HIDDEN_T3TEAM_DIR, REFERENCES_DIR_NAME);
   NodeFS.mkdirSync(manifestDir, { recursive: true });
   // Migrated from the project home: lists the clones, names no main repository yet.
   NodeFS.writeFileSync(
     NodePath.join(manifestDir, MANIFEST_FILE_NAME),
     JSON.stringify({
+      ...(manifestMain ? manifestMain : {}),
       linkedRepositories: [
         { url: MAIN_URL, localPath: mainCheckoutRoot, status: "cloned" },
         {
@@ -66,9 +66,15 @@ function initMainCheckout() {
   );
 }
 
-const startChild = () => {
-  const harness = createEvalHarness(mainVariant);
-  initMainCheckout();
+const startChild = (
+  options: { manifestMain?: Record<string, unknown>; urlLess?: boolean } = {},
+) => {
+  const harness = createEvalHarness(
+    options.urlLess
+      ? { ...mainVariant, mainRepository: { checkoutPath: mainCheckoutRoot, selection: "user" } }
+      : mainVariant,
+  );
+  initMainCheckout(options.manifestMain);
   return harness.runBroker(
     Effect.gen(function* () {
       const broker = yield* T3TeamToolBroker;
@@ -111,5 +117,46 @@ describe("t3team.thread.start_child isolation with a selected main repository", 
     const startResult = await startChild();
     expect(startResult.isError).toBe(true);
     expect(JSON.stringify(startResult.content)).toContain("pass 'repo_full_name'");
+  });
+  it("disables a switched manifest default when the flag is absent", async () => {
+    delete process.env[MAIN_REPOSITORY_FLAG_ENV];
+    const result = await startChild({
+      manifestMain: {
+        mainRepository: { localPath: mainCheckoutRoot, url: MAIN_URL, status: "user" },
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain("pass 'repo_full_name'");
+  });
+
+  it("accepts a URL-less selected record before the manifest names it", async () => {
+    process.env[MAIN_REPOSITORY_FLAG_ENV] = "1";
+    const result = await startChild({ urlLess: true });
+    expect(result.isError).toBeUndefined();
+    expect((result.structuredContent as { worktree_path: string }).worktree_path).toContain(
+      mainCheckoutRoot,
+    );
+  });
+
+  it("normalizes an old adopted manifest on disk and preserves flag-off isolation", async () => {
+    delete process.env[MAIN_REPOSITORY_FLAG_ENV];
+    const result = await startChild({
+      manifestMain: {
+        metaRepository: { localPath: mainCheckoutRoot, url: MAIN_URL, status: "adopted" },
+      },
+    });
+    expect(result.isError).toBeUndefined();
+    const manifest = JSON.parse(
+      NodeFS.readFileSync(
+        NodePath.join(mainCheckoutRoot, HIDDEN_T3TEAM_DIR, REFERENCES_DIR_NAME, MANIFEST_FILE_NAME),
+        "utf8",
+      ),
+    );
+    expect(manifest.metaRepository).toBeUndefined();
+    expect(manifest.mainRepository).toEqual({
+      localPath: mainCheckoutRoot,
+      url: MAIN_URL,
+      status: "adopted",
+    });
   });
 });

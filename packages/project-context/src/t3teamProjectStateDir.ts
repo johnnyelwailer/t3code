@@ -14,6 +14,8 @@
  * separate directory and is not affected.
  */
 
+import { readFeatureFlag } from "./t3teamFeatureFlags.ts";
+
 /** Canonical state dir name: vanilla builds, and the wire vocabulary clients address paths with. */
 export const T3TEAM_PROJECT_STATE_DIR = ".t3team";
 /** Pack-build state dir name. */
@@ -26,8 +28,7 @@ const readProcessEnv: ReadEnv = (key) =>
   (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.[key];
 
 export function isNexiStateDirEnabled(readEnv: ReadEnv = readProcessEnv): boolean {
-  const raw = readEnv(NEXI_STATE_DIR_FLAG_ENV)?.trim().toLowerCase();
-  return raw === "1" || raw === "true" || raw === "on";
+  return readFeatureFlag("NEXI_STATE_DIR", readEnv);
 }
 
 export function resolveProjectStateDirName(readEnv: ReadEnv = readProcessEnv): string {
@@ -37,6 +38,11 @@ export function resolveProjectStateDirName(readEnv: ReadEnv = readProcessEnv): s
 /** The state dir name for this process. Fixed at load: a process never splits its state across
  * two directories. */
 export const PROJECT_STATE_DIR = resolveProjectStateDirName();
+
+/** Advertise the effective selection, even after an env or DB flag update. */
+export function isNexiStateDirSelectedAtStartup(): boolean {
+  return PROJECT_STATE_DIR === NEXI_PROJECT_STATE_DIR;
+}
 
 const CANONICAL_STATE_DIR_SEGMENT = /(^|[\\/])\.t3team(?=[\\/]|$)/;
 

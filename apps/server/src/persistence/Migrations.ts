@@ -116,6 +116,7 @@ import Migration0077 from "./Migrations/t3team-059_SignalSources.ts";
 import Migration0078 from "./Migrations/t3team-060_EnsureProjectionThreadActivitiesKindIndex.ts";
 import Migration0079 from "./Migrations/t3team-061_ResourcePressureEvents.ts";
 import Migration0080 from "./Migrations/t3team-062_ProjectionProjectsMainRepository.ts";
+import Migration0081 from "./Migrations/t3team-063_FeatureFlags.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -208,6 +209,7 @@ const migrationEntries = [
   [78, "EnsureProjectionThreadActivitiesKindIndex", Migration0078],
   [79, "ResourcePressureEvents", Migration0079],
   [80, "ProjectionProjectsMainRepository", Migration0080],
+  [81, "FeatureFlags", Migration0081],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

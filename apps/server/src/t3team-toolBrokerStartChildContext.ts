@@ -14,6 +14,13 @@ import {
   type MainRepositoryBootstrapResult,
 } from "./t3team-project-repository-utils.ts";
 
+import {
+  normalizeReferenceManifestJson,
+  readNormalizedReferenceManifest,
+} from "./t3team-referenceManifestNormalization.ts";
+
+import { ensureNexiProjectStateDir } from "./t3team-projectMainRepositoryState.ts";
+
 const MAIN_REPOSITORY_STATUSES: ReadonlyArray<MainRepositoryBootstrapResult["status"]> = [
   "adopted",
   "detected",
@@ -27,7 +34,9 @@ export const mainRepositoryFromManifestJson = (
   manifestJson: string,
 ): MainRepositoryBootstrapResult | undefined => {
   try {
-    const parsed = globalThis.JSON.parse(manifestJson) as { mainRepository?: unknown };
+    const parsed = globalThis.JSON.parse(normalizeReferenceManifestJson(manifestJson)) as {
+      mainRepository?: unknown;
+    };
     const candidate = parsed.mainRepository;
     if (typeof candidate !== "object" || candidate === null) return undefined;
     const entry = candidate as { localPath?: unknown; url?: unknown; status?: unknown };
@@ -54,6 +63,10 @@ export const readMainRepositoryFromWorkspace = (input: {
   readonly projectWorkspaceRoot: string;
 }) =>
   Effect.gen(function* () {
+    yield* ensureNexiProjectStateDir(input.projectWorkspaceRoot).pipe(
+      Effect.provideService(FileSystem.FileSystem, input.services.fileSystem),
+      Effect.provideService(Path.Path, input.services.path),
+    );
     const manifestPath = input.services.path.join(
       input.projectWorkspaceRoot,
       HIDDEN_T3TEAM_DIR,
@@ -64,9 +77,10 @@ export const readMainRepositoryFromWorkspace = (input: {
       .exists(manifestPath)
       .pipe(Effect.orElseSucceed(() => false));
     if (!exists) return undefined;
-    const manifestText = yield* input.services.fileSystem
-      .readFileString(manifestPath)
-      .pipe(Effect.orElseSucceed(() => ""));
+    const manifestText = yield* readNormalizedReferenceManifest(
+      input.services.fileSystem,
+      manifestPath,
+    );
     return mainRepositoryFromManifestJson(manifestText);
   });
 
@@ -110,16 +124,22 @@ export const linkedRepositoryManifestExists = (input: {
   readonly services: T3TeamStartChildLinkedRepositoryServices;
   readonly projectWorkspaceRoot: string;
 }) =>
-  input.services.fileSystem
-    .exists(
-      input.services.path.join(
-        input.projectWorkspaceRoot,
-        HIDDEN_T3TEAM_DIR,
-        REFERENCES_DIR_NAME,
-        MANIFEST_FILE_NAME,
-      ),
-    )
-    .pipe(Effect.orElseSucceed(() => false));
+  Effect.gen(function* () {
+    yield* ensureNexiProjectStateDir(input.projectWorkspaceRoot).pipe(
+      Effect.provideService(FileSystem.FileSystem, input.services.fileSystem),
+      Effect.provideService(Path.Path, input.services.path),
+    );
+    return yield* input.services.fileSystem
+      .exists(
+        input.services.path.join(
+          input.projectWorkspaceRoot,
+          HIDDEN_T3TEAM_DIR,
+          REFERENCES_DIR_NAME,
+          MANIFEST_FILE_NAME,
+        ),
+      )
+      .pipe(Effect.orElseSucceed(() => false));
+  });
 
 /** The child worktree's setup-script phase as one call: no worktree → not requested; no
  * runner service → failed; otherwise run and map the runner's result. Extracted from
