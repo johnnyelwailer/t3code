@@ -6,7 +6,12 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import {
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+  type ProjectMainRepository,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -69,7 +74,7 @@ function runGit(cwd: string, args: ReadonlyArray<string>) {
   }
 }
 
-function initGitRepo(root: string) {
+export function initGitRepo(root: string) {
   NodeFS.mkdirSync(root, { recursive: true });
   runGit(root, ["init"]);
   runGit(root, ["config", "user.email", "eval@test.com"]);
@@ -106,8 +111,8 @@ function initLocalWorkspace() {
   initGitRepo(localWorkspaceRoot);
 }
 
-/** An adopted monorepo-as-meta-repo: the workspace root is a real git repository whose
- * reference manifest carries a `metaRepository` entry alongside linked repositories. */
+/** An adopted monorepo-as-main repository: the workspace root is a real git repository whose
+ * reference manifest carries a `mainRepository` entry alongside linked repositories. */
 function initMetaWorkspace() {
   initGitRepo(metaWorkspaceRoot);
 
@@ -119,7 +124,7 @@ function initMetaWorkspace() {
       workspaceRoot: metaWorkspaceRoot,
       referencesRoot: manifestDir,
       workspaceRepositoryInitialized: false,
-      metaRepository: {
+      mainRepository: {
         url: `https://github.com/${META_REPO_FULL_NAME}`,
         localPath: metaWorkspaceRoot,
         status: "adopted",
@@ -150,11 +155,12 @@ afterAll(() => {
   NodeFS.rmSync(evalRoot, { recursive: true, force: true });
 });
 
-type EvalVariant = {
+export type EvalVariant = {
   readonly projectId: ProjectId;
   readonly parentThreadId: ThreadId;
   readonly workspaceRoot: string;
   readonly projectTitle: string;
+  readonly mainRepository?: ProjectMainRepository;
 };
 
 export const linkedVariant: EvalVariant = {
@@ -249,6 +255,7 @@ export function createEvalHarness(variant: EvalVariant = linkedVariant) {
           id: variant.projectId,
           title: variant.projectTitle,
           workspaceRoot: variant.workspaceRoot,
+          ...(variant.mainRepository ? { mainRepository: variant.mainRepository } : {}),
           repositoryIdentity: null,
           defaultModelSelection: null,
           scripts: [],

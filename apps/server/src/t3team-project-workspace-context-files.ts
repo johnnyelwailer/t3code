@@ -1,3 +1,4 @@
+import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import { fromJsonStringPretty } from "@t3tools/shared/schemaJson";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -21,7 +22,7 @@ export type T3TeamWorkspaceContextFilesWriteResult = {
   readonly writtenFiles: ReadonlyArray<string>;
 };
 
-const CONTEXT_SYNC_COMMIT_MARKER_PATH = ".t3team/context/.sync-commit.json";
+const CONTEXT_SYNC_COMMIT_MARKER_PATH = `${PROJECT_STATE_DIR}/context/.sync-commit.json`;
 
 const workspaceWriteLocks = new Map<string, Promise<void>>();
 

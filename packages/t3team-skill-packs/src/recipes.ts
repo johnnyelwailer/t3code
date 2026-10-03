@@ -1,3 +1,4 @@
+import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import type { Recipe } from "@t3tools/project-recipes";
 import type { ActionDefinition } from "@t3team/sdk/placements";
 
@@ -95,7 +96,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3TeamRecipe> = [
               body: "A new recipe, or an edit to an existing one — and what should it do?",
               sections: ["context-summary", "available-context-keys", "capabilities"],
               capabilities: [
-                "Create a new recipe under .t3team/recipes/<recipe-id>.",
+                `Create a new recipe under ${PROJECT_STATE_DIR}/recipes/<recipe-id>.`,
                 "Edit an existing project-local recipe or plugin module, with a diff to review before saving.",
                 "Use project and ticket context signals to control where a recipe appears.",
               ],

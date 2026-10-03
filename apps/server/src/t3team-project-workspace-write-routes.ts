@@ -1,3 +1,4 @@
+import { toPhysicalProjectStatePath } from "@t3tools/project-context/t3teamProjectStateDir";
 import * as Effect from "effect/Effect";
 import { HttpRouter } from "effect/unstable/http";
 
@@ -29,7 +30,11 @@ export const t3teamProjectWorkspaceWriteContextFilesRouteLayer = HttpRouter.add(
     const workspaceRoot = yield* normalizeT3TeamWorkspaceRoot(workspaceRootInput);
     const response: WriteContextFilesResponse = yield* writeT3TeamWorkspaceContextFiles({
       workspaceRoot,
-      files: input.files,
+      // Clients address state paths with the canonical dir name; place them in the physical one.
+      files: input.files.map((file) => ({
+        ...file,
+        relativePath: toPhysicalProjectStatePath(file.relativePath),
+      })),
     }).pipe(Effect.mapError(toAtlassianError("Failed to write workspace context files.")));
     return okJson(response);
   }).pipe(

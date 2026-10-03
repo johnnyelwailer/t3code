@@ -1,8 +1,15 @@
 import {
+  T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH,
+  T3TEAM_PROJECT_CONTEXT_ROOT,
+} from "@t3tools/project-context/t3teamContextPaths";
+import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
+import {
   DEFAULT_T3TEAM_PROFILE_ID,
   resolveEnabledSkillPackIds,
   resolveT3TeamProfile,
   T3TEAM_PROFILES,
+  T3TEAM_PROJECT_PROFILE_MANIFEST_PATH,
+  T3TEAM_PROJECT_PROFILES_DIR,
   type T3TeamProfile,
   type T3TeamProfileId,
   type T3TeamProjectProfileManifest,
@@ -13,14 +20,13 @@ import { getPackProfilesForResolver } from "./t3team-pack-setupProfileOverlay.ts
 export const T3TEAM_PROJECT_SETUP_VERSION = 1;
 export const T3TEAM_PROJECT_AGENTS_PATH = "AGENTS.md";
 export const T3TEAM_PROJECT_CLAUDE_PATH = "CLAUDE.md";
-export const T3TEAM_PROJECT_SETUP_ROOT = ".t3team/setup";
-export const T3TEAM_PROJECT_PROFILES_DIR = `${T3TEAM_PROJECT_SETUP_ROOT}/profiles`;
-export const T3TEAM_PROJECT_CONTEXT_ROOT = ".t3team/context";
-export const T3TEAM_PROJECT_SKILLS_ROOT = ".t3team/skills";
-export const T3TEAM_PROJECT_RECIPES_ROOT = ".t3team/recipes";
-export const T3TEAM_PROJECT_TEMPLATES_ROOT = ".t3team/templates";
-export const T3TEAM_PROJECT_PROFILE_MANIFEST_PATH = `${T3TEAM_PROJECT_SETUP_ROOT}/profile.json`;
-export const T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH = `${T3TEAM_PROJECT_CONTEXT_ROOT}/entrypoint.json`;
+// State paths derive from the single state-dir resolver (`@t3tools/project-context`).
+export const T3TEAM_PROJECT_SETUP_ROOT = `${PROJECT_STATE_DIR}/setup`;
+export { T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH, T3TEAM_PROJECT_CONTEXT_ROOT };
+export { T3TEAM_PROJECT_PROFILE_MANIFEST_PATH, T3TEAM_PROJECT_PROFILES_DIR };
+export const T3TEAM_PROJECT_SKILLS_ROOT = `${PROJECT_STATE_DIR}/skills`;
+export const T3TEAM_PROJECT_RECIPES_ROOT = `${PROJECT_STATE_DIR}/recipes`;
+export const T3TEAM_PROJECT_TEMPLATES_ROOT = `${PROJECT_STATE_DIR}/templates`;
 export const T3TEAM_PROJECT_STATUS_SKILL_PATH = `${T3TEAM_PROJECT_SKILLS_ROOT}/status-and-context-summary/SKILL.md`;
 
 export type T3TeamProjectSetupProfileId = T3TeamProfileId;

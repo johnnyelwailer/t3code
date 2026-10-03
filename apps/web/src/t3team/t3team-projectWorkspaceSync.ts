@@ -4,6 +4,7 @@ import {
   T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH,
   T3TEAM_PROJECT_CONTEXT_ROOT,
   T3TEAM_PROJECT_PROFILE_MANIFEST_PATH,
+  T3TEAM_PROJECT_REFERENCES_MANIFEST_PATH,
 } from "~/t3team/t3team-projectSetup";
 
 import type { BackendApi, ProjectWorkspaceContextFile } from "~/t3team/backend/t3team-types";
@@ -74,7 +75,7 @@ export function buildProjectWorkspaceSyncFiles(input: {
         profileId: setupProfileId,
         contextRoot: T3TEAM_PROJECT_CONTEXT_ROOT,
         projectEntryPointPath: buildProjectContextEntryPoint(input.project.id),
-        referencesManifestPath: ".t3team/references/reference-repositories.json",
+        referencesManifestPath: T3TEAM_PROJECT_REFERENCES_MANIFEST_PATH,
         profilePath: T3TEAM_PROJECT_PROFILE_MANIFEST_PATH,
       }),
     },

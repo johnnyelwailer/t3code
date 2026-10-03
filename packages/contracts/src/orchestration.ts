@@ -26,6 +26,7 @@ import {
 } from "./baseSchemas.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
 import { T3TeamActorMessageUrgency, T3TeamMessageExt } from "./t3team-message-ext.ts";
+import { ProjectMainRepository } from "./t3team-projectMainRepository.ts";
 import {
   PullRequestActor,
   PullRequestChecksState,
@@ -592,6 +593,8 @@ export const OrchestrationProject = Schema.Struct({
   // Optional on the wire so cached snapshots from older servers still decode.
   faviconPath: Schema.optional(Schema.NullOr(ProjectFaviconPath)),
   projectIcon: Schema.optional(Schema.NullOr(ProjectIconOverride)),
+  // Optional: the repository whose checkout is `workspaceRoot` (t3team main repository).
+  mainRepository: Schema.optional(ProjectMainRepository),
   scripts: Schema.Array(ProjectScript),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -1060,6 +1063,7 @@ export const OrchestrationProjectShell = Schema.Struct({
   // Optional on the wire so cached snapshots from older servers still decode.
   faviconPath: Schema.optional(Schema.NullOr(ProjectFaviconPath)),
   projectIcon: Schema.optional(Schema.NullOr(ProjectIconOverride)),
+  mainRepository: Schema.optional(ProjectMainRepository),
   scripts: Schema.Array(ProjectScript),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -1345,6 +1349,8 @@ const ProjectMetaUpdateCommand = Schema.Struct({
   autoPull: Schema.optional(Schema.Boolean),
   faviconPath: Schema.optional(Schema.NullOr(ProjectFaviconPath)),
   projectIcon: Schema.optional(Schema.NullOr(ProjectIconOverride)),
+  // Absent = leave unchanged; null = clear.
+  mainRepository: Schema.optional(Schema.NullOr(ProjectMainRepository)),
   scripts: Schema.optional(Schema.Array(ProjectScript)),
   // Optional: absence means "leave the existing binding untouched" (this is
   // the repair/rebind mechanism — a meta-update without `source` must never
@@ -2130,6 +2136,7 @@ export const ProjectMetaUpdatedPayload = Schema.Struct({
   autoPull: Schema.optional(Schema.Boolean),
   faviconPath: Schema.optional(Schema.NullOr(ProjectFaviconPath)),
   projectIcon: Schema.optional(Schema.NullOr(ProjectIconOverride)),
+  mainRepository: Schema.optional(Schema.NullOr(ProjectMainRepository)),
   scripts: Schema.optional(Schema.Array(ProjectScript)),
   updatedAt: IsoDateTime,
   // Optional: historical `project.meta-updated` events predate this field,
