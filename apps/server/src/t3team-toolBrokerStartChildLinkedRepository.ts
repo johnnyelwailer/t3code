@@ -3,6 +3,7 @@ import { t3teamRandomHex } from "./t3team-random.ts";
 import type * as Path from "effect/Path";
 
 import {
+  CHILD_WORKTREES_DIR_NAME,
   deriveReferenceDirectoryName,
   HIDDEN_T3TEAM_DIR,
   type LinkedRepositoryBootstrapResult,
@@ -76,7 +77,7 @@ export function buildScopedChildWorktreePath(input: {
   return input.path.join(
     input.projectWorkspaceRoot,
     HIDDEN_T3TEAM_DIR,
-    "child-session-worktrees",
+    CHILD_WORKTREES_DIR_NAME,
     repoDirectory,
     `${refDirectory}-${childDirectory}`,
   );

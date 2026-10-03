@@ -11,6 +11,7 @@ import {
   ModelSelection,
   ProjectIconOverride,
   ProjectId,
+  ProjectMainRepository,
   ProjectScript,
   ThreadEnvMode,
 } from "@t3tools/contracts";
@@ -30,6 +31,7 @@ export const ProjectionProject = Schema.Struct({
   autoPull: Schema.Boolean,
   faviconPath: Schema.optional(Schema.NullOr(Schema.String)),
   projectIcon: Schema.optional(Schema.NullOr(ProjectIconOverride)),
+  mainRepository: Schema.optional(Schema.NullOr(ProjectMainRepository)),
   scripts: Schema.Array(ProjectScript),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,

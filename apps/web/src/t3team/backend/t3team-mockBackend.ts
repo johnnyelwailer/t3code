@@ -119,6 +119,9 @@ export function createMockBackend(): BackendApi {
           status: "cloned" as const,
         })),
       }),
+      setMainRepository: async () => {
+        throw new Error("Main repositories are not available in the mock backend.");
+      },
       discoverRecipes: async (input) => ({
         workspaceRoot: input.workspaceRoot,
         hasProjectLocalRecipes: false,
