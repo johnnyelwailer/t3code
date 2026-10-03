@@ -2,13 +2,19 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+type ThreadStub = { id: string; projectId: string; title: string };
 const entityState: {
-  thread: { id: string; projectId: string; title: string } | null;
+  /** The listed thread's shell (most threads). */
+  thread: ThreadStub | null;
+  /** The detail projection only (a thread the shell snapshot never carries). */
+  detail: ThreadStub | null;
   project: { title: string; source?: { provider?: string }; workspaceRoot?: string } | null;
-} = { thread: null, project: null };
+} = { thread: null, detail: null, project: null };
 
 vi.mock("~/state/entities", () => ({
-  useThread: () => entityState.thread,
+  useThreadShell: () => entityState.thread,
+  useThreadProjection: () =>
+    entityState.detail === null ? null : { projection: { thread: entityState.detail } },
   useProject: () => entityState.project,
 }));
 
@@ -77,9 +83,9 @@ describe("T3TeamThreadRightPanelSurface", () => {
     // `retention: "ephemeral"` on purpose so they stay out of the sidebar, which means the
     // shell snapshot never carries them — only the independent detail fetch resolves. This is
     // the regression case: the surface must render from detail alone, with no shell at all.
-    entityState.thread = { id: "thread-C", projectId: "project-1", title: "Review correctness" };
+    entityState.detail = { id: "thread-C", projectId: "project-1", title: "Review correctness" };
     const html = renderSurface();
-    entityState.thread = null;
+    entityState.detail = null;
 
     expect(html).toContain('data-testid="thread-chat-view"');
     expect(html).not.toContain("Loading thread…");
@@ -88,7 +94,7 @@ describe("T3TeamThreadRightPanelSurface", () => {
   it("passes the project title, source and workspace root through when the project is projected", () => {
     entityState.thread = { id: "thread-C", projectId: "project-1", title: "Accessibility review" };
     entityState.project = {
-      title: "Nexplore AI",
+      title: "Acme Platform",
       source: { provider: "local" },
       workspaceRoot: "/tmp/wt",
     };
@@ -99,7 +105,7 @@ describe("T3TeamThreadRightPanelSurface", () => {
     expect(readStubProps(html)).toEqual({
       threadId: "thread-C",
       projectId: "project-1",
-      projectTitle: "Nexplore AI",
+      projectTitle: "Acme Platform",
       projectSource: { provider: "local" },
       projectWorkspaceRoot: "/tmp/wt",
       title: "Accessibility review",
