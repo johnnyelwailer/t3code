@@ -657,6 +657,15 @@ const buildAppUnderTest = (options?: {
             ...options.layers.threadEngagement,
           })
         : T3TeamThreadEngagementLive;
+    // Shared by the served routes and the real PullRequestServiceLive provided below.
+    const serverSettingsMockLayer = Layer.mock(ServerSettings.ServerSettingsService)({
+      start: Effect.void,
+      ready: Effect.void,
+      getSettings: Effect.succeed(DEFAULT_SERVER_SETTINGS),
+      updateSettings: () => Effect.succeed(DEFAULT_SERVER_SETTINGS),
+      streamChanges: Stream.empty,
+      ...options?.layers?.serverSettings,
+    });
     const t3teamRouterSupportLayer = Layer.mergeAll(
       SqlitePersistenceMemory,
       threadEngagementLayer,
@@ -996,16 +1005,7 @@ const buildAppUnderTest = (options?: {
           }),
         ),
       ),
-      Layer.provide(
-        Layer.mock(ServerSettings.ServerSettingsService)({
-          start: Effect.void,
-          ready: Effect.void,
-          getSettings: Effect.succeed(DEFAULT_SERVER_SETTINGS),
-          updateSettings: () => Effect.succeed(DEFAULT_SERVER_SETTINGS),
-          streamChanges: Stream.empty,
-          ...options?.layers?.serverSettings,
-        }),
-      ),
+      Layer.provide(serverSettingsMockLayer),
       Layer.provide(
         Layer.mergeAll(
           Layer.mock(ExternalLauncher.ExternalLauncher)({
@@ -1199,7 +1199,9 @@ const buildAppUnderTest = (options?: {
       .pipe(
         Layer.provide(
           Layer.mergeAll(
-            PullRequestServiceLive,
+            // Bitbucket (inside the source control registry) reads its saved credential
+            // from server settings.
+            PullRequestServiceLive.pipe(Layer.provide(serverSettingsMockLayer)),
             Layer.succeed(
               PullRequestProviderRegistry,
               PullRequestProviderRegistry.of({

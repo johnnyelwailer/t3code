@@ -184,7 +184,6 @@ import {
   isSidebarThreadWorking,
   isTrailingDoubleClick,
   orderItemsByPreferredIds,
-  planPinnedReorder,
   planSidebarThreadDrop,
   reduceSidebarProjectScopeMenuState,
   resolveAdjacentThreadId,
@@ -211,6 +210,7 @@ import {
   type SidebarListMarker,
   type SidebarSection,
 } from "./Sidebar.logic";
+import { planPinnedReorder } from "@t3tools/client-runtime/state/thread-sort";
 import { resolveLocalCheckoutBranchMismatch } from "./BranchToolbar.logic";
 import {
   createSidebarCollisionDetection,

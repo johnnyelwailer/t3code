@@ -2626,7 +2626,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const isComposerApprovalState = activePendingApproval !== null;
   const composerSuggestionsVisible = composerMenuOpen && !isComposerApprovalState;
   const composerSuggestionListVisible = composerSuggestionsVisible && composerMenuItems.length > 0;
-  const activePendingUserInput = pendingUserInputs[0] ?? null;
   const isChoiceOnlyPendingQuestion =
     activePendingProgress?.activeQuestion?.allowCustomAnswer === false;
   // The prompt editor's value while a pending question is docked: it stays on
