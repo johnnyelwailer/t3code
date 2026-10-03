@@ -1,26 +1,24 @@
 /**
- * Types and the message-upsert command builder shared by the workflow-engine broker (Epic 25
- * §Host wiring). The broker itself lives in `t3team-workflowEngineBroker.ts`; this module
- * carries the per-run dependency shape, the pending-ask record the registry/durability layer
- * mirrors, and the payload shapes the SDK's thread verbs put on the wire.
+ * Types shared by the workflow-engine broker (Epic 25 §Host wiring). The broker itself lives in
+ * `t3team-workflowEngineBroker.ts`; this module carries the per-run dependency shape and the
+ * pending-ask record the registry/durability layer mirrors. The payload shapes the SDK's verbs
+ * put on the wire live in `t3team-workflowEngineBrokerPayloads.ts` (re-exported here).
  */
 
-import {
-  CommandId,
-  MessageId,
-  type ModelSelection,
-  type OrchestrationCommand,
-  type ProjectId,
-  type ProviderInteractionMode,
-  type RuntimeMode,
-  type T3TeamMessageExt,
-  ThreadId,
+import type {
+  ModelSelection,
+  ProjectId,
+  ProviderInteractionMode,
+  RuntimeMode,
 } from "@t3tools/contracts";
 
-import type { AskAffordance, ModelSelection as WorkflowModelSelection } from "@t3team/sdk";
-
+import type {
+  SignalRegisterPayload,
+  SignalWaitPayload,
+} from "./t3team-workflowEngineBrokerPayloads.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 import type { WorkflowStepActivityEmitter } from "./t3team-workflowEngineStepActivities.ts";
+import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
 
 /** The ask a run is parked on, as the broker knows it when it fires (thread + correlation). */
 export interface WorkflowEnginePendingAsk {
@@ -45,23 +43,6 @@ export interface WorkflowEngineWatch {
   readonly paramsHash: string;
   readonly watchSignalName: string;
   readonly watchSignalKey: string;
-}
-
-/** The `signal.register` envelope payload: the run's binding to one source instance. `params`
- * is the author's validated params (host-validated at bind time against the source's params
- * schema); `paramsHash` is the canonical-JSON hash forming the instance-identity half. */
-export interface SignalRegisterPayload {
-  readonly source: string;
-  readonly params: unknown;
-  readonly paramsHash: string;
-}
-
-/** The `signal.wait` envelope payload: the awaited `(signal, key)` within one source instance. */
-export interface SignalWaitPayload {
-  readonly source: string;
-  readonly paramsHash: string;
-  readonly signal: string;
-  readonly key: string;
 }
 
 /**
@@ -110,8 +91,8 @@ export interface WorkflowEngineBrokerDeps {
   readonly runtimeMode: RuntimeMode;
   readonly interactionMode: ProviderInteractionMode;
   readonly registry: T3TeamWorkflowEngineRegistryShape;
-  /** Run an orchestration command (the launch builds this from the captured runtime). */
-  readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
+  /** The thread operations the run performs (`T3TeamWorkflowHost`). */
+  readonly host: WorkflowHostPort;
   readonly newId: () => string;
   readonly nowIso: () => string;
   /**
@@ -164,89 +145,15 @@ export interface WorkflowEngineBrokerDeps {
    * in the same order reproduces it). Absent in tests/older wiring — `step()` then stamps nothing.
    */
   readonly currentPhase?: () => string | undefined;
-  /**
-   * Backoff wait between `thread.turn.start` busy-retry attempts (see
-   * `t3team-workflowEngineTurnStartBusyRetry.ts`). Real `setTimeout` in production; tests inject
-   * a fast/no-op resolver so a budget-exhaustion case does not wait out the real ladder.
-   */
-  readonly threadTurnBusyRetryDelay?: (ms: number) => Promise<void>;
 }
 
-export interface ThreadCreatePayload {
-  readonly threadId: string;
-  readonly name?: string;
-  readonly model?: WorkflowModelSelection;
-  /** Provider-agnostic thinking level; see `resolveWorkflowChildModel`. */
-  readonly effort?: import("@t3team/sdk").AgentEffort;
-  /** Omitted is ephemeral, preserving one-shot agent() as a hidden child. */
-  readonly retention?: "ephemeral" | "retained";
-}
-export interface ThreadTurnPayload {
-  readonly threadId: string;
-  readonly prompt: string;
-  readonly model?: WorkflowModelSelection;
-  /** Short human-facing status label, separate from the provider prompt. */
-  readonly label?: string;
-  /** Provider-agnostic thinking level; see `resolveWorkflowChildModel`. */
-  readonly effort?: import("@t3team/sdk").AgentEffort;
-  /** The author's structured data, named by the SDK and journaled as structure; the host
-   * serializes it into the turn text (`workflowTurnText`). Absent on older journals. */
-  readonly attachments?: ReadonlyArray<import("@t3team/sdk").NamedAttachment>;
-}
-export interface ThreadMessagePayload {
-  readonly threadId: string;
-  readonly recipient: "agent" | "user";
-  readonly text: string;
-  readonly widget?: {
-    readonly title: string;
-    readonly widgetCode: string;
-    readonly format?: "html" | "svg";
-    readonly loadingMessages?: ReadonlyArray<string>;
-  };
-}
-export interface UserInputPayload {
-  readonly threadId: string;
-  readonly question: string;
-  /** Short human-facing status label, separate from the user question. */
-  readonly label?: string;
-  /** Serializable descriptor of the reply affordance, derived from the ask's schema by the
-   * SDK (`schemaToAffordance`). Absent on payloads from older journals → treated as text. */
-  readonly affordance?: AskAffordance;
-  /** External-resource refs to render as cards on the decision message. */
-  readonly attachments?: ReadonlyArray<unknown>;
-}
-/**
- * The `model.resolve` envelope payload: the author's provider ladder (`{ models: [...] }`), in
- * wire form. Resolved host-side against the live registry; the chosen selection is the
- * primitive's journaled reply, so replays reuse it instead of re-probing.
- */
-export interface ModelResolvePayload {
-  readonly entries: ReadonlyArray<import("@t3team/sdk").ModelCascadeWireEntry>;
-}
-/** The `wait.until` envelope payload: the wall-clock deadline (epoch millis) the run sleeps to. */
-export interface WaitUntilPayload {
-  readonly deadline: number;
-}
-
-export function messageUpsert(
-  deps: WorkflowEngineBrokerDeps,
-  threadId: string,
-  role: "user" | "system",
-  text: string,
-  t3teamExt?: T3TeamMessageExt,
-): OrchestrationCommand {
-  return {
-    type: "thread.message.upsert",
-    commandId: CommandId.make(`t3team-wf:msg:${deps.newId()}`),
-    threadId: ThreadId.make(threadId),
-    message: {
-      messageId: MessageId.make(deps.newId()),
-      role,
-      text,
-      turnId: null,
-      streaming: false,
-      ...(t3teamExt === undefined ? {} : { t3teamExt }),
-    },
-    createdAt: deps.nowIso(),
-  };
-}
+export type {
+  ModelResolvePayload,
+  SignalRegisterPayload,
+  SignalWaitPayload,
+  ThreadCreatePayload,
+  ThreadMessagePayload,
+  ThreadTurnPayload,
+  UserInputPayload,
+  WaitUntilPayload,
+} from "./t3team-workflowEngineBrokerPayloads.ts";

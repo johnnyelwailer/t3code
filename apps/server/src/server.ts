@@ -258,6 +258,7 @@ import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistr
 import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
 import { T3TeamToolBrokerLive } from "./t3team-toolBrokerLive.ts";
 import { T3TeamV2FoundationLive } from "./t3team-v2/t3team-v2FoundationLive.ts";
+import * as T3TeamWorkflowHost from "./t3team-workflowHost.ts";
 import { T3TeamChildThreadMetadataLive } from "./t3team-childThreadMetadata.ts";
 import { T3TeamAskUserWriterLive } from "./mcp/toolkits/t3team/t3team-askUserWriter.ts";
 import { T3TeamDelegatedTaskPreparationLive } from "./t3team-delegateTaskPreparationLive.ts";
@@ -722,6 +723,9 @@ const RuntimeCoreDependenciesBaseLive = Layer.mergeAll(
   // t3_thread_send mailbox hook resolve to these same instances (layer references memoize).
   T3TeamThreadEngagementLive,
   T3TeamActorMailboxLive,
+  // t3team: the workflow engine's port onto V2 (threads, turns, notes, step pips, run facts),
+  // over the same foundation writers (layer references memoize).
+  T3TeamWorkflowHost.layer.pipe(Layer.provide(T3TeamV2FoundationLive)),
 ).pipe(
   // t3team: the tool broker reads several capabilities through serviceOption at construction
   // time. Mount it before the runtime services so the later provideMerges expose the production

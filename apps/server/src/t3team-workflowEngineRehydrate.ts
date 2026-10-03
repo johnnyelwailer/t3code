@@ -5,12 +5,14 @@
  * `workflow_runs` row in status `suspended` is rebuilt into a live, resumable run:
  *   • DATA from the DB — workflow path, launch args, project/model/mode, and the pending ask —
  *     is read off the row.
- *   • CODE from the host layers — the orchestration `dispatch`, the SQLite journal store, the
- *     in-memory registry, the lifecycle write-through — is reconstructed here and handed to
+ *   • CODE from the host layers — the workflow host, the SQLite journal store, the in-memory
+ *     registry, the lifecycle write-through — is reconstructed here and handed to
  *     {@link createWorkflowRunController}, the SAME builder the live launch uses.
  * The controller re-registers the run's `resume` closure; restoring the pending ask into the
  * in-memory registry then makes the reactor behave identically whether the ask was set this
- * uptime or recovered from a prior one. No local-disk journal is involved — replay reads the
+ * uptime or recovered from a prior one — its durable sweep re-judges a restored `askAgent` step
+ * against V2 state, so a step whose run ended while the server was down settles on the first
+ * sweep. No local-disk journal is involved — replay reads the
  * DB-backed journal through the injected store.
  *
  * ── Clock-parked runs (Epic 27) ──────────────────────────────────────────────
@@ -32,14 +34,13 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
 import { ServerConfig } from "./config.ts";
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
-import { t3teamRandomUUID } from "./t3team-random.ts";
 import { deliverWorkflowFailure } from "./t3team-workflowCompletionMessage.ts";
 import { T3TeamWorkflowEngineReactorLive } from "./t3team-workflowEngineReactor.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import { T3TeamWorkflowHost, toWorkflowHostPort } from "./t3team-workflowHost.ts";
 import { resolveRehydratedWorkflowScripts } from "./t3team-workflowRehydrateScripts.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 import { drainSignalParkInbox } from "./t3team-workflowSignalParkDrain.ts";
@@ -66,7 +67,7 @@ const rehydrateSuspendedWorkflowRunsCore = Effect.fn("rehydrateSuspendedWorkflow
     rehydrateGate?.markInFlight();
     const store = yield* WorkflowJournalStore;
     const registry = yield* T3TeamWorkflowEngineRegistry;
-    const orchestration = yield* OrchestrationEngineService;
+    const host = toWorkflowHostPort(yield* T3TeamWorkflowHost);
     const serverConfig = yield* ServerConfig;
     const scheduler = yield* T3TeamWorkflowScheduler;
     // Restored runs must keep the same `getTools()` tree they launched with — no more and no less.
@@ -81,8 +82,6 @@ const rehydrateSuspendedWorkflowRunsCore = Effect.fn("rehydrateSuspendedWorkflow
     const paused = yield* repo.listByStatus({ status: "paused" });
     const queued = yield* repo.listByStatus({ status: "queued" });
     const watching = yield* repo.listByStatus({ status: "watching" });
-    const dispatch = (command: Parameters<typeof orchestration.dispatch>[0]): Promise<void> =>
-      Effect.runPromise(orchestration.dispatch(command)).then(() => undefined);
 
     // A process died while executing a non-idempotent live step. Never blindly replay it at
     // boot: surface Needs attention instead of leaving a forever-running orphan — and TELL the
@@ -96,11 +95,13 @@ const rehydrateSuspendedWorkflowRunsCore = Effect.fn("rehydrateSuspendedWorkflow
           launchThreadId: run.launchThreadId ?? undefined,
           workflowRunId: run.runId,
           errorText: "The server restarted while this run was executing; it was not resumed.",
-          dispatch,
-          newId: () => t3teamRandomUUID(),
-          nowIso,
+          host,
         }),
       );
+      if (run.launchThreadId !== null) {
+        const launchThreadId = run.launchThreadId;
+        yield* Effect.promise(() => host.syncRunFacts(launchThreadId).catch(() => undefined));
+      }
     }
     if (
       suspended.length === 0 &&
@@ -120,7 +121,7 @@ const rehydrateSuspendedWorkflowRunsCore = Effect.fn("rehydrateSuspendedWorkflow
       store,
       registry,
       runsRoot,
-      dispatch,
+      host,
       rearmScheduler: () => scheduler.rearm(),
       toolBroker,
       nowIso,

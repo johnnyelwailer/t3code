@@ -1,16 +1,18 @@
 /**
- * The orchestration-backed {@link MessageBroker} for the workflow engine (Epic 25 §Host
- * wiring). Each thread verb fired by a workflow body maps onto one orchestration command:
+ * The host-backed {@link MessageBroker} for the workflow engine (Epic 25 §Host wiring). Each
+ * thread verb fired by a workflow body maps onto one workflow-host operation
+ * (`t3team-workflowHost.ts`):
  *
- *   • thread.create  → dispatch(thread.create)        — make the spawned thread.
- *   • thread.turn    → dispatch(thread.turn.start)     — start an agent turn; record a pending
- *                       ask so the reactor can resolve it when the turn completes.
- *   • thread.message → dispatch(thread.message.upsert) — post a one-way message (no turn).
- *   • user.input     → dispatch(thread.message.upsert, role system) — request user input; record
- *                       a pending ask resolved when the user replies.
+ *   • thread.create  → host.createThread — make the spawned thread (linked under the launch thread).
+ *   • thread.turn    → host.startTurn    — queue an agent turn; record a pending ask the reactor
+ *                       resolves when that turn's run ends.
+ *   • thread.message → host.postMessage  — post a one-way note (user-facing), or queue a turn
+ *                       carrying it (agent-facing: an agent only reads what a turn delivers).
+ *   • user.input     → host.postMessage  — post the question (a decision card when it has
+ *                       choices); record a pending ask resolved when the user replies.
  *
  * The broker is created per run, so it carries the run's id, project, and model selection.
- * Dispatches are chained on a single tail promise: `thread.create` is fired floating by the
+ * Host calls are chained on a single tail promise: `thread.create` is fired floating by the
  * SDK's one-way `sendOneWay`, so chaining guarantees the create lands before the `thread.turn`
  * it precedes (turn-on-a-missing-thread would otherwise race).
  */
@@ -23,7 +25,7 @@ import {
   type WorkflowEngineBrokerDeps,
 } from "./t3team-workflowEngineBrokerTypes.ts";
 import { workflowStepDetailSnippet } from "./t3team-workflowEngineStepActivities.ts";
-import { dispatchWorkflowChild } from "./t3team-workflowChildPlacement.ts";
+import { createWorkflowChild } from "./t3team-workflowChildPlacement.ts";
 import {
   resolveWorkflowChildModel,
   resolveWorkflowModelCascade,
@@ -134,7 +136,7 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
           ? deps.modelSelection
           : await resolveWorkflowChildModel(deps.modelSelection, p.model, p.effort);
       step(correlationId, kind, "completed", p.name ?? "Spawn thread", p.threadId);
-      await runPrimitive(() => enqueueOneWay(() => dispatchWorkflowChild(deps, p, modelSelection)));
+      await runPrimitive(() => enqueueOneWay(() => createWorkflowChild(deps, p, modelSelection)));
       return;
     }
     // Signal-source verbs (GHE #332): `signal.register` (one-way binding FACT) and `signal.wait`

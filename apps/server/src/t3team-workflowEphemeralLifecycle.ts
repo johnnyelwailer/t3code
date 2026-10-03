@@ -1,13 +1,12 @@
 /**
  * Builds the durable lifecycle for a prepared workflow run — the SQLite-backed row plus the
- * sleep/dispatch wiring the engine drives it through.
+ * sleep/host wiring the engine drives it through.
  *
  * Separate from `t3team-workflowEphemeralLaunch.ts` because this is where a run becomes RECOVERABLE:
  * the row is written before any detached execution starts, so a request disconnect leaves a run that
  * boot rehydration can find rather than an invisible source-only orphan. An `ephemeral` run enters
  * `queued` rather than `running` so the admission queue owns its promotion.
  */
-import { t3teamRandomUUID } from "./t3team-random.ts";
 import {
   buildRunningWorkflowRunRow,
   makeWorkflowRunLifecycle,
@@ -53,7 +52,6 @@ export function buildPreparedWorkflowLifecycle(input: {
     onSleep: () => {
       void deps.rearmScheduler();
     },
-    dispatch: deps.dispatch,
-    newId: () => t3teamRandomUUID(),
+    host: deps.host,
   });
 }

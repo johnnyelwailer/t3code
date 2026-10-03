@@ -5,10 +5,10 @@
  *
  *   • a LIVE (black-boxed composition) ask has no failure channel of its own: it settles with ""
  *     so the composition's own emptiness check fires;
- *   • a durable ask whose turn FAILED (the session died with `error`) gets the bounded re-drive
+ *   • a durable ask whose run FAILED (failed, interrupted, cancelled) gets the bounded re-drive
  *     whether it was set live or rehydrated — a dead provider is transient, and failing on the
  *     spot or parking forever is the overnight stall of GHE #403;
- *   • a durable ask whose turn was merely SILENT re-drives only when it was interrupted by a host
+ *   • a durable ask whose run completed SILENT re-drives only when it was rehydrated after a
  *     restart (its pending carries the journaled `turnRetries` budget); a live step that says
  *     nothing is a body fault and still fails the run, as before.
  */
@@ -20,7 +20,7 @@ import type {
   WorkflowPendingAsk,
 } from "./t3team-workflowEngineRegistry.ts";
 import { NO_TEXT_MESSAGE, type InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
-import type { WorkflowTurnSettlement } from "./t3team-workflowTurnResolution.ts";
+import type { WorkflowTurnSettlement } from "./t3team-workflowTurnRun.ts";
 
 export type UnansweredTurnSettlement = Extract<
   WorkflowTurnSettlement,

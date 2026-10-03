@@ -10,11 +10,11 @@
  * The child id is reported through `onRepairChildId` rather than returned: the caller reads it much
  * later, on the audit path, and only the fallback branch ever sets it.
  */
-import { CommandId, MessageId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import type { LaunchWorkflowRecipeInput } from "./t3team-workflowEngineLaunchTypes.ts";
 import { buildWorkflowRepairPrompt } from "./t3team-workflowRepairPrompt.ts";
+import { newWorkflowStepPromptMessageId } from "./t3team-workflowTurnPrompt.ts";
 import {
   parseWorkflowRepairChildResult,
   type GenerateWorkflowRepair,
@@ -109,49 +109,37 @@ export function makeWorkflowRepairGenerator(ctx: WorkflowRepairGenerateContext) 
     const replyPromise = new Promise<string>((resolve, reject) => {
       void (async () => {
         if (stopped()) throw new Error("Workflow was stopped");
-        // Wait until the create command has committed its ephemeral
-        // retention before publishing a pending repair turn. This prevents
-        // a fast provider reply from racing the shell's create event.
-        await input.dispatch({
-          type: "thread.create",
-          commandId: CommandId.make(`t3team-wf:repair:create:${input.newId()}`),
-          threadId: ThreadId.make(childId),
+        // Wait until the create has committed its ephemeral retention before publishing a
+        // pending repair turn, so a fast provider reply cannot race the shell's create event.
+        await input.host.createThread({
+          threadId: childId,
           projectId: input.projectId,
           title: "Workflow repair",
           modelSelection: repairModelSelection,
           runtimeMode: input.runtimeMode,
           interactionMode: input.interactionMode,
-          branch: null,
-          worktreePath: null,
-          createdAt: input.nowIso(),
           retention: "ephemeral",
+          ...(input.launchThreadId === undefined ? {} : { parentThreadId: input.launchThreadId }),
         });
         if (stopped()) throw new Error("Workflow was stopped");
+        const correlationId = `${input.runId}:repair:${attempt + 1}`;
+        const promptMessageId = newWorkflowStepPromptMessageId(correlationId);
         input.registry.setPending(childId, {
           runId: input.runId,
-          correlationId: `${input.runId}:repair:${attempt + 1}`,
+          correlationId,
           kind: "thread.turn",
+          promptMessageId,
           resolveLive: async (value) => {
             resolve(typeof value === "string" ? value : JSON.stringify(value));
           },
           cancelLive: () => reject(new Error("Workflow was stopped")),
         });
-        await input.dispatch({
-          type: "thread.turn.start",
-          commandId: CommandId.make(`t3team-wf:repair:turn:${input.newId()}`),
-          threadId: ThreadId.make(childId),
-          message: {
-            messageId: MessageId.make(input.newId()),
-            role: "user",
-            text: prompt,
-            attachments: [],
-            // Marks this as an automated start for decider turn admission.
-            t3teamExt: { author: { kind: "system" } },
-          },
+        await input.host.startTurn({
+          threadId: childId,
+          messageId: promptMessageId,
+          text: prompt,
           modelSelection: repairModelSelection,
-          runtimeMode: input.runtimeMode,
-          interactionMode: input.interactionMode,
-          createdAt: input.nowIso(),
+          author: { kind: "system", workflowRunId: input.runId },
         });
       })().catch(reject);
     });

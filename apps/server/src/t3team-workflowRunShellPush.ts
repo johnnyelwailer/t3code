@@ -1,50 +1,30 @@
 // @effect-diagnostics globalConsole:off -- fire-and-forget delivery failure log in a plain Promise path, outside any Effect runtime.
 /**
- * Pushes a workflow run's launch thread through the sidebar's live shell stream.
+ * Pushes a workflow run's status to its launch thread's sidebar row.
  *
- * `apps/server/src/ws.ts`'s `subscribeShell` already re-pushes a thread's shell to every
- * connected client whenever ANY `OrchestrationEvent` with `aggregateKind: "thread"` lands for it
- * (see `toShellStreamEvent`'s default case) — that is the existing, reused seam. A durable
- * workflow run's `status`/`pendingKind`/`wakeAt` are computed by joining `workflow_runs` onto the
- * thread row (`ProjectionSnapshotQuery.getThreadShellById`), not stored as thread columns, so
- * there is no dedicated event type for "a run transitioned." Dispatching a field-less
- * `thread.meta.update` is how other reactors (`t3team-childStatusReactor.ts`,
- * `t3team-activityLabelReactor.ts`) already turn an unrelated state change into a thread-shell
- * refresh: the decider emits `thread.meta-updated` with only `threadId`/`updatedAt` set, the
- * projector's spread-of-defined-fields pattern leaves every other thread column untouched, and
- * the live stream refetches the shell — which now carries the fresh `workflowRunStatus`.
+ * A durable run's `status`/`pendingKind`/`wakeAt` live in `workflow_runs`, not on the V2 thread
+ * shell, so they travel on the fork thread-facts side stream (`workflowRunStatus`,
+ * `sleepingUntil`). On every run transition the host re-derives both from `workflow_runs` and
+ * patches the launch thread's facts (`T3TeamWorkflowHost.syncRunFacts`); subscribers of
+ * `t3team.subscribeThreadFacts` see the change live.
  */
-import { CommandId, type OrchestrationCommand, ThreadId } from "@t3tools/contracts";
+import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
 
 export interface PushWorkflowRunThreadShellInput {
   /** The run's `launchThreadId`; a headless run (no launch thread) is a no-op. */
   readonly launchThreadId: string | null | undefined;
-  /** Absent for callers that never wired dispatch through (e.g. the recipe-harness launcher) —
-   * a missing push capability is a no-op, never a thrown error. */
-  readonly dispatch: ((command: OrchestrationCommand) => Promise<void>) | undefined;
-  readonly newId: (() => string) | undefined;
+  /** Absent for callers that run without a host (the fs/in-memory path) — a no-op then. */
+  readonly host: Pick<WorkflowHostPort, "syncRunFacts"> | undefined;
 }
 
-/** Fire a no-op thread-meta touch so the sidebar's live shell stream refetches this run's launch
- * thread. One-way and swallows dispatch failures — a lost push must not fail a run; the client
- * still catches up on the next full snapshot (e.g. a reload). */
+/** Refresh the launch thread's run facts. One-way and swallows failures — a lost push must not
+ * fail a run; the client still catches up on its next facts snapshot (e.g. a reconnect). */
 export function pushWorkflowRunThreadShell(input: PushWorkflowRunThreadShellInput): void {
-  if (
-    input.launchThreadId === null ||
-    input.launchThreadId === undefined ||
-    input.dispatch === undefined ||
-    input.newId === undefined
-  ) {
-    return;
-  }
-  const dispatch = input.dispatch;
+  if (input.launchThreadId === null || input.launchThreadId === undefined) return;
+  if (input.host === undefined) return;
   const threadId = input.launchThreadId;
-  void dispatch({
-    type: "thread.meta.update",
-    commandId: CommandId.make(`t3team-wf-shell-push:${input.newId()}`),
-    threadId: ThreadId.make(threadId),
-  }).catch((error: unknown) => {
-    console.warn(`[t3team-workflow] shell push failed for launch thread ${threadId}:`, error);
+  void input.host.syncRunFacts(threadId).catch((error: unknown) => {
+    console.warn(`[t3team-workflow] run facts push failed for launch thread ${threadId}:`, error);
   });
 }
 
