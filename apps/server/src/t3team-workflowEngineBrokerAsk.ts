@@ -35,11 +35,11 @@ export async function handleBrokerAskVerb(core: BrokerCore, s: BrokerSend): Prom
     // provider/model must reject this ask cleanly, not park the run on an undispatched turn.
     // Stay SYNCHRONOUS when there is nothing to resolve: awaiting unconditionally would yield a
     // microtask before `setPending`, and callers observe the pending entry right after `send`.
-    const modelSelection =
+    const { modelSelection, modelRouting } =
       p.model === undefined && p.effort === undefined
-        ? deps.modelSelection
+        ? { modelSelection: deps.modelSelection, modelRouting: undefined }
         : await resolveWorkflowChildModel(deps.modelSelection, p.model, p.effort);
-    step(correlationId, kind, "started", p.label ?? p.prompt, p.threadId);
+    step(correlationId, kind, "started", p.label ?? p.prompt, p.threadId, modelRouting);
     const liveSettlement = isLiveCompositionAsk ? makeLiveSettlement() : null;
     // ONE author for the whole step: it rides the prompt below, and the reactor reuses it to
     // attribute the assistant messages that answer it.

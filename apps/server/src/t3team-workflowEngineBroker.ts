@@ -71,13 +71,7 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
   };
 
   // Live step-status pip (UX slice 1): fire-and-forget — the emitter swallows its own failures.
-  const step = (
-    correlationId: string,
-    kind: string,
-    phase: "started" | "waiting" | "completed",
-    detail?: string,
-    threadId?: string,
-  ): void => {
+  const step: BrokerCore["step"] = (correlationId, kind, phase, detail, threadId, modelRouting) => {
     const workflowPhase = deps.currentPhase?.();
     void deps.stepActivities?.emitSent({
       correlationId,
@@ -86,6 +80,7 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
       ...(detail === undefined ? {} : { detail: workflowStepDetailSnippet(detail) }),
       ...(threadId === undefined ? {} : { threadId }),
       ...(workflowPhase === undefined ? {} : { workflowPhase }),
+      ...(modelRouting === undefined ? {} : { modelRouting }),
     });
   };
 
@@ -129,11 +124,11 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
       // invalid provider/model must reject this send() while the SDK still observes it.
       // Stay SYNCHRONOUS when there is nothing to resolve: awaiting unconditionally would yield a
       // microtask before `setPending`, and callers observe the pending entry right after `send`.
-      const modelSelection =
+      const { modelSelection, modelRouting } =
         p.model === undefined && p.effort === undefined
-          ? deps.modelSelection
+          ? { modelSelection: deps.modelSelection, modelRouting: undefined }
           : await resolveWorkflowChildModel(deps.modelSelection, p.model, p.effort);
-      step(correlationId, kind, "completed", p.name ?? "Spawn thread", p.threadId);
+      step(correlationId, kind, "completed", p.name ?? "Spawn thread", p.threadId, modelRouting);
       await runPrimitive(() => enqueueOneWay(() => dispatchWorkflowChild(deps, p, modelSelection)));
       return;
     }

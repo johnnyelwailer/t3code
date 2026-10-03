@@ -7,7 +7,9 @@
  * {@link resolveStartChildModelSelection} — the same resolver `t3team.thread.start_child` uses for
  * free cross-provider spawning — so "available" means exactly what it means for start_child: the
  * instance exists, its driver is available, it is installed and enabled, and it owns the requested
- * model (or has one to fall back on). A rung that fails becomes a skip reason, not an error.
+ * model (or has one to fall back on). A rung that fails becomes a skip reason, not an error. With
+ * auto-latest routing on (`NEXI_FF_AUTO_LATEST_MODEL`), a stale rung routes to its newest catalog
+ * version instead of falling through, and the reason names the requested slug.
  *
  * A rung with no `instanceId` means "this model on the run's CURRENT provider instance", so the
  * base instance is substituted and the same validation applies — a model the current provider does
@@ -36,6 +38,8 @@ export function resolveModelCascade(input: {
   readonly base: ModelSelection;
   readonly entries: ReadonlyArray<ModelCascadeWireEntry>;
   readonly providers: ReadonlyArray<ServerProvider>;
+  /** Auto-latest routing per rung (`NEXI_FF_AUTO_LATEST_MODEL`); a routed rung says so. */
+  readonly autoLatestModel?: boolean;
 }): WorkflowModelCascadeChoice {
   const skipped: string[] = [];
   for (const [index, entry] of input.entries.entries()) {
@@ -45,9 +49,13 @@ export function resolveModelCascade(input: {
       requestedProvider: entry.instanceId ?? input.base.instanceId,
       ...(entry.model === undefined ? {} : { requestedModel: entry.model }),
       providers: input.providers,
+      autoLatestModel: input.autoLatestModel,
     });
     if (result.ok) {
-      const chose = `chose ${label} → ${result.value.instanceId}/${result.value.model}`;
+      const routed = result.modelRouting?.routed
+        ? ` (auto-latest from ${result.modelRouting.requested})`
+        : "";
+      const chose = `chose ${label} → ${result.value.instanceId}/${result.value.model}${routed}`;
       return {
         selection: result.value,
         reason: skipped.length === 0 ? chose : `${chose}; skipped ${skipped.join("; ")}`,

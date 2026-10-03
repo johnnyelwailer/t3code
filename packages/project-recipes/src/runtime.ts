@@ -173,6 +173,19 @@ export const ProjectRecipeWorkflowStepActivityPayload = Schema.Struct({
    * treat "no field" as "unknown", not "instant".
    */
   durationMs: Schema.optional(Schema.Number),
+  /**
+   * Auto-latest model routing record for a step that requested an explicit model
+   * (`NEXI_FF_AUTO_LATEST_MODEL`): the slug the author asked for, the slug that runs, and why.
+   * Absent when the step requested no model or no provider catalog was wired.
+   */
+  modelRouting: Schema.optional(
+    Schema.Struct({
+      requested: Schema.String,
+      effective: Schema.String,
+      routed: Schema.Boolean,
+      reason: Schema.String,
+    }),
+  ),
 });
 export type ProjectRecipeWorkflowStepActivityPayload =
   typeof ProjectRecipeWorkflowStepActivityPayload.Type;

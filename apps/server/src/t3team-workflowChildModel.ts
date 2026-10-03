@@ -4,7 +4,9 @@ import type {
   ModelCascadeWireEntry,
   ModelSelection as WorkflowModelSelection,
 } from "@t3team/sdk";
+import type { ModelRouting } from "@t3tools/shared/t3team-modelRouting";
 
+import { isAutoLatestModelEnabled } from "./t3team-autoLatestModelFlag.ts";
 import { getChildProviderCatalog } from "./t3team-childProviderCatalog.ts";
 import { applyWorkflowEffort } from "./t3team-workflowEffortOptions.ts";
 import { resolveStartChildModelSelection } from "./t3team-toolBrokerStartChildProvider.ts";
@@ -29,34 +31,50 @@ import { fromWorkflowModelSelection } from "./t3team-workflowModelSelection.ts";
  * - No catalog wired (some test/SDK harnesses don't set one) → fall back to the legacy blind
  *   `fromWorkflowModelSelection` mapping so existing SDK/test behavior is preserved.
  * - Catalog wired → fetch the live provider snapshots and defer to the same pure resolver
- *   `start_child` uses, throwing on an invalid provider/model so the caller's ask fails.
+ *   `start_child` uses, throwing on an invalid provider/model so the caller's ask fails. That
+ *   resolver also applies auto-latest routing (`NEXI_FF_AUTO_LATEST_MODEL`), returned as
+ *   `modelRouting` so the step activity records requested vs effective.
  */
+export interface WorkflowChildModelResolution {
+  readonly modelSelection: ModelSelection;
+  /** Auto-latest requested-vs-effective record; present when a model was explicitly requested
+   * and resolved against the live catalog. The broker stamps it on the step activity. */
+  readonly modelRouting?: ModelRouting;
+}
+
 export async function resolveWorkflowChildModel(
   base: ModelSelection,
   requested: WorkflowModelSelection | undefined,
   effort?: AgentEffort,
-): Promise<ModelSelection> {
-  if (requested === undefined && effort === undefined) return base;
+): Promise<WorkflowChildModelResolution> {
+  if (requested === undefined && effort === undefined) return { modelSelection: base };
 
   const catalog = getChildProviderCatalog();
   // No catalog (some test/SDK harnesses): legacy blind mapping, and `effort` degrades to a no-op
   // because the provider's option descriptors are only knowable from a live snapshot.
   if (catalog === undefined) {
-    return requested === undefined ? base : fromWorkflowModelSelection(requested);
+    return {
+      modelSelection: requested === undefined ? base : fromWorkflowModelSelection(requested),
+    };
   }
 
   const providers = await catalog();
-  if (requested === undefined) return applyWorkflowEffort(base, effort, providers);
+  if (requested === undefined)
+    return { modelSelection: applyWorkflowEffort(base, effort, providers) };
 
   const result = resolveStartChildModelSelection({
     parentModelSelection: base,
     requestedProvider: requested.provider,
     requestedModel: requested.model.id,
     providers,
+    autoLatestModel: isAutoLatestModelEnabled(),
   });
 
   if (!result.ok) throw new Error(result.message);
-  return applyWorkflowEffort(result.value, effort, providers);
+  return {
+    modelSelection: applyWorkflowEffort(result.value, effort, providers),
+    ...(result.modelRouting ? { modelRouting: result.modelRouting } : {}),
+  };
 }
 
 /**
@@ -78,5 +96,10 @@ export async function resolveWorkflowModelCascade(
       reason: `no provider registry wired; keeping the run's default ${base.instanceId}/${base.model}`,
     };
   }
-  return resolveModelCascade({ base, entries, providers: await catalog() });
+  return resolveModelCascade({
+    base,
+    entries,
+    providers: await catalog(),
+    autoLatestModel: isAutoLatestModelEnabled(),
+  });
 }

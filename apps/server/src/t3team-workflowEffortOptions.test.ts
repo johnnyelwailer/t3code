@@ -193,7 +193,7 @@ describe("resolveWorkflowChildModel — effort", () => {
 
   it("applies effort to the run's own model without naming a provider", async () => {
     setChildProviderCatalog(async () => [codex]);
-    const result = await resolveWorkflowChildModel(
+    const { modelSelection: result } = await resolveWorkflowChildModel(
       selection("codex", "codex-a"),
       undefined,
       "high",
@@ -205,6 +205,6 @@ describe("resolveWorkflowChildModel — effort", () => {
 
   it("degrades to a no-op — never an error — when no provider catalog is wired", async () => {
     const base = selection("codex", "codex-a");
-    await expect(resolveWorkflowChildModel(base, undefined, "high")).resolves.toBe(base);
+    expect((await resolveWorkflowChildModel(base, undefined, "high")).modelSelection).toBe(base);
   });
 });

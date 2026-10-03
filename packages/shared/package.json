@@ -55,6 +55,10 @@
       "types": "./src/model.ts",
       "import": "./src/model.ts"
     },
+    "./t3team-modelRouting": {
+      "types": "./src/t3team-modelRouting.ts",
+      "import": "./src/t3team-modelRouting.ts"
+    },
     "./advertisedEndpoint": {
       "types": "./src/advertisedEndpoint.ts",
       "import": "./src/advertisedEndpoint.ts"
