@@ -4,8 +4,8 @@
  * calls DIRECTLY (not a hand-rolled re-implementation, unlike the older durability/scheduler
  * tests' `rebuildFromDb` helpers). It boots the real `WorkflowRunRepository` +
  * `WorkflowJournalStore` + `T3TeamWorkflowEngineRegistry` + `T3TeamWorkflowScheduler` layers
- * over an in-memory SQLite DB, plus a stub `OrchestrationEngineService` (dispatch is a no-op
- * success; no domain-event reactor is under test here — that is
+ * over an in-memory SQLite DB, plus a recording fake `T3TeamWorkflowHost` (every host call
+ * succeeds; no reactor is under test here — that is
  * `t3team-workflowEngineReactor.integration.test.ts`'s job).
  *
  * Three cases:
@@ -31,12 +31,9 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as Stream from "effect/Stream";
 import { afterAll } from "vite-plus/test";
 
 import { ServerConfig } from "./config.ts";
-import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStore.ts";
 import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
@@ -57,6 +54,10 @@ import {
   T3TeamWorkflowEngineRegistry,
   T3TeamWorkflowEngineRegistryLive,
 } from "./t3team-workflowEngineRegistry.ts";
+import {
+  makeFakeWorkflowHost,
+  makeFakeWorkflowHostLayer,
+} from "./t3team-workflowHostFake.fixtures.ts";
 import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
 
 const reviewWorkflowPath = NodeURL.fileURLToPath(
@@ -74,19 +75,6 @@ afterAll(() => NodeFS.rmSync(cwd, { recursive: true, force: true }));
 const projectId = ProjectId.make("proj-rehydrate");
 const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
 const nowIso = (): string => "2026-06-08T00:00:00.000Z";
-
-// A no-op stub: no domain-event reactor is under test in this file, so `dispatch` just
-// succeeds and `streamDomainEvents` is never subscribed.
-const stubEngine: OrchestrationEngineShape = {
-  readEvents: () => Stream.empty,
-  readThreadEvents: () => Stream.empty,
-  getThreadReplayStats: () => Effect.die("unused"),
-  dispatch: () => Effect.succeed({ sequence: 0 }),
-  streamDomainEvents: Stream.never,
-  subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
-  latestSequence: Effect.succeed(0),
-};
-const OrchestrationEngineTestLive = Layer.succeed(OrchestrationEngineService, stubEngine);
 
 it.live("rehydrates durable queued runs and promotes them when FIFO capacity opens", () =>
   Effect.scoped(
@@ -155,7 +143,7 @@ const WorkflowEngineDurabilityTestLive = T3TeamWorkflowSchedulerLive.pipe(
 // store, which the event-park rehydration drains the boot-gap inbox through when present).
 const TestLayer = Layer.mergeAll(
   WorkflowEngineDurabilityTestLive,
-  OrchestrationEngineTestLive,
+  makeFakeWorkflowHostLayer().layer,
   ServerConfig.layerTest(cwd, { prefix: "t3-rehydrate-test-" }),
   WorkflowSignalStoreLive.pipe(Layer.provide(SqlitePersistenceMemory)),
 ).pipe(Layer.provideMerge(NodeServices.layer));
@@ -201,7 +189,7 @@ it.effect(
           runtimeMode: "full-access",
           interactionMode: "default",
           registry: throwaway,
-          dispatch: () => Promise.resolve(),
+          host: makeFakeWorkflowHost().host,
           newId: () => `id-${(seq += 1)}`,
           nowIso,
           store,
@@ -316,7 +304,7 @@ it.live(
           runtimeMode: "full-access",
           interactionMode: "default",
           registry: throwaway,
-          dispatch: () => Promise.resolve(),
+          host: makeFakeWorkflowHost().host,
           newId: () => "id-1",
           nowIso,
           store,
@@ -395,7 +383,7 @@ it.live("rehydrates a watching run and drains the boot-gap inbox entry that woke
         runtimeMode: "full-access",
         interactionMode: "default",
         registry: throwaway,
-        dispatch: () => Promise.resolve(),
+        host: makeFakeWorkflowHost().host,
         newId: () => `id-${(seq += 1)}`,
         nowIso,
         store,
@@ -518,7 +506,7 @@ it.live("rehydrates a watching run with no inbox entry: rebuilt, still parked, u
         runtimeMode: "full-access",
         interactionMode: "default",
         registry: throwaway,
-        dispatch: () => Promise.resolve(),
+        host: makeFakeWorkflowHost().host,
         newId: () => `id-${(seq += 1)}`,
         nowIso,
         store,

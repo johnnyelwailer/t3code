@@ -18,12 +18,13 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 
-import { type OrchestrationCommand, ProjectId, ProviderInstanceId } from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import { launchWorkflowRecipe } from "./t3team-workflowEngineLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
 
 const workflowPath = NodeURL.fileURLToPath(
   new URL("../__fixtures__/t3team-examplePhaseStamp.workflow.ts", import.meta.url),
@@ -34,10 +35,7 @@ afterAll(() => NodeFS.rmSync(runsRoot, { recursive: true, force: true }));
 describe("workflow step activities — authored phase stamp", () => {
   it("stamps a step's SENT activity with the live phase, and its RESOLVED re-emission with the SAME phase, across a resume", async () => {
     const registry = makeWorkflowEngineRegistry();
-    const dispatched: OrchestrationCommand[] = [];
-    const dispatch = async (command: OrchestrationCommand): Promise<void> => {
-      dispatched.push(command);
-    };
+    const fake = makeFakeWorkflowHost();
     let seq = 0;
     const runId = "wf-phase-stamp";
     const launchThreadId = "launch-1";
@@ -55,7 +53,7 @@ describe("workflow step activities — authored phase stamp", () => {
       runtimeMode: "full-access",
       interactionMode: "default",
       registry,
-      dispatch,
+      host: fake.host,
       newId: () => `id-${(seq += 1)}`,
       nowIso: () => "2026-01-01T00:00:00.000Z",
     });
@@ -64,13 +62,9 @@ describe("workflow step activities — authored phase stamp", () => {
     expect(result.status).toBe("suspended");
 
     const stepActivities = () =>
-      dispatched.flatMap((c) =>
-        c.type === "thread.activity.append" && c.activity.kind === "t3team.recipe.workflow.step"
-          ? [c.activity]
-          : [],
-      );
+      fake.activities().filter((activity) => activity.kind === "t3team.recipe.workflow.step");
     const childThreadIds = () =>
-      dispatched.filter((c) => c.type === "thread.create").map((c) => String(c.threadId));
+      fake.calls.flatMap((call) => (call.op === "createThread" ? [call.input.threadId] : []));
 
     const firstSent = stepActivities().find(
       (activity) => (activity.payload as { detail?: string }).detail === "First turn",

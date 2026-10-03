@@ -3,6 +3,14 @@
  * need a real orchestrator: every operation is recorded and succeeds (or fails, when `failOn`
  * names it). Tests assert on what the run asked the host to do.
  */
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+
+import {
+  T3TeamWorkflowHost,
+  T3TeamWorkflowHostError,
+  type T3TeamWorkflowHostShape,
+} from "./t3team-workflowHost.ts";
 import type {
   WorkflowHostActivityInput,
   WorkflowHostMessageInput,
@@ -45,4 +53,33 @@ export function makeFakeWorkflowHost(options: { readonly failOn?: keyof Workflow
     turns: (): WorkflowHostStartTurnInput[] => inputsOf("startTurn"),
     activities: (): WorkflowHostActivityInput[] => inputsOf("upsertActivity"),
   };
+}
+
+/**
+ * The same recording fake as a `T3TeamWorkflowHost` service layer, for layers that resolve the
+ * host from context (boot rehydration, the scheduler). Held notes are never held: `flushHeld` is
+ * a no-op and nothing is ever pending.
+ */
+export function makeFakeWorkflowHostLayer(
+  options: { readonly failOn?: keyof WorkflowHostPort } = {},
+) {
+  const fake = makeFakeWorkflowHost(options);
+  const lift =
+    <K extends keyof WorkflowHostPort>(op: K) =>
+    (input: Parameters<WorkflowHostPort[K]>[0]) =>
+      Effect.tryPromise({
+        try: () => (fake.host[op] as (value: typeof input) => Promise<void>)(input),
+        catch: (cause) => new T3TeamWorkflowHostError({ operation: op, message: String(cause) }),
+      });
+  const service: T3TeamWorkflowHostShape = {
+    createThread: lift("createThread"),
+    startTurn: lift("startTurn"),
+    postMessage: lift("postMessage"),
+    upsertActivity: lift("upsertActivity"),
+    interrupt: lift("interrupt"),
+    syncRunFacts: lift("syncRunFacts"),
+    flushHeld: () => Effect.void,
+    heldThreadIds: () => [],
+  };
+  return { ...fake, layer: Layer.succeed(T3TeamWorkflowHost, service) };
 }

@@ -35,16 +35,14 @@
 import * as NodeTimers from "node:timers";
 
 import * as Context from "effect/Context";
-import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
-import { t3teamRandomUUID } from "./t3team-random.ts";
 import { deliverWorkflowFailure } from "./t3team-workflowCompletionMessage.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import { T3TeamWorkflowHost, toWorkflowHostPort } from "./t3team-workflowHost.ts";
 import { makeSchedulerResume, orphanSleepingRun } from "./t3team-workflowSchedulerResume.ts";
 
 /** Floor for a re-arm delay of an already-due row. A due row whose resume is a no-op (unregistered
@@ -74,11 +72,10 @@ export const T3TeamWorkflowSchedulerLive = Layer.effect(
   Effect.gen(function* () {
     const repo = yield* WorkflowRunRepository;
     const registry = yield* T3TeamWorkflowEngineRegistry;
-    // Optional on purpose: harnesses without an orchestration engine still get a
-    // working scheduler — orphaned runs then only log instead of messaging.
-    const orchestration = Option.getOrUndefined(
-      yield* Effect.serviceOption(OrchestrationEngineService),
-    );
+    // Optional on purpose: harnesses without a workflow host still get a working
+    // scheduler — orphaned runs then only log instead of messaging.
+    const workflowHost = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamWorkflowHost));
+    const host = workflowHost === undefined ? undefined : toWorkflowHostPort(workflowHost);
 
     const listSleeping = (): Promise<ReadonlyArray<SchedulerSleepingRun>> =>
       Effect.runPromise(repo.listByStatus({ status: "sleeping" })).then((rows) =>
@@ -94,18 +91,10 @@ export const T3TeamWorkflowSchedulerLive = Layer.effect(
           repo,
           runId,
           correlationId,
-          orchestration === undefined
+          host === undefined
             ? undefined
             : (launchThreadId, errorText) =>
-                deliverWorkflowFailure({
-                  launchThreadId,
-                  workflowRunId: runId,
-                  errorText,
-                  dispatch: (command) =>
-                    Effect.runPromise(orchestration.dispatch(command)).then(() => undefined),
-                  newId: () => t3teamRandomUUID(),
-                  nowIso: () => DateTime.formatIso(DateTime.nowUnsafe()),
-                }),
+                deliverWorkflowFailure({ launchThreadId, workflowRunId: runId, errorText, host }),
         ),
     });
 
