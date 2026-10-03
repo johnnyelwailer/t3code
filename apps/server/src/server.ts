@@ -228,6 +228,7 @@ import {
 } from "./t3team-github-routes.ts";
 import { t3teamProjectWorkspaceBootstrapRouteLayer } from "./t3team-project-repository-routes.ts";
 import { t3teamThreadToolContextRouteLayer } from "./t3team-thread-tool-context-routes.ts";
+import { t3teamThreadPlacementRouteLayer } from "./t3team-thread-placement-routes.ts";
 import { t3teamMyWorkDigestRouteLayer } from "./t3team-myworkDigest-routes.ts";
 import { T3TeamThreadToolContextStoreLive } from "./t3team-threadToolContextStore.ts";
 import { turnInactivityPolicyLive } from "./orchestration-v2/t3team-turnInactivityPolicy.ts";
@@ -248,7 +249,7 @@ import { T3TeamThreadStopCascadeReactorLive } from "./t3team-threadStopCascadeRe
 import { T3TeamChildStatusReactorLive } from "./t3team-childStatusReactor.ts";
 import { T3TeamActivityLabelReactorLive } from "./t3team-activityLabelReactor.ts";
 import { T3TeamChildSettleSweeperLive } from "./t3team-childSettleSweeper.ts";
-import { T3TeamChildCleanupNudgeReactorLive } from "./t3team-childCleanupNudgeReactor.ts";
+import { T3TeamSettleGuardsLive } from "./t3team-childSettleGuards.ts";
 import { T3TeamThreadTransientTurnRetryLive } from "./t3team-threadTransientTurnRetry.ts";
 import { T3TeamThreadSilenceWatchReactorLive } from "./t3team-threadSilenceWatchReactorLive.ts";
 import { T3TeamWorkflowEngineRehydrateLive } from "./t3team-workflowEngineRehydrate.ts";
@@ -623,6 +624,9 @@ const T3TeamToolBrokerLayerLive = T3TeamToolBrokerLive.pipe(
 const OrchestrationV2RuntimeLayerLive = OrchestrationV2ProductionLayerLive.pipe(
   // t3team: host turn-inactivity watchdog budget per provider instance.
   Layer.provide(turnInactivityPolicyLive),
+  // t3team: the ONE settle-guard override (workflow run, live child, parent wait, settled
+  // parent); other fork guards compose into it (t3team-childSettleGuards.ts).
+  Layer.provide(T3TeamSettleGuardsLive),
   // t3team: pack-registered delegated-completion wake text (default text without a pack).
   Layer.provide(packCompletionWakeRendererLive.pipe(Layer.provide(ProjectionStoreV2.layer))),
   Layer.provide(ProviderEventIngestor.analyticsLive),
@@ -901,6 +905,7 @@ export const makeRoutesLayer = Layer.mergeAll(
     t3teamThreadDraftMutationStatusRouteLayer,
     t3teamThreadWorkflowResolveInputRouteLayer,
     t3teamThreadToolContextRouteLayer,
+    t3teamThreadPlacementRouteLayer,
     t3teamMyWorkDigestRouteLayer,
     t3teamWidgetToolCallRouteLayer,
   ),
@@ -1318,7 +1323,6 @@ const makeServerLayer = Layer.unwrap(
       T3TeamChildStatusReactorLive,
       T3TeamActivityLabelReactorLive,
       T3TeamChildSettleSweeperLive,
-      T3TeamChildCleanupNudgeReactorLive,
       T3TeamThreadSilenceWatchReactorLive,
       T3TeamThreadTransientTurnRetryLive,
       T3TeamWorkflowEngineRehydrateLive,
