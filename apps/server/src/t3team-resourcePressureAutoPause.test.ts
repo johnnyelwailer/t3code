@@ -1,9 +1,5 @@
-import { ThreadId } from "@t3tools/contracts";
 import { assert, describe, it } from "@effect/vitest";
-import * as Effect from "effect/Effect";
-import * as Fiber from "effect/Fiber";
 
-import { makeResourcePressureAutoPause } from "./t3team-resourcePressureAutoPause.ts";
 import {
   AUTO_PAUSE_COOLDOWN_MS,
   admitTurn,

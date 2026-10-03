@@ -51,9 +51,11 @@ export const describeSource = (source: ProjectSourceBinding): string =>
     ? "local"
     : `${source.provider}:${source.accountId}/${source.externalProjectId}`;
 
+const isProjectOperationError = Schema.is(ProjectOperationError);
+
 /** The client-facing text of a binding claim failure, if `cause` is one. */
 export const projectSourceClaimMessage = (cause: unknown): string | undefined =>
-  Schema.is(ProjectOperationError)(cause) && cause.cause instanceof ProjectSourceBindingClaimedError
+  isProjectOperationError(cause) && cause.cause instanceof ProjectSourceBindingClaimedError
     ? cause.cause.message
     : undefined;
 

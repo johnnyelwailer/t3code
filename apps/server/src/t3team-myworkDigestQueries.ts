@@ -13,13 +13,9 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
-import {
-  readCachedBacklogIssueRows,
-  readCachedBacklogViewRow,
-} from "./t3team-atlassian-backlog-cacheQueries.ts";
+import { readCachedBacklogViewRow } from "./t3team-atlassian-backlog-cacheQueries.ts";
 import {
   parseJson,
-  type BacklogResourceRef,
   type T3TeamBacklogCacheIdentity,
 } from "./t3team-atlassian-backlog-cacheShared.ts";
 import { T3TeamChildThreadMetadata } from "./t3team-childThreadMetadata.ts";
@@ -122,11 +118,11 @@ export function readDigestPendingDecisions(appProjectIds: ReadonlyArray<string>)
   return Effect.gen(function* () {
     const repo = yield* WorkflowRunRepository;
     const suspended = yield* repo.listByStatus({ status: "suspended" });
-    const projects = appProjectIds.map((id) => id as (typeof suspended)[number]["projectId"]);
+    const projects = new Set<string>(appProjectIds);
     return suspended.filter(
       (run) =>
         run.pendingKind === "user.input" &&
-        projects.includes(run.projectId) &&
+        projects.has(run.projectId) &&
         run.pendingThreadId !== null &&
         run.pendingCorrelationId !== null,
     );
@@ -182,19 +178,6 @@ export function parseDecisionQuestionEntry(
   }
   const label = envelope["label"];
   return typeof label === "string" && label.trim() !== "" ? label : undefined;
-}
-
-/** All mirror issue refs of one project, parsed (the digest ticket source). */
-function readDigestTickets(identity: T3TeamBacklogCacheIdentity) {
-  return Effect.gen(function* () {
-    const rows = yield* readCachedBacklogIssueRows(identity);
-    const tickets: BacklogResourceRef[] = [];
-    for (const row of rows) {
-      const parsed = parseJson<BacklogResourceRef>(row.resourceJson);
-      if (parsed !== null) tickets.push(parsed);
-    }
-    return tickets;
-  });
 }
 
 /**

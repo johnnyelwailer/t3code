@@ -58,10 +58,10 @@ const userMessage = (text: string): OrchestrationV2DomainEvent =>
   }) as never;
 
 /** Polls in real time (`it.live`): the summarizer runs on real timers, not the test clock. */
-const waitFor = (check: () => Promise<boolean>) =>
+const waitFor = <E, R>(check: Effect.Effect<boolean, E, R>) =>
   Effect.gen(function* () {
     for (let attempt = 0; attempt < 200; attempt += 1) {
-      if (yield* Effect.promise(check)) return;
+      if (yield* check) return;
       yield* Effect.sleep("10 millis");
     }
     return yield* Effect.die(new Error("condition not reached"));
@@ -103,8 +103,8 @@ it.live("labels a thread from finished turn items and clears it when the run end
       } as never),
     );
     const facts = yield* ThreadFactsStore.T3TeamThreadFactsStore;
-    const labelOf = () =>
-      Effect.runPromise(facts.get(threadId)).then((record) => record?.activityLabel);
+    const labelIs = (label: string | null) =>
+      facts.get(threadId).pipe(Effect.map((record) => record?.activityLabel === label));
     yield* makeT3TeamActivityLabelReactor({
       debounceMs: 0,
       minRegenerateMs: 0,
@@ -115,12 +115,12 @@ it.live("labels a thread from finished turn items and clears it when the run end
 
     yield* PubSub.publish(events, userMessage("Please   fix the flaky test"));
     yield* PubSub.publish(events, commandItem("pnpm test"));
-    yield* waitFor(async () => (await labelOf()) === "Running the test suite");
+    yield* waitFor(labelIs("Running the test suite"));
     assert.include(contexts[0], "pnpm test");
     assert.include(contexts[0], "Please fix the flaky test");
 
     yield* PubSub.publish(events, runTerminal);
-    yield* waitFor(async () => (await labelOf()) === null);
+    yield* waitFor(labelIs(null));
   }).pipe(
     Effect.provide(ThreadFactsStore.layer.pipe(Layer.provideMerge(SqlitePersistenceMemory))),
     Effect.scoped,
