@@ -675,10 +675,11 @@ as `t3team.thread.search_source`.
 thread was forked from (its lineage parent), so details the fork's compacted handoff left out
 stay reachable.
 
-`t3team.thread.read_message` reads the full body of a previously delivered inter-agent
-message in the current thread. Long inter-agent bodies are truncated on delivery to a
-short preview plus a marker carrying the message id; the full body stays persisted on the
-first-class `actor`-role message and this tool retrieves it on demand.
+`t3team.thread.read_message` reads the full body of an inter-agent message delivered to the
+current thread. Agents send those with `t3_thread_send` `mode: "mailbox"`: the message waits in a
+durable mailbox and reaches the recipient, batched with its other pending messages, as one digest
+turn once the recipient is idle. Long bodies appear in the digest as a subject plus a marker
+carrying the message id; this tool retrieves the full body from the mailbox on demand.
 
 `delegate_task` carries the fork's child-launch options: `workspace: { isolation: "worktree",
 repository?, baseRef? }` gives the child its own branch and worktree (of a linked repository, the
@@ -689,7 +690,7 @@ T3 server). `orchestrator_capabilities` lists them under `delegation`.
 
 `t3team.thread.children` is ONE meta tool for the child-thread operations upstream does not
 have, selected by an `op` parameter: `watch` / `unwatch` (silence watch), `sweep` (bulk settle of
-finished children), `drain` (claim this thread's own inter-agent mailbox now), `environments`
+finished children), `drain` (deliver this thread's own pending mailbox messages now), `environments`
 (targets for `extensions.environment`) and `help`.
 
 ## Tool Safety Matrix

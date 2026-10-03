@@ -34,7 +34,7 @@ import {
   resolveActorMessageDebounceMs,
 } from "./t3team-actorMessageReactorLimits.ts";
 import { T3TeamThreadEngagement, T3TeamThreadEngagementLive } from "./t3team-threadEngagement.ts";
-import { T3TeamThreadMessageRecorder } from "./t3team-v2/t3team-threadMessageRecorder.ts";
+import * as ThreadMessageRecorder from "./t3team-v2/t3team-threadMessageRecorder.ts";
 
 export class T3TeamActorMailbox extends Context.Service<
   T3TeamActorMailbox,
@@ -54,7 +54,7 @@ export class T3TeamActorMailbox extends Context.Service<
 const make = Effect.gen(function* () {
   const threads = yield* ThreadManagementService;
   const store = yield* T3TeamActorMailboxStore;
-  const recorder = yield* T3TeamThreadMessageRecorder;
+  const recorder = yield* ThreadMessageRecorder.T3TeamThreadMessageRecorder;
   const engagement = yield* T3TeamThreadEngagement;
   const scope = yield* Effect.scope;
 
@@ -104,6 +104,14 @@ const make = Effect.gen(function* () {
   return T3TeamActorMailbox.of({ send, drain, store });
 });
 
+// The recorder and engagement layers are the same references the runtime registers
+// (T3TeamV2FoundationLive, server.ts), so memoization hands this service those instances.
 export const T3TeamActorMailboxLive = Layer.effect(T3TeamActorMailbox, make).pipe(
-  Layer.provide(Layer.mergeAll(T3TeamActorMailboxStoreLive, T3TeamThreadEngagementLive)),
+  Layer.provide(
+    Layer.mergeAll(
+      T3TeamActorMailboxStoreLive,
+      T3TeamThreadEngagementLive,
+      ThreadMessageRecorder.layer,
+    ),
+  ),
 );
