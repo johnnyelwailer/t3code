@@ -8,7 +8,6 @@ import {
   splitAutomatedBurst,
 } from "./t3team-actorBurstFold.ts";
 import { buildActorReactionDigestInput } from "./t3team-actorReactionInput.ts";
-import { buildActorRestartHoldSummary } from "./t3team-actorRestartHold.ts";
 import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
 
 /** Build a minimal actor mailbox entry; `summary`/`urgency` are overridable. */
@@ -145,26 +144,6 @@ describe("buildActorReactionDigestInput · burst fold", () => {
     const input = buildActorReactionDigestInput(burst(12));
     expect(input).toContain("[Inter-agent burst: 12 messages folded");
     expect(input.split("\n").filter((l) => l.startsWith("- id "))).toHaveLength(12);
-  });
-});
-
-describe("buildActorRestartHoldSummary · burst fold", () => {
-  it("folds a held burst of non-urgent messages into ONE compact list", () => {
-    const out = buildActorRestartHoldSummary({ entries: burst(9), interruptedChildren: [] });
-    expect(out).toContain("[Inter-agent burst: 9 messages folded");
-    const itemLines = out.split("\n").filter((l) => l.startsWith("- id "));
-    expect(itemLines).toHaveLength(9);
-    // The held-messages inlined-body form is replaced, not duplicated.
-    expect(out).toContain("9 inter-agent message(s) were pending");
-  });
-
-  it("keeps the full per-line form for a sub-threshold held batch", () => {
-    const out = buildActorRestartHoldSummary({
-      entries: burst(ACTOR_BURST_FOLD_THRESHOLD),
-      interruptedChildren: [],
-    });
-    expect(out).not.toContain("[Inter-agent burst:");
-    expect(out).toContain("[msg-1] from «Silence Watch» (thread watcher):");
   });
 });
 

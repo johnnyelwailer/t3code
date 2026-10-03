@@ -8,7 +8,7 @@
  * t3team_read_message pointer) instead of one verbose block each.
  *
  * The fold is a DELIVERY-LEVEL concern, not a per-notifier one: it sits beside
- * the digest framing and the restart-hold summary, so EVERY automated source
+ * the digest framing, so EVERY automated source
  * inherits it just by passing through this one renderer — no notifier copies
  * the compact form. Two call sites: buildActorReactionDigestInput and
  * buildActorRestartHoldSummary.
