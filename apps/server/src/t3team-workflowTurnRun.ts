@@ -55,7 +55,17 @@ export function judgeStepRun(
   run: OrchestrationV2Run,
 ): WorkflowTurnSettlement {
   if (!isTerminalRunStatus(run.status)) return { kind: "pending" };
-  const result = subagentResultForRun(projection, run);
+  // `subagentResultForRun` picks the most recently updated message; order ties (one provider
+  // write can stamp several messages with the same instant) by timeline position, latest first.
+  const position = new Map(
+    projection.turnItems.flatMap((item) =>
+      item.type === "assistant_message" ? [[item.messageId, item.ordinal] as const] : [],
+    ),
+  );
+  const messages = projection.messages.toSorted(
+    (left, right) => (position.get(right.id) ?? -1) - (position.get(left.id) ?? -1),
+  );
+  const result = subagentResultForRun({ messages, turnItems: projection.turnItems }, run);
   if (run.status === "completed") {
     return result.messageId === null && result.turnItemId === null
       ? { kind: "empty" }

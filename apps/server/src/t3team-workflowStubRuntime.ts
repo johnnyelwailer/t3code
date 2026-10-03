@@ -64,6 +64,8 @@ export function makeWorkflowStubRuntime(options: {
     layer: T3TeamWorkflowEngineReactorLayer.pipe(Layer.provideMerge(core)),
     /** Every turn the scripted agent ran, in order. */
     turns: provider.turns,
+    /** End a held turn (see `makeWorkflowStubProvider`). */
+    settle: provider.settle,
   };
 }
 

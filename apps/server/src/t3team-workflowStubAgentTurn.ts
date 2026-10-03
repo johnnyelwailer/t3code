@@ -8,8 +8,9 @@
  * provider turn running, the assistant message(s), the provider turn completed, and the terminal.
  *
  * A reply is the text of the turn's final answer; an array is several assistant messages (a
- * preamble, then the answer); `{ fail }` ends the turn `failed` with that reason; `{ silent }`
- * completes the turn without a word; `{ hold }` starts the turn and never ends it.
+ * preamble, then the answer); `{ fail }` / `{ interrupted }` end the turn without completing it
+ * (after an optional streamed preamble); `{ silent }` completes the turn without a word;
+ * `{ hold }` starts the turn and never ends it.
  */
 import type { PackJson, PackTurnInput } from "@t3team/pack-api";
 import { ProviderDriverKind, ProviderInstanceId } from "@t3tools/contracts";
@@ -28,7 +29,10 @@ import { makePackOrchestrationAdapter } from "./t3team-pack-driverAdapter.ts";
 export type WorkflowStubReply =
   | string
   | ReadonlyArray<string>
-  | { readonly fail: string }
+  /** The turn streams `preamble` (if any), then FAILS with this reason. */
+  | { readonly fail: string; readonly preamble?: ReadonlyArray<string> }
+  /** The turn streams `preamble` (if any), then is interrupted before it completes. */
+  | { readonly interrupted: true; readonly preamble?: ReadonlyArray<string> }
   | { readonly silent: true }
   | { readonly hold: true };
 
@@ -91,25 +95,22 @@ export function stubAgentTurnEvents(turn: PackTurnInput, reply: WorkflowStubRepl
     PackJson,
     PackJson,
   ];
-  if (typeof reply === "object" && "hold" in reply) return [running];
-  if (typeof reply === "object" && "fail" in reply) {
-    return [
-      running,
-      {
-        ...terminal,
-        status: "failed",
-        failureItemOrdinal: 1,
-        failure: {
-          class: "provider_error",
-          message: reply.fail,
-          code: null,
-          retryable: true,
-        },
-      },
-    ];
+  if (typeof reply === "string")
+    return [running, ...assistantEvents(turn, [reply]), completed, terminal];
+  if ("hold" in reply) return [running];
+  if ("silent" in reply) return [running, completed, terminal];
+  if ("fail" in reply || "interrupted" in reply) {
+    const end =
+      "fail" in reply
+        ? {
+            status: "failed",
+            failureItemOrdinal: (reply.preamble?.length ?? 0) + 1,
+            failure: { class: "provider_error", message: reply.fail, code: null, retryable: true },
+          }
+        : { status: "interrupted" };
+    return [running, ...assistantEvents(turn, reply.preamble ?? []), { ...terminal, ...end }];
   }
-  const texts = typeof reply === "string" ? [reply] : "silent" in reply ? [] : reply;
-  return [running, ...assistantEvents(turn, texts), completed, terminal];
+  return [running, ...assistantEvents(turn, reply), completed, terminal];
 }
 
 /**
@@ -144,5 +145,12 @@ export function makeWorkflowStubProvider(
       ];
     }),
   );
-  return { registryLayer, turns: pack.turns };
+  return {
+    registryLayer,
+    turns: pack.turns,
+    /** End a turn that was answered `{ hold: true }` with `reply` (its running event already went). */
+    settle: (turn: PackTurnInput, reply: Exclude<WorkflowStubReply, { readonly hold: true }>) => {
+      for (const event of stubAgentTurnEvents(turn, reply).slice(1)) pack.events.push(event);
+    },
+  };
 }
