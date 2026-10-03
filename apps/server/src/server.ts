@@ -758,6 +758,9 @@ const RuntimeCoreDependenciesBaseLive = Layer.mergeAll(
   Layer.provideMerge(
     Layer.mergeAll(SourceControlProviderRegistryLayerLive, GitHubCli.layer, PullRequestServiceLive),
   ),
+  // t3team: PullRequestService reads ProjectService, which the OrchestrationApplication step above
+  // cannot hand to a later step; the runtime's own layer reference memoizes to that instance.
+  Layer.provideMerge(ProjectServiceLayerLive),
   Layer.provideMerge(GitLayerLive),
   Layer.provideMerge(VcsLayerLive),
   Layer.provideMerge(

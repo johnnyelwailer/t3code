@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import type { PullRequestRef } from "@t3tools/contracts";
 
 import { T3TeamAtlassianError } from "./t3team-atlassian-http.ts";
-import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as ProjectService from "./project/ProjectService.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
 import { PullRequestProviderRegistry } from "./pullRequest/PullRequestProviderRegistry.ts";
 import type {
@@ -59,7 +59,7 @@ export function loadPullRequestContext(
   GitHubPullRequestContextResponse,
   T3TeamAtlassianError,
   | PullRequestService.PullRequestService
-  | ProjectionSnapshotQuery.ProjectionSnapshotQuery
+  | ProjectService.ProjectService
   | PullRequestProviderRegistry
 > {
   const host = readTrimmedString(input.host) ?? "github.com";

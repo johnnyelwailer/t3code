@@ -1,3 +1,9 @@
+/**
+ * The AGENTS.md version that taught the removed \`t3team.thread.start_child\` tool. Kept only so
+ * the managed refresh (t3team-projectSetupManagedRefresh.ts) recognizes and replaces it.
+ *
+ * @module t3team-projectSetupAgentsPreviousStartChild
+ */
 import {
   T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH,
   T3TEAM_PROJECT_CONTEXT_ROOT,
@@ -8,11 +14,10 @@ import {
   type ProjectSetupProfileDefinition,
 } from "./t3team-projectSetupShared.ts";
 
-export function jsonFile(value: unknown): string {
-  return `${JSON.stringify(value, null, 2)}\n`;
-}
-
-export function renderAgentsMd(profile: ProjectSetupProfileDefinition): string {
+export function renderPreviousAgentsMdStartChild(profile: ProjectSetupProfileDefinition): string {
+  // Reproduces the AGENTS.md version replaced when child sessions moved from the removed
+  // \`t3team.thread.start_child\` tool to \`delegate_task\` (orchestration V2), so projects still
+  // on it are recognized as managed and auto-refreshed. Historical bytes -- do not edit.
   const technicalDepthLine =
     profile.communicationStyle.technicalDepth === "high"
       ? "Give implementation detail and verification notes when they materially change a decision."
@@ -72,12 +77,12 @@ Use these project files internally before asking the user to restate context:
 ## Working Separately
 
 - Treat the current thread as where you coordinate and synthesize.
-- Use one child-session tool, \`delegate_task\`, and choose the workspace explicitly.
+- Use one child-session tool, \`t3team.thread.start_child\`, and always pass \`isolation\`.
 - Decision table:
-  | Work | \`workspace\` | Repository fields |
+  | Work | \`isolation\` | Repository fields |
   | --- | --- | --- |
-  | Planning, triage, synthesis, project status | omit (shared checkout) | none |
-  | Implementation, debugging, tests, review, PR work | \`{ isolation: "worktree" }\` | \`repository\` for a linked repo (omit it in a local workspace or a monorepo project where the workspace is the meta-repo, to isolate in that repository); \`baseRef\` when the base matters |
+  | Planning, triage, synthesis, project status | \`shared\` | Do not pass \`repo_full_name\` or \`repo_ref\` |
+  | Implementation, debugging, tests, review, PR work | \`own-worktree\` | Pass \`repo_full_name\` for a linked repo (omit it in a local workspace or a monorepo project where the workspace is the meta-repo, to isolate in that repository); pass \`repo_ref\` when the base matters |
 - For work that means digging through a repository, changing code, debugging, validation, or code review, do it in a separate thread scoped to the right repository, and keep this thread clean.
 - Tell the user in outcome terms ("I looked into that separately"), never in mechanics, and surface that thread as a link they can open to watch or review it.
 - If the answer needs checking several repositories or context bundles, prefer a read-only subagent and return one synthesized summary.
@@ -100,118 +105,4 @@ Use these project files internally before asking the user to restate context:
 - Keep work focused on this project.
 - If project context is missing or stale, refresh ${T3TEAM_PROJECT_CONTEXT_ROOT} before continuing.
 `;
-}
-
-export function renderContextReadme(): string {
-  return `# Project Context
-
-Use this context bundle to answer project questions without making the user restate background.
-
-Internal navigation only:
-
-- entrypoint.json is the quickest status snapshot for the current workspace.
-- metadata.json is the prepared project overview for agent context.
-- jira/, github/, misc/, and work-items/ contain linked structured snapshots written during add-to-chat and automatic sync.
-- ../references/reference-repositories.json lists linked local repository mirrors.
-
-Response rules:
-
-- Translate findings into user-facing project terms such as status, owner, blocker, next step, or affected repository.
-- Do not mention internal cache paths, JSON file names, or sync mechanics unless the user asks for provenance or debugging detail.
-- When the answer requires checking several sources, prefer a read-only subagent and return one synthesized summary.
-`;
-}
-
-export function renderSkillsReadme(): string {
-  return `# Project Skills
-
-Save project-local skills here when a workflow becomes repeatable.
-
-- Offer before creating a new skill.
-- Keep skills focused on one repeatable workflow.
-- For read-only lookup workflows, prefer a subagent-driven exploration phase and a user-facing summary.
-- Hide internal file layout unless the user explicitly asks where the answer came from.
-- Prefer durable artifacts over chat-only summaries.
-- Use ../templates/skills/ as a starting point when helpful.
-`;
-}
-
-export function renderRecipesReadme(): string {
-  return `# Project Recipes
-
-Save project-local action recipes here.
-
-- Keep recipes small and reviewable.
-- Prefer the typed form: \`recipe.ts\` (\`defineRecipe\`) plus \`<id>.workflow.ts\` (\`defineWorkflow\`). Legacy \`recipe.json\` is discovery-compatible but should not be used for new recipes.
-- Point templates at files under ${T3TEAM_PROJECT_CONTEXT_ROOT}/.
-- Use ../templates/recipes/ as a starting point, or run the create-recipe action to scaffold typed starter files.
-- See AUTHORING.md in this directory for how to author a workflow well (replay determinism, run visibility, suspension verbs, fan-out patterns).
-`;
-}
-
-export function renderRecipeTemplate(profile: ProjectSetupProfileDefinition): string {
-  return `# Repeatable Workflow Template
-
-Profile: ${profile.title}
-
-Prefer the typed starter (\`recipe.ts\` + \`<id>.workflow.ts\`, generated by the create-recipe action) over this prose template for new recipes.
-
-## When To Use
-
-- A workflow has already succeeded at least once.
-- The same inputs and outputs are likely to appear again.
-
-## Recommended Context
-
-- ${T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH}
-- ${T3TEAM_PROJECT_CONTEXT_ROOT}/
-
-## Expected Output
-
-- A durable artifact saved in the project workspace.
-- A short user-facing summary in plain language.
-- A clear next step or approval question when needed.
-`;
-}
-
-export function renderSkillTemplate(profile: ProjectSetupProfileDefinition): string {
-  return `# SKILL Template
-
-## Purpose
-
-Help with a repeatable ${profile.title.toLowerCase()} workflow.
-
-## Required Context
-
-- Use ${T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH} and neighboring context bundles as internal evidence.
-
-## Workflow
-
-1. If the task is mostly read-only lookup or synthesis, use a read-only subagent for the exploration phase.
-2. Reconcile the findings into the smallest useful answer.
-3. Lead with the outcome in user-facing terms.
-4. Mention internal paths or JSON file names only when the user explicitly asks for provenance.
-
-## Working Rules
-
-- Keep the final explanation concise.
-- Persist useful outputs in the workspace.
-- Ask before creating or changing project-local recipes, skills, or external records.
-`;
-}
-
-export function renderContextEntrypointPlaceholder(): string {
-  return jsonFile({
-    kind: "project-workspace-context",
-    status: "pending-sync",
-    referencesManifestPath: ".t3team/references/reference-repositories.json",
-    profilePath: T3TEAM_PROJECT_PROFILE_MANIFEST_PATH,
-    contextRoot: T3TEAM_PROJECT_CONTEXT_ROOT,
-    paths: {
-      manifest: `${T3TEAM_PROJECT_CONTEXT_ROOT}/manifest.json`,
-      metadata: `${T3TEAM_PROJECT_CONTEXT_ROOT}/metadata.json`,
-      linkedRepositories: `${T3TEAM_PROJECT_CONTEXT_ROOT}/linked-repositories.json`,
-      workItemsIndex: `${T3TEAM_PROJECT_CONTEXT_ROOT}/work-items/index.json`,
-    },
-  });
 }

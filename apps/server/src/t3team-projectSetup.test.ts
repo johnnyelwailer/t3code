@@ -12,6 +12,8 @@ import {
   T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH,
   T3TEAM_PROJECT_PROFILE_MANIFEST_PATH,
 } from "./t3team-projectSetup.js";
+import { renderPreviousAgentsMdStartChild } from "./t3team-projectSetupAgentsPreviousStartChild.ts";
+import { resolveT3TeamProjectSetupProfile } from "./t3team-projectSetupShared.ts";
 
 describe("resolveT3TeamProjectSetupProfileId", () => {
   it("preserves unknown ids while surfacing fallback preferences", () => {
@@ -212,6 +214,26 @@ describe("readPersistedT3TeamProjectSetupState", () => {
         "AGENTS.md": "sha256:known",
         "CLAUDE.md": "sha256:known-claude",
       },
+    });
+  });
+});
+
+describe("AGENTS.md child-session guidance", () => {
+  it("teaches delegate_task and refreshes the managed start_child version", () => {
+    const agents = renderT3TeamProjectSetupFiles().find(
+      (file) => file.relativePath === T3TEAM_PROJECT_AGENTS_PATH,
+    );
+    expect(agents?.contents).toContain("`delegate_task`");
+    expect(agents?.contents).toContain('`{ isolation: "worktree" }`');
+    expect(agents?.contents).not.toContain("start_child");
+    const { profile } = resolveT3TeamProjectSetupProfile({});
+    const startChildVersion = renderPreviousAgentsMdStartChild(profile);
+    expect(startChildVersion).toContain("t3team.thread.start_child");
+    expect(
+      resolveT3TeamProjectSetupWriteDecision({ file: agents!, currentContents: startChildVersion }),
+    ).toEqual({
+      shouldWrite: true,
+      nextManagedHash: createT3TeamProjectSetupContentHash(agents!.contents),
     });
   });
 });
