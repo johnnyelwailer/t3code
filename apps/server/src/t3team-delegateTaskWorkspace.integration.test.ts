@@ -11,6 +11,7 @@ import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import { afterAll, describe, expect, it } from "vite-plus/test";
@@ -104,9 +105,14 @@ const resolve = (input: {
       worktreeKey: delegatedWorktreeKey("thread:parent", input.key ?? NodePath.basename(root)),
     }).pipe(Effect.result);
   }).pipe(
-    Effect.provide(GitVcsDriver.layer),
-    Effect.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-delegate-ws-git-" })),
-    Effect.provide(NodeServices.layer),
+    Effect.provide(
+      GitVcsDriver.layer.pipe(
+        Layer.provideMerge(
+          ServerConfig.layerTest(process.cwd(), { prefix: "t3-delegate-ws-git-" }),
+        ),
+        Layer.provideMerge(NodeServices.layer),
+      ),
+    ),
     Effect.scoped,
     Effect.runPromise,
   );
