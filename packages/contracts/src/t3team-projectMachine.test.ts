@@ -26,6 +26,8 @@ describe("RepositoryRelativePath", () => {
       "/etc/devcontainer.json",
       "C:/x/devcontainer.json",
       ".devcontainer\\devcontainer.json",
+      ".devcontainer/\u0000devcontainer.json",
+      ".devcontainer/\ndevcontainer.json",
     ]) {
       expect(isPath(path), path).toBe(false);
     }
@@ -55,6 +57,18 @@ describe("ProjectMachineFile", () => {
       });
       expect(exit._tag, name).toBe("Failure");
     }
+  });
+
+  it("refuses a secret declared twice, even under different scopes", () => {
+    const exit = decodeFile({
+      version: 1,
+      devcontainer: ".devcontainer/devcontainer.json",
+      secrets: [
+        { name: "NPM_TOKEN", scope: "team" },
+        { name: "NPM_TOKEN", scope: "user" },
+      ],
+    });
+    expect(exit._tag).toBe("Failure");
   });
 
   it("refuses a pointer outside the repository and an unknown version", () => {

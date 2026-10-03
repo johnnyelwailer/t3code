@@ -198,6 +198,10 @@ import {
   CloudSessionService,
   layer as CloudSessionServiceLayer,
 } from "./cloud/t3team-CloudSessionService.ts";
+import {
+  ProjectMachineDiscovery,
+  layer as ProjectMachineDiscoveryLayer,
+} from "./project/t3team-ProjectMachineDiscovery.ts";
 import * as CloudCliTokenManager from "./cloud/CliTokenManager.ts";
 import * as ConnectCredentialMinter from "./cloud/t3team-ConnectCredentialMinter.ts";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
@@ -731,6 +735,7 @@ const makeWsRpcLayer = (
       const usage = yield* UsageService.UsageService;
       const relayClient = yield* RelayClient.RelayClient;
       const cloudSessions = yield* CloudSessionService;
+      const projectMachines = yield* ProjectMachineDiscovery;
       const authorizationError = (requiredScope: AuthEnvironmentScope) =>
         new EnvironmentAuthorizationError({
           message: `The authenticated token is missing required scope: ${requiredScope}.`,
@@ -2875,6 +2880,12 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.cloudSessionCancel, cloudSessions.cancel(input), {
             "rpc.aggregate": "cloud",
           }),
+        [WS_METHODS.projectMachineDiscover]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectMachineDiscover,
+            projectMachines.discover(input.projectId),
+            { "rpc.aggregate": "cloud" },
+          ),
         [WS_METHODS.cloudInstallRelayClient]: (_input) =>
           observeRpcStream(
             WS_METHODS.cloudInstallRelayClient,
@@ -4084,6 +4095,7 @@ export const websocketRpcRouteLayer = Layer.unwrap(
                   Layer.provide(ConnectCredentialMinter.layer),
                 ),
               ),
+              Layer.provide(ProjectMachineDiscoveryLayer),
               Layer.provide(
                 SourceControlDiscovery.layer.pipe(
                   Layer.provide(

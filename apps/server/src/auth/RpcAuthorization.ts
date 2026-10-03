@@ -85,6 +85,8 @@ export const RPC_REQUIRED_SCOPES = {
   // so they sit behind the write scope alongside relay-client installation.
   [WS_METHODS.cloudSessionCreate]: AuthRelayWriteScope,
   [WS_METHODS.cloudSessionCancel]: AuthRelayWriteScope,
+  // Reads committed files in the project's own checkouts, like the other project reads.
+  [WS_METHODS.projectMachineDiscover]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsList]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsListStats]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsSummary]: AuthOrchestrationReadScope,
