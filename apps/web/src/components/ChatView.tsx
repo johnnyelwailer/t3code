@@ -411,6 +411,8 @@ import { environmentShell } from "../state/shell";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import type { ChatViewT3TeamExtensionProps } from "~/t3team/t3team-chatViewExtensions";
 import { appendContextAttachmentsToPrompt } from "~/t3team/chat/t3team-prepareThreadContextAttachments";
+import { useT3TeamTimelineArtifacts } from "~/t3team/chat/t3team-useTimelineArtifacts";
+import { useT3TeamChatTimelineProps } from "~/t3team/chat/t3team-useChatTimelineProps";
 import { createPageScrollController, type PageScrollKey } from "./chat/pageScrollController";
 import { isTimelineScrollTarget } from "./chat/timelineScrollTarget";
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
@@ -3877,7 +3879,14 @@ export default function ChatView(props: ChatViewProps) {
       ),
     [optimisticUserMessages],
   );
-  const timelineEntries = isServerThread ? serverTimelineEntries : draftTimelineEntries;
+  // t3team: fork artifacts (workflow / decision / widget rows) join the server timeline.
+  const t3teamTimeline = useT3TeamTimelineArtifacts({
+    environmentId,
+    threadId: isServerThread ? threadId : null,
+    entries: serverTimelineEntries,
+    messages: serverProjection?.messages,
+  });
+  const timelineEntries = isServerThread ? t3teamTimeline.entries : draftTimelineEntries;
   const timelineMessages = useMemo(
     () => timelineEntries.flatMap((entry) => (entry.kind === "message" ? [entry.message] : [])),
     [timelineEntries],
@@ -4117,10 +4126,17 @@ export default function ChatView(props: ChatViewProps) {
       ? activeProviderStatus
       : null;
   const hasOpenUserInput = pendingUserInputs.length > 0;
-  const timelineT3TeamProps = useMemo(
+  const t3teamWorkingRow = useMemo(
     () => ({ serverStartedAtMs, hasOpenUserInput }),
     [hasOpenUserInput, serverStartedAtMs],
   );
+  const { timelineProps: timelineT3TeamProps } = useT3TeamChatTimelineProps({
+    environmentId,
+    threadId: isServerThread ? threadId : null,
+    extension: t3teamExtension,
+    threadActivities: t3teamTimeline.threadActivities,
+    workingRow: t3teamWorkingRow,
+  });
   const hasTimelineTopBanner = Boolean(timelineThreadError) || visibleProviderStatus !== null;
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
   const activeThreadWorktreePath = activeThread?.worktreePath ?? null;

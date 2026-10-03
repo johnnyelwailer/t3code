@@ -53,6 +53,16 @@ import {
 import { workflowCompletionDisplayText } from "~/t3team/chat/t3team-workflowCompletionDisplayText";
 import type { T3TeamTimelineRowProps } from "~/t3team/chat/t3team-timelineRowProps";
 import {
+  isT3TeamFullBleedTimelineRow,
+  isT3TeamTimelineRowVisible,
+  T3TeamSystemMessageRow,
+  T3TeamTimelineRowsProvider,
+  useT3TeamTimelineRowsState,
+} from "~/t3team/chat/t3team-timelineRows";
+import { useT3TeamWorkflowCardNavigation } from "~/t3team/chat/t3team-useWorkflowCardNavigation";
+import { getT3TeamRenderableAttachments } from "~/t3team/chat/t3team-messageExtViews";
+import { T3TeamMessageAttachmentList } from "~/t3team/chat/t3team-messageAttachmentList";
+import {
   foldBackgroundJobs,
   type BackgroundJobState,
 } from "@t3tools/client-runtime/work-log/background-jobs";
@@ -968,7 +978,19 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     backgroundJobFold,
     hasOpenUserInput,
   ]);
-  const rows = useStableRows(rawRows, listIdentityKey);
+  // t3team: rich system rows (workflow / decision / widget cards) and their hidden replies.
+  const t3teamRows = useT3TeamTimelineRowsState(t3team, timelineEntries);
+  const visibleRawRows = useMemo(
+    () => rawRows.filter((row) => isT3TeamTimelineRowVisible(row, t3teamRows)),
+    [rawRows, t3teamRows],
+  );
+  const rows = useStableRows(visibleRawRows, listIdentityKey);
+  useT3TeamWorkflowCardNavigation({
+    request: t3team.workflowCardNavigationRequest,
+    rows,
+    listRef,
+    onManualNavigation,
+  });
   // Run status/timestamps churn on every stream event; the shared row context
   // must not change with them or every timeline row re-renders per event.
   const runs = useStableHandoffRuns(runsProp);
@@ -1499,7 +1521,15 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   const renderItem = useCallback(
     ({ item }: { item: MessagesTimelineRow }) => (
       <div className="messages-timeline-row-frame">
-        <div className="chat-content-lane overflow-x-clip" data-timeline-root="true">
+        <div
+          // t3team: a full-bleed widget row owns its overflow and spans the content width.
+          className={
+            isT3TeamFullBleedTimelineRow(item)
+              ? "mx-auto w-full min-w-0"
+              : "chat-content-lane overflow-x-clip"
+          }
+          data-timeline-root="true"
+        >
           <TimelineRowContent row={item} />
         </div>
       </div>
@@ -1529,78 +1559,80 @@ export const MessagesTimeline = memo(function MessagesTimeline({
 
   return (
     <TimelineRowCtx value={sharedState}>
-      <TimelineRowActivityCtx value={activityState}>
-        <div
-          ref={setTimelineViewportElement}
-          className="relative h-full min-h-0"
-          data-assistant-citation-viewport="true"
-        >
-          {onCiteAssistantText && citationThreadRef ? (
-            <AssistantSelectionToolbar
-              viewport={timelineViewportElement}
-              threadRef={citationThreadRef}
-              onCite={onCiteAssistantText}
+      <T3TeamTimelineRowsProvider value={t3teamRows}>
+        <TimelineRowActivityCtx value={activityState}>
+          <div
+            ref={setTimelineViewportElement}
+            className="relative h-full min-h-0"
+            data-assistant-citation-viewport="true"
+          >
+            {onCiteAssistantText && citationThreadRef ? (
+              <AssistantSelectionToolbar
+                viewport={timelineViewportElement}
+                threadRef={citationThreadRef}
+                onCite={onCiteAssistantText}
+              />
+            ) : null}
+            <LegendList<MessagesTimelineRow>
+              ref={setTimelineList}
+              data={rows}
+              extraData={`${listIdentityKey}:${rows.length}`}
+              keyExtractor={keyExtractor}
+              getItemType={getItemType}
+              renderItem={renderItem}
+              estimatedItemSize={90}
+              initialScrollAtEnd={citationRequest === null && rememberedPosition?.atEnd !== false}
+              // Legend needs a data refresh to mount new pins without a scroll event.
+              dataVersion={readyCitationRequest?.key ?? listIdentityKey}
+              {...(alwaysRender ? { alwaysRender } : {})}
+              onLoad={onCitationListLoad}
+              {...(anchoredEndSpace ? { anchoredEndSpace } : {})}
+              contentInsetEndAdjustment={anchoredEndSpace ? contentInsetEndAdjustment : 0}
+              maintainScrollAtEnd={
+                citationPositioning ||
+                (restoringThreadPosition && rememberedPosition?.atEnd === false) ||
+                anchoredEndSpace ||
+                !liveFollowEnabled ||
+                disclosureToggleSettling
+                  ? false
+                  : isWorking && !prefersReducedMotion && settlingListIdentity === null
+                    ? TIMELINE_MAINTAIN_SCROLL_AT_END_SMOOTH
+                    : TIMELINE_MAINTAIN_SCROLL_AT_END
+              }
+              maintainVisibleContentPosition={
+                citationPositioning ||
+                (restoringThreadPosition && rememberedPosition?.atEnd === false)
+                  ? false
+                  : maintainVisibleContentPosition
+              }
+              maintainScrollAtEndThreshold={1}
+              onScroll={handleScroll}
+              onItemSizeChanged={reportContentOverflow}
+              className={cn(
+                "messages-timeline-scroll scrollbar-gutter-both h-full min-h-0 overflow-x-hidden overscroll-y-contain [overflow-anchor:none]",
+                topFadeEnabled && "topbar-scroll-fade",
+              )}
+              ListHeaderComponent={listHeader}
+              ListFooterComponent={timelineListFooter}
             />
-          ) : null}
-          <LegendList<MessagesTimelineRow>
-            ref={setTimelineList}
-            data={rows}
-            extraData={`${listIdentityKey}:${rows.length}`}
-            keyExtractor={keyExtractor}
-            getItemType={getItemType}
-            renderItem={renderItem}
-            estimatedItemSize={90}
-            initialScrollAtEnd={citationRequest === null && rememberedPosition?.atEnd !== false}
-            // Legend needs a data refresh to mount new pins without a scroll event.
-            dataVersion={readyCitationRequest?.key ?? listIdentityKey}
-            {...(alwaysRender ? { alwaysRender } : {})}
-            onLoad={onCitationListLoad}
-            {...(anchoredEndSpace ? { anchoredEndSpace } : {})}
-            contentInsetEndAdjustment={anchoredEndSpace ? contentInsetEndAdjustment : 0}
-            maintainScrollAtEnd={
-              citationPositioning ||
-              (restoringThreadPosition && rememberedPosition?.atEnd === false) ||
-              anchoredEndSpace ||
-              !liveFollowEnabled ||
-              disclosureToggleSettling
-                ? false
-                : isWorking && !prefersReducedMotion && settlingListIdentity === null
-                  ? TIMELINE_MAINTAIN_SCROLL_AT_END_SMOOTH
-                  : TIMELINE_MAINTAIN_SCROLL_AT_END
-            }
-            maintainVisibleContentPosition={
-              citationPositioning ||
-              (restoringThreadPosition && rememberedPosition?.atEnd === false)
-                ? false
-                : maintainVisibleContentPosition
-            }
-            maintainScrollAtEndThreshold={1}
-            onScroll={handleScroll}
-            onItemSizeChanged={reportContentOverflow}
-            className={cn(
-              "messages-timeline-scroll scrollbar-gutter-both h-full min-h-0 overflow-x-hidden overscroll-y-contain [overflow-anchor:none]",
-              topFadeEnabled && "topbar-scroll-fade",
-            )}
-            ListHeaderComponent={listHeader}
-            ListFooterComponent={timelineListFooter}
-          />
-          <TimelineMinimap
-            items={minimapItems}
-            hasPersistentGutter={minimapHasPersistentGutter}
-            hitStripWidth={minimapHitStripWidth}
-            currentIndex={minimapCurrentIndex}
-            stripMap={minimapStripMap}
-            onSelect={(item) => {
-              onManualNavigation();
-              void listRef.current?.scrollToIndex({
-                index: item.rowIndex,
-                animated: true,
-                viewOffset: 24,
-              });
-            }}
-          />
-        </div>
-      </TimelineRowActivityCtx>
+            <TimelineMinimap
+              items={minimapItems}
+              hasPersistentGutter={minimapHasPersistentGutter}
+              hitStripWidth={minimapHitStripWidth}
+              currentIndex={minimapCurrentIndex}
+              stripMap={minimapStripMap}
+              onSelect={(item) => {
+                onManualNavigation();
+                void listRef.current?.scrollToIndex({
+                  index: item.rowIndex,
+                  animated: true,
+                  viewOffset: 24,
+                });
+              }}
+            />
+          </div>
+        </TimelineRowActivityCtx>
+      </T3TeamTimelineRowsProvider>
     </TimelineRowCtx>
   );
 });
@@ -2029,6 +2061,9 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
       {row.kind === "message" && row.message.role === "assistant" ? (
         <AssistantTimelineRow row={row} />
       ) : null}
+      {row.kind === "message" && row.message.role === "system" ? (
+        <SystemTimelineRow row={row} />
+      ) : null}
       {row.kind === "assistant-meta" ? <AssistantMetaTimelineRow row={row} /> : null}
       {row.kind === "proposed-plan" ? <ProposedPlanTimelineRow row={row} /> : null}
       {row.kind === "working" ? <WorkingTimelineRow row={row} /> : null}
@@ -2037,6 +2072,27 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
     </div>
   );
 });
+
+function T3TeamUserMessageAttachments({ message }: { message: ChatMessage }) {
+  const attachments = getT3TeamRenderableAttachments(message);
+  return attachments.length > 0 ? (
+    <div className="mb-2">
+      <T3TeamMessageAttachmentList attachments={attachments} />
+    </div>
+  ) : null;
+}
+
+/** t3team: fork system notes and cards (see `t3team-timelineRows.tsx`). */
+function SystemTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
+  const ctx = use(TimelineRowCtx);
+  return (
+    <T3TeamSystemMessageRow
+      message={row.message}
+      threadRef={ctx.threadRef}
+      markdownCwd={ctx.markdownCwd}
+    />
+  );
+}
 
 function WorktreeSetupTimelineRow({
   row,
@@ -2452,6 +2508,8 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             ))}
           </div>
         ) : null}
+        {/* t3team: work-item context cards the composer attached (message ext). */}
+        <T3TeamUserMessageAttachments message={row.message} />
         <div onCopyCapture={onBodyCopyCapture}>
           <CollapsibleUserMessageBody
             text={resolvedContext.text}

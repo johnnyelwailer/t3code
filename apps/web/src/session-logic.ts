@@ -45,6 +45,7 @@ import {
   isHiddenT3TeamFramingMessage,
   t3teamMessageExtOf,
 } from "./t3team/chat/t3team-messageFraming";
+import { t3teamRecorderNoteEntry } from "./t3team/chat/t3team-recorderNote";
 import * as DateTime from "effect/DateTime";
 import * as Equal from "effect/Equal";
 import { shallow } from "zustand/vanilla/shallow";
@@ -610,6 +611,12 @@ export function deriveTimelineEntriesFromVisibleTurnItems(
     const createdAt = projectedItemCreatedAt(row);
     const attempt = resolveAttempt(item);
     const attemptMetadata = attempt === undefined ? {} : { attempt };
+    // t3team: a fork run-less system note is a conversation row, not a runtime warning.
+    const t3teamNote = t3teamRecorderNoteEntry(row, createdAt);
+    if (t3teamNote !== null) {
+      entries.push(t3teamNote);
+      continue;
+    }
     if (item.type === "notification") {
       entries.push({
         id: item.id,
