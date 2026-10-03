@@ -80,8 +80,7 @@ const BUNDLED_RECIPES: ReadonlyArray<BundledT3TeamRecipe> = [
     shortDescription:
       "Create a new recipe for this project, or edit an existing one, whether it lives with the project or with a view like this one.",
     surfaces: ["workitem.detail.sidepanel"],
-    promptTemplate:
-      "Create or edit a t3team recipe for this project. Decide from the request which branch applies. For a new recipe: scaffold it under .t3team/recipes/<recipe-id>/ with a recipe.ts and a prompt.md, and add a workflow.ts or helper scripts only when one agent step is not enough. For an edit: open the named existing recipe or plugin module, keep its ids and structure stable, draft the change, show the diff, and write it back only after the user approves.",
+    promptTemplate: `Create or edit a t3team recipe for this project. Decide from the request which branch applies. For a new recipe: scaffold it under ${PROJECT_STATE_DIR}/recipes/<recipe-id>/ with a recipe.ts and a prompt.md, and add a workflow.ts or helper scripts only when one agent step is not enough. For an edit: open the named existing recipe or plugin module, keep its ids and structure stable, draft the change, show the diff, and write it back only after the user approves.`,
     kickoff: {
       version: 1,
       steps: [
