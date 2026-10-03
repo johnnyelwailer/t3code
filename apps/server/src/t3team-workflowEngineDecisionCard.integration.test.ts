@@ -1,326 +1,168 @@
-/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Legacy async tests intentionally bridge Effect runtimes; tracked cleanup is separate from upstream green gate. */
-// @effect-diagnostics nodeBuiltinImport:off - integration test reads a workflow fixture + temp dir.
+// @effect-diagnostics nodeBuiltinImport:off - integration test reads workflow fixtures + temp dir.
 /**
- * Real-path proof for the `askUser` decision card (Epic 25 §askUser decision cards), sibling of
- * the reactor integration test: REAL OrchestrationEngine + projection pipeline + the production
- * `T3TeamWorkflowEngineReactorLive` over `SqlitePersistenceMemory`.
+ * Real-path proof for the `askUser` decision cards (Epic 25 §askUser decision cards) on a real
+ * orchestration V2 runtime (`t3team-workflowStubRuntime.ts`) with the production reactor:
  *
- *   1. launch → `askUser` with a `Schema.Literals` choice + an attached resource → suspends on
- *      `user.input`, and the escalation `thread.message.upsert` carries the
- *      `workflow.decision` view (question + affordance + correlationId) PLUS the resource
- *      attachment, tagged `waiting-for-input`.
- *   2. the resolve route's value check (same helper the HTTP handler runs against the same live
- *      registry state) rejects an out-of-range value and a stale correlationId, accepts a
- *      offered choice.
- *   3. the route-shaped reply message (display text + `t3teamExt.workflowReply`) lands as a
- *      domain event → the REAL reactor resolves the parked ask with the STRUCTURED value →
- *      the run completes with the schema-validated choice.
+ *   1. launch → `askUser` suspends on `user.input`; the question is a run-less system message on
+ *      the launch thread tagged `waiting-for-input`, and its decision card (the
+ *      `workflow.decision` view with the affordance + correlationId, plus resource refs) is the
+ *      message's `message-ext` artifact;
+ *   2. the resolve route's value check (`rejectWorkflowResolveValue`, run against the same live
+ *      registry state) rejects an invalid value or a stale correlationId and accepts a valid one;
+ *   3. replies land as a person's messages: a stale structured reply and a widget action are
+ *      ignored, and the reply pinned to the pending ask resolves it with its STRUCTURED value.
  */
-
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 
-import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import { afterAll } from "vite-plus/test";
-import {
-  CommandId,
-  MessageId,
-  type OrchestrationCommand,
-  ProjectId,
-  ProviderInstanceId,
-  type T3TeamMessageExt,
-  ThreadId,
-} from "@t3tools/contracts";
+import { readT3TeamMessageExtContext, type T3TeamMessageExt } from "@t3tools/contracts";
 import { PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION } from "@t3tools/project-recipes";
-import { createModelSelection } from "@t3tools/shared/model";
-import * as Duration from "effect/Duration";
+import type { AskAffordance } from "@t3team/sdk";
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
 
-import { OrchestrationCommandReceiptRepositoryLive } from "./persistence/Layers/OrchestrationCommandReceipts.ts";
-import { OrchestrationEventStoreLive } from "./persistence/Layers/OrchestrationEventStore.ts";
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
-import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
-import { OrchestrationEngineLive } from "./orchestration/Layers/OrchestrationEngine.ts";
-import { OrchestrationProjectionPipelineLive } from "./orchestration/Layers/ProjectionPipeline.ts";
-import { OrchestrationProjectionSnapshotQueryLive } from "./orchestration/Layers/ProjectionSnapshotQuery.ts";
-import * as ThreadBackgroundLiveness from "./orchestration/ThreadBackgroundLiveness.ts";
-import * as ThreadPlanProgress from "./orchestration/ThreadPlanProgress.ts";
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
-import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
-import { ServerConfig } from "./config.ts";
-import { launchWorkflowRecipe } from "./t3team-workflowEngineLaunch.ts";
-import { T3TeamWorkflowEngineReactorLive } from "./t3team-workflowEngineReactor.ts";
+import { T3TeamThreadArtifactsStore } from "./t3team-v2/t3team-threadArtifactsStore.ts";
 import {
-  T3TeamWorkflowEngineRegistry,
-  T3TeamWorkflowEngineRegistryLive,
-} from "./t3team-workflowEngineRegistry.ts";
+  launchScenarioWorkflow,
+  setUpLaunchThread,
+  threadMessages,
+  typeUserMessage,
+  waitUntil,
+} from "./t3team-workflowEngineScenario.fixtures.ts";
+import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { rejectWorkflowResolveValue } from "./t3team-workflowResolveInput.ts";
+import { makeWorkflowStubRuntime } from "./t3team-workflowStubRuntime.ts";
 
-const workflowPath = NodeURL.fileURLToPath(
-  new URL("../__fixtures__/t3team-decisionChoice.workflow.ts", import.meta.url),
-);
+const fixture = (name: string) =>
+  NodeURL.fileURLToPath(new URL(`../__fixtures__/${name}`, import.meta.url));
 const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-decision-"));
+afterAll(() => NodeFS.rmSync(runsRoot, { recursive: true, force: true }));
 
-const projectId = ProjectId.make("proj-decision");
-const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
-const ISO = "2026-06-09T00:00:00.000Z";
+// The only agent turns here are the ones a person's own reply starts on the launch thread.
+const runtime = () =>
+  makeWorkflowStubRuntime({ name: "t3team-workflow-decision", respond: () => "Noted." });
 
-const EngineLive = OrchestrationEngineLive.pipe(
-  Layer.provide(ThreadBackgroundLiveness.layer),
-  // Upstream's shell mapper reads background liveness + plan progress per thread;
-  // both are provided INTO the snapshot query so the requirement is discharged here.
-  Layer.provide(
-    OrchestrationProjectionSnapshotQueryLive.pipe(
-      Layer.provide(ThreadBackgroundLiveness.layer),
-      Layer.provide(ThreadPlanProgress.layer),
-    ),
-  ),
-  Layer.provide(OrchestrationProjectionPipelineLive),
-  Layer.provide(OrchestrationEventStoreLive),
-  Layer.provide(OrchestrationCommandReceiptRepositoryLive),
-  Layer.provide(RepositoryIdentityResolver.layer),
-  Layer.provideMerge(SqlitePersistenceMemory),
-  Layer.provideMerge(ServerConfig.layerTest(process.cwd(), { prefix: "t3-workflow-decision-" })),
-  Layer.provideMerge(NodeServices.layer),
-);
-
-const TestLayer = T3TeamWorkflowEngineReactorLive.pipe(
-  Layer.provideMerge(
-    Layer.merge(
-      EngineLive,
-      Layer.merge(
-        T3TeamWorkflowEngineRegistryLive,
-        Layer.merge(
-          OrchestrationProjectionSnapshotQueryLive.pipe(
-            Layer.provide(ThreadBackgroundLiveness.layer),
-            Layer.provide(ThreadPlanProgress.layer),
-            Layer.provide(RepositoryIdentityResolver.layer),
-            Layer.provideMerge(SqlitePersistenceMemory),
-            Layer.provideMerge(NodeServices.layer),
-          ),
-          WorkflowRunRepositoryLive.pipe(
-            Layer.provideMerge(SqlitePersistenceMemory),
-            Layer.provideMerge(NodeServices.layer),
-          ),
-        ),
-      ),
-    ),
-  ),
-);
-
-/** Poll an in-memory predicate (observe-only; never resolves an ask) until it holds or times out. */
-const waitUntil = (predicate: () => boolean, label: string): Effect.Effect<void> =>
+/** Launch a decision fixture to its askUser; return the pending ask and the card it posted. */
+const launchToDecision = (key: string, workflow: string) =>
   Effect.gen(function* () {
-    for (let i = 0; i < 1000; i += 1) {
-      if (predicate()) return;
-      yield* Effect.sleep(Duration.millis(5));
-    }
-    return yield* Effect.die(new Error(`timed out waiting for: ${label}`));
+    const registry = yield* T3TeamWorkflowEngineRegistry;
+    const artifacts = yield* T3TeamThreadArtifactsStore;
+    const { projectId, launchThreadId } = yield* setUpLaunchThread(`decision-${key}`);
+    const question = `Decision for ${key}?`;
+    const run = yield* launchScenarioWorkflow({
+      runId: `${key}-run`,
+      workflowPath: fixture(workflow),
+      launchThreadId,
+      projectId,
+      runsRoot,
+      args: { question },
+    });
+    assert.strictEqual(run.launched.status, "suspended");
+    const pending = registry.peekPending(launchThreadId);
+    assert.strictEqual(pending?.kind, "user.input");
+
+    const message = (yield* threadMessages(launchThreadId)).find((m) => m.text === question);
+    assert.strictEqual(message?.role, "system");
+    assert.strictEqual(readT3TeamMessageExtContext(message?.context)?.status, "waiting-for-input");
+    const card = yield* artifacts.get(`message-ext:${message?.id}`);
+    assert.strictEqual(card?.kind, "message-ext");
+    assert.strictEqual(card?.messageId, message?.id);
+    const ext = card?.payload as T3TeamMessageExt | undefined;
+    const view = ext?.attachments?.[0];
+    if (view?.kind !== "view") throw new Error("expected a decision view attachment first");
+    assert.strictEqual(view.miniappId, PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION);
+    assert.strictEqual(view.props["question"], question);
+    assert.strictEqual(view.props["correlationId"], pending?.correlationId);
+    const reject = (value: unknown, correlationId = pending?.correlationId) =>
+      rejectWorkflowResolveValue({ pending, correlationId, hasValue: true, value });
+    return { ...run, registry, launchThreadId, pending, ext, view, reject };
   });
 
-it.live(
-  "askUser decision card: launch → suspend emits the decision view + attachments, structured value is checked and resumes the run",
-  () =>
-    Effect.gen(function* () {
-      const orchestration = yield* OrchestrationEngineService;
-      const registry = yield* T3TeamWorkflowEngineRegistry;
+it.live("choice card: ignores stale and widget replies, resolves with the structured value", () => {
+  const stub = runtime();
+  return Effect.gen(function* () {
+    const run = yield* launchToDecision("choice", "t3team-decisionChoice.workflow.ts");
+    const choice: AskAffordance = { kind: "choice", options: ["ship-now", "hold", "rollback"] };
+    assert.deepStrictEqual(run.pending?.affordance, choice);
+    assert.deepStrictEqual(run.view.props["affordance"], choice);
+    const resource = run.ext?.attachments?.[1];
+    if (resource?.kind !== "resource") throw new Error("expected a resource attachment second");
+    assert.strictEqual(resource.resource.id, "BUG-7");
 
-      // Let the forked reactor subscribe to the hot `streamDomainEvents` PubSub first.
-      yield* Effect.sleep(Duration.millis(100));
+    assert.isNotNull(run.reject("merge-later"));
+    assert.isNotNull(run.reject("hold", "choice-run:999"));
+    assert.isNull(run.reject("hold"));
 
-      const runId = "decision-run";
-      const launchThreadId = "decision-launch";
-      const args = { question: "Release decision for BUG-7?" };
+    // A reply authored for another ask, then a widget action: neither answers this ask.
+    yield* typeUserMessage(run.launchThreadId, "ship-now", "stale", {
+      workflowReply: { value: "ship-now", correlationId: "choice-run:999" },
+    });
+    yield* typeUserMessage(run.launchThreadId, "Widget action: Approve", "widget", {
+      visibleToUser: false,
+      widgetReply: { widgetId: "release-widget", widgetTitle: "release context" },
+    });
+    yield* waitUntil(() => stub.turns.length >= 2, "the two replies' own turns");
+    assert.strictEqual(
+      run.registry.peekPending(run.launchThreadId)?.correlationId,
+      run.pending?.correlationId,
+    );
 
-      yield* orchestration.dispatch({
-        type: "project.create",
-        commandId: CommandId.make("decision-project"),
-        projectId,
-        title: "Decision Project",
-        workspaceRoot: "/tmp/decision-project",
-        defaultModelSelection: modelSelection,
-        createdAt: ISO,
-      });
-      yield* orchestration.dispatch({
-        type: "thread.create",
-        commandId: CommandId.make("decision-launch-thread"),
-        threadId: ThreadId.make(launchThreadId),
-        projectId,
-        title: "Launch thread",
-        modelSelection,
-        runtimeMode: "full-access",
-        interactionMode: "default",
-        branch: null,
-        worktreePath: null,
-        createdAt: ISO,
-      });
+    yield* typeUserMessage(run.launchThreadId, "hold", "reply", {
+      workflowReply: { value: "hold", correlationId: run.pending?.correlationId ?? "" },
+    });
+    yield* waitUntil(() => run.completed.length > 0, "the run to complete after the decision");
+    assert.deepStrictEqual(run.completed[0], { decision: "hold" });
+    assert.isUndefined(run.registry.getRun("choice-run"));
+  }).pipe(Effect.scoped, Effect.provide(stub.layer));
+});
 
-      const dispatched: OrchestrationCommand[] = [];
-      const completed: unknown[] = [];
-      let seq = 0;
-      const dispatch = (command: OrchestrationCommand): Promise<void> => {
-        dispatched.push(command);
-        return Effect.runPromise(orchestration.dispatch(command)).then(() => undefined);
-      };
+it.live("boolean card: labels ride the affordance, a structured true resumes the run", () => {
+  const stub = runtime();
+  return Effect.gen(function* () {
+    const run = yield* launchToDecision("boolean", "t3team-decisionBoolean.workflow.ts");
+    const affordance: AskAffordance = {
+      kind: "boolean",
+      labels: { true: "Ship it", false: "Hold" },
+    };
+    assert.deepStrictEqual(run.pending?.affordance, affordance);
+    assert.deepStrictEqual(run.view.props["affordance"], affordance);
+    assert.isNotNull(run.reject("yes"));
+    assert.isNull(run.reject(true));
 
-      // ── 1. Launch: askUser fires the decision-card escalation, then suspends. ──
-      const launched = yield* Effect.promise(() =>
-        launchWorkflowRecipe({
-          runId,
-          workflowPath,
-          args,
-          runsRoot,
-          launchThreadId,
-          projectId,
-          modelSelection,
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          registry,
-          dispatch,
-          newId: () => `id-${(seq += 1)}`,
-          nowIso: () => ISO,
-          onComplete: async (output) => {
-            completed.push(output);
-          },
-        }),
-      );
-      assert.strictEqual(launched.status, "suspended");
+    yield* typeUserMessage(run.launchThreadId, "Ship it", "boolean", {
+      workflowReply: { value: true, correlationId: run.pending?.correlationId ?? "" },
+    });
+    yield* waitUntil(() => run.completed.length > 0, "the boolean run to complete");
+    assert.deepStrictEqual(run.completed[0], { approved: true });
+  }).pipe(Effect.scoped, Effect.provide(stub.layer));
+});
 
-      const pending = registry.peekPending(launchThreadId);
-      assert.strictEqual(pending?.kind, "user.input");
-      assert.deepStrictEqual(pending?.affordance, {
-        kind: "choice",
-        options: ["ship-now", "hold", "rollback"],
-      });
+it.live("form card: the value check gates field types, a structured object resumes", () => {
+  const stub = runtime();
+  return Effect.gen(function* () {
+    const run = yield* launchToDecision("form", "t3team-decisionForm.workflow.ts");
+    const affordance: AskAffordance = {
+      kind: "form",
+      fields: [
+        { name: "severity", type: "literals", options: ["low", "high"], optional: false },
+        { name: "note", type: "string", optional: false },
+        { name: "urgent", type: "boolean", optional: false },
+      ],
+    };
+    assert.deepStrictEqual(run.pending?.affordance, affordance);
+    assert.isNotNull(run.reject({ severity: "nope", note: "x", urgent: true }));
+    assert.isNotNull(run.reject({ severity: "high", note: "x" }));
+    assert.isNotNull(run.reject({ severity: "high", note: "x", urgent: "yes" }));
+    const valid = { severity: "high", note: "rounding bug", urgent: true };
+    assert.isNull(run.reject(valid));
 
-      // The escalation message carries the decision view + the resource attachment.
-      const upsert = dispatched.find((command) => command.type === "thread.message.upsert");
-      assert.isDefined(upsert);
-      if (upsert?.type !== "thread.message.upsert") throw new Error("unreachable");
-      const ext: T3TeamMessageExt | undefined = upsert.message.t3teamExt;
-      assert.strictEqual(ext?.status, "waiting-for-input");
-      assert.strictEqual(upsert.message.text, args.question);
-      const [view, resource] = ext?.attachments ?? [];
-      if (view?.kind !== "view") throw new Error("expected a view attachment first");
-      assert.strictEqual(view.miniappId, PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION);
-      assert.deepStrictEqual(view.props["affordance"], {
-        kind: "choice",
-        options: ["ship-now", "hold", "rollback"],
-      });
-      assert.strictEqual(view.props["question"], args.question);
-      assert.strictEqual(view.props["correlationId"], pending?.correlationId);
-      if (resource?.kind !== "resource") throw new Error("expected a resource attachment second");
-      assert.deepStrictEqual(resource.resource, {
-        provider: "jira",
-        kind: "issue",
-        id: "BUG-7",
-        displayId: "BUG-7",
-        title: "Checkout rounding error",
-        url: "https://example.atlassian.net/browse/BUG-7",
-        status: "Open",
-      });
-
-      // ── 2. The resolve route's check against the LIVE pending state: an out-of-range value
-      // and a stale correlationId are rejected; an offered choice passes. ──
-      assert.isNotNull(
-        rejectWorkflowResolveValue({
-          pending,
-          correlationId: pending?.correlationId,
-          hasValue: true,
-          value: "merge-later",
-        }),
-      );
-      assert.isNotNull(
-        rejectWorkflowResolveValue({
-          pending,
-          correlationId: "decision-run:999",
-          hasValue: true,
-          value: "hold",
-        }),
-      );
-      assert.isNull(
-        rejectWorkflowResolveValue({
-          pending,
-          correlationId: pending?.correlationId,
-          hasValue: true,
-          value: "hold",
-        }),
-      );
-
-      // ── 3a. A STALE decision reply (authored for an ask that is not the pending one) lands
-      // first. The reactor must ignore it and leave the ask pending — the staleness pin is
-      // authoritative at the consume point, not just at the route's peek. ──
-      yield* orchestration.dispatch({
-        type: "thread.message.upsert",
-        commandId: CommandId.make("decision-stale-reply"),
-        threadId: ThreadId.make(launchThreadId),
-        message: {
-          messageId: MessageId.make("decision-stale-reply-msg"),
-          role: "user",
-          text: "ship-now",
-          turnId: null,
-          streaming: false,
-          t3teamExt: { workflowReply: { value: "ship-now", correlationId: "decision-run:999" } },
-        },
-        createdAt: ISO,
-      });
-
-      // A widget action is a hidden agent turn, not a direct answer to askUser. It must not
-      // consume the pending decision even though it is stored as a user-role message.
-      yield* orchestration.dispatch({
-        type: "thread.message.upsert",
-        commandId: CommandId.make("decision-widget-action"),
-        threadId: ThreadId.make(launchThreadId),
-        message: {
-          messageId: MessageId.make("decision-widget-action-msg"),
-          role: "user",
-          text: "Widget “release context” action: Approve",
-          turnId: null,
-          streaming: false,
-          t3teamExt: {
-            visibleToUser: false,
-            visibleToAgent: true,
-            widgetReply: { widgetId: "release-widget", widgetTitle: "release context" },
-          },
-        },
-        createdAt: ISO,
-      });
-      yield* Effect.sleep(Duration.millis(20));
-      assert.strictEqual(
-        registry.peekPending(launchThreadId)?.correlationId,
-        pending?.correlationId,
-      );
-
-      // ── 3b. The route-shaped reply (display text + structured workflowReply pinned to the
-      // pending ask) lands as a real domain event; the REAL reactor resolves with the
-      // structured value. Completing with "hold" proves the stale "ship-now" was ignored AND
-      // the pending ask was re-registered. ──
-      yield* orchestration.dispatch({
-        type: "thread.message.upsert",
-        commandId: CommandId.make("decision-user-reply"),
-        threadId: ThreadId.make(launchThreadId),
-        message: {
-          messageId: MessageId.make("decision-user-reply-msg"),
-          role: "user",
-          text: "hold",
-          turnId: null,
-          streaming: false,
-          t3teamExt: {
-            workflowReply: { value: "hold", correlationId: pending?.correlationId ?? "" },
-          },
-        },
-        createdAt: ISO,
-      });
-
-      yield* waitUntil(() => completed.length > 0, "run to complete after the decision click");
-
-      assert.deepStrictEqual(completed[0], { decision: "hold" });
-      assert.isUndefined(registry.getRun(runId));
-    }).pipe(Effect.provide(TestLayer)),
-);
-
-afterAll(() => NodeFS.rmSync(runsRoot, { recursive: true, force: true }));
+    yield* typeUserMessage(run.launchThreadId, "severity: high", "form", {
+      workflowReply: { value: valid, correlationId: run.pending?.correlationId ?? "" },
+    });
+    yield* waitUntil(() => run.completed.length > 0, "the form run to complete");
+    assert.deepStrictEqual(run.completed[0], valid);
+  }).pipe(Effect.scoped, Effect.provide(stub.layer));
+});

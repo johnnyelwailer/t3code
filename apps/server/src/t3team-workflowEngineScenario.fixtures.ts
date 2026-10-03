@@ -6,7 +6,14 @@
  * The runtime itself is `makeWorkflowStubRuntime` (t3team-workflowStubRuntime.ts): the real V2
  * orchestrator + workflow engine with a scripted agent.
  */
-import { MessageId, ProjectId, ThreadId, CommandId } from "@t3tools/contracts";
+import {
+  CommandId,
+  MessageId,
+  ProjectId,
+  type T3TeamMessageExt,
+  ThreadId,
+  withT3TeamMessageExtContext,
+} from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
@@ -96,8 +103,14 @@ export const launchScenarioWorkflow = (
     return { launched, completed, errors, host };
   });
 
-/** A person types `text` on `threadId` (the composer path: it queues an agent turn too). */
-export const typeUserMessage = (threadId: string, text: string, nonce: string) =>
+/** A person types `text` on `threadId` (the composer path: it queues an agent turn too). The
+ * optional `ext` rides the message context, as a decision card's structured reply does. */
+export const typeUserMessage = (
+  threadId: string,
+  text: string,
+  nonce: string,
+  ext?: T3TeamMessageExt,
+) =>
   Effect.flatMap(ThreadManagementService, (threads) =>
     threads.dispatch({
       type: "message.dispatch",
@@ -105,6 +118,7 @@ export const typeUserMessage = (threadId: string, text: string, nonce: string) =
       threadId: ThreadId.make(threadId),
       messageId: MessageId.make(`user-reply-msg:${nonce}`),
       text,
+      ...(ext === undefined ? {} : { context: withT3TeamMessageExtContext(ext)! }),
       attachments: [],
       dispatchMode: { type: "queue_after_active" },
       createdBy: "user",
