@@ -112,9 +112,68 @@ it.layer(NodeServices.layer)("scanCheckout", (it) => {
         expect(yield* scan({ "README.md": "# hi" })).toEqual({ candidates: [], rejected: [] });
       }),
     );
+
+    it.effect("resolves a root .devcontainer.json's Dockerfile against the repository root", () =>
+      Effect.gen(function* () {
+        const result = yield* scan({
+          ".devcontainer.json": `{ "build": { "dockerfile": "Dockerfile" } }`,
+          Dockerfile: "FROM node:22\n",
+        });
+        expect(result.rejected).toEqual([]);
+        expect(result.candidates.map((c) => c.devcontainerPath)).toEqual([".devcontainer.json"]);
+      }),
+    );
+
+    it.effect(
+      "rejects an absolute build reference even when a same-named relative file exists",
+      () =>
+        Effect.gen(function* () {
+          const result = yield* scan({
+            ".devcontainer/devcontainer.json": `{ "build": { "dockerfile": "/Dockerfile" } }`,
+            ".devcontainer/Dockerfile": "FROM node:22\n",
+          });
+          expect(result.candidates).toEqual([]);
+          expect(result.rejected[0]?.reason).toContain("outside the repository");
+        }),
+    );
+
+    it.effect("rejects a blank image as no build source at all", () =>
+      Effect.gen(function* () {
+        const result = yield* scan({ ".devcontainer/devcontainer.json": `{ "image": "  " }` });
+        expect(result.candidates).toEqual([]);
+        expect(result.rejected).toHaveLength(1);
+      }),
+    );
+
+    it.effect("skips a nested folder whose name the wire contract cannot carry", () =>
+      Effect.gen(function* () {
+        const result = yield* scan({
+          ".devcontainer/a\nb/devcontainer.json": `{ "image": "node:22" }`,
+          ".devcontainer/ok/devcontainer.json": `{ "image": "node:22" }`,
+        });
+        expect(result.candidates.map((c) => c.devcontainerPath)).toEqual([
+          ".devcontainer/ok/devcontainer.json",
+        ]);
+        expect(result.rejected).toEqual([]);
+      }),
+    );
   });
 
   describe(".nexi/machine.json", () => {
+    it.effect("an unreadable pointer is rejected and still decides alone", () =>
+      Effect.gen(function* () {
+        const result = yield* scan({
+          ".nexi/machine.json": " ".repeat(1024 * 1024 + 1),
+          ".devcontainer/devcontainer.json": `{ "image": "node:22" }`,
+        });
+        expect(result.candidates).toEqual([]);
+        expect(result.rejected[0]).toMatchObject({
+          path: ".nexi/machine.json",
+          reason: ".nexi/machine.json is larger than 1 MB.",
+        });
+      }),
+    );
+
     it.effect("a pointer decides alone and carries its health check and secrets", () =>
       Effect.gen(function* () {
         const result = yield* scan({

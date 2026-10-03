@@ -12,6 +12,7 @@ import {
   type ProjectId,
   type ProjectMachineDiscovery as Discovery,
   ProjectMachineDiscoveryError,
+  TrimmedNonEmptyString,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -27,10 +28,7 @@ import {
   MANIFEST_FILE_NAME,
   REFERENCES_DIR_NAME,
 } from "../t3team-project-repository-utils.ts";
-import {
-  readLinkedRepositories,
-  repositoryLookupCandidates,
-} from "../t3team-toolBrokerStartChildLinkedRepository.ts";
+import { repositoryLookupCandidates } from "../t3team-toolBrokerStartChildLinkedRepository.ts";
 import { scanCheckout } from "./t3team-projectMachineScan.ts";
 
 export class ProjectMachineDiscovery extends Context.Service<
@@ -46,6 +44,14 @@ const decodeManifest = Schema.decodeUnknownOption(
   Schema.fromJsonString(
     Schema.Struct({ linkedRepositories: Schema.optional(Schema.Array(Schema.Unknown)) }),
   ),
+);
+/** One usable manifest entry. Entries that do not decode are skipped, never trusted by cast. */
+const decodeLinkedRepository = Schema.decodeUnknownOption(
+  Schema.Struct({
+    url: TrimmedNonEmptyString,
+    localPath: TrimmedNonEmptyString,
+    status: Schema.Literals(["cloned", "updated"]),
+  }),
 );
 
 /** `owner/repo` for a linked repository's remote URL (the host is dropped, as `start_child` does). */
@@ -77,8 +83,8 @@ const make = Effect.gen(function* () {
     const manifest = manifestText === null ? Option.none() : decodeManifest(manifestText);
     const linked = Option.isNone(manifest)
       ? []
-      : readLinkedRepositories(manifest.value.linkedRepositories)
-          .filter((entry) => entry.status !== "failed" && entry.localPath.trim().length > 0)
+      : (manifest.value.linkedRepositories ?? [])
+          .flatMap((raw) => Option.toArray(decodeLinkedRepository(raw)))
           .map((entry) => ({ repository: repositoryName(entry.url), root: entry.localPath }));
     return [...own, ...linked];
   });

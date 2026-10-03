@@ -91,6 +91,21 @@ it.layer(NodeServices.layer)("ProjectMachineDiscovery", (it) => {
         }),
     );
 
+    it.effect("skips malformed manifest entries instead of failing the whole discovery", () =>
+      Effect.gen(function* () {
+        const result = yield* discoverIn((root) =>
+          writeTree(root, {
+            ".git/HEAD": "ref: refs/heads/main\n",
+            ".devcontainer/devcontainer.json": `{ "image": "node:22" }`,
+            ".t3team/references/reference-repositories.json": `{ "linkedRepositories": [
+              {}, { "localPath": "/elsewhere" }, null, "x"
+            ] }`,
+          }),
+        );
+        expect(result.candidates.map((c) => c.repository)).toEqual(["."]);
+      }),
+    );
+
     it.effect("fails with unknown_project for a project this environment does not hold", () =>
       Effect.gen(function* () {
         const projections = Layer.mock(ProjectionSnapshotQuery)({

@@ -8,14 +8,18 @@
 import * as NodeCrypto from "node:crypto";
 
 import { fromLenientJson } from "@t3tools/shared/schemaJson";
+import { TrimmedNonEmptyString } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 
+// A blank source is no source: `"image": ""` must not pass as a buildable definition.
 const DevcontainerSource = Schema.Struct({
-  image: Schema.optional(Schema.String),
-  build: Schema.optional(Schema.Struct({ dockerfile: Schema.optional(Schema.String) })),
+  image: Schema.optional(TrimmedNonEmptyString),
+  build: Schema.optional(Schema.Struct({ dockerfile: Schema.optional(TrimmedNonEmptyString) })),
   /** The spec's deprecated spelling of `build.dockerfile`. */
-  dockerFile: Schema.optional(Schema.String),
-  dockerComposeFile: Schema.optional(Schema.Union([Schema.String, Schema.Array(Schema.String)])),
+  dockerFile: Schema.optional(TrimmedNonEmptyString),
+  dockerComposeFile: Schema.optional(
+    Schema.Union([TrimmedNonEmptyString, Schema.Array(TrimmedNonEmptyString)]),
+  ),
 });
 const decodeDevcontainer = Schema.decodeUnknownResult(fromLenientJson(DevcontainerSource));
 
@@ -61,16 +65,28 @@ export function resolveRepositoryPath(relative: string): string | null {
   return segments.length === 0 ? null : segments.join("/");
 }
 
-/** The directory of a repository path, `""` for the repository root. */
-export const repositoryDirname = (repositoryPath: string) =>
-  repositoryPath.split("/").slice(0, -1).join("/");
+/**
+ * A build reference (`build.dockerfile`, a compose file) resolved against the directory of the
+ * devcontainer that names it, as the spec resolves them; null when it is absolute or leaves the
+ * repository. The reference is checked before joining, so `/Dockerfile` cannot pass as relative.
+ */
+export function resolveBuildReference(devcontainerPath: string, reference: string): string | null {
+  if (reference.startsWith("/") || reference.includes("\\") || /^[A-Za-z]:/.test(reference)) {
+    return null;
+  }
+  const directory = devcontainerPath.split("/").slice(0, -1).join("/");
+  return resolveRepositoryPath(directory === "" ? reference : `${directory}/${reference}`);
+}
 
-/** The definition hash: path and contents of every file that defines the build, order-independent. */
+/**
+ * The definition hash: path and contents of every file that defines the build, order-independent.
+ * Ordered by code unit, never by locale, so every machine computes the same hash.
+ */
 export function hashDefinitionFiles(
   files: ReadonlyArray<{ readonly path: string; readonly contents: string }>,
 ): string {
   const hash = NodeCrypto.createHash("sha256");
-  for (const file of files.toSorted((a, b) => a.path.localeCompare(b.path))) {
+  for (const file of files.toSorted((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))) {
     hash.update(file.path).update("\0").update(file.contents).update("\0");
   }
   return `sha256:${hash.digest("hex")}`;

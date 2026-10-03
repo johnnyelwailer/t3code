@@ -12,6 +12,7 @@ import {
   type ProjectMachineDefinition,
   ProjectMachineFile,
   type ProjectMachineRejectedCandidate,
+  RepositoryRelativePath,
 } from "@t3tools/contracts";
 import { fromLenientJson } from "@t3tools/shared/schemaJson";
 import * as Effect from "effect/Effect";
@@ -22,7 +23,7 @@ import * as Schema from "effect/Schema";
 import {
   devcontainerBuildReferences,
   hashDefinitionFiles,
-  repositoryDirname,
+  resolveBuildReference,
   resolveRepositoryPath,
 } from "./t3team-devcontainerSource.ts";
 
@@ -30,6 +31,7 @@ import {
 const MAX_DEFINITION_FILE_BYTES = 1024 * 1024;
 
 const decodeMachineFile = Schema.decodeUnknownResult(fromLenientJson(ProjectMachineFile));
+const isRepositoryPath = Schema.is(RepositoryRelativePath);
 
 export interface ProjectMachineScan {
   readonly candidates: ReadonlyArray<ProjectMachineDefinition>;
@@ -83,10 +85,15 @@ export const scanCheckout = Effect.fn("projectMachine.scanCheckout")(function* (
       if ("error" in build) {
         return yield* new Rejected({ reason: `${devcontainerPath} ${build.error}.` });
       }
-      const directory = repositoryDirname(file.path);
       const files = [file];
       for (const reference of build.references) {
-        const referenced = yield* read(`${directory}/${reference}`);
+        const resolved = resolveBuildReference(file.path, reference);
+        if (resolved === null) {
+          return yield* new Rejected({
+            reason: `${devcontainerPath} refers to ${reference}, outside the repository.`,
+          });
+        }
+        const referenced = yield* read(resolved);
         if (referenced === null) {
           return yield* new Rejected({
             reason: `${devcontainerPath} refers to ${reference}, which does not exist.`,
@@ -104,10 +111,11 @@ export const scanCheckout = Effect.fn("projectMachine.scanCheckout")(function* (
     } satisfies ProjectMachineScan);
 
   // A committed pointer is the project's stated intent: it alone decides, devcontainers beside it
-  // are not offered as alternatives.
-  const pointer = yield* read(PROJECT_MACHINE_FILE_PATH).pipe(
-    Effect.catch(() => Effect.succeed(null)),
-  );
+  // are not offered as alternatives — not even when the pointer itself cannot be read.
+  const pointerRead = yield* read(PROJECT_MACHINE_FILE_PATH).pipe(Effect.result);
+  if (pointerRead._tag === "Failure")
+    return yield* rejectedAt(PROJECT_MACHINE_FILE_PATH)(pointerRead.failure);
+  const pointer = pointerRead.success;
   if (pointer !== null) {
     return yield* Effect.gen(function* () {
       const decoded = decodeMachineFile(pointer.contents);
@@ -137,9 +145,14 @@ export const scanCheckout = Effect.fn("projectMachine.scanCheckout")(function* (
   const nested = yield* fileSystem
     .readDirectory(path.join(input.root, ".devcontainer"))
     .pipe(Effect.orElseSucceed(() => [] as Array<string>));
+  // A folder name the wire contract cannot carry (a newline, an overlong name) cannot be offered
+  // or reported either; such entries are skipped rather than poisoning the whole answer.
   const devcontainerPaths = [
     ...DEVCONTAINER_CANDIDATE_PATHS,
-    ...nested.toSorted().map((entry) => `.devcontainer/${entry}/devcontainer.json`),
+    ...nested
+      .toSorted()
+      .map((entry) => `.devcontainer/${entry}/devcontainer.json`)
+      .filter(isRepositoryPath),
   ];
   const scans = yield* Effect.forEach(devcontainerPaths, (devcontainerPath) =>
     read(devcontainerPath).pipe(
