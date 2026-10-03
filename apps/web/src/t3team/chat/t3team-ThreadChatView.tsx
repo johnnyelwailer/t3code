@@ -5,7 +5,6 @@ import { ThreadChatViewBody } from "~/t3team/chat/t3team-ThreadChatViewBody";
 import { useKickoffBranch } from "~/t3team/chat/t3team-useKickoffBranch";
 import { useThreadBootstrap } from "~/t3team/chat/t3team-useThreadBootstrap";
 import { useThreadChatComposerState } from "~/t3team/chat/t3team-useThreadChatComposerState";
-import { useT3TeamDraftMutationIngest } from "~/t3team/chat/t3team-useDraftMutationIngest";
 import { useThreadChatDebug } from "~/t3team/chat/t3team-useThreadChatDebug";
 import { useThreadChatServerState } from "~/t3team/chat/t3team-useThreadChatServerState";
 import { useThreadChatTurnToolContext } from "~/t3team/chat/t3team-useThreadChatTurnToolContext";
@@ -117,8 +116,6 @@ export function ThreadChatView({
     onInitialUserMessageSent,
     serverThread,
   });
-
-  useT3TeamDraftMutationIngest({ environmentId, threadId });
 
   useThreadChatDebug({
     environmentId,

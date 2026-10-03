@@ -1,4 +1,4 @@
-import { ProjectId, ThreadId } from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { syncLiveThreadMetadataToLocalState } from "./t3team-threadBridge";
@@ -32,8 +32,8 @@ describe("syncLiveThreadMetadataToLocalState", () => {
   });
 
   it("takes a child's parent from the placement in local state, not from the parent's activity", () => {
-    // A live shell carries no activities. The relation the waiting indicator needs is the
-    // placement the server route hydrated into local state.
+    // A child outside the V2 lineage (a placed workflow child): the relation the waiting
+    // indicator needs is the placement the server route hydrated into local state.
     const result = syncLiveThreadMetadataToLocalState({
       threads: [
         makeProjectThread({ id: "thread-parent", projectId: "stored-project" }),
@@ -52,8 +52,14 @@ describe("syncLiveThreadMetadataToLocalState", () => {
           id: ThreadId.make("thread-child"),
           projectId: LIVE_SAVED,
           title: "Side Quest",
-          session: { status: "running" } as never,
-          latestTurn: { state: "running" } as never,
+          runtime: {
+            status: "running",
+            activeRunId: null,
+            providerInstanceId: ProviderInstanceId.make("codex"),
+            providerName: null,
+            lastError: null,
+            updatedAt: "2026-05-22T10:00:00.000Z",
+          },
         }),
       ],
     });

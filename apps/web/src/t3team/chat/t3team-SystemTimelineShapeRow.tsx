@@ -14,7 +14,7 @@ import {
 } from "~/t3team/chat/t3team-messageShapeCard";
 import { T3TeamWorkflowShapeLiveCard } from "~/t3team/chat/t3team-messageShapeCardLive";
 import type { T3TeamWorkflowRunProgress } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
-import { useThreadShells } from "~/state/entities";
+import { useT3TeamChildThreadRelationsStore } from "~/t3team/t3team-childThreadRelationsStore";
 
 export function T3TeamSystemTimelineShapeRow({
   workflowShape,
@@ -35,11 +35,14 @@ export function T3TeamSystemTimelineShapeRow({
    * `t3team-workflowRunOutcome.ts`. Only meaningful once the run has a live progress card. */
   readonly outcomeSummary?: string | undefined;
 }) {
-  const threadShells = useThreadShells();
+  // Child status is a fork thread fact; the sidebar's child relation already carries it per child.
+  const childThreadsByParentId = useT3TeamChildThreadRelationsStore(
+    (state) => state.childThreadsByParentId,
+  );
   const childStatuses = Object.fromEntries(
-    threadShells.flatMap((thread) =>
-      thread.childStatus ? [[thread.id, thread.childStatus] as const] : [],
-    ),
+    [...childThreadsByParentId.values()]
+      .flat()
+      .flatMap((thread) => (thread.childStatus ? [[thread.id, thread.childStatus] as const] : [])),
   );
   const progress =
     workflowShape.workflowRunId !== undefined

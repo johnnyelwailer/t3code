@@ -3,6 +3,7 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 
 import type { Project, ThreadShell } from "~/types";
 import type { ProjectThread } from "~/t3team/t3team-types";
+import { makeThreadFixture, type ThreadFixtureOverrides } from "~/test-fixtures";
 
 export function makeLiveProject(overrides: Partial<Project> = {}): Project {
   return {
@@ -52,32 +53,18 @@ export function makeProjectThread(overrides: Partial<ProjectThread> = {}): Proje
 }
 
 /**
- * A live thread SHELL — the only thing the t3team store reads per row. Defaults to a settled,
- * idle root thread in `live-project`; override just the fields under test.
+ * A live V2 thread SHELL — the only thing the t3team store reads per row. Defaults to an idle root
+ * thread in `live-project`; override just the fields under test.
  */
-export function makeLiveThreadShell(overrides: Partial<ThreadShell> = {}): ThreadShell {
-  return {
+export function makeLiveThreadShell(overrides: ThreadFixtureOverrides = {}): ThreadShell {
+  return makeThreadFixture({
     id: ThreadId.make("thread-1"),
     environmentId: "env-local" as EnvironmentId,
     projectId: ProjectId.make("live-project"),
     title: "Investigate regression",
     modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5-codex" },
-    runtimeMode: "full-access",
-    interactionMode: "default",
-    branch: null,
-    worktreePath: null,
-    pullRequests: [],
-    latestTurn: null,
     createdAt: "2026-05-22T09:00:00.000Z",
     updatedAt: "2026-05-22T10:00:00.000Z",
-    archivedAt: null,
-    settledOverride: null,
-    settledAt: null,
-    session: null,
-    latestUserMessageAt: null,
-    hasPendingApprovals: false,
-    hasPendingUserInput: false,
-    hasActionableProposedPlan: false,
     ...overrides,
-  };
+  });
 }

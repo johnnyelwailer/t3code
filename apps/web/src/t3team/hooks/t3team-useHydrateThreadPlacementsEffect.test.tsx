@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { ProjectId, ThreadId } from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { Project, ThreadShell } from "~/types";
@@ -229,8 +229,14 @@ describe("useHydrateThreadPlacements after a fetched placement", () => {
     const child = makeLiveThreadShell({
       id: ThreadId.make("thread-child"),
       projectId: ProjectId.make("live-project"),
-      session: { status: "running" } as never,
-      latestTurn: { state: "running" } as never,
+      runtime: {
+        status: "running",
+        activeRunId: null,
+        providerInstanceId: ProviderInstanceId.make("codex"),
+        providerName: null,
+        lastError: null,
+        updatedAt: "2026-09-29T10:00:00.000Z",
+      },
     });
     const liveThreads: ReadonlyArray<ThreadShell> = [parent, child];
     // A fresh browser: local state has the rows but no placement yet.

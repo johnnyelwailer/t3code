@@ -16,7 +16,7 @@ import {
   reconcileStoredProjectsWithLive,
 } from "./t3team-projectStoreUtils";
 import { useProjectStoreSyncEffects } from "./t3team-useProjectStore-syncEffects";
-import { resolveStoredProjectId } from "./t3team-threadBridge";
+import { isListedLiveThread, resolveStoredProjectId } from "./t3team-threadBridge";
 
 export function useProjectStore() {
   const [storedProjects, setStoredProjects] = useState<ProjectShellProject[]>(loadStoredProjects);
@@ -30,8 +30,10 @@ export function useProjectStore() {
   const [threads, setThreads] = useState<ProjectThread[]>([]);
   const [threadsHydrated, setThreadsHydrated] = useState(false);
   const liveProjects = useProjects();
-  // Shells only, like upstream's sidebar: see mapLiveThreadToProjectThread.
-  const liveThreads = useThreadShells();
+  // Shells only, like upstream's sidebar: see mapLiveThreadToProjectThread. Provider-native
+  // subagents stay hidden there too (isListedLiveThread).
+  const allLiveThreads = useThreadShells();
+  const liveThreads = useMemo(() => allLiveThreads.filter(isListedLiveThread), [allLiveThreads]);
   useHydrateStoredProjects({
     setStoredProjects,
     setSelectedProjectId,
