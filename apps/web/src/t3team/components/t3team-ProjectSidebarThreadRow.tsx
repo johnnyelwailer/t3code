@@ -12,11 +12,6 @@ import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay
 import { useThreadRowMenuHandlers } from "~/t3team/components/t3team-threadRowMenuHandlers";
 import { useThreadRowRename } from "~/t3team/components/t3team-useThreadRowRename";
 import { useThreadRowContextMenu } from "./t3team-ProjectSidebarThreadRow-rowItem";
-import {
-  ExternalSessionActiveLock,
-  ExternalSessionProviderMark,
-  isExternalSessionActive,
-} from "~/t3team/components/t3team-ExternalSessionThreadMarks";
 
 interface ThreadRowProps {
   thread: ProjectThread;
@@ -53,10 +48,6 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
     (settings) => settings.t3teamActivityLabelsEnabled,
   );
   const statusPill = resolveThreadStatusPill(thread, { activityLabelsEnabled });
-  const externalActive = isExternalSessionActive({
-    providerKind: thread.providerKind,
-    lastMessageAt: thread.lastMessageAt,
-  });
 
   const openThreadMenu = useThreadRowContextMenu({
     thread,
@@ -79,7 +70,6 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
       onClick={onSelect}
     >
       <div className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
-        <ExternalSessionProviderMark providerKind={thread.providerKind} active={externalActive} />
         {variant === "issue" ? (
           <MessageSquareIcon className="size-3 shrink-0 text-muted-foreground/70" />
         ) : null}
@@ -122,7 +112,6 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
             ) : null}
           </span>
         )}
-        <ExternalSessionActiveLock active={externalActive} />
       </div>
       <div className="ml-auto flex shrink-0 items-center">
         <div className="relative flex min-w-12 justify-end pr-1">

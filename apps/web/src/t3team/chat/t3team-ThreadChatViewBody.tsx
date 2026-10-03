@@ -16,8 +16,6 @@ import type { ChatMessage } from "~/types";
 type ThreadChatComposerState = ReturnType<typeof useThreadChatComposerState>;
 
 export interface ThreadChatViewBodyProps {
-  /** Covers the composer when an external Codex/Claude session still owns this thread. */
-  composerReadOnlyOverlay?: React.ReactNode;
   environmentId: EnvironmentId;
   threadId: string;
   projectId: string;
@@ -33,8 +31,6 @@ export interface ThreadChatViewBodyProps {
   titleBarControlsAccessory: React.ReactNode | undefined;
   hideHeader: boolean;
   embeddedMode: boolean;
-  /** Fork the thread from a message (branch point); rendered next to each message's copy button. */
-  onForkThread?: ((input: { readonly messageId: string }) => void | Promise<void>) | undefined;
   backend: BackendApi | null | undefined;
   bootstrapStatus: ThreadBootstrapStatus;
   retryThreadBootstrap: () => void;
@@ -60,7 +56,6 @@ function useThreadOutbox(
 
 /** Presentational body for {@link ThreadChatView}: kickoff placeholder + ChatView/pending-chat split. */
 export function ThreadChatViewBody({
-  composerReadOnlyOverlay,
   environmentId,
   threadId,
   projectId,
@@ -75,7 +70,6 @@ export function ThreadChatViewBody({
   titleBarControlsAccessory,
   hideHeader,
   embeddedMode,
-  onForkThread,
   backend,
   bootstrapStatus,
   retryThreadBootstrap,
@@ -151,16 +145,7 @@ export function ThreadChatViewBody({
             enqueueOfflineTurnStart={enqueueOfflineTurnStart}
             composerContextAttachmentSlot={contextAttachmentSlot}
             composerContainerProps={composerDropTarget.composerContainerProps}
-            composerContainerOverlay={
-              composerReadOnlyOverlay ? (
-                <>
-                  {composerDropTarget.composerContainerOverlay}
-                  {composerReadOnlyOverlay}
-                </>
-              ) : (
-                composerDropTarget.composerContainerOverlay
-              )
-            }
+            composerContainerOverlay={composerDropTarget.composerContainerOverlay}
             composerContextAttachments={contextAttachments}
             prepareComposerContextAttachments={prepareComposerContextAttachments}
             onComposerContextAttachmentsConsumed={clearThreadAttachments}
@@ -168,7 +153,6 @@ export function ThreadChatViewBody({
             dispatchWorkflowDecision={resolveWorkflowDecision}
             {...(controlWorkflow ? { onControlWorkflow: controlWorkflow } : {})}
             onOpenThread={onOpenThread}
-            {...(onForkThread ? { onForkThread } : {})}
             queuedExtensions={outboxTimelineExtensions}
           />
         </>

@@ -320,14 +320,11 @@ describe("side chat (thread) tabs", () => {
         onAddDevice={() => undefined}
         onAddDiff={() => undefined}
         onAddFiles={() => undefined}
-        onAddAgents={() => undefined}
-        liveAgentCount={0}
         browserAvailable
         terminalAvailable={false}
         diffAvailable={false}
         filesAvailable={false}
         pullRequestAvailable={false}
-        agentsAvailable={false}
         pullRequestsAvailable={false}
         deviceAvailable={false}
       >

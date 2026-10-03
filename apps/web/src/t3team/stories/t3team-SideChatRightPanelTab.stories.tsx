@@ -99,8 +99,6 @@ function PanelDemo({ threadId, label }: { threadId: string; label: string }) {
       standInPane("Files (stand-in pane)")
     ) : activeSurface?.kind === "preview" ? (
       standInPane("Browser (stand-in pane)")
-    ) : activeSurface?.kind === "agents" ? (
-      standInPane("Agents (stand-in pane)")
     ) : activeSurface?.kind === "diff" ? (
       standInPane("Diff (stand-in pane)")
     ) : (
@@ -126,13 +124,6 @@ function PanelDemo({ threadId, label }: { threadId: string; label: string }) {
             onClick={() => useRightPanelStore.getState().open(ref, "files")}
           >
             Files
-          </Button>
-          <Button
-            size="xs"
-            variant="outline"
-            onClick={() => useRightPanelStore.getState().open(ref, "agents")}
-          >
-            Agents
           </Button>
           <Button
             size="xs"
@@ -180,7 +171,6 @@ function PanelDemo({ threadId, label }: { threadId: string; label: string }) {
             onAddFiles={() => useRightPanelStore.getState().open(ref, "files")}
             onAddPullRequest={() => undefined}
             onAddPullRequests={() => undefined}
-            onAddAgents={() => useRightPanelStore.getState().open(ref, "agents")}
             onAddDevice={() => undefined}
             browserAvailable
             terminalAvailable={false}
@@ -189,7 +179,6 @@ function PanelDemo({ threadId, label }: { threadId: string; label: string }) {
             pullRequestAvailable={false}
             pullRequestsAvailable={false}
             deviceAvailable={false}
-            agentsAvailable
             liveAgentCount={0}
           >
             {content}

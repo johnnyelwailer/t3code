@@ -15,7 +15,6 @@ import { useHomeProjectChat } from "./t3team-AppMainContentShell";
 import { resolveWorkHomeProject } from "~/t3team/t3team-appMainContentResolution";
 import { resolveT3TeamSetupSurfaceReason } from "~/t3team/t3team-setupSurfaceReason";
 import { useAppMainContentThreadResolution } from "~/t3team/t3team-useAppMainContentThreadResolution";
-import { useLocalProviderSessionThreadFilter } from "~/t3team/hooks/t3team-useLocalProviderSessionThreadFilter";
 
 type MainContentProps = {
   view: ViewState | null;
@@ -70,12 +69,6 @@ export function AppMainContent({
   onThreadDisplayModeChange,
 }: MainContentProps) {
   const backendState = useBackendState();
-  // Display-only hiding of adopted local provider sessions (the "Local provider sessions"
-  // toggle). Thread resolution below intentionally keeps the full getThreadsForProject, so
-  // an external session that is open while the toggle turns off stays open — it just
-  // leaves the lists.
-  const { filterForProject: visibleThreadsForProject } =
-    useLocalProviderSessionThreadFilter(getThreadsForProject);
   const { homeChatProject, homeChatThreadId } = useHomeProjectChat({
     projects,
     getThreadsForProject,
@@ -125,7 +118,7 @@ export function AppMainContent({
         <AppDashboardPane
           activeDashboardMode={activeDashboardMode}
           project={homeProject}
-          projectThreads={visibleThreadsForProject(homeProject.id)}
+          projectThreads={getThreadsForProject(homeProject.id)}
           activeThread={null}
           activeThreadId={null}
           providers={backendState.providers}
@@ -181,7 +174,7 @@ export function AppMainContent({
       <AppDashboardPane
         activeDashboardMode={activeDashboardMode}
         project={project}
-        projectThreads={visibleThreadsForProject(project.id)}
+        projectThreads={getThreadsForProject(project.id)}
         activeThread={resolvedThread}
         activeThreadId={view.embeddedThreadId ?? null}
         providers={backendState.providers}

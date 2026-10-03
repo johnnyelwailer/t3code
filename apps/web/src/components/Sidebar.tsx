@@ -264,7 +264,7 @@ import {
   useComboboxFilter,
 } from "./ui/combobox";
 import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
-import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
+import { SidebarChromeFooter } from "./sidebar/SidebarChrome";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 // t3team: the fork's structural additions to this file are the slots imported here,
 // plus the child-thread relation hook used to hide sub-runbook children and chip their parent.
@@ -275,7 +275,6 @@ import {
   InboxWorkItemSection,
 } from "~/t3team/components/t3team-InboxSlots";
 import { runT3TeamThreadNavigationOverride } from "~/t3team/t3team-threadNavigationOverride";
-import { SUB_RUN_MONITORING_LABEL } from "~/t3team/chat/t3team-AgentsPanelForkSection.logic";
 import { useT3TeamSidebarThreadMeta } from "~/t3team/hooks/t3team-useChildThreadRelations";
 import { useT3TeamChildThreadRelationsStore } from "~/t3team/t3team-childThreadRelationsStore";
 import { useExpandedSubRunsStore } from "~/t3team/hooks/t3team-useExpandedSubRuns";
@@ -1141,10 +1140,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // When a snooze ended (timer or early wake); drives the Woke pill until
   // the user visits the thread.
   wokeAt: string | null;
-  // t3team: true while this thread's own work is settled but it still has
-  // live (non-terminal, non-settled) app-owned sub-run children — the DERIVED
-  // waiting fact: the row reads "Monitoring", not "Done".
-  waitingOnChildren?: boolean;
   isActive: boolean;
   openPullRequestsInRightPanel: boolean;
   jumpLabel: string | null;
@@ -1363,28 +1358,19 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                     icon: "failed" as const,
                     className: "text-error",
                   }
-                : props.waitingOnChildren === true
+                : isWoke
                   ? {
-                      // t3team: DERIVED waiting on live app-owned sub-run children:
-                      // not "Done" yet — nothing is owed to the user, so it keeps
-                      // the working hue (amber is reserved for "needs you").
-                      label: SUB_RUN_MONITORING_LABEL,
-                      icon: null,
-                      className: "text-info",
+                      label: "Woke",
+                      icon: "woke" as const,
+                      className: "text-warning",
                     }
-                  : isWoke
+                  : isUnread
                     ? {
-                        label: "Woke",
-                        icon: "woke" as const,
-                        className: "text-warning",
+                        label: "Done",
+                        icon: "done" as const,
+                        className: "text-success",
                       }
-                    : isUnread
-                      ? {
-                          label: "Done",
-                          icon: "done" as const,
-                          className: "text-success",
-                        }
-                      : null;
+                    : null;
   const isWokeStatus = topStatus?.icon === "woke";
 
   const branchMismatch = resolveLocalCheckoutBranchMismatch({
@@ -2370,15 +2356,15 @@ export default function Sidebar() {
   // (InboxSubRunsChip, InboxThreadAttribution) read those maps with narrow
   // Zustand selectors — no per-row useProjectStore subscriptions, memo intact.
   const { childThreadIds, childThreadsByParentId } = useT3TeamSidebarThreadMeta();
-  // t3team: mirror the relation for chrome outside this component (Agents panel fork section) —
+  // t3team: mirror the relation for chrome outside this component (the sub-run tree) —
   // see t3team-childThreadRelationsStore.ts for why this is a mirror rather than a second
   // useT3TeamChildThreadRelations()/useProjectStore() instance elsewhere.
-  const setChildThreadsByParentIdForAgentsPanel = useT3TeamChildThreadRelationsStore(
+  const mirrorChildThreadsByParentId = useT3TeamChildThreadRelationsStore(
     (state) => state.setChildThreadsByParentId,
   );
   useEffect(() => {
-    setChildThreadsByParentIdForAgentsPanel(childThreadsByParentId);
-  }, [childThreadsByParentId, setChildThreadsByParentIdForAgentsPanel]);
+    mirrorChildThreadsByParentId(childThreadsByParentId);
+  }, [childThreadsByParentId, mirrorChildThreadsByParentId]);
   // t3team: which parents currently have their "N sub-runs" chip expanded
   // (InboxSubRunsChip toggles this); persisted to localStorage so a parent
   // the user opened stays open across reload (see t3team-useExpandedSubRuns.ts).
@@ -5209,14 +5195,6 @@ export default function Sidebar() {
                         const isCard =
                           section === "active" || section === "pinned" || section === "working";
                         const rowVariant = isCard ? "card" : "slim";
-                        // t3team: the parent row reads "Monitoring", not "Done", while
-                        // one of its app-owned sub-run children is still live
-                        // (non-settled, running or idle) — the same relation map the
-                        // sub-run chip renders.
-                        const waitingOnChildren = (childThreadsByParentId.get(thread.id) ?? []).some(
-                          (child) =>
-                            !child.settled && (child.status === "running" || child.status === "idle"),
-                        );
                         return (
                           <SidebarThreadRow
                             // Fade between card and compact rows while the outer
@@ -5245,7 +5223,6 @@ export default function Sidebar() {
                                 .threadPinning === true
                             }
                             isPinned={thread.pinnedAt != null}
-                            waitingOnChildren={waitingOnChildren}
                             sortable={sortable}
                             dropVerb={
                               dragState?.activeKey === threadKey
@@ -5322,7 +5299,9 @@ export default function Sidebar() {
                       // is recovered from the still-live thread shell, falling back to
                       // the parent's when a shell hasn't hydrated yet (same environment
                       // in practice, since sub-runbooks never cross environments).
-                      const renderSubRunRows = (parentThread: EnvironmentThreadShell): ReactNode[] => {
+                      const renderSubRunRows = (
+                        parentThread: EnvironmentThreadShell,
+                      ): ReactNode[] => {
                         if (!expandedSubRunParentIds.has(parentThread.id)) return [];
                         const allChildren = childThreadsByParentId.get(parentThread.id);
                         if (!allChildren || allChildren.length === 0) return [];

@@ -39,8 +39,6 @@ export type ProjectThread = {
   dashboardMode?: ProjectDashboardMode;
   displayMode?: ProjectThreadDisplayMode;
   title: string;
-  /** Instance id of a mirrored native local session (see t3team-localProviderKinds). */
-  providerKind?: string;
   lastMessageAt: string;
   createdAt: string;
   kickoffMessage?: string;
@@ -111,23 +109,12 @@ export type ProjectThread = {
    */
   awaitingParent?: boolean;
   /**
-   * True while this thread's own work is settled but it has one or more
-   * non-terminal, non-settled t3team children (durable handoff relation —
-   * legacy `parent:N` sub-runs never count). The DERIVED waiting fact: the
-   * row reads "Monitoring", not "Done"/"Completed" — mirrors the server
-   * primitive's `waiting` run state (t3team-threadRunStatus). Recomputed on
-   * every live sync; absence clears.
+   * True while this thread's own work is settled but child work is still live: a pending
+   * `subagent` background task on its V2 shell, or a live app-owned child in the lineage
+   * (`deriveThreadRunState` "waiting"). The row reads "Waiting", not "Done"/"Completed".
+   * Recomputed on every live sync; absence clears.
    */
   waitingOnChildren?: boolean;
-  /**
-   * True while this thread has registered a `t3team_children` wait (`op: wait`)
-   * that is still pending — the DECLARED waiting fact: a genuine blocking
-   * relationship, not just "children are live". Derived from the thread's own
-   * durable activities (open registered/resolved pair) — no flag anyone sets.
-   * The row reads "Waiting" (declared outranks derived "Monitoring"); both
-   * keep the standard working/in-progress colour. Absence clears.
-   */
-  waitingDeclared?: boolean;
   childStatusUpdatedAt?: string | null;
 };
 
