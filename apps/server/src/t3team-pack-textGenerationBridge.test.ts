@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { ProviderInstanceId } from "@t3tools/contracts";
-import type { PackProviderDriverDefinition, PackProviderInstance } from "@t3team/packs";
+import type { PackProviderDriverDefinition, PackProviderInstance } from "@t3team/pack-api";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
@@ -14,34 +14,25 @@ const instance: PackProviderInstance = {
     status: "ready",
     models: [{ slug: "pack/model", name: "Pack model" }],
   }),
-  startSession: async (input) => ({
-    threadId: input.threadId,
-    status: "ready",
-    runtimeMode: input.runtimeMode,
-  }),
-  sendTurn: async (input) => ({ threadId: input.threadId, turnId: "turn-1" }),
-  interruptTurn: async () => {},
-  respondToRequest: async () => {},
-  respondToUserInput: async () => {},
-  stopSession: async () => {},
-  hasSession: async () => false,
-  listSessions: async () => [],
-  readThread: async (threadId) => ({ threadId, turns: [] }),
-  rollbackThread: async (threadId) => ({ threadId, turns: [] }),
+  orchestration: {
+    getCapabilities: async () => ({}),
+    openSession: async () => {
+      throw new Error("text generation never opens a session");
+    },
+  },
   textGeneration: {
     generateCommitMessage: async () => ({ subject: "Pack subject", body: "" }),
     generatePrContent: async () => ({ title: "Pack PR", body: "## Summary" }),
     generateBranchName: async () => ({ branch: "pack-branch" }),
     generateThreadTitle: async () => ({ title: "Pack title" }),
     generateStructured: async () => ({ status: "Checking pack status" }),
+    generateActivityLabel: async () => ({ label: "Checking status" }),
   },
-  stopAll: async () => {},
-  events: async function* () {},
   dispose: async () => {},
 };
 
 const definition: PackProviderDriverDefinition = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   driver: "custom-pack",
   displayName: "Pack provider",
   create: async () => instance,
@@ -72,6 +63,12 @@ describe("pack text generation bridge", () => {
         modelSelection: { instanceId: ProviderInstanceId.make("custom-pack"), model: "pack/model" },
       });
       expect(structured).toEqual({ status: "Checking pack status" });
+      const label = yield* built.textGeneration.generateActivityLabel!({
+        cwd: "/tmp",
+        context: "running tests",
+        modelSelection: { instanceId: ProviderInstanceId.make("custom-pack"), model: "pack/model" },
+      });
+      expect(label).toEqual({ label: "Checking status" });
     }),
   );
 });

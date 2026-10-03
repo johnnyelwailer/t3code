@@ -473,9 +473,9 @@ function selectionSupportsTextGeneration(
 }
 
 function resolveTextGenerationProvider(settings: ServerSettings): ServerSettings {
-  // t3team: distribution-configured policy override first — a configured selection wins over any
-  // persisted preference (data residency for every text generator: titles, branch names,
-  // commit/PR text).
+  // t3team: pack-registered model policy override first (`defineModelPolicy`, see
+  // t3team-configuredDefaultModelSelection.ts) — a pinned selection wins over any persisted
+  // preference (data residency for every text generator: titles, branch names, commit/PR text).
   const policySelection = getConfiguredTextGenerationModelSelection();
   if (policySelection !== undefined) {
     return { ...settings, textGenerationModelSelection: policySelection };

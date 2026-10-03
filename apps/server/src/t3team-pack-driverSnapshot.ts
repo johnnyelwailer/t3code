@@ -14,7 +14,7 @@ import {
   type ServerProvider,
   type ServerProviderModel,
 } from "@t3tools/contracts";
-import type { PackProviderInstance, PackProviderSnapshot } from "@t3team/packs";
+import type { PackProviderInstance, PackProviderSnapshot } from "@t3team/pack-api";
 
 import { buildServerProvider } from "./provider/providerSnapshot.ts";
 

@@ -175,8 +175,8 @@ const recordStartupHeartbeat = Effect.gen(function* () {
 
 // The model an auto-bootstrapped thread selects when the project has no default. Upstream
 // default stays Codex; t3team: a distribution can override it without hardcoding a provider
-// in core through the env seam in t3team-configuredDefaultModelSelection.ts (e.g. pointing it
-// at a pack-registered provider instance + model).
+// in core through the pack-registered model policy in t3team-configuredDefaultModelSelection.ts
+// (`defineModelPolicy({ defaultModelSelection })`).
 export const getAutoBootstrapThreadModelSelection = (): ModelSelection =>
   getConfiguredDefaultModelSelection(DEFAULT_MODEL);
 

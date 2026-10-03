@@ -3,6 +3,7 @@ import type { ModelSelection } from "@t3tools/contracts";
 
 import type { WorkspacePackHostDiagnostic } from "./t3team-pack-host.ts";
 import type { WorkflowRepairPolicy } from "./t3team-workflowRepairPolicy.ts";
+import { inertPackActivationContext } from "./t3team-pack-activationContext.ts";
 
 const WORKFLOW_REPAIR_POLICY_CAPABILITY = "workflow-repair-policy:v1";
 
@@ -14,10 +15,7 @@ export const loadPackWorkflowRepairPolicy = async (
   for (const pack of diagnostic.resolution?.packs ?? []) {
     if (!pack.manifest.entrypoints?.activate) continue;
     await activateWorkspacePack(pack, {
-      defineAgentProvider: () => undefined,
-      defineProviderDriver: () => undefined,
-      defineTheme: () => undefined,
-      defineSetupProfile: () => undefined,
+      ...inertPackActivationContext,
       defineWorkflowRepairPolicy: (definition) => {
         if (!pack.manifest.capabilities.includes(WORKFLOW_REPAIR_POLICY_CAPABILITY)) {
           throw new Error(
@@ -28,11 +26,6 @@ export const loadPackWorkflowRepairPolicy = async (
           throw new Error("Multiple workspace packs define a workflow repair policy");
         }
         policy = definition;
-      },
-      defineWorkflowAgentModelPolicy: () => undefined,
-      defineWorkflowEphemeralConcurrencyPolicy: () => undefined,
-      resolveAssetDataUrl: async () => {
-        throw new Error("Asset resolution is only available to pack activation code");
       },
     });
   }

@@ -444,7 +444,8 @@
     "apps/server/src/orchestration-v2/ProviderContinuationService.ts",
     "apps/server/src/orchestration-v2/ProjectionStore.ts",
     "apps/server/src/orchestration-v2/legacy/LegacyV1ThreadImporter.ts",
-    "apps/server/src/persistence/Errors.ts"
+    "apps/server/src/persistence/Errors.ts",
+    "apps/server/src/orchestration-v2/ProviderAdapter.ts"
   ],
   "allowedUnprefixedNewFiles": [
     ".agents/skills/merge-upstream/SKILL.md",

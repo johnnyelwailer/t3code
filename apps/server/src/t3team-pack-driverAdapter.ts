@@ -1,223 +1,154 @@
 /**
- * Pack driver adapter bridge.
+ * Pack orchestration adapter bridge.
  *
- * Wraps a pack `PackProviderInstance` (Promise / AsyncIterable surface) as a
- * host `ProviderAdapterShape`. Promise methods become Effects; rejections map
- * to `ProviderAdapterRequestError`. Session/turn payloads are decoded against
- * the contracts schemas and re-stamped with the bridged driver kind + instance
- * id so downstream correlation stays consistent. `resumeCursor` is opaque and
- * flows through untouched.
- *
- * The event stream is materialized lazily per subscription (a synchronous
- * throw from `events()` becomes a logged termination, not a defect) and is
- * tied to `interruptSignal` so it ends when the instance scope closes — the
- * termination `ProviderService.reconcileInstanceSubscriptions` relies on.
+ * Maps a pack's `PackOrchestrationAdapter` (`@t3team/pack-api`, Promise + JSON) onto the host
+ * `ProviderAdapterV2Shape` one-to-one. `openSession` runs in the session scope the
+ * `ProviderSessionManagerV2` owns: the scope's close calls the pack session's `close()` (bounded)
+ * and ends its event stream. The session receives the thread's MCP access and a
+ * `requestContinuation` host service that feeds `ProviderContinuationRequests`, the same queue
+ * built-in adapters use for provider-native wakes.
  *
  * @module t3team-pack-driverAdapter
  */
+import type {
+  PackContinuationRequest,
+  PackOpenSessionInput,
+  PackOrchestrationAdapter,
+} from "@t3team/pack-api";
 import {
-  ProviderSession,
-  ProviderTurnStartResult,
+  ProviderThreadId,
   ThreadId,
   type ProviderDriverKind,
   type ProviderInstanceId,
-  type ProviderRuntimeEvent,
-  type ProviderSessionStartInput,
 } from "@t3tools/contracts";
-import type { PackProviderInstance } from "@t3team/packs";
-import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import * as Stream from "effect/Stream";
 
-import { ProviderAdapterRequestError, type ProviderAdapterError } from "./provider/Errors.ts";
-import type {
-  ProviderAdapterShape,
-  ProviderThreadSnapshot,
-} from "./provider/Services/ProviderAdapter.ts";
-import { packEventsToStream } from "./t3team-pack-driverEvents.ts";
-import { makePackJobControl } from "./t3team-pack-driverJobControl.ts";
+import {
+  ProviderAdapterCapabilitiesError,
+  ProviderAdapterOpenSessionError,
+  ProviderAdapterProtocolError,
+  type ProviderAdapterV2Shape,
+} from "./orchestration-v2/ProviderAdapter.ts";
+import type { ProviderContinuationRequest } from "./orchestration-v2/ProviderContinuationRequests.ts";
+import { turnScopedSelectionTransition } from "./orchestration-v2/ProviderSelectionTransition.ts";
+import { packCall, packRoundTrip } from "./t3team-pack-driverCall.ts";
+import { asPack, PackCodec } from "./t3team-pack-driverCodec.ts";
 import { readPackMcpSession } from "./t3team-pack-driverMcp.ts";
+import { makePackSessionRuntime } from "./t3team-pack-driverSession.ts";
 
-const decodeSession = Schema.decodeUnknownEffect(ProviderSession);
-const decodeTurn = Schema.decodeUnknownEffect(ProviderTurnStartResult);
+/** Upper bound on a pack session `close()` so a hung teardown cannot stall session release. */
+const CLOSE_TIMEOUT = Duration.seconds(5);
 
-const defined = <K extends string, V>(key: K, value: V | undefined): Partial<Record<K, V>> =>
-  value === undefined ? {} : ({ [key]: value } as Record<K, V>);
+const decodeNotification = Schema.decodeUnknownOption(PackCodec.notification);
 
-export const makePackProviderAdapter = (input: {
-  readonly packInstance: PackProviderInstance;
-  readonly driverKind: ProviderDriverKind;
-  readonly instanceId: ProviderInstanceId;
-  /** Completes when the instance scope closes; ends the event stream. */
-  readonly interruptSignal: Effect.Effect<void>;
-}): ProviderAdapterShape<ProviderAdapterError> => {
-  const { packInstance, driverKind, instanceId } = input;
-
-  const requestError = (method: string) => (cause: unknown) =>
-    new ProviderAdapterRequestError({
-      provider: driverKind,
-      method,
-      detail: cause instanceof Error ? cause.message : String(cause),
-      cause,
-    });
-
-  const attempt = <A>(method: string, run: () => Promise<A>) =>
-    Effect.tryPromise({ try: run, catch: requestError(method) });
-
-  const stampSession = (raw: unknown) =>
-    DateTime.now.pipe(
-      Effect.map(DateTime.formatIso),
-      Effect.flatMap((now) =>
-        decodeSession({
-          createdAt: now,
-          updatedAt: now,
-          ...(raw as Record<string, unknown>),
-          provider: driverKind,
-          providerInstanceId: instanceId,
-        }),
-      ),
-    );
-
-  const jobControl = makePackJobControl({
-    packInstance,
-    driverKind,
-    method: packInstance.jobControl,
-  });
-
-  const events = Stream.unwrap(
-    // `Effect.sync` so a synchronous throw from `events()` becomes a defect we
-    // catch into a logged, empty stream rather than escaping as an unhandled
-    // defect. `events()` is thus materialized lazily per subscription.
-    Effect.sync(() =>
-      packEventsToStream({ events: packInstance.events(), driverKind, instanceId }),
-    ).pipe(
-      Effect.catchCause((cause) =>
-        Effect.logError("Pack provider events() threw before streaming", {
-          driverKind,
-          instanceId,
-          cause,
-        }).pipe(Effect.as(Stream.empty as Stream.Stream<ProviderRuntimeEvent>)),
-      ),
-    ),
-  ).pipe(Stream.interruptWhen(input.interruptSignal));
-
+export const toContinuationRequest = (
+  driver: ProviderDriverKind,
+  request: PackContinuationRequest,
+): ProviderContinuationRequest => {
+  const notification =
+    request.notification === undefined ? Option.none() : decodeNotification(request.notification);
   return {
-    provider: driverKind,
-    // `jobControl` is advertised only when the pack instance actually carries
-    // the method — absence means "not supported", and the client hides its
-    // affordances on that capability, never on a swallowed call.
-    capabilities: {
-      sessionModelSwitch: "unsupported",
-      ...(jobControl !== undefined ? { jobControl: true } : {}),
-    },
-    ...(jobControl !== undefined ? { jobControl } : {}),
-    startSession: (startInput: ProviderSessionStartInput) =>
-      attempt("startSession", () =>
-        packInstance.startSession({
-          threadId: startInput.threadId,
-          runtimeMode: startInput.runtimeMode,
-          ...readPackMcpSession(startInput.threadId),
-          ...defined("cwd", startInput.cwd),
-          ...defined("resumeCursor", startInput.resumeCursor),
-          ...defined("modelSelection", startInput.modelSelection),
-          ...defined("approvalPolicy", startInput.approvalPolicy),
-          ...defined("sandboxMode", startInput.sandboxMode),
-        }),
-      ).pipe(
-        Effect.flatMap((session) =>
-          stampSession(session).pipe(Effect.mapError(requestError("startSession"))),
-        ),
-      ),
-    sendTurn: (turnInput) =>
-      attempt("sendTurn", () =>
-        packInstance.sendTurn({
-          threadId: turnInput.threadId,
-          ...defined("input", turnInput.input),
-          ...defined("attachments", turnInput.attachments),
-          ...defined("modelSelection", turnInput.modelSelection),
-          ...defined("interactionMode", turnInput.interactionMode),
-          ...defined("turnOrigin", turnInput.turnOrigin),
-        }),
-      ).pipe(
-        Effect.flatMap((result) =>
-          decodeTurn({ ...(result as Record<string, unknown>), threadId: turnInput.threadId }).pipe(
-            Effect.mapError(requestError("sendTurn")),
-          ),
-        ),
-      ),
-    interruptTurn: (threadId, turnId) =>
-      attempt("interruptTurn", () => packInstance.interruptTurn(threadId, turnId)),
-    respondToRequest: (threadId, requestId, decision) =>
-      attempt("respondToRequest", () =>
-        packInstance.respondToRequest(threadId, requestId, decision),
-      ),
-    respondToUserInput: (threadId, requestId, answers) =>
-      attempt("respondToUserInput", () =>
-        packInstance.respondToUserInput(threadId, requestId, answers),
-      ),
-    stopSession: (threadId) => attempt("stopSession", () => packInstance.stopSession(threadId)),
-    listSessions: () =>
-      attempt("listSessions", () => packInstance.listSessions()).pipe(
-        Effect.flatMap((sessions) => Effect.forEach(sessions, (session) => stampSession(session))),
-        Effect.catchCause((cause) =>
-          Effect.logWarning("Pack provider listSessions failed", { driverKind, cause }).pipe(
-            Effect.as([]),
-          ),
-        ),
-      ),
-    hasSession: (threadId) =>
-      attempt("hasSession", () => packInstance.hasSession(threadId)).pipe(
-        Effect.catchCause((cause) =>
-          Effect.logWarning("Pack provider hasSession failed", { driverKind, cause }).pipe(
-            Effect.as(false),
-          ),
-        ),
-      ),
-    readThread: (threadId) =>
-      attempt("readThread", () => packInstance.readThread(threadId)).pipe(
-        Effect.flatMap((snapshot) =>
-          Effect.try({
-            try: () => shapeThreadSnapshot(threadId, snapshot),
-            catch: requestError("readThread"),
-          }),
-        ),
-      ),
-    rollbackThread: (threadId, numTurns) =>
-      attempt("rollbackThread", () => packInstance.rollbackThread(threadId, numTurns)).pipe(
-        Effect.flatMap((snapshot) =>
-          Effect.try({
-            try: () => shapeThreadSnapshot(threadId, snapshot),
-            catch: requestError("rollbackThread"),
-          }),
-        ),
-      ),
-    stopAll: () =>
-      attempt("stopAll", () => packInstance.stopAll()).pipe(
-        Effect.catchCause((cause) =>
-          Effect.logWarning("Pack provider stopAll failed", { driverKind, cause }).pipe(
-            Effect.asVoid,
-          ),
-        ),
-      ),
-    streamEvents: events,
+    threadId: ThreadId.make(request.threadId),
+    providerThreadId: ProviderThreadId.make(request.providerThreadId),
+    driver,
+    detail: request.detail,
+    ...(Option.isSome(notification) ? { notification: notification.value } : {}),
+    ...(request.delivery === undefined ? {} : { delivery: request.delivery }),
   };
 };
 
-/** Defensive: tolerates malformed (non-array / non-object) pack thread data. */
-const shapeThreadSnapshot = (threadId: ThreadId, snapshot: unknown): ProviderThreadSnapshot => {
-  const rawTurns = (snapshot as { readonly turns?: unknown })?.turns;
-  const turns = Array.isArray(rawTurns) ? rawTurns : [];
+export const makePackOrchestrationAdapter = (input: {
+  readonly adapter: PackOrchestrationAdapter;
+  readonly driver: ProviderDriverKind;
+  readonly instanceId: ProviderInstanceId;
+  /** Host continuation queue (`ProviderContinuationRequests.offer`). */
+  readonly offerContinuation: (request: ProviderContinuationRequest) => Effect.Effect<void>;
+}): ProviderAdapterV2Shape => {
+  const { adapter, driver, instanceId } = input;
+  const plan = adapter.planSelectionTransition;
   return {
-    threadId,
-    turns: turns.map((turn) => {
-      const record = (turn ?? {}) as { readonly id?: unknown; readonly items?: unknown };
-      return {
-        id: (typeof record.id === "string"
-          ? record.id
-          : "") as ProviderThreadSnapshot["turns"][number]["id"],
-        items: Array.isArray(record.items) ? [...record.items] : [],
-      };
-    }),
+    instanceId,
+    driver,
+    getCapabilities: () => {
+      const bridge = packCall((cause) => new ProviderAdapterCapabilitiesError({ driver, cause }));
+      return bridge
+        .call(() => adapter.getCapabilities())
+        .pipe(Effect.flatMap((raw) => bridge.decode(PackCodec.capabilities, raw)));
+    },
+    planSelectionTransition: (value) =>
+      plan === undefined
+        ? Effect.succeed(turnScopedSelectionTransition())
+        : packRoundTrip(
+            packCall(
+              (cause) =>
+                new ProviderAdapterProtocolError({
+                  driver,
+                  detail: "planSelectionTransition failed",
+                  cause,
+                }),
+            ),
+            { codec: PackCodec.selectionTransitionInput, value },
+            (encoded) => plan.call(adapter, asPack(encoded)),
+            PackCodec.selectionTransitionPlan,
+          ),
+    openSession: (value) =>
+      Effect.gen(function* () {
+        const bridge = packCall(
+          (cause) =>
+            new ProviderAdapterOpenSessionError({
+              driver,
+              providerSessionId: value.providerSessionId,
+              cause,
+            }),
+        );
+        const encoded = yield* bridge.encode(PackCodec.openSessionInput, value);
+        const runtime = yield* bridge.call(() =>
+          adapter.openSession({
+            ...asPack<Omit<PackOpenSessionInput, "mcp" | "host">>(encoded),
+            ...readPackMcpSession(value.threadId),
+            host: {
+              requestContinuation: (request) => {
+                // The host queue is unbounded and needs no services: a plain fork is enough.
+                Effect.runFork(input.offerContinuation(toContinuationRequest(driver, request)));
+              },
+            },
+          }),
+        );
+        const closed = yield* Deferred.make<void>();
+        // LIFO: end the event stream first, then close the pack session (bounded).
+        yield* Effect.addFinalizer(() =>
+          bridge
+            .call(() => runtime.close())
+            .pipe(
+              Effect.timeout(CLOSE_TIMEOUT),
+              Effect.catchCause((cause) =>
+                Effect.logWarning("Pack provider session close() failed or timed out", {
+                  driver,
+                  instanceId,
+                  cause,
+                }),
+              ),
+            ),
+        );
+        yield* Effect.addFinalizer(() => Deferred.succeed(closed, undefined));
+        const providerSession = yield* bridge.decode(PackCodec.providerSession, {
+          ...runtime.providerSession,
+          id: value.providerSessionId,
+          driver,
+          providerInstanceId: instanceId,
+        });
+        return makePackSessionRuntime({
+          runtime,
+          driver,
+          instanceId,
+          providerSessionId: value.providerSessionId,
+          providerSession,
+          closed: Deferred.await(closed),
+        });
+      }),
   };
 };

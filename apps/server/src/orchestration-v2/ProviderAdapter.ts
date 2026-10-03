@@ -22,6 +22,8 @@ import {
   ProviderInteractionMode,
   ProviderDriverKind,
   ProviderInstanceId,
+  ProviderJobControlRequest,
+  ProviderJobControlResult,
   PositiveInt,
   ProviderUserInputAnswers,
   ProviderSessionId,
@@ -576,6 +578,15 @@ export interface ProviderAdapterV2SessionRuntime {
   readonly forkThread: (
     input: ProviderAdapterV2ForkThreadInput,
   ) => Effect.Effect<OrchestrationV2ProviderThread, ProviderAdapterV2Error>;
+  /**
+   * t3team: out-of-band control of the provider thread's background jobs
+   * (list / cancel / read retained output). Absent means unsupported; the
+   * host's job-control route checks for the method, never a capability flag.
+   */
+  readonly jobControl?: (input: {
+    readonly providerThread: OrchestrationV2ProviderThread;
+    readonly request: ProviderJobControlRequest;
+  }) => Effect.Effect<ProviderJobControlResult, ProviderAdapterV2Error>;
 }
 
 export interface ProviderAdapterV2Shape {

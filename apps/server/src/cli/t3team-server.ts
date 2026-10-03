@@ -15,11 +15,13 @@ import { activateCompiledInDistribution } from "../t3team-distribution-bootstrap
 import {
   inspectConfiguredWorkspacePacks,
   loadPackAppearanceOverlay,
+  loadPackModelPolicy,
   loadPackProviderOverlay,
   loadPackWorkflowAgentModelPolicy,
   loadPackWorkflowEphemeralConcurrencyPolicy,
   loadPackWorkflowRepairPolicy,
 } from "../t3team-pack-host.ts";
+import { setDistributionModelPolicy } from "../t3team-configuredDefaultModelSelection.ts";
 import { setPackAppearanceOverlay } from "../t3team-pack-appearanceOverlay.ts";
 import {
   loadPackSetupProfileOverlay,
@@ -120,6 +122,21 @@ export const runT3TeamServerCommand = (
         ),
         Effect.catch((cause) =>
           Effect.logWarning("Workspace pack setup profile loading failed", { cause }).pipe(
+            Effect.as(undefined),
+          ),
+        ),
+      );
+      yield* Effect.tryPromise({
+        try: () => loadPackModelPolicy(packDiagnostic),
+        catch: (cause) => new WorkspacePackLoadError({ cause }),
+      }).pipe(
+        Effect.tap((policy) =>
+          Effect.sync(() => {
+            if (policy !== undefined) setDistributionModelPolicy(policy);
+          }),
+        ),
+        Effect.catch((cause) =>
+          Effect.logWarning("Workspace pack model policy loading failed", { cause }).pipe(
             Effect.as(undefined),
           ),
         ),

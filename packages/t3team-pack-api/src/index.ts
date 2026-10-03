@@ -1,6 +1,7 @@
 import type { PackProviderDriverDefinition } from "./provider-driver.ts";
 
 export * from "./provider-driver.ts";
+export * from "./provider-orchestration.ts";
 
 export type PackAssetResolver = (relativePath: string, mimeType: string) => Promise<string>;
 
@@ -24,6 +25,26 @@ export type WorkflowAgentModelPolicyDefinition = {
         readonly model: string;
         readonly options?: Record<string, unknown>;
       };
+};
+
+/** A model selection a pack names: an instance id, a model slug and optional model options. */
+export type PackModelSelectionDefinition = {
+  readonly instanceId: string;
+  readonly model: string;
+  readonly options?: Record<string, unknown>;
+};
+
+/**
+ * Distribution model defaults (capability `model-policy:v1`).
+ * - `defaultModelSelection` is the host default model: the welcome thread's model and the
+ *   text-generation default while the user has not chosen one.
+ * - `textGenerationModelSelection` pins every server-side text generator (thread titles, branch
+ *   names, commit/PR text, activity labels) regardless of user settings, e.g. to keep generated
+ *   text on a distribution-approved provider.
+ */
+export type ModelPolicyDefinition = {
+  readonly defaultModelSelection?: PackModelSelectionDefinition;
+  readonly textGenerationModelSelection?: PackModelSelectionDefinition;
 };
 
 export type WorkflowEphemeralConcurrencyPolicyDefinition = {
@@ -148,6 +169,7 @@ export type PackActivationContext = {
   readonly defineWorkflowEphemeralConcurrencyPolicy: (
     definition: WorkflowEphemeralConcurrencyPolicyDefinition,
   ) => void;
+  readonly defineModelPolicy: (definition: ModelPolicyDefinition) => void;
   readonly resolveAssetDataUrl: PackAssetResolver;
 };
 
