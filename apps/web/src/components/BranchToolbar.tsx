@@ -1,7 +1,6 @@
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { useNavigate } from "@tanstack/react-router";
 import {
   ChevronDownIcon,
   FolderGit2Icon,
@@ -22,9 +21,7 @@ import {
 } from "react";
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
-import { useCloudSessionController } from "../cloud/t3team-useCloudSessionController";
-import { runOnCloudSessions } from "./cloud/t3team-cloudSessionSplit";
-import { formatHoldDuration } from "./cloud/t3team-cloudSessionHoldFormat";
+import { useT3TeamRunOnCloudSessionProps } from "./cloud/t3team-useRunOnCloudSessionProps";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useProject, useThreadShell, useThreadShellsForProjectRefs } from "../state/entities";
 import {
@@ -617,30 +614,8 @@ export const BranchToolbar = memo(function BranchToolbar({
   const [stripElement, setStripElement] = useState<HTMLDivElement | null>(null);
   const labelsOverflow = useLabelsOverflow(stripElement);
 
-  // Cloud sessions shown in the "Run on" menu: everything still provisioning
-  // plus the most recent failed session (never silently forgotten). Read the
-  // split rule's doc for why ready sessions stay out of this list. Both
-  // derived values are memoised: the selector is memo'd and this strip
-  // re-renders on every keystroke, so a fresh array or callback here would
-  // defeat its memo.
-  // When there is no primary environment, no cloud affordance is passed and
-  // the menu renders exactly as it did before.
-  const cloudSessions = useCloudSessionController();
-  const pendingCloudSessions = useMemo(
-    () => (cloudSessions.available ? runOnCloudSessions(cloudSessions.sessions) : []),
-    [cloudSessions.available, cloudSessions.sessions],
-  );
-  const onCreateCloudSession = useCallback(
-    () => cloudSessions.onCreate(cloudSessions.durationSeconds),
-    [cloudSessions.durationSeconds, cloudSessions.onCreate],
-  );
-  // Unconfigured: the entry is a setup affordance, not a machine promise.
-  // The provisioning panel lives in the Connections settings, so the item
-  // leaves there — the same target the "Set up connections" link uses.
-  const navigate = useNavigate();
-  const onSetupCloudSessions = useCallback(() => {
-    void navigate({ to: "/settings/connections" });
-  }, [navigate]);
+  // t3team: the "Run on" menu's cloud entries (shared with the thread details panel).
+  const cloudSessions = useT3TeamRunOnCloudSessionProps();
 
   // The same machine can reach the catalog under two environment ids (its T3
   // Connect identity and a relay id minted when a cloud session's relay link
@@ -744,18 +719,7 @@ export const BranchToolbar = memo(function BranchToolbar({
                 environmentId={environmentId}
                 availableEnvironments={runOnEnvironments}
                 {...(showEnvironmentPicker && onEnvironmentChange ? { onEnvironmentChange } : {})}
-                {...(cloudSessions.available && cloudSessions.configured
-                  ? {
-                      pendingCloudSessions,
-                      onCreateCloudSession,
-                      cloudSessionDurationLabel: formatHoldDuration(cloudSessions.durationSeconds),
-                      onCloudSessionAction: cloudSessions.onSessionAction,
-                      onCloudMenuOpenChange: cloudSessions.onCloudMenuOpenChange,
-                    }
-                  : {})}
-                {...(cloudSessions.available && !cloudSessions.configured
-                  ? { onSetupCloudSessions }
-                  : {})}
+                {...cloudSessions.selectorProps}
               />
               {showGitControls ? (
                 <Separator

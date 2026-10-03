@@ -29,6 +29,7 @@ import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { ThreadAutomationsPanel } from "./ThreadAutomationsPanel";
 import { ThreadRelationshipsPanel } from "./ThreadRelationshipsControl";
 import { T3TeamThreadSubRunsSection } from "~/t3team/chat/t3team-ThreadSubRunsSection";
+import { useT3TeamRunOnCloudSessionProps } from "../cloud/t3team-useRunOnCloudSessionProps";
 
 interface VersionMismatchIssue {
   readonly clientVersion: string;
@@ -86,11 +87,16 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
   // Same rule as the composer strip: a lone remote machine still gets a row,
   // shown as a static label because there is nothing to pick.
   const canPickEnvironment = props.availableEnvironments.length > 1;
-  const showEnvironment = shouldShowEnvironmentIndicator({
-    activeEnvironment:
-      props.availableEnvironments.find((env) => env.environmentId === props.environmentId) ?? null,
-    canPickEnvironment,
-  });
+  // t3team: the "Run on" menu's cloud entries, as on the composer strip.
+  const cloudSessions = useT3TeamRunOnCloudSessionProps();
+  const showEnvironment =
+    cloudSessions.available ||
+    shouldShowEnvironmentIndicator({
+      activeEnvironment:
+        props.availableEnvironments.find((env) => env.environmentId === props.environmentId) ??
+        null,
+      canPickEnvironment,
+    });
   const branchToolbarProps = {
     showGitControls: props.isGitRepo,
     environmentId: props.environmentId,
@@ -162,6 +168,7 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                   {...(canPickEnvironment
                     ? { onEnvironmentChange: props.onEnvironmentChange }
                     : {})}
+                  {...cloudSessions.selectorProps}
                 />
               ) : null}
 
