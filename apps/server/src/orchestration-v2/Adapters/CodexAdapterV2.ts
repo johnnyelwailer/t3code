@@ -2,6 +2,10 @@ import { revertCodexThread } from "../../provider/CodexThreadRevert.ts";
 import { historyResponseItems } from "../ContextHandoffBudget.ts";
 import { makeProviderTextDeltaCoalescer } from "./ProviderTextDeltaCoalescer.ts";
 import {
+  CODEX_APP_SERVER_FORCE_KILL_AFTER,
+  spawnCodexAppServer,
+} from "./t3team-codexAppServerProcess.ts";
+import {
   mcpToolPresentation,
   type McpToolPresentation,
 } from "../../provider/CodexToolPresentation.ts";
@@ -1257,6 +1261,8 @@ export const makeCodexAppServerSpawnCommand = Effect.fn(
     ...(input.env === undefined ? {} : { env: input.env }),
     ...(input.extendEnv === undefined ? {} : { extendEnv: input.extendEnv }),
     shell: spawnCommand.shell,
+    // t3team: escalate to SIGKILL when the app-server ignores SIGTERM (GHE #326).
+    forceKillAfter: CODEX_APP_SERVER_FORCE_KILL_AFTER,
   });
 });
 
@@ -1282,7 +1288,7 @@ const makeCodexAppServerClientFactoryCommandLayer = (
               ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
               ...(options.env === undefined ? {} : { env: options.env, extendEnv: true }),
             });
-            const handle = yield* spawner.spawn(command).pipe(
+            const handle = yield* spawnCodexAppServer(spawner.spawn, command).pipe(
               Effect.provideService(Scope.Scope, scope),
               Effect.mapError(
                 (cause) =>
@@ -1401,7 +1407,7 @@ export const codexAppServerClientFactoryFromSettingsLayer: Layer.Layer<
             ),
             env: environment,
           });
-          const handle = yield* spawner.spawn(command).pipe(
+          const handle = yield* spawnCodexAppServer(spawner.spawn, command).pipe(
             Effect.provideService(Scope.Scope, scope),
             Effect.mapError(
               (cause) =>
