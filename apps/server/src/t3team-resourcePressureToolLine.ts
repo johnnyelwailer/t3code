@@ -1,8 +1,9 @@
 /**
  * Proactive pressure push on tool results (flag `NEXI_FF_RESOURCE_PRESSURE`):
  * agents never poll memory pressure. Instead every result of a
- * pressure-impacting tool — `t3team.thread.start_child`,
- * `t3team.orchestration.run` / `.resume` — carries one compact line with the
+ * pressure-impacting tool — `t3team.orchestration.run` / `.resume` (and
+ * `delegate_task`, through its result note in `t3team-delegateTaskExtensions.ts`)
+ * — carries one compact line with the
  * level, the T3 app-tree RSS, the machine verdict and one advisory, so the
  * agent sees the state exactly when it adds load.
  *
@@ -23,7 +24,6 @@ import { resolveT3TeamCanonicalToolId } from "./t3team-toolBrokerLegacyToolIds.t
 import type { ResourcePressureMonitorShape } from "./t3team-resourcePressureMonitor.ts";
 
 const PRESSURE_IMPACTING_TOOL_IDS: ReadonlySet<string> = new Set([
-  "t3team.thread.start_child",
   "t3team.orchestration.run",
   "t3team.orchestration.resume",
 ]);
@@ -31,8 +31,7 @@ const PRESSURE_IMPACTING_TOOL_IDS: ReadonlySet<string> = new Set([
 export const PRESSURE_ADVISORY: Record<ResourcePressureLevel, string> = {
   ok: "no action needed",
   warn: "avoid parallel spawns; prefer finishing current work",
-  critical:
-    "expect dispatch backoff — new turns (including a new child's first turn) are held until pressure clears; finish in-flight work and end the turn",
+  critical: "do not start new children or parallel work; finish in-flight work and end the turn",
 };
 
 const gib = (bytes: number): string => `${(bytes / 1024 ** 3).toFixed(1)} GiB`;

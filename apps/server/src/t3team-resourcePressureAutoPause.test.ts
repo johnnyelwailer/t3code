@@ -14,12 +14,6 @@ import {
   takeTurnNote,
   type AutoPauseState,
 } from "./t3team-resourcePressureAutoPauseModel.ts";
-import {
-  DISABLED_TURN_GATE,
-  makeResourcePressureTurnGate,
-  NOTE_HEADER,
-  RESOURCE_PRESSURE_ACTIVITY_KINDS,
-} from "./t3team-resourcePressureTurnGate.ts";
 
 const observe = (state: AutoPauseState, level: "ok" | "warn" | "critical", nowMs: number) =>
   observeLevel(state, level, nowMs);
@@ -112,61 +106,4 @@ describe("auto-pause state machine", () => {
     assert.strictEqual(note.note, escalationNote("warn"));
     assert.strictEqual(takeTurnNote(note.state, "t1").note, null);
   });
-});
-
-describe("turn gate (reactor seam)", () => {
-  it.effect("holds while critical, appends one paused activity, replays on resume", () =>
-    Effect.gen(function* () {
-      const autoPause = yield* makeResourcePressureAutoPause(1_000);
-      const dispatched: Array<{ kind: string; threadId: string }> = [];
-      const gate = makeResourcePressureTurnGate({
-        autoPause,
-        engine: {
-          dispatch: (command) => {
-            if (command.type === "thread.activity.append") {
-              dispatched.push({ kind: command.activity.kind, threadId: command.threadId });
-            }
-            return Effect.succeed({ sequence: 0 }) as never;
-          },
-        },
-      });
-      const threadId = ThreadId.make("t1");
-      const replayed: string[] = [];
-      const resumes = yield* gate
-        .runResumes((id) => Effect.sync(() => void replayed.push(id)))
-        .pipe(Effect.forkChild);
-      yield* Effect.yieldNow;
-
-      assert.isFalse(yield* gate.holdTurn(threadId), "ok admits");
-      yield* autoPause.observe("critical", 0);
-      assert.isTrue(yield* gate.holdTurn(threadId));
-      assert.isTrue(yield* gate.holdTurn(threadId));
-      assert.deepStrictEqual(dispatched, [
-        { kind: RESOURCE_PRESSURE_ACTIVITY_KINDS.paused, threadId: "t1" },
-      ]);
-
-      yield* autoPause.observe("ok", 10);
-      yield* autoPause.observe("ok", 1_010);
-      for (let i = 0; i < 10; i += 1) yield* Effect.yieldNow;
-      assert.deepStrictEqual(replayed, ["t1"]);
-      assert.strictEqual(dispatched[1]?.kind, RESOURCE_PRESSURE_ACTIVITY_KINDS.resumed);
-
-      const note = yield* gate.takeNote(threadId);
-      assert.strictEqual(note, `${NOTE_HEADER}\nPaused 1 s for memory pressure; current level ok.`);
-      assert.strictEqual(yield* gate.takeNote(threadId), null);
-      yield* Fiber.interrupt(resumes);
-    }),
-  );
-
-  it.effect("flag off: the disabled gate never holds, never notes", () =>
-    Effect.gen(function* () {
-      const gate = makeResourcePressureTurnGate({
-        autoPause: undefined,
-        engine: { dispatch: () => Effect.die("must not dispatch") },
-      });
-      assert.strictEqual(gate, DISABLED_TURN_GATE);
-      assert.isFalse(yield* gate.holdTurn(ThreadId.make("t1")));
-      assert.strictEqual(yield* gate.takeNote(ThreadId.make("t1")), null);
-    }),
-  );
 });

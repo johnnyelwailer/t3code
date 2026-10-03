@@ -225,8 +225,8 @@ import { sweepStorageNow } from "./t3team-resourcePressureSweep.ts";
 import {
   executeThreadCleanup,
   previewThreadCleanup,
-  type ThreadCleanupDeps,
 } from "./t3team-resourcePressureThreadCleanup.ts";
+import { makeThreadCleanupDeps } from "./t3team-resourcePressureThreadCleanupDeps.ts";
 import { StorageCleanup } from "./storageCleanup.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as UsageService from "./usage/UsageService.ts";
@@ -1280,14 +1280,12 @@ const makeWsRpcLayer = (
       const storageCleanup = yield* Effect.serviceOption(StorageCleanup);
       const processResourceMonitor = yield* ProcessResourceMonitor.ProcessResourceMonitor;
       const resourceTelemetry = yield* ResourceTelemetry.ResourceTelemetry;
-      const threadCleanupDeps: ThreadCleanupDeps = {
+      const threadCleanupDeps = yield* makeThreadCleanupDeps({
         enabled: isResourcePressureEnabled(),
         serverPid: process.pid,
         telemetry: resourceTelemetry,
-        providers: providerSessionManager,
         signal: processDiagnostics.signal,
-        engine: orchestrationEngine,
-      };
+      });
       const relayClient = yield* RelayClient.RelayClient;
       const cloudSessions = yield* CloudSessionService;
       const authorizationError = (requiredScope: AuthEnvironmentScope) =>
