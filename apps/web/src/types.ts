@@ -14,6 +14,7 @@ import type {
   RunId,
   RuntimeMode,
   ScheduledTaskId,
+  T3TeamMessageExt,
   ThreadId,
 } from "@t3tools/contracts";
 import type {
@@ -103,6 +104,8 @@ export interface ChatMessage {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly inputIntent?: OrchestrationV2UserMessageInputIntent | undefined;
+  /** t3team: the fork message ext, read from the message's context record (t3team-messageFraming). */
+  readonly t3teamExt?: T3TeamMessageExt | undefined;
 }
 
 export interface ProposedPlan {

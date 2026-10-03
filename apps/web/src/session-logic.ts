@@ -41,6 +41,10 @@ import {
   type SessionPhase,
   type TurnDiffSummary,
 } from "./types";
+import {
+  isHiddenT3TeamFramingMessage,
+  t3teamMessageExtOf,
+} from "./t3team/chat/t3team-messageFraming";
 import * as DateTime from "effect/DateTime";
 import * as Equal from "effect/Equal";
 import { shallow } from "zustand/vanilla/shallow";
@@ -601,6 +605,8 @@ export function deriveTimelineEntriesFromVisibleTurnItems(
     // Task progress belongs in the composer, not between conversation entries.
     if (item.type === "todo_list" || item.type === "checkpoint") continue;
     if (item.type === "user_message" && foldedAnswerMessageIds.has(item.messageId)) continue;
+    // t3team: agent-facing fork framing never shows in the timeline.
+    if (item.type === "user_message" && isHiddenT3TeamFramingMessage(item)) continue;
     const createdAt = projectedItemCreatedAt(row);
     const attempt = resolveAttempt(item);
     const attemptMetadata = attempt === undefined ? {} : { attempt };
@@ -629,6 +635,7 @@ export function deriveTimelineEntriesFromVisibleTurnItems(
         role: item.type === "user_message" ? "user" : "assistant",
         text: item.text,
         ...(item.type === "user_message" && item.context ? { context: item.context } : {}),
+        ...(item.type === "user_message" ? t3teamMessageExtOf(item) : {}),
         ...((item.attachments?.length ?? 0) > 0
           ? {
               attachments: (item.attachments ?? []).map((attachment) => {
