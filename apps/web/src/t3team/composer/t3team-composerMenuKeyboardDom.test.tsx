@@ -29,7 +29,7 @@ vi.mock("~/hooks/useTheme", () => ({ useTheme: () => ({ resolvedTheme: "light" }
 
 import type { ComposerPromptEditorHandle } from "~/components/ComposerPromptEditor";
 import { KickoffComposerEditor } from "~/t3team/composer/t3team-KickoffComposerEditor";
-import { t3teamComposerMenuOptionDomId } from "~/t3team/composer/t3team-composerMenuKeyboard";
+import { composerSuggestionOptionId } from "~/components/chat/ComposerCommandMenu";
 import type { T3TeamComposerMenuSelectionEffect } from "~/t3team/composer/t3team-composerMenuSelection";
 import { buildT3TeamRecipeSlashItems } from "~/t3team/composer/t3team-composerRecipeSlashItems";
 import { useT3TeamComposerCommandMenu } from "~/t3team/composer/t3team-useComposerCommandMenu";
@@ -207,7 +207,7 @@ describe("kickoff composer slash menu keyboard", () => {
     const listboxId = probe.listbox()?.id ?? "";
     expect(listboxId).toBeTruthy();
     expect(first[0]?.id).toBe(
-      t3teamComposerMenuOptionDomId(listboxId, "recipe-slash-command:alpha"),
+      composerSuggestionOptionId(listboxId, "recipe-slash-command:alpha"),
     );
     expect(probe.editor().getAttribute("aria-activedescendant")).toBe(first[0]?.id);
     expect(probe.editor().getAttribute("aria-controls")).toBe(probe.listbox()?.id);

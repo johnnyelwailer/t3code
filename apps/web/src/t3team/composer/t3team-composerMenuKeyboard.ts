@@ -12,23 +12,6 @@ export type T3TeamComposerMenuKeyAction =
   | { readonly type: "close" };
 
 /**
- * Stable DOM id for a menu option, derived from the item id.
- *
- * `aria-activedescendant` has to name an element id, so the ids may not be
- * generated per render. Item ids embed `:` and `/` (path and provider items),
- * which are legal in an HTML id but awkward in selectors, so every character
- * outside `[A-Za-z0-9-]` is escaped as `_<hex>_`. The escape is injective
- * (`_` is escaped too), so two different items can never share an id.
- */
-export function t3teamComposerMenuOptionDomId(listboxId: string, itemId: string): string {
-  const encoded = itemId.replace(
-    /[^a-zA-Z0-9-]/g,
-    (character) => `_${character.codePointAt(0)?.toString(16) ?? "x"}_`,
-  );
-  return `${listboxId}-option-${encoded}`;
-}
-
-/**
  * Resolves a key press against the rendered option list.
  *
  * Navigation wraps in both directions and starts from the first item on

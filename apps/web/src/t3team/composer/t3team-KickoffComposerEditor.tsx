@@ -1,4 +1,4 @@
-import { useId, useRef } from "react";
+import { useId } from "react";
 import type { ServerProviderSkill } from "@t3tools/contracts";
 
 import {
@@ -6,10 +6,11 @@ import {
   type ComposerPromptEditorHandle,
 } from "~/components/ComposerPromptEditor";
 import { EMPTY_COMPOSER_CONTEXT_RECORDS } from "~/components/composerContextPresentation";
-import { ComposerCommandMenu } from "~/components/chat/ComposerCommandMenu";
+import {
+  ComposerCommandMenu,
+  composerSuggestionOptionId,
+} from "~/components/chat/ComposerCommandMenu";
 import { useTheme } from "~/hooks/useTheme";
-import { t3teamComposerMenuOptionDomId } from "~/t3team/composer/t3team-composerMenuKeyboard";
-import { useT3TeamComposerActiveDescendant } from "~/t3team/composer/t3team-useComposerActiveDescendant";
 import type { useT3TeamKickoffComposerMenu } from "~/t3team/composer/t3team-useKickoffComposerMenu";
 
 type KickoffComposerCommandMenu = ReturnType<typeof useT3TeamKickoffComposerMenu>;
@@ -33,22 +34,16 @@ type KickoffComposerEditorProps = {
 export function KickoffComposerEditor(props: KickoffComposerEditorProps) {
   const { resolvedTheme } = useTheme();
   const { commandMenu } = props;
-  const containerRef = useRef<HTMLDivElement>(null);
-  const reactId = useId();
-  const listboxId = `t3team-composer-menu${reactId}`;
-
-  useT3TeamComposerActiveDescendant({
-    containerRef,
-    listboxId,
-    menuOpen: commandMenu.menuOpen,
-    activeOptionDomId: commandMenu.activeItemId
-      ? t3teamComposerMenuOptionDomId(listboxId, commandMenu.activeItemId)
-      : null,
-  });
+  const listId = `t3team-composer-menu${useId()}`;
+  // Same ARIA wiring as the chat composer: the editor names the list and its
+  // active option only while the list is actually rendered with items.
+  const activeSuggestionId =
+    commandMenu.menuOpen && commandMenu.menuItems.length > 0 && commandMenu.activeItemId
+      ? composerSuggestionOptionId(listId, commandMenu.activeItemId)
+      : undefined;
 
   return (
     <div
-      ref={containerRef}
       className="relative px-3 pb-2 pt-3.5 sm:px-4 sm:pt-4"
       onKeyDownCapture={(event) => {
         if (event.key !== "Escape" || !commandMenu.menuOpen) return;
@@ -60,11 +55,11 @@ export function KickoffComposerEditor(props: KickoffComposerEditorProps) {
       {commandMenu.menuOpen ? (
         <div className="absolute inset-x-0 bottom-full z-20 mb-2">
           <ComposerCommandMenu
+            listId={listId}
             items={commandMenu.menuItems}
             resolvedTheme={resolvedTheme}
             isLoading={commandMenu.isPathSearchPending}
             triggerKind={commandMenu.trigger?.kind ?? null}
-            listboxId={listboxId}
             activeItemId={commandMenu.activeItemId}
             onHighlightedItemChange={commandMenu.onHighlightedItemChange}
             onSelect={commandMenu.selectItem}
@@ -73,6 +68,8 @@ export function KickoffComposerEditor(props: KickoffComposerEditorProps) {
       ) : null}
       <ComposerPromptEditor
         editorRef={props.editorRef}
+        suggestionListId={listId}
+        activeSuggestionId={activeSuggestionId}
         value={props.text}
         cursor={props.cursor}
         contextRecords={EMPTY_COMPOSER_CONTEXT_RECORDS}

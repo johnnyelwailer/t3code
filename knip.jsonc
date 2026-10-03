@@ -111,6 +111,7 @@
         "scripts/cli.ts",
         "scripts/evaluate-thread-titles.ts",
         "scripts/measure-pr-preview.ts",
+        "scripts/update-test-shard-weights.ts",
         "src/provider/testFixtures/*.mjs",
         // One-off operator script, run by path (it imports its -run/-mapping/-layers siblings).
         "scripts/t3team-replay-task-records-to-plans.ts",

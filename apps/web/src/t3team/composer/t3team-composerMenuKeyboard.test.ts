@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  resolveT3TeamComposerMenuKey,
-  t3teamComposerMenuOptionDomId,
-} from "~/t3team/composer/t3team-composerMenuKeyboard";
+import { resolveT3TeamComposerMenuKey } from "~/t3team/composer/t3team-composerMenuKeyboard";
 
 const items = [{ id: "one" }, { id: "two" }, { id: "three" }];
 
@@ -13,23 +10,6 @@ function resolve(
 ) {
   return resolveT3TeamComposerMenuKey({ key, items, activeItemId });
 }
-
-describe("t3teamComposerMenuOptionDomId", () => {
-  it("is stable and escapes item ids injectively", () => {
-    expect(t3teamComposerMenuOptionDomId("box", "recipe-slash-command:qa-plan")).toBe(
-      t3teamComposerMenuOptionDomId("box", "recipe-slash-command:qa-plan"),
-    );
-    expect(t3teamComposerMenuOptionDomId("box", "path:file:a/b")).not.toBe(
-      t3teamComposerMenuOptionDomId("box", "path:file:a:b"),
-    );
-    expect(t3teamComposerMenuOptionDomId("box", "a_b")).not.toBe(
-      t3teamComposerMenuOptionDomId("box", "a-b"),
-    );
-    expect(/^[A-Za-z0-9_-]+$/.test(t3teamComposerMenuOptionDomId("box", "path:file:a/b.ts"))).toBe(
-      true,
-    );
-  });
-});
 
 describe("resolveT3TeamComposerMenuKey", () => {
   it("moves the highlight down and wraps", () => {

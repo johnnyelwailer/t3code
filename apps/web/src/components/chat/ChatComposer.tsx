@@ -258,7 +258,11 @@ import { ProviderModelPicker } from "./ProviderModelPicker";
 import { ComposerVoiceInput } from "./t3team-ComposerVoiceInput";
 import { isElectron } from "../../env";
 import { resolveModelPickerSelectedModel } from "./ModelPickerContent";
-import { type ComposerCommandItem, ComposerCommandMenu } from "./ComposerCommandMenu";
+import {
+  type ComposerCommandItem,
+  ComposerCommandMenu,
+  composerSuggestionOptionId,
+} from "./ComposerCommandMenu";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
 import { useComposerPathSearch } from "../../lib/composerPathSearchState";
 import { searchProviderSkills } from "../../providerSkillSearch";
@@ -320,8 +324,6 @@ import { basenameOfPath } from "../../pierre-icons";
 import { FileTagChipContent } from "./FileTagChip";
 import { applyT3TeamComposerMenuReplacement } from "~/t3team/composer/t3team-composerMenuApply";
 import type { T3TeamComposerMenuAppliedText } from "~/t3team/composer/t3team-composerMenuApply";
-import { t3teamComposerMenuOptionDomId } from "~/t3team/composer/t3team-composerMenuKeyboard";
-import { useT3TeamComposerActiveDescendant } from "~/t3team/composer/t3team-useComposerActiveDescendant";
 import { cn, isMacPlatform, randomUUID } from "~/lib/utils";
 import {
   getComposerPromptLengthValidationMessage,
@@ -2150,6 +2152,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     resetTrigger: resetComposerTrigger,
   } = useComposerTriggerState(() => detectComposerTrigger(prompt, prompt.length));
   const [composerHighlightedItemId, setComposerHighlightedItemId] = useState<string | null>(null);
+  const composerSuggestionId = useId();
+  const composerSuggestionListId = `${composerSuggestionId}-${encodeURIComponent(draftId ?? activeThreadId ?? "new")}-suggestions`;
   // Active ArrowUp recall. Cleared on edit and on thread switch.
   const promptHistoryPositionRef = useRef<ComposerPromptHistoryPosition | null>(null);
   const [composerHighlightedSearchKey, setComposerHighlightedSearchKey] = useState<string | null>(
@@ -2195,7 +2199,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const composerFormRef = useRef<HTMLFormElement>(null);
   const composerSurfaceRef = useRef<HTMLDivElement>(null);
-  const composerMenuSurfaceRef = useRef<HTMLDivElement>(null);
   const providerInputRejectedRef = useRef(false);
   const composerBlurFrameRef = useRef<number | null>(null);
   const mobileComposerExpandFrameRef = useRef<number | null>(null);
@@ -2594,7 +2597,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
 
   const composerMenuOpen = Boolean(composerTrigger);
   const composerMenuSearchKey = composerTrigger
-    ? `${composerTrigger.kind}:${composerTrigger.query.trim().toLowerCase()}`
+    ? `${composerSuggestionListId}:${composerTrigger.kind}:${composerTrigger.query.trim().toLowerCase()}`
     : null;
   const activeComposerMenuItem = useMemo(() => {
     const activeItemId = resolveComposerMenuActiveItemId({
@@ -2615,23 +2618,15 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   composerMenuItemsRef.current = composerMenuItems;
   activeComposerMenuItemRef.current = activeComposerMenuItem;
 
-  const composerMenuListboxId = `chat-composer-menu${useId()}`;
-  const composerMenuIsRendered = composerMenuOpen && activePendingApproval === null;
-  useT3TeamComposerActiveDescendant({
-    containerRef: composerMenuSurfaceRef,
-    listboxId: composerMenuListboxId,
-    menuOpen: composerMenuIsRendered,
-    activeOptionDomId: activeComposerMenuItem?.id
-      ? t3teamComposerMenuOptionDomId(composerMenuListboxId, activeComposerMenuItem.id)
-      : null,
-  });
-
   const nonPersistedComposerImageIdSet = useMemo(
     () => new Set(nonPersistedComposerImageIds),
     [nonPersistedComposerImageIds],
   );
 
   const isComposerApprovalState = activePendingApproval !== null;
+  const composerSuggestionsVisible = composerMenuOpen && !isComposerApprovalState;
+  const composerSuggestionListVisible = composerSuggestionsVisible && composerMenuItems.length > 0;
+  const activePendingUserInput = pendingUserInputs[0] ?? null;
   const isChoiceOnlyPendingQuestion =
     activePendingProgress?.activeQuestion?.allowCustomAnswer === false;
   // The prompt editor's value while a pending question is docked: it stays on
@@ -3283,6 +3278,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   // ------------------------------------------------------------------
   useEffect(() => {
     setComposerHighlightedItemId(null);
+    setComposerHighlightedSearchKey(null);
     setComposerSubmissionError(null);
     setProviderInputSubmissionError(null);
     setComposerCursor(collapseExpandedComposerCursor(promptRef.current, promptRef.current.length));
@@ -6511,7 +6507,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           <div
             ref={(node) => {
               composerSurfaceRef.current = node;
-              composerMenuSurfaceRef.current = node;
               setComposerMenuAnchor(node);
             }}
             data-chat-composer-surface="true"
@@ -6604,15 +6599,24 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 </ComposerCommandMenuLayer>
               )}
 
-              {composerMenuOpen && !isComposerApprovalState && (
+              <div role="status" aria-atomic="true" className="sr-only">
+                {composerSuggestionsVisible && composerMenuItems.length === 0
+                  ? isComposerMenuLoading
+                    ? composerTriggerKind === "pull-request"
+                      ? "Finding pull request..."
+                      : "Searching workspace files..."
+                    : composerMenuEmptyState
+                  : ""}
+              </div>
+              {composerSuggestionsVisible && (
                 <ComposerCommandMenuLayer anchor={composerMenuAnchor}>
                   <ComposerCommandMenu
+                    listId={composerSuggestionListId}
                     items={composerMenuItems}
                     resolvedTheme={resolvedTheme}
                     isLoading={isComposerMenuLoading}
                     triggerKind={composerTriggerKind}
                     emptyStateText={composerMenuEmptyState}
-                    listboxId={composerMenuListboxId}
                     activeItemId={activeComposerMenuItem?.id ?? null}
                     onHighlightedItemChange={onComposerMenuItemHighlighted}
                     onSelect={onSelectComposerItem}
@@ -6996,6 +7000,16 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 ) : null}
                 <ComposerContextActionsContext value={composerContextActions}>
                   <ComposerPromptEditor
+                    ariaLabel="Message"
+                    suggestionListId={composerSuggestionListId}
+                    activeSuggestionId={
+                      composerSuggestionListVisible && activeComposerMenuItem
+                        ? composerSuggestionOptionId(
+                            composerSuggestionListId,
+                            activeComposerMenuItem.id,
+                          )
+                        : undefined
+                    }
                     editorRef={composerEditorRef}
                     richTextEnabled={settings.composerRichTextEnabled}
                     value={resolveComposerPromptEditorValue(composerDraftAnswerState)}

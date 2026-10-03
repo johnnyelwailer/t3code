@@ -84,6 +84,11 @@ vi.mock("../../cloud/publicConfig", async (importOriginal) => ({
   hasCloudPublicConfig: () => false,
 }));
 vi.mock("../ThreadTerminalDrawer", () => ({ TerminalViewport: () => null }));
+vi.mock("../settings/ChatGptWelcomeCoordinator", () => ({ ChatGptWelcomeCoordinator: () => null }));
+vi.mock("../settings/CodexSetupSection", () => ({
+  CodexSetupSection: () => null,
+  AddManagedCodexAccountDialog: () => null,
+}));
 vi.mock("../cloud/CloudEnvironmentConnectList", () => ({
   CloudEnvironmentConnectRows: () => null,
 }));
