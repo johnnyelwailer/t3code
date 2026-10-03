@@ -119,6 +119,11 @@ import { buildRuntimeInstructions } from "../../provider/RuntimeInstructions.ts"
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import * as IdAllocator from "../IdAllocator.ts";
 import { makeProviderFailure, makeProviderRetryTurnItem } from "../ProviderFailure.ts";
+import {
+  isClaudeInterruptedCause,
+  isClaudeInterruptedMessage,
+  planClaudeGatewayRedrive,
+} from "./t3team-claudeTurnRecovery.ts";
 import { turnScopedSelectionTransition } from "../ProviderSelectionTransition.ts";
 import { providerMessageTextWithAttachmentPaths } from "../AttachmentPrompt.ts";
 import * as ProviderAdapter from "../ProviderAdapter.ts";
@@ -2307,7 +2312,8 @@ function terminalStatusFromResult(
       : "completed";
   }
   const errorText = message.errors.join("\n").toLowerCase();
-  if (errorText.includes("interrupt")) {
+  // t3team: abort phrasings ("This operation was aborted") are interruptions too.
+  if (errorText.includes("interrupt") || isClaudeInterruptedMessage(errorText)) {
     return "interrupted";
   }
   if (errorText.includes("cancel")) {
@@ -2640,8 +2646,9 @@ interface ActiveClaudeTurnContext {
   readonly pendingSubagentLaunchesByToolUseId: Map<string, PendingClaudeSubagentLaunch>;
   // Set on turns that offered a prompt. Claude runs a wake turn it queued
   // for background work before the next prompt's turn, and only the
-  // prompt's turn echoes this uuid (see handleSdkMessage).
-  readonly promptUuid: string | null;
+  // prompt's turn echoes this uuid (see handleSdkMessage). t3team: a gateway
+  // re-drive re-prompts the same turn under a new uuid.
+  promptUuid: string | null;
   promptEcho: "pending" | "confirmed";
   // Root frames seen before the echo; held only when the CLI echoes early.
   gatedFramesBeforeEcho: number;
@@ -4986,7 +4993,10 @@ export function makeClaudeAdapterV2(
             return;
           }
           const completedAt = yield* DateTime.now;
-          const interrupted = (yield* Ref.get(interruptedTurns)).has(context.providerTurnId);
+          const interrupted =
+            (yield* Ref.get(interruptedTurns)).has(context.providerTurnId) ||
+            // t3team: a mid-tool-call abort kills the stream with an abort error.
+            (cause !== undefined && isClaudeInterruptedCause(cause));
           yield* finalizeActiveTurn({
             context,
             status: interrupted ? "interrupted" : "failed",
@@ -5332,6 +5342,111 @@ export function makeClaudeAdapterV2(
             providerThread: baseThread,
             status,
           });
+          return true;
+        });
+
+        // t3team: transient gateway re-drive (t3team-claudeTurnRecovery.ts). The failed result
+        // leaves the turn running behind a provider-retry item; after the wait the live query is
+        // re-prompted under a new prompt uuid, which the echo gate then tracks as this turn's.
+        const t3teamRedriveTransientGateway = Effect.fnUntraced(function* (
+          context: ActiveClaudeTurnContext,
+          message: SDKResultMessage,
+        ) {
+          const liveQuery = yield* Ref.get(queryContext);
+          if (
+            liveQuery === null ||
+            context.promptUuid === null ||
+            message.subtype === "success" ||
+            terminalStatusFromResult(message) !== "failed"
+          ) {
+            return false;
+          }
+          const plan = planClaudeGatewayRedrive(context, message.errors.join("\n"));
+          if (plan === null) {
+            return false;
+          }
+          const updatedAt = yield* DateTime.now;
+          const previous = (yield* Ref.get(providerRetries)).get(context.providerTurnId);
+          const state: ActiveClaudeProviderRetry = {
+            retry: {
+              attempt: plan.attempt,
+              maxAttempts: plan.maxAttempts,
+              retryDelayMs: plan.retryDelayMs,
+            },
+            failure: makeProviderFailure({
+              message: plan.errorText,
+              code: "gateway_transient",
+              class: "provider_error",
+              retryable: true,
+            }),
+            startedAt: previous?.startedAt ?? updatedAt,
+            itemOrdinal:
+              previous?.itemOrdinal ??
+              (yield* resolveItemOrdinal(context, `terminal-failure:${context.providerTurnId}`)),
+          };
+          yield* Ref.update(providerRetries, (current) =>
+            new Map(current).set(context.providerTurnId, state),
+          );
+          yield* emitProviderEvent({
+            type: "turn_item.updated",
+            driver: CLAUDE_PROVIDER,
+            turnItem: makeProviderRetryTurnItem({
+              idAllocator,
+              driver: CLAUDE_PROVIDER,
+              threadId: context.input.threadId,
+              runId: context.input.runId,
+              nodeId: context.input.rootNodeId,
+              providerThreadId: context.input.providerThread.id,
+              providerTurnId: context.providerTurnId,
+              itemOrdinal: state.itemOrdinal,
+              failure: state.failure,
+              retry: state.retry,
+              status: "running",
+              startedAt: state.startedAt,
+              updatedAt,
+            }),
+          });
+          const promptUuid = claudePromptUuid(
+            `${context.input.attemptId}:t3team-gateway-retry:${plan.attempt}`,
+          );
+          const redrive = Effect.gen(function* () {
+            const stillActive =
+              (yield* Ref.get(activeTurn)) === context &&
+              (yield* Ref.get(queryContext))?.query === liveQuery.query &&
+              !(yield* Ref.get(interruptedTurns)).has(context.providerTurnId);
+            if (!stillActive) {
+              return;
+            }
+            context.promptUuid = promptUuid;
+            context.promptEcho = "pending";
+            context.gatedFramesBeforeEcho = 0;
+            yield* liveQuery.query.offer({
+              type: "user",
+              message: { role: "user", content: [{ type: "text", text: plan.text }] },
+              parent_tool_use_id: null,
+              uuid: promptUuid,
+            } satisfies SDKUserMessage);
+          });
+          yield* Effect.sleep(plan.retryDelayMs).pipe(
+            Effect.andThen(redrive),
+            Effect.catchCause((cause) =>
+              Effect.gen(function* () {
+                yield* Effect.logWarning("t3team.claude-gateway-redrive-failed", {
+                  providerTurnId: context.providerTurnId,
+                  cause,
+                });
+                if ((yield* Ref.get(activeTurn)) === context) {
+                  yield* finalizeActiveTurn({
+                    context,
+                    status: "failed",
+                    completedAt: yield* DateTime.now,
+                    failure: state.failure,
+                  });
+                }
+              }),
+            ),
+            Effect.forkIn(sessionScope),
+          );
           return true;
         });
 
@@ -6256,6 +6371,14 @@ export function makeClaudeAdapterV2(
               (message.terminal_reason == null ||
                 message.terminal_reason === "api_error" ||
                 message.terminal_reason === "blocking_limit");
+            if (
+              !interrupted &&
+              !usageLimited &&
+              context.authenticationFailureMessage === undefined &&
+              (yield* t3teamRedriveTransientGateway(context, message))
+            ) {
+              return;
+            }
             const failureHint =
               context.authenticationFailureMessage ??
               (usageLimited

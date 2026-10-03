@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - a real child process stands in for a wedged app-server.
 import * as NodeChildProcess from "node:child_process";
 
 import { assert, it } from "@effect/vitest";

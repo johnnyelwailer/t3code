@@ -21,14 +21,17 @@ import { makeOpenCodeAdapterV2 } from "./OpenCodeAdapterV2.ts";
 
 type ConnectInput = Parameters<OpenCodeRuntimeShape["connectToOpenCodeServer"]>[0];
 
-const openWith = (configContent: string) =>
-  Effect.gen(function* () {
+const decodeSettings = Schema.decodeSync(OpenCodeSettings);
+
+const openWith = (configContent: string) => {
+  const settings = decodeSettings({ configContent });
+  return Effect.gen(function* () {
     const idAllocator = yield* IdAllocator.IdAllocatorV2;
     const instanceId = ProviderInstanceId.make("opencode-config");
     const connects: Array<ConnectInput> = [];
     const adapter = makeOpenCodeAdapterV2({
       instanceId,
-      settings: Schema.decodeSync(OpenCodeSettings)({ configContent }),
+      settings,
       environment: {},
       runtime: {
         connectToOpenCodeServer: (input: ConnectInput) => {
@@ -57,6 +60,7 @@ const openWith = (configContent: string) =>
     assert.isTrue(Exit.isFailure(exit));
     return connects;
   }).pipe(Effect.provide(IdAllocator.layer), Effect.scoped);
+};
 
 it.effect("forwards the configured OpenCode config content when a session connects", () =>
   Effect.gen(function* () {
