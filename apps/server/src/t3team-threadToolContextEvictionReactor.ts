@@ -25,14 +25,7 @@ import * as Stream from "effect/Stream";
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
 import { T3TeamThreadToolContextStore } from "./t3team-threadToolContextStore.ts";
 
-type ToolContextLifecycleEvent = Extract<
-  OrchestrationV2DomainEvent,
-  { readonly type: "thread.created" | "thread.deleted" }
->;
-
-const isToolContextLifecycleEvent = (
-  event: OrchestrationV2DomainEvent,
-): event is ToolContextLifecycleEvent =>
+const isToolContextLifecycleEvent = (event: OrchestrationV2DomainEvent) =>
   event.type === "thread.created" || event.type === "thread.deleted";
 
 export interface T3TeamThreadToolContextEvictionReactorShape {
@@ -50,10 +43,11 @@ const make = Effect.gen(function* () {
   const threads = yield* ThreadManagementService;
   const store = yield* T3TeamThreadToolContextStore;
 
-  const apply = (event: ToolContextLifecycleEvent) => {
+  const apply = (event: OrchestrationV2DomainEvent) => {
     if (event.type === "thread.deleted") {
       return store.put({ threadId: event.threadId, toolContext: null });
     }
+    if (event.type !== "thread.created") return Effect.void;
     const lineage = event.payload.lineage;
     if (lineage.relationshipToParent !== "fork" || lineage.parentThreadId === null) {
       return Effect.void;
@@ -68,7 +62,7 @@ const make = Effect.gen(function* () {
     });
   };
 
-  const handle = (event: ToolContextLifecycleEvent) =>
+  const handle = (event: OrchestrationV2DomainEvent) =>
     apply(event).pipe(
       Effect.catchCause((cause) =>
         Cause.hasInterruptsOnly(cause)

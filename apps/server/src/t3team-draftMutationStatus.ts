@@ -1,59 +1,57 @@
 /**
- * Recording a reviewer's verdict ON the draft carrier — the durable half of accept/dismiss.
+ * Recording a reviewer's verdict ON the draft artifact — the durable half of accept/dismiss.
  *
- * A draft is published as a hidden carrier message whose id the draft id derives from
- * (`jira-draft:<carrierMessageId>`, see t3team-draftMutationPublish.ts). That makes the carrier
- * addressable, so the verdict is recorded by RE-UPSERTING the same message with the same payload and
- * a new `status` — the same publish path, the same message id, no second channel and no server-owned
- * draft table. A re-read of the thread then returns the verdict, which is what stops an accepted
+ * A draft is published as a `draft-mutation` thread artifact whose id IS the draft id
+ * (`jira-draft:<uuid>`, see t3team-draftMutationPublish.ts). The verdict is recorded by
+ * re-upserting the same artifact with the same payload and a new `status` — no second channel. A
+ * re-read of the thread's artifacts then returns the verdict, which is what stops an accepted
  * proposal from coming back as pending review.
  *
- * This module is the pure part: given the carrier's `t3teamExt`, produce the updated one. The
- * projector REPLACES `t3teamExt` wholesale on upsert (see ProjectionPipeline's `thread.message-sent`
- * case), so the whole ext is carried through here — `visibleToUser: false`, `visibleToAgent: false`
- * and the author included. Dropping any of them would surface the carrier in the chat as an empty
- * message, which is exactly the bug the hidden carrier exists to avoid.
+ * This module is the pure part: id normalisation and the payload update.
  */
 
-import type { T3TeamDraftMutationStatus, T3TeamMessageExt } from "@t3tools/contracts";
+import type {
+  T3TeamDraftMutationStatus,
+  T3TeamMessageDraftMutationAttachment,
+} from "@t3tools/contracts";
 
-/** The prefix `buildT3TeamDraftMutationAttachment` puts in front of the carrier's message id. */
+/** Artifact kind of a draft carrier in the thread artifacts store. */
+export const T3TEAM_DRAFT_MUTATION_ARTIFACT_KIND = "draft-mutation";
+
+/** The prefix every draft id (= artifact id) carries. */
 const DRAFT_ID_PREFIX = "jira-draft:";
 
 /**
- * The carrier message id a draft id addresses. Accepts the draft id (`jira-draft:<messageId>`) or a
- * bare message id, so a caller holding either identifies the same carrier.
+ * The artifact id a client-supplied draft reference addresses. Accepts the draft id
+ * (`jira-draft:<id>`) or the bare id after the prefix, so a caller holding either identifies the
+ * same artifact.
  */
-export function carrierMessageIdFromDraftId(value: string): string | undefined {
+export function draftArtifactIdFromDraftId(value: string): string | undefined {
   const trimmed = value.trim();
   if (trimmed.length === 0) return undefined;
   const withoutPrefix = trimmed.startsWith(DRAFT_ID_PREFIX)
     ? trimmed.slice(DRAFT_ID_PREFIX.length).trim()
     : trimmed;
-  return withoutPrefix.length > 0 ? withoutPrefix : undefined;
+  return withoutPrefix.length > 0 ? `${DRAFT_ID_PREFIX}${withoutPrefix}` : undefined;
 }
 
+const isDraftAttachment = (payload: unknown): payload is T3TeamMessageDraftMutationAttachment => {
+  if (!payload || typeof payload !== "object") return false;
+  const record = payload as { readonly kind?: unknown; readonly draft?: unknown };
+  return record.kind === "draft-mutation" && !!record.draft && typeof record.draft === "object";
+};
+
 /**
- * The carrier's ext with every draft attachment moved to `status`, or `undefined` when the message
- * carries no draft at all (a wrong message id, or a plain message) — the caller reports that rather
- * than silently upserting a message with nothing changed.
+ * The artifact payload with the draft moved to `status`, or `undefined` when the payload carries
+ * no draft — the caller reports that rather than silently writing an unchanged row.
  *
- * Everything except `status` is preserved verbatim, including the patch: this records a verdict, it
- * never rewrites the proposal.
+ * Everything except `status` is preserved verbatim, including the patch: this records a verdict,
+ * it never rewrites the proposal.
  */
 export function withDraftMutationStatus(
-  ext: T3TeamMessageExt | undefined,
+  payload: unknown,
   status: T3TeamDraftMutationStatus,
-): T3TeamMessageExt | undefined {
-  const attachments = ext?.attachments;
-  if (ext === undefined || attachments === undefined) return undefined;
-  if (!attachments.some((attachment) => attachment.kind === "draft-mutation")) return undefined;
-  return {
-    ...ext,
-    attachments: attachments.map((attachment) =>
-      attachment.kind === "draft-mutation"
-        ? { ...attachment, draft: { ...attachment.draft, status } }
-        : attachment,
-    ),
-  };
+): T3TeamMessageDraftMutationAttachment | undefined {
+  if (!isDraftAttachment(payload)) return undefined;
+  return { ...payload, draft: { ...payload.draft, status } };
 }

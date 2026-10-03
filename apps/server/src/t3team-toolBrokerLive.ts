@@ -29,6 +29,7 @@ import { makeRecipeToolHandlers } from "./t3team-toolBrokerRecipeTools.ts";
 import { makeT3TeamThreadReads } from "./t3team-toolBrokerThreadReads.ts";
 import { makeLoadThreadView } from "./t3team-toolBrokerViewWorkspace.ts";
 import { makeT3TeamWidgetShowBinder } from "./t3team-toolBrokerWidgetShow.ts";
+import { makeT3TeamDraftMutationPublisherBinder } from "./t3team-draftMutationPublish.ts";
 import { makeWorkflowToolsForThread } from "./t3team-toolBrokerWorkflowToolsWiring.ts";
 import { UsageLimitSources } from "./usage/UsageLimitSources.ts";
 
@@ -94,8 +95,8 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     usageLimitSources,
     resourcePressure,
     contextRefresh,
-    dispatchCommand,
     bindShowWidget: yield* makeT3TeamWidgetShowBinder(),
+    bindPublishDraft: yield* makeT3TeamDraftMutationPublisherBinder(),
     loadThreadView: makeLoadThreadView(loadThreadProject, reads.loadThreadStats),
     manageChildren,
     recipeToolsForThread: makeRecipeToolHandlers({ fileSystem, path, loadThreadProject }),

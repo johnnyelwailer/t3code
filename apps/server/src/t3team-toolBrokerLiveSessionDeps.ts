@@ -5,11 +5,12 @@
  *
  * @module t3team-toolBrokerLiveSessionDeps
  */
-import type { OrchestrationV2ServerCommand, ThreadId as ThreadIdType } from "@t3tools/contracts";
+import type { ThreadId as ThreadIdType } from "@t3tools/contracts";
 import type * as Effect from "effect/Effect";
 
 import type { ProviderRegistryShape } from "./provider/Services/ProviderRegistry.ts";
 import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshService.ts";
+import type { T3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
 import type { ResourcePressureMonitorShape } from "./t3team-resourcePressureMonitor.ts";
 import type { T3TeamThreadToolContextStoreShape } from "./t3team-threadToolContextStore.ts";
 import type { T3TeamToolCallResult, T3TeamTurnToolContext } from "./t3team-toolBroker.ts";
@@ -31,13 +32,11 @@ export interface BindSessionDeps {
   readonly usageLimitSources: UsageLimitSources["Service"] | undefined;
   readonly resourcePressure: ResourcePressureMonitorShape | undefined;
   readonly contextRefresh: T3TeamContextRefreshServiceShape;
-  /** V2 command dispatch (ThreadManagementService), errors flattened to a message. */
-  readonly dispatchCommand: (
-    command: OrchestrationV2ServerCommand,
-  ) => Effect.Effect<unknown, string>;
-  readonly bindShowWidget: <TLoadError, TDispatchError>(
-    input: Omit<Parameters<typeof makeT3TeamShowWidget<TLoadError, TDispatchError>>[0], "runtime">,
+  readonly bindShowWidget: <TLoadError>(
+    input: Omit<Parameters<typeof makeT3TeamShowWidget<TLoadError>>[0], "runtime">,
   ) => (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
+  /** Per-thread draft-mutation publisher (thread artifacts store). */
+  readonly bindPublishDraft: (threadId: ThreadIdType) => T3TeamDraftMutationPublisher;
   readonly loadThreadView: (
     threadId: ThreadIdType,
     toolContext: T3TeamTurnToolContext,

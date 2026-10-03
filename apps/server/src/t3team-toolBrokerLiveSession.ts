@@ -8,7 +8,6 @@
  */
 import * as Effect from "effect/Effect";
 
-import { makeT3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
 import { withPressureLines } from "./t3team-resourcePressureToolLine.ts";
 import { type T3TeamToolBrokerShape } from "./t3team-toolBroker.ts";
 import { setBacklogAssigneeFilterForContext } from "./t3team-toolBrokerBacklogFilter.ts";
@@ -22,7 +21,7 @@ import { makeReadProviderUsage } from "./t3team-toolBrokerProviderUsage.ts";
 export type { BindSessionDeps } from "./t3team-toolBrokerLiveSessionDeps.ts";
 
 export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["bindSession"] {
-  const { contextStore, genericThreadToolIds, reads, dispatchCommand } = deps;
+  const { contextStore, genericThreadToolIds, reads } = deps;
   const scopeLabel = "for this thread.";
 
   return ({ threadId, toolContext, allowedToolGroups }) =>
@@ -54,9 +53,8 @@ export function makeBindSession(deps: BindSessionDeps): T3TeamToolBrokerShape["b
         showWidget: deps.bindShowWidget({
           threadId,
           loadThreadProject: () => reads.loadThreadProject(threadId),
-          dispatch: dispatchCommand,
         }),
-        publishDraft: makeT3TeamDraftMutationPublisher({ threadId, dispatch: dispatchCommand }),
+        publishDraft: deps.bindPublishDraft(threadId),
         threadId,
         toolContext: resolvedToolContext,
         availableToolIds: toolIds,

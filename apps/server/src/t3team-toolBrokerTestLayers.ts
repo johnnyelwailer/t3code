@@ -27,6 +27,7 @@ import {
 import { makeContextRefreshLiveLayer } from "./t3team-contextRefreshTestFixtures.ts";
 import { T3TeamThreadToolContextStoreLive } from "./t3team-threadToolContextStore.ts";
 import { T3TeamToolBrokerLive } from "./t3team-toolBrokerLive.ts";
+import { T3TeamThreadArtifactsStore } from "./t3team-v2/t3team-threadArtifactsStore.ts";
 import { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
 import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
 
@@ -124,6 +125,16 @@ const v2Fakes = (dispatch: TestDispatch) =>
         Effect.succeed(id === projectId ? Option.some(testBrokerProject) : Option.none()),
     }),
     Layer.mock(T3TeamThreadFactsStore)({ list: () => Effect.succeed([]) }),
+    // Widgets and draft mutations are recorded as thread artifacts; accept every write.
+    Layer.mock(T3TeamThreadArtifactsStore)({
+      upsert: (input) =>
+        Effect.succeed({
+          ...input,
+          messageId: input.messageId ?? null,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        }),
+    }),
   );
 
 function makeBrokerLayerBase(
