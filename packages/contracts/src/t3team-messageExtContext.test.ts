@@ -31,24 +31,19 @@ describe("t3team message ext context record", () => {
 
   it("replaces an earlier ext record and keeps the other records", () => {
     const first = withT3TeamMessageExtContext({ displayText: "one" });
-    const withMention = {
-      version: 1 as const,
+    const mention = Schema.decodeUnknownSync(OrchestrationMessageContext)({
+      version: 1,
       records: [
-        ...first!.records,
-        roundTrip({
+        {
           version: 1,
-          records: [
-            {
-              version: 1,
-              contextId: "mention-1",
-              label: "README.md",
-              kind: "mention",
-              path: "README.md",
-            },
-          ],
-        } as OrchestrationMessageContext).records[0]!,
+          contextId: "mention-1",
+          label: "README.md",
+          kind: "mention",
+          path: "README.md",
+        },
       ],
-    };
+    }).records[0]!;
+    const withMention = { version: 1 as const, records: [...first!.records, mention] };
 
     const next = withT3TeamMessageExtContext({ displayText: "two" }, withMention);
 
