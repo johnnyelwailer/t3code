@@ -461,7 +461,8 @@
     "apps/server/src/orchestration-v2/RunExecutionService.ts",
     "packages/t3team-pack-api/src/index.ts",
     "packages/t3team-pack-api/src/provider-driver.test.ts",
-    "apps/server/src/provider/T3OrchestrationInstructions.ts"
+    "apps/server/src/provider/T3OrchestrationInstructions.ts",
+    "apps/web/src/components/chat/ThreadDetailsPanel.tsx"
   ],
   "allowedUnprefixedNewFiles": [
     ".agents/skills/merge-upstream/SKILL.md",

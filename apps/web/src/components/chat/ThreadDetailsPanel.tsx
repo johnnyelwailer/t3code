@@ -28,6 +28,7 @@ import { OpenInPicker } from "./OpenInPicker";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import { ThreadAutomationsPanel } from "./ThreadAutomationsPanel";
 import { ThreadRelationshipsPanel } from "./ThreadRelationshipsControl";
+import { T3TeamThreadSubRunsSection } from "~/t3team/chat/t3team-ThreadSubRunsSection";
 
 interface VersionMismatchIssue {
   readonly clientVersion: string;
@@ -228,6 +229,14 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
 
           {density === "full" && !props.draftId ? (
             <ThreadRelationshipsPanel
+              environmentId={props.environmentId}
+              threadId={props.threadId}
+            />
+          ) : null}
+
+          {/* t3team: the nested sub-run tree (app-owned subagent lineage). */}
+          {density === "full" && !props.draftId ? (
+            <T3TeamThreadSubRunsSection
               environmentId={props.environmentId}
               threadId={props.threadId}
             />

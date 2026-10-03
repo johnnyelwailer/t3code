@@ -414,6 +414,8 @@ import { appendContextAttachmentsToPrompt } from "~/t3team/chat/t3team-prepareTh
 import { useT3TeamTimelineArtifacts } from "~/t3team/chat/t3team-useTimelineArtifacts";
 import { useResourcePressureBannerItem } from "./chat/t3team-ResourcePressureThreadBanner";
 import { useT3TeamChatTimelineProps } from "~/t3team/chat/t3team-useChatTimelineProps";
+import { useT3TeamStopCascade } from "~/t3team/chat/t3team-useStopCascade";
+import { useT3TeamActiveAgents } from "~/t3team/chat/t3team-useActiveAgents";
 import { createPageScrollController, type PageScrollKey } from "./chat/pageScrollController";
 import { isTimelineScrollTarget } from "./chat/timelineScrollTarget";
 import { DraftHeroHeadline } from "./chat/DraftHeroHeadline";
@@ -4135,9 +4137,13 @@ export default function ChatView(props: ChatViewProps) {
       ? activeProviderStatus
       : null;
   const hasOpenUserInput = pendingUserInputs.length > 0;
+  const t3teamActiveAgents = useT3TeamActiveAgents({
+    threadId: isServerThread ? threadId : null,
+    subagents: serverProjection?.subagents,
+  });
   const t3teamWorkingRow = useMemo(
-    () => ({ serverStartedAtMs, hasOpenUserInput }),
-    [hasOpenUserInput, serverStartedAtMs],
+    () => ({ serverStartedAtMs, hasOpenUserInput, activeAgents: t3teamActiveAgents }),
+    [hasOpenUserInput, serverStartedAtMs, t3teamActiveAgents],
   );
   const t3teamChat = useT3TeamChatTimelineProps({
     environmentId,
@@ -4459,6 +4465,12 @@ export default function ChatView(props: ChatViewProps) {
       );
     }
   }, [activeThread, environmentId, interruptThreadTurn, setThreadError]);
+  // t3team: "Stop incl. sub-runs" over V2 lineage (capability-gated fork RPC).
+  const t3teamStopCascade = useT3TeamStopCascade({
+    environmentId,
+    threadId: activeThread?.id ?? null,
+    supported: serverConfig?.environment.capabilities.t3team?.stopCascade === true,
+  });
   useEffect(() => subscribeSnapShotComposerFocus(focusComposer), [focusComposer]);
   const scheduleComposerFocus = useCallback(() => {
     window.requestAnimationFrame(() => {
@@ -11277,6 +11289,8 @@ export default function ChatView(props: ChatViewProps) {
                               onSend={onSend}
                               onResume={onResume}
                               onInterrupt={onInterrupt}
+                              hasChildThreads={t3teamStopCascade.hasChildThreads}
+                              onInterruptCascade={t3teamStopCascade.onInterruptCascade}
                               onImplementPlanInNewThread={onImplementPlanInNewThread}
                               onRespondToApproval={onRespondToApproval}
                               onSelectActivePendingUserInputOption={
