@@ -215,6 +215,7 @@ import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as HostResources from "./resourceTelemetry/HostResources.ts";
 import { T3TeamThreadEngagement } from "./t3team-threadEngagement.ts";
+import { stopThreadCascade } from "./t3team-threadStopCascade.ts";
 import { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
 import { T3TeamThreadArtifactsStore } from "./t3team-v2/t3team-threadArtifactsStore.ts";
 import { isThreadResubscribeStaggerEnabled } from "./t3team-threadResubscribeStaggerFlag.ts";
@@ -2094,6 +2095,17 @@ const makeWsRpcLayer = (
             threadArtifacts === undefined
               ? Stream.make({ type: "snapshot" as const, threadId: input.threadId, artifacts: [] })
               : threadArtifacts.subscribe(input).pipe(Stream.orDie),
+            { "rpc.aggregate": "t3team", "orchestration_v2.thread_id": input.threadId },
+          ),
+        [WS_METHODS.t3teamStopThreadCascade]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.t3teamStopThreadCascade,
+            stopThreadCascade(input).pipe(
+              Effect.provideService(
+                ThreadManagementService.ThreadManagementService,
+                threadManagement,
+              ),
+            ),
             { "rpc.aggregate": "t3team", "orchestration_v2.thread_id": input.threadId },
           ),
         [WS_METHODS.scheduledTasksList]: (_input) =>

@@ -369,6 +369,10 @@ import {
   T3TeamThreadFactsStreamEvent,
 } from "./t3team-threadFacts.ts";
 import {
+  T3TeamStopThreadCascadeInput,
+  T3TeamStopThreadCascadeResult,
+} from "./t3team-threadStopCascade.ts";
+import {
   T3TeamSubscribeThreadArtifactsInput,
   T3TeamThreadArtifactsStreamEvent,
 } from "./t3team-threadArtifacts.ts";
@@ -594,6 +598,8 @@ export const WS_METHODS = {
   // t3team: fork side streams (capability-gated by `capabilities.t3team`).
   t3teamSubscribeThreadFacts: "t3team.subscribeThreadFacts",
   t3teamSubscribeThreadArtifacts: "t3team.subscribeThreadArtifacts",
+  // t3team: "stop including sub-runs" (capability-gated by `capabilities.t3team.stopCascade`).
+  t3teamStopThreadCascade: "t3team.stopThreadCascade",
 } as const;
 
 const WsServerUpsertKeybindingRpc = Rpc.make(WS_METHODS.serverUpsertKeybinding, {
@@ -1695,6 +1701,13 @@ const WsOrchestrationNoteComposingRpc = Rpc.make(WS_METHODS.orchestrationNoteCom
   error: EnvironmentAuthorizationError,
 });
 
+// t3team: interrupt a thread and every descendant subagent thread (see T3TeamStopThreadCascadeInput).
+const WsT3TeamStopThreadCascadeRpc = Rpc.make(WS_METHODS.t3teamStopThreadCascade, {
+  payload: T3TeamStopThreadCascadeInput,
+  success: T3TeamStopThreadCascadeResult,
+  error: EnvironmentAuthorizationError,
+});
+
 // t3team: fork thread facts side stream (snapshot, then per-thread changes).
 const WsT3TeamSubscribeThreadFactsRpc = Rpc.make(WS_METHODS.t3teamSubscribeThreadFacts, {
   payload: T3TeamSubscribeThreadFactsInput,
@@ -2054,4 +2067,5 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationNoteComposingRpc,
   WsT3TeamSubscribeThreadFactsRpc,
   WsT3TeamSubscribeThreadArtifactsRpc,
+  WsT3TeamStopThreadCascadeRpc,
 );

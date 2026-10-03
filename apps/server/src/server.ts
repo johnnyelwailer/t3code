@@ -245,7 +245,6 @@ import {
   T3TeamThreadMailboxDeliveryLive,
 } from "./t3team-actorMailboxPorts.ts";
 import { T3TeamThreadEngagementLive } from "./t3team-threadEngagement.ts";
-import { T3TeamThreadStopCascadeReactorLive } from "./t3team-threadStopCascadeReactor.ts";
 import { T3TeamChildStatusReactorLive } from "./t3team-childStatusReactor.ts";
 import { T3TeamActivityLabelReactorLive } from "./t3team-activityLabelReactor.ts";
 import { T3TeamChildSettleSweeperLive } from "./t3team-childSettleSweeper.ts";
@@ -1319,7 +1318,6 @@ const makeServerLayer = Layer.unwrap(
       tailscaleServeLayer,
       T3TeamWorkflowEngineReactorLive,
       T3TeamActorMessageReactorLive,
-      T3TeamThreadStopCascadeReactorLive,
       T3TeamChildStatusReactorLive,
       T3TeamActivityLabelReactorLive,
       T3TeamChildSettleSweeperLive,

@@ -11,5 +11,7 @@ export const T3TeamEnvironmentCapabilities = Schema.Struct({
   threadFacts: Schema.optionalKey(Schema.Boolean),
   /** Server streams fork thread artifacts (`t3team.subscribeThreadArtifacts`). */
   threadArtifacts: Schema.optionalKey(Schema.Boolean),
+  /** Server serves "stop including sub-runs" (`t3team.stopThreadCascade`). */
+  stopCascade: Schema.optionalKey(Schema.Boolean),
 });
 export type T3TeamEnvironmentCapabilities = typeof T3TeamEnvironmentCapabilities.Type;
