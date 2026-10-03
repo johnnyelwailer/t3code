@@ -26,16 +26,8 @@ import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
-import { runMigrations } from "../../persistence/Migrations.ts";
+import { migrationEntries, runMigrations } from "../../persistence/Migrations.ts";
 import { makeSqlitePersistenceLive } from "../../persistence/Layers/Sqlite.ts";
-import Migration0042 from "../../persistence/Migrations/042_ProjectionThreadLinkedPullRequest.ts";
-import Migration0043 from "../../persistence/Migrations/043_ProjectionThreadsUnsettledAt.ts";
-import Migration0044 from "../../persistence/Migrations/044_ClearAutomaticProjectModelDefaults.ts";
-import Migration0045 from "../../persistence/Migrations/045_ProjectionProjectsAutoPull.ts";
-import Migration0046 from "../../persistence/Migrations/046_RepairAutomaticSettlementTimestamps.ts";
-import Migration0047 from "../../persistence/Migrations/047_ProjectionProjectIcon.ts";
-import Migration0048 from "../../persistence/Migrations/048_ProjectionThreadBranchPullRequest.ts";
-import Migration0049 from "../../persistence/Migrations/049_ProjectionThreadsActiveOrderKey.ts";
 import { CodexProviderCapabilitiesV2 } from "../Adapters/CodexAdapterV2.ts";
 import * as EffectWorker from "../EffectWorker.ts";
 import * as EventSink from "../EventSink.ts";
@@ -100,10 +92,12 @@ const seedV1Database = (fixturePath: string, workspace: string) =>
       yield* sql`PRAGMA busy_timeout = 5000;`;
       yield* sql`PRAGMA foreign_keys = ON;`;
       yield* sql`PRAGMA journal_mode = WAL;`;
-      yield* runMigrations({ toMigrationInclusive: 40 });
+      // t3team: on the fork ledger upstream 040/041 are ids 54/55 and upstream's 042-049 tail
+      // spans fork ids 56-73 (fork migrations interleave); the site-local entry takes 55.
+      yield* runMigrations({ toMigrationInclusive: 54 });
       yield* sql`
         INSERT INTO effect_sql_migrations (migration_id, name)
-        VALUES (41, 'ThreadSummaryTimeline')
+        VALUES (55, 'ThreadSummaryTimeline')
       `;
       yield* sql`
         CREATE TABLE thread_summary_timeline_entries (
@@ -112,16 +106,7 @@ const seedV1Database = (fixturePath: string, workspace: string) =>
           payload_json TEXT NOT NULL
         )
       `;
-      const tailMigrations = [
-        [42, "ProjectionThreadLinkedPullRequest", Migration0042],
-        [43, "ProjectionThreadsUnsettledAt", Migration0043],
-        [44, "ClearAutomaticProjectModelDefaults", Migration0044],
-        [45, "ProjectionProjectsAutoPull", Migration0045],
-        [46, "RepairAutomaticSettlementTimestamps", Migration0046],
-        [47, "ProjectionProjectIcon", Migration0047],
-        [48, "ProjectionThreadBranchPullRequest", Migration0048],
-        [49, "ProjectionThreadsActiveOrderKey", Migration0049],
-      ] as const;
+      const tailMigrations = migrationEntries.filter(([id]) => id >= 56 && id <= 73);
       for (const [id, name, migration] of tailMigrations) {
         yield* migration;
         yield* sql`
@@ -893,7 +878,7 @@ describe("orchestration v2 legacy v1 cutover", () => {
               SELECT COUNT(*) AS count FROM projection_threads
             `;
               const recordedMigration41 = yield* sql<{ readonly name: string }>`
-              SELECT name FROM effect_sql_migrations WHERE migration_id = 41
+              SELECT name FROM effect_sql_migrations WHERE migration_id = 55
             `;
               const authSessionColumns = yield* sql<{ readonly name: string }>`
               PRAGMA table_info(auth_sessions)
@@ -931,7 +916,7 @@ describe("orchestration v2 legacy v1 cutover", () => {
             String(log.message).includes("migration history diverges"),
           );
           assert.deepStrictEqual(divergenceLog?.annotations.divergent, [
-            "41:ThreadSummaryTimeline (this build: AuthSessionClientConnection)",
+            "55:ThreadSummaryTimeline (this build: AuthSessionClientConnection)",
           ]);
           assert.equal(firstBoot.migration41Name, "ThreadSummaryTimeline");
           // The skipped migration's columns never landed; the schema gap is

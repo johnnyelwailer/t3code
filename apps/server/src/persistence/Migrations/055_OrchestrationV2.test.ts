@@ -11,24 +11,40 @@ const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layer({ filename: ":memor
 layer("055_OrchestrationV2", (it) => {
   it.effect("keeps released migrations contiguous", () =>
     Effect.sync(() => {
+      // t3team: the fork ledger keeps its own ids 1..83 and places upstream 055/056 at 84/85.
+      // Fork migrations from 86 are allocated in reserved blocks, so later ids may skip; they
+      // must still be unique and strictly increasing.
+      const ids = migrationEntries.map(([id]) => id);
       assert.deepStrictEqual(
-        migrationEntries.map(([id]) => id),
-        Array.from({ length: 56 }, (_, index) => index + 1),
+        ids.filter((id) => id <= 85),
+        Array.from({ length: 85 }, (_, index) => index + 1),
       );
+      assert.ok(ids.every((id, index) => index === 0 || id > ids[index - 1]!));
     }),
   );
 
+  // t3team: upstream's released 53 (PullRequestFilesViewed) is fork ledger id 80, and upstream
+  // 054/055/056 are fork 81/84/85 (fork 82/83 and every fork migration from 86 interleave).
   it.effect("upgrades released schema 53 through the latest migrations", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
-      yield* runMigrations({ toMigrationInclusive: 53 });
+      yield* runMigrations({ toMigrationInclusive: 80 });
 
       const executed = yield* runMigrations();
-      assert.deepStrictEqual(executed, [
-        [54, "ProjectionThreadsAutoSettleDisabledAt"],
-        [55, "OrchestrationV2"],
-        [56, "RemoveRedundantProjectionIndexes"],
-      ]);
+      assert.deepStrictEqual(
+        executed,
+        migrationEntries.filter(([id]) => id > 80).map(([id, name]) => [id, name]),
+      );
+      assert.deepStrictEqual(
+        executed.filter(([id]) => id <= 85),
+        [
+          [81, "ProjectionThreadsAutoSettleDisabledAt"],
+          [82, "ProjectionThreadShellT3TeamFacts"],
+          [83, "OrchestrationEventsTypeSequenceIndex"],
+          [84, "OrchestrationV2"],
+          [85, "RemoveRedundantProjectionIndexes"],
+        ],
+      );
       assert.deepStrictEqual(yield* runMigrations(), []);
 
       const migrations = yield* sql<{
@@ -37,19 +53,16 @@ layer("055_OrchestrationV2", (it) => {
       }>`
         SELECT migration_id, name
         FROM effect_sql_migrations
-        WHERE migration_id >= 48
+        WHERE migration_id >= 80 AND migration_id <= 85
         ORDER BY migration_id
       `;
       assert.deepStrictEqual(migrations, [
-        { migration_id: 48, name: "ProjectionThreadBranchPullRequest" },
-        { migration_id: 49, name: "ProjectionThreadsActiveOrderKey" },
-        { migration_id: 50, name: "ProjectionThreadPullRequests" },
-        { migration_id: 51, name: "ProjectionThreadMessageContext" },
-        { migration_id: 52, name: "ProjectionThreadTitleState" },
-        { migration_id: 53, name: "PullRequestFilesViewed" },
-        { migration_id: 54, name: "ProjectionThreadsAutoSettleDisabledAt" },
-        { migration_id: 55, name: "OrchestrationV2" },
-        { migration_id: 56, name: "RemoveRedundantProjectionIndexes" },
+        { migration_id: 80, name: "PullRequestFilesViewed" },
+        { migration_id: 81, name: "ProjectionThreadsAutoSettleDisabledAt" },
+        { migration_id: 82, name: "ProjectionThreadShellT3TeamFacts" },
+        { migration_id: 83, name: "OrchestrationEventsTypeSequenceIndex" },
+        { migration_id: 84, name: "OrchestrationV2" },
+        { migration_id: 85, name: "RemoveRedundantProjectionIndexes" },
       ]);
 
       const tables = yield* sql<{ readonly name: string }>`

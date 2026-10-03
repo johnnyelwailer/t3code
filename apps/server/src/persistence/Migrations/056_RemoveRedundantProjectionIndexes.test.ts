@@ -12,8 +12,9 @@ layer("056_RemoveRedundantProjectionIndexes", (it) => {
   it.effect("keeps the covering indexes and removes their prefix indexes", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
-      yield* runMigrations({ toMigrationInclusive: 55 });
-      yield* runMigrations({ toMigrationInclusive: 56 });
+      // t3team: upstream 055/056 are fork ledger ids 84/85 (Migrations.ts).
+      yield* runMigrations({ toMigrationInclusive: 84 });
+      yield* runMigrations({ toMigrationInclusive: 85 });
 
       const rows = yield* sql<{ readonly name: string }>`
         SELECT name

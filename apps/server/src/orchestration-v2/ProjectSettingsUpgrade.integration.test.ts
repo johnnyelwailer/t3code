@@ -52,7 +52,8 @@ const readSettings = Effect.gen(function* () {
 /** A released V1 database at migration 54 whose project carries all four settings. */
 const seedV1Database = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
-  yield* runMigrations({ toMigrationInclusive: 54 });
+  // t3team: upstream's last V1 migration (054) is fork ledger id 83; V2 starts at 84.
+  yield* runMigrations({ toMigrationInclusive: 83 });
   const events = [
     {
       type: "project.created",

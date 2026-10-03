@@ -434,7 +434,12 @@
     "scripts/release-smoke.ts",
     "tsconfig.base.json",
     "vite.config.ts",
-    "vitest.config.ts"
+    "vitest.config.ts",
+    "apps/server/src/persistence/Migrations/055_OrchestrationV2.test.ts",
+    "apps/server/src/persistence/Migrations/056_RemoveRedundantProjectionIndexes.test.ts",
+    "apps/server/src/persistence/reconcileV2PreviewMigration.test.ts",
+    "apps/server/src/orchestration-v2/ProjectSettingsUpgrade.integration.test.ts",
+    "apps/server/src/orchestration-v2/legacy/LegacyV1Cutover.integration.test.ts"
   ],
   "allowedUnprefixedNewFiles": [
     ".agents/skills/merge-upstream/SKILL.md",
