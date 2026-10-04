@@ -11,7 +11,7 @@ import { AppMainContentHomeBrowser } from "~/t3team/t3team-AppMainContentHomeBro
 import { AllProjectsMyWorkView } from "~/t3team/t3team-AllProjectsMyWorkView";
 import { AppDraftPane } from "~/t3team/t3team-AppDraftPane";
 import { AppThreadPane } from "~/t3team/t3team-AppThreadPane";
-import { useHomeProjectChat } from "./t3team-AppMainContentShell";
+import { useT3TeamScratchHomeChat } from "~/t3team/t3team-useScratchHomeChat";
 import { resolveWorkHomeProject } from "~/t3team/t3team-appMainContentResolution";
 import { resolveT3TeamSetupSurfaceReason } from "~/t3team/t3team-setupSurfaceReason";
 import { useAppMainContentThreadResolution } from "~/t3team/t3team-useAppMainContentThreadResolution";
@@ -69,10 +69,8 @@ export function AppMainContent({
   onThreadDisplayModeChange,
 }: MainContentProps) {
   const backendState = useBackendState();
-  const { homeChatProject, homeChatThreadId } = useHomeProjectChat({
-    projects,
-    getThreadsForProject,
-  });
+  // Project-less chats live in upstream's Scratch project ("No project").
+  const { scratchProject, startScratch } = useT3TeamScratchHomeChat(allProjects);
   const showInitialSetup = !view && (reopenInitialSetup || allProjects.length === 0);
   const setupSurfaceReason = resolveT3TeamSetupSurfaceReason({
     allProjects,
@@ -93,11 +91,12 @@ export function AppMainContent({
       setupSurfaceReason={setupSurfaceReason}
       showAside={!reopenInitialSetup && projects.length > 0}
       shouldInsetDesktopHeader={shouldInsetDesktopHeader}
-      homeChatProject={homeChatProject}
+      scratchProject={scratchProject}
+      onStartScratch={startScratch}
       providers={backendState.providers}
       isConnected={backendState.connectionStatus === "connected"}
       onOpenHomeThread={(threadId) => {
-        if (homeChatProject) onOpenThread(homeChatProject.id, threadId);
+        if (scratchProject) onOpenThread(scratchProject.id, threadId);
       }}
       onKickoffProjectThread={onKickoffProjectThread}
     />
@@ -107,8 +106,6 @@ export function AppMainContent({
     view,
     allProjects,
     homeProject,
-    homeChatProject,
-    homeChatThreadId,
     getThreadsForProject,
   });
 

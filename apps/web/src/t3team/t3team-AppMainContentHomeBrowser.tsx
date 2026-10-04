@@ -15,7 +15,8 @@ export function AppMainContentHomeBrowser({
   setupSurfaceReason = T3TEAM_FIRST_PROJECT_SETUP_REASON,
   showAside,
   shouldInsetDesktopHeader = false,
-  homeChatProject,
+  scratchProject,
+  onStartScratch,
   providers,
   isConnected,
   onOpenHomeThread,
@@ -27,7 +28,9 @@ export function AppMainContentHomeBrowser({
   setupSurfaceReason?: T3TeamSetupSurfaceReason;
   showAside: boolean;
   shouldInsetDesktopHeader?: boolean;
-  homeChatProject: ProjectShellProject | null;
+  /** Upstream's Scratch project ("No project"), once it exists; the home kickoff targets it. */
+  scratchProject: ProjectShellProject | null;
+  onStartScratch: (() => void) | undefined;
   providers: ReadonlyArray<ServerProvider>;
   isConnected: boolean;
   onOpenHomeThread: (threadId: string) => void;
@@ -41,7 +44,8 @@ export function AppMainContentHomeBrowser({
       setupSurfaceReason={setupSurfaceReason}
       showAside={showAside}
       shouldInsetDesktopHeader={shouldInsetDesktopHeader}
-      homeChatProject={homeChatProject}
+      scratchProject={scratchProject}
+      onStartScratch={onStartScratch}
       providers={providers}
       isConnected={isConnected}
       onOpenHomeThread={onOpenHomeThread}
@@ -55,9 +59,9 @@ export function AppMainContentHomeBrowser({
         kickoffContextAttachments,
         kickoffWorkflow,
       ) => {
-        if (!homeChatProject) return;
+        if (!scratchProject) return;
         onKickoffProjectThread({
-          projectId: homeChatProject.id,
+          projectId: scratchProject.id,
           kickoffMessage,
           ...(kickoffPending !== undefined ? { kickoffPending } : {}),
           kickoffModelSelection,
