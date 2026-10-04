@@ -10,12 +10,17 @@ import { T3SurfaceCardContent } from "~/t3team/components/ui/t3team-surface";
 import { ScrollArea } from "~/t3team/components/ui/t3team-scroll-area";
 import { splitRepositoryInput } from "~/t3team/components/t3team-linkedRepositories";
 import { useBackend } from "~/t3team/backend/t3team-index";
+import { MainRepositoryPicker } from "~/t3team/components/t3team-MainRepositoryPicker";
 import {
-  applyWorkspaceBootstrapToProject,
   normalizeRepositoryUrls,
   readLinkedRepositoryUrlsFromProject,
-  replaceLinkedRepositoryUrlsInProject,
 } from "~/t3team/hooks/t3team-createProjectBootstrap";
+import {
+  readMainRepositoryCandidatesFromProject,
+  readMainRepositoryFromProject,
+} from "~/t3team/hooks/t3team-projectMainRepository";
+import { saveProjectRepositories } from "~/t3team/hooks/t3team-saveProjectRepositories";
+import { useServerConfig } from "~/t3team/t3team-serverState";
 
 export function ManageProjectRepositoriesDialog({
   project,
@@ -35,6 +40,11 @@ export function ManageProjectRepositoriesDialog({
   const [newRepositoryUrl, setNewRepositoryUrl] = useState("");
   const [saveError, setSaveError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
+  const mainRepositoryEnabled = useServerConfig()?.mainRepository === true;
+  // An adopted workspace repository is the project workspace itself, not a linked repository.
+  const currentMain = readMainRepositoryFromProject(project);
+  const initialMainUrl = currentMain?.status === "adopted" ? null : (currentMain?.url ?? null);
+  const [mainRepositoryUrl, setMainRepositoryUrl] = useState<string | null>(initialMainUrl);
 
   const addRepository = () => {
     const normalized = splitRepositoryInput(newRepositoryUrl);
@@ -45,6 +55,7 @@ export function ManageProjectRepositoriesDialog({
 
   const removeRepository = (url: string) => {
     setLinkedRepositoryUrls((current) => current.filter((entry) => entry !== url));
+    if (url === mainRepositoryUrl) setMainRepositoryUrl(null);
   };
 
   const handleDiscoveredRepositoryUrlsChange = (urls: ReadonlyArray<string>) => {
@@ -57,17 +68,14 @@ export function ManageProjectRepositoriesDialog({
     setSaveError(null);
     setSaving(true);
     try {
-      let nextProject = replaceLinkedRepositoryUrlsInProject(project, linkedRepositoryUrls);
-      if (backend && project.workspace?.rootPath) {
-        const bootstrap = await backend.projectWorkspace.bootstrapWorkspace({
-          workspaceRoot: project.workspace.rootPath,
-          linkedRepositoryUrls,
-        });
-        nextProject = applyWorkspaceBootstrapToProject(nextProject, bootstrap);
-        if (linkedRepositoryUrls.length === 0) {
-          nextProject = replaceLinkedRepositoryUrlsInProject(nextProject, []);
-        }
-      }
+      const nextProject = await saveProjectRepositories({
+        backend,
+        project,
+        linkedRepositoryUrls,
+        ...(mainRepositoryEnabled && mainRepositoryUrl !== initialMainUrl
+          ? { mainRepositoryUrl }
+          : {}),
+      });
       onProjectUpdated(nextProject);
       onClose();
     } catch (error) {
@@ -124,6 +132,20 @@ export function ManageProjectRepositoriesDialog({
                 </div>
               </T3SurfaceCardContent>
             </Card>
+
+            {mainRepositoryEnabled ? (
+              <Card>
+                <T3SurfaceCardContent>
+                  <MainRepositoryPicker
+                    repositoryUrls={linkedRepositoryUrls}
+                    candidates={readMainRepositoryCandidatesFromProject(project)}
+                    value={mainRepositoryUrl}
+                    onChange={setMainRepositoryUrl}
+                    disabled={saving}
+                  />
+                </T3SurfaceCardContent>
+              </Card>
+            ) : null}
 
             {saveError ? (
               <T3TeamErrorState

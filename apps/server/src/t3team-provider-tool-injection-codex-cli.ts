@@ -1,3 +1,4 @@
+import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -44,7 +45,7 @@ export interface T3TeamCodexCliApplyResult {
   readonly codexReloadMcpConfig: boolean;
 }
 
-const DEFAULT_WORKSPACE_LOCAL_CODEX_HOME = ".t3team/provider-homes/codex";
+const DEFAULT_WORKSPACE_LOCAL_CODEX_HOME = `${PROJECT_STATE_DIR}/provider-homes/codex`;
 
 export const resolveWorkspaceLocalCodexHomePath = Effect.fn("resolveWorkspaceLocalCodexHomePath")(
   function* (input: { readonly workspaceRoot: string; readonly codexHomeRelativePath?: string }) {

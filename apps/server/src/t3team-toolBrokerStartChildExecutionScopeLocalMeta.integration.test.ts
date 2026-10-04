@@ -153,7 +153,7 @@ describe("t3team.thread.start_child isolation integration eval (local + meta var
     );
   });
 
-  it("scenario G: monorepo-as-metarepo project isolates without repo_full_name in a meta-repo worktree", async () => {
+  it("scenario G: monorepo-as-metarepo project isolates without repo_full_name in a main repository worktree", async () => {
     const harness = createEvalHarness(metaVariant);
     const startResult = await harness.runBroker(
       Effect.gen(function* () {
@@ -183,13 +183,13 @@ describe("t3team.thread.start_child isolation integration eval (local + meta var
     expect(NodeFS.existsSync(structured.worktree_path)).toBe(true);
     expect(structured.worktree_path.startsWith(metaWorkspaceRoot)).toBe(true);
     expect(structured.worktree_path).toContain("child-session-worktrees");
-    // The worktree's main worktree is the meta-repo itself (monorepo work, GHE #42).
+    // The worktree's main worktree is the main repository itself (monorepo work, GHE #42).
     const worktreeCommonDir = NodeChildProcess.spawnSync("git", ["rev-parse", "--git-common-dir"], {
       cwd: structured.worktree_path,
       encoding: "utf8",
     }).stdout.trim();
     expect(worktreeCommonDir).toBe(NodePath.join(NodeFS.realpathSync(metaWorkspaceRoot), ".git"));
-    // The meta-repo keeps only machine-local subpaths ignored, so committed team state under
+    // The main repository keeps only machine-local subpaths ignored, so committed team state under
     // .t3team/ survives the worktree.
     const gitignore = NodeFS.readFileSync(NodePath.join(metaWorkspaceRoot, ".gitignore"), "utf8");
     expect(gitignore).toContain(".t3team/references/");
@@ -202,7 +202,7 @@ describe("t3team.thread.start_child isolation integration eval (local + meta var
     ).toBe(false);
   });
 
-  it("scenario H: repo_full_name matching the meta-repo URL isolates in the meta-repo", async () => {
+  it("scenario H: repo_full_name matching the main repository URL isolates in the main repository", async () => {
     const harness = createEvalHarness(metaVariant);
     const startResult = await harness.runBroker(
       Effect.gen(function* () {
@@ -264,7 +264,7 @@ describe("t3team.thread.start_child isolation integration eval (local + meta var
     expect(structured.repo_full_name).toBe(EVAL_REPO_FULL_NAME);
     expect(NodeFS.existsSync(structured.worktree_path)).toBe(true);
     expect(structured.worktree_path.startsWith(metaWorkspaceRoot)).toBe(true);
-    // The worktree's main worktree is the LINKED repository, not the meta-repo.
+    // The worktree's main worktree is the LINKED repository, not the main repository.
     const worktreeCommonDir = NodeChildProcess.spawnSync("git", ["rev-parse", "--git-common-dir"], {
       cwd: structured.worktree_path,
       encoding: "utf8",

@@ -613,6 +613,17 @@ export const ServerConfig = Schema.Struct({
    */
   resourcePressure: Schema.optionalKey(Schema.Boolean),
   /**
+   * Whether a project can designate a linked repository as its MAIN repository (picker,
+   * switch-with-migration, auto-detection, `start_child` default). Runtime feature flag (env
+   * `NEXI_FF_MAIN_REPOSITORY`, default on); absent on older servers.
+   */
+  mainRepository: Schema.optionalKey(Schema.Boolean),
+  /**
+   * Whether this server names the project state dir `.nexi` instead of `.t3team`. Runtime
+   * feature flag (env `NEXI_FF_NEXI_STATE_DIR`, default on); absent on older servers.
+   */
+  nexiStateDir: Schema.optionalKey(Schema.Boolean),
+  /**
    * Whether thread detail reads accept a turn window (`turnLimit`/
    * `beforeCursor`) and return `page` metadata. Clients must not send window
    * fields to servers that don't advertise this.

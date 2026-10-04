@@ -2,7 +2,7 @@
  * Local-repository worktree resolution for `t3team.thread.start_child`
  * isolation (split out of `t3team-toolBrokerStartChildContext.ts` for the
  * additive LOC budget): creates a dedicated worktree of the LOCAL repository
- * (or adopted meta-repo) at the project workspace root. Behavior unchanged.
+ * (or adopted main repository) at the project workspace root. Behavior unchanged.
  *
  * @module t3team-toolBrokerStartChildLocalWorktree
  */
@@ -14,7 +14,7 @@ import { ensureWorkspaceGitignore } from "./t3team-project-repository-services.t
 import {
   HIDDEN_T3TEAM_DIR,
   MANIFEST_FILE_NAME,
-  META_REPOSITORY_GITIGNORE_ENTRIES,
+  MAIN_REPOSITORY_GITIGNORE_ENTRIES,
   REFERENCES_DIR_NAME,
 } from "./t3team-project-repository-utils.ts";
 import {
@@ -22,14 +22,16 @@ import {
   buildScopedChildWorktreePath,
 } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
 import {
-  metaRepositoryFromManifestJson,
+  mainRepositoryFromManifestJson,
   type T3TeamStartChildLinkedRepositoryServices,
 } from "./t3team-toolBrokerStartChildContext.ts";
 
+import { readNormalizedReferenceManifest } from "./t3team-referenceManifestNormalization.ts";
+
 /** Creates a dedicated worktree of the LOCAL repository (or submodule) at the project
  * workspace root — the isolation path for workspaces without a linked-repository manifest, and
- * for adopted meta-repos (monorepo projects, GHE #42) whose sub-work happens in worktrees of
- * the meta-repo itself. Mirrors `resolveLinkedRepositoryWorktree`: same branch naming, same
+ * for adopted main repositories (monorepo projects, GHE #42) whose sub-work happens in worktrees of
+ * the main repository itself. Mirrors `resolveLinkedRepositoryWorktree`: same branch naming, same
  * scoped path layout under `.t3team/child-session-worktrees/`, same base-ref resolution.
  * Ensures `.t3team/` is gitignored so the worktree stays invisible to the shared checkout. */
 export const resolveLocalRepositoryWorktree = (input: {
@@ -61,24 +63,25 @@ export const resolveLocalRepositoryWorktree = (input: {
         .pipe(Effect.orElseSucceed(() => "main"))) ||
         "main");
 
-    // An adopted meta-repo keeps only its machine-local subpaths ignored so committed team
+    // An adopted main repository keeps only its machine-local subpaths ignored so committed team
     // state under `.t3team/` survives (GHE #42); legacy workspaces keep the full entry.
-    const metaRepositoryManifestPath = path.join(
+    const mainRepositoryManifestPath = path.join(
       workspaceRoot,
       HIDDEN_T3TEAM_DIR,
       REFERENCES_DIR_NAME,
       MANIFEST_FILE_NAME,
     );
-    const metaRepositoryManifestExists = yield* fileSystem
-      .exists(metaRepositoryManifestPath)
+    const mainRepositoryManifestExists = yield* fileSystem
+      .exists(mainRepositoryManifestPath)
       .pipe(Effect.orElseSucceed(() => false));
     let gitignoreEntries: ReadonlyArray<string> | undefined;
-    if (metaRepositoryManifestExists) {
-      const manifestText = yield* fileSystem
-        .readFileString(metaRepositoryManifestPath)
-        .pipe(Effect.orElseSucceed(() => ""));
-      if (metaRepositoryFromManifestJson(manifestText)) {
-        gitignoreEntries = META_REPOSITORY_GITIGNORE_ENTRIES;
+    if (mainRepositoryManifestExists) {
+      const manifestText = yield* readNormalizedReferenceManifest(
+        fileSystem,
+        mainRepositoryManifestPath,
+      );
+      if (mainRepositoryFromManifestJson(manifestText)) {
+        gitignoreEntries = MAIN_REPOSITORY_GITIGNORE_ENTRIES;
       }
     }
 

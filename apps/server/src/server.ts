@@ -229,6 +229,7 @@ import {
   t3teamGitHubPullRequestContextRouteLayer,
 } from "./t3team-github-routes.ts";
 import { t3teamProjectWorkspaceBootstrapRouteLayer } from "./t3team-project-repository-routes.ts";
+import { t3teamProjectMainRepositoryRouteLayer } from "./t3team-projectMainRepositoryRoute.ts";
 import { t3teamThreadPlacementRouteLayer } from "./t3team-thread-placement-routes.ts";
 import { t3teamThreadToolContextRouteLayer } from "./t3team-thread-tool-context-routes.ts";
 import { t3teamThreadForkRouteLayer } from "./t3team-thread-fork-routes.ts";
@@ -825,6 +826,7 @@ export const makeRoutesLayer = Layer.mergeAll(
     t3teamGitHubPullRequestContextRouteLayer,
     localProviderSessionsRouteLayer,
     t3teamProjectWorkspaceBootstrapRouteLayer,
+    t3teamProjectMainRepositoryRouteLayer,
     t3teamProjectWorkspaceDiscoverRecipesRouteLayer,
     t3teamProjectWorkspaceWriteContextFilesRouteLayer,
     t3teamProjectWorkspaceRefreshProjectContextRouteLayer,

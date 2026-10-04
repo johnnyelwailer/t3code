@@ -459,6 +459,75 @@ describe("DesktopBackendConfiguration", () => {
       }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
   );
 
+  it.effect(
+    "resolvePrimary does not inject NEXI_FF_NEXI_STATE_DIR; extendEnv carries an explicit off",
+    () =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const previousNexiStateDir = process.env.NEXI_FF_NEXI_STATE_DIR;
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => {
+            restoreEnv("NEXI_FF_NEXI_STATE_DIR", previousNexiStateDir);
+          }),
+        );
+
+        const resolvePrimary = (input: {
+          readonly isPackaged: boolean;
+          readonly withPacksDir: boolean;
+        }) =>
+          Effect.gen(function* () {
+            const baseDir = yield* fileSystem.makeTempDirectoryScoped({
+              prefix: "t3-desktop-backend-config-test-",
+            });
+            const resourcesPath = path.join(baseDir, "resources");
+            const appPath = path.join(baseDir, "app.asar");
+            if (input.withPacksDir) {
+              yield* fileSystem.makeDirectory(path.join(appPath, "apps", "desktop", "packs"), {
+                recursive: true,
+              });
+            }
+
+            return yield* Effect.gen(function* () {
+              const configuration = yield* DesktopBackendConfiguration.DesktopBackendConfiguration;
+              return yield* configuration.resolvePrimary;
+            }).pipe(
+              Effect.provide(
+                DesktopBackendConfiguration.layer.pipe(
+                  Layer.provideMerge(serverExposureLayer),
+                  Layer.provideMerge(DesktopAppSettings.layerTest()),
+                  Layer.provideMerge(DesktopWslEnvironment.layerTest()),
+                  Layer.provideMerge(DesktopWslServerTree.layerTest()),
+                  Layer.provideMerge(
+                    makeEnvironmentLayer(baseDir, {
+                      appPath,
+                      isPackaged: input.isPackaged,
+                      platform: "darwin",
+                      resourcesPath,
+                    }),
+                  ),
+                ),
+              ),
+            );
+          });
+
+        delete process.env.NEXI_FF_NEXI_STATE_DIR;
+        const packDefault = yield* resolvePrimary({ isPackaged: true, withPacksDir: true });
+        assert.isFalse(Object.hasOwn(packDefault.env, "NEXI_FF_NEXI_STATE_DIR"));
+
+        // A packaged app with no packs directory is vanilla T3 Code.
+        const vanilla = yield* resolvePrimary({ isPackaged: true, withPacksDir: false });
+        assert.isFalse(Object.hasOwn(vanilla.env, "NEXI_FF_NEXI_STATE_DIR"));
+        assert.isUndefined({ ...process.env, ...vanilla.env }.NEXI_FF_NEXI_STATE_DIR);
+
+        process.env.NEXI_FF_NEXI_STATE_DIR = "0";
+        const packExplicit = yield* resolvePrimary({ isPackaged: true, withPacksDir: true });
+        assert.equal(packExplicit.extendEnv, true);
+        assert.isFalse(Object.hasOwn(packExplicit.env, "NEXI_FF_NEXI_STATE_DIR"));
+        assert.equal({ ...process.env, ...packExplicit.env }.NEXI_FF_NEXI_STATE_DIR, "0");
+      }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("resolveWsl reuses the primary's bootstrap token", () =>
     withHarness(
       Effect.gen(function* () {

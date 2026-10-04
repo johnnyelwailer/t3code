@@ -148,7 +148,7 @@ const T3TeamStartChildTool = Tool.make("t3team_start_child", {
     }),
     isolation: Schema.Literals(["shared", "own-worktree"]).annotate({
       description:
-        "Required. Where the child works: 'shared' = the project's shared checkout, no new branch or worktree (planning, triage, synthesis, read-only review); 'own-worktree' = a dedicated branch + worktree (implementation, debugging, tests, PR work). With 'own-worktree', pass 'repo_full_name' to pick a linked repo; omit it to isolate in the project's own repository (a monorepo used as the meta-repo, or a local workspace without linked repos).",
+        "Required. Where the child works: 'shared' = the project's shared checkout, no new branch or worktree (planning, triage, synthesis, read-only review); 'own-worktree' = a dedicated branch + worktree (implementation, debugging, tests, PR work). With 'own-worktree', pass 'repo_full_name' to pick a linked repo; omit it to isolate in the project's own repository (a monorepo used as the main repository, or a local workspace without linked repos).",
     }),
     ticket_id: Schema.optional(Schema.String).annotate({
       description:
@@ -186,7 +186,7 @@ const T3TeamStartChildTool = Tool.make("t3team_start_child", {
     }),
     repo_full_name: Schema.optional(Schema.String).annotate({
       description:
-        "Optional, only with isolation='own-worktree'. Linked repository to open in a fresh scoped worktree, for example 'owner/repo' or 'github.com/owner/repo'. Required in legacy projects that wrap linked repos. In a monorepo project (workspace is itself a git repository used as the meta-repo) you may pass the meta-repo's own URL to isolate there explicitly, or omit it; in a local workspace (no linked repos) omit it to isolate in the local repository.",
+        "Optional, only with isolation='own-worktree'. Linked repository to open in a fresh scoped worktree, for example 'owner/repo' or 'github.com/owner/repo'. Required in legacy projects that wrap linked repos. In a monorepo project (workspace is itself a git repository used as the main repository) you may pass the main repository's own URL to isolate there explicitly, or omit it; in a local workspace (no linked repos) omit it to isolate in the local repository.",
     }),
     repo_ref: Schema.optional(Schema.String).annotate({
       description:
