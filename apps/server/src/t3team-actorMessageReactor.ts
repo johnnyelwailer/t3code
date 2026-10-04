@@ -7,7 +7,8 @@
  *   a fork stop cascade) → hold the thread's delivery, so a digest cannot
  *   re-open the turn the user just stopped;
  * - a message the user typed (`role: "user"`, `createdBy: "user"`) → lift
- *   the holds of the thread and of its held descendants, then deliver;
+ *   the holds of the thread and of its held descendants, then deliver (V1
+ *   history the importer writes never counts);
  * - a durable sweep (`Scheduler.register`, 5 s tick) → drop the holds of
  *   deleted threads, then deliver every due digest. The sweep is what makes
  *   delivery restart-safe: it derives due work from the mailbox table, never
@@ -53,6 +54,9 @@ const TERMINAL_RUN_STATUSES: ReadonlySet<string> = new Set([
   "cancelled",
   "rolled_back",
 ]);
+
+/** Event id prefix of the V1 importer's history (`orchestration-v2/legacy/LegacyV1ThreadImporter.ts`). */
+const IMPORTED_V1_EVENT_PREFIX = "migration:v1:";
 
 /** Lineage depth searched when lifting a held descendant's hold. */
 const MAX_LINEAGE_DEPTH = 16;
@@ -114,6 +118,9 @@ export const T3TeamActorMessageReactor = Layer.effectDiscard(
       });
 
     const handle = ({ commandId, event }: OrchestrationV2StoredEvent) => {
+      // V1 history the transcript importer writes is not a live action: an imported user
+      // message must not lift the hold the V1 cutover placed on its undelivered messages.
+      if (event.id.startsWith(IMPORTED_V1_EVENT_PREFIX)) return Effect.void;
       if (event.type === "run.updated" && TERMINAL_RUN_STATUSES.has(event.payload.status)) {
         return drainSoon(event.threadId);
       }

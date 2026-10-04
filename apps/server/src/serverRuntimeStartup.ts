@@ -32,6 +32,7 @@ import * as ExternalLauncher from "./process/externalLauncher.ts";
 import * as EffectWorker from "./orchestration-v2/EffectWorker.ts";
 import * as LegacyV1ThreadImporter from "./orchestration-v2/legacy/LegacyV1ThreadImporter.ts";
 import { runLegacyLineageCutover } from "./orchestration-v2/legacy/t3team-legacyLineageCutover.ts";
+import { runLegacyRichMessageCutover } from "./orchestration-v2/legacy/t3team-legacyRichMessageCutover.ts";
 import * as ProviderRuntimeRecovery from "./orchestration-v2/ProviderRuntimeRecoveryService.ts";
 import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManager.ts";
 import * as ThreadLaunch from "./orchestration-v2/ThreadLaunchService.ts";
@@ -519,8 +520,12 @@ const make = (options?: StartupOptions) =>
           ),
         ).pipe(
           // t3team: once the shells exist, re-link the fork's V1 parent/child and fork
-          // relations on V2 lineage (one-shot, ledgered; never fails startup).
+          // relations on V2 lineage, then carry V1 rich rows and pending inter-agent
+          // deliveries (one-shot, ledgered; never fail startup).
           Effect.tap(() => runStartupPhase("t3team.legacy-v1.lineage", runLegacyLineageCutover)),
+          Effect.tap(() =>
+            runStartupPhase("t3team.legacy-v1.rich-messages", runLegacyRichMessageCutover),
+          ),
         ),
         recover: runStartupPhase("orchestration-v2.recovery", providerRuntimeRecovery.recover),
         startEffectWorker: runStartupPhase(

@@ -1,5 +1,6 @@
 import { assert, it } from "@effect/vitest";
-import { CommandId, MessageId, ThreadId } from "@t3tools/contracts";
+import { CommandId, EventId, MessageId, ThreadId } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -77,6 +78,32 @@ it.layer(TestLayer)("t3team actor message reactor", (it) => {
         ),
       );
 
+      // V1 history hydrated after boot (importer events) is not "the user wrote again".
+      const importedAt = DateTime.makeUnsafe("2025-06-01T00:00:00.000Z");
+      yield* (yield* EventSink.EventSinkV2).write({
+        events: [
+          {
+            id: EventId.make("migration:v1:message:reactor:v1-user"),
+            type: "message.updated",
+            threadId: stopped,
+            occurredAt: importedAt,
+            payload: {
+              createdBy: "user",
+              creationSource: "server",
+              id: MessageId.make("reactor:v1-user"),
+              threadId: stopped,
+              runId: null,
+              nodeId: null,
+              role: "user",
+              text: "written on V1",
+              attachments: [],
+              streaming: false,
+              createdAt: importedAt,
+              updatedAt: importedAt,
+            },
+          },
+        ],
+      });
       // A live user message is handled after anything the reactor would replay first.
       yield* userMessage(live, "reactor:live-message");
       yield* Deferred.await(liveDrained);
