@@ -15,6 +15,7 @@ import type { ProviderInstance } from "../provider/ProviderDriver.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as ThreadTitleLinks from "./ThreadTitleLinks.ts";
 import type { TextGenerationPolicy } from "./TextGenerationPolicy.ts";
+import { withPinnedTextGenerationModel } from "./t3team-textGenerationModelPin.ts";
 
 export interface CommitMessageGenerationInput {
   cwd: string;
@@ -199,7 +200,7 @@ const resolveInstance = (
 export const make = Effect.gen(function* () {
   const registry = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
   const sourceControl = yield* SourceControlProviderRegistry.SourceControlProviderRegistry;
-  return TextGeneration.of({
+  const routed = TextGeneration.of({
     generateCommitMessage: (input) =>
       resolveInstance(registry, "generateCommitMessage", input.modelSelection.instanceId).pipe(
         Effect.flatMap((textGeneration) => textGeneration.generateCommitMessage(input)),
@@ -255,6 +256,8 @@ export const make = Effect.gen(function* () {
         ),
       ) as never,
   });
+  // t3team: a distribution-pinned text-generation model overrides every caller's selection.
+  return withPinnedTextGenerationModel(routed);
 });
 
 export const layer = Layer.effect(TextGeneration, make);

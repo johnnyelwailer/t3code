@@ -41,8 +41,10 @@ export type PackModelSelectionDefinition = {
  * - `defaultModelSelection` is the host default model: the welcome thread's model and the
  *   text-generation default while the user has not chosen one.
  * - `textGenerationModelSelection` pins every server-side text generator (thread titles, branch
- *   names, commit/PR text, activity labels) regardless of user settings, e.g. to keep generated
- *   text on a distribution-approved provider.
+ *   names, commit/PR text, activity labels) regardless of user settings, including the user's
+ *   source-control writer model and per-project overrides, e.g. to keep generated text on a
+ *   distribution-approved provider. Structured background generation (child status, workflow
+ *   repair) is not pinned; the workflow agent / repair model policies choose its model.
  */
 export type ModelPolicyDefinition = {
   readonly defaultModelSelection?: PackModelSelectionDefinition;

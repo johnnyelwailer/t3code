@@ -12,6 +12,7 @@ import {
   resetDistributionModelPolicy,
   setDistributionModelPolicy,
 } from "./t3team-configuredDefaultModelSelection.ts";
+import { ServerSettingsService, layerTest as serverSettingsLayerTest } from "./serverSettings.ts";
 import { inspectConfiguredWorkspacePacks, loadPackModelPolicy } from "./t3team-pack-host.ts";
 
 const nodeLayer = it.layer(NodeServices.layer);
@@ -110,3 +111,27 @@ it("falls back to the host defaults until a policy is installed", () => {
   resetDistributionModelPolicy();
   expect(getConfiguredTextGenerationModelSelection()).toBeUndefined();
 });
+
+it.effect("reports the pin as the effective text-generation and source-control writer model", () =>
+  Effect.gen(function* () {
+    setDistributionModelPolicy({
+      textGenerationModelSelection: { instanceId: "example", model: "example/small" },
+    });
+    const settings = yield* Effect.gen(function* () {
+      const service = yield* ServerSettingsService;
+      return yield* service.getSettings;
+    }).pipe(
+      Effect.provide(
+        serverSettingsLayerTest({
+          textGenerationModelSelection: { instanceId: "codex", model: "user-model" },
+          sourceControlWriterModelSelection: { instanceId: "codex", model: "writer-model" },
+        }),
+      ),
+    );
+    expect(settings.textGenerationModelSelection).toEqual({
+      instanceId: "example",
+      model: "example/small",
+    });
+    expect(settings.sourceControlWriterModelSelection).toBeNull();
+  }),
+);
