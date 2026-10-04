@@ -76,6 +76,46 @@ export const providerThreadJson = (threadId: string, providerSessionId: string):
   updatedAt: NOW,
 });
 
+/** Host `ProviderAdapterV2TurnInput` JSON for one user turn on `threadId`. */
+export const turnInputJson = (threadId: string, providerSessionId: string): PackJson => ({
+  appThread: {
+    createdBy: "user",
+    creationSource: "web",
+    id: threadId,
+    projectId: "project-1",
+    title: "Example thread",
+    providerInstanceId: PACK_DRIVER,
+    modelSelection: { instanceId: PACK_DRIVER, model: "example/model" },
+    runtimeMode: "full-access",
+    interactionMode: "default",
+    branch: null,
+    worktreePath: null,
+    activeProviderThreadId: `provider-thread:${threadId}`,
+    lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
+    forkedFrom: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+    archivedAt: null,
+    deletedAt: null,
+  },
+  threadId,
+  runId: `run:${threadId}`,
+  runOrdinal: 1,
+  providerTurnOrdinal: 1,
+  attemptId: `attempt:${threadId}`,
+  rootNodeId: `node:${threadId}`,
+  providerThread: providerThreadJson(threadId, providerSessionId),
+  message: {
+    messageId: `message:${threadId}`,
+    text: "hello",
+    attachments: [],
+    createdBy: "user",
+    creationSource: "web",
+  },
+  modelSelection: { instanceId: PACK_DRIVER, model: "example/model" },
+  runtimePolicy: { runtimeMode: "full-access", interactionMode: "default", cwd: "/work" },
+});
+
 /** The events a pack emits to run one turn to `completed`. */
 export const completedTurnEvents = (turn: PackTurnInput): ReadonlyArray<PackJson> => {
   const providerThreadId = String(turn.providerThread.id);

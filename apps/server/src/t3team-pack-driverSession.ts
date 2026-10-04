@@ -1,8 +1,9 @@
 /**
  * Maps one open pack session (`@t3team/pack-api` `PackSessionRuntime`) onto the host's
  * `ProviderAdapterV2SessionRuntime`: turns, steering, interrupts, runtime-request answers,
- * background-work probes and per-job control. Thread operations live in
- * `t3team-pack-driverSessionThreads.ts`, events in `t3team-pack-driverEvents.ts`.
+ * per-job control and per-turn MCP access. Thread operations live in
+ * `t3team-pack-driverSessionThreads.ts`, background-work probes in
+ * `t3team-pack-driverSessionProbes.ts`, events in `t3team-pack-driverEvents.ts`.
  *
  * @module t3team-pack-driverSession
  */
@@ -28,18 +29,12 @@ import {
 import { packCall, packRoundTrip } from "./t3team-pack-driverCall.ts";
 import { asPack, PackCodec } from "./t3team-pack-driverCodec.ts";
 import { packEventsToStream } from "./t3team-pack-driverEvents.ts";
+import { withPackMcp } from "./t3team-pack-driverMcp.ts";
+import { makePackSessionProbes } from "./t3team-pack-driverSessionProbes.ts";
 import { makePackThreadOps } from "./t3team-pack-driverSessionThreads.ts";
 
-/** A pack probe that fails reads as "no pending work" (logged), never as a failed session. */
-const probe = <E>(driver: ProviderDriverKind, check: Effect.Effect<boolean, E>) =>
-  check.pipe(
-    Effect.map((pending) => pending === true),
-    Effect.catch((cause) =>
-      Effect.logWarning("Pack provider background-work probe failed", { driver, cause }).pipe(
-        Effect.as(false),
-      ),
-    ),
-  );
+type TurnJson = Omit<PackTurnInput, "mcp">;
+type SteerJson = Omit<Parameters<NonNullable<PackSessionRuntime["steerTurn"]>>[0], "mcp">;
 
 export const makePackSessionRuntime = (input: {
   readonly runtime: PackSessionRuntime;
@@ -64,14 +59,12 @@ export const makePackSessionRuntime = (input: {
       const bridge = packCall(turnError(value));
       return bridge
         .encode(PackCodec.turnInput, value)
-        .pipe(Effect.flatMap((encoded) => bridge.call(() => method(asPack(encoded)))));
+        .pipe(
+          Effect.flatMap((encoded) =>
+            bridge.call(() => method(withPackMcp(asPack<TurnJson>(encoded), value.threadId))),
+          ),
+        );
     };
-  const probeCall = packCall(
-    (cause) =>
-      new ProviderAdapterProtocolError({ driver, detail: "background-work probe failed", cause }),
-  );
-  const pending = runtime.hasPendingBackgroundWork;
-  const pendingForThread = runtime.hasPendingBackgroundWorkForThread;
   const compact = runtime.compactThread;
   const steer = runtime.steerTurn;
   const jobControl = runtime.jobControl;
@@ -86,29 +79,7 @@ export const makePackSessionRuntime = (input: {
       providerSessionId,
       closed: input.closed,
     }),
-    ...(pending === undefined
-      ? {}
-      : {
-          hasPendingBackgroundWork: probe(
-            driver,
-            probeCall.call(() => pending.call(runtime)),
-          ),
-        }),
-    ...(pendingForThread === undefined
-      ? {}
-      : {
-          hasPendingBackgroundWorkForThread: (providerThread) =>
-            probe(
-              driver,
-              probeCall
-                .encode(PackCodec.providerThread, providerThread)
-                .pipe(
-                  Effect.flatMap((encoded) =>
-                    probeCall.call(() => pendingForThread.call(runtime, asPack(encoded))),
-                  ),
-                ),
-            ),
-        }),
+    ...makePackSessionProbes(runtime, driver),
     ...makePackThreadOps({ runtime, driver, providerSessionId }),
     startTurn: runTurn((encoded) => runtime.startTurn(encoded)),
     ...(compact === undefined
@@ -134,7 +105,13 @@ export const makePackSessionRuntime = (input: {
       );
       return bridge
         .encode(PackCodec.steerInput, value)
-        .pipe(Effect.flatMap((encoded) => bridge.call(() => steer.call(runtime, asPack(encoded)))));
+        .pipe(
+          Effect.flatMap((encoded) =>
+            bridge.call(() =>
+              steer.call(runtime, withPackMcp(asPack<SteerJson>(encoded), value.threadId)),
+            ),
+          ),
+        );
     },
     interruptTurn: (value) => {
       const bridge = packCall(

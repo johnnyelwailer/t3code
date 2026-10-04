@@ -4,15 +4,21 @@ import {
   ProviderInstanceId,
   ProviderSessionId,
   ProviderThreadId,
+  ProviderTurnId,
   ThreadId,
 } from "@t3tools/contracts";
-import type { PackProviderDriverDefinition, PackSessionRuntime } from "@t3team/pack-api";
+import type {
+  PackProviderDriverDefinition,
+  PackSessionRuntime,
+  PackTurnInput,
+} from "@t3team/pack-api";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
@@ -25,8 +31,12 @@ import {
   makeScriptedPack,
   PACK_DRIVER,
   providerThreadJson,
+  turnInputJson,
 } from "./t3team-pack-driver.fixtures.ts";
 import { bridgePackProviderDriver } from "./t3team-pack-driverBridge.ts";
+import { PackCodec } from "./t3team-pack-driverCodec.ts";
+
+const decodeTurnInput = Schema.decodeUnknownEffect(PackCodec.turnInput);
 
 const instanceId = ProviderInstanceId.make(PACK_DRIVER);
 const threadId = ThreadId.make("thread-1");
@@ -112,6 +122,52 @@ describe("bridgePackProviderDriver (orchestration V2)", () => {
       expect(pack.log).toContain("close");
       yield* Scope.close(scope, Exit.void);
       expect(pack.log.at(-1)).toBe("dispose");
+    }),
+  );
+
+  it.effect("gives every turn the MCP access of its own thread", () =>
+    Effect.gen(function* () {
+      const steered: Array<PackTurnInput["mcp"]> = [];
+      const pack = makeScriptedPack({
+        session: {
+          steerTurn: async (input) => {
+            steered.push(input.mcp);
+          },
+        },
+      });
+      const { runtime } = yield* openSession(pack.definition);
+      const secondThreadId = ThreadId.make("thread-2");
+      setMcpProviderSession({
+        environmentId: EnvironmentId.make("environment-1"),
+        threadId: secondThreadId,
+        providerSessionId,
+        providerInstanceId: instanceId,
+        browserToolsAvailable: false,
+        endpoint: "http://127.0.0.1:3000/mcp",
+        authorizationHeader: "Bearer thread-2-token",
+      });
+      const turn = yield* decodeTurnInput(turnInputJson(secondThreadId, providerSessionId));
+      yield* runtime.startTurn(turn);
+      yield* runtime.steerTurn({
+        threadId: secondThreadId,
+        runId: turn.runId,
+        providerThread: turn.providerThread,
+        providerTurnId: ProviderTurnId.make("provider-turn-1"),
+        message: turn.message,
+      });
+      clearMcpProviderSession(secondThreadId);
+      yield* runtime.startTurn(
+        yield* decodeTurnInput(turnInputJson("thread-3", providerSessionId)),
+      );
+
+      const secondThreadAccess = {
+        endpoint: "http://127.0.0.1:3000/mcp",
+        authorizationHeader: "Bearer thread-2-token",
+      };
+      // The session was opened by thread-1, which had no access of its own.
+      expect(pack.opened[0]?.mcp).toBeUndefined();
+      expect(pack.turns.map((seen) => seen.mcp)).toEqual([secondThreadAccess, undefined]);
+      expect(steered).toEqual([secondThreadAccess]);
     }),
   );
 

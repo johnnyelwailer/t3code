@@ -53,7 +53,18 @@ export type PackTurnMessage = {
   readonly senderThreadId?: string;
 };
 
-/** Host `ProviderAdapterV2TurnInput`; `appThread` is `OrchestrationV2AppThread`, `providerThread` is `OrchestrationV2ProviderThread`. */
+/**
+ * Provider-scoped access to the host MCP endpoint (`t3-code` server) for one app thread. Tool
+ * calls made with it act as that thread (delegation, thread tools, `ask_user`).
+ */
+export type PackMcpAccess = { readonly endpoint: string; readonly authorizationHeader: string };
+
+/**
+ * Host `ProviderAdapterV2TurnInput`; `appThread` is `OrchestrationV2AppThread`, `providerThread`
+ * is `OrchestrationV2ProviderThread`. `mcp` is the MCP access of the turn's own thread (absent when
+ * the host has none for it); a session shared by several app threads must use it for this turn's
+ * tool calls instead of the access it was opened with.
+ */
 export type PackTurnInput = {
   readonly appThread: PackJson;
   readonly threadId: string;
@@ -67,6 +78,7 @@ export type PackTurnInput = {
   readonly message: PackTurnMessage;
   readonly modelSelection: PackModelSelection;
   readonly runtimePolicy: PackRuntimePolicy;
+  readonly mcp?: PackMcpAccess;
 };
 
 /** Host `ProviderAdapterV2ThreadSnapshot`: `OrchestrationV2ProviderThread`, `OrchestrationV2ProviderTurn[]`, `OrchestrationV2ConversationMessage[]`, `OrchestrationV2RuntimeRequest[]`. */
@@ -110,8 +122,8 @@ export type PackOpenSessionInput = {
   readonly resumeFromSession?: PackJson;
   readonly initialNativeThreadId?: string;
   readonly initialProviderItemIdentityVersion?: 2;
-  /** Provider-scoped access to the host MCP endpoint (`t3-code` server) for this thread. */
-  readonly mcp?: { readonly endpoint: string; readonly authorizationHeader: string };
+  /** MCP access of the thread that opened the session; each turn carries its own thread's. */
+  readonly mcp?: PackMcpAccess;
   readonly host: PackSessionHost;
 };
 
@@ -156,6 +168,8 @@ export type PackSessionRuntime = {
     readonly providerThread: PackJson;
     readonly providerTurnId: string;
     readonly message: PackTurnMessage;
+    /** MCP access of the steered turn's thread, as on `PackTurnInput`. */
+    readonly mcp?: PackMcpAccess;
   }): Promise<void>;
   interruptTurn(input: {
     readonly providerThread: PackJson;
