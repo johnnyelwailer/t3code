@@ -13,6 +13,7 @@ import { JiraSessionExpiredPanel } from "~/t3team/components/t3team-JiraSessionE
 import { JiraSignInPanel } from "~/t3team/components/t3team-JiraSignInPanel";
 import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
 import { ProjectMyWorkDigestErrorState } from "~/t3team/t3team-ProjectMyWorkDigestErrorState";
+import { ProjectMyWorkDigestRetryState } from "~/t3team/t3team-ProjectMyWorkDigestRetryState";
 import { ProjectMyWorkDigestView } from "~/t3team/t3team-ProjectMyWorkDigestView";
 import { useT3TeamBetaFlags } from "~/t3team/t3team-betaFlags";
 import { ProjectMyWorkLoadingState } from "~/t3team/t3team-projectMyWorkContentState";
@@ -42,10 +43,11 @@ export function ProjectMyWorkDigestContent({
       ? (ticketId: string) => onOpenTicket(project.id, ticketId)
       : undefined;
   const projects = useMemo(() => [project], [project]);
-  const { graph, status, error, viewerUnresolved, sessionExpired, reload } = useMyWorkDigestGraph({
-    projects,
-    scope: "project",
-  });
+  const { graph, status, error, viewerUnresolved, sessionExpired, updatedAt, reload } =
+    useMyWorkDigestGraph({
+      projects,
+      scope: "project",
+    });
   // The My Work filter bar (search, status category, hidden types, priority, status) shapes the
   // digest the same way it shapes the legacy lenses: keep only the tickets that match, and drop
   // the agent activity that belongs to tickets the filter hid, so no lane orphans a filtered row.
@@ -85,6 +87,11 @@ export function ProjectMyWorkDigestContent({
     );
   }, [effectiveGraph, nowMs]);
 
+  // A failed fetch (backend still starting, timeout) is not terminal: the poller retries with
+  // backoff and this recovers on its own, so it renders as "retrying" — never a raw error.
+  if (status === "retrying" && !graph) {
+    return <ProjectMyWorkDigestRetryState />;
+  }
   if (status === "loading" && !graph) {
     return <ProjectMyWorkLoadingState />;
   }
@@ -135,6 +142,7 @@ export function ProjectMyWorkDigestContent({
       nowMs={nowMs}
       burndownVariant={flags.digestBurndownVariant}
       onOpenTicket={openTicketInApp}
+      {...(updatedAt !== undefined ? { updatedAtMs: updatedAt } : {})}
     />
   );
 }
