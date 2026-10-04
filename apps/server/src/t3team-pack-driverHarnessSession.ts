@@ -25,6 +25,8 @@ import { asPack, PackCodec } from "./t3team-pack-driverCodec.ts";
 
 type Run = <A, E>(effect: Effect.Effect<A, E>) => Promise<A>;
 
+const decodeProviderThread = Schema.decodeUnknownEffect(PackCodec.providerThread);
+
 const via =
   <I, IJ, O, E>(
     run: Run,
@@ -56,6 +58,8 @@ const sessionToPack = (
     (encodedSession) => {
       const providerSession = asPack<PackJson>(encodedSession);
       const { steerTurn, compactThread, injectHistory, unloadThread, jobControl } = runtime;
+      const { hasPendingBackgroundWork: pending, hasPendingBackgroundWorkForThread: pendingFor } =
+        runtime;
       const encodeEvent = Schema.encodeEffect(PackCodec.event);
       return {
         providerSession,
@@ -64,6 +68,15 @@ const sessionToPack = (
             runtime.events.pipe(Stream.mapEffect((event) => encodeEvent(event))),
             ambient,
           ),
+        // Idle release and root-run stop gates read these; dropping them lets the host release a
+        // session whose inner runtime still has background work running.
+        ...(pending === undefined ? {} : { hasPendingBackgroundWork: () => run(pending) }),
+        ...(pendingFor === undefined
+          ? {}
+          : {
+              hasPendingBackgroundWorkForThread: (json: unknown) =>
+                run(decodeProviderThread(json).pipe(Effect.flatMap(pendingFor))),
+            }),
         ensureThread: via(run, PackCodec.ensureThreadInput, PackCodec.providerThread, (value) =>
           runtime.ensureThread(value),
         ),
