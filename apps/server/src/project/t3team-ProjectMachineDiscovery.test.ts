@@ -9,9 +9,17 @@ import * as Path from "effect/Path";
 import type { PlatformError } from "effect/PlatformError";
 
 import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import {
+  HIDDEN_T3TEAM_DIR,
+  MANIFEST_FILE_NAME,
+  REFERENCES_DIR_NAME,
+} from "../t3team-project-repository-utils.ts";
 import * as ProjectMachineDiscovery from "./t3team-ProjectMachineDiscovery.ts";
 
 const projectId = ProjectId.make("project-1");
+// The state dir name follows the NEXI_STATE_DIR flag (`.nexi` by default), so derive every path.
+const references = `${HIDDEN_T3TEAM_DIR}/${REFERENCES_DIR_NAME}`;
+const manifest = `${references}/${MANIFEST_FILE_NAME}`;
 
 const writeTree = Effect.fn("writeTree")(function* (root: string, files: Record<string, string>) {
   const fileSystem = yield* FileSystem.FileSystem;
@@ -62,13 +70,13 @@ it.layer(NodeServices.layer)("ProjectMachineDiscovery", (it) => {
         Effect.gen(function* () {
           const path = yield* Path.Path;
           const result = yield* discoverIn((root) => {
-            const api = path.join(root, ".t3team/references/01-api");
-            const broken = path.join(root, ".t3team/references/02-web");
+            const api = path.join(root, references, "01-api");
+            const broken = path.join(root, references, "02-web");
             return Effect.gen(function* () {
               yield* writeTree(root, {
                 ".git/HEAD": "ref: refs/heads/main\n",
                 ".devcontainer/devcontainer.json": `{ "image": "node:22" }`,
-                ".t3team/references/reference-repositories.json": `{ "linkedRepositories": [
+                [manifest]: `{ "linkedRepositories": [
                 { "url": "https://github.com/acme/api.git", "localPath": "${api}", "status": "cloned" },
                 { "url": "https://github.com/acme/web.git", "localPath": "${broken}", "status": "failed" }
               ] }`,
@@ -97,7 +105,7 @@ it.layer(NodeServices.layer)("ProjectMachineDiscovery", (it) => {
           writeTree(root, {
             ".git/HEAD": "ref: refs/heads/main\n",
             ".devcontainer/devcontainer.json": `{ "image": "node:22" }`,
-            ".t3team/references/reference-repositories.json": `{ "linkedRepositories": [
+            [manifest]: `{ "linkedRepositories": [
               {}, { "localPath": "/elsewhere" }, null, "x"
             ] }`,
           }),

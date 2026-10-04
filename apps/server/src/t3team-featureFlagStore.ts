@@ -17,7 +17,7 @@ export const registeredFeatureFlags = Object.entries(FEATURE_FLAG_DEFINITIONS).m
   ([key, definition]) => ({ key: key as FeatureFlagKey, ...definition }),
 );
 
-/** Call during startup before importing project-state modules, and after any external Admin
+/** @public Call during startup before importing project-state modules, and after any external Admin
  * update. PostgreSQL and SQLite clients use the same parameterized SQL contract. */
 export const refreshFeatureFlags = Effect.fn("refreshFeatureFlags")(function* () {
   const sql = yield* SqlClient.SqlClient;
