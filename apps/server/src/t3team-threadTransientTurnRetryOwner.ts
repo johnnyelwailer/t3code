@@ -26,8 +26,11 @@ export type TransientRetryOwner = "user-stop" | "parent" | "workflow" | "session
 /** Turn item types the gate reads for the failed run (its failure and any Stop request). */
 export const TRANSIENT_RETRY_TURN_ITEM_TYPES = ["error", "run_interrupt_request"] as const;
 
-/** Same test as `Orchestrator.appOwnedSubagentParentThreadId`. */
-const isAppOwnedDelegatedChild = (
+/**
+ * Same test as `Orchestrator.appOwnedSubagentParentThreadId`: upstream wakes this thread's parent
+ * exactly once when its run ends, whatever the terminal status.
+ */
+export const isAppOwnedDelegatedChild = (
   thread: Pick<OrchestrationV2AppThread, "lineage" | "forkedFrom">,
 ) =>
   thread.lineage.relationshipToParent === "subagent" &&

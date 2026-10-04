@@ -3,7 +3,7 @@
  * fake target projection and a recording mailbox; time is the test clock.
  */
 import { assert, it } from "@effect/vitest";
-import { type OrchestrationV2DomainEvent, RunId, ThreadId } from "@t3tools/contracts";
+import { NodeId, type OrchestrationV2DomainEvent, RunId, ThreadId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -31,8 +31,16 @@ const shell = (over: Partial<SilenceWatchShell> = {}): SilenceWatchShell => ({
   pendingBackgroundTasks: [],
   settledAt: null,
   updatedAt: DateTime.makeUnsafe(0),
+  lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: TARGET },
+  forkedFrom: null,
   ...over,
 });
+
+/** The watcher's own `delegate_task` child: upstream wakes the watcher when its run ends. */
+const delegatedChildOfWatcher = {
+  lineage: { parentThreadId: WATCHER, relationshipToParent: "subagent", rootThreadId: WATCHER },
+  forkedFrom: { type: "node", nodeId: NodeId.make("node-1") },
+} as const satisfies Partial<SilenceWatchShell>;
 
 const event = (type: string, threadId: string, payload: unknown, atMs: number) =>
   ({
@@ -139,6 +147,30 @@ it.effect("a failed run reports the stop once and closes the watch", () =>
       yield* watchTarget();
       assert.strictEqual(sent[1]?.messageId, sent[0]?.messageId);
       assert.lengthOf(yield* store.listOpen, 0);
+    }),
+  ),
+);
+
+it.effect("a watched delegated child's failed run is left to upstream's completion wake", () =>
+  run(
+    Effect.gen(function* () {
+      const { core, sent, shells, store, watchTarget } = yield* setup;
+      shells.set(TARGET, shell(delegatedChildOfWatcher));
+      yield* watchTarget();
+      shells.set(
+        TARGET,
+        shell({ ...delegatedChildOfWatcher, status: "failed", activityRunStatus: null }),
+      );
+      yield* core.handleEvent(event("run.updated", TARGET, { status: "failed" }, 1_000));
+      // One report per terminal: the parent's completion wake, not a second mailbox digest.
+      assert.lengthOf(sent, 0);
+      assert.lengthOf(yield* store.listOpen, 0);
+      // Deleting the child is not a run terminal, so the watch still reports that.
+      shells.set(TARGET, shell(delegatedChildOfWatcher));
+      yield* watchTarget();
+      shells.delete(TARGET);
+      yield* core.handleEvent(event("thread.deleted", TARGET, {}, 2_000));
+      assert.include(sent[0]?.text, "terminal state (deleted)");
     }),
   ),
 );

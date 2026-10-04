@@ -1,6 +1,7 @@
 /**
  * Evaluates the open watches of ONE target against its V2 shell and tracked
- * activity: a stopped target reports once per episode and closes its watches, a
+ * activity: a stopped target reports once per episode and closes its watches
+ * (unless upstream's delegated-completion wake already told the watcher), a
  * resting one closes them silently, a live one is checked for a silence breach.
  * Notices go through the shared inter-agent mailbox (sender = the target) with
  * deterministic message ids, so a repeat is a no-op.
@@ -31,9 +32,25 @@ import {
 } from "./t3team-threadSilenceWatch.ts";
 import type { SilenceActivityTracker } from "./t3team-threadSilenceWatchActivity.ts";
 import type { T3TeamThreadSilenceWatchStore } from "./t3team-threadSilenceWatchStore.ts";
+import { isAppOwnedDelegatedChild } from "./t3team-threadTransientTurnRetryOwner.ts";
 
 export type SilenceWatchShell = SilenceWatchTargetView &
-  Pick<OrchestrationV2ThreadShell, "updatedAt">;
+  Pick<OrchestrationV2ThreadShell, "updatedAt" | "lineage" | "forkedFrom">;
+
+/**
+ * A watcher's own delegated child that ENDED its run is already reported to the watcher by
+ * upstream's delegated-completion wake; a second "[Thread stopped]" digest would be a second turn
+ * about the same failure. Deleted and settled targets are not run terminals and still report.
+ */
+const isReportedByCompletionWake = (
+  shell: SilenceWatchShell,
+  record: ThreadSilenceWatchRecord,
+  stoppedStatus: string,
+) =>
+  stoppedStatus !== "deleted" &&
+  stoppedStatus !== "settled" &&
+  shell.lineage.parentThreadId === record.watcherThreadId &&
+  isAppOwnedDelegatedChild(shell);
 
 export interface ThreadSilenceWatchCoreDeps {
   readonly store: T3TeamThreadSilenceWatchStore["Service"];
@@ -85,7 +102,10 @@ export const makeSilenceWatchEvaluator = (
       const state = classifySilenceWatchTarget(shell);
       if (records.length === 0 || shell === null || state.kind !== "live") {
         for (const record of records) {
-          if (state.kind === "stopped") {
+          if (
+            state.kind === "stopped" &&
+            !(shell !== null && isReportedByCompletionWake(shell, record, state.status))
+          ) {
             const text = buildStoppedNoticeText(record, state.status);
             const id = stoppedNoticeMessageId(record, state.episode);
             yield* notice(record, id, text, "Watched thread stopped");
