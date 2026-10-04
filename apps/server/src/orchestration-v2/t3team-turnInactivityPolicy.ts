@@ -13,12 +13,13 @@
  *
  * @module t3team-turnInactivityPolicy
  */
-import type { ProviderInstanceId } from "@t3tools/contracts";
+import type { ProviderInstanceId, RuntimeRequestId, ThreadId } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
 import * as ProviderInstanceRegistry from "../provider/Services/ProviderInstanceRegistry.ts";
+import * as ProjectionStore from "./ProjectionStore.ts";
 import type { ProviderAdapterV2Event } from "./ProviderAdapter.ts";
 
 export const DEFAULT_TURN_INACTIVITY_TIMEOUT_MS = 600_000;
@@ -32,11 +33,24 @@ const MAX_RETRY_ANNOUNCE_BUDGET_MS = 24 * 60 * 60 * 1000;
 export interface TurnInactivityPolicyShape {
   /** Base inactivity budget for a run on this instance; `null` disables the watchdog. */
   readonly budgetMs: (instanceId: ProviderInstanceId) => Effect.Effect<number | null>;
+  /**
+   * Whether a runtime request (approval, question) still waits for its answer — the projection's
+   * view, since several adapters never report the answer on their own stream.
+   */
+  readonly isRuntimeRequestPending: (
+    threadId: ThreadId,
+    requestId: RuntimeRequestId,
+  ) => Effect.Effect<boolean>;
 }
 
 export class TurnInactivityPolicy extends Context.Reference<TurnInactivityPolicyShape>(
   "t3team/orchestration-v2/TurnInactivityPolicy",
-  { defaultValue: () => ({ budgetMs: () => Effect.succeed(null) }) },
+  {
+    defaultValue: () => ({
+      budgetMs: () => Effect.succeed(null),
+      isRuntimeRequestPending: () => Effect.succeed(false),
+    }),
+  },
 ) {}
 
 export const budgetFromSeconds = (seconds: number | undefined): number =>
@@ -48,6 +62,7 @@ export const turnInactivityPolicyLive = Layer.effect(
   TurnInactivityPolicy,
   Effect.gen(function* () {
     const instances = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
     return {
       budgetMs: (instanceId) =>
         instances
@@ -55,9 +70,19 @@ export const turnInactivityPolicyLive = Layer.effect(
           .pipe(
             Effect.map((instance) => budgetFromSeconds(instance?.turnInactivityTimeoutSeconds)),
           ),
+      isRuntimeRequestPending: (threadId, requestId) =>
+        projections.getRuntimeRequest(threadId, requestId).pipe(
+          Effect.map((request) => request?.status === "pending"),
+          // Unknown is not "answered": keep waiting and look again on the next poll.
+          Effect.catchCause((cause) =>
+            Effect.logWarning("t3team.turn-watchdog.request-unreadable", { cause }).pipe(
+              Effect.as(true),
+            ),
+          ),
+        ),
     } satisfies TurnInactivityPolicyShape;
   }),
-);
+).pipe(Layer.provide(ProjectionStore.layer));
 
 /**
  * The budget to arm after `event`: an announced provider retry (a running `error` turn item with

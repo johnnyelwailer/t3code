@@ -1,6 +1,7 @@
 /**
- * End-to-end: the turn-inactivity watchdog settles a run whose provider went silent, and the
- * Stop backstop settles a stopped run whose provider never reports a terminal. Drives the real
+ * End-to-end: the turn-inactivity watchdog fails a run whose provider went silent — whether the
+ * provider swallows the watchdog's interrupt or acknowledges it — and the Stop backstop ends a
+ * stopped run whose provider never reports a terminal as the user's Stop. Drives the real
  * orchestrator, effect worker and run execution with a scripted provider that never ends a turn.
  */
 import type { PackTurnInput } from "@t3team/pack-api";
@@ -38,11 +39,15 @@ const instanceId = ProviderInstanceId.make(PACK_DRIVER);
 const modelSelection = { instanceId, model: "example/model" };
 const BUDGET_MS = 60_000;
 
-const runScenario = (name: string, stop: boolean) =>
+type Scenario = "silent" | "stop" | "acknowledged";
+
+const runScenario = (name: string, scenario: Scenario) =>
   Effect.scoped(
     Effect.gen(function* () {
       const cwd = yield* checkpointWorkspace(name);
-      // The provider starts every turn and then goes silent; interrupts are swallowed.
+      const stop = scenario === "stop";
+      // The provider starts every turn and then goes silent. Interrupts are swallowed, except
+      // that an `acknowledged` provider ends the turn `interrupted` when told to.
       const pack = makeScriptedPack({
         cwd,
         autoComplete: false,
@@ -50,6 +55,12 @@ const runScenario = (name: string, stop: boolean) =>
           startTurn: async (turn: PackTurnInput) => {
             pack.turns.push(turn);
             pack.events.push(completedTurnEvents(turn)[0]);
+          },
+          interruptTurn: async () => {
+            pack.log.push("interruptTurn");
+            const turn = pack.turns.at(-1);
+            if (scenario !== "acknowledged" || turn === undefined) return;
+            pack.events.push({ ...completedTurnEvents(turn)[2], status: "interrupted" });
           },
         },
       });
@@ -68,6 +79,7 @@ const runScenario = (name: string, stop: boolean) =>
       );
       const policy = Layer.succeed(TurnInactivityPolicy, {
         budgetMs: () => Effect.succeed(BUDGET_MS),
+        isRuntimeRequestPending: () => Effect.succeed(false),
       });
       return yield* Effect.gen(function* () {
         const orchestrator = yield* Orchestrator.OrchestratorV2;
@@ -127,8 +139,9 @@ const runScenario = (name: string, stop: boolean) =>
         );
         // Stop: the backstop's poll notices the pending Stop, then waits out the grace.
         // Silence: the budget expires, the interrupt is swallowed, then the grace runs out.
+        // Acknowledged: the budget expires and the provider ends the turn `interrupted` at once.
         yield* TestClock.adjust(stop ? 10_000 : BUDGET_MS);
-        yield* TestClock.adjust(30_000);
+        if (scenario !== "acknowledged") yield* TestClock.adjust(30_000);
         yield* Fiber.join(settled);
         yield* worker.drain();
         const projection = yield* orchestrator.getThreadProjection(threadId);
@@ -137,6 +150,7 @@ const runScenario = (name: string, stop: boolean) =>
           status: projection.runs[0]?.status,
           code: failure?.type === "error" ? failure.failure.code : undefined,
           interrupts: pack.log.filter((entry) => entry === "interruptTurn").length,
+          stopAnswered: projection.turnItems.some((item) => item.type === "run_interrupt_result"),
         };
       }).pipe(
         Effect.provide(
@@ -150,18 +164,30 @@ const runScenario = (name: string, stop: boolean) =>
 
 it.effect("settles a silent turn as failed after the watchdog's interrupt goes unanswered", () =>
   Effect.gen(function* () {
-    const result = yield* runScenario("t3team-watchdog-silent", false);
+    const result = yield* runScenario("t3team-watchdog-silent", "silent");
     assert.equal(result.status, "failed");
     assert.equal(result.code, "turn_inactivity");
     assert.equal(result.interrupts, 1);
   }),
 );
 
-it.effect("settles a stopped turn whose provider never reports a terminal", () =>
+it.effect("fails a stalled turn retryably even when the provider acknowledges the interrupt", () =>
   Effect.gen(function* () {
-    const result = yield* runScenario("t3team-watchdog-stop", true);
+    const result = yield* runScenario("t3team-watchdog-acknowledged", "acknowledged");
     assert.equal(result.status, "failed");
-    assert.equal(result.code, "interrupt_no_terminal");
+    assert.equal(result.code, "turn_inactivity");
+    assert.equal(result.interrupts, 1);
+    assert.isFalse(result.stopAnswered);
+  }),
+);
+
+it.effect("ends a stopped turn whose provider never reports a terminal as stopped", () =>
+  Effect.gen(function* () {
+    const result = yield* runScenario("t3team-watchdog-stop", "stop");
+    // The user's Stop, recorded as such: resumable, never retried as a failure.
+    assert.equal(result.status, "interrupted");
+    assert.equal(result.code, undefined);
+    assert.isTrue(result.stopAnswered);
     // Only the user's Stop interrupted the provider.
     assert.equal(result.interrupts, 1);
   }),

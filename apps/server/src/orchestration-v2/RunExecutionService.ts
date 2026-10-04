@@ -1185,9 +1185,20 @@ export const layer: Layer.Layer<
               Ref.modify(eventRouting, (state) => routeProviderEvent(event, routeIdentity, state)),
             ),
             (routed) =>
-              settlement === null
+              settlement === null || watchdog === null
                 ? routed
-                : Stream.merge(routed, settlement.events, { haltStrategy: "left" }),
+                : Stream.merge(
+                    // t3team: the provider's answer to the watchdog's own interrupt is a stall.
+                    Stream.mapEffect(routed, (event) =>
+                      watchdog.reviseTerminal(event, (failure) =>
+                        Ref.get(latestTurnItemOrdinal).pipe(
+                          Effect.map((ordinal) => makeFailedTerminalEvent(failure, ordinal + 1)),
+                        ),
+                      ),
+                    ),
+                    settlement.events,
+                    { haltStrategy: "left" },
+                  ),
             Stream.tap((event) =>
               Effect.gen(function* () {
                 if (watchdog !== null && settlement !== null) {
@@ -1366,6 +1377,11 @@ export const layer: Layer.Layer<
             yield* watchdog.start({
               isSettled: Ref.get(rootTerminalSeen),
               hasPendingStop: input.hasUnpairedRunInterruptRequest?.() ?? Effect.succeed(false),
+              isRuntimeRequestPending: (request) =>
+                inactivityPolicy.isRuntimeRequestPending(
+                  request.threadId ?? input.run.threadId,
+                  request.requestId,
+                ),
               interruptTurn: Effect.gen(function* () {
                 const providerTurnId =
                   (yield* Ref.get(eventRouting)).rootProviderTurnId ?? input.attempt.providerTurnId;
@@ -1379,10 +1395,13 @@ export const layer: Layer.Layer<
                 });
                 return true;
               }),
-              settle: (failure) =>
+              settle: (outcome) =>
                 Ref.get(latestTurnItemOrdinal).pipe(
                   Effect.flatMap((ordinal) =>
-                    settlement.settle(makeFailedTerminalEvent(failure, ordinal + 1)),
+                    settlement.settle(
+                      outcome.status,
+                      makeFailedTerminalEvent(outcome.failure, ordinal + 1),
+                    ),
                   ),
                 ),
             });

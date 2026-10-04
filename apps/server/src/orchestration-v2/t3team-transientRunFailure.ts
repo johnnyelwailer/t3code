@@ -13,7 +13,8 @@
  *
  * Never transient: usage limits (upstream limit recovery owns them),
  * permission/validation errors, and a Stop the provider never acknowledged
- * (`interrupt_no_terminal`) — re-running that would undo the user's stop.
+ * (`interrupt_no_terminal`, on runs settled before the Stop backstop recorded
+ * such a Stop as `interrupted`) — re-running that would undo the user's stop.
  */
 import type { OrchestrationV2ProviderFailure } from "@t3tools/contracts";
 
