@@ -97,3 +97,8 @@ export function transientRetryInFlightText(
 export function transientRetryExhaustedText(reason: string): string {
   return `${reason} — automatic retries exhausted (${MAX_SESSION_TRANSIENT_RETRIES} attempts)`;
 }
+
+/** The note on a delegated child's failed run: its parent was told and decides what happens next. */
+export function transientRetryLeftToParentText(reason: string): string {
+  return `${reason} — not retried automatically: the delegating agent was told this run failed`;
+}

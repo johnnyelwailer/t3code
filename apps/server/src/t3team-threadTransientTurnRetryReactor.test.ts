@@ -3,6 +3,7 @@ import {
   CommandId,
   EventId,
   MessageId,
+  NodeId,
   type OrchestrationV2ProviderFailure,
   type OrchestrationV2Run,
   ThreadId,
@@ -19,6 +20,7 @@ import {
 } from "./t3team-threadTransientTurnRetryPlan.ts";
 import {
   handleTransientRunFailure,
+  TRANSIENT_RETRY_TURN_ITEM_TYPES,
   type TransientRetryDeps,
 } from "./t3team-threadTransientTurnRetryReactor.ts";
 import { T3TeamThreadMessageRecorder } from "./t3team-v2/t3team-threadMessageRecorder.ts";
@@ -36,7 +38,7 @@ const liveDeps = Effect.gen(function* () {
       projections
         .getThreadRecords(threadId, ["runs", "turnItems"], {
           turnItemRunId: runId,
-          turnItemTypes: ["error"],
+          turnItemTypes: TRANSIENT_RETRY_TURN_ITEM_TYPES,
         })
         .pipe(Effect.orDie),
     dispatch: (command) => orchestrator.dispatch(command).pipe(Effect.mapError(String)),
@@ -165,6 +167,82 @@ it.layer(makeT3TeamV2TestLayer("t3team-transient-retry"))("transient run retry o
         );
         assert.strictEqual(rejected._tag, "Failure", name);
       }
+    }),
+  );
+
+  it.effect("leaves a delegated child's failure to the parent that was already told", () =>
+    Effect.gen(function* () {
+      const projections = yield* ProjectionStore.ProjectionStoreV2;
+      const threadId = ThreadId.make("thread:retry-delegated-child");
+      const failed = yield* threadWithFailedRun(threadId, stall);
+      const thread = yield* projections.getThread(threadId);
+      // What delegate_task creates: a subagent child forked from the parent's subagent node.
+      yield* projections.apply({
+        id: EventId.make(`lineage:${threadId}`),
+        type: "thread.metadata-updated",
+        threadId,
+        occurredAt: yield* DateTime.now,
+        payload: {
+          ...thread,
+          lineage: {
+            parentThreadId: ThreadId.make("thread:retry-parent"),
+            relationshipToParent: "subagent",
+            rootThreadId: ThreadId.make("thread:retry-parent"),
+          },
+          forkedFrom: { type: "node", nodeId: NodeId.make("node:retry-parent-subagent") },
+        },
+      });
+
+      yield* handleTransientRunFailure(yield* liveDeps, { threadId, runId: failed.id });
+
+      const records = yield* projections.getThreadRecords(threadId, ["runs", "messages"]);
+      assert.strictEqual(records.runs.length, 1, "no continuation run on the child");
+      const note = records.messages.find(
+        (message) => message.id === transientRetryNoteId(failed.id),
+      );
+      assert.include(note?.text ?? "", "not retried automatically");
+    }),
+  );
+
+  it.effect("never continues a failed run the user had stopped", () =>
+    Effect.gen(function* () {
+      const projections = yield* ProjectionStore.ProjectionStoreV2;
+      const threadId = ThreadId.make("thread:retry-stopped");
+      const failed = yield* threadWithFailedRun(threadId, stall);
+      const now = yield* DateTime.now;
+      yield* projections.apply({
+        id: EventId.make(`stop:${threadId}`),
+        type: "turn-item.updated",
+        threadId,
+        runId: failed.id,
+        occurredAt: now,
+        payload: {
+          id: TurnItemId.make(`stop:${threadId}`),
+          threadId,
+          runId: failed.id,
+          nodeId: failed.rootNodeId,
+          providerThreadId: null,
+          providerTurnId: null,
+          nativeItemRef: null,
+          parentItemId: null,
+          ordinal: 4,
+          status: "completed",
+          title: "Interrupt requested",
+          startedAt: now,
+          completedAt: now,
+          updatedAt: now,
+          type: "run_interrupt_request",
+          message: "Interrupt requested",
+        },
+      });
+
+      yield* handleTransientRunFailure(yield* liveDeps, { threadId, runId: failed.id });
+
+      const records = yield* projections.getThreadRecords(threadId, ["runs", "messages"]);
+      assert.strictEqual(records.runs.length, 1);
+      assert.isUndefined(
+        records.messages.find((message) => message.id === transientRetryNoteId(failed.id)),
+      );
     }),
   );
 });

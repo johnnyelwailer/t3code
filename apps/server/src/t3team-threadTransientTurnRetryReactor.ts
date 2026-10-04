@@ -9,15 +9,19 @@
  * runs (`t3team-threadTransientTurnRetryPlan.ts`).
  *
  * A user stop is never resurrected (the run ends `interrupted`, not
- * `failed`); a user message during the backoff makes the continuation
- * ineligible (no longer the latest run), so it is dropped. The backoff timer
- * is in-memory: a restart during the wait leaves the failed run to the user's
- * Resume.
+ * `failed`, and a failed run that carries a Stop request is skipped); a user
+ * message during the backoff makes the continuation ineligible (no longer the
+ * latest run), so it is dropped. An app-owned delegated child is never
+ * retried here: upstream already reported its failure to the parent
+ * (`finalizeAppOwnedSubagent`, exactly once), so the parent owns the retry. The
+ * backoff timer is in-memory: a restart during the wait leaves the failed run
+ * to the user's Resume.
  *
  * @module t3team-threadTransientTurnRetryReactor
  */
 import {
   CommandId,
+  type OrchestrationV2AppThread,
   type OrchestrationV2ServerCommand,
   type OrchestrationV2Run,
   type OrchestrationV2TurnItem,
@@ -34,7 +38,11 @@ import * as Stream from "effect/Stream";
 import { classifyTransientRunFailure } from "./orchestration-v2/t3team-transientRunFailure.ts";
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
 import { forkParked } from "./serverActivation.ts";
-import { transientTurnRetryDelayMs } from "./t3team-threadTransientTurnRetryPolicy.ts";
+import {
+  transientRetryLeftToParentText,
+  transientRetryReason,
+  transientTurnRetryDelayMs,
+} from "./t3team-threadTransientTurnRetryPolicy.ts";
 import {
   planTransientRetry,
   transientRetryMessageId,
@@ -42,12 +50,16 @@ import {
 } from "./t3team-threadTransientTurnRetryPlan.ts";
 import { T3TeamThreadMessageRecorder } from "./t3team-v2/t3team-threadMessageRecorder.ts";
 
+/** Turn items `loadRecords` must return for the failed run. */
+export const TRANSIENT_RETRY_TURN_ITEM_TYPES = ["error", "run_interrupt_request"] as const;
+
 export interface TransientRetryDeps {
-  /** All runs of the thread plus the failed run's `error` turn items. */
+  /** The thread, all its runs, and the failed run's `TRANSIENT_RETRY_TURN_ITEM_TYPES` items. */
   readonly loadRecords: (
     threadId: ThreadId,
     runId: RunId,
   ) => Effect.Effect<{
+    readonly thread: Pick<OrchestrationV2AppThread, "lineage" | "forkedFrom"> | null;
     readonly runs: ReadonlyArray<OrchestrationV2Run>;
     readonly turnItems: ReadonlyArray<OrchestrationV2TurnItem>;
   }>;
@@ -60,17 +72,39 @@ export interface TransientRetryDeps {
   readonly delayMs: (attempt: number, directiveSeconds: number | null) => number;
 }
 
+/**
+ * A `delegate_task` child whose terminal run upstream transfers into the parent (the same test as
+ * `Orchestrator.appOwnedSubagentParentThreadId`).
+ */
+const isAppOwnedDelegatedChild = (
+  thread: Pick<OrchestrationV2AppThread, "lineage" | "forkedFrom"> | null,
+) =>
+  thread !== null &&
+  thread.lineage.relationshipToParent === "subagent" &&
+  thread.lineage.parentThreadId !== null &&
+  thread.forkedFrom?.type === "node";
+
 /** Handles one failed run: note, back off, continue. Fail-open (logs). */
 export const handleTransientRunFailure = (
   deps: TransientRetryDeps,
   input: { readonly threadId: ThreadId; readonly runId: RunId },
 ) =>
   Effect.gen(function* () {
-    const { runs, turnItems } = yield* deps.loadRecords(input.threadId, input.runId);
+    const { thread, runs, turnItems } = yield* deps.loadRecords(input.threadId, input.runId);
     const run = runs.find((entry) => entry.id === input.runId);
     if (run === undefined || run.status !== "failed") return;
+    // The user stopped this run; whatever it failed with, it stays stopped.
+    if (turnItems.some((item) => item.type === "run_interrupt_request")) return;
     const failure = classifyTransientRunFailure(latestRootProviderFailure(run, turnItems));
     if (failure === null) return;
+    if (isAppOwnedDelegatedChild(thread)) {
+      yield* deps.recordNote({
+        threadId: input.threadId,
+        messageId: transientRetryNoteId(run.id),
+        text: transientRetryLeftToParentText(transientRetryReason(failure)),
+      });
+      return;
+    }
     const plan = planTransientRetry({
       runs,
       failedRunId: run.id,
@@ -137,9 +171,9 @@ export const T3TeamThreadTransientTurnRetryLive = Layer.effectDiscard(
         threads
           .getThreadRecords(threadId, ["runs", "turnItems"], {
             turnItemRunId: runId,
-            turnItemTypes: ["error"],
+            turnItemTypes: TRANSIENT_RETRY_TURN_ITEM_TYPES,
           })
-          .pipe(Effect.orElseSucceed(() => ({ runs: [], turnItems: [] }))),
+          .pipe(Effect.orElseSucceed(() => ({ thread: null, runs: [], turnItems: [] }))),
       dispatch: (command) => threads.dispatch(command).pipe(Effect.mapError(String)),
       recordNote: ({ threadId, messageId, text }) =>
         recorder
