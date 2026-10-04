@@ -283,6 +283,7 @@ it.effect(
           turnRedrive: {
             processTurnRetry: () => Effect.fail("turn re-issue lost the race"),
             settleNoText: () => Effect.void,
+            releaseHeldRun: () => Effect.succeed(true),
             settleFailedTurn: () => Effect.void,
           } as never,
           retryFailed: {
@@ -352,6 +353,7 @@ const makeCardControlDeps = Effect.gen(function* () {
       turnRedrive: {
         processTurnRetry: () => Effect.void,
         settleNoText: () => Effect.void,
+        releaseHeldRun: () => Effect.succeed(true),
         settleFailedTurn: () => Effect.void,
       } as never,
       retryFailed: {

@@ -8,6 +8,7 @@ import { MessageId, RunId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Predicate from "effect/Predicate";
 
+import type { OrchestratorV2Error } from "./orchestration-v2/Orchestrator.ts";
 import type { ThreadManagementServiceShape } from "./orchestration-v2/ThreadManagementService.ts";
 import type { WorkflowPendingAsk } from "./t3team-workflowEngineRegistry.ts";
 import { findWorkflowStepPrompt, type WorkflowStepPrompt } from "./t3team-workflowTurnPrompt.ts";
@@ -30,7 +31,7 @@ export type WorkflowTurnState =
 
 export type WorkflowTurnReads = Pick<ThreadManagementServiceShape, "getThreadRecords">;
 
-type ReadError = Effect.Error<ReturnType<WorkflowTurnReads["getThreadRecords"]>>;
+type ReadError = OrchestratorV2Error;
 
 /** The read failed because the thread itself does not exist — a definitive absence. */
 const isThreadGone = (error: ReadError) =>
@@ -91,7 +92,7 @@ export const readWorkflowTurnState = (
   }).pipe(
     // Only a thread that is gone is a definitive answer; any other read error (an SQL error under
     // load) says nothing about the step, so the caller keeps it parked and looks again.
-    Effect.catch((error) =>
+    Effect.catch((error): Effect.Effect<WorkflowTurnState> =>
       isThreadGone(error)
         ? Effect.succeed({ kind: "missing" } as const)
         : Effect.logWarning("t3team workflow step state unreadable", { threadId, error }).pipe(

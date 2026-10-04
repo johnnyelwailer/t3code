@@ -72,6 +72,8 @@ export interface InterruptedTurnRetryDeps {
   readonly threads: WorkflowTurnReads;
   /** Post the re-driven prompt (the workflow host's queued turn start). */
   readonly startTurn: (input: WorkflowHostStartTurnInput) => Effect.Effect<void, string>;
+  /** Take a still-queued step run out of the thread's queue (V2 `queued-run.cancel`). */
+  readonly cancelQueuedRun: (threadId: string, runId: string) => Effect.Effect<void, string>;
   /** Journal the re-drive attempt on the run row — the cross-restart half of the budget. */
   readonly recordTurnRetries: (
     runId: string,
@@ -109,6 +111,13 @@ export interface InterruptedTurnRetry {
     run: WorkflowRegisteredRun,
     error: string,
   ) => Effect.Effect<void>;
+  /**
+   * Take a step run that V2 HELD in a paused queue out of it, so the re-drive can post the step
+   * again (an idle thread starts it at once). Never resumes the queue itself: the other held
+   * messages are the person's to release. `false` when the run is no longer queued (the queue was
+   * resumed meanwhile) — the caller then looks again instead of re-driving.
+   */
+  readonly releaseHeldRun: (threadId: string, runId: string) => Effect.Effect<boolean>;
   /** The due re-drive: re-validate, then re-issue the step's prompt turn. */
   readonly processTurnRetry: (input: {
     readonly threadId: string;

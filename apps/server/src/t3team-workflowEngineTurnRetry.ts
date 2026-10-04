@@ -105,7 +105,20 @@ export function makeInterruptedTurnRetry(deps: InterruptedTurnRetryDeps): Interr
     yield* deps.armTurnRetry(threadId, pending.correlationId, delayMs);
   });
 
+  const releaseHeldRun = (threadId: string, runId: string) =>
+    deps.cancelQueuedRun(threadId, runId).pipe(
+      Effect.as(true),
+      Effect.catch((error) =>
+        Effect.logInfo("t3team workflow held step run not released", {
+          threadId,
+          runId,
+          error,
+        }).pipe(Effect.as(false)),
+      ),
+    );
+
   return {
+    releaseHeldRun,
     settleNoText: (threadId, pending, run) =>
       scheduleRedrive(
         threadId,
@@ -124,6 +137,6 @@ export function makeInterruptedTurnRetry(deps: InterruptedTurnRetryDeps): Interr
         `${failedTurnMessage(error)} (step ${pending.correlationId}, ${MAX_INTERRUPTED_TURN_REDRIVES} re-drives exhausted)`,
       ),
 
-    processTurnRetry: makeProcessTurnRetry({ deps, failRun }),
+    processTurnRetry: makeProcessTurnRetry({ deps, failRun, releaseHeldRun }),
   };
 }

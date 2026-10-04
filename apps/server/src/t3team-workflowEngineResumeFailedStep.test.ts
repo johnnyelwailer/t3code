@@ -88,6 +88,7 @@ repoLayer("resumeFailedTurnStep", (it) => {
       const redriven: Array<{ threadId: string; correlationId: string }> = [];
       const turnRedrive: InterruptedTurnRetry = {
         settleNoText: () => Effect.void,
+        releaseHeldRun: () => Effect.succeed(true),
         settleFailedTurn: () => Effect.void,
         processTurnRetry: (input) => {
           redriven.push(input);
@@ -175,6 +176,7 @@ repoLayer("resumeFailedTurnStep", (it) => {
       };
       const turnRedrive: InterruptedTurnRetry = {
         settleNoText: () => Effect.void,
+        releaseHeldRun: () => Effect.succeed(true),
         settleFailedTurn: () => Effect.void,
         processTurnRetry: () => Effect.void,
       };

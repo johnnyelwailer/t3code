@@ -102,6 +102,11 @@ export function createWorkflowReactorTaskHandler(
       }
       const { settlement } = state;
       if (settlement.kind === "pending") return;
+      // A run held in a paused queue never starts on its own: take it out (the step then re-drives
+      // or settles like any failed turn), or look again on the next sweep if it already started.
+      if (settlement.kind === "failed" && settlement.heldRunId !== undefined) {
+        if (!(yield* deps.turnRetry.releaseHeldRun(threadId, settlement.heldRunId))) return;
+      }
       registry.takePending(threadId);
       if (settlement.kind === "answer") {
         if (settlement.messageId !== null && deps.attributeAnswer !== undefined) {

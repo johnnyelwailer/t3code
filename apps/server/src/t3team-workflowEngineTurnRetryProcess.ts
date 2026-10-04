@@ -26,10 +26,11 @@ export interface ProcessTurnRetryContext {
     correlationId: string,
     error: unknown,
   ) => Effect.Effect<void>;
+  readonly releaseHeldRun: (threadId: string, runId: string) => Effect.Effect<boolean>;
 }
 
 export function makeProcessTurnRetry(ctx: ProcessTurnRetryContext) {
-  const { deps, failRun } = ctx;
+  const { deps, failRun, releaseHeldRun } = ctx;
 
   return Effect.fn("InterruptedTurnRetry.processTurnRetry")(function* ({
     threadId,
@@ -88,6 +89,10 @@ export function makeProcessTurnRetry(ctx: ProcessTurnRetryContext) {
         threadId,
         stepId: correlationId,
       });
+    }
+    // A held run would start a second copy of the step once the queue resumes: take it out first.
+    if (settlement.kind === "failed" && settlement.heldRunId !== undefined) {
+      if (!(yield* releaseHeldRun(threadId, settlement.heldRunId))) return yield* rearm;
     }
     const prompt = yield* readWorkflowStepPrompt(deps.threads, threadId, pending).pipe(
       Effect.catch(() => Effect.succeed("unreadable" as const)),

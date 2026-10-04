@@ -53,6 +53,7 @@ function harness(input: {
   readonly answer?: string;
   readonly promptOnThread?: boolean;
   readonly unreadable?: boolean;
+  readonly queueHeld?: boolean;
 }) {
   const registry = makeWorkflowEngineRegistry();
   const failed: unknown[] = [];
@@ -60,6 +61,7 @@ function harness(input: {
   const armed: Array<{ correlationId: string; delayMs: number }> = [];
   const journaled: number[] = [];
   const started: WorkflowHostStartTurnInput[] = [];
+  const cancelled: string[] = [];
   const run: WorkflowRegisteredRun = {
     resume: async (_correlationId, reply) => void resumed.push(reply),
     cancel: () => {},
@@ -69,7 +71,10 @@ function harness(input: {
   const threads = input.unreadable
     ? failingReads("read")
     : records({
-        run: v2Run(input.status ?? "failed"),
+        run: {
+          ...v2Run(input.status ?? "failed"),
+          ...(input.queueHeld ? { queueHeld: true } : {}),
+        },
         messages: [
           ...(input.promptOnThread === false ? [] : [prompt]),
           ...(input.answer === undefined
@@ -81,12 +86,13 @@ function harness(input: {
     registry,
     threads,
     startTurn: (turn) => Effect.sync(() => void started.push(turn)),
+    cancelQueuedRun: (_threadId, runId) => Effect.sync(() => void cancelled.push(runId)),
     recordTurnRetries: (_runId, turnRetries) => Effect.sync(() => void journaled.push(turnRetries)),
     armTurnRetry: (_threadId, correlationId, delayMs) =>
       Effect.sync(() => void armed.push({ correlationId, delayMs })),
     backoffOverrideMs: 1,
   });
-  return { registry, run, failed, resumed, armed, journaled, started, retry };
+  return { registry, run, failed, resumed, armed, journaled, started, cancelled, retry };
 }
 
 const liveAsk: WorkflowPendingAsk = { runId: RUN, correlationId: STEP, kind: "thread.turn" };
@@ -189,5 +195,16 @@ it.effect("processTurnRetry re-arms without spending budget when the thread cann
     const pending = h.registry.peekPending(THREAD);
     assert.strictEqual(pending?.turnRetries, 1);
     assert.strictEqual(pending?.redriveScheduled, true);
+  }),
+);
+
+it.effect("processTurnRetry takes a held step run out of the queue before re-posting it", () =>
+  Effect.gen(function* () {
+    const h = harness({ status: "queued", queueHeld: true });
+    h.registry.setPending(THREAD, { ...liveAsk, turnRetries: 1, promptMessageId: STEP_PROMPT });
+    yield* h.retry.processTurnRetry({ threadId: THREAD, correlationId: STEP });
+    assert.deepStrictEqual(h.cancelled, [v2Run("queued").id]);
+    assert.strictEqual(h.started.length, 1);
+    assert.strictEqual(h.started[0]!.text, "Pick the next task.");
   }),
 );

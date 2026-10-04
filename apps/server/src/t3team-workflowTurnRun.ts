@@ -27,8 +27,10 @@ export type WorkflowTurnSettlement =
   /**
    * The run ended WITHOUT completing (failed, interrupted, cancelled, rolled back). Whatever it
    * streamed before that was preamble, never the answer; `error` names the provider's reason.
+   * `heldRunId`: the run never started — V2 held it in the thread's queue after an earlier run
+   * failed (or on a restart), and nothing but a person's "resume queue" would ever start it.
    */
-  | { readonly kind: "failed"; readonly error: string };
+  | { readonly kind: "failed"; readonly error: string; readonly heldRunId?: string };
 
 /** The run that answers the prompt `promptMessageId`, following restart continuations. */
 export function resolveStepRun(
@@ -48,12 +50,17 @@ export function resolveStepRun(
 }
 
 const INTERRUPTED_TURN = "The agent turn ended before it completed";
+const HELD_TURN =
+  "The agent turn never started: the thread's queue was paused after an earlier run failed";
 
 /** Judge a step's (resolved) run from its records. */
 export function judgeStepRun(
   projection: Pick<OrchestrationV2ThreadProjection, "messages" | "turnItems">,
   run: OrchestrationV2Run,
 ): WorkflowTurnSettlement {
+  if (run.status === "queued" && run.queueHeld === true) {
+    return { kind: "failed", error: `${HELD_TURN}.`, heldRunId: run.id };
+  }
   if (!isTerminalRunStatus(run.status)) return { kind: "pending" };
   // `subagentResultForRun` picks the most recently updated message; order ties (one provider
   // write can stamp several messages with the same instant) by timeline position, latest first.

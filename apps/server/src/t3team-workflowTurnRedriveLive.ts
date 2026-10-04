@@ -8,11 +8,13 @@
  * itself on a detached fiber — when it has to wait (a run already owns the step), it re-checks
  * after the backoff rather than leaving the restored ask parked with nothing to wake it.
  */
+import { CommandId, RunId, ThreadId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import type * as Scope from "effect/Scope";
 
+import type { ThreadManagementServiceShape } from "./orchestration-v2/ThreadManagementService.ts";
 import type { WorkflowRunRepositoryShape } from "./persistence/Services/WorkflowRuns.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 import {
@@ -37,7 +39,7 @@ const backoffOverrideFromEnv = (): number | undefined => {
 
 export function makeWorkflowTurnRedriveLive(deps: {
   readonly registry: T3TeamWorkflowEngineRegistryShape;
-  readonly threads: WorkflowTurnReads;
+  readonly threads: WorkflowTurnReads & Pick<ThreadManagementServiceShape, "dispatch">;
   readonly host: Pick<T3TeamWorkflowHostShape, "startTurn">;
   readonly runRepository: Pick<WorkflowRunRepositoryShape, "setTurnRetries">;
   /** Where a due re-drive runs; absent runs it on the armed fiber itself. */
@@ -53,6 +55,15 @@ export function makeWorkflowTurnRedriveLive(deps: {
     threads: deps.threads,
     startTurn: (input) =>
       deps.host.startTurn(input).pipe(Effect.mapError((error) => error.message)),
+    cancelQueuedRun: (threadId, runId) =>
+      deps.threads
+        .dispatch({
+          type: "queued-run.cancel",
+          commandId: CommandId.make(`t3team-wf-held:${runId}`),
+          threadId: ThreadId.make(threadId),
+          runId: RunId.make(runId),
+        })
+        .pipe(Effect.asVoid, Effect.mapError(String)),
     recordTurnRetries: (runId, turnRetries) =>
       deps.runRepository.setTurnRetries({
         runId,

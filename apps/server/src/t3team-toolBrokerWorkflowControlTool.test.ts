@@ -75,6 +75,7 @@ repoLayer("t3team.orchestration.pause / stop", (it) => {
       let rearmed = 0;
       const turnRedrive: InterruptedTurnRetry = {
         settleNoText: () => Effect.void,
+        releaseHeldRun: () => Effect.succeed(true),
         settleFailedTurn: () => Effect.void,
         processTurnRetry: (input) => {
           redriven.push(input);

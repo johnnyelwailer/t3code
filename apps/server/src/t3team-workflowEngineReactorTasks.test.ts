@@ -37,6 +37,7 @@ const STEP = `${RUN}:2`;
 const setup = (
   pending: Omit<WorkflowPendingAsk, "runId" | "correlationId" | "kind">,
   threads: WorkflowTurnReads,
+  releasable = true,
 ) => {
   const registry = makeWorkflowEngineRegistry();
   const calls: string[] = [];
@@ -49,6 +50,11 @@ const setup = (
   registry.registerRun(RUN, run);
   registry.setPending(THREAD, { runId: RUN, correlationId: STEP, kind: "thread.turn", ...pending });
   const turnRetry: InterruptedTurnRetry = {
+    releaseHeldRun: (_threadId, runId) =>
+      Effect.sync(() => {
+        calls.push(`release:${runId}`);
+        return releasable;
+      }),
     settleFailedTurn: (_threadId, _pending, _run, error) =>
       Effect.sync(() => void calls.push(`redrive-failed:${error}`)),
     settleNoText: () => Effect.sync(() => void calls.push("redrive-silent")),
@@ -170,6 +176,31 @@ it.effect("skips a step whose re-drive is already scheduled", () =>
     );
     yield* handle({ kind: "check", threadId: THREAD });
     assert.deepStrictEqual(calls, []);
+  }),
+);
+
+it.effect("takes a step run held in a paused queue out of it, then re-drives the step", () =>
+  Effect.gen(function* () {
+    const held = { ...v2Run("queued"), queueHeld: true };
+    const { handle, calls } = setup({ promptMessageId: PROMPT }, records({ run: held }));
+    yield* handle({ kind: "check", threadId: THREAD });
+    assert.strictEqual(calls.length, 2);
+    assert.strictEqual(calls[0], `release:${held.id}`);
+    assert.include(calls[1], "redrive-failed:The agent turn never started");
+  }),
+);
+
+it.effect("looks again later when the held run already left the queue", () =>
+  Effect.gen(function* () {
+    const held = { ...v2Run("queued"), queueHeld: true };
+    const { handle, calls, registry } = setup(
+      { promptMessageId: PROMPT },
+      records({ run: held }),
+      false,
+    );
+    yield* handle({ kind: "check", threadId: THREAD });
+    assert.deepStrictEqual(calls, [`release:${held.id}`]);
+    assert.strictEqual(registry.peekPending(THREAD)?.correlationId, STEP);
   }),
 );
 
