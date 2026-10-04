@@ -364,7 +364,7 @@ describe("claim agent labels", () => {
     expect(digestAgentLabel({ providerName: "codex", model: "gpt-5.1-codex" })).toBe(
       "Codex · gpt-5.1-codex",
     );
-    expect(digestAgentLabel({ providerName: "claude", model: "claude-sonnet-4-5" })).toBe(
+    expect(digestAgentLabel({ providerName: "claudeAgent", model: "claude-sonnet-4-5" })).toBe(
       "Claude · claude-sonnet-4-5",
     );
   });

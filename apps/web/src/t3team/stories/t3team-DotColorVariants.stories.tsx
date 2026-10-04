@@ -14,8 +14,8 @@ import "./t3team-DotColorVariantsCD.css";
  *
  * STORY-ONLY — no production behavior change. Every variant paints the
  * EXACT production dot DOM (`.t3team-aci-cell[data-t3team-state]` wrapping
- * the pulse span + `.t3team-aci-dot`, the same structure the working row and
- * Agents panel stamp), so:
+ * the pulse span + `.t3team-aci-dot`, the same structure the working row
+ * stamps), so:
  *   - the shared state keyframes (wave / snap / breathe / ring) run from
  *     t3team-index.css unchanged — motion carries the state;
  *   - the dots inherit the production centering (the GHE #201 alignment
@@ -36,8 +36,8 @@ import "./t3team-DotColorVariantsCD.css";
  * done · error · base (no state stamped — the resting dot).
  */
 
-/** The full dot vocabulary: the five live states + the two roster result
- *  states (t3team-agentsPanelDots.logic) + the unstamped base dot. */
+/** The full dot vocabulary: the live states + the roster result states
+ *  (settled / done / error) + the unstamped base dot. */
 const STATES: readonly (string | null)[] = [
   "thinking",
   "writing",
@@ -60,7 +60,7 @@ const STATE_LABELS: Record<string, string> = {
   base: "base (no state)",
 };
 
-/** One dot — identical DOM to AgentsPanelStatusDot / the working-row cell. */
+/** One dot — identical DOM to the working-row cell. */
 function Dot({
   state,
   index,
