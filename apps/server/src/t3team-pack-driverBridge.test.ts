@@ -12,6 +12,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
@@ -149,6 +150,55 @@ describe("bridgePackProviderDriver (orchestration V2)", () => {
       yield* Scope.close(sessionScope, Exit.void);
       const exit = yield* Fiber.await(fiber);
       expect(Exit.isSuccess(exit)).toBe(true);
+    }),
+  );
+
+  // Live clock: the late close runs on a detached fiber outside the test clock.
+  it.live("closes a pack session that resolves after its open was interrupted", () =>
+    Effect.gen(function* () {
+      const pack = makeScriptedPack();
+      let started!: () => void;
+      const openStarted = new Promise<void>((resolve) => (started = resolve));
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      let closed!: () => void;
+      const closeCalled = new Promise<void>((resolve) => (closed = resolve));
+      const { instance } = yield* createInScope({
+        ...pack.definition,
+        create: async () => ({
+          ...pack.instance,
+          orchestration: {
+            ...pack.instance.orchestration,
+            openSession: async (input) => {
+              started();
+              await gate;
+              const session = await pack.instance.orchestration.openSession(input);
+              return {
+                ...session,
+                close: async () => {
+                  pack.log.push("close");
+                  closed();
+                },
+              };
+            },
+          },
+        }),
+      });
+      const sessionScope = yield* Scope.make();
+      const fiber = yield* instance.orchestrationAdapter
+        .openSession({ threadId, providerSessionId, modelSelection, runtimePolicy })
+        .pipe(Effect.provideService(Scope.Scope, sessionScope), Effect.forkChild);
+      yield* Effect.promise(() => openStarted);
+      yield* Fiber.interrupt(fiber);
+      expect(pack.log).not.toContain("close");
+
+      release();
+      // Bounded only so a regression fails instead of hanging; the close lands in a few ticks.
+      const outcome = yield* Effect.promise(() => closeCalled).pipe(
+        Effect.timeoutOption(Duration.seconds(2)),
+      );
+      expect(Option.isSome(outcome)).toBe(true);
+      expect(pack.log.filter((entry) => entry === "close")).toEqual(["close"]);
     }),
   );
 

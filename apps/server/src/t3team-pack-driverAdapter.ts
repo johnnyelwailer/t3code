@@ -4,7 +4,8 @@
  * Maps a pack's `PackOrchestrationAdapter` (`@t3team/pack-api`, Promise + JSON) onto the host
  * `ProviderAdapterV2Shape` one-to-one. `openSession` runs in the session scope the
  * `ProviderSessionManagerV2` owns: the scope's close calls the pack session's `close()` (bounded)
- * and ends its event stream. The session receives the thread's MCP access and a
+ * and ends its event stream; a session that resolves after the open was interrupted is closed
+ * when it arrives. The session receives the thread's MCP access and a
  * `requestContinuation` host service that feeds `ProviderContinuationRequests`, the same queue
  * built-in adapters use for provider-native wakes.
  *
@@ -14,6 +15,7 @@ import type {
   PackContinuationRequest,
   PackOpenSessionInput,
   PackOrchestrationAdapter,
+  PackSessionRuntime,
 } from "@t3team/pack-api";
 import {
   ProviderThreadId,
@@ -106,21 +108,7 @@ export const makePackOrchestrationAdapter = (input: {
             }),
         );
         const encoded = yield* bridge.encode(PackCodec.openSessionInput, value);
-        const runtime = yield* bridge.call(() =>
-          adapter.openSession({
-            ...asPack<Omit<PackOpenSessionInput, "mcp" | "host">>(encoded),
-            ...readPackMcpSession(value.threadId),
-            host: {
-              requestContinuation: (request) => {
-                // The host queue is unbounded and needs no services: a plain fork is enough.
-                Effect.runFork(input.offerContinuation(toContinuationRequest(driver, request)));
-              },
-            },
-          }),
-        );
-        const closed = yield* Deferred.make<void>();
-        // LIFO: end the event stream first, then close the pack session (bounded).
-        yield* Effect.addFinalizer(() =>
+        const closePack = (runtime: PackSessionRuntime) =>
           bridge
             .call(() => runtime.close())
             .pipe(
@@ -132,8 +120,41 @@ export const makePackOrchestrationAdapter = (input: {
                   cause,
                 }),
               ),
+            );
+        let opening: Promise<PackSessionRuntime> | undefined;
+        // Only the wait for the pack is interruptible: once it resolves, its close() finalizer is
+        // registered in the same uninterruptible step, so no session escapes the scope.
+        const runtime = yield* Effect.uninterruptibleMask((restore) =>
+          restore(
+            bridge.call(() => {
+              opening = adapter.openSession({
+                ...asPack<Omit<PackOpenSessionInput, "mcp" | "host">>(encoded),
+                ...readPackMcpSession(value.threadId),
+                host: {
+                  requestContinuation: (request) => {
+                    // The host queue is unbounded and needs no services: a plain fork is enough.
+                    Effect.runFork(input.offerContinuation(toContinuationRequest(driver, request)));
+                  },
+                },
+              });
+              return opening;
+            }),
+          ).pipe(
+            // Interrupted mid-open: the pack's Promise is abandoned, so close whatever session it
+            // still resolves to (a rejection opened nothing).
+            Effect.onInterrupt(() =>
+              Effect.sync(() => {
+                void opening?.then(
+                  (late) => Effect.runFork(closePack(late)),
+                  () => undefined,
+                );
+              }),
             ),
+            Effect.tap((opened) => Effect.addFinalizer(() => closePack(opened))),
+          ),
         );
+        const closed = yield* Deferred.make<void>();
+        // LIFO: end the event stream first, then close the pack session (bounded).
         yield* Effect.addFinalizer(() => Deferred.succeed(closed, undefined));
         const providerSession = yield* bridge.decode(PackCodec.providerSession, {
           ...runtime.providerSession,

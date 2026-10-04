@@ -1647,7 +1647,16 @@ export const layerWithOptions = (
                       ),
                     ),
                   ),
-                  Effect.onInterrupt(() => dropReservation),
+                  // t3team: an interrupted open still owns what the adapter acquired in the
+                  // session scope (a spawned process, a pack session); close it in the
+                  // background so a wedged finalizer cannot stall the interrupt.
+                  Effect.onInterrupt(() =>
+                    Scope.close(sessionScope, Exit.void).pipe(
+                      Effect.ignore,
+                      Effect.forkDetach({ startImmediately: true }),
+                      Effect.andThen(dropReservation),
+                    ),
+                  ),
                   Effect.mapError(
                     (cause) =>
                       new ProviderSessionOpenError({
