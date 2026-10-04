@@ -87,6 +87,8 @@ export function createWorkflowReactorTaskHandler(
       }
       const state = yield* readWorkflowTurnState(deps.threads, threadId, pending);
       if (!isCurrent(threadId, pending)) return;
+      // A failed read says nothing about the step: stay parked, the sweep looks again.
+      if (state.kind === "unreadable") return;
       if (state.kind === "missing") {
         registry.takePending(threadId);
         yield* Effect.logWarning("t3team workflow step prompt is not on its thread", {

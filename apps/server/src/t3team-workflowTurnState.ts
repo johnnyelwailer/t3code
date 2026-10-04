@@ -6,6 +6,7 @@
  */
 import { MessageId, RunId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Predicate from "effect/Predicate";
 
 import type { ThreadManagementServiceShape } from "./orchestration-v2/ThreadManagementService.ts";
 import type { WorkflowPendingAsk } from "./t3team-workflowEngineRegistry.ts";
@@ -17,8 +18,10 @@ import {
 } from "./t3team-workflowTurnRun.ts";
 
 export type WorkflowTurnState =
-  /** The step's prompt is not on the thread (or the thread cannot be read): it can never answer. */
+  /** The step's prompt (or the thread) is definitively gone: it can never answer. */
   | { readonly kind: "missing" }
+  /** A read failed this time (a store error): nothing is known, so look again later. */
+  | { readonly kind: "unreadable" }
   | {
       readonly kind: "settlement";
       readonly promptMessageId: string;
@@ -27,17 +30,28 @@ export type WorkflowTurnState =
 
 export type WorkflowTurnReads = Pick<ThreadManagementServiceShape, "getThreadRecords">;
 
-/** The step's latest prompt on the thread, found by its workflow author stamp. */
+type ReadError = Effect.Error<ReturnType<WorkflowTurnReads["getThreadRecords"]>>;
+
+/** The read failed because the thread itself does not exist — a definitive absence. */
+const isThreadGone = (error: ReadError) =>
+  Predicate.hasProperty(error, "cause") &&
+  Predicate.hasProperty(error.cause, "_tag") &&
+  error.cause._tag === "ProjectionStoreThreadNotFoundError";
+
+/**
+ * The step's latest prompt on the thread, found by its workflow author stamp; `null` when it is
+ * definitively not there. Fails only when the thread could not be read (worth another look).
+ */
 export const readWorkflowStepPrompt = (
   threads: WorkflowTurnReads,
   threadId: string,
   pending: Pick<WorkflowPendingAsk, "runId" | "correlationId">,
-): Effect.Effect<WorkflowStepPrompt | null> =>
+): Effect.Effect<WorkflowStepPrompt | null, ReadError> =>
   threads.getThreadRecords(ThreadId.make(threadId), ["messages"], { messageRoles: ["user"] }).pipe(
     Effect.map(({ messages }) =>
       findWorkflowStepPrompt(messages, pending.runId, pending.correlationId),
     ),
-    Effect.orElseSucceed(() => null),
+    Effect.catchIf(isThreadGone, () => Effect.succeed(null)),
   );
 
 export const readWorkflowTurnState = (
@@ -75,7 +89,13 @@ export const readWorkflowTurnState = (
     });
     return { kind: "settlement", promptMessageId, settlement: judgeStepRun(records, run) } as const;
   }).pipe(
-    // A read that cannot land cannot verify the step: treat the thread as unavailable (the
-    // caller then fails the run — parking it would hide the failure forever).
-    Effect.orElseSucceed(() => ({ kind: "missing" }) as const),
+    // Only a thread that is gone is a definitive answer; any other read error (an SQL error under
+    // load) says nothing about the step, so the caller keeps it parked and looks again.
+    Effect.catch((error) =>
+      isThreadGone(error)
+        ? Effect.succeed({ kind: "missing" } as const)
+        : Effect.logWarning("t3team workflow step state unreadable", { threadId, error }).pipe(
+            Effect.as({ kind: "unreadable" } as const),
+          ),
+    ),
   );

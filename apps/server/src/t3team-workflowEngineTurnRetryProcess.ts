@@ -10,6 +10,7 @@ import * as Effect from "effect/Effect";
 
 import type { WorkflowRegisteredRun } from "./t3team-workflowEngineRegistry.ts";
 import {
+  interruptedTurnRetryBackoffMs,
   PROMPT_LOST_ERROR,
   type InterruptedTurnRetryDeps,
 } from "./t3team-workflowEngineTurnRetrySupport.ts";
@@ -53,7 +54,14 @@ export function makeProcessTurnRetry(ctx: ProcessTurnRetryContext) {
       Effect.sync(() => deps.registry.takePending(threadId)).pipe(
         Effect.andThen(failRun(run, correlationId, new Error(error))),
       );
+    // The thread could not be read: nothing is known, so try again later without spending budget.
+    const rearm = Effect.suspend(() => {
+      deps.registry.setPending(threadId, { ...pending, redriveScheduled: true });
+      const delayMs = interruptedTurnRetryBackoffMs(0, deps.backoffOverrideMs);
+      return deps.armTurnRetry(threadId, correlationId, delayMs);
+    });
     const state = yield* readWorkflowTurnState(deps.threads, threadId, pending);
+    if (state.kind === "unreadable") return yield* rearm;
     if (state.kind === "missing") {
       yield* Effect.logWarning("t3team workflow step re-drive: prompt not found on thread", {
         threadId,
@@ -81,7 +89,10 @@ export function makeProcessTurnRetry(ctx: ProcessTurnRetryContext) {
         stepId: correlationId,
       });
     }
-    const prompt = yield* readWorkflowStepPrompt(deps.threads, threadId, pending);
+    const prompt = yield* readWorkflowStepPrompt(deps.threads, threadId, pending).pipe(
+      Effect.catch(() => Effect.succeed("unreadable" as const)),
+    );
+    if (prompt === "unreadable") return yield* rearm;
     if (prompt === null) return yield* fail(PROMPT_LOST_ERROR);
     const messageId = newWorkflowStepPromptMessageId(correlationId);
     // Recorded BEFORE the dispatch so a check racing it waits for this prompt's run.

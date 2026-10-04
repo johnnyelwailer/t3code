@@ -20,6 +20,7 @@ import {
 } from "./t3team-workflowEngineTurnRetry.ts";
 import type { WorkflowHostStartTurnInput } from "./t3team-workflowHostPort.ts";
 import {
+  failingReads,
   message,
   records,
   STEP_PROMPT,
@@ -51,6 +52,7 @@ function harness(input: {
   readonly status?: Parameters<typeof v2Run>[0];
   readonly answer?: string;
   readonly promptOnThread?: boolean;
+  readonly unreadable?: boolean;
 }) {
   const registry = makeWorkflowEngineRegistry();
   const failed: unknown[] = [];
@@ -64,13 +66,17 @@ function harness(input: {
     fail: async (error) => void failed.push(error),
   };
   registry.registerRun(RUN, run);
-  const threads = records({
-    run: v2Run(input.status ?? "failed"),
-    messages: [
-      ...(input.promptOnThread === false ? [] : [prompt]),
-      ...(input.answer === undefined ? [] : [message({ role: "assistant", text: input.answer })]),
-    ],
-  });
+  const threads = input.unreadable
+    ? failingReads("read")
+    : records({
+        run: v2Run(input.status ?? "failed"),
+        messages: [
+          ...(input.promptOnThread === false ? [] : [prompt]),
+          ...(input.answer === undefined
+            ? []
+            : [message({ role: "assistant", text: input.answer })]),
+        ],
+      });
   const retry = makeInterruptedTurnRetry({
     registry,
     threads,
@@ -168,5 +174,20 @@ it.effect("processTurnRetry fails the run instead of parking it when the prompt 
     yield* h.retry.processTurnRetry({ threadId: THREAD, correlationId: STEP });
     assert.deepStrictEqual(h.started, []);
     assert.match((h.failed[0] as Error).message, /can no longer be re-driven/);
+  }),
+);
+
+it.effect("processTurnRetry re-arms without spending budget when the thread cannot be read", () =>
+  Effect.gen(function* () {
+    const h = harness({ unreadable: true });
+    h.registry.setPending(THREAD, { ...liveAsk, turnRetries: 1, redriveScheduled: true });
+    yield* h.retry.processTurnRetry({ threadId: THREAD, correlationId: STEP });
+    assert.deepStrictEqual(h.started, []);
+    assert.deepStrictEqual(h.failed, []);
+    assert.deepStrictEqual(h.armed, [{ correlationId: STEP, delayMs: 1 }]);
+    assert.deepStrictEqual(h.journaled, []);
+    const pending = h.registry.peekPending(THREAD);
+    assert.strictEqual(pending?.turnRetries, 1);
+    assert.strictEqual(pending?.redriveScheduled, true);
   }),
 );

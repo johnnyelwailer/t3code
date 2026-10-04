@@ -19,8 +19,10 @@ import {
   type WorkflowRegisteredRun,
 } from "./t3team-workflowEngineRegistry.ts";
 import { type InterruptedTurnRetry, NO_TEXT_MESSAGE } from "./t3team-workflowEngineTurnRetry.ts";
+import { PROMPT_LOST_ERROR } from "./t3team-workflowEngineTurnRetrySupport.ts";
 import type { WorkflowTurnReads } from "./t3team-workflowTurnState.ts";
 import {
+  failingReads,
   failureItem,
   message,
   records,
@@ -168,6 +170,24 @@ it.effect("skips a step whose re-drive is already scheduled", () =>
     );
     yield* handle({ kind: "check", threadId: THREAD });
     assert.deepStrictEqual(calls, []);
+  }),
+);
+
+it.effect("keeps a step parked when its thread cannot be read this time", () =>
+  Effect.gen(function* () {
+    const { handle, calls, registry } = setup({ promptMessageId: PROMPT }, failingReads("read"));
+    yield* handle({ kind: "check", threadId: THREAD });
+    assert.deepStrictEqual(calls, []);
+    assert.strictEqual(registry.peekPending(THREAD)?.correlationId, STEP);
+  }),
+);
+
+it.effect("fails the run when the step's thread is gone", () =>
+  Effect.gen(function* () {
+    const { handle, calls, registry } = setup({ promptMessageId: PROMPT }, failingReads("gone"));
+    yield* handle({ kind: "check", threadId: THREAD });
+    assert.deepStrictEqual(calls, [`fail:${PROMPT_LOST_ERROR}`]);
+    assert.isUndefined(registry.peekPending(THREAD));
   }),
 );
 

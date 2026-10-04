@@ -14,6 +14,11 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
+import { OrchestratorProjectionError } from "./orchestration-v2/Orchestrator.ts";
+import {
+  ProjectionStoreReadError,
+  ProjectionStoreThreadNotFoundError,
+} from "./orchestration-v2/ProjectionStore.ts";
 import { WORKFLOW_STUB_MODEL_SELECTION } from "./t3team-workflowStubAgentTurn.ts";
 import type { WorkflowTurnReads } from "./t3team-workflowTurnState.ts";
 
@@ -94,3 +99,23 @@ export const records = (input: {
       turnItems: input.turnItems ?? [],
     })) as unknown as WorkflowTurnReads["getThreadRecords"],
 });
+
+/**
+ * Thread reads that fail the way `ThreadManagementService.getThreadRecords` does: a transient
+ * store error (`"read"`) or a thread that no longer exists (`"gone"`).
+ */
+export const failingReads = (kind: "read" | "gone"): WorkflowTurnReads => {
+  const threadId = ThreadId.make(STEP_THREAD);
+  return {
+    getThreadRecords: (() =>
+      Effect.fail(
+        new OrchestratorProjectionError({
+          threadId,
+          cause:
+            kind === "gone"
+              ? new ProjectionStoreThreadNotFoundError({ threadId })
+              : new ProjectionStoreReadError({ threadId, cause: "SQLITE_BUSY" }),
+        }),
+      )) as unknown as WorkflowTurnReads["getThreadRecords"],
+  };
+};
