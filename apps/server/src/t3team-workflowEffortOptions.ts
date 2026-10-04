@@ -35,7 +35,7 @@ import type { AgentEffort } from "@t3team/sdk";
 
 /** Documented low→high ordering of the reasoning-choice vocabularies we know. Unknown ids keep
  * their declared order and rank after the known ones. */
-export const EFFORT_LADDER = [
+const EFFORT_LADDER = [
   "none",
   "minimal",
   "very-low",

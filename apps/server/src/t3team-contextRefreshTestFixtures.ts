@@ -86,7 +86,7 @@ export function makeContextRefreshScopeTestLayer() {
   return Layer.mergeAll(nodeLayer, WorkspacePaths.layer.pipe(Layer.provide(nodeLayer)));
 }
 
-export function makeContextRefreshServiceTestLayer(prefix: string) {
+function makeContextRefreshServiceTestLayer(prefix: string) {
   const nodeLayer = NodeServices.layer;
   return T3TeamContextRefreshServiceLive.pipe(
     Layer.provide(
@@ -108,7 +108,7 @@ export function makeContextRefreshLiveLayer(prefix = "t3team-broker-context-refr
   return makeContextRefreshServiceTestLayer(prefix);
 }
 
-export function seedContextRefreshBacklogChild(input: {
+function seedContextRefreshBacklogChild(input: {
   readonly project: ProjectShellProject;
   readonly parentKey: string;
   readonly childKey: string;

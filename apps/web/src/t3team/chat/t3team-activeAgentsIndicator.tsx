@@ -167,7 +167,7 @@ export function T3TeamActiveAgentsIndicator({
         {overflow > 0 ? (
           <span
             aria-hidden
-            className="pl-0.5 text-[10px] font-medium leading-none tabular-nums text-sky-600 dark:text-sky-300/80"
+            className="pl-0.5 text-3xs font-medium leading-none tabular-nums text-info-foreground"
           >
             +{overflow}
           </span>

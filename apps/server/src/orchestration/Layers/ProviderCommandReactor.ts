@@ -38,6 +38,7 @@ import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 import { resolveThreadWorkspaceCwd } from "../../checkpointing/Utils.ts";
 import { increment, orchestrationEventsProcessedTotal } from "../../observability/Metrics.ts";
 import {
+  ProviderAdapterProcessError,
   ProviderAdapterRequestError,
   ProviderAdapterValidationError,
   ProviderWorkspaceMissingError,
@@ -64,8 +65,14 @@ import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { getConfiguredTextGenerationModelSelection } from "../../t3team-configuredDefaultModelSelection.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
-import { ProviderUsageWatcher } from "../../t3team-providerUsageWatcher.ts";
 import { loadRestartWakeSteer } from "../../t3team-restartWakeSteer.ts";
+import { ResourcePressureMonitor } from "../../t3team-resourcePressureMonitor.ts";
+import {
+  composeTurnText,
+  makeResourcePressureTurnGate,
+} from "../../t3team-resourcePressureTurnGate.ts";
+import * as TerminalManager from "../../terminal/Manager.ts";
+const isProviderAdapterProcessError = Schema.is(ProviderAdapterProcessError);
 const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
 const isProviderAdapterValidationError = Schema.is(ProviderAdapterValidationError);
 const isProviderWorkspaceMissingError = Schema.is(ProviderWorkspaceMissingError);
@@ -328,7 +335,7 @@ function buildForkTranscriptBootstrapInput(input: {
   );
 }
 
-export function providerErrorLabel(value: string | undefined): string {
+function providerErrorLabel(value: string | undefined): string {
   const normalized = value?.trim();
   return normalized && normalized.length > 0 ? normalized : "unknown";
 }
@@ -429,6 +436,7 @@ const make = Effect.gen(function* () {
   const vcsStatusBroadcaster = yield* VcsStatusBroadcaster;
   const textGeneration = yield* TextGeneration;
   const serverSettingsService = yield* ServerSettingsService;
+  const terminalManager = yield* TerminalManager.TerminalManager;
   /** Environment settings with the thread's project overrides applied. */
   const projectSettingsForThread = Effect.fnUntraced(function* (threadId: ThreadId) {
     const settings = yield* serverSettingsService.getSettings;
@@ -439,7 +447,12 @@ const make = Effect.gen(function* () {
     return resolveProjectSettings(settings, Option.isSome(thread) ? thread.value.projectId : null)
       .settings;
   });
-  const providerUsageWatcher = yield* ProviderUsageWatcher;
+  // Memory-pressure auto-pause at the turn boundary (flag NEXI_FF_RESOURCE_PRESSURE; off = no-op).
+  const pressureGate = makeResourcePressureTurnGate({
+    autoPause: Option.getOrUndefined(yield* Effect.serviceOption(ResourcePressureMonitor))
+      ?.autoPause,
+    engine: orchestrationEngine,
+  });
   const serverCommandId = (tag: string) =>
     crypto.randomUUIDv4.pipe(Effect.map((uuid) => CommandId.make(`server:${tag}:${uuid}`)));
   const serverEventId = () => crypto.randomUUIDv4.pipe(Effect.map(EventId.make));
@@ -457,6 +470,9 @@ const make = Effect.gen(function* () {
     );
 
   const threadModelSelections = new Map<string, ModelSelection>();
+  // The selection of each thread's last turn its provider accepted, options included. A
+  // rejected provider switch is rolled back to it.
+  const acceptedModelSelections = new Map<ThreadId, ModelSelection>();
   const compactingThreadIds = new Set<ThreadId>();
   type QueuedTurnStart = Extract<ProviderIntentEvent, { type: "thread.turn-start-requested" }>;
   // Turn starts received while a thread compacts, replayed in order once its session is restored.
@@ -583,6 +599,9 @@ const make = Effect.gen(function* () {
     if (isProviderAdapterRequestError(failReason?.error)) {
       return failReason.error.detail;
     }
+    if (isProviderAdapterProcessError(failReason?.error)) {
+      return failReason.error.detail;
+    }
     if (isProviderAdapterValidationError(failReason?.error)) {
       return failReason.error.issue;
     }
@@ -706,16 +725,24 @@ const make = Effect.gen(function* () {
     });
     // A directory deleted without `git worktree remove` leaves an admin entry
     // that makes `git worktree add` refuse the path; prune clears it.
+    // Best effort like the rest of this recovery: a settings read failure
+    // falls back to the checkout's t3.json.
+    const submodules = yield* projectSettingsForThread(thread.id).pipe(
+      Effect.map((settings) => settings.worktreeSubmodules),
+      Effect.orElseSucceed(() => null),
+    );
     yield* gitWorkflow.pruneWorktrees({ cwd }).pipe(
-      Effect.andThen(gitWorkflow.createWorktree({ cwd, refName: branch, path: worktreePath })),
-      Effect.catchCause((cause) =>
-        Cause.hasInterruptsOnly(cause)
-          ? Effect.failCause(cause)
-          : Effect.logWarning("provider command reactor failed to recreate worktree", {
-              threadId: thread.id,
-              worktreePath,
-              cause: Cause.pretty(cause),
-            }),
+      Effect.andThen(
+        gitWorkflow.createWorktree({ cwd, refName: branch, path: worktreePath }, { submodules }),
+      ),
+      Effect.catchCauseIf(
+        (cause) => !Cause.hasInterruptsOnly(cause),
+        (cause) =>
+          Effect.logWarning("provider command reactor failed to recreate worktree", {
+            threadId: thread.id,
+            worktreePath,
+            cause: Cause.pretty(cause),
+          }),
       ),
     );
   });
@@ -781,6 +808,9 @@ const make = Effect.gen(function* () {
     options?: {
       readonly modelSelection?: ModelSelection;
       readonly pendingTurnStart?: boolean;
+      // First-turn prompt seed. A manual title that still equals this seed was
+      // written by the client's auto-title, not a user rename.
+      readonly titleSeed?: string;
     },
   ) {
     const thread = yield* resolveThreadShell(threadId);
@@ -898,21 +928,42 @@ const make = Effect.gen(function* () {
       requestedModelSelection !== undefined &&
       requestedModelSelection.instanceId !== currentInstanceId
     ) {
-      if (currentInfo.driverKind !== desiredInfo.driverKind) {
+      const incompatibleSwitchDetail =
+        currentInfo.driverKind !== desiredInfo.driverKind
+          ? `Thread '${threadId}' is bound to driver '${currentInfo.driverKind}' and cannot switch to '${desiredInfo.driverKind}'.`
+          : currentInfo.continuationIdentity.continuationKey !==
+              desiredInfo.continuationIdentity.continuationKey
+            ? `Thread '${threadId}' cannot switch from instance '${currentInstanceId}' to '${desiredInstanceId}' because their provider resume state is incompatible.`
+            : null;
+      if (incompatibleSwitchDetail !== null) {
+        // The client persists its selection before the turn starts. A rejected switch must
+        // not stay on the thread, or every later turn that inherits it fails the same way.
+        // Re-read last, so a selection persisted since this turn was requested is not overwritten.
+        const rollbackCommandId = yield* serverCommandId("rejected-provider-switch-rollback");
+        const latestSelection = (yield* resolveThreadShell(threadId))?.modelSelection;
+        const boundModel = activeSession?.model;
+        if (
+          boundModel &&
+          latestSelection?.instanceId === desiredInstanceId &&
+          latestSelection.model === desiredModelSelection.model
+        ) {
+          const accepted = acceptedModelSelections.get(threadId);
+          yield* orchestrationEngine
+            .dispatch({
+              type: "thread.meta.update",
+              commandId: rollbackCommandId,
+              threadId,
+              modelSelection:
+                accepted?.instanceId === currentInstanceId && accepted.model === boundModel
+                  ? accepted
+                  : { instanceId: currentInstanceId, model: boundModel },
+            })
+            .pipe(Effect.ignoreCause({ log: true }));
+        }
         return yield* new ProviderAdapterRequestError({
           provider: preferredProvider,
           method: "thread.turn.start",
-          detail: `Thread '${threadId}' is bound to driver '${currentInfo.driverKind}' and cannot switch to '${desiredInfo.driverKind}'.`,
-        });
-      }
-      if (
-        currentInfo.continuationIdentity.continuationKey !==
-        desiredInfo.continuationIdentity.continuationKey
-      ) {
-        return yield* new ProviderAdapterRequestError({
-          provider: preferredProvider,
-          method: "thread.turn.start",
-          detail: `Thread '${threadId}' cannot switch from instance '${currentInstanceId}' to '${desiredInstanceId}' because their provider resume state is incompatible.`,
+          detail: incompatibleSwitchDetail,
         });
       }
     }
@@ -926,6 +977,15 @@ const make = Effect.gen(function* () {
           .refreshWorkspaceSnapshot({ instanceId: desiredInstanceId, cwd: effectiveCwd })
           .pipe(Effect.forkDetach)
       : Effect.void;
+    // OpenCode skips SessionPrompt.ensureTitle when session.create already has
+    // a title. Prompt seeds and "New thread" are not user titles, so omit them
+    // and let the provider generate one. A real rename is source "manual" and
+    // differs from the first-turn prompt seed (the web client writes that seed
+    // through thread.meta.update, which also marks the title manual).
+    const manualTitle = thread.titleState?.source === "manual" ? thread.title.trim() : "";
+    const promptSeed = options?.titleSeed?.trim();
+    const sessionTitle =
+      manualTitle.length > 0 && manualTitle !== promptSeed ? thread.title : undefined;
 
     const startProviderSession = (input?: {
       readonly resumeCursor?: unknown;
@@ -937,7 +997,7 @@ const make = Effect.gen(function* () {
           ...(preferredProvider ? { provider: preferredProvider } : {}),
           providerInstanceId: desiredInstanceId,
           ...(effectiveCwd ? { cwd: effectiveCwd } : {}),
-          ...(thread.title ? { title: thread.title } : {}),
+          ...(sessionTitle ? { title: sessionTitle } : {}),
           modelSelection: desiredModelSelection,
           ...(input?.resumeCursor !== undefined ? { resumeCursor: input.resumeCursor } : {}),
           runtimeMode: desiredRuntimeMode,
@@ -1054,6 +1114,7 @@ const make = Effect.gen(function* () {
     readonly interactionMode?: "default" | "plan";
     readonly turnOrigin?: "user" | "automated";
     readonly createdAt: string;
+    readonly titleSeed?: string;
   }) {
     const thread = yield* resolveThreadShell(input.threadId);
     if (!thread) {
@@ -1063,6 +1124,7 @@ const make = Effect.gen(function* () {
     }
     yield* ensureSessionForThread(input.threadId, input.createdAt, {
       ...(input.modelSelection !== undefined ? { modelSelection: input.modelSelection } : {}),
+      ...(input.titleSeed !== undefined ? { titleSeed: input.titleSeed } : {}),
       pendingTurnStart: true,
     });
     if (input.modelSelection !== undefined) {
@@ -1122,12 +1184,15 @@ const make = Effect.gen(function* () {
         : input.modelSelection;
 
     return {
-      threadId: input.threadId,
-      ...(effectiveInput ? { input: effectiveInput } : {}),
-      ...(normalizedAttachments.length > 0 ? { attachments: normalizedAttachments } : {}),
-      ...(modelForTurn !== undefined ? { modelSelection: modelForTurn } : {}),
-      ...(input.interactionMode !== undefined ? { interactionMode: input.interactionMode } : {}),
-      ...(input.turnOrigin !== undefined ? { turnOrigin: input.turnOrigin } : {}),
+      request: {
+        threadId: input.threadId,
+        ...(effectiveInput ? { input: effectiveInput } : {}),
+        ...(normalizedAttachments.length > 0 ? { attachments: normalizedAttachments } : {}),
+        ...(modelForTurn !== undefined ? { modelSelection: modelForTurn } : {}),
+        ...(input.interactionMode !== undefined ? { interactionMode: input.interactionMode } : {}),
+        ...(input.turnOrigin !== undefined ? { turnOrigin: input.turnOrigin } : {}),
+      },
+      modelSelection: modelForTurn ?? requestedModelSelection,
     };
   });
 
@@ -1418,15 +1483,14 @@ const make = Effect.gen(function* () {
         return;
       }
       const result = yield* regenerateThreadTitle(event, requestId).pipe(
-        Effect.catchCause((cause) => {
-          if (Cause.hasInterruptsOnly(cause)) {
-            return Effect.failCause(cause);
-          }
-          return Effect.logWarning("provider command reactor failed to regenerate thread title", {
-            threadId: event.payload.threadId,
-            cause: Cause.pretty(cause),
-          }).pipe(Effect.as({ _tag: "Completed", title: undefined } as const));
-        }),
+        Effect.catchCauseIf(
+          (cause) => !Cause.hasInterruptsOnly(cause),
+          (cause) =>
+            Effect.logWarning("provider command reactor failed to regenerate thread title", {
+              threadId: event.payload.threadId,
+              cause: Cause.pretty(cause),
+            }).pipe(Effect.as({ _tag: "Completed", title: undefined } as const)),
+        ),
       );
       if (result._tag === "Superseded") {
         return;
@@ -1438,34 +1502,26 @@ const make = Effect.gen(function* () {
         ...(result.title !== undefined ? { title: result.title } : {}),
       };
       yield* dispatchThreadTitleRegenerationCompletion(completion).pipe(
-        Effect.catchCause((cause) => {
-          if (Cause.hasInterruptsOnly(cause)) {
-            return Effect.failCause(cause);
-          }
-          return Effect.logWarning(
-            "provider command reactor retrying title regeneration completion",
-            {
+        Effect.catchCauseIf(
+          (cause) => !Cause.hasInterruptsOnly(cause),
+          (cause) =>
+            Effect.logWarning("provider command reactor retrying title regeneration completion", {
               threadId: event.payload.threadId,
               cause: Cause.pretty(cause),
-            },
-          ).pipe(Effect.andThen(dispatchThreadTitleRegenerationCompletion(completion)));
-        }),
+            }).pipe(Effect.andThen(dispatchThreadTitleRegenerationCompletion(completion))),
+        ),
       );
     },
     (effect, event) =>
       effect.pipe(
-        Effect.catchCause((cause) => {
-          if (Cause.hasInterruptsOnly(cause)) {
-            return Effect.failCause(cause);
-          }
-          return Effect.logWarning(
-            "provider command reactor failed to complete title regeneration",
-            {
+        Effect.catchCauseIf(
+          (cause) => !Cause.hasInterruptsOnly(cause),
+          (cause) =>
+            Effect.logWarning("provider command reactor failed to complete title regeneration", {
               threadId: event.payload.threadId,
               cause: Cause.pretty(cause),
-            },
-          );
-        }),
+            }),
+        ),
       ),
   );
   const threadTitleRegenerationWorker = yield* makeDrainableWorker(
@@ -1597,30 +1653,6 @@ const make = Effect.gen(function* () {
     }).pipe(Effect.catchCause((cause) => recoverTurnStartFailure(cause).pipe(Effect.as(true))));
     if (authCommandHandled) {
       return;
-    }
-
-    // Provider usage hold gate (GHE #421, auto-resume layer): when this
-    // thread's provider rolling window is exhausted, record the deferral so
-    // the watcher's auto-resume path can re-dispatch `thread.turn.resume`
-    // when the window recovers. This is ADVISORY — the turn still proceeds;
-    // the provider itself will 429 if actually rate-limited. The banner is
-    // informational, not a barrier.
-    const hold = yield* providerUsageWatcher
-      .checkThreadHeld({
-        threadId: thread.id,
-        providerInstanceId: thread.modelSelection.instanceId ?? null,
-        sessionProviderName: thread.session?.providerName ?? null,
-      })
-      .pipe(Effect.map(Option.getOrUndefined));
-    if (hold !== undefined) {
-      yield* providerUsageWatcher.recordDeferredTurn({
-        threadId: thread.id,
-        messageId: event.payload.messageId,
-        driver: hold.driver,
-        providerInstanceId: thread.modelSelection.instanceId ?? null,
-        resetsAt: hold.resetsAt,
-        now: event.payload.createdAt,
-      });
     }
 
     yield* ensureThreadWorktree(thread);
@@ -1773,6 +1805,12 @@ const make = Effect.gen(function* () {
       turnsAfterCompaction.set(event.payload.threadId, queued);
       return;
     }
+    // Memory pressure critical: hold this NEW turn (in-flight turns finish) in the same queue; the
+    // gate replays it once pressure stays below critical for the cooldown.
+    if (!resumed && (yield* pressureGate.holdTurn(event.payload.threadId))) {
+      turnsAfterCompaction.set(event.payload.threadId, [event]);
+      return;
+    }
     // Same classifier as turn admission (t3team-deciderTurnAdmission):
     // automated dispatchers stamp an author/actor ext; a typed user message
     // never carries one. Providers may prioritize interactive turns on it.
@@ -1788,10 +1826,12 @@ const make = Effect.gen(function* () {
     const restartWakeSteer = isUserTurn
       ? yield* loadRestartWakeSteer({ thread, query: projectionSnapshotQuery })
       : null;
+    // At most one memory-pressure note per escalation / resume (agent context only).
+    const pressureNote = yield* pressureGate.takeNote(event.payload.threadId);
     const sendTurnRequest = yield* buildSendTurnRequestForThread({
       threadId: event.payload.threadId,
       messageText: projectComposerContextForProvider({
-        text: restartWakeSteer !== null ? `${restartWakeSteer}\n\n${message.text}` : message.text,
+        text: composeTurnText([pressureNote, restartWakeSteer], message.text),
         records: message.context?.records ?? [],
       }),
       ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
@@ -1801,8 +1841,13 @@ const make = Effect.gen(function* () {
       interactionMode: event.payload.interactionMode,
       turnOrigin: isUserTurn ? ("user" as const) : ("automated" as const),
       createdAt: event.payload.createdAt,
+      // Later turns must not reuse the current title as titleSeed. Only the
+      // first prompt seed should suppress a not-yet-renamed session title.
+      ...(!hasOtherUserMessages && event.payload.titleSeed !== undefined
+        ? { titleSeed: event.payload.titleSeed }
+        : {}),
     }).pipe(
-      Effect.map(Option.some),
+      Effect.asSome,
       Effect.catchCause((cause) => handleTurnStartFailure(cause).pipe(Effect.as(Option.none()))),
     );
 
@@ -1810,9 +1855,14 @@ const make = Effect.gen(function* () {
       return;
     }
 
-    const send = providerService
-      .sendTurn(sendTurnRequest.value)
-      .pipe(Effect.asVoid, Effect.catchCause(recoverTurnStartFailure));
+    const { request, modelSelection: turnModelSelection } = sendTurnRequest.value;
+    const send = providerService.sendTurn(request).pipe(
+      Effect.tap(() =>
+        Effect.sync(() => acceptedModelSelections.set(request.threadId, turnModelSelection)),
+      ),
+      Effect.asVoid,
+      Effect.catchCause(recoverTurnStartFailure),
+    );
     // The forked send settles `sent` from here on, so drop the entry the post-processing hook uses.
     if (resumed && event.commandId !== null) resumedTurnStarts.delete(event.commandId);
     yield* send.pipe(
@@ -2206,6 +2256,14 @@ const make = Effect.gen(function* () {
         yield* processSessionStopRequested(event);
         return;
       case "thread.settled": {
+        const thread = yield* projectionSnapshotQuery.getThreadShellById(event.payload.threadId);
+        // A thread re-engaged before this event ran keeps its shells and session.
+        if (Option.isNone(thread) || thread.value.settledOverride !== "settled") {
+          return;
+        }
+        // Idle shells close so they stop holding the worktree. A terminal that
+        // runs a command (a dev server, an editor) stays for the user to close.
+        yield* terminalManager.closeIdle({ threadId: event.payload.threadId });
         // Only a user-initiated settle tears the provider session down. Automated
         // settles (`server:auto-settle`, the t3team child-settle sweeper) are
         // bookkeeping, and on 0.0.42 startup they stopped 12 live sessions across
@@ -2214,12 +2272,7 @@ const make = Effect.gen(function* () {
         if (event.commandId !== null && event.commandId.startsWith("server:")) {
           return;
         }
-        const thread = yield* projectionSnapshotQuery.getThreadShellById(event.payload.threadId);
-        if (
-          Option.isNone(thread) ||
-          thread.value.session == null ||
-          thread.value.session.status === "stopped"
-        ) {
+        if (thread.value.session == null || thread.value.session.status === "stopped") {
           return;
         }
         yield* orchestrationEngine.dispatch({
@@ -2290,6 +2343,26 @@ const make = Effect.gen(function* () {
     // Subscribe before returning, even while event handling waits for server activation.
     const domainEvents = yield* orchestrationEngine.subscribeDomainEvents;
     yield* forkParked(Stream.runForEach(domainEvents, processEvent));
+    // Replay held turns of threads the memory-pressure auto-pause resumed (unless compacting).
+    yield* forkParked(
+      pressureGate.runResumes((threadId) =>
+        compactingThreadIds.has(threadId)
+          ? Effect.void
+          : resumeTurnsAfterCompaction(threadId).pipe(
+              // A rejected replay would leave the queue behind and park every later turn: report
+              // the held messages as not sent and clear it instead.
+              Effect.catchCause(() =>
+                cancelTurnsAfterCompaction(
+                  threadId,
+                  "The memory-pressure pause ended but this message could not be resumed. Send it again to continue.",
+                ),
+              ),
+              Effect.ignore({ log: true, message: "failed to replay pressure-held turns" }),
+              Effect.forkScoped,
+              Effect.asVoid,
+            ),
+      ),
+    );
 
     // Earlier events do not replay. Clear interrupted requests by their captured
     // IDs, then schedule persisted refinements after subscribing to their events.

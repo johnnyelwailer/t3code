@@ -66,9 +66,36 @@ describe("@runbook/core checkpoint primitive", () => {
       state,
       retainedHistory: 2,
       at: "2026-09-01T00:00:00.000Z",
+      history: [{ seq: 1, state, at: "2026-09-01T00:00:00.000Z" }],
     });
     expect(journal.entries).toHaveLength(1);
     expect(journal.entries[0]).toMatchObject({ kind: "checkpoint", refId: "checkpoint", seq: 1 });
+  });
+
+  it("records the ring at commit time: previous ring + this state, capped at retention", async () => {
+    const at = "2026-09-01T00:00:00.000Z";
+    const runtime = createDurableRuntime({
+      journal: new Map(),
+      writer: makeMemoryJournal().sink,
+      source: SOURCE,
+      initialSeq: 10,
+    });
+    const { checkpoint } = createCheckpointPrimitives({
+      callPrimitive: runtime.callPrimitive,
+      currentSeq: runtime.currentSeq,
+      nowIso: () => at,
+      // A legacy boundary (no recorded ring) seeds the ring with its own entry.
+      resumeFrom: { compactedThroughSeq: 9, state: { i: 0 }, retainedHistory: 2, at },
+    });
+    const first = await checkpoint({ state: { i: 1 }, retention: { history: 2 } });
+    expect(first.history).toEqual([
+      { seq: 10, state: { i: 0 }, at },
+      { seq: 11, state: { i: 1 }, at },
+    ]);
+    const second = await checkpoint({ state: { i: 2 }, retention: { history: 2 } });
+    expect(second.history?.map((h) => h.seq)).toEqual([11, 12]);
+    const cleared = await checkpoint({ state: { i: 3 } });
+    expect(cleared.history).toEqual([]);
   });
 
   it("reports compactedThroughSeq as the highest completed seq BEFORE the boundary", async () => {

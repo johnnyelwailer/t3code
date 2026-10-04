@@ -87,6 +87,23 @@ describe("resolveWorkflowChildModel", () => {
       });
     });
 
+    it("records the model selected by effort after slug normalization", async () => {
+      delete process.env.NEXI_FF_AUTO_LATEST_MODEL;
+      setChildProviderCatalog(async () => [makeProvider("nexplore", ["low", "medium", "high"])]);
+      const result = await resolveWorkflowChildModel(
+        base,
+        workflowModel("nexplore", "LOW"),
+        "high",
+      );
+      expect(result.modelSelection.model).toBe("high");
+      expect(result.modelRouting).toEqual({
+        requested: "LOW",
+        effective: "high",
+        routed: false,
+        reason: "unparseable",
+      });
+    });
+
     it("runs the requested slug verbatim when the flag is off", async () => {
       process.env.NEXI_FF_AUTO_LATEST_MODEL = "0";
       setChildProviderCatalog(async () => catalog);

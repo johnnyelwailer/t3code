@@ -93,7 +93,7 @@ function TaskSummary({
         >
           {progress.completedSteps}/{progress.totalSteps}
         </ComposerBanner.Count>
-        <TaskSegments className="hidden w-20 sm:flex" steps={steps} />
+        <TaskSegments className="hidden w-20 @min-[560px]:flex" steps={steps} />
         <ComposerBanner.ToggleIcon expanded={expanded} />
       </ComposerBanner.Actions>
     </>
@@ -165,7 +165,7 @@ export const ComposerTasksContent = memo(function ComposerTasksContent({
         <ComposerBanner.Scroll data-composer-tasks-scroll="true">
           {planUpdatedAt ? (
             <div
-              className="px-3 pb-1 pt-1.5 text-[10px] text-muted-foreground/45"
+              className="px-3 pb-1 pt-1.5 text-3xs text-muted-foreground/45"
               data-composer-task-updated="true"
             >
               Updated {formatRelativeTimeLabel(planUpdatedAt)}
@@ -211,7 +211,7 @@ export const ComposerTasksContent = memo(function ComposerTasksContent({
                 </ComposerBanner.Content>
                 <ComposerBanner.Actions>
                   <span
-                    className="w-12 text-right text-[10px]/4 text-muted-foreground/45 tabular-nums"
+                    className="w-12 text-right text-3xs/4 text-muted-foreground/45 tabular-nums"
                     data-composer-task-duration="true"
                   >
                     {step.durationMs !== undefined

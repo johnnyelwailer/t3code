@@ -123,11 +123,6 @@ export interface WorkflowRunController {
   readonly isCancelled: () => boolean;
 }
 
-export {
-  awaitWorkflowRepairChildReply,
-  remainingWorkflowRepairBudget,
-} from "./t3team-workflowEngineRepair.ts";
-
 /**
  * Build the per-run broker + resume closure and register the run, WITHOUT starting it. Shared
  * by {@link launchWorkflowRecipe} (which then calls `startWorkflow`) and boot rehydration

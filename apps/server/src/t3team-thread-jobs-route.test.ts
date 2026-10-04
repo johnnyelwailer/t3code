@@ -4,15 +4,13 @@ import { threadJobsValidationError } from "./t3team-thread-jobs-route.ts";
 
 describe("thread jobs route validation", () => {
   it("rejects a missing or blank threadId", () => {
-    expect(
-      threadJobsValidationError({ request: { kind: "list" } }),
-    ).toContain("threadId");
-    expect(
-      threadJobsValidationError({ threadId: "   ", request: { kind: "list" } }),
-    ).toContain("threadId");
-    expect(
-      threadJobsValidationError({ threadId: 42, request: { kind: "list" } }),
-    ).toContain("threadId");
+    expect(threadJobsValidationError({ request: { kind: "list" } })).toContain("threadId");
+    expect(threadJobsValidationError({ threadId: "   ", request: { kind: "list" } })).toContain(
+      "threadId",
+    );
+    expect(threadJobsValidationError({ threadId: 42, request: { kind: "list" } })).toContain(
+      "threadId",
+    );
   });
 
   it("rejects a request without a known kind", () => {
@@ -24,7 +22,9 @@ describe("thread jobs route validation", () => {
   });
 
   it("accepts list without a jobId", () => {
-    expect(threadJobsValidationError({ threadId: "thread-1", request: { kind: "list" } })).toBeNull();
+    expect(
+      threadJobsValidationError({ threadId: "thread-1", request: { kind: "list" } }),
+    ).toBeNull();
   });
 
   it("requires a non-empty jobId for cancel and read-output", () => {

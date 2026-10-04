@@ -55,7 +55,7 @@ export function T3TeamDiffText({
           underline, so the two stack legibly on the same words.
         */
         const commented = segment.commented
-          ? "underline decoration-primary decoration-dotted decoration-2 underline-offset-[3px]"
+          ? "underline decoration-primary decoration-dotted decoration-2 underline-offset-3"
           : undefined;
 
         if (segment.kind === "del") {
@@ -63,7 +63,7 @@ export function T3TeamDiffText({
             <del
               key={key}
               className={cn(
-                "mx-px rounded-[3px] bg-destructive/10 px-1 text-muted-foreground decoration-destructive/60",
+                "mx-px rounded-xs bg-destructive/10 px-1 text-muted-foreground decoration-destructive/60",
                 commented,
               )}
             >
@@ -77,7 +77,7 @@ export function T3TeamDiffText({
           return (
             <mark
               key={key}
-              className={cn("mx-px rounded-[3px] bg-success/15 px-1 text-foreground", commented)}
+              className={cn("mx-px rounded-xs bg-success/15 px-1 text-foreground", commented)}
             >
               {segment.text}
             </mark>
@@ -110,7 +110,7 @@ export function T3TeamDiffBlock({
   return (
     <div
       className={cn(
-        "-ml-3 border-l-2 py-0.5 pl-[calc(0.75rem-2px)]",
+        "-ml-3 border-l-2 py-0.5 pl-2.5",
         kind === "add" && "border-success/60 bg-success/5",
         kind === "del" && "border-destructive/60 bg-destructive/5",
         kind === "edit" && "border-primary/50",
@@ -141,7 +141,7 @@ export function T3TeamDiffRibbon({
   return (
     <span
       className={cn(
-        "absolute left-0 top-0 z-10 rounded-br-md rounded-tl-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-background",
+        "absolute left-0 top-0 z-10 rounded-br-md rounded-tl-md px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide text-background",
         kind === "add" && "bg-success",
         kind === "del" && "bg-destructive",
         kind === "edit" && "bg-primary",
@@ -177,7 +177,7 @@ export function T3TeamDiffGutter({
   return (
     <div className="relative flex w-4 shrink-0 select-none items-start justify-end pt-0.5 pr-1">
       {commentCount > 0 ? (
-        <span className="absolute -left-4 top-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+        <span className="absolute -left-4 top-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-3xs font-semibold text-primary-foreground">
           {commentCount}
         </span>
       ) : onComment ? (
@@ -185,7 +185,7 @@ export function T3TeamDiffGutter({
           type="button"
           aria-label="Comment on this block"
           onClick={onComment}
-          className="absolute -left-4 top-0.5 flex size-4 cursor-pointer items-center justify-center rounded-[3px] text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
+          className="absolute -left-4 top-0.5 flex size-4 cursor-pointer items-center justify-center rounded-xs text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
         >
           <MessageSquarePlus className="size-3.5" />
         </button>

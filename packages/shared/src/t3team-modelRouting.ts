@@ -35,8 +35,9 @@ export type ModelRoutingReason =
 
 export interface ModelRouting {
   readonly requested: string;
-  /** The slug to run: the catalog's slug when routed, otherwise `requested` verbatim. */
+  /** Resolved slug; server callers update it after normalization and effort mapping. */
   readonly effective: string;
+  /** Whether auto-latest changed the model; normalization/effort alone do not set this. */
   readonly routed: boolean;
   readonly reason: ModelRoutingReason;
 }
@@ -96,19 +97,20 @@ interface CatalogEntry {
   readonly parsed: ParsedModelSlug;
 }
 
+const compareParsedModels = (a: ParsedModelSlug, b: ParsedModelSlug): number =>
+  compareModelVersions(a.version, b.version) || (a.date ?? 0) - (b.date ?? 0);
+
 /** Newest entry by version, then snapshot date; equal entries keep catalog order (first wins). */
 const newest = (entries: ReadonlyArray<CatalogEntry>): CatalogEntry | undefined =>
   entries.reduce<CatalogEntry | undefined>((best, entry) => {
     if (best === undefined) return entry;
-    const byVersion = compareModelVersions(entry.parsed.version, best.parsed.version);
-    if (byVersion !== 0) return byVersion > 0 ? entry : best;
-    return (entry.parsed.date ?? 0) > (best.parsed.date ?? 0) ? entry : best;
+    return compareParsedModels(entry.parsed, best.parsed) > 0 ? entry : best;
   }, undefined);
 
 /**
  * Route `requestedModel` against `providerCatalog` (the target provider's slug list).
  *
- * - Same tier at a newer version in the catalog → that slug (`gpt-5.6-sol` → `gpt-6-sol`).
+ * - Same tier at a newer version or snapshot date in the catalog → that slug (`gpt-5.6-sol` → `gpt-6-sol`).
  * - Tier absent from the catalog → the family's newest slug, any tier.
  * - Already newest in its tier (or newer than the catalog) → unchanged, `routed: false`.
  * - Flag off, unparseable slug, or no catalog entry of the same family → unchanged.
@@ -138,7 +140,7 @@ export function resolveModelRouting(
   const target = newest(sameTier.length > 0 ? sameTier : family);
   if (
     target === undefined ||
-    (sameTier.length > 0 && compareModelVersions(target.parsed.version, requested.version) <= 0)
+    (sameTier.length > 0 && compareParsedModels(target.parsed, requested) <= 0)
   ) {
     return keep("already-latest");
   }

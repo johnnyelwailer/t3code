@@ -32,12 +32,9 @@ import { makeProcessTurnRetry } from "./t3team-workflowEngineTurnRetryProcess.ts
 
 // Re-exported so existing importers keep their import path.
 export {
-  INTERRUPTED_TURN_RETRY_BACKOFF_MS,
   MAX_INTERRUPTED_TURN_REDRIVES,
   NO_TEXT_MESSAGE,
-  findInterruptedStepPrompt,
   failedTurnMessage,
-  interruptedTurnRetryBackoffMs,
 } from "./t3team-workflowEngineTurnRetrySupport.ts";
 export type {
   InterruptedTurnRetry,

@@ -43,7 +43,7 @@ export function T3TeamSystemTimelineGenericRow({
   return (
     <div className="flex flex-col items-start gap-1">
       <div className="max-w-[92%] rounded-2xl border border-border/70 bg-muted/25 px-4 py-3">
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <p className="mb-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
           System
         </p>
         {showMessageText ? (

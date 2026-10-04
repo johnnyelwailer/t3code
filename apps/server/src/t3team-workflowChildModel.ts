@@ -67,12 +67,13 @@ export async function resolveWorkflowChildModel(
     requestedProvider: requested.provider,
     requestedModel: requested.model.id,
     providers,
+    ...(effort === undefined ? {} : { effort }),
     autoLatestModel: isAutoLatestModelEnabled(),
   });
 
   if (!result.ok) throw new Error(result.message);
   return {
-    modelSelection: applyWorkflowEffort(result.value, effort, providers),
+    modelSelection: result.value,
     ...(result.modelRouting ? { modelRouting: result.modelRouting } : {}),
   };
 }

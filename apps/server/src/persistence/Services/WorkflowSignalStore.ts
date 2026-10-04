@@ -108,7 +108,7 @@ export interface WorkflowSignalStoreShape {
   readonly listLiveRegistrations: () => Effect.Effect<
     ReadonlyArray<SignalRegistration>,
     ProjectionRepositoryError
-    >;
+  >;
   /** Drop settled runs' bindings (terminal cleanup, run by the periodic sweep). */
   readonly purgeTerminalRegistrations: () => Effect.Effect<void, ProjectionRepositoryError>;
   /** Write a durable delivery slot for an event that landed while no run was parked. */

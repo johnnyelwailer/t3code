@@ -35,6 +35,7 @@ const makeProvider = (instanceId: string, modelSlugs: ReadonlyArray<string>): Se
 
 const providers = [
   makeProvider("anthropic", ["claude-opus-4-8", "claude-opus-5-5", "claude-sonnet-5"]),
+  makeProvider("claude-review", ["claude-haiku-4-5-20260101"]),
   makeProvider("openai", ["gpt-5.6-sol", "gpt-6-sol", "gpt-6-astra"]),
 ];
 
@@ -151,6 +152,49 @@ describe("start_child auto-latest model routing", () => {
         reason: "same-tier-newer",
       });
     }),
+  );
+
+  effectIt.effect("routes a removed cross-provider snapshot to the newer snapshot", () =>
+    Effect.gen(function* () {
+      const { commands, startChild } = makeHarness();
+      const result = yield* startChild(ThreadId.make("parent-1"), {
+        name: "child",
+        isolation: "shared",
+        provider: "claude-review",
+        model: "claude-haiku-4-5-20250101",
+      });
+      expect(createdModel(commands)).toMatchObject({
+        instanceId: "claude-review",
+        model: "claude-haiku-4-5-20260101",
+      });
+      expect(result.model_routing).toEqual({
+        requested: "claude-haiku-4-5-20250101",
+        effective: "claude-haiku-4-5-20260101",
+        routed: true,
+        reason: "same-tier-newer",
+      });
+    }),
+  );
+
+  effectIt.effect(
+    "records the normalized catalog slug as effective without marking an upgrade",
+    () =>
+      Effect.gen(function* () {
+        const { commands, startChild } = makeHarness();
+        const result = yield* startChild(ThreadId.make("parent-1"), {
+          name: "child",
+          isolation: "shared",
+          provider: "openai",
+          model: "GPT-6-SOL",
+        });
+        expect(createdModel(commands)?.model).toBe("gpt-6-sol");
+        expect(result.model_routing).toMatchObject({
+          requested: "GPT-6-SOL",
+          effective: "gpt-6-sol",
+          routed: false,
+          reason: "already-latest",
+        });
+      }),
   );
 
   effectIt.effect("records routed:false for an already-latest slug", () =>

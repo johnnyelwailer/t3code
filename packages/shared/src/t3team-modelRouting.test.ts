@@ -1,4 +1,4 @@
-import { FastCheck as fc } from "effect/testing";
+import * as fc from "fast-check";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -128,6 +128,21 @@ describe("resolveModelRouting", () => {
     expect(resolveModelRouting("gpt-5-luna", ["gpt-6-astra", "gpt-6-sol"], on).effective).toBe(
       "gpt-6-astra",
     );
+  });
+
+  it.each([
+    ["20250101", "20260101", true],
+    ["20260101", "20250101", false],
+    ["20260101", "20260101", false],
+  ])("compares same-version snapshot dates (%s → %s)", (from, to, routed) => {
+    const requested = `claude-haiku-4-5-${from}`;
+    const catalogSlug = `claude-haiku-4-5-${to}`;
+    expect(resolveModelRouting(requested, [catalogSlug], on)).toEqual({
+      requested,
+      effective: routed ? catalogSlug : requested,
+      routed,
+      reason: routed ? "same-tier-newer" : "already-latest",
+    });
   });
 
   it("does not route an already-latest or newer-than-catalog slug", () => {

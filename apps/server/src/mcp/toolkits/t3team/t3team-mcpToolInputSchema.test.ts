@@ -47,10 +47,7 @@ for (const { label, tools, atLeast } of toolkits) {
       it(`${name} advertises an object inputSchema`, () => {
         const schema = Tool.getJsonSchema(tool as never) as Record<string, unknown>;
         // Top level only: `anyOf` INSIDE a property is just how an optional union renders and is fine.
-        expect(
-          schema.anyOf,
-          `${name} inputSchema must not be a top-level union`,
-        ).toBeUndefined();
+        expect(schema.anyOf, `${name} inputSchema must not be a top-level union`).toBeUndefined();
         expect(schema.type).toBe("object");
       });
     }

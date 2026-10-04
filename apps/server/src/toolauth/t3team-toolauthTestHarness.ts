@@ -28,7 +28,7 @@ import * as ToolAuthService from "./t3team-ToolAuthService.ts";
 // `PtyAdapter` — no real process is ever spawned. Mirrors the
 // `FakePtyProcess`/`FakePtyAdapter` pattern already used by
 // `terminal/Manager.test.ts` for the same reason.
-export class FakePtyProcess {
+class FakePtyProcess {
   readonly pid = 4242;
   readonly writes: string[] = [];
   killed = false;
@@ -58,7 +58,7 @@ export class FakePtyProcess {
   }
 }
 
-export class FakePtyAdapterService {
+class FakePtyAdapterService {
   readonly processes: FakePtyProcess[] = [];
   readonly spawnInputs: PtyAdapter.PtySpawnInput[] = [];
 

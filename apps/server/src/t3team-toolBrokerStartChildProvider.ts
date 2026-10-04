@@ -73,6 +73,15 @@ export function resolveStartChildModelSelection(
     input.reasoningEffort
       ? selection
       : applyWorkflowEffort(selection, input.effort, input.providers);
+  // Auto-latest's routed/reason describe its decision; effective names the final model.
+  const finish = (selection: ModelSelection, modelRouting: ModelRouting | undefined) => {
+    const value = withTier(selection);
+    return {
+      ok: true as const,
+      value,
+      ...(modelRouting ? { modelRouting: { ...modelRouting, effective: value.model } } : {}),
+    };
+  };
   // Auto-latest routing runs against the TARGET provider's live catalog, before any slug
   // validation, so a stale-but-routable slug resolves instead of failing.
   const route = (target: ServerProvider | undefined): ModelRouting | undefined =>
@@ -87,20 +96,17 @@ export function resolveStartChildModelSelection(
       (provider) => provider.instanceId === input.parentModelSelection.instanceId,
     );
     const modelRouting = route(target);
-    return {
-      ok: true,
-      value: withTier(
-        buildStartChildModelSelection(
-          input.parentModelSelection,
-          {
-            ...(modelRouting ? { model: modelRouting.effective } : {}),
-            ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
-          },
-          target,
-        ),
+    return finish(
+      buildStartChildModelSelection(
+        input.parentModelSelection,
+        {
+          ...(modelRouting ? { model: modelRouting.effective } : {}),
+          ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
+        },
+        target,
       ),
-      ...(modelRouting ? { modelRouting } : {}),
-    };
+      modelRouting,
+    );
   }
 
   const target = input.providers.find((provider) => provider.instanceId === requested);
@@ -130,17 +136,14 @@ export function resolveStartChildModelSelection(
     model: slug.slug,
     options: [],
   };
-  return {
-    ok: true,
-    value: withTier(
-      buildStartChildModelSelection(
-        base,
-        input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {},
-        target,
-      ),
+  return finish(
+    buildStartChildModelSelection(
+      base,
+      input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {},
+      target,
     ),
-    ...(modelRouting ? { modelRouting } : {}),
-  };
+    modelRouting,
+  );
 }
 
 /**

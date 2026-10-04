@@ -20,10 +20,7 @@ import {
   summarizeActorMessageForDelivery,
   summarizeActorMessageForDeliveryLegacy,
 } from "./t3team-actorReactionInputSummarize.ts";
-import {
-  renderAutomatedBurstBlock,
-  splitAutomatedBurst,
-} from "./t3team-actorBurstFold.ts";
+import { renderAutomatedBurstBlock, splitAutomatedBurst } from "./t3team-actorBurstFold.ts";
 
 /**
  * The SINGLE digest framing for a CLAIMED BATCH of deliveries: one reaction

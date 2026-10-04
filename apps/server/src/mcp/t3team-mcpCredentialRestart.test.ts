@@ -13,13 +13,14 @@ import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts"
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { HttpServer } from "effect/unstable/http";
+import * as NetAddress from "effect/unstable/net/NetAddress";
 
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as McpSessionRegistry from "./McpSessionRegistry.ts";
 
 const environmentId = EnvironmentId.make("environment-restart");
 const fakeHttpServer = HttpServer.HttpServer.of({
-  address: { _tag: "TcpAddress", hostname: "127.0.0.1", port: 43124 },
+  address: NetAddress.inetAddressFromIpStringUnsafe("127.0.0.1", 43124),
   serve: (() => Effect.void) as HttpServer.HttpServer["Service"]["serve"],
 });
 const fakeEnvironment = ServerEnvironment.ServerEnvironment.of({

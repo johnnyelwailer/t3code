@@ -43,7 +43,12 @@ import {
   type ProjectionSnapshotQueryShape,
 } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { type OrchestrationEventStoreError } from "./persistence/Errors.ts";
-import { collectPendingChildWaits, type ChildWaitRecord } from "./t3team-childWait.ts";
+import { readEventsMatching } from "./orchestration/t3team-eventReplayFilter.ts";
+import {
+  collectPendingChildWaits,
+  PENDING_CHILD_WAIT_REPLAY_FILTERS,
+  type ChildWaitRecord,
+} from "./t3team-childWait.ts";
 import { makeAbnormalStopGuards } from "./t3team-childAbnormalStopDedup.ts";
 import { makeChildCompletionQuiet } from "./t3team-childCompletionQuiet.ts";
 import { makeChildWaitEventRouter } from "./t3team-childWaitEventRouter.ts";
@@ -89,6 +94,7 @@ export function makeChildWaitReactor(deps: ChildWaitReactorDeps): ChildWaitReact
     noteResume,
     notifyAbnormalStop,
     rehydrate: ledgerRehydrate,
+    replayFilters: ledgerReplayFilters,
   } = makeAbnormalStopGuards({
     engine,
     query,
@@ -162,7 +168,7 @@ export function makeChildWaitReactor(deps: ChildWaitReactorDeps): ChildWaitReact
   // the live stream, so a terminal session-set never resolves against an empty index.
   const rehydrate = Effect.gen(function* () {
     const replayed: ReadonlyArray<OrchestrationEvent> = yield* Stream.runCollect(
-      engine.readEvents(0, Number.MAX_SAFE_INTEGER),
+      readEventsMatching(engine, [...PENDING_CHILD_WAIT_REPLAY_FILTERS, ...ledgerReplayFilters]),
     ).pipe(Effect.map((chunk) => Array.from(chunk)));
     for (const record of collectPendingChildWaits(replayed)) {
       index.add(record);

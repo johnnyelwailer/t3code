@@ -62,6 +62,11 @@ import { getProviderSummary } from "../settings/providerStatus";
 import { getDriverOption } from "../settings/providerDriverMeta";
 import { TerminalViewport } from "../ThreadTerminalDrawer";
 import { CloudEnvironmentConnectRows } from "../cloud/CloudEnvironmentConnectList";
+import {
+  canContinueWithSelection,
+  setupEnvironmentIds,
+  shouldAutoSelectComputer,
+} from "./t3team-onboardingComputerSelection";
 import { ClaudeAI, OpenAI } from "../Icons";
 import { T3Wordmark } from "../T3Wordmark";
 import { Button } from "../ui/button";
@@ -76,6 +81,9 @@ import { Dialog } from "../ui/dialog";
 import { toastManager } from "../ui/toast";
 import { cn } from "../../lib/utils";
 import { formatRelativeTime } from "../../timestampFormat";
+import { useWelcomeWizardBrand } from "~/t3team/onboarding/t3team-welcomeWizardBrand";
+import { WelcomeCloudSignInOption } from "./t3team-WelcomeCloudSignInOption";
+import { OnboardingReadyAgents } from "./t3team-OnboardingReadyAgents";
 
 /**
  * First-run welcome wizard. Rendered over the workspace at `/welcome` on a
@@ -99,9 +107,10 @@ export function WelcomeWizard({
 }: {
   /** Whether this client is authenticated to the server serving the app. */
   readonly localAvailable: boolean;
-  readonly onDone: (projectRef?: ScopedProjectRef) => void;
+  readonly onDone: (projectRef?: ScopedProjectRef) => void | Promise<void>;
 }) {
   const completeOnboarding = useCompleteOnboarding();
+  const brand = useWelcomeWizardBrand();
   const [step, setStep] = useState<WizardStep>("connection");
   const { environments } = useEnvironments();
   const [selection, setSelection] = useState<ReadonlySet<EnvironmentId> | null>(null);
@@ -112,8 +121,12 @@ export function WelcomeWizard({
   const completionErrorToastIdRef = useRef<ReturnType<typeof toastManager.add> | null>(null);
   const primaryEnvironment = usePrimaryEnvironment();
   useEffect(() => {
+    // Only a reachable computer is ticked for the user, once it connects; one
+    // they toggled themselves is already in the set and never re-ticked.
     const newComputers = environments.filter(
-      (environment) => !autoSelectedComputers.current.has(environment.environmentId),
+      (environment) =>
+        !autoSelectedComputers.current.has(environment.environmentId) &&
+        shouldAutoSelectComputer(environment),
     );
     if (newComputers.length === 0) return;
     for (const environment of newComputers) {
@@ -141,7 +154,7 @@ export function WelcomeWizard({
   };
   const stageIndex = step === "agents" ? 1 : step === "import" ? 2 : 0;
   const finish = useCallback(
-    (projectRef?: ScopedProjectRef) => {
+    (projectRef?: ScopedProjectRef, importWarning?: string, importedThreadCount = 0) => {
       if (finishingPromiseRef.current !== null) return finishingPromiseRef.current;
       if (completionErrorToastIdRef.current !== null) {
         toastManager.close(completionErrorToastIdRef.current);
@@ -149,12 +162,25 @@ export function WelcomeWizard({
       }
 
       const completion = completeOnboarding()
-        .then(() => {
+        .then(async () => {
           if (completionErrorToastIdRef.current !== null) {
             toastManager.close(completionErrorToastIdRef.current);
             completionErrorToastIdRef.current = null;
           }
-          onDone(projectRef);
+          await onDone(projectRef);
+          if (importWarning) {
+            toastManager.add({
+              type: "warning",
+              title: "Some history was not imported",
+              description: importWarning,
+              timeout: 0,
+            });
+          } else if (importedThreadCount > 0) {
+            toastManager.add({
+              type: "success",
+              title: `Imported ${importedThreadCount} ${importedThreadCount === 1 ? "thread" : "threads"}`,
+            });
+          }
           return true;
         })
         .catch(() => {
@@ -189,14 +215,16 @@ export function WelcomeWizard({
         initialFocus={() => document.getElementById("onboarding-pairing-url") ?? true}
       >
         <WizardHeader
-          title="Set up T3 Code"
+          title={`Set up ${brand.productName}`}
           identity={
-            <div className="flex items-baseline gap-1.5" role="img" aria-label="T3 Code">
-              <T3Wordmark className="h-4 w-auto shrink-0" aria-hidden />
-              <span className="text-[1.4rem] font-medium tracking-tight text-muted-foreground">
-                Code
-              </span>
-            </div>
+            brand.identity ?? (
+              <div className="flex items-baseline gap-1.5" role="img" aria-label="T3 Code">
+                <T3Wordmark className="h-4 w-auto shrink-0" aria-hidden />
+                <span className="text-2xl font-medium tracking-tight text-muted-foreground">
+                  Code
+                </span>
+              </div>
+            )
           }
         >
           <WizardSteps
@@ -217,21 +245,16 @@ export function WelcomeWizard({
               selectedIds={selectedIds}
               autoSelectedComputers={autoSelectedComputers.current}
               onSelectionChange={setSelection}
-              onToggleEnvironment={(environmentId, checked) =>
+              onToggleEnvironment={(environmentId, checked) => {
+                autoSelectedComputers.current.add(environmentId);
                 setSelection((current) => {
                   const next = new Set(current ?? selectedIds);
                   if (checked) next.add(environmentId);
                   else next.delete(environmentId);
                   return next;
-                })
-              }
-              onContinue={() =>
-                startSetup(
-                  environments
-                    .filter((environment) => selectedIds.has(environment.environmentId))
-                    .map((environment) => environment.environmentId),
-                )
-              }
+                });
+              }}
+              onContinue={() => startSetup(setupEnvironmentIds(selectedIds, environments))}
               onPaired={(environmentId) => {
                 setSelection(new Set([...selectedIds, environmentId]));
               }}
@@ -278,14 +301,7 @@ function ConnectionStep({
   );
   const [pairingOpen, setPairingOpen] = useState(expandPairingInitially);
   const [isPairing, setIsPairing] = useState(false);
-  const ready =
-    selectedIds.size > 0 &&
-    [...selectedIds].every((id) =>
-      environments.some(
-        (environment) =>
-          environment.environmentId === id && environment.connection.phase === "connected",
-      ),
-    );
+  const ready = canContinueWithSelection(selectedIds, environments);
   const continueRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (
@@ -315,6 +331,7 @@ function ConnectionStep({
               <Checkbox
                 checked={selectedIds.has(environment.environmentId)}
                 onCheckedChange={(checked) => {
+                  autoSelectedComputers.add(environment.environmentId);
                   const next = new Set(selectedIds);
                   if (checked) next.add(environment.environmentId);
                   else next.delete(environment.environmentId);
@@ -343,47 +360,52 @@ function ConnectionStep({
       ) : null}
       <div className="mt-4 space-y-2">
         {cloudEnabled ? (
-          <ConnectAccountOption
-            autoSelectedComputers={autoSelectedComputers}
-            disabled={isPairing}
-            selectedIds={selectedIds}
-            onToggleEnvironment={onToggleEnvironment}
-          />
-        ) : null}
-        <Collapsible
-          open={pairingOpen}
-          onOpenChange={setPairingOpen}
-          className="rounded-lg border border-border bg-background"
-        >
-          <CollapsibleTrigger
-            disabled={isPairing}
-            render={
-              <Button
-                variant="ghost"
-                className="h-auto min-h-14 w-full justify-start gap-3 px-3 py-3 text-left whitespace-normal sm:h-auto"
+          <WelcomeCloudSignInOption
+            fallback={
+              <ConnectAccountOption
+                autoSelectedComputers={autoSelectedComputers}
+                disabled={isPairing}
+                selectedIds={selectedIds}
+                onToggleEnvironment={onToggleEnvironment}
               />
             }
-          >
-            <LinkIcon className="size-4 text-muted-foreground" />
-            <span className="flex-1">Add a computer</span>
-            <ChevronRightIcon
-              className={cn("size-4 text-muted-foreground", pairingOpen && "rotate-90")}
-            />
-          </CollapsibleTrigger>
-          <CollapsiblePanel>
-            <div className="px-3 pb-3">
-              <PairingForm
-                isPairing={isPairing}
-                setIsPairing={setIsPairing}
-                onPaired={(environmentId) => {
-                  setPairingOpen(false);
-                  onPaired(environmentId);
-                  requestAnimationFrame(() => continueRef.current?.focus());
-                }}
+          />
+        ) : null}
+        <div className="rounded-lg border border-border bg-background">
+          <Collapsible open={pairingOpen} onOpenChange={setPairingOpen}>
+            <CollapsibleTrigger
+              disabled={isPairing}
+              render={
+                <Button
+                  variant="ghost"
+                  size="sm-multiline"
+                  // `sm:min-h-14` too: size="sm-multiline" carries `sm:min-h-7`, which outranks a
+                  // bare `min-h-14` from the sm breakpoint up and collapsed this row to 26px.
+                  className="min-h-14 w-full justify-start sm:min-h-14"
+                />
+              }
+            >
+              <LinkIcon className="size-4 text-muted-foreground" />
+              <span className="flex-1 text-left">Add a computer</span>
+              <ChevronRightIcon
+                className={cn("size-4 text-muted-foreground", pairingOpen && "rotate-90")}
               />
-            </div>
-          </CollapsiblePanel>
-        </Collapsible>
+            </CollapsibleTrigger>
+            <CollapsiblePanel>
+              <div className="px-3 pb-3">
+                <PairingForm
+                  isPairing={isPairing}
+                  setIsPairing={setIsPairing}
+                  onPaired={(environmentId) => {
+                    setPairingOpen(false);
+                    onPaired(environmentId);
+                    requestAnimationFrame(() => continueRef.current?.focus());
+                  }}
+                />
+              </div>
+            </CollapsiblePanel>
+          </Collapsible>
+        </div>
       </div>
       <div className="mt-6 flex items-center justify-end gap-3">
         <Button
@@ -414,74 +436,74 @@ function ConnectAccountOption({
   const { environments } = useEnvironments();
   const { isLoaded, isSignedIn } = useAuth({ treatPendingAsSignedOut: false });
   const { openAuthPrompt } = useT3ConnectAuthPrompt();
+  const { productName } = useWelcomeWizardBrand();
   const [expanded, setExpanded] = useState(true);
   const [discoveryReady, setDiscoveryReady] = useState(false);
   const onDiscoveryReady = useCallback(() => setDiscoveryReady(true), []);
 
   return (
-    <Collapsible
-      open={expanded && !!isSignedIn && discoveryReady}
-      onOpenChange={setExpanded}
-      className="rounded-lg border border-border bg-background"
-    >
-      <CollapsibleTrigger
-        disabled={disabled || !isLoaded}
-        onClick={(event) => {
-          if (!isSignedIn) {
-            event.preventDefault();
-            setExpanded(true);
-            openAuthPrompt();
+    <div className="rounded-lg border border-border bg-background">
+      <Collapsible open={expanded && !!isSignedIn && discoveryReady} onOpenChange={setExpanded}>
+        <CollapsibleTrigger
+          disabled={disabled || !isLoaded}
+          onClick={(event) => {
+            if (!isSignedIn) {
+              event.preventDefault();
+              setExpanded(true);
+              openAuthPrompt();
+            }
+          }}
+          render={
+            <Button
+              variant="ghost"
+              size="sm-multiline"
+              className="min-h-14 w-full justify-start sm:min-h-14"
+            />
           }
-        }}
-        render={
-          <Button
-            variant="ghost"
-            className="h-auto min-h-14 w-full justify-start gap-3 px-3 py-3 text-left whitespace-normal sm:h-auto"
+        >
+          <CloudIcon className="size-4 text-muted-foreground" />
+          <span className="flex-1 text-left">T3 Connect</span>
+          <span className="text-xs text-muted-foreground">
+            {!isLoaded
+              ? "Loading sign-in…"
+              : !isSignedIn
+                ? "Sign in"
+                : !discoveryReady
+                  ? "Loading computers…"
+                  : null}
+          </span>
+          <ChevronRightIcon
+            className={cn("size-4 text-muted-foreground", expanded && isSignedIn && "rotate-90")}
           />
-        }
-      >
-        <CloudIcon className="size-4 text-muted-foreground" />
-        <span className="flex-1">T3 Connect</span>
-        <span className="text-xs text-muted-foreground">
-          {!isLoaded
-            ? "Loading sign-in…"
-            : !isSignedIn
-              ? "Sign in"
-              : !discoveryReady
-                ? "Loading computers…"
-                : null}
-        </span>
-        <ChevronRightIcon
-          className={cn("size-4 text-muted-foreground", expanded && isSignedIn && "rotate-90")}
-        />
-      </CollapsibleTrigger>
-      <CollapsiblePanel keepMounted>
-        <div className="px-3 pb-3">
-          <div className="mb-3 space-y-1.5">
-            {isSignedIn ? (
-              <CloudEnvironmentConnectRows
-                primaryEnvironmentId={null}
-                savedEnvironments={environments}
-                showSavedEnvironments
-                onDiscoveryReady={onDiscoveryReady}
-                selection={{ selectedIds, onChange: onToggleEnvironment, autoSelectedComputers }}
-                refreshWhileEmpty
-                empty={
-                  <p className="py-3 text-sm text-muted-foreground">No computers linked yet.</p>
-                }
-              />
-            ) : null}
+        </CollapsibleTrigger>
+        <CollapsiblePanel keepMounted>
+          <div className="px-3 pb-3">
+            <div className="mb-3 space-y-1.5">
+              {isSignedIn ? (
+                <CloudEnvironmentConnectRows
+                  primaryEnvironmentId={null}
+                  savedEnvironments={environments}
+                  showSavedEnvironments
+                  onDiscoveryReady={onDiscoveryReady}
+                  selection={{ selectedIds, onChange: onToggleEnvironment, autoSelectedComputers }}
+                  refreshWhileEmpty
+                  empty={
+                    <p className="py-3 text-sm text-muted-foreground">No computers linked yet.</p>
+                  }
+                />
+              ) : null}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Run this on each computer you want to connect.
+            </p>
+            <CommandBlock command="npx t3 connect" className="mt-3" />
+            <p className="mt-3 text-xs text-muted-foreground">
+              Keep {productName} running. Select the computers you want to set up above.
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Run this on each computer you want to connect.
-          </p>
-          <CommandBlock command="npx t3 connect" className="mt-3" />
-          <p className="mt-3 text-xs text-muted-foreground">
-            Keep T3 Code running. Select the computers you want to set up above.
-          </p>
-        </div>
-      </CollapsiblePanel>
-    </Collapsible>
+        </CollapsiblePanel>
+      </Collapsible>
+    </div>
   );
 }
 
@@ -500,6 +522,7 @@ function PairingForm({
   readonly onPaired: (environmentId: EnvironmentId) => void;
 }) {
   const connectPairingEnvironment = useAtomCommand(connectPairing, { reportFailure: false });
+  const { productName } = useWelcomeWizardBrand();
   const [pairingUrl, setPairingUrl] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const mountedRef = useRef(true);
@@ -588,13 +611,13 @@ function PairingForm({
               {isPairing ? "Pairing..." : "Pair"}
             </Button>
           </div>
-          <CollapsiblePanel className="pt-3">
-            <p className="text-sm text-muted-foreground">
+          <CollapsiblePanel>
+            <p className="pt-3 text-sm text-muted-foreground">
               Run this on the computer with your code.
             </p>
             <CommandBlock command="npx t3 pair" className="mt-2" />
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              Start T3 Code first, or run <code className="font-mono">npx t3 serve</code>. Add{" "}
+              Start {productName} first, or run <code className="font-mono">npx t3 serve</code>. Add{" "}
               <code className="font-mono">--tailscale</code> to use your tailnet.
             </p>
           </CollapsiblePanel>
@@ -636,10 +659,7 @@ function AgentsStep({
   const { environments } = useEnvironments();
   return (
     <StepShell title="Your agents" description="Agents available on your selected computers.">
-      <ScrollArea
-        scrollFade
-        className="mt-5 h-auto max-h-96 [&_[data-slot=scroll-area-scrollbar]]:opacity-100"
-      >
+      <ScrollArea scrollFade className="mt-5 h-auto max-h-96">
         <div className="space-y-5 pr-3">
           {environmentIds.map((environmentId) => (
             <ConnectedAgentsStep
@@ -693,6 +713,7 @@ function ConnectedAgentsStep({
     <section>
       <h2 className="mb-2 text-sm font-medium">{machineLabel}</h2>
       <div className="space-y-1.5">
+        <OnboardingReadyAgents providers={providers} excludeDrivers={PRIMARY_AGENT_DRIVERS} />
         {primaryAgents.map(({ driver, provider }) => (
           <AgentCard
             key={driver}
@@ -896,9 +917,12 @@ function AgentInstallTerminal({
   ]);
 
   return (
-    <div className="thread-terminal-drawer mt-4 overflow-hidden rounded-lg border border-border/70 bg-background text-foreground">
+    <div
+      data-thread-terminal-drawer
+      className="mt-4 overflow-hidden rounded-lg border border-border/70 bg-background text-foreground"
+    >
       <div className="flex items-center justify-between border-b border-border/60 bg-background/60 px-3 py-1.5">
-        <span className="text-[11px] font-medium text-muted-foreground">
+        <span className="text-2xs font-medium text-muted-foreground">
           {setupState === "writeFailed" ? (
             <>
               Run <code className="rounded bg-muted px-1 font-mono">{command}</code> in this
@@ -958,14 +982,19 @@ function ImportStep({
   readonly scans: ReturnType<typeof useProjectScans>;
   readonly isImporting: boolean;
   readonly setIsImporting: (value: boolean) => void;
-  readonly onDone: (projectRef?: ScopedProjectRef) => Promise<boolean>;
+  readonly onDone: (
+    projectRef?: ScopedProjectRef,
+    importWarning?: string,
+    importedThreadCount?: number,
+  ) => Promise<boolean>;
 }) {
   const { environments } = useEnvironments();
   const createProject = useAtomCommand(projectEnvironment.create, { reportFailure: false });
   const importThreads = useAtomCommand(agentSessionImport, { reportFailure: false });
   const projects = useProjects();
   const [selectedPaths, setSelectedPaths] = useState<ReadonlySet<string> | null>(null);
-  const [importError, setImportError] = useState("");
+  const importWarningRef = useRef("");
+  const importedThreadCountRef = useRef(0);
   const [landingProject, setLandingProject] = useState<ScopedProjectRef | null>(null);
   // Keep project creation attempts separate from completed history imports so both can retry.
   const importedProjectsRef = useRef(new Map<string, ScopedProjectRef>());
@@ -994,9 +1023,11 @@ function ImportStep({
       )
     ) {
       setLandingProject(null);
-      void onDone(landingProject).then((completed) => {
-        if (!completed) setIsImporting(false);
-      });
+      void onDone(landingProject, importWarningRef.current, importedThreadCountRef.current).then(
+        (completed) => {
+          if (!completed) setIsImporting(false);
+        },
+      );
     }
   }, [landingProject, onDone, projects, setIsImporting]);
 
@@ -1026,7 +1057,7 @@ function ImportStep({
       importedProjectsRef.current,
     );
     if (projectRef === undefined) {
-      void onDone();
+      void onDone(undefined, importWarningRef.current, importedThreadCountRef.current);
       return;
     }
     setIsImporting(true);
@@ -1040,7 +1071,8 @@ function ImportStep({
       return;
     }
     setIsImporting(true);
-    setImportError("");
+    importWarningRef.current = "";
+    importedThreadCountRef.current = 0;
     lastImportSelectionRef.current = selection.map((candidate) => candidate.key);
     const importGeneration = importGenerationRef.current;
     const importedProjects = importedProjectsRef.current;
@@ -1136,23 +1168,17 @@ function ImportStep({
       if (refreshEnvironments.has(scan.environmentId)) scan.refresh();
     }
     setIsImporting(false);
+    importedThreadCountRef.current = importedThreadCount;
     if (importedProjectsCount < selection.length) {
       if (importedThreadCount > 0 && skippedThreadCount > 0) {
-        setImportError(
-          `Imported ${importedThreadCount} ${importedThreadCount === 1 ? "thread" : "threads"}. ${skippedThreadCount} ${skippedThreadCount === 1 ? "thread" : "threads"} could not be imported.`,
-        );
+        importWarningRef.current = `Imported ${importedThreadCount} ${importedThreadCount === 1 ? "thread" : "threads"}. ${skippedThreadCount} ${skippedThreadCount === 1 ? "thread" : "threads"} could not be imported.`;
       } else if (skippedThreadCount > 0) {
-        setImportError(
-          `${skippedThreadCount} ${skippedThreadCount === 1 ? "thread could" : "threads could"} not be imported.`,
-        );
+        importWarningRef.current = `${skippedThreadCount} ${skippedThreadCount === 1 ? "thread could" : "threads could"} not be imported.`;
       } else if (importedThreadCount > 0) {
-        setImportError(
-          `Imported ${importedThreadCount} ${importedThreadCount === 1 ? "thread" : "threads"}. Some thread history could not be imported.`,
-        );
+        importWarningRef.current = `Imported ${importedThreadCount} ${importedThreadCount === 1 ? "thread" : "threads"}. Some thread history could not be imported.`;
       } else {
-        setImportError("Could not import thread history.");
+        importWarningRef.current = "Could not import thread history.";
       }
-      return;
     }
     finishAfterImport();
   };
@@ -1162,7 +1188,7 @@ function ImportStep({
       <div className="flex h-full min-h-40 flex-col">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Your projects</h1>
         <div className="flex flex-1 flex-col items-center justify-center gap-3 py-6">
-          <Spinner className="size-5 text-muted-foreground" />
+          <Spinner size="lg" tone="muted" />
           <p className="text-center text-sm text-muted-foreground">
             Looking for projects from Claude Code and Codex…
           </p>
@@ -1206,10 +1232,7 @@ function ImportStep({
           </div>
         </div>
       ) : null}
-      <ScrollArea
-        scrollFade
-        className="mt-2 h-auto max-h-80 [&_[data-slot=scroll-area-scrollbar]]:opacity-100"
-      >
+      <ScrollArea scrollFade className="mt-2 h-auto max-h-80">
         <div className="space-y-5 pr-3">
           {scans.map((scan) => {
             const scanCandidates = candidates.filter(
@@ -1229,7 +1252,7 @@ function ImportStep({
                 ) : null}
                 {scan.isPending && scan.data === null ? (
                   <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
-                    <Spinner className="size-4" />
+                    <Spinner size="md" />
                     Looking for projects…
                   </div>
                 ) : scan.error !== null ? (
@@ -1262,14 +1285,9 @@ function ImportStep({
           })}
         </div>
       </ScrollArea>
-      {importError ? <p className="mt-3 text-sm text-destructive">{importError}</p> : null}
       <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
-        <Button
-          variant="ghost-muted"
-          disabled={isImporting}
-          onClick={importError ? finishAfterImport : () => void onDone()}
-        >
-          {importError ? "Continue without the rest" : "Do not import projects"}
+        <Button variant="ghost-muted" disabled={isImporting} onClick={finishAfterImport}>
+          Do not import projects
         </Button>
         <Button
           autoFocus
@@ -1454,12 +1472,10 @@ function ImportCandidateRow({
             {label}
           </span>
           {secondary !== undefined ? (
-            <span className="truncate font-mono text-[11px] text-muted-foreground">
-              {secondary}
-            </span>
+            <span className="truncate font-mono text-2xs text-muted-foreground">{secondary}</span>
           ) : null}
         </TooltipTrigger>
-        <TooltipPopup className="max-w-96 break-all font-mono">{candidate.path}</TooltipPopup>
+        <TooltipPopup variant="code">{candidate.path}</TooltipPopup>
       </Tooltip>
       <ImportRowMeta
         sources={nested ? null : candidate.sources}

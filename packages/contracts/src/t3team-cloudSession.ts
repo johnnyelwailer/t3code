@@ -27,6 +27,14 @@ export type CloudSessionProviderKind = typeof CloudSessionProviderKindSchema.Typ
  * phase in which the relay has published an environment link, and before that
  * there is nothing for a client to connect to.
  */
+/**
+ * How a client reaches the session's machine. `t3_connect` sessions join through relay discovery
+ * (Clerk + Cloudflare tunnel); `nexi_broker` sessions through the Nexi broker (Entra + the VM
+ * dialing out), see `t3team-cloudBroker.ts`. Absent on records from servers that predate it.
+ */
+export const CloudSessionTransportSchema = Schema.Literals(["t3_connect", "nexi_broker"]);
+export type CloudSessionTransport = typeof CloudSessionTransportSchema.Type;
+
 export const CloudSessionPhaseSchema = Schema.Literals([
   "requested",
   "queued",
@@ -72,6 +80,8 @@ export const CloudSessionSchema = Schema.Struct({
    * (now − dispatch) and keeps growing after the run ends.
    */
   durationSeconds: Schema.optional(Schema.Int),
+  /** How a client connects to this session; absent means `t3_connect`. */
+  transport: Schema.optional(CloudSessionTransportSchema),
 });
 export type CloudSession = typeof CloudSessionSchema.Type;
 
@@ -82,6 +92,12 @@ export const CloudSessionListResultSchema = Schema.Struct({
    * offer setup instead of rendering a permanently empty list.
    */
   configured: Schema.Boolean,
+  /**
+   * Where a human can browse every one of their sessions on the provider — the
+   * escape hatch for the capped history the client shows. Optional: providers
+   * without such a page, and older servers, omit it.
+   */
+  historyUrl: Schema.optional(Schema.String),
 });
 export type CloudSessionListResult = typeof CloudSessionListResultSchema.Type;
 
@@ -128,6 +144,13 @@ export const CloudSessionFailureReasonSchema = Schema.Literals([
    * intact, only its handoff to the VM failed.
    */
   "payload_issue_failed",
+  /**
+   * The Nexi broker is this server's transport and the user is not signed in to it (Entra). The
+   * remediation is the in-app Nexplore sign-in (a device code), not a retry.
+   */
+  "broker_sign_in_required",
+  /** The Nexi broker could not be reached or refused the request. */
+  "broker_unavailable",
 ]);
 export type CloudSessionFailureReason = typeof CloudSessionFailureReasonSchema.Type;
 

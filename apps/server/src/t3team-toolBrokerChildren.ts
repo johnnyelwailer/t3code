@@ -59,9 +59,6 @@ import {
 import { type T3TeamToolCallResult } from "./t3team-toolBroker.ts";
 
 export {
-  T3TEAM_CHILD_OPS,
-  T3TEAM_CHILD_WAIT_OUTCOMES,
-  T3TEAM_CHILDREN_TOOL_ID,
   type ChildThreadActivity,
   type ChildThreadDetail,
   type ChildThreadMessage,

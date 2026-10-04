@@ -62,7 +62,7 @@
 .sdv2-vA .t3team-aci-cell[data-t3team-state="error"] {
   --s: var(--error);
 }
-.sdv2-vA .sdv2-row .t3team-aci-cell .t3team-aci-dot {
+.sdv2-vA [data-sdv2="row"] .t3team-aci-cell .t3team-aci-dot {
   background-color: var(--s);
   box-shadow: 0 0 5px 0 color-mix(in oklch, var(--s) 38%, transparent);
   transition:
@@ -70,7 +70,7 @@
     box-shadow 380ms ease-in-out,
     opacity 380ms ease-in-out;
 }
-.sdv2-vA .sdv2-row .t3team-aci-cell[data-t3team-state="waiting"] > span::before {
+.sdv2-vA [data-sdv2="row"] .t3team-aci-cell[data-t3team-state="waiting"] > span::before {
   border-color: var(--s);
   box-shadow: 0 0 5px 1px color-mix(in oklch, var(--s) 30%, transparent);
   transition:
@@ -80,11 +80,11 @@
 
 /* B. Soft-glow blend — A's paint + a two-layer halo that blends on the same
    380ms ease-in-out; the waiting ring widens its glow. */
-.sdv2-vB .sdv2-row .t3team-aci-cell .t3team-aci-dot {
+.sdv2-vB [data-sdv2="row"] .t3team-aci-cell .t3team-aci-dot {
   box-shadow:
     0 0 6px 1px color-mix(in oklch, var(--s) 48%, transparent),
     0 0 16px 6px color-mix(in oklch, var(--s) 20%, transparent);
 }
-.sdv2-vB .sdv2-row .t3team-aci-cell[data-t3team-state="waiting"] > span::before {
+.sdv2-vB [data-sdv2="row"] .t3team-aci-cell[data-t3team-state="waiting"] > span::before {
   box-shadow: 0 0 6px 1px color-mix(in oklch, var(--s) 30%, transparent);
 }

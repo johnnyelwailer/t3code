@@ -26,13 +26,15 @@ export default {
 
 type Story = StoryObj;
 
-const DIVIDER = <div className="h-px bg-zinc-200/70 dark:bg-zinc-700/50" />;
+const DIVIDER = <div className="h-px bg-border" />;
 
 function SectionTitle({ children }: { children: ReactNode }) {
   return (
     <div className="mb-1.5 flex items-center gap-2 px-0.5">
-      <span className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">▸</span>
-      <span className="text-xs font-medium text-zinc-300">{children}</span>
+      <span className="text-3xs font-semibold uppercase tracking-widest text-muted-foreground">
+        ▸
+      </span>
+      <span className="text-xs font-medium text-foreground">{children}</span>
     </div>
   );
 }

@@ -68,7 +68,7 @@ const ProjectRecipeKickoffProgramTarget = Schema.Struct({
 export const ProjectRecipeKickoffProgram = ProjectRecipeKickoffProgramSource.pipe(
   Schema.decodeTo(
     ProjectRecipeKickoffProgramTarget,
-    SchemaTransformation.transformOrFail({
+    SchemaTransformation.transformEffect({
       decode: (raw) => {
         const normalized: Record<string, unknown> = {
           steps: raw.steps.map(normalizeKickoffStep),

@@ -15,13 +15,13 @@
 
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
-import { fileURLToPath } from "node:url";
+import * as NodeURL from "node:url";
 
 import { FsJournalStore, resumeWorkflow, startWorkflow } from "../src/t3team-sdk.index.ts";
 import { inspectRun } from "@runbook/core/status";
 import type { MessageBroker } from "../src/t3team-sdk.broker.ts";
 
-const dir = NodePath.dirname(fileURLToPath(import.meta.url));
+const dir = NodePath.dirname(NodeURL.fileURLToPath(import.meta.url));
 const stateDir = NodePath.join(dir, ".state");
 const runsRoot = NodePath.join(stateDir, "runs");
 const callsPath = NodePath.join(stateDir, "nexplore-calls.jsonl");

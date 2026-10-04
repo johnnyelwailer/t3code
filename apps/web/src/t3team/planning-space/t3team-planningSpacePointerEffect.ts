@@ -79,7 +79,7 @@ export function usePlanningSpacePointerEffect(ctxRef: MutableRefObject<PlanningS
           const selector =
             hover.type === "subtask"
               ? `[data-subtask-id="${hover.subtaskId}"]`
-              : `.t3ps-node[data-node-id="${hover.storyId}"] .t3ps-card`;
+              : `[data-t3ps~="node"][data-node-id="${hover.storyId}"] [data-t3ps~="card"]`;
           nextDropHot = stage.querySelector(selector);
         }
         if (nextDropHot !== g.dropHotEl) {

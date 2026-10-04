@@ -62,6 +62,8 @@ import {
 import { connectionStorageLayer } from "./storage";
 import { clientPresentationMetadata } from "./clientMetadata";
 import { isApplicationActiveResubscribeWake } from "./t3team-applicationActiveWake";
+import { webBrokerEnvironmentGateway } from "./t3team-brokerGateway";
+import { BrokerEnvironmentGateway } from "@t3tools/client-runtime/connection";
 
 let nextObservedRpcRequestId = 0;
 
@@ -225,7 +227,7 @@ const capabilitiesLayer = Layer.effectContext(
       }),
     });
     const identity = RelayDeviceIdentity.of({
-      deviceId: Effect.succeed(Option.none()),
+      deviceId: Effect.succeedNone,
     });
     const primaryAuth = PrimaryEnvironmentAuth.of({
       bearerToken: Effect.tryPromise({
@@ -300,6 +302,7 @@ const capabilitiesLayer = Layer.effectContext(
       Context.add(RelayDeviceIdentity, identity),
       Context.add(ClientPresentation, presentation),
       Context.add(SshEnvironmentGateway, ssh),
+      Context.add(BrokerEnvironmentGateway, webBrokerEnvironmentGateway),
     );
   }),
 );

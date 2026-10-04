@@ -9,9 +9,9 @@
  *
  *   `thread-upserted` shell stream event (activityState + activityLabel) →
  *   `applyShellStreamEvent` (the same reducer the WS shell subscription drives)
- *   → `useMergedThreads` / `mergeEnvironmentThread` (over a STALE cached detail
- *     that carries no activityState — the pre-fix failure mode: the cached
- *     detail shadowed the live shell's activity fields) →
+ *   → the live shell list (the store reads shells only, never thread detail, so
+ *     no cached detail can shadow the live shell's activity fields — the
+ *     pre-fix failure mode) →
  *   `syncLiveThreadMetadataToLocalState` / `mapLiveThreadToProjectThread`
  *   → the row's live summary: the sub-run row (`SidebarSubRunRow`) and the
  *     parent card's verbatim `resolveActivityPillDisplay` derivation.
@@ -20,7 +20,6 @@ import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { Atom } from "effect/unstable/reactivity";
 import type {
   OrchestrationShellSnapshot,
   OrchestrationShellStreamEvent,
@@ -38,57 +37,16 @@ vi.mock("~/hooks/useSettings", () => ({
 }));
 
 const entitiesHarness = vi.hoisted(() => ({
-  refs: [] as Array<{ environmentId: string; threadId: string }>,
   shells: [] as unknown[],
 }));
 
 vi.mock("~/state/entities", () => ({
-  useThreadRefs: () => entitiesHarness.refs,
   useThreadShells: () => entitiesHarness.shells,
 }));
 
-// Detail atoms: one thread carries a STALE cached detail (opened before the
-// state word arrived — no activityState/activityLabel on it), the other was
-// never opened (null detail). Both must resolve their live summary from the
-// shell, exactly as `useMergedThreads` reads them via the app atom registry.
-const staleDetail = {
-  id: "thread-stale",
-  projectId: "project-test",
-  environmentId: "env-test",
-  title: "Stale detail thread",
-  modelSelection: { instanceId: "codex", model: "gpt-5.4" },
-  runtimeMode: "full-access",
-  interactionMode: "default",
-  branch: null,
-  worktreePath: null,
-  latestTurn: null,
-  createdAt: "2026-01-01T00:00:00.000Z",
-  updatedAt: "2026-01-01T00:00:00.000Z",
-  archivedAt: null,
-  deletedAt: null,
-  settledOverride: null,
-  settledAt: null,
-  messages: [],
-  proposedPlans: [],
-  activities: [],
-  checkpoints: [],
-  session: null,
-} as never;
-
-vi.mock("~/state/threads", () => ({
-  environmentThreadShells: {
-    threadShellAtom: () => null,
-  },
-  environmentThreadDetails: {
-    detailAtom: (ref: { threadId: string }) =>
-      Atom.make(() => (ref.threadId === "thread-stale" ? staleDetail : null)),
-  },
-}));
-
-import { resetAppAtomRegistryForTests } from "~/rpc/atomRegistry";
 import type { ProjectThread } from "~/t3team/t3team-types";
+import { useThreadShells } from "~/state/entities";
 import { syncLiveThreadMetadataToLocalState } from "~/t3team/hooks/t3team-threadBridge";
-import { useMergedThreads } from "~/t3team/t3team-mergedThreads";
 import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay";
 import { SidebarSubRunRow } from "../components/t3team-SidebarSubRunRow";
 
@@ -162,17 +120,13 @@ function mountProbe(initial: OrchestrationShellSnapshot): Probe {
       );
     };
     entitiesHarness.shells = snapshot.threads as never[];
-    entitiesHarness.refs = snapshot.threads.map((thread) => ({
-      environmentId: "env-test",
-      threadId: thread.id,
-    }));
-    const merged = useMergedThreads();
+    const liveThreads = useThreadShells();
     // The project-store sync step: live shells → local ProjectThreads.
     latest = syncLiveThreadMetadataToLocalState({
       threads: [],
       storedProjects: [],
       liveProjects: [],
-      liveThreads: merged,
+      liveThreads,
     });
     return null;
   }
@@ -230,11 +184,9 @@ function parentCardSummary(thread: ProjectThread): string {
 
 beforeEach(() => {
   settingsState.activityLabelsEnabled = true;
-  resetAppAtomRegistryForTests();
 });
 
 afterEach(() => {
-  entitiesHarness.refs = [];
   entitiesHarness.shells = [];
 });
 
@@ -245,10 +197,10 @@ const initialSnapshot: OrchestrationShellSnapshot = {
 } as unknown as OrchestrationShellSnapshot;
 
 describe("live status summary reaches the rows (GHE #208/#40)", () => {
-  it("a thread with activityState='thinking' renders the LLM label, not 'Working' (stale detail cached)", () => {
+  it("a thread with activityState='thinking' renders the LLM label, not 'Working'", () => {
     const probe = mountProbe(initialSnapshot);
     // The classifier persisted a state transition + the LLM enrichment landed:
-    // the live shell now carries both. The cached detail has neither.
+    // the live shell now carries both.
     probe.push(
       upsert(
         1,
@@ -265,7 +217,7 @@ describe("live status summary reaches the rows (GHE #208/#40)", () => {
     const [thread] = probe.projectThreads();
     expect(thread, "thread synced").toBeTruthy();
     expect(thread!.status).toBe("running");
-    expect(thread!.activityState, "shell state word survived the merge").toBe("thinking");
+    expect(thread!.activityState, "shell state word reached the ProjectThread").toBe("thinking");
 
     // The sub-run row's live summary — the reported surface.
     const rowText = renderRow(thread!, childRef);
@@ -279,7 +231,7 @@ describe("live status summary reaches the rows (GHE #208/#40)", () => {
     probe.unmount();
   });
 
-  it("a never-opened thread (no detail) gets the state word from the shell alone", () => {
+  it("a thread gets the state word from the shell alone", () => {
     const probe = mountProbe({
       projects: [],
       threads: [

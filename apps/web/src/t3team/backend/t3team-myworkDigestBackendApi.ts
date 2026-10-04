@@ -56,6 +56,8 @@ export type MyWorkDigestPayload = {
    * `unresolved` means a project had no Jira identity (stale or missing token).
    */
   readonly viewer?: { readonly name?: string; readonly unresolved?: true };
+  /** A first change-request read is still running server-side; re-poll soon to pick it up. */
+  readonly changeRequestsPending?: true;
   readonly projects: ReadonlyArray<{
     readonly project: { readonly id: string; readonly name: string };
     readonly tickets: ReadonlyArray<MyWorkDigestTicketRef>;

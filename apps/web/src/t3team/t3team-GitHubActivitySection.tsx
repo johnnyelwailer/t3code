@@ -48,7 +48,7 @@ function GitHubActivitySectionRow({
         <div className="text-xs font-medium text-foreground/90">
           {item.subjectTitle ?? item.repository}
         </div>
-        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-2xs text-muted-foreground">
           {summaryLabel ? <span>{summaryLabel}</span> : null}
           {updatedAt ? <span>{updatedAt}</span> : null}
         </div>
@@ -128,7 +128,7 @@ export function GitHubActivitySection({
     <T3SurfacePanel tone="muted" className="p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        <div className="text-[11px] text-muted-foreground">
+        <div className="text-2xs text-muted-foreground">
           {host ? <span>{host}</span> : null}
           {account ? <span> · {account}</span> : null}
         </div>
@@ -139,7 +139,7 @@ export function GitHubActivitySection({
         unreadable on a light background regardless.
       */}
       {warning ? (
-        <div className="mb-2 rounded border border-warning/30 bg-warning/10 px-2 py-1 text-[11px] text-warning-foreground">
+        <div className="mb-2 rounded border border-warning/30 bg-warning/10 px-2 py-1 text-2xs text-warning-foreground">
           {warning}
         </div>
       ) : null}
@@ -167,7 +167,7 @@ export function GitHubActivitySection({
         </div>
       ) : null}
       {suggestedRepositoryCount && suggestedRepositoryCount > 0 ? (
-        <div className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
+        <div className="mt-2 flex items-center gap-1 text-2xs text-muted-foreground">
           <ExternalLink className="size-3" />
           {suggestedRepositoryCount} suggested repositories available
         </div>

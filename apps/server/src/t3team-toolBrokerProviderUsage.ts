@@ -1,71 +1,134 @@
 /**
  * Broker handler for `t3team.runtime.provider_usage`.
  *
- * Sibling of `t3team.runtime.models` (see t3team-toolBrokerLive.ts):
- * on-demand sampling of the live provider plan limits, no caching here —
- * the session-scoped watcher owns that (phase 2). Each requested provider
- * instance with a live-limit source is sampled; per-instance failures are
- * degraded to `unavailable` entries so one bad provider never hides the rest.
+ * Reads upstream's provider-usage pipeline — the usage windows each provider
+ * instance publishes on `ServerProvider.usageLimits`, plus the accounts the
+ * configured CLIProxyAPI hubs report — and returns them per INSTANCE with a
+ * severity per window. It samples nothing itself: the probe cadence and the
+ * live rate-limit merges belong to the provider snapshots.
+ *
+ * @module t3team-toolBrokerProviderUsage
  */
-import * as NodeServices from "@effect/platform-node/NodeServices";
+import {
+  PROVIDER_USAGE_CONTRACT_VERSION,
+  hasUsageData,
+  providerUsageSeverity,
+  sessionUsageWindow,
+  type ProviderUsageQueryResult,
+  type ServerProvider,
+  type ServerProviderUsageLimits,
+  type UsageLimitSourceSnapshot,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
-import * as Layer from "effect/Layer";
-import * as Scope from "effect/Scope";
 import * as Schema from "effect/Schema";
-import { FetchHttpClient } from "effect/unstable/http";
 
-import { type ServerSettings, type ServerSettingsError } from "@t3tools/contracts";
 import { type T3TeamToolCallResult } from "./t3team-toolBroker.ts";
 import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
-import {
-  ProviderUsageToolArgs,
-  sampleProviderInstancesUsage,
-} from "./provider/t3team-providerUsageSampler.ts";
 
-/**
- * Structural service view: the live binding passes the yielded
- * `ServerSettingsService` object; only `getSettings` matters here.
- */
-export interface ProviderUsageSettingsView {
-  readonly getSettings: Effect.Effect<ServerSettings, ServerSettingsError>;
-}
+const ProviderUsageToolArgs = Schema.Struct({
+  provider_instance_id: Schema.optional(Schema.String),
+});
+// Tool arguments arrive untyped from the model.
+const decodeToolArgs = Schema.decodeUnknownExit(ProviderUsageToolArgs);
 
-/** Services the samplers need; provided here so the dispatch table can stay self-contained. */
-const providerUsageLayer = Layer.merge(NodeServices.layer, FetchHttpClient.layer);
+const windowViews = (limits: ServerProviderUsageLimits | undefined) =>
+  hasUsageData(limits)
+    ? limits.windows.map((window) => ({
+        ...window,
+        severity: providerUsageSeverity(window.usedPercent),
+      }))
+    : [];
+
+const sessionSeverity = (limits: ServerProviderUsageLimits | undefined) => {
+  const session = sessionUsageWindow(limits);
+  return session === null ? null : providerUsageSeverity(session.usedPercent);
+};
+
+const unavailableReason = (limits: ServerProviderUsageLimits | undefined): string | undefined => {
+  if (limits === undefined) return "no usage reported for this instance";
+  if (limits.unavailable !== undefined) {
+    return limits.unavailable.message ?? limits.unavailable.reason;
+  }
+  return limits.windows.length === 0 ? "no usage windows reported" : undefined;
+};
+
+/** Pure projection of the published snapshots into the tool answer. */
+const buildProviderUsageResult = (input: {
+  readonly providers: ReadonlyArray<ServerProvider>;
+  readonly sources: ReadonlyArray<UsageLimitSourceSnapshot>;
+  readonly providerInstanceId?: string;
+}): ProviderUsageQueryResult => {
+  const selected = input.providers.filter(
+    (provider) =>
+      provider.enabled &&
+      (input.providerInstanceId === undefined || provider.instanceId === input.providerInstanceId),
+  );
+  // Hub accounts are not runnable instances; they only answer the unfiltered question.
+  const sources = input.providerInstanceId === undefined ? input.sources : [];
+  return {
+    contractVersion: PROVIDER_USAGE_CONTRACT_VERSION,
+    instances: selected.map((provider) => {
+      const unavailable = unavailableReason(provider.usageLimits);
+      return {
+        providerInstanceId: provider.instanceId,
+        driver: provider.driver,
+        ...(provider.displayName?.trim() ? { displayName: provider.displayName.trim() } : {}),
+        ...(provider.usageLimits ? { checkedAt: provider.usageLimits.checkedAt } : {}),
+        sessionSeverity: sessionSeverity(provider.usageLimits),
+        windows: windowViews(provider.usageLimits),
+        ...(unavailable !== undefined ? { unavailable } : {}),
+      };
+    }),
+    hubAccounts: sources.flatMap((source) =>
+      source.accounts.map((account) => ({
+        sourceId: source.id,
+        sourceLabel: source.label,
+        accountId: account.id,
+        driver: account.driver,
+        ...(account.plan ? { plan: account.plan } : {}),
+        checkedAt: account.usageLimits.checkedAt,
+        sessionSeverity: sessionSeverity(account.usageLimits),
+        windows: windowViews(account.usageLimits),
+      })),
+    ),
+    hubErrors: sources.flatMap((source) =>
+      source.error === undefined ? [] : [{ sourceId: source.id, error: source.error }],
+    ),
+  };
+};
 
 export const makeReadProviderUsage =
   (input: {
-    readonly serverSettings: ProviderUsageSettingsView | undefined;
+    readonly providerRegistry:
+      | { readonly getProviders: Effect.Effect<ReadonlyArray<ServerProvider>> }
+      | undefined;
+    readonly usageLimitSources:
+      | { readonly current: Effect.Effect<ReadonlyArray<UsageLimitSourceSnapshot>> }
+      | undefined;
   }): ((toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>) =>
   (toolArgs) =>
     Effect.gen(function* () {
-      if (input.serverSettings === undefined) {
+      if (input.providerRegistry === undefined) {
         return errorResult(
-          "Provider usage sampling is not available in this runtime (server settings not wired).",
+          "Provider usage is not available in this runtime (no provider registry).",
         );
       }
-      const settingsExit = yield* input.serverSettings.getSettings.pipe(Effect.exit);
-      if (Exit.isFailure(settingsExit)) {
-        return errorResult(`Failed to read server settings: ${String(settingsExit.cause)}`);
-      }
-      const settings = settingsExit.value;
-      const argsExit = Schema.decodeUnknownExit(ProviderUsageToolArgs)(toolArgs ?? {});
+      const argsExit = decodeToolArgs(toolArgs ?? {});
       if (Exit.isFailure(argsExit)) {
         return errorResult(`Invalid arguments for provider usage: ${String(argsExit.cause)}`);
       }
-      // Sampler side-effects (keychain child, transient app-server) run in a
-      // private scope that is closed when the sampling settles.
-      const sampling = sampleProviderInstancesUsage(settings, {
-        ...(argsExit.value.provider_instance_id !== undefined
-          ? { requestedInstanceIds: new Set([argsExit.value.provider_instance_id]) }
-          : {}),
+      const providers = yield* input.providerRegistry.getProviders;
+      const sources = input.usageLimitSources ? yield* input.usageLimitSources.current : [];
+      const instanceId = argsExit.value.provider_instance_id;
+      if (instanceId !== undefined && !providers.some((p) => p.instanceId === instanceId)) {
+        return errorResult(`Unknown provider instance '${instanceId}'. Call t3team_models first.`);
+      }
+      return okResult({
+        providerUsage: buildProviderUsageResult({
+          providers,
+          sources,
+          ...(instanceId !== undefined ? { providerInstanceId: instanceId } : {}),
+        }),
       });
-      const result = yield* Effect.gen(function* () {
-        const scope = yield* Scope.make();
-        const out = yield* Scope.provide(scope)(sampling);
-        yield* Scope.close(scope, Exit.void);
-        return out;
-      });
-      return okResult({ providerUsage: result });
-    }).pipe(Effect.provide(providerUsageLayer));
+    });

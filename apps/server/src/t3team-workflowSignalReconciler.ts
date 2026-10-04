@@ -33,16 +33,13 @@ import {
 import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
 import { PullRequestService } from "./pullRequest/PullRequestService.ts";
 import { makeReconcilerCore } from "./t3team-workflowSignalReconcilerCore.ts";
-import {
-  providerForAccount,
-  providerForPersistedAuths,
-} from "./t3team-atlassian-auth-store.ts";
+import { providerForAccount, providerForPersistedAuths } from "./t3team-atlassian-auth-store.ts";
 import * as ServerConfig from "./config.ts";
 
 /** The periodic sweep cadence: catch orphaned instances + GC without hammering the DB. */
-export const WORKFLOW_SIGNAL_SWEEP_MS = 60_000;
+const WORKFLOW_SIGNAL_SWEEP_MS = 60_000;
 /** Delivered inbox entries older than this are GC'd by the sweep (design 42 §7: entries expire). */
-export const WORKFLOW_SIGNAL_INBOX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const WORKFLOW_SIGNAL_INBOX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** The ambient services the Atlassian auth read needs (provided by the app composition). */
 type AtlassianAuthServices =
@@ -114,13 +111,10 @@ export const T3TeamWorkflowSignalReconcilerLive = Layer.effect(
 
     // Boot reconcile: instances bound before this uptime come back now; each source's durable
     // cursor bridges the host-down window (the catch-up sweep inside its start).
-    yield* Effect.promise(
-      () =>
-        core.reconcile().catch((error) => {
-          void Effect.runPromise(
-            log("boot reconcile failed", { error: String(error) }),
-          );
-        }),
+    yield* Effect.promise(() =>
+      core.reconcile().catch((error) => {
+        void Effect.runPromise(log("boot reconcile failed", { error: String(error) }));
+      }),
     );
 
     yield* Effect.addFinalizer(() => Effect.promise(() => core.stopAll()));
