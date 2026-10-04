@@ -170,10 +170,17 @@ function pullRequestServiceLayer(
     summary: () => Effect.die("not used"),
     subscribeMerges: Effect.die("not used"),
     subscribeRefreshes: Stream.empty,
-    refreshAfterTurn: Effect.void,
+    refreshAfterTurn: () => Effect.void,
+    routing: () => Effect.die("not used"),
+    routingIdentity: () => Effect.die("not used"),
+    withRoutingCredential: () => Effect.die("not used"),
+    stack: () => Effect.die("not used"),
     labelCandidates: () => Effect.die("not used"),
     setLabels: () => Effect.die("not used"),
     detail: () => Effect.succeed(detail),
+    preview: () => Effect.die("not used"),
+    filesViewed: () => Effect.die("not used"),
+    setFilesViewed: () => Effect.die("not used"),
     activity: activityImpl ?? (() => Effect.succeed(activity)),
     diff:
       diffImpl ??

@@ -2,6 +2,7 @@ import { EllipsisVertical } from "lucide-react";
 import { useId, useState, type ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
+import { Button } from "~/t3team/components/ui/t3team-button";
 import {
   Menu,
   MenuItem,
@@ -18,21 +19,20 @@ export function T3TeamSidecarMenuKebabTrigger({
 }: {
   readonly triggerId: string;
   readonly label: string;
+  /** Placement and reveal (e.g. show on group hover) for the wrapper; it stays visible while open. */
   readonly className?: string | undefined;
 }) {
   return (
-    <MenuTrigger
-      id={triggerId}
-      type="button"
-      aria-label={label}
-      title={label}
-      className={cn(
-        "inline-flex size-7 items-center justify-center rounded-md border border-border/60 bg-background/70 text-muted-foreground transition-colors hover:bg-accent/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 data-[popup-open]:opacity-100",
-        className,
-      )}
-    >
-      <EllipsisVertical className="size-3.5" />
-    </MenuTrigger>
+    <span className={cn("inline-flex has-data-popup-open:opacity-100", className)}>
+      <MenuTrigger
+        id={triggerId}
+        aria-label={label}
+        title={label}
+        render={<Button variant="outline" size="icon-sm" />}
+      >
+        <EllipsisVertical className="size-3.5" />
+      </MenuTrigger>
+    </span>
   );
 }
 

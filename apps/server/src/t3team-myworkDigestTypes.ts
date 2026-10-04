@@ -144,6 +144,8 @@ export type T3TeamMyWorkDigestPayload = {
     readonly unresolved?: true;
     readonly lastVisitAt?: string;
   };
+  /** A first change-request read is still running; the client re-polls soon for it. */
+  readonly changeRequestsPending?: true;
 };
 
 /**

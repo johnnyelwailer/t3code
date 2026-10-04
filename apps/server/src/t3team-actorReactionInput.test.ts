@@ -358,11 +358,11 @@ describe("collectPendingActorDeliveries", () => {
     const events = [
       delivered("delivery-a", "first"),
       delivered("delivery-b", "second"),
-      actorSent(
-        "target",
-        buildActorReactionInput(reactedEntry) + "\n[user-return suffix]",
-        { senderThreadId: "sender", hopCount: 3, rootThreadId: "root" },
-      ),
+      actorSent("target", buildActorReactionInput(reactedEntry) + "\n[user-return suffix]", {
+        senderThreadId: "sender",
+        hopCount: 3,
+        rootThreadId: "root",
+      }),
     ];
 
     expect(collectPendingActorDeliveries(events, 6)).toHaveLength(1);
@@ -436,11 +436,11 @@ describe("collectPendingActorDeliveries", () => {
     const events = [
       delivered("delivery-a", body),
       delivered("delivery-b", "second"),
-      actorSent(
-        "target",
-        legacyAdmitted + "\n[user-return suffix]",
-        { senderThreadId: "sender", hopCount: 3, rootThreadId: "root" },
-      ),
+      actorSent("target", legacyAdmitted + "\n[user-return suffix]", {
+        senderThreadId: "sender",
+        hopCount: 3,
+        rootThreadId: "root",
+      }),
     ];
 
     const pending = collectPendingActorDeliveries(events, 6);
@@ -460,11 +460,11 @@ describe("collectPendingActorDeliveries", () => {
     const events = [
       delivered("delivery-a", body),
       delivered("delivery-b", "second"),
-      actorSent(
-        "target",
-        legacyAdmitted + "\n[user-return suffix]",
-        { senderThreadId: "sender", hopCount: 3, rootThreadId: "root" },
-      ),
+      actorSent("target", legacyAdmitted + "\n[user-return suffix]", {
+        senderThreadId: "sender",
+        hopCount: 3,
+        rootThreadId: "root",
+      }),
     ];
 
     const pending = collectPendingActorDeliveries(events, 6);

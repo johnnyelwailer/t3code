@@ -35,7 +35,15 @@ export function isDigestTicketDone(ticket: ProjectTicket): boolean {
 }
 
 function isMine(ticket: ProjectTicket, graph: DigestGraph): boolean {
-  return ticket.assignee === graph.viewer.name;
+  const assignee = ticket.assignee?.trim().toLowerCase();
+  const viewer = graph.viewer.name?.trim().toLowerCase();
+  return (
+    assignee !== undefined &&
+    assignee !== "" &&
+    viewer !== undefined &&
+    viewer !== "" &&
+    assignee === viewer
+  );
 }
 
 function latestClaimActivity(graph: DigestGraph, ticketId: string): number | null {
@@ -69,7 +77,7 @@ type Bucket = {
   readonly id: string;
   readonly heading: string;
   readonly placement: DigestPlacement;
-  readonly accepts: (facets: readonly DigestFacet[]) => boolean;
+  readonly accepts: (facets: readonly DigestFacet[], ticket: ProjectTicket) => boolean;
 };
 
 const BUCKETS: readonly Bucket[] = [
@@ -97,6 +105,23 @@ const BUCKETS: readonly Bucket[] = [
     placement: "footer",
     accepts: (f) => f.includes("stalled"),
   },
+  // The viewer's own board state, so work nobody has touched lately still reads as work, not as
+  // "parked": what is moving (in progress / review), then what the current sprint queues next.
+  {
+    id: "in-progress",
+    heading: "In progress",
+    placement: "main",
+    accepts: (_f, ticket) => {
+      const lane = getProjectTicketKanbanLane(ticket.status);
+      return lane === "inProgress" || lane === "review";
+    },
+  },
+  {
+    id: "up-next",
+    heading: "Up next this sprint",
+    placement: "main",
+    accepts: (_f, ticket) => ticket.sprintState?.toLowerCase() === "active",
+  },
   { id: "rest", heading: "Parked", placement: "footer", accepts: () => true },
 ];
 
@@ -121,7 +146,7 @@ export function buildHeuristicDigestPlan(
     heading: bucket.heading,
     items: candidates
       .filter((ticket) => !placed.has(ticket.id))
-      .filter((ticket) => bucket.accepts(digestFacetsFor(graph, ticket.id, nowMs)))
+      .filter((ticket) => bucket.accepts(digestFacetsFor(graph, ticket.id, nowMs), ticket))
       .map((ticket) => {
         placed.add(ticket.id);
         return { ticketId: ticket.id };

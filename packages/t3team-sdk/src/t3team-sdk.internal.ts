@@ -4,6 +4,7 @@ import * as NodeProcess from "node:process";
 import * as NodeURL from "node:url";
 
 export { decodeWithSchema } from "@runbook/core/schema";
+import { WORKFLOW_VM_NAME_PREFIX } from "@runbook/ts/loader";
 
 import type { WorkflowRuntime, WorkflowSdkRegistry } from "./t3team-sdk.types.ts";
 
@@ -51,8 +52,22 @@ export function duplicateRegistrationError(kind: string, id: string): Error {
   return new Error(`Duplicate ${kind} registration '${id}'. ${kind} ids must be globally unique.`);
 }
 
+/**
+ * A frame's filename as a usable filesystem path. `node:vm` scripts carry a synthetic resource
+ * name instead: `@runbook/ts` runs workflow bodies as `WORKFLOW_VM_NAME_PREFIX + absolutePath`
+ * so V8 coverage cannot merge the VM execution into the source file's counters. That label is
+ * not a filesystem path — strip it (only when what remains is an absolute path) so relative
+ * workflow resolution against a VM body frame keeps working.
+ */
 function normalizeFilePath(fileName: string): string {
-  return fileName.startsWith("file://") ? NodeURL.fileURLToPath(fileName) : fileName;
+  const decoded = fileName.startsWith("file://") ? NodeURL.fileURLToPath(fileName) : fileName;
+  if (decoded.startsWith(WORKFLOW_VM_NAME_PREFIX)) {
+    const stripped = decoded.slice(WORKFLOW_VM_NAME_PREFIX.length);
+    if (isAbsoluteFilePath(stripped)) {
+      return stripped;
+    }
+  }
+  return decoded;
 }
 
 function findCallerFilePath(): string | undefined {

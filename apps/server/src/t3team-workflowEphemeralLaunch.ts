@@ -116,6 +116,10 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
       store: deps.journalStore,
       lifecycle,
       lifecycleAlreadyRunning: true,
+      ...(deps.signalStore === undefined ? {} : { signalStore: deps.signalStore }),
+      ...(deps.pokeSignalReconcile === undefined
+        ? {}
+        : { pokeSignalReconcile: deps.pokeSignalReconcile }),
       ...(input.onComplete === undefined ? {} : { onComplete: input.onComplete }),
       ...(input.onError === undefined ? {} : { onError: input.onError }),
       ...(input.intent === undefined || !canReplaceEphemeralSource

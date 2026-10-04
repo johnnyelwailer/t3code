@@ -57,7 +57,7 @@ function T3TeamAdfStoryFrame({
 }
 
 const meta: Meta<typeof T3TeamAdfRenderer> = {
-  title: "T3Team/WorkItem/AdfRenderer",
+  title: "T3Team/Work Item/Adf Renderer",
   component: T3TeamAdfRenderer,
   parameters: { layout: "padded" },
   decorators: [

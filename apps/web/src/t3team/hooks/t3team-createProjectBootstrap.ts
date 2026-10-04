@@ -1,9 +1,11 @@
 import { resolveT3TeamProjectSetupProfileId } from "~/t3team/t3team-projectSetup";
 import type { ProjectShellProject } from "@t3tools/project-context";
+import type { ProjectMainRepositoryCandidate } from "@t3tools/contracts";
 import type {
   LinkedRepositorySyncResult,
   ProjectWorkspaceBootstrapResult,
 } from "~/t3team/backend/t3team-types";
+import type { ProjectWorkspaceBootstrapMainRepository } from "~/t3team/backend/t3team-projectWorkspaceTypes";
 
 export type LinkedRepositoryReference = {
   readonly url: string;
@@ -12,18 +14,16 @@ export type LinkedRepositoryReference = {
   readonly error?: string;
 };
 
-export type MetaRepositoryReference = {
-  readonly url?: string;
-  readonly localPath: string;
-  readonly status: "adopted";
-};
+export type MainRepositoryReference = ProjectWorkspaceBootstrapMainRepository;
 
 export type ProjectAgentReferences = {
   readonly referencesRoot?: string;
   readonly linkedRepositories: ReadonlyArray<LinkedRepositoryReference>;
   readonly workspaceRepositoryInitialized?: boolean;
-  /** Set when the workspace root is itself a git repository adopted as the meta-repo. */
-  readonly metaRepository?: MetaRepositoryReference;
+  /** Set when the workspace root is itself a git repository: the project's main repository. */
+  readonly mainRepository?: MainRepositoryReference;
+  /** Linked clones that already carry a project state dir, offered for the user to pick. */
+  readonly mainRepositoryCandidates?: ReadonlyArray<ProjectMainRepositoryCandidate>;
 };
 
 export type ProjectAgentSetup = {
@@ -39,6 +39,10 @@ export function normalizeRepositoryUrls(
     if (trimmed.length > 0) deduped.add(trimmed);
   }
   return [...deduped.values()];
+}
+
+function isMainRepositoryReference(value: unknown): value is MainRepositoryReference {
+  return typeof readObjectRecord(value).localPath === "string";
 }
 
 function readObjectRecord(value: unknown): Record<string, unknown> {
@@ -88,9 +92,21 @@ export function applyWorkspaceBootstrapToProject(
     workspaceRepositoryInitialized: bootstrap.workspaceRepositoryInitialized,
     linkedRepositories:
       bootstrap.linkedRepositories.length > 0
-        ? mapLinkedRepositories(bootstrap.linkedRepositories)
+        ? [
+            // The main repository is the workspace itself, so bootstrap does not sync it as a
+            // reference — but it stays one of the project's linked repositories.
+            ...existingLinked.filter(
+              (entry) =>
+                entry.url === bootstrap.mainRepository?.url &&
+                !bootstrap.linkedRepositories.some((result) => result.url === entry.url),
+            ),
+            ...mapLinkedRepositories(bootstrap.linkedRepositories),
+          ]
         : existingLinked,
-    ...(bootstrap.metaRepository ? { metaRepository: bootstrap.metaRepository } : {}),
+    ...(bootstrap.mainRepository ? { mainRepository: bootstrap.mainRepository } : {}),
+    ...(bootstrap.mainRepositoryCandidates?.length
+      ? { mainRepositoryCandidates: bootstrap.mainRepositoryCandidates }
+      : {}),
   };
 
   return {
@@ -141,6 +157,10 @@ export function replaceLinkedRepositoryUrlsInProject(
       ? { workspaceRepositoryInitialized: currentReferences.workspaceRepositoryInitialized }
       : {}),
     linkedRepositories: normalized.map((url) => ({ url })),
+    // Rebuilding the linked list must not drop the main repository the workspace is rooted in.
+    ...(isMainRepositoryReference(currentReferences.mainRepository)
+      ? { mainRepository: currentReferences.mainRepository }
+      : {}),
   };
   return {
     ...project,

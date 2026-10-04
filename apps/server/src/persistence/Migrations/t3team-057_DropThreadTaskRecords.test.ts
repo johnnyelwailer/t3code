@@ -16,7 +16,7 @@ import { runMigrations } from "../Migrations.ts";
  * through 69 (table created) and checks that 70 removes it, with and without
  * data.
  */
-const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
+const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layer({ filename: ":memory:" })));
 
 layer("t3team-057 drop migration", (it) => {
   it.effect("drops the table even when it holds data", () =>
@@ -33,8 +33,13 @@ layer("t3team-057 drop migration", (it) => {
             '2026-09-12T00:00:00.000Z', '2026-09-12T00:00:00.000Z')
       `;
 
-      const executed = yield* runMigrations();
-      assert.deepStrictEqual(executed.map(([id]) => id), [70]);
+      // New upstream migrations (ids 72-76) landed after this one; bound the run
+      // to this migration so the assertion stays "only the drop runs".
+      const executed = yield* runMigrations({ toMigrationInclusive: 70 });
+      assert.deepStrictEqual(
+        executed.map(([id]) => id),
+        [70],
+      );
 
       const tables = yield* sql<{ readonly name: string | null }>`
         SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'thread_task_records'
@@ -46,15 +51,18 @@ layer("t3team-057 drop migration", (it) => {
 
 // A second, separate layer block: the in-memory DB is shared across tests of
 // one block, and the test above already applied 70 to it.
-const noDataLayer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
+const noDataLayer = it.layer(Layer.mergeAll(NodeSqliteClient.layer({ filename: ":memory:" })));
 
 noDataLayer("t3team-057 on a table without data", (it) => {
   it.effect("drops the table created on a fresh database", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       yield* runMigrations({ toMigrationInclusive: 69 });
-      const executed = yield* runMigrations();
-      assert.deepStrictEqual(executed.map(([id]) => id), [70]);
+      const executed = yield* runMigrations({ toMigrationInclusive: 70 });
+      assert.deepStrictEqual(
+        executed.map(([id]) => id),
+        [70],
+      );
       const tables = yield* sql<{ readonly name: string | null }>`
         SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'thread_task_records'
       `;

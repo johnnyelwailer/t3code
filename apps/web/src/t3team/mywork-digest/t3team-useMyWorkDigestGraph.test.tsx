@@ -10,6 +10,7 @@ import type {
   MyWorkDigestPollFn,
 } from "~/t3team/backend/t3team-myworkDigestBackendApi";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
+import { clearCachedDigestGraphsForTests } from "./t3team-digestGraphCache";
 import { digestSprintGoals, payloadToDigestGraph } from "./t3team-digestGraphMappers";
 import { useMyWorkDigestGraph } from "./t3team-useMyWorkDigestGraph";
 
@@ -208,6 +209,7 @@ describe("useMyWorkDigestGraph", () => {
 
   afterEach(async () => {
     window.localStorage.clear();
+    clearCachedDigestGraphsForTests();
     if (root) {
       await act(async () => root?.unmount());
     }
@@ -286,6 +288,10 @@ describe("useMyWorkDigestGraph", () => {
     expect(firstGraph).not.toBeNull();
     expect(firstGraph?.tickets).toHaveLength(2);
     expect(firstGraph?.viewer.name).toBe("Philip");
+    // Tickets are keyed by the APP project id, so the graph's project list must be too — the
+    // project chip looks it up by `ticket.projectId` and would otherwise print the raw uuid.
+    expect(firstGraph?.projects[0]?.id).toBe("p1");
+    expect(firstGraph?.tickets[0]?.projectId).toBe("p1");
     // The request carries the viewer's display name for the server's burndown join.
     expect(calls[0]?.viewer?.name).toBe("Philip");
 
@@ -303,6 +309,49 @@ describe("useMyWorkDigestGraph", () => {
     expect(latest.result?.graph).toBe(firstGraph);
     expect(latest.result?.status).toBe("ready");
   });
+
+  it("paints the last graph at once when the view remounts", async () => {
+    const projects = [createProject({ id: "p1", externalProjectId: "IES" })];
+    const payload = createDigestPayload();
+    const first = await mountWith(
+      async () => ({ unchanged: false, fingerprint: "sha256:one", value: payload }),
+      projects,
+    );
+    await vi.waitFor(() => expect(first.latest.result?.status).toBe("ready"));
+    await act(async () => root?.unmount());
+    root = null;
+
+    // The remount's first round never answers: without the cache this would sit in "loading".
+    const second = await mountWith(() => new Promise(() => {}), projects);
+    expect(second.latest.result?.status).toBe("ready");
+    expect(second.latest.result?.graph?.tickets).toHaveLength(2);
+  });
+
+  it(
+    "re-polls soon while the server is still reading change requests",
+    { timeout: 10_000 },
+    async () => {
+      const payload = createDigestPayload();
+      let calls = 0;
+      const { latest } = await mountWith(async () => {
+        calls += 1;
+        return calls === 1
+          ? {
+              unchanged: false,
+              fingerprint: "sha256:pending",
+              value: { ...payload, changeRequestsPending: true },
+            }
+          : calls === 2
+            ? // Still reading: the pending payload hashes the same, so the round answers unchanged.
+              { unchanged: true, fingerprint: "sha256:pending" }
+            : { unchanged: false, fingerprint: "sha256:full", value: payload };
+      }, [createProject({ id: "p1", externalProjectId: "IES" })]);
+
+      await vi.waitFor(() => expect(latest.result?.status).toBe("ready"));
+      // An unchanged retry must not end the fast re-polling while the read is still pending.
+      await vi.waitFor(() => expect(calls).toBe(3), { timeout: 7_000 });
+    },
+  );
 
   it("reports a readable error when the server lacks the endpoint", async () => {
     // A backend whose atlassian surface has no pollMyWorkDigest: the hook's
@@ -426,7 +475,7 @@ describe("useMyWorkDigestGraph", () => {
     projectsRef.projects = [createProject({ id: "pB", externalProjectId: "BBB" })];
     await rerender();
     await vi.waitFor(() => {
-      expect(latest.result?.graph?.projects[0]?.name).toBe("BBB");
+      expect(latest.result?.graph?.projects[0]?.name).toBe("Project pB");
     });
     expect(calls.at(-1)).toBe("BBB");
   });
@@ -487,7 +536,7 @@ describe("useMyWorkDigestGraph", () => {
     projectsRef.projects = [createProject({ id: "pB", externalProjectId: "BBB" })];
     await rerender();
     await vi.waitFor(() => {
-      expect(latest.result?.graph?.projects[0]?.name).toBe("BBB NG");
+      expect(latest.result?.graph?.projects[0]?.name).toBe("Project pB");
     });
     expect(latest.result?.status).toBe("ready");
     expect(latest.result?.graph?.tickets).toHaveLength(0);

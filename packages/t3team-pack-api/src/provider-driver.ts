@@ -187,6 +187,56 @@ export type PackDriverCreateInput = {
 };
 
 /**
+ * One thread's background-job control, reaching the runtime's live job
+ * registry OUT OF BAND: the transcript only names a job when the runtime's
+ * own tools/notices surface it, so the host (and its UI) also reads state
+ * straight from the registry.
+ *
+ * `read-output` is cursor-paged in BYTES over a bounded ring: `since` is a
+ * byte offset into the retained stream, `maxBytes` caps the page, and the
+ * runtime resolves torn UTF-8 boundaries (never the host).
+ */
+export type PackJobControlRequest =
+  | { readonly kind: "list" }
+  | { readonly kind: "cancel"; readonly jobId: string }
+  | {
+      readonly kind: "read-output";
+      readonly jobId: string;
+      readonly since?: number;
+      readonly maxBytes?: number;
+    };
+
+export type PackJobControlResult =
+  | {
+      readonly kind: "jobs";
+      readonly jobs: readonly {
+        readonly jobId: string;
+        readonly command: string;
+        readonly pid?: number;
+        readonly state: "running" | "completed" | "failed" | "killed-deadline" | "cancelled";
+        readonly exitCode: number | null;
+        readonly startedAtMs: number;
+      }[];
+    }
+  | {
+      readonly kind: "cancelled";
+      readonly jobId: string;
+      readonly state: "running" | "completed" | "failed" | "killed-deadline" | "cancelled";
+      readonly exitCode: number | null;
+      readonly elapsedMs: number;
+      readonly command: string;
+    }
+  | {
+      readonly kind: "output";
+      readonly jobId: string;
+      readonly text: string;
+      readonly nextCursor: number;
+      readonly oldestRetained: number;
+      readonly settled: boolean;
+    }
+  | { readonly kind: "unknown-job"; readonly jobId: string };
+
+/**
  * One live provider instance owned by the pack. Method semantics mirror the
  * host `ProviderAdapter` surface one-to-one so the bridge is mechanical.
  * Every emitted event object SHOULD be `ProviderRuntimeEvent`-shaped; the
@@ -206,6 +256,13 @@ export type PackProviderInstance = {
   listSessions(): Promise<readonly PackProviderSession[]>;
   readThread(threadId: string): Promise<PackThreadSnapshot>;
   rollbackThread(threadId: string, numTurns: number): Promise<PackThreadSnapshot>;
+  /**
+   * Out-of-band control of the thread's background bash jobs (list / cancel /
+   * read retained output). Promise-based like the rest of the surface.
+   * OPTIONAL: a runtime that keeps no jobs omits it, and the host must treat
+   * absence as "not supported" (its capability check, never a call).
+   */
+  jobControl?(threadId: string, request: PackJobControlRequest): Promise<PackJobControlResult>;
   readonly textGeneration?: PackTextGeneration;
   stopAll(): Promise<void>;
   events(): AsyncIterable<unknown>;

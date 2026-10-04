@@ -49,6 +49,8 @@ export interface ThreadSilenceWatchSweeperDeps {
     watches: readonly ThreadSilenceWatchRecord[],
     nowMs: number,
   ) => Promise<void>;
+  /** Reconcile pending targets before calculating silence emissions. */
+  readonly beforeSweep?: () => Promise<void>;
   readonly clock?: ThreadSilenceWatchClock;
   readonly tickMs?: number;
   readonly onWarn?: (message: string, fields?: Record<string, unknown>) => void;
@@ -100,6 +102,9 @@ export function makeThreadSilenceWatchSweeper(
 
   const tick = async (): Promise<void> => {
     try {
+      // Guarded so a caller that omits beforeSweep keeps the tick body
+      // synchronous up to notifyDue (the sweeper's unit tests rely on that).
+      if (deps.beforeSweep !== undefined) await deps.beforeSweep();
       const nowMs = clock.now();
       const due = dueWatches(nowMs);
       if (due.length > 0) {

@@ -112,10 +112,6 @@ export function useWorkItemDetailViewModel({
   });
   const matchedGitHubActivityItems = githubActivity.activityByWorkItem.get(displayId) ?? [];
 
-  const issueThreads = projectThreads.filter(
-    (thread) =>
-      resolveCanonicalProjectTicketId(thread.ticketId, ticketLookup) === canonicalTicketId,
-  );
   const activeThread = activeThreadId
     ? (projectThreads.find((candidate) => candidate.id === activeThreadId) ?? null)
     : null;
@@ -180,7 +176,6 @@ export function useWorkItemDetailViewModel({
     jiraLastCheckedAt,
     githubActivity,
     matchedGitHubActivityItems,
-    issueThreads,
     activeThread,
     currentUserName,
   };

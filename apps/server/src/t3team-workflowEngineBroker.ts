@@ -32,6 +32,7 @@ import { toWorkflowModelSelection } from "./t3team-workflowModelSelection.ts";
 import { createWorkflowLiveSettlement } from "./t3team-workflowLiveSettlement.ts";
 import { handleBrokerAskVerb } from "./t3team-workflowEngineBrokerAsk.ts";
 import { handleBrokerNotifyVerb } from "./t3team-workflowEngineBrokerNotify.ts";
+import { handleBrokerSignalVerb } from "./t3team-workflowEngineBrokerSignal.ts";
 import type {
   BrokerCore,
   BrokerSend,
@@ -42,6 +43,7 @@ export type {
   WorkflowEngineBrokerDeps,
   WorkflowEnginePendingAsk,
   WorkflowEngineSleep,
+  WorkflowEngineWatch,
 } from "./t3team-workflowEngineBrokerTypes.ts";
 
 export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): MessageBroker {
@@ -134,6 +136,13 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
       step(correlationId, kind, "completed", p.name ?? "Spawn thread", p.threadId);
       await runPrimitive(() => enqueueOneWay(() => dispatchWorkflowChild(deps, p, modelSelection)));
       return;
+    }
+    // Signal-source verbs (GHE #332): `signal.register` (one-way binding FACT) and `signal.wait`
+    // (event park — live-drains the durable inbox or records `watching` and suspends out of band).
+    // Gated on the kind so non-signal verbs stay on the synchronous prefix the ask verb relies
+    // on (an unconditional await here would yield a microtask before `setPending`).
+    if (sendCtx.kind === "signal.register" || sendCtx.kind === "signal.wait") {
+      if (await handleBrokerSignalVerb(core, sendCtx)) return;
     }
     if (await handleBrokerAskVerb(core, sendCtx)) return;
     await handleBrokerNotifyVerb(core, sendCtx);

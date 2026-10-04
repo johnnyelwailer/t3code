@@ -11,6 +11,8 @@
  * chart is then a lower bound on reality, which it labels by being sparse.
  */
 
+import * as DateTime from "effect/DateTime";
+
 import type {
   T3TeamDigestBurndown,
   T3TeamDigestProjectSource,
@@ -23,7 +25,7 @@ const DONE_STATUS_KEYWORDS = ["done", "closed", "resolved", "cancelled", "cancel
 /** The digest burndown never walks more than 60 days (a very long sprint). */
 const MAX_BURNDOWN_DAYS = 60;
 
-export function isDigestDoneStatus(status: string): boolean {
+function isDigestDoneStatus(status: string): boolean {
   const normalized = status.trim().toLowerCase().replace(/\s+/g, " ");
   if (normalized === "") return false;
   return DONE_STATUS_KEYWORDS.some((keyword) => normalized.includes(keyword));
@@ -83,7 +85,7 @@ function dayRange(startDate: string, endDate: string, nowIso: string): string[] 
     Number(last.slice(8, 10)),
   );
   while (cursor <= endUtc && days.length < MAX_BURNDOWN_DAYS) {
-    days.push(new Date(cursor).toISOString().slice(0, 10));
+    days.push(DateTime.formatIso(DateTime.makeUnsafe(cursor)).slice(0, 10));
     cursor += 24 * 60 * 60 * 1000;
   }
   return days;

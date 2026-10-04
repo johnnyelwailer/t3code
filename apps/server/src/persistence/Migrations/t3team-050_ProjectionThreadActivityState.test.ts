@@ -11,7 +11,7 @@ interface ColumnRow {
   readonly notnull: number;
 }
 
-const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
+const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layer({ filename: ":memory:" })));
 
 layer("t3team-050_ProjectionThreadActivityState", (it) => {
   it.effect("adds the nullable activity-state columns to projection_threads", () =>

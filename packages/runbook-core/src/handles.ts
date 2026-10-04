@@ -10,7 +10,8 @@
  *     broker best-effort, return the `correlationId` (the new thread's id). Never suspends.
  * Replay: a recorded sent entry is NOT re-fired; an ask whose resolved entry is present returns
  * the recorded reply, one whose entry is absent throws {@link WorkflowSuspended} (→ a
- * `SuspendedResult` the host resumes when the reply lands).
+ * `SuspendedResult` the host resumes when the reply lands). The one exception is opt-in and
+ * one-shot: a {@link RefireTarget} names a single unanswered ask to send again on this replay.
  */
 
 import type { JournalSink } from "./journalStore.ts";
@@ -32,15 +33,57 @@ export interface ReplyResolver {
   reject(error?: unknown): void;
 }
 
+/**
+ * How a fire reaches the broker. Absent on every first fire. `redelivery: true` marks a
+ * {@link RefireTarget} re-fire: the SAME correlationId and byte-identical args as a recorded
+ * `sent` entry, so a host that dedupes (or keys a run) by correlationId can tell a deliberate
+ * re-send from a duplicate. It is transport metadata — never part of the args or `argsHash`.
+ */
+export interface FireDelivery {
+  readonly redelivery: true;
+}
+
 /** A handle "sent" call routed through the durable runtime's shared `seq` counter. */
 export interface HandleSendCall {
   readonly kind: PrimitiveKind;
   readonly refId: string;
   /** Canonical-JSON args; hashed into the `sent` entry for drift detection. */
   readonly args: unknown;
-  /** Fire the side effect (only on the live path). Receives the deterministic
-   * `correlationId` and a resolver the broker may call to settle synchronously. */
-  readonly fire: (correlationId: string, resolver: ReplyResolver) => Promise<void>;
+  /** Fire the side effect (the live path, or a {@link RefireTarget} re-fire). Receives the
+   * deterministic `correlationId`, a resolver the broker may call to settle synchronously, and —
+   * only on a re-fire — the {@link FireDelivery} marker. */
+  readonly fire: (
+    correlationId: string,
+    resolver: ReplyResolver,
+    delivery?: FireDelivery,
+  ) => Promise<void>;
+}
+
+/**
+ * One-shot, opt-in instruction to send a RECORDED, unanswered ask again on replay. The replay
+ * reaches the target's `sent` entry at its own seq, re-checks the args hash (which is what proves
+ * the re-fired payload identical), fires the broker again with the same correlationId, and
+ * journals nothing until the reply lands. It exists because a host cannot rebuild the payload
+ * itself — the journal keeps only `argsHash` — and faking a reply to force a re-ask would burn a
+ * schema attempt and lie to the model. The run boundary fails the run if the target is never
+ * consumed, so a stale or mistyped target can never park a run silently.
+ */
+export interface RefireTarget {
+  readonly correlationId: string;
+  readonly consumed: () => boolean;
+  /** Mark the target used; the dispatch calls this exactly once, right before the re-fire. */
+  readonly consume: () => void;
+}
+
+export function createRefireTarget(correlationId: string): RefireTarget {
+  let used = false;
+  return {
+    correlationId,
+    consumed: () => used,
+    consume: () => {
+      used = true;
+    },
+  };
 }
 
 /** The minimal seam the durable runtime exposes so handle journaling shares its `seq` seat. */
@@ -63,6 +106,8 @@ export interface HandleSeat {
   readonly abortSignal?: AbortSignal | undefined;
   /** The run's sticky suspension record — see {@link SuspensionLatch}. */
   readonly suspension: SuspensionLatch;
+  /** Opt-in re-fire of one recorded, unanswered ask — see {@link RefireTarget}. */
+  readonly refire?: RefireTarget | undefined;
 }
 
 export interface HandleDispatch {
@@ -173,4 +218,4 @@ export function createSuspensionLatch(): SuspensionLatch {
   };
 }
 
-export { createHandleDispatch } from "./handlesDispatch.ts";
+export { createHandleDispatch, REFIRABLE_ASK_KINDS } from "./handlesDispatch.ts";

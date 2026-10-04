@@ -59,7 +59,7 @@ export function threadHasActionableProposedPlan(
     | undefined,
 ): boolean {
   if (proposedPlans === undefined || proposedPlans.length === 0) return false;
-  const sorted = [...proposedPlans].toSorted(
+  const sorted = [...proposedPlans].sort(
     (left, right) =>
       left.updatedAt.localeCompare(right.updatedAt) || left.id.localeCompare(right.id),
   );

@@ -4,10 +4,10 @@ import { Button } from "~/components/ui/button";
 import {
   Combobox,
   ComboboxEmpty,
-  ComboboxInput,
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
+  ComboboxSearchInput,
   ComboboxStatus,
   ComboboxTrigger,
 } from "~/components/ui/combobox";
@@ -66,7 +66,7 @@ export function ProjectBacklogOverviewAssigneeFilter({
     >
       <ComboboxTrigger
         render={<Button variant="outline" size="xs" />}
-        className="w-[11rem] justify-between gap-1.5 font-normal"
+        className="w-44 justify-between"
         aria-label="Filter backlog by assignee"
       >
         <span className="flex min-w-0 items-center gap-1.5">
@@ -75,25 +75,12 @@ export function ProjectBacklogOverviewAssigneeFilter({
         </span>
         <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />
       </ComboboxTrigger>
-      <ComboboxPopup align="start" side="bottom" className="w-[15rem]">
-        <div className="border-b p-1">
-          <ComboboxInput
-            className="[&_input]:font-sans rounded-md"
-            inputClassName="ring-0"
-            placeholder="Search assignees..."
-            showTrigger={false}
-            size="sm"
-          />
-        </div>
+      <ComboboxPopup align="start" side="bottom" className="w-60">
+        <ComboboxSearchInput placeholder="Search assignees..." />
         <ComboboxEmpty>No matching assignees.</ComboboxEmpty>
         <ComboboxList className="max-h-56">
           {options.map((option) => (
-            <ComboboxItem
-              key={option.value}
-              value={option.value}
-              className="text-xs"
-              contentClassName="flex min-w-0 items-center gap-2"
-            >
+            <ComboboxItem key={option.value} value={option.value}>
               <span className="truncate">{option.label}</span>
               {option.value === value ? <CheckIcon className="ml-auto size-3.5" /> : null}
             </ComboboxItem>
@@ -101,10 +88,10 @@ export function ProjectBacklogOverviewAssigneeFilter({
         </ComboboxList>
         {showScopeOptions ? (
           <div className="border-t px-2 py-2">
-            <p className="px-1 pb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            <p className="px-1 pb-1.5 text-3xs font-medium uppercase tracking-wide text-muted-foreground">
               Assignee applies to
             </p>
-            <p className="px-1 pb-2 text-[10px] leading-snug text-muted-foreground">
+            <p className="px-1 pb-2 text-3xs leading-snug text-muted-foreground">
               Stories bubble up from your subtasks. Subtasks filter directly when enabled.
             </p>
             <div className="space-y-1">

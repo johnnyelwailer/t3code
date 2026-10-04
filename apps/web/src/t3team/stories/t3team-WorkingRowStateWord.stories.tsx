@@ -52,6 +52,8 @@ function Row({
         backgroundJobs: [],
         onOpenAgents: () => {},
         threadActivityState,
+        unsettledTurnId: null,
+        backgroundWorktreeSetup: null,
       }}
     >
       <WorkingTimelineRow row={WORKING_ROW} />
@@ -83,7 +85,7 @@ function Card({
     <div className="w-[560px] rounded-xl border border-border/70 bg-card p-4 shadow-sm">
       <div className="mb-3 text-xs font-medium text-muted-foreground">{title}</div>
       <div className="flex flex-col gap-3">{children}</div>
-      {footnote ? <div className="text-[10px] text-muted-foreground/70">{footnote}</div> : null}
+      {footnote ? <div className="text-3xs text-muted-foreground/70">{footnote}</div> : null}
     </div>
   );
 }
@@ -142,7 +144,7 @@ function DarkCanvas({ children }: { children: React.ReactNode }) {
 }
 
 const meta: Meta = {
-  title: "T3Team/Conversation/Working Row State Word (GHE #208)",
+  title: "T3Team/Chat/Working Row State Word (GHE #208)",
 };
 export default meta;
 type Story = StoryObj;

@@ -33,6 +33,36 @@ import * as Layer from "effect/Layer";
 
 export type ThreadBackgroundLiveness = "working" | "monitoring" | null;
 
+/**
+ * The terminal session transitions: once the session is in one of these
+ * states, no background work of the thread can still be live. A session that
+ * dies by FAILURE (a failed turn or an error session state) transitions to
+ * `error` WITHOUT ever emitting `session.exited`, so these are the statuses
+ * that orphan the thread's background work — and the two consumers of this
+ * module (ingestion's clear, the shell-mapping backstop) must agree on them.
+ */
+export const TERMINAL_SESSION_STATUSES: ReadonlySet<string> = new Set([
+  "error",
+  "stopped",
+  "interrupted",
+]);
+
+/**
+ * Projection backstop (stuck "Monitoring" pill): a stale in-memory registry
+ * entry must not survive past a terminal session. The shell mappers null the
+ * liveness whenever the projected session is terminal, regardless of what the
+ * registry still holds, so every consumer of the shell (sidebar pill, run
+ * status, reaper, settle gate) sees the dead session as not-live.
+ */
+export function resolveShellBackgroundLiveness(
+  session: { readonly status: string } | null | undefined,
+  liveness: ThreadBackgroundLiveness,
+): ThreadBackgroundLiveness {
+  if (session === null || session === undefined) return liveness;
+  if (TERMINAL_SESSION_STATUSES.has(session.status)) return null;
+  return liveness;
+}
+
 interface ThreadLivenessState {
   readonly agents: Map<string, number>;
   readonly monitors: Map<string, number>;
@@ -93,7 +123,11 @@ export class ThreadBackgroundLivenessService extends Context.Service<
       readonly agentId?: string | undefined;
     }) => void;
 
-    /** Session death orphans all of a thread's background work. */
+    /**
+     * A terminal session transition orphans all of a thread's background
+     * work: the dead session can no longer stream the tasks' terminal rows,
+     * so their entries would otherwise pin the pill until the 30-minute TTL.
+     */
     readonly clearThreadLiveness: (threadId: string) => void;
 
     /**

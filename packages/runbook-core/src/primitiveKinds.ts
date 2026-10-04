@@ -18,6 +18,7 @@ export const PRIMITIVE_KINDS = [
   "wait.until",
   "artifact",
   "usage",
+  "checkpoint",
 ] as const;
 
 /** Open primitive-kind vocabulary for adapter and catalog extensions. */

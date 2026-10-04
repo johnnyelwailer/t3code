@@ -52,7 +52,7 @@ export const CHILD_SETTLE_SWEEP_INTERVAL_MS = 5 * 60 * 1_000;
  *  same child for this long: one blocked child must not burn a warning log,
  *  a failure metric and a persisted rejected receipt on every 5-minute pass
  *  (receipts key on commandId, so fresh command ids do not dedupe). */
-export const CHILD_SETTLE_RETRY_BLOCK_MS = 60 * 60 * 1_000;
+const CHILD_SETTLE_RETRY_BLOCK_MS = 60 * 60 * 1_000;
 /**
  * After a restart the in-memory retry-backoff map is wiped, so the startup
  * pass would otherwise re-fire every previously-blocked child at once. For
@@ -62,7 +62,7 @@ export const CHILD_SETTLE_RETRY_BLOCK_MS = 60 * 60 * 1_000;
  */
 export const CHILD_SETTLE_STARTUP_GRACE_MS = 4 * CHILD_SETTLE_SWEEP_INTERVAL_MS;
 /** Spread boot-time settle attempts across this many consecutive passes. */
-export const CHILD_SETTLE_STARTUP_STAGGER = 4;
+const CHILD_SETTLE_STARTUP_STAGGER = 4;
 
 function envMs(name: string, fallbackMs: number): number {
   const raw = process.env[name];

@@ -1,10 +1,24 @@
-import { EnvironmentHttpApi, ProviderDriverKind } from "@t3tools/contracts";
+// @effect-diagnostics nodeBuiltinImport:off
+import * as NodeHttp from "node:http";
+
+import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import {
+  EnvironmentHttpApi,
+  ProviderDriverKind,
+  type RepositoryIdentity,
+} from "@t3tools/contracts";
+import type { RelayManagedEndpointRuntimeConfig } from "@t3tools/contracts/relay";
 import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
 import * as Duration from "effect/Duration";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Random from "effect/Random";
 import * as Schedule from "effect/Schedule";
+import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import { FetchHttpClient, HttpRouter, HttpServer } from "effect/unstable/http";
 import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
@@ -22,22 +36,25 @@ import {
   staticAndDevRouteLayer,
   browserApiCorsLayer,
   httpCompressionLayer,
+  untracedRequestsLayer,
 } from "./http.ts";
 import { guardHttpResponseWriteErrors } from "./httpResponseErrorGuard.ts";
 import { fixPath } from "./os-jank.ts";
 import { websocketRpcRouteLayer } from "./ws.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
+import * as NodePtyAdapter from "./terminal/NodePtyAdapter.ts";
 import { pullRequestHttpApiLayer } from "./pullRequest/http.ts";
 import * as PullRequestProviderRegistry from "./pullRequest/PullRequestProviderRegistry.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
 import { layerConfig as SqlitePersistenceLayerLive } from "./persistence/Layers/Sqlite.ts";
+import * as PullRequestFilesViewed from "./persistence/PullRequestFilesViewed.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import { ProviderSessionDirectoryLive } from "./provider/Layers/ProviderSessionDirectory.ts";
 import * as ProviderSessionRuntime from "./persistence/ProviderSessionRuntime.ts";
 import { ProviderAdapterRegistryLive } from "./provider/Layers/ProviderAdapterRegistry.ts";
 import * as ModelManifest from "./provider/ModelManifest.ts";
-import * as CodexResetCredit from "./provider/Layers/codexResetCredit.ts";
+import * as ResetCreditCoordinator from "./provider/Layers/resetCreditCoordinator.ts";
 import * as ProviderEventLoggers from "./provider/Layers/ProviderEventLoggers.ts";
 import { ProviderServiceLive } from "./provider/Layers/ProviderService.ts";
 import { ProviderAuthServiceLive } from "./provider/Layers/ProviderAuthService.ts";
@@ -55,12 +72,15 @@ import * as AzureDevOpsCli from "./sourceControl/AzureDevOpsCli.ts";
 import * as BitbucketApi from "./sourceControl/BitbucketApi.ts";
 import * as GitHubCli from "./sourceControl/GitHubCli.ts";
 import * as GitLabCli from "./sourceControl/GitLabCli.ts";
+import * as ForgejoCli from "./sourceControl/ForgejoCli.ts";
 import * as TextGeneration from "./textGeneration/TextGeneration.ts";
 import { ProviderInstanceRegistryHydrationLive } from "./provider/Layers/ProviderInstanceRegistryHydration.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import * as McpHttpServer from "./mcp/McpHttpServer.ts";
 import * as McpSessionRegistry from "./mcp/McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
+import * as DeviceService from "./device/DeviceService.ts";
+import { deviceHubProxyRouteLayer } from "./device/DeviceHubProxy.ts";
 import * as PreviewManager from "./preview/Manager.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
 import * as ProcessRunner from "./processRunner.ts";
@@ -75,6 +95,9 @@ import { ProviderCommandReactorLive } from "./orchestration/Layers/ProviderComma
 import { CheckpointReactorLive } from "./orchestration/Layers/CheckpointReactor.ts";
 import { ThreadDeletionReactorLive } from "./orchestration/Layers/ThreadDeletionReactor.ts";
 import * as ThreadSettlementReactor from "./orchestration/ThreadSettlementReactor.ts";
+import * as StorageCleanup from "./storageCleanup.ts";
+import * as PullRequestSyncReactor from "./orchestration/PullRequestSyncReactor.ts";
+import * as ThreadPullRequestReactor from "./orchestration/ThreadPullRequestReactor.ts";
 import * as AgentAwarenessRelay from "./relay/AgentAwarenessRelay.ts";
 import { hasCloudPublicConfig } from "./cloud/publicConfig.ts";
 import { ProviderRegistryLive } from "./provider/Layers/ProviderRegistry.ts";
@@ -92,29 +115,48 @@ import * as VcsProjectConfig from "./vcs/VcsProjectConfig.ts";
 import * as VcsProcess from "./vcs/VcsProcess.ts";
 import * as VcsProvisioningService from "./vcs/VcsProvisioningService.ts";
 import * as VcsStatusBroadcaster from "./vcs/VcsStatusBroadcaster.ts";
+import * as ProjectCloneTracker from "./project/ProjectCloneTracker.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import * as ReviewService from "./review/ReviewService.ts";
 import * as SourceControlProviderRegistry from "./sourceControl/SourceControlProviderRegistry.ts";
+import * as PullRequestReadCache from "./pullRequest/PullRequestReadCache.ts";
 import * as SourceControlRateLimit from "./sourceControl/SourceControlRateLimit.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts";
+import * as WorktreeSetupTracker from "./project/WorktreeSetupTracker.ts";
 import { ObservabilityLive } from "./observability/Layers/Observability.ts";
+import * as HeapSnapshot from "./observability/HeapSnapshot.ts";
+import * as EventLoopMonitor from "./observability/EventLoopMonitor.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import { authHttpApiLayer, environmentAuthenticatedAuthLayer } from "./auth/http.ts";
+import * as ReplayMarkers from "./auth/replayMarkers.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import {
   connectHttpApiLayer,
   pendingServiceUpdateExists,
-  reconcileDesiredCloudLink,
+  reconcileDesiredCloudLinkIfStillDesired,
+  recoverManagedCloudTunnel,
+  registerManagedCloudTunnelRecovery,
+  startManagedCloudTunnelIfOriginConfirmed,
   releaseManagedTunnelOnShutdown,
 } from "./cloud/http.ts";
 import { serverRelayBrokerTracingLayer } from "./cloud/relayTracing.ts";
 import { shouldRetryCloudLink } from "./cloud/relayResponse.ts";
 import * as CloudManagedEndpointRuntime from "./cloud/ManagedEndpointRuntime.ts";
+import {
+  MANAGED_TUNNEL_FIRST_REGISTRATION_JITTER,
+  MANAGED_TUNNEL_RECOVERY_COOLDOWN,
+  managedTunnelStartupAction,
+  retryManagedTunnelRegistration,
+} from "./cloud/managedTunnelStartup.ts";
 import * as CloudCliTokenManager from "./cloud/CliTokenManager.ts";
 import * as CloudCliState from "./cloud/CliState.ts";
+import * as ConnectCredentialMinter from "./cloud/t3team-ConnectCredentialMinter.ts";
+import * as NexiBrokerAuth from "./cloud/t3team-NexiBrokerAuth.ts";
+import * as NexiBrokerService from "./cloud/t3team-NexiBrokerService.ts";
+import { runConnectCredentialTopUp } from "./cloud/t3team-ConnectCredentialTopUp.ts";
 import * as ServerSelfUpdate from "./cloud/selfUpdate.ts";
 import * as DesktopAppUpdate from "./desktopUpdate/DesktopAppUpdate.ts";
 import * as ServiceLauncherClient from "./cloud/serviceLauncherClient.ts";
@@ -137,6 +179,7 @@ import {
 } from "./serverRuntimeState.ts";
 import { orchestrationHttpApiLayer } from "./orchestration/http.ts";
 import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
+import { WorkflowSignalStoreLive } from "./persistence/Layers/WorkflowSignalStore.ts";
 import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStore.ts";
 import * as ToolAuthService from "./toolauth/t3team-ToolAuthService.ts";
 import { T3TeamThreadToolContextEvictionReactorLive } from "./t3team-threadToolContextEvictionReactor.ts";
@@ -158,6 +201,7 @@ import { t3teamAtlassianIssueContentRouteLayer } from "./t3team-atlassian-issue-
 import { t3teamAtlassianOAuthExchangeRouteLayer } from "./t3team-atlassian-oauth-routes.ts";
 import { t3teamAtlassianOAuthFlowRouteLayer } from "./t3team-atlassian-oauth-flowRoutes.ts";
 import { t3teamTempoRouteLayer } from "./t3team-tempo-routes.ts";
+import { t3teamCloudBrokerRouteLayer } from "./t3team-cloud-broker-routes.ts";
 import { t3teamProjectWorkspaceDiscoverRecipesRouteLayer } from "./t3team-project-workspace-recipe-routes.ts";
 import { t3teamProjectWorkspaceWriteContextFilesRouteLayer } from "./t3team-project-workspace-write-routes.ts";
 import {
@@ -170,6 +214,7 @@ import {
   t3teamThreadWorkflowResolveInputRouteLayer,
 } from "./t3team-thread-recipe-workflow-routes.ts";
 import { t3teamThreadDraftMutationStatusRouteLayer } from "./t3team-thread-draftMutation-status-route.ts";
+import { t3teamThreadJobsRouteLayer } from "./t3team-thread-jobs-route.ts";
 import { t3teamThreadWorkflowControlRouteLayer } from "./t3team-thread-workflow-control-route.ts";
 import {
   t3teamProviderUsageDevRouteLayer,
@@ -177,13 +222,14 @@ import {
   t3teamThreadProviderHoldControlRouteLayer,
 } from "./t3team-thread-provider-hold-route.ts";
 import { T3TeamProviderUsageWatcherLive } from "./t3team-providerUsageWatcher.ts";
-import { ProviderUsageHoldRepositoryLive } from "./persistence/Layers/t3team-ProviderUsageHolds.ts";
+import { ResourcePressureMonitorLive } from "./t3team-resourcePressureMonitor.ts";
 import {
   t3teamGitHubAssetRouteLayer,
   t3teamGitHubInboxRouteLayer,
   t3teamGitHubPullRequestContextRouteLayer,
 } from "./t3team-github-routes.ts";
 import { t3teamProjectWorkspaceBootstrapRouteLayer } from "./t3team-project-repository-routes.ts";
+import { t3teamProjectMainRepositoryRouteLayer } from "./t3team-projectMainRepositoryRoute.ts";
 import { t3teamThreadPlacementRouteLayer } from "./t3team-thread-placement-routes.ts";
 import { t3teamThreadToolContextRouteLayer } from "./t3team-thread-tool-context-routes.ts";
 import { t3teamThreadForkRouteLayer } from "./t3team-thread-fork-routes.ts";
@@ -203,8 +249,10 @@ import { T3TeamChildWaitReactorLive } from "./t3team-childWait.ts";
 import { T3TeamChildSettleSweeperLive } from "./t3team-childSettleSweeper.ts";
 import { T3TeamChildCleanupNudgeReactorLive } from "./t3team-childCleanupNudgeReactor.ts";
 import { T3TeamThreadTransientTurnRetryLive } from "./t3team-threadTransientTurnRetry.ts";
-import { T3TeamThreadSilenceWatchReactorLive } from "./t3team-threadSilenceWatchReactor.ts";
+import { T3TeamThreadSilenceWatchReactorLive } from "./t3team-threadSilenceWatchReactorLive.ts";
 import { T3TeamWorkflowEngineRehydrateLive } from "./t3team-workflowEngineRehydrate.ts";
+import { T3TeamWorkflowSignalDeliveryLive } from "./t3team-workflowSignalDelivery.ts";
+import { T3TeamWorkflowSignalReconcilerLive } from "./t3team-workflowSignalReconciler.ts";
 import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
 import { T3TeamToolBrokerLive } from "./t3team-toolBrokerLive.ts";
@@ -225,21 +273,12 @@ export const HTTP_ROUTER_CONFIG = {
 // those finalizers get a chance to run.
 const HTTP_PREEMPTIVE_SHUTDOWN_GRACE_MS = 0;
 const ResourceAttributionLayerLive = ResourceAttribution.layer;
-const ApplicationObservabilityLive = ObservabilityLive.pipe(
+const ApplicationObservabilityLive = EventLoopMonitor.layer.pipe(
+  Layer.provideMerge(ObservabilityLive),
   Layer.provideMerge(ResourceAttributionLayerLive),
 );
 
-const PtyAdapterLive = Layer.unwrap(
-  Effect.gen(function* () {
-    if (typeof Bun !== "undefined") {
-      const BunPtyAdapter = yield* Effect.promise(() => import("./terminal/BunPtyAdapter.ts"));
-      return BunPtyAdapter.layer;
-    } else {
-      const NodePtyAdapter = yield* Effect.promise(() => import("./terminal/NodePtyAdapter.ts"));
-      return NodePtyAdapter.layer;
-    }
-  }),
-);
+const PtyAdapterLive = NodePtyAdapter.layer;
 
 const ServerSettingsLayerLive = ServerSettings.layer.pipe(
   Layer.provide(ServerSecretStore.layer),
@@ -280,6 +319,10 @@ const ResourceDiagnosticsLayerLive = Layer.mergeAll(
   ResourceTelemetryLayerLive,
   ProcessDiagnostics.layer.pipe(Layer.provide(ResourceTelemetryLayerLive)),
   ProcessResourceMonitor.layer.pipe(Layer.provide(ResourceTelemetryLayerLive)),
+  // Flag NEXI_FF_RESOURCE_PRESSURE: off = a constant "disabled" report, no fiber.
+  ResourcePressureMonitorLive.pipe(
+    Layer.provide(Layer.mergeAll(HostResources.layer, ResourceTelemetryLayerLive)),
+  ),
 );
 
 const RelayClientLive = Layer.unwrap(
@@ -292,74 +335,38 @@ const RelayClientLive = Layer.unwrap(
 const HttpServerLive = Layer.unwrap(
   Effect.gen(function* () {
     const config = yield* ServerConfig.ServerConfig;
-    if (typeof Bun !== "undefined") {
-      const BunHttpServer = yield* Effect.promise(
-        () => import("@effect/platform-bun/BunHttpServer"),
-      );
-      return BunHttpServer.layer({
-        port: config.port,
-        hostname: config.host ?? "127.0.0.1",
-        gracefulShutdownTimeout: HTTP_PREEMPTIVE_SHUTDOWN_GRACE_MS,
-        websocket: {
-          // Negotiate permessage-deflate with clients that offer it; clients
-          // that don't still get uncompressed frames on their connection. A
-          // dedicated compressor keeps a per-connection sliding window
-          // (context takeover) so the compression dictionary is shared across
-          // server-to-client frames. Decompression uses the shared
-          // decompressor: uWebSockets' dedicated decompressor path can abort
-          // connections (close 1006) on valid DEFLATE input — see
-          // https://github.com/uNetworking/uWebSockets.js/issues/633.
-          perMessageDeflate: {
-            compress: "dedicated",
-            decompress: "shared",
-          },
-        },
-      });
-    } else {
-      const [NodeHttpServer, NodeHttp] = yield* Effect.all([
-        Effect.promise(() => import("@effect/platform-node/NodeHttpServer")),
-        Effect.promise(() => import("node:http")),
-      ]);
-      return NodeHttpServer.layer(() => guardHttpResponseWriteErrors(NodeHttp.createServer()), {
-        host: config.host ?? "127.0.0.1",
-        port: config.port,
-        gracefulShutdownTimeout: HTTP_PREEMPTIVE_SHUTDOWN_GRACE_MS,
-        // Negotiate permessage-deflate with clients that offer it; clients
-        // that don't still get uncompressed frames on their connection.
-        // Context takeover stays enabled (ws default) so the compression
-        // window is shared across frames — that also makes small frames cheap
-        // to compress, so no size threshold is set (ws only honors
-        // `threshold` when context takeover is disabled).
-        websocket: { perMessageDeflate: true },
-      });
-    }
+    return NodeHttpServer.layer(() => guardHttpResponseWriteErrors(NodeHttp.createServer()), {
+      host: config.host ?? "127.0.0.1",
+      port: config.port,
+      gracefulShutdownTimeout: HTTP_PREEMPTIVE_SHUTDOWN_GRACE_MS,
+      // Negotiate permessage-deflate with clients that offer it; clients
+      // that don't still get uncompressed frames on their connection.
+      // Context takeover stays enabled (ws default) so the compression
+      // window is shared across frames — that also makes small frames cheap
+      // to compress, so no size threshold is set (ws only honors
+      // `threshold` when context takeover is disabled).
+      websocket: { perMessageDeflate: true },
+    });
   }),
 );
 
-const PlatformServicesLive = Layer.unwrap(
-  Effect.gen(function* () {
-    if (typeof Bun !== "undefined") {
-      const { layer } = yield* Effect.promise(() => import("@effect/platform-bun/BunServices"));
-      return layer;
-    } else {
-      const { layer } = yield* Effect.promise(() => import("@effect/platform-node/NodeServices"));
-      return layer;
-    }
-  }),
-);
+const PlatformServicesLive = NodeServices.layer;
 
 const ReactorLayerLive = Layer.empty.pipe(
   Layer.provideMerge(OrchestrationReactorLive),
   Layer.provideMerge(ProviderRuntimeIngestionLive),
   Layer.provideMerge(ProviderCommandReactorLive),
-  // The turn-start gate (GHE #421) runs inside the provider command reactor, so the
-  // watcher's in-memory held set + hold rows must satisfy ITS requirements.
+  // The ONE provider usage watcher (GHE #421). Provided here, once; the hold
+  // control/dev routes read this same instance from the runtime services.
   Layer.provideMerge(T3TeamProviderUsageWatcherLive),
   Layer.provideMerge(CheckpointReactorLive),
+  Layer.provideMerge(StorageCleanup.layer),
   Layer.provideMerge(ThreadDeletionReactorLive),
   Layer.provideMerge(T3TeamThreadToolContextEvictionReactorLive),
   Layer.provideMerge(T3TeamProjectSourceIconReactorLive),
   Layer.provideMerge(ThreadSettlementReactor.layer),
+  Layer.provideMerge(PullRequestSyncReactor.layer),
+  Layer.provideMerge(ThreadPullRequestReactor.layer),
   Layer.provideMerge(AgentAwarenessRelay.layer.pipe(Layer.provide(ServerSecretStore.layer))),
   Layer.provideMerge(RuntimeReceiptBusLive),
 );
@@ -387,17 +394,62 @@ const VcsDriverRegistryLayerLive = VcsDriverRegistry.layer.pipe(
 
 const SourceControlProviderRegistryLayerLive = SourceControlProviderRegistry.layer.pipe(
   Layer.provide(
-    Layer.mergeAll(AzureDevOpsCli.layer, BitbucketApi.layer, GitHubCli.layer, GitLabCli.layer),
+    Layer.mergeAll(
+      AzureDevOpsCli.layer,
+      BitbucketApi.layer,
+      GitHubCli.layer,
+      GitLabCli.layer,
+      ForgejoCli.layer,
+    ),
   ),
   Layer.provideMerge(GitVcsDriver.layer),
   Layer.provideMerge(VcsDriverRegistryLayerLive),
 );
 
+const RepositoryIdentityResolverLayerLive = Layer.effect(
+  RepositoryIdentityResolver.RepositoryIdentityResolver,
+  Effect.gen(function* () {
+    const registry = yield* SourceControlProviderRegistry.SourceControlProviderRegistry;
+    return yield* RepositoryIdentityResolver.make({
+      refine: Effect.fn(function* (identity: RepositoryIdentity) {
+        const remote = ForgejoCli.parseForgejoRemote(identity.locator.remoteUrl);
+        if (
+          !remote ||
+          !identity.rootPath ||
+          (identity.provider !== undefined &&
+            identity.provider !== "unknown" &&
+            identity.provider !== "forgejo")
+        )
+          return identity;
+        const handle = yield* registry.resolveHandle({
+          cwd: identity.rootPath,
+          context: {
+            provider: { kind: "unknown", name: "Unknown", baseUrl: "" },
+            remoteName: identity.locator.remoteName,
+            remoteUrl: identity.locator.remoteUrl,
+          },
+        });
+        if (handle.context?.provider.kind !== "forgejo") return identity;
+        const baseUrl = handle.context.provider.baseUrl.replace(/\/+$/, "");
+        const basePath = new URL(baseUrl).pathname.replace(/^\/+|\/+$/g, "");
+        const path =
+          !remote.ssh && basePath && remote.path.startsWith(`${basePath}/`)
+            ? remote.path.slice(basePath.length + 1)
+            : remote.path;
+        return { ...identity, provider: "forgejo", webUrl: `${baseUrl}/${path}` };
+      }),
+    });
+  }),
+).pipe(Layer.provide(SourceControlProviderRegistryLayerLive), Layer.provide(ProcessRunner.layer));
+
 const GitManagerLayerLive = GitManager.layer.pipe(
   Layer.provideMerge(ProjectSetupScriptRunner.layer.pipe(Layer.provide(ServerSettingsLayerLive))),
+  Layer.provideMerge(WorktreeSetupTracker.layer),
   Layer.provideMerge(GitVcsDriver.layer),
   Layer.provideMerge(SourceControlProviderRegistryLayerLive),
-  Layer.provideMerge(TextGeneration.layer),
+  Layer.provideMerge(
+    TextGeneration.layer.pipe(Layer.provide(SourceControlProviderRegistryLayerLive)),
+  ),
 );
 
 const GitLayerLive = Layer.empty.pipe(
@@ -415,6 +467,10 @@ const SourceControlRepositoryServiceLayerLive = SourceControlRepositoryService.l
   Layer.provideMerge(SourceControlProviderRegistryLayerLive),
 );
 
+const ProjectCloneTrackerLayerLive = ProjectCloneTracker.layer.pipe(
+  Layer.provide(SourceControlRepositoryServiceLayerLive),
+);
+
 const ReviewLayerLive = ReviewService.layer.pipe(
   Layer.provideMerge(GitVcsDriver.layer),
   Layer.provideMerge(VcsDriverRegistryLayerLive),
@@ -427,6 +483,7 @@ const VcsLayerLive = Layer.empty.pipe(
   Layer.provideMerge(GitWorkflowLayerLive),
   Layer.provideMerge(ReviewLayerLive),
   Layer.provideMerge(SourceControlRepositoryServiceLayerLive),
+  Layer.provideMerge(ProjectCloneTrackerLayerLive),
   Layer.provideMerge(
     VcsStatusBroadcaster.layer.pipe(
       Layer.provide(GitWorkflowLayerLive),
@@ -447,6 +504,7 @@ const PortScannerLayerLive = PortScanner.layer.pipe(Layer.provide(ProcessRunner.
 const TerminalLayerLive = TerminalManager.layer.pipe(
   Layer.provide(PtyAdapterLive),
   Layer.provide(PortScannerLayerLive),
+  Layer.provide(NativeTelemetryLayerLive),
 );
 
 // "Connected tools" sign-in flows. Reuses the same real pty service the
@@ -458,11 +516,16 @@ const PreviewLayerLive = Layer.empty.pipe(
   Layer.provideMerge(PortScannerLayerLive),
 );
 
+const DeviceLayerLive = DeviceService.layer.pipe(
+  Layer.provide(ServerSettingsLayerLive),
+  Layer.provide(ProcessRunner.layer),
+  Layer.provide(NetService.layer),
+);
+
 const WorkspaceEntriesLayerLive = WorkspaceEntries.layer.pipe(
   Layer.provide(WorkspacePaths.layer),
   Layer.provideMerge(VcsDriverRegistryLayerLive),
 );
-
 const WorkspaceFileSystemLayerLive = WorkspaceFileSystem.layer.pipe(
   Layer.provide(WorkspacePaths.layer),
   Layer.provide(WorkspaceEntriesLayerLive),
@@ -536,9 +599,31 @@ export const mountT3TeamBrokerBeforeRuntimeServices = <A, E, R, A2, E2, R2>(
 export const PullRequestServiceLive = PullRequestService.layer.pipe(
   // One registry entry per supported host; the service only knows the registry.
   Layer.provide(PullRequestProviderRegistry.layer),
+  // Where the viewed-file marks live for a host that keeps none of its own.
+  Layer.provide(PullRequestFilesViewed.layer),
+  Layer.provide(PullRequestReadCache.layer),
   Layer.provide(SourceControlProviderRegistryLayerLive),
   Layer.provide(SourceControlRateLimit.layer),
   Layer.provide(VcsProcess.layer),
+  // Project linked repositories are read from the workspace's .t3team context directory.
+  Layer.provide(WorkspacePaths.layer),
+);
+
+// Durable signal sources (GHE #332): the signal store (durable state), the delivery port
+// (event → parked runs / inbox), and the reconciler (the live source set, derived from the
+// journaled registrations). Chained provideMerge in DEPENDENCY ORDER — in `a.pipe(provideMerge(b))`
+// the inner accumulated layer's requirements are satisfied by b's services while b's own
+// requirements leak outward, so the reconciler (the fullest consumer) sits innermost and each
+// outer step supplies what the accumulated layer still needs. The reconciler additionally
+// carries a BOOT-ORDERING edge on `T3TeamWorkflowEngineRehydrateLive` (GHE #332 review): its
+// rehydration must finish before the boot reconcile starts source instances, and its rehydrate
+// requirements (repo / journal / registry / scheduler / orchestration / config) leak outward to
+// the mergeAll app layer, where the app already provides them (the rehydrate layer itself is a
+// mergeAll sibling, so no double execution — layers memoize by reference).
+const WorkflowSignalSourcesLive = T3TeamWorkflowSignalReconcilerLive.pipe(
+  Layer.provideMerge(T3TeamWorkflowSignalDeliveryLive),
+  Layer.provideMerge(WorkflowSignalStoreLive),
+  Layer.provideMerge(WorkflowEngineDurabilityLive),
 );
 
 const AntigravityInstallationRefreshLive = Layer.effectDiscard(
@@ -574,7 +659,7 @@ const RuntimeCoreDependenciesLive = mountT3TeamBrokerBeforeRuntimeServices(
     Layer.provideMerge(T3TeamWidgetRegistryLive),
     Layer.provideMerge(T3TeamContextRefreshServiceLive),
     Layer.provide(OrchestrationLayerLive),
-    Layer.provide(WorkflowEngineDurabilityLive),
+    Layer.provide(WorkflowSignalSourcesLive),
     Layer.provide(ProviderRegistryLive),
   ),
 )
@@ -584,17 +669,31 @@ const RuntimeCoreDependenciesLive = mountT3TeamBrokerBeforeRuntimeServices(
     // it as well as to the reactor, rather than constructing a dependency-blind broker.
 
     Layer.provideMerge(AntigravityInstallationRefreshLive),
+    Layer.provideMerge(ReplayMarkers.layer),
     Layer.provideMerge(ProviderAuthServiceLive),
     // Core Services
     Layer.provideMerge(ServerSettingsLayerLive),
     Layer.provideMerge(CheckpointingLayerLive),
+    // `GitHubCli` is the registry's own instance, exposed because the asset route fetches
+    // GitHub-hosted pull request media with the repository's credential.
+    // Signal sources (GHE #332): placed BEFORE the PullRequestService + Persistence provides
+    // below — in `a.pipe(provideMerge(b))` the accumulated layer's requirements are satisfied
+    // by b at this step only, so the signal chain's external {PullRequestService, SqlClient}
+    // must be satisfied by a LATER step: PRS by the mergeAll below, SqlClient by PersistenceLayerLive.
+    Layer.provideMerge(WorkflowSignalSourcesLive),
     Layer.provideMerge(
-      Layer.mergeAll(SourceControlProviderRegistryLayerLive, PullRequestServiceLive),
+      Layer.mergeAll(
+        SourceControlProviderRegistryLayerLive,
+        PullRequestServiceLive,
+        GitHubCli.layer,
+      ),
     ),
     Layer.provideMerge(GitLayerLive),
     Layer.provideMerge(VcsLayerLive),
     Layer.provideMerge(ProviderRuntimeLayerLive),
-    Layer.provideMerge(Layer.mergeAll(TerminalLayerLive, PreviewLayerLive, ToolAuthLayerLive)),
+    Layer.provideMerge(
+      Layer.mergeAll(TerminalLayerLive, PreviewLayerLive, DeviceLayerLive, ToolAuthLayerLive),
+    ),
     Layer.provideMerge(PersistenceLayerLive),
     // Both read a user-owned file out of the state directory and stream changes
     // to clients; neither depends on the other.
@@ -602,10 +701,6 @@ const RuntimeCoreDependenciesLive = mountT3TeamBrokerBeforeRuntimeServices(
       Layer.mergeAll(Keybindings.layer, EnvironmentTheme.layer, UsageLimitSources.layer),
     ),
     Layer.provideMerge(ProviderRegistryLive),
-    // Shared singletons: the launch route registers parked runs in the registry and writes the
-    // run record + journal through the repo/store; the workflow-engine reactor + boot rehydration
-    // resolve the same instances. See WorkflowEngineDurabilityLive above.
-    Layer.provideMerge(WorkflowEngineDurabilityLive),
     // The instance registry is the new routing keystone — text generation,
     // adapter lookup, and runtime ingestion all resolve `ProviderInstanceId`
     // through this layer. Built-in drivers come from `BUILT_IN_DRIVERS`;
@@ -624,7 +719,7 @@ const RuntimeCoreDependenciesLive = mountT3TeamBrokerBeforeRuntimeServices(
     // from the repo's `model-manifest.json` on `main` and applied by the
     // Codex/Claude drivers.
     Layer.provideMerge(
-      Layer.mergeAll(ProviderEventLoggers.layer, ModelManifest.layer, CodexResetCredit.layer),
+      Layer.mergeAll(ProviderEventLoggers.layer, ModelManifest.layer, ResetCreditCoordinator.layer),
     ),
     // `OpenCodeDriver.create()` yields `OpenCodeRuntime`; previously the old
     // `ProviderRegistryLive` pulled `OpenCodeRuntimeLive` in for itself, but
@@ -633,18 +728,15 @@ const RuntimeCoreDependenciesLive = mountT3TeamBrokerBeforeRuntimeServices(
     // keeps a single Live for all opencode consumers.
     Layer.provideMerge(OpenCodeRuntime.OpenCodeRuntimeLive),
     Layer.provideMerge(WorkspaceLayerLive),
-    // Favicon + native app icon + repo identity share one provideMerge slot, and ServerSecretStore rides the
+    // Favicon + native app icon share one provideMerge slot, and ServerSecretStore rides the
     // cloud slot below: `pipe` accepts at most 20 arguments, and the fork's two extra layers
     // (tool broker, workflow-engine durability) already spend two of them. Going over the cap
     // makes the whole layer resolve to `never`, which surfaces far away as `any` requirement
     // channels in bin.ts / t3team-server.ts rather than here.
     Layer.provideMerge(
-      Layer.mergeAll(
-        NativeAppIconResolver.layer,
-        ProjectFaviconResolverLayerLive,
-        RepositoryIdentityResolver.layer,
-      ),
+      Layer.mergeAll(NativeAppIconResolver.layer, ProjectFaviconResolverLayerLive),
     ),
+    Layer.provideMerge(RepositoryIdentityResolverLayerLive),
     Layer.provideMerge(ServerEnvironmentLayerLive),
     Layer.provideMerge(AuthLayerLive),
     Layer.provideMerge(
@@ -653,6 +745,16 @@ const RuntimeCoreDependenciesLive = mountT3TeamBrokerBeforeRuntimeServices(
         CloudCliTokenManager.layer.pipe(
           Layer.provide(ServerSecretStore.layer),
           Layer.provide(ExternalLauncher.layer),
+        ),
+        // The in-app credential mint rides the SAME CloudCliTokenManager and
+        // ExternalLauncher instances the CLI flow uses, so minted and CLI
+        // credentials land in one shared secret.
+        ConnectCredentialMinter.layer,
+        // Server-lifetime, not per connection: the Entra sign-in in flight and the loopback
+        // forwarders of attached broker sessions are shared by the RPCs and the HTTP routes.
+        NexiBrokerService.layer.pipe(
+          Layer.provideMerge(NexiBrokerAuth.layer),
+          Layer.provide(ServerSecretStore.layer),
         ),
         CloudManagedEndpointRuntimeLive,
       ),
@@ -693,6 +795,7 @@ export const makeRoutesLayer = Layer.mergeAll(
     otlpTracesProxyRouteLayer,
     assetRouteLayer,
     attachmentUploadRouteLayer,
+    deviceHubProxyRouteLayer,
     staticAndDevRouteLayer,
     websocketRpcRouteLayer,
   ),
@@ -715,6 +818,7 @@ export const makeRoutesLayer = Layer.mergeAll(
     t3teamAtlassianResourceRouteLayer,
     t3teamAtlassianResourcesRouteLayer,
     t3teamTempoRouteLayer,
+    t3teamCloudBrokerRouteLayer,
   ),
   Layer.mergeAll(
     t3teamGitHubAssetRouteLayer,
@@ -722,6 +826,7 @@ export const makeRoutesLayer = Layer.mergeAll(
     t3teamGitHubPullRequestContextRouteLayer,
     localProviderSessionsRouteLayer,
     t3teamProjectWorkspaceBootstrapRouteLayer,
+    t3teamProjectMainRepositoryRouteLayer,
     t3teamProjectWorkspaceDiscoverRecipesRouteLayer,
     t3teamProjectWorkspaceWriteContextFilesRouteLayer,
     t3teamProjectWorkspaceRefreshProjectContextRouteLayer,
@@ -731,21 +836,19 @@ export const makeRoutesLayer = Layer.mergeAll(
     t3teamThreadForkRouteLayer,
     t3teamThreadRecipeWorkflowLaunchRouteLayer,
     t3teamThreadWorkflowControlRouteLayer,
+    t3teamThreadJobsRouteLayer,
     t3teamThreadDraftMutationStatusRouteLayer,
     t3teamThreadWorkflowResolveInputRouteLayer,
     t3teamThreadToolContextRouteLayer,
     t3teamMyWorkDigestRouteLayer,
     t3teamWidgetToolCallRouteLayer,
-    Layer.mergeAll(
-      t3teamThreadProviderHoldControlRouteLayer,
-      t3teamProviderUsageDevRouteLayer,
-      t3teamProviderUsageDevStateRouteLayer,
-    ).pipe(
-      Layer.provideMerge(T3TeamProviderUsageWatcherLive),
-      Layer.provideMerge(ProviderUsageHoldRepositoryLive),
-    ),
+    t3teamThreadProviderHoldControlRouteLayer,
+    t3teamProviderUsageDevRouteLayer,
+    t3teamProviderUsageDevStateRouteLayer,
   ),
   McpHttpServer.layer.pipe(Layer.provide(McpSessionRegistry.layer)),
+  // Last, so no route layer can replace the server's one TracerDisabledWhen.
+  untracedRequestsLayer,
 ).pipe(
   // Both transports consume the same service instance, so caches single-flight across clients
   // and mutations observed on WebSocket invalidate patches subsequently read over HTTP.
@@ -757,7 +860,16 @@ export const makeRoutesLayer = Layer.mergeAll(
   Layer.provide(httpCompressionLayer),
 );
 
-export const makeServerLayer = Layer.unwrap(
+class ServerDistributionActivationError extends Schema.TaggedError<ServerDistributionActivationError>()(
+  "ServerDistributionActivationError",
+  { cause: Schema.Unknown },
+) {
+  override get message(): string {
+    return `Compiled-in distribution activation failed: ${String(this.cause)}`;
+  }
+}
+
+const makeServerLayer = Layer.unwrap(
   Effect.gen(function* () {
     const config = yield* ServerConfig.ServerConfig;
     const activation = yield* Deferred.make<void>();
@@ -777,7 +889,7 @@ export const makeServerLayer = Layer.unwrap(
     // in t3team-server.ts; the standard start/serve path needs it too.
     yield* Effect.tryPromise({
       try: () => activateCompiledInDistribution(),
-      catch: (cause) => new Error(`Compiled-in distribution activation failed: ${String(cause)}`),
+      catch: (cause) => new ServerDistributionActivationError({ cause }),
     }).pipe(
       Effect.catch((cause) =>
         Effect.logWarning("Compiled-in distribution activation failed; continuing without it", {
@@ -804,9 +916,11 @@ export const makeServerLayer = Layer.unwrap(
             return;
           }
 
+          const launcher = yield* ServiceLauncherClient.ServiceLauncherClient;
           const state = yield* makePersistedServerRuntimeState({
             config,
             port: address.port,
+            serviceManaged: launcher.managed,
           });
           yield* persistServerRuntimeState({
             path: config.serverRuntimeStatePath,
@@ -880,10 +994,6 @@ export const makeServerLayer = Layer.unwrap(
       : Layer.empty;
     const cloudDesiredLinkReconcileLayer = Layer.effectDiscard(
       Effect.gen(function* () {
-        if (!hasCloudPublicConfig) {
-          yield* Deferred.succeed(cloudLinkParked, undefined).pipe(Effect.orDie);
-          return;
-        }
         const releaseManagedTunnel = releaseManagedTunnelOnShutdown().pipe(
           Effect.timeout("10 seconds"),
           Effect.tap((released) =>
@@ -912,34 +1022,199 @@ export const makeServerLayer = Layer.unwrap(
             if (!cleanupBeforeActivation) {
               yield* Effect.addFinalizer(() => releaseManagedTunnel);
             }
-            if (!(yield* CloudCliState.readCliDesiredCloudLink)) return;
             const server = yield* HttpServer.HttpServer;
             const address = server.address;
             if (typeof address === "string" || !("port" in address)) return;
+            const localOrigin = `http://127.0.0.1:${address.port}`;
+            const endpointRuntime = yield* CloudManagedEndpointRuntime.CloudManagedEndpointRuntime;
+            const recoveryLock = yield* Semaphore.make(1);
+            let lastRecoveryAtMillis = 0;
+            const recoverManagedTunnel = (config: RelayManagedEndpointRuntimeConfig) =>
+              recoveryLock.withPermits(1)(
+                Effect.gen(function* () {
+                  const elapsed = (yield* Clock.currentTimeMillis) - lastRecoveryAtMillis;
+                  const wait = Duration.toMillis(MANAGED_TUNNEL_RECOVERY_COOLDOWN) - elapsed;
+                  if (wait > 0) yield* Effect.sleep(Duration.millis(wait));
+                  lastRecoveryAtMillis = yield* Clock.currentTimeMillis;
+                }).pipe(
+                  Effect.andThen(
+                    recoverManagedCloudTunnel(localOrigin, config, {
+                      retryRuntimeFailures: true,
+                    }),
+                  ),
+                  Effect.retry({
+                    while: (error) =>
+                      shouldRetryCloudLink(error) &&
+                      error._tag !== "EnvironmentCloudEndpointUnavailableError",
+                    schedule: Schedule.exponential("1 second").pipe(
+                      Schedule.modifyDelay(({ duration }) =>
+                        Effect.succeed(Duration.min(duration, Duration.seconds(30))),
+                      ),
+                      Schedule.jittered,
+                    ),
+                  }),
+                  Effect.tap((recovered) =>
+                    recovered ? Effect.logInfo("T3 Connect managed tunnel recovered") : Effect.void,
+                  ),
+                  Effect.catchCause((cause) =>
+                    Cause.hasInterrupts(cause)
+                      ? Effect.interrupt
+                      : Effect.logWarning("Failed to recover the T3 Connect managed tunnel", {
+                          cause,
+                        }),
+                  ),
+                ),
+              );
+            yield* endpointRuntime.recoveryRequests.pipe(
+              Stream.runForEach(recoverManagedTunnel),
+              Effect.forkScoped,
+            );
             // No settling delay before the first attempt: routes are already
             // serving by the time activation opens this gate (the startup
             // sequence awaits routesReady), and the retry schedule below
             // covers anything this sleep used to hedge against. Every
             // millisecond here is dead time on the path to remote
             // reachability after a restart.
-            yield* reconcileDesiredCloudLink(`http://127.0.0.1:${address.port}`).pipe(
-              Effect.retry({
-                while: shouldRetryCloudLink,
-                schedule: Schedule.exponential("1 second").pipe(
-                  Schedule.modifyDelay(({ duration }) =>
-                    Effect.succeed(Duration.min(duration, Duration.seconds(30))),
+            const wantsCliLink = hasCloudPublicConfig
+              ? yield* CloudCliState.readCliDesiredCloudLink.pipe(
+                  Effect.catch((cause) =>
+                    Effect.logWarning("Failed to read the desired T3 Connect link", { cause }).pipe(
+                      Effect.as(false),
+                    ),
                   ),
-                  Schedule.upTo({ duration: "10 minutes" }),
-                ),
-              }),
-              Effect.tap(() => Effect.logInfo("T3 Connect desired link reconciled on startup")),
+                )
+              : false;
+            // A failed read must not end this fiber before it registers
+            // recovery and starts consuming recovery requests. "managed" is
+            // what a missing value means, so it is the safe fallback.
+            const desiredCliLinkMode = wantsCliLink
+              ? yield* CloudCliState.readCliDesiredLinkMode.pipe(
+                  Effect.catch((cause) =>
+                    Effect.logWarning("Failed to read the desired T3 Connect link mode", {
+                      cause,
+                    }).pipe(Effect.as("managed" as const)),
+                  ),
+                )
+              : null;
+            // A publish-only link must not expose the host, even if a managed
+            // config from an earlier link is still stored.
+            const startedConfirmed =
+              desiredCliLinkMode === "publish_only"
+                ? false
+                : yield* startManagedCloudTunnelIfOriginConfirmed(localOrigin).pipe(
+                    Effect.catch((cause) =>
+                      Effect.logWarning("Failed to start the confirmed T3 Connect tunnel", {
+                        cause,
+                      }).pipe(Effect.as(false)),
+                    ),
+                  );
+            const startStoredManagedTunnel = startManagedCloudTunnelIfOriginConfirmed(localOrigin, {
+              requireConfirmedOrigin: false,
+            }).pipe(
+              Effect.tap((started) =>
+                started
+                  ? Effect.logWarning(
+                      "T3 Connect started the stored tunnel without relay confirmation",
+                    )
+                  : Effect.void,
+              ),
               Effect.catch((cause) =>
-                Effect.logWarning("Failed to reconcile T3 Connect desired link on startup", {
-                  message: cause.message,
-                }),
+                Effect.logWarning("Failed to start the stored T3 Connect tunnel", { cause }),
+              ),
+              Effect.asVoid,
+            );
+            const registerManagedTunnel = retryManagedTunnelRegistration(
+              registerManagedCloudTunnelRecovery(localOrigin, {
+                retryRuntimeFailures: true,
+              }),
+              (error) =>
+                shouldRetryCloudLink(error) &&
+                error._tag !== "EnvironmentCloudEndpointUnavailableError",
+              startedConfirmed ? Effect.void : startStoredManagedTunnel,
+            ).pipe(
+              Effect.tap((result) =>
+                result.status === "ready"
+                  ? Effect.logInfo("T3 Connect managed tunnel recovery registered")
+                  : Effect.void,
+              ),
+              Effect.catchCause((cause) =>
+                Cause.hasInterrupts(cause)
+                  ? Effect.interrupt
+                  : Effect.logWarning("Failed to register T3 Connect managed tunnel recovery", {
+                      cause,
+                    }).pipe(Effect.as({ status: "unavailable" as const })),
               ),
             );
+            // A host without a confirmed marker is on its first boot after the
+            // upgrade. Spread those registrations so an auto-update wave does
+            // not hit the relay all at once.
+            if (!startedConfirmed && desiredCliLinkMode !== "publish_only") {
+              const jitter = yield* Random.nextIntBetween(
+                0,
+                Duration.toMillis(MANAGED_TUNNEL_FIRST_REGISTRATION_JITTER),
+              );
+              yield* Effect.sleep(Duration.millis(jitter));
+            }
+            const registration =
+              desiredCliLinkMode === "publish_only"
+                ? { status: "not_linked" as const }
+                : yield* registerManagedTunnel;
+            // A terminal registration failure also allows the stored config
+            // to start. Transient outages use the fallback above and keep
+            // registration retrying in this scoped startup fiber.
+            if (registration.status === "unavailable" && !startedConfirmed) {
+              yield* startStoredManagedTunnel;
+            }
+            const startupAction = managedTunnelStartupAction({ wantsCliLink, registration });
+            if (startupAction.action === "request_recovery") {
+              yield* endpointRuntime.requestRecovery(startupAction.config);
+            }
+            if (startupAction.action === "reconcile_link") {
+              const reconciledMode = yield* reconcileDesiredCloudLinkIfStillDesired(
+                localOrigin,
+              ).pipe(
+                Effect.retry({
+                  while: shouldRetryCloudLink,
+                  schedule: Schedule.exponential("1 second").pipe(
+                    Schedule.modifyDelay(({ duration }) =>
+                      Effect.succeed(Duration.min(duration, Duration.seconds(30))),
+                    ),
+                    Schedule.upTo({ duration: "10 minutes" }),
+                  ),
+                }),
+                Effect.tap((mode) =>
+                  mode === null
+                    ? Effect.void
+                    : Effect.logInfo("T3 Connect desired link reconciled on startup"),
+                ),
+                Effect.catch((cause) =>
+                  Effect.logWarning("Failed to reconcile T3 Connect desired link on startup", {
+                    cause,
+                  }).pipe(Effect.as(null)),
+                ),
+              );
+              if (reconciledMode === "managed") {
+                const afterReconcile = yield* registerManagedTunnel;
+                if (afterReconcile.status === "recovery_required") {
+                  yield* endpointRuntime.requestRecovery(afterReconcile.config);
+                }
+              }
+            }
           }),
+        );
+        // Top up the per-user T3 Connect credential in the background: a
+        // linked environment (linked from the app or a phone) can outlive a
+        // missing or unrefreshable credential, and the cloud-session handoff
+        // needs one. The top-up may open the user's browser; it never blocks
+        // activation, and not-linked installs never attempt a mint.
+        yield* forkParked(
+          runConnectCredentialTopUp().pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning("Stopped the T3 Connect credential top-up", {
+                errors: Cause.prettyErrors(cause).map((error) => error.message),
+              }),
+            ),
+          ),
         );
         yield* Deferred.succeed(cloudLinkParked, undefined).pipe(Effect.orDie);
       }),
@@ -966,7 +1241,7 @@ export const makeServerLayer = Layer.unwrap(
     const serverApplicationLayer = Layer.mergeAll(
       routesLayer,
       httpListeningLayer,
-      runtimeStateLayer,
+      runtimeStateLayer.pipe(Layer.provide(launcherLayer)),
       tailscaleServeLayer,
       T3TeamWorkflowEngineReactorLive,
       T3TeamActorMessageReactorLive,
@@ -980,6 +1255,7 @@ export const makeServerLayer = Layer.unwrap(
       T3TeamThreadTransientTurnRetryLive,
       T3TeamWorkflowEngineRehydrateLive,
       cloudDesiredLinkReconcileLayer,
+      HeapSnapshot.layer,
     );
 
     return serverApplicationLayer.pipe(

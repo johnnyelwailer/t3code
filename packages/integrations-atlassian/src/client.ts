@@ -14,6 +14,9 @@ export class AtlassianNetworkError extends Data.TaggedError("AtlassianNetworkErr
 export class AtlassianAuthError extends Data.TaggedError("AtlassianAuthError")<{
   readonly message: string;
   readonly path: string;
+  /** The token is valid but was granted without the scope this endpoint needs
+   * (Jira answers `401 "scope does not match"`); only a re-consent fixes it. */
+  readonly missingScope?: boolean;
 }> {}
 
 /**
@@ -102,6 +105,8 @@ export type JiraBoardConfigurationColumn = {
 };
 
 export type JiraBoardConfigurationResponse = {
+  /** The saved filter that defines which issues the board shows. */
+  readonly filter?: { readonly id?: string | number };
   readonly columnConfig?: {
     readonly columns?: ReadonlyArray<JiraBoardConfigurationColumn>;
   };

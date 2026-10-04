@@ -5,6 +5,7 @@ import {
   PreviewAutomationHostTargetLostError,
   PreviewAutomationOperationError,
   previewAutomationTargetLostReason,
+  serializePreviewAutomationHostError,
 } from "./previewAutomationErrors.ts";
 
 const context = {
@@ -50,7 +51,9 @@ describe("PreviewAutomationOperationError.fromCause target-lost mapping", () => 
       ...context,
       cause: abortedInNode,
     });
-    expect(mapped.responseTag).toBe("PreviewAutomationTargetLostError");
+    expect(serializePreviewAutomationHostError(mapped)._tag).toBe(
+      "PreviewAutomationTargetLostError",
+    );
     expect(mapped.message).toContain("rebind the preview tab");
     expect(Schema.is(PreviewAutomationHostTargetLostError)(mapped)).toBe(true);
   });
@@ -60,7 +63,9 @@ describe("PreviewAutomationOperationError.fromCause target-lost mapping", () => 
       ...context,
       cause: targetClosed,
     });
-    expect(mapped.responseTag).toBe("PreviewAutomationTargetLostError");
+    expect(serializePreviewAutomationHostError(mapped)._tag).toBe(
+      "PreviewAutomationTargetLostError",
+    );
     expect(mapped.message).toContain("was closed");
   });
 
@@ -69,7 +74,9 @@ describe("PreviewAutomationOperationError.fromCause target-lost mapping", () => 
       ...context,
       cause: new TypeError("boom"),
     });
-    expect(mapped.responseTag).toBe("PreviewAutomationExecutionError");
+    expect(serializePreviewAutomationHostError(mapped)._tag).toBe(
+      "PreviewAutomationExecutionError",
+    );
     expect(Schema.is(PreviewAutomationOperationError)(mapped)).toBe(true);
   });
 });

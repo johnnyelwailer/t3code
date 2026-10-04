@@ -416,7 +416,8 @@ const rebuildFromDb = (
       if (
         row.pendingThreadId === null ||
         row.pendingCorrelationId === null ||
-        row.pendingKind === null
+        row.pendingKind === null ||
+        row.pendingKind === "signal.wait"
       ) {
         continue;
       }

@@ -1,11 +1,17 @@
+import { useMemo, useRef } from "react";
 import type { EnvironmentId } from "@t3tools/contracts";
 import ChatView from "~/components/ChatView";
+import type { ChatComposerHandle } from "~/components/chat/ChatComposer";
+import { ComposerHandleContext, useComposerHandleContext } from "~/composerHandleContext";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { ThreadPendingChat } from "~/t3team/chat/t3team-threadPendingChat";
 import type { ThreadBootstrapStatus } from "~/t3team/chat/t3team-useThreadBootstrap";
 import { useThreadChatComposerState } from "~/t3team/chat/t3team-useThreadChatComposerState";
 import { ThreadKickoffPlaceholder } from "~/t3team/chat/t3team-threadKickoffPlaceholder";
 import { T3TeamThreadComposerAccessory } from "~/t3team/chat/t3team-ThreadComposerAccessory";
+import { t3TeamOutboxTimelineExtensions } from "~/t3team/outbox/t3team-outboxTimelineRows";
+import { useT3TeamOutboxStore } from "~/t3team/outbox/t3team-outboxStore";
+import { useT3TeamOutboxDrain } from "~/t3team/outbox/t3team-useOutboxDrain";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
 import type { ChatMessage } from "~/types";
 
@@ -37,6 +43,23 @@ export interface ThreadChatViewBodyProps {
   composerState: ThreadChatComposerState;
 }
 
+/** Queued outbox entries for the viewed thread, plus the drain that delivers them on reconnect. */
+function useThreadOutbox(
+  environmentId: EnvironmentId,
+  threadId: string,
+  backend: BackendApi | null | undefined,
+) {
+  useT3TeamOutboxDrain({ environmentId, backend });
+  const snapshot = useT3TeamOutboxStore();
+  return useMemo(
+    () =>
+      snapshot.entries.filter(
+        (entry) => entry.environmentId === environmentId && entry.threadId === threadId,
+      ),
+    [snapshot.entries, environmentId, threadId],
+  );
+}
+
 /** Presentational body for {@link ThreadChatView}: kickoff placeholder + ChatView/pending-chat split. */
 export function ThreadChatViewBody({
   composerReadOnlyOverlay,
@@ -63,6 +86,7 @@ export function ThreadChatViewBody({
     composerDropTarget,
     contextAttachments,
     dispatchTurnStartOverride,
+    enqueueOfflineTurnStart,
     prepareComposerContextAttachments,
     prepareTurnStart,
     removeContextAttachment,
@@ -80,6 +104,23 @@ export function ThreadChatViewBody({
       attachments={contextAttachments}
       onRemoveAttachment={removeContextAttachment}
     />
+  );
+  // ChatView reads its send model from the context handle, and the app-wide one belongs to the
+  // primary thread. An embedded peer thread scopes its own, or its composer hijacks the primary's.
+  const appComposerHandleRef = useComposerHandleContext();
+  const embeddedComposerHandleRef = useRef<ChatComposerHandle | null>(null);
+  const outboxEntries = useThreadOutbox(environmentId, threadId, backend);
+  const outboxSnapshot = useT3TeamOutboxStore();
+  // Stable row nodes for the native queued surface: re-built only when the
+  // outbox actually changes, so composer churn does not re-render the rows.
+  const outboxTimelineExtensions = useMemo(
+    () =>
+      t3TeamOutboxTimelineExtensions(
+        outboxEntries,
+        outboxSnapshot.dispatchingEntryId,
+        outboxSnapshot.failures,
+      ),
+    [outboxEntries, outboxSnapshot.dispatchingEntryId, outboxSnapshot.failures],
   );
   const controlWorkflow = backend?.controlWorkflow
     ? ({ workflowRunId, action }: { workflowRunId: string; action: "pause" | "resume" | "stop" }) =>
@@ -101,39 +142,45 @@ export function ThreadChatViewBody({
       {hasServerThread ? (
         <>
           {kickoffPlaceholder}
-          <ChatView
-            environmentId={environmentId}
-            threadId={threadId as never}
-            routeKind="server"
-            {...(kickoffHistoryMessage ? { syntheticMessages: [kickoffHistoryMessage] } : {})}
-            {...(onBack ? { onBack } : {})}
-            {...(titleBarControlsAccessory ? { titleBarControlsAccessory } : {})}
-            hideHeader={hideHeader || embeddedMode}
-            hideBranchToolbar={embeddedMode}
-            minimalComposer={embeddedMode}
-            beforeDispatchTurnStart={prepareTurnStart}
-            dispatchTurnStartOverride={dispatchTurnStartOverride}
-            composerContextAttachmentSlot={contextAttachmentSlot}
-            composerContainerProps={composerDropTarget.composerContainerProps}
-            composerContainerOverlay={
-              composerReadOnlyOverlay ? (
-                <>
-                  {composerDropTarget.composerContainerOverlay}
-                  {composerReadOnlyOverlay}
-                </>
-              ) : (
-                composerDropTarget.composerContainerOverlay
-              )
-            }
-            composerContextAttachments={contextAttachments}
-            prepareComposerContextAttachments={prepareComposerContextAttachments}
-            onComposerContextAttachmentsConsumed={clearThreadAttachments}
-            onSubmitRecipeCardAction={submitRecipeCardAction}
-            dispatchWorkflowDecision={resolveWorkflowDecision}
-            {...(controlWorkflow ? { onControlWorkflow: controlWorkflow } : {})}
-            onOpenThread={onOpenThread}
-            {...(onForkThread ? { onForkThread } : {})}
-          />
+          <ComposerHandleContext
+            value={embeddedMode ? embeddedComposerHandleRef : appComposerHandleRef}
+          >
+            <ChatView
+              environmentId={environmentId}
+              threadId={threadId as never}
+              routeKind="server"
+              {...(kickoffHistoryMessage ? { syntheticMessages: [kickoffHistoryMessage] } : {})}
+              {...(onBack ? { onBack } : {})}
+              {...(titleBarControlsAccessory ? { titleBarControlsAccessory } : {})}
+              hideHeader={hideHeader || embeddedMode}
+              hideBranchToolbar={embeddedMode}
+              minimalComposer={embeddedMode}
+              beforeDispatchTurnStart={prepareTurnStart}
+              dispatchTurnStartOverride={dispatchTurnStartOverride}
+              enqueueOfflineTurnStart={enqueueOfflineTurnStart}
+              composerContextAttachmentSlot={contextAttachmentSlot}
+              composerContainerProps={composerDropTarget.composerContainerProps}
+              composerContainerOverlay={
+                composerReadOnlyOverlay ? (
+                  <>
+                    {composerDropTarget.composerContainerOverlay}
+                    {composerReadOnlyOverlay}
+                  </>
+                ) : (
+                  composerDropTarget.composerContainerOverlay
+                )
+              }
+              composerContextAttachments={contextAttachments}
+              prepareComposerContextAttachments={prepareComposerContextAttachments}
+              onComposerContextAttachmentsConsumed={clearThreadAttachments}
+              onSubmitRecipeCardAction={submitRecipeCardAction}
+              dispatchWorkflowDecision={resolveWorkflowDecision}
+              {...(controlWorkflow ? { onControlWorkflow: controlWorkflow } : {})}
+              onOpenThread={onOpenThread}
+              {...(onForkThread ? { onForkThread } : {})}
+              queuedExtensions={outboxTimelineExtensions}
+            />
+          </ComposerHandleContext>
         </>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">

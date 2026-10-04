@@ -23,6 +23,7 @@ export const T3TEAM_CHILD_OPS = [
   "close",
   "sweep",
   "drain",
+  "environments",
   "help",
 ] as const;
 export type T3TeamChildOp = (typeof T3TEAM_CHILD_OPS)[number];
@@ -95,6 +96,12 @@ export type ParentChildRelation = {
 export interface T3TeamChildrenToolDeps {
   readonly callerThreadId: ThreadIdType;
   readonly callerProjectId: ProjectId;
+  /** This server's own EnvironmentId — the `environments` op marks it as the
+   *  default target and drops it from the cross-environment history.
+   *  `string | undefined` (not a bare optional) so structural fakes that
+   *  spread `Partial<T>` overrides stay assignable under
+   *  exactOptionalPropertyTypes. */
+  readonly localEnvironmentId?: string | undefined;
   readonly loadThreadDetail: (
     threadId: ThreadIdType,
   ) => Effect.Effect<ChildThreadDetail | undefined, string>;
@@ -146,6 +153,25 @@ export interface T3TeamChildrenToolDeps {
    * thread's own inbox (the inter-agent messages this thread is owed).
    */
   readonly drainOwnMailbox: () => Effect.Effect<ChildrenDrainOutcome, string>;
+  /**
+   * The `environments` op: the distinct cross-environment bindings recorded
+   * on threads in this store — the environments this host has previously
+   * targeted through start_child `environment`, with the newest recorded
+   * label, bound-thread count, and most-recent activity. Own-environment
+   * threads never carry a binding, so the op merges `localEnvironmentId`
+   * in front of this history. Host adapters may supply a richer source here
+   * (a real environment registry); the op's result shape (`source`:
+   * "own" | "history") is what a host-specific enrichment would extend.
+   */
+  readonly listEnvironmentBindings: () => Effect.Effect<
+    ReadonlyArray<{
+      readonly environmentId: string;
+      readonly label?: string;
+      readonly threadCount: number;
+      readonly latestThreadAt: string;
+    }>,
+    string
+  >;
   readonly nowIso: () => string;
   readonly newId: () => string;
 }

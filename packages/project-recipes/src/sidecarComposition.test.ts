@@ -11,7 +11,7 @@ import {
 const BUNDLED_DEFAULT = {
   sections: [
     { sectionId: "quick-starts", visible: true, collapsed: false },
-    { sectionId: "recent-conversations", visible: true, collapsed: false },
+    { sectionId: "notes", visible: true, collapsed: false },
   ],
 } as const;
 
@@ -19,7 +19,7 @@ describe("resolveSidecarComposition", () => {
   it("returns the bundled default order when no overrides are present", () => {
     expect(resolveSidecarComposition({ bundledDefault: BUNDLED_DEFAULT }).sections).toEqual([
       { sectionId: "quick-starts", visible: true, collapsed: false },
-      { sectionId: "recent-conversations", visible: true, collapsed: false },
+      { sectionId: "notes", visible: true, collapsed: false },
     ]);
   });
 
@@ -28,10 +28,10 @@ describe("resolveSidecarComposition", () => {
       resolveSidecarComposition({
         bundledDefault: BUNDLED_DEFAULT,
         profileDefault: {
-          sections: [{ sectionId: "recent-conversations" }, { sectionId: "quick-starts" }],
+          sections: [{ sectionId: "notes" }, { sectionId: "quick-starts" }],
         },
       }).sections.map((section) => section.sectionId),
-    ).toEqual(["recent-conversations", "quick-starts"]);
+    ).toEqual(["notes", "quick-starts"]);
   });
 
   it("drops hidden user-overridden sections and lets user collapse state beat profile state", () => {
@@ -40,18 +40,18 @@ describe("resolveSidecarComposition", () => {
         bundledDefault: BUNDLED_DEFAULT,
         profileDefault: {
           sections: [
-            { sectionId: "recent-conversations", collapsed: false },
+            { sectionId: "notes", collapsed: false },
             { sectionId: "quick-starts", collapsed: false },
           ],
         },
         userOverrides: {
           sections: [
-            { sectionId: "recent-conversations", collapsed: true },
+            { sectionId: "notes", collapsed: true },
             { sectionId: "quick-starts", visible: false },
           ],
         },
       }).sections,
-    ).toEqual([{ sectionId: "recent-conversations", visible: true, collapsed: true }]);
+    ).toEqual([{ sectionId: "notes", visible: true, collapsed: true }]);
   });
 
   it("reads section item personalization from the shared per-user payload", () => {

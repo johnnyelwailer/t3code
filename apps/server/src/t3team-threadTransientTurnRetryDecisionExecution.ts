@@ -59,6 +59,9 @@ export function executeTransientRetryDecision(
     return (lastMessage?.id === messageId || lastTurnIncomplete) && thread.messages.length > 0;
   };
 
+  // `superseded` cannot survive this path: the snapshot's ProjectionThreadSession
+  // has no such column — any future full-session-JSON migration must keep it
+  // excluded (the marker is one-shot and belongs on the event payload only).
   const sessionFrom = (
     thread: OrchestrationThread,
     lastError: string,

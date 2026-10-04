@@ -40,7 +40,7 @@ export function ProjectMyWorkOptionsMenuFilterSections({
     <>
       <MenuSub>
         <MenuSubTrigger>Issue types</MenuSubTrigger>
-        <MenuSubPopup className="min-w-[15rem] border-border/80 bg-background/95">
+        <MenuSubPopup className="min-w-60">
           <MenuGroup>
             <MenuGroupLabel>Visible issue types</MenuGroupLabel>
             {typeOptions.length > 0 ? (
@@ -64,7 +64,7 @@ export function ProjectMyWorkOptionsMenuFilterSections({
 
       <MenuSub>
         <MenuSubTrigger>Priority</MenuSubTrigger>
-        <MenuSubPopup className="min-w-[14rem] border-border/80 bg-background/95">
+        <MenuSubPopup className="min-w-56">
           <MenuRadioGroup value={selectedPriority} onValueChange={onSelectedPriorityChange}>
             <MenuRadioItem value="all">All priorities</MenuRadioItem>
             {priorityOptions.map((priority) => (
@@ -78,7 +78,7 @@ export function ProjectMyWorkOptionsMenuFilterSections({
 
       <MenuSub>
         <MenuSubTrigger>Exact status</MenuSubTrigger>
-        <MenuSubPopup className="min-w-[14rem] border-border/80 bg-background/95">
+        <MenuSubPopup className="min-w-56">
           <MenuRadioGroup value={selectedStatus} onValueChange={onSelectedStatusChange}>
             <MenuRadioItem value="all">All statuses</MenuRadioItem>
             {statusOptions.map((status) => (
@@ -93,9 +93,7 @@ export function ProjectMyWorkOptionsMenuFilterSections({
       <MenuSeparator />
 
       <MenuGroup>
-        <MenuItem className="min-h-8 rounded-md py-1.5 text-[12px]" onClick={onReset}>
-          Reset filters
-        </MenuItem>
+        <MenuItem onClick={onReset}>Reset filters</MenuItem>
       </MenuGroup>
     </>
   );

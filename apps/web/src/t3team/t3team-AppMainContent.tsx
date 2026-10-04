@@ -92,9 +92,6 @@ export function AppMainContent({
     showInitialSetup,
     hasRouteView: Boolean(view),
   });
-  const homeChatProjectThreads = homeChatProject
-    ? visibleThreadsForProject(homeChatProject.id)
-    : [];
   const homeBrowser = (
     <AppMainContentHomeBrowser
       onCreate={onCreate}
@@ -104,7 +101,6 @@ export function AppMainContent({
       showAside={!reopenInitialSetup && projects.length > 0}
       shouldInsetDesktopHeader={shouldInsetDesktopHeader}
       homeChatProject={homeChatProject}
-      homeChatProjectThreads={homeChatProjectThreads}
       providers={backendState.providers}
       isConnected={backendState.connectionStatus === "connected"}
       onOpenHomeThread={(threadId) => {

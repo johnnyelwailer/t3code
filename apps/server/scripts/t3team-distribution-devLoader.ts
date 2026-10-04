@@ -21,16 +21,12 @@
  * through the `T3TEAM_PACKS_DIR` runtime pack loader. No behaviour is added here — only the
  * resolution.
  */
-import { registerHooks } from "node:module";
-import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import * as NodeModule from "node:module";
 
 const SPECIFIER = "@t3code/distribution";
-const STUB_URL = pathToFileURL(
-  join(dirname(fileURLToPath(import.meta.url)), "..", "src", "t3team-distribution.ts"),
-).href;
+const STUB_URL = new URL("../src/t3team-distribution.ts", import.meta.url).href;
 
-registerHooks({
+NodeModule.registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier === SPECIFIER) {
       // shortCircuit: the mapping is total for this specifier; nothing downstream may override it.

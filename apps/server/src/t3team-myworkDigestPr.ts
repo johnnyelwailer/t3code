@@ -9,19 +9,20 @@
  */
 
 import { ProjectId, type PullRequestListEntry } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
 import { PullRequestService } from "./pullRequest/PullRequestService.ts";
 import type { T3TeamDigestProjectSource } from "./t3team-myworkDigestTypes.ts";
 
-export const DIGEST_PR_LIMIT = 50;
+const DIGEST_PR_LIMIT = 50;
 /**
  * How many open PRs get the detail + activity reads per round. The digest
  * polls on the order of a minute and the detail/activity cache is 15s, so a
  * cold round costs two host reads per enriched PR; eight is roughly how many
  * chips a single screen shows before the section scrolls.
  */
-export const DIGEST_PR_ENRICH_LIMIT = 8;
+const DIGEST_PR_ENRICH_LIMIT = 8;
 
 export type PrEnrichment = {
   readonly reviewers: ReadonlyArray<{ readonly name: string; readonly login: string }>;
@@ -36,7 +37,7 @@ export type PrReadResult = {
 };
 
 /** `host:repo#number` — the digest's own PR id, the enrichment key. */
-export function digestPrKey(entry: {
+function digestPrKey(entry: {
   readonly host: string;
   readonly repository: string;
   readonly number: number;
@@ -66,7 +67,9 @@ function mapUnhandledThreads(activity: {
       const times = thread.comments
         .map((comment) => Date.parse(comment.createdAt))
         .filter((time) => Number.isFinite(time));
-      return times.length > 0 ? { lastCommentAt: new Date(Math.max(...times)).toISOString() } : {};
+      return times.length > 0
+        ? { lastCommentAt: DateTime.formatIso(DateTime.makeUnsafe(Math.max(...times))) }
+        : {};
     });
 }
 

@@ -24,6 +24,7 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 import { useProjectMyWork } from "~/t3team/hooks/t3team-useProjectMyWork";
 import { useProjectKanbanBoardColumns } from "~/t3team/hooks/t3team-useProjectKanbanBoardColumns";
 import { readProjectSetupProfileIdFromProject } from "~/t3team/hooks/t3team-createProjectBootstrap";
+import { humanizeT3TeamBackendError } from "~/t3team/t3team-humanizeBackendError";
 import { JiraSessionExpiredPanel } from "~/t3team/components/t3team-JiraSessionExpiredPanel";
 import { AppProjectIcon } from "~/t3team/t3team-AppStatusBits";
 import { TicketWorkItemRow } from "~/t3team/t3team-ProjectDashboardItemViews";
@@ -159,7 +160,10 @@ export function AllProjectsMyWorkSection({
       {sessionExpired ? (
         <JiraSessionExpiredPanel onSignedIn={reload} />
       ) : error ? (
-        <p className="text-destructive text-xs">{error}</p>
+        <p className="text-destructive text-xs">
+          {humanizeT3TeamBackendError(error).title}
+          <span className="sr-only"> {error}</span>
+        </p>
       ) : lens === "board" ? (
         <AllProjectsMyWorkBoard
           project={project}

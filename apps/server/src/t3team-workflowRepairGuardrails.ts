@@ -73,8 +73,8 @@ export const validateWorkflowRepairCandidate = (input: {
  * be spent on and to write back. Keeping the decision rules together — and away from the effectful
  * orchestration — means no caller can weaken them by construction.
  */
-export const T3TEAM_WORKFLOW_REPAIR_LIMIT = 3;
-export const T3TEAM_WORKFLOW_REPAIR_HARD_LIMIT = 5;
+const T3TEAM_WORKFLOW_REPAIR_LIMIT = 3;
+const T3TEAM_WORKFLOW_REPAIR_HARD_LIMIT = 5;
 
 export type WorkflowRepairIntent = {
   readonly goal: string;
@@ -157,7 +157,7 @@ const unsafeFailure =
   /\b(?:cancel(?:led|ed|ation)?|abort(?:ed|ing)?|auth(?:entication|orization)?|unauthori[sz]ed|forbidden|policy|capabilit(?:y|ies)|permission|approval|user[ _-]?input)\b/i;
 
 /** Only compiler/runtime defects can be repaired. Human, auth, and policy failures must surface. */
-export const isRepairableWorkflowFailure = (error: unknown): boolean => {
+const isRepairableWorkflowFailure = (error: unknown): boolean => {
   const message = error instanceof Error ? error.message : String(error);
   return message.trim().length > 0 && !unsafeFailure.test(message);
 };

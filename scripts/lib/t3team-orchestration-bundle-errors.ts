@@ -5,7 +5,7 @@
  */
 import * as Schema from "effect/Schema";
 
-export class OrchestrationBundleProbeError extends Schema.TaggedErrorClass<OrchestrationBundleProbeError>()(
+export class OrchestrationBundleProbeError extends Schema.TaggedError<OrchestrationBundleProbeError>()(
   "OrchestrationBundleProbeError",
   { exitCode: Schema.Number, output: Schema.String },
 ) {
@@ -14,7 +14,7 @@ export class OrchestrationBundleProbeError extends Schema.TaggedErrorClass<Orche
   }
 }
 
-export class OrchestrationBundleDistMissingError extends Schema.TaggedErrorClass<OrchestrationBundleDistMissingError>()(
+export class OrchestrationBundleDistMissingError extends Schema.TaggedError<OrchestrationBundleDistMissingError>()(
   "OrchestrationBundleDistMissingError",
   { distDir: Schema.String },
 ) {
@@ -23,7 +23,7 @@ export class OrchestrationBundleDistMissingError extends Schema.TaggedErrorClass
   }
 }
 
-export class OrchestrationBundleClosureError extends Schema.TaggedErrorClass<OrchestrationBundleClosureError>()(
+export class OrchestrationBundleClosureError extends Schema.TaggedError<OrchestrationBundleClosureError>()(
   "OrchestrationBundleClosureError",
   { detail: Schema.String },
 ) {

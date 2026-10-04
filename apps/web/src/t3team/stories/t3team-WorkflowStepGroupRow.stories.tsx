@@ -44,7 +44,7 @@ function Frame({ children }: { readonly children: React.ReactNode }) {
 }
 
 const meta = {
-  title: "T3Team/Workflow Step Group Row",
+  title: "T3Team/Workflow/Step Group Row",
   parameters: { layout: "padded" },
 } satisfies Meta;
 
@@ -92,17 +92,17 @@ export const Expanded: Story = {
 export const BeforeAndAfter: Story = {
   render: () => (
     <Frame>
-      <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/65">
+      <p className="text-3xs font-medium uppercase tracking-widest text-muted-foreground/65">
         Now — attributed to the workflow
       </p>
       <T3TeamWorkflowStepGroupRow group={GROUP} expanded={false} onToggle={() => {}} />
 
-      <p className="pt-3 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/65">
+      <p className="pt-3 text-3xs font-medium uppercase tracking-widest text-muted-foreground/65">
         Before — wearing the user's bubble
       </p>
       <UserBubble>{PROMPT_TEXT}</UserBubble>
 
-      <p className="pt-3 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/65">
+      <p className="pt-3 text-3xs font-medium uppercase tracking-widest text-muted-foreground/65">
         A real human message, unchanged either way
       </p>
       <UserBubble>Please add acceptance criteria.</UserBubble>

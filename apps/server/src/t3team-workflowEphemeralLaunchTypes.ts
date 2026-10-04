@@ -21,6 +21,7 @@ import type {
   WorkflowRunOrigin,
   WorkflowRunRepositoryShape,
 } from "./persistence/Services/WorkflowRuns.ts";
+import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
 import type { LaunchWorkflowRecipeInput } from "./t3team-workflowEngineLaunchTypes.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 
@@ -40,6 +41,10 @@ export interface PreparedWorkflowLaunchDeps {
   readonly repairModelSelection?: "inherit" | ModelSelection;
   readonly repairTotalTimeBudgetMs?: number;
   readonly generateRepairStructured?: LaunchWorkflowRecipeInput["generateRepairStructured"];
+  /** Durable signal-source state (GHE #332); absent disables the run's signal verbs. */
+  readonly signalStore?: WorkflowSignalStoreShape;
+  /** Poke fired after a binding FACT is journaled, so the reconciler acts promptly. */
+  readonly pokeSignalReconcile?: () => void;
 }
 
 export interface PreparedWorkflowLaunchInput {

@@ -28,7 +28,7 @@ import {
 } from "./t3team-toolBrokerChildrenTypes.ts";
 
 /** True when this child keeps its parent waiting. */
-export function isLiveChildShell(shell: ChildThreadShell): boolean {
+function isLiveChildShell(shell: ChildThreadShell): boolean {
   if (shell.settledOverride === "settled") return false;
   return !isTerminalThreadRunState(
     deriveThreadRunState({
@@ -81,18 +81,14 @@ export function loadLiveChildParentIds(
             .map((relation) => relation.childThreadId),
         ),
       ];
-      return Effect.forEach(
-        childIds,
-        (id) => deps.loadThreadShell(ThreadId.make(id)),
-        { concurrency: 8 },
-      ).pipe(
+      return Effect.forEach(childIds, (id) => deps.loadThreadShell(ThreadId.make(id)), {
+        concurrency: 8,
+      }).pipe(
         Effect.map((shells) =>
           liveChildParentIds(
             wantedParents,
             relations,
-            new Map(
-              childIds.map((id, index) => [id, shells[index] ?? undefined]),
-            ),
+            new Map(childIds.map((id, index) => [id, shells[index] ?? undefined])),
           ),
         ),
       );

@@ -247,8 +247,8 @@ describe("activity label summarizer", () => {
     await summarizer.clear("t1"); // thread went idle mid-generation
     gateResolve!();
     // Let the stale generation's microtask continuation finish: it must not persist.
-    await new Promise((resolve) => queueMicrotask(resolve));
-    await new Promise((resolve) => queueMicrotask(resolve));
+    await new Promise<void>((resolve) => queueMicrotask(() => resolve()));
+    await new Promise<void>((resolve) => queueMicrotask(() => resolve()));
     expect(started).toBe(true);
     // clear() supersedes the in-flight generation (note=1, clear=2) and persists the null.
     expect(persisted).toEqual([{ label: null, generation: 2 }]);

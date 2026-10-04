@@ -80,6 +80,8 @@ function RealWorkingRow({
         onOpenAgents,
         onOpenAgent,
         threadActivityState: threadState === "settled" ? null : threadState,
+        unsettledTurnId: null,
+        backgroundWorktreeSetup: null,
       }}
     >
       <WorkingTimelineRow row={WORKING_ROW} />
@@ -100,7 +102,7 @@ function Card({
     <div className="w-[560px] rounded-xl border border-border/70 bg-card p-4 shadow-sm">
       <div className="mb-3 text-xs font-medium text-muted-foreground">{title}</div>
       <div className="flex flex-col gap-3">{children}</div>
-      {footnote ? <div className="text-[10px] text-muted-foreground/70">{footnote}</div> : null}
+      {footnote ? <div className="text-3xs text-muted-foreground/70">{footnote}</div> : null}
     </div>
   );
 }
@@ -126,10 +128,10 @@ function AgentSidePanel({
     >
       <div className="mb-2 flex items-center justify-between">
         <span
-          className={`rounded-sm px-1.5 py-0.5 text-[10px] font-medium ${
+          className={`rounded-sm px-1.5 py-0.5 text-3xs font-medium ${
             entry.source === "subagent"
-              ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
-              : "bg-sky-500/15 text-sky-600 dark:text-sky-400"
+              ? "bg-warning/15 text-warning-foreground"
+              : "bg-info/15 text-info-foreground"
           }`}
         >
           {entry.source === "subagent" ? "provider subagent" : "child thread"}
@@ -147,7 +149,7 @@ function AgentSidePanel({
       <div className="mt-1 text-xs text-muted-foreground">
         {entry.statusLabel} · {stateWordOf(state)}
       </div>
-      <div className="mt-3 rounded-md bg-accent/50 px-3 py-2 text-[11px] text-foreground/80">
+      <div className="mt-3 rounded-md bg-accent/50 px-3 py-2 text-2xs text-foreground/80">
         Thread pane stand-in — in the app this dot opens the {entry.source} here on the side.
       </div>
     </div>
@@ -411,7 +413,7 @@ function StateMotionDots({
       className="flex w-full flex-col items-center gap-8 px-12 py-10 pb-16"
     >
       {reducedMotion ? (
-        <style>{`.sdv-mixed .h-1.w-1, .sdv-mixed .t3team-aci-dot, .sdv-mixed .t3team-aci-cell, .sdv-mixed .t3team-aci-cell > span, .sdv-mixed .t3team-aci-cell > span::before, .t3team-aci-pulse, .t3team-aci-flip-in, .t3team-aci-flip-out { animation: none !important; } .sdv-mixed .t3team-aci-dot { opacity: 0.4 !important; box-shadow: none !important; } .t3team-aci-lead { transition: none !important; }`}</style>
+        <style>{`[data-sdv-mixed] .h-1.w-1, [data-sdv-mixed] .t3team-aci-dot, [data-sdv-mixed] .t3team-aci-cell, [data-sdv-mixed] .t3team-aci-cell > span, [data-sdv-mixed] .t3team-aci-cell > span::before, .t3team-aci-pulse, .t3team-aci-flip-in, .t3team-aci-flip-out { animation: none !important; } [data-sdv-mixed] .t3team-aci-dot { opacity: 0.4 !important; box-shadow: none !important; } .t3team-aci-lead { transition: none !important; }`}</style>
       ) : null}
 
       <div className="flex w-full items-start justify-center gap-6">
@@ -444,7 +446,11 @@ function StateMotionDots({
               <div
                 ref={mixedScopeRef}
                 data-sdv-no-springs={springs && !reducedMotion ? undefined : ""}
-                className={`relative ${ring ? "" : "sdv-no-ring"} ${colorShifts ? "" : "sdv-no-hue"} ${frozenClock ? "sdv-frozen" : ""} sdv-mixed sdv-st-${threadForMixed ?? "settled"}`}
+                data-sdv-mixed=""
+                data-sdv-no-ring={ring ? undefined : ""}
+                data-sdv-no-hue={colorShifts ? undefined : ""}
+                data-sdv-frozen={frozenClock ? "" : undefined}
+                className="relative"
                 onPointerMove={
                   debug
                     ? (event) => {
@@ -471,11 +477,11 @@ function StateMotionDots({
                 <button
                   type="button"
                   onClick={() => setDriftState((current) => rollDrift(entriesRef.current.length))}
-                  className="rounded-sm border border-border/70 bg-accent/40 px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+                  className="rounded-sm border border-border/70 bg-accent/40 px-2 py-0.5 text-3xs text-muted-foreground hover:text-foreground"
                 >
                   re-roll agent states
                 </button>
-                <span className="text-[10px] text-muted-foreground/70">
+                <span className="text-3xs text-muted-foreground/70">
                   thread: {threadForMixed === null ? "Working" : stateWordOf(threadForMixed)} ·
                   agents:{" "}
                   {entries
@@ -500,15 +506,15 @@ function StateMotionDots({
       {debug ? (
         <div className="flex w-full flex-col items-start gap-2">
           {snaps.map((text, i) => (
-            <div key={`${i}-${text.slice(0, 12)}`} className="sdv-snap-chip">
+            <div key={`${i}-${text.slice(0, 12)}`} data-sdv="snap-chip">
               {text}
             </div>
           ))}
-          <div className="sdv-live">{liveReadout || "move the mouse over the row…"}</div>
+          <div data-sdv="live">{liveReadout || "move the mouse over the row…"}</div>
         </div>
       ) : null}
 
-      <div className="text-[10px] text-muted-foreground/70">
+      <div className="text-3xs text-muted-foreground/70">
         With <code className="text-foreground/70">prefers-reduced-motion</code> every state is a
         static dim dot (the ring and the springs stop too).
       </div>
@@ -517,7 +523,7 @@ function StateMotionDots({
 }
 
 const meta = {
-  title: "T3Team/Conversation/Status Dots — State Motion (GHE #201)",
+  title: "T3Team/Chat/Status Dots — State Motion (GHE #201)",
   component: StateMotionDots,
   args: {
     threadState: "auto" as "auto" | DotState,

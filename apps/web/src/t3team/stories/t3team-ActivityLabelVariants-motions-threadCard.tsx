@@ -67,16 +67,20 @@ export function ThreadCard({
       ref={cardRef}
       role="button"
       tabIndex={0}
-      className="group/sidebar-row t3team-label-pass-scope relative w-full cursor-pointer overflow-hidden rounded-md bg-sidebar-row-active text-sidebar-foreground outline-none select-none"
+      className="group/sidebar-row relative w-full cursor-pointer overflow-hidden rounded-md bg-sidebar-row-active text-sidebar-foreground outline-none select-none"
     >
       <ProjectSizer refHost={sizerRef} />
-      <div className="relative z-10 px-[var(--sidebar-row-content-inset)] py-[var(--sidebar-content-inset)]">
+      <div className="relative z-10 px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)">
         {/* header strip */}
         <div className="flex h-5 min-w-0 items-center gap-1.5">
           <ProjectFavicon
-            environmentId={EnvironmentId.make("env-1")}
-            cwd="/tmp/build-40"
-            projectName="build-40"
+            project={{
+              environmentId: EnvironmentId.make("env-1"),
+              workspaceRoot: "/tmp/build-40",
+              title: "build-40",
+              faviconPath: null,
+              projectIcon: null,
+            }}
             className="size-4 shrink-0"
           />
           <span className="min-w-0 flex-1 truncate text-secondary-label text-xs font-medium">
@@ -93,7 +97,7 @@ export function ThreadCard({
             >
               {/* icon glides with the width transition; spins on each update
                   (and, in slide mode, instantly on every label landing) */}
-              <span className="shrink-0 text-sky-600 dark:text-sky-400">
+              <span className="shrink-0 text-info-foreground">
                 <MorphIcon
                   solid={false}
                   pulse
@@ -102,7 +106,7 @@ export function ThreadCard({
                   instant={slide}
                 />
               </span>
-              <span className="relative min-w-0 flex-1 font-medium text-sky-600 dark:text-sky-400">
+              <span className="relative min-w-0 flex-1 font-medium text-info-foreground">
                 {idle ? (
                   <span role="status" className="opacity-60">
                     <span className="t3team-label-shimmer">Waiting</span>

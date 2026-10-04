@@ -15,6 +15,7 @@ import type * as Effect from "effect/Effect";
 import type * as Stream from "effect/Stream";
 
 import type { OrchestrationEventStoreError } from "../Errors.ts";
+import type { OrchestrationEventReplayFilter } from "../../orchestration/t3team-eventReplayFilter.ts";
 
 export interface OrchestrationAggregateReplayRange {
   readonly aggregateKind: OrchestrationEvent["aggregateKind"];
@@ -58,6 +59,27 @@ export interface OrchestrationEventStoreShape {
   readonly readFromSequence: (
     sequenceExclusive: number,
     limit?: number,
+  ) => Stream.Stream<OrchestrationEvent, OrchestrationEventStoreError>;
+
+  /**
+   * Replay attachment-cleanup events plus the current head marker.
+   *
+   * Live storage filters this at the SQL boundary so cleanup recovery does not
+   * decode unrelated message and activity history. Optional for lightweight
+   * test stores; callers fall back to readFromSequence when it is absent.
+   */
+  readonly readAttachmentCleanupCandidatesFromSequence?: (
+    sequenceExclusive: number,
+    limit?: number,
+  ) => Stream.Stream<OrchestrationEvent, OrchestrationEventStoreError>;
+
+  /**
+   * t3team: every event matching `filters`, in sequence order, filtered at the
+   * SQL boundary so a startup rehydrate does not decode unrelated history.
+   * Optional for lightweight test stores.
+   */
+  readonly readMatching?: (
+    filters: ReadonlyArray<OrchestrationEventReplayFilter>,
   ) => Stream.Stream<OrchestrationEvent, OrchestrationEventStoreError>;
 
   /** Read one aggregate through a captured global head, without decoding other streams. */

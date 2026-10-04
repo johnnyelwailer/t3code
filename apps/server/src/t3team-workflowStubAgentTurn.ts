@@ -31,13 +31,15 @@ export interface StubAgentTurn {
   /** One entry per complete assistant message, each split into its streamed delta chunks. */
   readonly messages: ReadonlyArray<ReadonlyArray<string>>;
   readonly createdAt: string;
-  /** How the session ends: `ready` after a normal turn, `error` for a failed one. */
-  readonly endStatus?: "ready" | "error";
+  /** How the session ends: `ready` after a normal turn, `error` for a failed one, `stopped`
+   * when the provider session exited mid-turn, `interrupted` when the turn was aborted before
+   * it completed (host watchdog, provider abort). */
+  readonly endStatus?: "ready" | "error" | "stopped" | "interrupted";
 }
 
 const session = (input: {
   readonly threadId: string;
-  readonly status: "running" | "ready" | "error";
+  readonly status: "running" | "ready" | "error" | "stopped" | "interrupted";
   readonly activeTurnId: string | null;
   readonly createdAt: string;
 }) => ({

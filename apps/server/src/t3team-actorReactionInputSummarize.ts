@@ -129,15 +129,16 @@ export function summarizeActorMessageForDelivery(
 // held message after an upgrade. NEVER used for NEW turns.
 
 /** LEGACY inline cap: bodies at or under this were inlined verbatim. */
-export const LEGACY_T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS = 1500;
-const LEGACY_T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS_ENV = "T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS";
+const LEGACY_T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS = 1500;
+const LEGACY_T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS_ENV =
+  "T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS";
 
 /**
  * Resolve the LEGACY inline cap exactly as the pre-overhaul code did
  * (same env var, same default) so matching stays faithful for distributions
  * that tuned the old cap.
  */
-export function resolveLegacyActorMessageDeliveryMaxChars(): number {
+function resolveLegacyActorMessageDeliveryMaxChars(): number {
   const raw = process.env[LEGACY_T3TEAM_ACTOR_MESSAGE_DELIVERY_MAX_CHARS_ENV]?.trim();
   if (raw !== "") {
     const parsed = Number(raw);

@@ -141,65 +141,13 @@ export const CanonicalRequestType = Schema.Literals([
   "apply_patch_approval",
   "exec_command_approval",
   "mcp_elicitation_approval",
+  "permission_approval",
   "tool_user_input",
   "dynamic_tool_call",
   "auth_tokens_refresh",
   "unknown",
 ]);
 export type CanonicalRequestType = typeof CanonicalRequestType.Type;
-
-const ProviderRuntimeEventType = Schema.Literals([
-  "session.started",
-  "session.configured",
-  "session.state.changed",
-  "session.exited",
-  "thread.started",
-  "thread.state.changed",
-  "thread.metadata.updated",
-  "thread.token-usage.updated",
-  "thread.realtime.started",
-  "thread.realtime.item-added",
-  "thread.realtime.audio.delta",
-  "thread.realtime.error",
-  "thread.realtime.closed",
-  "turn.started",
-  "turn.completed",
-  "turn.aborted",
-  "turn.plan.updated",
-  "turn.proposed.delta",
-  "turn.proposed.completed",
-  "turn.diff.updated",
-  "item.started",
-  "item.updated",
-  "item.completed",
-  "content.delta",
-  "request.opened",
-  "request.resolved",
-  "user-input.requested",
-  "user-input.resolved",
-  "task.started",
-  "task.progress",
-  "task.updated",
-  "task.completed",
-  "hook.started",
-  "hook.progress",
-  "hook.completed",
-  "tool.progress",
-  "tool.summary",
-  "tool.denied",
-  "auth.status",
-  "account.updated",
-  "account.rate-limits.updated",
-  "mcp.status.updated",
-  "mcp.oauth.completed",
-  "model.rerouted",
-  "config.warning",
-  "deprecation.notice",
-  "files.persisted",
-  "runtime.warning",
-  "runtime.error",
-]);
-export type ProviderRuntimeEventType = typeof ProviderRuntimeEventType.Type;
 
 const SessionStartedType = Schema.Literal("session.started");
 const SessionConfiguredType = Schema.Literal("session.configured");
@@ -405,12 +353,30 @@ const TurnCompletedPayload = Schema.Struct({
   totalCostUsd: Schema.optional(Schema.Number),
   errorMessage: Schema.optional(TrimmedNonEmptyStringSchema),
   tokenUsage: Schema.optional(TurnTokenUsage),
+  /**
+   * Adapter-stamped from the provider's STRUCTURED failure data (Claude's
+   * rejected rate-limit window / `rate_limit` assistant error, Codex's
+   * `usageLimitExceeded`), never from message text: the turn failed because
+   * the account's usage or rate limit rejected it. Absent on every other
+   * outcome, and on emitters that cannot tell.
+   */
+  failureKind: Schema.optional(Schema.Literal("usage_limit")),
 });
 export type TurnCompletedPayload = typeof TurnCompletedPayload.Type;
 
 const TurnAbortedPayload = Schema.Struct({
   reason: TrimmedNonEmptyStringSchema,
   tokenUsage: Schema.optional(TurnTokenUsage),
+  /**
+   * Host-stamped (NOT provider-derived): the server set this when the abort
+   * settles a turn a newer sendTurn superseded — a new message replaced the
+   * in-flight turn. The pack's free-text `reason` varies per pack and must
+   * not be matched; this structured marker is the only trusted signal that
+   * the interrupted session is about to run a NEW turn. Absent on genuine
+   * user stops and on every provider-emitted event (old emitters decode
+   * unchanged).
+   */
+  superseded: Schema.optional(Schema.Boolean),
 });
 export type TurnAbortedPayload = typeof TurnAbortedPayload.Type;
 
@@ -536,6 +502,11 @@ export const UserInputQuestion = Schema.Struct({
   header: TrimmedNonEmptyStringSchema,
   question: TrimmedNonEmptyStringSchema,
   options: Schema.Array(UserInputQuestionOption),
+  // Markdown content from earlier in the thread that the question refers to
+  // (options, proposals, or discussion). Rendered above the question in the
+  // dock card so the question is intelligible on its own. Optional: the
+  // provider-native question paths never set it.
+  context: Schema.optional(TrimmedNonEmptyStringSchema),
   allowCustomAnswer: Schema.optional(Schema.Boolean),
   multiSelect: Schema.optional(Schema.Boolean).pipe(
     Schema.withConstructorDefault(Effect.succeed(false)),

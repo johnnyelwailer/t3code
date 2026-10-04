@@ -59,7 +59,7 @@ export function InboxThreadAttribution({ threadId }: { threadId: string }): Reac
     <span
       data-t3team-inbox-attribution
       title={attribution.title || attribution.displayId}
-      className="shrink-0 truncate rounded-sm bg-sidebar-control-surface px-1 text-[0.6875rem] font-medium text-sidebar-muted-foreground"
+      className="shrink-0 truncate rounded-sm bg-sidebar-control-surface px-1 text-2xs font-medium text-sidebar-muted-foreground"
     >
       {attribution.displayId}
     </span>
@@ -100,8 +100,8 @@ export function InboxSubRunsChip({ threadId }: { threadId: string }): ReactNode 
     ? `${counts.running} active ${noun(counts.running)}${settledCount > 0 ? ` · ${settledCount} settled` : ""}`
     : `${settledCount} ${noun(settledCount)}`;
   const chipClass = active
-    ? "flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm bg-sidebar-control-surface px-1 text-[0.6875rem] font-medium tabular-nums text-sidebar-muted-foreground hover:text-sidebar-foreground"
-    : "flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm bg-sidebar-control-surface px-1 text-[0.6875rem] font-medium tabular-nums text-sidebar-muted-foreground/60 hover:text-sidebar-muted-foreground/90";
+    ? "flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm bg-sidebar-control-surface px-1 text-2xs font-medium tabular-nums text-sidebar-muted-foreground hover:text-sidebar-foreground"
+    : "flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm bg-sidebar-control-surface px-1 text-2xs font-medium tabular-nums text-sidebar-muted-foreground/60 hover:text-sidebar-muted-foreground/90";
   return (
     <button
       type="button"

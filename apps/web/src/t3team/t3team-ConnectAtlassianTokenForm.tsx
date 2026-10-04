@@ -71,7 +71,7 @@ export function ConnectAtlassianTokenForm({
           </Button>
         ) : null}
         <Button
-          className="w-full justify-center gap-2 sm:w-auto"
+          className="w-full justify-center sm:w-auto"
           onClick={onSubmit}
           disabled={submitting || !canSubmit}
         >

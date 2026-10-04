@@ -42,6 +42,8 @@ function Row({
         backgroundJobs: [],
         onOpenAgents: () => {},
         threadActivityState,
+        unsettledTurnId: null,
+        backgroundWorktreeSetup: null,
       }}
     >
       <WorkingTimelineRow row={WORKING_ROW} />
@@ -61,7 +63,7 @@ function RowPanel({ width, children }: { width: string; children: React.ReactNod
 }
 
 export default {
-  title: "T3Team/Conversation/Working Row — Long Timer (Writing for 1h 42m)",
+  title: "T3Team/Chat/Working Row — Long Timer (Writing for 1h 42m)",
   tags: ["autodocs"],
 } satisfies Meta;
 
@@ -72,9 +74,7 @@ export const NormalWidths: Story = {
     <div className="flex flex-col items-start gap-3 p-6">
       {["max-w-3xl", "560px", "400px", "320px"].map((width) => (
         <div key={width} className="flex items-center gap-2">
-          <span className="w-20 text-right font-mono text-[10px] text-muted-foreground">
-            {width}
-          </span>
+          <span className="w-20 text-right font-mono text-3xs text-muted-foreground">{width}</span>
           <RowPanel width={width}>
             <Row threadActivityState="writing" />
           </RowPanel>
@@ -89,9 +89,7 @@ export const WithStepLabel: Story = {
     <div className="flex flex-col items-start gap-3 p-6">
       {["max-w-3xl", "400px"].map((width) => (
         <div key={width} className="flex items-center gap-2">
-          <span className="w-20 text-right font-mono text-[10px] text-muted-foreground">
-            {width}
-          </span>
+          <span className="w-20 text-right font-mono text-3xs text-muted-foreground">{width}</span>
           <RowPanel width={width}>
             <Row threadActivityState="writing" workingStepLabel="Updating the release notes" />
           </RowPanel>
@@ -106,9 +104,7 @@ export const NarrowLastResort: Story = {
     <div className="flex flex-col items-start gap-3 p-6">
       {["200px", "140px", "100px"].map((width) => (
         <div key={width} className="flex items-center gap-2">
-          <span className="w-20 text-right font-mono text-[10px] text-muted-foreground">
-            {width}
-          </span>
+          <span className="w-20 text-right font-mono text-3xs text-muted-foreground">{width}</span>
           <RowPanel width={width}>
             <Row threadActivityState="writing" />
           </RowPanel>

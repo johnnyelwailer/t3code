@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import * as DateTime from "effect/DateTime";
 
 import {
   assembleMyWorkDigestChangeRequests,
@@ -35,7 +36,7 @@ function fixtureSources(): T3TeamDigestProjectSource {
     status: i % 3 === 0 ? "To Do" : i % 3 === 1 ? "In Progress" : "Done",
     assignee: i % 4 === 0 ? "Philip" : "Someone",
     // Newest first: ticket 0 is freshest.
-    updatedAt: new Date(Date.UTC(2026, 8, 14, 9, 0) - i * 1000).toISOString(),
+    updatedAt: DateTime.formatIso(DateTime.makeUnsafe(Date.UTC(2026, 8, 14, 9, 0) - i * 1000)),
     url: "https://jira/IES",
     provider: "atlassian",
     kind: "issue",
@@ -50,7 +51,9 @@ function fixtureSources(): T3TeamDigestProjectSource {
     threadTitle: `Work on IES-${1000 + i}`,
     ticketRef: { issueId: `issue-${1000 + i}`, issueKey: `IES-${1000 + i}` },
     agent: i % 2 === 0 ? "codex" : "claude",
-    lastActivityAt: new Date(Date.UTC(2026, 8, 14, 8, 0) - i * 60_000).toISOString(),
+    lastActivityAt: DateTime.formatIso(
+      DateTime.makeUnsafe(Date.UTC(2026, 8, 14, 8, 0) - i * 60_000),
+    ),
   }));
 
   const decisions = [
@@ -79,7 +82,9 @@ function fixtureSources(): T3TeamDigestProjectSource {
         headBranch: `feat/ies-${1002 + (i % 50)}-part`,
         state: closed ? (merged ? "merged" : "closed") : "open",
         isDraft: i % 10 === 9,
-        updatedAt: new Date(Date.UTC(2026, 8, 14, 7, 0) - i * 30_000).toISOString(),
+        updatedAt: DateTime.formatIso(
+          DateTime.makeUnsafe(Date.UTC(2026, 8, 14, 7, 0) - i * 30_000),
+        ),
         viewerReviewRequested: i % 5 === 0,
         ...(i % 5 === 1 ? { reviewDecision: "changes-requested" as const } : {}),
         ...(i % 5 === 2 ? { reviewDecision: "approved" as const } : {}),

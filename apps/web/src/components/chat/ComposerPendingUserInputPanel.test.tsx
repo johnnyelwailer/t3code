@@ -20,17 +20,19 @@ const prompt: PendingUserInput = {
       multiSelect: false,
     },
   ],
+  dismissible: true,
 };
 
-function renderPanel() {
+function renderPanel(pendingUserInput: PendingUserInput = prompt) {
   return renderToStaticMarkup(
     <ComposerPendingUserInputPanel
-      pendingUserInputs={[prompt]}
+      pendingUserInputs={[pendingUserInput]}
       respondingRequestIds={[]}
       answers={{}}
       questionIndex={0}
       onToggleOption={() => {}}
       onAdvance={() => {}}
+      onDismiss={() => {}}
     />,
   );
 }
@@ -50,6 +52,13 @@ describe("ComposerPendingUserInputPanel", () => {
     expect(markup).toMatch(new RegExp(`<div[^>]*\\sid="${controlledId}"`));
   });
 
+  it("offers dismiss only for async questions", () => {
+    expect(renderPanel()).toContain("data-pending-user-input-dismiss");
+    expect(renderPanel({ ...prompt, dismissible: false })).not.toContain(
+      "data-pending-user-input-dismiss",
+    );
+  });
+
   it("starts expanded so the question and its options are visible", () => {
     const markup = renderPanel();
 
@@ -66,6 +75,7 @@ describe("ComposerPendingUserInputPanel", () => {
           {
             requestId: ApprovalRequestId.make("request-md"),
             createdAt: "2026-08-15T00:00:00.000Z",
+            dismissible: false,
             questions: [
               {
                 id: "question-md",
@@ -87,6 +97,7 @@ describe("ComposerPendingUserInputPanel", () => {
         questionIndex={0}
         onToggleOption={() => {}}
         onAdvance={() => {}}
+        onDismiss={() => {}}
       />,
     );
 
@@ -97,5 +108,56 @@ describe("ComposerPendingUserInputPanel", () => {
     expect(markup).not.toContain("The **header** is too long; *drop* it?");
     // Option description: markdown too.
     expect(markup).toContain("<em>panel</em>");
+  });
+
+  it("renders a clamped context strip with an expand affordance above the question", () => {
+    const markup = renderToStaticMarkup(
+      <ComposerPendingUserInputPanel
+        pendingUserInputs={[
+          {
+            requestId: ApprovalRequestId.make("request-ctx"),
+            createdAt: "2026-08-15T00:00:00.000Z",
+            dismissible: false,
+            questions: [
+              {
+                id: "question-ctx",
+                header: "Ship order",
+                question: "Which of these should we ship first?",
+                context: "### Proposed options\n\n1. Ship A — smallest, ships this week",
+                options: [
+                  { label: "Ship A", description: "Ships this week" },
+                  { label: "Ship B", description: "User requested" },
+                ],
+                multiSelect: false,
+              },
+            ],
+          },
+        ]}
+        respondingRequestIds={[]}
+        answers={{}}
+        questionIndex={0}
+        onToggleOption={() => {}}
+        onAdvance={() => {}}
+        onDismiss={() => {}}
+      />,
+    );
+
+    // Context renders as markdown, is clamped, and carries the expand affordance.
+    expect(markup).toMatch(/<h3[^>]*>Proposed options<\/h3>/);
+    expect(markup).toContain("line-clamp-4");
+    expect(markup).toContain("Show full context");
+    // The strip sits ABOVE the question: context markup precedes the question text.
+    const contextAt = markup.indexOf("Ship A — smallest, ships this week");
+    const questionAt = markup.indexOf("Which of these should we ship first?");
+    expect(contextAt).toBeGreaterThan(-1);
+    expect(questionAt).toBeGreaterThan(-1);
+    expect(contextAt).toBeLessThan(questionAt);
+  });
+
+  it("omits the context strip entirely when the question carries no context", () => {
+    const markup = renderPanel();
+
+    expect(markup).not.toContain("Show full context");
+    expect(markup).not.toContain("line-clamp-4");
   });
 });

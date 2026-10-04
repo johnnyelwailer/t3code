@@ -14,6 +14,11 @@ export type PersistedAtlassianAuths = {
   readonly auths: ReadonlyArray<{
     readonly accountId: string;
     readonly auth: JiraApiAuth;
+    /**
+     * Set when Atlassian rejected this account's refresh token as invalid (rotated away by another
+     * installation). Optional so version-1 files written before the flag existed still decode.
+     */
+    readonly needsReconnect?: boolean;
   }>;
 };
 
@@ -44,6 +49,7 @@ const PersistedAtlassianAuths = Schema.Struct({
     Schema.Struct({
       accountId: Schema.String,
       auth: PersistedJiraApiAuth,
+      needsReconnect: Schema.optional(Schema.Boolean),
     }),
   ),
 });
