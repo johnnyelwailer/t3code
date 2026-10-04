@@ -87,6 +87,7 @@ export function useProjectStore() {
     threads,
     liveProjects,
     liveThreads,
+    factsByThreadId,
   });
   const {
     addProject,

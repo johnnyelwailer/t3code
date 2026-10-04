@@ -65,6 +65,27 @@ function projectThreadArraysEqual(
   return left.every((value, index) => value === right[index]);
 }
 
+function workflowRunStatusEqual(
+  left: ProjectThread["workflowRunStatus"],
+  right: ProjectThread["workflowRunStatus"],
+): boolean {
+  if (left === right) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return false;
+  }
+
+  return (
+    left.runId === right.runId &&
+    left.status === right.status &&
+    left.pendingKind === right.pendingKind &&
+    left.wakeAt === right.wakeAt &&
+    left.updatedAt === right.updatedAt
+  );
+}
+
 export function projectThreadsEqual(left: ProjectThread, right: ProjectThread): boolean {
   return (
     left.id === right.id &&
@@ -101,6 +122,13 @@ export function projectThreadsEqual(left: ProjectThread, right: ProjectThread): 
     // Waiting-on-children indicator: a child starting or settling must diff
     // through the equality gate or the parent row would not update.
     left.waitingOnChildren === right.waitingOnChildren &&
+    left.awaitingParent === right.awaitingParent &&
+    // Thread facts arrive on their own stream (`t3team.subscribeThreadFacts`), usually without a
+    // shell change: a fact-only update must diff here or it never reaches the store.
+    workflowRunStatusEqual(left.workflowRunStatus, right.workflowRunStatus) &&
+    left.retention === right.retention &&
+    left.childStatus === right.childStatus &&
+    left.childStatusUpdatedAt === right.childStatusUpdatedAt &&
     projectThreadArraysEqual(left.selectedToolIds, right.selectedToolIds)
   );
 }

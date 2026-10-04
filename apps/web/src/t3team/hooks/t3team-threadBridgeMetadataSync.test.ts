@@ -1,4 +1,9 @@
-import { ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import {
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+  type T3TeamThreadFacts,
+} from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { syncLiveThreadMetadataToLocalState } from "./t3team-threadBridge";
@@ -8,6 +13,7 @@ import {
   makeProjectThread,
   makeStoredProject,
 } from "./t3team-threadBridge.testSupport";
+import type { ProjectThread } from "~/t3team/t3team-types";
 
 const LIVE_SAVED = ProjectId.make("live-saved");
 const storedProjects = [makeStoredProject()];
@@ -90,5 +96,60 @@ describe("syncLiveThreadMetadataToLocalState", () => {
     const child = result.find((thread) => thread.id === "thread-child");
     expect(child).toBeDefined();
     expect(child?.parentThreadId).toBeUndefined();
+  });
+
+  it("lands a fact-only update in the store even when the shell did not change", () => {
+    // V2 delivers workflow/child facts on their own stream: a sleeping routine that wakes moves
+    // only its workflowRunStatus fact, never the launch thread's shell.
+    const shell = makeLiveThreadShell({
+      id: ThreadId.make("thread-launch"),
+      projectId: LIVE_SAVED,
+    });
+    const sync = (threads: ReadonlyArray<ProjectThread>, patch: Partial<T3TeamThreadFacts>) =>
+      syncLiveThreadMetadataToLocalState({
+        threads,
+        storedProjects,
+        liveProjects,
+        liveThreads: [shell],
+        factsByThreadId: new Map([
+          [
+            "thread-launch",
+            { threadId: shell.id, updatedAt: "2026-05-22T10:00:00.000Z", ...patch },
+          ],
+        ]),
+      });
+    const sleeping = sync([], {
+      workflowRunStatus: {
+        runId: "run-1",
+        status: "sleeping",
+        pendingKind: null,
+        wakeAt: "2026-05-23T09:00:00.000Z",
+        updatedAt: "2026-05-22T10:00:00.000Z",
+      },
+    });
+    const askingFacts: Partial<T3TeamThreadFacts> = {
+      workflowRunStatus: {
+        runId: "run-1",
+        status: "suspended",
+        pendingKind: "user.input",
+        wakeAt: null,
+        updatedAt: "2026-05-23T09:00:05.000Z",
+      },
+      childStatus: "Asked the person to pick a branch",
+      childStatusUpdatedAt: "2026-05-23T09:00:05.000Z",
+      retention: "ephemeral",
+    };
+
+    const asking = sync(sleeping, askingFacts);
+
+    expect(asking).not.toBe(sleeping);
+    expect(asking[0]).toMatchObject({
+      workflowRunStatus: { status: "suspended", pendingKind: "user.input" },
+      childStatus: "Asked the person to pick a branch",
+      childStatusUpdatedAt: "2026-05-23T09:00:05.000Z",
+      retention: "ephemeral",
+    });
+    // An unchanged snapshot keeps the array identity (no re-render churn).
+    expect(sync(asking, askingFacts)).toBe(asking);
   });
 });

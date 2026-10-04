@@ -133,24 +133,21 @@ function isLiveChild(thread: ThreadShell): boolean {
   return !isTerminalThreadRunState(deriveLiveThreadRunState(thread, false));
 }
 
-export function syncLiveThreadMetadataToLocalState(input: {
-  threads: ReadonlyArray<ProjectThread>;
-  storedProjects: ReadonlyArray<ProjectShellProject>;
-  liveProjects: ReadonlyArray<Project>;
-  liveThreads: ReadonlyArray<ThreadShell>;
-  factsByThreadId?: ReadonlyMap<string, T3TeamThreadFacts>;
-}): ProjectThread[] {
-  let nextThreads = input.threads as ProjectThread[];
+/**
+ * The parents that have a live child — from V2 lineage or the persisted placement relation (a
+ * workflow child placed under its launch thread). Feeds `hasLiveChildren` of the mapping.
+ */
+export function collectLiveChildParentIds(
+  threads: ReadonlyArray<ProjectThread>,
+  liveThreads: ReadonlyArray<ThreadShell>,
+): ReadonlySet<string> {
   const parentByChildId = new Map(
-    input.threads.flatMap((thread) =>
+    threads.flatMap((thread) =>
       thread.parentThreadId ? [[thread.id, thread.parentThreadId] as const] : [],
     ),
   );
-
-  // Pass 1: collect the parents that have a live child — from V2 lineage or the persisted
-  // placement relation (a workflow child placed under its launch thread).
   const liveChildParentIds = new Set<string>();
-  for (const liveThread of input.liveThreads) {
+  for (const liveThread of liveThreads) {
     const parentId =
       parentByChildId.get(liveThread.id) ??
       (liveThread.lineage.relationshipToParent === "subagent"
@@ -160,9 +157,20 @@ export function syncLiveThreadMetadataToLocalState(input: {
       liveChildParentIds.add(parentId);
     }
   }
+  return liveChildParentIds;
+}
 
-  // Pass 2: map and upsert with the waiting fact folded into the run state, so a parent's flag
-  // reflects children that appear later in the live list. Absence clears on the next sync.
+export function syncLiveThreadMetadataToLocalState(input: {
+  threads: ReadonlyArray<ProjectThread>;
+  storedProjects: ReadonlyArray<ProjectShellProject>;
+  liveProjects: ReadonlyArray<Project>;
+  liveThreads: ReadonlyArray<ThreadShell>;
+  factsByThreadId?: ReadonlyMap<string, T3TeamThreadFacts>;
+}): ProjectThread[] {
+  let nextThreads = input.threads as ProjectThread[];
+  // Collect first, then map: a parent's waiting flag reflects children that appear later in the
+  // live list. Absence clears on the next sync.
+  const liveChildParentIds = collectLiveChildParentIds(input.threads, input.liveThreads);
   for (const liveThread of input.liveThreads) {
     nextThreads = upsertProjectThreadLocalState(
       nextThreads,
