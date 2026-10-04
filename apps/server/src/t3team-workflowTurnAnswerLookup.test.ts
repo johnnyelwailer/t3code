@@ -57,6 +57,37 @@ describe("findCompletedAnswer", () => {
     });
   });
 
+  it("never counts the preamble of a turn that ended without completing", () => {
+    // The thread's latest turn died (interrupted/error): its streamed messages were preamble,
+    // not an answer — the re-drive must re-issue the turn instead of consuming that text.
+    const prompt = message("u2", "user", "workflow prompt");
+    const preamble = {
+      ...message("a2", "assistant", "I'll check the repo first…"),
+      turnId: "turn-dead",
+    } as Message;
+    const t = {
+      messages: [prompt, preamble],
+      latestTurn: { turnId: "turn-dead", state: "interrupted" },
+    } as unknown as OrchestrationThread;
+    expect(findCompletedAnswer(t, "u2")).toBeNull();
+  });
+
+  it("still counts a completed reply when a LATER turn died", () => {
+    // The prompt's own turn completed and answered; a NEWER turn later died. The dead turn's
+    // preamble is skipped, the completed answer still counts.
+    const prompt = message("u2", "user", "workflow prompt");
+    const answer = { ...message("a2", "assistant", "the answer"), turnId: "turn-ok" } as Message;
+    const laterPreamble = {
+      ...message("a3", "assistant", "still working…"),
+      turnId: "turn-dead",
+    } as Message;
+    const t = {
+      messages: [prompt, answer, laterPreamble],
+      latestTurn: { turnId: "turn-dead", state: "error" },
+    } as unknown as OrchestrationThread;
+    expect(findCompletedAnswer(t, "u2")).toEqual({ messageId: "a2", text: "the answer" });
+  });
+
   it("returns null when the prompt is not on the thread", () => {
     expect(findCompletedAnswer(thread([message("a1", "assistant", "x")]), "u9")).toBeNull();
   });

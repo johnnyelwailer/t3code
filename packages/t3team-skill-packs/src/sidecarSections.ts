@@ -50,19 +50,6 @@ const BUNDLED_SIDECAR_SECTIONS: ReadonlyArray<SidecarSectionDefinition> = [
         : [],
     defaults: { collapsed: false, visible: true },
   }),
-  defineSidecarSection({
-    id: "recent-conversations",
-    version: "1.0.0",
-    title: "Recent conversations",
-    shortDescription: "Resume or revisit recent thread activity.",
-    surfaces: [
-      "project.dashboard.backlog",
-      "project.dashboard.myWork",
-      "workitem.detail.sidepanel",
-    ],
-    component: "recent-conversations",
-    defaults: { collapsed: false, visible: true },
-  }),
 ];
 
 export const DEFAULT_SIDECAR_COMPOSITION: SidecarComposition = {

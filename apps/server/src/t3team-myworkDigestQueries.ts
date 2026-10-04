@@ -173,7 +173,7 @@ export function parseDecisionQuestionEntry(
 }
 
 /** All mirror issue refs of one project, parsed (the digest ticket source). */
-export function readDigestTickets(identity: T3TeamBacklogCacheIdentity) {
+function readDigestTickets(identity: T3TeamBacklogCacheIdentity) {
   return Effect.gen(function* () {
     const rows = yield* readCachedBacklogIssueRows(identity);
     const tickets: BacklogResourceRef[] = [];

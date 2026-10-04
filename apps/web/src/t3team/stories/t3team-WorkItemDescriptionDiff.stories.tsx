@@ -120,7 +120,7 @@ function ProposedDescription() {
                   />
                   <span
                     className={cn(
-                      item.kind === "add" ? "rounded-[3px] bg-success/15 px-1" : undefined,
+                      item.kind === "add" ? "rounded-xs bg-success/15 px-1" : undefined,
                     )}
                   >
                     {item.text}
@@ -136,7 +136,7 @@ function ProposedDescription() {
 }
 
 const meta = {
-  title: "T3Team/Work Item Description Diff",
+  title: "T3Team/Work Item/Description Diff",
   parameters: { layout: "padded" },
 } satisfies Meta;
 

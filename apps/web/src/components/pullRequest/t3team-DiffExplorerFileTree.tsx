@@ -75,7 +75,7 @@ export function DiffExplorerFileTree({
       >
         <span className="px-1 font-medium text-foreground">Files</span>
         <span className="tabular-nums">{files.length}</span>
-        <span className="ml-auto tabular-nums text-[11px]">
+        <span className="ml-auto tabular-nums text-2xs">
           {counts.viewed}/{counts.total} viewed
         </span>
         {directoryPaths.length > 0 ? (

@@ -13,7 +13,7 @@ import * as Schema from "effect/Schema";
 
 import * as ResourceTelemetry from "../resourceTelemetry/ResourceTelemetry.ts";
 
-export class ProcessSignalFailed extends Schema.TaggedErrorClass<ProcessSignalFailed>()(
+export class ProcessSignalFailed extends Schema.TaggedError<ProcessSignalFailed>()(
   "ProcessSignalFailed",
   {
     pid: Schema.Number,
@@ -48,12 +48,13 @@ function formatElapsed(runTimeMs: number): string {
     : `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
-function canSignalCategory(category: ResourceTelemetryProcessCategory): boolean {
+export function canSignalCategory(category: ResourceTelemetryProcessCategory): boolean {
   return (
     category === "server-child" || category === "provider-root" || category === "terminal-root"
   );
 }
 
+/** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.fn("makeProcessDiagnostics")(function* () {
   const telemetry = yield* ResourceTelemetry.ResourceTelemetry;
   const refreshedTelemetry = telemetry.refresh.pipe(Effect.catch(() => telemetry.latest));

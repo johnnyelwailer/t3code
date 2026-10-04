@@ -15,7 +15,7 @@ export function ProjectBacklogEstimateReadonlyValue({
   const content = (
     <>
       <span>{presentation.valueText || "-"}</span>
-      <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+      <span className="shrink-0 text-3xs font-medium uppercase tracking-widest text-muted-foreground">
         {presentation.valueSuffix}
       </span>
     </>
@@ -34,7 +34,7 @@ export function ProjectBacklogEstimateReadonlyValue({
       <TooltipTrigger render={<div className={className} aria-label={presentation.tooltipText} />}>
         {content}
       </TooltipTrigger>
-      <TooltipPopup side="top" align="center" className="max-w-80 p-0">
+      <TooltipPopup side="top" align="center">
         <ProjectBacklogEstimateTooltipContent tooltip={presentation.tooltip} />
       </TooltipPopup>
     </Tooltip>
@@ -47,7 +47,7 @@ function ProjectBacklogEstimateTooltipContent({
   tooltip: ProjectBacklogEstimateTooltip;
 }) {
   return (
-    <div className="w-[20rem] space-y-3 px-3 py-2.5 text-left text-[11px] leading-4">
+    <div className="w-[20rem] space-y-3 px-3 py-2.5 text-left text-2xs leading-4">
       <div className="space-y-1.5 border-b border-border/70 pb-2">
         <div className="font-semibold text-foreground">{tooltip.title}</div>
         <div className="rounded-md bg-muted/55 px-2 py-1.5 font-medium text-foreground/85">

@@ -28,21 +28,14 @@ interface ExpandedSubRunsState {
   /** Parent thread ids whose sub-runs chip is currently expanded. */
   readonly expandedParentIds: ReadonlySet<string>;
   readonly toggle: (parentThreadId: string) => void;
-  /**
-   * Adds parent ids to the expanded set without touching ones already
-   * present. Used by Sidebar.tsx to auto-expand a parent the moment one of
-   * its children starts running — additive only, so it can never collapse
-   * anything the user (or a previous auto-expand) already opened.
-   */
-  readonly ensureExpanded: (parentThreadIds: ReadonlyArray<string>) => void;
 }
 
 /**
  * Expansion state for the "N sub-runs" chip (Epic: first-class sub-runbooks,
- * tree v2). Persisted to localStorage (survives reload) and additionally
- * auto-expanded by Sidebar.tsx whenever a parent's children include a
- * RUNNING thread, so active sub-run work is never hidden behind a collapsed
- * chip after a reload — see `ensureExpanded`.
+ * tree v2). Persisted to localStorage (survives reload). Expansion is
+ * user-driven only — a parent is never auto-expanded when one of its
+ * children starts running, so freshly started child threads keep the row
+ * collapsed; `toggle` is the sole mutator.
  */
 export const useExpandedSubRunsStore = create<ExpandedSubRunsState>((set) => ({
   expandedParentIds: readPersistedExpandedParentIds(),
@@ -54,15 +47,6 @@ export const useExpandedSubRunsStore = create<ExpandedSubRunsState>((set) => ({
       } else {
         next.add(parentThreadId);
       }
-      writePersistedExpandedParentIds(next);
-      return { expandedParentIds: next };
-    }),
-  ensureExpanded: (parentThreadIds) =>
-    set((state) => {
-      const missing = parentThreadIds.filter((id) => !state.expandedParentIds.has(id));
-      if (missing.length === 0) return state;
-      const next = new Set(state.expandedParentIds);
-      for (const id of missing) next.add(id);
       writePersistedExpandedParentIds(next);
       return { expandedParentIds: next };
     }),

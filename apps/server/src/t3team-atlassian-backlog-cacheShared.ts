@@ -18,6 +18,8 @@ export type T3TeamBacklogSelectionInput = {
 export type T3TeamAtlassianBacklogCapabilities = {
   readonly canCreateSubtasks: boolean;
   readonly estimateFieldLabel?: string;
+  /** The connection lacks the Jira Software scopes; board filters need a reconnect. */
+  readonly boardScopeMissing?: true;
 };
 
 export type T3TeamAtlassianBacklogPayload = {

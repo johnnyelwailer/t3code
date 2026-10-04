@@ -15,7 +15,7 @@ interface RecipePathRow {
   readonly recipe_path: string | null;
 }
 
-const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
+const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layer({ filename: ":memory:" })));
 
 layer("t3team-045_WorkflowRecipePath", (it) => {
   it.effect("adds nullable recipe_path TEXT to workflow_runs", () =>

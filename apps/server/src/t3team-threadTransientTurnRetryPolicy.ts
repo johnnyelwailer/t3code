@@ -123,6 +123,7 @@ type TurnCompletedLike = {
   readonly state: string;
   readonly stopReason?: unknown;
   readonly errorMessage?: unknown;
+  readonly failureKind?: unknown;
 };
 
 /** 423 / gpu-reservation class, per the shared classifier vocabulary. */
@@ -139,6 +140,9 @@ export function classifyTransientTurnFailure(
   payload: TurnCompletedLike,
 ): { readonly reason: string; readonly directiveSeconds: number | null } | null {
   if (payload.state !== "failed") return null;
+  // A usage-limit wall is not transient: the usage watcher replays it once
+  // after the window resets, so a seconds-scale retry would only hit it again.
+  if (payload.failureKind === "usage_limit") return null;
   const text = [payload.errorMessage, payload.stopReason]
     .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
     .join(" ");

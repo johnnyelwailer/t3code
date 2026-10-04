@@ -11,6 +11,8 @@
  */
 
 import type { WorkflowRef, WorkflowRunOptions } from "@t3team/sdk";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
 import { createWorkflowEngineBroker } from "./t3team-workflowEngineBroker.ts";
 import {
@@ -84,6 +86,38 @@ export function createWorkflowRunControllerEnv(
           afterPrimitive: () => input.lifecycle!.releaseActive(),
           recordPending: (pending) => input.lifecycle!.recordSuspended(pending),
           recordSleeping: (sleep) => input.lifecycle!.recordSleeping(sleep),
+          recordWatching: async (watch) => {
+            await input.lifecycle!.recordWatching?.(watch);
+          },
+        }),
+    // Signal-source hooks (GHE #332): the binding FACT upserts into the durable registrations
+    // table then pokes the reconciler; a `signal.wait` live-drains the durable inbox (first-wins
+    // take). Absent on the fs/in-memory path — the signal verbs then no-op.
+    ...(input.signalStore === undefined
+      ? {}
+      : {
+          recordSignalRegistration: (reg) =>
+            Effect.runPromise(
+              input.signalStore!.upsertRegistration({
+                runId: input.runId,
+                sourceName: reg.source,
+                paramsHash: reg.paramsHash,
+                params: reg.params,
+                registeredAt: input.nowIso(),
+              }),
+            ).then(() => {
+              input.pokeSignalReconcile?.();
+            }),
+          drainSignalWait: (wait) =>
+            Effect.runPromise(
+              input.signalStore!.takeOpenInboxEntry({
+                sourceName: wait.source,
+                paramsHash: wait.paramsHash,
+                signalName: wait.signal,
+                key: wait.key,
+                deliveredAt: input.nowIso(),
+              }),
+            ).then((entry) => (Option.isSome(entry) ? entry.value.payload : undefined)),
         }),
   });
   const options: WorkflowRunOptions = {

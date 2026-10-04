@@ -22,13 +22,11 @@ Whitelisting ~1,000 files individually is not viable and would defeat the guard'
 The blocking base is therefore a **frozen fork-baseline tag**, recorded in
 `.t3team-additive-guard.json` as `forkBaselineRef`:
 
-- Current: `t3team/fork-baseline-20260915b` → fork commit `b1712df988` (post-merge main head
-  after PR #262). Grandfathered: everything in main up to and including #262.
-- Previous: `t3team/fork-baseline-20260915` → fork commit `a6277f7de9` (post-merge main head
-  after PR #259; superseded when #262 advanced main).
-- Previous: `t3team/fork-baseline-20260908-postsync` → fork commit `046a181c46` (the
-  post-merge-main tree after PR #188 absorbed the 2026-09-06/07 upstream sync plus the
-  guard rebaseline).
+- Current: `t3team/fork-baseline-20260927` → fork commit `1fad6113ea` (the tree the
+  2026-09-27 upstream sync lands on main). Grandfathered: the 391 absorbed upstream commits.
+- Before that: `t3team/fork-baseline-20260908-postsync` → fork commit `598218c705` (the
+  tag was re-pointed after the 2026-09-17 sync; originally `046a181c46`, the post-merge-main
+  tree after PR #188 absorbed the 2026-09-06/07 upstream sync plus the guard rebaseline).
 - Previous: `t3team/fork-baseline-20260908` → fork main commit `06c2bc30f0` (2026-09-08,
   cut before the sync was merged into main; kept for history — see "Move record" below).
 - Everything inside the tree the tag points at is **grandfathered debt**. It is not re-checked.
@@ -68,12 +66,11 @@ git push origin t3team/fork-baseline-YYYYMMDD
 
 ### Move record
 
-| date       | from                                     | to                                                      | reason                                                                                                                                                                                                                                               |
-| ---------- | ---------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-08 | —                                        | `t3team/fork-baseline-20260908` (`06c2bc30f0`)          | First baseline; grandfathers the pre-existing fork debt that red the guard on every CI run since 2026-09-06.                                                                                                                                         |
-| 2026-09-08 | `t3team/fork-baseline-20260908`          | `t3team/fork-baseline-20260908-postsync` (`046a181c46`) | PR #188 absorbed the 2026-09-06/07 upstream sync into main; the post-merge main tree (== the `046a181c46` tree) is grandfathered so main and every PR forked off it measure only their own additions.                                                |
-| 2026-09-15 | `t3team/fork-baseline-20260908-postsync` | `t3team/fork-baseline-20260915` (`a6277f7de9`)          | Post-baseline PRs (#255, #258, #259) modified upstream files without allowlist entries, red-ing the guard on main and every open PR; the post-merge main tree is grandfathered so main and PRs forked off it measure only their own additions again. |
-| 2026-09-15 | `t3team/fork-baseline-20260915`          | `t3team/fork-baseline-20260915b` (`b1712df988`)         | PR #262 (Atlassian OAuth port pin) merged into main after the previous baseline was cut; its 6-file desktop change is grandfathered by rebasing the blocking base onto current main head so it is not read as a new unwhitelisted upstream edit.     |
+| date       | from                                     | to                                                      | reason                                                                                                                                                                                                                  |
+| ---------- | ---------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-08 | —                                        | `t3team/fork-baseline-20260908` (`06c2bc30f0`)          | First baseline; grandfathers the pre-existing fork debt that red the guard on every CI run since 2026-09-06.                                                                                                            |
+| 2026-09-08 | `t3team/fork-baseline-20260908`          | `t3team/fork-baseline-20260908-postsync` (`046a181c46`) | PR #188 absorbed the 2026-09-06/07 upstream sync into main; the post-merge main tree (== the `046a181c46` tree) is grandfathered so main and every PR forked off it measure only their own additions.                   |
+| 2026-09-27 | `t3team/fork-baseline-20260908-postsync` | `t3team/fork-baseline-20260927` (`1fad6113ea`)          | The 2026-09-27 upstream sync (de251fc297, 391 commits). Against the old tag the guard flagged 5,017 new lines; 4,990 were upstream-identical files and the rest were reviewed fork resolutions (listed in the sync PR). |
 
 Until the new tag is pushed, the guard fails loudly on CI (missing tag), never silently.
 
@@ -231,6 +228,35 @@ Until the new tag is pushed, the guard fails loudly on CI (missing tag), never s
   - Diff `activityState` / `activityLabel` through the upsert equality gate or state transitions would not re-render rows.
 - `apps/web/src/t3team/stories/t3team-ActivityLabelPill.stories.tsx`
   - Extend the #40 stories: one story per state word, enrichment composition, flag-off, idle-cleared, and reduced-motion.
+
+## ask-user context — docked question references prior content
+
+- `packages/contracts/src/providerRuntime.ts`
+  - Optional `context` field on `UserInputQuestion` so a docked `t3team_ask_user` question can carry the content it refers to; shared with provider-native questions, but the field is optional so existing adapter payloads stay valid.
+
+## Cloud-sessions stack re-land (2026-09-15)
+
+Upstream files the cloud-sessions stack (branch `work/cloud-sessions-stack`) touches while landing on current main.
+
+- `apps/server/src/orchestration/Layers/CheckpointReactor.test.ts`
+  - Fork provenance note (#236): the checkpoint-reactor test now expects the note's model-transition payload shape.
+- `apps/server/src/serverRuntimeStartup.reconcile.test.ts`
+  - Same #236 change surfaced in the startup-reconcile test fixtures.
+- `apps/server/src/project/RepositoryIdentityResolver.ts` + `apps/server/src/project/RepositoryIdentityResolver.test.ts`
+  - #239: prefer `origin` over `upstream` when resolving the primary remote, so fork-side `gh`/git operations target the fork.
+- `apps/web/src/hooks/useTheme.ts`
+  - Expose the theme-snapshot trigger so widget iframes resnapshot on host theme flips.
+- `packages/project-context/src/t3teamWidgetGuidance.ts`
+  - Widget guidance carries the theme-token + icon-sprite contract so `t3team_show_widget` renders against the host theme.
+
+## Cloud-sessions UI fixes (2026-09-28)
+
+- `apps/web/src/components/onboarding/WelcomeWizard.tsx`
+  - Onboarding no longer auto-ticks an unreachable computer, and one does not block Continue; the rules live in `t3team-onboardingComputerSelection.ts`.
+- `apps/web/src/components/onboarding/WelcomeWizard.test.tsx`
+  - Covers the rule above, and repairs the `publicConfig` mock that upstream's `lib/runtime` import broke (the whole suite failed on `853cf6d3e6`).
+- `apps/web/src/components/cloud/CloudEnvironmentConnectList.tsx`
+  - The same rule for discovered T3 Connect computers: an offline relay is listed but not auto-ticked.
 
 ## Allowed Unprefixed New Files
 

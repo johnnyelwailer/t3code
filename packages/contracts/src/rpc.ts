@@ -6,6 +6,8 @@ import {
   ProviderAuthCancelInput,
   ProviderAuthCompleteInput,
   ProviderAuthState,
+  ProviderAuthStartInput,
+  ProviderAuthRespondInput,
   ProviderInstallCancelInput,
   ProviderInstallState,
   ProviderSetupError,
@@ -46,6 +48,12 @@ import {
   AttachmentDeleteInput,
   AttachmentUploadSigningKeyError,
 } from "./assets.ts";
+import {
+  WorktreeSetupCancelInput,
+  WorktreeSetupCancelResult,
+  WorktreeSetupStreamEvent,
+  WorktreeSetupSubscribeInput,
+} from "./worktreeSetup.ts";
 import {
   GitActionProgressEvent,
   VcsSwitchRefInput,
@@ -105,8 +113,10 @@ import {
   PullRequestCommentInput,
   PullRequestCommentUpdateInput,
   PullRequestDetail,
+  PullRequestPreview,
   PullRequestDiffFileContentsInput,
   PullRequestDiffFileContentsResult,
+  PullRequestFilesViewedResult,
   PullRequestInvalidateInput,
   PullRequestListInput,
   PullRequestListResult,
@@ -115,11 +125,17 @@ import {
   PullRequestOperationError,
   PullRequestReactionInput,
   PullRequestRef,
+  PullRequestRoutingResult,
+  PullRequestRoutingIdentityInput,
+  PullRequestRoutingIdentityResult,
+  PullRequestStack,
+  PullRequestLinkedThreadsResult,
   PullRequestSummary,
   PullRequestReviewerCandidateList,
   PullRequestReviewerRequestInput,
   PullRequestLabelCandidateList,
   PullRequestLabelChangeInput,
+  PullRequestSetFilesViewedInput,
   PullRequestSubmitReviewInput,
   PullRequestThreadCommentsInput,
   PullRequestThreadCommentsResult,
@@ -128,6 +144,13 @@ import {
   PullRequestUnavailableError,
   PullRequestUpdateInput,
 } from "./pullRequest.ts";
+import {
+  CloudSessionCancelInputSchema,
+  CloudSessionCreateInputSchema,
+  CloudSessionFailedError,
+  CloudSessionListResultSchema,
+  CloudSessionSchema,
+} from "./t3team-cloudSession.ts";
 import {
   RelayClientInstallFailedError,
   RelayClientInstallProgressEventSchema,
@@ -180,6 +203,21 @@ import {
   PreviewSessionSnapshot,
 } from "./preview.ts";
 import {
+  DeviceActionInput,
+  DeviceCloseInput,
+  DeviceConfigureInput,
+  DeviceDetail,
+  DeviceDetailInput,
+  DeviceError,
+  DeviceListInput,
+  SshDeviceHostConfig,
+  DeviceHostSummary,
+  DeviceOpenInput,
+  DeviceServiceState,
+  DeviceSession,
+  DeviceShutdownInput,
+} from "./device.ts";
+import {
   PreviewAutomationError,
   PreviewAutomationHost,
   PreviewAutomationHostFocus,
@@ -216,12 +254,28 @@ import {
   ResourceTelemetryRetryResult,
   ResourceTelemetrySnapshot,
 } from "./resourceTelemetry.ts";
+import { ResourcePressureReport, ResourcePressureSweepResult } from "./t3team-resourcePressure.ts";
 import {
+  ResourcePressureCleanupExecuteInput,
+  ResourcePressureCleanupInput,
+  ResourcePressureCleanupPlan,
+  ResourcePressureCleanupResult,
+} from "./t3team-resourcePressureCleanup.ts";
+import {
+  UsageLimitSourceError,
   ProviderConsumeResetCreditInput,
   ProviderConsumeResetCreditResult,
 } from "./providerUsageLimits.ts";
 import { UsagePricing, UsageReadError, UsageSummary, UsageSummaryInput } from "./usage.ts";
 import { ServerSettings, ServerSettingsError, ServerSettingsPatch } from "./settings.ts";
+import {
+  ProjectCloneActionInput,
+  ProjectCloneActionResult,
+  ProjectCloneListEvent,
+  ProjectCloneStartInput,
+  ProjectCloneStartResult,
+  ProjectCloneSubscribeInput,
+} from "./projectClone.ts";
 import {
   SourceControlCloneRepositoryInput,
   SourceControlCloneRepositoryResult,
@@ -274,6 +328,7 @@ export const WS_METHODS = {
   providerAuthStart: "provider.auth.start",
   providerConsumeResetCredit: "provider.consumeResetCredit",
   providerAuthComplete: "provider.auth.complete",
+  providerAuthRespond: "provider.auth.respond",
   providerAuthCancel: "provider.auth.cancel",
   providerAuthLogout: "provider.auth.logout",
   providerAuthSubscribe: "provider.auth.subscribe",
@@ -322,6 +377,16 @@ export const WS_METHODS = {
   previewAutomationRespond: "previewAutomation.respond",
   previewAutomationFocusHost: "previewAutomation.focusHost",
 
+  // Device methods
+  deviceConfigure: "device.configure",
+  deviceList: "device.list",
+  deviceTestHost: "device.testHost",
+  deviceOpen: "device.open",
+  deviceClose: "device.close",
+  deviceShutdown: "device.shutdown",
+  deviceDetail: "device.detail",
+  deviceAction: "device.action",
+
   // Server meta
   serverProbe: "server.probe",
   serverGetConfig: "server.getConfig",
@@ -342,6 +407,10 @@ export const WS_METHODS = {
   serverGetResourceTelemetryHistory: "server.getResourceTelemetryHistory",
   serverRetryResourceTelemetry: "server.retryResourceTelemetry",
   serverSignalProcess: "server.signalProcess",
+  serverGetResourcePressure: "server.getResourcePressure",
+  serverSweepStorageNow: "server.sweepStorageNow",
+  serverPreviewThreadResourceCleanup: "server.previewThreadResourceCleanup",
+  serverCleanupThreadResources: "server.cleanupThreadResources",
   serverReportClientActivity: "server.reportClientActivity",
   serverReportHostPowerState: "server.reportHostPowerState",
   serverGetBackgroundPolicy: "server.getBackgroundPolicy",
@@ -351,15 +420,25 @@ export const WS_METHODS = {
   // Cloud environment methods
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
   cloudInstallRelayClient: "cloud.installRelayClient",
+  cloudSessionList: "cloud.session.list",
+  cloudSessionCreate: "cloud.session.create",
+  cloudSessionCancel: "cloud.session.cancel",
 
   // Pull request methods
   pullRequestsList: "pullRequests.list",
   pullRequestsListStats: "pullRequests.listStats",
   pullRequestsSummary: "pullRequests.summary",
+  pullRequestsRouting: "pullRequests.routing",
+  pullRequestsRoutingIdentity: "pullRequests.routingIdentity",
+  pullRequestsStack: "pullRequests.stack",
+  pullRequestsLinkedThreads: "pullRequests.linkedThreads",
   pullRequestsDetail: "pullRequests.detail",
+  pullRequestsPreview: "pullRequests.preview",
   pullRequestsActivity: "pullRequests.activity",
   pullRequestsThreadComments: "pullRequests.threadComments",
   pullRequestsDiffFileContents: "pullRequests.diffFileContents",
+  pullRequestsFilesViewed: "pullRequests.filesViewed",
+  pullRequestsSetFilesViewed: "pullRequests.setFilesViewed",
   pullRequestsRunAction: "pullRequests.runAction",
   pullRequestsUpdate: "pullRequests.update",
   pullRequestsComment: "pullRequests.comment",
@@ -379,6 +458,10 @@ export const WS_METHODS = {
   sourceControlLookupRepository: "sourceControl.lookupRepository",
   sourceControlCloneRepository: "sourceControl.cloneRepository",
   sourceControlPublishRepository: "sourceControl.publishRepository",
+  projectCloneStart: "projectClone.start",
+  projectCloneCancel: "projectClone.cancel",
+  projectCloneRetry: "projectClone.retry",
+  subscribeProjectClones: "subscribeProjectClones",
 
   // Tool auth methods (Connected tools: signing `claude`/`codex` into a
   // hosted sandbox from the UI)
@@ -390,10 +473,13 @@ export const WS_METHODS = {
 
   // Streaming subscriptions
   subscribeVcsStatus: "subscribeVcsStatus",
+  subscribeWorktreeSetup: "subscribeWorktreeSetup",
+  worktreeSetupCancel: "worktreeSetup.cancel",
   subscribeTerminalEvents: "subscribeTerminalEvents",
   subscribeTerminalMetadata: "subscribeTerminalMetadata",
   subscribePreviewEvents: "subscribePreviewEvents",
   subscribeDiscoveredLocalServers: "subscribeDiscoveredLocalServers",
+  subscribeDeviceState: "subscribeDeviceState",
   subscribeServerConfig: "subscribeServerConfig",
   subscribeServerLifecycle: "subscribeServerLifecycle",
   subscribeAuthAccess: "subscribeAuthAccess",
@@ -436,7 +522,8 @@ const WsServerRefreshProvidersRpc = Rpc.make(WS_METHODS.serverRefreshProviders, 
      */
     instanceId: Schema.optional(ProviderInstanceId),
     cwd: Schema.optional(TrimmedNonEmptyString),
-    /** Explicit user request. Background status refreshes must not open agent sessions. */
+    /** Explicit user request: bypass T3-owned caches and rediscover models.
+     * Background status refreshes must not open agent sessions. */
     refreshModels: Schema.optional(Schema.Boolean),
   }),
   success: ServerProviderUpdatedPayload,
@@ -454,11 +541,17 @@ const ProviderSetupRpcError = Schema.Union([ProviderSetupError, EnvironmentAutho
 const WsProviderConsumeResetCreditRpc = Rpc.make(WS_METHODS.providerConsumeResetCredit, {
   payload: ProviderConsumeResetCreditInput,
   success: ProviderConsumeResetCreditResult,
-  error: ProviderSetupRpcError,
+  error: Schema.Union([ProviderSetupError, UsageLimitSourceError, EnvironmentAuthorizationError]),
 });
 
 const WsProviderAuthStartRpc = Rpc.make(WS_METHODS.providerAuthStart, {
-  payload: ProviderSetupInput,
+  payload: ProviderAuthStartInput,
+  success: ProviderAuthState,
+  error: ProviderSetupRpcError,
+});
+
+const WsProviderAuthRespondRpc = Rpc.make(WS_METHODS.providerAuthRespond, {
+  payload: ProviderAuthRespondInput,
   success: ProviderAuthState,
   error: ProviderSetupRpcError,
 });
@@ -605,6 +698,36 @@ const WsServerRefreshUsageRatesRpc = Rpc.make(WS_METHODS.serverRefreshUsageRates
   error: EnvironmentAuthorizationError,
 });
 
+// Memory-pressure model over resource telemetry (flag NEXI_FF_RESOURCE_PRESSURE).
+const WsServerGetResourcePressureRpc = Rpc.make(WS_METHODS.serverGetResourcePressure, {
+  payload: Schema.Struct({}),
+  success: ResourcePressureReport,
+  error: EnvironmentAuthorizationError,
+});
+
+// Runs the existing policy-driven storage sweep (worktree cleanup rules) now.
+const WsServerSweepStorageNowRpc = Rpc.make(WS_METHODS.serverSweepStorageNow, {
+  payload: Schema.Struct({}),
+  success: ResourcePressureSweepResult,
+  error: EnvironmentAuthorizationError,
+});
+
+// One thread's agent session + background jobs: preview (PIDs and why), then act on the confirmed set.
+const WsServerPreviewThreadResourceCleanupRpc = Rpc.make(
+  WS_METHODS.serverPreviewThreadResourceCleanup,
+  {
+    payload: ResourcePressureCleanupInput,
+    success: ResourcePressureCleanupPlan,
+    error: EnvironmentAuthorizationError,
+  },
+);
+
+const WsServerCleanupThreadResourcesRpc = Rpc.make(WS_METHODS.serverCleanupThreadResources, {
+  payload: ResourcePressureCleanupExecuteInput,
+  success: ResourcePressureCleanupResult,
+  error: EnvironmentAuthorizationError,
+});
+
 const WsServerSignalProcessRpc = Rpc.make(WS_METHODS.serverSignalProcess, {
   payload: ServerSignalProcessInput,
   success: ServerSignalProcessResult,
@@ -622,6 +745,24 @@ const WsCloudInstallRelayClientRpc = Rpc.make(WS_METHODS.cloudInstallRelayClient
   success: RelayClientInstallProgressEventSchema,
   error: Schema.Union([RelayClientInstallFailedError, EnvironmentAuthorizationError]),
   stream: true,
+});
+
+const WsCloudSessionListRpc = Rpc.make(WS_METHODS.cloudSessionList, {
+  payload: Schema.Struct({}),
+  success: CloudSessionListResultSchema,
+  error: Schema.Union([CloudSessionFailedError, EnvironmentAuthorizationError]),
+});
+
+const WsCloudSessionCreateRpc = Rpc.make(WS_METHODS.cloudSessionCreate, {
+  payload: CloudSessionCreateInputSchema,
+  success: CloudSessionSchema,
+  error: Schema.Union([CloudSessionFailedError, EnvironmentAuthorizationError]),
+});
+
+const WsCloudSessionCancelRpc = Rpc.make(WS_METHODS.cloudSessionCancel, {
+  payload: CloudSessionCancelInputSchema,
+  success: Schema.Void,
+  error: Schema.Union([CloudSessionFailedError, EnvironmentAuthorizationError]),
 });
 
 const WsServerReportClientActivityRpc = Rpc.make(WS_METHODS.serverReportClientActivity, {
@@ -663,15 +804,45 @@ const WsPullRequestsListStatsRpc = Rpc.make(WS_METHODS.pullRequestsListStats, {
   error: PullRequestRpcError,
 });
 
+const WsPullRequestsRoutingRpc = Rpc.make(WS_METHODS.pullRequestsRouting, {
+  payload: PullRequestRef,
+  success: PullRequestRoutingResult,
+  error: PullRequestRpcError,
+});
+
+const WsPullRequestsRoutingIdentityRpc = Rpc.make(WS_METHODS.pullRequestsRoutingIdentity, {
+  payload: PullRequestRoutingIdentityInput,
+  success: PullRequestRoutingIdentityResult,
+  error: PullRequestRpcError,
+});
+
 const WsPullRequestsSummaryRpc = Rpc.make(WS_METHODS.pullRequestsSummary, {
   payload: PullRequestRef,
   success: PullRequestSummary,
   error: PullRequestRpcError,
 });
 
+const WsPullRequestsStackRpc = Rpc.make(WS_METHODS.pullRequestsStack, {
+  payload: PullRequestRef,
+  success: Schema.NullOr(PullRequestStack),
+  error: PullRequestRpcError,
+});
+
+const WsPullRequestsLinkedThreadsRpc = Rpc.make(WS_METHODS.pullRequestsLinkedThreads, {
+  payload: PullRequestRef,
+  success: PullRequestLinkedThreadsResult,
+  error: PullRequestRpcError,
+});
+
 const WsPullRequestsDetailRpc = Rpc.make(WS_METHODS.pullRequestsDetail, {
   payload: PullRequestRef,
   success: PullRequestDetail,
+  error: PullRequestRpcError,
+});
+
+const WsPullRequestsPreviewRpc = Rpc.make(WS_METHODS.pullRequestsPreview, {
+  payload: PullRequestRef,
+  success: PullRequestPreview,
   error: PullRequestRpcError,
 });
 
@@ -690,6 +861,18 @@ const WsPullRequestsThreadCommentsRpc = Rpc.make(WS_METHODS.pullRequestsThreadCo
 const WsPullRequestsDiffFileContentsRpc = Rpc.make(WS_METHODS.pullRequestsDiffFileContents, {
   payload: PullRequestDiffFileContentsInput,
   success: PullRequestDiffFileContentsResult,
+  error: PullRequestRpcError,
+});
+
+const WsPullRequestsFilesViewedRpc = Rpc.make(WS_METHODS.pullRequestsFilesViewed, {
+  payload: PullRequestRef,
+  success: PullRequestFilesViewedResult,
+  error: PullRequestRpcError,
+});
+
+const WsPullRequestsSetFilesViewedRpc = Rpc.make(WS_METHODS.pullRequestsSetFilesViewed, {
+  payload: PullRequestSetFilesViewedInput,
+  success: Schema.Void,
   error: PullRequestRpcError,
 });
 
@@ -796,6 +979,37 @@ const WsSourceControlCloneRepositoryRpc = Rpc.make(WS_METHODS.sourceControlClone
   error: Schema.Union([SourceControlRepositoryError, EnvironmentAuthorizationError]),
 });
 
+// Clone-backed project creation. `start` returns once the project exists and
+// the clone is running; progress arrives on the subscription.
+const WsProjectCloneStartRpc = Rpc.make(WS_METHODS.projectCloneStart, {
+  payload: ProjectCloneStartInput,
+  success: ProjectCloneStartResult,
+  error: Schema.Union([
+    SourceControlRepositoryError,
+    OrchestrationDispatchCommandError,
+    EnvironmentAuthorizationError,
+  ]),
+});
+
+const WsProjectCloneCancelRpc = Rpc.make(WS_METHODS.projectCloneCancel, {
+  payload: ProjectCloneActionInput,
+  success: ProjectCloneActionResult,
+  error: EnvironmentAuthorizationError,
+});
+
+const WsProjectCloneRetryRpc = Rpc.make(WS_METHODS.projectCloneRetry, {
+  payload: ProjectCloneActionInput,
+  success: ProjectCloneActionResult,
+  error: Schema.Union([SourceControlRepositoryError, EnvironmentAuthorizationError]),
+});
+
+const WsSubscribeProjectClonesRpc = Rpc.make(WS_METHODS.subscribeProjectClones, {
+  payload: ProjectCloneSubscribeInput,
+  success: ProjectCloneListEvent,
+  error: EnvironmentAuthorizationError,
+  stream: true,
+});
+
 const WsSourceControlPublishRepositoryRpc = Rpc.make(WS_METHODS.sourceControlPublishRepository, {
   payload: SourceControlPublishRepositoryInput,
   success: SourceControlPublishRepositoryResult,
@@ -900,6 +1114,19 @@ const WsVcsRefreshStatusRpc = Rpc.make(WS_METHODS.vcsRefreshStatus, {
   payload: VcsStatusInput,
   success: VcsStatusResult,
   error: Schema.Union([GitManagerServiceError, EnvironmentAuthorizationError]),
+});
+
+const WsSubscribeWorktreeSetupRpc = Rpc.make(WS_METHODS.subscribeWorktreeSetup, {
+  payload: WorktreeSetupSubscribeInput,
+  success: WorktreeSetupStreamEvent,
+  error: EnvironmentAuthorizationError,
+  stream: true,
+});
+
+const WsWorktreeSetupCancelRpc = Rpc.make(WS_METHODS.worktreeSetupCancel, {
+  payload: WorktreeSetupCancelInput,
+  success: WorktreeSetupCancelResult,
+  error: EnvironmentAuthorizationError,
 });
 
 const WsGitRunStackedActionRpc = Rpc.make(WS_METHODS.gitRunStackedAction, {
@@ -1079,6 +1306,59 @@ const WsSubscribeDiscoveredLocalServersRpc = Rpc.make(WS_METHODS.subscribeDiscov
     configuredUrls: Schema.optional(ConfiguredLocalServerUrls),
   }),
   success: DiscoveredLocalServerList,
+  error: EnvironmentAuthorizationError,
+  stream: true,
+});
+
+const WsDeviceTestHostRpc = Rpc.make(WS_METHODS.deviceTestHost, {
+  payload: SshDeviceHostConfig,
+  success: DeviceHostSummary,
+  error: Schema.Union([DeviceError, EnvironmentAuthorizationError]),
+});
+
+const WsDeviceListRpc = Rpc.make(WS_METHODS.deviceList, {
+  payload: DeviceListInput,
+  success: DeviceServiceState,
+  error: Schema.Union([DeviceError, EnvironmentAuthorizationError]),
+});
+
+const WsDeviceConfigureRpc = Rpc.make(WS_METHODS.deviceConfigure, {
+  payload: DeviceConfigureInput,
+  success: DeviceServiceState,
+  error: Schema.Union([DeviceError, EnvironmentAuthorizationError]),
+});
+
+const WsDeviceOpenRpc = Rpc.make(WS_METHODS.deviceOpen, {
+  payload: DeviceOpenInput,
+  success: DeviceSession,
+  error: Schema.Union([DeviceError, EnvironmentAuthorizationError]),
+});
+
+const WsDeviceCloseRpc = Rpc.make(WS_METHODS.deviceClose, {
+  payload: DeviceCloseInput,
+  error: Schema.Union([DeviceError, EnvironmentAuthorizationError]),
+});
+
+const WsDeviceShutdownRpc = Rpc.make(WS_METHODS.deviceShutdown, {
+  payload: DeviceShutdownInput,
+  error: Schema.Union([DeviceError, EnvironmentAuthorizationError]),
+});
+
+const WsDeviceDetailRpc = Rpc.make(WS_METHODS.deviceDetail, {
+  payload: DeviceDetailInput,
+  success: DeviceDetail,
+  error: Schema.Union([DeviceError, EnvironmentAuthorizationError]),
+});
+
+const WsDeviceActionRpc = Rpc.make(WS_METHODS.deviceAction, {
+  payload: DeviceActionInput,
+  success: DeviceDetail,
+  error: Schema.Union([DeviceError, EnvironmentAuthorizationError]),
+});
+
+const WsSubscribeDeviceStateRpc = Rpc.make(WS_METHODS.subscribeDeviceState, {
+  payload: Schema.Struct({}),
+  success: DeviceServiceState,
   error: EnvironmentAuthorizationError,
   stream: true,
 });
@@ -1265,6 +1545,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsProviderConsumeResetCreditRpc,
   WsProviderAuthStartRpc,
   WsProviderAuthCompleteRpc,
+  WsProviderAuthRespondRpc,
   WsProviderAuthCancelRpc,
   WsProviderAuthLogoutRpc,
   WsProviderAuthSubscribeRpc,
@@ -1289,18 +1570,32 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetUsageSummaryRpc,
   WsServerRefreshUsageRatesRpc,
   WsServerSignalProcessRpc,
+  WsServerGetResourcePressureRpc,
+  WsServerSweepStorageNowRpc,
+  WsServerPreviewThreadResourceCleanupRpc,
+  WsServerCleanupThreadResourcesRpc,
   WsServerReportClientActivityRpc,
   WsServerReportHostPowerStateRpc,
   WsServerGetBackgroundPolicyRpc,
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,
+  WsCloudSessionListRpc,
+  WsCloudSessionCreateRpc,
+  WsCloudSessionCancelRpc,
   WsPullRequestsListRpc,
   WsPullRequestsListStatsRpc,
   WsPullRequestsSummaryRpc,
+  WsPullRequestsRoutingRpc,
+  WsPullRequestsRoutingIdentityRpc,
+  WsPullRequestsStackRpc,
+  WsPullRequestsLinkedThreadsRpc,
   WsPullRequestsDetailRpc,
+  WsPullRequestsPreviewRpc,
   WsPullRequestsActivityRpc,
   WsPullRequestsThreadCommentsRpc,
   WsPullRequestsDiffFileContentsRpc,
+  WsPullRequestsFilesViewedRpc,
+  WsPullRequestsSetFilesViewedRpc,
   WsPullRequestsRunActionRpc,
   WsPullRequestsUpdateRpc,
   WsPullRequestsCommentRpc,
@@ -1318,6 +1613,10 @@ export const WsRpcGroup = RpcGroup.make(
   WsSourceControlLookupRepositoryRpc,
   WsSourceControlCloneRepositoryRpc,
   WsSourceControlPublishRepositoryRpc,
+  WsProjectCloneStartRpc,
+  WsProjectCloneCancelRpc,
+  WsProjectCloneRetryRpc,
+  WsSubscribeProjectClonesRpc,
   WsProjectsListEntriesRpc,
   WsProjectsReadFileRpc,
   WsProjectsSearchContentsRpc,
@@ -1332,6 +1631,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsAttachmentsDeleteRpc,
   WsProviderUploadFeedbackRpc,
   WsSubscribeVcsStatusRpc,
+  WsSubscribeWorktreeSetupRpc,
+  WsWorktreeSetupCancelRpc,
   WsVcsPullRpc,
   WsVcsRefreshStatusRpc,
   WsGitRunStackedActionRpc,
@@ -1372,6 +1673,15 @@ export const WsRpcGroup = RpcGroup.make(
   WsPreviewAutomationFocusHostRpc,
   WsSubscribePreviewEventsRpc,
   WsSubscribeDiscoveredLocalServersRpc,
+  WsDeviceConfigureRpc,
+  WsDeviceListRpc,
+  WsDeviceTestHostRpc,
+  WsDeviceOpenRpc,
+  WsDeviceCloseRpc,
+  WsDeviceShutdownRpc,
+  WsDeviceDetailRpc,
+  WsDeviceActionRpc,
+  WsSubscribeDeviceStateRpc,
   WsSubscribeServerConfigRpc,
   WsSubscribeServerLifecycleRpc,
   WsSubscribeAuthAccessRpc,

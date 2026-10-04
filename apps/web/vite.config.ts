@@ -12,6 +12,7 @@ import pkg from "./package.json" with { type: "json" };
 import { DEV_PROXIED_PATH_PREFIXES } from "@t3tools/shared/devProxy";
 
 import { loadRepoEnv } from "../../scripts/lib/public-config";
+import { thirdPartyLicensesPlugin } from "../../scripts/lib/third-party-licenses";
 import { tailwindPlugins } from "./vite/tailwind";
 
 const repoEnv = loadRepoEnv();
@@ -55,6 +56,29 @@ const configuredAtlassianOAuthRedirectUri =
   process.env.VITE_ATLASSIAN_OAUTH_REDIRECT_URI?.trim() ||
   process.env.T3TEAM_ATLASSIAN_OAUTH_REDIRECT_URI?.trim() ||
   "";
+// Build guard: a pinned desktop release listens on the default backend port
+// (3773, see DEFAULT_DESKTOP_BACKEND_PORT in apps/desktop/src/app/DesktopBackendPort.ts).
+// A baked redirect URI pointing at a different origin would desync the Atlassian
+// OAuth callback from the live listener — the resolver prefers the live desktop
+// base URL, but the baked value is still the fallback while the bridge has no
+// live URL, so a stale one must never ship. Refuse the build instead.
+const pinnedDesktopBackendPort = process.env.VITE_DESKTOP_PIN_BACKEND_PORT?.trim() === "1";
+if (pinnedDesktopBackendPort && configuredAtlassianOAuthRedirectUri) {
+  let redirectOrigin = "";
+  try {
+    redirectOrigin = new URL(configuredAtlassianOAuthRedirectUri).origin;
+  } catch {
+    redirectOrigin = "<unparseable>";
+  }
+  if (redirectOrigin !== "http://127.0.0.1:3773") {
+    throw new Error(
+      `VITE_ATLASSIAN_OAUTH_REDIRECT_URI (${configuredAtlassianOAuthRedirectUri}) does not match the ` +
+        "pinned desktop backend origin (http://127.0.0.1:3773). Unset VITE_ATLASSIAN_OAUTH_REDIRECT_URI " +
+        "(or T3TEAM_ATLASSIAN_OAUTH_REDIRECT_URI) so the desktop resolver uses the live backend origin, " +
+        "or point it at http://127.0.0.1:3773/oauth/callback.",
+    );
+  }
+}
 const configuredHostedAppUrl = (() => {
   const explicitHostedAppUrl = process.env.VITE_HOSTED_APP_URL?.trim();
   if (explicitHostedAppUrl) {
@@ -172,6 +196,15 @@ export default defineConfig(() => {
     assetsInclude: ["**/*.wasm"],
     plugins: [
       devCompressionPlugin(),
+      thirdPartyLicensesPlugin({
+        bundleName: "web",
+        configFile: new URL("../../third-party-licenses.config.json", import.meta.url),
+        packageManifests: [
+          { bundle: "web", path: new URL("./package.json", import.meta.url) },
+          { bundle: "server", path: new URL("../server/package.json", import.meta.url) },
+          { bundle: "desktop", path: new URL("../desktop/package.json", import.meta.url) },
+        ],
+      }),
       // Route components load as split chunks so settings, pull-request, and
       // usage code stay out of the cold-start payload; the router prefetches
       // them on navigation intent (see getRouter's defaultPreload).
@@ -248,16 +281,17 @@ export default defineConfig(() => {
         ? {
             // One entry per shared prefix; the server's dev catch-all 404s the
             // same list, so the two sides cannot drift. `/ws` is the app's own
-            // socket — Vite's HMR socket is matched separately and exactly
-            // (path "/" plus a vite-hmr subprotocol), so the two upgrade
-            // handlers don't collide.
+            // socket and `/api` carries the device hub's stream sockets —
+            // Vite's HMR socket is matched separately and exactly (path "/"
+            // plus a vite-hmr subprotocol), so the upgrade handlers don't
+            // collide.
             proxy: Object.fromEntries(
               DEV_PROXIED_PATH_PREFIXES.map((prefix) => [
                 prefix,
                 {
                   target: devProxyTarget,
                   changeOrigin: true,
-                  ...(prefix === "/ws" ? { ws: true } : {}),
+                  ...(prefix === "/ws" || prefix === "/api" ? { ws: true } : {}),
                   // t3team: /oauth/callback is a RENDERER route (the Atlassian
                   // callback page); in prod the server SPA-fallbacks it, but the
                   // dev proxy would 404 it against the backend. Serve the SPA —

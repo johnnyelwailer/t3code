@@ -99,6 +99,9 @@ export function childStatusFromDetail(
     ...(status.branch ? { branch: status.branch } : {}),
     ...(status.worktreePath ? { worktreePath: status.worktreePath } : {}),
     ...(status.childStatus ? { childStatus: status.childStatus } : {}),
+    // Cross-environment child (t3team start_child `environment`): the row shows
+    // the target environment's identity; messaging stays same-environment.
+    ...(detail.environment ? { environment: detail.environment } : {}),
     // Detail loads carry no shell pending flag; derive the same fact from the
     // thread's user-input activity lifecycle (retention keeps the pending row).
     ...(detailHasOpenUserInputRequest(detail.activities) ? { awaitingUserInput: true } : {}),
@@ -129,6 +132,8 @@ export function childStatusFromShell(
     ...(status.branch ? { branch: status.branch } : {}),
     ...(status.worktreePath ? { worktreePath: status.worktreePath } : {}),
     ...(status.childStatus ? { childStatus: status.childStatus } : {}),
+    // Cross-environment child (t3team start_child `environment`).
+    ...(shell.environment ? { environment: shell.environment } : {}),
     // Shell live state: a question docked in this child's composer.
     ...(status.awaitingUserInput ? { awaitingUserInput: true } : {}),
     // Shell live state: a plan-mode child that presented its plan and stopped.
@@ -147,7 +152,7 @@ export function childStatusFromShell(
  * hasPendingUserInput flag is the same fact for live shells; detail loads do
  * not carry it, so the status op derives it here.)
  */
-export function detailHasOpenUserInputRequest(
+function detailHasOpenUserInputRequest(
   activities: ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>,
 ): boolean {
   const openRequestIds = new Set<string>();
@@ -169,7 +174,7 @@ export function detailHasOpenUserInputRequest(
 }
 
 /** The direct children of a thread, from its `t3team.handoff.started` activities. */
-export function directChildren(
+function directChildren(
   detail: ChildThreadDetail,
 ): ReadonlyArray<{ readonly threadId: string; readonly title: string | null }> {
   const seen = new Set<string>();

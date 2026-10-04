@@ -31,7 +31,10 @@ describe("ToolAuthService.install — one click installs AND signs in", () => {
         expect(ptyAdapter.processes).toHaveLength(1);
         expect(ptyAdapter.spawnInputs[0]?.shell).toBe(FAKE.command[0]);
         expect(ptyAdapter.spawnInputs[0]?.args).toEqual(FAKE.command.slice(1));
-        expect(binaryCheck.calls).toEqual(["node"]);
+        // Two lookups: install()'s own "already present?" fast path, then the
+        // spawn path's pre-spawn check — the spawn re-checks independently so
+        // it stays safe no matter who chains into it.
+        expect(binaryCheck.calls).toEqual(["node", "node"]);
       } finally {
         removeTempHome(homeDir);
       }

@@ -10,7 +10,10 @@ import { useNowMinute } from "~/hooks/useNowMinute";
 
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { JiraSessionExpiredPanel } from "~/t3team/components/t3team-JiraSessionExpiredPanel";
+import { JiraSignInPanel } from "~/t3team/components/t3team-JiraSignInPanel";
 import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
+import { ProjectMyWorkDigestErrorState } from "~/t3team/t3team-ProjectMyWorkDigestErrorState";
+import { ProjectMyWorkDigestRetryState } from "~/t3team/t3team-ProjectMyWorkDigestRetryState";
 import { ProjectMyWorkDigestView } from "~/t3team/t3team-ProjectMyWorkDigestView";
 import { useT3TeamBetaFlags } from "~/t3team/t3team-betaFlags";
 import { ProjectMyWorkLoadingState } from "~/t3team/t3team-projectMyWorkContentState";
@@ -18,6 +21,8 @@ import {
   buildHeuristicDigestPlan,
   resolveDigestPlan,
 } from "~/t3team/t3team-projectMyWorkDigestPlan";
+import { filterDigestTickets, hasActiveDigestFilters } from "~/t3team/t3team-projectMyWork";
+import type { DigestFilterState } from "~/t3team/t3team-projectMyWorkDigestTypes";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 // TODO(digest-nav): rows navigate to the ticket URL today; thread an in-app onOpenTicket through
@@ -25,9 +30,11 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 export function ProjectMyWorkDigestContent({
   project,
   onOpenTicket,
+  digestFilters,
 }: {
   project: ProjectShellProject;
   onOpenTicket: (projectId: string, ticketId: string) => void;
+  digestFilters?: DigestFilterState | undefined;
 }) {
   const { flags } = useT3TeamBetaFlags();
   // Beta flag: rows open the ticket in-app, or fall back to the ticket URL.
@@ -36,20 +43,55 @@ export function ProjectMyWorkDigestContent({
       ? (ticketId: string) => onOpenTicket(project.id, ticketId)
       : undefined;
   const projects = useMemo(() => [project], [project]);
-  const { graph, status, error, viewerUnresolved, sessionExpired, reload } = useMyWorkDigestGraph({
-    projects,
-    scope: "project",
-  });
+  const { graph, status, error, viewerUnresolved, sessionExpired, updatedAt, reload } =
+    useMyWorkDigestGraph({
+      projects,
+      scope: "project",
+    });
+  // The My Work filter bar (search, status category, hidden types, priority, status) shapes the
+  // digest the same way it shapes the legacy lenses: keep only the tickets that match, and drop
+  // the agent activity that belongs to tickets the filter hid, so no lane orphans a filtered row.
+  const effectiveGraph = useMemo(() => {
+    if (!graph || !digestFilters) return graph;
+    const tickets = filterDigestTickets({
+      tickets: graph.tickets,
+      query: digestFilters.query,
+      statusCategory: digestFilters.statusCategory,
+      excludedTypeKeys: digestFilters.excludedTypeKeys,
+      selectedPriority: digestFilters.selectedPriority,
+      selectedStatus: digestFilters.selectedStatus,
+    });
+    if (tickets.length === graph.tickets.length) return graph;
+    const kept = new Set(tickets.map((ticket) => ticket.id));
+    return {
+      ...graph,
+      tickets,
+      claims: graph.claims.filter((claim) => kept.has(claim.ticketId)),
+      decisions: graph.decisions.filter((decision) => kept.has(decision.ticketId)),
+      changeRequests: graph.changeRequests.filter((request) => kept.has(request.ticketId)),
+      blockers: graph.blockers.filter((blocker) => kept.has(blocker.ticketId)),
+      transitions: graph.transitions.filter((transition) => kept.has(transition.ticketId)),
+    };
+  }, [graph, digestFilters]);
   // Minute-granular clock shared with the rest of the app: stable within a render, re-plans on tick.
   // useNowMinute yields UTC wall-clock text without a zone suffix; parse it as UTC.
   const nowMs = Date.parse(`${useNowMinute()}Z`);
   const plan = useMemo(() => {
-    if (!graph) {
+    if (!effectiveGraph) {
       return null;
     }
-    return resolveDigestPlan(buildHeuristicDigestPlan(graph, nowMs), graph, nowMs);
-  }, [graph, nowMs]);
+    return resolveDigestPlan(
+      buildHeuristicDigestPlan(effectiveGraph, nowMs),
+      effectiveGraph,
+      nowMs,
+    );
+  }, [effectiveGraph, nowMs]);
 
+  // A failed fetch (backend still starting, timeout) is not terminal: the poller retries with
+  // backoff and this recovers on its own, so it renders as "retrying" — never a raw error.
+  if (status === "retrying" && !graph) {
+    return <ProjectMyWorkDigestRetryState />;
+  }
   if (status === "loading" && !graph) {
     return <ProjectMyWorkLoadingState />;
   }
@@ -57,34 +99,50 @@ export function ProjectMyWorkDigestContent({
     return <JiraSessionExpiredPanel onSignedIn={reload} />;
   }
   if (status === "error") {
-    return (
-      <T3SurfacePanel tone="dashed" className="px-4 py-8 text-sm text-muted-foreground">
-        Could not load the digest view.
-        {error ? <span className="block pt-1 text-xs opacity-80">{error}</span> : null}
-      </T3SurfacePanel>
-    );
+    return <ProjectMyWorkDigestErrorState error={error} onRetry={reload} />;
   }
   if (viewerUnresolved && (graph?.tickets.length ?? 0) === 0) {
-    return (
-      <T3SurfacePanel tone="dashed" className="px-4 py-8 text-sm text-muted-foreground">
-        Sign in to Jira under Settings → Connected tools to load your work.
-      </T3SurfacePanel>
-    );
+    return <JiraSignInPanel heading="Sign in to Jira to load your work." onSignedIn={reload} />;
   }
-  if (!graph || !plan) {
+  if (!effectiveGraph || !plan) {
     return (
       <T3SurfacePanel tone="dashed" className="px-4 py-8 text-sm text-muted-foreground">
         Nothing needs you
       </T3SurfacePanel>
     );
   }
+  if (effectiveGraph.tickets.length === 0 && graph !== null && effectiveGraph !== graph) {
+    // The graph has tickets, but the active filters hid every one of them: say so, instead of
+    // implying there is nothing on the board at all.
+    return (
+      <T3SurfacePanel tone="dashed" className="px-4 py-8 text-sm text-muted-foreground">
+        No items match the active filters.
+      </T3SurfacePanel>
+    );
+  }
+  if (
+    digestFilters &&
+    hasActiveDigestFilters(digestFilters) &&
+    plan.sections.length === 0 &&
+    effectiveGraph.tickets.length > 0
+  ) {
+    // The filters kept tickets the digest lens cannot place in a lane (e.g. status "done": the
+    // digest shows active work, not finished items): attribute the empty state to the filters,
+    // not to the board.
+    return (
+      <T3SurfacePanel tone="dashed" className="px-4 py-8 text-sm text-muted-foreground">
+        No items match the active filters.
+      </T3SurfacePanel>
+    );
+  }
   return (
     <ProjectMyWorkDigestView
       plan={plan}
-      graph={graph}
+      graph={effectiveGraph}
       nowMs={nowMs}
       burndownVariant={flags.digestBurndownVariant}
       onOpenTicket={openTicketInApp}
+      {...(updatedAt !== undefined ? { updatedAtMs: updatedAt } : {})}
     />
   );
 }

@@ -1,13 +1,19 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { expect, it } from "@effect/vitest";
+import { expect, it, vi } from "@effect/vitest";
+import {
+  ORCHESTRATION_PROTOCOL_VERSION,
+  PROVIDER_SEND_TURN_MAX_FILE_BYTES,
+} from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as PlatformError from "effect/PlatformError";
 import * as Schema from "effect/Schema";
+
+import { DEFAULT_SIGNAL_EXPORT } from "@t3tools/shared/observability";
+import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
 
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import {
@@ -31,7 +37,7 @@ const makeServerEnvironmentLayer = (baseDir: string) =>
 const emptySecretStoreLayer = Layer.succeed(
   ServerSecretStore.ServerSecretStore,
   ServerSecretStore.ServerSecretStore.of({
-    get: () => Effect.succeed(Option.none()),
+    get: () => Effect.succeedNone,
     set: () => Effect.void,
     create: () => Effect.void,
     getOrCreateRandom: () => Effect.succeed(new Uint8Array()),
@@ -52,8 +58,11 @@ const makeServerConfig = Effect.fn(function* (baseDir: string) {
     traceMaxFiles: 10,
     otlpTracesUrl: undefined,
     otlpMetricsUrl: undefined,
-    otlpExportIntervalMs: 10_000,
-    otlpServiceName: "t3-server",
+    otlpLogsUrl: undefined,
+    otlpTracesExport: DEFAULT_SIGNAL_EXPORT,
+    otlpMetricsExport: DEFAULT_SIGNAL_EXPORT,
+    otlpLogsExport: DEFAULT_SIGNAL_EXPORT,
+    otelEnvironment: OtelEnvironment.none,
     cwd: process.cwd(),
     baseDir,
     mode: "web",
@@ -151,23 +160,49 @@ it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
         prefix: "t3-server-environment-test-",
       });
 
+      // The boot stamp identifies THIS server process (epoch ms, set once at
+      // layer construction): a background bash job that started before it
+      // cannot be live any more. Pin it with a Date-only fake clock: same
+      // layer → same stamp on every read; a rebuilt layer ("restart") gets
+      // the new time, never a persisted value.
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(1_700_000_000_000);
       const first = yield* Effect.gen(function* () {
         const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
-        return yield* serverEnvironment.getDescriptor;
+        const [a, b] = [
+          yield* serverEnvironment.getDescriptor,
+          yield* serverEnvironment.getDescriptor,
+        ];
+        expect(a.serverStartedAtMs).toBe(b.serverStartedAtMs);
+        return a;
       }).pipe(Effect.provide(makeServerEnvironmentLayer(baseDir)));
+      vi.setSystemTime(1_700_000_005_000);
       const second = yield* Effect.gen(function* () {
         const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
         return yield* serverEnvironment.getDescriptor;
       }).pipe(Effect.provide(makeServerEnvironmentLayer(baseDir)));
+      vi.useRealTimers();
 
       expect(first.environmentId).toBe(second.environmentId);
+      expect(first.serverStartedAtMs).toBe(1_700_000_000_000);
+      expect(second.serverStartedAtMs).toBe(1_700_000_005_000);
+      if (first.serverStartedAtMs === undefined || second.serverStartedAtMs === undefined) {
+        throw new Error("boot stamp missing from descriptor");
+      }
+      expect(second.serverStartedAtMs).toBeGreaterThan(first.serverStartedAtMs);
+      expect(first.orchestrationProtocolVersion).toBe(ORCHESTRATION_PROTOCOL_VERSION);
       expect(second.capabilities.repositoryIdentity).toBe(true);
       expect(second.capabilities.connectionProbe).toBe(true);
       expect(second.capabilities.attachmentUploads).toBe(true);
-      expect(second.capabilities.fileAttachments).toEqual({ maxUploadBytes: 50 * 1024 * 1024 });
+      expect(second.capabilities.fileAttachments).toEqual({
+        maxUploadBytes: PROVIDER_SEND_TURN_MAX_FILE_BYTES,
+      });
       expect(second.capabilities.pullRequests).toBe(true);
+      expect(second.capabilities.requiredWorktreeBootstrap).toBe(true);
       expect(second.capabilities.usagePriceOverrides).toBe(true);
+      expect(second.capabilities.threadActiveReorder).toBe(true);
       expect(second.capabilities.threadTitleRegeneration).toBe(true);
+      expect(second.capabilities.threadPullRequests).toBe(true);
       expect(second.capabilities.threadPullRequestLinking).toBe(true);
       expect(second.capabilities.agentActivityPublishing).toBe(false);
     }),

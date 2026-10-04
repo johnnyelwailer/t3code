@@ -42,7 +42,7 @@
  *
  * @module threadRunStatus
  */
-import type { OrchestrationThreadShell } from "@t3tools/contracts";
+import type { OrchestrationThreadShell, ThreadEnvironmentBinding } from "@t3tools/contracts";
 
 import { deriveThreadAwaitingParent } from "./t3team-threadAwaitingParent.ts";
 
@@ -85,6 +85,10 @@ export type ThreadRunStatusInput = Pick<
   readonly interactionMode?: string | null;
   readonly hasActionableProposedPlan?: boolean | undefined;
   readonly hasOpenChildWaits?: boolean | undefined;
+  /** Cross-environment binding (t3team start_child `environment`): present on
+   *  shells/details of a child bound to a different environment; absent =
+   *  same environment as the hosting server. */
+  readonly environment?: ThreadEnvironmentBinding | undefined;
 };
 
 export interface ThreadRunStatus {

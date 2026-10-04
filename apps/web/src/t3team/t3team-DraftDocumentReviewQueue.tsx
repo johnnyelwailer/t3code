@@ -17,7 +17,7 @@ export function DraftDocumentReviewQueue({
   return (
     <section className="space-y-3" aria-label="Agent document drafts">
       <div className="space-y-1">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           Agent-proposed Jira changes
         </p>
         <h2 className="text-base font-semibold">Review document drafts before saving</h2>

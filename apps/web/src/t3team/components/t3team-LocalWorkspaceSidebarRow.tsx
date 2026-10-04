@@ -1,6 +1,8 @@
 /* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay";
+import { resolveStatusOrbState, STATUS_ORB_CLASS } from "~/t3team/t3team-statusOrb";
+import "~/t3team/t3team-statusOrb.css";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { ChevronRightIcon, FolderIcon } from "lucide-react";
 import { useMemo } from "react";
@@ -13,14 +15,11 @@ import type {
 } from "~/t3team/t3team-types";
 import { useAddToChat } from "~/t3team/hooks/t3team-useAddToChat";
 import { readLinkedRepositoryUrlsFromProject } from "~/t3team/hooks/t3team-createProjectBootstrap";
-import { SidebarMenuButton, SidebarMenuSub } from "~/t3team/components/ui/t3team-sidebar";
+import { T3SidebarRow, T3SidebarSubList } from "~/t3team/components/ui/t3team-sidebar-row";
 import { LocalWorkspaceSidebarRowActions } from "./t3team-LocalWorkspaceSidebarRowActions";
 import { buildNewThreadProjectContextRequest } from "./t3team-projectSidebarAddToChatRequests";
 import { ProjectSidebarThreadTreeRows } from "./t3team-ProjectSidebarThreadTreeRows";
-import {
-  getSidebarProjectState,
-  getSidebarStandaloneButtonClassName,
-} from "./t3team-projectSidebarItemState";
+import { getSidebarProjectState } from "./t3team-projectSidebarItemState";
 import { useLocalWorkspaceRowState } from "./t3team-useLocalWorkspaceRowState";
 import { useLocalWorkspaceThreadTree } from "./t3team-useLocalWorkspaceThreadTree";
 
@@ -116,11 +115,11 @@ export function LocalWorkspaceSidebarRow({
   return (
     <>
       <div className="group/project-header relative" onContextMenu={handleContextMenu}>
-        <SidebarMenuButton
-          size="sm"
-          className={`gap-2 px-2 py-1.5 pr-8 text-left group-hover/project-header:bg-accent group-hover/project-header:text-foreground group-focus-within/project-header:bg-accent group-focus-within/project-header:text-foreground max-sm:pr-14 cursor-pointer ${getSidebarStandaloneButtonClassName(
-            projectState,
-          )}`}
+        <T3SidebarRow
+          hoverGroup="project-header"
+          isActive={projectState.isSelected}
+          // Keeps the title clear of the actions overlaid on the row's end.
+          className="pr-8 max-sm:pr-14"
           onClick={() => onToggleExpand(project.id)}
         >
           {!expanded && projectStatus ? (
@@ -131,7 +130,8 @@ export function LocalWorkspaceSidebarRow({
             >
               <span className="absolute inset-0 flex items-center justify-center transition-opacity duration-150 group-hover/project-header:opacity-0">
                 <span
-                  className={`size-[9px] rounded-full ${projectStatus.dotClass} ${projectStatus.pulse ? (projectStatus.pulseClass ?? "animate-pulse") : ""}`}
+                  data-t3team-state={resolveStatusOrbState(projectStatus) ?? undefined}
+                  className={`size-[9px] rounded-full ${resolveStatusOrbState(projectStatus) ? STATUS_ORB_CLASS : projectStatus.dotClass} ${projectStatus.pulse ? (projectStatus.pulseClass ?? "animate-pulse") : ""}`}
                 />
               </span>
               <ChevronRightIcon className="absolute inset-0 m-auto size-3.5 text-muted-foreground/70 opacity-0 transition-opacity duration-150 group-hover/project-header:opacity-100" />
@@ -144,9 +144,13 @@ export function LocalWorkspaceSidebarRow({
 
           {environmentId && workspaceRoot ? (
             <ProjectFavicon
-              environmentId={environmentId}
-              cwd={workspaceRoot}
-              projectName={project.title}
+              project={{
+                environmentId,
+                workspaceRoot,
+                title: project.title,
+                faviconPath: null,
+                projectIcon: null,
+              }}
             />
           ) : (
             <FolderIcon className="size-3.5 shrink-0 text-muted-foreground/50" />
@@ -167,7 +171,7 @@ export function LocalWorkspaceSidebarRow({
               {project.title}
             </span>
           )}
-        </SidebarMenuButton>
+        </T3SidebarRow>
 
         <LocalWorkspaceSidebarRowActions
           projectTitle={project.title}
@@ -177,7 +181,7 @@ export function LocalWorkspaceSidebarRow({
       </div>
 
       {expanded ? (
-        <SidebarMenuSub className="mx-1 mt-1 mb-1.5 w-full translate-x-0 gap-0.5 overflow-hidden px-1.5 py-0.5">
+        <T3SidebarSubList className="mx-1 mt-1 mb-1.5 w-full overflow-hidden">
           <ProjectSidebarThreadTreeRows
             projectId={project.id}
             roots={visibleRootThreads}
@@ -191,16 +195,16 @@ export function LocalWorkspaceSidebarRow({
           {hiddenThreadCount > 0 || showAllThreads ? (
             <button
               type="button"
-              className="w-full px-2 py-1 text-left text-[10px] text-muted-foreground/60 hover:text-foreground"
+              className="w-full px-2 py-1 text-left text-3xs text-muted-foreground/60 hover:text-foreground"
               onClick={toggleShowAllThreads}
             >
               {showAllThreads ? "Show less" : `+${hiddenThreadCount} more`}
             </button>
           ) : null}
           {sortedProjectThreads.length === 0 ? (
-            <div className="px-2 py-1 text-[10px] text-muted-foreground/60">No threads yet</div>
+            <div className="px-2 py-1 text-3xs text-muted-foreground/60">No threads yet</div>
           ) : null}
-        </SidebarMenuSub>
+        </T3SidebarSubList>
       ) : null}
     </>
   );

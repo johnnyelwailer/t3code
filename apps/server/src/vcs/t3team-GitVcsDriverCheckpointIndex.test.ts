@@ -49,6 +49,38 @@ const failed = (exitCode: number, stderr: string): VcsProcess.VcsProcessOutput =
   stderrTruncated: false,
 });
 
+/** Real VcsProcess semantics: a non-zero exit fails unless the caller allowed it. */
+const withExitSemantics = (
+  input: VcsProcess.VcsProcessInput,
+  respond: () => VcsProcess.VcsProcessOutput,
+) =>
+  Effect.sync(respond).pipe(
+    Effect.flatMap((output) =>
+      output.exitCode === 0 || input.allowNonZeroExit === true
+        ? Effect.succeed(output)
+        : Effect.fail(
+            new VcsProcessExitError({
+              operation: input.operation,
+              command: input.command,
+              cwd: input.cwd,
+              exitCode: output.exitCode,
+              detail: "Process exited with a non-zero status.",
+            }),
+          ),
+    ),
+  );
+
+/**
+ * The service-level execute prepends `-C <cwd>`, and the checkpoint path adds
+ * `-c key=value` pairs (index/fsync config, upstream). Strip both so the fakes
+ * see the bare subcommand.
+ */
+const gitSubcommandArgs = (raw: ReadonlyArray<string>): ReadonlyArray<string> => {
+  let args = raw.slice(raw[0] === "-C" ? 2 : 0);
+  while (args[0] === "-c") args = args.slice(2);
+  return args;
+};
+
 /** Contents of each pathspec file the mocked `git add` sees. */
 const pathspecReads: string[] = [];
 
@@ -57,11 +89,16 @@ const DriverLayer = Layer.mergeAll(GitVcsDriver.vcsLayer, GitVcsDriver.layer).pi
   Layer.provideMerge(
     Layer.succeed(VcsProcess.VcsProcess, {
       run: (input) =>
-        Effect.sync(() => {
+        withExitSemantics(input, () => {
           // The service-level execute prepends `-C <cwd>`; strip it.
-          const args = input.args.slice(input.args[0] === "-C" ? 2 : 0);
+          const args = gitSubcommandArgs(input.args);
           if (args[0] === "rev-parse" && args[1] === "--git-common-dir") {
             return ok(".git\n");
+          }
+          // Upstream probes sparse checkout before building the temp index; an
+          // unset key is git's exit 1 with empty output (allowNonZeroExit).
+          if (args[0] === "config" && args[1] === "--bool") {
+            return failed(1, "");
           }
           if (args[0] === "rev-parse" && args[1] === "--verify") {
             return ok("head-oid\n");
@@ -163,10 +200,13 @@ const DriverLayerAllUnindexable = Layer.mergeAll(GitVcsDriver.vcsLayer, GitVcsDr
   Layer.provideMerge(
     Layer.succeed(VcsProcess.VcsProcess, {
       run: (input) =>
-        Effect.sync(() => {
-          const args = input.args.slice(input.args[0] === "-C" ? 2 : 0);
+        withExitSemantics(input, () => {
+          const args = gitSubcommandArgs(input.args);
           if (args[0] === "rev-parse" && args[1] === "--git-common-dir") {
             return ok(".git\n");
+          }
+          if (args[0] === "config" && args[1] === "--bool") {
+            return failed(1, "");
           }
           if (args[0] === "rev-parse" && args[1] === "--verify") {
             return ok("head-oid\n");
@@ -184,6 +224,9 @@ const DriverLayerAllUnindexable = Layer.mergeAll(GitVcsDriver.vcsLayer, GitVcsDr
           }
           if (args[0] === "ls-files" && args.includes("--others")) {
             return ok("nul\0");
+          }
+          if (args[0] === "read-tree") {
+            return ok();
           }
           if (args[0] === "ls-files") {
             return ok("com1\0");
@@ -291,9 +334,12 @@ const DriverLayerAddTimeout = Layer.mergeAll(GitVcsDriver.vcsLayer, GitVcsDriver
   Layer.provideMerge(
     Layer.succeed(VcsProcess.VcsProcess, {
       run: (input) => {
-        const args = input.args.slice(input.args[0] === "-C" ? 2 : 0);
+        const args = gitSubcommandArgs(input.args);
         if (args[0] === "rev-parse" && args[1] === "--git-common-dir") {
           return Effect.succeed(ok(".git\n"));
+        }
+        if (args[0] === "config" && args[1] === "--bool") {
+          return Effect.succeed(failed(1, ""));
         }
         if (args[0] === "rev-parse" && args[1] === "--verify") {
           return Effect.succeed(ok("head-oid\n"));

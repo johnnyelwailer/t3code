@@ -47,7 +47,12 @@ export type ToolAuthServiceStreamEvent =
 /** Shared session shape the login and install flows both read and write via `sessionsRef`. */
 export interface ActiveSession {
   readonly adapter: ToolAuthAdapter;
-  readonly process: PtyAdapter.PtyProcess;
+  /**
+   * Absent for a session that never spawned a process — the binary-missing
+   * failed state the login flow registers in place of a spawn. Terminal
+   * states need no live pty; `cancel`/`submitCode` guard on this.
+   */
+  readonly process?: PtyAdapter.PtyProcess | undefined;
   readonly state: AuthState;
 }
 
@@ -176,6 +181,7 @@ export const makeWithOptions = Effect.fn("ToolAuthService.makeWithOptions")(func
     homeDir,
     env,
     singleFlight,
+    checkBinaryAvailable,
   });
 
   const { install } = makeToolAuthInstallFlow({

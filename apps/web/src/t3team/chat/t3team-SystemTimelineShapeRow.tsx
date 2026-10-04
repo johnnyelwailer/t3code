@@ -14,7 +14,7 @@ import {
 } from "~/t3team/chat/t3team-messageShapeCard";
 import { T3TeamWorkflowShapeLiveCard } from "~/t3team/chat/t3team-messageShapeCardLive";
 import type { T3TeamWorkflowRunProgress } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
-import { useMergedThreads } from "~/t3team/t3team-mergedThreads";
+import { useThreadShells } from "~/state/entities";
 
 export function T3TeamSystemTimelineShapeRow({
   workflowShape,
@@ -35,9 +35,9 @@ export function T3TeamSystemTimelineShapeRow({
    * `t3team-workflowRunOutcome.ts`. Only meaningful once the run has a live progress card. */
   readonly outcomeSummary?: string | undefined;
 }) {
-  const mergedThreads = useMergedThreads();
+  const threadShells = useThreadShells();
   const childStatuses = Object.fromEntries(
-    mergedThreads.flatMap((thread) =>
+    threadShells.flatMap((thread) =>
       thread.childStatus ? [[thread.id, thread.childStatus] as const] : [],
     ),
   );

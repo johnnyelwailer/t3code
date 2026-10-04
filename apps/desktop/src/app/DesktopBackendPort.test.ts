@@ -1,7 +1,7 @@
-import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import { assert, describe, it } from "@effect/vitest";
 
 import * as NetService from "@t3tools/shared/Net";
@@ -38,7 +38,7 @@ describe("resolveDesktopBackendPort", () => {
   );
 
   it.effect("pinned: keeps the default port when it is free", () =>
-    resolveDesktopBackendPort(Option.none, true).pipe(
+    resolveDesktopBackendPort(Option.none(), true).pipe(
       Effect.flatMap((selection) =>
         Effect.sync(() => {
           assert.equal(selection.port, DEFAULT_DESKTOP_BACKEND_PORT);
@@ -51,14 +51,12 @@ describe("resolveDesktopBackendPort", () => {
   );
 
   it.effect("pinned: fails loudly when the default port is busy instead of scanning on", () =>
-    resolveDesktopBackendPort(Option.none, true).pipe(
-      Effect.flatMap((selection) =>
-        Effect.fail(new Error(`expected the pinned port error, got port ${selection.port}`)),
-      ),
-      Effect.catchCause((cause) =>
+    resolveDesktopBackendPort(Option.none(), true).pipe(
+      Effect.flip,
+      Effect.flatMap((error) =>
         Effect.sync(() => {
-          const error = Cause.squash(cause);
-          assert.isTrue(error instanceof DesktopPinnedBackendPortBusyError);
+          assert.isTrue(Schema.is(DesktopPinnedBackendPortBusyError)(error));
+          if (!Schema.is(DesktopPinnedBackendPortBusyError)(error)) return;
           assert.equal(error.port, DEFAULT_DESKTOP_BACKEND_PORT);
           assert.deepEqual(error.hosts, [...DESKTOP_BACKEND_PORT_PROBE_HOSTS]);
           assert.match(error.message, /pinned to port 3773.*in use.*T3CODE_PORT/u);
@@ -69,7 +67,7 @@ describe("resolveDesktopBackendPort", () => {
   );
 
   it.effect("unpinned: scans upward past a busy default port", () =>
-    resolveDesktopBackendPort(Option.none, false).pipe(
+    resolveDesktopBackendPort(Option.none(), false).pipe(
       Effect.flatMap((selection) =>
         Effect.sync(() => {
           assert.equal(selection.port, DEFAULT_DESKTOP_BACKEND_PORT + 1);
@@ -82,14 +80,11 @@ describe("resolveDesktopBackendPort", () => {
   );
 
   it.effect("unpinned: reports unavailability when every port is busy", () =>
-    resolveDesktopBackendPort(Option.none, false).pipe(
-      Effect.flatMap((selection) =>
-        Effect.fail(new Error(`expected the unavailable-port error, got port ${selection.port}`)),
-      ),
-      Effect.catchCause((cause) =>
+    resolveDesktopBackendPort(Option.none(), false).pipe(
+      Effect.flip,
+      Effect.flatMap((error) =>
         Effect.sync(() => {
-          const error = Cause.squash(cause);
-          assert.isTrue(error instanceof DesktopBackendPortUnavailableError);
+          assert.isTrue(Schema.is(DesktopBackendPortUnavailableError)(error));
         }),
       ),
       Effect.provide(makeNetLayer(new Set())),

@@ -24,7 +24,7 @@ export function SideSection({
   return (
     <section className="space-y-2">
       <DigestKicker count={section.items.length}>{section.heading}</DigestKicker>
-      {section.hint ? <p className="text-[11.5px] text-muted-foreground">{section.hint}</p> : null}
+      {section.hint ? <p className="text-xs text-muted-foreground">{section.hint}</p> : null}
       <T3SurfacePanel
         tone={section.id.includes("needs-you") ? "default" : "muted"}
         className="divide-y divide-border/60"
@@ -86,7 +86,7 @@ export function MainSection({
   return (
     <section className="space-y-2">
       <DigestKicker count={section.items.length}>{section.heading}</DigestKicker>
-      {section.hint ? <p className="text-[11.5px] text-muted-foreground">{section.hint}</p> : null}
+      {section.hint ? <p className="text-xs text-muted-foreground">{section.hint}</p> : null}
       <div className="grid gap-3 2xl:grid-cols-2">
         {groupByParent(section, graph, ticketsById).map((group) => {
           if (!group.parent) {
@@ -156,13 +156,11 @@ export function FooterSection({
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="flex w-full items-center gap-3 px-3 py-2 text-left text-[12.5px]"
+          className="flex w-full items-center gap-3 px-3 py-2 text-left text-xs"
         >
           <span className="text-xl font-semibold tabular-nums">{section.items.length}</span>
           <span className="text-muted-foreground">{section.hint ?? "nothing needed from you"}</span>
-          <span className="ml-auto text-[11px] text-muted-foreground">
-            {open ? "Hide" : "Show"}
-          </span>
+          <span className="ml-auto text-2xs text-muted-foreground">{open ? "Hide" : "Show"}</span>
         </button>
         {open
           ? section.items.map((item) => {

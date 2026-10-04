@@ -161,7 +161,7 @@ export function formatAgentVisiblePromptContext(
   return ["Workflow context:", ...entries.map((entry) => `- ${entry}`)].join("\n");
 }
 
-export function prependAgentVisiblePromptContext(input: {
+function prependAgentVisiblePromptContext(input: {
   promptText: string;
   contextText: string;
 }): string {
@@ -178,7 +178,7 @@ export function prependAgentVisiblePromptContext(input: {
   return `${contextText}\n\nUser request:\n${promptText}`;
 }
 
-export const loadAgentVisiblePromptContext = Effect.fn("loadAgentVisiblePromptContext")(function* (
+const loadAgentVisiblePromptContext = Effect.fn("loadAgentVisiblePromptContext")(function* (
   threadId: ThreadId,
 ) {
   const projectionSnapshotQuery = yield* Effect.serviceOption(ProjectionSnapshotQuery);

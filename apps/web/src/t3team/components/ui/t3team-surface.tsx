@@ -2,17 +2,19 @@ import type { ComponentPropsWithoutRef } from "react";
 import { Card, CardContent } from "~/t3team/components/ui/t3team-card";
 import { cn } from "~/t3team/lib/t3team-utils";
 
-type SurfaceTone = "default" | "muted" | "danger";
+type SurfaceTone = "default" | "muted" | "danger" | "primary";
 
 type PanelTone = "default" | "muted" | "soft" | "inset" | "dashed";
 
-const cardToneClasses: Record<SurfaceTone, string> = {
-  default: "border-border/80 bg-card/78",
-  muted: "border-border/80 bg-muted/25",
-  // Blur like the surfaces it sits on: at /8 opacity the wizard's hero art bleeds
-  // straight through the banner and the text fights it without a backdrop filter.
-  danger: "border-destructive/35 bg-destructive/8 supports-[backdrop-filter]:backdrop-blur",
-};
+// The looks live in the fork's Card `tone` variant; `danger` blurs its backdrop because at
+// /8 opacity the wizard's hero art would bleed straight through the banner text, and
+// `primary` marks agent-proposed content awaiting review.
+const cardTones = {
+  default: "translucent",
+  muted: "muted",
+  danger: "destructive",
+  primary: "primary",
+} as const;
 
 const panelToneClasses: Record<PanelTone, string> = {
   default: "rounded-lg border border-border/75 bg-card/76",
@@ -35,15 +37,19 @@ export function T3SurfaceCard({
   tone = "default",
   className,
   ...props
-}: ComponentPropsWithoutRef<typeof Card> & { tone?: SurfaceTone }) {
-  return <Card className={cn(cardToneClasses[tone], className)} {...props} />;
+}: Omit<ComponentPropsWithoutRef<typeof Card>, "tone"> & { tone?: SurfaceTone }) {
+  return <Card tone={cardTones[tone]} className={className} {...props} />;
 }
 
+/** `compact` is the tighter strip inset for a banner in a section, not a panel. */
 export function T3SurfaceCardContent({
+  density = "default",
   className,
   ...props
-}: ComponentPropsWithoutRef<typeof CardContent>) {
-  return <CardContent className={cn("p-4", className)} {...props} />;
+}: ComponentPropsWithoutRef<typeof CardContent> & { density?: "default" | "compact" }) {
+  return (
+    <CardContent size={density === "compact" ? "compact" : "sm"} className={className} {...props} />
+  );
 }
 
 export function T3SurfacePanel({

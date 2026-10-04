@@ -19,6 +19,7 @@ import { useNowMinute } from "~/hooks/useNowMinute";
 
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { JiraSessionExpiredPanel } from "~/t3team/components/t3team-JiraSessionExpiredPanel";
+import { JiraSignInPanel } from "~/t3team/components/t3team-JiraSignInPanel";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import { useProjectDashboardMyWorkState } from "~/t3team/t3team-projectDashboardMyWorkState";
@@ -28,6 +29,8 @@ import {
 } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
 import { AllProjectsMyWorkSection } from "~/t3team/t3team-AllProjectsMyWorkSection";
+import { ProjectMyWorkDigestErrorState } from "~/t3team/t3team-ProjectMyWorkDigestErrorState";
+import { ProjectMyWorkDigestRetryState } from "~/t3team/t3team-ProjectMyWorkDigestRetryState";
 import { ProjectMyWorkDigestView } from "~/t3team/t3team-ProjectMyWorkDigestView";
 import {
   ProjectMyWorkViewSwitch,
@@ -69,6 +72,7 @@ export function AllProjectsMyWorkView({
     error: digestError,
     viewerUnresolved,
     sessionExpired: digestSessionExpired,
+    updatedAt: digestUpdatedAt,
     reload: digestReload,
   } = useMyWorkDigestGraph({
     projects: boundProjects,
@@ -97,6 +101,11 @@ export function AllProjectsMyWorkView({
   }
 
   const renderDigest = () => {
+    // A failed fetch (backend still starting, timeout) is not terminal: the poller retries with
+    // backoff and this recovers on its own, so it renders as "retrying" — never a raw error.
+    if (digestStatus === "retrying" && !digestGraph) {
+      return <ProjectMyWorkDigestRetryState />;
+    }
     // First paint shows a loading state instead of a misleading empty one.
     if (digestStatus === "loading" && !digestGraph) {
       return <ProjectMyWorkLoadingState />;
@@ -105,26 +114,11 @@ export function AllProjectsMyWorkView({
       return <JiraSessionExpiredPanel onSignedIn={digestReload} />;
     }
     if (digestStatus === "error") {
-      return (
-        <T3SurfacePanel
-          tone="dashed"
-          className="px-6 py-10 text-center text-sm text-muted-foreground"
-        >
-          Could not load the digest view.
-          {digestError ? (
-            <span className="block pt-1 text-xs opacity-80">{digestError}</span>
-          ) : null}
-        </T3SurfacePanel>
-      );
+      return <ProjectMyWorkDigestErrorState error={digestError} onRetry={digestReload} centered />;
     }
     if (viewerUnresolved && (digestGraph?.tickets.length ?? 0) === 0) {
       return (
-        <T3SurfacePanel
-          tone="dashed"
-          className="px-6 py-10 text-center text-sm text-muted-foreground"
-        >
-          Sign in to Jira under Settings → Connected tools to load your work.
-        </T3SurfacePanel>
+        <JiraSignInPanel heading="Sign in to Jira to load your work." onSignedIn={digestReload} />
       );
     }
     if (!digestGraph || !digestPlan) {
@@ -145,6 +139,7 @@ export function AllProjectsMyWorkView({
         graph={digestGraph}
         nowMs={nowMs}
         burndownVariant={flags.digestBurndownVariant}
+        {...(digestUpdatedAt !== undefined ? { updatedAtMs: digestUpdatedAt } : {})}
         onOpenTicket={
           // Beta flag: rows open the ticket in-app (each ticket knows its project).
           flags.digestRowNavigation === "in-app"
@@ -160,7 +155,14 @@ export function AllProjectsMyWorkView({
 
   return (
     <ScrollArea className="h-full min-h-0 flex-1">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 p-4 sm:p-6">
+      <div
+        className={
+          lens === "digest"
+            ? // The digest spans the full pane width; the legacy sections keep the centered column.
+              "flex w-full flex-col gap-8 p-4 sm:p-6"
+            : "mx-auto flex w-full max-w-6xl flex-col gap-8 p-4 sm:p-6"
+        }
+      >
         <div>
           <ProjectMyWorkViewSwitch lens={lens} onLensChange={setLens} />
         </div>
@@ -170,6 +172,7 @@ export function AllProjectsMyWorkView({
               <AllProjectsMyWorkSection
                 key={project.id}
                 project={project}
+                lens={lens}
                 onOpenTicket={onOpenTicket}
               />
             ))}

@@ -4,6 +4,8 @@ import type { ScopedThreadRef } from "@t3tools/contracts";
 
 import ThreadSidebar from "~/components/Sidebar";
 import { useThreadShells } from "~/state/entities";
+import { usePrimaryEnvironmentId } from "~/state/environments";
+import { isTeamShellEnvironment } from "~/t3team/t3team-upstreamRouteBridge";
 import { setT3TeamThreadNavigationOverride } from "~/t3team/t3team-threadNavigationOverride";
 
 /**
@@ -25,6 +27,9 @@ export function InboxSidebar() {
   // through a ref; re-registering per shells change would be pure churn.
   const threadShellsRef = useRef(threadShells);
   threadShellsRef.current = threadShells;
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const primaryEnvironmentIdRef = useRef(primaryEnvironmentId);
+  primaryEnvironmentIdRef.current = primaryEnvironmentId;
 
   // Thread clicks must navigate WITHIN the /t3team tree. Upstream's own
   // navigation targets `/$environmentId/$threadId`, which unmounts the whole
@@ -42,7 +47,11 @@ export function InboxSidebar() {
         )?.projectId ??
         shells.find((shell) => shell.id === threadRef.threadId)?.projectId ??
         null;
+      // Not handled here: upstream's own navigation opens it on its environment-scoped route.
       if (projectId === null) return false;
+      if (!isTeamShellEnvironment(threadRef.environmentId, primaryEnvironmentIdRef.current)) {
+        return false;
+      }
       void navigate({
         to: "/t3team/projects/$projectId/threads/$threadId",
         params: { projectId, threadId: threadRef.threadId },

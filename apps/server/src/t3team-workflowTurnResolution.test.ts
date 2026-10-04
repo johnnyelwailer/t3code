@@ -127,13 +127,75 @@ describe("workflow turn tracker", () => {
     expect(tracker.take(THREAD, ASK)).toEqual({ kind: "answer", text: "done" });
   });
 
-  it("treats a stopped session like before: no answer is empty, not failed", () => {
+  it("settles a stopped session as failed, not as an answer or an empty turn", () => {
+    // The provider session exited mid-turn: whatever the turn had streamed was preamble, and the
+    // step must re-drive instead of settling with the partial text.
+    const tracker = createWorkflowTurnTracker();
+    tracker.noteSession(THREAD, ASK, running);
+    tracker.appendDelta(THREAD, ASK, "m1", "I'll start by checking the repo…");
+    tracker.completeMessage(THREAD, ASK, "m1", "");
+    expect(tracker.noteSession(THREAD, ASK, { status: "stopped", activeTurnId: null })).toBe(
+      "ended",
+    );
+    expect(tracker.take(THREAD, ASK)).toEqual({
+      kind: "failed",
+      error: "The provider session ended before the turn completed.",
+    });
+  });
+
+  it("settles a stopped session as failed even when the turn said nothing", () => {
     const tracker = createWorkflowTurnTracker();
     tracker.noteSession(THREAD, ASK, running);
     expect(tracker.noteSession(THREAD, ASK, { status: "stopped", activeTurnId: null })).toBe(
       "ended",
     );
-    expect(tracker.take(THREAD, ASK)).toEqual({ kind: "empty" });
+    expect(tracker.take(THREAD, ASK)).toEqual({
+      kind: "failed",
+      error: "The provider session ended before the turn completed.",
+    });
+  });
+
+  it("settles an interrupted turn as failed, never with its pre-abort text", () => {
+    // The turn was aborted before it completed (a host watchdog, a provider abort): the session
+    // is still ALIVE, but the text streamed before the abort was preamble, not the answer.
+    const tracker = createWorkflowTurnTracker();
+    tracker.noteSession(THREAD, ASK, running);
+    tracker.appendDelta(THREAD, ASK, "m1", "Checking the build log first…");
+    tracker.completeMessage(THREAD, ASK, "m1", "");
+    expect(tracker.noteSession(THREAD, ASK, { status: "interrupted", activeTurnId: null })).toBe(
+      "ended",
+    );
+    expect(tracker.take(THREAD, ASK)).toEqual({
+      kind: "failed",
+      error: "The agent turn was interrupted before it completed.",
+    });
+  });
+
+  it("takes the interrupted write's lastError as the failure reason when it carries one", () => {
+    const tracker = createWorkflowTurnTracker();
+    tracker.noteSession(THREAD, ASK, running);
+    expect(
+      tracker.noteSession(THREAD, ASK, {
+        status: "interrupted",
+        activeTurnId: null,
+        lastError: "Provider stream stalled (no activity for 600s)",
+      }),
+    ).toBe("ended");
+    expect(tracker.take(THREAD, ASK)).toEqual({
+      kind: "failed",
+      error: "Provider stream stalled (no activity for 600s)",
+    });
+  });
+
+  it("does not let a stray interrupted write end the wait of a turn it never saw running", () => {
+    // An interrupted session is still alive and can take a NEW turn — an `interrupted` write for
+    // some other turn (one the watch never saw start) is not a verdict on this ask.
+    const tracker = createWorkflowTurnTracker();
+    expect(tracker.noteSession(THREAD, ASK, { status: "interrupted", activeTurnId: null })).toBe(
+      "pending",
+    );
+    tracker.noteSession(THREAD, ASK, running);
+    expect(tracker.noteSession(THREAD, ASK, idle)).toBe("ended");
   });
 
   it("ends the wait for a turn that answered even if no active session was observed", () => {

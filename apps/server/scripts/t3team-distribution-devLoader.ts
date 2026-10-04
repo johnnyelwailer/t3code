@@ -22,18 +22,9 @@
  * resolution.
  */
 import * as NodeModule from "node:module";
-import * as NodePath from "node:path";
-import * as NodeURL from "node:url";
 
 const SPECIFIER = "@t3code/distribution";
-const STUB_URL = NodeURL.pathToFileURL(
-  NodePath.join(
-    NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)),
-    "..",
-    "src",
-    "t3team-distribution.ts",
-  ),
-).href;
+const STUB_URL = new URL("../src/t3team-distribution.ts", import.meta.url).href;
 
 NodeModule.registerHooks({
   resolve(specifier, context, nextResolve) {

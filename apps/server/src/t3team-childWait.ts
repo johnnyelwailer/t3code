@@ -34,6 +34,7 @@ export {
   type ChildWaitScheduler,
   type ChildWaitSchedulerDeps,
 } from "./t3team-childWaitScheduler.ts";
+import type { OrchestrationEventReplayFilter } from "./orchestration/t3team-eventReplayFilter.ts";
 export { T3TeamChildWaitReactorLive } from "./t3team-childWaitReactor.ts";
 
 // Re-exported for downstream consumers; also used locally below (rehydration
@@ -85,6 +86,14 @@ export function childWaitOutcomeMatches(outcome: ChildWaitOutcome, on: ChildWait
 }
 
 // ── Rehydration: replay persisted events into the pending index ────────────
+
+/** The events `collectPendingChildWaits` reads. */
+export const PENDING_CHILD_WAIT_REPLAY_FILTERS: ReadonlyArray<OrchestrationEventReplayFilter> = [
+  {
+    type: "thread.activity-appended",
+    activityKinds: [CHILD_WAIT_REGISTERED_KIND, CHILD_WAIT_RESOLVED_KIND],
+  },
+];
 
 export function collectPendingChildWaits(
   events: ReadonlyArray<OrchestrationEvent>,

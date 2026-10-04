@@ -31,6 +31,15 @@ export function sortProjectBacklogTableTickets({
 }): ProjectTicket[] {
   return [...tickets].sort((left, right) => {
     if (sortBy === "rank") {
+      // "desc" (the default) means highest rank first, i.e. the board's own order.
+      // Unranked tickets (live-search hits, fresh subtasks) always trail the
+      // ranked ones so the comparator stays consistent.
+      if (left.boardRank !== undefined && right.boardRank !== undefined) {
+        const rankDelta = left.boardRank - right.boardRank;
+        return sortDirection === "desc" ? rankDelta : -rankDelta;
+      }
+      if (left.boardRank !== undefined) return -1;
+      if (right.boardRank !== undefined) return 1;
       return sortDirection === "desc"
         ? compareProjectBacklogTickets(left, right)
         : compareProjectBacklogTickets(right, left);

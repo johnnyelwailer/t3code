@@ -13,18 +13,24 @@
  * @module t3team-childAbnormalStopDedup
  */
 import type { OrchestrationEvent } from "@t3tools/contracts";
+import { ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import type { ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import {
+  findHandoffParentThreadId,
   makeChildAbnormalStopNotifier,
   type ChildTerminalOutcome,
 } from "./t3team-childAbnormalStopNotify.ts";
-import { makeTerminalNotifyLedger } from "./t3team-terminalNotifyDedup.ts";
+import {
+  makeTerminalNotifyLedger,
+  type TerminalNotifyLedger,
+} from "./t3team-terminalNotifyDedup.ts";
 
 /** Durable "already notified" marker kind, appended on the child thread. */
-export const CHILD_ABNORMAL_STOP_NOTIFIED_KIND = "t3team.child_abnormal_stop_notified";
+const CHILD_ABNORMAL_STOP_NOTIFIED_KIND = "t3team.child_abnormal_stop_notified";
 
 /**
  * The marker's human line, outcome-aware: a clean finish must never read like
@@ -47,6 +53,7 @@ export interface AbnormalStopGuards {
   }) => Effect.Effect<void>;
   /** Rebuild the in-memory map from a persisted event replay at boot. */
   readonly rehydrate: (events: ReadonlyArray<OrchestrationEvent>) => void;
+  readonly replayFilters: TerminalNotifyLedger["replayFilters"];
 }
 
 /**
@@ -68,15 +75,29 @@ export function makeAbnormalStopGuards(deps: {
   return {
     noteResume: (childThreadId, seq) => ledger.noteResume(childThreadId, seq),
     rehydrate: (events) => ledger.rehydrate(events),
+    replayFilters: ledger.replayFilters,
     notifyAbnormalStop: ({ childThreadId, outcome, lastError, eventSequence }) =>
-      ledger.notify({
-        key: childThreadId,
-        markerThreadId: childThreadId,
-        resumeThreadId: childThreadId,
-        terminalSeq: eventSequence,
-        markerPayload: { outcome },
-        markerSummary: markerSummaryFor(outcome),
-        doNotify: notify({ childThreadId, outcome, lastError }),
+      Effect.gen(function* () {
+        const child = Option.getOrUndefined(
+          yield* deps.query
+            .getThreadDetailById(ThreadId.make(childThreadId))
+            .pipe(Effect.orElseSucceed(() => Option.none())),
+        );
+        // No parent, no report: a top-level thread's terminal state is not a
+        // child event. Without this gate the ledger would still write the
+        // "reported to parent" marker on a thread that has no parent
+        // (owner-reported 2026-09-13); the notifier itself already no-ops
+        // there, but the marker is what made the lie visible.
+        if (child === undefined || findHandoffParentThreadId(child.activities) === null) return;
+        yield* ledger.notify({
+          key: childThreadId,
+          markerThreadId: childThreadId,
+          resumeThreadId: childThreadId,
+          terminalSeq: eventSequence,
+          markerPayload: { outcome },
+          markerSummary: markerSummaryFor(outcome),
+          doNotify: notify({ childThreadId, outcome, lastError }),
+        });
       }),
   };
 }

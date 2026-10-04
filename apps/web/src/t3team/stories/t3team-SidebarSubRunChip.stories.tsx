@@ -44,7 +44,6 @@ function makeThread(id: string, status: ProjectThread["status"], title?: string)
     projectId: "story-project",
     parentThreadId: PARENT_ID,
     title: title ?? `Sub-run ${id.slice(0, 4)}`,
-    messageCount: 1,
     lastMessageAt: "2026-08-29T20:54:00.000Z",
     createdAt: "2026-08-29T18:00:00.000Z",
     status,
@@ -56,7 +55,6 @@ function seedChildren(children: ReadonlyArray<ProjectThread>): void {
     id: PARENT_ID,
     projectId: "story-project",
     title: "Find and triage open issues",
-    messageCount: 1,
     lastMessageAt: "2026-08-29T20:54:00.000Z",
     createdAt: "2026-08-29T18:00:00.000Z",
     status: "running",
@@ -75,8 +73,10 @@ const INSET_VARS = {
 function SectionTitle({ children }: { children: string }) {
   return (
     <div className="mb-1.5 flex items-center gap-2 px-0.5">
-      <span className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">▸</span>
-      <span className="text-xs font-medium text-zinc-300">{children}</span>
+      <span className="text-3xs font-semibold uppercase tracking-widest text-muted-foreground">
+        ▸
+      </span>
+      <span className="text-xs font-medium text-foreground">{children}</span>
     </div>
   );
 }
@@ -89,7 +89,7 @@ function ParentMetaRow() {
       <InboxSubRunsChip threadId={PARENT_ID} />
       <span
         aria-hidden
-        className="pointer-events-none ml-auto inline-flex size-3.5 shrink-0 items-center justify-center rounded-sm bg-orange-500/80 text-[8px] font-bold leading-none text-white"
+        className="pointer-events-none ml-auto inline-flex size-3.5 shrink-0 items-center justify-center rounded-sm bg-warning/80 text-4xs font-bold leading-none text-white"
       >
         n
       </span>
@@ -105,9 +105,7 @@ function ParentRow({ title = "Find and triage open issues…" }: { title?: strin
     >
       <div className="flex min-w-0 items-center gap-2 px-1">
         <span className="min-w-0 flex-1 truncate font-medium text-foreground/90">{title}</span>
-        <span className="shrink-0 text-[10px] font-medium text-sky-600 dark:text-sky-300/80">
-          Working · 5m
-        </span>
+        <span className="shrink-0 text-3xs font-medium text-info-foreground/80">Working · 5m</span>
       </div>
       <ParentMetaRow />
     </div>
@@ -138,7 +136,7 @@ function SettledFoldRow({ count, open = false }: { count: number; open?: boolean
         type="button"
         aria-expanded={open}
         onClick={() => {}}
-        className="flex h-7 w-full items-center gap-1 rounded-md ps-[calc(var(--sidebar-content-inset)+0.5rem)] text-left text-xs text-muted-foreground/60 hover:bg-sidebar-row-hover hover:text-muted-foreground/90"
+        className="flex h-7 w-full items-center gap-1 rounded-md ps-4 text-left text-xs text-muted-foreground/60 hover:bg-sidebar-row-hover hover:text-muted-foreground/90"
       >
         <ChevronRightIcon
           aria-hidden
@@ -227,7 +225,7 @@ export const SettledOnlyParent: Story = {
                 <SettledFoldRow count={189} />
               </ul>
             ) : (
-              <p className="px-1 text-[11px] leading-relaxed text-zinc-500">
+              <p className="px-1 text-2xs leading-relaxed text-muted-foreground">
                 collapsed: nothing under the row. The #304 fold row is NOT a permanent element — it
                 only exists inside the expanded sub-runs section, and the chip collapses it again.
               </p>
@@ -279,7 +277,7 @@ export const DotStates: Story = {
               <SubRunRow child={makeThread("c-run-1", "running", "Working child (sky ring)")} />
             </ul>
           </div>
-          <div className="px-1 pb-1 text-[11px] leading-relaxed text-zinc-500">
+          <div className="px-1 pb-1 text-2xs leading-relaxed text-muted-foreground">
             Before the fix, a thread that hit ANY transient error (a gateway 413, a dropped provider
             session) carried <code className="font-mono">session.lastError</code> forever and
             painted its row red "randomly". The status now follows the session's CURRENT state — red

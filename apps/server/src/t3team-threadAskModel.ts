@@ -10,9 +10,9 @@
 
 const GATEWAY_URL = "https://chat.nexplore.dev/v1/chat/completions";
 const GATEWAY_FALLBACK_KEY = "nexplore-open-gateway";
-export const T3TEAM_ASK_MODEL_ID = "qwen3.8-27b-nvfp4-mtp-192k";
+const T3TEAM_ASK_MODEL_ID = "qwen3.8-27b-nvfp4-mtp-192k";
 /** Well under any turn budget — a slow gateway must never stall the caller. */
-export const T3TEAM_ASK_TIMEOUT_MS = 60_000;
+const T3TEAM_ASK_TIMEOUT_MS = 60_000;
 
 /**
  * Byte-identical on every call. The gateway caches the KV prefix, so anything

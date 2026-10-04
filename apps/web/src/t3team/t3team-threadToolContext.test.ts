@@ -14,7 +14,6 @@ function makeThread(overrides: Partial<ProjectThread> = {}): ProjectThread {
     id: overrides.id ?? "thread-1",
     projectId: overrides.projectId ?? "project-1",
     title: overrides.title ?? "Thread",
-    messageCount: overrides.messageCount ?? 0,
     lastMessageAt: overrides.lastMessageAt ?? "2026-05-22T10:00:00.000Z",
     createdAt: overrides.createdAt ?? "2026-05-22T10:00:00.000Z",
     status: overrides.status ?? "idle",
@@ -186,6 +185,11 @@ describe("createT3TeamTurnToolContext", () => {
           capabilities: ["read"],
         },
         {
+          id: "t3team.thread.ask_user",
+          label: "Ask user a question",
+          capabilities: ["write"],
+        },
+        {
           id: "t3team.thread.start_child",
           label: "Start child session",
           capabilities: ["write"],
@@ -279,14 +283,13 @@ describe("createT3TeamTurnToolContext", () => {
       kickoffPending: false,
       kickoffWorkflow: {
         kind: "recipe",
-        recipeId: "create-contextual-recipe",
+        recipeId: "author-view-recipe",
         title: "Create a recipe for this context",
         description: "Design a contextual recipe for the current surface.",
         source: "bundled",
         surface: "project.dashboard.backlog",
-        promptPath: "/workspace/project-alpha/.t3team/recipes/create-contextual-recipe/prompt.md",
-        workflowPath:
-          "/workspace/project-alpha/.t3team/recipes/create-contextual-recipe/workflow.ts",
+        promptPath: "/workspace/project-alpha/.t3team/recipes/author-view-recipe/prompt.md",
+        workflowPath: "/workspace/project-alpha/.t3team/recipes/author-view-recipe/workflow.ts",
         launchContext: {
           surface: "project.dashboard.backlog",
           project: {
@@ -322,11 +325,10 @@ describe("createT3TeamTurnToolContext", () => {
         message: "Recipe authoring kickoff",
         pending: false,
         workflow: {
-          recipeId: "create-contextual-recipe",
+          recipeId: "author-view-recipe",
           surface: "project.dashboard.backlog",
-          promptPath: "/workspace/project-alpha/.t3team/recipes/create-contextual-recipe/prompt.md",
-          workflowPath:
-            "/workspace/project-alpha/.t3team/recipes/create-contextual-recipe/workflow.ts",
+          promptPath: "/workspace/project-alpha/.t3team/recipes/author-view-recipe/prompt.md",
+          workflowPath: "/workspace/project-alpha/.t3team/recipes/author-view-recipe/workflow.ts",
           launchContext: {
             surface: "project.dashboard.backlog",
             project: {
@@ -349,7 +351,6 @@ describe("mergeProjectThreads", () => {
       title: "Local title",
       status: "idle",
       lastMessageAt: "2026-05-20T10:00:00.000Z",
-      messageCount: 0,
       createdAt: "2026-05-20T10:00:00.000Z",
       kickoffMessage: "Investigate this ticket",
       selectedToolIds: [],
@@ -361,7 +362,6 @@ describe("mergeProjectThreads", () => {
       title: "Live title",
       status: "running",
       lastMessageAt: "2026-05-20T10:05:00.000Z",
-      messageCount: 3,
       createdAt: "2026-05-20T10:00:00.000Z",
     };
 

@@ -42,6 +42,7 @@ const readModel: OrchestrationReadModel = {
     {
       id: threadId,
       projectId: ProjectId.make("turn-admission-project"),
+      pullRequests: [],
       title: "Thread",
       modelSelection: {
         instanceId: ProviderInstanceId.make("provider"),

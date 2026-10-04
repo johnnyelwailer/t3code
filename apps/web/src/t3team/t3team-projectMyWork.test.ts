@@ -5,7 +5,9 @@ import { createProjectBacklogTestTicket as createTicket } from "./t3team-project
 import {
   buildProjectMyWorkTypeOptions,
   buildProjectMyWorkVisibleHierarchy,
+  filterDigestTickets,
   filterProjectMyWorkTickets,
+  hasActiveDigestFilters,
   isProjectMyWorkEpic,
   isProjectMyWorkTicket,
 } from "./t3team-projectMyWork";
@@ -197,5 +199,97 @@ describe("project my work", () => {
 
     expect(hierarchy.visibleTickets.map((ticket) => ticket.id)).toEqual(["story"]);
     expect(hierarchy.contextByTicketId.get("story")?.directChildren).toEqual([]);
+  });
+
+  it("filters digest tickets by the user-selected filters without the assigned-to-me pre-filter", () => {
+    const assigned = createTicket({
+      id: "assigned",
+      ref: { displayId: "PROJ-1", title: "Do the thing" },
+      assignee: "Philip Jonientz",
+      status: "In Progress",
+      priority: "High",
+    });
+    // Not assigned to the viewer: the legacy filter would drop it, but the digest keeps it
+    // because it is part of the viewer's work graph (agent claim, decision, or PR).
+    const claimedByAgent = createTicket({
+      id: "claimed",
+      issueType: "Story",
+      ref: { displayId: "PROJ-2", title: "Agent is working" },
+      assignee: "Alex",
+      status: "In Progress",
+    });
+    const epic = createTicket({
+      id: "epic",
+      issueType: "Epic",
+      ref: { displayId: "PROJ-3", title: "Big Epic" },
+      assignee: "Philip Jonientz",
+      status: "To Do",
+    });
+
+    const all = {
+      query: "",
+      statusCategory: "all" as const,
+      excludedTypeKeys: [],
+      selectedPriority: "all",
+      selectedStatus: "all",
+    };
+
+    // No filters: both rows survive even though one is not assigned to the viewer.
+    expect(
+      filterDigestTickets({ tickets: [assigned, claimedByAgent, epic], ...all }).map((t) => t.id),
+    ).toEqual(["assigned", "claimed", "epic"]);
+
+    // Hidden types still apply to the digest.
+    expect(
+      filterDigestTickets({
+        tickets: [assigned, claimedByAgent, epic],
+        ...all,
+        excludedTypeKeys: ["epic"],
+      }).map((t) => t.id),
+    ).toEqual(["assigned", "claimed"]);
+
+    // Search applies to title/key, independent of assignment.
+    expect(
+      filterDigestTickets({ tickets: [assigned, claimedByAgent], ...all, query: "agent" }).map(
+        (t) => t.id,
+      ),
+    ).toEqual(["claimed"]);
+
+    // Priority and status narrow exactly like the legacy lenses.
+    expect(
+      filterDigestTickets({
+        tickets: [assigned, claimedByAgent],
+        ...all,
+        selectedPriority: "High",
+      }).map((t) => t.id),
+    ).toEqual(["assigned"]);
+    expect(
+      filterDigestTickets({ tickets: [assigned, epic], ...all, selectedStatus: "To Do" }).map(
+        (t) => t.id,
+      ),
+    ).toEqual(["epic"]);
+
+    // Ordering is left to the caller: input order is preserved.
+    expect(filterDigestTickets({ tickets: [epic, assigned], ...all }).map((t) => t.id)).toEqual([
+      "epic",
+      "assigned",
+    ]);
+  });
+
+  it("only treats non-default digest values as active filters", () => {
+    const defaults = {
+      query: "",
+      statusCategory: "all" as const,
+      excludedTypeKeys: [],
+      selectedPriority: "all",
+      selectedStatus: "all",
+    };
+
+    expect(hasActiveDigestFilters(defaults)).toBe(false);
+    expect(hasActiveDigestFilters({ ...defaults, query: "  done  " })).toBe(true);
+    expect(hasActiveDigestFilters({ ...defaults, statusCategory: "done" })).toBe(true);
+    expect(hasActiveDigestFilters({ ...defaults, excludedTypeKeys: ["epic"] })).toBe(true);
+    expect(hasActiveDigestFilters({ ...defaults, selectedPriority: "High" })).toBe(true);
+    expect(hasActiveDigestFilters({ ...defaults, selectedStatus: "Done" })).toBe(true);
   });
 });

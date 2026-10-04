@@ -1,5 +1,9 @@
+import { PROJECT_STATE_DIR } from "./t3teamProjectStateDir.ts";
 import { EMPTY_OBJECT_INPUT_SCHEMA, type T3TeamToolCatalogEntry } from "./t3teamToolCatalogCore.ts";
-import { T3TEAM_WIDGET_AUTHORING_GUIDANCE } from "./t3teamWidgetGuidance.ts";
+import {
+  T3TEAM_WIDGET_AUTHORING_GUIDANCE,
+  T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION,
+} from "./t3teamWidgetGuidance.ts";
 
 const START_CHILD_INPUT_SCHEMA = {
   type: "object",
@@ -74,6 +78,25 @@ const START_CHILD_INPUT_SCHEMA = {
       description:
         "Optional branch, tag, or commit to use as the base ref for the child's worktree (linked or local). Only valid with isolation='own-worktree'. When omitted, the repository default branch is used.",
       minLength: 1,
+    },
+    environment: {
+      type: "object",
+      additionalProperties: false,
+      description:
+        "Optional execution environment to bind the child session to — a DIFFERENT T3 server than this one. Omit to keep the child in this environment (the default). The thread record and handoff are stamped with the target environment, and the launch result carries an environment_note documenting the delivery boundary: inter-agent messaging (send_message, mailbox, children ops) only reaches threads in THIS environment, so report-back from a cross-environment child needs a separate channel.",
+      properties: {
+        id: {
+          type: "string",
+          description: "EnvironmentId of the target environment (a non-empty string).",
+          minLength: 1,
+        },
+        label: {
+          type: "string",
+          description: "Optional human-readable name of the target environment.",
+          minLength: 1,
+        },
+      },
+      required: ["id"],
     },
   },
   required: ["name", "isolation"],
@@ -201,9 +224,9 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
   "t3team.runtime.provider_usage": {
     id: "t3team.runtime.provider_usage",
     label: "Read provider usage limits",
-    title: "Sample live provider plan-limit windows",
+    title: "Read provider usage-limit windows per instance",
     description:
-      "Read the provider's LIVE rolling plan-limit windows (how much of the 5-hour / weekly quota is used, when it resets, and the severity verdict) by sampling each configured provider instance on demand. Call it when you need to know how close a provider is to a rate-limit wall before delegating long work to it, or when a provider start fails with a rate-limit error. Unsampleable instances are reported in `unavailable` with a reason instead of failing the call.",
+      "Read each provider INSTANCE's usage-limit windows (session / weekly / monthly: usedPercent, resetsAt, severity normal|warning|critical) from the host's live provider snapshots, plus accounts reported by configured usage hubs. Call it when you need to know how close an account is to its limit before delegating long work to it, or when a turn failed with a usage-limit error. Instances without data say why in `unavailable` instead of failing the call.",
     capabilities: ["read"],
     kind: "read",
     surfaces: ["thread"],
@@ -216,7 +239,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
         provider_instance_id: {
           type: "string",
           description:
-            "Optional provider INSTANCE id to sample (as returned by t3team.runtime.models). Omit to sample all enabled instances with a live-limit source.",
+            "Optional provider INSTANCE id (as returned by t3team.runtime.models). Omit to list every enabled instance and hub account.",
         },
       },
     },
@@ -225,8 +248,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     id: "t3team.widget.show",
     label: "Show widget",
     title: "Show an inline widget in the chat timeline",
-    description:
-      "Show a widget inline in the current thread's chat timeline. Single entry point for all widget fidelities, selected via 'format': html/svg render instantly in a sandboxed iframe with live light/dark theme CSS variables plus the sendPrompt/callTool bridge; mdx (future) renders trusted whitelisted first-party components inline; tsx (future) composes a full design-system-native React view (slower). The widget body is persisted as a durable artifact. Use only provided theme variables for colors. Make the widget fluid and responsive across mobile and wide panes, keep it compact with progressive disclosure, keep the background transparent, and avoid top-level padding. Render icons from the host-injected sprite (<use href=\"#t3w-icon-NAME\">, class t3w-icon) rather than emoji or an external icon dependency.",
+    description: T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION,
     capabilities: ["write"],
     kind: "view-state",
     surfaces: ["thread"],
@@ -262,8 +284,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     id: "t3team.recipe.list",
     label: "List project recipes",
     title: "List t3team project recipes",
-    description:
-      "List the t3team project recipes discovered in this project's workspace (.t3team/recipes/) — t3team project recipes are directories bundling a typed recipe.ts module (or legacy recipe.json manifest) with a .workflow.ts the t3team workflow engine runs; they are NOT Claude Code skills or provider-native workflows. Returns each recipe's id, title, shortDescription, surfaces, authoring form ('recipe-ts' typed module vs 'recipe-json' legacy manifest), recipe directory, and resolved workflow path, plus structured errors for recipes that failed to load. Read-only: nothing is written or launched.",
+    description: `List the t3team project recipes discovered in this project's workspace (${PROJECT_STATE_DIR}/recipes/) — t3team project recipes are directories bundling a typed recipe.ts module (or legacy recipe.json manifest) with a .workflow.ts the t3team workflow engine runs; they are NOT Claude Code skills or provider-native workflows. Returns each recipe's id, title, shortDescription, surfaces, authoring form ('recipe-ts' typed module vs 'recipe-json' legacy manifest), recipe directory, and resolved workflow path, plus structured errors for recipes that failed to load. Read-only: nothing is written or launched.`,
     capabilities: ["read"],
     kind: "read",
     surfaces: ["thread"],
@@ -300,8 +321,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     id: "t3team.orchestration.run",
     label: "Run ephemeral orchestration",
     title: "Run a temporary agent orchestration in this conversation",
-    description:
-      "Run a temporary agent orchestration immediately in this conversation — a durable, journaled t3team engine run that can pause for user decisions; NOT a Claude Code/Codex/CI workflow. Pass exactly one of 'source' (inline orchestration TypeScript, persisted under .t3team-runs/<runId>/) or 'workflowPath' (existing .workflow.ts in the workspace). Body format: .t3team/recipes/AUTHORING.md; validate with t3team.recipe.validate first. Returns {runId, status: accepted|completed|suspended|failed, handoff: 'workflow-ui', output?, error?}. A successful 'workflow-ui' handoff means the orchestration card owns progress: end the current turn immediately with no follow-up assistant prose. A user decision appears on that card and resumes the orchestration on reply — do not poll. On 'failed', fix the source using 'error' and re-run. No approval gate; at most 8 live ephemeral runs.",
+    description: `Run a temporary agent orchestration immediately in this conversation — a durable, journaled t3team engine run that can pause for user decisions; NOT a Claude Code/Codex/CI workflow. Pass exactly one of 'source' (inline orchestration TypeScript, persisted under .t3team-runs/<runId>/) or 'workflowPath' (existing .workflow.ts in the workspace). Body format: ${PROJECT_STATE_DIR}/recipes/AUTHORING.md; validate with t3team.recipe.validate first. Returns {runId, status: accepted|completed|suspended|failed, handoff: 'workflow-ui', output?, error?}. A successful 'workflow-ui' handoff means the orchestration card owns progress: end the current turn immediately with no follow-up assistant prose. A user decision appears on that card and resumes the orchestration on reply — do not poll. On 'failed', fix the source using 'error' and re-run. No approval gate; at most 8 live ephemeral runs.`,
     capabilities: ["write"],
     kind: "thread",
     surfaces: ["thread"],
@@ -625,7 +645,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     label: "Start child session",
     title: "Start child session",
     description:
-      "Create a child t3team session from the current thread and optionally start it immediately. isolation is required: 'shared' keeps the child in the project's shared checkout without repo_full_name; 'own-worktree' prepares a dedicated scoped worktree — of the linked repository named by repo_full_name when the project has linked repos, or of the local repository when it does not.",
+      "Create a child t3team session from the current thread and optionally start it immediately. isolation is required: 'shared' keeps the child in the project's shared checkout without repo_full_name; 'own-worktree' prepares a dedicated scoped worktree — of the linked repository named by repo_full_name when the project has linked repos, or of the local repository when it does not. Optional 'environment' binds the child session to a DIFFERENT execution environment (another T3 server): the record and handoff are stamped with it, but inter-agent messaging stays same-environment (the launch result's environment_note documents that boundary).",
     capabilities: ["write"],
     kind: "thread",
     surfaces: ["thread"],
@@ -644,6 +664,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       "- wait: durably resume this turn when a child reaches a terminal state (on: terminal|completed|failed; timeout in ms)\n" +
       "- stop: halt a child's running turn\n" +
       "- close: mark a child done from this side\n" +
+      "- environments: read-only — which environments start_child's environment arg can target (own environment + recorded cross-environment bindings; every entry states its delivery boundary)\n" +
       "- help: exact schema for one op (op_name)",
     capabilities: ["write"],
     kind: "thread",
@@ -656,8 +677,9 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       properties: {
         op: {
           type: "string",
-          description: "The operation to perform: list, status, wait, stop, close, or help.",
-          enum: ["list", "status", "wait", "stop", "close", "help"],
+          description:
+            "The operation to perform: list, status, wait, stop, close, environments, or help.",
+          enum: ["list", "status", "wait", "stop", "close", "environments", "help"],
         },
         thread_id: {
           type: "string",

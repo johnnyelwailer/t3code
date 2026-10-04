@@ -16,7 +16,6 @@ import type {
 export type ProjectDashboardKickoffAsideProps = {
   project: ProjectShellProject;
   dashboardMode: ProjectDashboardMode;
-  projectThreads: ProjectThread[];
   activeThread: ProjectThread | null;
   providers: ReadonlyArray<ServerProvider>;
   isConnected: boolean;

@@ -54,8 +54,16 @@ export type MyWorkDigestPayload = {
   /**
    * The viewer as the server resolved them; fills in when the client has no cached name.
    * `unresolved` means a project had no Jira identity (stale or missing token).
+   * `lastVisitAt` is the server's visit receipt from the PREVIOUS round — the "since
+   * last visit" cutoff lives on the server, not in the client's localStorage.
    */
-  readonly viewer?: { readonly name?: string; readonly unresolved?: true };
+  readonly viewer?: {
+    readonly name?: string;
+    readonly unresolved?: true;
+    readonly lastVisitAt?: string;
+  };
+  /** A first change-request read is still running server-side; re-poll soon to pick it up. */
+  readonly changeRequestsPending?: true;
   readonly projects: ReadonlyArray<{
     readonly project: { readonly id: string; readonly name: string };
     readonly tickets: ReadonlyArray<MyWorkDigestTicketRef>;
@@ -135,17 +143,28 @@ export function createMyWorkDigestBackendApi(httpBaseUrl: string) {
           readonly poll: { readonly enabled: true; readonly knownFingerprint?: string };
         },
         MyWorkDigestPollResult
-      >(httpBaseUrl, "/api/t3team/mywork-digest/graph/poll", {
-        scope: input.scope,
-        projects: input.projects,
-        ...(input.viewer !== undefined ? { viewer: input.viewer } : {}),
-        poll: {
-          enabled: true,
-          ...(input.knownFingerprint !== undefined
-            ? { knownFingerprint: input.knownFingerprint }
-            : {}),
+      >(
+        httpBaseUrl,
+        "/api/t3team/mywork-digest/graph/poll",
+        {
+          scope: input.scope,
+          projects: input.projects,
+          ...(input.viewer !== undefined ? { viewer: input.viewer } : {}),
+          poll: {
+            enabled: true,
+            ...(input.knownFingerprint !== undefined
+              ? { knownFingerprint: input.knownFingerprint }
+              : {}),
+          },
         },
-      });
+        {
+          // A cold Jira backlog cache makes the first digest load refresh it
+          // server-side (12-17s observed vs the 15s default, which failed the
+          // request seconds before the payload was ready). Warm loads return in
+          // ~10ms, so this only matters on the first round after start or TTL.
+          timeoutMs: 45_000,
+        },
+      );
     },
   };
 }

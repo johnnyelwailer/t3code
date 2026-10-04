@@ -23,7 +23,6 @@ export function TicketDetailKickoffAside({
   relatedTickets,
   jiraIssueType,
   ticketPriority,
-  issueThreads,
   projectId,
   projectTitle,
   projectWorkspaceRoot,
@@ -122,7 +121,6 @@ export function TicketDetailKickoffAside({
     <aside className="flex h-full min-h-0 flex-col overflow-hidden border-l border-border/70 bg-background [view-transition-name:t3team-right-sidebar-panel]">
       <TicketKickoffPanel
         profileId={profileId}
-        issueThreads={issueThreads}
         projectId={projectId}
         ticketId={ticketId}
         quickStartRecipeInput={quickStartRecipeInput}

@@ -27,6 +27,7 @@ import { createEnvironmentRpcCommand, runAtomCommand } from "@t3tools/client-run
 import { connectionAtomRuntime } from "~/connection/runtime";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { primaryEnvironmentIdAtom } from "~/state/primaryEnvironment";
+import { setThreadComposingReporter } from "~/t3team/chat/t3team-threadComposingSink";
 
 const noteThreadComposingCommand = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "t3team:orchestration:noteComposing",
@@ -116,3 +117,6 @@ export function reportThreadComposing(threadId: string | null | undefined): void
     sendComposingBeat(threadId, environmentId);
   }, TYPING_HEARTBEAT_TRAILING_MS);
 }
+
+// The composer draft store reports through the dependency-free sink (see t3team-threadComposingSink).
+setThreadComposingReporter(reportThreadComposing);

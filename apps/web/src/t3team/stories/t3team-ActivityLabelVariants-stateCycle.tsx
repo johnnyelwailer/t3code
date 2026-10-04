@@ -38,12 +38,16 @@ export function StateCycleCard() {
       tabIndex={0}
       className="group/sidebar-row relative w-full cursor-pointer overflow-hidden rounded-md bg-sidebar-row-active text-sidebar-foreground outline-none select-none"
     >
-      <div className="relative z-10 px-[var(--sidebar-row-content-inset)] py-[var(--sidebar-content-inset)]">
+      <div className="relative z-10 px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)">
         <div className="flex h-5 min-w-0 items-center gap-1.5">
           <ProjectFavicon
-            environmentId={EnvironmentId.make("env-1")}
-            cwd="/tmp/build-40"
-            projectName="build-40"
+            project={{
+              environmentId: EnvironmentId.make("env-1"),
+              workspaceRoot: "/tmp/build-40",
+              title: "build-40",
+              faviconPath: null,
+              projectIcon: null,
+            }}
             className="size-4 shrink-0"
           />
           <span
@@ -72,9 +76,7 @@ export function StateCycleCard() {
                   stays anchored at the right edge */}
               <span
                 className={`shrink-0 transition-colors duration-300 ${
-                  state.kind === "done"
-                    ? "text-emerald-700 dark:text-emerald-300"
-                    : "text-sky-600 dark:text-sky-400"
+                  state.kind === "done" ? "text-success-foreground" : "text-info-foreground"
                 } ${state.kind === "idle" ? "opacity-60" : ""}`}
               >
                 <MorphIcon
@@ -87,9 +89,7 @@ export function StateCycleCard() {
               </span>
               <span
                 className={`relative min-w-0 flex-1 font-medium transition-colors duration-300 ${
-                  state.kind === "done"
-                    ? "text-emerald-700 dark:text-emerald-300"
-                    : "text-sky-600 dark:text-sky-400"
+                  state.kind === "done" ? "text-success-foreground" : "text-info-foreground"
                 } ${state.kind === "idle" ? "opacity-60" : ""}`}
               >
                 {over && state.kind === "live" ? (

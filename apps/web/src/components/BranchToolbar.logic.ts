@@ -1,9 +1,17 @@
-import type { EnvironmentId, EnvironmentMachineKind, VcsRef, ProjectId } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  EnvironmentMachineKind,
+  VcsRef,
+  ProjectId,
+  WorktreeSubmodules,
+} from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
+import { sanitizeNewRefName } from "@t3tools/shared/git";
 import { toSortableTimestamp } from "../lib/threadSort";
 export {
   dedupeRemoteBranchesWithLocalMatches,
   deriveLocalBranchNameFromRemoteRef,
+  sanitizeNewRefName,
 } from "@t3tools/shared/git";
 
 export interface EnvironmentOption {
@@ -12,6 +20,12 @@ export interface EnvironmentOption {
   label: string;
   isPrimary: boolean;
   machine: EnvironmentMachineKind;
+  /**
+   * True when the environment's connection is in the `connected` phase.
+   * Used by `dedupeRunOnEnvironments` as the tie-break between two rows for
+   * the same machine: the live one wins over a stale duplicate.
+   */
+  connected?: boolean;
 }
 
 export const EnvMode = Schema.Literals(["local", "worktree"]);
@@ -55,6 +69,59 @@ export function shouldShowEnvironmentIndicator(input: {
   return input.activeEnvironment !== null && !input.activeEnvironment.isPrimary;
 }
 
+/**
+ * Collapses "Run on" rows that are the same machine reachable under two
+ * environment ids.
+ *
+ * How the duplicate arises: a ready cloud session publishes its relay
+ * environment, so the machine can sit in the environment catalog twice — the
+ * id the T3 Connect registry minted for it, and a second id minted when its
+ * relay link was (re)published. The catalog only carries `environmentId` and
+ * the server-provided label for each entry, so the strongest identity two
+ * rows of the same machine share is the pair (machine kind, normalized
+ * label); `environmentId` itself is exactly what differs. Primary rows never
+ * compete (there is one primary), and a row that is the thread's active
+ * environment is always kept — replacing its duplicate if the duplicate was
+ * seen first — so the trigger never points at a filtered-out id. When the
+ * active-environment rule does not decide, the connected row beats a stale
+ * one: a duplicate that is not `connected` is exactly the registry entry for
+ * a machine whose relay link has since been republished, and keeping it would
+ * hide the live machine from the menu.
+ *
+ * Known limit: two genuinely different machines with the same machine kind
+ * and the same label would collapse into one row. That is rarer than the
+ * duplicate the menu has to prevent, and the row kept is a live one either
+ * way.
+ */
+export function dedupeRunOnEnvironments(
+  environments: readonly EnvironmentOption[],
+  activeEnvironmentId: EnvironmentId,
+): EnvironmentOption[] {
+  const result: EnvironmentOption[] = [];
+  const fingerprintIndex = new Map<string, number>();
+  for (const environment of environments) {
+    if (environment.isPrimary) {
+      result.push(environment);
+      continue;
+    }
+    const fingerprint = `${environment.machine}\u0000${environment.label.trim().toLowerCase()}`;
+    const existingIndex = fingerprintIndex.get(fingerprint);
+    if (existingIndex === undefined) {
+      fingerprintIndex.set(fingerprint, result.length);
+      result.push(environment);
+      continue;
+    }
+    const existing = result[existingIndex];
+    if (existing !== undefined) {
+      const connectedWins = environment.connected === true && existing.connected !== true;
+      if (environment.environmentId === activeEnvironmentId || connectedWins) {
+        result[existingIndex] = environment;
+      }
+    }
+  }
+  return result;
+}
+
 export function shouldShowComposerContextStrip(input: {
   hasActiveProject: boolean;
   isGitRepo: boolean;
@@ -86,12 +153,24 @@ export function resolveEnvModeLabel(mode: EnvMode): string {
   return mode === "worktree" ? "New worktree" : "Current checkout";
 }
 
+export const WORKTREE_SUBMODULES_LABELS: Record<WorktreeSubmodules, string> = {
+  recursive: "Recursive",
+  "top-level": "Top level only",
+  none: "Skip",
+};
+
 export function resolveCurrentWorkspaceLabel(activeWorktreePath: string | null): string {
   return activeWorktreePath ? "Current worktree" : resolveEnvModeLabel("local");
 }
 
-export function resolveLockedWorkspaceLabel(activeWorktreePath: string | null): string {
-  return activeWorktreePath ? "Worktree" : "Local checkout";
+// A locked thread in worktree mode with no path is still creating its
+// worktree, so it reads as a new worktree rather than the project checkout.
+export function resolveLockedWorkspaceLabel(
+  activeWorktreePath: string | null,
+  effectiveEnvMode: EnvMode,
+): string {
+  if (activeWorktreePath) return "Worktree";
+  return effectiveEnvMode === "worktree" ? resolveEnvModeLabel("worktree") : "Local checkout";
 }
 
 export interface PreviousWorktreeSeed {
@@ -145,15 +224,20 @@ export function resolveEffectiveEnvMode(input: {
   activeWorktreePath: string | null;
   hasServerThread: boolean;
   draftThreadEnvMode: EnvMode | undefined;
+  /**
+   * The server is still creating this thread's worktree. The thread exists
+   * from the start of that setup but gets its worktree path only at the end.
+   */
+  preparingWorktree?: boolean;
 }): EnvMode {
-  const { activeWorktreePath, hasServerThread, draftThreadEnvMode } = input;
+  const { activeWorktreePath, hasServerThread, draftThreadEnvMode, preparingWorktree } = input;
   if (!hasServerThread) {
     if (activeWorktreePath) {
       return "local";
     }
     return draftThreadEnvMode === "worktree" ? "worktree" : "local";
   }
-  return activeWorktreePath ? "worktree" : "local";
+  return activeWorktreePath || preparingWorktree ? "worktree" : "local";
 }
 
 export function resolveDraftEnvModeAfterBranchChange(input: {
@@ -261,19 +345,6 @@ export function resolveBranchSelectionTarget(input: {
     nextWorktreePath,
     reuseExistingWorktree: false,
   };
-}
-
-// Git rejects ASCII space and the ASCII control characters (tab, newline and
-// friends) in ref names, so the picker's "Create new ref" entry can only fail
-// for a typed name like "new branch". Replacing runs of those with a dash makes
-// the name usable without reimplementing check-ref-format: names invalid for
-// other reasons still surface the git error. Only the whitespace git actually
-// rejects is replaced — git accepts U+00A0 and friends, and rewriting those
-// would silently create a ref the user never asked for. Case and existing
-// dashes are left alone, since ref names are case sensitive and consecutive
-// dashes are valid.
-export function sanitizeNewRefName(rawName: string): string {
-  return rawName.trim().replace(/[ \t\n\r\f\v]+/g, "-");
 }
 
 export function shouldIncludeBranchPickerItem(input: {

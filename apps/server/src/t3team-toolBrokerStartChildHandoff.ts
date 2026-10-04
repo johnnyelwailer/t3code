@@ -4,6 +4,7 @@ import {
   type ModelSelection,
   type ProviderInteractionMode,
   type RuntimeMode,
+  type ThreadEnvironmentBinding,
   // A VALUE import, not type-only: this branch calls `ThreadId.make` below.
   ThreadId,
 } from "@t3tools/contracts";
@@ -65,6 +66,7 @@ export function appendStartChildHandoffActivities(input: {
   readonly branch?: string | null;
   readonly worktreePath?: string | null;
   readonly kickoffPrompt?: string;
+  readonly environment?: ThreadEnvironmentBinding;
 }) {
   const payload = {
     ...(input.handoffParentThreadId ? { parentThreadId: input.handoffParentThreadId } : {}),
@@ -77,6 +79,7 @@ export function appendStartChildHandoffActivities(input: {
     ...(input.branch ? { branch: input.branch } : {}),
     ...(input.worktreePath ? { worktreePath: input.worktreePath } : {}),
     ...(input.kickoffPrompt ? { kickoffPrompt: input.kickoffPrompt } : {}),
+    ...(input.environment ? { environment: input.environment } : {}),
   };
 
   return Effect.all([

@@ -23,12 +23,14 @@ import { T3TeamThreadToolContextStore } from "./t3team-threadToolContextStore.ts
 import { makeLoadThreadView } from "./t3team-toolBrokerViewWorkspace.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { bindChildProviderCatalog } from "./t3team-childProviderCatalog.ts";
+import { ServerEnvironmentIdentity } from "./environment/ServerEnvironment.ts";
 import { makeRecipeToolHandlers } from "./t3team-toolBrokerRecipeTools.ts";
 import { makeWorkflowToolsForThread } from "./t3team-toolBrokerWorkflowToolsWiring.ts";
 import { T3TeamContextRefreshService } from "./t3team-contextRefreshService.ts";
 import { makeT3TeamWidgetShowBinder } from "./t3team-toolBrokerWidgetShow.ts";
 import { makeBindSession } from "./t3team-toolBrokerLiveSession.ts";
-import { ServerSettingsService } from "./serverSettings.ts";
+import { UsageLimitSources } from "./usage/UsageLimitSources.ts";
+import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
 
 const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () {
   // Host tools every provider may call without an explicit `surface:"t3team"`
@@ -68,10 +70,21 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     yield* Effect.serviceOption(ProjectSetupScriptRunner),
   );
   const providerRegistry = Option.getOrUndefined(yield* Effect.serviceOption(ProviderRegistry));
-  const serverSettings = Option.getOrUndefined(yield* Effect.serviceOption(ServerSettingsService));
+  const usageLimitSources = Option.getOrUndefined(yield* Effect.serviceOption(UsageLimitSources));
+  const resourcePressure = Option.getOrUndefined(
+    yield* Effect.serviceOption(ResourcePressureMonitor),
+  );
   const workflowRegistry = Option.getOrUndefined(
     yield* Effect.serviceOption(T3TeamWorkflowEngineRegistry),
   );
+  // This server's own EnvironmentId: tells a same-environment start_child
+  // `environment` argument apart from a cross-environment binding.
+  const serverEnvironmentIdentity = Option.getOrUndefined(
+    yield* Effect.serviceOption(ServerEnvironmentIdentity),
+  );
+  const localEnvironmentId = serverEnvironmentIdentity
+    ? yield* serverEnvironmentIdentity.getEnvironmentId
+    : undefined;
   bindChildProviderCatalog(providerRegistry);
   const bindShowWidget = yield* makeT3TeamWidgetShowBinder();
 
@@ -127,12 +140,14 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
       ...(workflowRegistry
         ? { workflowLaunchThreadForChild: workflowRegistry.launchThreadForChildThread }
         : {}),
+      ...(localEnvironmentId !== undefined ? { localEnvironmentId } : {}),
     },
   });
   const manageChildren = makeManageChildrenHandler({
     query,
     orchestration,
     ...(mailbox !== undefined ? { mailbox } : {}),
+    ...(localEnvironmentId !== undefined ? { localEnvironmentId } : {}),
   });
 
   // Extracted to t3team-toolBrokerLiveSession.ts (additive LOC budget) — behavior unchanged.
@@ -141,7 +156,8 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     genericThreadToolIds,
     query,
     providerRegistry,
-    serverSettings,
+    usageLimitSources,
+    resourcePressure,
     contextRefresh,
     dispatchCommand,
     bindShowWidget,

@@ -1,4 +1,17 @@
+import type { ProjectMyWorkStatusCategory } from "./t3team-projectMyWorkShared";
 import type { ProjectTicket } from "~/t3team/t3team-types";
+
+/**
+ * The user-selected My Work filters, applied to the digest lens the same way they shape the
+ * legacy list/board lenses. All-projects values ("all") mean "no filter".
+ */
+export type DigestFilterState = {
+  readonly query: string;
+  readonly statusCategory: ProjectMyWorkStatusCategory;
+  readonly excludedTypeKeys: readonly string[];
+  readonly selectedPriority: string;
+  readonly selectedStatus: string;
+};
 
 export type DigestClaim = {
   readonly threadId: string;

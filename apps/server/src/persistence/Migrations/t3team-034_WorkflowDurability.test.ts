@@ -17,7 +17,7 @@ interface TableRow {
   readonly name: string;
 }
 
-const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
+const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layer({ filename: ":memory:" })));
 
 layer("t3team-034_WorkflowDurability", (it) => {
   it.effect("creates workflow_journal + workflow_runs cleanly without disturbing projections", () =>
@@ -67,8 +67,13 @@ layer("t3team-034_WorkflowDurability", (it) => {
         "run_id",
         "runtime_mode",
         "status",
+        "turn_retries", // added by t3team-053 (interrupted-turn re-drive budget)
         "updated_at",
         "wake_at", // added by t3team-035 (Epic 27 scheduler)
+        "watch_params_hash", // added by t3team-059 (signal sources, GHE #332)
+        "watch_signal_key",
+        "watch_signal_name",
+        "watch_source_name",
         "workflow_path",
       ]);
       assert.deepStrictEqual(

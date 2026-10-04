@@ -12,7 +12,7 @@
 import type { ProjectionThreadActivity } from "../../../persistence/Services/ProjectionThreadActivities.ts";
 
 /** requestId carried by a user-input lifecycle activity payload, or null. */
-export const extractUserInputRequestId = (payload: unknown): string | null =>
+const extractUserInputRequestId = (payload: unknown): string | null =>
   typeof payload === "object" &&
   payload !== null &&
   typeof (payload as Record<string, unknown>).requestId === "string"

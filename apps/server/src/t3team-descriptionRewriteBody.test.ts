@@ -16,6 +16,10 @@ import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 
 import { describe, expect, it } from "vite-plus/test";
+import {
+  PROJECT_STATE_DIR,
+  T3TEAM_PROJECT_STATE_DIR,
+} from "@t3tools/project-context/t3teamProjectStateDir";
 
 import { DESCRIPTION_REWRITE_WORKFLOW_BODY } from "./t3team-descriptionRewriteBody.ts";
 import { renderDescriptionRewriteWorkflow } from "./t3team-projectSetupDescriptionRewriteRecipe.ts";
@@ -26,7 +30,14 @@ const workflowSourceUrl = new URL("./t3team-descriptionRewrite.workflow.ts", imp
 describe("describe-rewrite body text", () => {
   it("is the workflow module's own source, byte for byte", () => {
     expect(DESCRIPTION_REWRITE_WORKFLOW_BODY).toBe(NodeFS.readFileSync(workflowSourceUrl, "utf8"));
-    expect(renderDescriptionRewriteWorkflow()).toBe(DESCRIPTION_REWRITE_WORKFLOW_BODY);
+    // Scaffold rewrites the canonical context paths onto the physical state dir. With the flag
+    // off that replacement is a no-op, so the written file matches the module source.
+    expect(renderDescriptionRewriteWorkflow()).toBe(
+      DESCRIPTION_REWRITE_WORKFLOW_BODY.replaceAll(
+        `${T3TEAM_PROJECT_STATE_DIR}/context/`,
+        `${PROJECT_STATE_DIR}/context/`,
+      ),
+    );
   });
 
   it("is source text, not a stringified function", () => {

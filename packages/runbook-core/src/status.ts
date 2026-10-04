@@ -11,6 +11,8 @@
 import type { ArtifactRecord } from "./artifacts.ts";
 import type { RunMeta } from "./journal.ts";
 import type { JournalStore } from "./journalStore.ts";
+import { selectReplayWindow, type CheckpointRecord, type HistoryEntry } from "./checkpoint.ts";
+import { selectHistoryView } from "./historyView.ts";
 import type { UsageRecord, UsageTotals } from "./usage.ts";
 import { summarizeUsage } from "./usage.ts";
 
@@ -25,6 +27,20 @@ export interface RunStatus {
   readonly entryCount: number;
   /** Highest journaled seq, or 0 for an empty run. */
   readonly lastSeq: number;
+  /** The active checkpoint boundary's seq, when a valid checkpoint is committed. */
+  readonly checkpointSeq?: number;
+  /** The committed compact state of the active boundary (bounded read, not the full history). */
+  readonly checkpoint?: CheckpointRecord;
+  /**
+   * The active boundary's `history(n)` ring — its latest `retainedHistory` iteration outputs,
+   * oldest first. Present alongside {@link RunStatus.checkpoint}; empty when retention is 0.
+   */
+  readonly history?: ReadonlyArray<HistoryEntry>;
+  /**
+   * How many seq-keyed entries a checkpoint-aware resume would materialize — the bounded working
+   * set. Equals {@link RunStatus.entryCount} for pre-checkpoint runs.
+   */
+  readonly materializedEntryCount: number;
   /** Correlation ids of `sent` handles with no recorded reply yet — what a resume awaits. */
   readonly pendingCorrelationIds: readonly string[];
   /** The run's journaled artifacts, in emission order. */
@@ -66,6 +82,7 @@ export async function inspectRun(store: JournalStore, runId: string): Promise<Ru
         : meta === undefined
           ? "empty"
           : "in-progress";
+  const window = selectReplayWindow(entries);
   return {
     state,
     ...(meta === undefined ? {} : { meta }),
@@ -74,5 +91,13 @@ export async function inspectRun(store: JournalStore, runId: string): Promise<Ru
     pendingCorrelationIds,
     artifacts,
     usage: summarizeUsage(usage),
+    ...(window.checkpoint === undefined
+      ? {}
+      : {
+          checkpointSeq: window.checkpoint.seq,
+          checkpoint: window.checkpoint.record,
+          history: selectHistoryView(entries, window.checkpoint.record.retainedHistory),
+        }),
+    materializedEntryCount: window.materializedEntries,
   };
 }

@@ -1,6 +1,7 @@
+import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import * as NodeCrypto from "node:crypto";
 
-export const T3TEAM_CONTEXT_BLOB_ROOT = ".t3team/context/_blobs";
+export const T3TEAM_CONTEXT_BLOB_ROOT = `${PROJECT_STATE_DIR}/context/_blobs`;
 
 export function hashT3TeamContextBytes(bytes: Uint8Array): string {
   return NodeCrypto.createHash("sha256").update(bytes).digest("hex");

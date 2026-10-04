@@ -449,4 +449,88 @@ describe("createWorkflowEngineBroker", () => {
 
     expect(dispatched.filter((command) => command.type === "thread.create")).toHaveLength(1);
   });
+
+  it("retries a busy-thread turn-start rejection and starts the turn once the thread frees up", async () => {
+    const registry = makeWorkflowEngineRegistry();
+    const dispatched: OrchestrationCommand[] = [];
+    const delays: number[] = [];
+    let turnStartAttempts = 0;
+    const broker = createWorkflowEngineBroker({
+      runId: "run-busy",
+      projectId: ProjectId.make("project-1"),
+      modelSelection: createModelSelection(ProviderInstanceId.make("instance-1"), "model-1"),
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      registry,
+      dispatch: async (command) => {
+        if (command.type === "thread.turn.start") {
+          turnStartAttempts += 1;
+          if (turnStartAttempts < 3) {
+            throw {
+              _tag: "OrchestrationCommandInvariantError",
+              commandType: "thread.turn.start",
+              detail: "Thread 'child-busy' already has a turn in progress.",
+            };
+          }
+        }
+        dispatched.push(command);
+      },
+      threadTurnBusyRetryDelay: async (ms) => {
+        delays.push(ms);
+      },
+      newId: () => "id-1",
+      nowIso: () => "2026-01-01T00:00:00.000Z",
+    });
+
+    await broker.send(
+      {
+        correlationId: "run-busy:1",
+        kind: "thread.turn",
+        payload: { threadId: "child-busy", prompt: "Review" },
+      },
+      { resolve: () => {}, reject: () => {} },
+    );
+
+    expect(turnStartAttempts).toBe(3);
+    expect(delays).toEqual([5_000, 30_000]);
+    expect(dispatched.filter((command) => command.type === "thread.turn.start")).toHaveLength(1);
+  });
+
+  it("fails the run once the busy-thread retry budget is exhausted", async () => {
+    const registry = makeWorkflowEngineRegistry();
+    let turnStartAttempts = 0;
+    const busyRejection = {
+      _tag: "OrchestrationCommandInvariantError",
+      commandType: "thread.turn.start",
+      detail: "Thread 'child-stuck' already has a turn in progress.",
+    };
+    const broker = createWorkflowEngineBroker({
+      runId: "run-stuck",
+      projectId: ProjectId.make("project-1"),
+      modelSelection: createModelSelection(ProviderInstanceId.make("instance-1"), "model-1"),
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      registry,
+      dispatch: async (command) => {
+        if (command.type === "thread.turn.start") turnStartAttempts += 1;
+        throw busyRejection;
+      },
+      threadTurnBusyRetryDelay: async () => {},
+      newId: () => "id-1",
+      nowIso: () => "2026-01-01T00:00:00.000Z",
+    });
+
+    await expect(
+      broker.send(
+        {
+          correlationId: "run-stuck:1",
+          kind: "thread.turn",
+          payload: { threadId: "child-stuck", prompt: "Review" },
+        },
+        { resolve: () => {}, reject: () => {} },
+      ),
+    ).rejects.toBe(busyRejection);
+    // 1 initial attempt + MAX_INTERRUPTED_TURN_REDRIVES (3) retries.
+    expect(turnStartAttempts).toBe(4);
+  });
 });

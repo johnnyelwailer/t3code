@@ -32,9 +32,8 @@ export function EmbeddedThreadAside({
         {onOpenFullThread ? (
           <div className="flex h-10 shrink-0 items-center justify-end border-b border-border/60 px-3">
             <Button
-              variant="ghost"
+              variant="ghost-muted"
               size="xs"
-              className="text-muted-foreground/80"
               onClick={() => runT3TeamViewTransition(() => onOpenFullThread())}
               aria-label="Open full thread"
             >

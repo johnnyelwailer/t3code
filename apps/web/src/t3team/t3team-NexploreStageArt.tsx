@@ -165,7 +165,8 @@ export function T3TeamNexploreStripArt() {
   return (
     <svg
       ref={svgRef}
-      className="stage-art stage-nexplore h-full w-full"
+      data-stage-art="nexplore"
+      className="h-full w-full"
       fill="none"
       preserveAspectRatio="xMinYMin slice"
       viewBox={`0 0 8192 ${STRIP_HEIGHT}`}
@@ -197,7 +198,8 @@ export function T3TeamNexploreStripArt() {
 function NexploreButtonArt() {
   return (
     <svg
-      className="stage-art stage-nexplore stage-nexplore-compact h-full w-full"
+      data-stage-art="nexplore"
+      className="stage-nexplore-compact h-full w-full"
       fill="none"
       preserveAspectRatio="xMidYMid slice"
       viewBox="0 0 32 32"

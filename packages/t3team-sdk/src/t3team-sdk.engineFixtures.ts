@@ -36,6 +36,9 @@ import type * as BigintResultWorkflow from "./__fixtures__/t3team-sdk.bigintResu
 import type * as ErrorGlobalsWorkflow from "./__fixtures__/t3team-sdk.errorGlobals.workflow.ts";
 import type * as NeverBaseWorkflow from "./__fixtures__/t3team-sdk.neverMarkerBase.workflow.ts";
 import type * as NeverRemovedWorkflow from "./__fixtures__/t3team-sdk.neverMarkerRemoved.workflow.ts";
+import type * as SignalTwoWaitsWorkflow from "./__fixtures__/t3team-sdk.signalTwoWaits.workflow.ts";
+import type * as SignalKeyDedupeWorkflow from "./__fixtures__/t3team-sdk.signalKeyDedupe.workflow.ts";
+import type * as SignalNoCapabilityWorkflow from "./__fixtures__/t3team-sdk.signalNoCapability.workflow.ts";
 import type * as NowWorkflow from "./__fixtures__/t3team-sdk.journalNow.workflow.ts";
 import type * as RandomWorkflow from "./__fixtures__/t3team-sdk.journalRandom.workflow.ts";
 import type * as ScriptWorkflow from "./__fixtures__/t3team-sdk.journalScript.workflow.ts";
@@ -284,6 +287,16 @@ export const modelCascadeAbsentWorkflow = defineWorkflow<typeof ModelCascadeAbse
 );
 export const modelCascadePrecedenceWorkflow = defineWorkflow<typeof ModelCascadePrecedenceWorkflow>(
   "./__fixtures__/t3team-sdk.modelCascadePrecedence.workflow.ts",
+);
+
+export const signalTwoWaitsWorkflow = defineWorkflow<typeof SignalTwoWaitsWorkflow>(
+  "./__fixtures__/t3team-sdk.signalTwoWaits.workflow.ts",
+);
+export const signalKeyDedupeWorkflow = defineWorkflow<typeof SignalKeyDedupeWorkflow>(
+  "./__fixtures__/t3team-sdk.signalKeyDedupe.workflow.ts",
+);
+export const signalNoCapabilityWorkflow = defineWorkflow<typeof SignalNoCapabilityWorkflow>(
+  "./__fixtures__/t3team-sdk.signalNoCapability.workflow.ts",
 );
 
 export const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-engine-"));

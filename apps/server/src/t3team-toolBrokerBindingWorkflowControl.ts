@@ -13,8 +13,8 @@ import type {
   WorkflowControlToolAction,
 } from "./t3team-toolBrokerWorkflowControlTool.ts";
 
-export const T3TEAM_WORKFLOW_PAUSE_TOOL_ID = "t3team.orchestration.pause";
-export const T3TEAM_WORKFLOW_STOP_TOOL_ID = "t3team.orchestration.stop";
+const T3TEAM_WORKFLOW_PAUSE_TOOL_ID = "t3team.orchestration.pause";
+const T3TEAM_WORKFLOW_STOP_TOOL_ID = "t3team.orchestration.stop";
 
 const ACTION_BY_TOOL_ID: Readonly<Record<string, WorkflowControlToolAction>> = {
   [T3TEAM_WORKFLOW_PAUSE_TOOL_ID]: "pause",

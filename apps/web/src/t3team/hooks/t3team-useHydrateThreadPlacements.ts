@@ -2,33 +2,29 @@ import { useEffect, useMemo, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
-import type { Project, Thread } from "~/types";
+import type { Project, ThreadShell } from "~/types";
 import { useBackend, useBackendState } from "~/t3team/backend/t3team-index";
 import type { T3TeamThreadPlacement } from "~/t3team/backend/t3team-types";
 import { upsertProjectThreadLocalState } from "~/t3team/t3team-threadToolContext";
 import type { ProjectThread } from "~/t3team/t3team-types";
-import { readT3TeamThreadPlacementFromActivities } from "~/t3team/hooks/t3team-threadHandoffMetadata";
 
-import { mapLiveThreadToProjectThread, resolveStoredProjectId } from "./t3team-threadBridge";
+import {
+  mapLiveThreadToProjectThread,
+  resolveStoredProjectId,
+  syncLiveThreadMetadataToLocalState,
+} from "./t3team-threadBridge";
 
 export function readMissingThreadPlacementIds(input: {
   threads: ReadonlyArray<ProjectThread>;
-  liveThreads: ReadonlyArray<Thread>;
+  liveThreads: ReadonlyArray<ThreadShell>;
 }): string[] {
+  // Shells never carry ephemeral threads (the shell stream excludes them), and they carry no
+  // activities: the server's placement route is the one source of a live thread's placement.
   const existingThreads = new Map(input.threads.map((thread) => [thread.id, thread] as const));
 
   return input.liveThreads.flatMap((thread) => {
-    if (thread.retention === "ephemeral") {
-      return [];
-    }
     const existingThread = existingThreads.get(thread.id);
-    const livePlacement = readT3TeamThreadPlacementFromActivities(thread);
-    return existingThread?.parentThreadId ||
-      existingThread?.ticketId ||
-      livePlacement.parentThreadId ||
-      livePlacement.ticketId
-      ? []
-      : [thread.id];
+    return existingThread?.parentThreadId || existingThread?.ticketId ? [] : [thread.id];
   });
 }
 
@@ -38,7 +34,7 @@ export function readMissingThreadPlacementIds(input: {
  */
 export function filterUnresolvedThreadPlacementIds(input: {
   threadIds: ReadonlyArray<string>;
-  liveThreads: ReadonlyArray<Pick<Thread, "id" | "updatedAt">>;
+  liveThreads: ReadonlyArray<Pick<ThreadShell, "id" | "updatedAt">>;
   resolvedEmpty: ReadonlyMap<string, string>;
 }): string[] {
   if (input.resolvedEmpty.size === 0) {
@@ -56,7 +52,7 @@ export function mergeFetchedThreadPlacements(input: {
   threads: ReadonlyArray<ProjectThread>;
   storedProjects: ReadonlyArray<ProjectShellProject>;
   liveProjects: ReadonlyArray<Project>;
-  liveThreads: ReadonlyArray<Thread>;
+  liveThreads: ReadonlyArray<ThreadShell>;
   placements: ReadonlyArray<T3TeamThreadPlacement>;
 }): ProjectThread[] {
   const liveThreadById = new Map(input.liveThreads.map((thread) => [thread.id, thread] as const));
@@ -64,7 +60,7 @@ export function mergeFetchedThreadPlacements(input: {
 
   for (const placement of input.placements) {
     const liveThread = liveThreadById.get(placement.threadId);
-    if (!liveThread || liveThread.retention === "ephemeral") {
+    if (!liveThread) {
       continue;
     }
 
@@ -92,7 +88,7 @@ export function useHydrateThreadPlacements(input: {
   setThreads: Dispatch<SetStateAction<ProjectThread[]>>;
   storedProjects: ReadonlyArray<ProjectShellProject>;
   liveProjects: ReadonlyArray<Project>;
-  liveThreads: ReadonlyArray<Thread>;
+  liveThreads: ReadonlyArray<ThreadShell>;
 }) {
   const backend = useBackend();
   const backendState = useBackendState();
@@ -119,6 +115,40 @@ export function useHydrateThreadPlacements(input: {
   // e.g. `["a\nb", "c"]` vs `["a", "b\nc"]` would otherwise both join to
   // "a\nb\nc".
   const candidateThreadIdsKey = JSON.stringify(candidateThreadIds);
+  // Content-stable key for the live lists this effect actually reads (GHE
+  // #382 follow-up). `liveThreads` and `liveProjects` are fresh arrays with
+  // fresh object identity on every shell event, so depending on them re-fired
+  // the fetch on every live update (778 POSTs in 12 min on the live
+  // machine) — the same identity-flapping this file already solved once for
+  // the candidate ids. What the effect consumes is: the candidate threads'
+  // `updatedAt` (the unresolved-id filter and the empty-answer staleness
+  // stamps), plus the live projects' id/roots (project-id resolution in the
+  // merge). A primitive key over exactly that content re-runs the effect only
+  // when the fetch decision itself can change.
+  const liveThreadsKey = useMemo(
+    () =>
+      JSON.stringify(
+        (() => {
+          const byId = new Map(liveThreads.map((thread) => [thread.id as string, thread] as const));
+          return candidateThreadIds.map((threadId) => {
+            const thread = byId.get(threadId);
+            return thread === undefined ? [threadId, null] : [thread.id, thread.updatedAt];
+          });
+        })(),
+      ),
+    [candidateThreadIds, liveThreads],
+  );
+  const liveProjectsKey = useMemo(
+    () =>
+      JSON.stringify(
+        liveProjects.map((project) => [
+          project.id,
+          project.workspaceRoot,
+          project.repositoryIdentity?.rootPath ?? null,
+        ]),
+      ),
+    [liveProjects],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -169,13 +199,20 @@ export function useHydrateThreadPlacements(input: {
           return;
         }
 
+        // Re-derive the live facts that key on placement (`waitingOnChildren` reads the
+        // local parentThreadId): the sync effect only re-runs on the next shell change.
         setThreads((currentThreads) =>
-          mergeFetchedThreadPlacements({
-            threads: currentThreads,
+          syncLiveThreadMetadataToLocalState({
+            threads: mergeFetchedThreadPlacements({
+              threads: currentThreads,
+              storedProjects,
+              liveProjects,
+              liveThreads,
+              placements,
+            }),
             storedProjects,
             liveProjects,
             liveThreads,
-            placements,
           }),
         );
       })
@@ -184,19 +221,19 @@ export function useHydrateThreadPlacements(input: {
     return () => {
       cancelled = true;
     };
-    // `candidateThreadIds` is intentionally omitted: it is a freshly derived
-    // array on every render (new identity each time even when its contents
-    // are unchanged), so including it would re-run this effect — and refetch
-    // placements — on every re-render instead of only when the actual set of
-    // candidate ids changes. `candidateThreadIdsKey` is the stable,
-    // content-based dependency; the effect body still reads the up-to-date
-    // `candidateThreadIds` value via closure.
+    // `candidateThreadIds`, `liveThreads`, and `liveProjects` are
+    // intentionally omitted: each is a freshly derived value with new identity
+    // on every live event even when its content is unchanged, so including it
+    // would re-run this effect — and refetch placements — on every re-render
+    // instead of only when the actual fetch decision changes. The content
+    // keys are the stable dependencies; the effect body still reads the
+    // up-to-date values via closure.
   }, [
     backend,
     backendState.connectionStatus,
     candidateThreadIdsKey,
-    liveProjects,
-    liveThreads,
+    liveProjectsKey,
+    liveThreadsKey,
     setThreads,
     storedProjects,
   ]);

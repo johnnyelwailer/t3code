@@ -13,6 +13,11 @@ import {
   ACTIVITY_STATE_MIN_TRANSITION_MS,
   type ThreadActivityState,
 } from "./t3team-activityState.ts";
+import {
+  ACTIVITY_STATE_TOOL_STALL_CEILING_MS,
+  applyToolLifecycleTransition,
+  shouldPromoteToWaiting,
+} from "./t3team-activityStateIdle.ts";
 
 interface TrackedThread {
   state: ThreadActivityState | null;
@@ -20,6 +25,8 @@ interface TrackedThread {
   inFlightTools: number;
   /** Last instant any output arrived (deltas, tool results, tool streams). */
   lastOutputAt: number;
+  /** Instant `inFlightTools` went 0→1; see `t3team-activityStateIdle.ts`. */
+  inFlightSince: number;
   /**
    * Last instant the ACTIVE state word actually changed (0 until the first
    * transition of a turn). Gates the thinking/writing/working debounce. Not
@@ -43,12 +50,15 @@ export function createActivityStateTracker(input: {
   readonly idleGapMs?: number;
   /** Debounce interval between active-state (thinking/writing/working) changes. */
   readonly minTransitionMs?: number;
+  /** Ceiling on a pending tool suppressing `waiting`; see `t3team-activityStateIdle.ts`. */
+  readonly toolStallCeilingMs?: number;
   readonly now?: () => number;
   readonly setTimer?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
   readonly clearTimer?: (timer: ReturnType<typeof setTimeout>) => void;
 }) {
   const idleGapMs = input.idleGapMs ?? ACTIVITY_STATE_IDLE_GAP_MS;
   const minTransitionMs = input.minTransitionMs ?? ACTIVITY_STATE_MIN_TRANSITION_MS;
+  const toolStallCeilingMs = input.toolStallCeilingMs ?? ACTIVITY_STATE_TOOL_STALL_CEILING_MS;
   const now = input.now ?? Date.now;
   const setTimer = input.setTimer ?? setTimeout;
   const clearTimer = input.clearTimer ?? clearTimeout;
@@ -61,6 +71,7 @@ export function createActivityStateTracker(input: {
         state: null,
         inFlightTools: 0,
         lastOutputAt: 0,
+        inFlightSince: 0,
         lastActiveChangeAt: 0,
         timer: undefined,
       };
@@ -69,16 +80,20 @@ export function createActivityStateTracker(input: {
     return tracked;
   };
 
+  // Re-arms itself when suppressed by a live tool (GHE #297 Defect 2 — used
+  // to fire once and never re-check, so a stalled tool was never promoted).
   const setTimerFor = (threadId: string, tracked: TrackedThread, delayMs: number) => {
     if (tracked.timer) clearTimer(tracked.timer);
     tracked.timer = setTimer(() => {
       tracked.timer = undefined;
-      // The gap elapsed with no tool in flight: the thread is waiting on
-      // something we cannot see (slow provider, stuck turn, …).
-      if (tracked.inFlightTools === 0 && tracked.state !== "waiting") {
-        tracked.state = "waiting";
-        void input.persist({ threadId, state: "waiting" }).catch(() => undefined);
+      if (shouldPromoteToWaiting(tracked, now(), toolStallCeilingMs)) {
+        if (tracked.state !== "waiting") {
+          tracked.state = "waiting";
+          void input.persist({ threadId, state: "waiting" }).catch(() => undefined);
+        }
+        return;
       }
+      setTimerFor(threadId, tracked, idleGapMs);
     }, delayMs);
   };
 
@@ -123,9 +138,9 @@ export function createActivityStateTracker(input: {
               ? "thinking"
               : tracked.state;
 
-    if (event.type === "tool-started") tracked.inFlightTools += 1;
-    if (event.type === "tool-completed")
-      tracked.inFlightTools = Math.max(0, tracked.inFlightTools - 1);
+    if (event.type === "tool-started" || event.type === "tool-completed") {
+      applyToolLifecycleTransition(tracked, event.type, now());
+    }
     if (
       event.type === "reasoning-delta" ||
       event.type === "assistant-delta" ||

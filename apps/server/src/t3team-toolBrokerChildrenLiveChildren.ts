@@ -28,7 +28,7 @@ import {
 } from "./t3team-toolBrokerChildrenTypes.ts";
 
 /** True when this child keeps its parent waiting. */
-export function isLiveChildShell(shell: ChildThreadShell): boolean {
+function isLiveChildShell(shell: ChildThreadShell): boolean {
   if (shell.settledOverride === "settled") return false;
   return !isTerminalThreadRunState(
     deriveThreadRunState({

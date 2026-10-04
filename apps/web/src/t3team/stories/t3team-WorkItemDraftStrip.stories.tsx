@@ -147,7 +147,7 @@ function DescriptionDiffDemo() {
 }
 
 const meta = {
-  title: "T3Team/Work Item Draft Strip",
+  title: "T3Team/Work Item/Draft Strip",
   parameters: { layout: "padded" },
 } satisfies Meta;
 

@@ -26,6 +26,32 @@ export type ChatViewT3TeamExtensionProps = {
     readonly createdAt: string;
     readonly hasAttachments: boolean;
   }) => Promise<TurnStartOverrideResult>;
+  /**
+   * Offline outbox hook for the "Not connected" send gate: instead of
+   * erroring, hand the would-be turn start to the host. Returns true when the
+   * send was queued (the composer clears it); false to keep the stock toast.
+   */
+  readonly enqueueOfflineTurnStart?: (turnStart: {
+    readonly threadId: string;
+    readonly messageId: string;
+    readonly messageText: string;
+    readonly modelSelection: ModelSelection | null;
+    readonly titleSeed: string;
+    readonly runtimeMode: RuntimeMode;
+    readonly interactionMode: ProviderInteractionMode;
+    readonly createdAt: string;
+    readonly hasAttachments: boolean;
+  }) => boolean | Promise<boolean>;
+  /**
+   * Queued-send rows the host wants rendered at the bottom of the timeline,
+   * directly after the native queued messages. The t3team offline outbox uses
+   * this to share the native queued-message surface instead of its own
+   * top-header banner: one queue, one place.
+   */
+  readonly queuedExtensions?: ReadonlyArray<{
+    readonly id: string;
+    readonly node: ReactNode;
+  }>;
   readonly composerContextAttachmentSlot?: ReactNode;
   readonly composerContainerProps?: HTMLAttributes<HTMLDivElement>;
   readonly composerContainerOverlay?: ReactNode;

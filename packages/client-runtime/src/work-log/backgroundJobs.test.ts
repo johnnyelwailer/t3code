@@ -29,15 +29,18 @@ const entry = (
   id: overrides.id,
   createdAt: overrides.createdAt ?? T0_ISO,
   detail: overrides.detail,
+  command: overrides.command,
+  label: overrides.label,
 });
 
 describe("detectBackgroundJobStart", () => {
-  it("parses id, start and hard deadline from the yield marker", () => {
+  it("parses id, start, hard deadline and pid from the yield marker", () => {
     const start = detectBackgroundJobStart(startDetail, T0 + 10_000);
     expect(start).toEqual({
       jobId: "job_a1b2c3d4",
       startedAtMs: T0,
       deadlineMs: T0 + 600_000,
+      pid: 4242,
     });
   });
 
@@ -53,6 +56,18 @@ describe("detectBackgroundJobStart", () => {
       jobId: "job_8865dcbe",
       startedAtMs: observedAtMs,
       deadlineMs: observedAtMs + 1_800_000,
+      pid: 84712,
+    });
+  });
+
+  it("omits pid when the marker reports one", () => {
+    const marker =
+      "Command still running after 10s — it is now a background job: job_a1b2c3d4 (pid ?). " +
+      "It keeps running under a 600s hard deadline owned by this thread; you do not have to wait...";
+    expect(detectBackgroundJobStart(marker, T0 + 10_000)).toEqual({
+      jobId: "job_a1b2c3d4",
+      startedAtMs: T0,
+      deadlineMs: T0 + 600_000,
     });
   });
 
@@ -163,6 +178,7 @@ describe("foldBackgroundJobs over transposed history", () => {
         jobId: "job_8865dcbe",
         startedAtMs: observedAtMs,
         deadlineMs: observedAtMs + 1_800_000,
+        pid: 84712,
         state: "running",
         startedEntryId: persistedRow.id,
         lastSeenEntryId: persistedRow.id,
@@ -206,6 +222,81 @@ describe("foldBackgroundJobs over transposed history", () => {
         T0 + 60_000,
       ),
     ).toEqual([]);
+  });
+
+  // Modern shape: the runtime sends a structured command AND a result. The
+  // row's `command` field is the shell command — adopt it so the expanded
+  // indicator can say WHAT is running, not just that something is.
+  it("adopts the row's command when the marker came from detail", () => {
+    const jobs = foldBackgroundJobs(
+      [
+        {
+          id: "bash",
+          createdAt: T0_PLUS_10S,
+          detail: startDetail,
+          command: "node scripts/quality-gate.mjs",
+        },
+      ],
+      T0 + 60_000,
+    );
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]).toMatchObject({
+      jobId: "job_a1b2c3d4",
+      pid: 4242,
+      command: "node scripts/quality-gate.mjs",
+      state: "running",
+    });
+  });
+
+  // Transposed era: `command` holds the marker text itself. Adopting it would
+  // display the yield message as if it were the shell command — it must stay
+  // inert even though the shape now carries a `command` field.
+  it("does NOT adopt the marker text as the command on transposed rows", () => {
+    const jobs = foldBackgroundJobs([persistedRow], observedAtMs + 60_000);
+    expect(jobs[0]?.command).toBeUndefined();
+    expect(jobs[0]?.label).toBeUndefined();
+  });
+
+  // The row's display label is the tool call's own human label ("Building
+  // the project") — the same text the tool card renders. Modern rows carry
+  // it; transposed history does not.
+  it("adopts the row's display label when the marker came from detail", () => {
+    const jobs = foldBackgroundJobs(
+      [
+        {
+          id: "bash",
+          createdAt: T0_PLUS_10S,
+          detail: startDetail,
+          command: "node scripts/quality-gate.mjs",
+          label: "Running the quality gate",
+        },
+      ],
+      T0 + 60_000,
+    );
+    expect(jobs[0]).toMatchObject({
+      label: "Running the quality gate",
+      command: "node scripts/quality-gate.mjs",
+    });
+  });
+
+  it("keeps the first opener's label on repeated start markers", () => {
+    const jobs = foldBackgroundJobs(
+      [
+        entry({ id: "e1", detail: startDetail, label: "First label" }),
+        entry({ id: "e2", detail: startDetail, label: "Second label" }),
+      ],
+      T0 + 60_000,
+    );
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]?.label).toBe("First label");
+  });
+
+  it("ignores a blank label instead of adopting it", () => {
+    const jobs = foldBackgroundJobs(
+      [entry({ id: "e1", detail: startDetail, label: "   " })],
+      T0 + 60_000,
+    );
+    expect(jobs[0]?.label).toBeUndefined();
   });
 });
 
@@ -285,6 +376,99 @@ describe("foldBackgroundJobs", () => {
 
   it("ignores entries without detail", () => {
     expect(foldBackgroundJobs([entry({ id: "e1" })], T0)).toEqual([]);
+  });
+});
+
+describe("foldBackgroundJobs across a server restart", () => {
+  // The job started 4m ago (well inside its 600s deadline, so the deadline
+  // rule alone would keep the chip up), the server booted 1m ago.
+  const startCreatedAt = "2026-09-11T11:56:00.000Z";
+  const startMs = Date.parse(startCreatedAt);
+  const bootMs = startMs + 60_000;
+  const nowMs = startMs + 240_000;
+  const preBootEntry = entry({ id: "e1", createdAt: startCreatedAt, detail: startDetail });
+
+  it("settles a running job that started before the server boot", () => {
+    const jobs = foldBackgroundJobs([preBootEntry], nowMs, bootMs);
+    expect(jobs).toEqual([
+      {
+        jobId: "job_a1b2c3d4",
+        // Marker reports 10s elapsed at observation, so start = observed - 10s.
+        startedAtMs: startMs - 10_000,
+        deadlineMs: startMs - 10_000 + 600_000,
+        // The start marker also reports the pid; the fold carries it.
+        pid: 4242,
+        state: "finished",
+        finishedReason: "lost-restart",
+        startedEntryId: "e1",
+        lastSeenEntryId: "e1",
+      },
+    ]);
+  });
+
+  it("keeps a job started after the boot running", () => {
+    const late = entry({
+      id: "e1",
+      createdAt: "2026-09-11T11:58:00.000Z", // 2m ago, after the boot
+      detail: startDetail,
+    });
+    const jobs = foldBackgroundJobs([late], nowMs, bootMs);
+    expect(jobs[0]).toMatchObject({ state: "running" });
+    expect(jobs[0]).not.toHaveProperty("finishedReason");
+  });
+
+  it("does not settle a job that started exactly at the boot (strictly before)", () => {
+    // Marker observed 10s after the boot instant -> startedAtMs == bootMs.
+    const atBoot = entry({
+      id: "e1",
+      createdAt: "2026-09-11T11:57:10.000Z",
+      detail: startDetail,
+    });
+    const jobs = foldBackgroundJobs([atBoot], nowMs, bootMs);
+    expect(jobs[0]).toMatchObject({ state: "running" });
+  });
+
+  it("settles pre-boot jobs and keeps post-boot ones in the same fold", () => {
+    const late = entry({
+      id: "e2",
+      createdAt: "2026-09-11T11:58:00.000Z",
+      detail:
+        "Command still running after 10s — it is now a background job: job_postboot1 (pid 4243). " +
+        "It keeps running under a 600s hard deadline owned by this thread; you do not have to wait for it.",
+    });
+    const jobs = foldBackgroundJobs([preBootEntry, late], nowMs, bootMs);
+    const byState = new Map(jobs.map((job) => [job.jobId, job.state]));
+    expect(byState.get("job_a1b2c3d4")).toBe("finished");
+    expect(byState.get("job_postboot1")).toBe("running");
+  });
+
+  it("tolerates a missing, zero, or invalid boot reference (deadline behavior only)", () => {
+    for (const reference of [undefined, 0, -1, Number.NaN]) {
+      const jobs = foldBackgroundJobs([preBootEntry], nowMs, reference);
+      expect(jobs[0]).toMatchObject({ state: "running" });
+    }
+  });
+
+  it("never overrides a terminal marker that already settled the job", () => {
+    const jobs = foldBackgroundJobs(
+      [
+        preBootEntry,
+        entry({
+          id: "e2",
+          detail: "Kill requested for job_a1b2c3d4; it will be reported as cancelled.",
+        }),
+      ],
+      nowMs,
+      bootMs,
+    );
+    expect(jobs[0]).toMatchObject({ state: "finished", finishedReason: "cancelled" });
+  });
+
+  it("drops settled jobs from the indicator label (chip disappears)", () => {
+    const jobs = foldBackgroundJobs([preBootEntry], nowMs, bootMs);
+    const running = runningBackgroundJobs(jobs, nowMs);
+    expect(running).toEqual([]);
+    expect(backgroundJobsSummaryLabel(running, nowMs)).toBeNull();
   });
 });
 
