@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - test drives the real on-disk pack layout.
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";

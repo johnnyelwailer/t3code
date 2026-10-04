@@ -16,7 +16,7 @@
     }
   },
   "scripts": {
-    "typecheck": "node ../../scripts/tsgo-noemit.mjs",
+    "typecheck": "tsgo --noEmit",
     "test": "vp test run"
   },
   "dependencies": {

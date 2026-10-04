@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - resolves asset paths against the real filesystem (symlinks).
 import * as NodePath from "node:path";
 
 import { isWithinCanonicalRoot } from "./t3team-packs.pathCanonical.ts";
