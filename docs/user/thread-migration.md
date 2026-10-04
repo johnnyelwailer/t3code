@@ -17,6 +17,10 @@ interaction modes, branch or worktree, archive state, settlement state, snooze a
 linked pull request. T3 Code also brings over user and assistant messages, their timestamps, and
 supported attachments. Large histories may appear in stages while the server imports transcripts.
 
+If your threads used messages between agents, workflow notes and cards, widgets, or proposed
+work-item drafts, those come over too. A message another agent sent that the receiving thread had
+not picked up before the update waits until you next write in that thread.
+
 The migration does not recreate the old provider's live session. It also does not convert old run
 records, checkpoints and diffs, tool activity, approval history, or proposed plan history into the
 new format. These items may be absent from a migrated timeline even though the conversation text is

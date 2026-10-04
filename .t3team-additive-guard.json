@@ -280,6 +280,7 @@
     "docs/t3team-mvp/32-project-provider-tool-policies.md",
     "docs/t3team-mvp/38-executable-workspace-packs.md",
     "docs/t3team-mvp/core-workflow-runtime-api.md",
+    "docs/user/thread-migration.md",
     "knip.jsonc",
     "package.json",
     "packages/agent-runner/src/executor.ts",
