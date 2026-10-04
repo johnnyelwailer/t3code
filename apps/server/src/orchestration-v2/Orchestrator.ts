@@ -6245,9 +6245,16 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         }),
         runtimeMode: command.runtimeMode,
         interactionMode: command.interactionMode,
+        // t3team: an isolated child works on its own branch, so none of the parent's PRs are its own.
         ...(command.workspace === undefined
           ? {}
-          : { branch: command.workspace.branch, worktreePath: command.workspace.worktreePath }),
+          : {
+              branch: command.workspace.branch,
+              worktreePath: command.workspace.worktreePath,
+              linkedPullRequest: null,
+              branchPullRequest: null,
+              pullRequests: [],
+            }),
       };
       const task: OrchestrationV2Subagent = {
         id: taskNodeId,

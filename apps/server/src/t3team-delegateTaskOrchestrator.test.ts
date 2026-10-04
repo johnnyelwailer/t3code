@@ -36,15 +36,42 @@ const startParentRun = (threadId: ThreadId) =>
     return { runId: run.id, nodeId: run.rootNodeId };
   });
 
+/** Links pull request #7 to the parent explicitly and through the thread's link list. */
+const linkParentPullRequest = (threadId: ThreadId) =>
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const parent = yield* projections.getThread(threadId);
+    const url = "https://example.test/owner/repo/pull/7";
+    yield* orchestrator.dispatch({
+      type: "thread.metadata.update",
+      commandId: CommandId.make(`link-pr:${threadId}`),
+      threadId,
+      linkedPullRequest: { projectId: parent.projectId, repository: "owner/repo", number: 7, url },
+    });
+    yield* orchestrator.dispatch({
+      type: "thread.pull-request.link",
+      commandId: CommandId.make(`link-pr-list:${threadId}`),
+      threadId,
+      host: "example.test",
+      repository: "owner/repo",
+      number: 7,
+      url,
+      source: "manual",
+    });
+  });
+
 const delegate = (input: {
   readonly parentThreadId: ThreadId;
   readonly key: string;
   readonly workspace?: { readonly branch: string | null; readonly worktreePath: string | null };
+  readonly parentHasPullRequest?: boolean;
 }) =>
   Effect.gen(function* () {
     const orchestrator = yield* Orchestrator.OrchestratorV2;
     const projections = yield* ProjectionStore.ProjectionStoreV2;
     const parentRun = yield* startParentRun(input.parentThreadId);
+    if (input.parentHasPullRequest === true) yield* linkParentPullRequest(input.parentThreadId);
     const result = yield* orchestrator.dispatch({
       type: "delegated_task.request",
       commandId: CommandId.make(`delegate:${input.key}`),
@@ -77,6 +104,35 @@ it.layer(makeT3TeamV2TestLayer("t3team-delegate-task-workspace"))(
         assert.strictEqual(child?.branch, "feature/child-1234");
         assert.strictEqual(child?.worktreePath, "/tmp/child-worktree");
         assert.strictEqual(child?.lineage.relationshipToParent, "subagent");
+      }),
+    );
+
+    it.effect("does not carry the parent's pull requests into an isolated child", () =>
+      Effect.gen(function* () {
+        const child = yield* delegate({
+          parentThreadId: ThreadId.make("thread:delegate-ws-pr-parent"),
+          key: "with-workspace-pr",
+          workspace: { branch: "feature/child-5678", worktreePath: "/tmp/child-worktree-pr" },
+          parentHasPullRequest: true,
+        });
+        assert.strictEqual(child?.linkedPullRequest ?? null, null);
+        assert.strictEqual(child?.branchPullRequest ?? null, null);
+        assert.deepStrictEqual(child?.pullRequests ?? [], []);
+      }),
+    );
+
+    it.effect("shares the parent's pull requests when it shares the parent's checkout", () =>
+      Effect.gen(function* () {
+        const child = yield* delegate({
+          parentThreadId: ThreadId.make("thread:delegate-inherit-pr-parent"),
+          key: "inherit-pr",
+          parentHasPullRequest: true,
+        });
+        assert.strictEqual(child?.linkedPullRequest?.number, 7);
+        assert.deepStrictEqual(
+          child?.pullRequests?.map((link) => link.number),
+          [7],
+        );
       }),
     );
 
