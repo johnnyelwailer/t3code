@@ -64,11 +64,7 @@ export function T3TeamCloneProjectSetupProfileDialog({
         De-emphasized on purpose: this is a secondary escape hatch off the profile-card decision
         above it, not a second call to action competing with it.
       */}
-      <DialogTrigger
-        render={
-          <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" />
-        }
-      >
+      <DialogTrigger render={<Button type="button" variant="ghost-muted" size="sm" />}>
         Clone starter profile
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">

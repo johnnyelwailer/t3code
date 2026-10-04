@@ -18,6 +18,7 @@ import {
   AtlassianAuthError,
   AtlassianMirrorSourceUnavailableError,
   AtlassianNetworkError,
+  type JiraBoardConfigurationResponse,
   type JiraIssue,
   type JiraIssueLinkType,
 } from "./client.ts";
@@ -97,7 +98,14 @@ export type AtlassianBacklogSelection = {
   readonly selectedSprintId?: string;
   readonly selectedFilterId?: string;
   readonly selectedFilterJql?: string;
+  /** Board/sprint/quick-filter reads were refused for a missing OAuth scope;
+   * the catalog above is the issue-derived fallback and needs a re-consent. */
+  readonly boardScopeMissing?: true;
 };
+
+function isMissingScopeError(error: unknown): boolean {
+  return error instanceof AtlassianAuthError && error.missingScope === true;
+}
 
 function normalizeOptionalId(value: unknown): string | undefined {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -629,6 +637,28 @@ function describeAccountError(
   return `${siteUrl}: ${String(cause)}`;
 }
 
+/** The provider's mirror walk already requests `issuelinks`; surface the outward direction. */
+function readJiraOutwardIssueLinks(jiraIssue: JiraIssue): Array<{
+  readonly outward: string;
+  readonly key: string;
+}> {
+  const raw = jiraIssue.fields["issuelinks"];
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: Array<{ outward: string; key: string }> = [];
+  for (const link of raw as ReadonlyArray<Record<string, unknown>>) {
+    if (link === null || typeof link !== "object") continue;
+    const type = link["type"] as { readonly outward?: unknown } | null | undefined;
+    const outward = typeof type?.outward === "string" ? type.outward.trim() : "";
+    const target = link["outwardIssue"] as { readonly key?: unknown } | null | undefined;
+    const key = typeof target?.key === "string" ? target.key.trim() : "";
+    if (outward.length === 0 || key.length === 0 || seen.has(`${outward}|${key}`)) continue;
+    seen.add(`${outward}|${key}`);
+    out.push({ outward, key });
+  }
+  return out;
+}
+
 export class AtlassianIntegrationProvider implements IntegrationProvider {
   id = "atlassian";
   kind = "atlassian";
@@ -811,14 +841,15 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     }
 
     const projectKey = project.key.replace(/"/g, '\\"');
-    const backlogJqlParts = [`project = "${projectKey}"`, "statusCategory != Done"];
+    // Mirrors the Jira board backlog: a sprint lists every issue it holds,
+    // including finished ones; the unplanned backlog hides Done work.
+    const requestedSprintId = input.sprintId?.trim();
+    const backlogJqlParts = requestedSprintId
+      ? [`project = "${projectKey}"`, buildSprintJqlClause(requestedSprintId)]
+      : [`project = "${projectKey}"`, "statusCategory != Done"];
     const filterJql = stripJqlOrderBy(input.filterJql);
     if (filterJql) {
       backlogJqlParts.unshift(`(${filterJql})`);
-    }
-    const requestedSprintId = input.sprintId?.trim();
-    if (requestedSprintId) {
-      backlogJqlParts.push(buildSprintJqlClause(requestedSprintId));
     }
     const requestedQuickFilterIds = (input.quickFilterIds ?? [])
       .map((id) => id.trim())
@@ -833,7 +864,8 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
         }
       }
     }
-    const backlogJql = `${backlogJqlParts.join(" AND ")} ORDER BY updated DESC`;
+    // Rank is the board's own order; clients treat list position as the rank.
+    const backlogJql = `${backlogJqlParts.join(" AND ")} ORDER BY Rank ASC`;
     const [estimateField, sprintField] = await Promise.all([
       this.resolveEstimateField(entry.client),
       this.resolveSprintField(entry.client),
@@ -1007,9 +1039,47 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
           item.sprintCompleteDate = sprint.completeDate;
         }
       }
+      const links = readJiraOutwardIssueLinks(jiraIssue);
+      if (links.length > 0) {
+        item.links = links;
+      }
 
       return item as typeof normalized;
     }
+  }
+
+  /**
+   * One issue's status history from Jira's changelog: a single `getIssue` read
+   * with `expand=changelog` (the only caller that asks for the expansion),
+   * normalized to oldest-first status transitions. The digest burndown
+   * backfill is the consumer; everything else reads statuses from the mirror.
+   */
+  async listIssueStatusChangelog(input: {
+    account: IntegrationAccountRef;
+    issueIdOrKey: string;
+  }): Promise<
+    ReadonlyArray<{
+      readonly from: string | null;
+      readonly to: string;
+      readonly atMs: number;
+    }>
+  > {
+    const entry = this.getClientForAccount(input.account.id) ?? this.getDefaultClient();
+    if (!entry) return [];
+    const issue = await entry.client.getIssue(input.issueIdOrKey, [], { expandChangelog: true });
+    const out: Array<{ from: string | null; to: string; atMs: number }> = [];
+    for (const history of issue.changelog?.histories ?? []) {
+      const atMs = Date.parse(history.created ?? "");
+      if (!Number.isFinite(atMs)) continue;
+      for (const item of history.items ?? []) {
+        if ((item.field ?? "").toLowerCase() !== "status") continue;
+        const to = item.toString ?? (typeof item.to === "string" ? item.to : null);
+        if (to === null || to === "") continue;
+        const from = item.fromString ?? (typeof item.from === "string" ? item.from : null);
+        out.push({ from, to, atMs });
+      }
+    }
+    return out.toSorted((a, b) => a.atMs - b.atMs);
   }
 
   async listProjectStatuses(input: {
@@ -1070,6 +1140,10 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     ]);
     const listedBoards = projectBoards.boards;
     const selectedFilter = selectBacklogSavedFilter(savedFilters, input.filterId?.trim());
+    let boardScopeMissing = projectBoards.missingScope === true;
+    const noteMissingScope = (error: unknown) => {
+      if (isMissingScopeError(error)) boardScopeMissing = true;
+    };
     const participationPreference =
       input.boardId?.trim() || input.sprintId?.trim()
         ? undefined
@@ -1109,6 +1183,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
         ...(selectedSprint ? { selectedSprintId: selectedSprint.id } : {}),
         ...(selectedFilter ? { selectedFilterId: selectedFilter.id } : {}),
         ...(selectedFilter ? { selectedFilterJql: selectedFilter.jql } : {}),
+        ...(boardScopeMissing ? { boardScopeMissing: true as const } : {}),
       };
     }
 
@@ -1118,6 +1193,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     // filter clauses there would silently return unfiltered data.)
     const quickFilters = await this.listBacklogQuickFilters(entry, selectedBoard.id).catch(
       (error: unknown) => {
+        noteMissingScope(error);
         // A silent [] is indistinguishable from a board that simply has no
         // filters, so leave a trace. This package is Promise-based (no
         // Effect logger in scope), so console is the trace.
@@ -1131,14 +1207,33 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     );
 
     const boardSprints = (
-      await entry.client.listBoardSprints(selectedBoard.id).catch(() => ({ values: [] }))
+      await entry.client.listBoardSprints(selectedBoard.id).catch((error: unknown) => {
+        noteMissingScope(error);
+        return { values: [] };
+      })
     ).values
       .map((sprint) => toBacklogSprint(sprint))
       .filter((sprint): sprint is AtlassianBacklogSprint => sprint !== undefined)
       .toSorted(compareBacklogSprints);
     const boardConfiguration = await entry.client
       .getBoardConfiguration(selectedBoard.id)
-      .catch(() => ({ columnConfig: { columns: [] as const } }));
+      .catch((error: unknown): JiraBoardConfigurationResponse => {
+        noteMissingScope(error);
+        return { columnConfig: { columns: [] } };
+      });
+    // Without an explicit saved filter the backlog shows what the board shows:
+    // the board's own filter, exactly as Jira's backlog page does.
+    const boardFilterId = boardConfiguration.filter?.id;
+    const boardFilterJql =
+      !selectedFilter && boardFilterId !== undefined
+        ? await entry.client
+            .getFilter(String(boardFilterId))
+            .then((filter) => filter.jql)
+            .catch((error: unknown) => {
+              noteMissingScope(error);
+              return undefined;
+            })
+        : undefined;
     const selectedBoardColumns = (boardConfiguration.columnConfig?.columns ?? [])
       .map((column) => toBacklogBoardColumn(column))
       .filter((column): column is AtlassianBacklogBoardColumn => column !== undefined);
@@ -1160,7 +1255,12 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
       ...(selectedBoardColumns && selectedBoardColumns.length > 0 ? { selectedBoardColumns } : {}),
       ...(selectedSprint ? { selectedSprintId: selectedSprint.id } : {}),
       ...(selectedFilter ? { selectedFilterId: selectedFilter.id } : {}),
-      ...(selectedFilter ? { selectedFilterJql: selectedFilter.jql } : {}),
+      ...(selectedFilter?.jql
+        ? { selectedFilterJql: selectedFilter.jql }
+        : boardFilterJql
+          ? { selectedFilterJql: boardFilterJql }
+          : {}),
+      ...(boardScopeMissing ? { boardScopeMissing: true as const } : {}),
     };
   }
 
@@ -1883,6 +1983,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
   ): Promise<{
     boards: ReadonlyArray<AtlassianBacklogBoard>;
     defaultBoardId?: string;
+    missingScope?: true;
   }> {
     const projectIdentifiers = [...new Set([project.key.trim(), project.id.trim()])].filter(
       (identifier) => identifier.length > 0,
@@ -1890,9 +1991,13 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
 
     const listedBoardsById = new Map<string, AtlassianBacklogBoard>();
     let defaultBoardId: string | undefined;
+    let missingScope = false;
 
     for (const projectIdentifier of projectIdentifiers) {
-      const response = await client.listBoards(projectIdentifier).catch(() => ({ values: [] }));
+      const response = await client.listBoards(projectIdentifier).catch((error: unknown) => {
+        if (isMissingScopeError(error)) missingScope = true;
+        return { values: [] };
+      });
       for (const board of response.values) {
         const listedBoard = toBacklogBoard(board);
         if (!listedBoard) {
@@ -1921,6 +2026,7 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
     return {
       boards: [...listedBoardsById.values()],
       ...(defaultBoardId ? { defaultBoardId } : {}),
+      ...(missingScope ? { missingScope: true as const } : {}),
     };
   }
 

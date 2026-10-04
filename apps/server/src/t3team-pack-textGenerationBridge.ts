@@ -18,9 +18,7 @@ import type { TextGeneration } from "./textGeneration/TextGeneration.ts";
 const errorDetail = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
 
-export const unsupportedTextGeneration = (
-  driver: ProviderDriverKind,
-): TextGeneration["Service"] => {
+const unsupportedTextGeneration = (driver: ProviderDriverKind): TextGeneration["Service"] => {
   const fail = (operation: string) =>
     Effect.fail(
       new TextGenerationError({

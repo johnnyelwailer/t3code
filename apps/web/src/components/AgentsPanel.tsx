@@ -1,7 +1,6 @@
 /**
- * Agents right-panel surface: the fleet view over the native subagent fold,
- * and the ONLY place the roster renders (the chat carries one CTA row per
- * spawn batch).
+ * Agents right-panel surface: the fleet view over the native subagent fold.
+ * The chat carries one expandable row per spawn batch and links here.
  *
  * Visualization rules (from live-test feedback):
  * - Spawn order is stable. Activity and completion update rows in place.
@@ -13,6 +12,11 @@
  * - One bounded scroll container holds the roster AND the fork section in both
  *   branches; the 'No agents yet' hero renders only when there is genuinely
  *   nothing (no native agents, no fork content).
+ *
+ * Adaptive density (variant A, 2026-09-08): a run with a single agent renders
+ * as one flat row — no phase rail, no section borders, no "0/1 settled" header.
+ * A run with multiple agents gets a bordered card with the run title and one
+ * flat row per agent. Phase structure lives in the workflow card, not the panel.
  */
 import { useAtomValue } from "@effect/atom-react";
 import type {
@@ -30,6 +34,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { orchestrationEnvironment } from "~/state/orchestration";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { Button } from "~/components/ui/button";
@@ -138,7 +143,7 @@ function agentActivityText(agent: RuntimeSubagent): string | null {
   );
 }
 
-/** Flat, non-interactive agent status line. No unfold. */
+/** Three-line agent row (used by direct spawns). */
 function AgentRow({ agent, index = 0 }: { agent: RuntimeSubagent; index?: number }) {
   const label = STATUS_LABEL[agent.status];
   const activity = agentActivityText(agent);
@@ -149,7 +154,9 @@ function AgentRow({ agent, index = 0 }: { agent: RuntimeSubagent; index?: number
       : agent.role;
   const metadata = [
     modelLabel,
-    agent.usage ? `${formatSubagentTokenCount(agent.usage.totalTokens)} tok` : "— tok",
+    // No usage yet is not data: an absent counter renders nothing, never a "— tok" placeholder
+    // (agents-panel UX 2026-09-08, variant 2 "quiet metadata").
+    agent.usage ? `${formatSubagentTokenCount(agent.usage.totalTokens)} tok` : null,
     agent.usage?.toolUses !== undefined ? `${agent.usage.toolUses} tools` : null,
     agent.activationCount > 1 ? `run ${agent.activationCount}` : null,
   ].filter((value): value is string => value !== null);
@@ -162,12 +169,12 @@ function AgentRow({ agent, index = 0 }: { agent: RuntimeSubagent; index?: number
       <span className="col-start-2 row-start-1 flex min-w-0 items-baseline gap-2">
         <span className="min-w-0 truncate text-sm font-medium">{agent.title}</span>
         {role ? (
-          <span className="max-w-28 shrink-0 truncate rounded-sm border border-border/60 px-1 font-mono text-[.65rem] text-muted-foreground">
+          <span className="max-w-28 shrink-0 truncate rounded-sm border border-border/60 px-1 font-mono text-3xs text-muted-foreground">
             {role}
           </span>
         ) : null}
       </span>
-      <span className="col-start-3 row-start-1 min-w-14 text-right font-mono text-[.7rem] text-muted-foreground/80">
+      <span className="col-start-3 row-start-1 min-w-14 text-right font-mono text-2xs text-muted-foreground/80">
         <span className="inline-flex items-center gap-1">
           <AgentElapsed agent={agent} />
           {agent.status === "completed" ? (
@@ -183,11 +190,51 @@ function AgentRow({ agent, index = 0 }: { agent: RuntimeSubagent; index?: number
       >
         {activity ?? label}
       </span>
-      <span className="col-start-2 col-end-4 row-start-3 truncate font-mono text-[.7rem] tabular-nums text-muted-foreground/70">
+      <span className="col-start-2 col-end-4 row-start-3 truncate font-mono text-2xs tabular-nums text-muted-foreground/70">
         {metadata.join(" · ")}
       </span>
       <span className="sr-only">{label}</span>
     </div>
+  );
+}
+
+/**
+ * Single-line flat agent row (variant A adaptive panel). Shows status dot,
+ * name, label, chevron, and elapsed time. Hover tooltip carries model,
+ * tokens, and activity detail.
+ */
+function SimpleAgentRow({ agent, index = 0 }: { agent: RuntimeSubagent; index?: number }) {
+  const label = STATUS_LABEL[agent.status];
+  const modelLabel = formatSubagentModelLabel(agent.model, agent.effort);
+  const parts: string[] = [];
+  if (modelLabel) parts.push(modelLabel);
+  if (agent.usage) parts.push(`${formatSubagentTokenCount(agent.usage.totalTokens)} tok`);
+  const activity = agentActivityText(agent);
+  if (activity) parts.push(activity);
+  const tooltip = parts.join(" · ");
+
+  const row = (
+    <div className="group flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1.5 transition-colors hover:bg-muted/35">
+      <AgentsPanelStatusDot agent={agent} index={index} className="size-3 shrink-0" />
+      <span className="min-w-0 flex-1 truncate text-sm font-medium">{agent.title}</span>
+      <span className="shrink-0 text-xs text-muted-foreground">{label}</span>
+      <ChevronRight
+        aria-hidden
+        className="size-3.5 shrink-0 text-muted-foreground/70 transition-transform group-hover:translate-x-0.5"
+      />
+      <span className="shrink-0 font-mono text-2xs tabular-nums text-muted-foreground/80">
+        <AgentElapsed agent={agent} />
+      </span>
+    </div>
+  );
+
+  return tooltip ? (
+    <Tooltip>
+      <TooltipTrigger render={row} />
+      <TooltipPopup side="top">{tooltip}</TooltipPopup>
+    </Tooltip>
+  ) : (
+    row
   );
 }
 
@@ -205,64 +252,11 @@ function workflowMembers(group: AgentPanelWorkflowGroup): ReadonlyArray<RuntimeS
   return [...group.phases.flatMap((phase) => phase.members), ...group.unphasedMembers];
 }
 
-/**
- * Phase rail: the run's shape at a glance. One segment per phase in order,
- * separated by chevrons; each segment shows title + one dot per member.
- * The whole arc (done → live → pending) is visible without scrolling the
- * member list.
- */
-function PhaseRail({ group }: { group: AgentPanelWorkflowGroup }) {
-  if (group.phases.length === 0) {
-    return null;
-  }
+/** Count total agents across all phases and unphased members. */
+function countGroupAgents(group: AgentPanelWorkflowGroup): number {
   return (
-    <div className="flex flex-wrap items-center gap-x-1 gap-y-1 px-1.5 pb-1 pt-1.5">
-      {group.phases.map((phase, index) => (
-        <div key={phase.index} className="flex items-center gap-1">
-          {index > 0 ? (
-            <ChevronRight aria-hidden className="size-3 text-muted-foreground/40" />
-          ) : null}
-          <div
-            className={cn(
-              "flex items-center gap-1 rounded-sm border px-1.5 py-0.5",
-              phase.state === "running"
-                ? "border-info/40"
-                : phase.state === "done"
-                  ? "border-success/30"
-                  : "border-border/50",
-            )}
-          >
-            <span
-              className={cn(
-                "font-mono text-[.65rem]",
-                phase.state === "running"
-                  ? "text-info-foreground"
-                  : phase.state === "done"
-                    ? "text-success-foreground"
-                    : "text-muted-foreground/70",
-              )}
-            >
-              {phase.state === "done" ? "✓ " : ""}
-              {phase.title}
-            </span>
-            <span className="flex items-center gap-0.5">
-              {phase.members.length === 0 ? (
-                <span className="font-mono text-[.6rem] text-muted-foreground/50">–</span>
-              ) : (
-                phase.members.map((member, i) => (
-                  <AgentsPanelStatusDot
-                    key={member.id}
-                    agent={member}
-                    index={i}
-                    className="size-2"
-                  />
-                ))
-              )}
-            </span>
-          </div>
-        </div>
-      ))}
-    </div>
+    group.phases.reduce((sum, phase) => sum + phase.members.length, 0) +
+    group.unphasedMembers.length
   );
 }
 
@@ -288,7 +282,7 @@ function WorkflowScriptView({
     <div className="mx-1.5 mb-1 rounded-md border border-border/60 bg-background/60">
       <div className="flex items-center gap-2 border-b border-border/50 px-2 py-1">
         <Braces aria-hidden className="size-3 text-muted-foreground" />
-        <span className="truncate font-mono text-[.65rem] text-muted-foreground">
+        <span className="truncate font-mono text-3xs text-muted-foreground">
           {scriptPath.split("/").at(-1)}
         </span>
         <Button
@@ -303,7 +297,7 @@ function WorkflowScriptView({
       </div>
       <div className="max-h-72 overflow-auto p-2">
         {result._tag === "Success" ? (
-          <pre className="whitespace-pre-wrap break-words font-mono text-[.7rem] leading-relaxed text-foreground/90">
+          <pre className="whitespace-pre-wrap break-words font-mono text-2xs leading-relaxed text-foreground/90">
             {result.value.contents}
             {result.value.truncated ? "\n… (truncated)" : ""}
           </pre>
@@ -318,73 +312,13 @@ function WorkflowScriptView({
 }
 
 /**
- * Collapsible phase section. A phase opens when it becomes active, then keeps
- * that shape as it settles so completion never yanks rows out from under the
- * user. Manual toggles stick until a later activation begins.
+ * Adaptive expanded workflow (variant A). A run with a single agent renders
+ * as one flat row — no border, no phase rail, no "settled" counter. A run with
+ * multiple agents gets a bordered card with the run title and one flat row per
+ * agent. Phase structure is not shown in the panel; it lives in the workflow
+ * card in the main chat area.
  */
-function PhaseSection({
-  phase,
-  defaultOpen = false,
-}: {
-  phase: AgentPanelWorkflowGroup["phases"][number];
-  defaultOpen?: boolean;
-}) {
-  const [open, setOpen] = useState(defaultOpen || phase.state === "running");
-  const previousState = useRef(phase.state);
-
-  useEffect(() => {
-    if (previousState.current !== "running" && phase.state === "running") {
-      setOpen(true);
-    }
-    previousState.current = phase.state;
-  }, [phase.state]);
-
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        className={cn(
-          "mt-2 flex w-full items-center gap-1.5 rounded-sm px-1.5 text-left text-[.65rem] font-medium uppercase tracking-wider hover:bg-accent/40",
-          phase.state === "done"
-            ? "text-success-foreground"
-            : phase.state === "running"
-              ? "text-info-foreground"
-              : "text-muted-foreground/70",
-        )}
-      >
-        {open ? (
-          <ChevronDown aria-hidden className="size-3 shrink-0" />
-        ) : (
-          <ChevronRight aria-hidden className="size-3 shrink-0" />
-        )}
-        {phase.state === "done" ? <Check aria-hidden className="size-3" /> : null}
-        <span>{phase.title}</span>
-        <span className="font-normal normal-case text-muted-foreground/70">
-          {phase.state === "pending" && phase.members.length === 0
-            ? "pending"
-            : phase.state === "done"
-              ? `${phase.settledCount} done`
-              : `${phase.activeCount} active · ${phase.settledCount} done`}
-        </span>
-        {!open && phase.members.length > 0 ? (
-          <span className="ml-auto flex items-center gap-0.5">
-            {phase.members.map((member, i) => (
-              <AgentsPanelStatusDot key={member.id} agent={member} index={i} className="size-2" />
-            ))}
-          </span>
-        ) : null}
-      </button>
-      {open
-        ? phase.members.map((member, i) => <AgentRow key={member.id} agent={member} index={i} />)
-        : null}
-    </div>
-  );
-}
-
-/** Expanded workflow: phase rail + full phase tree. */
-function ExpandedWorkflowSection({
+function AdaptiveWorkflowSection({
   group,
   environmentId,
   threadId,
@@ -397,6 +331,7 @@ function ExpandedWorkflowSection({
 }) {
   const [scriptOpen, setScriptOpen] = useState(false);
   const members = workflowMembers(group);
+  const agentCount = countGroupAgents(group);
   const settled = members.filter(
     (member) =>
       member.status === "completed" ||
@@ -406,9 +341,41 @@ function ExpandedWorkflowSection({
   ).length;
   const scriptPath = group.workflow.runHandles?.scriptPath;
   const canShowScript = scriptPath !== undefined && environmentId !== null && threadId !== null;
+
+  // Simple: one agent (or zero) — flat row, no border.
+  if (agentCount <= 1) {
+    const agent = members[0] ?? group.workflow;
+    return (
+      <div>
+        <SimpleAgentRow agent={agent} />
+        {canShowScript ? (
+          <div className="px-1.5">
+            <button
+              type="button"
+              onClick={() => setScriptOpen((value) => !value)}
+              className="rounded-sm border border-border/60 px-1.5 py-0.5 font-mono text-3xs text-muted-foreground hover:text-foreground"
+              aria-expanded={scriptOpen}
+            >
+              {"{}"} script
+            </button>
+          </div>
+        ) : null}
+        {scriptOpen && canShowScript ? (
+          <WorkflowScriptView
+            environmentId={environmentId!}
+            threadId={threadId!}
+            scriptPath={scriptPath}
+            onClose={() => setScriptOpen(false)}
+          />
+        ) : null}
+      </div>
+    );
+  }
+
+  // Complex: multiple agents — bordered card with run title + flat rows.
   return (
     <section className="rounded-lg border border-border/50 bg-card/30 p-1.5">
-      <div className="flex items-center gap-2 px-1.5 pt-0.5 text-[.65rem] font-medium uppercase tracking-wider text-muted-foreground">
+      <div className="flex items-center gap-2 px-1.5 pt-0.5 text-3xs font-medium uppercase tracking-wider text-muted-foreground">
         <AgentsPanelStatusDot agent={group.workflow} ariaLabel="Workflow" className="size-3" />
         <span className="min-w-0 truncate">
           {group.workflow.workflowName ?? group.workflow.title}
@@ -438,7 +405,6 @@ function ExpandedWorkflowSection({
           <ChevronDown aria-hidden className="size-3" />
         </Button>
       </div>
-      <PhaseRail group={group} />
       {scriptOpen && canShowScript ? (
         <WorkflowScriptView
           environmentId={environmentId}
@@ -447,15 +413,9 @@ function ExpandedWorkflowSection({
           onClose={() => setScriptOpen(false)}
         />
       ) : null}
-      {group.phases.map((phase) => (
-        <PhaseSection key={phase.index} phase={phase} defaultOpen={!workflowIsLive(group)} />
+      {members.map((agent, i) => (
+        <SimpleAgentRow key={agent.id} agent={agent} index={i} />
       ))}
-      {group.unphasedMembers.map((member, i) => (
-        <AgentRow key={member.id} agent={member} index={i} />
-      ))}
-      {group.phases.length === 0 && group.unphasedMembers.length === 0 ? (
-        <AgentRow agent={group.workflow} />
-      ) : null}
     </section>
   );
 }
@@ -499,7 +459,7 @@ function CollapsedWorkflowSection({
         <span className="truncate text-sm">
           {group.workflow.workflowName ?? group.workflow.title}
         </span>
-        <span className="ml-auto flex items-center gap-1.5 font-mono text-[.7rem] text-muted-foreground/80">
+        <span className="ml-auto flex items-center gap-1.5 font-mono text-2xs text-muted-foreground/80">
           {failed > 0 ? <span className="text-destructive-foreground">{failed} failed</span> : null}
           <span>{members.length} agents</span>
           <span className="tabular-nums">· {formatSubagentTokenCount(totalTokens)} tok</span>
@@ -523,7 +483,7 @@ function WorkflowSection({
 }) {
   const [open, setOpen] = useState(() => workflowIsLive(group));
   return open ? (
-    <ExpandedWorkflowSection
+    <AdaptiveWorkflowSection
       group={group}
       environmentId={environmentId}
       threadId={threadId}
@@ -567,7 +527,7 @@ export function AgentsPanel({
   }
 
   return (
-    <div className="t3team-agp flex h-full min-h-0 flex-col">
+    <div data-t3team-agents-panel="" className="flex h-full min-h-0 flex-col">
       <ScrollArea className="min-h-0 flex-1">
         {model.hasAgents ? (
           <div className="flex flex-col gap-2 p-2">
@@ -581,7 +541,7 @@ export function AgentsPanel({
             ))}
             {model.directAgents.length > 0 ? (
               <section>
-                <div className="px-1.5 pt-1 text-[.65rem] font-medium uppercase tracking-wider text-muted-foreground">
+                <div className="px-1.5 pt-1 text-3xs font-medium uppercase tracking-wider text-muted-foreground">
                   Direct spawns
                 </div>
                 {model.directAgents.map((agent, i) => (
@@ -594,7 +554,7 @@ export function AgentsPanel({
         {forkSection}
       </ScrollArea>
       {model.hasAgents ? (
-        <footer className="flex items-center justify-between border-t border-border/60 px-3 py-1.5 font-mono text-[.7rem] text-muted-foreground">
+        <footer className="flex items-center justify-between border-t border-border/60 px-3 py-1.5 font-mono text-2xs text-muted-foreground">
           <span className="flex items-center gap-2">
             {model.runningCount + model.waitingCount > 0 ? (
               <span className="text-info-foreground">

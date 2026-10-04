@@ -14,6 +14,7 @@
 import * as Schema from "effect/Schema";
 
 import { deterministicGlobals, hostSource, type DeterministicSource } from "@runbook/ts/globals";
+import type { CheckpointPrimitives, CheckpointRecord } from "@runbook/core/checkpoint";
 
 import {
   CancelledError,
@@ -21,14 +22,18 @@ import {
   ProviderUnavailableError,
   ReplayDriftError,
   SchemaExhaustedError,
+  SubWorkflowCheckpointError,
   TargetMissingError,
   TimeoutError,
   WorkflowError,
 } from "./t3team-sdk.errors.ts";
 import type { WorkflowPrimitives } from "./t3team-sdk.primitives.ts";
 import type { SchedulePrimitives } from "./t3team-sdk.schedulePrimitive.ts";
+import type { SignalPrimitives } from "./t3team-sdk.signalPrimitive.ts";
+import { BUILTIN_SIGNAL_GLOBALS } from "./t3team-sdk.builtinSignals.ts";
 import type { WorkflowThreadPrimitives } from "./t3team-sdk.threadPrimitives.ts";
 import { defineWorkflow } from "./t3team-sdk.ts";
+import { defineSignal } from "./t3team-sdk.signal.ts";
 
 export {
   deterministicGlobals,
@@ -53,8 +58,13 @@ export function buildWorkflowGlobals(opts: {
   readonly scripts: Record<string, unknown>;
   readonly runtime: DeterministicSource;
   readonly primitives: WorkflowPrimitives;
+  /** The run's `checkpoint` primitive (bounded execution). */
+  readonly checkpoint: CheckpointPrimitives["checkpoint"];
+  /** The compact state a checkpoint-window resume restored (absent = fresh / full-replay). */
+  readonly resume?: CheckpointRecord | undefined;
   readonly threads: WorkflowThreadPrimitives;
   readonly schedule: SchedulePrimitives;
+  readonly signals: SignalPrimitives;
   /** The `@runbook/core/authoring` `RunbookContext` subset a body's `run(ctx)` sees. Optional:
    * older globals shapes and legacy zero-arg bodies never reference `ctx` at all. */
   readonly ctx?: unknown;
@@ -72,6 +82,13 @@ export function buildWorkflowGlobals(opts: {
     pipeline: p.pipeline,
     workflow: p.workflow,
     wait: p.wait,
+    // Bounded execution (docs/runbook/bounded-execution.md): the `checkpoint` primitive commits
+    // the (seq, compactState) boundary; `resume` carries the compact state a checkpoint-window
+    // resume restored, so a checkpoint-aware body seeds its carried state from it instead of
+    // re-running the superseded prefix. Absent on a fresh start and for bodies that never
+    // checkpoint — a plain loop is unchanged.
+    checkpoint: opts.checkpoint,
+    resume: opts.resume,
     budget: p.budget,
     phase: p.phase,
     log: p.log,
@@ -91,6 +108,15 @@ export function buildWorkflowGlobals(opts: {
     // `waitUntil` (Epic 27) suspends until a wall-clock instant; gated by the `"schedule"`
     // capability (calling it without that capability throws PermissionDeniedError).
     waitUntil: opts.schedule.waitUntil,
+    // `getSignalSource` (design 42) binds a durable source instance; gated by the
+    // `"source:<name>"` capability per source.
+    getSignalSource: opts.signals.getSignalSource,
+    // The built-in signal-source declarations (design 42 §7): the loader blanks every import in
+    // a body, so `ScmChangeRequestWatch` & co. resolve from this surface, exactly like
+    // `defineWorkflow` and the error classes.
+    ...BUILTIN_SIGNAL_GLOBALS,
+    // `defineSignal` lets a body declare its own typed signal shape (pure data, no effects).
+    defineSignal,
     // The accessor form of the per-run VALUES above (Epic 25 §The engine API). A body that does
     // `import { getArgs } from "@t3team/sdk"` has that import blanked by the loader, so the call
     // has to resolve to something in this surface — these five are it. They read the same values
@@ -100,10 +126,13 @@ export function buildWorkflowGlobals(opts: {
     getBudget: () => p.budget,
     getScripts: () => opts.scripts,
     getTools: () => opts.tools,
+    // Bounded execution: the accessor form of the `resume` global above (same value).
+    getResume: () => opts.resume,
     // `defineWorkflow` lets a body construct the typed sub-workflow ref `workflow()` needs;
     // it is a pure ref constructor (no capability concern), so it is unconditionally bound.
     defineWorkflow,
     WorkflowError,
+    SubWorkflowCheckpointError,
     TimeoutError,
     SchemaExhaustedError,
     ProviderUnavailableError,

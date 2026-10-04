@@ -1,20 +1,17 @@
 /* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
-import { memo, useCallback } from "react";
+import { memo } from "react";
 import { EllipsisIcon, MessageSquareIcon } from "lucide-react";
 import type { ProjectThread } from "~/t3team/t3team-types";
-import { SidebarMenuSubButton, SidebarMenuSubItem } from "~/t3team/components/ui/t3team-sidebar";
-import { readLocalApi } from "~/localApi";
+import { SidebarMenuSubItem } from "~/t3team/components/ui/t3team-sidebar";
+import { T3SidebarSubRow } from "~/t3team/components/ui/t3team-sidebar-row";
 import { usePrimarySettings } from "~/hooks/useSettings";
 import { formatRelativeTime, resolveThreadStatusPill } from "./t3team-projectSidebarShared";
-import {
-  getSidebarSurfaceClassName,
-  getSidebarWrappedButtonClassName,
-  type SidebarItemState,
-} from "./t3team-projectSidebarItemState";
+import type { SidebarItemState } from "./t3team-projectSidebarItemState";
 import { useAutoScrollIntoView } from "./t3team-useAutoScrollIntoView";
 import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay";
 import { useThreadRowMenuHandlers } from "~/t3team/components/t3team-threadRowMenuHandlers";
 import { useThreadRowRename } from "~/t3team/components/t3team-useThreadRowRename";
+import { useThreadRowContextMenu } from "./t3team-ProjectSidebarThreadRow-rowItem";
 import {
   ExternalSessionActiveLock,
   ExternalSessionProviderMark,
@@ -61,59 +58,24 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
     lastMessageAt: thread.lastMessageAt,
   });
 
-  const openThreadMenu = useCallback(
-    async (x: number, y: number) => {
-      const api = readLocalApi();
-      if (!api) return;
-
-      const action = await api.contextMenu.show(
-        [
-          { id: "rename", label: "Rename thread" },
-          { id: "copy-path", label: "Copy Path" },
-          { id: "copy-thread-id", label: "Copy Thread ID" },
-          { id: "delete", label: "Delete", destructive: true },
-        ],
-        { x, y },
-      );
-
-      if (action === "rename") {
-        setRenameTitle(thread.title);
-        setIsRenaming(true);
-        requestAnimationFrame(() => {
-          renameInputRef.current?.focus();
-          renameInputRef.current?.select();
-        });
-      } else if (action === "delete") {
-        const confirmed = await api.dialogs.confirm(
-          [
-            `Delete thread "${thread.title}"?`,
-            "This permanently clears conversation history for this thread.",
-          ].join("\n"),
-        );
-        if (confirmed) {
-          await onDelete();
-        }
-      } else if (action === "copy-thread-id") {
-        void navigator.clipboard.writeText(thread.id);
-      } else if (action === "copy-path") {
-        if (workspacePath) {
-          void navigator.clipboard.writeText(workspacePath);
-        }
-      }
-    },
-    [onDelete, thread, workspacePath],
-  );
+  const openThreadMenu = useThreadRowContextMenu({
+    thread,
+    workspacePath,
+    onDelete,
+    setRenameTitle,
+    setIsRenaming,
+    renameInputRef,
+  });
 
   const { handleContextMenu, handleOpenMenu } = useThreadRowMenuHandlers(openThreadMenu);
 
   const content = (
-    <SidebarMenuSubButton
+    <T3SidebarSubRow
       ref={rowRef}
-      size="sm"
+      // A child thread's status line grows the row.
+      size={thread.childStatus ? "fit" : "sm"}
       isActive={state.isSelected}
-      className={`group/thread-row-button ${thread.childStatus ? "h-auto min-h-7 py-1" : "h-7"} w-full translate-x-0 cursor-pointer justify-start px-2 text-left select-none focus-visible:ring-1 focus-visible:ring-inset ${getSidebarWrappedButtonClassName(
-        state,
-      )}`}
+      className="group/thread-row-button select-none focus-visible:ring-1 focus-visible:ring-inset"
       onClick={onSelect}
     >
       <div className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
@@ -153,7 +115,7 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
             {thread.childStatus ? (
               <span
                 data-child-status={thread.childStatus}
-                className="block truncate text-[10px] text-muted-foreground/75"
+                className="block truncate text-3xs text-muted-foreground/75"
               >
                 {thread.childStatus}
               </span>
@@ -172,82 +134,27 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
           >
             <EllipsisIcon className="size-3.5" />
           </button>
-          <span className="pointer-events-none text-[10px] text-muted-foreground/40 transition-opacity duration-150 group-hover/thread-row-button:opacity-0 group-focus-within/thread-row-button:opacity-0">
+          <span className="pointer-events-none text-3xs text-muted-foreground/40 transition-opacity duration-150 group-hover/thread-row-button:opacity-0 group-focus-within/thread-row-button:opacity-0">
             {formatRelativeTime(thread.lastMessageAt)}
           </span>
         </div>
       </div>
-    </SidebarMenuSubButton>
+    </T3SidebarSubRow>
   );
 
   if (!wrapWithMenuItem) {
     return (
-      <div
-        className={`group/menu-sub-item relative w-full ${getSidebarSurfaceClassName(state)}`}
-        onContextMenu={handleContextMenu}
-      >
+      <div className="group/menu-sub-item relative w-full" onContextMenu={handleContextMenu}>
         {content}
       </div>
     );
   }
 
   return (
-    <SidebarMenuSubItem
-      className={`w-full ${getSidebarSurfaceClassName(state)}`}
-      onContextMenu={handleContextMenu}
-    >
+    <SidebarMenuSubItem className="w-full" onContextMenu={handleContextMenu}>
       {content}
     </SidebarMenuSubItem>
   );
 });
 
-/**
- * Memo barrier for `ThreadRow` in the Work-lens lists.
- *
- * `ThreadRow` is `memo`-ized, but its list callers used to hand it a fresh
- * `state` object and fresh `onSelect`/`onDelete`/`onRename` closures on every
- * render of the list. Because those props changed identity on each render, the
- * row's `memo` never bailed out and selecting a thread re-rendered the ENTIRE
- * list (measured: every visible row, ~2.4 s of cascaded effect chains).
- *
- * This wrapper receives only referentially-stable props: the thread object, a
- * primitive `isSelected`, and the stable list handlers. It builds the per-row
- * `state` and closures inside, so a row re-renders only when its own selection
- * state changes — not when a sibling thread is selected.
- */
-export const ProjectSidebarThreadRowItem = memo(function ProjectSidebarThreadRowItem(props: {
-  thread: ProjectThread;
-  isSelected: boolean;
-  workspacePath?: string | null;
-  variant?: "default" | "issue";
-  wrapWithMenuItem?: boolean;
-  projectId: string;
-  onSelectThread: (projectId: string, threadId: string) => void;
-  onDeleteThread: (threadId: string) => void;
-  onRenameThread: (threadId: string, newTitle: string) => void;
-}) {
-  const {
-    thread,
-    isSelected,
-    workspacePath = null,
-    variant,
-    wrapWithMenuItem,
-    projectId,
-    onSelectThread,
-    onDeleteThread,
-    onRenameThread,
-  } = props;
-  const state: SidebarItemState = { isSelected, isOpen: isSelected };
-  return (
-    <ThreadRow
-      thread={thread}
-      {...(variant ? { variant } : {})}
-      state={state}
-      workspacePath={workspacePath}
-      onSelect={() => onSelectThread(projectId, thread.id)}
-      onDelete={() => onDeleteThread(thread.id)}
-      onRename={(newTitle) => onRenameThread(thread.id, newTitle)}
-      {...(wrapWithMenuItem === undefined ? {} : { wrapWithMenuItem })}
-    />
-  );
-});
+export { ProjectSidebarThreadRowItem } from "./t3team-ProjectSidebarThreadRow-rowItem";

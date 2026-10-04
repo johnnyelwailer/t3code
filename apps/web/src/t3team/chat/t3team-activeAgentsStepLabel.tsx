@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useActiveAgentHover } from "~/t3team/chat/t3team-activeAgentsCore";
+import { formatActiveAgentLabel, useActiveAgentHover } from "~/t3team/chat/t3team-activeAgentsCore";
 
 /**
  * GHE #201 — the "<label>" for the conversation working row.
@@ -25,7 +25,7 @@ function useDebouncedValue(value: string, ms: number): string {
 export function T3TeamActiveAgentsStepLabel({ label }: { label: string | null }) {
   const hover = useActiveAgentHover();
   const stable = useDebouncedValue(label ?? "", 900);
-  const target = hover ? `${hover.title} — ${hover.statusLabel}` : stable;
+  const target = hover ? formatActiveAgentLabel(hover.title, hover.statusLabel) : stable;
   const [shown, setShown] = useState(target);
   const [phase, setPhase] = useState<"idle" | "out" | "in">("idle");
 

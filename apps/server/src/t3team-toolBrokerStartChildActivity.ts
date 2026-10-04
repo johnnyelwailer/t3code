@@ -9,6 +9,7 @@ export type T3TeamStartChildProject = {
   readonly title: string;
   readonly workspaceRoot: string;
   readonly defaultModelSelection: import("@t3tools/contracts").ModelSelection | null;
+  readonly mainRepository?: import("@t3tools/contracts").ProjectMainRepository | undefined;
 };
 
 export type T3TeamStartChildThread = {

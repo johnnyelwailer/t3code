@@ -13,7 +13,7 @@ import * as Option from "effect/Option";
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import type { ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { makeActorSendMessage } from "./t3team-actorSendMessage.ts";
-import { T3TEAM_ACTOR_MESSAGE_DELIVERY_SUMMARY_MAX_CHARS } from "./t3team-actorReactionInput.ts";
+import { T3TEAM_ACTOR_MESSAGE_DELIVERY_SUMMARY_MAX_CHARS } from "./t3team-actorReactionInputSummarize.ts";
 
 const thread = (id: string) =>
   ({
@@ -87,6 +87,31 @@ describe("makeActorSendMessage summary", () => {
         const command = dispatches[0] as Record<string, unknown>;
         expect("summary" in command).toBe(false);
       }
+    }),
+  );
+
+  it.effect("M3: urgent flips the command and result urgency, normal by default", () =>
+    Effect.gen(function* () {
+      const dispatches: unknown[] = [];
+      const send = make(dispatches);
+      const normalResult = yield* send({
+        toThreadId: "target",
+        fromThreadId: "sender",
+        text: "body",
+      });
+      expect((dispatches[0] as { urgency: string }).urgency).toBe("normal");
+      expect(normalResult.urgency).toBe("normal");
+
+      const urgentDispatches: unknown[] = [];
+      const sendUrgent = make(urgentDispatches);
+      const urgentResult = yield* sendUrgent({
+        toThreadId: "target",
+        fromThreadId: "sender",
+        text: "body",
+        urgent: true,
+      });
+      expect((urgentDispatches[0] as { urgency: string }).urgency).toBe("urgent");
+      expect(urgentResult.urgency).toBe("urgent");
     }),
   );
 });

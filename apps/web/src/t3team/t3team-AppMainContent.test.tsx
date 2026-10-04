@@ -73,7 +73,6 @@ const looseProjectThread = {
   projectId: "project-loose",
   ticketId: "ticket-1",
   title: "Loose thread",
-  messageCount: 0,
   lastMessageAt: "2026-05-26T00:00:00.000Z",
   createdAt: "2026-05-26T00:00:00.000Z",
   status: "idle" as const,

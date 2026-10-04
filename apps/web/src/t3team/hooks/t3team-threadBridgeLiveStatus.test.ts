@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
-import { ProjectId, type EnvironmentId } from "@t3tools/contracts";
+import { ThreadId } from "@t3tools/contracts";
 import { deriveThreadRunState } from "@t3tools/shared/t3team-threadRunStatus";
 
 import { mapLiveThreadToProjectThread } from "./t3team-threadBridge";
+import { makeLiveThreadShell } from "./t3team-threadBridge.testSupport";
 
 // GHE #52 — active-children live sync. The ProjectThread status the active-children
 // indicator (and the sidebar dots) key on must agree with the canonical server
@@ -11,26 +12,19 @@ import { mapLiveThreadToProjectThread } from "./t3team-threadBridge";
 // flight before session start, or native background work after the turn settled)
 // stays invisible to the indicator.
 describe("mapLiveThreadToProjectThread — live running status (GHE #52)", () => {
-  const base = {
-    id: "thread-child",
-    projectId: ProjectId.make("live-saved"),
+  const base = makeLiveThreadShell({
+    id: ThreadId.make("thread-child"),
     title: "Child work",
-    messages: [],
-    activities: [],
-    archivedAt: null,
-    error: null,
     createdAt: "2026-06-14T09:00:00.000Z",
     updatedAt: "2026-06-14T10:00:00.000Z",
-    environmentId: "env-local" as EnvironmentId,
-    defaultModelSelection: null,
-  };
+  });
 
   it("reads a child as running when its turn is in flight but the session has not started yet", () => {
     const projectThread = mapLiveThreadToProjectThread({
       ...base,
-      latestTurn: { state: "running", startedAt: "2026-06-14T10:00:00.000Z" },
+      latestTurn: { state: "running", startedAt: "2026-06-14T10:00:00.000Z" } as never,
       session: null,
-    } as never);
+    });
 
     expect(projectThread.status).toBe("running");
   });
@@ -38,10 +32,10 @@ describe("mapLiveThreadToProjectThread — live running status (GHE #52)", () =>
   it("reads a child as running on native background liveness after the turn settled", () => {
     const projectThread = mapLiveThreadToProjectThread({
       ...base,
-      latestTurn: { state: "completed", completedAt: "2026-06-14T10:05:00.000Z" },
+      latestTurn: { state: "completed", completedAt: "2026-06-14T10:05:00.000Z" } as never,
       session: null,
       backgroundLiveness: "working",
-    } as never);
+    });
 
     expect(projectThread.status).toBe("running");
   });
@@ -51,7 +45,7 @@ describe("mapLiveThreadToProjectThread — live running status (GHE #52)", () =>
       ...base,
       latestTurn: null,
       session: null,
-    } as never);
+    });
 
     expect(projectThread.status).toBe("idle");
   });
@@ -77,12 +71,12 @@ describe("mapLiveThreadToProjectThread — live running status (GHE #52)", () =>
       expect(deriveThreadRunState(input)).toBe("running");
       const projectThread = mapLiveThreadToProjectThread({
         ...base,
-        session: input.session ? { ...input.session, activeTurnId: null } : null,
-        latestTurn: input.latestTurn,
+        session: (input.session ? { ...input.session, activeTurnId: null } : null) as never,
+        latestTurn: input.latestTurn as never,
         ...(input.backgroundLiveness !== undefined
           ? { backgroundLiveness: input.backgroundLiveness }
           : {}),
-      } as never);
+      });
       expect(projectThread.status).toBe("running");
     }
   });

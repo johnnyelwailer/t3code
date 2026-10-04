@@ -11,7 +11,7 @@
 import * as NodeFS from "node:fs";
 import * as NodeTimersPromises from "node:timers/promises";
 
-import { assert, it } from "@effect/vitest";
+import { assert, describe, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   type OrchestrationCommand,
@@ -20,6 +20,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -39,6 +40,7 @@ import {
 import { callT3TeamWorkflowRunTool } from "./t3team-toolBrokerBindingWorkflowRun.ts";
 import {
   makeWorkflowRunToolHandlers,
+  recentActiveLaunchBlocker,
   type T3TeamWorkflowRunToolHandlers,
 } from "./t3team-toolBrokerWorkflowRunTools.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
@@ -104,6 +106,7 @@ const testLayer = it.layer(
 );
 
 /** Real fs/path + real durable seams over an in-memory DB; dispatch is captured. */
+let harnessCount = 0;
 const makeHarness = Effect.fn("makeHarness")(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -114,6 +117,8 @@ const makeHarness = Effect.fn("makeHarness")(function* () {
   });
   const dispatched: OrchestrationCommand[] = [];
   const registry = makeWorkflowEngineRegistry();
+  harnessCount += 1;
+  const harnessThreadId = ThreadId.make(`${threadId}-${harnessCount}`);
   const handlers = makeWorkflowRunToolHandlers({
     fileSystem,
     path,
@@ -137,8 +142,11 @@ const makeHarness = Effect.fn("makeHarness")(function* () {
           modelSelection,
         },
       }),
-  })(threadId);
-  return { handlers, dispatched, workspaceRoot, repo, registry };
+    // Each harness is its own launch thread: the in-memory DB is shared across the file, and the
+    // one-launch-per-turn guard (GHE #415) would otherwise see an earlier test's still-suspended
+    // run as this thread's own.
+  })(harnessThreadId);
+  return { handlers, dispatched, workspaceRoot, repo, registry, threadId: harnessThreadId };
 });
 
 testLayer("t3team.orchestration.run — ephemeral workflow tool", (it) => {
@@ -234,7 +242,7 @@ testLayer("t3team.orchestration.run — ephemeral workflow tool", (it) => {
     () =>
       Effect.scoped(
         Effect.gen(function* () {
-          const { handlers, dispatched, repo } = yield* makeHarness();
+          const { handlers, dispatched, repo, threadId } = yield* makeHarness();
 
           const result = yield* handlers.runWorkflow({
             source: ASK_USER_SOURCE,
@@ -415,3 +423,47 @@ testLayer("t3team.orchestration.run — ephemeral workflow tool", (it) => {
 // Type-level guard: the binding glue accepts exactly these handlers.
 const _handlersType: T3TeamWorkflowRunToolHandlers | undefined = undefined;
 void _handlersType;
+
+// GHE #415: one agent turn launched 87 runs because nothing enforced "a handoff ends the turn".
+describe("recentActiveLaunchBlocker", () => {
+  const now = Date.parse("2026-09-03T15:00:00.000Z");
+  const row = (runId: string, status: string, ageSeconds: number, launchThreadId = "thread-1") => ({
+    runId,
+    launchThreadId,
+    status,
+    createdAt: DateTime.formatIso(DateTime.makeUnsafe(now - ageSeconds * 1000)),
+  });
+
+  it("refuses a second launch while a run from this thread is still active", () => {
+    const verdict = recentActiveLaunchBlocker([row("run-a", "suspended", 30)], {
+      threadId: "thread-1",
+      nowMs: now,
+    });
+    assert.strictEqual(verdict.kind, "refuse");
+    if (verdict.kind === "refuse") {
+      assert.include(verdict.message, "run-a");
+      assert.include(verdict.message, "replaceRunId");
+      assert.include(verdict.message, "t3team_orchestration_status");
+    }
+  });
+
+  it("allows a launch when the earlier run is terminal, old, or another thread's", () => {
+    const rows = [
+      row("run-done", "completed", 10),
+      row("run-old", "suspended", 10 * 60),
+      row("run-other", "suspended", 5, "thread-2"),
+    ];
+    assert.deepStrictEqual(recentActiveLaunchBlocker(rows, { threadId: "thread-1", nowMs: now }), {
+      kind: "ok",
+    });
+  });
+
+  it("replaces the named active run instead of refusing", () => {
+    const verdict = recentActiveLaunchBlocker([row("run-a", "running", 20)], {
+      threadId: "thread-1",
+      nowMs: now,
+      replaceRunId: "run-a",
+    });
+    assert.deepStrictEqual(verdict, { kind: "replace", runId: "run-a" });
+  });
+});

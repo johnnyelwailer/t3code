@@ -12,6 +12,8 @@
 
 import { afterAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
+import { withAgentStepContract } from "@runbook/threads";
+
 import {
   cleanupRunsRoot,
   envelopeText,
@@ -125,8 +127,9 @@ describe("agent ergonomics — first-class attachments", () => {
       { name: "gates", value: gates },
       { name: "data-2", value: { policy: "strict" } },
     ]);
-    // …and NOT a single byte of it stringified into the prompt.
-    expect(payload.prompt).toBe("Judge these gates");
+    // …and NOT a single byte of it stringified into the prompt. (The engine appends the
+    // one-step agent contract to every agent() prompt; assert the full post-append form.)
+    expect(payload.prompt).toBe(withAgentStepContract("Judge these gates"));
     // The provider-agnostic effort tier rides on both the create and the turn — no provider or
     // model named anywhere in the workflow.
     expect(payload.effort).toBe("high");

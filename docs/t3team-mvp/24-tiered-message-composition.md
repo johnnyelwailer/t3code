@@ -976,7 +976,7 @@ memory). Phase C folds into Epic 19 Phase 5. Phase D blocks on recipes Phase 4
 Sharpens T2b above, and applies it to `t3team.widget.show` / `thread.showWidget` rather than only
 to registered views.
 
-**The default should be a prompt, not code.** The calling agent describes *what it wants to see*;
+**The default should be a prompt, not code.** The calling agent describes _what it wants to see_;
 `widget.show` spawns a builder subagent that authors it. The builder has its own isolated context
 and system prompt, exact knowledge of the theme-token and icon contracts, and iterates until the
 widget runs without errors and is visually verified — only then is it shown to the user. That is
@@ -987,7 +987,7 @@ the `reuse-check → draft → typecheck → preview → fix → repeat` loop al
 or harness may be selected per call.
 
 **Raw code stays a first-class input — it is not a legacy path.** `widgetCode` (HTML, SVG, React,
-whatever) must remain accepted, *especially inside orchestrations*: a workflow body replays from
+whatever) must remain accepted, _especially inside orchestrations_: a workflow body replays from
 line 1 on every resume, so a builder that regenerated the widget on each replay would be
 nondeterministic. Passing authored code keeps the run deterministic.
 

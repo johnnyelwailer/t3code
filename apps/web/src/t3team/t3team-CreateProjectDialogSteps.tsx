@@ -27,7 +27,7 @@ export function AccountStep({
       <div className="space-y-2">
         {loading
           ? ["account-1", "account-2", "account-3"].map((key) => (
-              <Skeleton key={key} className="h-14 w-full rounded-md" />
+              <Skeleton key={key} shape="card" className="h-14 w-full" />
             ))
           : accounts.map((account) => (
               <button
@@ -85,7 +85,7 @@ export function ProjectStep({
       <div className="max-h-[min(60dvh,36rem)] space-y-2 overflow-y-auto overscroll-contain pr-1 [scrollbar-gutter:stable]">
         {showLoadingSkeletons
           ? ["project-1", "project-2", "project-3", "project-4"].map((key) => (
-              <Skeleton key={key} className="h-14 w-full rounded-md" />
+              <Skeleton key={key} shape="card" className="h-14 w-full" />
             ))
           : filteredProjects.map((project) => {
               const existing = alreadyAdded?.get(project.id);

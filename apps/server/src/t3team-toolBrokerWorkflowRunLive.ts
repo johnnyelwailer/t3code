@@ -14,12 +14,14 @@ import * as Schema from "effect/Schema";
 
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
 import {
   makeWorkflowRunToolHandlers,
   type T3TeamWorkflowRunToolHandlers,
 } from "./t3team-toolBrokerWorkflowRunTools.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
+import { T3TeamWorkflowSignalReconciler } from "./t3team-workflowSignalReconciler.ts";
 import { TextGeneration } from "./textGeneration/TextGeneration.ts";
 
 const WorkflowRepairOutput = Schema.Union([
@@ -45,6 +47,9 @@ export const makeWorkflowRunToolsForThread = Effect.fn("makeWorkflowRunToolsForT
     readonly path?: Path.Path | undefined;
     readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
     readonly loadThreadProject: LoadThreadProjectLike;
+    readonly stopRun?:
+      | ((threadId: ThreadId, runId: string) => Effect.Effect<void, string>)
+      | undefined;
   }) {
     const registry = Option.getOrUndefined(
       yield* Effect.serviceOption(T3TeamWorkflowEngineRegistry),
@@ -53,6 +58,12 @@ export const makeWorkflowRunToolsForThread = Effect.fn("makeWorkflowRunToolsForT
     const journalStore = Option.getOrUndefined(yield* Effect.serviceOption(WorkflowJournalStore));
     const scheduler = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamWorkflowScheduler));
     const textGeneration = Option.getOrUndefined(yield* Effect.serviceOption(TextGeneration));
+    // Durable signal-source state (GHE #332) — optional, like the other engine services above:
+    // absent, a launched run simply has no signal verbs.
+    const signalStore = Option.getOrUndefined(yield* Effect.serviceOption(WorkflowSignalStore));
+    const signalReconciler = Option.getOrUndefined(
+      yield* Effect.serviceOption(T3TeamWorkflowSignalReconciler),
+    );
     if (!registry || !runRepository || !journalStore || !scheduler) {
       return undefined;
     }
@@ -60,12 +71,23 @@ export const makeWorkflowRunToolsForThread = Effect.fn("makeWorkflowRunToolsForT
       fileSystem: deps.fileSystem,
       path: deps.path,
       loadThreadProject: deps.loadThreadProject,
+      ...(deps.stopRun === undefined ? {} : { stopRun: deps.stopRun }),
       launch: {
         registry,
         runRepository,
         journalStore,
         rearmScheduler: () => scheduler.rearm(),
         dispatch: deps.dispatch,
+        ...(signalStore === undefined
+          ? {}
+          : {
+              signalStore,
+              ...(signalReconciler === undefined
+                ? {}
+                : {
+                    pokeSignalReconcile: () => void signalReconciler.reconcile().catch(() => {}),
+                  }),
+            }),
         ...(textGeneration?.generateStructured === undefined
           ? {}
           : {

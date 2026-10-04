@@ -12,7 +12,6 @@ import {
   MenuRadioGroup,
   MenuRadioItem,
   MenuSeparator,
-  MenuShortcut,
   MenuTrigger,
 } from "~/t3team/components/ui/t3team-menu";
 import { projectBacklogFocusFilterOptions } from "~/t3team/t3team-ProjectBacklogOptionsMenuMeta";
@@ -65,7 +64,7 @@ export function ProjectBacklogOverviewJiraFiltersMenu({
     <Menu>
       <MenuTrigger
         render={<Button variant="outline" size="xs" />}
-        className="w-auto justify-between gap-1.5 font-normal data-[popup-open]:bg-accent"
+        className="w-auto justify-between"
         aria-label="Filter backlog by Jira filters"
       >
         <span className="flex min-w-0 items-center gap-1.5">
@@ -74,20 +73,15 @@ export function ProjectBacklogOverviewJiraFiltersMenu({
         </span>
         <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />
       </MenuTrigger>
-      <MenuPopup align="start" side="bottom" className="min-w-[15rem] border-border/80">
+      <MenuPopup align="start" side="bottom" className="min-w-60">
         <MenuGroup>
           <MenuGroupLabel>Focus</MenuGroupLabel>
           <MenuRadioGroup
-            className="grid gap-1"
             value={focusFilter}
             onValueChange={(value) => onFocusFilterChange(value as ProjectBacklogFocusFilter)}
           >
             {projectBacklogFocusFilterOptions.map((option) => (
-              <MenuRadioItem
-                key={option.value}
-                value={option.value}
-                className="min-h-8 rounded-md py-1.5 text-[12px]"
-              >
+              <MenuRadioItem key={option.value} value={option.value}>
                 {option.label}
               </MenuRadioItem>
             ))}
@@ -103,7 +97,6 @@ export function ProjectBacklogOverviewJiraFiltersMenu({
               <MenuCheckboxItem
                 key={quickFilter.id}
                 checked={selectedQuickFilterSet.has(quickFilter.id)}
-                className="min-h-8 rounded-md py-1.5 text-[12px]"
                 onCheckedChange={(checked) => toggleQuickFilter(quickFilter.id, Boolean(checked))}
               >
                 {quickFilter.name}
@@ -118,29 +111,20 @@ export function ProjectBacklogOverviewJiraFiltersMenu({
           <MenuGroup>
             <MenuGroupLabel>Saved filters</MenuGroupLabel>
             <MenuRadioGroup
-              className="grid max-h-72 gap-1 overflow-y-auto"
+              className="max-h-72 overflow-y-auto"
               value={selectedFilterId ?? ALL_SAVED_FILTERS_VALUE}
               onValueChange={(value) =>
                 onFilterChange(value === ALL_SAVED_FILTERS_VALUE ? undefined : (value as string))
               }
             >
-              <MenuRadioItem
-                value={ALL_SAVED_FILTERS_VALUE}
-                className="min-h-8 rounded-md py-1.5 text-[12px]"
-              >
-                All issues
-              </MenuRadioItem>
+              <MenuRadioItem value={ALL_SAVED_FILTERS_VALUE}>All issues</MenuRadioItem>
               {savedFilters.map((savedFilter) => (
-                <MenuRadioItem
-                  key={savedFilter.id}
-                  value={savedFilter.id}
-                  className="min-h-8 rounded-md py-1.5 text-[12px]"
-                >
+                <MenuRadioItem key={savedFilter.id} value={savedFilter.id}>
                   <span className="flex min-w-0 flex-col">
                     <span className="truncate">{savedFilter.name}</span>
-                    <MenuShortcut className="max-w-[15rem] truncate text-left font-normal tracking-normal text-muted-foreground/80">
+                    <span className="max-w-60 truncate text-xs text-muted-foreground/80">
                       {savedFilter.jql}
-                    </MenuShortcut>
+                    </span>
                   </span>
                 </MenuRadioItem>
               ))}

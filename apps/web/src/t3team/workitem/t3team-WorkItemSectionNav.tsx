@@ -80,8 +80,9 @@ export function WorkItemSectionNav({
             both edges and content scrolled past in the gap, which read as a floating black band.
           */
           "-mx-4 px-4 @2xl/workitem:-mx-6 @2xl/workitem:px-6",
-          // Opaque enough to hide content passing underneath, with a border so it reads as chrome.
-          "border-b border-border/60 bg-background/95 backdrop-blur",
+          // Strongly frosted so scrolling content never reads through the pinned bar, with a border
+          // so it reads as chrome.
+          "border-b border-border/60 bg-background/95 backdrop-blur-lg",
           // The row scrolls sideways on a phone rather than wrapping into a second line of chrome.
           "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
           className,

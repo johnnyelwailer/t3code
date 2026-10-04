@@ -3,6 +3,10 @@ import {
   candidateUpstreamCounterpartPaths,
   classifyPrefixedLocResult,
 } from "./t3team-additive-guard-lib.mjs";
+import {
+  ADDITIVE_GUARD_BASE_ENV,
+  enforceForkBaselineRef,
+} from "./scripts/lib/additive-guard-core.mjs";
 
 describe("t3team additive guard counterpart detection", () => {
   it("maps web t3team migration path to project-shell counterpart", () => {
@@ -22,6 +26,51 @@ describe("t3team additive guard counterpart detection", () => {
     ]);
 
     expect(result).toContain("apps/server/src/server.ts");
+  });
+});
+
+describe("t3team additive guard fork baseline ref policy", () => {
+  it("accepts a frozen fork-baseline tag in the namespaced form", () => {
+    expect(enforceForkBaselineRef("t3team/fork-baseline-20260908")).toBe(
+      "t3team/fork-baseline-20260908",
+    );
+  });
+
+  it("accepts an optional suffix on the baseline date", () => {
+    expect(enforceForkBaselineRef("t3team/fork-baseline-20260908-sync")).toBe(
+      "t3team/fork-baseline-20260908-sync",
+    );
+  });
+
+  it("leaves the blocking base untouched when no baseline is configured", () => {
+    expect(enforceForkBaselineRef(undefined)).toBeUndefined();
+    expect(enforceForkBaselineRef("")).toBeUndefined();
+  });
+
+  it("refuses to repoint the blocking gate at an arbitrary ref", () => {
+    for (const bogus of [
+      "upstream/main",
+      "origin/main",
+      "main",
+      "HEAD",
+      "refs/heads/main",
+      "t3team/baseline-20260908",
+      "t3team/fork-baseline",
+      "https://github.com/pingdotgg/t3code",
+    ]) {
+      expect(() => enforceForkBaselineRef(bogus)).toThrow(/forkBaselineRef/);
+    }
+  });
+
+  it("refuses non-string baseline values", () => {
+    expect(() => enforceForkBaselineRef({})).toThrow(/forkBaselineRef/);
+    expect(() => enforceForkBaselineRef(["t3team/fork-baseline-20260908"])).toThrow(
+      /forkBaselineRef/,
+    );
+  });
+
+  it("exposes the drift-override env var name", () => {
+    expect(ADDITIVE_GUARD_BASE_ENV).toBe("T3TEAM_ADDITIVE_GUARD_BASE");
   });
 });
 

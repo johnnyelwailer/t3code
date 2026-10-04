@@ -5,7 +5,7 @@ import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
 
 const GUIDED_WORKFLOW: T3TeamKickoffWorkflow = {
   kind: "recipe",
-  recipeId: "create-contextual-recipe",
+  recipeId: "author-view-recipe",
   title: "Create a recipe for this context",
   description: "Design a contextual recipe for the current surface.",
   source: "bundled",

@@ -1,3 +1,4 @@
+import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -15,7 +16,7 @@ const CodexMcpListSchema = Schema.Array(
 
 const decodeCodexMcpList = Schema.decodeEffect(Schema.fromJsonString(CodexMcpListSchema));
 
-export class T3TeamCodexCliError extends Schema.TaggedErrorClass<T3TeamCodexCliError>()(
+export class T3TeamCodexCliError extends Schema.TaggedError<T3TeamCodexCliError>()(
   "T3TeamCodexCliError",
   {
     detail: Schema.String,
@@ -23,7 +24,7 @@ export class T3TeamCodexCliError extends Schema.TaggedErrorClass<T3TeamCodexCliE
   },
 ) {}
 
-export class T3TeamWorkspacePathError extends Schema.TaggedErrorClass<T3TeamWorkspacePathError>()(
+export class T3TeamWorkspacePathError extends Schema.TaggedError<T3TeamWorkspacePathError>()(
   "T3TeamWorkspacePathError",
   {
     detail: Schema.String,
@@ -44,7 +45,7 @@ export interface T3TeamCodexCliApplyResult {
   readonly codexReloadMcpConfig: boolean;
 }
 
-const DEFAULT_WORKSPACE_LOCAL_CODEX_HOME = ".t3team/provider-homes/codex";
+const DEFAULT_WORKSPACE_LOCAL_CODEX_HOME = `${PROJECT_STATE_DIR}/provider-homes/codex`;
 
 export const resolveWorkspaceLocalCodexHomePath = Effect.fn("resolveWorkspaceLocalCodexHomePath")(
   function* (input: { readonly workspaceRoot: string; readonly codexHomeRelativePath?: string }) {

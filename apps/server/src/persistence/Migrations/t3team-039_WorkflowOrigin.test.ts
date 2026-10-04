@@ -4,7 +4,7 @@ import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { runMigrations } from "../Migrations.ts";
-import * as NodeSqliteClient from "../NodeSqliteClient.ts";
+import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 
 interface ColumnRow {
   readonly name: string;
@@ -15,7 +15,7 @@ interface OriginRow {
   readonly origin: string;
 }
 
-const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
+const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layer({ filename: ":memory:" })));
 
 layer("t3team-039_WorkflowOrigin", (it) => {
   it.effect("adds origin TEXT NOT NULL DEFAULT 'recipe' to workflow_runs", () =>

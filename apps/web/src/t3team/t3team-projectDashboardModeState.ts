@@ -48,15 +48,17 @@ export function parseProjectDashboardModeRouteSearch(
   return parsed;
 }
 
+// Session-scoped on purpose: within a session a project keeps the view you left it on, but every
+// launch opens on My work (the default) rather than whichever view was last clicked, weeks ago.
 export function readPersistedProjectDashboardModeState(
   storageKey: string,
 ): PersistedProjectDashboardModeState | null {
-  if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
+  if (typeof window === "undefined" || typeof window.sessionStorage === "undefined") {
     return null;
   }
 
   try {
-    const raw = window.localStorage.getItem(storageKey);
+    const raw = window.sessionStorage.getItem(storageKey);
     if (!raw) {
       return null;
     }
@@ -77,11 +79,11 @@ export function writePersistedProjectDashboardModeState(
   storageKey: string,
   state: ProjectDashboardModeState,
 ): void {
-  if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
+  if (typeof window === "undefined" || typeof window.sessionStorage === "undefined") {
     return;
   }
 
-  window.localStorage.setItem(storageKey, JSON.stringify(state));
+  window.sessionStorage.setItem(storageKey, JSON.stringify(state));
 }
 
 export function resolveProjectDashboardModeState(input: {

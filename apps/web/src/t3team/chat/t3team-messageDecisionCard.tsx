@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The `askUser` decision card (Epic 25 §askUser decision cards) — renders the
  * `t3team.workflow.decision` view a workflow's escalation message carries: a distinct bordered
@@ -103,14 +102,12 @@ export function T3TeamWorkflowDecisionCard(props: {
           data-workflow-decision-status="answered"
         >
           <CheckIcon className="size-3.5" />
-          <span className="text-[11px] font-semibold uppercase tracking-wide">Answered</span>
+          <span className="text-2xs font-semibold uppercase tracking-wide">Answered</span>
         </div>
       ) : (
         <div className="mb-2 flex items-center gap-1.5 text-primary">
           <CircleHelpIcon className="size-3.5" />
-          <span className="text-[11px] font-semibold uppercase tracking-wide">
-            Needs your input
-          </span>
+          <span className="text-2xs font-semibold uppercase tracking-wide">Needs your input</span>
         </div>
       )}
       <T3TeamWorkflowQuestionProse question={decision.question} />

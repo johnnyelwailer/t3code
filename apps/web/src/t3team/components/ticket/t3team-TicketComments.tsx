@@ -22,44 +22,48 @@ export function TicketComments({
 
   return (
     <T3SurfaceCard>
-      <T3SurfaceCardContent className="space-y-4">
-        <h3 className="text-sm font-semibold">Comments (newest first)</h3>
+      <T3SurfaceCardContent>
         <div className="space-y-4">
-          {comments.map((comment, index) => {
-            const commentBody = comment.bodyMarkdown?.trim() ?? "";
-            const commentHtml = comment.bodyHtml?.trim() ?? "";
-            const timestamp = formatTimestamp(comment.updated || comment.created);
+          <h3 className="text-sm font-semibold">Comments (newest first)</h3>
+          <div className="space-y-4">
+            {comments.map((comment, index) => {
+              const commentBody = comment.bodyMarkdown?.trim() ?? "";
+              const commentHtml = comment.bodyHtml?.trim() ?? "";
+              const timestamp = formatTimestamp(comment.updated || comment.created);
 
-            return (
-              <T3SurfacePanel
-                key={`${comment.id ?? "comment"}-${index}`}
-                tone="default"
-                className="rounded-lg bg-background/88 p-3"
-              >
-                <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-                  <MessageSquare className="size-3.5" />
-                  <span className="font-medium text-foreground">{comment.author ?? "Unknown"}</span>
-                  {timestamp && (
-                    <>
-                      <span>•</span>
-                      <time>{timestamp}</time>
-                    </>
+              return (
+                <T3SurfacePanel
+                  key={`${comment.id ?? "comment"}-${index}`}
+                  tone="default"
+                  className="rounded-lg bg-background/88 p-3"
+                >
+                  <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+                    <MessageSquare className="size-3.5" />
+                    <span className="font-medium text-foreground">
+                      {comment.author ?? "Unknown"}
+                    </span>
+                    {timestamp && (
+                      <>
+                        <span>•</span>
+                        <time>{timestamp}</time>
+                      </>
+                    )}
+                  </div>
+                  {commentHtml ? (
+                    <HtmlBlock
+                      content={commentHtml}
+                      {...(htmlBaseUrl ? { baseUrl: htmlBaseUrl } : {})}
+                      {...(resolveAssetUrl ? { resolveAssetUrl } : {})}
+                    />
+                  ) : commentBody ? (
+                    <MarkdownBlock content={commentBody} />
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No comment body.</p>
                   )}
-                </div>
-                {commentHtml ? (
-                  <HtmlBlock
-                    content={commentHtml}
-                    {...(htmlBaseUrl ? { baseUrl: htmlBaseUrl } : {})}
-                    {...(resolveAssetUrl ? { resolveAssetUrl } : {})}
-                  />
-                ) : commentBody ? (
-                  <MarkdownBlock content={commentBody} />
-                ) : (
-                  <p className="text-sm text-muted-foreground">No comment body.</p>
-                )}
-              </T3SurfacePanel>
-            );
-          })}
+                </T3SurfacePanel>
+              );
+            })}
+          </div>
         </div>
       </T3SurfaceCardContent>
     </T3SurfaceCard>

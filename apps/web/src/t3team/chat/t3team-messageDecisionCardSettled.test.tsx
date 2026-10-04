@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 // @vitest-environment jsdom
 /**
  * Split out of `t3team-messageDecisionCard.test.tsx` (which outgrew the test-file LOC ceiling)
@@ -33,6 +32,16 @@ import type { LegendListRef } from "@legendapp/list/react";
 
 import { buildT3TeamMessagesTimelineTestProps } from "~/t3team/chat/t3team-messagesTimelineTestProps";
 import type { ChatMessage } from "~/types";
+// Loaded statically so its large module graph evaluates in Vitest's untimed collection phase, not
+// inside a hook or test budget; the tests' own `await import(...)` calls then hit the module cache.
+import "~/components/chat/MessagesTimeline";
+
+// Break the composerDraftStore → t3team-threadComposingSignal → primaryEnvironment → catalog →
+// connection/runtime import cycle (same mock as MessagesTimeline.test.tsx): with the timeline as
+// the graph's entry, the catalog otherwise evaluates while the runtime export is uninitialized.
+vi.mock("~/t3team/chat/t3team-threadComposingSignal", () => ({
+  reportThreadComposing: () => {},
+}));
 
 vi.mock("@legendapp/list/react", async () => {
   const LegendList = (props: {

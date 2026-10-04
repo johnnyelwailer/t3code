@@ -33,8 +33,7 @@ describe("mergeSidecarRecipeQuickStarts", () => {
       [
         createQuickStart("prioritize-pending-work"),
         createQuickStart("shape-next-backlog-slice"),
-        createQuickStart("create-contextual-recipe"),
-        createQuickStart("create-recipe"),
+        createQuickStart("manage-project-recipes"),
       ],
       3,
     );
@@ -43,8 +42,7 @@ describe("mergeSidecarRecipeQuickStarts", () => {
       "project-local-triage",
       "project-local-risk",
       "prioritize-pending-work",
-      "create-contextual-recipe",
-      "create-recipe",
+      "manage-project-recipes",
     ]);
   });
 
@@ -53,7 +51,7 @@ describe("mergeSidecarRecipeQuickStarts", () => {
       [createQuickStart("prioritize-pending-work", "project-local")],
       [
         createQuickStart("prioritize-pending-work", "bundled"),
-        createQuickStart("create-contextual-recipe"),
+        createQuickStart("manage-project-recipes"),
       ],
       2,
     );
@@ -61,7 +59,7 @@ describe("mergeSidecarRecipeQuickStarts", () => {
     expect(merged[0]?.workflow?.source).toBe("project-local");
     expect(merged.map((quickStart) => quickStart.id)).toEqual([
       "prioritize-pending-work",
-      "create-contextual-recipe",
+      "manage-project-recipes",
     ]);
   });
 });

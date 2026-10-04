@@ -111,7 +111,13 @@ export function stripAnsi(chunk: string): string {
  * whole lines in one go); a real CLI through a real pty does.
  *
  * So value-capturing matchers (`url`, `displayCode`) only ever see COMPLETE
- * lines. The trailing partial line is still checked for the `awaitingCode`
+ * lines. The one exception: `url` is additionally tried on the trailing
+ * partial, but only when the matched token is CLOSED by following content in
+ * the same partial — a blocking prompt line (gh's "Press Enter to open
+ * <url>…") is often the last line and may never get the newline that would
+ * release it, so its URL must still surface; a match running to the very end
+ * of the partial may still be growing and is deferred (see `urlFromPartial`).
+ * The trailing partial line is also checked for the `awaitingCode`
  * PROMPT, because that one is a boolean detector rather than a capture, and a
  * CLI that prints "Paste code here:" and then blocks never sends the newline
  * that would otherwise release it — waiting for one would stall the flow on a
@@ -175,10 +181,39 @@ export function foldPtyRead(
     if (line.length > 0) state = advance(state, line, adapter);
   }
   const partial = stripAnsi(read.partial);
-  if (partial.length > 0 && adapter.match.awaitingCode?.test(partial) && state.url) {
-    state = { ...state, phase: "awaiting-code" };
+  if (partial.length > 0) {
+    // A blocking prompt line (gh's "Press Enter to open <url>…" waits for a
+    // keypress) is often the LAST line and may never receive the trailing
+    // newline that would make it complete — its URL must still surface.
+    const partialUrl = urlFromPartial(partial, adapter.match.url);
+    if (partialUrl) {
+      state = { ...state, url: partialUrl };
+      if (state.phase === "idle" || state.phase === "starting") state.phase = "awaiting-open";
+    }
+    if (adapter.match.awaitingCode?.test(partial) && state.url) {
+      state = { ...state, phase: "awaiting-code" };
+    }
   }
   return state;
+}
+
+/**
+ * URL capture from the INCOMPLETE trailing line, safe against the truncation
+ * trap `assemblePtyRead` exists to prevent: a match is accepted only when it
+ * is CLOSED — followed by further content within the same partial (a space,
+ * prose, a quote). A match that runs to the very end of the partial may still
+ * be growing (the next read can extend the token), so it is deferred until the
+ * line completes. For literal URL matchers (gh's host-anchored
+ * `https://host/login/device`) a truncated prefix simply never matches;
+ * for character-class matchers (Claude/Codex) the guard is what keeps a
+ * half-arrived URL from being reported.
+ */
+function urlFromPartial(partial: string, url: RegExp): string | undefined {
+  const m = partial.match(url);
+  if (!m || m.index === undefined) return undefined;
+  const matchEnd = m.index + m[0].length;
+  if (matchEnd >= partial.length) return undefined;
+  return m[1];
 }
 
 const MAX_PENDING_CHARS = 8_192;

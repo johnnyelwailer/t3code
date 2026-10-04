@@ -1,4 +1,8 @@
 import { ThreadId } from "@t3tools/contracts";
+import * as Effect from "effect/Effect";
+import * as Stream from "effect/Stream";
+
+import { type OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 
 export {
   makeBrokerLayer,
@@ -7,6 +11,19 @@ export {
 } from "./t3team-toolBrokerTestLayers.ts";
 
 export const threadId = ThreadId.make("thread-1");
+
+// Every case drives the broker through the same engine stub; only dispatch differs.
+export const makeOrchestrationMock = (
+  dispatch: OrchestrationEngineShape["dispatch"] = () => Effect.succeed({ sequence: 1 }),
+): OrchestrationEngineShape => ({
+  readEvents: () => Stream.empty,
+  readThreadEvents: () => Stream.empty,
+  getThreadReplayStats: () => Effect.die("unused"),
+  dispatch,
+  streamDomainEvents: Stream.empty,
+  subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
+  latestSequence: Effect.succeed(0),
+});
 
 type TestToolContextTool = {
   id: string;

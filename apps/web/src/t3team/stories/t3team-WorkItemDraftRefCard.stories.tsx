@@ -12,7 +12,7 @@ const ATTACHMENT = {
 } as never;
 
 const meta = {
-  title: "T3Team/Work Item Draft Ref Card",
+  title: "T3Team/Work Item/Draft Ref Card",
   parameters: { layout: "padded" },
 } satisfies Meta;
 

@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-native-title-tooltip -- Mirrors the sidebar rows' native provider-icon title. */
 /**
  * "Local provider sessions" setting toggle — the display-side contract.
  *
@@ -30,7 +29,6 @@ const threads: ProjectThread[] = [
     id: "t-app",
     projectId: "p1",
     title: "Fix the failing retry test",
-    messageCount: 14,
     lastMessageAt: iso(48 * 60 * 60 * 1000),
     createdAt: iso(72 * 60 * 60 * 1000),
     status: "idle",
@@ -40,7 +38,6 @@ const threads: ProjectThread[] = [
     projectId: "p1",
     title: "Codex · refactor auth middleware",
     providerKind: "codex",
-    messageCount: 8,
     lastMessageAt: iso(CODEX_ACTIVE_WINDOW_MS / 2),
     createdAt: iso(6 * 60 * 60 * 1000),
     status: "idle",
@@ -50,7 +47,6 @@ const threads: ProjectThread[] = [
     projectId: "p1",
     title: "Claude · investigate flaky e2e",
     providerKind: "claudeAgent",
-    messageCount: 5,
     lastMessageAt: iso(30 * 60 * 60 * 1000),
     createdAt: iso(36 * 60 * 60 * 1000),
     status: "idle",
@@ -61,11 +57,8 @@ const noOp = () => undefined;
 
 function Section({ visibleThreads }: { visibleThreads: ProjectThread[] }) {
   return (
-    <SidebarProvider
-      className="h-dvh w-[360px] overflow-hidden bg-sidebar text-sidebar-foreground"
-      defaultOpen
-    >
-      <div className="px-2 pt-4">
+    <SidebarProvider className="h-dvh w-[360px] overflow-hidden" defaultOpen>
+      <div className="h-full w-full bg-sidebar px-2 pt-4 text-sidebar-foreground">
         <div className="mb-2 flex items-center gap-2 rounded-md bg-accent/60 px-2 py-1.5 text-xs font-medium">
           <span className="truncate">my-project</span>
         </div>
@@ -87,7 +80,7 @@ function Section({ visibleThreads }: { visibleThreads: ProjectThread[] }) {
 }
 
 const meta: Meta = {
-  title: "Local provider sessions toggle",
+  title: "T3Team/Providers/Local Sessions Toggle",
   parameters: { layout: "fullscreen" },
 };
 export default meta;

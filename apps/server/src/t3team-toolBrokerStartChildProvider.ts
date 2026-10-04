@@ -1,9 +1,4 @@
-import {
-  isProviderAvailable,
-  ProviderInstanceId,
-  type ModelSelection,
-  type ServerProvider,
-} from "@t3tools/contracts";
+import { ProviderInstanceId, type ModelSelection, type ServerProvider } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import type { AgentEffort } from "@t3team/sdk";
@@ -14,6 +9,11 @@ import {
   type T3TeamStartChildReasoningEffort,
 } from "./t3team-toolBrokerStartChildArgs.ts";
 import { applyWorkflowEffort, effortIsHonored } from "./t3team-workflowEffortOptions.ts";
+import {
+  formatList,
+  resolveSlug,
+  unusableReason,
+} from "./t3team-toolBrokerStartChildProviderSlug.ts";
 
 /**
  * Free cross-provider + model resolution for `t3team.thread.start_child`.
@@ -27,8 +27,6 @@ import { applyWorkflowEffort, effortIsHonored } from "./t3team-workflowEffortOpt
  * handling; this module only picks the routing instance + model slug and then
  * defers to it so effort logic is never duplicated.
  */
-
-const MAX_LISTED = 12;
 
 export type ResolveStartChildModelSelectionInput = {
   readonly parentModelSelection: ModelSelection;
@@ -44,57 +42,6 @@ export type ResolveStartChildModelSelectionInput = {
 export type ResolveStartChildModelSelectionResult =
   | { readonly ok: true; readonly value: ModelSelection }
   | { readonly ok: false; readonly message: string };
-
-const formatList = (values: ReadonlyArray<string>): string => {
-  if (values.length === 0) return "none";
-  const shown = values.slice(0, MAX_LISTED).map((value) => `'${value}'`);
-  const extra = values.length - shown.length;
-  return extra > 0 ? `${shown.join(", ")} (+${extra} more)` : shown.join(", ");
-};
-
-const unusableReason = (provider: ServerProvider): string | undefined => {
-  if (!isProviderAvailable(provider)) {
-    return provider.unavailableReason ?? "the provider driver is unavailable in this build";
-  }
-  if (!provider.installed) return "the provider is not installed";
-  if (!provider.enabled) return "the provider is disabled";
-  return undefined;
-};
-
-type SlugResult =
-  | { readonly ok: true; readonly slug: string }
-  | { readonly ok: false; readonly message: string };
-
-const resolveSlug = (
-  provider: ServerProvider,
-  requestedModel: string | undefined,
-  parentModel: string,
-): SlugResult => {
-  if (requestedModel) {
-    const wanted = requestedModel.trim().toLowerCase();
-    const match = provider.models.find((model) => model.slug.toLowerCase() === wanted);
-    if (!match) {
-      return {
-        ok: false,
-        message:
-          `Model '${requestedModel}' is not available on provider instance ` +
-          `'${provider.instanceId}'. Valid models: ${formatList(provider.models.map((m) => m.slug))}.`,
-      };
-    }
-    return { ok: true, slug: match.slug };
-  }
-
-  const parentSlug = parentModel.trim().toLowerCase();
-  const chosen =
-    provider.models.find((model) => model.slug.toLowerCase() === parentSlug) ?? provider.models[0];
-  if (!chosen) {
-    return {
-      ok: false,
-      message: `Provider instance '${provider.instanceId}' has no models configured to run a child on.`,
-    };
-  }
-  return { ok: true, slug: chosen.slug };
-};
 
 /**
  * Resolve the child's `ModelSelection`.

@@ -24,6 +24,9 @@
  *   stop   — halt a child's running turn
  *   close  — mark a child done from this side (bookkeeping)
  *   sweep  — settle terminal threads in bulk (verify first; cleanup protocol)
+ *   drain  — claim THIS thread's own pending inter-agent mailbox now (no args)
+ *   environments — read-only: which environments start_child `environment`
+ *                  can target (own environment + recorded cross-env bindings)
  *   help   — the exact schema for one op
  *
  * This module is the entry point: it validates the `op` and dispatches to the
@@ -36,7 +39,9 @@ import * as Effect from "effect/Effect";
 import { okResult, errorResult } from "./t3team-toolBrokerHelpers.ts";
 import { opUsage, readString } from "./t3team-toolBrokerChildrenShared.ts";
 import { opList, opStatus } from "./t3team-toolBrokerChildrenStatus.ts";
+import { opEnvironments } from "./t3team-toolBrokerChildrenEnvironments.ts";
 import { opSweep } from "./t3team-toolBrokerChildrenSweep.ts";
+import { opDrain } from "./t3team-toolBrokerChildrenDrain.ts";
 import {
   opClose,
   opStop,
@@ -54,9 +59,6 @@ import {
 import { type T3TeamToolCallResult } from "./t3team-toolBroker.ts";
 
 export {
-  T3TEAM_CHILD_OPS,
-  T3TEAM_CHILD_WAIT_OUTCOMES,
-  T3TEAM_CHILDREN_TOOL_ID,
   type ChildThreadActivity,
   type ChildThreadDetail,
   type ChildThreadMessage,
@@ -120,6 +122,10 @@ export function callT3TeamChildrenTool(input: {
       return opClose(deps, args);
     case "sweep":
       return opSweep(deps, args);
+    case "drain":
+      return opDrain(deps, args);
+    case "environments":
+      return opEnvironments(deps, args);
     default:
       return Effect.succeed(errorResult(opUsage(op)));
   }

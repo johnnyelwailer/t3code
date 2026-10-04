@@ -46,10 +46,20 @@ export function T3TeamActorTimelineRow(props: {
   const senderProjectId = author?.projectId;
   const urgency = actor?.urgency ?? "normal";
 
+  // Title the card with the SUBJECT when present (the sender's short summary,
+  // or the auto-derived one persisted on the message): without it the card
+  // would show a clamp of the FULL body, and expanding would reveal the same
+  // body — there would be nothing to title it with.
+  const subject =
+    actor?.summary !== undefined && actor.summary.length > 0
+      ? actor.summary.replaceAll(/\s+/g, " ").trim()
+      : "";
   const summarySource =
-    message.t3teamExt?.displayText && message.t3teamExt.displayText.length > 0
-      ? message.t3teamExt.displayText
-      : message.text;
+    subject !== ""
+      ? subject
+      : message.t3teamExt?.displayText && message.t3teamExt.displayText.length > 0
+        ? message.t3teamExt.displayText
+        : message.text;
   const normalizedPreview = summarySource.replaceAll(/\s+/g, " ").trim();
   const summary =
     normalizedPreview.length <= 120
@@ -67,11 +77,11 @@ export function T3TeamActorTimelineRow(props: {
         <summary className="cursor-pointer list-none px-3.5 py-2.5 [&::-webkit-details-marker]:hidden">
           <span className="flex items-center gap-1.5 text-muted-foreground">
             <CornerUpRightIcon className="size-3.5 shrink-0 opacity-70" />
-            <span className="min-w-0 flex-1 text-[11px] font-medium uppercase tracking-wide">
+            <span className="min-w-0 flex-1 text-2xs font-medium uppercase tracking-wide">
               Message from <span className="font-semibold text-foreground/80">{senderTitle}</span>
             </span>
             {urgency === "urgent" ? (
-              <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">
+              <span className="rounded-full border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-3xs font-medium uppercase tracking-wide text-warning-foreground">
                 Urgent
               </span>
             ) : null}

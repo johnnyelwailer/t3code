@@ -4,9 +4,19 @@ import * as Stream from "effect/Stream";
 
 import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import type { T3TeamActorMailboxShape } from "./t3team-actorMailbox.ts";
-import { collectStaleSessionThreadIdsAtRehydrate } from "./t3team-actorRestartHold.ts";
-import { collectPendingActorDeliveries } from "./t3team-actorReactionInput.ts";
-import { collectSuppressedThreadsAtRehydrate } from "./t3team-actorMessageSuppression.ts";
+import { readEventsMatching } from "./orchestration/t3team-eventReplayFilter.ts";
+import {
+  collectStaleSessionThreadIdsAtRehydrate,
+  STALE_SESSION_REPLAY_FILTERS,
+} from "./t3team-actorRestartHold.ts";
+import {
+  collectPendingActorDeliveries,
+  PENDING_ACTOR_DELIVERY_REPLAY_FILTERS,
+} from "./t3team-actorReactionInput.ts";
+import {
+  collectSuppressedThreadsAtRehydrate,
+  SUPPRESSION_REPLAY_FILTERS,
+} from "./t3team-actorMessageSuppression.ts";
 
 /**
  * Rehydrate the actor mailbox after a restart — and HOLD, not drain (GHE
@@ -24,12 +34,16 @@ import { collectSuppressedThreadsAtRehydrate } from "./t3team-actorMessageSuppre
  * orchestrator to pull detail and resume as it sees fit.
  */
 export const rehydrateActorMailbox = Effect.fn("rehydrateActorMailbox")(function* (input: {
-  readonly engine: Pick<OrchestrationEngineShape, "readEvents">;
+  readonly engine: Pick<OrchestrationEngineShape, "readEvents" | "readEventsMatching">;
   readonly mailbox: T3TeamActorMailboxShape;
   readonly hopCap: number;
 }) {
   const replayed: ReadonlyArray<OrchestrationEvent> = yield* Stream.runCollect(
-    input.engine.readEvents(0, Number.MAX_SAFE_INTEGER),
+    readEventsMatching(input.engine, [
+      ...SUPPRESSION_REPLAY_FILTERS,
+      ...PENDING_ACTOR_DELIVERY_REPLAY_FILTERS,
+      ...STALE_SESSION_REPLAY_FILTERS,
+    ]),
   ).pipe(Effect.map((chunk) => Array.from(chunk)));
   // Restore suppression BEFORE enqueueing below — a fresh process has
   // forgotten the in-memory flag entirely, and draining first would resume

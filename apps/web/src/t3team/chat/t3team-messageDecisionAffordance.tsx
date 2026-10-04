@@ -35,18 +35,20 @@ function DecisionButton(props: {
   muted?: boolean;
   onClick: () => void;
 }) {
+  // The fade lives on a wrapper: Button owns its own opacity (disabled:opacity-64).
   return (
-    <Button
-      type="button"
-      size="sm"
-      variant={props.chosen || props.primary ? "default" : "outline"}
-      disabled={props.disabled}
-      className={props.muted ? "opacity-40" : undefined}
-      onClick={props.onClick}
-    >
-      {props.busy ? <LoaderCircleIcon className="mr-1 size-3 animate-spin" /> : null}
-      {props.label}
-    </Button>
+    <span className={props.muted ? "inline-flex opacity-40" : "inline-flex"}>
+      <Button
+        type="button"
+        size="sm"
+        variant={props.chosen || props.primary ? "default" : "outline"}
+        disabled={props.disabled}
+        onClick={props.onClick}
+      >
+        {props.busy ? <LoaderCircleIcon className="mr-1 size-3 animate-spin" /> : null}
+        {props.label}
+      </Button>
+    </span>
   );
 }
 
@@ -117,6 +119,19 @@ export function T3TeamWorkflowDecisionAffordance({
   }
 
   if (affordance.kind === "form") {
+    // Answered: the reply's own bubble is suppressed (it is card-sourced), so the card is the one
+    // place the submitted values are stated — as the "key: value" summary the submit produced,
+    // never as a dead disabled form or a JSON blob.
+    if (answeredChoice !== undefined) {
+      return (
+        <p
+          className="text-sm text-foreground/90 [overflow-wrap:anywhere]"
+          data-workflow-decision-status="answered-form-summary"
+        >
+          {answeredChoice}
+        </p>
+      );
+    }
     return (
       <T3TeamWorkflowDecisionForm
         fields={affordance.fields}

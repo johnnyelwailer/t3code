@@ -35,7 +35,7 @@ describe("sidecar composition persistence", () => {
           composition: {
             sections: [
               { sectionId: "quick-starts", collapsed: false },
-              { sectionId: "recent-conversations", collapsed: true },
+              { sectionId: "notes", collapsed: true },
             ],
           },
         }),
@@ -43,7 +43,7 @@ describe("sidecar composition persistence", () => {
     ).toEqual({
       sections: [
         { sectionId: "quick-starts", collapsed: false },
-        { sectionId: "recent-conversations", collapsed: true },
+        { sectionId: "notes", collapsed: true },
       ],
     });
   });
@@ -150,13 +150,13 @@ describe("sidecar composition persistence", () => {
     persistStoredSidecarComposition({
       sections: [
         { sectionId: "quick-starts", collapsed: true },
-        { sectionId: "recent-conversations", visible: false },
+        { sectionId: "notes", visible: false },
       ],
     });
 
     await vi.waitFor(() => {
       expect(persistJson).toHaveBeenCalledWith(
-        '{"composition":{"sections":[{"sectionId":"quick-starts","collapsed":true},{"sectionId":"recent-conversations","visible":false}]}}',
+        '{"composition":{"sections":[{"sectionId":"quick-starts","collapsed":true},{"sectionId":"notes","visible":false}]}}',
       );
     });
 
@@ -168,7 +168,7 @@ describe("sidecar composition persistence", () => {
     ).toEqual({
       sections: [
         { sectionId: "quick-starts", collapsed: true },
-        { sectionId: "recent-conversations", visible: false },
+        { sectionId: "notes", visible: false },
       ],
     });
     resetPersister();

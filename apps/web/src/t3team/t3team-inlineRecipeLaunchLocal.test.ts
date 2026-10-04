@@ -16,7 +16,7 @@ import { buildT3TeamSidecarSectionResetLaunch } from "~/t3team/t3team-sidecarPer
 const DEFAULT_COMPOSITION: SidecarComposition = {
   sections: [
     { sectionId: "quick-starts", visible: true, collapsed: false },
-    { sectionId: "recent-conversations", visible: true, collapsed: false },
+    { sectionId: "notes", visible: true, collapsed: false },
   ],
 };
 
@@ -29,7 +29,7 @@ describe("t3team-inlineRecipeLaunchLocal", () => {
     const personalization: SidecarPersonalization = {
       composition: {
         sections: [
-          { sectionId: "recent-conversations", visible: true, collapsed: false },
+          { sectionId: "notes", visible: true, collapsed: false },
           { sectionId: "quick-starts", visible: true, collapsed: true },
         ],
       },

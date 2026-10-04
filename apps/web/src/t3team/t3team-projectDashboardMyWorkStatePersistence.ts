@@ -6,6 +6,7 @@ import {
   projectDashboardMyWorkRouteSearchKeys,
   projectMyWorkGroupModeValues,
   projectMyWorkKanbanLaneSelectionModeValues,
+  projectMyWorkLensValues,
   projectMyWorkStatusCategoryValues,
   projectMyWorkTableSortByValues,
   projectMyWorkTableSortDirectionValues,
@@ -14,6 +15,7 @@ import {
   type ProjectDashboardMyWorkRouteSearch,
   type ProjectDashboardMyWorkState,
 } from "./t3team-projectDashboardMyWorkStateShared";
+import { readT3TeamBetaFlags } from "./t3team-betaFlags";
 
 export function readPersistedProjectDashboardMyWorkState(
   storageKey: string,
@@ -36,6 +38,9 @@ export function readPersistedProjectDashboardMyWorkState(
     const persisted: PersistedProjectDashboardMyWorkState = {};
 
     if (typeof parsed.query === "string") persisted.query = parsed.query;
+
+    const lens = parseRouteEnum(parsed.lens, projectMyWorkLensValues);
+    if (lens !== undefined) persisted.lens = lens;
 
     const viewMode = parseRouteEnum(parsed.viewMode, projectMyWorkViewModeValues);
     if (viewMode !== undefined) persisted.viewMode = viewMode;
@@ -103,6 +108,11 @@ export function resolveProjectDashboardMyWorkState(input: {
     ...createDefaultProjectDashboardMyWorkState(),
     ...input.persisted,
   };
+
+  // The beta flag's default lens only applies when the user has not persisted one.
+  if (input.persisted?.lens === undefined) {
+    next.lens = readT3TeamBetaFlags().digestDefaultLens;
+  }
 
   const search = input.search;
   if (!search) {
@@ -179,6 +189,7 @@ export function areProjectDashboardMyWorkStatesEqual(
 ): boolean {
   return (
     left.query === right.query &&
+    left.lens === right.lens &&
     left.viewMode === right.viewMode &&
     left.groupMode === right.groupMode &&
     left.statusCategory === right.statusCategory &&

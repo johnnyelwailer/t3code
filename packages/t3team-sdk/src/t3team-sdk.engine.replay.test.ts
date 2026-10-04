@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Replay-drift tests: per-call args drift, call-identity drift (insertion), input-boundary
  * drift at seq 0, replay:never marker round-trips, and gap-drift when a journaled seq is

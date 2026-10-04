@@ -47,7 +47,6 @@ function Staged({
     rewrite.open();
     for (const note of notes) rewrite.submitComment(note);
     // Runs once, on mount, to reach the demonstrated state immediately.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return <WorkItemAgentRewriteControl {...props} />;
@@ -62,7 +61,7 @@ function StagedComposerPreview() {
 
   return (
     <div className="mt-6 max-w-sm rounded-lg border border-border bg-card p-3">
-      <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
+      <p className="mb-2 text-3xs font-medium uppercase tracking-widest text-muted-foreground/70">
         On the composer
       </p>
       <p className="text-sm font-medium text-foreground">{staged.selectedRecipe.recipe.title}</p>
@@ -75,7 +74,7 @@ function StagedComposerPreview() {
 }
 
 const meta = {
-  title: "T3Team/Work Item Agent Rewrite Control",
+  title: "T3Team/Work Item/Agent Rewrite Control",
   parameters: { layout: "padded" },
 } satisfies Meta;
 

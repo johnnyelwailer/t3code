@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-native-title-tooltip --Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Pause / resume / stop for a live workflow run.
  *
@@ -30,15 +30,24 @@ const ICON_BUTTON_CLASS_NAME =
 export function T3TeamWorkflowRunControlStatus({
   pending,
   error,
+  isRetry,
 }: {
   readonly pending: WorkflowRunControlAction | null;
   readonly error: string | null;
+  /** The in-flight resume is re-driving a failed run from its journal — say "Retrying…". */
+  readonly isRetry?: boolean;
 }) {
   return (
     <>
       {pending !== null ? (
         <div className="mb-2 text-xs font-medium text-muted-foreground" role="status">
-          {pending === "pause" ? "Pausing…" : pending === "resume" ? "Resuming…" : "Stopping…"}
+          {pending === "pause"
+            ? "Pausing…"
+            : pending === "resume"
+              ? isRetry
+                ? "Retrying…"
+                : "Resuming…"
+              : "Stopping…"}
         </div>
       ) : null}
       {error ? (
@@ -60,6 +69,7 @@ export function T3TeamWorkflowRunControls({
   canPause,
   canResume,
   canStop,
+  isRetry,
   pending,
   className,
   onControl,
@@ -68,6 +78,9 @@ export function T3TeamWorkflowRunControls({
   readonly canPause: boolean;
   readonly canResume: boolean;
   readonly canStop: boolean;
+  /** The resume control is re-driving a failed run from its journal, not restoring a pause —
+   * label it "Retry run" instead of "Resume" (same action, same handler). */
+  readonly isRetry?: boolean;
   readonly pending: WorkflowRunControlAction | null;
   readonly className: string;
   readonly onControl?: (action: WorkflowRunControlAction) => void;
@@ -101,8 +114,8 @@ export function T3TeamWorkflowRunControls({
         <button
           type="button"
           disabled={pending !== null}
-          title="Resume orchestration"
-          aria-label="Resume orchestration"
+          title={isRetry ? "Retry run" : "Resume orchestration"}
+          aria-label={isRetry ? "Retry run" : "Resume orchestration"}
           className={ICON_BUTTON_CLASS_NAME}
           onClick={() => onControl?.("resume")}
         >
@@ -114,7 +127,7 @@ export function T3TeamWorkflowRunControls({
           <MenuTrigger
             aria-label={showStopItem ? "More orchestration actions" : "What this run may do"}
             disabled={pending !== null && showStopItem}
-            className={ICON_BUTTON_CLASS_NAME}
+            render={<button type="button" className={ICON_BUTTON_CLASS_NAME} />}
           >
             <EllipsisIcon className="size-3.5" />
           </MenuTrigger>
@@ -128,8 +141,8 @@ export function T3TeamWorkflowRunControls({
             {hasCapabilities ? (
               <MenuGroup>
                 {showStopItem ? <MenuSeparator /> : null}
-                <MenuGroupLabel className="flex cursor-default items-center gap-1 px-2 pt-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/60">
-                  <ShieldIcon className="size-2.5" />
+                <MenuGroupLabel className="flex cursor-default items-center">
+                  <ShieldIcon className="mr-1 size-3" />
                   This run may
                 </MenuGroupLabel>
                 {capabilities.map((capability) => {

@@ -2,6 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
+// Upstream keeps this key private in clientPersistenceStorage.ts (the additive
+// guard forbids fork-only exports there); the fork tests pin the constant so
+// they can assert against raw localStorage writes. Keep in sync if upstream
+// bumps the key version.
+const CLIENT_SETTINGS_STORAGE_KEY = "t3code:client-settings:v1";
+
 function createMemoryStorage(): Storage {
   const entries = new Map<string, string>();
   return {
@@ -21,13 +27,7 @@ function createMemoryStorage(): Storage {
 }
 
 async function loadPersistenceModules() {
-  const [
-    { CLIENT_SETTINGS_STORAGE_KEY },
-    { __resetLocalApiForTests },
-    projectStoreUtils,
-    persistence,
-  ] = await Promise.all([
-    import("~/clientPersistenceStorage"),
+  const [{ __resetLocalApiForTests }, projectStoreUtils, persistence] = await Promise.all([
     import("~/localApi"),
     import("./t3team-projectStoreUtils"),
     import("./t3team-projectStorePersistence"),

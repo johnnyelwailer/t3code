@@ -52,7 +52,12 @@ export interface ThreadRef {
 
 /** Options for an ask verb (`agent` / `askAgent` / `askUser`). */
 export interface AskOpts<R = string> {
-  /** Short human-facing workflow label. Kept separate from the full agent/user prompt. */
+  /**
+   * Short human-facing workflow label. Kept separate from the full agent/user prompt. For an
+   * ask inside a loop, keep it STABLE across iterations (no iteration counter): the run card
+   * groups consecutive same-label steps into one collapsible row, so `'Pick next task (17)'`
+   * defeats the grouping and renders one row per iteration.
+   */
   readonly label?: string;
   readonly schema?: Schema.Schema<R>;
   readonly model?: ModelSelection;

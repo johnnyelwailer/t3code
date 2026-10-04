@@ -40,6 +40,7 @@ import {
   makeInterruptedTurnRetry,
   type InterruptedTurnRetryDeps,
 } from "./t3team-workflowEngineTurnRetry.ts";
+import { makeTerminalNoticeResurfer } from "./t3team-workflowTerminalResurface.ts";
 import { stopWorkflowsOwnedByThread } from "./t3team-workflowStopCascade.ts";
 import {
   createWorkflowTurnTracker,
@@ -84,10 +85,18 @@ export const T3TeamWorkflowEngineReactorLive = Layer.effectDiscard(
           turnRetries,
           updatedAt: DateTime.formatIso(DateTime.nowUnsafe()),
         }),
+      // Registers the forked fiber in the registry's turn-retry handle map (GHE #411 §3), so a
+      // pause/stop that clears this step's pending ask can interrupt it before it fires.
       armTurnRetry: (threadId, correlationId, delayMs) =>
-        Effect.suspend(() => enqueueTurnRetry({ threadId, correlationId })).pipe(
+        Effect.suspend(() => {
+          registry.removeTurnRetryFiber(threadId, correlationId);
+          return enqueueTurnRetry({ threadId, correlationId });
+        }).pipe(
           Effect.delay(Duration.millis(delayMs)),
           Effect.forkIn(reactorScope),
+          Effect.tap((fiber) =>
+            Effect.sync(() => registry.registerTurnRetryFiber(threadId, correlationId, fiber)),
+          ),
           Effect.asVoid,
         ),
       dispatch: (command: OrchestrationCommand) => orchestration.dispatch(command),
@@ -106,6 +115,16 @@ export const T3TeamWorkflowEngineReactorLive = Layer.effectDiscard(
           Effect.asVoid,
         ),
       turnRetry: makeInterruptedTurnRetry(turnRetryDeps),
+    });
+    // A terminal failure notice that lands WHILE the launch turn is still active is buried in
+    // that turn; re-anchor it when the thread's session goes idle (live incident: a run died
+    // 30 ms after launch and its notice sat unseen in the transcript for 40 minutes).
+    const resurfaceTerminalNotice = makeTerminalNoticeResurfer({
+      runRepo: runRepo,
+      dispatch: (command: OrchestrationCommand) =>
+        Effect.runPromise(orchestration.dispatch(command)).then(() => undefined),
+      nowIso: () => DateTime.formatIso(DateTime.nowUnsafe()),
+      nowMs: () => DateTime.toEpochMillis(DateTime.nowUnsafe()),
     });
     const traced = Effect.fn("processWorkflowEngineReactorTask")(handle);
 
@@ -152,7 +171,19 @@ export const T3TeamWorkflowEngineReactorLive = Layer.effectDiscard(
     yield* Effect.forkScoped(
       Stream.runForEach(orchestration.streamDomainEvents, (event) => {
         if (event.type === "thread.message-sent" || event.type === "thread.session-set") {
-          return lane(event.payload.threadId).enqueue({ kind: "event", event });
+          // The session-set event ALSO feeds the terminal-notice resurfer: when the launch
+          // turn just ended, re-anchor the buried failure notice behind it. Independent of
+          // the pending-ask lane — a run with no parked ask still needs its notice surfaced,
+          // and a lane hiccup must not swallow the resurface.
+          return Effect.all(
+            [
+              lane(event.payload.threadId).enqueue({ kind: "event", event }),
+              event.type === "thread.session-set"
+                ? resurfaceTerminalNotice.onSessionSet(event)
+                : Effect.void,
+            ],
+            { discard: true },
+          );
         }
         if (event.type === "thread.turn-interrupt-requested") return stopOwnedWorkflows(event);
         return Effect.void;

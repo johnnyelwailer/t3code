@@ -3,17 +3,11 @@ import {
   MenuItem,
   MenuRadioGroup,
   MenuRadioItem,
-  MenuShortcut,
   MenuSub,
   MenuSubPopup,
   MenuSubTrigger,
 } from "~/t3team/components/ui/t3team-menu";
-import {
-  menuShortcutClassName,
-  menuSubPopupClassName,
-  radioItemClassName,
-  stackedRadioGroupClassName,
-} from "~/t3team/t3team-ProjectBacklogOptionsMenuMeta";
+import { menuValueClassName } from "~/t3team/t3team-ProjectBacklogOptionsMenuMeta";
 
 const ALL_SPRINTS_VALUE = "all";
 
@@ -47,25 +41,25 @@ export function ProjectBacklogOptionsJiraFilters({
   return (
     <>
       <MenuSub>
-        <MenuSubTrigger className={radioItemClassName}>
+        <MenuSubTrigger>
           Sprint board
-          <MenuShortcut className={menuShortcutClassName}>{selectedBoardLabel}</MenuShortcut>
+          <span className={menuValueClassName}>{selectedBoardLabel}</span>
         </MenuSubTrigger>
-        <MenuSubPopup className={menuSubPopupClassName}>
+        <MenuSubPopup className="min-w-60">
           {hasBoards ? (
             <MenuRadioGroup
-              className={stackedRadioGroupClassName}
+              className="max-h-72 overflow-y-auto"
               value={selectedBoardValue ?? ""}
               onValueChange={(value) => onBoardChange(value)}
             >
               {boards.map((board) => (
-                <MenuRadioItem key={board.id} value={board.id} className={radioItemClassName}>
+                <MenuRadioItem key={board.id} value={board.id}>
                   {board.name}
                 </MenuRadioItem>
               ))}
             </MenuRadioGroup>
           ) : (
-            <MenuItem disabled className={radioItemClassName}>
+            <MenuItem disabled>
               Jira did not return any sprint boards for this project yet.
             </MenuItem>
           )}
@@ -73,32 +67,28 @@ export function ProjectBacklogOptionsJiraFilters({
       </MenuSub>
 
       <MenuSub>
-        <MenuSubTrigger className={radioItemClassName}>
+        <MenuSubTrigger>
           Sprint
-          <MenuShortcut className={menuShortcutClassName}>{selectedSprintLabel}</MenuShortcut>
+          <span className={menuValueClassName}>{selectedSprintLabel}</span>
         </MenuSubTrigger>
-        <MenuSubPopup className={menuSubPopupClassName}>
+        <MenuSubPopup className="min-w-60">
           {hasSprintOptions ? (
             <MenuRadioGroup
-              className={stackedRadioGroupClassName}
+              className="max-h-72 overflow-y-auto"
               value={selectedSprintId ?? ALL_SPRINTS_VALUE}
               onValueChange={(value) =>
                 onSprintChange(value === ALL_SPRINTS_VALUE ? undefined : value)
               }
             >
-              <MenuRadioItem value={ALL_SPRINTS_VALUE} className={radioItemClassName}>
-                All board issues
-              </MenuRadioItem>
+              <MenuRadioItem value={ALL_SPRINTS_VALUE}>All board issues</MenuRadioItem>
               {sprints.map((sprint) => (
-                <MenuRadioItem key={sprint.id} value={sprint.id} className={radioItemClassName}>
+                <MenuRadioItem key={sprint.id} value={sprint.id}>
                   {sprint.name}
                 </MenuRadioItem>
               ))}
             </MenuRadioGroup>
           ) : (
-            <MenuItem disabled className={radioItemClassName}>
-              Jira did not return any sprints for this project yet.
-            </MenuItem>
+            <MenuItem disabled>Jira did not return any sprints for this project yet.</MenuItem>
           )}
         </MenuSubPopup>
       </MenuSub>

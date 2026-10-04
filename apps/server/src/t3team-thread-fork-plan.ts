@@ -10,8 +10,8 @@
  */
 
 export const FORK_TRANSCRIPT_TOKEN_CAP = 30_000;
-export const FORK_TRANSCRIPT_HEAD_RATIO = 0.4;
-export const FORK_ATTACHMENT_TOKEN_ALLOWANCE = 512;
+const FORK_TRANSCRIPT_HEAD_RATIO = 0.4;
+const FORK_ATTACHMENT_TOKEN_ALLOWANCE = 512;
 
 export function estimateMessageTokens(message: {
   readonly text?: string | null;

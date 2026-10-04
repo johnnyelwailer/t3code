@@ -15,6 +15,10 @@
       "types": "./src/t3team-sdk.placements.ts",
       "import": "./src/t3team-sdk.placements.ts"
     },
+    "./source": {
+      "types": "./src/t3team-sdk.signalSource.ts",
+      "import": "./src/t3team-sdk.signalSource.ts"
+    },
     "./surface": {
       "types": "./src/t3team-sdk.surface.ts",
       "import": "./src/t3team-sdk.surface.ts"
@@ -26,6 +30,10 @@
     "./models": {
       "types": "./src/t3team-sdk.models.ts",
       "import": "./src/t3team-sdk.models.ts"
+    },
+    "./time": {
+      "types": "./src/t3team-sdk.time.ts",
+      "import": "./src/t3team-sdk.time.ts"
     },
     "./tools/t3team": {
       "types": "./src/tools/t3team-sdk.t3team.ts",
@@ -50,8 +58,9 @@
     "@runbook/threads": "workspace:*",
     "@runbook/tools": "workspace:*",
     "@runbook/ts": "workspace:*",
+    "cron-parser": "^5.10.1",
     "effect": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "~6.0.3"
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",

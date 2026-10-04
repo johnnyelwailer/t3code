@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 
 import {
   createT3TeamProjectSetupContentHash,
@@ -40,26 +41,14 @@ describe("renderT3TeamProjectSetupFiles", () => {
     const starterRecipePrompt = files.find(
       (file) => file.relativePath === ".t3team/recipes/explain-selected-work/prompt.md",
     );
-    const createRecipeModule = files.find(
-      (file) => file.relativePath === ".t3team/recipes/create-recipe/recipe.ts",
+    const manageRecipeModule = files.find(
+      (file) => file.relativePath === ".t3team/recipes/manage-project-recipes/recipe.ts",
     );
-    const createRecipeWorkflow = files.find(
-      (file) => file.relativePath === ".t3team/recipes/create-recipe/workflow.ts",
+    const manageRecipePrompt = files.find(
+      (file) => file.relativePath === ".t3team/recipes/manage-project-recipes/prompt.md",
     );
-    const createRecipeScript = files.find(
-      (file) => file.relativePath === ".t3team/recipes/create-recipe/recipe-script.ts",
-    );
-    const editRecipeModule = files.find(
-      (file) => file.relativePath === ".t3team/recipes/edit-plugin-module/recipe.ts",
-    );
-    const editRecipePrompt = files.find(
-      (file) => file.relativePath === ".t3team/recipes/edit-plugin-module/prompt.md",
-    );
-    const editRecipeWorkflow = files.find(
-      (file) => file.relativePath === ".t3team/recipes/edit-plugin-module/workflow.ts",
-    );
-    const editRecipeScript = files.find(
-      (file) => file.relativePath === ".t3team/recipes/edit-plugin-module/recipe-script.ts",
+    const manageRecipeWorkflow = files.find(
+      (file) => file.relativePath === ".t3team/recipes/manage-project-recipes/workflow.ts",
     );
     const skillTemplate = files.find(
       (file) => file.relativePath === ".t3team/templates/skills/repeatable-workflow/SKILL.md",
@@ -74,7 +63,7 @@ describe("renderT3TeamProjectSetupFiles", () => {
     expect(agents?.contents).toContain(T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH);
     expect(agents?.contents).toContain("prefer a read-only subagent");
     expect(agents?.contents).toContain(
-      "Save reusable work as a project recipe (under `.t3team/recipes/`) in the background",
+      `Save reusable work as a project recipe (under \`${PROJECT_STATE_DIR}/recipes/\`) in the background`,
     );
     expect(agents?.contents).toContain("do it in a separate thread scoped to the right repository");
     expect(agents?.contents).toContain("surface that thread as a link");
@@ -104,29 +93,16 @@ describe("renderT3TeamProjectSetupFiles", () => {
     expect(entrypoint?.contents).toContain("pending-sync");
     expect(statusSkill?.contents).toContain("name: t3team-status-and-context-summary");
     expect(statusSkill?.contents).toContain("Do not narrate file exploration");
+    expect(statusSkill?.contents).toContain(`under ${PROJECT_STATE_DIR}/context/`);
     // A prompt-only starter: its default action is the prompt.md beside it.
     expect(starterRecipeModule?.contents).toContain("import { definePrompt, defineRecipe }");
     expect(starterRecipeModule?.contents).toContain('defaultAction: definePrompt("./prompt.md")');
     expect(starterRecipeModule?.contents).toContain('scope: "project"');
     expect(starterRecipePrompt?.contents).toContain("Explain this simply");
-    expect(createRecipeModule?.contents).toContain(
-      'defaultAction: defineWorkflow<typeof Workflow>("./workflow.ts")',
-    );
-    expect(createRecipeWorkflow?.contents).toContain('kind: "script"');
-    expect(createRecipeWorkflow?.contents).toContain('kind: "agent"');
-    expect(createRecipeScript?.contents).toContain("prepareAuthoringWorkspace");
-    expect(createRecipeScript?.contents).toContain("starter/recipe.ts");
-    expect(createRecipeScript?.contents).toContain("starter/example-recipe.workflow.ts");
-    expect(createRecipeScript?.contents).toContain("defineRecipe");
-    expect(editRecipeModule?.contents).toContain(
-      'defaultAction: defineWorkflow<typeof Workflow>("./workflow.ts")',
-    );
-    expect(editRecipePrompt?.contents).toContain("## bundled-recipe");
-    expect(editRecipePrompt?.contents).toContain("./prompts/edit-recipe.md");
-    expect(editRecipeWorkflow?.contents).toContain('promptPath: "./draft-prompt.md"');
-    expect(editRecipeWorkflow?.contents).toContain('actionId: "approve"');
-    expect(editRecipeScript?.contents).toContain("prepareEditWorkspace");
-    expect(editRecipeScript?.contents).toContain("artifacts/proposed-source.txt");
+    expect(manageRecipeModule?.contents).toContain('defaultAction: definePrompt("./prompt.md")');
+    expect(manageRecipePrompt?.contents).toContain("Create or edit a t3team recipe");
+    expect(manageRecipePrompt?.contents).toContain(`${PROJECT_STATE_DIR}/recipes/<recipe-id>/`);
+    expect(manageRecipeWorkflow).toBeUndefined();
     expect(skillTemplate?.contents).toContain("use a read-only subagent");
     expect(recipesAuthoringGuide?.writeMode).toBe("if-missing");
     expect(recipesAuthoringGuide?.contents).toContain(

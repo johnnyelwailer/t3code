@@ -133,7 +133,6 @@ export function TicketDetailView({
           relatedTickets: view.relatedTickets,
           issueType: view.issueType,
           priority: view.priority,
-          issueThreads: view.issueThreads,
           resolvedTicketId,
           activeThread: view.activeThread,
           matchedGitHubActivityItems: view.matchedGitHubActivityItems,

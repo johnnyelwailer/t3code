@@ -58,7 +58,7 @@ export async function dispatchWorkflowChild(
  * child nests immediately, before its thread detail is ever opened). Without the parent-side
  * half a freshly spawned retained child rendered flat until a placement refetch.
  */
-export function buildWorkflowChildPlacementCommands(input: {
+function buildWorkflowChildPlacementCommands(input: {
   readonly parentThreadId: string;
   readonly childThreadId: string;
   readonly childTitle: string;
@@ -94,7 +94,7 @@ export function buildWorkflowChildPlacementCommands(input: {
   ];
 }
 
-export function buildWorkflowChildPlacementCommand(input: {
+function buildWorkflowChildPlacementCommand(input: {
   readonly parentThreadId: string;
   readonly childThreadId: string;
   readonly childTitle: string;
