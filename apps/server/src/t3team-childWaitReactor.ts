@@ -44,11 +44,7 @@ import {
 } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { type OrchestrationEventStoreError } from "./persistence/Errors.ts";
 import { readEventsMatching } from "./orchestration/t3team-eventReplayFilter.ts";
-import {
-  collectPendingChildWaits,
-  PENDING_CHILD_WAIT_REPLAY_FILTERS,
-  type ChildWaitRecord,
-} from "./t3team-childWait.ts";
+import { collectPendingChildWaits, PENDING_CHILD_WAIT_REPLAY_FILTERS } from "./t3team-childWait.ts";
 import { makeAbnormalStopGuards } from "./t3team-childAbnormalStopDedup.ts";
 import { makeChildCompletionQuiet } from "./t3team-childCompletionQuiet.ts";
 import { makeChildWaitEventRouter } from "./t3team-childWaitEventRouter.ts";

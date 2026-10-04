@@ -53,6 +53,8 @@ export const makeResolveWait =
   (deps: ChildWaitResolveDeps): ResolveWait =>
   (record, outcome) =>
     Effect.gen(function* () {
+      // Claim synchronously before any reads or usage refresh can yield to the deadline timer.
+      if (!deps.index.remove(record.waitId)) return;
       const outcomeLabel = outcome === "timeout" ? "timed out" : `reached ${outcome}`;
       const nowIso = DateTime.formatIso(DateTime.nowUnsafe());
       // The child's project (children always live in the parent's project) and
@@ -135,6 +137,5 @@ export const makeResolveWait =
             }),
           ),
         );
-      deps.index.remove(record.waitId);
       yield* Effect.promise(() => deps.rearm());
     });

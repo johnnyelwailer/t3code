@@ -213,6 +213,26 @@ describe("makeChildAbnormalStopNotifier silent-completion (outcome: completed)",
       expect(actorMessage(dispatches[0]!).text).toContain("\n[provider-usage] claudeAgent:");
     }),
   );
+  it.effect("suppresses silent completion when the child reports during usage refresh", () =>
+    Effect.gen(function* () {
+      const messages: Array<{ readonly role: string; readonly t3teamExt?: unknown }> = [];
+      const parent = parentThread(messages);
+      const { dispatches, effect } = runNotifier(
+        childThread(),
+        { outcome: "completed", lastError: null },
+        undefined,
+        parent,
+        () =>
+          Effect.sync(() => {
+            messages.push({ role: "actor", t3teamExt: { actor: { senderThreadId: "child-1" } } });
+            return "\n[provider-usage] fresh";
+          }),
+      );
+      yield* effect;
+      expect(dispatches).toHaveLength(0);
+    }),
+  );
+
   it.effect("notifies the parent when a child completes and the parent received nothing", () =>
     Effect.gen(function* () {
       const { dispatches, effect } = runNotifier(

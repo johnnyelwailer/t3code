@@ -166,6 +166,15 @@ export const makeChildAbnormalStopNotifier =
           projectId: String(child.projectId),
         }) ?? Effect.succeed("")
       );
+      // The usage refresh can yield while the child sends its own final report.
+      if (input.outcome === "completed" && deps.usageLine) {
+        const parent = Option.getOrUndefined(
+          yield* deps.query
+            .getThreadDetailById(ThreadId.make(parentThreadId))
+            .pipe(Effect.orElseSucceed(() => Option.none())),
+        );
+        if (!parent || parentReceivedFromChild(parent, String(child.id))) return;
+      }
       const nowIso = DateTime.formatIso(DateTime.nowUnsafe());
       yield* deps.engine
         .dispatch({

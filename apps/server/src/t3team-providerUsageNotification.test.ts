@@ -1,9 +1,16 @@
-import { ProjectId, ThreadId, type ServerProviderUsageWindow } from "@t3tools/contracts";
+import {
+  ProjectId,
+  ThreadId,
+  type ServerProvider,
+  type ServerProviderUsageWindow,
+} from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as DateTime from "effect/DateTime";
 import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
+import * as TestClock from "effect/testing/TestClock";
 
 import type { ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import type { ProviderRegistryShape } from "./provider/Services/ProviderRegistry.ts";
