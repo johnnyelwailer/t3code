@@ -145,7 +145,7 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
         // Re-issuing for a thread that already holds credentials is a provider
         // session RESTART (model tier / cwd / access change), not a stop. The
         // agent process that received the earlier token may well survive that
-        // restart — the Nexplore driver reuses its live session and never sees
+        // restart — a pack driver may reuse its live session and never see
         // the new bearer — so killing the old token here stranded a running
         // thread on 401s until the whole app was restarted. Instead every live
         // token of the thread adopts the new scope; they all die together on
