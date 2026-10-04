@@ -177,7 +177,9 @@ describe("buildHumanSteeringInstruction", () => {
   it("emits the standing anti-ping rule when idle but a parent exists", () => {
     const instruction = buildHumanSteeringInstruction({ kind: "idle" }, "parent-thread");
     expect(instruction).toContain("No human is actively steering this thread");
-    expect(instruction).toContain("exactly one final report");
+    // The completion wake is the one report; the mailbox carries blockers only.
+    expect(instruction).toContain("Do not mail the parent a completion report");
+    expect(instruction).not.toContain("exactly one final report");
     expect(instruction).toContain("No progress pings, no acknowledgements");
   });
 });

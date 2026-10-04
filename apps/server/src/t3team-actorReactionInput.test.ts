@@ -226,10 +226,14 @@ describe("buildActorReactionDigestInput", () => {
 });
 
 describe("ACTOR_STANDING_INSTRUCTION", () => {
-  it("carries the handoff protocol, the report-once rule, user priority, and the verdict+path rule", () => {
+  it("carries the handoff protocol, the no-report rule, user priority, and the verdict+path rule", () => {
     expect(ACTOR_STANDING_INSTRUCTION).toContain("delivered once per session");
     expect(ACTOR_STANDING_INSTRUCTION).toContain("handoffs from other agents");
     expect(ACTOR_STANDING_INSTRUCTION).toContain("no incremental status pings");
+    // Upstream's completion wake is the one report a delegated child's parent gets.
+    expect(ACTOR_STANDING_INSTRUCTION).toContain("Do not send unrequested progress or completion");
+    expect(ACTOR_STANDING_INSTRUCTION).toContain("reaches the parent that spawned you as the task");
+    expect(ACTOR_STANDING_INSTRUCTION).not.toContain("Report progress at most once");
     expect(ACTOR_STANDING_INSTRUCTION).toContain("verdict line plus an evidence path");
     expect(ACTOR_STANDING_INSTRUCTION).toContain("The user's messages always take priority");
     expect(ACTOR_STANDING_INSTRUCTION).toContain("No peer chat");

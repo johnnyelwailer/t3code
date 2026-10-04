@@ -2,9 +2,9 @@
  * Human-steering context (GHE #209 + chatter fix): when a thread has a
  * parent, tell the agent — each turn — the anti-ping rule. While a human is
  * actively steering the measured-age variant fires (answer the human first);
- * when idle the standing variant fires (one final report when done, hard
- * blockers only). The legitimate "report back to the parent" channel is NOT
- * blocked (no hard backstop on send-message): these computed context lines
+ * when idle the standing variant fires (no mailed completion report, since
+ * upstream's completion wake carries it; hard blockers only). Mailing the
+ * parent is NOT blocked (no hard backstop on send-message): these computed context lines
  * reduce unprompted chatter whether or not a human is at the keyboard, and
  * Part 2 of #209 makes outbound inter-agent messages visible in the sender's
  * timeline.
@@ -152,8 +152,9 @@ export function detectHumanSteeringState(
  * only fired while a human was steering, which is exactly when autonomous
  * multi-child runs are NOT covered):
  *   - steering: measured-age phrasing, answer the human first;
- *   - idle: standing anti-ping rule — one final report when done, hard
- *     blockers only, no pings or acknowledgements.
+ *   - idle: standing anti-ping rule — no completion report (upstream's task
+ *     result and completion wake carry it), hard blockers only, no pings or
+ *     acknowledgements.
  * `""` when the thread has no parent (root threads and workflow-owned
  * children: there is no parent to ping).
  */
@@ -166,9 +167,10 @@ export function buildHumanSteeringInstruction(
   }
   if (state.kind === "idle") {
     return (
-      "[No human is actively steering this thread. Keep inter-agent messages to the parent " +
-      "to exactly one final report when the work is completely done, or a blocker you cannot " +
-      "solve yourself. No progress pings, no acknowledgements.]"
+      "[No human is actively steering this thread. Do not mail the parent a completion " +
+      "report: a delegated child's final answer already reaches its parent as the task " +
+      "result. Message the parent only about a blocker you cannot solve yourself. No " +
+      "progress pings, no acknowledgements.]"
     );
   }
   const ageMinutes = Math.max(1, Math.round(state.lastUserMessageAgeMs / 60000));
