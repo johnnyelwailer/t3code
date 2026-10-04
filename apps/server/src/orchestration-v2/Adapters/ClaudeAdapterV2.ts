@@ -5346,8 +5346,8 @@ export function makeClaudeAdapterV2(
         });
 
         // t3team: transient gateway re-drive (t3team-claudeTurnRecovery.ts). The failed result
-        // leaves the turn running behind a provider-retry item; after the wait the live query is
-        // re-prompted under a new prompt uuid, which the echo gate then tracks as this turn's.
+        // leaves the turn running behind a provider-retry item, gated on a new prompt uuid; after
+        // the wait the live query is re-prompted under that uuid, so only its echo settles it.
         const t3teamRedriveTransientGateway = Effect.fnUntraced(function* (
           context: ActiveClaudeTurnContext,
           message: SDKResultMessage,
@@ -5409,6 +5409,11 @@ export function makeClaudeAdapterV2(
           const promptUuid = claudePromptUuid(
             `${context.input.attemptId}:t3team-gateway-retry:${plan.attempt}`,
           );
+          // Gate the turn on the re-drive prompt NOW, not after the wait: a wake turn the idle
+          // CLI runs during the backoff (a background task finished) must not settle this turn.
+          context.promptUuid = promptUuid;
+          context.promptEcho = "pending";
+          context.gatedFramesBeforeEcho = 0;
           const redrive = Effect.gen(function* () {
             const stillActive =
               (yield* Ref.get(activeTurn)) === context &&
@@ -5417,9 +5422,6 @@ export function makeClaudeAdapterV2(
             if (!stillActive) {
               return;
             }
-            context.promptUuid = promptUuid;
-            context.promptEcho = "pending";
-            context.gatedFramesBeforeEcho = 0;
             yield* liveQuery.query.offer({
               type: "user",
               message: { role: "user", content: [{ type: "text", text: plan.text }] },

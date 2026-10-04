@@ -107,6 +107,8 @@ const resultFrame = (input: {
   readonly uuid: string;
   readonly echo?: string;
   readonly errors?: ReadonlyArray<string>;
+  /** A turn the CLI started on its own, e.g. when a background task finished. */
+  readonly taskNotification?: boolean;
 }): SDKMessage =>
   ({
     type: "result",
@@ -131,6 +133,7 @@ const resultFrame = (input: {
     terminal_reason: input.errors === undefined ? "completed" : "model_error",
     ...(input.errors === undefined ? {} : { errors: input.errors }),
     ...(input.echo === undefined ? {} : { user_message_uuid: input.echo }),
+    ...(input.taskNotification === true ? { origin: { kind: "task-notification" } } : {}),
   }) as unknown as SDKMessage;
 
 const makeHarness = Effect.gen(function* () {
@@ -286,6 +289,51 @@ describe("ClaudeAdapterV2 t3team recovery", () => {
           harness.sdkMessages,
           resultFrame({
             uuid: "00000000-0000-4000-8000-000000000302",
+            ...(redrive?.uuid === undefined ? {} : { echo: redrive.uuid }),
+          }),
+        );
+        yield* awaitUntil(() => harness.terminals().length === 1, "terminal");
+        assert.equal(harness.terminals()[0]?.status, "completed");
+      }).pipe(Effect.provide(testLayer)),
+    ),
+  );
+
+  it.effect("a wake turn finishing during the re-drive backoff never settles the turn", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const harness = yield* makeHarness;
+        yield* awaitUntil(() => harness.offered.length === 1, "first prompt");
+        const firstUuid = harness.offered[0]?.uuid;
+        yield* Queue.offer(
+          harness.sdkMessages,
+          resultFrame({
+            uuid: "00000000-0000-4000-8000-000000000311",
+            ...(firstUuid === undefined ? {} : { echo: firstUuid }),
+            errors: ['Request failed with status 503: {"retry_after_seconds": 2}'],
+          }),
+        );
+        yield* awaitUntil(
+          () =>
+            harness.events.some(
+              (event) => event.type === "turn_item.updated" && event.turnItem.type === "error",
+            ),
+          "retry item",
+        );
+        // The idle CLI runs a background task's notification turn while the re-drive waits.
+        yield* Queue.offer(
+          harness.sdkMessages,
+          resultFrame({ uuid: "00000000-0000-4000-8000-000000000312", taskNotification: true }),
+        );
+        for (let index = 0; index < 200; index++) yield* Effect.yieldNow;
+        assert.lengthOf(harness.terminals(), 0, "the wake's result is not this turn's");
+
+        yield* TestClock.adjust("3 seconds");
+        yield* awaitUntil(() => harness.offered.length === 2, "re-drive prompt");
+        const redrive = harness.offered[1];
+        yield* Queue.offer(
+          harness.sdkMessages,
+          resultFrame({
+            uuid: "00000000-0000-4000-8000-000000000313",
             ...(redrive?.uuid === undefined ? {} : { echo: redrive.uuid }),
           }),
         );
