@@ -128,6 +128,19 @@ describe("findT3TeamWorkflowDecisionAnswers", () => {
     expect(answers.get("ask-legacy")).toEqual({ answerMessageId: "reply-legacy", text: "sure" });
   });
 
+  it("legacy fallback skips user-role messages the person did not write", () => {
+    const ask = askMessage("ask-legacy", "run-2:1");
+    const workflowPrompt = {
+      ...legacyUserReply("prompt-parallel", "Review the diff"),
+      createdBy: "system",
+    } as ChatMessage;
+    const reply = legacyUserReply("reply-legacy", "sure");
+
+    const answers = findT3TeamWorkflowDecisionAnswers(entries([ask, workflowPrompt, reply]));
+
+    expect(answers.get("ask-legacy")).toEqual({ answerMessageId: "reply-legacy", text: "sure" });
+  });
+
   it("prefers a correlationId match over the legacy adjacency fallback when both exist", () => {
     const ask = askMessage("ask-1", "run-3:1");
     const adjacentButWrong = legacyUserReply("reply-adjacent", "typed early");
