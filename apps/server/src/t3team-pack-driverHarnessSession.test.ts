@@ -56,7 +56,7 @@ const makeInnerAdapter = (probes: {
 }): ProviderAdapterV2Shape => ({
   instanceId,
   driver: INNER,
-  getCapabilities: () => decodeCapabilities(CAPABILITIES_JSON),
+  getCapabilities: () => decodeCapabilities(CAPABILITIES_JSON).pipe(Effect.orDie),
   planSelectionTransition: () => Effect.succeed({ type: "apply_on_next_turn" }),
   openSession: (input) =>
     decodeSession({
