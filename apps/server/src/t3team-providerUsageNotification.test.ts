@@ -8,6 +8,8 @@ import * as Option from "effect/Option";
 import type { ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import type { ProviderRegistryShape } from "./provider/Services/ProviderRegistry.ts";
 import {
+  PROVIDER_USAGE_NOTIFICATION_MAX_AGE_MS,
+  PROVIDER_USAGE_NOTIFICATION_REFRESH_MS,
   makeProviderUsageNotificationLine,
   providerUsageNotificationLine,
   selectProviderUsageObservation,
@@ -52,9 +54,14 @@ describe("provider usage notification line", () => {
     ).toBe("");
   });
   it("omits stale, future, and expired samples", () => {
-    expect(format({ providerUsageSample: { ...sample, checkedAt: "2026-09-23T09:58:00Z" } })).toBe(
-      "",
-    );
+    expect(
+      format({
+        providerUsageSample: {
+          ...sample,
+          checkedAt: new Date(NOW - PROVIDER_USAGE_NOTIFICATION_MAX_AGE_MS - 1_000).toISOString(),
+        },
+      }),
+    ).toBe("");
     expect(format({ providerUsageSample: { ...sample, checkedAt: "2026-09-23T10:01:00Z" } })).toBe(
       "",
     );
