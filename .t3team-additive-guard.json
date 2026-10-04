@@ -61,6 +61,8 @@
     "apps/server/src/orchestration-v2/ProviderTurnStartService.ts",
     "apps/server/src/orchestration-v2/RunExecutionService.ts",
     "apps/server/src/orchestration-v2/SteeringCompletion.integration.test.ts",
+    "apps/server/src/orchestration-v2/ThreadSettlementService.test.ts",
+    "apps/server/src/orchestration-v2/ThreadSettlementService.ts",
     "apps/server/src/orchestration-v2/legacy/LegacyV1Cutover.integration.test.ts",
     "apps/server/src/orchestration-v2/legacy/LegacyV1ThreadImporter.ts",
     "apps/server/src/os-jank.test.ts",

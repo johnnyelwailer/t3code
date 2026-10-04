@@ -8,6 +8,9 @@
  * Guards run inside the orchestrator's dispatch under the thread's lock: they
  * must be read-only and fast, and must never dispatch a command or take a
  * thread lock (that deadlocks). Read fork tables or `ProjectionStoreV2` only.
+ * The automatic-settlement sweep (`ThreadSettlementService`) also asks them,
+ * lock-free, before it dispatches, so a refused thread is skipped quietly
+ * instead of leaving a rejected receipt on every sweep.
  *
  * Several fork features contribute checks (workflow runs, live children,
  * parent waits); compose them with `combineSettleGuards` into ONE override and

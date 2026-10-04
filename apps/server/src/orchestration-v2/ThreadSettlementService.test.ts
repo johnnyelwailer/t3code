@@ -38,6 +38,7 @@ import * as ProjectStore from "./ProjectStore.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ThreadSettlementService from "./ThreadSettlementService.ts";
+import { T3TeamSettleGuard, type T3TeamSettleGuardInput } from "../t3team-v2/t3team-settleGuard.ts";
 
 const NOW_MS = Date.parse("2026-06-10T12:00:00.000Z");
 const DAY_MS = 24 * 60 * 60 * 1_000;
@@ -1073,6 +1074,54 @@ describe("ThreadSettlementServiceV2 single-thread sweeps", () => {
           yield* service.drain;
           assert.deepStrictEqual(yield* Ref.get(fixture.candidateReads), [finished.id]);
         }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
+});
+
+// t3team: the sweep consults the fork settle guards before it dispatches.
+describe("ThreadSettlementServiceV2 settle guards", () => {
+  it.effect("skips a thread the guards refuse on every sweep without dispatching", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const guarded = makeThread("workflow-waiting");
+        const free = makeThread("idle-thread");
+        const checks = yield* Ref.make<ReadonlyArray<T3TeamSettleGuardInput>>([]);
+        const guard = Layer.succeed(T3TeamSettleGuard, {
+          check: (input) =>
+            Ref.update(checks, (all) => [...all, input]).pipe(
+              Effect.as(input.threadId === guarded.id ? "unfinished workflow run" : null),
+            ),
+        });
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([guarded, free]),
+          settings: { ...DEFAULT_SERVER_SETTINGS, sidebarAutoSettleAfterDays: 3 },
+        });
+
+        yield* Effect.gen(function* () {
+          const service = yield* ThreadSettlementService.ThreadSettlementServiceV2;
+          yield* startHarness(service, fixture.activation, fixture.snapshotReads);
+          yield* fixture.publishEvent({
+            type: "provider-session.detached",
+            id: EventId.make("event:guarded-detached"),
+            threadId: guarded.id,
+            occurredAt: DateTime.makeUnsafe(NOW),
+            payload: {
+              providerSessionId: ProviderSessionId.make("provider-session:guarded"),
+              detachedAt: DateTime.makeUnsafe(NOW),
+            },
+          });
+          yield* Queue.take(fixture.snapshotReads);
+          yield* service.drain;
+
+          const commands = yield* Ref.get(fixture.commands);
+          expect(commands.map((command) => command.threadId)).toEqual([free.id]);
+          const guardedChecks = (yield* Ref.get(checks)).filter(
+            (input) => input.threadId === guarded.id,
+          );
+          expect(guardedChecks.map((input) => input.origin)).toEqual(["server", "server"]);
+        }).pipe(Effect.provide(Layer.provide(fixture.layer, guard)));
       }),
     ),
   );

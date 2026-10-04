@@ -657,7 +657,12 @@ const OrchestrationApplicationLayerLive = CheckpointDiffQuery.layer.pipe(
 // so every client sees the same shelf.
 const ThreadSettlementWorkerLive = Layer.effectDiscard(
   ThreadSettlementService.make.pipe(Effect.flatMap((service) => service.start())),
-).pipe(Layer.provide(PullRequestServiceLive), Layer.provide(ProjectionStoreV2.layer));
+).pipe(
+  Layer.provide(PullRequestServiceLive),
+  Layer.provide(ProjectionStoreV2.layer),
+  // t3team: the sweep skips what the settle guards refuse (same layer reference as the runtime's).
+  Layer.provide(T3TeamSettleGuardsLive),
+);
 
 const ThreadPullRequestWorkerLive = Layer.effectDiscard(
   ThreadPullRequestService.make.pipe(Effect.flatMap((service) => service.start())),

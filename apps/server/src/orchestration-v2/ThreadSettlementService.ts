@@ -26,6 +26,7 @@ import * as TerminalManager from "../terminal/Manager.ts";
 import * as ProjectStore from "./ProjectStore.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
+import { T3TeamSettleGuard, settleGuardInput } from "../t3team-v2/t3team-settleGuard.ts";
 
 export interface SettlementPullRequest {
   readonly state: "open" | "closed" | "merged";
@@ -259,6 +260,8 @@ export const make = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
   const fileSystem = yield* FileSystem.FileSystem;
   const terminals = yield* TerminalManager.TerminalManager;
+  // t3team: the same settle guards the orchestrator applies to every thread.settle.
+  const settleGuard = yield* T3TeamSettleGuard;
 
   const sweep = Effect.fn("ThreadSettlementServiceV2.sweep")(function* (
     mergedPullRequest: PullRequestService.PullRequestMergeEvent | null,
@@ -296,9 +299,22 @@ export const make = Effect.gen(function* () {
         });
         if (settledAt === null) return thread;
         const uuid = yield* crypto.randomUUIDv4;
+        const commandId = CommandId.make(`server:auto-settle:${thread.id}:${uuid}`);
+        // t3team: skip what the fork settle guards refuse instead of persisting a rejected
+        // receipt and a warning on every sweep until the thread can settle.
+        const refusal = yield* settleGuard.check(
+          settleGuardInput({ threadId: thread.id, commandId }),
+        );
+        if (refusal !== null) {
+          yield* Effect.logDebug("automatic thread settlement deferred", {
+            threadId: thread.id,
+            refusal,
+          });
+          return null;
+        }
         yield* orchestrator.dispatch({
           type: "thread.auto-settle",
-          commandId: CommandId.make(`server:auto-settle:${thread.id}:${uuid}`),
+          commandId,
           threadId: thread.id,
           snapshotAt: thread.updatedAt,
           settledAt,
