@@ -5,6 +5,7 @@ import type {
 } from "@t3tools/client-runtime/state/thread-requests";
 import { turnItemIsWorkspacePreparation } from "@t3tools/client-runtime/state/turn-item-presentation";
 import { formatSubagentDisplayTitle } from "@t3tools/client-runtime/state/subagent-display";
+import { isHiddenT3TeamFramingMessage } from "@t3tools/client-runtime/state/message-framing";
 import { extractToolActivityPresentation } from "@t3tools/client-runtime/work-log/tool-presentation";
 import {
   commandDisplayText,
@@ -1671,6 +1672,8 @@ export function buildThreadFeed(
     if (turnItemIsWorkspacePreparation(item)) continue;
     if (item.type === "todo_list" || item.type === "checkpoint") continue;
     if (item.type === "user_message" && foldedAnswerMessageIds.has(item.messageId)) continue;
+    // t3team: agent-facing fork framing never shows in the timeline (same rule as web).
+    if (item.type === "user_message" && isHiddenT3TeamFramingMessage(item)) continue;
     // Match the web timeline: only the terminal interrupt result is useful to
     // users; the preceding request is transient bookkeeping.
     if (item.type === "run_interrupt_request") {

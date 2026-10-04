@@ -259,6 +259,10 @@
       "types": "./src/state/t3team-threadArtifacts.ts",
       "default": "./src/state/t3team-threadArtifacts.ts"
     },
+    "./state/message-framing": {
+      "types": "./src/state/t3team-messageFraming.ts",
+      "default": "./src/state/t3team-messageFraming.ts"
+    },
     "./state/thread-stop-cascade": {
       "types": "./src/state/t3team-threadStopCascade.ts",
       "default": "./src/state/t3team-threadStopCascade.ts"

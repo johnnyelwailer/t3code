@@ -1,45 +1,20 @@
 /**
- * Fork framing on V2 user messages.
- *
- * Fork layers post agent-facing framing as user-role messages: run-less notes recorded with
- * `createdBy: "system"` (upstream never creates a system-authored user message), and turns whose
- * fork message ext says `visibleToUser: false` (e.g. the hidden transport of a widget action).
- * The agent reads them; the timeline does not show them.
+ * Fork framing on V2 user messages. The hidden-framing predicate and the cached ext decode are
+ * shared with mobile (`@t3tools/client-runtime/state/message-framing`).
  */
+import type { OrchestrationMessageContext, T3TeamMessageExt } from "@t3tools/contracts";
 import {
-  readT3TeamMessageExtContext,
-  type OrchestrationMessageContext,
-  type OrchestrationV2Actor,
-  type T3TeamMessageExt,
-} from "@t3tools/contracts";
+  isHiddenT3TeamFramingMessage,
+  readT3TeamMessageExt,
+} from "@t3tools/client-runtime/state/message-framing";
 
-// The timeline re-derives on every projection update; context objects keep their identity
-// across updates, so each one is decoded once.
-const extByContext = new WeakMap<OrchestrationMessageContext, T3TeamMessageExt | null>();
-
-function readExt(context: OrchestrationMessageContext | undefined): T3TeamMessageExt | undefined {
-  if (context === undefined) return undefined;
-  let ext = extByContext.get(context);
-  if (ext === undefined) {
-    ext = readT3TeamMessageExtContext(context) ?? null;
-    extByContext.set(context, ext);
-  }
-  return ext ?? undefined;
-}
-
-export function isHiddenT3TeamFramingMessage(message: {
-  readonly createdBy?: OrchestrationV2Actor | undefined;
-  readonly context?: OrchestrationMessageContext | undefined;
-}): boolean {
-  if (message.createdBy === "system") return true;
-  return readExt(message.context)?.visibleToUser === false;
-}
+export { isHiddenT3TeamFramingMessage };
 
 /** The fork message ext a V2 turn item carries, spread-ready for a timeline `ChatMessage`. */
 export function t3teamMessageExtOf(item: {
   readonly context?: OrchestrationMessageContext | undefined;
 }): { readonly t3teamExt?: T3TeamMessageExt } {
-  const t3teamExt = readExt(item.context);
+  const t3teamExt = readT3TeamMessageExt(item.context);
   return t3teamExt ? { t3teamExt } : {};
 }
 
