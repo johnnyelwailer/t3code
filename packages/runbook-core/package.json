@@ -94,6 +94,10 @@
       "types": "./src/reduce.ts",
       "import": "./src/reduce.ts"
     },
+    "./watermark": {
+      "types": "./src/watermark.ts",
+      "import": "./src/watermark.ts"
+    },
     "./scheduling": {
       "types": "./src/scheduling.ts",
       "import": "./src/scheduling.ts"

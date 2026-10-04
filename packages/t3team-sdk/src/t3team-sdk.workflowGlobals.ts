@@ -24,6 +24,7 @@ import {
   SchemaExhaustedError,
   SubWorkflowCheckpointError,
   TargetMissingError,
+  WatermarkScopeError,
   TimeoutError,
   WorkflowError,
 } from "./t3team-sdk.errors.ts";
@@ -31,6 +32,7 @@ import type { WorkflowPrimitives } from "./t3team-sdk.primitives.ts";
 import type { ReducePrimitives } from "./t3team-sdk.reducePrimitive.ts";
 import type { SchedulePrimitives } from "./t3team-sdk.schedulePrimitive.ts";
 import type { SignalPrimitives } from "./t3team-sdk.signalPrimitive.ts";
+import type { WatermarkPrimitives } from "./t3team-sdk.watermarkPrimitive.ts";
 import { BUILTIN_SIGNAL_GLOBALS } from "./t3team-sdk.builtinSignals.ts";
 import type { WorkflowThreadPrimitives } from "./t3team-sdk.threadPrimitives.ts";
 import { defineModel, defineWorkflow } from "./t3team-sdk.ts";
@@ -63,6 +65,8 @@ export function buildWorkflowGlobals(opts: {
   readonly checkpoint: CheckpointPrimitives["checkpoint"];
   /** The compact state a checkpoint-window resume restored (absent = fresh / full-replay). */
   readonly resume?: CheckpointRecord | undefined;
+  /** The run's `watermark` primitive (a durable source cursor over `checkpoint`). */
+  readonly watermark: WatermarkPrimitives["watermark"];
   /** The run's reducers (`accumulate` folds commit checkpoint boundaries). */
   readonly reduce: ReducePrimitives;
   readonly threads: WorkflowThreadPrimitives;
@@ -92,6 +96,9 @@ export function buildWorkflowGlobals(opts: {
     // checkpoint — a plain loop is unchanged.
     checkpoint: opts.checkpoint,
     resume: opts.resume,
+    // `watermark(key)` keeps a durable cursor as that boundary's state; gated by the
+    // `"source:<key>"` capability, like `getSignalSource`.
+    watermark: opts.watermark,
     // `accumulate` folds an observation into a reducer and commits it as a checkpoint boundary;
     // `reducerState` reads a reducer's restored-or-folded snapshot. Unconditionally bound, like
     // `checkpoint` (a sub-workflow body gets the refusing stand-in instead).
@@ -143,6 +150,7 @@ export function buildWorkflowGlobals(opts: {
     defineModel,
     WorkflowError,
     SubWorkflowCheckpointError,
+    WatermarkScopeError,
     TimeoutError,
     SchemaExhaustedError,
     ProviderUnavailableError,

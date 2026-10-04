@@ -25,6 +25,7 @@ import type {
   CheckpointPrimitives,
   CheckpointRecord,
 } from "@runbook/core/checkpoint";
+import type { Watermark, WatermarkOptions, WatermarkPrimitives } from "@runbook/core/watermark";
 import type { AccumulateOptions, ReducePrimitives, ReducerSnapshot } from "@runbook/core/reduce";
 import type { AgentOpts, SpawnThreadOpts, Thread } from "./t3team-sdk.threadTypes.ts";
 import type { WorkflowInvokeOpts, WorkflowRef } from "./t3team-sdk.types.ts";
@@ -170,6 +171,19 @@ export function getResume(): CheckpointRecord | undefined {
     );
   }
   return surface.resume as CheckpointRecord | undefined;
+}
+
+/**
+ * A durable cursor over a data source (bounded execution). `current()` is the cursor a resume
+ * restored (else `opts.initial`); `advance(next)` commits it as the run's checkpoint boundary, so
+ * the next resume reads strictly after it. Requires the `'source:<sourceKey>'` capability, and
+ * owns the run's boundary: a body that uses `watermark` cannot also call a raw `checkpoint()`.
+ */
+export function watermark<Cursor>(
+  sourceKey: string,
+  opts?: WatermarkOptions<Cursor>,
+): Watermark<Cursor> {
+  return fromRun<WatermarkPrimitives["watermark"]>("watermark")(sourceKey, opts);
 }
 
 /**

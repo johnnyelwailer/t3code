@@ -27,6 +27,10 @@ import type { ReducePrimitives } from "./t3team-sdk.reducePrimitive.ts";
 import { createSchedulePrimitives } from "./t3team-sdk.schedulePrimitive.ts";
 import type { CheckpointPrimitives, CheckpointRecord } from "@runbook/core/checkpoint";
 import { createSignalPrimitives } from "./t3team-sdk.signalPrimitive.ts";
+import {
+  createWatermarkPrimitives,
+  type WatermarkPrimitives,
+} from "./t3team-sdk.watermarkPrimitive.ts";
 import { createThreadPrimitives } from "./t3team-sdk.threadPrimitives.ts";
 import {
   extractMeta,
@@ -60,6 +64,8 @@ export async function runPreparedBody(opts: {
    * Absent on a fresh start and on a full-replay resume; sub-workflow bodies never see one.
    */
   readonly resume?: CheckpointRecord | undefined;
+  /** A sub-workflow's refusing `watermark` stand-in; absent = the run's real primitive. */
+  readonly watermark?: WatermarkPrimitives["watermark"];
   /** The run's reducers (`accumulate`) — the refusing stand-in for a sub-workflow body. */
   readonly reduce: ReducePrimitives;
   readonly handleDispatch: HandleDispatch;
@@ -126,6 +132,14 @@ export async function runPreparedBody(opts: {
     broker: opts.broker ?? defaultBroker,
     capabilities,
   });
+  // `watermark` (bounded execution) — capability-gated per source (`"source:<name>"`). It owns
+  // the run's checkpoint boundary once used, so the body binds ITS guarded `checkpoint`.
+  const bounded = createWatermarkPrimitives({
+    checkpoint: opts.checkpoint,
+    resume: opts.resume,
+    now: opts.runtime.now,
+    capabilities,
+  });
   const globals = buildWorkflowGlobals({
     args: decodedArgs,
     tools: buildToolTree(opts.toolRefs, opts.runtime, capabilities),
@@ -134,8 +148,9 @@ export async function runPreparedBody(opts: {
     scripts: capabilities.has("script") ? buildScriptTree(opts.scripts, opts.runtime) : {},
     runtime: opts.runtime,
     primitives: opts.primitives,
-    checkpoint: opts.checkpoint,
+    checkpoint: bounded.checkpoint,
     resume: opts.resume,
+    watermark: opts.watermark ?? bounded.watermark,
     reduce: opts.reduce,
     threads,
     schedule,
