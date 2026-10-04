@@ -4,15 +4,55 @@
  * `t3team-toolBrokerStartChildProvider.ts`).
  */
 
-import { isProviderAvailable, type ServerProvider } from "@t3tools/contracts";
+import {
+  isProviderAvailable,
+  type ServerProvider,
+  type ServerProviderModel,
+} from "@t3tools/contracts";
 
-const MAX_LISTED = 12;
+export class WorkflowModelSelectionError extends Error {
+  readonly _tag = "WorkflowModelSelectionError";
+  readonly reason:
+    | "unknown_instance"
+    | "unknown_model"
+    | "unavailable_instance"
+    | "no_models"
+    | "registry_unavailable";
+  readonly choices: ReadonlyArray<string>;
+
+  constructor(
+    reason: WorkflowModelSelectionError["reason"],
+    message: string,
+    choices: ReadonlyArray<string> = [],
+  ) {
+    super(message);
+    this.name = this._tag;
+    this.reason = reason;
+    this.choices = choices;
+  }
+}
 
 export const formatList = (values: ReadonlyArray<string>): string => {
   if (values.length === 0) return "none";
-  const shown = values.slice(0, MAX_LISTED).map((value) => `'${value}'`);
-  const extra = values.length - shown.length;
-  return extra > 0 ? `${shown.join(", ")} (+${extra} more)` : shown.join(", ");
+  return values.map((value) => `'${value}'`).join(", ");
+};
+
+/** Catalog order is authoritative; model identifiers carry no version semantics. */
+export const defaultProviderModel = (
+  provider: Pick<ServerProvider, "models">,
+): ServerProviderModel | undefined =>
+  provider.models.find((model) => model.isDefault === true && model.isLegacy !== true) ??
+  provider.models.find((model) => model.isLegacy !== true) ??
+  provider.models[0];
+
+const modelChoices = (provider: ServerProvider): ReadonlyArray<string> => {
+  const current = provider.models.filter((model) => model.isLegacy !== true);
+  const choices = current.length === 0 ? provider.models : current;
+  const preferred = defaultProviderModel(provider);
+  return [
+    ...(preferred ? [preferred.slug] : []),
+    ...choices.filter((model) => model !== preferred).map((model) => model.slug),
+  ];
 };
 
 export const unusableReason = (provider: ServerProvider): string | undefined => {
@@ -26,35 +66,40 @@ export const unusableReason = (provider: ServerProvider): string | undefined => 
 
 export type SlugResult =
   | { readonly ok: true; readonly slug: string }
-  | { readonly ok: false; readonly message: string };
+  | {
+      readonly ok: false;
+      readonly message: string;
+      readonly error: WorkflowModelSelectionError;
+    };
 
 export const resolveSlug = (
   provider: ServerProvider,
   requestedModel: string | undefined,
-  parentModel: string,
 ): SlugResult => {
-  if (requestedModel) {
+  if (requestedModel !== undefined) {
     const wanted = requestedModel.trim().toLowerCase();
     const match = provider.models.find((model) => model.slug.toLowerCase() === wanted);
     if (!match) {
-      return {
-        ok: false,
-        message:
-          `Model '${requestedModel}' is not available on provider instance ` +
-          `'${provider.instanceId}'. Valid models: ${formatList(provider.models.map((m) => m.slug))}.`,
-      };
+      const choices = modelChoices(provider);
+      const error = new WorkflowModelSelectionError(
+        "unknown_model",
+        `Model '${requestedModel}' is not available on provider instance ` +
+          `'${provider.instanceId}'. Valid models: ${formatList(choices)}. ` +
+          `Use model: "${provider.instanceId}/<slug>" with one of these exact slugs.`,
+        choices,
+      );
+      return { ok: false, message: error.message, error };
     }
     return { ok: true, slug: match.slug };
   }
 
-  const parentSlug = parentModel.trim().toLowerCase();
-  const chosen =
-    provider.models.find((model) => model.slug.toLowerCase() === parentSlug) ?? provider.models[0];
+  const chosen = defaultProviderModel(provider);
   if (!chosen) {
-    return {
-      ok: false,
-      message: `Provider instance '${provider.instanceId}' has no models configured to run a child on.`,
-    };
+    const error = new WorkflowModelSelectionError(
+      "no_models",
+      `Provider instance '${provider.instanceId}' has no models configured to run a child on.`,
+    );
+    return { ok: false, message: error.message, error };
   }
   return { ok: true, slug: chosen.slug };
 };

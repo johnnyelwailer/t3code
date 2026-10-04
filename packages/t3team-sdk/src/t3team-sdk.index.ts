@@ -39,7 +39,6 @@ export {
 export { createStoreSink, defaultRunsRoot, FsJournalStore } from "./t3team-sdk.journalStore.ts";
 export { buildJournalMaps, insertWireEntry } from "./t3team-sdk.journalReader.ts";
 export { toResolvedWire, toWire } from "./t3team-sdk.journalWriter.ts";
-export { models } from "./t3team-sdk.models.ts";
 export {
   buildScriptTree,
   buildToolTree,
@@ -226,6 +225,7 @@ export type {
   FetchLike,
   IntegrationClient,
   IntegrationMethod,
+  ModelOption,
   ModelRef,
   ModelSelection,
   RecipeApplicabilitySpec,

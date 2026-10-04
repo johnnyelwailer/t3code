@@ -8,12 +8,12 @@ import type * as Schema from "effect/Schema";
 
 import type { AgentAttachment } from "./attachments.ts";
 import type { WorkflowChildCapabilities } from "./capabilities.ts";
-import type { ModelRef, ModelSelection } from "./models.ts";
+import type { ModelRef, ModelOption } from "./models.ts";
 
 /**
  * One rung of a {@link ModelCascade}. All three shapes are legal:
  *   • `{ instanceId, model }` — a specific model on a specific provider instance;
- *   • `{ instanceId }`        — that instance, on the run's model if it has it else its first;
+ *   • `{ instanceId }`        — that instance, on its latest provider-declared default;
  *   • `{ model }`             — that model on the run's CURRENT provider instance.
  * `model` may be a typed `ModelRef` from a host's model catalog or a raw provider slug.
  */
@@ -60,7 +60,8 @@ export interface AskOpts<R = string> {
    */
   readonly label?: string;
   readonly schema?: Schema.Schema<R>;
-  readonly model?: ModelSelection;
+  /** `instance/slug` selects an exact model; `instance` selects its latest available default. */
+  readonly model?: ModelOption;
   /** Provider fallback ladder; ignored when `model` is given. See {@link ModelCascade}. */
   readonly models?: ModelCascade;
   /** Thinking level for this ask, provider-agnostic. See {@link AgentEffort}. */
@@ -117,7 +118,8 @@ export interface SpawnThreadOpts<Capabilities = WorkflowChildCapabilities> {
   /** What the spawned thread's agent may do: `"inherit"`, or an explicit subset of the parent's. */
   readonly capabilities: Capabilities;
   readonly name?: string;
-  readonly model?: ModelSelection;
+  /** `instance/slug` selects an exact model; `instance` selects its latest available default. */
+  readonly model?: ModelOption;
   /** Provider fallback ladder for the thread's asks; ignored when `model` is given. Resolved ONCE
    * per thread (on its first ask) and reused by every later ask on it. See {@link ModelCascade}. */
   readonly models?: ModelCascade;

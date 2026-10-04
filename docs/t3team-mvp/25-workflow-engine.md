@@ -174,7 +174,6 @@ export const meta = {
   outputs?: Schema.Schema<unknown>;      // Effect Schema; validated before result is returned
   capabilities?: ReadonlyArray<EngineCapability | ToolGroupRef>;   // see §Capability gating
   phases?: ReadonlyArray<{ title: string; detail?: string }>;       // progress UI groups; declare with `as const` for typed phase() calls
-  model?: ModelSelection;                // default model for agent / askAgent calls
 };
 ```
 
@@ -194,7 +193,6 @@ What's allowed in `meta`:
 - Value imports from the engine's pure-modules allowlist:
   - `effect` (Schema combinators, etc.)
   - `@t3team/sdk/groups` (typed `ToolGroupRef`s)
-  - `@t3team/sdk/models` (typed `ModelRef`s; see [§Model selection](#model-selection))
   - `@t3team/sdk/surfaces` (typed surface placement consts — optional; raw `RecipeSurface`
     literal strings also work since they're a closed-set Schema.Literals union)
   - any other modules the SDK adds to the allowlist in future releases
@@ -213,32 +211,29 @@ What's forbidden in `meta`:
 
 ### Model selection
 
-`meta.model` selects the default LLM for `agent` / `askAgent` calls. Per the
-type-safety principle, the model identifier is a typed `ModelRef` from the SDK's
-`models.*` registry, not a free-form string. Provider instance ids stay as strings
-because they reference user-configured provider instances (dynamic per installation,
-not knowable at SDK build time):
+`model` is a plain string: `"<instanceId>/<modelSlug>"` for an exact model, or
+`"<instanceId>"` for that instance's latest available model. Instance ids and model slugs
+come from the live runtime catalog (`t3team_models`); copy them verbatim rather than
+guessing from a provider name. The SDK keeps no static model catalog.
 
 ```ts
-import { models } from "@t3team/sdk/models";
-
-export const meta = {
-  // …
-  model: {
-    provider: "anthropic-primary", // project-configured provider instance id (string)
-    model: models.anthropic.claudeHaiku45, // typed ModelRef — autocomplete + typo-safe
-  },
-} as const;
+await agent("Review this change", {
+  capabilities: "inherit",
+  model: "<instanceId>/<modelSlug>", // exact live instance id and its catalog slug
+  effort: "high",
+});
 ```
 
-`models.*` is a typed tree (imported from `@t3team/sdk`) mirroring the providers and model slugs the SDK knows
-about (`models.anthropic.claudeOpus47`, `models.openai.gpt5_4`, etc.). Each leaf is a
-`ModelRef` whose `id` is the canonical provider-scoped slug. The engine still passes the
-string slug to the provider adapter; the type is what authors interact with.
+When no exact model is supplied, latest means the provider-declared non-legacy default
+(`isDefault`), otherwise the first non-legacy catalog entry. Legacy entries become defaults
+only when no non-legacy entry exists. An explicitly requested legacy slug still works.
+Unknown instance ids or slugs fail with the valid choices verbatim, so the next edit can
+use an exact catalog value. The runtime does not infer slugs from natural-language names.
 
-`meta.model` is the orchestration-wide default. Individual `agent(prompt, { model })` /
-`askAgent(prompt, { model })` calls can override per-call (same `{ provider, model: ModelRef }`
-shape).
+Individual `agent(prompt, { model })` / `askAgent(prompt, { model })` calls and
+`spawnThread({ model })` can use the same string
+form. Omit `model` to use the current instance's latest available model. `effort` is
+independent: use `"light"`, `"standard"`, or `"high"` when the task needs a thinking tier.
 
 #### Model cascade — `models: [...]`
 
@@ -250,10 +245,9 @@ against the live provider registry, first available one wins.
 await agent("Judge this gate", {
   label: "Judge gate",
   models: [
-    { instanceId: "nexplore", model: "minimax-m2.7-reap-139b-q4-160k" }, // instance + model
-    { instanceId: "nexplore", model: "qwen3.6-35b-a3b-q6-192k:nothink" },
-    { instanceId: "claudeAgent" }, // instance only — its default/matching model
-    { model: models.anthropic.claudeOpus48 }, // model only — the run's CURRENT instance
+    { instanceId: "<primary instanceId>", model: "<slug for that instance>" },
+    { instanceId: "<fallback instanceId>" }, // its latest available model
+    { model: "<slug for the current instance>" },
   ],
   effort: "high",
 });
