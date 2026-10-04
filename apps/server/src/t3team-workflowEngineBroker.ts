@@ -28,6 +28,7 @@ import {
   resolveWorkflowChildModel,
   resolveWorkflowModelCascade,
 } from "./t3team-workflowChildModel.ts";
+import { getChildProviderCatalog } from "./t3team-childProviderCatalog.ts";
 import { toWorkflowModelSelection } from "./t3team-workflowModelSelection.ts";
 import { createWorkflowLiveSettlement } from "./t3team-workflowLiveSettlement.ts";
 import { handleBrokerAskVerb } from "./t3team-workflowEngineBrokerAsk.ts";
@@ -127,12 +128,17 @@ export function createWorkflowEngineBroker(deps: WorkflowEngineBrokerDeps): Mess
       if (deps.registry.childThreadsForRun(deps.runId).includes(p.threadId)) return;
       // Resolve BEFORE registering/dispatching: enqueueOneWay swallows dispatch errors, so an
       // invalid provider/model must reject this send() while the SDK still observes it.
-      // Stay SYNCHRONOUS when there is nothing to resolve: awaiting unconditionally would yield a
+      // Stay SYNCHRONOUS in catalog-free harnesses: awaiting unconditionally would yield a
       // microtask before `setPending`, and callers observe the pending entry right after `send`.
       const modelSelection =
-        p.model === undefined && p.effort === undefined
+        p.model === undefined && p.effort === undefined && getChildProviderCatalog() === undefined
           ? deps.modelSelection
-          : await resolveWorkflowChildModel(deps.modelSelection, p.model, p.effort);
+          : await resolveWorkflowChildModel(
+              deps.modelSelection,
+              p.model,
+              p.effort,
+              p.modelIsDefault,
+            );
       step(correlationId, kind, "completed", p.name ?? "Spawn thread", p.threadId);
       await runPrimitive(() => enqueueOneWay(() => dispatchWorkflowChild(deps, p, modelSelection)));
       return;
