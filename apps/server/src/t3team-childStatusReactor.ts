@@ -1,7 +1,8 @@
 /**
  * Feeds the child-status summarizer from V2: every finished, meaningful turn
- * item of a subagent child (`shell.lineage.relationshipToParent: "subagent"`)
- * updates that child's recent-activity window; the debounced summary is
+ * item of an app-owned subagent child (`shell.lineage.relationshipToParent:
+ * "subagent"`, not a provider-native subagent) updates that child's
+ * recent-activity window; the debounced summary is
  * written as the child's `childStatus` thread fact (side stream, never chat).
  *
  * Live tail only (`streamDomainEvents`): a status is a best-effort hint about
@@ -9,7 +10,11 @@
  * item regenerates it.
  * @module t3team-childStatusReactor
  */
-import { type OrchestrationV2DomainEvent, ThreadId } from "@t3tools/contracts";
+import {
+  isProviderNativeSubagentThread,
+  type OrchestrationV2DomainEvent,
+  ThreadId,
+} from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -67,7 +72,9 @@ export const T3TeamChildStatusReactorLive = Layer.effectDiscard(
         if (
           shell === null ||
           shell.lineage.parentThreadId === null ||
-          shell.lineage.relationshipToParent !== "subagent"
+          shell.lineage.relationshipToParent !== "subagent" ||
+          // The provider's own subagents are hidden and run inside the parent's turn: no summary.
+          isProviderNativeSubagentThread(shell)
         ) {
           return;
         }
