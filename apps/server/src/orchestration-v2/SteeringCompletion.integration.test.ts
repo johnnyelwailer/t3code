@@ -207,6 +207,10 @@ it.effect.each(
         const first = started[0]!;
         const messageId = MessageId.make("message:steering");
         const taskId = NodeId.make("task:mailbox");
+        // t3team: a mailbox wake carries the text DelegatedCompletionWakeRenderer rendered.
+        const dispatchedText = mailbox
+          ? `Background test (${taskId}) completed: done.`
+          : "fix the popover";
         if (mailbox) {
           const sink = yield* EventSink.EventSinkV2;
           const current = yield* orchestrator.getThreadProjection(threadId);
@@ -268,7 +272,7 @@ it.effect.each(
           commandId: CommandId.make("steer"),
           threadId,
           messageId,
-          text: "fix the popover",
+          text: dispatchedText,
           attachments: [
             {
               type: "image",
@@ -364,8 +368,7 @@ it.effect.each(
         }
         assert.equal(started.length, 2);
         assert.equal(started[1]?.message.messageId, messageId);
-        if (mailbox) assert.include(started[1]?.message.text ?? "", String(taskId));
-        else assert.equal(started[1]?.message.text, "fix the popover");
+        assert.equal(started[1]?.message.text, dispatchedText);
         assert.deepEqual(started[1]?.message.attachments, [
           {
             type: "image",

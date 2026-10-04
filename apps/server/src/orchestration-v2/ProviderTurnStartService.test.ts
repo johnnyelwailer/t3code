@@ -36,6 +36,8 @@ import * as ProviderSessionManager from "./ProviderSessionManager.ts";
 import * as ProviderTurnStart from "./ProviderTurnStartService.ts";
 import * as RunExecutionService from "./RunExecutionService.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
+import { delegatedCompletionWakeDetail } from "./Orchestrator.ts";
+import { DelegatedCompletionWakeRenderer } from "../t3team-v2/t3team-delegatedCompletionWakeRenderer.ts";
 
 const isDomainEvent = Schema.is(OrchestrationV2DomainEvent);
 
@@ -168,6 +170,8 @@ function makeLocalCommandHarness(input: {
   readonly interruptOpen?: boolean;
   readonly interruptRunBeforeOpenFailure?: boolean;
   readonly writeFailure?: unknown;
+  /** t3team: makes the turn's message a queued delegated-completion wake. */
+  readonly delegatedCompletion?: OrchestrationV2ThreadProjection["messages"][number]["delegatedCompletion"];
 }) {
   const now = DateTime.makeUnsafe("2026-09-04T12:00:00Z");
   const threadId = ThreadId.make("thread-native-account-command");
@@ -228,6 +232,13 @@ function makeLocalCommandHarness(input: {
     creationSource: "web",
     createdAt: now,
     updatedAt: now,
+    ...(input.delegatedCompletion === undefined
+      ? {}
+      : {
+          createdBy: "agent" as const,
+          creationSource: "server" as const,
+          delegatedCompletion: input.delegatedCompletion,
+        }),
   };
   let projection: OrchestrationV2ThreadProjection = {
     thread: {
@@ -802,3 +813,32 @@ for (const previousMessages of [[], ["/compact", " /COMPACT "]]) {
       }),
   );
 }
+
+// t3team: a wake whose task set changed while queued is rendered once it starts.
+effectIt.effect(
+  "renders a merged delegated-completion wake before the provider session opens",
+  () =>
+    Effect.gen(function* () {
+      const taskIds = [NodeId.make("task-merged-a"), NodeId.make("task-merged-b")];
+      const harness = makeLocalCommandHarness({
+        text: delegatedCompletionWakeDetail(taskIds),
+        delegatedCompletion: { parentRunId: RunId.make("run-parent"), generation: 1, taskIds },
+        openFailure: new Error("provider session rejected"),
+      });
+
+      yield* harness.start.pipe(
+        Effect.provideService(DelegatedCompletionWakeRenderer, {
+          render: (wake) => Effect.succeed(`Finished: ${wake.taskIds.join(", ")}.`),
+        }),
+      );
+
+      expect(harness.open).toHaveBeenCalledOnce();
+      expect(harness.events[0]).toMatchObject({
+        type: "message.updated",
+        payload: { text: "Finished: task-merged-a, task-merged-b." },
+      });
+      expect(harness.projection().messages.at(-1)?.text).toBe(
+        "Finished: task-merged-a, task-merged-b.",
+      );
+    }),
+);

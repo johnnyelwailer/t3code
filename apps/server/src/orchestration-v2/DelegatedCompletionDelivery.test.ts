@@ -434,6 +434,48 @@ it.layer(TestLayer)("delegated completion delivery repairs", (it) => {
     }),
   );
 
+  // t3team: a wake rendered by DelegatedCompletionWakeRenderer for the live cohort is delivered.
+  it.effect("keeps a wake text rendered for exactly the live cohort", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const now = yield* DateTime.now;
+      const threadId = ThreadId.make("thread:delegated-delivery-rendered");
+      const runId = RunId.make("run:delegated-delivery-rendered");
+      const taskId = NodeId.make("node:delegated-delivery-rendered-task");
+      const messageId = MessageId.make(`message:delegated-delivery:${threadId}`);
+      const rendered = `Delegated task ${taskId} completed: child finished.`;
+
+      yield* seedParentWithTerminalTask({
+        threadId,
+        projectId: ProjectId.make("project:delegated-delivery-rendered"),
+        runId,
+        rootNodeId: NodeId.make("node:delegated-delivery-rendered-root"),
+        taskId,
+        deliveryState: "claimed",
+        completionWake: "always",
+        deliveryTaskIds: [taskId],
+        now,
+      });
+
+      yield* orchestrator.dispatch({
+        type: "message.dispatch",
+        commandId: CommandId.make("command:delegated-delivery-rendered"),
+        threadId,
+        messageId,
+        text: rendered,
+        attachments: [],
+        dispatchMode: { type: "queue_after_active" },
+        createdBy: "agent",
+        creationSource: "server",
+        delegatedCompletion: { parentRunId: runId, generation: 1, taskIds: [taskId] },
+      });
+
+      const projection = yield* orchestrator.getThreadProjection(threadId);
+      const message = projection.messages.find((candidate) => candidate.id === messageId);
+      assert.strictEqual(message?.text, rendered);
+    }),
+  );
+
   it.effect("does not re-offer when wake-policy upgrades after delivered ownership settled", () =>
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;

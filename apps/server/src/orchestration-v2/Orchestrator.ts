@@ -114,6 +114,7 @@ import {
 } from "./ThreadForkService.ts";
 import { planThreadDeletion } from "./ThreadDeletion.ts";
 import { T3TeamSettleGuard, settleGuardInput } from "../t3team-v2/t3team-settleGuard.ts";
+import { keepsRenderedWakeText } from "../t3team-v2/t3team-delegatedCompletionWakeRenderer.ts";
 import { classifyTransientRunFailure } from "./t3team-transientRunFailure.ts";
 import { t3teamUserInputAnswerText } from "./t3team-userInputAnswerText.ts";
 
@@ -447,7 +448,7 @@ function hasLiveRun(projection: Pick<OrchestrationV2ThreadProjection, "runs">): 
   );
 }
 
-function delegatedCompletionWakeDetail(taskIds: ReadonlyArray<string>): string {
+export function delegatedCompletionWakeDetail(taskIds: ReadonlyArray<string>): string {
   const taskList = taskIds.join(", ");
   return taskIds.length === 1
     ? `Delegated task ${taskList} reached a terminal state. Use task_status with taskId ${taskList} to read the result.`
@@ -4438,8 +4439,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           }
         }
       }
+      // t3team: keep a wake text rendered for exactly this cohort (DelegatedCompletionWakeRenderer).
       const dispatchText =
-        delegatedCompletion === undefined
+        delegatedCompletion === undefined ||
+        keepsRenderedWakeText(command, delegatedCompletion.taskIds)
           ? command.text
           : delegatedCompletionWakeDetail(delegatedCompletion.taskIds);
       const sourcePlanProjection =
