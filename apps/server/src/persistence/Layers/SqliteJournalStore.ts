@@ -52,7 +52,7 @@ function seqFromCorrelationId(correlationId: string): number {
  * (not an `Effect.gen`) so its `Effect.runPromise` calls — which fire later, when the SDK
  * engine drives the store outside any fiber — are not flagged as nested-Effect runs.
  */
-function buildSqliteJournalStore(sql: SqlClient.SqlClient): JournalStore {
+export function buildSqliteJournalStore(sql: SqlClient.SqlClient): JournalStore {
   // A `resolved` reply reuses its matching `sent` entry's seq so the (run_id, seq, phase) PK
   // stays unique. Prefer the recorded sent row; fall back to parsing the correlationId.
   const resolvedSeq = async (runId: string, correlationId: string): Promise<number> => {
