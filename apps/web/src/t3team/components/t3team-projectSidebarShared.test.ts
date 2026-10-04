@@ -13,7 +13,6 @@ function makeThread(overrides: Partial<ProjectThread>): ProjectThread {
     id: "t1",
     projectId: "p1",
     title: "Weekly triage",
-    messageCount: 0,
     lastMessageAt: "2026-06-14T00:00:00.000Z",
     createdAt: "2026-06-14T00:00:00.000Z",
     status: "idle",

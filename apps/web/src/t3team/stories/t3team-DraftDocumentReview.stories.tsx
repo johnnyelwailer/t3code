@@ -53,7 +53,7 @@ function DraftDocumentReviewStory() {
     <div className="min-h-screen bg-background p-6 text-foreground">
       <div className="mx-auto max-w-5xl space-y-5">
         <header className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             Jira document draft review
           </p>
           <h1 className="text-2xl font-semibold">Agent-proposed content changes</h1>

@@ -15,7 +15,7 @@ interface OriginRow {
   readonly origin: string;
 }
 
-const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
+const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layer({ filename: ":memory:" })));
 
 layer("t3team-039_WorkflowOrigin", (it) => {
   it.effect("adds origin TEXT NOT NULL DEFAULT 'recipe' to workflow_runs", () =>

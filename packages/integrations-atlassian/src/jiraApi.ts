@@ -174,9 +174,11 @@ export class JiraApiClient {
     }
 
     if (response.status === 401 || response.status === 403) {
+      const body = await response.text().catch(() => "");
       throw new AtlassianAuthError({
         message: `Authentication failed (${response.status}). Check your credentials or re-authenticate.`,
         path,
+        ...(/scope does not match/i.test(body) ? { missingScope: true } : {}),
       });
     }
 
@@ -367,6 +369,12 @@ export class JiraApiClient {
   async listFavouriteFilters(): Promise<ReadonlyArray<JiraFilter>> {
     return this.fetchJson<ReadonlyArray<JiraFilter>>(
       "/rest/api/3/filter/favourite?expand=owner,jql",
+    );
+  }
+
+  async getFilter(filterId: string): Promise<JiraFilter> {
+    return this.fetchJson<JiraFilter>(
+      `/rest/api/3/filter/${encodeURIComponent(filterId)}?expand=jql`,
     );
   }
 

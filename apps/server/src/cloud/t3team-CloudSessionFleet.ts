@@ -29,17 +29,27 @@ export interface CloudSessionFleetConfig {
 
 export const resolveFleetConfig = Effect.fn("cloud.session_service.fleet")(function* () {
   const repoRef: CloudSessionRepoRef = {
-    host: yield* Config.string("T3CODE_CLOUD_SESSION_HOST").pipe(Config.withDefault(DEFAULT_HOST)),
-    owner: yield* Config.string("T3CODE_CLOUD_SESSION_OWNER").pipe(
+    host: yield* Config.String("T3CODE_CLOUD_SESSION_HOST").pipe(Config.withDefault(DEFAULT_HOST)),
+    owner: yield* Config.String("T3CODE_CLOUD_SESSION_OWNER").pipe(
       Config.withDefault(DEFAULT_OWNER),
     ),
-    repo: yield* Config.string("T3CODE_CLOUD_SESSION_REPO").pipe(Config.withDefault(DEFAULT_REPO)),
-    workflowFileName: yield* Config.string("T3CODE_CLOUD_SESSION_WORKFLOW").pipe(
+    repo: yield* Config.String("T3CODE_CLOUD_SESSION_REPO").pipe(Config.withDefault(DEFAULT_REPO)),
+    workflowFileName: yield* Config.String("T3CODE_CLOUD_SESSION_WORKFLOW").pipe(
       Config.withDefault(DEFAULT_WORKFLOW_FILE_NAME),
     ),
   };
-  const machineLabel = yield* Config.string("T3CODE_CLOUD_SESSION_MACHINE_LABEL").pipe(
+  const machineLabel = yield* Config.String("T3CODE_CLOUD_SESSION_MACHINE_LABEL").pipe(
     Config.withDefault(DEFAULT_MACHINE_LABEL),
   );
   return { repoRef, machineLabel } satisfies CloudSessionFleetConfig;
 });
+
+/**
+ * The provider's page listing every run of the session workflow, filtered to
+ * one login — the full history the client caps at a handful of rows. Built
+ * from the fleet config because no single run's `html_url` names the workflow.
+ */
+export function workflowHistoryUrl(repoRef: CloudSessionRepoRef, login: string): string {
+  const base = `https://${repoRef.host}/${repoRef.owner}/${repoRef.repo}/actions/workflows/${encodeURIComponent(repoRef.workflowFileName)}`;
+  return `${base}?query=${encodeURIComponent(`actor:${login}`)}`;
+}

@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
-import type { Project, Thread } from "~/types";
+import type { Project, ThreadShell } from "~/types";
 import type { ProjectThread } from "~/t3team/t3team-types";
 
 import { getMockTicketsForProject } from "./t3team-projectStoreUtils";
@@ -17,7 +17,7 @@ export function resolveProjectThreadsForQuery(input: {
   projects: ProjectShellProject[];
   threads: ProjectThread[];
   liveProjects: ReadonlyArray<Project>;
-  liveThreads: ReadonlyArray<Thread>;
+  liveThreads: ReadonlyArray<ThreadShell>;
 }) {
   const { projectId, projects, threads, liveProjects, liveThreads } = input;
   const resolvedProjectId = resolveStoredProjectId(projectId, projects, liveProjects);
@@ -37,12 +37,7 @@ export function resolveProjectThreadsForQuery(input: {
       .map((thread) => thread.id),
   );
   const liveProjectThreads = liveThreads
-    .filter(
-      (thread) =>
-        thread.projectId === canonicalProjectId &&
-        thread.retention !== "ephemeral" &&
-        !claimedThreadIds.has(thread.id),
-    )
+    .filter((thread) => thread.projectId === canonicalProjectId && !claimedThreadIds.has(thread.id))
     .map((thread) => mapLiveThreadToProjectThread(thread, resolvedProjectId));
 
   return mergeProjectThreads([...localThreads, ...liveProjectThreads]).filter(
@@ -54,7 +49,7 @@ export function useProjectStoreQueries(input: {
   projects: ProjectShellProject[];
   threads: ProjectThread[];
   liveProjects: ReadonlyArray<Project>;
-  liveThreads: ReadonlyArray<Thread>;
+  liveThreads: ReadonlyArray<ThreadShell>;
 }) {
   const { projects, threads, liveProjects, liveThreads } = input;
 

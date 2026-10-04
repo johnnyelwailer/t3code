@@ -103,6 +103,12 @@ export interface ProjectWorkspaceBackendApi {
     readonly setupProfileId?: string;
     readonly customProfile?: import("@t3tools/t3team-skill-packs").T3TeamProfile;
   }) => Promise<ProjectWorkspaceBootstrapResult>;
+  /** Sets the project's main repository (`url: null` = the project's own workspace). */
+  readonly setMainRepository: (input: {
+    readonly projectId: string;
+    readonly url: string | null;
+    readonly selection?: "user" | "detected";
+  }) => Promise<ProjectMainRepositorySwitchResult>;
   readonly discoverRecipes: (
     input: DiscoverProjectRecipesRequest,
   ) => Promise<DiscoverProjectRecipesResponse>;
@@ -182,11 +188,13 @@ export interface T3TeamAuthProviderProps {
 
 // Workspace bootstrap shapes live in their own module; re-exported so importers are unaffected.
 import type {
+  ProjectMainRepositorySwitchResult,
   ProjectWorkspaceBootstrapResult,
   ProjectWorkspaceContextFile,
   ProjectWorkspaceWriteContextFilesResult,
 } from "~/t3team/backend/t3team-projectWorkspaceTypes";
 export type {
+  ProjectMainRepositorySwitchResult,
   ProjectWorkspaceBootstrapResult,
   ProjectWorkspaceContextFile,
   ProjectWorkspaceWriteContextFilesResult,

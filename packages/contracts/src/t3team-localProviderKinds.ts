@@ -72,6 +72,15 @@ export function findLocalProviderKindByInstanceId(
   return byInstanceId.get(instanceId);
 }
 
+/** The adopted session's instance id when `messageId` is a `local:<instanceId>:…` mirror id. */
+export function readLocalProviderSessionInstanceId(
+  messageId: string,
+): ProviderInstanceId | undefined {
+  const [prefix, instanceId] = messageId.split(":", 2);
+  if (prefix !== "local" || instanceId === undefined) return undefined;
+  return byInstanceId.get(instanceId)?.instanceId;
+}
+
 /** Label for any kind, falling back to the raw kind so an unknown provider is still legible. */
 export function localProviderDisplayName(kind: string): string {
   return (byKind.get(kind) ?? byInstanceId.get(kind))?.displayName ?? kind;

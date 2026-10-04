@@ -41,6 +41,8 @@ export class StorageCleanup extends Context.Service<
   {
     readonly start: () => Effect.Effect<void, never, Scope.Scope>;
     readonly drain: Effect.Effect<void>;
+    /** Run one policy sweep now (same rules as the hourly sweep) and wait for it. */
+    readonly sweepNow: Effect.Effect<void>;
   }
 >()("t3/storageCleanup") {}
 
@@ -419,10 +421,9 @@ export const make = Effect.gen(function* () {
   });
   const worker = yield* makeDrainableWorker(() =>
     sweep().pipe(
-      Effect.catchCause((cause) =>
-        Cause.hasInterruptsOnly(cause)
-          ? Effect.failCause(cause)
-          : Effect.logWarning("storage cleanup failed", { cause }),
+      Effect.catchCauseIf(
+        (cause) => !Cause.hasInterruptsOnly(cause),
+        (cause) => Effect.logWarning("storage cleanup failed", { cause }),
       ),
     ),
   );
@@ -476,7 +477,11 @@ export const make = Effect.gen(function* () {
       ),
     );
   });
-  return { start, drain: worker.drain } satisfies StorageCleanup["Service"];
+  return {
+    start,
+    drain: worker.drain,
+    sweepNow: worker.enqueue(undefined).pipe(Effect.andThen(worker.drain)),
+  } satisfies StorageCleanup["Service"];
 });
 
 export const layer = Layer.effect(StorageCleanup, make);

@@ -17,6 +17,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import type { T3TeamActorMailboxShape } from "./t3team-actorMailbox.ts";
 import { loadT3TeamThreadDescendants } from "./t3team-threadStopCascade.ts";
+import type { OrchestrationEventReplayFilter } from "./orchestration/t3team-eventReplayFilter.ts";
 
 export function isRealUserMessage(
   payload: Extract<OrchestrationEvent, { type: "thread.message-sent" }>["payload"],
@@ -37,6 +38,12 @@ export function isRealUserMessage(
  * stopped thread's queued actor messages auto-dispatch on the next settle —
  * resuming the exact ping-pong the suppression exists to stop.
  */
+/** The events `collectSuppressedThreadsAtRehydrate` reads. */
+export const SUPPRESSION_REPLAY_FILTERS: ReadonlyArray<OrchestrationEventReplayFilter> = [
+  { type: "thread.turn-interrupt-requested" },
+  { type: "thread.message-sent", messageRole: "user" },
+];
+
 export function collectSuppressedThreadsAtRehydrate(
   events: ReadonlyArray<OrchestrationEvent>,
 ): ReadonlySet<string> {

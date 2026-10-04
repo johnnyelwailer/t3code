@@ -61,7 +61,7 @@ export function PlanningSpaceStageChrome({ c }: { c: PlanningSpaceController }) 
                 else c.gaugeButtonRefs.current.delete(label);
               }}
               onClick={() => c.handlers.onGaugeClick(index)}
-              className="text-left text-[9px] leading-6 text-muted-foreground hover:text-foreground"
+              className="text-left text-3xs leading-6 text-muted-foreground hover:text-foreground"
             >
               {label}
             </button>
@@ -112,7 +112,7 @@ export function PlanningSpaceStageChrome({ c }: { c: PlanningSpaceController }) 
 
       <div
         ref={c.ghostRef}
-        className="pointer-events-none absolute z-30 hidden max-w-44 truncate rounded-md border border-primary/60 bg-background px-2 py-1 text-[10px] text-foreground shadow-none"
+        className="pointer-events-none absolute z-30 hidden max-w-44 truncate rounded-md border border-primary/60 bg-background px-2 py-1 text-3xs text-foreground shadow-none"
         style={{ display: "none" }}
       />
     </>

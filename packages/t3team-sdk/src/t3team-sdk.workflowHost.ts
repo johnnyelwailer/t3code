@@ -11,12 +11,15 @@
 
 import { appendResolvedEntry } from "./t3team-sdk.broker.ts";
 import { startWorkflow } from "./t3team-sdk.engine.ts";
-import { resumeWorkflowRunHost } from "./t3team-sdk.workflowHostResume.ts";
+import {
+  driveOptions,
+  redriveWorkflowRunHost,
+  resumeWorkflowRunHost,
+} from "./t3team-sdk.workflowHostResume.ts";
 import type { AbortedResult, SuspendedResult, WorkflowRunResult } from "@runbook/core/engineTypes";
 import type {
   CreateWorkflowRunHostConfig,
-  WorkflowHostRegistry,
-  WorkflowHostRegisteredRun,
+  WorkflowHostRedriveOptions,
   WorkflowLaunchStatus,
   WorkflowRunHost,
 } from "./t3team-sdk.workflowHostTypes.ts";
@@ -25,6 +28,7 @@ export type {
   CreateWorkflowRunHostConfig,
   WorkflowHostLifecycle,
   WorkflowHostPendingAsk,
+  WorkflowHostRedriveOptions,
   WorkflowHostRegisteredRun,
   WorkflowHostRegistry,
   WorkflowHostSleep,
@@ -32,26 +36,7 @@ export type {
   WorkflowLaunchStatus,
   WorkflowRunHost,
 } from "./t3team-sdk.workflowHostTypes.ts";
-
-/** Build a fresh in-memory host-neutral registry. */
-export function createWorkflowHostRegistry(): WorkflowHostRegistry {
-  const runs = new Map<string, WorkflowHostRegisteredRun>();
-  const ownerByRun = new Map<string, string>();
-  return {
-    registerRun: (runId, run) => {
-      runs.set(runId, run);
-    },
-    deleteRun: (runId) => {
-      runs.delete(runId);
-      ownerByRun.delete(runId);
-    },
-    getRun: (runId) => runs.get(runId),
-    registerOwnership: (runId, owner) => {
-      if (owner === undefined) return;
-      ownerByRun.set(runId, owner);
-    },
-  };
-}
+export { createWorkflowHostRegistry } from "./t3team-sdk.workflowHostRegistry.ts";
 
 /**
  * The single per-run control funnel. Both a live launch and a boot-time
@@ -104,7 +89,7 @@ export function createWorkflowRunHost(config: CreateWorkflowRunHostConfig): Work
   const start = async (): Promise<WorkflowLaunchStatus> => {
     if (!config.lifecycleAlreadyRunning) await lifecycle?.recordRunning();
     try {
-      return await settle(await startWorkflow(ref, args, { ...runOptions, runId }));
+      return await settle(await startWorkflow(ref, args, { ...driveOptions(runOptions), runId }));
     } catch (error) {
       if (cancelled) return "suspended";
       if (await repairAttempt(error)) return "completed";
@@ -119,32 +104,44 @@ export function createWorkflowRunHost(config: CreateWorkflowRunHostConfig): Work
     }
   };
 
-  const resume = async (correlationId: string, reply: unknown): Promise<void> => {
+  // One replay drive at a time: a concurrent resume/redrive is settling — never double-drive.
+  const exclusive = async (drive: () => Promise<void>): Promise<void> => {
     if (registry.getRun(runId) === undefined) return;
-    if (resuming) return; // a concurrent resume is settling — never double-drive
+    if (resuming) return;
     resuming = true;
     try {
-      await resumeWorkflowRunHost({
-        runId,
-        correlationId,
-        reply,
-        ref,
-        args,
-        runOptions,
-        registry,
-        lifecycle,
-        appendReply,
-        retryResolvedReply: config.retryResolvedReply,
-        onReplyJournaled: config.onReplyJournaled,
-        settle,
-        repairAttempt,
-        isCancelled: () => cancelled,
-        onFailed: sinks.onFailed,
-      });
+      await drive();
     } finally {
       resuming = false;
     }
   };
+  const funnel = {
+    runId,
+    ref,
+    args,
+    runOptions,
+    registry,
+    lifecycle,
+    settle,
+    repairAttempt,
+    isCancelled: () => cancelled,
+    onFailed: sinks.onFailed,
+  };
+
+  const resume = (correlationId: string, reply: unknown): Promise<void> =>
+    exclusive(() =>
+      resumeWorkflowRunHost({
+        ...funnel,
+        correlationId,
+        reply,
+        appendReply,
+        retryResolvedReply: config.retryResolvedReply,
+        onReplyJournaled: config.onReplyJournaled,
+      }),
+    );
+
+  const redrive = (opts?: WorkflowHostRedriveOptions): Promise<void> =>
+    exclusive(() => redriveWorkflowRunHost({ ...funnel, refire: opts?.refire }));
 
   const fail = async (error: unknown): Promise<void> => {
     if (cancelled) return;
@@ -156,8 +153,8 @@ export function createWorkflowRunHost(config: CreateWorkflowRunHostConfig): Work
     cancelled = true;
   };
 
-  registry.registerRun(runId, { resume, cancel, fail });
+  registry.registerRun(runId, { resume, redrive, cancel, fail });
   registry.registerOwnership?.(runId, runOptions.launchThreadId);
 
-  return { start, resume, fail, cancel, isCancelled: () => cancelled, settle };
+  return { start, resume, redrive, fail, cancel, isCancelled: () => cancelled, settle };
 }

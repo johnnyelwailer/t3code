@@ -69,7 +69,20 @@ export function parseOAuthErrorBody(text: string): {
 
 const AUTH_BASE = "https://auth.atlassian.com";
 export const ATLASSIAN_API_BASE = "https://api.atlassian.com";
-const OAUTH_SCOPES = ["read:jira-work", "read:jira-user", "write:jira-work", "offline_access"];
+// Board, sprint and quick-filter reads (`/rest/agile/1.0`) only accept the
+// granular Jira Software scopes; without them Jira answers 401 "scope does not
+// match" and the backlog cannot see the board's own filter.
+const OAUTH_SCOPES = [
+  "read:jira-work",
+  "read:jira-user",
+  "write:jira-work",
+  "read:board-scope:jira-software",
+  "read:board-scope.admin:jira-software",
+  "read:sprint:jira-software",
+  "read:project:jira",
+  "read:jql:jira",
+  "offline_access",
+];
 
 /**
  * How long one sign-in attempt stays completable, shared by both ends of the flow.

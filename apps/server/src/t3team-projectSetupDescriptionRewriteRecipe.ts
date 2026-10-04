@@ -30,6 +30,11 @@
  * @module t3team-projectSetupDescriptionRewriteRecipe
  */
 
+import {
+  PROJECT_STATE_DIR,
+  T3TEAM_PROJECT_STATE_DIR,
+} from "@t3tools/project-context/t3teamProjectStateDir";
+
 import { DESCRIPTION_REWRITE_WORKFLOW_BODY } from "./t3team-descriptionRewriteBody.ts";
 import {
   T3TEAM_PROJECT_RECIPES_ROOT,
@@ -54,5 +59,10 @@ export function descriptionRewriteSetupFiles(
 
 /** The scaffolded `workflow.ts` for {@link DESCRIPTION_REWRITE_RECIPE_ID}. */
 export function renderDescriptionRewriteWorkflow(): string {
-  return DESCRIPTION_REWRITE_WORKFLOW_BODY;
+  // The body is workflow source text (it runs sandboxed and cannot import the resolver); its
+  // prompt addresses the context mirror with the canonical state dir name.
+  return DESCRIPTION_REWRITE_WORKFLOW_BODY.replaceAll(
+    `${T3TEAM_PROJECT_STATE_DIR}/context/`,
+    `${PROJECT_STATE_DIR}/context/`,
+  );
 }

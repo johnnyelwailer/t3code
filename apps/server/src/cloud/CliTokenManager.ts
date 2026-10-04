@@ -91,12 +91,10 @@ export const waitForLoopbackAuthorization = Effect.fn(
       while (true) {
         const result = yield* Effect.raceFirst(
           input.callback.pipe(
-            Effect.map(
-              (code): LoopbackAuthorizationResult => ({
-                _tag: "AuthorizationCode",
-                code,
-              }),
-            ),
+            Effect.map((code): LoopbackAuthorizationResult => ({
+              _tag: "AuthorizationCode",
+              code,
+            })),
           ),
           readLoopbackAuthorizationAction(terminalInput),
         );
@@ -343,7 +341,7 @@ const pollDeviceToken = Effect.fn("cloud.cli_token.poll_device_token")(function*
     const response = yield* HttpClientRequest.post(metadata.tokenEndpoint).pipe(
       HttpClientRequest.bodyUrlParams(params),
       httpClient.execute,
-      Effect.map(Option.some),
+      Effect.asSome,
       Effect.catchIf(isTransportError, () => Effect.succeedNone),
     );
     // Transport failures and upstream 5xx are transient while the device code

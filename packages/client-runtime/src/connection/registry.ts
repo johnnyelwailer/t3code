@@ -31,6 +31,7 @@ import type {
   SupervisorConnectionState,
 } from "./model.ts";
 import { ConnectionBlockedError } from "./model.ts";
+import { brokerCredentialKey } from "./t3team-brokerConnection.ts";
 import * as Persistence from "../platform/persistence.ts";
 import * as EnvironmentSupervisor from "./supervisor.ts";
 import * as ConnectionDriver from "./driver.ts";
@@ -671,6 +672,16 @@ export const make = Effect.gen(function* () {
 
         yield* githubRoutingPermissions.forget(environmentId);
         yield* registrations.remove(target);
+        if (target._tag === "BrokerConnectionTarget") {
+          yield* credentials.remove(brokerCredentialKey(target.sessionId)).pipe(
+            Effect.catch((error) =>
+              Effect.logWarning("Could not clear the cloud session bearer credential.", {
+                environmentId,
+                error,
+              }),
+            ),
+          );
+        }
         yield* Ref.update(persistedTargetsByEnvironment, (current) => {
           const next = new Map(current);
           next.delete(environmentId);

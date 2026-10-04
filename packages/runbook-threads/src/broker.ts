@@ -52,6 +52,13 @@ export interface MessageEnvelope {
   readonly correlationId: string;
   readonly kind: HandleKind;
   readonly payload: unknown;
+  /**
+   * Set only when the host asked a resume to re-fire this recorded, unanswered ask
+   * (`WorkflowRunOptions.refire`): the SAME correlationId and a byte-identical `payload` as the
+   * first send, deliberately. A broker that dedupes by correlationId (or keys a run by it) must
+   * treat this as a fresh delivery of the same ask, not a duplicate. Never part of the payload.
+   */
+  readonly redelivery?: true;
 }
 
 /** The host-provided delivery seam, injected via `WorkflowRunOptions.broker`. */
@@ -176,10 +183,8 @@ export function createHostBroker(handlers: HostBrokerHandlers): MessageBroker {
     send: async (envelope, resolver) => {
       // `model.resolve` settles its own reply (the cascade choice IS the journaled reply), and
       // `signal.wait` may too (a durable inbox entry is the reply) — both get the resolver.
-      if (envelope.kind === "model.resolve")
-        return handlers["model.resolve"]?.(envelope, resolver);
-      if (envelope.kind === "signal.wait")
-        return handlers["signal.wait"]?.(envelope, resolver);
+      if (envelope.kind === "model.resolve") return handlers["model.resolve"]?.(envelope, resolver);
+      if (envelope.kind === "signal.wait") return handlers["signal.wait"]?.(envelope, resolver);
       await handlers[envelope.kind]?.(envelope);
     },
   };

@@ -12,6 +12,7 @@ import type { ThreadJobsController } from "~/t3team/backend/t3team-thread-jobsBa
 
 import { observeVisibleAnimation } from "../../lib/visibleAnimation";
 import { cn } from "../../lib/utils";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { BackgroundJobOutputPanel } from "./BackgroundJobOutputPanel";
 
 /** Shared empty set default for optional cancel-state props. */
@@ -178,7 +179,7 @@ export function BackgroundJobsRunningIndicator({
             onShowOutput={(job) => setOutputJob(job.jobId)}
           />
           {cancelError !== null ? (
-            <div className="mt-1 text-[.7rem] text-destructive">{cancelError}</div>
+            <div className="mt-1 text-2xs text-destructive">{cancelError}</div>
           ) : null}
           {outputJob !== null && threadId !== undefined && controller !== undefined ? (
             <BackgroundJobOutputPanel
@@ -235,15 +236,23 @@ export function BackgroundJobList({
         return (
           <li key={job.jobId} className="min-w-0">
             <div className="flex items-baseline justify-between gap-2">
-              <span
-                className={cn(
-                  "min-w-0 truncate text-xs",
-                  isCancelled ? "text-muted-foreground/50 line-through" : "text-foreground/80",
-                )}
-                title={job.command ?? job.jobId}
-              >
-                {job.label ?? job.command ?? job.jobId}
-              </span>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span
+                      className={cn(
+                        "min-w-0 truncate text-xs",
+                        isCancelled
+                          ? "text-muted-foreground/50 line-through"
+                          : "text-foreground/80",
+                      )}
+                    />
+                  }
+                >
+                  {job.label ?? job.command ?? job.jobId}
+                </TooltipTrigger>
+                <TooltipPopup variant="code">{job.command ?? job.jobId}</TooltipPopup>
+              </Tooltip>
               <span className="flex shrink-0 items-baseline gap-2">
                 {isCancelled ? (
                   <span className="text-xs tabular-nums text-muted-foreground/60">cancelled</span>
@@ -254,39 +263,51 @@ export function BackgroundJobList({
                 )}
                 {canControl && onCancel && onShowOutput ? (
                   <span className="flex shrink-0 items-center gap-0.5">
-                    <button
-                      type="button"
-                      onClick={() => onShowOutput(job)}
-                      title="Show output"
-                      aria-label="Show job output"
-                      className="rounded p-0.5 text-muted-foreground outline-none hover:bg-foreground/5 hover:text-foreground focus-visible:bg-foreground/5"
-                    >
-                      <SquareTerminal className="size-3.5" aria-hidden />
-                    </button>
-                    {!isCancelled ? (
-                      <button
-                        type="button"
-                        disabled={pending}
-                        onClick={() => onCancel(job)}
-                        title={pending ? "Stopping job" : "Cancel job"}
-                        aria-label="Cancel job"
-                        className="rounded p-0.5 text-destructive/70 outline-none hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 disabled:opacity-50"
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <button
+                            type="button"
+                            onClick={() => onShowOutput(job)}
+                            aria-label="Show job output"
+                            className="rounded p-0.5 text-muted-foreground outline-none hover:bg-foreground/5 hover:text-foreground focus-visible:bg-foreground/5"
+                          />
+                        }
                       >
-                        {pending ? (
-                          <LoaderCircle className="size-3.5 motion-safe:animate-spin" aria-hidden />
-                        ) : (
-                          <X className="size-3.5" aria-hidden />
-                        )}
-                      </button>
+                        <SquareTerminal className="size-3.5" aria-hidden />
+                      </TooltipTrigger>
+                      <TooltipPopup>Show output</TooltipPopup>
+                    </Tooltip>
+                    {!isCancelled ? (
+                      <Tooltip>
+                        {/* The span keeps the tooltip reachable while the button is disabled. */}
+                        <TooltipTrigger render={<span className="flex shrink-0" />}>
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={() => onCancel(job)}
+                            aria-label={pending ? "Stopping job" : "Cancel job"}
+                            className="rounded p-0.5 text-destructive/70 outline-none hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 disabled:opacity-50"
+                          >
+                            {pending ? (
+                              <LoaderCircle
+                                className="size-3.5 motion-safe:animate-spin"
+                                aria-hidden
+                              />
+                            ) : (
+                              <X className="size-3.5" aria-hidden />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipPopup>{pending ? "Stopping job" : "Cancel job"}</TooltipPopup>
+                      </Tooltip>
                     ) : null}
                   </span>
                 ) : null}
               </span>
             </div>
             {job.pid !== undefined ? (
-              <div className="text-[.65rem] tabular-nums text-muted-foreground/60">
-                pid {job.pid}
-              </div>
+              <div className="text-3xs tabular-nums text-muted-foreground/60">pid {job.pid}</div>
             ) : null}
           </li>
         );
@@ -307,7 +328,7 @@ export function BackgroundJobRunningBadge({ job }: { readonly job: BackgroundJob
   const age = formatDuration(now - job.startedAtMs);
   return (
     <span
-      className="flex shrink-0 items-center gap-1 text-[.7rem] text-muted-foreground tabular-nums"
+      className="flex shrink-0 items-center gap-1 text-2xs text-muted-foreground tabular-nums"
       role="status"
     >
       <span

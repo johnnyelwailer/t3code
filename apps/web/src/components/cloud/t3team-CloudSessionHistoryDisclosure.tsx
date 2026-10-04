@@ -13,10 +13,13 @@ import { CloudSessionRow } from "./t3team-CloudSessionProvisionRow";
 export function CloudSessionHistoryDisclosure({
   sessions,
   hiddenCount,
+  historyUrl = null,
 }: {
   readonly sessions: readonly CloudSession[];
   /** Terminal sessions beyond the cap, from `splitCloudSessions`. */
   readonly hiddenCount: number;
+  /** The provider's page with every session, so the cap is never a dead end. */
+  readonly historyUrl?: string | null;
 }) {
   const total = sessions.length + hiddenCount;
   return (
@@ -39,9 +42,20 @@ export function CloudSessionHistoryDisclosure({
               showAction={false}
             />
           ))}
-          {hiddenCount > 0 ? (
+          {hiddenCount > 0 || historyUrl !== null ? (
             <p className="px-3 pb-1 text-muted-foreground/80 text-xs sm:px-4">
-              {hiddenCount} older sessions hidden
+              {hiddenCount > 0 ? `${hiddenCount} older sessions hidden` : null}
+              {hiddenCount > 0 && historyUrl !== null ? " · " : null}
+              {historyUrl !== null ? (
+                <a
+                  href={historyUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="underline-offset-2 hover:text-foreground hover:underline"
+                >
+                  View all in GitHub
+                </a>
+              ) : null}
             </p>
           ) : null}
         </div>

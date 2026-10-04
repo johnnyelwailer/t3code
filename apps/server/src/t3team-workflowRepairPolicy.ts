@@ -8,7 +8,7 @@ export type WorkflowRepairPolicy = {
   readonly totalTimeBudgetMs: number;
 };
 
-export const DEFAULT_WORKFLOW_REPAIR_POLICY: WorkflowRepairPolicy = {
+const DEFAULT_WORKFLOW_REPAIR_POLICY: WorkflowRepairPolicy = {
   maxAttempts: 3,
   modelSelection: "inherit",
   totalTimeBudgetMs: 900_000,

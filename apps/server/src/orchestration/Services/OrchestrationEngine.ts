@@ -23,6 +23,7 @@ import type * as Stream from "effect/Stream";
 
 import type { OrchestrationDispatchError } from "../Errors.ts";
 import type { OrchestrationEventStoreError } from "../../persistence/Errors.ts";
+import type { OrchestrationEventReplayFilter } from "../t3team-eventReplayFilter.ts";
 import type { OrchestrationAggregateReplayStats } from "../../persistence/Services/OrchestrationEventStore.ts";
 
 export interface OrchestrationThreadReplayRange {
@@ -47,6 +48,15 @@ export interface OrchestrationEngineShape {
   readonly readEvents: (
     fromSequenceExclusive: number,
     limit?: number,
+  ) => Stream.Stream<OrchestrationEvent, OrchestrationEventStoreError, never>;
+
+  /**
+   * t3team: every event matching `filters`, in sequence order, filtered in SQL.
+   * Optional for lightweight test engines; call through `readEventsMatching`
+   * (t3team-eventReplayFilter.ts), which falls back to a filtered full read.
+   */
+  readonly readEventsMatching?: (
+    filters: ReadonlyArray<OrchestrationEventReplayFilter>,
   ) => Stream.Stream<OrchestrationEvent, OrchestrationEventStoreError, never>;
 
   /** Read only this thread's events through a captured authoritative head. */

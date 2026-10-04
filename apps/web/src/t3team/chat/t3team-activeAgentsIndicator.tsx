@@ -4,12 +4,21 @@ import {
   setActiveAgentHover,
   type ActiveAgentEntry,
 } from "~/t3team/chat/t3team-activeAgentsCore";
-import { MAX_VISIBLE_DOTS } from "~/t3team/chat/t3team-activeAgentsIndicator-sbend";
-import { useActiveAgentsSBendProximity } from "~/t3team/chat/t3team-activeAgentsIndicator-sbend";
+import {
+  MAX_VISIBLE_DOTS,
+  useActiveAgentsSBendProximity,
+} from "~/t3team/chat/t3team-activeAgentsIndicator-sbend";
+import "~/t3team/t3team-statusOrb.css";
 
 /**
  * GHE #201 — the dots of the active-agents indicator, rendered directly
  * after "Working for …" in the conversation working row.
+ *
+ * Paint: each dot stamps `t3team-orb` — the shared porcelain-orb module
+ * (t3team-statusOrb.css) paints it from `data-t3team-state` (theme-aware
+ * token palette + 420ms soft-out color morph + drifting sheen). Geometry,
+ * the state-motion keyframes and the S-bend physics stay in t3team-index.css
+ * / the physics module.
  *
  * One still dot per active agent; dots are completely still between events.
  * When an agent's live activity changes (activityKey), its dot performs ONE
@@ -17,14 +26,6 @@ import { useActiveAgentsSBendProximity } from "~/t3team/chat/t3team-activeAgents
  * "+n". Hover scales the dot up (and flips the step label — separate
  * component, shared hover store). Group click opens the Agents panel.
  */
-
-const DOT_HUE_CLASSES = [
-  "bg-sky-500 dark:bg-sky-300/90",
-  "bg-cyan-500 dark:bg-cyan-300/90",
-  "bg-violet-500 dark:bg-violet-300/90",
-  "bg-fuchsia-500 dark:bg-fuchsia-300/90",
-  "bg-amber-500 dark:bg-amber-300/90",
-] as const;
 
 export function T3TeamActiveAgentsIndicator({
   entries,
@@ -156,9 +157,7 @@ export function T3TeamActiveAgentsIndicator({
                 className={`t3team-aci-shift ${pulse > 0 ? "t3team-aci-pulse relative" : "relative"}`}
               >
                 <span
-                  className={`t3team-aci-dot inline-block ${DOT_HUE_CLASSES[i % DOT_HUE_CLASSES.length]} ${
-                    hot ? "t3team-aci-hot" : ""
-                  }`}
+                  className={`t3team-orb t3team-aci-dot inline-block ${hot ? "t3team-aci-hot" : ""}`}
                 />
               </span>
             </button>
@@ -167,7 +166,7 @@ export function T3TeamActiveAgentsIndicator({
         {overflow > 0 ? (
           <span
             aria-hidden
-            className="pl-0.5 text-[10px] font-medium leading-none tabular-nums text-sky-600 dark:text-sky-300/80"
+            className="pl-0.5 text-3xs font-medium leading-none tabular-nums text-info-foreground"
           >
             +{overflow}
           </span>

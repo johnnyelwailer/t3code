@@ -61,7 +61,6 @@ import { OrchestrationProjectionPipelineLive } from "./ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQuery.ts";
 import * as ThreadBackgroundLiveness from "../ThreadBackgroundLiveness.ts";
 import * as ThreadPlanProgress from "../ThreadPlanProgress.ts";
-import * as ThreadPlanStaleness from "../ThreadPlanStaleness.ts";
 import * as ThreadSilenceWatchdog from "../ThreadSilenceWatchdog.ts";
 import {
   ProviderRuntimeIngestionLive,
@@ -370,7 +369,6 @@ describe("ProviderRuntimeIngestion", () => {
       // engine, and the snapshot query (reader).
       Layer.provideMerge(ThreadBackgroundLiveness.layer),
       Layer.provideMerge(ThreadPlanProgress.layer),
-      Layer.provideMerge(ThreadPlanStaleness.layer),
       Layer.provideMerge(ThreadSilenceWatchdog.layer),
       Layer.provideMerge(SqlitePersistenceMemory),
       Layer.provideMerge(Layer.succeed(ProviderService, provider.service)),
@@ -5820,8 +5818,8 @@ describe("ProviderRuntimeIngestion", () => {
       author: { kind: "system" },
     });
 
-    const claimed = thread.activities.find((activity) =>
-      activity.kind === "job-notification.claimed",
+    const claimed = thread.activities.find(
+      (activity) => activity.kind === "job-notification.claimed",
     );
     expect(claimed?.payload).toMatchObject({
       markerActivityId: "evt-jn-marker",
@@ -5856,8 +5854,7 @@ describe("ProviderRuntimeIngestion", () => {
       thread?.messages.filter((message) => message.t3teamExt?.notification === true).length,
     ).toBe(1);
     expect(
-      thread?.activities.filter((activity) => activity.kind === "job-notification.claimed")
-        .length,
+      thread?.activities.filter((activity) => activity.kind === "job-notification.claimed").length,
     ).toBe(1);
   });
 
@@ -5912,9 +5909,9 @@ describe("ProviderRuntimeIngestion", () => {
     expect(
       thread?.messages.filter((message) => message.t3teamExt?.notification === true).length,
     ).toBe(0);
-    expect(thread?.activities.some((activity) => activity.kind === "job-notification.claimed")).toBe(
-      false,
-    );
+    expect(
+      thread?.activities.some((activity) => activity.kind === "job-notification.claimed"),
+    ).toBe(false);
 
     // Complete the host turn so the thread is idle again...
     harness.emit({
@@ -5962,14 +5959,13 @@ describe("ProviderRuntimeIngestion", () => {
     expect(
       thread?.messages.filter((message) => message.t3teamExt?.notification === true).length,
     ).toBe(0);
-    expect(thread?.activities.some((activity) => activity.kind === "job-notification.claimed")).toBe(
-      false,
-    );
+    expect(
+      thread?.activities.some((activity) => activity.kind === "job-notification.claimed"),
+    ).toBe(false);
     // Both markers stay pending (unclaimed) — the recency window dropped them,
     // it did not consume them.
     expect(
-      thread?.activities.filter((activity) => activity.kind === "job-notification.pending")
-        .length,
+      thread?.activities.filter((activity) => activity.kind === "job-notification.pending").length,
     ).toBe(2);
   });
 
@@ -6097,6 +6093,61 @@ describe("splitBufferedAssistantText", () => {
     expect(splitBufferedAssistantText("```\n- one\n- two\n")).toEqual({
       ready: "",
       rest: "```\n- one\n- two\n",
+    });
+  });
+
+  it("holds a heading until the block under it is done", () => {
+    expect(splitBufferedAssistantText("intro\n\n## Setup\n\nInstall it")).toEqual({
+      ready: "intro\n\n",
+      rest: "## Setup\n\nInstall it",
+    });
+    expect(
+      splitBufferedAssistantText("intro\n\n# Plan\n\n## Setup\n\nInstall it.\n\nNext"),
+    ).toEqual({
+      ready: "intro\n\n# Plan\n\n## Setup\n\nInstall it.\n\n",
+      rest: "Next",
+    });
+  });
+
+  it("delivers the paragraph above a heading with no blank line between them", () => {
+    expect(splitBufferedAssistantText("para\n## Setup\n\nInstall")).toEqual({
+      ready: "para\n",
+      rest: "## Setup\n\nInstall",
+    });
+    // A bold line there continues the paragraph, so both stay buffered.
+    expect(splitBufferedAssistantText("para\n**Setup**\n\nInstall")).toEqual({
+      ready: "",
+      rest: "para\n**Setup**\n\nInstall",
+    });
+  });
+
+  it("holds a line of only bold text like a heading", () => {
+    expect(splitBufferedAssistantText("**Risk by area:**\n\n| a |\n|---|\n")).toEqual({
+      ready: "",
+      rest: "**Risk by area:**\n\n| a |\n|---|\n",
+    });
+    expect(splitBufferedAssistantText("**Use *npm* now**\n\nInstall it")).toEqual({
+      ready: "",
+      rest: "**Use *npm* now**\n\nInstall it",
+    });
+    expect(splitBufferedAssistantText("**Note:** read this.\n\nNext")).toEqual({
+      ready: "**Note:** read this.\n\n",
+      rest: "Next",
+    });
+  });
+
+  it("delivers a held heading with its first list item or its whole code block", () => {
+    expect(splitBufferedAssistantText("## Steps\n\n- one\n- tw")).toEqual({
+      ready: "## Steps\n\n- one\n",
+      rest: "- tw",
+    });
+    expect(splitBufferedAssistantText("## Code\n\n```ts\na\n\nb\n")).toEqual({
+      ready: "",
+      rest: "## Code\n\n```ts\na\n\nb\n",
+    });
+    expect(splitBufferedAssistantText("## Code\n\n```ts\na\n```\nafter")).toEqual({
+      ready: "## Code\n\n```ts\na\n```\n",
+      rest: "after",
     });
   });
 });

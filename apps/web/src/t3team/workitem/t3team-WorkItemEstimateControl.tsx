@@ -12,6 +12,7 @@ import {
   WorkItemFieldUndoBanner,
 } from "~/t3team/workitem/t3team-WorkItemFieldOverlay";
 import { useWorkItemFieldDraftMarker } from "~/t3team/workitem/t3team-WorkItemFieldDraftReview";
+import { WorkItemFieldTrigger } from "~/t3team/workitem/t3team-WorkItemFieldTrigger";
 import { readEstimatePointsDraftPatch } from "~/t3team/workitem/t3team-workItemDraftPatchReaders";
 import { parseWorkItemEstimateDraft } from "~/t3team/workitem/t3team-workItemEstimateParsing";
 
@@ -91,7 +92,7 @@ export function WorkItemEstimateControl({
           aria-label={`Story points: ${committedText || "not set"}. Change story points.`}
           aria-busy={mutation.pending}
           disabled={mutation.pending}
-          className="-mx-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 leading-none tabular-nums outline-none transition-colors hover:bg-accent/60 focus-visible:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-70"
+          render={<WorkItemFieldTrigger className="gap-1 tabular-nums disabled:opacity-70" />}
         >
           <span className={cn(!committedText && "text-muted-foreground")}>
             {committedText || "—"}
@@ -99,9 +100,9 @@ export function WorkItemEstimateControl({
           {marker}
           {mutation.pending ? <Spinner className="size-3" /> : null}
         </PopoverTrigger>
-        <PopoverPopup align="start" side="bottom" className="w-48 p-3">
+        <PopoverPopup align="start" side="bottom" padding="compact" className="w-48">
           <label
-            className="mb-1.5 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+            className="mb-1.5 block text-3xs font-medium uppercase tracking-wide text-muted-foreground"
             htmlFor={`estimate-${issueIdOrKey}`}
           >
             Story points

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { ACTOR_STANDING_INSTRUCTION, buildActorReactionDigestInput } from "./t3team-actorReactionInput.ts";
+import {
+  ACTOR_STANDING_INSTRUCTION,
+  buildActorReactionDigestInput,
+} from "./t3team-actorReactionInput.ts";
 import { buildActorReactionTurnInput } from "./t3team-actorReactionVisibility.ts";
 import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
 
@@ -19,7 +22,9 @@ const entry: T3TeamActorMailboxEntry = {
 
 describe("buildActorReactionTurnInput", () => {
   it("returns the bare digest base without the standing instruction", () => {
-    expect(buildActorReactionTurnInput([entry], false)).toBe(buildActorReactionDigestInput([entry]));
+    expect(buildActorReactionTurnInput([entry], false)).toBe(
+      buildActorReactionDigestInput([entry]),
+    );
     expect(buildActorReactionTurnInput([entry], false)).not.toContain(ACTOR_STANDING_INSTRUCTION);
   });
 

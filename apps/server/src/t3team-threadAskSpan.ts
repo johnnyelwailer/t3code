@@ -9,15 +9,15 @@ import type { ThreadSearchEntry } from "./t3team-threadMessageSearch.ts";
  * large span is opt-in via explicit `fromPosition`/`toPosition`.
  */
 
-export const T3TEAM_ASK_TOKEN_CEILING = 196_608;
+const T3TEAM_ASK_TOKEN_CEILING = 196_608;
 /** Headroom for the system prompt, the question and the answer. */
-export const T3TEAM_ASK_RESERVE_TOKENS = 4_096;
+const T3TEAM_ASK_RESERVE_TOKENS = 4_096;
 export const T3TEAM_ASK_MAX_SPAN_TOKENS = T3TEAM_ASK_TOKEN_CEILING - T3TEAM_ASK_RESERVE_TOKENS;
 /** Default budget for the cheap `query` + `question` path. */
 export const T3TEAM_ASK_DEFAULT_SPAN_TOKENS = 8_000;
 /** Keep the JSON request body clear of a 1 MB payload target. */
-export const T3TEAM_ASK_MAX_SPAN_BYTES = 768_000;
-export const T3TEAM_ASK_NEIGHBOURHOOD_ENTRIES = 2;
+const T3TEAM_ASK_MAX_SPAN_BYTES = 768_000;
+const T3TEAM_ASK_NEIGHBOURHOOD_ENTRIES = 2;
 
 /**
  * Cap on the rendered text of ONE entry. Activity payloads are already capped

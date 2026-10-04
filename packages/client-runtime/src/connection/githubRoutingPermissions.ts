@@ -24,6 +24,8 @@ export function gitHubRoutingConnectionKey(entry: ConnectionCatalogEntry): strin
   const target = entry.target;
   if (target._tag === "RelayConnectionTarget")
     return JSON.stringify([target._tag, target.environmentId]);
+  if (target._tag === "BrokerConnectionTarget")
+    return JSON.stringify([target._tag, target.environmentId, target.sessionId]);
   const profile = Option.getOrNull(entry.profile);
   if (target._tag === "SshConnectionTarget") {
     if (profile?._tag !== "SshConnectionProfile") return null;

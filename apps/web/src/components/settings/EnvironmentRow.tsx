@@ -20,6 +20,7 @@ export function environmentTransportLabel(environment: EnvironmentPresentation):
   const { entry } = environment;
   if (entry.target._tag === "PrimaryConnectionTarget") return "This machine";
   if (environment.relayManaged) return "T3 Connect";
+  if (entry.target._tag === "BrokerConnectionTarget") return "Nexi cloud";
   if (isDesktopLocalConnectionTarget(entry.target)) return "WSL";
   if (
     entry.target._tag === "SshConnectionTarget" &&

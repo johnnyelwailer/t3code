@@ -10,7 +10,7 @@
  * the well-known Nexi global pack. Override with:
  *   T3CODE_DISTRIBUTION=/other/path node scripts/dev-nexi.ts
  */
-import { execFileSync, spawn } from "node:child_process";
+import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
@@ -53,7 +53,7 @@ console.log(`dev-nexi: worktree=${worktreeDir}`);
 console.log(`dev-nexi: distribution=${distribution}`);
 console.log(`dev-nexi: T3CODE_HOME=${env.T3CODE_HOME}`);
 
-const child = spawn(nodeBin, args, {
+const child = NodeChildProcess.spawn(nodeBin, args, {
   cwd: worktreeDir,
   env,
   stdio: "inherit",

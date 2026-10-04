@@ -7,7 +7,6 @@ export const MOCK_THREADS: ProjectThread[] = [
     title: "Signature pad iOS fix",
     status: "running",
     lastMessageAt: "2026-05-15T10:30:00.000Z",
-    messageCount: 12,
     createdAt: "2026-05-14T08:00:00.000Z",
   },
   {
@@ -16,7 +15,6 @@ export const MOCK_THREADS: ProjectThread[] = [
     title: "Clarify upload error copy",
     status: "completed",
     lastMessageAt: "2026-05-14T16:00:00.000Z",
-    messageCount: 5,
     createdAt: "2026-05-14T09:00:00.000Z",
   },
   {
@@ -25,7 +23,6 @@ export const MOCK_THREADS: ProjectThread[] = [
     title: "Payment retry banner overlap",
     status: "idle",
     lastMessageAt: "2026-05-15T09:00:00.000Z",
-    messageCount: 3,
     createdAt: "2026-05-15T08:00:00.000Z",
   },
 ];

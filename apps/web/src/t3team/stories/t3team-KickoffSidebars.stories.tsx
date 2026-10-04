@@ -61,7 +61,7 @@ function KickoffRecipePreview() {
     <div className="grid min-h-screen gap-8 bg-background p-8 text-foreground md:grid-cols-2">
       <section className="space-y-4 rounded-xl border border-border/70 bg-card p-5">
         <header className="space-y-1">
-          <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
+          <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
             Project dashboard backlog
           </p>
           <h2 className="text-lg font-semibold">Dashboard quick starts</h2>
@@ -71,7 +71,7 @@ function KickoffRecipePreview() {
 
       <section className="space-y-4 rounded-xl border border-border/70 bg-card p-5">
         <header className="space-y-1">
-          <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
+          <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
             Ticket detail
           </p>
           <h2 className="text-lg font-semibold">Ticket side panel quick starts</h2>

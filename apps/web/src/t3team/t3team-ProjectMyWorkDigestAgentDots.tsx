@@ -92,7 +92,7 @@ export function DigestAgentDots({
           return <span key={claim.threadId}>{tooltip}</span>;
         })}
       </span>
-      {rest > 0 ? <span className="ml-1 text-[10px] text-muted-foreground">+{rest}</span> : null}
+      {rest > 0 ? <span className="ml-1 text-3xs text-muted-foreground">+{rest}</span> : null}
     </span>
   );
 }

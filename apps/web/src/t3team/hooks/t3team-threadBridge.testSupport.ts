@@ -1,7 +1,7 @@
-import { ProjectId, type EnvironmentId } from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId, ThreadId, type EnvironmentId } from "@t3tools/contracts";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
-import type { Project } from "~/types";
+import type { Project, ThreadShell } from "~/types";
 import type { ProjectThread } from "~/t3team/t3team-types";
 
 export function makeLiveProject(overrides: Partial<Project> = {}): Project {
@@ -46,8 +46,38 @@ export function makeProjectThread(overrides: Partial<ProjectThread> = {}): Proje
     title: "Investigate regression",
     status: "idle",
     lastMessageAt: "2026-05-22T10:00:00.000Z",
-    messageCount: 1,
     createdAt: "2026-05-22T09:00:00.000Z",
+    ...overrides,
+  };
+}
+
+/**
+ * A live thread SHELL — the only thing the t3team store reads per row. Defaults to a settled,
+ * idle root thread in `live-project`; override just the fields under test.
+ */
+export function makeLiveThreadShell(overrides: Partial<ThreadShell> = {}): ThreadShell {
+  return {
+    id: ThreadId.make("thread-1"),
+    environmentId: "env-local" as EnvironmentId,
+    projectId: ProjectId.make("live-project"),
+    title: "Investigate regression",
+    modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5-codex" },
+    runtimeMode: "full-access",
+    interactionMode: "default",
+    branch: null,
+    worktreePath: null,
+    pullRequests: [],
+    latestTurn: null,
+    createdAt: "2026-05-22T09:00:00.000Z",
+    updatedAt: "2026-05-22T10:00:00.000Z",
+    archivedAt: null,
+    settledOverride: null,
+    settledAt: null,
+    session: null,
+    latestUserMessageAt: null,
+    hasPendingApprovals: false,
+    hasPendingUserInput: false,
+    hasActionableProposedPlan: false,
     ...overrides,
   };
 }

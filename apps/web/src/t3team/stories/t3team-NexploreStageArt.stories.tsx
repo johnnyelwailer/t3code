@@ -45,7 +45,7 @@ function HeaderRow({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <div className="font-mono text-[10px] text-neutral-500">{label}</div>
+      <div className="font-mono text-3xs text-muted-foreground">{label}</div>
       <div
         className="relative flex h-[52px] shrink-0 flex-row items-center overflow-hidden rounded-md"
         style={style ? { width, ...style } : { width }}
@@ -94,7 +94,7 @@ function HeaderRow({
  */
 export const WidthsOffMac: StoryObj = {
   render: () => (
-    <div className="flex flex-col gap-16 rounded-lg bg-neutral-900 p-6">
+    <div className="flex flex-col gap-16 rounded-lg bg-black/90 p-6">
       {/* 256px is the real minimum (`SIDEBAR_RESIZE_DEFAULT_MIN_WIDTH`); 220 and 190 are below it
           and included only to show where the descent takes over. */}
       {[420, 340, 288, 256, 220, 190].map((width) => (
@@ -112,7 +112,7 @@ export const WidthsOffMac: StoryObj = {
  */
 export const WidthsMacDesktop: StoryObj = {
   render: () => (
-    <div className="flex flex-col gap-16 rounded-lg bg-neutral-900 p-6">
+    <div className="flex flex-col gap-16 rounded-lg bg-black/90 p-6">
       {[420, 340, 288, 256].map((width) => (
         <div key={width} className="relative">
           <HeaderRow width={width} brandInset={80} label={`${width}px · macOS desktop`} />
@@ -130,7 +130,7 @@ export const WidthsMacDesktop: StoryObj = {
 /** Both palettes, so the orb can be judged against Orange/Rosa and Blau/Lila grounds. */
 export const DarkGround: StoryObj = {
   render: () => (
-    <div className="dark flex flex-col gap-5 rounded-lg bg-neutral-900 p-6">
+    <div className="dark flex flex-col gap-5 rounded-lg bg-black/90 p-6">
       {[420, 288].map((width) => (
         <HeaderRow key={width} width={width} brandInset={18} label={`${width}px · dark`} />
       ))}
@@ -170,7 +170,7 @@ const FADE_CASES: ReadonlyArray<{ label: string; vars?: Record<string, string> }
 export const TrafficLightFade: StoryObj = {
   render: () => (
     <ForceLight>
-      <div className="flex flex-col gap-16 rounded-lg bg-neutral-900 p-6">
+      <div className="flex flex-col gap-16 rounded-lg bg-black/90 p-6">
         {FADE_CASES.map(({ label, vars }) => (
           <HeaderRow
             key={label}

@@ -1,4 +1,4 @@
-import type { Virtualizer } from "@tanstack/react-virtual";
+import type { VirtualItem } from "@tanstack/react-virtual";
 import { memo } from "react";
 import type { MouseEvent } from "react";
 
@@ -18,7 +18,9 @@ export const ProjectBacklogTableVirtualBody = memo(function ProjectBacklogTableV
   tableMinWidth,
   visibleColumns,
   virtualRows,
-  rowVirtualizer,
+  virtualItems,
+  totalSize,
+  measureElement,
   collapsedGroupIds,
   collapsedTicketIds,
   projectId,
@@ -40,7 +42,12 @@ export const ProjectBacklogTableVirtualBody = memo(function ProjectBacklogTableV
   tableMinWidth: number;
   visibleColumns: readonly ProjectBacklogTableColumnId[];
   virtualRows: readonly ProjectBacklogTableVirtualRow[];
-  rowVirtualizer: Virtualizer<HTMLDivElement, Element>;
+  // The visible window is passed as values, not read off the virtualizer
+  // instance: the instance is referentially stable, so a memoized body that
+  // only received it would bail out on every scroll and never paint new rows.
+  virtualItems: readonly VirtualItem[];
+  totalSize: number;
+  measureElement: (element: Element | null) => void;
   collapsedGroupIds: ReadonlySet<string>;
   collapsedTicketIds: ReadonlySet<string>;
   projectId: string;
@@ -71,8 +78,8 @@ export const ProjectBacklogTableVirtualBody = memo(function ProjectBacklogTableV
     <tbody>
       <tr>
         <td colSpan={columnCount} className="border-0 p-0">
-          <div className="relative w-full" style={{ height: `${rowVirtualizer.getTotalSize()}px` }}>
-            {rowVirtualizer.getVirtualItems().map((virtualItem) => {
+          <div className="relative w-full" style={{ height: `${totalSize}px` }}>
+            {virtualItems.map((virtualItem) => {
               const virtualRow = virtualRows[virtualItem.index]!;
 
               return (
@@ -80,11 +87,9 @@ export const ProjectBacklogTableVirtualBody = memo(function ProjectBacklogTableV
                   key={virtualRow.key}
                   virtualRow={virtualRow}
                   dataIndex={virtualItem.index}
-                  measureRef={rowVirtualizer.measureElement}
-                  style={{
-                    height: `${virtualItem.size}px`,
-                    transform: `translateY(${virtualItem.start}px)`,
-                  }}
+                  measureRef={measureElement}
+                  start={virtualItem.start}
+                  size={virtualItem.size}
                   tableMinWidth={tableMinWidth}
                   visibleColumns={visibleColumns}
                   columnCount={columnCount}

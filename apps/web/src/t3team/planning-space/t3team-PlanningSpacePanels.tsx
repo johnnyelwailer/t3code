@@ -21,7 +21,7 @@ export function PlanningSpacePanels({ c }: { c: PlanningSpaceController }) {
           >
             <line
               ref={c.leaderRef}
-              stroke="#7c89ff"
+              stroke="var(--color-primary)"
               strokeWidth={1}
               strokeDasharray="4 4"
               strokeOpacity={0}
@@ -114,7 +114,7 @@ export function PlanningSpacePanels({ c }: { c: PlanningSpaceController }) {
         >
           <button
             type="button"
-            className="rounded px-2 py-1 text-left text-[11px] text-foreground hover:bg-accent"
+            className="rounded px-2 py-1 text-left text-2xs text-foreground hover:bg-accent"
             onClick={() => {
               c.setEpicDetailId(c.contextMenu!.epicId);
               c.setContextMenu(null);
@@ -124,7 +124,7 @@ export function PlanningSpacePanels({ c }: { c: PlanningSpaceController }) {
           </button>
           <button
             type="button"
-            className="rounded px-2 py-1 text-left text-[11px] text-foreground hover:bg-accent"
+            className="rounded px-2 py-1 text-left text-2xs text-foreground hover:bg-accent"
             onClick={() => {
               c.handlers.frameGroup({ kind: "epic", epicId: c.contextMenu!.epicId });
               c.setContextMenu(null);
@@ -134,7 +134,7 @@ export function PlanningSpacePanels({ c }: { c: PlanningSpaceController }) {
           </button>
           <button
             type="button"
-            className="rounded px-2 py-1 text-left text-[11px] text-foreground hover:bg-accent"
+            className="rounded px-2 py-1 text-left text-2xs text-foreground hover:bg-accent"
             onClick={() => {
               const epicId = c.contextMenu!.epicId;
               const active = c.spotlight?.kind === "epic" && c.spotlight.epicId === epicId;
@@ -152,7 +152,7 @@ export function PlanningSpacePanels({ c }: { c: PlanningSpaceController }) {
       ) : null}
 
       {c.toast ? (
-        <div className="absolute left-1/2 top-3 z-40 -translate-x-1/2 rounded-md border border-border bg-background/95 px-3 py-1.5 text-[11px] text-foreground">
+        <div className="absolute left-1/2 top-3 z-40 -translate-x-1/2 rounded-md border border-border bg-background/95 px-3 py-1.5 text-2xs text-foreground">
           {c.toast}
         </div>
       ) : null}

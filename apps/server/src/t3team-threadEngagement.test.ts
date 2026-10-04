@@ -19,9 +19,11 @@ describe("T3TeamThreadEngagementLive", () => {
     }).pipe(Effect.provide(T3TeamThreadEngagementLive));
 
   it.effect("is not engaged by default", () =>
-    run((engagement) => Effect.gen(function* () {
-      expect(yield* engagement.isEngaged("target")).toBe(false);
-    })),
+    run((engagement) =>
+      Effect.gen(function* () {
+        expect(yield* engagement.isEngaged("target")).toBe(false);
+      }),
+    ),
   );
 
   it.effect("a composing heartbeat engages the thread until it lapses", () =>

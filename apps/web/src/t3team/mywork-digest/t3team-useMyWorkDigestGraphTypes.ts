@@ -18,7 +18,8 @@ export type UseMyWorkDigestGraphInput = {
 
 export type UseMyWorkDigestGraphResult = {
   readonly graph: DigestGraph | null;
-  readonly status: "loading" | "ready" | "error";
+  /** "retrying" is a transient failure the poller is backing off; "error" is terminal. */
+  readonly status: "loading" | "ready" | "retrying" | "error";
   readonly error?: string;
   /** True when the server had no Jira identity for a project (stale or missing token). */
   readonly viewerUnresolved: boolean;
@@ -27,5 +28,7 @@ export type UseMyWorkDigestGraphResult = {
    * instead of the error string, and reload once the user signs back in.
    */
   readonly sessionExpired: boolean;
+  /** When the last successful graph update landed (drives the "auto · updated" status). */
+  readonly updatedAt?: number;
   readonly reload: () => void;
 };

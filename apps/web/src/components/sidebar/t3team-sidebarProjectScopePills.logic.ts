@@ -6,7 +6,7 @@ export const SCOPE_DISC_OVERLAP = 8;
  * gap and the wider padding, beyond the disc's own 28px. Reserved up front so the trailing
  * discs never get clipped when a long name opens.
  */
-export const SCOPE_CHIP_LABEL_WIDTH = 124;
+const SCOPE_CHIP_LABEL_WIDTH = 124;
 
 /** How many project discs fit beside the always-present "All" disc in `width` px. */
 export function projectScopeDiscCapacity(width: number): number {

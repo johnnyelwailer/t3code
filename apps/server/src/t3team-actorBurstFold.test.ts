@@ -14,7 +14,13 @@ import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
 /** Build a minimal actor mailbox entry; `summary`/`urgency` are overridable. */
 const makeEntry = (
   messageId: string,
-  over: { fromTitle?: string; fromThreadId?: string; text?: string; summary?: string; urgency?: "normal" | "urgent" } = {},
+  over: {
+    fromTitle?: string;
+    fromThreadId?: string;
+    text?: string;
+    summary?: string;
+    urgency?: "normal" | "urgent";
+  } = {},
 ): T3TeamActorMailboxEntry => ({
   messageId,
   fromThreadId: over.fromThreadId ?? "watcher",
@@ -55,7 +61,9 @@ describe("automatedBurstItemLine", () => {
     const line = automatedBurstItemLine(
       makeEntry("abc123", { fromTitle: "Silence Watch", fromThreadId: "fbdb583b", text: "gone" }),
     );
-    expect(line.startsWith("- id abc123 · «Silence Watch» · thread fbdb583b · normal — ")).toBe(true);
+    expect(line.startsWith("- id abc123 · «Silence Watch» · thread fbdb583b · normal — ")).toBe(
+      true,
+    );
   });
 
   it("caps the subject to the burst-item budget (super compact, not a full body)", () => {
@@ -122,7 +130,9 @@ describe("buildActorReactionDigestInput · burst fold", () => {
       ...burst(6),
     ]);
     // The urgent entry is a full block with its verbatim body, NOT a fold line.
-    expect(input).toContain("[from «Abnormal Stop» · thread watcher · id urgent-1 · urgency urgent]");
+    expect(input).toContain(
+      "[from «Abnormal Stop» · thread watcher · id urgent-1 · urgency urgent]",
+    );
     expect(input).toContain("[Inter-agent burst: 6 messages folded");
     const itemLines = input.split("\n").filter((l) => l.startsWith("- id "));
     expect(itemLines).toHaveLength(6);

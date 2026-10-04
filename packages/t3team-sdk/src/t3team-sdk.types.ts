@@ -38,7 +38,7 @@ export type {
   WorkflowCapability,
   WorkflowChildCapabilities,
 } from "./t3team-sdk.capabilityVocabulary.ts";
-export type { ModelRef, ModelSelection } from "@runbook/threads/models";
+export type { ModelOption, ModelRef, ModelSelection } from "@runbook/threads/models";
 
 export type IntegrationMethod = (...args: ReadonlyArray<unknown>) => Promise<unknown>;
 
@@ -205,4 +205,7 @@ export interface WorkflowRunOptions {
    * aborted rather than failed.
    */
   readonly abortSignal?: AbortSignal;
+  /** Resume only: re-send ONE recorded, unanswered ask by correlationId — see
+   * `@runbook/core/engineTypes` `WorkflowRunOptionsBase.refire`. */
+  readonly refire?: string;
 }

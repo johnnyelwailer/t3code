@@ -40,13 +40,7 @@ export interface ScmEvent {
   readonly payload: unknown;
 }
 
-const TERMINAL_CHECK_STATUSES = new Set([
-  "success",
-  "failure",
-  "skipped",
-  "neutral",
-  "cancelled",
-]);
+const TERMINAL_CHECK_STATUSES = new Set(["success", "failure", "skipped", "neutral", "cancelled"]);
 const MAX_REVIEW_EVENTS_PER_POLL = 5;
 
 /** Map the provider detail to the neutral change-request payload every Tier A signal carries. */

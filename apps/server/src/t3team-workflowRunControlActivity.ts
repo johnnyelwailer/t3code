@@ -16,7 +16,9 @@ const errorMessage = (error: unknown) => (error instanceof Error ? error.message
 
 export const postWorkflowRunControlActivity = Effect.fn("postWorkflowRunControlActivity")(
   function* (input: {
-    readonly dispatch: (command: OrchestrationCommand) => Effect.Effect<unknown, OrchestrationDispatchError>;
+    readonly dispatch: (
+      command: OrchestrationCommand,
+    ) => Effect.Effect<unknown, OrchestrationDispatchError>;
     readonly runId: string;
     readonly threadId: string;
     readonly projectId: string;

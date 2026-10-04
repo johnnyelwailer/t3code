@@ -28,7 +28,13 @@ export function cssNumberPx(style: CSSStyleDeclaration, name: string, fallback: 
  * Rendered INSIDE the strip's `<svg>` (after the orb group, so it sits above the orb and the
  * ground). `widthUnits` is the fade width converted to viewBox units by the strip's measurement.
  */
-export function NexploreTitlebarFade({ opacity, widthUnits }: { opacity: number; widthUnits: number }) {
+export function NexploreTitlebarFade({
+  opacity,
+  widthUnits,
+}: {
+  opacity: number;
+  widthUnits: number;
+}) {
   const { resolvedTheme } = useTheme();
   const gradientId = useId().replace(/[^a-zA-Z0-9]/g, "");
   if (resolvedTheme !== "light" || opacity <= 0 || widthUnits <= 0) return null;
@@ -43,8 +49,8 @@ export function NexploreTitlebarFade({ opacity, widthUnits }: { opacity: number;
           y2="0"
           gradientUnits="userSpaceOnUse"
         >
-          <stop offset="0" stopColor="#ffffff" stopOpacity={opacity} />
-          <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+          <stop offset="0" style={{ stopColor: "var(--color-white)" }} stopOpacity={opacity} />
+          <stop offset="1" style={{ stopColor: "var(--color-white)" }} stopOpacity="0" />
         </linearGradient>
       </defs>
       <rect width="100%" height="100%" fill={`url(#${gradientId})`} />

@@ -32,9 +32,7 @@ export function assertT3TeamContextRefreshNotSuperseded(
   return supersession?.aborted() ? Effect.fail(supersededRefreshError()) : Effect.void;
 }
 
-export function refreshDedupKey(
-  input: Pick<T3TeamContextRefreshInput, "workspaceRoot" | "ticketKey">,
-) {
+function refreshDedupKey(input: Pick<T3TeamContextRefreshInput, "workspaceRoot" | "ticketKey">) {
   return `${input.workspaceRoot}|${normalizeTicketKey(input.ticketKey)}`;
 }
 

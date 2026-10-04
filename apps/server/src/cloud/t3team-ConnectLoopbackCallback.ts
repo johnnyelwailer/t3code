@@ -20,41 +20,41 @@ import { renderLoopbackAuthorizationCompleteHtml } from "./cliAuthHtml.ts";
  * the listener stops when the surrounding scope closes, so a failed or timed
  * out mint leaves no listener behind.
  */
-export const startConnectLoopbackCallback = Effect.fn(
-  "cloud.connect.start_loopback_callback",
-)(function* (input: {
-  readonly port: number;
-  readonly state: string;
-  readonly onCode: (code: string) => Effect.Effect<void>;
-}) {
-  const redirectUri = connectLoopbackRedirectUri(input.port);
-  const callbackRoute = HttpRouter.add(
-    "GET",
-    "/callback",
-    Effect.gen(function* () {
-      const request = yield* HttpServerRequest.HttpServerRequest;
-      const url = new URL(request.originalUrl, redirectUri);
-      const code = url.searchParams.get("code");
-      if (url.searchParams.get("state") !== input.state || !code) {
-        return HttpServerResponse.text("Invalid T3 Connect authorization callback.", {
-          status: 400,
-        });
-      }
-      yield* input.onCode(code);
-      return HttpServerResponse.html(renderLoopbackAuthorizationCompleteHtml());
-    }),
-  );
-  return yield* HttpRouter.serve(callbackRoute, {
-    disableListenLog: true,
-    disableLogger: true,
-  }).pipe(
-    Layer.provide(
-      NodeHttpServer.layer(NodeHttp.createServer, {
-        host: "127.0.0.1",
-        port: input.port,
-        disablePreemptiveShutdown: true,
+export const startConnectLoopbackCallback = Effect.fn("cloud.connect.start_loopback_callback")(
+  function* (input: {
+    readonly port: number;
+    readonly state: string;
+    readonly onCode: (code: string) => Effect.Effect<void>;
+  }) {
+    const redirectUri = connectLoopbackRedirectUri(input.port);
+    const callbackRoute = HttpRouter.add(
+      "GET",
+      "/callback",
+      Effect.gen(function* () {
+        const request = yield* HttpServerRequest.HttpServerRequest;
+        const url = new URL(request.originalUrl, redirectUri);
+        const code = url.searchParams.get("code");
+        if (url.searchParams.get("state") !== input.state || !code) {
+          return HttpServerResponse.text("Invalid T3 Connect authorization callback.", {
+            status: 400,
+          });
+        }
+        yield* input.onCode(code);
+        return HttpServerResponse.html(renderLoopbackAuthorizationCompleteHtml());
       }),
-    ),
-    Layer.build,
-  );
-});
+    );
+    return yield* HttpRouter.serve(callbackRoute, {
+      disableListenLog: true,
+      disableLogger: true,
+    }).pipe(
+      Layer.provide(
+        NodeHttpServer.layer(NodeHttp.createServer, {
+          host: "127.0.0.1",
+          port: input.port,
+          disablePreemptiveShutdown: true,
+        }),
+      ),
+      Layer.build,
+    );
+  },
+);

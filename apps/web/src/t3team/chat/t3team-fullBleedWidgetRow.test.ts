@@ -17,11 +17,7 @@ import type { ChatMessage } from "~/types";
 
 const CREATED_AT = "2026-09-20T00:00:00.000Z";
 
-function buildMessage(
-  id: string,
-  text: string,
-  t3teamExt?: ChatMessage["t3teamExt"],
-): ChatMessage {
+function buildMessage(id: string, text: string, t3teamExt?: ChatMessage["t3teamExt"]): ChatMessage {
   return {
     id: MessageId.make(id),
     role: "system",
@@ -76,18 +72,26 @@ describe("isT3TeamFullBleedWidgetRow", () => {
   });
 
   it("is true for a trusted historical-HTML system message", () => {
-    const message = buildMessage("message-historical-html", "<div class='legacy-report'><p>done</p></div>", {
-      author: { kind: "system", workflowRunId: "run-1" },
-      visibleToUser: true,
-    });
+    const message = buildMessage(
+      "message-historical-html",
+      "<div class='legacy-report'><p>done</p></div>",
+      {
+        author: { kind: "system", workflowRunId: "run-1" },
+        visibleToUser: true,
+      },
+    );
     expect(isT3TeamFullBleedWidgetRow(message)).toBe(true);
   });
 
   it("is true for a historical SVG body", () => {
-    const message = buildMessage("message-historical-svg", "<svg viewBox='0 0 10 10'><rect/></svg>", {
-      author: { kind: "system", workflowRunId: "run-1" },
-      visibleToUser: true,
-    });
+    const message = buildMessage(
+      "message-historical-svg",
+      "<svg viewBox='0 0 10 10'><rect/></svg>",
+      {
+        author: { kind: "system", workflowRunId: "run-1" },
+        visibleToUser: true,
+      },
+    );
     expect(isT3TeamFullBleedWidgetRow(message)).toBe(true);
   });
 

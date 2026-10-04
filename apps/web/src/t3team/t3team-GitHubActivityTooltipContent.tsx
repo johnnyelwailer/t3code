@@ -84,24 +84,24 @@ export function GitHubActivityTooltipContent({
   ].filter((value): value is { label: string; className: string } => value !== null);
 
   return (
-    <div className="w-[22rem] space-y-3 text-[11px] leading-4">
+    <div className="w-[22rem] space-y-3 text-2xs leading-4">
       <div className="space-y-2 border-b border-border/70 pb-2">
         <div className="flex items-start gap-2.5">
           <AuthorAvatar login={item.authorLogin} avatarUrl={item.authorAvatarUrl} />
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-muted-foreground/80">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-3xs text-muted-foreground/80">
               {owner ? <span>{owner}</span> : null}
               <span className="font-medium text-foreground/80">{ownerAndRepo.repo}</span>
               {prNumber ? <span>PR #{prNumber}</span> : null}
             </div>
-            <div className="mt-1 line-clamp-3 text-[12px] font-semibold leading-5 text-foreground">
+            <div className="mt-1 line-clamp-3 text-xs font-semibold leading-5 text-foreground">
               {item.subjectTitle ?? item.repository}
             </div>
           </div>
         </div>
 
         {summaryBits.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[10px] font-medium">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-3xs font-medium">
             {summaryBits.map((bit) => (
               <span key={bit.label} className={bit.className}>
                 {bit.label}

@@ -119,14 +119,14 @@ completed prefix once it is no longer needed for active replay.
 
 Each primitive must make the three-part contract concrete:
 
-| Primitive | Durable journal shape | Replay rule | Retention policy |
-| --- | --- | --- | --- |
-| `checkpoint` | Boundary seq, compact state, policy, schema/version integrity | Restore the latest valid state and replay its suffix | Archive or prune the superseded prefix only after commit |
-| `recurring` | Iteration, carried state, next wake, compact result | Resume the active iteration from its checkpoint | Keep compact state plus `history(n)` |
-| `watermark` | Source identity, cursor, observation time | Read strictly after the durable cursor | Replace the prior cursor; retain bounded diagnostics |
-| `reduce` / `accumulate` | Reducer identity, current state, optional observation | Continue folding from the recorded state | Replace prior state plus an optional last-`N` ring |
-| `history(n)` | Ring capacity and ordered retained outputs | Rehydrate the recorded ring without scanning old detail | Evict oldest output when capacity is exceeded |
-| `retry` / `backoff` | Attempt, journaled deadline, last classified failure | Resume the current attempt or delay; never rerun a settled attempt | Keep the configured attempt bound and final outcome |
+| Primitive               | Durable journal shape                                         | Replay rule                                                        | Retention policy                                         |
+| ----------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------- |
+| `checkpoint`            | Boundary seq, compact state, policy, schema/version integrity | Restore the latest valid state and replay its suffix               | Archive or prune the superseded prefix only after commit |
+| `recurring`             | Iteration, carried state, next wake, compact result           | Resume the active iteration from its checkpoint                    | Keep compact state plus `history(n)`                     |
+| `watermark`             | Source identity, cursor, observation time                     | Read strictly after the durable cursor                             | Replace the prior cursor; retain bounded diagnostics     |
+| `reduce` / `accumulate` | Reducer identity, current state, optional observation         | Continue folding from the recorded state                           | Replace prior state plus an optional last-`N` ring       |
+| `history(n)`            | Ring capacity and ordered retained outputs                    | Rehydrate the recorded ring without scanning old detail            | Evict oldest output when capacity is exceeded            |
+| `retry` / `backoff`     | Attempt, journaled deadline, last classified failure          | Resume the current attempt or delay; never rerun a settled attempt | Keep the configured attempt bound and final outcome      |
 
 ### Proposed API
 
@@ -269,14 +269,14 @@ audit material and must not be independently replayed.
 
 ## Phasing
 
-| Phase | Scope | Exit condition |
-| --- | --- | --- |
-| 1 | Checkpoint contract: entry shape, replay rule, retention vocabulary, continuation proof | Conformance tests show crash-safe checkpoint commit and identical result before/after resume |
-| 2 | `JournalStore` replay windows + checkpoint-aware `inspectRun` | Full durable record may grow while active replay/materialization stays bounded |
-| 3 | `history(n)` projection and physical archive/prune capability | Bounded UI/status reads; cleanup is retryable and never loses pending effects |
-| 4 | `recurring` and completed fan-out collapse | Long-lived routines replay in `O(checkpoint suffix)` without changing author intent |
-| 5 | `watermark`, `reduce` / `accumulate`, `retry` / `backoff` | Data cursors and bounded folds reuse the same checkpoint contract |
-| 6 | Runaway breaker and operational policy | Operators can detect/stop pathological wake rates independently of compaction |
+| Phase | Scope                                                                                   | Exit condition                                                                               |
+| ----- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 1     | Checkpoint contract: entry shape, replay rule, retention vocabulary, continuation proof | Conformance tests show crash-safe checkpoint commit and identical result before/after resume |
+| 2     | `JournalStore` replay windows + checkpoint-aware `inspectRun`                           | Full durable record may grow while active replay/materialization stays bounded               |
+| 3     | `history(n)` projection and physical archive/prune capability                           | Bounded UI/status reads; cleanup is retryable and never loses pending effects                |
+| 4     | `recurring` and completed fan-out collapse                                              | Long-lived routines replay in `O(checkpoint suffix)` without changing author intent          |
+| 5     | `watermark`, `reduce` / `accumulate`, `retry` / `backoff`                               | Data cursors and bounded folds reuse the same checkpoint contract                            |
+| 6     | Runaway breaker and operational policy                                                  | Operators can detect/stop pathological wake rates independently of compaction                |
 
 Phase 1 is load-bearing. No higher-level primitive should ship with a private compaction format
 while its continuation and crash semantics remain unresolved.
