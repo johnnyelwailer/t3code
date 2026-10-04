@@ -9,7 +9,9 @@
  * same prompt text and author stamp, posted as a fresh prompt message that queues a new run —
  * with backoff, up to {@link MAX_INTERRUPTED_TURN_REDRIVES} attempts. Only when the budget is
  * spent does the run fail through the normal funnel, and the reason then names the step and, for
- * a failed turn, the provider's own error.
+ * a failed turn, the provider's own error. This re-drive is the step run's ONLY retrier: the
+ * session-level transient retry leaves runs a workflow prompt started alone
+ * (`t3team-threadTransientTurnRetryOwner.ts`), so a step is never started twice.
  *
  * The budget is journaled ON THE RUN (`workflow_runs.turn_retries`, migration 052) and seeded
  * into the rehydrated pending ask at boot (`t3team-workflowEngineRehydrate.ts`) — never in the

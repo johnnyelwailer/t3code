@@ -18,11 +18,12 @@ import {
   transientRetryMessageId,
   transientRetryNoteId,
 } from "./t3team-threadTransientTurnRetryPlan.ts";
+import { TRANSIENT_RETRY_TURN_ITEM_TYPES } from "./t3team-threadTransientTurnRetryOwner.ts";
 import {
   handleTransientRunFailure,
-  TRANSIENT_RETRY_TURN_ITEM_TYPES,
   type TransientRetryDeps,
 } from "./t3team-threadTransientTurnRetryReactor.ts";
+import { workflowPromptContext } from "./t3team-workflowTurnPrompt.ts";
 import { T3TeamThreadMessageRecorder } from "./t3team-v2/t3team-threadMessageRecorder.ts";
 import {
   createTestThread,
@@ -36,9 +37,11 @@ const liveDeps = Effect.gen(function* () {
   return {
     loadRecords: (threadId, runId) =>
       projections
-        .getThreadRecords(threadId, ["runs", "turnItems"], {
+        .getThreadRecords(threadId, ["runs", "turnItems", "messages"], {
           turnItemRunId: runId,
           turnItemTypes: TRANSIENT_RETRY_TURN_ITEM_TYPES,
+          messageRunIds: [runId],
+          messageRoles: ["user"],
         })
         .pipe(Effect.orDie),
     dispatch: (command) => orchestrator.dispatch(command).pipe(Effect.mapError(String)),
@@ -49,7 +52,11 @@ const liveDeps = Effect.gen(function* () {
 });
 
 /** A thread whose only run FAILED with `failure` on its root node. */
-const threadWithFailedRun = (threadId: ThreadId, failure: OrchestrationV2ProviderFailure) =>
+const threadWithFailedRun = (
+  threadId: ThreadId,
+  failure: OrchestrationV2ProviderFailure,
+  prompt: { readonly context?: ReturnType<typeof workflowPromptContext> } = {},
+) =>
   Effect.gen(function* () {
     const orchestrator = yield* Orchestrator.OrchestratorV2;
     const projections = yield* ProjectionStore.ProjectionStoreV2;
@@ -61,6 +68,7 @@ const threadWithFailedRun = (threadId: ThreadId, failure: OrchestrationV2Provide
       messageId: MessageId.make(`start:${threadId}`),
       text: "Refactor the parser",
       attachments: [],
+      ...(prompt.context === undefined ? {} : { context: prompt.context }),
       dispatchMode: { type: "start_immediately" },
       createdBy: "user",
       creationSource: "web",
@@ -240,6 +248,29 @@ it.layer(makeT3TeamV2TestLayer("t3team-transient-retry"))("transient run retry o
 
       const records = yield* projections.getThreadRecords(threadId, ["runs", "messages"]);
       assert.strictEqual(records.runs.length, 1);
+      assert.isUndefined(
+        records.messages.find((message) => message.id === transientRetryNoteId(failed.id)),
+      );
+    }),
+  );
+
+  it.effect("leaves a workflow step's run to the workflow's own re-drive", () =>
+    Effect.gen(function* () {
+      const projections = yield* ProjectionStore.ProjectionStoreV2;
+      const threadId = ThreadId.make("thread:retry-workflow-step");
+      const failed = yield* threadWithFailedRun(threadId, stall, {
+        context: workflowPromptContext({
+          kind: "workflow",
+          workflowRunId: "workflow-run:retry",
+          stepId: "step:retry",
+          label: "Draft the description",
+        }),
+      });
+
+      yield* handleTransientRunFailure(yield* liveDeps, { threadId, runId: failed.id });
+
+      const records = yield* projections.getThreadRecords(threadId, ["runs", "messages"]);
+      assert.strictEqual(records.runs.length, 1, "the step is not continued a second time");
       assert.isUndefined(
         records.messages.find((message) => message.id === transientRetryNoteId(failed.id)),
       );
