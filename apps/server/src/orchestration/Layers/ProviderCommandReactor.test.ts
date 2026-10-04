@@ -3984,7 +3984,7 @@ describe("ProviderCommandReactor", () => {
           text: "first",
           attachments: [],
         },
-        modelSelection: acceptedSelection,
+        // No explicit selection: the turn inherits the thread's, options included.
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode: "approval-required",
         createdAt: now,
