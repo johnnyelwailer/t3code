@@ -180,11 +180,10 @@ describe("SUB_RUN_LIFECYCLE_RANK", () => {
   });
 });
 
-describe("resolveSubRunStatusLabel (GHE #208 panel/sidebar seam)", () => {
+describe("resolveSubRunStatusLabel (GHE #40 panel/sidebar seam)", () => {
   it("shows the LLM activity label when it flows and the flag is on", () => {
     const thread = createThread({
       status: "running",
-      activityState: "writing",
       activityLabel: "Editing the router",
     });
     expect(resolveSubRunStatusLabel(thread, { activityLabelsEnabled: true })).toBe(
@@ -192,18 +191,15 @@ describe("resolveSubRunStatusLabel (GHE #208 panel/sidebar seam)", () => {
     );
   });
 
-  it("falls back to the deterministic state word when no label flows (flag off or absent)", () => {
-    const thread = createThread({ status: "running", activityState: "writing" });
-    expect(resolveSubRunStatusLabel(thread, { activityLabelsEnabled: true })).toBe("Writing");
+  it("keeps the stable status label when no label flows (flag off or absent)", () => {
     const labeled = createThread({
       status: "running",
-      activityState: "writing",
       activityLabel: "Editing the router",
     });
-    expect(resolveSubRunStatusLabel(labeled, { activityLabelsEnabled: false })).toBe("Writing");
+    expect(resolveSubRunStatusLabel(labeled, { activityLabelsEnabled: false })).toBe("Running");
   });
 
-  it("keeps the stable status label when neither label nor state is available", () => {
+  it("keeps the stable status label when no label is available", () => {
     const thread = createThread({ status: "running" });
     expect(resolveSubRunStatusLabel(thread, { activityLabelsEnabled: true })).toBe("Running");
   });
@@ -216,7 +212,6 @@ describe("resolveSubRunStatusLabel (GHE #208 panel/sidebar seam)", () => {
     ] as const) {
       const thread = createThread({
         status,
-        activityState: "working",
         activityLabel: "Editing the router",
       });
       expect(resolveSubRunStatusLabel(thread, { activityLabelsEnabled: true })).toBe(label);
@@ -228,7 +223,6 @@ describe("resolveSubRunStatusLabel (GHE #208 panel/sidebar seam)", () => {
     // stable label — the parent's next action is to look at that question.
     const running = createThread({
       status: "running",
-      activityState: "writing",
       activityLabel: "Editing the router",
       pendingUserInput: true,
     });

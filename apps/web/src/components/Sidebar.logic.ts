@@ -600,20 +600,9 @@ export interface ThreadStatusPill {
   /** GHE #40: live LLM-generated "working on" phrase. Rendered instead of `label`
    *  while the thread is active; `label` stays the stable status key. */
   activityLabel?: string;
-  /** GHE #208: deterministic 4-state base word. Rendered as the pill word when
-   *  there is no `activityLabel`; the `activityLabel` REPLACES it when present
-   *  (never both). */
-  activityState?: import("~/t3team/t3team-activityStateDisplay").ActivityState;
   colorClass: string;
   dotClass: string;
   pulse: boolean;
-  /**
-   * GHE #208: which pulse animation to run when `pulse` is true. Defaults to
-   * `animate-status-pulse`; the `waiting` state overrides it with the slower,
-   * shallower `animate-status-pulse-slow` so it reads as quieter than the
-   * active states.
-   */
-  pulseClass?: string;
 }
 
 const THREAD_STATUS_PRIORITY: Record<ThreadStatusPill["label"], number> = {
@@ -637,10 +626,9 @@ type ThreadStatusInput = Pick<
 > & {
   lastVisitedAt?: string | null | undefined;
   pendingBackgroundTasks?: SidebarThreadSummary["pendingBackgroundTasks"] | undefined;
-  /** t3team (GHE #40/#208): fork thread facts, not on the V2 shell. Absent, the pill keeps the
+  /** t3team (GHE #40): fork thread fact, not on the V2 shell. Absent, the pill keeps the
    *  stable status label. */
   activityLabel?: string | null | undefined;
-  activityState?: import("~/t3team/t3team-activityStateDisplay").ActivityState | null | undefined;
   /** t3team: liveness of a workflow run launched from the thread (t3team-workflowRunLiveness). */
   workflowRunLiveness?:
     | import("~/t3team/t3team-workflowRunLiveness").T3TeamWorkflowRunLiveness
@@ -1196,27 +1184,6 @@ export function resolveThreadStatusPill(input: {
   const { thread, activityLabelsEnabled } = input;
   const activityLabel =
     activityLabelsEnabled !== false && thread.activityLabel ? thread.activityLabel : undefined;
-  // GHE #208: the deterministic state word is the base label for active
-  // threads; `waiting` rests (no pulse) instead of animating.
-  const activityState =
-    thread.activityState && thread.activityState !== null ? thread.activityState : undefined;
-  const workingColors = activityState
-    ? {
-        colorClass:
-          activityState === "waiting"
-            ? "text-slate-500 dark:text-slate-300/80"
-            : "text-sky-600 dark:text-sky-300/80",
-        dotClass:
-          activityState === "waiting"
-            ? "bg-slate-400 dark:bg-slate-300/80"
-            : "bg-sky-500 dark:bg-sky-300/80",
-        pulse: activityState !== "waiting",
-      }
-    : {
-        colorClass: "text-sky-600 dark:text-sky-300/80",
-        dotClass: "bg-sky-500 dark:bg-sky-300/80",
-        pulse: true,
-      };
 
   if (thread.hasPendingApprovals) {
     return {
@@ -1244,8 +1211,9 @@ export function resolveThreadStatusPill(input: {
     return {
       label: "Working",
       ...(activityLabel ? { activityLabel } : {}),
-      ...(activityState ? { activityState } : {}),
-      ...workingColors,
+      colorClass: "text-sky-600 dark:text-sky-300/80",
+      dotClass: "bg-sky-500 dark:bg-sky-300/80",
+      pulse: true,
     };
   }
 

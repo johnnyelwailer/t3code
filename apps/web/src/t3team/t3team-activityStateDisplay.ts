@@ -4,8 +4,10 @@
  *
  * The base word is ALWAYS deterministic (zero inference): the client derives
  * `activityState` from the active V2 run's in-flight turn item
- * (t3team-activityStateDerive.ts); the #40 activity label arrives as the
- * `activityLabel` thread fact.
+ * (t3team-activityStateDerive.ts), so only the open thread's working row has
+ * one — listed rows (sidebar, sub-run tree) load shells, not turn items, and
+ * show the label or the stable status word. The #40 activity label arrives as
+ * the `activityLabel` thread fact.
  *
  * Display precedence: the LLM free-text label REPLACES the state word when it
  * is present (it is shorter and already names the activity) — the two never

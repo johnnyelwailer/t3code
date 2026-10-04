@@ -4,7 +4,7 @@
  * child / sub-run rows must render the SAME status treatment as parent rows —
  * the ring icon (ThreadActivityMorphIcon, sm variant) and the live status
  * summary derived by the parent's verbatim pipeline
- * (resolveActivityPillDisplay over activityState + activityLabel, gated by
+ * (resolveActivityPillDisplay over activityLabel, gated by
  * `t3teamActivityLabelsEnabled` on the detail only). Before the fix the
  * running child row rendered a plain `size-1.5 rounded-full` dot and never
  * showed any status summary.
@@ -106,34 +106,32 @@ describe("SidebarSubRunRow status treatment", () => {
     expect(container!.querySelector("button .size-1\\.5")).toBeNull();
   });
 
-  it("shows the live status summary the parent row shows: LLM label replaces the state word (flag on)", () => {
+  it("shows the live status summary the parent row shows: the LLM label (flag on)", () => {
     render(
       createThread({
         status: "running",
-        activityState: "thinking",
         activityLabel: "Reading contracts",
       }),
     );
     const text = button().textContent ?? "";
     expect(text).toContain("Reading contracts");
-    // replace, never append: the state word does not render next to the label
-    expect(text).not.toContain("Thinking");
+    // replace, never append: the status word does not render next to the label
+    expect(text).not.toContain("Working");
     expect(text).not.toContain("·");
     // the summary shimmers, same as the parent's live label
     expect(container!.querySelector("span.t3team-label-shimmer")).not.toBeNull();
   });
 
-  it("gates the LLM detail on activityLabelsEnabled exactly like the parent (state word stays)", () => {
+  it("gates the LLM detail on activityLabelsEnabled exactly like the parent", () => {
     settingsState.activityLabelsEnabled = false;
     render(
       createThread({
         status: "running",
-        activityState: "waiting",
         activityLabel: "Reading contracts",
       }),
     );
     const text = button().textContent ?? "";
-    expect(text).toContain("Waiting");
+    expect(text).toContain("Working");
     expect(text).not.toContain("Reading contracts");
   });
 

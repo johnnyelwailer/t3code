@@ -111,11 +111,9 @@ export function projectThreadsEqual(left: ProjectThread, right: ProjectThread): 
     // visible sub-run roster into the "Settled (N)" fold.
     left.settled === right.settled &&
     left.sleepingUntil === right.sleepingUntil &&
-    // GHE #40/#208 live pills: the enrichment label and the deterministic
-    // state word must diff through the equality gate or state transitions
-    // would not re-render the row.
+    // GHE #40 live pills: the enrichment label must diff through the equality gate or label
+    // transitions would not re-render the row.
     left.activityLabel === right.activityLabel &&
-    left.activityState === right.activityState &&
     // Pending-question indicator: a question docking or clearing must diff
     // through the equality gate or the sub-run row would not update.
     left.pendingUserInput === right.pendingUserInput &&

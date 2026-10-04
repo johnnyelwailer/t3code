@@ -68,54 +68,20 @@ describe("resolveProjectStatusIndicator (activity label rollup)", () => {
   });
 });
 
-describe("resolveThreadStatusPill (activity state, GHE #208)", () => {
-  it("carries the deterministic state word on a running thread", () => {
-    for (const activityState of ["thinking", "writing", "working", "waiting"] as const) {
-      const pill = resolveThreadStatusPill({ status: "running", activityState });
-      expect(pill).toMatchObject({
-        label: "Working",
-        activityState,
-        pulse: true,
-      });
-      expect(pill?.pulseClass).toBe(
-        activityState === "waiting" ? "animate-status-pulse-slow" : undefined,
-      );
-    }
-  });
-
-  it("the LLM label replaces the state word through the shared display helper", () => {
-    const pill = resolveThreadStatusPill({
+describe("resolveThreadStatusPill (live label, GHE #40)", () => {
+  it("a running row shows the LLM label through the shared display helper, else Working", () => {
+    const labelled = resolveThreadStatusPill({
       status: "running",
-      activityState: "working",
       activityLabel: "editing the retry test",
     });
-    expect(pill?.activityState).toBe("working");
-    expect(resolveActivityPillDisplay(pill!)).toBe("editing the retry test");
-  });
+    expect(labelled).toMatchObject({ label: "Working", pulse: true });
+    expect(resolveActivityPillDisplay(labelled!)).toBe("editing the retry test");
 
-  it("state word stands alone when the flag is off (enrichment gated)", () => {
-    const pill = resolveThreadStatusPill(
-      { status: "running", activityState: "writing", activityLabel: "editing the retry test" },
+    const gated = resolveThreadStatusPill(
+      { status: "running", activityLabel: "editing the retry test" },
       { activityLabelsEnabled: false },
     );
-    expect(pill?.activityLabel).toBeUndefined();
-    expect(pill?.activityState).toBe("writing");
-    expect(resolveActivityPillDisplay(pill!)).toBe("Writing");
-  });
-
-  it("waiting is quieter: slower pulse variant + dim slate", () => {
-    const pill = resolveThreadStatusPill({ status: "running", activityState: "waiting" });
-    expect(pill?.pulse).toBe(true);
-    expect(pill?.pulseClass).toBe("animate-status-pulse-slow");
-  });
-
-  it("no state word: pre-#208 pill (old servers keep working)", () => {
-    const pill = resolveThreadStatusPill({ status: "running", activityLabel: "Reading contracts" });
-    expect(pill?.activityState).toBeUndefined();
-    expect(pill).toMatchObject({
-      label: "Working",
-      activityLabel: "Reading contracts",
-      pulse: true,
-    });
+    expect(gated?.activityLabel).toBeUndefined();
+    expect(resolveActivityPillDisplay(gated!)).toBe("Working");
   });
 });

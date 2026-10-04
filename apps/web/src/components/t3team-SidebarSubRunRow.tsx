@@ -45,12 +45,11 @@ export const SidebarSubRunRow = memo(function SidebarSubRunRow(props: {
   onContextMenu: (threadRef: ScopedThreadRef, position: { x: number; y: number }) => void;
 }) {
   const { child } = props;
-  // GHE #40/#208: child rows carry the SAME live status summary as their
-  // parent card — the deterministic state word, with the LLM detail
-  // appended only while the activity-label flag is on. The derivation is
-  // the parent's verbatim (resolveActivityPillDisplay over the same
-  // fields), so a sub-run and its parent never disagree about what is
-  // happening.
+  // GHE #40: child rows carry the SAME live status summary as their parent
+  // card — the LLM detail while the activity-label flag is on, else
+  // "Working". The derivation is the parent's verbatim
+  // (resolveActivityPillDisplay over the same fields), so a sub-run and its
+  // parent never disagree about what is happening.
   const activityLabelsEnabled = usePrimarySettings(
     (settings) => settings.t3teamActivityLabelsEnabled,
   );
@@ -58,9 +57,6 @@ export const SidebarSubRunRow = memo(function SidebarSubRunRow(props: {
     child.status === "running"
       ? resolveActivityPillDisplay({
           label: "Working",
-          ...(child.activityState && child.activityState !== null
-            ? { activityState: child.activityState }
-            : {}),
           ...(activityLabelsEnabled && child.activityLabel
             ? { activityLabel: child.activityLabel }
             : {}),

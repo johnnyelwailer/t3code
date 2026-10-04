@@ -72,24 +72,17 @@ export const SUB_RUN_WAITING_LABEL = "Waiting";
 
 /**
  * The live status TEXT of a panel sub-run/agent row — the SAME shared resolution the
- * sidebar sub-run rows use (`resolveActivityPillDisplay` over the same
- * `activityLabel`/`activityState` fields, so the panel and the sidebar never
- * disagree at this seam): the LLM activity label REPLACES the state word when it
- * flows (only while the `t3teamActivityLabelsEnabled` flag is on — the caller gates
- * the flag here, mirroring t3team-SidebarSubRunRow), the deterministic state word
- * (Thinking/Writing/Working/Waiting) stands alone when there is no label, and the
- * stable status label is the fallback for settled states and old servers. Dots are
- * unaffected (they carry the 4-state + settled visuals).
+ * sidebar sub-run rows use (`resolveActivityPillDisplay` over the same `activityLabel`
+ * field, so the panel and the sidebar never disagree at this seam): the LLM activity
+ * label REPLACES the stable status word while it flows (only while the
+ * `t3teamActivityLabelsEnabled` flag is on — the caller gates the flag here, mirroring
+ * t3team-SidebarSubRunRow). Listed rows have no thinking/writing word: that needs the
+ * thread's turn items, which only the open thread loads.
  */
 export function resolveSubRunStatusLabel(
   thread: Pick<
     ProjectThread,
-    | "status"
-    | "activityLabel"
-    | "activityState"
-    | "pendingUserInput"
-    | "waitingOnChildren"
-    | "awaitingParent"
+    "status" | "activityLabel" | "pendingUserInput" | "waitingOnChildren" | "awaitingParent"
   >,
   options: { readonly activityLabelsEnabled: boolean },
 ): string {
@@ -119,7 +112,6 @@ export function resolveSubRunStatusLabel(
   if (thread.status !== "running") return label;
   return resolveActivityPillDisplay({
     label,
-    activityState: thread.activityState ?? null,
     activityLabel: options.activityLabelsEnabled ? (thread.activityLabel ?? null) : null,
   });
 }

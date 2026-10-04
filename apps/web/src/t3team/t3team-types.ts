@@ -6,7 +6,6 @@ import type {
   RecipeSurface,
 } from "@t3tools/project-recipes";
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
-import type { ActivityState } from "~/t3team/t3team-activityStateDisplay";
 
 export type T3TeamThreadToolId = T3TeamToolId;
 
@@ -85,10 +84,6 @@ export type ProjectThread = {
   /** GHE #40: live LLM-generated 2–4 word label for what an active thread is working
    *  on NOW; rendered on the Working pill while present. Absent/idle = static "Working". */
   activityLabel?: string | null;
-  /** GHE #208: deterministic 4-state activity word (thinking/writing/working/waiting);
-   *  the base pill word while a turn runs. Absent/idle = null. */
-  activityState?: ActivityState | null;
-  activityStateUpdatedAt?: string | null;
   /**
    * True while the thread has a pending user-input request (a question docked
    * in its composer). Shell-sourced live state — absent/cleared when no
