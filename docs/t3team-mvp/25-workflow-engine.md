@@ -14,10 +14,11 @@ change, not a cleanup:
 - **Engine internals** — module filenames (`t3team-workflow*.ts`), exported symbols, DB tables
   and columns, journal `refId` / `PrimitiveKind` strings (replay-stable: renaming them breaks
   resume of in-flight runs), and the `handoff: 'workflow-ui'` wire literal.
-- **The old tool ids remain as deprecated aliases.** `t3team_workflow_run` / `_status` /
-  `_resume` (MCP) and `t3team.workflow.run` / `.status` / `.resume` (canonical broker) resolve
-  to the `t3team_orchestration_*` / `t3team.orchestration.*` names and dispatch to the same
-  handlers, so pack configs and already-running agents keep working. Prefer the new names.
+- **Old broker ids still resolve; the old MCP names are gone.** The canonical broker ids
+  `t3team.workflow.run` / `.status` / `.resume` resolve to `t3team.orchestration.*` before the
+  permission gate (stored widget allowlists may carry them; they never appear in a catalog). The
+  MCP tools `t3team_workflow_run` / `_status` / `_resume` were removed: each was a second full
+  tool definition in every agent's context. Agents and packs call `t3team_orchestration_*`.
 
 ## Purpose
 

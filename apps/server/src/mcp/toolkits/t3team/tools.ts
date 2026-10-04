@@ -42,16 +42,6 @@ export const T3TEAM_MCP_CANONICAL_TOOL_MAP = {
   t3team_recipe_validate: "t3team.recipe.validate",
 } as const;
 
-/** Deprecated MCP tool name → its replacement. The old agent-orchestration names
- * (`t3team_workflow_*`) stay callable so pack configs, agent prompts, and live
- * transcripts that reference them keep working; both names dispatch to the same
- * canonical broker tool. */
-export const T3TEAM_MCP_DEPRECATED_TOOL_ALIASES = {
-  t3team_workflow_run: "t3team_orchestration_run",
-  t3team_workflow_status: "t3team_orchestration_status",
-  t3team_workflow_resume: "t3team_orchestration_resume",
-} as const;
-
 /**
  * Canonical tools deliberately NOT on the provider `/mcp` surface. The parity test forces an
  * explicit decision for every implemented catalog tool — mapped above, or listed here.
@@ -323,36 +313,6 @@ const T3TeamOrchestrationStopTool = Tool.make("t3team_orchestration_stop", {
   dependencies,
 });
 
-// Deprecated aliases (see T3TEAM_MCP_DEPRECATED_TOOL_ALIASES): identical schemas,
-// same canonical broker target. Kept so existing pack configs and agent prompts
-// that name `t3team_workflow_*` do not silently lose the capability.
-const deprecated = (replacement: string) =>
-  `DEPRECATED alias for ${replacement} — use that name instead. `;
-
-const T3TeamWorkflowRunTool = Tool.make("t3team_workflow_run", {
-  description: deprecated("t3team_orchestration_run") + orchestrationRunDescription,
-  parameters: orchestrationRunParameters,
-  success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
-  dependencies,
-});
-
-const T3TeamWorkflowStatusTool = Tool.make("t3team_workflow_status", {
-  description: deprecated("t3team_orchestration_status") + orchestrationStatusDescription,
-  parameters: orchestrationStatusParameters,
-  success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
-  dependencies,
-});
-
-const T3TeamWorkflowResumeTool = Tool.make("t3team_workflow_resume", {
-  description: deprecated("t3team_orchestration_resume") + orchestrationResumeDescription,
-  parameters: orchestrationResumeParameters,
-  success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
-  dependencies,
-});
-
 // Render an inline, sandboxed HTML/SVG widget in the calling thread. This is a
 // current-thread operation: the handler deliberately goes through the bound
 // broker surface, so normal thread resolution and tool-group policy still apply.
@@ -532,9 +492,6 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamOrchestrationResumeTool,
   T3TeamOrchestrationPauseTool,
   T3TeamOrchestrationStopTool,
-  T3TeamWorkflowRunTool,
-  T3TeamWorkflowStatusTool,
-  T3TeamWorkflowResumeTool,
   T3TeamShowWidgetTool,
   T3TeamHelpTool,
   T3TeamRecipeListTool,
