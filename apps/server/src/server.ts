@@ -203,7 +203,11 @@ import {
 } from "./t3team-atlassian-routes.ts";
 import { t3teamAtlassianIssueContentRouteLayer } from "./t3team-atlassian-issue-content-routes.ts";
 import { t3teamAtlassianOAuthExchangeRouteLayer } from "./t3team-atlassian-oauth-routes.ts";
-import { t3teamAtlassianOAuthFlowRouteLayer } from "./t3team-atlassian-oauth-flowRoutes.ts";
+import {
+  t3teamAtlassianOAuthBeginRouteLayer,
+  t3teamAtlassianOAuthCallbackRouteLayer,
+} from "./t3team-atlassian-oauth-flowRoutes.ts";
+import { t3teamRouteAuthLayer } from "./t3team-routeAuth.ts";
 import { t3teamTempoRouteLayer } from "./t3team-tempo-routes.ts";
 import { t3teamCloudBrokerRouteLayer } from "./t3team-cloud-broker-routes.ts";
 import { t3teamProjectWorkspaceDiscoverRecipesRouteLayer } from "./t3team-project-workspace-recipe-routes.ts";
@@ -886,24 +890,29 @@ export const makeRoutesLayer = Layer.mergeAll(
   // t3team routes. This is now the ONLY route registry: the parallel `makeT3TeamRoutesLayer`
   // in `t3team-server.ts` was deleted in the 2026-08 upstream sync, since the two copies drifted
   // every time upstream moved. The `t3team` binary launches this same layer (cli/t3team-server.ts).
+  // Routes that carry their own capability (t3team-routeAuth.ts says why each one may).
+  Layer.mergeAll(
+    t3teamAtlassianAssetContentRouteLayer,
+    t3teamAtlassianOAuthCallbackRouteLayer,
+    t3teamCloudBrokerRouteLayer,
+  ),
+  // Every other t3team route requires a session, like upstream's raw routes (t3team-routeAuth.ts).
   Layer.mergeAll(
     t3teamAtlassianAccountsRouteLayer,
     t3teamAtlassianAssetRouteLayer,
-    t3teamAtlassianAssetContentRouteLayer,
     t3teamAtlassianBacklogRouteLayer,
     t3teamAtlassianConnectBasicRouteLayer,
     t3teamAtlassianConnectOAuthRouteLayer,
     t3teamAtlassianIssueContentRouteLayer,
     t3teamAtlassianMyWorkRouteLayer,
+    t3teamAtlassianOAuthBeginRouteLayer,
     t3teamAtlassianOAuthExchangeRouteLayer,
-    t3teamAtlassianOAuthFlowRouteLayer,
     t3teamAtlassianProjectIssuesRouteLayer,
     t3teamAtlassianProjectsRouteLayer,
     t3teamAtlassianResourceRouteLayer,
     t3teamAtlassianResourcesRouteLayer,
     t3teamTempoRouteLayer,
-    t3teamCloudBrokerRouteLayer,
-  ),
+  ).pipe(Layer.provide(t3teamRouteAuthLayer)),
   Layer.mergeAll(
     t3teamGitHubAssetRouteLayer,
     t3teamGitHubInboxRouteLayer,
@@ -923,7 +932,7 @@ export const makeRoutesLayer = Layer.mergeAll(
     t3teamThreadPlacementRouteLayer,
     t3teamMyWorkDigestRouteLayer,
     t3teamWidgetToolCallRouteLayer,
-  ),
+  ).pipe(Layer.provide(t3teamRouteAuthLayer)),
   // The MCP session registry is provided globally (shared with V2 provider
   // sessions) rather than inline here. The orchestrator toolkit resolves
   // delegation targets through the same live adapter facade the V2

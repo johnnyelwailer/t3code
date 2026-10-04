@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
+import { __resetDesktopPrimaryAuthForTests } from "~/environments/primary/desktopAuth";
 import { postJson } from "./t3team-t3BackendHttp";
 
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  __resetDesktopPrimaryAuthForTests();
 });
 
 describe("postJson", () => {
@@ -39,6 +41,24 @@ describe("postJson", () => {
         files: [],
       }),
       signal: expect.any(AbortSignal),
+    });
+  });
+
+  it("authenticates with the desktop bearer, not a cookie, when the desktop provides one", async () => {
+    vi.stubGlobal("window", {
+      desktopBridge: { getLocalEnvironmentBearerToken: () => Promise.resolve("desktop-token") },
+    });
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ placements: [] }),
+    } as unknown as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await postJson("http://127.0.0.1:13773/", "/api/t3team/thread/placements", {});
+
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      credentials: "omit",
+      headers: { authorization: "Bearer desktop-token", "content-type": "application/json" },
     });
   });
 

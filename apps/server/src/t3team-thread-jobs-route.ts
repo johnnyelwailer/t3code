@@ -15,7 +15,8 @@
  * - 4xx/5xx — transport or session failures (malformed body, no live
  *   session, runtime request failed).
  *
- * Auth is handled upstream of the route like every other /api/t3team route.
+ * Requires an orchestration:operate session, like every t3team route in the
+ * authenticated group (t3team-routeAuth.ts, mounted in server.ts).
  *
  * @module t3team-thread-jobs-route
  */
