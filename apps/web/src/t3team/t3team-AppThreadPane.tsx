@@ -126,8 +126,8 @@ export function AppThreadPane({
             titleBarControlsAccessory: (
               <Button
                 size="icon-xs"
-                variant="ghost"
-                className="shrink-0 text-muted-foreground/80"
+                variant="ghost-muted"
+                className="shrink-0"
                 onClick={() =>
                   runT3TeamViewTransition(() =>
                     onOpenEmbeddedThread(view.projectId, resolvedThread.id),

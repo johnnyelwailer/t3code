@@ -4,6 +4,7 @@ import {
   type ModelSelection,
   type ProviderInteractionMode,
   type RuntimeMode,
+  type ThreadEnvironmentBinding,
   // A VALUE import, not type-only: this branch calls `ThreadId.make` below.
   ThreadId,
 } from "@t3tools/contracts";
@@ -26,7 +27,9 @@ export function buildChildKickoffText(
 ): string {
   return (
     `[Delegated by parent thread «${parentThread.title}» (thread ${parentThread.id}). ` +
-    `Report progress and results back to it with t3team_send_message.]\n\n${kickoffPrompt}`
+    `Stay silent while you work; report your final result back to it with t3team_send_message ` +
+    `exactly once, when you are completely done — or only for a blocker you cannot solve ` +
+    `yourself. No progress pings, no acknowledgements.]\n\n${kickoffPrompt}`
   );
 }
 
@@ -63,6 +66,7 @@ export function appendStartChildHandoffActivities(input: {
   readonly branch?: string | null;
   readonly worktreePath?: string | null;
   readonly kickoffPrompt?: string;
+  readonly environment?: ThreadEnvironmentBinding;
 }) {
   const payload = {
     ...(input.handoffParentThreadId ? { parentThreadId: input.handoffParentThreadId } : {}),
@@ -75,6 +79,7 @@ export function appendStartChildHandoffActivities(input: {
     ...(input.branch ? { branch: input.branch } : {}),
     ...(input.worktreePath ? { worktreePath: input.worktreePath } : {}),
     ...(input.kickoffPrompt ? { kickoffPrompt: input.kickoffPrompt } : {}),
+    ...(input.environment ? { environment: input.environment } : {}),
   };
 
   return Effect.all([

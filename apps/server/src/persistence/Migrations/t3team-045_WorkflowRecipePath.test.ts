@@ -4,7 +4,7 @@ import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { runMigrations } from "../Migrations.ts";
-import * as NodeSqliteClient from "../NodeSqliteClient.ts";
+import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 
 interface ColumnRow {
   readonly name: string;
@@ -15,7 +15,7 @@ interface RecipePathRow {
   readonly recipe_path: string | null;
 }
 
-const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
+const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layer({ filename: ":memory:" })));
 
 layer("t3team-045_WorkflowRecipePath", (it) => {
   it.effect("adds nullable recipe_path TEXT to workflow_runs", () =>

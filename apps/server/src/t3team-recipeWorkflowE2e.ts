@@ -24,6 +24,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
 import { runT3TeamRecipeWorkflowHarness } from "./t3team-recipeWorkflowHarness.ts";
+import * as ThreadBackgroundLiveness from "./orchestration/ThreadBackgroundLiveness.ts";
 import {
   makeT3TeamRecipeHarnessEngineLayer,
   makeT3TeamRecipeHarnessReactorLayer,
@@ -70,7 +71,13 @@ const spec = {
 const layer = Layer.mergeAll(
   makeT3TeamRecipeHarnessReactorLayer(),
   makeT3TeamRecipeHarnessStubProvider({ replies: spec.replies, capture }),
-).pipe(Layer.provideMerge(makeT3TeamRecipeHarnessEngineLayer("t3team-recipe-e2e-")));
+).pipe(
+  Layer.provideMerge(
+    makeT3TeamRecipeHarnessEngineLayer("t3team-recipe-e2e-").pipe(
+      Layer.provideMerge(ThreadBackgroundLiveness.layer),
+    ),
+  ),
+);
 
 const exitCode = await Effect.runPromise(
   Effect.scoped(

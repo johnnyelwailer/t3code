@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import type { OrchestrationWorkflowRunStatus } from "@t3tools/contracts";
 
-import { cn } from "~/lib/utils";
+import { ComposerBanner } from "~/components/chat/ComposerBanner";
 import type { ChatMessage } from "~/types";
 import { getT3TeamWorkflowShapeAttachment } from "~/t3team/chat/t3team-messageShapeCard";
 import type { T3TeamWorkflowRunProgress } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
@@ -123,48 +123,53 @@ export function T3TeamActiveWorkflowDock({
     setSelectedRunId(items[nextIndex]!.runId);
   };
 
+  // Same attached glass surface as every other composer notice (GHE #412): the dock used to be a
+  // bespoke `border-x border-t bg-card` div with its own fuse CSS, so it never lined up with the
+  // banner stack it sits next to.
   return (
-    <div
-      className={cn(
-        "flex items-center gap-1.5 border-x border-t border-border/60 bg-card/95 px-2 py-1.5 text-xs shadow-sm",
-        className,
-      )}
-      data-t3team-active-workflow-dock="true"
-    >
-      <RouteIcon className="size-3.5 shrink-0 text-primary" />
-      <button
-        type="button"
-        className="flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-muted/65"
-        title={`Show ${selected.name} in conversation`}
-        onClick={() => onOpen(selected)}
-      >
-        <span className="shrink-0 font-medium text-foreground">{selected.name}</span>
-        <span className="min-w-0 flex-1 truncate text-muted-foreground">{summary}</span>
-        <LocateFixedIcon className="size-3 shrink-0 text-muted-foreground" />
-      </button>
-      {items.length > 1 ? (
-        <div className="flex shrink-0 items-center gap-0.5" aria-label="Switch orchestration">
-          <button
-            type="button"
-            className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-            aria-label="Previous active orchestration"
-            onClick={() => selectOffset(-1)}
-          >
-            <ChevronLeftIcon className="size-3.5" />
-          </button>
-          <span className="min-w-7 text-center tabular-nums text-muted-foreground">
-            {selectedIndex + 1}/{items.length}
-          </span>
-          <button
-            type="button"
-            className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-            aria-label="Next active orchestration"
-            onClick={() => selectOffset(1)}
-          >
-            <ChevronRightIcon className="size-3.5" />
-          </button>
-        </div>
-      ) : null}
-    </div>
+    <ComposerBanner.Attachment className={className} data-t3team-active-workflow-dock="true">
+      <ComposerBanner.Root density="comfortable">
+        <ComposerBanner.Row>
+          <ComposerBanner.Icon className="text-primary">
+            <RouteIcon />
+          </ComposerBanner.Icon>
+          <ComposerBanner.Content>
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-muted/65"
+              title={`Show ${selected.name} in conversation`}
+              onClick={() => onOpen(selected)}
+            >
+              <span className="shrink-0 font-medium text-foreground">{selected.name}</span>
+              <span className="min-w-0 flex-1 truncate text-muted-foreground">{summary}</span>
+              <LocateFixedIcon className="size-3 shrink-0 text-muted-foreground" />
+            </button>
+          </ComposerBanner.Content>
+          {items.length > 1 ? (
+            <ComposerBanner.Actions role="group" aria-label="Switch orchestration">
+              <button
+                type="button"
+                className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label="Previous active orchestration"
+                onClick={() => selectOffset(-1)}
+              >
+                <ChevronLeftIcon className="size-3.5" />
+              </button>
+              <span className="min-w-7 text-center tabular-nums text-muted-foreground">
+                {selectedIndex + 1}/{items.length}
+              </span>
+              <button
+                type="button"
+                className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label="Next active orchestration"
+                onClick={() => selectOffset(1)}
+              >
+                <ChevronRightIcon className="size-3.5" />
+              </button>
+            </ComposerBanner.Actions>
+          ) : null}
+        </ComposerBanner.Row>
+      </ComposerBanner.Root>
+    </ComposerBanner.Attachment>
   );
 }

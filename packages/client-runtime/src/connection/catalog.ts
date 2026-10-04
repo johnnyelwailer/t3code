@@ -4,6 +4,7 @@ import * as Schema from "effect/Schema";
 
 import {
   BearerConnectionTarget,
+  BrokerConnectionTarget,
   PrimaryConnectionTarget,
   RelayConnectionTarget,
   SshConnectionTarget,
@@ -39,6 +40,10 @@ export type ConnectionProfile = typeof ConnectionProfile.Type;
 export interface ConnectionCatalogEntry {
   readonly target: ConnectionTarget;
   readonly profile: Option.Option<ConnectionProfile>;
+  /** False when the user switched the environment off: saved, but never connects. */
+  readonly enabled: boolean;
+  /** Discovery rejection stays visible while the saved connection is switched off. */
+  readonly unsupportedReason?: string;
 }
 
 export class BearerConnectionCredential extends Schema.TaggedClass<BearerConnectionCredential>()(
@@ -82,8 +87,16 @@ export class SshConnectionRegistration extends Schema.TaggedClass<SshConnectionR
   },
 ) {}
 
+export class BrokerConnectionRegistration extends Schema.TaggedClass<BrokerConnectionRegistration>()(
+  "BrokerConnectionRegistration",
+  {
+    target: BrokerConnectionTarget,
+  },
+) {}
+
 export const ConnectionRegistration = Schema.Union([
   RelayConnectionRegistration,
+  BrokerConnectionRegistration,
   BearerConnectionRegistration,
   SshConnectionRegistration,
 ]);
@@ -104,27 +117,24 @@ export const PlatformConnectionRegistration = Schema.Union([
 ]);
 export type PlatformConnectionRegistration = typeof PlatformConnectionRegistration.Type;
 
-export function connectionRegistrationTarget(
-  registration: ConnectionRegistration | PrimaryConnectionRegistration,
-): ConnectionTarget {
-  return registration.target;
-}
-
 export function connectionRegistrationCatalogEntry(
   registration: ConnectionRegistration | PrimaryConnectionRegistration,
 ): ConnectionCatalogEntry {
   switch (registration._tag) {
     case "PrimaryConnectionRegistration":
     case "RelayConnectionRegistration":
+    case "BrokerConnectionRegistration":
       return {
         target: registration.target,
         profile: Option.none(),
+        enabled: true,
       };
     case "BearerConnectionRegistration":
     case "SshConnectionRegistration":
       return {
         target: registration.target,
         profile: Option.some(registration.profile),
+        enabled: true,
       };
   }
 }

@@ -1,4 +1,7 @@
 import type { ProjectMyWorkStatusCategory } from "~/t3team/t3team-projectMyWork";
+import type { ProjectMyWorkLens } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
+
+export type { ProjectMyWorkLens };
 
 export type ProjectMyWorkViewMode = "table" | "list" | "grid" | "kanban";
 export type ProjectMyWorkGroupMode = "flat" | "hierarchy";
@@ -22,6 +25,7 @@ export interface ProjectDashboardMyWorkRouteSearch {
 
 export interface ProjectDashboardMyWorkState {
   query: string;
+  lens: ProjectMyWorkLens;
   viewMode: ProjectMyWorkViewMode;
   groupMode: ProjectMyWorkGroupMode;
   statusCategory: ProjectMyWorkStatusCategory;
@@ -42,6 +46,7 @@ export const projectMyWorkViewModeValues = new Set<ProjectMyWorkViewMode>([
   "grid",
   "kanban",
 ]);
+export const projectMyWorkLensValues = new Set<ProjectMyWorkLens>(["digest", "hierarchy", "board"]);
 export const projectMyWorkGroupModeValues = new Set<ProjectMyWorkGroupMode>(["flat", "hierarchy"]);
 export const projectMyWorkStatusCategoryValues = new Set<ProjectMyWorkStatusCategory>([
   "all",
@@ -117,6 +122,7 @@ export function parseRouteStringList(value: unknown): ReadonlyArray<string> | un
 export function createDefaultProjectDashboardMyWorkState(): ProjectDashboardMyWorkState {
   return {
     query: "",
+    lens: "digest",
     viewMode: "kanban",
     groupMode: "hierarchy",
     statusCategory: "all",

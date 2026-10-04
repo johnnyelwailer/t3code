@@ -200,8 +200,11 @@ describe("buildHumanSteeringInstruction", () => {
     expect(buildHumanSteeringInstruction(state, undefined)).toBe("");
   });
 
-  it("is a no-op when the signal is idle", () => {
-    expect(buildHumanSteeringInstruction({ kind: "idle" }, "parent-thread")).toBe("");
+  it("emits the standing anti-ping rule when idle but a parent exists", () => {
+    const instruction = buildHumanSteeringInstruction({ kind: "idle" }, "parent-thread");
+    expect(instruction).toContain("No human is actively steering this thread");
+    expect(instruction).toContain("exactly one final report");
+    expect(instruction).toContain("No progress pings, no acknowledgements");
   });
 });
 

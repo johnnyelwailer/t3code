@@ -25,10 +25,6 @@ import type { WorkflowRunReportRecord } from "./t3team-workflowReportTypes.ts";
 
 // The model call and its fallback live in the sibling module (LOC ceiling); re-exported so
 // importers reach the whole seam through this one module.
-export {
-  composeFreshWorkflowRunReport,
-  WORKFLOW_REPORT_TIMEOUT_MS,
-} from "./t3team-workflowReportComposeModel.ts";
 export type {
   ComposeWorkflowRunReportInput,
   GenerateWorkflowReport,

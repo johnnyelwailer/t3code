@@ -207,7 +207,6 @@ describe("resolvePromptCascade: three-way demo (defaults only / +catalog / +proj
       ["+ catalog", withCatalog],
       ["+ project (team-a slot fill)", withProject],
     ] as const) {
-      // eslint-disable-next-line no-console
       console.log(
         `[cascade demo] ${label}: layer=${resolved.layer} version=${resolved.version} ` +
           `hash=${resolved.hash.slice(0, 12)} overriddenLayers=${JSON.stringify(resolved.overriddenLayers)} ` +

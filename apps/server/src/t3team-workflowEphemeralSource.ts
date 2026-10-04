@@ -7,7 +7,7 @@ import * as Schema from "effect/Schema";
 const runIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const encodeJsonString = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 
-export class EphemeralWorkflowSourcePathError extends Schema.TaggedErrorClass<EphemeralWorkflowSourcePathError>()(
+export class EphemeralWorkflowSourcePathError extends Schema.TaggedError<EphemeralWorkflowSourcePathError>()(
   "EphemeralWorkflowSourcePathError",
   { message: Schema.String },
 ) {}

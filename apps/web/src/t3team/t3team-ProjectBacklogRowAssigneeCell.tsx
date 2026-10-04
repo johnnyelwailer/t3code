@@ -68,7 +68,7 @@ export function ProjectBacklogRowAssigneeCell({
   return (
     <div className="min-w-0">
       {compact ? null : (
-        <div className="mb-1 text-[9px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+        <div className="mb-1 text-3xs font-medium uppercase tracking-widest text-muted-foreground">
           Assignee
         </div>
       )}
@@ -80,8 +80,8 @@ export function ProjectBacklogRowAssigneeCell({
               title={resolvedAssigneeLabel}
               className={
                 compact
-                  ? "inline-flex h-7 w-full min-w-0 max-w-none items-center justify-between gap-2 rounded-md border border-border/70 bg-background/90 px-2 text-left text-[11px] leading-none hover:bg-accent/40"
-                  : "inline-flex h-8 min-w-[10rem] max-w-[13rem] items-center justify-between gap-2 rounded-md border border-border/70 bg-background/90 px-2.5 text-left text-[12px] leading-4 hover:bg-accent/40"
+                  ? "inline-flex h-7 w-full min-w-0 max-w-none items-center justify-between gap-2 rounded-md border border-border/70 bg-background/90 px-2 text-left text-2xs leading-none hover:bg-accent/40"
+                  : "inline-flex h-8 min-w-40 max-w-52 items-center justify-between gap-2 rounded-md border border-border/70 bg-background/90 px-2.5 text-left text-xs leading-4 hover:bg-accent/40"
               }
             />
           }
@@ -89,17 +89,17 @@ export function ProjectBacklogRowAssigneeCell({
           <span className="truncate">{resolvedAssigneeLabel}</span>
           <UserPlus className="ml-2 size-3.5 shrink-0 text-muted-foreground" />
         </PopoverTrigger>
-        <PopoverPopup align="start" side="bottom" className="w-72 border-border/80 p-0">
+        <PopoverPopup align="start" side="bottom" padding="none" className="w-72">
           <div className="space-y-2 p-2.5">
             <Input
-              className="h-8 border-border/80 bg-background text-[12px]"
+              size="compact"
               value={assigneeQuery}
               onChange={(event) => setAssigneeQuery(event.target.value)}
               placeholder="Search assignees"
             />
             <button
               type="button"
-              className="w-full rounded-md px-2 py-1.5 text-left text-[12px] leading-4 hover:bg-accent"
+              className="w-full rounded-md px-2 py-1.5 text-left text-xs leading-4 hover:bg-accent"
               onClick={() => handleAssigneeSelection(null)}
             >
               Unassigned
@@ -109,7 +109,7 @@ export function ProjectBacklogRowAssigneeCell({
                 <button
                   key={user.accountId}
                   type="button"
-                  className="w-full rounded-md px-2 py-1.5 text-left text-[12px] leading-4 hover:bg-accent"
+                  className="w-full rounded-md px-2 py-1.5 text-left text-xs leading-4 hover:bg-accent"
                   onClick={() => handleAssigneeSelection(user)}
                 >
                   <div className="font-medium">{user.displayName}</div>

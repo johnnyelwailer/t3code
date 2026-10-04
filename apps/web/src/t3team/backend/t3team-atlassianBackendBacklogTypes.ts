@@ -12,6 +12,8 @@ import type { ResourcePage } from "@t3tools/project-context";
 export type AtlassianBacklogCapabilities = {
   readonly estimateFieldLabel?: string;
   readonly canCreateSubtasks: boolean;
+  /** The connection lacks the Jira Software scopes; board filters need a reconnect. */
+  readonly boardScopeMissing?: true;
 };
 
 export type AtlassianBacklogBoard = {

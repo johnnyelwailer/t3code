@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { ProjectId, ThreadId, type EnvironmentId } from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 
 import {
   mapLiveThreadToProjectThread,
@@ -13,6 +13,7 @@ import {
 } from "./t3team-threadBridge";
 import {
   makeLiveProject,
+  makeLiveThreadShell,
   makeProjectThread,
   makeStoredProject,
 } from "./t3team-threadBridge.testSupport";
@@ -252,34 +253,31 @@ describe("resolveStoredProjectId", () => {
   });
 });
 
-describe("remapProjectThreadToStoredProject", () => {
-  it("reassigns legacy loose-workspace shadow threads to the owning stored project", () => {
-    const storedProjects = [
+const LIVE_SAVED = ProjectId.make("live-saved");
+
+function savedWorkspace() {
+  return {
+    storedProjects: [
       makeStoredProject({
         workspace: {
           rootPath: "/workspace/saved",
           createdAt: "2026-05-01T00:00:00.000Z",
         },
       }),
-    ];
-    const liveProjects = [
-      makeLiveProject({ id: ProjectId.make("live-saved"), workspaceRoot: "/workspace/saved" }),
-    ];
+    ],
+    liveProjects: [makeLiveProject({ id: LIVE_SAVED, workspaceRoot: "/workspace/saved" })],
+  };
+}
+
+describe("remapProjectThreadToStoredProject", () => {
+  it("reassigns legacy loose-workspace shadow threads to the owning stored project", () => {
+    const { storedProjects, liveProjects } = savedWorkspace();
     const localThread = makeProjectThread({
-      projectId: ProjectId.make("live-saved"),
+      projectId: LIVE_SAVED,
       ticketId: "ticket-1",
     });
     const liveThread = mapLiveThreadToProjectThread(
-      {
-        id: "thread-1",
-        projectId: ProjectId.make("live-saved"),
-        title: "Investigate regression",
-        messages: [],
-        createdAt: "2026-05-22T09:00:00.000Z",
-        updatedAt: "2026-05-22T10:00:00.000Z",
-        environmentId: "env-local" as EnvironmentId,
-        defaultModelSelection: null,
-      } as never,
+      makeLiveThreadShell({ id: ThreadId.make("thread-1"), projectId: LIVE_SAVED }),
       "stored-project",
     );
 
@@ -298,40 +296,73 @@ describe("remapProjectThreadToStoredProject", () => {
   });
 
   it("carries the live activity state + enrichment onto ProjectThread (GHE #208)", () => {
-    const mapped = mapLiveThreadToProjectThread({
-      id: "thread-activity",
-      projectId: ProjectId.make("live-saved"),
-      title: "Investigate regression",
-      messages: [],
-      createdAt: "2026-05-22T09:00:00.000Z",
-      updatedAt: "2026-05-22T10:00:00.000Z",
-      environmentId: "env-local" as EnvironmentId,
-      defaultModelSelection: null,
-      activityLabel: "editing the retry test",
-      activityState: "working",
-      activityStateUpdatedAt: "2026-05-22T10:00:01.000Z",
-    } as never);
+    const mapped = mapLiveThreadToProjectThread(
+      makeLiveThreadShell({
+        id: ThreadId.make("thread-activity"),
+        projectId: LIVE_SAVED,
+        activityLabel: "editing the retry test",
+        activityState: "working",
+        activityStateUpdatedAt: "2026-05-22T10:00:01.000Z",
+      }),
+    );
     expect(mapped.activityLabel).toBe("editing the retry test");
     expect(mapped.activityState).toBe("working");
     expect(mapped.activityStateUpdatedAt).toBe("2026-05-22T10:00:01.000Z");
   });
 
+  it("carries the shell's pending-question flag onto ProjectThread (parent-side indicator)", () => {
+    const base = makeLiveThreadShell({
+      id: ThreadId.make("thread-pending-question"),
+      projectId: LIVE_SAVED,
+    });
+    expect(
+      mapLiveThreadToProjectThread({ ...base, hasPendingUserInput: true }).pendingUserInput,
+    ).toBe(true);
+    expect(
+      mapLiveThreadToProjectThread({ ...base, hasPendingUserInput: false }).pendingUserInput,
+    ).toBe(false);
+    const { hasPendingUserInput: _omitted, ...withoutFlag } = base;
+    expect(
+      mapLiveThreadToProjectThread(withoutFlag as typeof base).pendingUserInput,
+    ).toBeUndefined();
+  });
+
+  it("carries the plan-mode awaiting-parent fact onto ProjectThread (same predicate as the children tool)", () => {
+    const base = makeLiveThreadShell({
+      id: ThreadId.make("thread-plan-child"),
+      projectId: LIVE_SAVED,
+      interactionMode: "plan",
+      latestTurn: {
+        turnId: "turn-1",
+        state: "completed",
+        requestedAt: "2026-05-22T09:00:01.000Z",
+        startedAt: "2026-05-22T09:00:02.000Z",
+        completedAt: "2026-05-22T09:30:00.000Z",
+        assistantMessageId: null,
+      } as never,
+      // The shell's actionable-plan flag replaces the detail's `proposedPlans` scan.
+      hasActionableProposedPlan: true,
+    });
+    // The plan-mode child that presented its plan and stopped…
+    expect(mapLiveThreadToProjectThread(base).awaitingParent).toBe(true);
+    // …reads plain completed once the approval-implementation turn consumes the plan.
+    expect(
+      mapLiveThreadToProjectThread({ ...base, hasActionableProposedPlan: false }).awaitingParent,
+    ).toBeUndefined();
+    // Default-mode threads never flag.
+    expect(
+      mapLiveThreadToProjectThread({ ...base, interactionMode: "default" }).awaitingParent,
+    ).toBeUndefined();
+  });
+
   describe("thread status: error is current state, not history", () => {
     const baseThread = (session: unknown) =>
-      ({
-        id: "thread-status",
-        projectId: ProjectId.make("live-saved"),
+      makeLiveThreadShell({
+        id: ThreadId.make("thread-status"),
+        projectId: LIVE_SAVED,
         title: "Child that hit a transient gateway error",
-        messages: [],
-        latestTurn: null,
-        archivedAt: null,
-        error: null,
-        session,
-        createdAt: "2026-05-22T09:00:00.000Z",
-        updatedAt: "2026-05-22T10:00:00.000Z",
-        environmentId: "env-local" as EnvironmentId,
-        defaultModelSelection: null,
-      }) as never;
+        session: session as never,
+      });
 
     it("keeps red only while the session is CURRENTLY in error state", () => {
       expect(
@@ -360,132 +391,57 @@ describe("remapProjectThreadToStoredProject", () => {
     });
   });
 
-  it("maps durable parent and ticket metadata from live threads", () => {
+  it("maps the mirrored local session instance from the shell field, not from message ids", () => {
+    const shell = makeLiveThreadShell({
+      id: ThreadId.make("thread-local-session"),
+      projectId: LIVE_SAVED,
+      localSessionInstanceId: ProviderInstanceId.make("codex"),
+    });
+    expect(mapLiveThreadToProjectThread(shell).providerKind).toBe("codex");
+    // App-managed threads carry no instance id: no provider mark.
     expect(
-      mapLiveThreadToProjectThread({
-        id: "thread-child",
-        projectId: ProjectId.make("live-saved"),
-        title: "Investigate regression",
-        messages: [],
-        activities: [
-          {
-            id: "activity-handoff-1",
-            tone: "info",
-            kind: "t3team.handoff.created",
-            summary: "Created from Parent thread",
-            payload: {
-              parentThreadId: ThreadId.make("thread-parent"),
-              childThreadId: ThreadId.make("thread-child"),
-              ticketId: "PROJ-123",
-            },
-            turnId: null,
-            createdAt: "2026-05-22T09:00:00.000Z",
-          },
-        ],
-        latestTurn: null,
-        archivedAt: null,
-        error: null,
-        session: null,
-        createdAt: "2026-05-22T09:00:00.000Z",
-        updatedAt: "2026-05-22T10:00:00.000Z",
-        environmentId: "env-local" as EnvironmentId,
-        defaultModelSelection: null,
-      } as never),
-    ).toEqual(
-      expect.objectContaining({
-        id: "thread-child",
-        parentThreadId: "thread-parent",
-        ticketId: "PROJ-123",
-      }),
-    );
+      mapLiveThreadToProjectThread(makeLiveThreadShell({ projectId: LIVE_SAVED })).providerKind,
+    ).toBeUndefined();
   });
 
-  it("maps durable ticket metadata even when no parent thread is recorded", () => {
-    expect(
-      mapLiveThreadToProjectThread({
-        id: "thread-ticket-root",
-        projectId: ProjectId.make("live-saved"),
-        title: "Investigate sibling ticket",
-        messages: [],
-        activities: [
-          {
-            id: "activity-handoff-2",
-            tone: "info",
-            kind: "t3team.handoff.created",
-            summary: "Created from Parent thread",
-            payload: {
-              childThreadId: ThreadId.make("thread-ticket-root"),
-              ticketId: "proj-456",
-            },
-            turnId: null,
-            createdAt: "2026-05-22T09:00:00.000Z",
-          },
-        ],
-        latestTurn: null,
-        archivedAt: null,
-        error: null,
-        session: null,
-        createdAt: "2026-05-22T09:00:00.000Z",
-        updatedAt: "2026-05-22T10:00:00.000Z",
-        environmentId: "env-local" as EnvironmentId,
-        defaultModelSelection: null,
-      } as never),
-    ).toEqual(
-      expect.objectContaining({
-        id: "thread-ticket-root",
-        ticketId: "proj-456",
-      }),
+  it("maps the declared wait from the shell's hasOpenChildWait flag", () => {
+    const base = makeLiveThreadShell({ projectId: LIVE_SAVED });
+    expect(mapLiveThreadToProjectThread({ ...base, hasOpenChildWait: true }).waitingDeclared).toBe(
+      true,
     );
+    expect(
+      mapLiveThreadToProjectThread({ ...base, hasOpenChildWait: false }).waitingDeclared,
+    ).toBeUndefined();
+    expect(mapLiveThreadToProjectThread(base).waitingDeclared).toBeUndefined();
   });
 
-  it("shadows live child-thread metadata into local state during startup hydration", () => {
-    const storedProjects = [
-      makeStoredProject({
-        workspace: {
-          rootPath: "/workspace/saved",
-          createdAt: "2026-05-01T00:00:00.000Z",
-        },
-      }),
-    ];
-    const liveProjects = [
-      makeLiveProject({ id: ProjectId.make("live-saved"), workspaceRoot: "/workspace/saved" }),
-    ];
+  it("derives no parent/ticket placement from a shell (placement comes from the server route)", () => {
+    const mapped = mapLiveThreadToProjectThread(
+      makeLiveThreadShell({ id: ThreadId.make("thread-child"), projectId: LIVE_SAVED }),
+    );
+    expect(mapped.parentThreadId).toBeUndefined();
+    expect(mapped.ticketId).toBeUndefined();
+    expect(mapped).not.toHaveProperty("retention");
+    expect(mapped).not.toHaveProperty("messageCount");
+  });
+
+  it("keeps durable parent and ticket metadata already in local state when a shell syncs", () => {
+    const { storedProjects, liveProjects } = savedWorkspace();
 
     expect(
       syncLiveThreadMetadataToLocalState({
-        threads: [],
+        threads: [
+          makeProjectThread({
+            id: "thread-child",
+            projectId: "stored-project",
+            parentThreadId: "thread-parent",
+            ticketId: "PROJ-123",
+          }),
+        ],
         storedProjects,
         liveProjects,
         liveThreads: [
-          {
-            id: "thread-child",
-            projectId: ProjectId.make("live-saved"),
-            title: "Investigate regression",
-            messages: [],
-            activities: [
-              {
-                id: "activity-handoff-1",
-                tone: "info",
-                kind: "t3team.handoff.created",
-                summary: "Created from Parent thread",
-                payload: {
-                  parentThreadId: ThreadId.make("thread-parent"),
-                  childThreadId: ThreadId.make("thread-child"),
-                  ticketId: "PROJ-123",
-                },
-                turnId: null,
-                createdAt: "2026-05-22T09:00:00.000Z",
-              },
-            ],
-            latestTurn: null,
-            archivedAt: null,
-            error: null,
-            session: null,
-            createdAt: "2026-05-22T09:00:00.000Z",
-            updatedAt: "2026-05-22T10:00:00.000Z",
-            environmentId: "env-local" as EnvironmentId,
-            defaultModelSelection: null,
-          } as never,
+          makeLiveThreadShell({ id: ThreadId.make("thread-child"), projectId: LIVE_SAVED }),
         ],
       }),
     ).toEqual([
@@ -498,18 +454,116 @@ describe("remapProjectThreadToStoredProject", () => {
     ]);
   });
 
+  it("shadows a live shell with no local placement as a root thread", () => {
+    const { storedProjects, liveProjects } = savedWorkspace();
+    const out = syncLiveThreadMetadataToLocalState({
+      threads: [],
+      storedProjects,
+      liveProjects,
+      liveThreads: [
+        makeLiveThreadShell({ id: ThreadId.make("thread-child"), projectId: LIVE_SAVED }),
+      ],
+    });
+    expect(out).toEqual([
+      expect.objectContaining({ id: "thread-child", projectId: "stored-project" }),
+    ]);
+    expect(out[0]?.parentThreadId).toBeUndefined();
+  });
+
+  it("marks a settled parent as waiting while its t3team child is live", () => {
+    const { storedProjects, liveProjects } = savedWorkspace();
+    const out = syncLiveThreadMetadataToLocalState({
+      // The parent/child relation is the placement persisted in local state.
+      threads: [
+        makeProjectThread({ id: "thread-parent", projectId: "stored-project" }),
+        makeProjectThread({
+          id: "thread-child",
+          projectId: "stored-project",
+          parentThreadId: "thread-parent",
+        }),
+      ],
+      storedProjects,
+      liveProjects,
+      liveThreads: [
+        makeLiveThreadShell({
+          id: ThreadId.make("thread-parent"),
+          projectId: LIVE_SAVED,
+          title: "Parent thread",
+          latestTurn: { state: "completed" } as never,
+          session: { status: "idle" } as never,
+        }),
+        makeLiveThreadShell({
+          id: ThreadId.make("thread-child"),
+          projectId: LIVE_SAVED,
+          latestTurn: { state: "running" } as never,
+          session: { status: "running" } as never,
+        }),
+      ],
+    });
+    const parent = out.find((thread) => thread.id === "thread-parent");
+    const child = out.find((thread) => thread.id === "thread-child");
+    expect(parent?.waitingOnChildren).toBe(true);
+    expect(child?.waitingOnChildren).toBe(false);
+  });
+
+  it("does not mark a parent as waiting when local state has no placement for the child", () => {
+    const { storedProjects, liveProjects } = savedWorkspace();
+    const out = syncLiveThreadMetadataToLocalState({
+      threads: [],
+      storedProjects,
+      liveProjects,
+      liveThreads: [
+        makeLiveThreadShell({
+          id: ThreadId.make("thread-parent"),
+          projectId: LIVE_SAVED,
+          latestTurn: { state: "completed" } as never,
+          session: { status: "idle" } as never,
+        }),
+        makeLiveThreadShell({
+          id: ThreadId.make("thread-child"),
+          projectId: LIVE_SAVED,
+          latestTurn: { state: "running" } as never,
+          session: { status: "running" } as never,
+        }),
+      ],
+    });
+    expect(out.find((thread) => thread.id === "thread-parent")?.waitingOnChildren).toBe(false);
+  });
+
+  it("clears the waiting fact once the child's run state settles", () => {
+    const { storedProjects, liveProjects } = savedWorkspace();
+    const out = syncLiveThreadMetadataToLocalState({
+      threads: [
+        makeProjectThread({ id: "thread-parent", projectId: "stored-project" }),
+        makeProjectThread({
+          id: "thread-child",
+          projectId: "stored-project",
+          parentThreadId: "thread-parent",
+        }),
+      ],
+      storedProjects,
+      liveProjects,
+      liveThreads: [
+        makeLiveThreadShell({
+          id: ThreadId.make("thread-parent"),
+          projectId: LIVE_SAVED,
+          latestTurn: { state: "completed" } as never,
+          session: { status: "idle" } as never,
+        }),
+        makeLiveThreadShell({
+          id: ThreadId.make("thread-child"),
+          projectId: LIVE_SAVED,
+          latestTurn: { state: "completed" } as never,
+          session: { status: "idle" } as never,
+        }),
+      ],
+    });
+    const parent = out.find((thread) => thread.id === "thread-parent");
+    expect(parent?.waitingOnChildren).toBe(false);
+  });
+
   it("preserves remembered local display mode while syncing live child metadata", () => {
-    const storedProjects = [
-      makeStoredProject({
-        workspace: {
-          rootPath: "/workspace/saved",
-          createdAt: "2026-05-01T00:00:00.000Z",
-        },
-      }),
-    ];
-    const liveProjects = [
-      makeLiveProject({ id: ProjectId.make("live-saved"), workspaceRoot: "/workspace/saved" }),
-    ];
+    const { storedProjects, liveProjects } = savedWorkspace();
 
     expect(
       syncLiveThreadMetadataToLocalState({
@@ -517,41 +571,15 @@ describe("remapProjectThreadToStoredProject", () => {
           makeProjectThread({
             id: "thread-child",
             projectId: "stored-project",
+            parentThreadId: "thread-parent",
+            ticketId: "PROJ-123",
             displayMode: "thread",
           }),
         ],
         storedProjects,
         liveProjects,
         liveThreads: [
-          {
-            id: "thread-child",
-            projectId: ProjectId.make("live-saved"),
-            title: "Investigate regression",
-            messages: [],
-            activities: [
-              {
-                id: "activity-handoff-1",
-                tone: "info",
-                kind: "t3team.handoff.created",
-                summary: "Created from Parent thread",
-                payload: {
-                  parentThreadId: ThreadId.make("thread-parent"),
-                  childThreadId: ThreadId.make("thread-child"),
-                  ticketId: "PROJ-123",
-                },
-                turnId: null,
-                createdAt: "2026-05-22T09:00:00.000Z",
-              },
-            ],
-            latestTurn: null,
-            archivedAt: null,
-            error: null,
-            session: null,
-            createdAt: "2026-05-22T09:00:00.000Z",
-            updatedAt: "2026-05-22T10:00:00.000Z",
-            environmentId: "env-local" as EnvironmentId,
-            defaultModelSelection: null,
-          } as never,
+          makeLiveThreadShell({ id: ThreadId.make("thread-child"), projectId: LIVE_SAVED }),
         ],
       }),
     ).toEqual([
@@ -566,22 +594,14 @@ describe("remapProjectThreadToStoredProject", () => {
   });
 
   it("carries a sleeping run's wake instant through to the sidebar pill", () => {
-    const projectThread = mapLiveThreadToProjectThread({
-      id: "thread-routine",
-      projectId: ProjectId.make("live-saved"),
-      title: "Weekly triage",
-      messages: [],
-      activities: [],
-      latestTurn: null,
-      archivedAt: null,
-      error: null,
-      session: null,
-      createdAt: "2026-06-14T09:00:00.000Z",
-      updatedAt: "2026-06-14T10:00:00.000Z",
-      sleepingUntil: "2026-06-15T09:00:00.000Z",
-      environmentId: "env-local" as EnvironmentId,
-      defaultModelSelection: null,
-    } as never);
+    const projectThread = mapLiveThreadToProjectThread(
+      makeLiveThreadShell({
+        id: ThreadId.make("thread-routine"),
+        projectId: LIVE_SAVED,
+        title: "Weekly triage",
+        sleepingUntil: "2026-06-15T09:00:00.000Z",
+      }),
+    );
 
     expect(projectThread.sleepingUntil).toBe("2026-06-15T09:00:00.000Z");
 
@@ -591,21 +611,13 @@ describe("remapProjectThreadToStoredProject", () => {
   });
 
   it("omits sleepingUntil and renders no sleeping pill when no run is clock-parked", () => {
-    const projectThread = mapLiveThreadToProjectThread({
-      id: "thread-plain",
-      projectId: ProjectId.make("live-saved"),
-      title: "Active work",
-      messages: [],
-      activities: [],
-      latestTurn: null,
-      archivedAt: null,
-      error: null,
-      session: null,
-      createdAt: "2026-06-14T09:00:00.000Z",
-      updatedAt: "2026-06-14T10:00:00.000Z",
-      environmentId: "env-local" as EnvironmentId,
-      defaultModelSelection: null,
-    } as never);
+    const projectThread = mapLiveThreadToProjectThread(
+      makeLiveThreadShell({
+        id: ThreadId.make("thread-plain"),
+        projectId: LIVE_SAVED,
+        title: "Active work",
+      }),
+    );
 
     expect(projectThread.sleepingUntil).toBeUndefined();
     expect(resolveThreadStatusPill(projectThread)?.label).not.toBe("Sleeping");

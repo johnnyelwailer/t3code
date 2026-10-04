@@ -29,7 +29,9 @@ export function GitHubRepositoryDiscoveryAdvancedOptions({
           />
         </div>
       </CollapsibleTrigger>
-      <CollapsibleContent className="pt-2">{children}</CollapsibleContent>
+      <CollapsibleContent>
+        <div className="pt-2">{children}</div>
+      </CollapsibleContent>
     </Collapsible>
   );
 }

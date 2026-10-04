@@ -16,7 +16,6 @@ export type TicketDetailKickoffAsideProps = {
   relatedTickets: ReadonlyArray<ProjectTicket>;
   jiraIssueType?: string | undefined;
   ticketPriority?: string | undefined;
-  issueThreads: ProjectThread[];
   projectId: string;
   projectTitle: string;
   projectWorkspaceRoot?: string;

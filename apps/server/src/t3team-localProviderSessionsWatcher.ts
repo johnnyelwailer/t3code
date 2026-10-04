@@ -1,3 +1,4 @@
+// @effect-diagnostics globalDateInEffect:off -- sweep timestamps are host wall-clock, not Effect Clock.
 import * as NodeOS from "node:os";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";

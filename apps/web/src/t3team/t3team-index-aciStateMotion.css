@@ -1,0 +1,84 @@
+/* Per-state keyframes of the active-agent dots and the waiting ring.
+ * Imported through t3team-index-global.css. */
+
+/* Every keyframe grows around the 1.5x rest — a gentle swell, not a
+   bounce (real threads burst sporadically). */
+@keyframes t3team-aci-wave {
+  0%,
+  100% {
+    transform: scale(1.5);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scale(1.82);
+    opacity: 0.95;
+  }
+}
+
+@keyframes t3team-aci-snap {
+  0%,
+  100% {
+    transform: scale(1.5);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.85);
+    opacity: 1;
+  }
+}
+
+@keyframes t3team-aci-breathe {
+  0%,
+  100% {
+    transform: scale(1.45);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.78);
+    opacity: 0.88;
+  }
+}
+
+/* Waiting dots get one soft breathing halo, synced to the 3.2s breath.
+   Paint follows the orb token; the cell's first span is the pulse wrapper. */
+.t3team-aci-cell[data-t3team-state="waiting"] > span::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 9999px;
+  border: 0;
+  box-shadow: 0 0 7px 2px
+    color-mix(in oklch, var(--t3team-orb-s, var(--muted-foreground)) 18%, transparent);
+  opacity: 0;
+  transform: scale(0.4);
+  animation: t3team-aci-ring-breathe 3.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  pointer-events: none;
+}
+
+@keyframes t3team-aci-ring-breathe {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.25;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t3team-aci-cell > span::before {
+    animation: none !important;
+  }
+}

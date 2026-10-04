@@ -7,8 +7,8 @@ import {
   useSidebarStageBackdropVariant,
 } from "~/components/SidebarStageBackdrop";
 import { T3TeamLeftSidebarHeaderToggle } from "~/t3team/t3team-LeftSidebarHeaderToggle";
-import { SidebarHeader, SidebarTrigger } from "~/t3team/components/ui/t3team-sidebar";
-import { T3TeamPackBrandImage } from "~/t3team/t3team-PackBrandImage";
+import { SidebarTrigger } from "~/t3team/components/ui/t3team-sidebar";
+import { isNexploreBrand, PackBrandIdentity } from "~/t3team/components/t3team-PackBrandIdentity";
 
 type ProjectSidebarHeaderProps = {
   appearance: EnvironmentAppearance | undefined;
@@ -45,9 +45,10 @@ export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHead
   });
 
   return (
-    <SidebarHeader
+    // The titlebar row, not a padded SidebarHeader: it aligns to the window controls.
+    <div
       className={cn(
-        "group/sidebar-header @container/sidebar-header relative h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center px-3 py-0 md:px-0",
+        "group/sidebar-header @container/sidebar-header relative flex h-[var(--workspace-topbar-height)] shrink-0 flex-row items-center gap-2 px-3 md:px-0",
         isElectron && "drag-region",
       )}
     >
@@ -60,35 +61,40 @@ export function ProjectSidebarHeader({ appearance, appName }: ProjectSidebarHead
         className="pointer-events-none absolute inset-0 z-[1]"
         style={{ background: "var(--t3team-sidebar-header-background, transparent)" }}
       />
-      <SidebarTrigger
-        className={cn(
-          "relative z-10 md:hidden",
-          onBackdrop &&
-            "[:hover,[data-pressed]]:bg-white/15 focus-visible:ring-white/90 focus-visible:ring-offset-blue-700 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white!",
-        )}
-      />
       <div
         className={cn(
           "relative z-10 flex h-7 w-fit min-w-0 shrink-0 items-center gap-1.5 overflow-hidden",
-          // Only macOS needs a left inset for native traffic lights. Windows and
-          // Linux place native controls on the right, so the brand can align with
-          // the sidebar content. On the web, reserve space only for WCO mode.
           brandInsetClass,
           onBackdrop ? "text-white" : "text-sidebar-foreground",
         )}
       >
-        <T3TeamPackBrandImage brand={appearance?.brand} kind="mark" className="size-5 shrink-0" />
-        {/* Inherits the wrapper's text color (white on backdrop, sidebar-foreground
-            otherwise) — the app name is the Team header's primary label, unlike
-            upstream's secondary "Code" caption next to a standalone wordmark. */}
-        <span className="truncate text-sm font-semibold">{appName}</span>
+        {/*
+          Aspect from the asset's 59.334x21.029 viewBox, so the wordmark never distorts.
+
+          `-translate-y-px` optically centres it against the label. The row is already
+          `items-center`, but that centres the wordmark's BOX while its letterforms are not
+          centred inside it: the lowercase mass spans y 4.57-20.85 of a 21.029 box, so its visual
+          centre sits ~2.2 units (~1.4px at this size) below the box centre, which reads as the
+          label sitting too high. Nudging the wordmark up instead of the label down keeps the text
+          on its own baseline.
+        */}
+        {/* Under nexplore the wordmark already reads "nexi", so the label carries only the
+            remainder ("Nexi Work" -> "Work"). Any other distribution keeps its own mark and its
+            full configured name. Both inherit the wrapper's text color. */}
+        <PackBrandIdentity
+          appearance={appearance}
+          appName={appName}
+          markClassName={isNexploreBrand(appearance) ? "h-[0.85rem] -translate-y-px" : "size-5"}
+          labelClassName="truncate text-sm font-semibold"
+          onBackdrop={onBackdrop}
+        />
       </div>
-      {/* `pr-2` matches the icon column's right inset below the header
-          (e.g. `SidebarGroup` content, project-row hover actions), since the
-          header itself drops horizontal padding at `md:px-0`. */}
-      <div className="relative z-10 ml-auto flex items-center pr-2">
-        <T3TeamLeftSidebarHeaderToggle surface="banner" />
-      </div>
-    </SidebarHeader>
+      <SidebarTrigger
+        // Over the stage artwork: the media viewer's control-on-imagery treatment, as upstream's
+        // SidebarChromeHeader does. The layout classes undo that variant's absolute centring.
+        variant={onBackdrop ? "media-navigation" : "ghost"}
+        className="relative top-auto z-10 ms-auto mr-[var(--sidebar-content-inset)] shrink-0 translate-y-0"
+      />
+    </div>
   );
 }

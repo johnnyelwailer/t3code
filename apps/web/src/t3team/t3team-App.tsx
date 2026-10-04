@@ -107,7 +107,7 @@ export function App({
       <Sidebar
         side="left"
         collapsible="offcanvas"
-        className="min-h-0 overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
+        className="min-h-0 overflow-hidden"
         resizable={{
           minWidth: T3TEAM_LEFT_SIDEBAR_MIN_WIDTH,
           shouldAcceptWidth: ({ nextWidth, wrapper }) =>

@@ -1,3 +1,4 @@
+// @effect-diagnostics preferSchemaOverJson:off -- argv/fixture JSON at a process boundary, not a domain payload.
 /**
  * A run's launch `intent` survives the launch (migration 051).
  *

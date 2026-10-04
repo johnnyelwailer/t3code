@@ -30,7 +30,6 @@ export function buildTicketDetailKickoffAsideProps(input: {
   relatedTickets: TicketRelatedTickets;
   issueType: string | undefined;
   priority: string | undefined;
-  issueThreads: ProjectThread[];
   resolvedTicketId: string;
   activeThread: ProjectThread | null;
   matchedGitHubActivityItems: ReadonlyArray<GitHubWorkActivityItem>;
@@ -50,7 +49,6 @@ export function buildTicketDetailKickoffAsideProps(input: {
     relatedTickets,
     issueType,
     priority,
-    issueThreads,
     resolvedTicketId,
     activeThread,
     matchedGitHubActivityItems,
@@ -71,7 +69,6 @@ export function buildTicketDetailKickoffAsideProps(input: {
     relatedTickets,
     jiraIssueType: issueType,
     ticketPriority: priority,
-    issueThreads,
     projectId: project.id,
     projectTitle: project.title,
     ...(project.workspace?.rootPath ? { projectWorkspaceRoot: project.workspace.rootPath } : {}),

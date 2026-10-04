@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Bridges the launch API once, like its siblings. */
 // @effect-diagnostics nodeBuiltinImport:off - writes real recipe modules into a temp workspace.
 /**
  * The host-tool scope must come from the RECIPE, not from the launch request.
@@ -105,11 +104,14 @@ const TestLayer = NodeServices.layer;
 const brokerDispatched: OrchestrationCommand[] = [];
 const brokerEngineMock: OrchestrationEngineShape = {
   readEvents: () => Stream.empty,
+  readThreadEvents: () => Stream.empty,
+  getThreadReplayStats: () => Effect.die("unused"),
   dispatch: (command) => {
     brokerDispatched.push(command);
     return Effect.succeed({ sequence: brokerDispatched.length });
   },
   streamDomainEvents: Stream.empty,
+  subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
   latestSequence: Effect.succeed(0),
 };
 const EndToEndLayer = Layer.mergeAll(NodeServices.layer, makeBrokerLayer(brokerEngineMock));

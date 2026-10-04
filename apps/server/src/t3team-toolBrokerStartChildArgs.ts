@@ -1,4 +1,4 @@
-import { type ProviderInteractionMode } from "@t3tools/contracts";
+import { type ProviderInteractionMode, type ThreadEnvironmentBinding } from "@t3tools/contracts";
 import type { AgentEffort } from "@t3team/sdk";
 
 import {
@@ -6,6 +6,7 @@ import {
   readStartChildReasoningEffort,
   type T3TeamStartChildReasoningEffort,
 } from "./t3team-toolBrokerStartChildEffortArgs.ts";
+import { readStartChildEnvironment } from "./t3team-toolBrokerStartChildEnvironment.ts";
 
 export type T3TeamStartChildKickoffMode = "plan" | "interactive" | "autopilot";
 export type { T3TeamStartChildReasoningEffort };
@@ -37,6 +38,13 @@ export type T3TeamStartChildArgs = {
   readonly effort?: AgentEffort;
   readonly repoFullName?: string;
   readonly repoRef?: string;
+  /**
+   * Optional execution-environment binding for the child session: when set,
+   * the thread record is stamped with the target environment's identity
+   * (cross-environment child). Absent = the child stays in THIS server's
+   * environment, byte-identical to pre-environment behavior.
+   */
+  readonly environment?: ThreadEnvironmentBinding;
 };
 
 type T3TeamStartChildArgsResult =
@@ -81,6 +89,7 @@ export const readStartChildArgs = (value: unknown): T3TeamStartChildArgsResult =
     readonly effort?: unknown;
     readonly repo_full_name?: unknown;
     readonly repo_ref?: unknown;
+    readonly environment?: unknown;
   };
 
   const rawName = typeof candidate.name === "string" ? candidate.name : candidate.title;
@@ -171,6 +180,8 @@ export const readStartChildArgs = (value: unknown): T3TeamStartChildArgsResult =
   const model = trimmedArg(candidate.model);
   const repoFullName = trimmedArg(candidate.repo_full_name);
   const repoRef = trimmedArg(candidate.repo_ref);
+  const environment = readStartChildEnvironment(candidate.environment);
+  if (!environment.ok) return environment;
 
   // Whether 'own-worktree' additionally needs 'repo_full_name' depends on the project context
   // (linked-repo manifest present or not), so that check happens in the start-child context,
@@ -198,6 +209,7 @@ export const readStartChildArgs = (value: unknown): T3TeamStartChildArgsResult =
       ...(effort ? { effort } : {}),
       ...(repoFullName ? { repoFullName } : {}),
       ...(repoRef ? { repoRef } : {}),
+      ...(environment.value !== undefined ? { environment: environment.value } : {}),
     },
   };
 };

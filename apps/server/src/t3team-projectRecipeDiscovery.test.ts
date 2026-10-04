@@ -94,11 +94,7 @@ export default function Action({ ctx }) {
       subtitle={ctx.workitem?.type}
       icon="bug"
     >
-      <FieldList
-        items={[
-          { label: "Priority", value: ctx.workitem?.priority ?? "Unknown" },
-        ]}
-      />
+      <div className="text-[10px] text-muted-foreground/70">Priority: {ctx.workitem?.priority ?? "Unknown"}</div>
     </RecipeAction>
   );
 }
@@ -318,8 +314,11 @@ export function visible(ctx) {
   it("binds visible.ts to the no-thread read-only tool surface", async () => {
     const orchestrationMock: OrchestrationEngineShape = {
       readEvents: () => Stream.empty,
+      readThreadEvents: () => Stream.empty,
+      getThreadReplayStats: () => Effect.die("unused"),
       dispatch: () => Effect.succeed({ sequence: 1 }),
       streamDomainEvents: Stream.empty,
+      subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
       latestSequence: Effect.succeed(0),
     };
 
@@ -430,9 +429,9 @@ export async function visible(_ctx, api) {
           const workspaceRoot = yield* makeTempWorkspace();
           yield* writeRecipe({
             workspaceRoot,
-            recipeId: "create-contextual-recipe",
+            recipeId: "author-view-recipe",
             recipeJson: `{
-  "id": "create-contextual-recipe",
+  "id": "author-view-recipe",
   "version": "0.1.0",
   "scope": "project",
   "displayName": "Create a recipe for {{surfaceAuthoringLabel}}",
@@ -485,7 +484,7 @@ export async function visible(_ctx, api) {
 
           expect(results.recipes).toHaveLength(1);
           expect(results.recipes[0]).toMatchObject({
-            id: "create-contextual-recipe",
+            id: "author-view-recipe",
             displayName: "Create a recipe for backlog view",
             shortDescription: "Prioritize pending work: 3 items, one bug (ALPHA-2)",
             prompt: "Author a recipe for backlog view in Project Alpha using 3 visible items.",

@@ -20,6 +20,10 @@ import {
   stepActivity,
   TEST_WORKFLOW_SHAPE,
 } from "~/t3team/chat/t3team-messageShapeCardLive.testSupport";
+// Loaded statically so its large module graph evaluates in Vitest's untimed collection phase, not
+// inside a hook or test budget; renderTimeline()'s `await import(...)` then hits the module cache.
+// Keep it last: as the graph's entry it trips the catalog → connection/runtime import cycle.
+import "~/components/chat/MessagesTimeline";
 
 describe("deriveT3TeamWorkflowStepRuns", () => {
   it("groups by run, orders by journal seq, keeps the latest phase, and splits the run row", () => {
@@ -48,8 +52,10 @@ describe("deriveT3TeamWorkflowStepRuns", () => {
     expect(run?.steps[0]?.phase).toBe("completed");
     expect(run?.steps[1]?.phase).toBe("waiting");
     expect(run?.steps[1]?.detail).toBe("Merge it?");
-    // the run-level terminal activity is NOT a step row
-    expect(run?.run).toEqual({ phase: "completed" });
+    // the run-level terminal activity is NOT a step row (its timestamp rides along as `updatedAt`
+    // so a paused banner can say when — GHE #403)
+    expect(run?.run).toMatchObject({ phase: "completed" });
+    expect(run?.run?.error).toBeUndefined();
     expect(runs.get("run-other")?.run).toBeNull();
   });
 
@@ -375,7 +381,22 @@ describe("live workflow step overlay on the plan card", () => {
     });
     expect(pausedMarkup).toContain('aria-label="Resume orchestration"');
     expect(pausedMarkup).toContain('aria-label="More orchestration actions"');
-    expect(pausedMarkup).toContain("Run paused");
+    // The banner says WHEN it was paused and offers Resume right there (GHE #403 §2).
+    expect(pausedMarkup).toMatch(/Paused (just now|\d+[mhd] ago)/);
+    expect(pausedMarkup).toContain("data-run-resume");
+
+    // GHE #344: a terminal failed card offers Retry (journal re-drive), labelled as a retry,
+    // not a pause-resume — and the failed banner carries the same affordance.
+    const failedRetryMarkup = await renderTimeline(
+      [...waiting, runActivity("failed", "boom")],
+      undefined,
+      { status: "failed" },
+    );
+    expect(failedRetryMarkup).toContain('aria-label="Retry run"');
+    expect(failedRetryMarkup).not.toContain('aria-label="Resume orchestration"');
+    expect(failedRetryMarkup).not.toContain('aria-label="Stop workflow"');
+    expect(failedRetryMarkup).toContain("data-run-resume");
+    expect(failedRetryMarkup).toContain(">Retry<");
 
     const stoppedMarkup = await renderTimeline([...waiting, runActivity("cancelled")], undefined, {
       status: "cancelled",

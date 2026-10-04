@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Static shape derivation (play-as-shape view). `deriveWorkflowShape` reads a `.workflow.ts`
  * and, WITHOUT executing the body, produces its phase strip (from `meta.phases`) plus an

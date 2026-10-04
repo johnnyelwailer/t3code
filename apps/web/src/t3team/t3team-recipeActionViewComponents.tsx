@@ -1,4 +1,3 @@
-/* oxlint-disable react/no-array-index-key -- Existing merged lint debt; keep green while preserving behavior. */
 import type { ReactNode } from "react";
 import {
   ArrowRight,
@@ -68,7 +67,7 @@ function RecipeAction(props: {
         <Icon className="size-3.5" />
       </div>
       {props.eyebrow ? (
-        <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/70">
+        <div className="text-3xs font-medium uppercase tracking-widest text-muted-foreground/70">
           {props.eyebrow}
         </div>
       ) : null}
@@ -87,26 +86,9 @@ function RecipeAction(props: {
   );
 }
 
-function FieldList(props: {
-  readonly items: ReadonlyArray<{ label: ReactNode; value: ReactNode }>;
-}) {
-  return (
-    <dl className="grid gap-x-3 gap-y-2 sm:grid-cols-2">
-      {props.items.map((item, index) => (
-        <div key={`${String(item.label)}-${index}`} className="space-y-0.5">
-          <dt className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/70">
-            {item.label}
-          </dt>
-          <dd className="text-xs leading-5 text-foreground/80">{item.value}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
-
 function SourceLink(props: { readonly label: ReactNode; readonly href?: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground/80">
+    <span className="inline-flex items-center gap-1.5 text-2xs font-medium text-muted-foreground/80">
       <Link2 className="size-3.5" />
       <span>{props.label}</span>
     </span>
@@ -115,7 +97,7 @@ function SourceLink(props: { readonly label: ReactNode; readonly href?: string }
 
 function ArtifactLink(props: { readonly label: ReactNode; readonly href?: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-foreground/80">
+    <span className="inline-flex items-center gap-1.5 text-2xs font-medium text-foreground/80">
       <ArrowUpRight className="size-3.5 text-muted-foreground" />
       <span>{props.label}</span>
     </span>
@@ -154,7 +136,6 @@ function JiraInlineIssue(props: {
 export const recipeActionViewComponents = {
   ArtifactLink,
   Badge,
-  FieldList,
   InlineActionChip,
   JiraInlineIssue,
   LaunchOptionGroup,

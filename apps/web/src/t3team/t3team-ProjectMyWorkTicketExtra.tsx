@@ -18,7 +18,7 @@ export function ProjectMyWorkTicketExtra({
     <>
       {!compact && updatedLabel ? (
         <div className="mt-2 flex flex-wrap items-center gap-1.5 px-1">
-          <span className="text-[10px] text-muted-foreground">Updated {updatedLabel}</span>
+          <span className="text-3xs text-muted-foreground">Updated {updatedLabel}</span>
         </div>
       ) : null}
     </>

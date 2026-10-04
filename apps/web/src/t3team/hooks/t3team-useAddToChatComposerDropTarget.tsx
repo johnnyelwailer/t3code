@@ -32,7 +32,7 @@ export function useAddToChatComposerDropTarget(target?: AddToChatTarget) {
         <T3TeamAgentContextDropOverlay
           active={isActive}
           label="Drop to add this item to the chat"
-          className="rounded-[20px]"
+          className="rounded-3xl"
         />
       ),
     }),

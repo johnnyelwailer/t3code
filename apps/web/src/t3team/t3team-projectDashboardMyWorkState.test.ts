@@ -10,6 +10,7 @@ describe("project dashboard my work state", () => {
   it("defaults to kanban view with no hidden lanes", () => {
     expect(resolveProjectDashboardMyWorkState({})).toEqual({
       query: "",
+      lens: "digest",
       viewMode: "kanban",
       groupMode: "hierarchy",
       statusCategory: "all",
@@ -53,6 +54,7 @@ describe("project dashboard my work state", () => {
 
     expect(resolveProjectDashboardMyWorkState({ persisted, search })).toEqual({
       query: "route query",
+      lens: "digest",
       viewMode: "table",
       groupMode: "hierarchy",
       statusCategory: "active",
@@ -69,6 +71,7 @@ describe("project dashboard my work state", () => {
   it("treats legacy lane-only route state as a custom lane selection", () => {
     expect(resolveProjectDashboardMyWorkState({ search: { myWorkLanes: "done" } })).toEqual({
       query: "",
+      lens: "digest",
       viewMode: "kanban",
       groupMode: "hierarchy",
       statusCategory: "all",
@@ -89,6 +92,7 @@ describe("project dashboard my work state", () => {
       }),
     ).toEqual({
       query: "q",
+      lens: "digest",
       viewMode: "kanban",
       groupMode: "hierarchy",
       statusCategory: "all",
@@ -100,5 +104,45 @@ describe("project dashboard my work state", () => {
       tableSortBy: "updated",
       tableSortDirection: "desc",
     });
+  });
+
+  it("keeps a persisted lens — the route search never mirrors it", () => {
+    expect(
+      resolveProjectDashboardMyWorkState({
+        persisted: { lens: "board" },
+        search: { myWorkView: "table" },
+      }),
+    ).toMatchObject({ lens: "board", viewMode: "table" });
+  });
+
+  it("applies the beta default lens only when no lens has been persisted", () => {
+    const storage = new Map<string, string>([
+      ["t3team:beta-flags", JSON.stringify({ digestDefaultLens: "board" })],
+    ]);
+    const windowStub = {
+      localStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          storage.set(key, value);
+        },
+        removeItem: (key: string) => {
+          storage.delete(key);
+        },
+      },
+      dispatchEvent: () => true,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    } as unknown as Window & typeof globalThis;
+    Object.defineProperty(globalThis, "window", {
+      value: windowStub,
+      configurable: true,
+      writable: true,
+    });
+
+    expect(resolveProjectDashboardMyWorkState({}).lens).toBe("board");
+    // A persisted lens wins over the beta default.
+    expect(resolveProjectDashboardMyWorkState({ persisted: { lens: "hierarchy" } }).lens).toBe(
+      "hierarchy",
+    );
   });
 });

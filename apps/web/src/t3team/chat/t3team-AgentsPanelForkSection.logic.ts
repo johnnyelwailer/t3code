@@ -5,9 +5,47 @@
  * the panel stays small; the panel's "N idle · expand" collapsing and the
  * nested indentation live in `t3team-AgentsPanelSubRunTree.tsx`.
  */
+import type { AgentPanelModel } from "@t3tools/client-runtime/state/subagentRuntime";
+
+import type { T3TeamActiveWorkflowDockItem } from "~/t3team/chat/t3team-activeWorkflowDock";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import { compareSubRunThreads } from "~/t3team/components/t3team-projectSidebarThreadTree";
 import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay";
+
+/**
+ * The VARIANTS decision (2026-09-08 agents-panel UX) — variant 1, "one source of truth":
+ * the roster already renders a workflow run's own name + phase + members, so re-listing that
+ * same run as a "Recipe workflows" row directly under it is the duplication PJ screenshotted
+ * (the panel's Recipe section and the composer dock share `deriveT3TeamActiveWorkflowDockItems`
+ * by design; the SECTION inside the panel is the redundant one). These pure helpers let the
+ * caller drop dock items the panel model already covers, WITHOUT touching the shared dock
+ * derivation the composer still needs.
+ */
+/** Every run id the panel model's workflow groups already render (group + member run handles). */
+export function panelModelRunIds(model: AgentPanelModel): ReadonlySet<string> {
+  const ids = new Set<string>();
+  for (const group of model.workflows) {
+    for (const agent of [
+      group.workflow,
+      ...group.unphasedMembers,
+      ...group.phases.flatMap((p) => p.members),
+    ]) {
+      const runId = agent.runHandles?.runId;
+      if (runId) ids.add(runId);
+      if (agent.kind === "workflow") ids.add(agent.id);
+    }
+  }
+  return ids;
+}
+
+/** Dock items that the panel roster does NOT already render — the deduped Recipe-workflows list. */
+export function filterWorkflowRunsForForkSection(
+  runs: ReadonlyArray<T3TeamActiveWorkflowDockItem>,
+  model: AgentPanelModel,
+): ReadonlyArray<T3TeamActiveWorkflowDockItem> {
+  const covered = panelModelRunIds(model);
+  return covered.size === 0 ? runs : runs.filter((item) => !covered.has(item.runId));
+}
 
 export type SubRunOpenCallback = (input: {
   readonly projectId: string;
@@ -64,6 +102,30 @@ export const SUB_RUN_STATUS_LABEL: Record<ProjectThread["status"], string> = {
 };
 
 /**
+ * The two WAITING labels, defined in ONE place (they may become icon-led
+ * later, so keep the text here, not scattered across components).
+ *
+ * The parent's settled-own-work + children situation is TWO distinct facts,
+ * not one: DERIVED ("has live children") is the looser state — keeping an
+ * eye on children that are still running; DECLARED ("a `t3team_children`
+ * `op: wait` registered on this thread is still pending") is the stronger,
+ * intentional blocking relationship. Against "Waiting", "Monitoring" reads
+ * as the looser state; keep that contrast — a later reader who sees only one
+ * will otherwise collapse them back together. DECLARED outranks DERIVED for
+ * the label (a parent explicitly blocked on a result is more specific than
+ * one merely supervising); a parent's OWN live work outranks both.
+ *
+ * Both use the standard working/in-progress colour, NOT amber: amber stays
+ * reserved for "Question awaiting answer", the only one of these that
+ * actually needs the user. Rejected names: "Paused" (that is a resumable
+ * orchestration run state, and the parent is not suspended — it finished its
+ * part) and "Idle" (`ThreadRunState` "idle" means nothing is happening — the
+ * opposite of "children are running").
+ */
+export const SUB_RUN_MONITORING_LABEL = "Monitoring";
+export const SUB_RUN_WAITING_DECLARED_LABEL = "Waiting";
+
+/**
  * The live status TEXT of a panel sub-run/agent row — the SAME shared resolution the
  * sidebar sub-run rows use (`resolveActivityPillDisplay` over the same
  * `activityLabel`/`activityState` fields, so the panel and the sidebar never
@@ -75,9 +137,47 @@ export const SUB_RUN_STATUS_LABEL: Record<ProjectThread["status"], string> = {
  * unaffected (they carry the 4-state + settled visuals).
  */
 export function resolveSubRunStatusLabel(
-  thread: Pick<ProjectThread, "status" | "activityLabel" | "activityState">,
+  thread: Pick<
+    ProjectThread,
+    | "status"
+    | "activityLabel"
+    | "activityState"
+    | "pendingUserInput"
+    | "waitingOnChildren"
+    | "waitingDeclared"
+    | "awaitingParent"
+  >,
   options: { readonly activityLabelsEnabled: boolean },
 ): string {
+  // A question docked in this thread's composer outranks the run state: the
+  // parent's next action is to look at that question (the row click jumps to
+  // the child's thread, where the panel sits).
+  if (thread.pendingUserInput === true) {
+    return "Question awaiting answer";
+  }
+  // A plan-mode child that presented its plan and stopped: the turn IS
+  // completed, but the parent owes this child a decision (same surface,
+  // same navigation as the pending question above — the amber pending
+  // treatment, never a separate indicator system).
+  if (thread.awaitingParent === true) {
+    return "Plan awaiting approval";
+  }
+  // Own work settled: the thread is waiting on child work. Two facts, one
+  // branch — the DECLARED one (a registered `op: wait` still pending) is the
+  // stronger, intentional blocking state and outranks the DERIVED one
+  // (children merely still live). A parent explicitly blocked on a result
+  // reads "Waiting", a parent merely supervising live children reads
+  // "Monitoring". Own live work (running) and a failed row (error) keep their
+  // own word, mirroring the server primitive's precedence.
+  if (
+    (thread.waitingOnChildren === true || thread.waitingDeclared === true) &&
+    thread.status !== "running" &&
+    thread.status !== "error"
+  ) {
+    return thread.waitingDeclared === true
+      ? SUB_RUN_WAITING_DECLARED_LABEL
+      : SUB_RUN_MONITORING_LABEL;
+  }
   const label = SUB_RUN_STATUS_LABEL[thread.status];
   if (thread.status !== "running") return label;
   return resolveActivityPillDisplay({

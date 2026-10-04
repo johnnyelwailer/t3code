@@ -19,7 +19,7 @@ import * as SynchronizedRef from "effect/SynchronizedRef";
 
 import * as PtyAdapter from "../terminal/PtyAdapter.ts";
 import { getAdapter } from "./t3team-adapters.ts";
-import { assemblePtyRead, foldPtyRead } from "./t3team-advance.ts";
+import { wireLoginProcess } from "./t3team-loginProcessWiring.ts";
 import type { ActiveSession } from "./t3team-ToolAuthService.ts";
 import type { ToolSingleFlight } from "./t3team-singleFlight.ts";
 import type { AuthState, ToolAuthAdapter } from "./t3team-types.ts";
@@ -40,6 +40,12 @@ export interface ToolAuthLoginFlowDeps {
   readonly env: NodeJS.ProcessEnv;
   /** Shared with the install flow so start() and install() cannot race each other. */
   readonly singleFlight: ToolSingleFlight;
+  /**
+   * "Is this binary on PATH?" — the same seam the install flow uses, checked
+   * BEFORE spawning so a missing binary reports a plain failed state the card
+   * can show, instead of a bare spawn ENOENT the caller only sees as a toast.
+   */
+  readonly checkBinaryAvailable: (binary: string) => Effect.Effect<boolean>;
 }
 
 /**
@@ -58,6 +64,7 @@ export function makeToolAuthLoginFlow(deps: ToolAuthLoginFlowDeps) {
     homeDir,
     env,
     singleFlight,
+    checkBinaryAvailable,
   } = deps;
 
   const spawnLoginProcess = Effect.fn("toolauth.spawnLoginProcess")(function* (
@@ -65,10 +72,40 @@ export function makeToolAuthLoginFlow(deps: ToolAuthLoginFlowDeps) {
     adapter: ToolAuthAdapter,
   ) {
     const [shell, ...args] = adapter.command;
+
+    // A missing binary must say so plainly, on the card: register a failed
+    // state (no process — terminal states need none) instead of letting the
+    // spawn die with an ENOENT the caller only ever sees as a generic toast.
+    // `install()` already re-checks this after a successful install, so this
+    // only ever reports a binary that genuinely is not there yet.
+    if (!(yield* checkBinaryAvailable(shell!))) {
+      const missingState: AuthState = {
+        tool,
+        phase: "failed",
+        message: `${shell} is not installed on this machine — install it on the host, then try again.`,
+      };
+      yield* SynchronizedRef.update(sessionsRef, (sessions) => {
+        const next = new Map(sessions);
+        next.set(tool, { adapter, state: missingState });
+        return next;
+      });
+      yield* notifyUpdate(missingState);
+      return missingState;
+    }
+
     const initialState: AuthState = { tool, phase: "starting" };
 
     const process = yield* ptyAdapter
-      .spawn({ shell: shell!, args, cwd: homeDir, cols: 80, rows: 30, env })
+      .spawn({
+        shell: shell!,
+        args,
+        cwd: homeDir,
+        cols: 80,
+        rows: 30,
+        // Adapter-specific variables (gh's GH_NO_BROWSER) win over the
+        // service env: they exist precisely to change host behaviour.
+        env: { ...env, ...adapter.spawnEnv },
+      })
       .pipe(Effect.mapError((cause) => new ToolAuthSpawnError({ tool, cause })));
 
     yield* SynchronizedRef.update(sessionsRef, (sessions) => {
@@ -78,61 +115,10 @@ export function makeToolAuthLoginFlow(deps: ToolAuthLoginFlowDeps) {
     });
     yield* notifyUpdate(initialState);
 
-    // Guards onData/onExit below against a stale process: if this is called
-    // again for this tool (Retry/Reconnect, or the install→login chain), the
-    // map's `process` entry moves on to the new one, but the OLD PtyProcess
-    // object's listeners are still registered and could otherwise still fire.
-    const isCurrentProcess = SynchronizedRef.get(sessionsRef).pipe(
-      Effect.map((sessions) => sessions.get(tool)?.process === process),
-    );
-
-    // Carries the trailing partial line between pty reads — see the truncation
-    // note on `assemblePtyRead`. Advanced SYNCHRONOUSLY here in the callback,
-    // not inside the fork: two forks can interleave at their suspension points,
-    // so doing the buffer arithmetic in there would fold reads out of order.
-    let pending = "";
-
-    process.onData((chunk) => {
-      // RAW chunk on purpose: `foldPtyRead` strips ANSI per assembled line, so
-      // an escape sequence split across two reads is reunited before stripping.
-      const read = assemblePtyRead(pending, chunk);
-      pending = read.pending;
-      Effect.runFork(
-        Effect.gen(function* () {
-          if (!(yield* isCurrentProcess)) return;
-          const session = (yield* SynchronizedRef.get(sessionsRef)).get(tool);
-          if (!session) return;
-          yield* applySessionUpdate(tool, foldPtyRead(session.state, read, adapter), session.state);
-        }),
-      );
-    });
-
-    process.onExit((event) => {
-      // Flush whatever partial line is still buffered BEFORE deciding the
-      // terminal phase: a CLI whose final line carries no newline (common for
-      // "Login successful" written without one) would otherwise have that line
-      // discarded and be reported purely by exit code.
-      const flushed = assemblePtyRead(pending, "", { flush: true });
-      pending = "";
-      Effect.runFork(
-        Effect.gen(function* () {
-          if (!(yield* isCurrentProcess)) return;
-          const session = (yield* SynchronizedRef.get(sessionsRef)).get(tool);
-          if (!session) return;
-          const settled = foldPtyRead(session.state, flushed, adapter);
-          if (settled.phase === "connected" || settled.phase === "failed") {
-            yield* applySessionUpdate(tool, settled, session.state);
-            return;
-          }
-          const nextState: AuthState = {
-            ...settled,
-            phase: event.exitCode === 0 ? "connected" : "failed",
-            message: settled.message ?? `exited with code ${event.exitCode}`,
-          };
-          yield* applySessionUpdate(tool, nextState, session.state);
-        }),
-      );
-    });
+    // Data/exit wiring (read assembly, auto-Enter answer, exit settlement)
+    // lives in `t3team-loginProcessWiring.ts`; it guards stale processes by
+    // identity against the session map this spawn just wrote.
+    wireLoginProcess({ process, tool, adapter, sessionsRef, applySessionUpdate });
 
     return initialState;
   });
@@ -186,22 +172,30 @@ export function makeToolAuthLoginFlow(deps: ToolAuthLoginFlowDeps) {
     if (session.state.phase !== "awaiting-code") {
       return yield* new ToolAuthNotAwaitingCodeError({ tool, phase: session.state.phase });
     }
+    // A session without a live process is one that never spawned (the
+    // binary-missing failed state above) — there is no CLI to answer.
+    const pty = session.process;
+    if (!pty) return yield* new ToolAuthNoActiveSessionError({ tool });
     const nextState: AuthState = { ...session.state, phase: "verifying" };
     yield* applySessionUpdate(tool, nextState, session.state);
-    yield* Effect.sync(() => session.process.write(`${code.trim()}\n`));
+    yield* Effect.sync(() => pty.write(`${code.trim()}\n`));
     return nextState;
   });
 
   const cancel = Effect.fn("toolauth.cancel")(function* (tool: string) {
     const session = (yield* SynchronizedRef.get(sessionsRef)).get(tool);
     if (session) {
-      yield* Effect.sync(() => {
-        try {
-          session.process.kill();
-        } catch {
-          // best-effort — the process may already be gone
-        }
-      });
+      // The binary-missing session has no process to kill — just drop the record.
+      const pty = session.process;
+      if (pty) {
+        yield* Effect.sync(() => {
+          try {
+            pty.kill();
+          } catch {
+            // best-effort — the process may already be gone
+          }
+        });
+      }
       yield* SynchronizedRef.update(sessionsRef, (sessions) => {
         const next = new Map(sessions);
         next.delete(tool);

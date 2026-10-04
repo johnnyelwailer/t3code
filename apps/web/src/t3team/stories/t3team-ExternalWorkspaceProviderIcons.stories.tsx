@@ -6,7 +6,7 @@ import {
 } from "~/t3team/components/t3team-ExternalWorkspaceProviderIcons";
 
 const meta: Meta<typeof ExternalWorkspaceProviderIcons> = {
-  title: "External sessions/Provider icons",
+  title: "T3Team/Providers/External Provider Icons",
   component: ExternalWorkspaceProviderIcons,
   decorators: [
     (Story) => (

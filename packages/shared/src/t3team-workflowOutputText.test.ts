@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { renderWorkflowRecordAsDisplayText } from "./t3team-workflowOutputText.ts";
+import {
+  renderWorkflowRecordAsDisplayText,
+  renderWorkflowValueAsDisplayText,
+} from "./t3team-workflowOutputText.ts";
 
 const render = (record: Record<string, unknown>) =>
   renderWorkflowRecordAsDisplayText(record, { emptyFallback: "Nothing to show." });
@@ -42,7 +45,7 @@ describe("renderWorkflowRecordAsDisplayText", () => {
     expect(output).toContain("Word: kiwi");
   });
 
-  it("falls back to a fenced JSON block for a deeply-nested field, never dropping it", () => {
+  it("renders a deeply-nested field as nested bullets, never dropping it and never as JSON", () => {
     const output = render({
       before: { status: "draft", meta: { owner: "alice" } },
       after: { status: "published", meta: { owner: "alice", publishedAt: "2026-01-01" } },
@@ -51,9 +54,11 @@ describe("renderWorkflowRecordAsDisplayText", () => {
     });
     expect(output).toContain("**Artifact Id:** art-1");
     expect(output).toContain("**Artifact Type:** document");
-    expect(output).toContain('"status": "draft"');
-    expect(output).toContain('"status": "published"');
-    expect(output).toContain("```json");
+    expect(output).toContain("- Status: draft");
+    expect(output).toContain("- Status: published");
+    expect(output).toContain("  - Owner: alice");
+    expect(output).not.toContain("```");
+    expect(output).not.toContain('"status"');
   });
 
   it("returns the caller's own fallback when nothing is readable", () => {
@@ -75,5 +80,42 @@ describe("renderWorkflowRecordAsDisplayText", () => {
     const output = render({ findings });
     expect(output).toContain("finding-0");
     expect(output).toContain("and 30 more");
+  });
+});
+
+describe("renderWorkflowValueAsDisplayText", () => {
+  const opts = { emptyFallback: "Workflow completed." };
+
+  it("renders an array of flat objects as a markdown table, never JSON", () => {
+    const text = renderWorkflowValueAsDisplayText(
+      [
+        { word: "apple", score: 8 },
+        { word: "river", score: 4 },
+      ],
+      opts,
+    );
+    expect(text).toContain("| Word | Score |");
+    expect(text).toContain("| apple | 8 |");
+    expect(text).not.toContain("{");
+    expect(text).not.toContain('"');
+  });
+
+  it("renders a deep array as nested bullets, never a JSON block", () => {
+    const text = renderWorkflowValueAsDisplayText(
+      [{ verdicts: ["HIGH", "LOW"], detail: { owner: "pj", tags: ["a", "b"] } }],
+      opts,
+    );
+    expect(text).toContain("- Verdicts:");
+    expect(text).toContain("  - HIGH");
+    expect(text).toContain("- Owner: pj");
+    expect(text).not.toContain("```");
+    expect(text).not.toContain("{");
+  });
+
+  it("passes strings through and falls back for empty values", () => {
+    expect(renderWorkflowValueAsDisplayText("done", opts)).toBe("done");
+    expect(renderWorkflowValueAsDisplayText([], opts)).toBe("Workflow completed.");
+    expect(renderWorkflowValueAsDisplayText(null, opts)).toBe("Workflow completed.");
+    expect(renderWorkflowValueAsDisplayText(42, opts)).toBe("42");
   });
 });

@@ -81,6 +81,7 @@ export interface T3TeamToolHandlerClient {
     readonly workflowPath?: string;
     readonly args?: unknown;
     readonly intent: WorkflowRunIntent;
+    readonly replaceRunId?: string;
   }) => Promise<unknown>;
   /** Dispatch a broker-owned host tool by id. Present only on a thread-bound run; the HOST decides
    * which ids it will accept, so this is a transport, not a widening of the tool surface. */
@@ -204,4 +205,7 @@ export interface WorkflowRunOptions {
    * aborted rather than failed.
    */
   readonly abortSignal?: AbortSignal;
+  /** Resume only: re-send ONE recorded, unanswered ask by correlationId — see
+   * `@runbook/core/engineTypes` `WorkflowRunOptionsBase.refire`. */
+  readonly refire?: string;
 }

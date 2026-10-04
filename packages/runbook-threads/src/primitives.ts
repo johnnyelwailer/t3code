@@ -20,6 +20,22 @@ import type {
 } from "./types.ts";
 import type { ModelSelection } from "./models.ts";
 
+/**
+ * Appended to every one-shot `agent()` prompt. The child thread runs with the ordinary assistant
+ * persona, which pads a step's answer with word counts, "want a different angle?" offers and
+ * questions back — text nobody can answer inside an orchestration and that flows straight into
+ * the run's result (GHE #419). The contract is stated once, at the end, where the model reads it
+ * last.
+ */
+export const AGENT_STEP_CONTRACT =
+  "You are one step of an automated orchestration, not in a conversation: reply with exactly the " +
+  "requested result and nothing else — no preamble, no summary of what you did, no word counts, " +
+  "no offers to revise, no questions back.";
+
+export function withAgentStepContract(prompt: string): string {
+  return `${prompt.trimEnd()}\n\n${AGENT_STEP_CONTRACT}`;
+}
+
 export type {
   AgentEffort,
   AgentOpts,
@@ -164,7 +180,7 @@ export function createThreadPrimitives<Capabilities = WorkflowChildCapabilities>
       ...(opts.model === undefined ? {} : { model: opts.model }),
       ...(opts.models === undefined ? {} : { models: opts.models }),
       ...(opts.effort === undefined ? {} : { effort: opts.effort }),
-    }).askAgent(prompt, opts);
+    }).askAgent(withAgentStepContract(prompt), opts);
   };
 
   return {

@@ -11,7 +11,7 @@ import {
 const DEFAULT_COMPOSITION: SidecarComposition = {
   sections: [
     { sectionId: "quick-starts", visible: true, collapsed: false },
-    { sectionId: "recent-conversations", visible: true, collapsed: false },
+    { sectionId: "notes", visible: true, collapsed: false },
     { sectionId: "status", visible: true, collapsed: false },
   ],
 };
@@ -33,7 +33,7 @@ describe("t3team-sidecarPersonalizationReset", () => {
     const personalization: SidecarPersonalization = {
       composition: {
         sections: [
-          { sectionId: "recent-conversations", visible: true, collapsed: false },
+          { sectionId: "notes", visible: true, collapsed: false },
           { sectionId: "quick-starts", visible: true, collapsed: true },
           { sectionId: "status", visible: false, collapsed: false },
         ],
@@ -65,7 +65,7 @@ describe("t3team-sidecarPersonalizationReset", () => {
         composition: {
           sections: [
             { sectionId: "quick-starts", visible: true, collapsed: false },
-            { sectionId: "recent-conversations", visible: true, collapsed: false },
+            { sectionId: "notes", visible: true, collapsed: false },
             { sectionId: "status", visible: false, collapsed: false },
           ],
         },

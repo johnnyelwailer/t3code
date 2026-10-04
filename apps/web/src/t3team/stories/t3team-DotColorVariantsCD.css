@@ -46,47 +46,43 @@
 .sdv2-vC .t3team-aci-cell[data-t3team-state="error"] {
   --s: var(--error);
 }
-.sdv2-vC .sdv2-row .t3team-aci-cell .t3team-aci-dot {
+.sdv2-vC [data-sdv2="row"] .t3team-aci-cell .t3team-aci-dot {
   background-color: var(--s);
   box-shadow: none;
   transition:
     background-color 500ms ease-in-out,
     opacity 500ms ease-in-out;
 }
-.sdv2-vC .sdv2-row .t3team-aci-cell[data-t3team-state="waiting"] > span::before {
+.sdv2-vC [data-sdv2="row"] .t3team-aci-cell[data-t3team-state="waiting"] > span::before {
   border-color: var(--s);
   box-shadow: none;
   transition: border-color 500ms ease-in-out;
 }
 
-/* D · PRODUCTION — the porcelain-orb direction chosen in this story now
-   ships: the palette, the 420ms soft-out color morph, the drifting sheen
-   and the waiting halo live in t3team/t3team-statusOrb.css (imported by the
-   story + the working-row / Agents-panel / sidebar seams). The D card in
-   the story stamps `t3team-orb` on its dots and renders that module — the
-   story-side copy was deleted on port so the story shows production, not a
-   fork. No D rules remain in this file.
+/* D · PRODUCTION — palette, color morph, sheen and waiting halo live in
+   t3team-statusOrb.css. The D card stamps `t3team-orb` and renders that
+   module, so no story-side D rules remain here.
 */
 
 /* Shared story scaffolding (card layout only — no dot paint here). */
-.sdv2-row {
+[data-sdv2="row"] {
   display: flex;
   gap: 28px;
   align-items: flex-end;
   padding: 10px 4px 2px;
 }
-.sdv2-col {
+[data-sdv2="col"] {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
 }
-[data-sdv2-flip] .sdv2-state-label {
+[data-sdv2-flip] [data-sdv2="state-label"] {
   min-width: 8.5ch;
   text-align: center;
 }
 
-.sdv2-state-label {
+[data-sdv2="state-label"] {
   font-family: ui-monospace, "SF Mono", monospace;
   font-size: 9px;
   letter-spacing: 0.04em;

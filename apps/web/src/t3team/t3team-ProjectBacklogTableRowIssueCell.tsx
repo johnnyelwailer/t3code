@@ -76,8 +76,8 @@ export function ProjectBacklogTableRowIssueCell({
             <span
               className={
                 row.isContextOnly
-                  ? "shrink-0 font-mono text-[11px] leading-none text-foreground/70"
-                  : "shrink-0 font-mono text-[11px] leading-none text-foreground/85"
+                  ? "shrink-0 font-mono text-2xs leading-none text-foreground/70"
+                  : "shrink-0 font-mono text-2xs leading-none text-foreground/85"
               }
             >
               {ticket.ref.displayId}

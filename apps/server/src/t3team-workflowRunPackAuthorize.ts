@@ -33,7 +33,7 @@ export const CONTAINMENT_HINT =
  * before remote-managed pack content is trusted, and neither exists yet, so `remote-managed` is
  * excluded from execution while remaining fully listable and validatable.
  */
-export const EXECUTABLE_PACK_SCOPES: ReadonlySet<string> = new Set([
+const EXECUTABLE_PACK_SCOPES: ReadonlySet<string> = new Set([
   "distribution",
   "global",
   "user",

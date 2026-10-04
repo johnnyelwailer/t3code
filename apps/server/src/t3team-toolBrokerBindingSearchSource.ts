@@ -3,7 +3,15 @@ import * as Effect from "effect/Effect";
 
 import { type T3TeamToolCallResult } from "./t3team-toolBroker.ts";
 import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
-import { normalizeThreadSearchLimit, searchThreadMessages } from "./t3team-threadMessageSearch.ts";
+import {
+  buildThreadSearchEntries,
+  normalizeThreadSearchLimit,
+  normalizeThreadSearchOffset,
+  normalizeThreadSearchOrder,
+  normalizeThreadSearchScope,
+  searchThreadEntries,
+  type ThreadMessageSearchableActivity,
+} from "./t3team-threadMessageSearch.ts";
 
 /**
  * `t3team.thread.search_source` — search the FULL transcript of the thread the
@@ -28,11 +36,15 @@ type SearchSourceThreadMessage = {
 export type SearchSourceThreadDetail = {
   readonly title?: string | undefined;
   readonly messages: ReadonlyArray<SearchSourceThreadMessage>;
+  readonly activities?: ReadonlyArray<ThreadMessageSearchableActivity> | undefined;
 };
 
 type SearchSourceArgs = {
   readonly query?: unknown;
   readonly limit?: unknown;
+  readonly offset?: unknown;
+  readonly scope?: unknown;
+  readonly order?: unknown;
 };
 
 export function callT3TeamSearchSourceTool(input: {
@@ -57,6 +69,9 @@ export function callT3TeamSearchSourceTool(input: {
     );
   }
   const limit = normalizeThreadSearchLimit(args.limit);
+  const offset = normalizeThreadSearchOffset(args.offset);
+  const scope = normalizeThreadSearchScope(args.scope);
+  const order = normalizeThreadSearchOrder(args.order);
 
   return Effect.gen(function* () {
     const currentRead = yield* loadThreadDetail(threadId).pipe(Effect.result);
@@ -94,25 +109,44 @@ export function callT3TeamSearchSourceTool(input: {
       return errorResult("The original (fork source) thread is no longer available.");
     }
 
-    const search = searchThreadMessages(sourceThread.messages, { query, limit });
+    const entries = buildThreadSearchEntries({
+      messages: sourceThread.messages,
+      activities: sourceThread.activities,
+      scope,
+    });
+    const search = searchThreadEntries(entries, { query, limit, offset, order });
 
     return okResult({
       ok: true,
       sourceThreadId: note.t3teamExt.forkSource.threadId,
       ...(sourceThread.title ? { sourceThreadTitle: sourceThread.title } : {}),
+      scope,
+      order,
+      matchMode: search.matchMode,
       totalMatches: search.totalMatches,
       returnedMatches: search.returnedMatches,
-      // Keep the established `search_source` result shape (`index`, no
-      // message id) — the shared scan reports `position` + `messageId`.
-      matches: search.matches.map(({ position, role, createdAt, snippet }) => ({
-        index: position,
+      hasMore: search.hasMore,
+      matches: search.matches.map(({ position, role, createdAt, messageId, snippet, source }) => ({
+        position,
+        source,
         role,
         ...(createdAt ? { createdAt } : {}),
+        ...(source === "message" ? { message_id: messageId } : { activity_id: messageId }),
         snippet,
       })),
+      ...(search.hasMore
+        ? {
+            hint:
+              `Showing matches ${offset + 1}-${offset + search.returnedMatches} of ` +
+              `${search.totalMatches}. Pass offset: ${offset + search.returnedMatches} for the next page.`,
+          }
+        : {}),
       ...(search.totalMatches === 0
         ? {
-            hint: `No message in the original thread contains "${query}". Try a shorter or different term.`,
+            hint:
+              `Nothing in the original thread contains "${query}". A multi-word query also retried ` +
+              "as all-terms and found nothing — try one distinctive word, or scope: 'activities' to " +
+              "search command output and tool calls.",
           }
         : {}),
     });

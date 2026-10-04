@@ -3,8 +3,7 @@ import { ListTreeIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { APP_DISPLAY_NAME } from "~/t3team/t3team-branding";
-import { STATUS_ORB_CLASS } from "~/t3team/t3team-statusOrb";
-import "~/t3team/t3team-statusOrb.css";
+import { resolveActivityStatePill } from "~/t3team/t3team-activityStateDisplay";
 import { useT3TeamPackAppearance } from "~/t3team/t3team-packAppearance";
 import {
   useT3TeamInboxPinnedGitHubActivity,
@@ -60,7 +59,7 @@ export function InboxThreadAttribution({ threadId }: { threadId: string }): Reac
     <span
       data-t3team-inbox-attribution
       title={attribution.title || attribution.displayId}
-      className="shrink-0 truncate rounded-sm bg-sidebar-control-surface px-1 text-[0.6875rem] font-medium text-sidebar-muted-foreground"
+      className="shrink-0 truncate rounded-sm bg-sidebar-control-surface px-1 text-2xs font-medium text-sidebar-muted-foreground"
     >
       {attribution.displayId}
     </span>
@@ -87,7 +86,7 @@ export function InboxSubRunsChip({ threadId }: { threadId: string }): ReactNode 
   const toggle = useExpandedSubRunsStore((state) => state.toggle);
   // Three states, one handle: running > 0 → the ACTIVE count chip (settled
   // children belong to the #304 "Settled (N)" fold, not the count); running = 0
-  // with total > 0 → a MUTED "Settled N" chip — without it the section's
+  // with total > 0 → a MUTED count chip — without it the section's
   // persisted/auto-set expanded state left the #304 fold row under the row
   // forever with nothing to collapse it (sidebar-row refine, 2026-08-30);
   // total = 0 / unknown → nothing (no stale total, no "0").
@@ -99,10 +98,10 @@ export function InboxSubRunsChip({ threadId }: { threadId: string }): ReactNode 
   const noun = (n: number) => (n === 1 ? "sub-run" : "sub-runs");
   const description = active
     ? `${counts.running} active ${noun(counts.running)}${settledCount > 0 ? ` · ${settledCount} settled` : ""}`
-    : `Settled ${settledCount} ${noun(settledCount)}`;
+    : `${settledCount} ${noun(settledCount)}`;
   const chipClass = active
-    ? "flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm bg-sidebar-control-surface px-1 text-[0.6875rem] font-medium tabular-nums text-sidebar-muted-foreground hover:text-sidebar-foreground"
-    : "flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm bg-sidebar-control-surface px-1 text-[0.6875rem] font-medium tabular-nums text-sidebar-muted-foreground/60 hover:text-sidebar-muted-foreground/90";
+    ? "flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm bg-sidebar-control-surface px-1 text-2xs font-medium tabular-nums text-sidebar-muted-foreground hover:text-sidebar-foreground"
+    : "flex shrink-0 cursor-pointer items-center gap-0.5 rounded-sm bg-sidebar-control-surface px-1 text-2xs font-medium tabular-nums text-sidebar-muted-foreground/60 hover:text-sidebar-muted-foreground/90";
   return (
     <button
       type="button"
@@ -121,20 +120,12 @@ export function InboxSubRunsChip({ threadId }: { threadId: string }): ReactNode 
       className={chipClass}
     >
       <ListTreeIcon aria-hidden className="size-3 shrink-0" />
-      {active ? (
-        <>
-          {counts.running}
-          {/* orb `working` = the working row's 4-state in-motion color, now
-              shared with every status dot via t3team-statusOrb.css */}
-          <span
-            aria-hidden
-            data-t3team-state="working"
-            className={`size-1.5 shrink-0 rounded-full ${STATUS_ORB_CLASS}`}
-          />
-        </>
-      ) : (
-        <span>Settled {settledCount}</span>
-      )}
+      {/* The count speaks the state: the working-row hue while any sub-run is
+          running, muted otherwise. No dot — the fold can hold terminal children
+          that are not settled yet, so a "Settled" word miscounted. */}
+      <span className={active ? resolveActivityStatePill("working").colorClass : undefined}>
+        {active ? counts.running : settledCount}
+      </span>
     </button>
   );
 }

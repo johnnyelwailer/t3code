@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import { describe, expect, it } from "vite-plus/test";

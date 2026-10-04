@@ -1,5 +1,5 @@
 import { useTicketAgentContext } from "~/t3team/hooks/t3team-useTicketAgentContext";
-import { SidebarMenuSub } from "~/t3team/components/ui/t3team-sidebar";
+import { T3SidebarSubList } from "~/t3team/components/ui/t3team-sidebar-row";
 import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
 import { sortSidebarItemsByStoredOrder } from "~/t3team/t3team-sidebarNavPreferences";
 import type { ProjectTicket, ViewState } from "~/t3team/t3team-types";
@@ -68,7 +68,7 @@ export function ProjectSidebarPinnedItems({
     .map((item) => item.pinnedItem.id);
 
   return (
-    <SidebarMenuSub className="mx-1 w-full translate-x-0 gap-0.5 overflow-hidden px-1.5 pb-0.5">
+    <T3SidebarSubList className="mx-1 w-full overflow-hidden">
       {sortedItems.map((item) =>
         item.kind === "jira-work-item" ? (
           (() => {
@@ -143,6 +143,6 @@ export function ProjectSidebarPinnedItems({
           />
         ),
       )}
-    </SidebarMenuSub>
+    </T3SidebarSubList>
   );
 }

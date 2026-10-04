@@ -14,7 +14,6 @@ function makeThread(overrides: Partial<ProjectThread> = {}): ProjectThread {
     id: overrides.id ?? "thread-1",
     projectId: overrides.projectId ?? "project-1",
     title: overrides.title ?? "Thread",
-    messageCount: overrides.messageCount ?? 0,
     lastMessageAt: overrides.lastMessageAt ?? "2026-05-22T10:00:00.000Z",
     createdAt: overrides.createdAt ?? "2026-05-22T10:00:00.000Z",
     status: overrides.status ?? "idle",
@@ -108,8 +107,18 @@ describe("createT3TeamTurnToolContext", () => {
     expect(toolContext).toEqual({
       surface: "t3team",
       tools: [
-        // Catalog order: t3team.widget.show is the first defaultEnabled entry
-        // in IMPLEMENTED_T3TEAM_TOOL_CATALOG.
+        // Catalog order: the defaultEnabled entries of IMPLEMENTED_T3TEAM_TOOL_CATALOG, starting
+        // with t3team.runtime.models (GHE #339), then provider usage, then widget.show.
+        {
+          id: "t3team.runtime.models",
+          label: "List runtime models",
+          capabilities: ["read"],
+        },
+        {
+          id: "t3team.runtime.provider_usage",
+          label: "Read provider usage limits",
+          capabilities: ["read"],
+        },
         {
           id: "t3team.widget.show",
           label: "Show widget",
@@ -146,6 +155,16 @@ describe("createT3TeamTurnToolContext", () => {
           capabilities: ["write"],
         },
         {
+          id: "t3team.orchestration.pause",
+          label: "Pause orchestration run",
+          capabilities: ["write"],
+        },
+        {
+          id: "t3team.orchestration.stop",
+          label: "Stop orchestration run",
+          capabilities: ["write"],
+        },
+        {
           id: "t3team.thread.rename",
           label: "Rename thread",
           capabilities: ["write"],
@@ -164,6 +183,11 @@ describe("createT3TeamTurnToolContext", () => {
           id: "t3team.thread.read_message",
           label: "Read inter-agent message",
           capabilities: ["read"],
+        },
+        {
+          id: "t3team.thread.ask_user",
+          label: "Ask user a question",
+          capabilities: ["write"],
         },
         {
           id: "t3team.thread.start_child",
@@ -259,14 +283,13 @@ describe("createT3TeamTurnToolContext", () => {
       kickoffPending: false,
       kickoffWorkflow: {
         kind: "recipe",
-        recipeId: "create-contextual-recipe",
+        recipeId: "author-view-recipe",
         title: "Create a recipe for this context",
         description: "Design a contextual recipe for the current surface.",
         source: "bundled",
         surface: "project.dashboard.backlog",
-        promptPath: "/workspace/project-alpha/.t3team/recipes/create-contextual-recipe/prompt.md",
-        workflowPath:
-          "/workspace/project-alpha/.t3team/recipes/create-contextual-recipe/workflow.ts",
+        promptPath: "/workspace/project-alpha/.t3team/recipes/author-view-recipe/prompt.md",
+        workflowPath: "/workspace/project-alpha/.t3team/recipes/author-view-recipe/workflow.ts",
         launchContext: {
           surface: "project.dashboard.backlog",
           project: {
@@ -302,11 +325,10 @@ describe("createT3TeamTurnToolContext", () => {
         message: "Recipe authoring kickoff",
         pending: false,
         workflow: {
-          recipeId: "create-contextual-recipe",
+          recipeId: "author-view-recipe",
           surface: "project.dashboard.backlog",
-          promptPath: "/workspace/project-alpha/.t3team/recipes/create-contextual-recipe/prompt.md",
-          workflowPath:
-            "/workspace/project-alpha/.t3team/recipes/create-contextual-recipe/workflow.ts",
+          promptPath: "/workspace/project-alpha/.t3team/recipes/author-view-recipe/prompt.md",
+          workflowPath: "/workspace/project-alpha/.t3team/recipes/author-view-recipe/workflow.ts",
           launchContext: {
             surface: "project.dashboard.backlog",
             project: {
@@ -329,7 +351,6 @@ describe("mergeProjectThreads", () => {
       title: "Local title",
       status: "idle",
       lastMessageAt: "2026-05-20T10:00:00.000Z",
-      messageCount: 0,
       createdAt: "2026-05-20T10:00:00.000Z",
       kickoffMessage: "Investigate this ticket",
       selectedToolIds: [],
@@ -341,7 +362,6 @@ describe("mergeProjectThreads", () => {
       title: "Live title",
       status: "running",
       lastMessageAt: "2026-05-20T10:05:00.000Z",
-      messageCount: 3,
       createdAt: "2026-05-20T10:00:00.000Z",
     };
 

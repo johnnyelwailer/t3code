@@ -6,10 +6,12 @@ import * as NodePath from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  attachmentFileExtension,
   attachmentRelativePath,
   createAttachmentId,
   createPendingAttachmentId,
   parseAttachmentUuid,
+  parseAttachmentFileExtension,
   planAttachmentClaim,
   parseThreadSegmentFromAttachmentId,
   resolveAttachmentPathById,
@@ -17,7 +19,7 @@ import {
 } from "./attachmentStore.ts";
 
 describe("attachmentStore", () => {
-  it("stores arbitrary files under a fixed .bin extension while images keep theirs", () => {
+  it("stores arbitrary files under their real extension while images keep theirs", () => {
     const attachmentId = "thread-abc-00000000-0000-4000-8000-000000000001";
     expect(
       attachmentRelativePath({
@@ -27,7 +29,7 @@ describe("attachmentStore", () => {
         mimeType: "text/plain",
         sizeBytes: 6,
       }),
-    ).toBe(`${attachmentId}.bin`);
+    ).toBe(`${attachmentId}.txt`);
     expect(
       attachmentRelativePath({
         type: "file",
@@ -36,7 +38,7 @@ describe("attachmentStore", () => {
         mimeType: "application/pdf",
         sizeBytes: 6,
       }),
-    ).toBe(`${attachmentId}.bin`);
+    ).toBe(`${attachmentId}.pdf`);
     expect(
       attachmentRelativePath({
         type: "image",
@@ -90,6 +92,21 @@ describe("attachmentStore", () => {
     );
   });
 
+  it("preserves safe file extensions in attachment ids and paths", () => {
+    const attachmentId = createPendingAttachmentId(".PDF");
+
+    expect(parseThreadSegmentFromAttachmentId(attachmentId)).toBe("pending");
+    expect(parseAttachmentUuid(attachmentId)).toMatch(/^[a-f0-9-]{36}$/);
+    expect(parseAttachmentFileExtension(attachmentId)).toBe("pdf");
+    expect(attachmentFileExtension("report.PDF")).toBe(".pdf");
+    expect(attachmentFileExtension("report")).toBe(".bin");
+    expect(attachmentFileExtension("report.extensiontoolong")).toBe(".bin");
+    // ".part" is the in-flight upload suffix; storing it would make the file
+    // look like a stale partial to the sweep.
+    expect(attachmentFileExtension("archive.part")).toBe(".bin");
+    expect(createAttachmentId("x".repeat(80), ".abcdefghij")?.length).toBeLessThanOrEqual(128);
+  });
+
   it("resolves attachment path by id using the extension that exists on disk", () => {
     const attachmentsDir = NodeFS.mkdtempSync(
       NodePath.join(NodeOS.tmpdir(), "t3code-attachment-store-"),
@@ -119,6 +136,21 @@ describe("attachmentStore", () => {
         attachmentId: "thread-1-missing",
       });
       expect(resolved).toBeNull();
+    } finally {
+      NodeFS.rmSync(attachmentsDir, { recursive: true, force: true });
+    }
+  });
+
+  it("resolves generic attachments without scanning the attachment directory", () => {
+    const attachmentsDir = NodeFS.mkdtempSync(
+      NodePath.join(NodeOS.tmpdir(), "t3code-file-attachment-"),
+    );
+    try {
+      const attachmentId = "thread-1-00000000-0000-4000-8000-000000000001-zip";
+      const archivePath = NodePath.join(attachmentsDir, `${attachmentId}.zip`);
+      NodeFS.writeFileSync(archivePath, Buffer.from("archive"));
+
+      expect(resolveAttachmentPathById({ attachmentsDir, attachmentId })).toBe(archivePath);
     } finally {
       NodeFS.rmSync(attachmentsDir, { recursive: true, force: true });
     }
@@ -179,15 +211,17 @@ describe("attachmentStore", () => {
       const oldTimeSeconds = (now - 2 * 24 * 60 * 60 * 1000) / 1000;
       const uuid = "00000000-0000-4000-8000-000000000002";
       const pendingPath = NodePath.join(attachmentsDir, `pending-${uuid}.png`);
+      const pendingFilePath = NodePath.join(attachmentsDir, `pending-${uuid}-pdf.pdf`);
       const threadPath = NodePath.join(attachmentsDir, `thread-1-${uuid}.png`);
       const partialPath = NodePath.join(attachmentsDir, `${uuid}.part`);
-      for (const filePath of [pendingPath, threadPath, partialPath]) {
+      for (const filePath of [pendingPath, pendingFilePath, threadPath, partialPath]) {
         NodeFS.writeFileSync(filePath, Buffer.from("pixels"));
         NodeFS.utimesSync(filePath, oldTimeSeconds, oldTimeSeconds);
       }
 
-      expect(sweepStalePendingAttachments({ attachmentsDir, nowMs: now })).toEqual({ deleted: 2 });
+      expect(sweepStalePendingAttachments({ attachmentsDir, nowMs: now })).toEqual({ deleted: 3 });
       expect(NodeFS.existsSync(pendingPath)).toBe(false);
+      expect(NodeFS.existsSync(pendingFilePath)).toBe(false);
       expect(NodeFS.existsSync(partialPath)).toBe(false);
       expect(NodeFS.existsSync(threadPath)).toBe(true);
     } finally {

@@ -652,7 +652,6 @@ export async function startSandbox(
           action === "exhausted"
             ? "exhausted all escalation attempts — container may still be running"
             : `attempt ${attempt} (${action}) failed, exitCode=${result?.exitCode ?? "n/a"}`;
-        // eslint-disable-next-line no-console -- this process holds the
         // control-plane's GitHub App private key; a failed teardown is
         // exactly the kind of thing that must never be silently swallowed.
         console.error(`startSandbox(${spec.jobId}): kill escalation (${reason}) — ${detail}`);

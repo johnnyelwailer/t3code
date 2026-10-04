@@ -22,14 +22,18 @@
  *
  * WHERE THE BODY LIVES
  * Bundled recipes reach a user's disk through project-setup scaffolding
- * (`renderBundledRecipeSetupFiles`), the same way `create-recipe` and `edit-plugin-module` ship
- * their `workflow.ts`. The packed server has no source tree to read at runtime, so the text must be
+ * (`renderBundledRecipeSetupFiles`), the same way this recipe ships its `workflow.ts`. The packed server has no source tree to read at runtime, so the text must be
  * embedded — but it is embedded from a REAL module (`./t3team-descriptionRewrite.workflow.ts`), so
  * the compiler checks the exact artifact the engine executes. Getting that module's TEXT differs
  * per loader; `./t3team-descriptionRewriteBody.ts` owns that, and validates it.
  *
  * @module t3team-projectSetupDescriptionRewriteRecipe
  */
+
+import {
+  PROJECT_STATE_DIR,
+  T3TEAM_PROJECT_STATE_DIR,
+} from "@t3tools/project-context/t3teamProjectStateDir";
 
 import { DESCRIPTION_REWRITE_WORKFLOW_BODY } from "./t3team-descriptionRewriteBody.ts";
 import {
@@ -55,5 +59,10 @@ export function descriptionRewriteSetupFiles(
 
 /** The scaffolded `workflow.ts` for {@link DESCRIPTION_REWRITE_RECIPE_ID}. */
 export function renderDescriptionRewriteWorkflow(): string {
-  return DESCRIPTION_REWRITE_WORKFLOW_BODY;
+  // The body is workflow source text (it runs sandboxed and cannot import the resolver); its
+  // prompt addresses the context mirror with the canonical state dir name.
+  return DESCRIPTION_REWRITE_WORKFLOW_BODY.replaceAll(
+    `${T3TEAM_PROJECT_STATE_DIR}/context/`,
+    `${PROJECT_STATE_DIR}/context/`,
+  );
 }
