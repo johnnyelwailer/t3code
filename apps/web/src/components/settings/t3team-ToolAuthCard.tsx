@@ -96,9 +96,7 @@ export function ToolAuthCard({
     <div className="flex min-w-0 items-center gap-2">
       <Icon className="size-4 shrink-0" aria-hidden />
       <span className={cn("size-2 shrink-0 rounded-full", PHASE_DOT_CLASS[phase])} aria-hidden />
-      <h3 className="truncate text-[13px] font-semibold tracking-[-0.01em] text-foreground">
-        {meta.label}
-      </h3>
+      <h3 className="truncate text-sm font-semibold text-foreground">{meta.label}</h3>
       {phase === "expired" ? (
         <Badge variant="warning" size="sm">
           Expired
@@ -167,9 +165,9 @@ export function ToolAuthCard({
             <div className="space-y-0.5">
               <p className="text-xs text-muted-foreground/80">{connectedSummary(state)}</p>
               {expiryLabel(state?.expiresAt) ? (
-                <p className="text-[11px] text-muted-foreground">{expiryLabel(state?.expiresAt)}</p>
+                <p className="text-2xs text-muted-foreground">{expiryLabel(state?.expiresAt)}</p>
               ) : null}
-              {state?.message ? <p className="text-[11px] text-warning">{state.message}</p> : null}
+              {state?.message ? <p className="text-2xs text-warning">{state.message}</p> : null}
             </div>
             <Button size="sm" variant="outline" className="shrink-0" onClick={onConnect}>
               Reconnect

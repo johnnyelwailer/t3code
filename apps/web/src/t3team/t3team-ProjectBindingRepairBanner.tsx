@@ -3,7 +3,7 @@ import { AlertTriangle } from "lucide-react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { Button } from "~/t3team/components/ui/t3team-button";
-import { T3SurfaceCard, T3SurfaceCardContent } from "~/t3team/components/ui/t3team-surface";
+import { T3SurfaceCard } from "~/t3team/components/ui/t3team-surface";
 import { projectBindingState } from "~/t3team/t3team-projectSourceBinding";
 import { RepairProjectBindingDialog } from "~/t3team/t3team-RepairProjectBindingDialog";
 
@@ -32,7 +32,8 @@ export function ProjectBindingRepairBanner({
     <>
       <div className="px-4 pt-3 sm:px-6">
         <T3SurfaceCard role="alert" tone="danger">
-          <T3SurfaceCardContent className="flex flex-wrap items-center gap-x-3 gap-y-1.5 p-2.5">
+          {/* A compact one-line alert row, not a card panel: its own padding and gaps. */}
+          <div className="flex flex-1 flex-wrap items-center gap-x-3 gap-y-1.5 p-2.5">
             <AlertTriangle className="size-4 shrink-0 text-destructive" aria-hidden="true" />
             <p className="min-w-0 flex-1 text-xs leading-5 text-foreground">
               <span className="font-medium">This project's Jira connection is broken.</span>{" "}
@@ -49,7 +50,7 @@ export function ProjectBindingRepairBanner({
             >
               Repair binding
             </Button>
-          </T3SurfaceCardContent>
+          </div>
         </T3SurfaceCard>
       </div>
 

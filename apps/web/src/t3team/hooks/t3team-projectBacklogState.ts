@@ -43,7 +43,12 @@ export function createProjectBacklogState(
   }
 
   return {
-    tickets: response.page.items.map((item) => resourceRefToProjectTicket(projectId, item)),
+    // The server returns items in board rank order; keep that order addressable
+    // because client-side filtering re-sorts the list.
+    tickets: response.page.items.map((item, index) => ({
+      ...resourceRefToProjectTicket(projectId, item),
+      boardRank: index,
+    })),
     capabilities: response.capabilities,
     boards: response.boards,
     sprints: response.sprints,

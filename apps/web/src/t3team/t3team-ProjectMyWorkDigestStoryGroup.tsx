@@ -15,7 +15,7 @@ import { WorkItemPersonAvatar } from "~/t3team/workitem/t3team-WorkItemPersonAva
  */
 function DigestStoryProgress({ done, total }: { done: number; total: number }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] tabular-nums text-muted-foreground">
+    <span className="inline-flex items-center gap-1.5 text-2xs tabular-nums text-muted-foreground">
       <span className="relative h-1 w-10 overflow-hidden rounded-full bg-border">
         <span
           className="absolute inset-y-0 left-0 rounded-full bg-success/70"
@@ -54,7 +54,7 @@ export function DigestStoryGroupHeader({
   };
   return (
     <div
-      className="flex cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 border-b border-border/60 bg-muted/40 py-1.5 px-3 text-[12px]"
+      className="flex cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 border-b border-border/60 bg-muted/40 py-1.5 px-3 text-xs"
       onClick={() =>
         onOpenTicket ? onOpenTicket(story.id) : window.open(story.ref.url, "_blank", "noopener")
       }
@@ -66,7 +66,7 @@ export function DigestStoryGroupHeader({
       />
       <a
         href={story.ref.url}
-        className="font-mono text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+        className="font-mono text-2xs text-muted-foreground hover:text-foreground hover:underline"
         onClick={onAnchorClick}
       >
         {story.ref.displayId}
@@ -108,7 +108,7 @@ export function DigestOtherChildren({
         <a
           key={child.id}
           href={child.ref.url}
-          className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-background/70 px-1.5 py-0.5 text-[11px] text-muted-foreground ring-1 ring-border/50 hover:text-foreground hover:ring-border"
+          className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-background/70 px-1.5 py-0.5 text-2xs text-muted-foreground ring-1 ring-border/50 hover:text-foreground hover:ring-border"
           onClick={(e) => e.stopPropagation()}
         >
           <JiraIssueTypeIcon
@@ -116,11 +116,11 @@ export function DigestOtherChildren({
             issueTypeIconUrl={child.issueTypeIconUrl}
             className="size-3 shrink-0"
           />
-          <span className="shrink-0 font-mono text-[10px] leading-none -translate-y-px">
+          <span className="shrink-0 font-mono text-3xs leading-none -translate-y-px">
             {child.ref.displayId}
           </span>
           <span className="truncate leading-none -translate-y-px">{child.ref.title}</span>
-          <span className="shrink-0 text-[10px] leading-none text-foreground/50 -translate-y-px">
+          <span className="shrink-0 text-3xs leading-none text-foreground/50 -translate-y-px">
             {child.status}
           </span>
           {child.assignee ? (

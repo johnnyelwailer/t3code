@@ -16,7 +16,7 @@ import type { WorkflowRunOptionsBase } from "./engineTypes.ts";
 const SOURCE = { now: () => 1_700_000_000_000, random: () => 0.5, uuid: () => "uuid-engine" };
 const NOW_ISO = "2026-09-01T00:00:00.000Z";
 const CRASH = Symbol("simulated host crash");
-type LoopArgs = { readonly k: number; readonly crashAfter?: number };
+type LoopArgs = { readonly k: number; readonly crashAfter?: number; readonly history?: number };
 
 /**
  * The crash-resume scenario end to end on the REAL engine + filesystem journal:
@@ -51,12 +51,14 @@ describe("@runbook/core engine checkpoint resume", () => {
           callPrimitive: runtime.callPrimitive,
           currentSeq: runtime.currentSeq,
           nowIso: () => NOW_ISO,
+          // Core seam injection: the SDK-level crash/resume test covers runner wiring end to end.
+          ...(req.resume === undefined ? {} : { resumeFrom: req.resume.checkpoint }),
         });
         let state =
           req.resume === undefined
             ? { i: 0, total: 0 }
             : (req.resume.checkpoint.state as { i: number; total: number });
-        const { k, crashAfter } = req.args as LoopArgs;
+        const { k, crashAfter, history } = req.args as LoopArgs;
         const runAgent = async (i: number): Promise<number> =>
           await runtime.callPrimitive({
             kind: "agent.step",
@@ -72,7 +74,7 @@ describe("@runbook/core engine checkpoint resume", () => {
           // Simulated hard crash AFTER the agent step's journaled result, BEFORE its checkpoint.
           if (req.resume === undefined && crashAfter === i) throw CRASH;
           state = { i: i + 1, total: state.total + result };
-          await checkpoint({ state });
+          await checkpoint(history === undefined ? { state } : { state, retention: { history } });
         }
         return state;
       },
@@ -124,6 +126,38 @@ describe("@runbook/core engine checkpoint resume", () => {
     expect(status.materializedEntryCount).toBe(0);
     expect(status.checkpointSeq).toBe(2 * K);
     expect(status.checkpoint?.state).toEqual({ i: K, total: sum(1, K) });
+  }, 60_000);
+
+  it("inspectRun exposes a real run's history(n) ring across a crash-resume", async () => {
+    const K = 10;
+    const CRASH_AT = 6;
+    const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "runbook-ck-history-"));
+    const engine = makeEngine({ agentExecs: [], materializedBySeq: [] });
+    const ref = { path: "bounded-loop.workflow.ts" };
+    const args = { k: K, crashAfter: CRASH_AT, history: 6 };
+
+    await expect(engine.startWorkflow(ref, args, { runId: "run-ck-1", runsRoot })).rejects.toBe(
+      CRASH,
+    );
+    const store = new FsJournalStore(runsRoot);
+    // Drive 1 committed checkpoints at seqs 2,4,..,12 (states i=1..6) before crashing on agent
+    // step 6 (seq 13). The boundary is seq 12; its recorded ring holds all six.
+    const midRun = await inspectRun(store, "run-ck-1");
+    expect(midRun.checkpointSeq).toBe(2 * CRASH_AT);
+    expect(midRun.history?.map((h) => h.seq)).toEqual([2, 4, 6, 8, 10, 12]);
+
+    await engine.resumeWorkflow("run-ck-1", ref, args, { runsRoot });
+    const status = await inspectRun(store, "run-ck-1");
+    // Drive 2 commits seqs 14..20 (states i=7..10). A 6-slot ring ending at seq 20 MUST reach
+    // back across the resume to drive 1's seqs 10 and 12 — a post-resume-only view holds 4.
+    expect(status.entryCount).toBe(2 * K);
+    expect(status.history?.map((h) => h.seq)).toEqual([10, 12, 14, 16, 18, 20]);
+    expect(status.history?.map((h) => h.state)).toEqual(
+      Array.from({ length: 6 }, (_, n) => ({ i: n + 5, total: sum(1, n + 5) })),
+    );
+    // Read from the active record alone: the ring is recorded, not rescanned.
+    expect(status.checkpoint?.history).toEqual(status.history);
+    expect(status.history?.at(-1)?.state).toEqual(status.checkpoint?.state);
   }, 60_000);
 });
 

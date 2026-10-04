@@ -1,7 +1,6 @@
 import { useState, useCallback, useMemo } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
-import { useMergedThreads } from "~/t3team/t3team-mergedThreads";
-import { useProjects } from "~/state/entities";
+import { useProjects, useThreadShells } from "~/state/entities";
 import type { ViewState, ProjectThread, ProjectThreadDisplayMode } from "~/t3team/t3team-types";
 import { useProjectStoreActions } from "./t3team-useProjectStoreActions";
 import { useProjectStoreQueries } from "./t3team-useProjectStoreQueries";
@@ -31,7 +30,8 @@ export function useProjectStore() {
   const [threads, setThreads] = useState<ProjectThread[]>([]);
   const [threadsHydrated, setThreadsHydrated] = useState(false);
   const liveProjects = useProjects();
-  const liveThreads = useMergedThreads();
+  // Shells only, like upstream's sidebar: see mapLiveThreadToProjectThread.
+  const liveThreads = useThreadShells();
   useHydrateStoredProjects({
     setStoredProjects,
     setSelectedProjectId,

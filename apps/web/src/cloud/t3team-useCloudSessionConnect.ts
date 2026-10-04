@@ -1,4 +1,6 @@
 import {
+  BrokerConnectionRegistration,
+  BrokerConnectionTarget,
   RelayConnectionRegistration,
   RelayConnectionTarget,
 } from "@t3tools/client-runtime/connection";
@@ -6,7 +8,7 @@ import {
   isAtomCommandInterrupted,
   type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
-import type { CloudSession, EnvironmentId } from "@t3tools/contracts";
+import { type CloudSession, EnvironmentId } from "@t3tools/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -16,8 +18,25 @@ import {
 import { toastManager } from "~/components/ui/toast";
 
 type RegisterRelay = (
-  registration: RelayConnectionRegistration,
+  registration: RelayConnectionRegistration | BrokerConnectionRegistration,
 ) => Promise<AtomCommandResult<unknown, unknown>>;
+
+/**
+ * A broker session carries its environment id on the record (the VM reports it to the broker), so
+ * it registers straight away — no relay discovery involved. Connecting itself (loopback forwarder,
+ * fresh pairing) happens in the resolver, on every connect.
+ */
+function brokerRegistration(session: CloudSession): BrokerConnectionRegistration | null {
+  const environmentId = session.environmentId?.trim();
+  if (session.transport !== "nexi_broker" || !environmentId) return null;
+  return new BrokerConnectionRegistration({
+    target: new BrokerConnectionTarget({
+      environmentId: EnvironmentId.make(environmentId),
+      label: "Cloud session",
+      sessionId: session.sessionId,
+    }),
+  });
+}
 
 /**
  * Resolves a ready cloud session to its relay environment and registers it —
@@ -36,24 +55,11 @@ export function useCloudSessionConnect(input: {
   primaryEnvironmentId: EnvironmentId | null;
   environmentIdsBefore: ReadonlySet<string> | null;
   register: RegisterRelay;
-  /**
-   * Fires once, when a session's machine is actually registered, with the
-   * session->environment link. Finding 8's "Stop this machine" affordance
-   * consumes this to match a saved machine back to its live session.
-   */
-  onRegistered?: (sessionId: string, environmentId: EnvironmentId) => void;
 }): {
   readonly connectPendingSessionId: string | null;
   readonly requestConnect: (sessionId: string) => void;
 } {
-  const {
-    sessions,
-    relayCandidates,
-    primaryEnvironmentId,
-    environmentIdsBefore,
-    register,
-    onRegistered,
-  } = input;
+  const { sessions, relayCandidates, primaryEnvironmentId, environmentIdsBefore, register } = input;
   const [connectRequestId, setConnectRequestId] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
   const firedForRef = useRef<string | null>(null);
@@ -69,11 +75,23 @@ export function useCloudSessionConnect(input: {
       setConnectRequestId(null);
       return;
     }
-    const target = resolveCloudSessionEnvironment(session, {
-      relayEnvironments: relayCandidates,
-      primaryEnvironmentId,
-      environmentIdsBefore,
-    });
+    const broker = brokerRegistration(session);
+    if (session.transport === "nexi_broker" && broker === null) {
+      // Never guess a relay machine for a broker session: its id arrives once the VM is up.
+      setConnectRequestId(null);
+      toastManager.add({
+        type: "info",
+        title: "This cloud session is still starting — try again in a moment.",
+      });
+      return;
+    }
+    const target = broker
+      ? broker.target
+      : resolveCloudSessionEnvironment(session, {
+          relayEnvironments: relayCandidates,
+          primaryEnvironmentId,
+          environmentIdsBefore,
+        });
     if (target === null) {
       setConnectRequestId(null);
       toastManager.add({
@@ -85,17 +103,17 @@ export function useCloudSessionConnect(input: {
     firedForRef.current = connectRequestId;
     setRegistering(true);
     void register(
-      new RelayConnectionRegistration({
-        target: new RelayConnectionTarget({
-          environmentId: target.environmentId,
-          label: target.label,
+      broker ??
+        new RelayConnectionRegistration({
+          target: new RelayConnectionTarget({
+            environmentId: target.environmentId,
+            label: target.label,
+          }),
         }),
-      }),
     )
       .then((result) => {
         if (result._tag === "Success") {
           toastManager.add({ type: "success", title: `Connected to ${target.label}.` });
-          onRegistered?.(connectRequestId, target.environmentId);
         } else if (!isAtomCommandInterrupted(result)) {
           toastManager.add({
             type: "error",
@@ -103,7 +121,11 @@ export function useCloudSessionConnect(input: {
           });
         }
       })
-      .finally(() => setRegistering(false));
+      .finally(() => {
+        setRegistering(false);
+        // Settle the request, so a failed connect can be retried with the same session.
+        setConnectRequestId(null);
+      });
   }, [
     connectRequestId,
     relayCandidates,
@@ -111,7 +133,6 @@ export function useCloudSessionConnect(input: {
     primaryEnvironmentId,
     environmentIdsBefore,
     register,
-    onRegistered,
   ]);
 
   const requestConnect = useCallback((sessionId: string) => {

@@ -42,13 +42,13 @@ export function SubRunStatusIcon({
     return (
       <CircleQuestionMarkIcon
         aria-hidden
-        className={cn("shrink-0 text-amber-600 dark:text-amber-400", iconClass)}
+        className={cn("shrink-0 text-warning-foreground", iconClass)}
       />
     );
   }
   if (status === "running") {
     return (
-      <span className={cn("shrink-0 text-sky-600 dark:text-sky-400", className)}>
+      <span className={cn("shrink-0 text-info-foreground", className)}>
         <ThreadActivityMorphIcon solid={false} size="sm" pulse />
       </span>
     );

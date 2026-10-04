@@ -55,6 +55,7 @@ export const ProjectionThread = Schema.Struct({
   pinnedAt: Schema.NullOr(IsoDateTime),
   pinOrderKey: Schema.optional(Schema.NullOr(Schema.String)),
   activeOrderKey: Schema.optional(Schema.NullOr(Schema.String)),
+  autoSettleDisabledAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   titleRegenerationRequestId: Schema.optional(Schema.NullOr(CommandId)),
   titleRegenerationStartedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   latestUserMessageAt: Schema.NullOr(IsoDateTime),
@@ -68,6 +69,10 @@ export const ProjectionThread = Schema.Struct({
   activityLabelUpdatedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   activityState: Schema.optional(Schema.NullOr(Schema.String)),
   activityStateUpdatedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
+  // Read-only here: `upsert` never writes these; the projector keeps them
+  // current through `refreshT3TeamShellFacts` / `setLocalSessionInstanceId`.
+  openChildWaitCount: Schema.optional(NonNegativeInt),
+  localSessionInstanceId: Schema.optional(Schema.NullOr(Schema.String)),
 });
 export type ProjectionThread = typeof ProjectionThread.Type;
 
@@ -75,16 +80,6 @@ export const GetProjectionThreadInput = Schema.Struct({
   threadId: ThreadId,
 });
 export type GetProjectionThreadInput = typeof GetProjectionThreadInput.Type;
-
-export const DeleteProjectionThreadInput = Schema.Struct({
-  threadId: ThreadId,
-});
-export type DeleteProjectionThreadInput = typeof DeleteProjectionThreadInput.Type;
-
-export const ListProjectionThreadsByProjectInput = Schema.Struct({
-  projectId: ProjectId,
-});
-export type ListProjectionThreadsByProjectInput = typeof ListProjectionThreadsByProjectInput.Type;
 
 /**
  * ProjectionThreadRepositoryShape - Service API for projected thread records.
@@ -104,26 +99,26 @@ export interface ProjectionThreadRepositoryShape {
     input: GetProjectionThreadInput,
   ) => Effect.Effect<Option.Option<ProjectionThread>, ProjectionRepositoryError>;
 
-  /**
-   * List projected threads for a project.
-   *
-   * Returned in deterministic creation order.
-   */
-  readonly listByProjectId: (
-    input: ListProjectionThreadsByProjectInput,
-  ) => Effect.Effect<ReadonlyArray<ProjectionThread>, ProjectionRepositoryError>;
-
-  /**
-   * Soft-delete a projected thread row by id.
-   */
-  readonly deleteById: (
-    input: DeleteProjectionThreadInput,
-  ) => Effect.Effect<void, ProjectionRepositoryError>;
   /** Background-only child status write; does not create an orchestration event. */
   readonly updateChildStatus: (input: {
     readonly threadId: ThreadId;
     readonly status: string;
     readonly updatedAt: IsoDateTime;
+  }) => Effect.Effect<void, ProjectionRepositoryError>;
+
+  /**
+   * Recompute both t3team shell facts from the thread's own activities and messages: the open
+   * `t3team.child_wait` count and the instance of its earliest `local:<instanceId>:` message.
+   * Needed wherever those tables are rewritten (thread re-created under the same id, revert).
+   */
+  readonly refreshT3TeamShellFacts: (
+    input: GetProjectionThreadInput,
+  ) => Effect.Effect<void, ProjectionRepositoryError>;
+
+  /** Record the mirrored native session's instance id; the first one recorded wins. */
+  readonly setLocalSessionInstanceId: (input: {
+    readonly threadId: ThreadId;
+    readonly instanceId: string;
   }) => Effect.Effect<void, ProjectionRepositoryError>;
 }
 

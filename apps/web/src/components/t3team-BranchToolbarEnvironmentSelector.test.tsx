@@ -64,7 +64,10 @@ vi.mock("./ui/select", () => ({
 vi.mock("./EnvironmentMachineIcon", () => ({
   EnvironmentMachineIcon: () => <span data-testid="machine-icon" />,
 }));
-vi.mock("./chat/composerEventScope", () => ({ composerFloatingLayerProps: {} }));
+vi.mock("./chat/composerEventScope", () => ({
+  composerFloatingLayerProps: {},
+  useComposerMenuProps: () => ({}),
+}));
 
 import {
   BranchToolbarEnvironmentSelector,
@@ -181,6 +184,14 @@ describe("BranchToolbarEnvironmentSelector", () => {
       createButton?.click();
     });
     expect(onCreateCloudSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("labels 'New cloud session' with the duration it will run for", () => {
+    mountSelector({ onCreateCloudSession: () => {}, cloudSessionDurationLabel: "4h" });
+
+    const label = findCreateButton()?.textContent ?? "";
+    expect(label).toContain("New cloud session");
+    expect(label).toContain("· 4h");
   });
 
   it("wires menu open/close to the polling callback", () => {

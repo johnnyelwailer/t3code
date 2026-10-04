@@ -53,7 +53,7 @@ export function AppContentPane({
 
   return (
     <T3TeamInlineRecipeLaunchProvider>
-      <SidebarInset className="h-full min-h-0 overflow-hidden bg-background text-foreground">
+      <SidebarInset className="h-full min-h-0 overflow-hidden">
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <AppMainContent
             view={resolvedView}

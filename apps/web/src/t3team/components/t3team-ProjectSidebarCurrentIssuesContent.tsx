@@ -1,5 +1,6 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
-import { SidebarMenuSub, SidebarMenuSubItem } from "~/t3team/components/ui/t3team-sidebar";
+import { SidebarMenuSubItem } from "~/t3team/components/ui/t3team-sidebar";
+import { T3SidebarSubList } from "~/t3team/components/ui/t3team-sidebar-row";
 import type { GitHubWorkActivityItem } from "~/t3team/t3team-githubActivity";
 import { buildTicketSidebarPinnedItemId } from "~/t3team/t3team-sidebarPinningTypes";
 import type { TicketViewMode } from "./t3team-projectSidebarShared";
@@ -72,7 +73,7 @@ export function ProjectSidebarCurrentIssuesContent({
   );
 
   return (
-    <SidebarMenuSub className="mx-1 mt-1.5 w-full translate-x-0 gap-0.5 overflow-hidden px-1.5 pb-0.5">
+    <T3SidebarSubList className="mx-1 mt-1.5 w-full overflow-hidden">
       {ticketViewMode === "tree"
         ? visibleTreeRoots.map((ticket) => (
             <SidebarMenuSubItem key={ticket.id} className="w-full">
@@ -120,7 +121,7 @@ export function ProjectSidebarCurrentIssuesContent({
 
       {ticketViewMode === "tree" && visibleTreeUnresolvedChildren.length > 0 && (
         <div className="mt-1 space-y-1">
-          <div className="px-2 text-[9px] font-medium uppercase tracking-[0.14em] text-muted-foreground/55">
+          <div className="px-2 text-3xs font-medium uppercase tracking-widest text-muted-foreground/55">
             Unlinked
           </div>
           {visibleTreeUnresolvedChildren.map((ticket) => (
@@ -148,11 +149,11 @@ export function ProjectSidebarCurrentIssuesContent({
 
       {hiddenTicketCount > 0 && (
         <SidebarMenuSubItem>
-          <div className="px-2 py-1 text-[10px] text-muted-foreground/60">
+          <div className="px-2 py-1 text-3xs text-muted-foreground/60">
             +{hiddenTicketCount} more
           </div>
         </SidebarMenuSubItem>
       )}
-    </SidebarMenuSub>
+    </T3SidebarSubList>
   );
 }

@@ -3,9 +3,10 @@ import type { EnvironmentId } from "@t3tools/contracts";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { Project, Thread } from "~/types";
+import type { Project, ThreadShell } from "~/types";
 import type { ProjectThread } from "~/t3team/t3team-types";
 
+import { makeLiveThreadShell } from "./t3team-threadBridge.testSupport";
 import {
   filterUnresolvedThreadPlacementIds,
   mergeFetchedThreadPlacements,
@@ -83,34 +84,12 @@ function makeStoredProject(overrides: Record<string, unknown> = {}): ProjectShel
   } as unknown as ProjectShellProject;
 }
 
-function makeLiveThread(overrides: Record<string, unknown> = {}): Thread {
-  return {
-    id: "thread-child",
-    environmentId: "env-local" as EnvironmentId,
-    codexThreadId: null,
+function makeLiveThread(overrides: Partial<ThreadShell> = {}): ThreadShell {
+  return makeLiveThreadShell({
+    id: ThreadId.make("thread-child"),
     projectId: ProjectId.make("live-project"),
-    title: "Investigate regression",
-    modelSelection: {
-      instanceId: "codex",
-      model: "gpt-5-codex",
-    },
-    runtimeMode: "full-access",
-    interactionMode: "default",
-    session: null,
-    messages: [],
-    proposedPlans: [],
-    error: null,
-    createdAt: "2026-05-22T09:00:00.000Z",
-    archivedAt: null,
-    updatedAt: "2026-05-22T10:00:00.000Z",
-    latestTurn: null,
-    pendingSourceProposedPlan: undefined,
-    branch: null,
-    worktreePath: null,
-    turnDiffSummaries: [],
-    activities: [],
     ...overrides,
-  } as unknown as Thread;
+  });
 }
 
 function makeProjectThread(overrides: Partial<ProjectThread> = {}): ProjectThread {
@@ -118,7 +97,6 @@ function makeProjectThread(overrides: Partial<ProjectThread> = {}): ProjectThrea
     id: "thread-child",
     projectId: "stored-project",
     title: "Investigate regression",
-    messageCount: 0,
     lastMessageAt: "2026-05-22T10:00:00.000Z",
     createdAt: "2026-05-22T09:00:00.000Z",
     status: "idle",
@@ -132,56 +110,37 @@ describe("t3team-useHydrateThreadPlacements", () => {
       readMissingThreadPlacementIds({
         threads: [makeProjectThread({ id: "thread-known", ticketId: "PROJ-1" })],
         liveThreads: [
-          makeLiveThread({ id: "thread-known" }),
-          makeLiveThread({ id: "thread-missing" }),
+          makeLiveThread({ id: ThreadId.make("thread-known") }),
+          makeLiveThread({ id: ThreadId.make("thread-missing") }),
         ],
       }),
     ).toEqual(["thread-missing"]);
   });
 
-  it("does not request placements when live activities already carry handoff metadata", () => {
+  it("does not request placements when local state already carries the placement", () => {
     expect(
       readMissingThreadPlacementIds({
-        threads: [],
-        liveThreads: [
-          makeLiveThread({
-            activities: [
-              {
-                id: "activity-handoff-1",
-                tone: "info",
-                kind: "t3team.handoff.created",
-                summary: "Created from Parent thread",
-                payload: {
-                  parentThreadId: ThreadId.make("thread-parent"),
-                  childThreadId: ThreadId.make("thread-child"),
-                  ticketId: "PROJ-123",
-                },
-                turnId: null,
-                createdAt: "2026-05-22T09:00:00.000Z",
-              },
-            ],
+        threads: [
+          makeProjectThread({
+            id: "thread-child",
+            parentThreadId: "thread-parent",
+            ticketId: "PROJ-123",
           }),
         ],
+        liveThreads: [makeLiveThread()],
       }),
     ).toEqual([]);
   });
 
-  it("does not merge an old placement row for an ephemeral repair child after reload", () => {
+  it("requests placements for a live thread whose local copy carries no placement", () => {
+    // A shell has no activities to carry placement, so a local thread without one is still
+    // unresolved and the server route is asked.
     expect(
-      mergeFetchedThreadPlacements({
-        threads: [],
-        storedProjects: [makeStoredProject()],
-        liveProjects: [makeLiveProject()],
-        liveThreads: [makeLiveThread({ id: "run:repair:1", retention: "ephemeral" })],
-        placements: [
-          {
-            threadId: ThreadId.make("run:repair:1"),
-            parentThreadId: ThreadId.make("launch-thread"),
-            ticketId: "PROJ-123",
-          },
-        ],
+      readMissingThreadPlacementIds({
+        threads: [makeProjectThread({ id: "thread-child" })],
+        liveThreads: [makeLiveThread()],
       }),
-    ).toEqual([]);
+    ).toEqual(["thread-child"]);
   });
 
   it("hydrates fetched placements into local shadow threads", () => {
@@ -207,5 +166,23 @@ describe("t3team-useHydrateThreadPlacements", () => {
         ticketId: "PROJ-123",
       }),
     ]);
+  });
+
+  it("ignores placements for threads that are not in the live shell list", () => {
+    expect(
+      mergeFetchedThreadPlacements({
+        threads: [],
+        storedProjects: [makeStoredProject()],
+        liveProjects: [makeLiveProject()],
+        liveThreads: [makeLiveThread()],
+        placements: [
+          {
+            threadId: ThreadId.make("run:repair:1"),
+            parentThreadId: ThreadId.make("launch-thread"),
+            ticketId: "PROJ-123",
+          },
+        ],
+      }),
+    ).toEqual([]);
   });
 });

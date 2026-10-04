@@ -195,6 +195,9 @@ export function ProjectDashboardBacklogView({
   return (
     <ProjectDashboardBacklogViewLayout
       overview={overview}
+      {...(capabilities.boardScopeMissing
+        ? { onReconnectBoard: () => refreshBacklog({ clearProjectCache: true }) }
+        : {})}
       content={content}
       error={error}
       isImmersiveView={isImmersiveView}

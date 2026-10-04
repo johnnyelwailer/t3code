@@ -133,7 +133,7 @@ export const Gallery: Story = {
     <div className="flex flex-col gap-4">
       {GALLERY_STATES.map(({ label, props }) => (
         <div key={label} className="flex flex-col gap-1.5">
-          <span className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
+          <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
             {label}
           </span>
           <PickerListAreaFrame>

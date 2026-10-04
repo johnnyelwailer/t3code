@@ -39,8 +39,8 @@ export type ProjectThread = {
   dashboardMode?: ProjectDashboardMode;
   displayMode?: ProjectThreadDisplayMode;
   title: string;
-  providerKind?: "codex" | "claudeAgent";
-  messageCount: number;
+  /** Instance id of a mirrored native local session (see t3team-localProviderKinds). */
+  providerKind?: string;
   lastMessageAt: string;
   createdAt: string;
   kickoffMessage?: string;
@@ -73,11 +73,12 @@ export type ProjectThread = {
       | "running"
       | "suspended"
       | "sleeping"
+      | "watching"
       | "paused"
       | "completed"
       | "failed"
       | "cancelled";
-    readonly pendingKind: "thread.turn" | "user.input" | null;
+    readonly pendingKind: "thread.turn" | "user.input" | "signal.wait" | null;
     readonly wakeAt: string | null;
     readonly updatedAt: string;
   };
@@ -179,6 +180,8 @@ export type ProjectTicket = {
   sprintCompleteDate?: string;
   updatedAt: string;
   labels?: ReadonlyArray<string>;
+  /** Position in the provider's board order (Jira Rank); set for backlog tickets only. */
+  boardRank?: number;
 };
 
 export type ProjectBacklogSubtaskCreateInput = {
@@ -210,6 +213,9 @@ export type ViewState =
       projectId?: string;
       embeddedThreadId?: string;
     };
+
+/** Parent views that can host an embedded project thread (sidebar chat). */
+export type EmbeddedThreadParentView = Extract<ViewState, { type: "dashboard" | "ticket" }>;
 
 export function readActiveThreadIdFromView(view: ViewState | null): string | null {
   if (!view) {

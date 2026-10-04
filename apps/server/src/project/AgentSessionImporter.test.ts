@@ -19,7 +19,6 @@ import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as ProviderUsageWatcher from "../t3team-providerUsageWatcher.ts";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -57,6 +56,7 @@ import { makeProviderRegistryLayer } from "../provider/testUtils/providerRegistr
 import { ServerSettingsService } from "../serverSettings.ts";
 import * as AnalyticsService from "../telemetry/AnalyticsService.ts";
 import { TextGeneration } from "../textGeneration/TextGeneration.ts";
+import { TerminalManager } from "../terminal/Manager.ts";
 import { VcsStatusBroadcaster } from "../vcs/VcsStatusBroadcaster.ts";
 import * as RepositoryIdentityResolver from "./RepositoryIdentityResolver.ts";
 import { importRecentAgentThreads } from "./AgentSessionImporter.ts";
@@ -233,7 +233,7 @@ it.layer(NodeServices.layer)("AgentSessionImporter", (it) => {
           upsert: (binding) => Effect.sync(() => void bindings.push(binding)),
           getProvider: () => Effect.die("unused"),
           recordImportedTranscript: () => Effect.void,
-          getBinding: () => Effect.succeed(Option.none()),
+          getBinding: () => Effect.succeedNone,
           listThreadIds: () => Effect.die("unused"),
           listBindings: () => Effect.die("unused"),
         });
@@ -457,7 +457,7 @@ it.layer(NodeServices.layer)("AgentSessionImporter", (it) => {
           upsert: () => Effect.die("must not replace an active binding"),
           getProvider: () => Effect.die("unused"),
           recordImportedTranscript: () => Effect.void,
-          getBinding: () => Effect.succeed(Option.some(runningBinding)),
+          getBinding: () => Effect.succeedSome(runningBinding),
           listThreadIds: () => Effect.die("unused"),
           listBindings: () => Effect.die("unused"),
         });
@@ -512,7 +512,7 @@ it.layer(NodeServices.layer)("AgentSessionImporter", (it) => {
           upsert: () => Effect.die("must not bind malformed or wrong-project sessions"),
           getProvider: () => Effect.die("unused"),
           recordImportedTranscript: () => Effect.die("unused"),
-          getBinding: () => Effect.succeed(Option.none()),
+          getBinding: () => Effect.succeedNone,
           listThreadIds: () => Effect.die("unused"),
           listBindings: () => Effect.die("unused"),
         });
@@ -570,16 +570,6 @@ const integrationLayer = Layer.mergeAll(
   integrationRuntimeRepository,
   ProviderSessionDirectoryLive.pipe(Layer.provide(integrationRuntimeRepository)),
   Layer.succeed(AgentSessionScanner.AgentSessionScanner, integrationScanner),
-  // Fork-only requirement leaked by the reactor chain inside OrchestrationEngineLive;
-  // the import flow never exercises the hold logic, so a quiet fake suffices.
-  Layer.succeed(ProviderUsageWatcher.ProviderUsageWatcher, {
-    sweep: () => Effect.void,
-    checkThreadHeld: () => Effect.succeed(Option.none()),
-    recordDeferredTurn: () => Effect.void,
-    forceExhaust: () => Effect.die("unused"),
-    forceRecover: () => Effect.die("unused"),
-    getDevState: () => Effect.succeed({ held: [], holds: [], lastSampledAt: null }),
-  }),
 ).pipe(
   Layer.provide(ThreadBackgroundLiveness.layer),
   Layer.provide(ThreadPlanProgress.layer),
@@ -942,6 +932,7 @@ it.layer(integrationLayer)("AgentSessionImporter integration", (it) => {
           Layer.provide(Layer.mock(GitWorkflowService)({})),
           Layer.provide(Layer.mock(VcsStatusBroadcaster)({})),
           Layer.provide(Layer.mock(TextGeneration)({})),
+          Layer.provide(Layer.mock(TerminalManager)({ closeIdle: () => Effect.void })),
           Layer.provide(ServerSettingsService.layerTest()),
         );
 

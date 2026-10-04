@@ -44,13 +44,13 @@ export function ChildIssueEstimateField({
         aria-label="Estimated hours"
         disabled={disabled}
         inputMode="decimal"
-        size="sm"
-        className="w-14 text-center text-[12px] tabular-nums"
+        size="compact"
+        className="w-14 text-center"
         value={hoursText}
         onChange={(event) => onChange(event.target.value)}
         placeholder="0"
       />
-      <span className="text-[10px] uppercase tracking-[0.06em] text-muted-foreground">h</span>
+      <span className="text-3xs uppercase tracking-wider text-muted-foreground">h</span>
       <button
         type="button"
         aria-label="Increase estimate"
@@ -60,7 +60,7 @@ export function ChildIssueEstimateField({
       >
         <Plus className="size-3" />
       </button>
-      {!parsed.ok ? <span className="text-[10px] text-destructive">{parsed.error}</span> : null}
+      {!parsed.ok ? <span className="text-3xs text-destructive">{parsed.error}</span> : null}
     </div>
   );
 }

@@ -31,10 +31,10 @@ import * as ConnectCredentialMinter from "./t3team-ConnectCredentialMinter.ts";
  */
 
 /** Give the first pass a beat after activation before it may open a browser. */
-export const CONNECT_CREDENTIAL_TOP_UP_INITIAL_DELAY = Duration.seconds(20);
+const CONNECT_CREDENTIAL_TOP_UP_INITIAL_DELAY = Duration.seconds(20);
 
 /** Quiet cadence; the mint itself bounds any single attempt. */
-export const CONNECT_CREDENTIAL_TOP_UP_INTERVAL = Duration.minutes(5);
+const CONNECT_CREDENTIAL_TOP_UP_INTERVAL = Duration.minutes(5);
 
 /**
  * One top-up pass. Idempotent and side-effect-free unless the linked

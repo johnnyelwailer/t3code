@@ -3,6 +3,8 @@ import "./t3team-sdk.globals.ts";
 export { schemaToAffordance } from "./t3team-sdk.affordance.ts";
 export { asNamedAttachments, renderAgentAttachments } from "./t3team-sdk.askAttachments.ts";
 export { appendResolvedEntry, createHostBroker, createMockBroker } from "./t3team-sdk.broker.ts";
+export type { HandleDispatch } from "@runbook/core/handles";
+export { createThreadPrimitives } from "./t3team-sdk.threadPrimitives.ts";
 export { builtinTools } from "./t3team-sdk.builtins.ts";
 export { hashArgs } from "./t3team-sdk.canonicalJson.ts";
 export {
@@ -40,7 +42,6 @@ export {
 export { createStoreSink, defaultRunsRoot, FsJournalStore } from "./t3team-sdk.journalStore.ts";
 export { buildJournalMaps, insertWireEntry } from "./t3team-sdk.journalReader.ts";
 export { toResolvedWire, toWire } from "./t3team-sdk.journalWriter.ts";
-export { models } from "./t3team-sdk.models.ts";
 export {
   buildScriptTree,
   buildToolTree,
@@ -152,6 +153,7 @@ export type {
   CreateWorkflowRunHostConfig,
   WorkflowHostLifecycle,
   WorkflowHostPendingAsk,
+  WorkflowHostRedriveOptions,
   WorkflowHostRegisteredRun,
   WorkflowHostRegistry,
   WorkflowHostSleep,
@@ -229,6 +231,7 @@ export type {
   FetchLike,
   IntegrationClient,
   IntegrationMethod,
+  ModelOption,
   ModelRef,
   ModelSelection,
   RecipeApplicabilitySpec,

@@ -3,12 +3,13 @@
  * (Epic 24 ad-hoc widget tier). Effectful orchestration lives in `t3team-widgetShowTool.ts`.
  */
 
+import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import type { T3TeamMessageWidgetAttachment } from "@t3tools/contracts";
 
 import { resolveWidgetCapabilityPolicy } from "./t3team-widgetCapabilityPolicy.ts";
 
-export const T3TEAM_WIDGET_SHOW_TOOL_ID = "t3team.widget.show";
-export const T3TEAM_WIDGET_CODE_MAX_BYTES = 128 * 1024;
+const T3TEAM_WIDGET_SHOW_TOOL_ID = "t3team.widget.show";
+const T3TEAM_WIDGET_CODE_MAX_BYTES = 128 * 1024;
 const TITLE_MAX_LENGTH = 64;
 const LOADING_MESSAGES_MAX = 8;
 const LOADING_MESSAGE_MAX_LENGTH = 200;
@@ -149,7 +150,7 @@ export function buildT3TeamWidgetArtifactRelativePath(input: {
   readonly title: string;
   readonly widgetId: string;
 }): string {
-  return `.t3team/artifacts/widgets/${input.title}-${input.widgetId}.html`;
+  return `${PROJECT_STATE_DIR}/artifacts/widgets/${input.title}-${input.widgetId}.html`;
 }
 
 export function buildT3TeamWidgetAttachment(input: {

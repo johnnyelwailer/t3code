@@ -18,8 +18,8 @@ import type { ToolAuthAdapter, ToolAuthPhase } from "./t3team-types.ts";
  * per deployment via `T3TEAM_GH_LOGIN_HOSTNAME` (read once at module load,
  * like the Atlassian OAuth client-id keys).
  */
-export const GH_LOGIN_HOSTNAME_ENV = "T3TEAM_GH_LOGIN_HOSTNAME";
-export const GH_DEFAULT_LOGIN_HOSTNAME = "nexplore.ghe.com";
+const GH_LOGIN_HOSTNAME_ENV = "T3TEAM_GH_LOGIN_HOSTNAME";
+const GH_DEFAULT_LOGIN_HOSTNAME = "nexplore.ghe.com";
 
 /** Escape a hostname for interpolation into the matcher regexes below. */
 function escapeRegex(s: string): string {

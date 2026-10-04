@@ -120,10 +120,10 @@ export const TicketKickoffComposer = forwardRef<
         className="mx-auto w-full min-w-0 max-w-208"
         data-chat-composer-form="true"
       >
-        <div className="group rounded-[22px] p-px transition-colors duration-200">
+        <div className="group rounded-3xl p-px transition-colors duration-200">
           <div
             className={cn(
-              "relative rounded-[20px] border bg-card transition-colors duration-200 has-focus-visible:border-ring/45",
+              "relative rounded-3xl border bg-card transition-colors duration-200 has-focus-visible:border-ring/45",
               "border-border",
               !isConnected ? "opacity-75" : null,
             )}

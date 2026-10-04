@@ -60,219 +60,230 @@ const baseInput: Omit<SignalDeliveryInput, "payload"> = {
 };
 
 describe("makeSignalDeliveryPort", () => {
-  it("fans out to every parked run on the exact tuple, not to others", async () => {
-    const parkedA = row({
-      runId: "run-a",
-      pendingCorrelationId: "corr-a",
-      watchSourceName: "scm.change-request.watch",
-      watchParamsHash: "hash-42",
-      watchSignalName: "scm.change-request.merged",
-      watchSignalKey: "42",
-    });
-    const parkedB = row({
-      runId: "run-b",
-      pendingCorrelationId: "corr-b",
-      watchSourceName: "scm.change-request.watch",
-      watchParamsHash: "hash-42",
-      watchSignalName: "scm.change-request.merged",
-      watchSignalKey: "42",
-    });
-    // Same source/params, different awaited signal — must NOT be woken by this event.
-    const parkedOtherSignal = row({
-      runId: "run-c",
-      pendingCorrelationId: "corr-c",
-      watchSourceName: "scm.change-request.watch",
-      watchParamsHash: "hash-42",
-      watchSignalName: "scm.change-request.closed",
-      watchSignalKey: "42",
-    });
-    // Same tuple shape but a different instance (params hash) — must NOT be woken.
-    const parkedOtherInstance = row({
-      runId: "run-d",
-      pendingCorrelationId: "corr-d",
-      watchSourceName: "scm.change-request.watch",
-      watchParamsHash: "hash-999",
-      watchSignalName: "scm.change-request.merged",
-      watchSignalKey: "42",
-    });
-    const controllers = new Map<string, FakeController>([
-      ["run-a", makeController()],
-      ["run-b", makeController()],
-      ["run-c", makeController()],
-      ["run-d", makeController()],
-    ]);
-    const inserted: InsertSignalInboxEntryInput[] = [];
-    const port = makeSignalDeliveryPort({
-      repo: {
-        listByStatus: () =>
-          Effect.succeed([parkedA, parkedB, parkedOtherSignal, parkedOtherInstance]),
-        clearPending: () => Effect.succeed(undefined),
-      },
-      store: {
-        insertInboxEntry: (input) => {
-          inserted.push(input);
-          return Effect.succeed(1);
+  it.effect("fans out to every parked run on the exact tuple, not to others", () =>
+    Effect.gen(function* () {
+      const parkedA = row({
+        runId: "run-a",
+        pendingCorrelationId: "corr-a",
+        watchSourceName: "scm.change-request.watch",
+        watchParamsHash: "hash-42",
+        watchSignalName: "scm.change-request.merged",
+        watchSignalKey: "42",
+      });
+      const parkedB = row({
+        runId: "run-b",
+        pendingCorrelationId: "corr-b",
+        watchSourceName: "scm.change-request.watch",
+        watchParamsHash: "hash-42",
+        watchSignalName: "scm.change-request.merged",
+        watchSignalKey: "42",
+      });
+      // Same source/params, different awaited signal — must NOT be woken by this event.
+      const parkedOtherSignal = row({
+        runId: "run-c",
+        pendingCorrelationId: "corr-c",
+        watchSourceName: "scm.change-request.watch",
+        watchParamsHash: "hash-42",
+        watchSignalName: "scm.change-request.closed",
+        watchSignalKey: "42",
+      });
+      // Same tuple shape but a different instance (params hash) — must NOT be woken.
+      const parkedOtherInstance = row({
+        runId: "run-d",
+        pendingCorrelationId: "corr-d",
+        watchSourceName: "scm.change-request.watch",
+        watchParamsHash: "hash-999",
+        watchSignalName: "scm.change-request.merged",
+        watchSignalKey: "42",
+      });
+      const controllers = new Map<string, FakeController>([
+        ["run-a", makeController()],
+        ["run-b", makeController()],
+        ["run-c", makeController()],
+        ["run-d", makeController()],
+      ]);
+      const inserted: InsertSignalInboxEntryInput[] = [];
+      const port = makeSignalDeliveryPort({
+        repo: {
+          listByStatus: () =>
+            Effect.succeed([parkedA, parkedB, parkedOtherSignal, parkedOtherInstance]),
+          clearPending: () => Effect.succeed(undefined),
         },
-      },
-      registry: {
-        getRun: (runId) =>
-          controllers.get(runId) as unknown as WorkflowRegisteredRun | undefined,
-      },
-      nowIso: () => NOW,
-    });
-
-    const payload = { changeRequest: { title: "Fix the billing path" } };
-    const woken = await Effect.runPromise(port.emit({ ...baseInput, payload }));
-    assert.strictEqual(woken, 2);
-    const controllerA = controllers.get("run-a");
-    const controllerB = controllers.get("run-b");
-    assert.strictEqual(controllerA?.resumes.length, 1);
-    assert.strictEqual(controllerA?.resumes[0]?.correlationId, "corr-a");
-    assert.deepStrictEqual(controllerA?.resumes[0]?.payload, payload);
-    assert.strictEqual(controllerB?.resumes[0]?.correlationId, "corr-b");
-    // The off-tuple runs are untouched:
-    assert.strictEqual(controllers.get("run-c")?.resumes.length, 0);
-    assert.strictEqual(controllers.get("run-d")?.resumes.length, 0);
-    // A parked run consumed the event — nothing goes to the inbox:
-    assert.strictEqual(inserted.length, 0);
-  });
-
-  it("bridges to the durable inbox when no run is parked on the tuple", async () => {
-    const parkedElsewhere = row({
-      runId: "run-x",
-      pendingCorrelationId: "corr-x",
-      watchSourceName: "work-item.updates",
-      watchParamsHash: "hash-wi",
-      watchSignalName: "work-item.updated",
-      watchSignalKey: "SVC-7",
-    });
-    const inserted: InsertSignalInboxEntryInput[] = [];
-    const port = makeSignalDeliveryPort({
-      repo: {
-        listByStatus: () => Effect.succeed([parkedElsewhere]),
-        clearPending: () => Effect.succeed(undefined),
-      },
-      store: {
-        insertInboxEntry: (input) => {
-          inserted.push(input);
-          return Effect.succeed(1);
+        store: {
+          insertInboxEntry: (input) => {
+            inserted.push(input);
+            return Effect.succeed(1);
+          },
         },
-      },
-      registry: { getRun: () => undefined },
-      nowIso: () => NOW,
-    });
-
-    const payload = { changeRequest: { title: "Fix the billing path" } };
-    const woken = await Effect.runPromise(port.emit({ ...baseInput, payload }));
-    assert.strictEqual(woken, 0);
-    assert.strictEqual(inserted.length, 1);
-    assert.deepStrictEqual(inserted[0], {
-      sourceName: baseInput.sourceName,
-      paramsHash: baseInput.paramsHash,
-      signalName: baseInput.signalName,
-      key: baseInput.key,
-      payload,
-      createdAt: NOW,
-    });
-  });
-
-  it("leaves a parked run parked while boot rehydration is in flight, and orphans it after", async () => {
-    const parked = row({
-      runId: "run-pending-rehydrate",
-      pendingCorrelationId: "corr-p",
-      watchSourceName: baseInput.sourceName,
-      watchParamsHash: baseInput.paramsHash,
-      watchSignalName: baseInput.signalName,
-      watchSignalKey: baseInput.key,
-    });
-    const cleared: ClearWorkflowRunPendingInput[] = [];
-    let inFlight = true;
-    const port = makeSignalDeliveryPort({
-      repo: {
-        listByStatus: () => Effect.succeed([parked]),
-        clearPending: (input) => {
-          cleared.push(input);
-          return Effect.succeed(undefined);
+        registry: {
+          getRun: (runId) => controllers.get(runId) as unknown as WorkflowRegisteredRun | undefined,
         },
-      },
-      store: { insertInboxEntry: () => Effect.succeed(1) },
-      registry: { getRun: () => undefined },
-      isRehydrateInFlight: () => inFlight,
-      nowIso: () => NOW,
-    });
+        nowIso: () => NOW,
+      });
 
-    // Rehydration in flight: the event arrives, the controller is not registered yet — the run
-    // must stay parked (the next event retries), NOT be failed.
-    const woken = await Effect.runPromise(port.emit({ ...baseInput, payload: {} }));
-    assert.strictEqual(woken, 0);
-    assert.strictEqual(cleared.length, 0);
+      const payload = { changeRequest: { title: "Fix the billing path" } };
+      const woken = yield* port.emit({ ...baseInput, payload });
+      assert.strictEqual(woken, 2);
+      const controllerA = controllers.get("run-a");
+      const controllerB = controllers.get("run-b");
+      assert.strictEqual(controllerA?.resumes.length, 1);
+      assert.strictEqual(controllerA?.resumes[0]?.correlationId, "corr-a");
+      assert.deepStrictEqual(controllerA?.resumes[0]?.payload, payload);
+      assert.strictEqual(controllerB?.resumes[0]?.correlationId, "corr-b");
+      // The off-tuple runs are untouched:
+      assert.strictEqual(controllers.get("run-c")?.resumes.length, 0);
+      assert.strictEqual(controllers.get("run-d")?.resumes.length, 0);
+      // A parked run consumed the event — nothing goes to the inbox:
+      assert.strictEqual(inserted.length, 0);
+    }),
+  );
 
-    // …and once rehydration completes, the SAME situation orphan-fails the run:
-    inFlight = false;
-    await Effect.runPromise(port.emit({ ...baseInput, payload: {} }));
-    assert.strictEqual(cleared.length, 1);
-    assert.strictEqual(cleared[0]!.status, "failed");
-    assert.strictEqual(cleared[0]!.failureStep, "signal.wait");
-    assert.strictEqual(cleared[0]!.runId, "run-pending-rehydrate");
-  });
-
-  it("orphan-fails a parked run when no controller exists and no gate is present", async () => {
-    const parked = row({
-      runId: "run-orphan",
-      pendingCorrelationId: "corr-o",
-      watchSourceName: baseInput.sourceName,
-      watchParamsHash: baseInput.paramsHash,
-      watchSignalName: baseInput.signalName,
-      watchSignalKey: baseInput.key,
-    });
-    const cleared: ClearWorkflowRunPendingInput[] = [];
-    const port = makeSignalDeliveryPort({
-      repo: {
-        listByStatus: () => Effect.succeed([parked]),
-        clearPending: (input) => {
-          cleared.push(input);
-          return Effect.succeed(undefined);
+  it.effect("bridges to the durable inbox when no run is parked on the tuple", () =>
+    Effect.gen(function* () {
+      const parkedElsewhere = row({
+        runId: "run-x",
+        pendingCorrelationId: "corr-x",
+        watchSourceName: "work-item.updates",
+        watchParamsHash: "hash-wi",
+        watchSignalName: "work-item.updated",
+        watchSignalKey: "SVC-7",
+      });
+      const inserted: InsertSignalInboxEntryInput[] = [];
+      const port = makeSignalDeliveryPort({
+        repo: {
+          listByStatus: () => Effect.succeed([parkedElsewhere]),
+          clearPending: () => Effect.succeed(undefined),
         },
-      },
-      store: { insertInboxEntry: () => Effect.succeed(1) },
-      registry: { getRun: () => undefined },
-      nowIso: () => NOW,
-    });
+        store: {
+          insertInboxEntry: (input) => {
+            inserted.push(input);
+            return Effect.succeed(1);
+          },
+        },
+        registry: { getRun: () => undefined },
+        nowIso: () => NOW,
+      });
 
-    await Effect.runPromise(port.emit({ ...baseInput, payload: {} }));
-    assert.strictEqual(cleared.length, 1);
-    assert.strictEqual(cleared[0]!.status, "failed");
-    assert.strictEqual(cleared[0]!.failureStep, "signal.wait");
-  });
+      const payload = { changeRequest: { title: "Fix the billing path" } };
+      const woken = yield* port.emit({ ...baseInput, payload });
+      assert.strictEqual(woken, 0);
+      assert.strictEqual(inserted.length, 1);
+      assert.deepStrictEqual(inserted[0], {
+        sourceName: baseInput.sourceName,
+        paramsHash: baseInput.paramsHash,
+        signalName: baseInput.signalName,
+        key: baseInput.key,
+        payload,
+        createdAt: NOW,
+      });
+    }),
+  );
 
-  it("fails the emit when a resume fails, so the poller holds its cursor for redelivery", async () => {
-    const parked = row({
-      runId: "run-failing-resume",
-      pendingCorrelationId: "corr-f",
-      watchSourceName: baseInput.sourceName,
-      watchParamsHash: baseInput.paramsHash,
-      watchSignalName: baseInput.signalName,
-      watchSignalKey: baseInput.key,
-    });
-    const port = makeSignalDeliveryPort({
-      repo: {
-        listByStatus: () => Effect.succeed([parked]),
-        clearPending: () => Effect.succeed(undefined),
-      },
-      store: { insertInboxEntry: () => Effect.succeed(1) },
-      registry: {
-        getRun: () => makeController("fail") as unknown as WorkflowRegisteredRun,
-      },
-      nowIso: () => NOW,
-    });
+  it.effect(
+    "leaves a parked run parked while boot rehydration is in flight, and orphans it after",
+    () =>
+      Effect.gen(function* () {
+        const parked = row({
+          runId: "run-pending-rehydrate",
+          pendingCorrelationId: "corr-p",
+          watchSourceName: baseInput.sourceName,
+          watchParamsHash: baseInput.paramsHash,
+          watchSignalName: baseInput.signalName,
+          watchSignalKey: baseInput.key,
+        });
+        const cleared: ClearWorkflowRunPendingInput[] = [];
+        let inFlight = true;
+        const port = makeSignalDeliveryPort({
+          repo: {
+            listByStatus: () => Effect.succeed([parked]),
+            clearPending: (input) => {
+              cleared.push(input);
+              return Effect.succeed(undefined);
+            },
+          },
+          store: { insertInboxEntry: () => Effect.succeed(1) },
+          registry: { getRun: () => undefined },
+          isRehydrateInFlight: () => inFlight,
+          nowIso: () => NOW,
+        });
 
-    const error = await Effect.runPromise(port.emit({ ...baseInput, payload: {} })).then(
-      (woken) => {
-        throw new Error(`emit unexpectedly succeeded: woken ${woken}`);
-      },
-      (cause) => cause,
-    );
-    assertInstanceOf(error, PersistenceSqlError);
-    assert.strictEqual(error.operation, "workflowSignal.resume");
-  });
+        // Rehydration in flight: the event arrives, the controller is not registered yet — the run
+        // must stay parked (the next event retries), NOT be failed.
+        const woken = yield* port.emit({ ...baseInput, payload: {} });
+        assert.strictEqual(woken, 0);
+        assert.strictEqual(cleared.length, 0);
+
+        // …and once rehydration completes, the SAME situation orphan-fails the run:
+        inFlight = false;
+        yield* port.emit({ ...baseInput, payload: {} });
+        assert.strictEqual(cleared.length, 1);
+        assert.strictEqual(cleared[0]!.status, "failed");
+        assert.strictEqual(cleared[0]!.failureStep, "signal.wait");
+        assert.strictEqual(cleared[0]!.runId, "run-pending-rehydrate");
+      }),
+  );
+
+  it.effect("orphan-fails a parked run when no controller exists and no gate is present", () =>
+    Effect.gen(function* () {
+      const parked = row({
+        runId: "run-orphan",
+        pendingCorrelationId: "corr-o",
+        watchSourceName: baseInput.sourceName,
+        watchParamsHash: baseInput.paramsHash,
+        watchSignalName: baseInput.signalName,
+        watchSignalKey: baseInput.key,
+      });
+      const cleared: ClearWorkflowRunPendingInput[] = [];
+      const port = makeSignalDeliveryPort({
+        repo: {
+          listByStatus: () => Effect.succeed([parked]),
+          clearPending: (input) => {
+            cleared.push(input);
+            return Effect.succeed(undefined);
+          },
+        },
+        store: { insertInboxEntry: () => Effect.succeed(1) },
+        registry: { getRun: () => undefined },
+        nowIso: () => NOW,
+      });
+
+      yield* port.emit({ ...baseInput, payload: {} });
+      assert.strictEqual(cleared.length, 1);
+      assert.strictEqual(cleared[0]!.status, "failed");
+      assert.strictEqual(cleared[0]!.failureStep, "signal.wait");
+    }),
+  );
+
+  it.effect(
+    "fails the emit when a resume fails, so the poller holds its cursor for redelivery",
+    () =>
+      Effect.gen(function* () {
+        const parked = row({
+          runId: "run-failing-resume",
+          pendingCorrelationId: "corr-f",
+          watchSourceName: baseInput.sourceName,
+          watchParamsHash: baseInput.paramsHash,
+          watchSignalName: baseInput.signalName,
+          watchSignalKey: baseInput.key,
+        });
+        const port = makeSignalDeliveryPort({
+          repo: {
+            listByStatus: () => Effect.succeed([parked]),
+            clearPending: () => Effect.succeed(undefined),
+          },
+          store: { insertInboxEntry: () => Effect.succeed(1) },
+          registry: {
+            getRun: () => makeController("fail") as unknown as WorkflowRegisteredRun,
+          },
+          nowIso: () => NOW,
+        });
+
+        const error = yield* port.emit({ ...baseInput, payload: {} }).pipe(
+          Effect.flatMap((woken) => Effect.die(`emit unexpectedly succeeded: woken ${woken}`)),
+          Effect.flip,
+        );
+        assertInstanceOf(error, PersistenceSqlError);
+        assert.strictEqual(error.operation, "workflowSignal.resume");
+      }),
+  );
 });

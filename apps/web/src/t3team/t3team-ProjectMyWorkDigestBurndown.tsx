@@ -51,7 +51,7 @@ export function DigestBurndownChart({ graph, nowMs }: { graph: DigestGraph; nowM
   if (!b) return null;
   if (b.total === 0)
     return (
-      <p className="rounded-md bg-muted/30 px-2 py-2 text-[11px] text-muted-foreground">
+      <p className="rounded-md bg-muted/30 px-2 py-2 text-2xs text-muted-foreground">
         Nothing assigned to you this sprint
       </p>
     );
@@ -108,7 +108,7 @@ export function DigestBurndownChart({ graph, nowMs }: { graph: DigestGraph; nowM
           style={{ left: `${pct}%` }}
         />
       </div>
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-2xs text-muted-foreground">
         <b className="font-semibold text-foreground">{b.remaining}</b> of {b.total} {b.unit} left ·{" "}
         {b.doneCount} of {b.openCount + b.doneCount} done · dashed = ideal
       </p>

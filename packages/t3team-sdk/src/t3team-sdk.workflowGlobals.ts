@@ -34,7 +34,7 @@ import type { SchedulePrimitives } from "./t3team-sdk.schedulePrimitive.ts";
 import type { SignalPrimitives } from "./t3team-sdk.signalPrimitive.ts";
 import { BUILTIN_SIGNAL_GLOBALS } from "./t3team-sdk.builtinSignals.ts";
 import type { WorkflowThreadPrimitives } from "./t3team-sdk.threadPrimitives.ts";
-import { defineWorkflow } from "./t3team-sdk.ts";
+import { defineModel, defineWorkflow } from "./t3team-sdk.ts";
 import { defineSignal } from "./t3team-sdk.signal.ts";
 
 export {
@@ -137,6 +137,8 @@ export function buildWorkflowGlobals(opts: {
     // `defineWorkflow` lets a body construct the typed sub-workflow ref `workflow()` needs;
     // it is a pure ref constructor (no capability concern), so it is unconditionally bound.
     defineWorkflow,
+    // Existing bodies import this pure constructor; imports are erased by the loader.
+    defineModel,
     WorkflowError,
     SubWorkflowCheckpointError,
     TimeoutError,

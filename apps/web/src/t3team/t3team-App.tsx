@@ -11,7 +11,10 @@ import { AppOverlays } from "~/t3team/t3team-AppOverlays";
 import { T3TeamLeftSidebarDesktopToggle } from "~/t3team/t3team-LeftSidebarDesktopToggle";
 import { useLocalProviderSessionThreadFilter } from "~/t3team/hooks/t3team-useLocalProviderSessionThreadFilter";
 import { useAppHandlers } from "~/t3team/t3team-useAppHandlers";
-import { useResolvedViewSync } from "~/t3team/t3team-useResolvedViewSync";
+import {
+  useMergedRouteAndStoreView,
+  useResolvedViewSync,
+} from "~/t3team/t3team-useResolvedViewSync";
 import { useHydratePinnedSidebarItems } from "~/t3team/hooks/t3team-useHydratePinnedSidebarItems";
 import {
   T3TEAM_LEFT_SIDEBAR_MIN_WIDTH,
@@ -46,7 +49,10 @@ export function App({
 
   const showCreate = showCreateProp ?? showCreateInternal;
   const setShowCreate = onCreateOpenChange ?? setShowCreateInternal;
-  const activeView = view ?? store.view;
+  // The route view wins; while URL navigation lags the store, the merged view
+  // keeps the store's embedded thread visible so sidebar chat survives a
+  // dashboard-mode switch (see mergeRouteAndStoreView).
+  const activeView = useMergedRouteAndStoreView(view, store.view);
   const resolvedView = useMemo(
     () => resolveViewStoredProject(activeView, store.resolveProjectId),
     [activeView, store.resolveProjectId],
@@ -107,7 +113,7 @@ export function App({
       <Sidebar
         side="left"
         collapsible="offcanvas"
-        className="min-h-0 overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
+        className="min-h-0 overflow-hidden"
         resizable={{
           minWidth: T3TEAM_LEFT_SIDEBAR_MIN_WIDTH,
           shouldAcceptWidth: ({ nextWidth, wrapper }) =>

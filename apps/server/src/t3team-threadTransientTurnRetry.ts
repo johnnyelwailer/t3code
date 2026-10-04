@@ -12,7 +12,6 @@
  */
 export {
   MAX_SESSION_TRANSIENT_RETRIES,
-  IN_FLIGHT_SETTLE_MS,
   transientTurnRetryBackoffMs,
   transientTurnRetryDelayMs,
   truncateStopReason,
@@ -29,8 +28,6 @@ export {
   type TransientTurnRetryDecision,
   type TransientTurnRetryTracker,
   type TransientTurnRetryTrackerOptions,
-  decisionForTransient,
-  stallDecisionFor,
 } from "./t3team-threadTransientTurnRetryDecision.ts";
 
 export { createTransientTurnRetryTracker } from "./t3team-threadTransientTurnRetryTracker.ts";

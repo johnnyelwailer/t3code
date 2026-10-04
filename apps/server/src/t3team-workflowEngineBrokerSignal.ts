@@ -16,7 +16,10 @@
  *     resolved entry when the source fires.
  */
 import type { BrokerCore, BrokerSend } from "./t3team-workflowEngineBrokerContext.ts";
-import type { SignalRegisterPayload, SignalWaitPayload } from "./t3team-workflowEngineBrokerTypes.ts";
+import type {
+  SignalRegisterPayload,
+  SignalWaitPayload,
+} from "./t3team-workflowEngineBrokerTypes.ts";
 
 export async function handleBrokerSignalVerb(core: BrokerCore, s: BrokerSend): Promise<boolean> {
   const { correlationId, kind, payload } = s;

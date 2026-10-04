@@ -69,7 +69,7 @@ export function WorkItemPropertyChips({
   return (
     <div className={cn("flex flex-wrap gap-1", className)}>
       {values.map((value) => (
-        <Badge key={value} variant="outline" size="sm" className="font-normal">
+        <Badge key={value} variant="outline" size="sm">
           {value}
         </Badge>
       ))}

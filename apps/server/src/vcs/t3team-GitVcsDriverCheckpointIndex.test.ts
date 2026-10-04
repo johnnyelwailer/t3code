@@ -49,6 +49,27 @@ const failed = (exitCode: number, stderr: string): VcsProcess.VcsProcessOutput =
   stderrTruncated: false,
 });
 
+/** Real VcsProcess semantics: a non-zero exit fails unless the caller allowed it. */
+const withExitSemantics = (
+  input: VcsProcess.VcsProcessInput,
+  respond: () => VcsProcess.VcsProcessOutput,
+) =>
+  Effect.sync(respond).pipe(
+    Effect.flatMap((output) =>
+      output.exitCode === 0 || input.allowNonZeroExit === true
+        ? Effect.succeed(output)
+        : Effect.fail(
+            new VcsProcessExitError({
+              operation: input.operation,
+              command: input.command,
+              cwd: input.cwd,
+              exitCode: output.exitCode,
+              detail: "Process exited with a non-zero status.",
+            }),
+          ),
+    ),
+  );
+
 /**
  * The service-level execute prepends `-C <cwd>`, and the checkpoint path adds
  * `-c key=value` pairs (index/fsync config, upstream). Strip both so the fakes
@@ -68,7 +89,7 @@ const DriverLayer = Layer.mergeAll(GitVcsDriver.vcsLayer, GitVcsDriver.layer).pi
   Layer.provideMerge(
     Layer.succeed(VcsProcess.VcsProcess, {
       run: (input) =>
-        Effect.sync(() => {
+        withExitSemantics(input, () => {
           // The service-level execute prepends `-C <cwd>`; strip it.
           const args = gitSubcommandArgs(input.args);
           if (args[0] === "rev-parse" && args[1] === "--git-common-dir") {
@@ -179,7 +200,7 @@ const DriverLayerAllUnindexable = Layer.mergeAll(GitVcsDriver.vcsLayer, GitVcsDr
   Layer.provideMerge(
     Layer.succeed(VcsProcess.VcsProcess, {
       run: (input) =>
-        Effect.sync(() => {
+        withExitSemantics(input, () => {
           const args = gitSubcommandArgs(input.args);
           if (args[0] === "rev-parse" && args[1] === "--git-common-dir") {
             return ok(".git\n");
@@ -203,6 +224,9 @@ const DriverLayerAllUnindexable = Layer.mergeAll(GitVcsDriver.vcsLayer, GitVcsDr
           }
           if (args[0] === "ls-files" && args.includes("--others")) {
             return ok("nul\0");
+          }
+          if (args[0] === "read-tree") {
+            return ok();
           }
           if (args[0] === "ls-files") {
             return ok("com1\0");

@@ -51,7 +51,7 @@ export function CommentBodyEditor({
   const editorRef = useRef<ComposerPromptEditorHandle | null>(null);
 
   return (
-    <div className="rounded-lg border border-input bg-background px-2.5 py-2 text-[13px] focus-within:ring-[3px] focus-within:ring-ring/24">
+    <div className="rounded-lg border border-input bg-background px-2.5 py-2 text-sm focus-within:ring-3 focus-within:ring-ring/24">
       <ComposerPromptEditor
         editorRef={editorRef}
         value={value}

@@ -28,20 +28,20 @@ export const reconcileIntervalMs = 24 * 60 * 60 * 1_000;
  * interval so brief hiccups don't drop updates. Over-fetch is harmless (upserts
  * dedupe) and typically stays within one page.
  */
-export const minIncrementalLookbackMinutes = 15;
+const minIncrementalLookbackMinutes = 15;
 
 /**
  * Slack added on top of the elapsed-time-based lookback so clock skew between
  * this machine and Jira (and JQL's minute granularity) can't drop updates.
  */
-export const incrementalLookbackSlackMinutes = 5;
+const incrementalLookbackSlackMinutes = 5;
 
 /**
  * Cap on the widened lookback. Anything older than this is the 24 h
  * reconcile's job anyway, and an uncapped `updated >= -Nm` after a very long
  * suspend would degenerate into a full-project walk on the incremental path.
  */
-export const maxIncrementalLookbackMinutes = 24 * 60;
+const maxIncrementalLookbackMinutes = 24 * 60;
 
 /**
  * Lookback for an incremental walk, widened by the time since the last
@@ -69,8 +69,8 @@ export const mirrorPageSize = 100;
  * the previous sleep. Both are capped, and any successful walk resets to the
  * normal cadence.
  */
-export const rateLimitedSleepMs = 5 * 60_000;
-export const maxSleepMs = 15 * 60_000;
+const rateLimitedSleepMs = 5 * 60_000;
+const maxSleepMs = 15 * 60_000;
 
 function causeChainHasStatus429(error: unknown, depth = 0): boolean {
   if (depth > 5 || error === null || typeof error !== "object") {

@@ -11,8 +11,11 @@ import {
 import { applyWorkflowEffort, effortIsHonored } from "./t3team-workflowEffortOptions.ts";
 import {
   formatList,
+  optionsSupportedByModel,
   resolveSlug,
+  slugPrefixHint,
   unusableReason,
+  WorkflowModelSelectionError,
 } from "./t3team-toolBrokerStartChildProviderSlug.ts";
 
 /**
@@ -41,17 +44,19 @@ export type ResolveStartChildModelSelectionInput = {
 
 export type ResolveStartChildModelSelectionResult =
   | { readonly ok: true; readonly value: ModelSelection }
-  | { readonly ok: false; readonly message: string };
+  | {
+      readonly ok: false;
+      readonly message: string;
+      readonly error: WorkflowModelSelectionError;
+    };
 
 /**
  * Resolve the child's `ModelSelection`.
  *
- * - No `requestedProvider` → inherit the parent's provider instance and defer
- *   entirely to `buildStartChildModelSelection` (pure refactor, no behavior
- *   change).
- * - `requestedProvider` set → validate it against the live provider snapshots
- *   (must exist, be usable, and own the requested/default model), then build a
- *   cross-provider base and reuse `buildStartChildModelSelection` for effort.
+ * The instance defaults to the parent's instance. The model is that instance's
+ * declared non-legacy default. With no declared default, the same instance keeps
+ * the parent's model; any other instance fails with its valid slugs.
+ * Explicit models use exact catalog matching, including explicitly chosen legacy models.
  */
 export function resolveStartChildModelSelection(
   input: ResolveStartChildModelSelectionInput,
@@ -63,51 +68,43 @@ export function resolveStartChildModelSelection(
     input.reasoningEffort
       ? selection
       : applyWorkflowEffort(selection, input.effort, input.providers);
-  const requested = input.requestedProvider?.trim();
-  if (!requested) {
-    const target = input.providers.find(
-      (provider) => provider.instanceId === input.parentModelSelection.instanceId,
-    );
-    return {
-      ok: true,
-      value: withTier(
-        buildStartChildModelSelection(
-          input.parentModelSelection,
-          {
-            ...(input.requestedModel ? { model: input.requestedModel } : {}),
-            ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
-          },
-          target,
-        ),
-      ),
-    };
-  }
-
-  const target = input.providers.find((provider) => provider.instanceId === requested);
+  const requested = input.requestedProvider?.trim() ?? input.parentModelSelection.instanceId;
+  const target = input.providers.find(
+    (provider) => provider.instanceId.toLowerCase() === requested.toLowerCase(),
+  );
   if (!target) {
-    return {
-      ok: false,
-      message:
-        `Unknown provider instance '${requested}'. Available provider instances: ` +
-        `${formatList(input.providers.map((provider) => provider.instanceId))}.`,
-    };
+    const choices = input.providers.map((provider) => provider.instanceId);
+    const hint = slugPrefixHint(requested, input.requestedModel, input.providers);
+    const error = new WorkflowModelSelectionError(
+      "unknown_instance",
+      `Unknown provider instance '${requested}'. Available provider instances: ` +
+        `${formatList(choices)}. Use model: "<instanceId>" or "<instanceId>/<slug>" ` +
+        `with one of these exact instance ids.${hint}`,
+      choices,
+    );
+    return { ok: false, message: error.message, error };
   }
 
   const reason = unusableReason(target);
   if (reason) {
-    return {
-      ok: false,
-      message: `Provider instance '${requested}' cannot run a child: ${reason}.`,
-    };
+    const error = new WorkflowModelSelectionError(
+      "unavailable_instance",
+      `Provider instance '${target.instanceId}' cannot run a child: ${reason}.`,
+    );
+    return { ok: false, message: error.message, error };
   }
 
-  const slug = resolveSlug(target, input.requestedModel, input.parentModelSelection.model);
+  const slug = resolveSlug(target, input.requestedModel, input.parentModelSelection);
   if (!slug.ok) return slug;
 
+  const sameInstance =
+    target.instanceId.toLowerCase() === input.parentModelSelection.instanceId.toLowerCase();
   const base: ModelSelection = {
-    instanceId: ProviderInstanceId.make(requested),
+    instanceId: ProviderInstanceId.make(target.instanceId),
     model: slug.slug,
-    options: [],
+    options: sameInstance
+      ? optionsSupportedByModel(target, slug.slug, input.parentModelSelection.options)
+      : [],
   };
   return {
     ok: true,
@@ -148,6 +145,16 @@ export function resolveChildModel(
         `Provider registry is not wired into this server build; cannot resolve provider ` +
           `instance '${args.provider}' for start_child.`,
       );
+    }
+    if (!listProviders) {
+      return {
+        modelSelection: buildStartChildModelSelection(baseModelSelection, args),
+        ...(args.effort
+          ? {
+              effortNote: `effort '${args.effort}' was not honored: no provider registry is wired.`,
+            }
+          : {}),
+      };
     }
     const providers = listProviders ? yield* listProviders() : [];
     const result = resolveStartChildModelSelection({

@@ -1,12 +1,16 @@
-import {
-  T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH,
-  T3TEAM_PROJECT_CONTEXT_ROOT,
-  T3TEAM_PROJECT_PROFILE_MANIFEST_PATH,
-  T3TEAM_PROJECT_RECIPES_ROOT,
-  T3TEAM_PROJECT_SKILLS_ROOT,
-  T3TEAM_PROJECT_STATUS_SKILL_PATH,
-  type ProjectSetupProfileDefinition,
-} from "./t3team-projectSetupShared.ts";
+import { T3TEAM_PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
+
+import type { ProjectSetupProfileDefinition } from "./t3team-projectSetupShared.ts";
+
+// Previous AGENTS.md revisions, rendered only to recognize unmodified managed files by hash.
+// They were written with the canonical state dir name, so they keep it regardless of the
+// configured one.
+const T3TEAM_PROJECT_CONTEXT_ROOT = `${T3TEAM_PROJECT_STATE_DIR}/context`;
+const T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH = `${T3TEAM_PROJECT_CONTEXT_ROOT}/entrypoint.json`;
+const T3TEAM_PROJECT_PROFILE_MANIFEST_PATH = `${T3TEAM_PROJECT_STATE_DIR}/setup/profile.json`;
+const T3TEAM_PROJECT_RECIPES_ROOT = `${T3TEAM_PROJECT_STATE_DIR}/recipes`;
+const T3TEAM_PROJECT_SKILLS_ROOT = `${T3TEAM_PROJECT_STATE_DIR}/skills`;
+const T3TEAM_PROJECT_STATUS_SKILL_PATH = `${T3TEAM_PROJECT_SKILLS_ROOT}/status-and-context-summary/SKILL.md`;
 
 function resolveConversationStyleLines(profile: ProjectSetupProfileDefinition) {
   const technicalDepthLine =

@@ -26,7 +26,7 @@ export function WorkItemSkeleton({
       {Array.from({ length: Math.max(1, lines) }, (_, index) => (
         <Skeleton
           key={index}
-          className="h-3.5 rounded"
+          className="h-3.5"
           style={{ width: index === lines - 1 ? "58%" : widths[index % widths.length] }}
         />
       ))}

@@ -1,3 +1,4 @@
+import { PROJECT_STATE_DIR } from "./t3teamProjectStateDir.ts";
 import { EMPTY_OBJECT_INPUT_SCHEMA, type T3TeamToolCatalogEntry } from "./t3teamToolCatalogCore.ts";
 import {
   T3TEAM_WIDGET_AUTHORING_GUIDANCE,
@@ -223,9 +224,9 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
   "t3team.runtime.provider_usage": {
     id: "t3team.runtime.provider_usage",
     label: "Read provider usage limits",
-    title: "Sample live provider plan-limit windows",
+    title: "Read provider usage-limit windows per instance",
     description:
-      "Read the provider's LIVE rolling plan-limit windows (how much of the 5-hour / weekly quota is used, when it resets, and the severity verdict) by sampling each configured provider instance on demand. Call it when you need to know how close a provider is to a rate-limit wall before delegating long work to it, or when a provider start fails with a rate-limit error. Unsampleable instances are reported in `unavailable` with a reason instead of failing the call.",
+      "Read each provider INSTANCE's usage-limit windows (session / weekly / monthly: usedPercent, resetsAt, severity normal|warning|critical) from the host's live provider snapshots, plus accounts reported by configured usage hubs. Call it when you need to know how close an account is to its limit before delegating long work to it, or when a turn failed with a usage-limit error. Instances without data say why in `unavailable` instead of failing the call.",
     capabilities: ["read"],
     kind: "read",
     surfaces: ["thread"],
@@ -238,7 +239,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
         provider_instance_id: {
           type: "string",
           description:
-            "Optional provider INSTANCE id to sample (as returned by t3team.runtime.models). Omit to sample all enabled instances with a live-limit source.",
+            "Optional provider INSTANCE id (as returned by t3team.runtime.models). Omit to list every enabled instance and hub account.",
         },
       },
     },
@@ -283,8 +284,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     id: "t3team.recipe.list",
     label: "List project recipes",
     title: "List t3team project recipes",
-    description:
-      "List the t3team project recipes discovered in this project's workspace (.t3team/recipes/) — t3team project recipes are directories bundling a typed recipe.ts module (or legacy recipe.json manifest) with a .workflow.ts the t3team workflow engine runs; they are NOT Claude Code skills or provider-native workflows. Returns each recipe's id, title, shortDescription, surfaces, authoring form ('recipe-ts' typed module vs 'recipe-json' legacy manifest), recipe directory, and resolved workflow path, plus structured errors for recipes that failed to load. Read-only: nothing is written or launched.",
+    description: `List the t3team project recipes discovered in this project's workspace (${PROJECT_STATE_DIR}/recipes/) — t3team project recipes are directories bundling a typed recipe.ts module (or legacy recipe.json manifest) with a .workflow.ts the t3team workflow engine runs; they are NOT Claude Code skills or provider-native workflows. Returns each recipe's id, title, shortDescription, surfaces, authoring form ('recipe-ts' typed module vs 'recipe-json' legacy manifest), recipe directory, and resolved workflow path, plus structured errors for recipes that failed to load. Read-only: nothing is written or launched.`,
     capabilities: ["read"],
     kind: "read",
     surfaces: ["thread"],
@@ -321,8 +321,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     id: "t3team.orchestration.run",
     label: "Run ephemeral orchestration",
     title: "Run a temporary agent orchestration in this conversation",
-    description:
-      "Run a temporary agent orchestration immediately in this conversation — a durable, journaled t3team engine run that can pause for user decisions; NOT a Claude Code/Codex/CI workflow. Pass exactly one of 'source' (inline orchestration TypeScript, persisted under .t3team-runs/<runId>/) or 'workflowPath' (existing .workflow.ts in the workspace). Body format: .t3team/recipes/AUTHORING.md; validate with t3team.recipe.validate first. Returns {runId, status: accepted|completed|suspended|failed, handoff: 'workflow-ui', output?, error?}. A successful 'workflow-ui' handoff means the orchestration card owns progress: end the current turn immediately with no follow-up assistant prose. A user decision appears on that card and resumes the orchestration on reply — do not poll. On 'failed', fix the source using 'error' and re-run. No approval gate; at most 8 live ephemeral runs.",
+    description: `Run a temporary agent orchestration immediately in this conversation — a durable, journaled t3team engine run that can pause for user decisions; NOT a Claude Code/Codex/CI workflow. Pass exactly one of 'source' (inline orchestration TypeScript, persisted under .t3team-runs/<runId>/) or 'workflowPath' (existing .workflow.ts in the workspace). Body format: ${PROJECT_STATE_DIR}/recipes/AUTHORING.md; validate with t3team.recipe.validate first. Returns {runId, status: accepted|completed|suspended|failed, handoff: 'workflow-ui', output?, error?}. A successful 'workflow-ui' handoff means the orchestration card owns progress: end the current turn immediately with no follow-up assistant prose. A user decision appears on that card and resumes the orchestration on reply — do not poll. On 'failed', fix the source using 'error' and re-run. No approval gate; at most 8 live ephemeral runs.`,
     capabilities: ["write"],
     kind: "thread",
     surfaces: ["thread"],

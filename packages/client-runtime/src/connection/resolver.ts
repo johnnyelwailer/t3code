@@ -35,6 +35,7 @@ import type {
   RelayConnectionTarget,
   SshConnectionTarget,
 } from "./model.ts";
+import { makeBrokerResolver } from "./t3team-brokerConnection.ts";
 import { ConnectionBlockedError, type ConnectionAttemptError } from "./model.ts";
 import * as ConnectionProfileStore from "./profileStore.ts";
 import {
@@ -110,10 +111,9 @@ const makeBearerBroker = Effect.fn("clientRuntime.connection.broker.makeBearer")
     entry: ConnectionCatalogEntry & { readonly target: BearerConnectionTarget },
   ) {
     const target = entry.target;
-    const profile = yield* Option.match(entry.profile, {
-      onNone: () => Effect.fail(profileMissingError(target.connectionId)),
-      onSome: Effect.succeed,
-    });
+    const profile = yield* Effect.fromOption(entry.profile, () =>
+      profileMissingError(target.connectionId),
+    );
     if (!isBearerProfile(profile)) {
       return yield* new ConnectionBlockedError({
         reason: "configuration",
@@ -186,10 +186,9 @@ const makeSshBroker = Effect.fn("clientRuntime.connection.broker.makeSsh")(funct
     entry: ConnectionCatalogEntry & { readonly target: SshConnectionTarget },
   ) {
     const target = entry.target;
-    const profile = yield* Option.match(entry.profile, {
-      onNone: () => Effect.fail(profileMissingError(target.connectionId)),
-      onSome: Effect.succeed,
-    });
+    const profile = yield* Effect.fromOption(entry.profile, () =>
+      profileMissingError(target.connectionId),
+    );
     if (!isSshProfile(profile)) {
       return yield* new ConnectionBlockedError({
         reason: "configuration",
@@ -245,6 +244,7 @@ export const make = Effect.gen(function* () {
   const bearer = yield* makeBearerBroker();
   const relay = yield* makeRelayBroker();
   const ssh = yield* makeSshBroker();
+  const broker = yield* makeBrokerResolver();
   const httpClient = yield* HttpClient.HttpClient;
 
   const prepare = Effect.fn("clientRuntime.connection.broker.prepare")(function* (
@@ -265,6 +265,8 @@ export const make = Effect.gen(function* () {
           return relay(target);
         case "SshConnectionTarget":
           return ssh({ ...entry, target });
+        case "BrokerConnectionTarget":
+          return broker(target);
       }
     })();
     const descriptor = yield* fetchRemoteEnvironmentDescriptor({

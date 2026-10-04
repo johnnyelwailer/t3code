@@ -67,7 +67,7 @@ describe("T3TeamWorkflowRunControls", () => {
         canResume={false}
         canStop={false}
         pending={null}
-        className="controls"
+        className="flex"
         capabilities={CAPABILITIES}
       />,
     );
@@ -93,7 +93,7 @@ describe("T3TeamWorkflowRunControls", () => {
         canResume={false}
         canStop={true}
         pending={null}
-        className="controls"
+        className="flex"
         onControl={onControl}
         capabilities={CAPABILITIES}
       />,
@@ -122,7 +122,7 @@ describe("T3TeamWorkflowRunControls", () => {
         canStop={false}
         isRetry={true}
         pending={null}
-        className="controls"
+        className="flex"
         onControl={onControl}
       />,
     );
@@ -157,7 +157,7 @@ describe("T3TeamWorkflowRunControls", () => {
         canResume={false}
         canStop={false}
         pending={null}
-        className="controls"
+        className="flex"
       />,
     );
 

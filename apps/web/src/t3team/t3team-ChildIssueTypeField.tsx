@@ -44,7 +44,7 @@ export function ChildIssueTypeField({
     return (
       <span
         className={cn(
-          "inline-flex h-7 items-center rounded-md border px-2 text-[12px]",
+          "inline-flex h-7 items-center rounded-md border px-2 text-xs",
           resolved
             ? "border-border/60 bg-muted/20 text-muted-foreground"
             : "border-destructive/40 bg-destructive/10 text-destructive",

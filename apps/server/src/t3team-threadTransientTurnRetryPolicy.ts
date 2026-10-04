@@ -106,6 +106,8 @@ type RuntimeWarningLike = {
 /**
  * Read the host-watchdog stall out of a `runtime.warning` event. Non-watchdog
  * warnings (and malformed details) return null — they never arm a retry.
+ * Self-heal notices leave the turn running; only exhaustion or a legacy
+ * hard-interrupt notice may arm the session retry tracker.
  */
 export function readWatchdogStallWarning(
   payload: RuntimeWarningLike,
@@ -113,7 +115,8 @@ export function readWatchdogStallWarning(
   const detail = payload.detail;
   if (typeof detail !== "object" || detail === null) return null;
   const code = (detail as { code?: unknown }).code;
-  if (code !== "turn.inactivity") return null;
+  if (code !== "turn.inactivity" && code !== "turn.inactivity.exhausted") return null;
+  if (code === "turn.inactivity" && "selfHealAttempt" in detail) return null;
   const seconds = (detail as { inactivitySeconds?: unknown }).inactivitySeconds;
   if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds <= 0) return null;
   return { inactivitySeconds: seconds };
@@ -123,6 +126,7 @@ type TurnCompletedLike = {
   readonly state: string;
   readonly stopReason?: unknown;
   readonly errorMessage?: unknown;
+  readonly failureKind?: unknown;
 };
 
 /** 423 / gpu-reservation class, per the shared classifier vocabulary. */
@@ -139,6 +143,9 @@ export function classifyTransientTurnFailure(
   payload: TurnCompletedLike,
 ): { readonly reason: string; readonly directiveSeconds: number | null } | null {
   if (payload.state !== "failed") return null;
+  // A usage-limit wall is not transient: the usage watcher replays it once
+  // after the window resets, so a seconds-scale retry would only hit it again.
+  if (payload.failureKind === "usage_limit") return null;
   const text = [payload.errorMessage, payload.stopReason]
     .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
     .join(" ");

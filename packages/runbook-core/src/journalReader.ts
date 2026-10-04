@@ -106,6 +106,11 @@ export interface ResolvedEntry {
    * it did the first time (it is read straight off the journaled `resolved` line, never
    * re-derived). */
   readonly by?: string;
+  /** When the reply was journaled — the `startedAt` of its `resolved` line. Informational only:
+   * it takes no part in hashing, replay matching or first-write-wins. Present on every entry read
+   * from a journal line (the wire schema requires it) and on the same run's in-memory copy of a
+   * journaled reply; absent only for a reply that was never journaled (a black-boxed send). */
+  readonly startedAt?: string;
 }
 
 export interface JournalMaps {
@@ -137,6 +142,7 @@ export function insertWireEntry(maps: JournalMaps, raw: unknown): void {
         dismissed: wire.result !== undefined && "dismissed" in wire.result,
         reply: unwrapResult(wire.result),
         ...(wire.by === undefined ? {} : { by: wire.by }),
+        startedAt: wire.startedAt,
       });
     }
     return;

@@ -195,8 +195,7 @@ export function startActorRestartHoldSummary(input: {
             buildActorRestartHoldSummary({
               entries,
               interruptedChildren,
-            }) +
-              (input.includeStandingInstruction ? `\n\n${ACTOR_STANDING_INSTRUCTION}` : ""),
+            }) + (input.includeStandingInstruction ? `\n\n${ACTOR_STANDING_INSTRUCTION}` : ""),
             humanSteeringInstructionForThread(thread, DateTime.toEpochMillis(yield* DateTime.now)),
           ),
           attachments: [],

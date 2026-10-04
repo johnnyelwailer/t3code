@@ -101,8 +101,8 @@ export function T3TeamImageLightbox({
 
           <DialogPrimitive.Close
             aria-label="Close image viewer"
-            className="absolute top-3 end-3 z-10 bg-background/70 text-foreground backdrop-blur-sm hover:bg-background/90"
-            render={<Button variant="ghost" size="icon" />}
+            className="absolute top-3 end-3 z-10"
+            render={<Button variant="glass" size="icon" />}
           >
             <XIcon />
           </DialogPrimitive.Close>

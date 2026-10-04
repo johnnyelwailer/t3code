@@ -34,7 +34,7 @@
  *
  * @module mcp/toolkits/t3team/t3team-askUser
  */
-import { randomUUID } from "node:crypto";
+import * as NodeCrypto from "node:crypto";
 
 import {
   ApprovalRequestId,
@@ -128,7 +128,7 @@ export const t3TeamAskUser = Effect.fn("T3TeamMcpToolkit.askUser")(function* (
     );
   }
 
-  const requestId = ApprovalRequestId.make(randomUUID());
+  const requestId = ApprovalRequestId.make(NodeCrypto.randomUUID());
 
   // `id` is the requestId — a short, stable identifier draft answers are
   // keyed by. The old build used the full question text as the id, which the
@@ -165,7 +165,7 @@ export const t3TeamAskUser = Effect.fn("T3TeamMcpToolkit.askUser")(function* (
     );
   }
 
-  const eventId = EventId.make(randomUUID());
+  const eventId = EventId.make(NodeCrypto.randomUUID());
   const createdAtIso = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
 
   // Message mode: the decider's `thread.user-input.respond` branch resolves

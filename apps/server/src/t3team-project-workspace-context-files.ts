@@ -1,3 +1,4 @@
+import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import { fromJsonStringPretty } from "@t3tools/shared/schemaJson";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -5,6 +6,8 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
+import { normalizeProjectContextStateFile } from "./t3team-projectContextStatePaths.ts";
+import { ensureNexiProjectStateDir } from "./t3team-projectMainRepositoryState.ts";
 import { writeT3TeamContextCasFiles } from "./t3team-context-blob-store.ts";
 import { ensureT3TeamContextCacheTables } from "./t3team-context-cache-tables.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
@@ -21,7 +24,7 @@ export type T3TeamWorkspaceContextFilesWriteResult = {
   readonly writtenFiles: ReadonlyArray<string>;
 };
 
-const CONTEXT_SYNC_COMMIT_MARKER_PATH = ".t3team/context/.sync-commit.json";
+const CONTEXT_SYNC_COMMIT_MARKER_PATH = `${PROJECT_STATE_DIR}/context/.sync-commit.json`;
 
 const workspaceWriteLocks = new Map<string, Promise<void>>();
 
@@ -66,12 +69,13 @@ function writeT3TeamWorkspaceContextFilesUnlocked(input: {
     const path = yield* Path.Path;
     const workspacePaths = yield* WorkspacePaths;
 
+    yield* ensureNexiProjectStateDir(input.workspaceRoot);
     yield* fileSystem.makeDirectory(input.workspaceRoot, { recursive: true });
     yield* ensureT3TeamContextCacheTables();
 
     const writtenFiles = yield* writeT3TeamContextCasFiles({
       workspaceRoot: input.workspaceRoot,
-      files: input.files,
+      files: input.files.map((file) => normalizeProjectContextStateFile(file)),
     });
 
     const commitMarker = yield* workspacePaths.resolveRelativePathWithinRoot({

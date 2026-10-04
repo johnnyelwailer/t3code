@@ -218,7 +218,7 @@ export function providerForPersistedAuths() {
   });
 }
 
-export function setAtlassianAuth(accountId: string, auth: JiraApiAuth): void {
+function setAtlassianAuth(accountId: string, auth: JiraApiAuth): void {
   atlassianAuths.set(accountId, auth);
   setAccountNeedsReconnect(accountId, false);
   invalidateT3TeamAtlassianAuthDependents();

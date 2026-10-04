@@ -20,8 +20,7 @@ export const ConnectCredentialMintFailureReason = Schema.Literals([
   /** The minted credential could not be persisted. */
   "credential_store_failed",
 ]);
-export type ConnectCredentialMintFailureReason =
-  typeof ConnectCredentialMintFailureReason.Type;
+export type ConnectCredentialMintFailureReason = typeof ConnectCredentialMintFailureReason.Type;
 
 export class ConnectCredentialMintError extends Data.TaggedError("ConnectCredentialMintError")<{
   readonly reason: ConnectCredentialMintFailureReason;

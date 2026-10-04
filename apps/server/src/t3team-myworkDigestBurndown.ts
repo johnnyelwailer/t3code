@@ -25,7 +25,7 @@ const DONE_STATUS_KEYWORDS = ["done", "closed", "resolved", "cancelled", "cancel
 /** The digest burndown never walks more than 60 days (a very long sprint). */
 const MAX_BURNDOWN_DAYS = 60;
 
-export function isDigestDoneStatus(status: string): boolean {
+function isDigestDoneStatus(status: string): boolean {
   const normalized = status.trim().toLowerCase().replace(/\s+/g, " ");
   if (normalized === "") return false;
   return DONE_STATUS_KEYWORDS.some((keyword) => normalized.includes(keyword));

@@ -3,6 +3,21 @@ import {
   DigestBurndownChart,
   DigestBurndownSparkline,
 } from "~/t3team/t3team-ProjectMyWorkDigestBurndown";
+import { formatDigestAgo } from "~/t3team/t3team-ProjectMyWorkDigestChips";
+
+/**
+ * The digest's data-source status. Read-only: the deterministic layer refreshes on its own
+ * ("auto"); the owner's live "arranging · 2 h" read was a status-reading bug — the view shows
+ * when the data was last updated, not a vague in-progress verb.
+ */
+function DigestAutoStatus({ updatedAtMs, nowMs }: { updatedAtMs: number; nowMs: number }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="size-1.5 rounded-full bg-success" aria-hidden />
+      auto · updated {formatDigestAgo(nowMs, new Date(updatedAtMs).toISOString())} ago
+    </span>
+  );
+}
 
 /**
  * How the sprint time axis is drawn: the 4px elapsed-time bar of today, the personal burndown
@@ -21,10 +36,12 @@ export function ProjectMyWorkDigestHeader({
   graph,
   nowMs,
   burndownVariant = "off",
+  updatedAtMs,
 }: {
   graph: DigestGraph;
   nowMs: number;
   burndownVariant?: DigestBurndownVariant;
+  updatedAtMs?: number;
 }) {
   const sprint = graph.sprint;
   const scopeLabel =
@@ -33,10 +50,10 @@ export function ProjectMyWorkDigestHeader({
     return (
       <header className="flex flex-wrap items-end justify-between gap-x-10 gap-y-2 border-b border-border/70 pb-4">
         <div>
-          <p className="text-[11px] tracking-wide text-muted-foreground">Digest · {scopeLabel}</p>
+          <p className="text-2xs tracking-wide text-muted-foreground">Digest · {scopeLabel}</p>
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">My Work</h1>
         </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12.5px] text-muted-foreground sm:gap-x-7">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground sm:gap-x-7">
           {graph.scope === "all"
             ? graph.projects.map((project) => (
                 <span key={project.id}>
@@ -50,6 +67,9 @@ export function ProjectMyWorkDigestHeader({
           <span>
             {graph.viewer.name} · {graph.viewer.role}
           </span>
+          {updatedAtMs !== undefined ? (
+            <DigestAutoStatus updatedAtMs={updatedAtMs} nowMs={nowMs} />
+          ) : null}
         </div>
       </header>
     );
@@ -63,7 +83,7 @@ export function ProjectMyWorkDigestHeader({
     <header className="space-y-4 border-b border-border/70 pb-4">
       <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-2">
         <div>
-          <p className="text-[11px] tracking-wide text-muted-foreground">Digest · {scopeLabel}</p>
+          <p className="text-2xs tracking-wide text-muted-foreground">Digest · {scopeLabel}</p>
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
             {sprint.name}{" "}
             <span className="font-normal text-muted-foreground">
@@ -71,7 +91,7 @@ export function ProjectMyWorkDigestHeader({
             </span>
           </h1>
         </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12.5px] text-muted-foreground sm:gap-x-7">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground sm:gap-x-7">
           <span>
             {formatDay(sprint.startDate)} – {formatDay(sprint.endDate)}
           </span>
@@ -81,6 +101,9 @@ export function ProjectMyWorkDigestHeader({
           <span>
             {graph.viewer.name} · {graph.viewer.role}
           </span>
+          {updatedAtMs !== undefined ? (
+            <DigestAutoStatus updatedAtMs={updatedAtMs} nowMs={nowMs} />
+          ) : null}
         </div>
       </div>
       <div className="space-y-1.5">
@@ -100,7 +123,7 @@ export function ProjectMyWorkDigestHeader({
             />
           </div>
         )}
-        <div className="flex justify-between text-[10.5px] text-muted-foreground/80">
+        <div className="flex justify-between text-3xs text-muted-foreground/80">
           <span>{formatDay(sprint.startDate)}</span>
           <span>
             {pct} % elapsed · today {formatDay(new Date(nowMs).toISOString())}
@@ -109,7 +132,7 @@ export function ProjectMyWorkDigestHeader({
         </div>
       </div>
       {sprint.goal.length > 0 ? (
-        <ul className="flex flex-wrap gap-x-6 gap-y-1 text-[12.5px] text-muted-foreground">
+        <ul className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
           {sprint.goal.map((line) => (
             <li
               key={line}

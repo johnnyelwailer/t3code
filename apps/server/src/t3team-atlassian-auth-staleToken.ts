@@ -27,7 +27,7 @@ const REFRESH_TOKEN_INVALID_CODES: ReadonlySet<string> = new Set([
  * is `unauthorized_client` or `invalid_grant` and whose description names the refresh token. Other
  * refresh failures (network, 5xx, revoked app) keep their original error.
  */
-export function isRefreshTokenInvalidError(error: unknown): boolean {
+function isRefreshTokenInvalidError(error: unknown): boolean {
   const oauthError =
     error instanceof AtlassianOAuthError
       ? error

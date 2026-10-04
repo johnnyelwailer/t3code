@@ -367,198 +367,194 @@ it.live(
 // that landed in the durable inbox while the previous uptime was down. `it.live` (real clock):
 // the rehydrated controller's resume re-drives the body ASYNCHRONOUSLY, so the assertion
 // polls the durable row for the re-park on the second signal.
-it.live(
-  "rehydrates a watching run and drains the boot-gap inbox entry that woken it",
-  () =>
-    Effect.gen(function* () {
-      const repo = yield* WorkflowRunRepository;
-      const store = yield* WorkflowJournalStore;
-      const signalStore = yield* WorkflowSignalStore;
-      const config = yield* ServerConfig;
-      const runsRoot = NodePath.join(config.cwd, ".t3team-runs");
+it.live("rehydrates a watching run and drains the boot-gap inbox entry that woken it", () =>
+  Effect.gen(function* () {
+    const repo = yield* WorkflowRunRepository;
+    const store = yield* WorkflowJournalStore;
+    const signalStore = yield* WorkflowSignalStore;
+    const config = yield* ServerConfig;
+    const runsRoot = NodePath.join(config.cwd, ".t3team-runs");
 
-      const runId = "rehydrate-watching";
-      const launchThreadId = "rehydrate-launch-watching";
-      const args = { key: "42" };
+    const runId = "rehydrate-watching";
+    const launchThreadId = "rehydrate-launch-watching";
+    const args = { key: "42" };
 
-      // Throwaway uptime: the run parks on its FIRST signal.wait — the durable row ends up in
-      // status `watching` with the awaited (signal, key) + correlation recorded.
-      const throwaway = makeWorkflowEngineRegistry();
-      let seq = 0;
-      const launched = yield* Effect.promise(() =>
-        launchWorkflowRecipe({
-          runId,
-          workflowPath: signalParkWorkflowPath,
-          args,
-          runsRoot,
-          launchThreadId,
-          projectId,
-          modelSelection,
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          registry: throwaway,
-          dispatch: () => Promise.resolve(),
-          newId: () => `id-${(seq += 1)}`,
-          nowIso,
-          store,
-          lifecycle: makeWorkflowRunLifecycle({
-            repo,
-            row: buildRunningWorkflowRunRow({
-              runId,
-              workflowPath: signalParkWorkflowPath,
-              args,
-              launchThreadId,
-              projectId,
-              modelSelection,
-              runtimeMode: "full-access",
-              interactionMode: "default",
-              nowIso: nowIso(),
-            }),
-            nowIso,
+    // Throwaway uptime: the run parks on its FIRST signal.wait — the durable row ends up in
+    // status `watching` with the awaited (signal, key) + correlation recorded.
+    const throwaway = makeWorkflowEngineRegistry();
+    let seq = 0;
+    const launched = yield* Effect.promise(() =>
+      launchWorkflowRecipe({
+        runId,
+        workflowPath: signalParkWorkflowPath,
+        args,
+        runsRoot,
+        launchThreadId,
+        projectId,
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        registry: throwaway,
+        dispatch: () => Promise.resolve(),
+        newId: () => `id-${(seq += 1)}`,
+        nowIso,
+        store,
+        lifecycle: makeWorkflowRunLifecycle({
+          repo,
+          row: buildRunningWorkflowRunRow({
+            runId,
+            workflowPath: signalParkWorkflowPath,
+            args,
+            launchThreadId,
+            projectId,
+            modelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            nowIso: nowIso(),
           }),
+          nowIso,
         }),
-      );
-      assert.strictEqual(
-        launched.status,
-        "suspended",
-        `launch should park on the first signal.wait, got status '${launched.status}'`,
-      );
+      }),
+    );
+    assert.strictEqual(
+      launched.status,
+      "suspended",
+      `launch should park on the first signal.wait, got status '${launched.status}'`,
+    );
 
-      const parkedRow = Option.getOrThrow(yield* repo.getById({ runId }));
-      assert.strictEqual(parkedRow.status, "watching");
-      assert.strictEqual(parkedRow.pendingKind, "signal.wait");
-      assert.isNotNull(parkedRow.watchSourceName);
-      assert.isNotNull(parkedRow.watchParamsHash);
-      assert.isNotNull(parkedRow.watchSignalName);
-      assert.isNotNull(parkedRow.watchSignalKey);
-      assert.isNotNull(parkedRow.pendingCorrelationId);
-      const firstCorrelation = parkedRow.pendingCorrelationId!;
+    const parkedRow = Option.getOrThrow(yield* repo.getById({ runId }));
+    assert.strictEqual(parkedRow.status, "watching");
+    assert.strictEqual(parkedRow.pendingKind, "signal.wait");
+    assert.isNotNull(parkedRow.watchSourceName);
+    assert.isNotNull(parkedRow.watchParamsHash);
+    assert.isNotNull(parkedRow.watchSignalName);
+    assert.isNotNull(parkedRow.watchSignalKey);
+    assert.isNotNull(parkedRow.pendingCorrelationId);
+    const firstCorrelation = parkedRow.pendingCorrelationId!;
 
-      // An event that landed while this uptime was down: the durable inbox holds it for the
-      // tuple the run is parked on.
-      const mergedPayload = {
-        changeRequest: {
-          provider: "github",
-          number: 42,
-          title: "Fix the billing path",
-          state: "merged",
-          isDraft: false,
-        },
-      };
-      yield* signalStore.insertInboxEntry({
-        sourceName: parkedRow.watchSourceName!,
-        paramsHash: parkedRow.watchParamsHash!,
-        signalName: parkedRow.watchSignalName!,
-        key: parkedRow.watchSignalKey!,
-        payload: mergedPayload,
-        createdAt: nowIso(),
-      });
+    // An event that landed while this uptime was down: the durable inbox holds it for the
+    // tuple the run is parked on.
+    const mergedPayload = {
+      changeRequest: {
+        provider: "github",
+        number: 42,
+        title: "Fix the billing path",
+        state: "merged",
+        isDraft: false,
+      },
+    };
+    yield* signalStore.insertInboxEntry({
+      sourceName: parkedRow.watchSourceName!,
+      paramsHash: parkedRow.watchParamsHash!,
+      signalName: parkedRow.watchSignalName!,
+      key: parkedRow.watchSignalKey!,
+      payload: mergedPayload,
+      createdAt: nowIso(),
+    });
 
-      // ── The real boot path: throw away `throwaway`, rehydrate into the layer's registry ──
-      // The watching loop must rebuild the controller AND drain the boot-gap inbox entry, which
-      // resolves the first wait and drives the body to its SECOND park (the closed signal).
-      yield* rehydrateSuspendedWorkflowRuns();
+    // ── The real boot path: throw away `throwaway`, rehydrate into the layer's registry ──
+    // The watching loop must rebuild the controller AND drain the boot-gap inbox entry, which
+    // resolves the first wait and drives the body to its SECOND park (the closed signal).
+    yield* rehydrateSuspendedWorkflowRuns();
 
-      const registry = yield* T3TeamWorkflowEngineRegistry;
-      assert.isDefined(registry.getRun(runId));
+    const registry = yield* T3TeamWorkflowEngineRegistry;
+    assert.isDefined(registry.getRun(runId));
 
-      let row = parkedRow;
-      for (let i = 0; i < 200; i += 1) {
-        row = Option.getOrThrow(yield* repo.getById({ runId }));
-        if (
-          row.status === "watching" &&
-          row.watchSignalName === "scm.change-request.closed" &&
-          row.pendingCorrelationId !== null &&
-          row.pendingCorrelationId !== firstCorrelation
-        ) {
-          break;
-        }
-        yield* Effect.sleep(Duration.millis(25));
+    let row = parkedRow;
+    for (let i = 0; i < 200; i += 1) {
+      row = Option.getOrThrow(yield* repo.getById({ runId }));
+      if (
+        row.status === "watching" &&
+        row.watchSignalName === "scm.change-request.closed" &&
+        row.pendingCorrelationId !== null &&
+        row.pendingCorrelationId !== firstCorrelation
+      ) {
+        break;
       }
+      yield* Effect.sleep(Duration.millis(25));
+    }
 
-      assert.strictEqual(row.status, "watching");
-      assert.strictEqual(row.watchSignalName, "scm.change-request.closed");
-      assert.isNotNull(row.pendingCorrelationId);
-      assert.notStrictEqual(row.pendingCorrelationId, firstCorrelation);
-      // The inbox entry was consumed (first-wins): nothing left to drain for the tuple.
-      const remaining = yield* signalStore.takeOpenInboxEntry({
-        sourceName: parkedRow.watchSourceName!,
-        paramsHash: parkedRow.watchParamsHash!,
-        signalName: parkedRow.watchSignalName!,
-        key: parkedRow.watchSignalKey!,
-        deliveredAt: nowIso(),
-      });
-      assertNone(remaining);
-    }).pipe(Effect.provide(TestLayer)),
+    assert.strictEqual(row.status, "watching");
+    assert.strictEqual(row.watchSignalName, "scm.change-request.closed");
+    assert.isNotNull(row.pendingCorrelationId);
+    assert.notStrictEqual(row.pendingCorrelationId, firstCorrelation);
+    // The inbox entry was consumed (first-wins): nothing left to drain for the tuple.
+    const remaining = yield* signalStore.takeOpenInboxEntry({
+      sourceName: parkedRow.watchSourceName!,
+      paramsHash: parkedRow.watchParamsHash!,
+      signalName: parkedRow.watchSignalName!,
+      key: parkedRow.watchSignalKey!,
+      deliveredAt: nowIso(),
+    });
+    assertNone(remaining);
+  }).pipe(Effect.provide(TestLayer)),
 );
 
-it.live(
-  "rehydrates a watching run with no inbox entry: rebuilt, still parked, untouched",
-  () =>
-    Effect.gen(function* () {
-      const repo = yield* WorkflowRunRepository;
-      const store = yield* WorkflowJournalStore;
-      const config = yield* ServerConfig;
-      const runsRoot = NodePath.join(config.cwd, ".t3team-runs");
+it.live("rehydrates a watching run with no inbox entry: rebuilt, still parked, untouched", () =>
+  Effect.gen(function* () {
+    const repo = yield* WorkflowRunRepository;
+    const store = yield* WorkflowJournalStore;
+    const config = yield* ServerConfig;
+    const runsRoot = NodePath.join(config.cwd, ".t3team-runs");
 
-      const runId = "rehydrate-watching-no-event";
-      const launchThreadId = "rehydrate-launch-watching-no-event";
+    const runId = "rehydrate-watching-no-event";
+    const launchThreadId = "rehydrate-launch-watching-no-event";
 
-      // A run parked on a signal whose awaited event has not landed anywhere (no live source
-      // this uptime yet, no inbox entry). Rehydration must rebuild the controller from the
-      // journal and leave the row exactly as parked — the delivery port wakes it when the
-      // source fires.
-      const throwaway = makeWorkflowEngineRegistry();
-      let seq = 0;
-      const launched = yield* Effect.promise(() =>
-        launchWorkflowRecipe({
-          runId,
-          workflowPath: signalParkWorkflowPath,
-          args: { key: "42" },
-          runsRoot,
-          launchThreadId,
-          projectId,
-          modelSelection,
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          registry: throwaway,
-          dispatch: () => Promise.resolve(),
-          newId: () => `id-${(seq += 1)}`,
-          nowIso,
-          store,
-          lifecycle: makeWorkflowRunLifecycle({
-            repo,
-            row: buildRunningWorkflowRunRow({
-              runId,
-              workflowPath: signalParkWorkflowPath,
-              args: { key: "42" },
-              launchThreadId,
-              projectId,
-              modelSelection,
-              runtimeMode: "full-access",
-              interactionMode: "default",
-              nowIso: nowIso(),
-            }),
-            nowIso,
+    // A run parked on a signal whose awaited event has not landed anywhere (no live source
+    // this uptime yet, no inbox entry). Rehydration must rebuild the controller from the
+    // journal and leave the row exactly as parked — the delivery port wakes it when the
+    // source fires.
+    const throwaway = makeWorkflowEngineRegistry();
+    let seq = 0;
+    const launched = yield* Effect.promise(() =>
+      launchWorkflowRecipe({
+        runId,
+        workflowPath: signalParkWorkflowPath,
+        args: { key: "42" },
+        runsRoot,
+        launchThreadId,
+        projectId,
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        registry: throwaway,
+        dispatch: () => Promise.resolve(),
+        newId: () => `id-${(seq += 1)}`,
+        nowIso,
+        store,
+        lifecycle: makeWorkflowRunLifecycle({
+          repo,
+          row: buildRunningWorkflowRunRow({
+            runId,
+            workflowPath: signalParkWorkflowPath,
+            args: { key: "42" },
+            launchThreadId,
+            projectId,
+            modelSelection,
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            nowIso: nowIso(),
           }),
+          nowIso,
         }),
-      );
-      assert.strictEqual(launched.status, "suspended");
+      }),
+    );
+    assert.strictEqual(launched.status, "suspended");
 
-      const parked = Option.getOrThrow(yield* repo.getById({ runId }));
-      assert.strictEqual(parked.status, "watching");
-      assert.isNotNull(parked.pendingCorrelationId);
-      const parkedCorrelation = parked.pendingCorrelationId!;
+    const parked = Option.getOrThrow(yield* repo.getById({ runId }));
+    assert.strictEqual(parked.status, "watching");
+    assert.isNotNull(parked.pendingCorrelationId);
+    const parkedCorrelation = parked.pendingCorrelationId!;
 
-      // No inbox entry for the tuple — the rehydration must NOT wake the run.
-      yield* rehydrateSuspendedWorkflowRuns();
+    // No inbox entry for the tuple — the rehydration must NOT wake the run.
+    yield* rehydrateSuspendedWorkflowRuns();
 
-      const registry = yield* T3TeamWorkflowEngineRegistry;
-      assert.isDefined(registry.getRun(runId)); // the resume closure is back
+    const registry = yield* T3TeamWorkflowEngineRegistry;
+    assert.isDefined(registry.getRun(runId)); // the resume closure is back
 
-      const row = Option.getOrThrow(yield* repo.getById({ runId }));
-      assert.strictEqual(row.status, "watching");
-      assert.strictEqual(row.pendingCorrelationId, parkedCorrelation);
-      assert.strictEqual(row.watchSignalName, "scm.change-request.merged");
-    }).pipe(Effect.provide(TestLayer)),
+    const row = Option.getOrThrow(yield* repo.getById({ runId }));
+    assert.strictEqual(row.status, "watching");
+    assert.strictEqual(row.pendingCorrelationId, parkedCorrelation);
+    assert.strictEqual(row.watchSignalName, "scm.change-request.merged");
+  }).pipe(Effect.provide(TestLayer)),
 );

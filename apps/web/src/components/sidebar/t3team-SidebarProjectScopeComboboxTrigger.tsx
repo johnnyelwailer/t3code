@@ -20,13 +20,7 @@ export function T3TeamSidebarProjectScopeComboboxTrigger({
   if (compact) {
     return (
       <ComboboxTrigger
-        render={
-          <SidebarMenuButton
-            size="icon"
-            aria-label="More projects"
-            className="shrink-0 focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
-          />
-        }
+        render={<SidebarMenuButton size="icon" aria-label="More projects" className="shrink-0" />}
       >
         <EllipsisIcon className="size-4 shrink-0" />
       </ComboboxTrigger>
@@ -35,10 +29,7 @@ export function T3TeamSidebarProjectScopeComboboxTrigger({
   return (
     <ComboboxTrigger
       render={
-        <SidebarMenuButton
-          aria-label="Filter threads by project"
-          className="min-w-0 flex-1 ps-[calc(var(--sidebar-row-content-inset)-1px)] focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
-        />
+        <SidebarMenuButton aria-label="Filter threads by project" className="min-w-0 flex-1" />
       }
     >
       {scopedGroup ? (

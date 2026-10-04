@@ -1,37 +1,17 @@
-import { type EnvironmentId, ProjectId } from "@t3tools/contracts";
+import { ProjectId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { Thread } from "~/types";
 import { syncLiveThreadMetadataToLocalState } from "./t3team-threadBridge";
 import {
   makeLiveProject,
+  makeLiveThreadShell,
   makeProjectThread,
   makeStoredProject,
 } from "./t3team-threadBridge.testSupport";
 
-function makeLiveThread(overrides: Partial<Thread> = {}): Thread {
-  return {
-    id: "thread-parent",
-    projectId: ProjectId.make("live-saved"),
-    title: "Generated title",
-    messages: [],
-    activities: [],
-    latestTurn: null,
-    archivedAt: null,
-    error: null,
-    session: null,
-    createdAt: "2026-05-22T09:00:00.000Z",
-    updatedAt: "2026-05-22T10:00:00.000Z",
-    environmentId: "env-local" as EnvironmentId,
-    defaultModelSelection: null,
-    ...overrides,
-  } as unknown as Thread;
-}
-
+const LIVE_SAVED = ProjectId.make("live-saved");
 const storedProjects = [makeStoredProject()];
-const liveProjects = [
-  makeLiveProject({ id: ProjectId.make("live-saved"), workspaceRoot: "/workspace/saved" }),
-];
+const liveProjects = [makeLiveProject({ id: LIVE_SAVED, workspaceRoot: "/workspace/saved" })];
 
 describe("syncLiveThreadMetadataToLocalState", () => {
   it("syncs generated titles for ordinary root threads", () => {
@@ -39,51 +19,70 @@ describe("syncLiveThreadMetadataToLocalState", () => {
       threads: [makeProjectThread({ id: "thread-parent", title: "New thread" })],
       storedProjects,
       liveProjects,
-      liveThreads: [makeLiveThread()],
+      liveThreads: [
+        makeLiveThreadShell({
+          id: ThreadId.make("thread-parent"),
+          projectId: LIVE_SAVED,
+          title: "Generated title",
+        }),
+      ],
     });
 
     expect(result).toEqual([expect.objectContaining({ title: "Generated title" })]);
   });
 
-  it("infers legacy child placement from the parent's handoff activity", () => {
-    const parent = makeLiveThread({
-      activities: [
-        {
-          id: "handoff-started",
-          tone: "info",
-          kind: "t3team.handoff.started",
-          summary: "Started child session Side Quest",
-          payload: { childThreadId: "thread-child", childTitle: "Side Quest" },
-          turnId: null,
-          createdAt: "2026-05-22T09:01:00.000Z",
-        },
-      ],
-    } as never);
-    const child = makeLiveThread({
-      id: "thread-child",
-      title: "Side Quest",
-      activities: [
-        {
-          id: "handoff-created",
-          tone: "info",
-          kind: "t3team.handoff.created",
-          summary: "Created from Generated title",
-          payload: { childThreadId: "thread-child", childTitle: "Side Quest" },
-          turnId: null,
-          createdAt: "2026-05-22T09:01:00.000Z",
-        },
-      ],
-    } as never);
-
+  it("takes a child's parent from the placement in local state, not from the parent's activity", () => {
+    // A live shell carries no activities. The relation the waiting indicator needs is the
+    // placement the server route hydrated into local state.
     const result = syncLiveThreadMetadataToLocalState({
-      threads: [],
+      threads: [
+        makeProjectThread({ id: "thread-parent", projectId: "stored-project" }),
+        makeProjectThread({
+          id: "thread-child",
+          projectId: "stored-project",
+          title: "Side Quest",
+          parentThreadId: "thread-parent",
+        }),
+      ],
       storedProjects,
       liveProjects,
-      liveThreads: [parent, child],
+      liveThreads: [
+        makeLiveThreadShell({ id: ThreadId.make("thread-parent"), projectId: LIVE_SAVED }),
+        makeLiveThreadShell({
+          id: ThreadId.make("thread-child"),
+          projectId: LIVE_SAVED,
+          title: "Side Quest",
+          session: { status: "running" } as never,
+          latestTurn: { state: "running" } as never,
+        }),
+      ],
     });
 
     expect(result).toContainEqual(
       expect.objectContaining({ id: "thread-child", parentThreadId: "thread-parent" }),
     );
+    expect(result).toContainEqual(
+      expect.objectContaining({ id: "thread-parent", waitingOnChildren: true }),
+    );
+  });
+
+  it("does not invent a placement for a child that local state has not hydrated yet", () => {
+    const result = syncLiveThreadMetadataToLocalState({
+      threads: [],
+      storedProjects,
+      liveProjects,
+      liveThreads: [
+        makeLiveThreadShell({ id: ThreadId.make("thread-parent"), projectId: LIVE_SAVED }),
+        makeLiveThreadShell({
+          id: ThreadId.make("thread-child"),
+          projectId: LIVE_SAVED,
+          title: "Side Quest",
+        }),
+      ],
+    });
+
+    const child = result.find((thread) => thread.id === "thread-child");
+    expect(child).toBeDefined();
+    expect(child?.parentThreadId).toBeUndefined();
   });
 });

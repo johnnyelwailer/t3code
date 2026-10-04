@@ -12,7 +12,7 @@ export function formatDigestAgo(nowMs: number, iso: string): string {
 
 export function DigestStatusDot({ status }: { status: string }) {
   return (
-    <span className="inline-flex shrink-0 text-[11px] leading-none text-muted-foreground">
+    <span className="inline-flex shrink-0 text-2xs leading-none text-muted-foreground">
       {status}
     </span>
   );
@@ -28,7 +28,7 @@ export function DigestKicker({
   right?: ReactNode;
 }) {
   return (
-    <div className="flex items-baseline gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+    <div className="flex items-baseline gap-2 text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
       <span>{children}</span>
       {count !== undefined ? (
         <span className="font-normal tabular-nums text-muted-foreground/70">{count}</span>
@@ -45,7 +45,7 @@ export function DigestProjectChip({ graph, projectId }: { graph: DigestGraph; pr
   const project = graph.projects.find((entry) => entry.id === projectId);
   const name = project?.name ?? projectId;
   const chip = (
-    <span className="block min-w-0 max-w-[9rem] shrink truncate rounded bg-muted/60 px-1.5 py-px text-[10px] text-muted-foreground">
+    <span className="block min-w-0 max-w-[9rem] shrink truncate rounded bg-muted/60 px-1.5 py-px text-3xs text-muted-foreground">
       {name}
     </span>
   );

@@ -45,7 +45,7 @@ export interface T3TeamDraftMutationStatusInput {
  * Set a carrier's draft status. Fails with a sentence naming the cause — a verdict that silently
  * did not persist is the bug this slice exists to remove, so nothing here is best-effort.
  */
-export const setT3TeamDraftMutationStatus = Effect.fn("setT3TeamDraftMutationStatus")(function* (
+const setT3TeamDraftMutationStatus = Effect.fn("setT3TeamDraftMutationStatus")(function* (
   input: T3TeamDraftMutationStatusInput,
 ) {
   const threadId = input.threadId?.trim() ?? "";

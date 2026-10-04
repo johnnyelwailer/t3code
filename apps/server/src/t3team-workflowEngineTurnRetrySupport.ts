@@ -47,7 +47,7 @@ export function failedTurnMessage(error: string): string {
 export const MAX_INTERRUPTED_TURN_REDRIVES = 3;
 
 /** Backoff ladder (ms) before re-drive attempts 1, 2, 3. */
-export const INTERRUPTED_TURN_RETRY_BACKOFF_MS = [5_000, 30_000, 120_000] as const;
+const INTERRUPTED_TURN_RETRY_BACKOFF_MS = [5_000, 30_000, 120_000] as const;
 
 /** Hard cap for the env override — the longest ladder step is the longest "transient" wait. */
 const MAX_RETRY_BACKOFF_OVERRIDE_MS = INTERRUPTED_TURN_RETRY_BACKOFF_MS[2]!;

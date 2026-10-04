@@ -7,7 +7,7 @@ export type T3TeamContextRefreshQueueItem = {
   readonly estimatedSizeBytes?: number;
 };
 
-export function compareT3TeamContextRefreshPriority(
+function compareT3TeamContextRefreshPriority(
   left: T3TeamContextRefreshQueueItem,
   right: T3TeamContextRefreshQueueItem,
 ): number {

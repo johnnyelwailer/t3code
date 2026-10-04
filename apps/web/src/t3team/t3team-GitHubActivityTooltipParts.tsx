@@ -22,15 +22,15 @@ export function StatChip({
 }) {
   const toneClass =
     tone === "positive"
-      ? "text-emerald-700 dark:text-emerald-400"
+      ? "text-diff-addition-foreground"
       : tone === "negative"
-        ? "text-rose-700 dark:text-rose-400"
+        ? "text-diff-deletion-foreground"
         : "text-foreground/80";
   return (
     <div className={`inline-flex items-center gap-1.5 ${toneClass}`}>
       {Icon ? <Icon className="size-3" /> : null}
-      <span className="text-[10px] font-semibold tabular-nums">{value}</span>
-      <span className="text-[10px] text-muted-foreground/80">{label}</span>
+      <span className="text-3xs font-semibold tabular-nums">{value}</span>
+      <span className="text-3xs text-muted-foreground/80">{label}</span>
     </div>
   );
 }
@@ -51,7 +51,7 @@ export function AuthorAvatar({
       className="size-7 rounded-full border border-border/70 object-cover"
     />
   ) : (
-    <div className="inline-flex size-7 items-center justify-center rounded-full border border-border/70 bg-muted/40 text-[10px] font-semibold text-foreground/80">
+    <div className="inline-flex size-7 items-center justify-center rounded-full border border-border/70 bg-muted/40 text-3xs font-semibold text-foreground/80">
       {fallback}
     </div>
   );

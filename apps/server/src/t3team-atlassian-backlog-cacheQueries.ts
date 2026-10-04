@@ -123,6 +123,30 @@ export const readCachedBacklogIssueRows = Effect.fn("t3team.atlassianBacklogCach
   },
 );
 
+/** Rows for one view's ids only; a project mirror can hold tens of thousands of issues. */
+export const readCachedBacklogIssueRowsByIds = Effect.fn(
+  "t3team.atlassianBacklogCache.readIssueRowsByIds",
+)(function* (input: T3TeamBacklogCacheIdentity & { readonly issueIds: ReadonlyArray<string> }) {
+  const sql = yield* SqlClient.SqlClient;
+  const idsJson = serializeBacklogCacheJson(input.issueIds);
+  return yield* sql<BacklogIssueRow>`
+    SELECT
+      external_project_id AS "externalProjectId",
+      issue_id AS "issueId",
+      issue_key AS "issueKey",
+      resource_json AS "resourceJson",
+      assignee_account_id AS "assigneeAccountId"
+    FROM t3team_atlassian_backlog_issues
+    WHERE provider = ${input.provider}
+      AND account_id = ${input.accountId}
+      AND external_project_id = ${input.externalProjectId}
+      AND (
+        issue_id IN (SELECT value FROM json_each(${idsJson}))
+        OR issue_key IN (SELECT value FROM json_each(${idsJson}))
+      )
+  `;
+});
+
 /**
  * My Work projection: issues assigned to the viewer in this project, plus one
  * level of parents for the assigned issues that aren't already assigned to

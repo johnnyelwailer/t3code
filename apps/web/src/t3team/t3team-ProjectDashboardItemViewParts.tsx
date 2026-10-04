@@ -26,7 +26,7 @@ export function ProjectDashboardTicketRelationshipBadge({
 
   return (
     <span
-      className="inline-flex items-center gap-1 rounded bg-muted/50 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+      className="inline-flex items-center gap-1 rounded bg-muted/50 px-1.5 py-0.5 text-3xs text-muted-foreground"
       aria-label={`${childCount} child items`}
     >
       <GitBranch className="size-3" />

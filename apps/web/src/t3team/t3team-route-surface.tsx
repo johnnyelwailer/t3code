@@ -20,6 +20,11 @@ import { Route as RootRoute } from "~/routes/__root";
 import "~/t3team/t3team-index.css";
 import { readProjectIdFromView } from "~/t3team/t3team-types";
 import { resolveWsBaseUrl } from "~/t3team/t3team-route-surface-wsUrl";
+import { isTeamShellEnvironment } from "~/t3team/t3team-upstreamRouteBridge";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { readThreadShells } from "~/state/entities";
+import { usePrimaryEnvironmentId } from "~/state/environments";
+import { buildThreadRouteParams } from "~/threadRoutes";
 
 function buildRouteSearch(
   search: T3TeamRouteSearch,
@@ -44,6 +49,7 @@ export function T3TeamRouteSurface() {
   const authenticated =
     authGateState.status === "authenticated" || authGateState.status === "hosted-static";
   const navigate = useNavigate();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const search = useSearch({
     strict: false,
@@ -156,6 +162,15 @@ export function T3TeamRouteSurface() {
             });
           }}
           onOpenThread={(projectId, threadId) => {
+            // The Team thread view talks to the primary server only; elsewhere, upstream's view.
+            const shell = readThreadShells().find((candidate) => candidate.id === threadId);
+            if (shell && !isTeamShellEnvironment(shell.environmentId, primaryEnvironmentId)) {
+              void navigate({
+                to: "/$environmentId/$threadId",
+                params: buildThreadRouteParams(scopeThreadRef(shell.environmentId, shell.id)),
+              });
+              return;
+            }
             void navigate({
               to: "/t3team/projects/$projectId/threads/$threadId",
               params: { projectId, threadId },
