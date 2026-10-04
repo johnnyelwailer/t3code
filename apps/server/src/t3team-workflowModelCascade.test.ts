@@ -22,7 +22,7 @@ import { resolveModelCascade } from "./t3team-workflowModelCascade.ts";
 
 const provider = (
   instanceId: string,
-  models: ReadonlyArray<{ slug: string; capabilities?: unknown }>,
+  models: ReadonlyArray<{ slug: string; capabilities?: unknown; isDefault?: boolean }>,
   over: Partial<ServerProvider> = {},
 ): ServerProvider =>
   ({
@@ -35,6 +35,7 @@ const provider = (
       name: model.slug,
       isCustom: false,
       capabilities: model.capabilities ?? null,
+      ...(model.isDefault ? { isDefault: true } : {}),
     })),
     ...over,
   }) as unknown as ServerProvider;
@@ -147,7 +148,9 @@ describe("resolveModelCascade", () => {
   });
 
   it("composes with effort: the tier lands on the CHOSEN rung's controls", () => {
-    const withCaps = provider("nexplore", [{ slug: "minimax-m2.7", capabilities: reasoningCaps }]);
+    const withCaps = provider("nexplore", [
+      { slug: "minimax-m2.7", capabilities: reasoningCaps, isDefault: true },
+    ]);
     const choice = resolveModelCascade({
       base,
       entries: [{ instanceId: "nexplore" }, { instanceId: "claudeAgent" }],

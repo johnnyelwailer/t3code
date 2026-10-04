@@ -268,6 +268,18 @@ interface PendingCompaction {
 const DEFAULT_TURN_INACTIVITY_TIMEOUT_MS = 600_000;
 
 /**
+ * How many times the host inactivity watchdog may RE-ARM (self-heal) a stalled
+ * turn before it falls back to a hard interrupt (GHE #113 self-heal). Each
+ * re-arm gives the provider a fresh full inactivity window to recover on its
+ * own: a self-healing driver (the Nexpore Pi driver's own watchdog re-sends
+ * the in-flight context on its retry episode) gets first crack, and any stream
+ * activity from the recovery resets the counter (recordTurnActivity re-arms
+ * with attempts = 0). Bounded, so a genuinely-wedged turn still cannot hang
+ * indefinitely.
+ */
+const MAX_TURN_INACTIVITY_SELFHEAL_ATTEMPTS = 2;
+
+/**
  * Defect 1 (GHE #297): when the watchdog's `interruptTurn` call SUCCEEDS but
  * the provider never emits the terminal event it implies (turn.aborted /
  * turn.completed / session.exited), the turn is stuck "running" forever with
@@ -312,11 +324,19 @@ const announcedRetryBudgetMs = (event: ProviderRuntimeEvent): number | undefined
 };
 
 interface TurnWatchdogEntry {
+  readonly token: symbol;
   readonly turnId: TurnId;
   readonly instanceId: ProviderInstanceId;
   readonly provider: ProviderDriverKind;
   readonly timeoutMs: number;
   readonly timerFiber: Fiber.Fiber<unknown, never>;
+  /**
+   * How many self-heal re-arms this turn has used. Reset to 0 on any stream
+   * activity (recordTurnActivity) and on a new turn (sendTurn); carried
+   * forward across re-arms so the host can bound how long a stalled turn is
+   * given before the hard backstop.
+   */
+  readonly selfHealAttempts: number;
 }
 
 /**
@@ -1235,23 +1255,84 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     instanceId: ProviderInstanceId,
     provider: ProviderDriverKind,
     timeoutMs: number,
+    selfHealAttempts: number,
+    token: symbol,
   ) {
     // Only fire if this exact entry is still armed — a newer turn, a
     // reset, or a settled turn replaced it in the meantime.
     const current = yield* Ref.get(turnWatchdogs);
-    if (current.get(threadId)?.turnId !== turnId) return;
-    yield* clearTurnWatchdog(threadId);
+    if (current.get(threadId)?.token !== token) return;
     const inactivitySeconds = Math.round(timeoutMs / 1000);
-    yield* Effect.logWarning("provider.turn.inactivity-watchdog", {
+    // Self-heal first (GHE #113): a stalled stream is usually a transient
+    // gateway flap, not a dead turn. Instead of a hard interrupt, give the
+    // provider a fresh full window to recover on its own — a self-healing
+    // driver (the Nexpore Pi driver's own watchdog re-sends the in-flight
+    // context on its retry episode) gets first crack, and any stream activity
+    // from the recovery resets the counter via recordTurnActivity. Bounded, so
+    // a genuinely-wedged turn still cannot hang indefinitely.
+    if (selfHealAttempts < MAX_TURN_INACTIVITY_SELFHEAL_ATTEMPTS) {
+      // Keep the entry live during warning publication, then replace it only
+      // if no activity or terminal event replaced it. Activity during the new
+      // window resets the counter (recordTurnActivity re-arms at 0).
+      // armTurnWatchdog is explicitly typed (R = never) so this fire -> arm
+      // call does not form a recursive Effect.fn type.
+      yield* Effect.logWarning("provider.turn.inactivity-selfheal", {
+        threadId: String(threadId),
+        turnId: String(turnId),
+        providerInstanceId: String(instanceId),
+        inactivitySeconds,
+        selfHealAttempt: selfHealAttempts + 1,
+        maxSelfHealAttempts: MAX_TURN_INACTIVITY_SELFHEAL_ATTEMPTS,
+      });
+      yield* publishRuntimeEvent({
+        eventId: EventId.make(NodeCrypto.randomUUID()),
+        provider,
+        providerInstanceId: instanceId,
+        threadId,
+        createdAt: yield* nowIso,
+        turnId,
+        type: "runtime.warning",
+        payload: {
+          message: `Turn stalled: no provider stream activity for ${inactivitySeconds} seconds (self-heal ${selfHealAttempts + 1}/${MAX_TURN_INACTIVITY_SELFHEAL_ATTEMPTS})`,
+          detail: {
+            code: "turn.inactivity",
+            inactivitySeconds,
+            selfHealAttempt: selfHealAttempts + 1,
+            maxSelfHealAttempts: MAX_TURN_INACTIVITY_SELFHEAL_ATTEMPTS,
+            turnId: String(turnId),
+          },
+        },
+      });
+      // Re-arm a full inactivity window, carrying the attempt count forward.
+      yield* armTurnWatchdog(
+        threadId,
+        turnId,
+        instanceId,
+        provider,
+        undefined,
+        selfHealAttempts + 1,
+        token,
+      );
+      return;
+    }
+    // Self-heal budget exhausted — the hard backstop. A runtime.warning with
+    // detail.code "turn.inactivity.exhausted" and the live turnId is the
+    // observable surface a consumer uses to tell a self-heal-exhausted abort
+    // apart from a user interrupt.
+    const claimed = yield* Ref.modify(turnWatchdogs, (map) => {
+      if (map.get(threadId)?.token !== token) return [false, map] as const;
+      const next = new Map(map);
+      next.delete(threadId);
+      return [true, next] as const;
+    });
+    if (!claimed) return;
+    yield* Effect.logWarning("provider.turn.inactivity-exhausted", {
       threadId: String(threadId),
       turnId: String(turnId),
       providerInstanceId: String(instanceId),
       inactivitySeconds,
+      selfHealAttempts,
     });
-    // Same observable surface as the pack-level watchdog: a
-    // runtime.warning carrying detail.code "turn.inactivity" and the live
-    // turnId, so host consumers can tell a watchdog abort apart from a
-    // user interrupt.
     yield* publishRuntimeEvent({
       eventId: EventId.make(NodeCrypto.randomUUID()),
       provider,
@@ -1261,18 +1342,15 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       turnId,
       type: "runtime.warning",
       payload: {
-        message: `Turn stalled: no provider stream activity for ${inactivitySeconds} seconds`,
+        message: `Turn stalled: no provider stream activity for ${inactivitySeconds} seconds after ${selfHealAttempts} self-heal attempt(s)`,
         detail: {
-          code: "turn.inactivity",
+          code: "turn.inactivity.exhausted",
           inactivitySeconds,
+          selfHealAttempts,
           turnId: String(turnId),
         },
       },
     });
-    // Abort through the provider-agnostic interrupt path — whatever the
-    // provider does on interrupt (turn.aborted event, session error, ...)
-    // is its own concern; the host guarantee is that the turn cannot hang
-    // past the budget.
     const adapter = yield* registry
       .getByInstance(instanceId)
       .pipe(Effect.orElseSucceed(() => undefined));
@@ -1364,12 +1442,26 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     }
   });
 
-  const armTurnWatchdog = Effect.fn("ProviderService.turnWatchdog.arm")(function* (
+  // Explicitly typed (R = never) to break the fire -> arm -> fire recursion
+  // from a mutual Effect.fn reference: the expensive Clock/Logger work is
+  // inside the forked timer fiber (its requirements are captured in the
+  // Fiber, not this effect's R), so this arming effect itself needs nothing.
+  const armTurnWatchdog: (
     threadId: ThreadId,
     turnId: TurnId,
     instanceId: ProviderInstanceId,
     provider: ProviderDriverKind,
     announcedBudgetMs?: number,
+    selfHealAttempts?: number,
+    expectedToken?: symbol,
+  ) => Effect.Effect<void, never, never> = Effect.fn("ProviderService.turnWatchdog.arm")(function* (
+    threadId: ThreadId,
+    turnId: TurnId,
+    instanceId: ProviderInstanceId,
+    provider: ProviderDriverKind,
+    announcedBudgetMs?: number,
+    selfHealAttempts = 0,
+    expectedToken?: symbol,
   ) {
     // Codex finding (HIGH, GHE #297): a new turn on this thread (superseding
     // a stalled one still in its settle grace) must clear the OLD turn's
@@ -1377,31 +1469,53 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     // (keyed only by threadId) survives, and its grace fiber later publishes
     // a thread-scoped synthetic `session.exited` that kills the NEW turn B,
     // even though B is healthy and never asked for a settle grace itself.
-    yield* clearAwaitingSettleFor(threadId);
+    if (expectedToken === undefined) yield* clearAwaitingSettleFor(threadId);
     const baseMs = yield* resolveTurnInactivityTimeoutMs(instanceId);
     const timeoutMs =
       announcedBudgetMs !== undefined ? Math.max(baseMs, announcedBudgetMs) : baseMs;
-    const previousEntry = yield* Ref.get(turnWatchdogs).pipe(
-      Effect.map((map) => map.get(threadId)),
-    );
-    if (previousEntry !== undefined) {
-      yield* Fiber.interrupt(previousEntry.timerFiber).pipe(Effect.ignore);
-    }
-    const timerFiber = yield* Effect.sleep(Duration.millis(timeoutMs)).pipe(
-      Effect.andThen(fireTurnWatchdog(threadId, turnId, instanceId, provider, timeoutMs)),
-      Effect.forkScoped,
-      // Detach the R requirement: the caller (sendTurn / recordTurnActivity)
-      // runs without a Scope in its context, so attach the timer to the
-      // captured service scope instead of the ambient one.
-      Effect.provideService(Scope.Scope, serviceScope),
-    );
-    yield* Ref.update(turnWatchdogs, (map) =>
-      new Map(map).set(threadId, {
-        turnId,
-        instanceId,
-        provider,
-        timeoutMs,
-        timerFiber,
+    yield* Effect.uninterruptibleMask((restore) =>
+      Effect.gen(function* () {
+        const previousEntry = (yield* Ref.get(turnWatchdogs)).get(threadId);
+        if (expectedToken !== undefined && previousEntry?.token !== expectedToken) return;
+        // A self-heal executes inside the old timer: interrupting it here
+        // would cancel the replacement before it is installed.
+        if (expectedToken === undefined && previousEntry !== undefined) {
+          yield* restore(Fiber.interrupt(previousEntry.timerFiber)).pipe(Effect.ignore);
+        }
+        const token = Symbol();
+        const timerFiber = yield* restore(
+          Effect.sleep(Duration.millis(timeoutMs)).pipe(
+            Effect.andThen(
+              fireTurnWatchdog(
+                threadId,
+                turnId,
+                instanceId,
+                provider,
+                timeoutMs,
+                selfHealAttempts,
+                token,
+              ),
+            ),
+          ),
+        ).pipe(Effect.forkScoped, Effect.provideService(Scope.Scope, serviceScope));
+        const installed = yield* Ref.modify(turnWatchdogs, (map) => {
+          if (expectedToken !== undefined && map.get(threadId)?.token !== expectedToken) {
+            return [false, map] as const;
+          }
+          return [
+            true,
+            new Map(map).set(threadId, {
+              token,
+              turnId,
+              instanceId,
+              provider,
+              timeoutMs,
+              timerFiber,
+              selfHealAttempts,
+            }),
+          ] as const;
+        });
+        if (!installed) yield* Fiber.interrupt(timerFiber).pipe(Effect.ignore);
       }),
     );
   });

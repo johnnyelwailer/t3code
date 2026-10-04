@@ -7,11 +7,11 @@
  */
 
 import type { AgentEffort, AskOpts, ModelCascade } from "./types.ts";
-import type { ModelSelection } from "./models.ts";
+import type { ModelOption } from "./models.ts";
 
 /** A thread's per-call defaults, applied to every ask that omits them. */
 export interface ThreadDefaults {
-  readonly model: ModelSelection | undefined;
+  readonly model: ModelOption | undefined;
   readonly models: ModelCascade | undefined;
   readonly effort: AgentEffort | undefined;
 }

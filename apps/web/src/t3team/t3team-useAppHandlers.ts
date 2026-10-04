@@ -10,6 +10,7 @@ import type {
 } from "~/t3team/t3team-kickoffTypes";
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
 import { createProjectKickoffThread } from "~/t3team/t3team-useAppHandlers-kickoffThread";
+import { selectProjectDashboardMode } from "~/t3team/t3team-projectThreadViewState";
 import { useLocalWorkspaceCommands } from "~/t3team/hooks/t3team-useLocalWorkspaceCommands";
 import {
   createTicketKickoffThread,
@@ -71,11 +72,17 @@ export function useAppHandlers({
   );
 
   const handleSelectProjectDashboardMode = useCallback(
-    (projectId: string, dashboardMode: ProjectDashboardMode) => {
-      const resolvedProjectId = store.resolveProjectId(projectId);
-      store.selectProject(resolvedProjectId);
-      onOpenDashboard?.(resolvedProjectId, dashboardMode);
-    },
+    (projectId: string, dashboardMode: ProjectDashboardMode) =>
+      // `activeView` through the ref: the handler's identity must stay stable
+      // across selections (memo barrier), but it must see the CURRENT view to
+      // carry its embedded thread into the new dashboard route.
+      selectProjectDashboardMode({
+        activeView: activeViewRef.current,
+        dashboardMode,
+        onOpenDashboard,
+        projectId,
+        store,
+      }),
     [onOpenDashboard, store],
   );
 

@@ -38,6 +38,7 @@ import {
   childAwaitingParentApproval,
   parentReceivedFromChild,
 } from "./t3team-childSilentCompletion.ts";
+import type { ProviderUsageNotificationReader } from "./t3team-providerUsageNotification.ts";
 
 /** The abnormal terminal outcomes that warrant a parent notification. */
 export type AbnormalStopOutcome = "failed" | "aborted";
@@ -96,6 +97,7 @@ export function buildAbnormalStopDetail(input: {
 export interface ChildAbnormalStopNotifierDeps {
   readonly engine: OrchestrationEngineShape;
   readonly query: ProjectionSnapshotQueryShape;
+  readonly usageLine?: ProviderUsageNotificationReader;
 }
 
 export interface NotifyChildAbnormalStopInput {
@@ -156,6 +158,22 @@ export const makeChildAbnormalStopNotifier =
           `[Child stopped abnormally] Child «${child.title}» (thread ${child.id}) ` +
           `stopped abnormally (${outcomeLabel}). It did not complete.` +
           (detail ? ` ${detail}.` : "");
+      }
+      text += yield* (
+        deps.usageLine?.({
+          provider: child.modelSelection?.instanceId,
+          parentThreadId,
+          projectId: String(child.projectId),
+        }) ?? Effect.succeed("")
+      );
+      // The usage refresh can yield while the child sends its own final report.
+      if (input.outcome === "completed" && deps.usageLine) {
+        const parent = Option.getOrUndefined(
+          yield* deps.query
+            .getThreadDetailById(ThreadId.make(parentThreadId))
+            .pipe(Effect.orElseSucceed(() => Option.none())),
+        );
+        if (!parent || parentReceivedFromChild(parent, String(child.id))) return;
       }
       const nowIso = DateTime.formatIso(DateTime.nowUnsafe());
       yield* deps.engine

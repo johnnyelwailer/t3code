@@ -113,6 +113,29 @@ A journaled retry policy with explicit attempt and delay bounds. It replaces han
 loops whose attempts silently expand the journal. Exhaustion remains an ordinary typed workflow
 failure.
 
+Implemented in `packages/runbook-core/src/retryBackoff.ts` as
+`retry(fn, { maxAttempts, backoff, classify? })`, kind `"retry"`:
+
+- one `retry.start` entry (args: the attempt bound), then one `retry.attempt` settlement per
+  attempt carrying its outcome, the last classified failure, and — for a retryable failure — the
+  backoff deadline. `classify` and `backoff` run black-boxed inside the live settlement only, so
+  jitter takes no seq and a replay never reads the live clock;
+- the delay is the existing durable `waitUntil`, so the SDK gates `retry` on `"schedule"`;
+- attempts run inline in the run's sequence (like `workflow()`), so `fn` may call `agent()` or
+  `workflow()`; a replay re-drives each attempt against the journal, so its effects replay
+  instead of re-firing, its closure writes are rebuilt, and an unfinished attempt resumes part-way;
+- a primitive that threw inside an attempt left no journal line, so its replay raises a gap drift.
+  Inside a settled attempt that gap is resolved by the journaled settlement; anywhere else, and for
+  any changed call identity or args, drift stays loud. This holds when the failure escapes `fn`:
+  an `fn` that catches and absorbs a primitive's failure sees the gap drift in its own catch on
+  replay, the same hazard as a bare body catching one;
+- giving up raises `RetryExhaustedError` with `attempts`, `maxAttempts`, and `lastFailure`.
+
+Settlements never accumulate an attempt history. Pruning a settled sequence's attempt detail is a
+journal-backend capability, as it is for `checkpoint`. Do not call `checkpoint()` inside `fn`, and
+do not use `retry` inside `parallel()`/`pipeline()`: the backoff `waitUntil` cannot durably park
+in a black box, exactly as for a bare `waitUntil` there.
+
 Already-completed fan-out items do not require a new primitive: recorded `sent` / `resolved` pairs
 already prevent replay from repeating a completed dispatch. Checkpointing only collapses the
 completed prefix once it is no longer needed for active replay.

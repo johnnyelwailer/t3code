@@ -103,24 +103,93 @@ export class WorkflowRunNotFoundError extends WorkflowError {
 }
 
 /**
- * Raised when `checkpoint()` is called from inside a SUB-workflow body. A sub-workflow journals
- * into the same run sequence as its parent and shares the run's checkpoint primitive, so a
- * boundary committed there would move the run's SHARED replay window: a crash mid-sub-workflow
- * would re-drive the TOP-level body from the child's boundary, no longer at its journaled seqs —
+ * Raised when `checkpoint()` (or `accumulate()`, which commits one) is called from inside a
+ * SUB-workflow body. A sub-workflow journals into the same run sequence as its parent and shares
+ * the run's checkpoint primitive, so a boundary committed there would move the run's SHARED
+ * replay window: a crash mid-sub-workflow would re-drive the TOP-level body from the child's
+ * boundary, no longer at its journaled seqs —
  * the pre-loop setup and the child prefix would re-fire live (external effects double-execute)
  * or fail drift, silently breaking the no-refire guarantee. Checkpoints are only valid in the
  * top-level run body.
+ *
+ * `verb` names the refused call: `watermark()` commits its cursor as a checkpoint boundary, so it
+ * is refused in a sub-workflow for the same reason.
  */
 export class SubWorkflowCheckpointError extends WorkflowError {
-  constructor() {
+  /**
+   * `primitive` names the refused call — `watermark()` and `accumulate()` each commit a checkpoint
+   * boundary, so they are refused in a sub-workflow for the same reason as a raw `checkpoint()`.
+   */
+  constructor(primitive = "checkpoint()") {
     super(
-      "checkpoint() is not valid inside a sub-workflow body: checkpoints are only valid in the " +
+      `${primitive} is not valid inside a sub-workflow body: checkpoints are only valid in the ` +
         "top-level run body. A sub-workflow journals into the same run sequence as its parent and " +
         "shares the run's checkpoint primitive, so a boundary committed here would move the run's " +
         "shared replay window and silently break the no-refire guarantee on crash-resume. Move the " +
-        "checkpoint to the top-level body.",
+        `${primitive} call to the top-level body.`,
     );
     this.name = "SubWorkflowCheckpointError";
+  }
+}
+
+/** A retry attempt's failure, reduced to the canonical-JSON form the journal records. */
+export interface RetryClassifiedFailure {
+  readonly classification: "retryable" | "fatal";
+  readonly name: string;
+  readonly message: string;
+}
+
+/**
+ * Raised by `retry()` when it gives up: every one of `maxAttempts` attempts failed, or `classify`
+ * called a failure `"fatal"` (which short-circuits the remaining attempts). `lastFailure` is the
+ * journaled classified failure, so a resumed run raises the same error without re-running the
+ * attempt; `cause` is the original thrown value, present only on the run that observed it live.
+ */
+export class RetryExhaustedError extends WorkflowError {
+  readonly attempts: number;
+  readonly maxAttempts: number;
+  readonly lastFailure: RetryClassifiedFailure;
+  constructor(opts: {
+    readonly attempts: number;
+    readonly maxAttempts: number;
+    readonly lastFailure: RetryClassifiedFailure;
+    readonly cause?: unknown;
+  }) {
+    const failure = `${opts.lastFailure.name}: ${opts.lastFailure.message}`;
+    super(
+      opts.lastFailure.classification === "fatal"
+        ? `retry: attempt ${opts.attempts} of ${opts.maxAttempts} failed with a fatal classification and was not retried (${failure}).`
+        : `retry: all ${opts.maxAttempts} attempts failed; last failure (${failure}).`,
+    );
+    this.name = "RetryExhaustedError";
+    this.attempts = opts.attempts;
+    this.maxAttempts = opts.maxAttempts;
+    this.lastFailure = opts.lastFailure;
+    if (opts.cause !== undefined) (this as { cause?: unknown }).cause = opts.cause;
+  }
+}
+
+/**
+ * Raised when a body mixes `watermark()` with a raw `checkpoint()`. Both commit the run's ONE
+ * replay boundary, and a resume restores only the latest one: a raw checkpoint after a watermark
+ * advance would drop every durable cursor (the next resume re-reads already processed input), and
+ * a watermark advance after a raw checkpoint would replace the author's compact state. So a run's
+ * boundary has one owner, fixed by the first of the two calls (or by the state a resume restored).
+ */
+export class WatermarkScopeError extends WorkflowError {
+  readonly owner: "watermark" | "checkpoint";
+  constructor(owner: "watermark" | "checkpoint") {
+    super(
+      owner === "watermark"
+        ? "checkpoint() is not valid in a body that uses watermark(): the watermark owns this run's " +
+            "checkpoint boundary, and a raw checkpoint would replace every durable cursor. Carry " +
+            "the extra state outside the checkpoint, or drop the watermark."
+        : "watermark() is not valid in a body that commits raw checkpoint() boundaries: the run's " +
+            "boundary already carries the author's compact state, and a watermark advance would " +
+            "replace it. Use either checkpoint() or watermark() in one run body, not both.",
+    );
+    this.name = "WatermarkScopeError";
+    this.owner = owner;
   }
 }
 
