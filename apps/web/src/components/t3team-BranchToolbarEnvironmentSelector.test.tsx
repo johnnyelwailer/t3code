@@ -61,6 +61,13 @@ vi.mock("./ui/select", () => ({
   ),
   SelectValue: () => <span data-testid="select-value">SELECTED</span>,
 }));
+// The trigger is upstream's `ThreadDetailsSelectControl`, a Base UI `Select.Trigger` that needs
+// the real Select root; the Select is mocked above, so the trigger is too.
+vi.mock("./chat/ThreadDetailsControl", () => ({
+  ThreadDetailsSelectControl: ({ children }: { children?: ReactNode }) => (
+    <div data-testid="trigger">{children}</div>
+  ),
+}));
 vi.mock("./EnvironmentMachineIcon", () => ({
   EnvironmentMachineIcon: () => <span data-testid="machine-icon" />,
 }));

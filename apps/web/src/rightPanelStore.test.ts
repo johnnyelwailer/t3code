@@ -1186,6 +1186,7 @@ describe("rightPanelStore", () => {
             ],
           },
         },
+        threadPanelVisibilityByThreadKey: {},
       });
     });
 
@@ -1223,6 +1224,7 @@ describe("rightPanelStore", () => {
             ],
           },
         },
+        threadPanelVisibilityByThreadKey: {},
       });
     });
   });
