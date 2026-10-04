@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-native-title-tooltip --Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The right-hand end of a runtime step row: when a scheduled step is due, and a child thread's status.
  *
@@ -22,7 +22,7 @@ export function StepDuration({ step }: { step: T3TeamWorkflowStepEntry | undefin
     return null;
   }
   return (
-    <span data-step-duration className="shrink-0 text-[11px] text-muted-foreground/70">
+    <span data-step-duration className="shrink-0 text-2xs text-muted-foreground/70">
       {formatDuration(step.durationMs)}
     </span>
   );
@@ -37,7 +37,7 @@ export function TurnCountBadge({ step }: { step: T3TeamWorkflowStepEntry | undef
   return (
     <span
       data-step-turn-count={step.turnCount}
-      className="shrink-0 rounded-full border border-border/55 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground/80"
+      className="shrink-0 rounded-full border border-border/55 px-1.5 py-0.5 text-3xs font-medium text-muted-foreground/80"
     >
       {step.turnCount} turns
     </span>
@@ -57,36 +57,59 @@ export function StepDue({
   if (wakeAt === undefined || wakeAt === null) return null;
   const due = formatWorkflowStepDue(wakeAt ?? undefined);
   return due ? (
-    <span data-step-due className="shrink-0 text-[11px] text-muted-foreground/70">
+    <span data-step-due className="shrink-0 text-2xs text-muted-foreground/70">
       {due}
     </span>
   ) : null;
+}
+
+/** A child thread's raw stop reason (server's "Retrying (3/14) — provider transient error") is
+ * machinery, not a status word: render the compact state word + counter, and keep the reason
+ * available in the row's tooltip instead of dumping the whole sentence into the trailing slot
+ * (agents-panel UX 2026-09-08, variant 3 "normalize status words"). */
+export function normalizeChildStatusLabel(status: string): {
+  readonly label: string;
+  readonly detail?: string;
+} {
+  const retry = status.match(/^Retrying \((\d+)\/(\d+)\) — (.+)$/);
+  if (retry) {
+    const reason = retry[3];
+    return reason === undefined
+      ? { label: `Retrying ${retry[1]}/${retry[2]}` }
+      : { label: `Retrying ${retry[1]}/${retry[2]}`, detail: reason };
+  }
+  return { label: status };
 }
 
 export function StepTrailing({
   step,
   wakeAt,
   childStatuses,
+  hideDuration = false,
 }: {
   step: T3TeamWorkflowStepEntry | undefined;
   wakeAt?: string | null | undefined;
   childStatuses?: Readonly<Record<string, string>> | undefined;
+  /** Inside a collapsed dynamic group the per-row durations are Σ-noise — the group summary
+   * shows the total instead. */
+  hideDuration?: boolean | undefined;
 }) {
   const childStatus = step?.threadId ? childStatuses?.[step.threadId] : undefined;
   if (childStatus) {
+    const normalized = normalizeChildStatusLabel(childStatus);
     return (
       <span
         data-step-child-status={childStatus}
-        className="max-w-[45%] shrink-0 truncate text-right text-[11px] font-normal text-muted-foreground/70"
-        title={childStatus}
+        className="max-w-[45%] shrink-0 truncate text-right text-2xs font-normal text-muted-foreground/70"
+        title={normalized.detail ?? childStatus}
       >
-        {childStatus}
+        {normalized.label}
       </span>
     );
   }
   return (
     <>
-      <StepDuration step={step} />
+      {hideDuration ? null : <StepDuration step={step} />}
       <StepDue step={step} wakeAt={wakeAt} />
     </>
   );

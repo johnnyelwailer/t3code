@@ -1,14 +1,10 @@
 import type { ReactNode } from "react";
 
 import type { AtlassianBackendApi } from "~/t3team/backend/t3team-atlassianBackendTypes";
-import type {
-  JiraAttachment,
-  JiraCommentItem,
-} from "~/t3team/components/ticket/t3team-ticketRichContentTypes";
+import type { JiraAttachment } from "~/t3team/components/ticket/t3team-ticketRichContentTypes";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 import { WorkItemAttachments } from "~/t3team/workitem/t3team-WorkItemAttachments";
 import { WorkItemChildren } from "~/t3team/workitem/t3team-WorkItemChildren";
-import { WorkItemComments } from "~/t3team/workitem/t3team-WorkItemComments";
 import type { WorkItemSectionTarget } from "~/t3team/workitem/t3team-useWorkItemDetailMainContent";
 import { WorkItemLinks } from "~/t3team/workitem/t3team-WorkItemLinks";
 import type { WorkItemSectionAnchors } from "~/t3team/workitem/t3team-workItemSectionAnchors";
@@ -19,9 +15,10 @@ type SectionMenu = (
 ) => { onContextMenu: (event: React.MouseEvent) => void } | Record<string, never>;
 
 /**
- * Children, links, attachments and comments, extracted out of `WorkItemDetailMain` so its own line
- * count doesn't grow every time one of these sections gains a mutation control — this is where
- * Slice C's direct comment/link/child controls actually live.
+ * Child items, links, attachments plus any supplemental sections — the bounded reference lane,
+ * extracted out of `WorkItemDetailMain` so its own line count doesn't grow every time one of these
+ * sections gains a mutation control (this is where Slice C's direct link/child controls live). The
+ * conversation (comments) is not here: it travels with the description in the primary column.
  */
 export function WorkItemSecondaryColumn({
   issueKey,
@@ -36,12 +33,9 @@ export function WorkItemSecondaryColumn({
   projectTickets,
   snapshotRaw,
   attachments,
-  comments,
   nowMs,
   estimateFieldLabel,
-  htmlBaseUrl,
   resolveAssetUrl,
-  renderCommentBody,
   onOpenTicket,
   onReload,
   supplementalSections,
@@ -60,13 +54,10 @@ export function WorkItemSecondaryColumn({
   readonly projectTickets: ReadonlyArray<ProjectTicket>;
   readonly snapshotRaw: unknown;
   readonly attachments: ReadonlyArray<JiraAttachment>;
-  readonly comments: ReadonlyArray<JiraCommentItem>;
   readonly nowMs: number;
   /** The project's story-point field label, resolved server-side; absent means "not known". */
   readonly estimateFieldLabel?: string | undefined;
-  readonly htmlBaseUrl?: string | undefined;
   readonly resolveAssetUrl?: ((url: string) => string) | undefined;
-  readonly renderCommentBody?: (comment: JiraCommentItem) => ReactNode;
   readonly onOpenTicket: (ticketId: string) => void;
   readonly onReload: () => void;
   readonly supplementalSections?: ReactNode;
@@ -103,17 +94,6 @@ export function WorkItemSecondaryColumn({
         {...(resolveAssetUrl ? { resolveAssetUrl } : {})}
         nowMs={nowMs}
         {...sectionMenu("attachments", `${issueKey} attachments`)}
-      />
-
-      <WorkItemComments
-        comments={comments}
-        anchorId={anchors.comments}
-        nowMs={nowMs}
-        {...(resolveAssetUrl ? { resolveAssetUrl } : {})}
-        {...(renderCommentBody ? { renderBody: renderCommentBody } : {})}
-        {...(htmlBaseUrl ? { htmlBaseUrl } : {})}
-        {...writeProps}
-        {...sectionMenu("comments", `${issueKey} comments`)}
       />
 
       {supplementalSections}

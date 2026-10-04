@@ -28,7 +28,6 @@ const thread = (over: Partial<ProjectThread> & { id: string }): ProjectThread =>
   ({
     projectId: "project-1",
     title: `Thread ${over.id}`,
-    messageCount: 1,
     lastMessageAt: "2026-07-01T00:00:00.000Z",
     createdAt: "2026-07-01T00:00:00.000Z",
     status: "idle",

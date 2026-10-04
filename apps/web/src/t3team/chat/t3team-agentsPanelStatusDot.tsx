@@ -7,7 +7,7 @@
  * wrapping a pulse-wrapper `<span>` that holds the `.t3team-aci-dot` — so the
  * shared motion/hue/waiting-ring CSS in t3team-index.css textures each dot the
  * SAME WAY as the working row (no second, divergent style). The panel's
- * `.t3team-agp` scope (set on the panel root by AgentsPanel.tsx) only adds the
+ * `[data-t3team-agents-panel]` scope (set on the panel root by AgentsPanel.tsx) only adds the
  * two still RESULT states the roster needs (done/error) — see
  * t3team-agentsPanelDots.css.
  *

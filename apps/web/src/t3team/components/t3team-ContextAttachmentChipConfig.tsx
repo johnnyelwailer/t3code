@@ -2,13 +2,13 @@ import { MarkGithubIcon } from "@primer/octicons-react";
 import {
   FileTextIcon,
   GitBranchIcon,
-  GitPullRequestIcon,
   InfoIcon,
   LinkIcon,
   MessageSquareIcon,
   PaperclipIcon,
   RefreshCwIcon,
 } from "lucide-react";
+import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import { JiraIcon } from "~/t3team/components/brand/t3team-AtlassianLogos";
 
 export type KindConfig = {
@@ -77,21 +77,21 @@ export const KIND_CONFIGS: Record<string, KindConfig> = {
     label: "GitHub",
   },
   "github-activity-pr": {
-    Icon: GitPullRequestIcon,
+    Icon: PullRequestGlyph.pullRequest,
     iconClassName: "text-sky-600",
     chipClassName: "border-sky-500/20 bg-sky-500/5 hover:border-sky-500/35",
     badgeClassName: "bg-sky-500/10 text-sky-700 dark:text-sky-300",
     label: "Pull request",
   },
   "github-activity-pr-open": {
-    Icon: GitPullRequestIcon,
+    Icon: PullRequestGlyph.pullRequest,
     iconClassName: "text-emerald-600",
     chipClassName: "border-emerald-500/20 bg-emerald-500/5 hover:border-emerald-500/35",
     badgeClassName: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
     label: "Open PR",
   },
   "github-activity-pr-closed": {
-    Icon: GitPullRequestIcon,
+    Icon: PullRequestGlyph.closed,
     iconClassName: "text-rose-600",
     chipClassName: "border-rose-500/20 bg-rose-500/5 hover:border-rose-500/35",
     badgeClassName: "bg-rose-500/10 text-rose-700 dark:text-rose-300",
@@ -105,14 +105,14 @@ export const KIND_CONFIGS: Record<string, KindConfig> = {
     label: "Merged PR",
   },
   "github-activity-pr-draft": {
-    Icon: GitPullRequestIcon,
+    Icon: PullRequestGlyph.draft,
     iconClassName: "text-amber-600",
     chipClassName: "border-amber-500/20 bg-amber-500/5 hover:border-amber-500/35",
     badgeClassName: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
     label: "Draft PR",
   },
   "github-activity-review-requested": {
-    Icon: GitPullRequestIcon,
+    Icon: PullRequestGlyph.pullRequest,
     iconClassName: "text-blue-600",
     chipClassName: "border-blue-500/20 bg-blue-500/5 hover:border-blue-500/35",
     badgeClassName: "bg-blue-500/10 text-blue-700 dark:text-blue-300",

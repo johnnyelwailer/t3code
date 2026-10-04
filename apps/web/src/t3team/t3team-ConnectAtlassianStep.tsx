@@ -72,9 +72,9 @@ export function ConnectAtlassianStep({
     return (
       <ConnectAtlassianStepFrame>
         <div className="flex flex-col items-center gap-5">
-          <Skeleton className="size-11 rounded-xl" />
+          <Skeleton shape="card" className="size-11" />
           <Skeleton className="h-4 w-56" />
-          <Skeleton className="h-9 w-56 rounded-lg" />
+          <Skeleton shape="card" className="h-9 w-56" />
         </div>
       </ConnectAtlassianStepFrame>
     );
@@ -125,7 +125,7 @@ export function ConnectAtlassianStep({
           Connect your Jira workspace to import projects and issues.
         </p>
         <Button
-          className="mt-5 min-w-56 justify-center gap-2"
+          className="mt-5 min-w-56 justify-center"
           onClick={() => void oauth.startOAuth()}
           disabled={oauthPending}
         >

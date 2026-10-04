@@ -23,15 +23,10 @@ type UseProjectGitHubActivityOptions = {
  * reads for the full pull request list — scoped to this project rather than to a set of linked
  * repository URLs, since upstream's listing is keyed by project rather than by repository.
  *
- * TODO(narrowing, tracked in PR body): `linkedRepositoryUrls` is accepted but unused. The old
- * inbox source could scope itself to more than one repository per project;
- * `PullRequestListInput` (packages/contracts/src/pullRequest.ts) has no `repository` field at
- * all — only `projectId`/`host`/`query` — so there is no way to ask upstream's listing for a
- * second repository's rows without adding that field and its provider plumbing server-side.
- * That is new server surface, out of scope here: a project's *own* repository still matches
- * fully, but a ticket linked only through a second repository on the same project will not
- * surface here until that surface exists. Kept in the signature so every call site needs no
- * change once it does.
+ * `linkedRepositoryUrls` is accepted but unused, kept so every call site needs no change:
+ * the server now resolves a project's linked repositories itself when answering `list`
+ * (from its `.t3team/context/linked-repositories.json`), so the project-scoped listing
+ * already carries the rows of its linked repositories and there is nothing to narrow here.
  */
 export function useProjectGitHubActivity({
   project,

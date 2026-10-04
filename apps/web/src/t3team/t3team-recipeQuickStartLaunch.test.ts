@@ -105,15 +105,15 @@ describe("applyT3TeamRecipeQuickStartLaunchCustomization", () => {
     ).toBe("Explain the selected work simply.\n\nAdditional user note:\nFocus on rollout risk.");
   });
 
-  it("creates a guided recipe-authoring kickoff when no custom note is provided", () => {
-    const bundledRecipe = getBundledT3TeamRecipe("create-contextual-recipe");
+  it("creates a guided recipe-management kickoff when no custom note is provided", () => {
+    const bundledRecipe = getBundledT3TeamRecipe("manage-project-recipes");
     if (!bundledRecipe?.kickoff) {
       throw new Error("Expected bundled recipe kickoff");
     }
 
     const recipe: T3TeamSidecarRecipeQuickStart = {
       id: bundledRecipe.id,
-      title: "Create a recipe for this view",
+      title: "Create or edit a recipe",
       description: bundledRecipe.shortDescription,
       prompt: bundledRecipe.promptTemplate ?? bundledRecipe.shortDescription,
       actionView: {
@@ -164,7 +164,7 @@ describe("applyT3TeamRecipeQuickStartLaunchCustomization", () => {
         kind: "recipe" as const,
         recipeId: bundledRecipe.id,
         kickoff: bundledRecipe.kickoff,
-        title: "Create a recipe for this view",
+        title: "Create or edit a recipe",
         description: bundledRecipe.shortDescription,
         source: "bundled" as const,
         surface: "workitem.detail.sidepanel" as const,
@@ -183,12 +183,12 @@ describe("applyT3TeamRecipeQuickStartLaunchCustomization", () => {
       buildT3TeamSelectedRecipeKickoffLaunch({
         selectedRecipe: { recipe },
       }).kickoffMessage,
-    ).toContain("Describe the recipe you want");
+    ).toContain("What do you want to do with recipes?");
     expect(
       buildT3TeamSelectedRecipeKickoffLaunch({
         selectedRecipe: { recipe },
       }).kickoffMessage,
-    ).toContain("A recipe is a reusable quick action for views like this.");
+    ).toContain("A new recipe, or an edit to an existing one");
     expect(
       buildT3TeamSelectedRecipeKickoffLaunch({
         selectedRecipe: { recipe },
@@ -223,13 +223,13 @@ describe("applyT3TeamRecipeQuickStartLaunchCustomization", () => {
 
   it("still hands the recipe straight to the agent when a custom note exists", () => {
     const recipe = {
-      id: "create-contextual-recipe",
-      title: "Create a recipe for this view",
+      id: "manage-project-recipes",
+      title: "Create or edit a recipe",
       description: "Design a contextual recipe for the current surface.",
       prompt: "Help me create a recipe for this context.",
       workflow: {
         kind: "recipe" as const,
-        recipeId: "create-contextual-recipe",
+        recipeId: "manage-project-recipes",
         kickoff: {
           version: 1 as const,
           steps: [
@@ -250,7 +250,7 @@ describe("applyT3TeamRecipeQuickStartLaunchCustomization", () => {
             },
           ],
         },
-        title: "Create a recipe for this view",
+        title: "Create or edit a recipe",
         description: "Design a contextual recipe for the current surface.",
         source: "bundled" as const,
         surface: "project.dashboard.backlog" as const,

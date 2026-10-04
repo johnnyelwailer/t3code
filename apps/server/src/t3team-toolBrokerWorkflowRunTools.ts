@@ -1,11 +1,14 @@
 /**
  * Live wiring for the agent-facing `t3team.orchestration.run` tool (ephemeral workflows, slice 1):
- * resolves the calling thread's project, enforces the ephemeral concurrency cap, persists an
- * inline `source` under `.t3team-runs/<runId>/workflow.ts` (the engine re-reads it on every
- * resume/rehydrate, so the file must outlive the call) or authorizes an existing `workflowPath`
- * ({@link ./t3team-workflowRunPathAuthorize.ts} — workspace containment, or a discovered pack
- * recipe's DECLARED workflow), then launches through the shared {@link launchPreparedWorkflow}
- * funnel with origin `ephemeral` — bound to the calling thread, NO approval gate.
+ * resolves the calling thread's project, enforces the ephemeral concurrency cap, PRECHECKS the
+ * source (inline or file) so it fails synchronously with the authoring manual, then PINS it at
+ * `.t3team-runs/<runId>/workflow.ts` — inline `source` is written there, and a `workflowPath`
+ * file is snapshotted there ({@link ./t3team-workflowRunPathAuthorize.ts} — workspace containment
+ * or a discovered pack recipe's DECLARED workflow, which runs in place). Pinning every
+ * agent-authored run makes the engine's self-heal and corrected-source resume work uniformly and
+ * keeps resume/rehydrate from drifting on later edits of the original file. Launch goes through
+ * the shared {@link launchPreparedWorkflow} funnel with origin `ephemeral` — bound to the calling
+ * thread, NO approval gate.
  */
 import type { ModelSelection, ProjectId, ThreadId } from "@t3tools/contracts";
 import type { ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
@@ -23,7 +26,7 @@ import { DEFAULT_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS } from "./t3team-workflowEphem
 import { resolveRunWorkflowPath } from "./t3team-workflowRunPathAuthorize.ts";
 
 /** Max ephemeral runs holding engine resources (running/suspended/sleeping) at once (spec D8). */
-export const T3TEAM_EPHEMERAL_RUN_CAP = DEFAULT_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS;
+const T3TEAM_EPHEMERAL_RUN_CAP = DEFAULT_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS;
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -37,7 +40,7 @@ export interface RunWorkflowHandlerArgs {
 }
 
 /** How recently a launch from the same thread blocks another one without `replaceRunId`. */
-export const RECENT_LAUNCH_WINDOW_MS = 2 * 60_000;
+const RECENT_LAUNCH_WINDOW_MS = 2 * 60_000;
 const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "cancelled"]);
 
 /**

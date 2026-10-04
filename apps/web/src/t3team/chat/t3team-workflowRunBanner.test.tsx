@@ -74,15 +74,37 @@ describe("RunStatusBanner (paused)", () => {
     expect(container.querySelector("[data-run-resume]")).toBeNull();
   });
 
-  it("keeps the failed banner free of a Resume button", async () => {
+  it("offers a Retry button on the failed banner that calls back (GHE #344)", async () => {
+    const onResume = vi.fn();
     const container = await renderNode(
       <RunStatusBanner
         run={{ phase: "failed", error: "The agent turn failed: gateway down" }}
-        onResume={() => {}}
+        onResume={onResume}
       />,
     );
     expect(container.textContent).toContain("Run failed");
     expect(container.textContent).toContain("gateway down");
+    expect(container.textContent).toContain("Retry");
+    const button = container.querySelector<HTMLButtonElement>("[data-run-resume]");
+    expect(button).not.toBeNull();
+    await act(async () => {
+      button!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+    expect(onResume).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the failed banner free of a Retry button when the viewer cannot control the run", async () => {
+    const container = await renderNode(
+      <RunStatusBanner run={{ phase: "failed", error: "The agent turn failed: gateway down" }} />,
+    );
+    expect(container.textContent).toContain("Run failed");
     expect(container.querySelector("[data-run-resume]")).toBeNull();
+  });
+
+  it("says Retrying while a retry is in flight", async () => {
+    const container = await renderNode(
+      <RunStatusBanner run={{ phase: "failed" }} onResume={() => {}} resumePending />,
+    );
+    expect(container.textContent).toContain("Retrying…");
   });
 });

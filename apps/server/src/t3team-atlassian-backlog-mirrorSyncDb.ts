@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { toPersistenceSqlError } from "./persistence/Errors.ts";
+import { captureDigestStatusTransitions } from "./t3team-digestStatusTransitions.ts";
 import { serializeBacklogCacheJson } from "./t3team-atlassian-backlog-cacheQueries.ts";
 import { ensureBacklogCacheTables } from "./t3team-atlassian-backlog-cacheTables.ts";
 import type { MirrorSyncIdentity } from "./t3team-atlassian-backlog-mirrorSyncShared.ts";
@@ -40,6 +41,31 @@ export function upsertMirrorIssues(input: {
     yield* ensureBacklogCacheTables();
     const sql = yield* SqlClient.SqlClient;
     const updatedAt = yield* Clock.currentTimeMillis;
+
+    // Digest status-transition capture: read the PREVIOUS statuses from the
+    // mirror (before the upsert below overwrites them) and record any change.
+    // A capture failure must never block the mirror upsert itself.
+    yield* captureDigestStatusTransitions(
+      input.identity,
+      input.items
+        .filter(
+          (
+            item,
+          ): item is Record<string, unknown> & { readonly id: string; readonly status: string } =>
+            typeof item["status"] === "string",
+        )
+        .map((item) => ({
+          issueId: item.id,
+          issueKey: typeof item["displayId"] === "string" ? item["displayId"] : null,
+          status: item["status"],
+        })),
+    ).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning("t3team: digest status transition capture failed", { cause }).pipe(
+          Effect.asVoid,
+        ),
+      ),
+    );
 
     yield* sql.withTransaction(
       Effect.gen(function* () {

@@ -35,18 +35,20 @@ function DecisionButton(props: {
   muted?: boolean;
   onClick: () => void;
 }) {
+  // The fade lives on a wrapper: Button owns its own opacity (disabled:opacity-64).
   return (
-    <Button
-      type="button"
-      size="sm"
-      variant={props.chosen || props.primary ? "default" : "outline"}
-      disabled={props.disabled}
-      className={props.muted ? "opacity-40" : undefined}
-      onClick={props.onClick}
-    >
-      {props.busy ? <LoaderCircleIcon className="mr-1 size-3 animate-spin" /> : null}
-      {props.label}
-    </Button>
+    <span className={props.muted ? "inline-flex opacity-40" : "inline-flex"}>
+      <Button
+        type="button"
+        size="sm"
+        variant={props.chosen || props.primary ? "default" : "outline"}
+        disabled={props.disabled}
+        onClick={props.onClick}
+      >
+        {props.busy ? <LoaderCircleIcon className="mr-1 size-3 animate-spin" /> : null}
+        {props.label}
+      </Button>
+    </span>
   );
 }
 

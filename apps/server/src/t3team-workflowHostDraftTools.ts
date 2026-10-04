@@ -42,7 +42,7 @@ import {
  * Reuses the id of the broker-side draft classification (`PROJECT_RECIPE_MUTATION_DRAFT_TOOL_GROUP`)
  * so bodies, the permission UI and the audit log speak ONE vocabulary.
  */
-export const T3TEAM_WORKFLOW_DRAFT_TOOL_GROUP = defineToolGroup({
+const T3TEAM_WORKFLOW_DRAFT_TOOL_GROUP = defineToolGroup({
   id: "mutation.draft",
   label: "Propose work-item drafts",
   description:
@@ -50,7 +50,7 @@ export const T3TEAM_WORKFLOW_DRAFT_TOOL_GROUP = defineToolGroup({
 });
 
 /** The exact broker tool ids reachable from a workflow body. Nothing outside this list is. */
-export const T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_IDS = [
+const T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_IDS = [
   "t3team.work_item.description.draft_update",
   "t3team.work_item.comment.draft_create",
   "t3team.work_item.assignee.draft_update",
@@ -94,7 +94,7 @@ function hostDraftToolRef(id: string): ToolRef<unknown, unknown> {
 /** Registered ONCE at module load — `defineTool` refuses a duplicate id, and the engine executes a
  * tool by looking its id up in that global registry, so per-run refs would never be reached. The
  * per-run part is the `ctx.t3team` client the handlers read. */
-export const T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_REFS: ReadonlyArray<ToolRef<unknown, unknown>> =
+const T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_REFS: ReadonlyArray<ToolRef<unknown, unknown>> =
   T3TEAM_WORKFLOW_HOST_DRAFT_TOOL_IDS.map(hostDraftToolRef);
 
 /**

@@ -44,7 +44,8 @@ export function RunStatusBanner({
   outcomeSummary?: string | undefined;
   /** When the run was paused (the durable row's `updatedAt`, else the pause activity's). */
   pausedAt?: string | undefined;
-  /** Present when the viewer can resume a paused run; renders the prominent Resume button. */
+  /** Present when the viewer can resume a paused run OR retry a failed one (GHE #344); renders
+   * the prominent Resume / Retry button. */
   onResume?: (() => void) | undefined;
   resumePending?: boolean;
 }) {
@@ -61,7 +62,7 @@ export function RunStatusBanner({
           ? "border-destructive/40 bg-destructive/10 text-destructive"
           : paused || cancelled
             ? "border-border bg-muted/30 text-muted-foreground"
-            : "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+            : "border-success/40 bg-success/10 text-success-foreground",
       )}
     >
       {failed ? (
@@ -88,7 +89,7 @@ export function RunStatusBanner({
           </span>
         ) : null}
       </span>
-      {paused && onResume ? (
+      {(paused || failed) && onResume ? (
         <button
           type="button"
           data-run-resume=""
@@ -97,7 +98,7 @@ export function RunStatusBanner({
           onClick={onResume}
         >
           <PlayIcon className="size-3" />
-          {resumePending ? "Resuming…" : "Resume"}
+          {resumePending ? (failed ? "Retrying…" : "Resuming…") : failed ? "Retry" : "Resume"}
         </button>
       ) : null}
     </div>
@@ -127,7 +128,7 @@ export function RepairStatusStrip({
     needsAttention
       ? "border-destructive/40 bg-destructive/10 text-destructive"
       : ready
-        ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+        ? "border-success/40 bg-success/10 text-success-foreground"
         : "border-primary/25 bg-primary/5 text-foreground/80",
   );
   const content = (

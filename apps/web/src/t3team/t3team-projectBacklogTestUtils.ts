@@ -1,5 +1,7 @@
 import type { ProjectTicket } from "./t3team-types";
 
+// The digest reads reporter off this ticket for bugs; keep the copy in sync with the type.
+
 export function createProjectBacklogTestTicket(
   overrides: Omit<Partial<ProjectTicket>, "ref"> & {
     ref?: Partial<ProjectTicket["ref"]>;
@@ -24,6 +26,7 @@ export function createProjectBacklogTestTicket(
     ...(overrides.priority ? { priority: overrides.priority } : {}),
     ...(overrides.assignee ? { assignee: overrides.assignee } : {}),
     ...(overrides.assigneeAccountId ? { assigneeAccountId: overrides.assigneeAccountId } : {}),
+    ...(overrides.reporter ? { reporter: overrides.reporter } : {}),
     ...(overrides.description ? { description: overrides.description } : {}),
     ...(overrides.estimateValue !== undefined ? { estimateValue: overrides.estimateValue } : {}),
     ...(overrides.timeOriginalEstimateSeconds !== undefined

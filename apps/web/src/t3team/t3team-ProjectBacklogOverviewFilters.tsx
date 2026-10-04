@@ -119,7 +119,8 @@ export function ProjectBacklogOverviewFilters({
         value={query}
         onChange={(event) => onQueryChange(event.target.value)}
         placeholder="Search issues"
-        className="h-8 w-full border-border/80 bg-background/95 text-xs sm:w-[13rem] lg:w-[15rem]"
+        size="compact"
+        className="w-full sm:w-52 lg:w-60"
       />
 
       <ProjectBacklogOverviewAssigneeFilter
@@ -152,7 +153,7 @@ export function ProjectBacklogOverviewFilters({
           <div
             role="status"
             aria-live="polite"
-            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground"
+            className="inline-flex items-center gap-1 text-2xs text-muted-foreground"
           >
             <Loader2 className="size-3 animate-spin" />
             <span>Updating backlog…</span>

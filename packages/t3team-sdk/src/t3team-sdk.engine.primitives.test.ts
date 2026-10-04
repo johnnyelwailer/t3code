@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Composition-primitive tests. Each primitive gets a round-trip (run → resume returns the
  * recorded result, the tool/script/sleep/sub does NOT re-fire) and, where it journals, a drift

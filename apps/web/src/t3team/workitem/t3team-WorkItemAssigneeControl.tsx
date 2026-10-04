@@ -20,6 +20,7 @@ import {
   WorkItemAssigneeResultsList,
 } from "~/t3team/workitem/t3team-WorkItemAssigneeResultsList";
 import { readAssigneeDraftPatch } from "~/t3team/workitem/t3team-workItemDraftPatchReaders";
+import { WorkItemFieldTrigger } from "~/t3team/workitem/t3team-WorkItemFieldTrigger";
 import { WorkItemPersonChip } from "~/t3team/workitem/t3team-WorkItemPersonAvatar";
 import type { WorkItemPerson } from "~/t3team/workitem/t3team-workItemFieldReaders";
 
@@ -163,7 +164,7 @@ export function WorkItemAssigneeControl({
           aria-label={`Assignee: ${mutation.value?.displayName ?? "Unassigned"}. Change assignee.`}
           aria-busy={mutation.pending}
           disabled={mutation.pending}
-          className="-mx-1.5 inline-flex min-w-0 items-center rounded-md px-1.5 py-0.5 leading-none outline-none transition-colors hover:bg-accent/60 focus-visible:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
+          render={<WorkItemFieldTrigger className="min-w-0" />}
         >
           <span className="flex min-w-0 items-center gap-1.5">
             <WorkItemPersonChip
@@ -174,7 +175,7 @@ export function WorkItemAssigneeControl({
             {mutation.pending ? <Spinner className="size-3 shrink-0" /> : null}
           </span>
         </PopoverTrigger>
-        <PopoverPopup align="start" side="bottom" className="w-72 p-0">
+        <PopoverPopup align="start" side="bottom" padding="none" className="w-72">
           <WorkItemAssigneeActionRows
             {...(currentUserName ? { currentUserName } : {})}
             hasAssignee={Boolean(mutation.value)}

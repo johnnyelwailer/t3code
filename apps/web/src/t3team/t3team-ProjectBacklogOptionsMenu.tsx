@@ -1,6 +1,7 @@
 import { EllipsisIcon } from "lucide-react";
 import type { AtlassianBacklogBoard, AtlassianBacklogSprint } from "~/t3team/backend/t3team-types";
 
+import { Button } from "~/t3team/components/ui/t3team-button";
 import {
   Menu,
   MenuGroup,
@@ -69,23 +70,12 @@ export function ProjectBacklogOptionsMenu({
 }) {
   return (
     <Menu>
-      <MenuTrigger
-        className="inline-flex size-8 items-center justify-center rounded-md border border-border/70 bg-background/90 text-muted-foreground transition-[border-color,background-color,color] hover:border-border hover:bg-accent/70 hover:text-foreground"
-        aria-label="Backlog options"
-      >
+      <MenuTrigger render={<Button variant="outline" size="icon" />} aria-label="Backlog options">
         <EllipsisIcon className="size-4" />
       </MenuTrigger>
-      <MenuPopup
-        align="end"
-        side="bottom"
-        className="min-w-[17rem] border-border/80 bg-background/95"
-      >
+      <MenuPopup align="end" side="bottom" className="min-w-68">
         <MenuGroup>
-          <MenuItem
-            className="min-h-8 rounded-md py-1.5 text-[12px]"
-            disabled={loading}
-            onClick={onRefreshData}
-          >
+          <MenuItem disabled={loading} onClick={onRefreshData}>
             Refresh data
           </MenuItem>
         </MenuGroup>

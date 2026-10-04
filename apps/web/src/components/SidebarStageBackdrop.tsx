@@ -4,31 +4,84 @@ import { useId } from "react";
 import { APP_STAGE_LABEL } from "../branding";
 import { resolveServerBackedAppStageLabel } from "../branding.logic";
 import { primaryServerConfigAtom } from "../state/server";
+import { useT3TeamPackAppearance } from "../t3team/t3team-packAppearance";
+import { T3TeamNexploreStageArt } from "../t3team/t3team-NexploreStageArt";
 
-export type SidebarStageBackdropVariant = "nightly" | "dev";
+export type SidebarStageBackdropVariant = "nightly" | "dev" | "nexplore";
 export type EnvironmentIdentificationPillLabel = "Dev" | "Nightly";
+
+/**
+ * Design override for stage art, e.g. `?stageArt=nexplore`.
+ *
+ * The stage label picks the variant in normal use, which means a packaged distribution (label
+ * "Alpha") can never render any art — so there is otherwise no way to see a candidate variant in
+ * the real UI. Reading it from the query string keeps that reviewable without a rebuild.
+ */
+const STAGE_ART_OVERRIDE_KEY = "t3team-stage-art-override";
+
+function asStageArtVariant(value: string | null): SidebarStageBackdropVariant | null {
+  return value === "nexplore" || value === "dev" || value === "nightly" ? value : null;
+}
+
+/**
+ * Persistence runs at module scope, not inside the resolver, because the resolver is called during
+ * render: writing there made rendering externally observable, including for renders React discards.
+ * `?stageArt=auto` (or `off`/`clear`) removes the override, since the query param is dropped by the
+ * router on the first navigation and there would otherwise be no way back to automatic selection.
+ */
+let stageArtOverride: SidebarStageBackdropVariant | null = null;
+
+if (typeof window !== "undefined") {
+  const raw = new URLSearchParams(window.location.search).get("stageArt");
+  const requested = asStageArtVariant(raw);
+  const isReset = raw === "auto" || raw === "off" || raw === "clear";
+  try {
+    if (requested) window.localStorage.setItem(STAGE_ART_OVERRIDE_KEY, requested);
+    else if (isReset) window.localStorage.removeItem(STAGE_ART_OVERRIDE_KEY);
+    stageArtOverride =
+      requested ??
+      (isReset ? null : asStageArtVariant(window.localStorage.getItem(STAGE_ART_OVERRIDE_KEY)));
+  } catch {
+    stageArtOverride = requested;
+  }
+}
+
+function readStageArtOverride(): SidebarStageBackdropVariant | null {
+  return stageArtOverride;
+}
 
 // A wide viewBox keeps the 96-unit art height at a fixed scale while sidebar resizing reveals
 // more horizontal canvas instead of zooming the scene.
 const STAGE_BACKDROP_VIEW_BOX = "0 0 8192 96";
 
+/**
+ * Pack themes that ship their own stage art, keyed by `EnvironmentAppearance.themeId`.
+ *
+ * A distribution's stage label is its release CHANNEL ("Alpha", "Latest", …), never a variant
+ * name, so selecting art from the stage label alone means a packaged distribution renders no art
+ * at all — only dev and nightly builds ever matched. A pack therefore selects its own art here.
+ */
+const PACK_THEME_STAGE_ART = new Map<string, SidebarStageBackdropVariant>([
+  ["nexplore", "nexplore"],
+]);
+
 export function resolveSidebarStageBackdropVariant(
   stageLabel: string,
   enabled = true,
+  packThemeId?: string,
 ): SidebarStageBackdropVariant | null {
+  // `enabled` carries the user's environment-identification setting, so it still vetoes pack art.
   if (!enabled) return null;
+  const override = readStageArtOverride();
+  if (override) return override;
+  // Channel art is checked FIRST: `dev` and `nightly` art is a build-channel warning, and a dev
+  // build talking to a nexplore server must keep looking like a dev build rather than a release.
+  // A Map (not an object literal) so a pack id like `constructor` cannot resolve to a function.
   const normalized = stageLabel.trim().toLowerCase();
   if (normalized === "nightly") return "nightly";
   if (normalized === "dev") return "dev";
-  return null;
-}
-
-export function resolveSidebarStageFocusRingOffsetClass(
-  variant: SidebarStageBackdropVariant,
-): string {
-  return variant === "nightly"
-    ? "focus-visible:ring-offset-(--stage-night-bottom)"
-    : "focus-visible:ring-offset-(--stage-art-bottom)";
+  if (normalized === "nexplore") return "nexplore";
+  return (packThemeId ? PACK_THEME_STAGE_ART.get(packThemeId) : undefined) ?? null;
 }
 
 export function resolveEnvironmentIdentificationPillLabel(
@@ -51,7 +104,9 @@ export function useEnvironmentStageLabel(): string {
 }
 
 export function useSidebarStageBackdropVariant(enabled = true): SidebarStageBackdropVariant | null {
-  return resolveSidebarStageBackdropVariant(useEnvironmentStageLabel(), enabled);
+  const stageLabel = useEnvironmentStageLabel();
+  const packThemeId = useT3TeamPackAppearance()?.themeId;
+  return resolveSidebarStageBackdropVariant(stageLabel, enabled, packThemeId);
 }
 
 /** Stage-channel header art; palettes mirror the per-channel app icons in `assets/`. */
@@ -67,10 +122,12 @@ export function SidebarStageBackdrop({ variant }: { variant: SidebarStageBackdro
 }
 
 export function StageBackdropArt({ variant }: { variant: SidebarStageBackdropVariant }) {
+  if (variant === "nexplore") return <T3TeamNexploreStageArt />;
   return variant === "nightly" ? <NightlySkyArt /> : <DevBlueprintArt />;
 }
 
 export function StageBackdropButtonArt({ variant }: { variant: SidebarStageBackdropVariant }) {
+  if (variant === "nexplore") return <T3TeamNexploreStageArt compact />;
   return variant === "nightly" ? <NightlySkyArt compact /> : <DevBlueprintArt compact />;
 }
 
@@ -116,7 +173,8 @@ function NightlySkyArt({ compact = false }: { compact?: boolean }) {
 
   return (
     <svg
-      className="stage-art stage-nightly h-full w-full"
+      data-stage-art="nightly"
+      className="h-full w-full"
       fill="none"
       preserveAspectRatio="xMinYMin slice"
       viewBox={compact ? "96 0 8192 96" : STAGE_BACKDROP_VIEW_BOX}
@@ -230,7 +288,8 @@ function DevBlueprintArt({ compact = false }: { compact?: boolean }) {
 
   return (
     <svg
-      className="stage-art stage-blueprint h-full w-full"
+      data-stage-art="blueprint"
+      className="h-full w-full"
       fill="none"
       preserveAspectRatio="xMinYMin slice"
       viewBox={compact ? "64 0 8192 96" : STAGE_BACKDROP_VIEW_BOX}

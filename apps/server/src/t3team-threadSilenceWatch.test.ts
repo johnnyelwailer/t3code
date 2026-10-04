@@ -98,6 +98,16 @@ describe("collectPendingThreadSilenceWatches", () => {
       },
     }) as unknown as OrchestrationEvent;
 
+  const settled = (threadId: string): OrchestrationEvent =>
+    ({
+      type: "thread.settled",
+      payload: {
+        threadId,
+        settledAt: "2026-08-23T12:00:00.000Z",
+        updatedAt: "2026-08-23T12:00:00.000Z",
+      },
+    }) as unknown as OrchestrationEvent;
+
   it("keeps registered watches and drops cancelled ones", () => {
     const events = [registered("w", "t1", "a"), registered("w", "t2", "b"), cancelled("w", "t1")];
     const pending = collectPendingThreadSilenceWatches(events);
@@ -133,6 +143,17 @@ describe("collectPendingThreadSilenceWatches", () => {
     expect(pending.find((record) => record.watchId === "b")?.timeoutMs).toBe(
       THREAD_SILENCE_DEFAULT_TIMEOUT_MS,
     );
+  });
+
+  it("a settled thread drops its pending watches on both sides (target and watcher)", () => {
+    const events = [
+      registered("w1", "t", "a"), // w1 watches t
+      registered("w1", "other", "b"), // w1 also watches other
+      registered("w2", "t", "c"), // w2 watches t
+      settled("t"),
+    ];
+    const pending = collectPendingThreadSilenceWatches(events);
+    expect(pending.map((record) => record.watchId)).toEqual(["b"]);
   });
   describe("parseThreadSilenceWatchEvent", () => {
     it("parses a registered watch event into a record", () => {

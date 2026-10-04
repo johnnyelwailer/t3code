@@ -7,7 +7,7 @@ import type {
 import { buildT3TeamActionRecipeLaunchContext } from "~/t3team/t3team-actionRecipeLaunchContext";
 import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
 
-const PINNED_T3TEAM_META_QUICK_START_IDS = new Set(["create-contextual-recipe", "create-recipe"]);
+const PINNED_T3TEAM_META_QUICK_START_IDS = new Set(["manage-project-recipes"]);
 
 export function buildPinnedQuickStartSelection<
   T extends { readonly recipe: { readonly id: string } },

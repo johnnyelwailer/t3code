@@ -123,7 +123,6 @@ describe("buildProjectContextBundle", () => {
             id: "thread-1",
             projectId: "Project Alpha",
             title: "Kickoff",
-            messageCount: 2,
             lastMessageAt: "2026-05-18T13:00:00.000Z",
             createdAt: "2026-05-18T12:30:00.000Z",
             status: "idle",

@@ -91,8 +91,9 @@ type HandoffStartedRow = {
  * The previous shape issued two statements per requested thread, one of them an
  * unindexed scan of `projection_thread_activities`. With ~170 candidate ids per
  * request and ~86k activities that took 11–13 s of synchronous SQLite on the
- * event loop, which starved the desktop readiness probe. This runs three
- * set-based statements per chunk and reduces in memory.
+ * event loop, which starved the desktop readiness probe. This runs four
+ * set-based statements per chunk — every one of them SQL-bound to the requested
+ * ids — and reduces in memory.
  */
 export function loadT3TeamThreadPlacements(
   threadIds: ReadonlyArray<string>,
@@ -141,29 +142,35 @@ export function loadT3TeamThreadPlacements(
           createdByThread.set(row.threadId, row);
         }
       }
-    }
 
-    // `handoff.started` is keyed by the parent, so filter on the child id in
-    // memory. The kind index keeps this to the handful of handoff rows.
-    const startedRows = yield* sql<HandoffStartedRow>`
-      SELECT
-        thread_id AS "threadId",
-        json_extract(payload_json, '$.childThreadId') AS "childThreadId"
-      FROM projection_thread_activities
-      WHERE kind = 't3team.handoff.started'
-        AND json_type(payload_json, '$.childThreadId') = 'text'
-      ORDER BY created_at DESC, activity_id DESC
-    `;
-    for (const row of startedRows) {
-      // Exact-string match, no trim: same semantics as the former
-      // `json_extract(...) = ${threadId}` comparison.
-      const childThreadId = row.childThreadId;
-      if (
-        typeof childThreadId === "string" &&
-        requested.has(childThreadId) &&
-        !startedParentByChild.has(childThreadId)
-      ) {
-        startedParentByChild.set(childThreadId, row.threadId);
+      // `handoff.started` is keyed by the parent, so the requested CHILD ids
+      // are matched inside SQL against the extracted payload value instead of
+      // filtering in memory after a kind-wide scan (GHE #382): the kind index
+      // narrows the scan to handoff rows, and the IN list keeps the result to
+      // this chunk's children only. `json_extract` is type-aware, so a
+      // numeric or missing `childThreadId` can never match a text id. The
+      // placeholder list is built manually (one `?` per requested id) because
+      // `sql.in` only accepts plain column identifiers, not expressions.
+      const startedParts = [
+        "SELECT\n          thread_id AS \"threadId\",\n          json_extract(payload_json, '$.childThreadId') AS \"childThreadId\"\n        FROM projection_thread_activities\n        WHERE kind = 't3team.handoff.started'\n          AND json_extract(payload_json, '$.childThreadId') IN (",
+        ...Array.from({ length: chunk.length - 1 }, () => ","),
+        ")\n        ORDER BY created_at DESC, activity_id DESC",
+      ];
+      const startedRows = yield* sql<HandoffStartedRow>(
+        Object.assign(startedParts, { raw: startedParts }) as unknown as TemplateStringsArray,
+        ...chunk,
+      );
+      for (const row of startedRows) {
+        // Exact-string match, no trim: same semantics as the former
+        // `json_extract(...) = ${threadId}` comparison.
+        const childThreadId = row.childThreadId;
+        if (
+          typeof childThreadId === "string" &&
+          requested.has(childThreadId) &&
+          !startedParentByChild.has(childThreadId)
+        ) {
+          startedParentByChild.set(childThreadId, row.threadId);
+        }
       }
     }
 

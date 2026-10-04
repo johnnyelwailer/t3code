@@ -68,6 +68,7 @@ function makeStubRepository(rows: ReadonlyArray<WorkflowRun>): WorkflowRunReposi
     markFailedRetainingPending: notImplemented("markFailedRetainingPending"),
     countLiveByOrigin: notImplemented("countLiveByOrigin"),
     setSleeping: notImplemented("setSleeping"),
+    setWatching: notImplemented("setWatching"),
     updateArgs: notImplemented("updateArgs"),
     setTurnRetries: notImplemented("setTurnRetries"),
   };

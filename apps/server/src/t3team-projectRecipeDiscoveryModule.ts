@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-vars -- Existing merged lint debt; keep green while preserving behavior. */
 /**
  * Recipe-module discovery (Epic 16 §Plugin Modules): load a project-local `recipe.ts` — a typed
  * `defineRecipe(...)` plugin module — and map it onto the SAME {@link ProjectRecipeDiscovered}
@@ -51,7 +50,7 @@ import {
 } from "./t3team-projectRecipeOrigin.ts";
 
 /** A `recipe.ts` module loaded fine but did not default-export a `defineRecipe(...)` result. */
-export class T3TeamRecipeModuleShapeError extends Data.TaggedError("T3TeamRecipeModuleShapeError")<{
+class T3TeamRecipeModuleShapeError extends Data.TaggedError("T3TeamRecipeModuleShapeError")<{
   readonly message: string;
 }> {}
 

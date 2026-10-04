@@ -54,7 +54,46 @@ export function WorkItemDetailHeader({
         <ArrowLeft className="size-4" />
       </Button>
 
-      <WorkItemBreadcrumb {...breadcrumb} className="flex-1" />
+      <WorkItemBreadcrumb
+        {...breadcrumb}
+        className="flex-1"
+        {...(externalUrl
+          ? {
+              /*
+                "Open in Jira" hugs the item key rather than docking to the far right: it acts on
+                this item, so it belongs right after the key. `shell.openExternal` is how the desktop
+                shell leaves the app; the real href keeps middle-click / copy-link / keyboard working
+                and modified clicks are left alone. Without a local API the native target="_blank"
+                is already correct, so the handler steps aside rather than swallowing the click.
+              */
+              trailing: (
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  render={
+                    <a
+                      href={externalUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(event) => {
+                        if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0)
+                          return;
+                        const shell = readLocalApi()?.shell;
+                        if (!shell) return;
+                        event.preventDefault();
+                        void shell.openExternal(externalUrl);
+                      }}
+                    />
+                  }
+                  aria-label="Open in Jira"
+                  title="Open in Jira"
+                >
+                  <ExternalLink className="size-3.5" />
+                </Button>
+              ),
+            }
+          : {})}
+      />
 
       <div className="flex shrink-0 items-center gap-1.5">
         <Button
@@ -67,42 +106,6 @@ export function WorkItemDetailHeader({
         >
           {isRefreshing ? <Spinner className="size-3.5" /> : <RefreshCw className="size-3.5" />}
         </Button>
-
-        {externalUrl ? (
-          /*
-            `target="_blank"` alone is not enough in the desktop shell, where a bare anchor has no
-            window to open into and the click goes nowhere. `shell.openExternal` is how the rest of
-            the app leaves the application (ThreadTerminalDrawer, GitActionsControl).
-
-            The href stays real so middle-click, copy-link-address and keyboard activation keep
-            working, and modified clicks are left alone. When there is no local API — the plain web
-            build — the browser's own `target="_blank"` is already correct, so the handler steps
-            aside rather than swallowing the click.
-          */
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            render={
-              <a
-                href={externalUrl}
-                target="_blank"
-                rel="noreferrer"
-                onClick={(event) => {
-                  if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0)
-                    return;
-                  const shell = readLocalApi()?.shell;
-                  if (!shell) return;
-                  event.preventDefault();
-                  void shell.openExternal(externalUrl);
-                }}
-              />
-            }
-            aria-label="Open in Jira"
-            title="Open in Jira"
-          >
-            <ExternalLink className="size-3.5" />
-          </Button>
-        ) : null}
 
         {actions}
       </div>

@@ -1,16 +1,16 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
 
-import type { Project, Thread } from "~/types";
+import type { Project, ThreadShell } from "~/types";
 import type { ProjectThread } from "~/t3team/t3team-types";
-import { deriveThreadRunState } from "@t3tools/shared/t3team-threadRunStatus";
+import { deriveThreadAwaitingParent } from "@t3tools/shared/t3team-threadAwaitingParent";
+import {
+  deriveThreadRunState,
+  isTerminalThreadRunState,
+} from "@t3tools/shared/t3team-threadRunStatus";
 import {
   mergeProjectThreadLocalState,
   upsertProjectThreadLocalState,
 } from "~/t3team/t3team-threadToolContext";
-import {
-  indexT3TeamChildParentThreads,
-  readT3TeamThreadPlacementFromActivities,
-} from "~/t3team/hooks/t3team-threadHandoffMetadata";
 import { resolveStoredProjectId } from "./t3team-threadProjectResolution";
 
 export {
@@ -23,24 +23,27 @@ export {
   resolveStoredProjectId,
 } from "./t3team-threadProjectResolution";
 
+/**
+ * A live thread as the t3team store sees it: from its SHELL only, like upstream's sidebar rows.
+ *
+ * Every field here is on the shell. Reading a thread's detail (messages, activities, plans) per
+ * row opened a `subscribeThread` stream for every thread that the idle TTL closed and the next
+ * shell update reopened: 5.6 subscriptions a second on a real install (2026-09-29). Facts that
+ * used to be derived from detail are projected onto the shell by the server instead
+ * (`hasOpenChildWait`, `localSessionInstanceId`); parent/ticket placement comes from the server's
+ * placement route and persists in local state.
+ */
 export function mapLiveThreadToProjectThread(
-  thread: Thread,
+  thread: ThreadShell,
   projectIdOverride: string = thread.projectId,
 ): ProjectThread {
-  const placement = readT3TeamThreadPlacementFromActivities(thread);
-  const providerKind = thread.messages.some((message) => message.id.startsWith("local:codex:"))
-    ? "codex"
-    : thread.messages.some((message) => message.id.startsWith("local:claudeAgent:"))
-      ? "claudeAgent"
-      : undefined;
-
   return {
     id: thread.id,
     projectId: projectIdOverride,
-    ...placement,
     title: thread.title,
-    ...(providerKind ? { providerKind } : {}),
-    messageCount: thread.messages.length,
+    ...(thread.localSessionInstanceId !== undefined
+      ? { providerKind: thread.localSessionInstanceId }
+      : {}),
     lastMessageAt: thread.latestTurn?.completedAt ?? thread.updatedAt ?? thread.createdAt,
     createdAt: thread.createdAt,
     // GHE #52 (active-children live-sync follow-up to GHE #234): the running
@@ -74,7 +77,10 @@ export function mapLiveThreadToProjectThread(
               }) === "running"
             ? "running"
             : "idle",
-    ...(thread.retention !== undefined ? { retention: thread.retention } : {}),
+    // GHE #304 follow-up: the REAL settle state (thread.settled event fired).
+    // The sub-run rosters' "Settled (N)" fold must key off this, never off
+    // `status !== "running"` — a fresh terminal child is not settled.
+    settled: thread.settledOverride === "settled",
     // A clock-parked routine (Epic 27): carry the server-computed wake instant so the sidebar
     // pill reads "Sleeping until <time>". Absent when no run on this thread is sleeping.
     ...(thread.sleepingUntil !== undefined ? { sleepingUntil: thread.sleepingUntil } : {}),
@@ -97,6 +103,31 @@ export function mapLiveThreadToProjectThread(
     ...(thread.activityStateUpdatedAt !== undefined
       ? { activityStateUpdatedAt: thread.activityStateUpdatedAt }
       : {}),
+    // A question docked in this thread's composer (shell live state). Drives
+    // the parent-side pending-question indicator; cleared by the next sync
+    // when the shell flag is false.
+    ...(thread.hasPendingUserInput !== undefined
+      ? { pendingUserInput: thread.hasPendingUserInput }
+      : {}),
+    // A plan-mode thread that presented its plan and stopped (shell live
+    // state, same pure predicate as the server's children tool). Drives the
+    // parent-side "Plan awaiting approval" indicator; cleared by the next
+    // sync once the plan is implemented or the mode leaves plan.
+    ...(deriveThreadAwaitingParent({
+      interactionMode: thread.interactionMode,
+      latestTurn: thread.latestTurn,
+      hasActionableProposedPlan: thread.hasActionableProposedPlan,
+    })
+      ? { awaitingParent: true }
+      : {}),
+    // The DECLARED waiting fact: this thread registered a `t3team_children`
+    // wait (`op: wait`) that is still pending — projected onto the shell from
+    // its durable activities (open registered/resolved pair, same predicate as
+    // the server's status op). Distinct from the DERIVED `waitingOnChildren`
+    // (children are still live): declared is the stronger, intentional
+    // "blocked on a child's result" state and outranks it for the label
+    // ("Waiting" vs "Monitoring"). Absence clears on the next sync.
+    ...(thread.hasOpenChildWait === true ? { waitingDeclared: true } : {}),
   };
 }
 
@@ -110,29 +141,66 @@ export function mergeProjectThreads(threads: ReadonlyArray<ProjectThread>): Proj
   return [...byId.values()];
 }
 
+/**
+ * A live t3team child that keeps its parent reading "Waiting": not archived,
+ * not settled, and its run state is not terminal (completed/failed/aborted)
+ * — the SAME terminal predicate the server's children tool uses, so both
+ * surfaces agree on what "live" means.
+ */
+function isLiveT3TeamChild(thread: ThreadShell): boolean {
+  if (thread.archivedAt) return false;
+  if (thread.settledOverride === "settled") return false;
+  return !isTerminalThreadRunState(
+    deriveThreadRunState({
+      session: thread.session,
+      latestTurn: thread.latestTurn,
+      ...(thread.backgroundLiveness !== undefined
+        ? { backgroundLiveness: thread.backgroundLiveness }
+        : {}),
+    }),
+  );
+}
+
 export function syncLiveThreadMetadataToLocalState(input: {
   threads: ReadonlyArray<ProjectThread>;
   storedProjects: ReadonlyArray<ProjectShellProject>;
   liveProjects: ReadonlyArray<Project>;
-  liveThreads: ReadonlyArray<Thread>;
+  liveThreads: ReadonlyArray<ThreadShell>;
 }): ProjectThread[] {
   let nextThreads = input.threads as ProjectThread[];
-  const parentByChildId = indexT3TeamChildParentThreads(input.liveThreads);
+  const parentByChildId = new Map(
+    input.threads.flatMap((thread) =>
+      thread.parentThreadId ? [[thread.id, thread.parentThreadId] as const] : [],
+    ),
+  );
 
+  // Pass 1: map every live thread AND collect the parents that have a live
+  // t3team child. The relation comes only from the durable handoff placement
+  // (server placement route, persisted in local state) — legacy `parent:N`
+  // sub-runs never carry a parentThreadId here, so they can never trigger the
+  // waiting indicator.
+  const liveChildParentIds = new Set<string>();
+  const shadows: ProjectThread[] = [];
   for (const liveThread of input.liveThreads) {
     const mappedThread = mapLiveThreadToProjectThread(
       liveThread,
       resolveStoredProjectId(liveThread.projectId, input.storedProjects, input.liveProjects),
     );
-    const inferredParentThreadId = parentByChildId.get(liveThread.id);
-    const shadowThread = {
-      ...mappedThread,
-      ...(!mappedThread.parentThreadId && inferredParentThreadId
-        ? { parentThreadId: inferredParentThreadId }
-        : {}),
-    };
+    shadows.push(mappedThread);
+    const parentId = parentByChildId.get(liveThread.id);
+    if (parentId !== undefined && isLiveT3TeamChild(liveThread)) {
+      liveChildParentIds.add(parentId);
+    }
+  }
 
-    nextThreads = upsertProjectThreadLocalState(nextThreads, shadowThread);
+  // Pass 2: upsert with the waiting fact attached, so a parent's flag reflects
+  // children that appear later in the live list. Explicit false clears the
+  // flag on the next sync (the merge replaces live-derived fields).
+  for (const shadowThread of shadows) {
+    nextThreads = upsertProjectThreadLocalState(nextThreads, {
+      ...shadowThread,
+      waitingOnChildren: liveChildParentIds.has(shadowThread.id),
+    });
   }
 
   return nextThreads;

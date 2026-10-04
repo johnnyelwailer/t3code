@@ -32,12 +32,12 @@ export function ExternalSessionReadOnlyOverlay({
 
   return (
     <div
-      className="pointer-events-auto absolute inset-0 z-30 flex items-center justify-center rounded-[22px] bg-background/90 p-3 backdrop-blur-sm"
+      className="pointer-events-auto absolute inset-0 z-30 flex items-center justify-center rounded-3xl bg-background/90 p-3 backdrop-blur-sm"
       data-external-session-read-only="true"
       aria-live="polite"
     >
-      <div className="flex max-w-lg items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-foreground shadow-sm">
-        <LockIcon className="mt-0.5 size-4 shrink-0 text-amber-500" />
+      <div className="flex max-w-lg items-start gap-2 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-foreground shadow-sm">
+        <LockIcon className="mt-0.5 size-4 shrink-0 text-warning" />
         <div className="space-y-2">
           <div className="font-medium">External {provider} session is active</div>
           <div className="text-muted-foreground">

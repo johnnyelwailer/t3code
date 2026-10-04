@@ -2,14 +2,11 @@
 import { ChevronRightIcon, EllipsisIcon, SquarePenIcon } from "lucide-react";
 import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay";
 import type { KeyboardEvent, MouseEvent, RefObject } from "react";
-import { SidebarMenuButton } from "~/t3team/components/ui/t3team-sidebar";
+import { T3SidebarRow } from "~/t3team/components/ui/t3team-sidebar-row";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
 import { ProjectIcon } from "./t3team-ProjectIcon";
 import type { ProjectRowProps } from "./t3team-projectSidebarProjectRowTypes";
-import {
-  getSidebarStandaloneButtonClassName,
-  type SidebarItemState,
-} from "./t3team-projectSidebarItemState";
+import type { SidebarItemState } from "./t3team-projectSidebarItemState";
 
 type ProjectStatus = {
   label: string;
@@ -59,11 +56,11 @@ export function ProjectSidebarProjectHeader({
 }: ProjectSidebarProjectHeaderProps) {
   return (
     <div className="group/project-header relative mb-1">
-      <SidebarMenuButton
-        size="sm"
-        className={`gap-2 px-2 py-1.5 pr-8 text-left group-hover/project-header:bg-accent group-hover/project-header:text-foreground group-focus-within/project-header:bg-accent group-focus-within/project-header:text-foreground max-sm:pr-14 cursor-pointer ${getSidebarStandaloneButtonClassName(
-          state,
-        )}`}
+      <T3SidebarRow
+        hoverGroup="project-header"
+        isActive={state.isSelected}
+        // Keeps the title clear of the actions overlaid on the row's end.
+        className="pr-8 max-sm:pr-14"
         onClick={onProjectClick}
         onContextMenu={onContextMenu}
       >
@@ -115,7 +112,7 @@ export function ProjectSidebarProjectHeader({
             <span className="truncate text-xs font-medium text-foreground/90">{project.title}</span>
           )}
         </span>
-      </SidebarMenuButton>
+      </T3SidebarRow>
 
       <div className="pointer-events-none absolute top-1 right-1.5 flex items-center gap-1 opacity-0 transition-opacity duration-150 group-hover/project-header:pointer-events-auto group-hover/project-header:opacity-100 group-focus-within/project-header:pointer-events-auto group-focus-within/project-header:opacity-100">
         <Tooltip>

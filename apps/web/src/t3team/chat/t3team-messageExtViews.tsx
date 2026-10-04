@@ -1,4 +1,4 @@
-/* oxlint-disable react/no-array-index-key -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable react/no-array-index-key --Existing merged lint debt; keep green while preserving behavior. */
 import { useState } from "react";
 import { CheckCircle2Icon, LoaderCircleIcon } from "lucide-react";
 import {
@@ -82,7 +82,7 @@ function renderWorkflowCardFields(workflowCard: ProjectRecipeWorkflowCardActivit
               className="flex items-center gap-2 text-sm text-muted-foreground"
             >
               {checked ? (
-                <CheckCircle2Icon className="size-4 text-emerald-600" />
+                <CheckCircle2Icon className="size-4 text-success-foreground" />
               ) : (
                 <div className="size-4 rounded-full border border-border/70" />
               )}

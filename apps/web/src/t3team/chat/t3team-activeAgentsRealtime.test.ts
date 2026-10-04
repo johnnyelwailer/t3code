@@ -16,9 +16,8 @@
  * alive only through native background liveness — mapped to status "idle" and
  * never lit a dot, no matter how fresh the shell events were.
  */
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
-import { Atom } from "effect/unstable/reactivity";
 import type {
   OrchestrationShellSnapshot,
   OrchestrationShellStreamEvent,
@@ -30,61 +29,19 @@ import { createRoot } from "react-dom/client";
 
 import { mergeActiveAgentsAndChildren } from "~/t3team/chat/t3team-activeAgentsCore";
 import { buildChildThreadRelations } from "~/t3team/hooks/t3team-childThreadRelationsCore";
-import {
-  mapLiveThreadToProjectThread,
-  syncLiveThreadMetadataToLocalState,
-} from "~/t3team/hooks/t3team-threadBridge";
-import { useMergedThreads } from "~/t3team/t3team-mergedThreads";
+import { syncLiveThreadMetadataToLocalState } from "~/t3team/hooks/t3team-threadBridge";
+import { makeProjectThread } from "~/t3team/hooks/t3team-threadBridge.testSupport";
+import { useThreadShells } from "~/state/entities";
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 const entitiesHarness = vi.hoisted(() => ({
-  refs: [] as Array<{ environmentId: string; threadId: string }>,
   shells: [] as unknown[],
 }));
 
 vi.mock("~/state/entities", () => ({
-  useThreadRefs: () => entitiesHarness.refs,
   useThreadShells: () => entitiesHarness.shells,
 }));
-
-// Detail atoms: the PARENT carries its detail (with the durable
-// `t3team.handoff.started` activity that records the child/parent relation);
-// the CHILD's detail stream is never subscribed (the child is never opened) —
-// exactly the case this regression pins: its state must come from the live
-// shell list alone.
-vi.mock("~/state/threads", () => {
-  const parentDetail = {
-    id: "thread-parent",
-    projectId: "project-test",
-    title: "Parent orchestration",
-    deletedAt: null,
-    messages: [],
-    proposedPlans: [],
-    activities: [
-      {
-        id: "activity-handoff",
-        tone: "info",
-        kind: "t3team.handoff.started",
-        summary: "Started child",
-        payload: { childThreadId: "thread-child" },
-        turnId: null,
-        createdAt: "2026-01-01T00:00:00.000Z",
-      },
-    ],
-  };
-  return {
-    environmentThreadShells: {
-      threadShellAtom: () => null,
-    },
-    environmentThreadDetails: {
-      detailAtom: (ref: { threadId: string }) =>
-        Atom.make(() => (ref.threadId === "thread-parent" ? parentDetail : null)),
-    },
-  };
-});
-
-import { resetAppAtomRegistryForTests } from "~/rpc/atomRegistry";
 
 // ---------------------------------------------------------------------------
 
@@ -138,6 +95,15 @@ const EMPTY_PANEL_MODEL = {
   liveCount: 0,
 } as never;
 
+const LOCAL_THREADS = [
+  makeProjectThread({ id: "thread-parent", projectId: "project-test" }),
+  makeProjectThread({
+    id: "thread-child",
+    projectId: "project-test",
+    parentThreadId: "thread-parent",
+  }),
+];
+
 interface IndicatorProbe {
   readonly entries: () => ReturnType<typeof mergeActiveAgentsAndChildren>;
   readonly push: (event: OrchestrationShellStreamEvent) => void;
@@ -165,15 +131,16 @@ function mountIndicatorProbe(initial: OrchestrationShellSnapshot): IndicatorProb
       );
     };
     entitiesHarness.shells = snapshot.threads as never[];
-    const merged = useMergedThreads();
+    const liveThreads = useThreadShells();
 
     // The project-store sync step: live shells → local ProjectThreads (status
-    // mapping + durable parent/child relation inference).
+    // mapping). The parent/child relation is the durable placement already in
+    // local state (hydrated from the server placement route), never a shell field.
     const projectThreads = syncLiveThreadMetadataToLocalState({
-      threads: [],
+      threads: LOCAL_THREADS,
       storedProjects: [],
       liveProjects: [],
-      liveThreads: merged,
+      liveThreads,
     });
     const relations = buildChildThreadRelations(projectThreads);
     const childThreads = relations.childThreadsByParentId.get("thread-parent") ?? [];
@@ -198,14 +165,6 @@ function mountIndicatorProbe(initial: OrchestrationShellSnapshot): IndicatorProb
 // ---------------------------------------------------------------------------
 
 describe("active-children indicator live sync (GHE #52)", () => {
-  beforeEach(() => {
-    resetAppAtomRegistryForTests();
-    entitiesHarness.refs = [
-      { environmentId: "env-test", threadId: "thread-parent" },
-      { environmentId: "env-test", threadId: "thread-child" },
-    ];
-  });
-
   it("lights the child dot when the turn goes in-flight and clears it when it settles — without opening the child", () => {
     const probe = mountIndicatorProbe(initialSnapshot);
     try {

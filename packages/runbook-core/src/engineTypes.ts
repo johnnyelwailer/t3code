@@ -29,6 +29,15 @@ export interface WorkflowRunOptionsBase {
    * throws {@link import("./errors.ts").WorkflowAborted} and the run settles as aborted.
    */
   readonly abortSignal?: AbortSignal;
+  /**
+   * Resume only: the correlationId of ONE recorded, unanswered ask to send again on this replay —
+   * same seq, same correlationId, byte-identical payload, nothing journaled until the reply lands,
+   * and the fire carries `redelivery: true`. For a host whose ask failed out of band (the model
+   * step died): re-sending it costs the body nothing, where faking a reply would burn a schema
+   * attempt. The run fails if the replay completes or parks without reaching the target, and
+   * `startWorkflow` refuses it (a fresh run has nothing recorded to re-send).
+   */
+  readonly refire?: string;
 }
 
 export type WorkflowVersionPolicy = "strict" | "allow-change";

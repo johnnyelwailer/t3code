@@ -36,7 +36,7 @@ export function T3TeamErrorTechnicalDisclosure({
         onClick={() => setOpen((current) => !current)}
         className={
           compact
-            ? "inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+            ? "inline-flex items-center gap-1 text-2xs text-muted-foreground hover:text-foreground"
             : "inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         }
       >
@@ -50,7 +50,7 @@ export function T3TeamErrorTechnicalDisclosure({
 
       {open ? (
         <div className="mt-1.5 space-y-1.5">
-          <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-md border border-border/60 bg-muted/30 p-2 font-mono text-[11px] leading-4 text-muted-foreground">
+          <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-md border border-border/60 bg-muted/30 p-2 font-mono text-2xs leading-4 text-muted-foreground">
             {technical}
           </pre>
           <Button

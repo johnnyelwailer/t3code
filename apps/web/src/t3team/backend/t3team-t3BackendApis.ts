@@ -5,6 +5,7 @@ import type {
 import type {
   GitHubBackendApi,
   GitHubInboxDiscoverResponse,
+  ProjectMainRepositorySwitchResult,
   ProjectWorkspaceContextFile,
   ProjectWorkspaceBackendApi,
   ProjectWorkspaceBootstrapResult,
@@ -63,6 +64,13 @@ export function createProjectWorkspaceBackendApi(httpBaseUrl: string): ProjectWo
       return postJson<typeof input, ProjectWorkspaceBootstrapResult>(
         httpBaseUrl,
         "/api/t3team/project/workspace/bootstrap",
+        input,
+      );
+    },
+    setMainRepository(input) {
+      return postJson<typeof input, ProjectMainRepositorySwitchResult>(
+        httpBaseUrl,
+        "/api/t3team/project/main-repository",
         input,
       );
     },

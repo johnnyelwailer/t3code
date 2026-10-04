@@ -18,6 +18,8 @@ import { ChevronRightIcon } from "lucide-react";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { useProjectMyWork } from "~/t3team/hooks/t3team-useProjectMyWork";
+import { humanizeT3TeamBackendError } from "~/t3team/t3team-humanizeBackendError";
+import { JiraSessionExpiredPanel } from "~/t3team/components/t3team-JiraSessionExpiredPanel";
 import { AppProjectIcon } from "~/t3team/t3team-AppStatusBits";
 import { TicketWorkItemRow } from "~/t3team/t3team-ProjectDashboardItemViews";
 
@@ -28,7 +30,8 @@ export function AllProjectsMyWorkSection({
   project: ProjectShellProject;
   onOpenTicket: (projectId: string, ticketId: string) => void;
 }) {
-  const { tickets, loading, error, lastCheckedAt } = useProjectMyWork(project);
+  const { tickets, loading, error, sessionExpired, reload, lastCheckedAt } =
+    useProjectMyWork(project);
   const assigned = useMemo(() => tickets ?? [], [tickets]);
   const navigate = useNavigate();
 
@@ -62,8 +65,13 @@ export function AllProjectsMyWorkSection({
           <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/section-head:opacity-100" />
         </button>
       </header>
-      {error ? (
-        <p className="text-destructive text-xs">{error}</p>
+      {sessionExpired ? (
+        <JiraSessionExpiredPanel onSignedIn={reload} />
+      ) : error ? (
+        <p className="text-destructive text-xs">
+          {humanizeT3TeamBackendError(error).title}
+          <span className="sr-only"> {error}</span>
+        </p>
       ) : (
         <div className="flex min-w-0 flex-col">
           {assigned.map((ticket) => (

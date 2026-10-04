@@ -8,8 +8,6 @@ import type {
   T3TeamSidecarRecipeQuickStart,
 } from "~/t3team/t3team-sidecarRecipes";
 
-export const T3TEAM_RECIPE_AUTHORING_RECIPE_ID = "create-contextual-recipe";
-
 export type T3TeamRecipeLaunchSelection = {
   readonly name: string;
   readonly label: string;

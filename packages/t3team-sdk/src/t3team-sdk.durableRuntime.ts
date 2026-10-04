@@ -6,7 +6,7 @@
 
 import { createDurableRuntime, type DurablePrimitiveRuntime } from "@runbook/core/durableRuntime";
 import type { WorkflowEventSink } from "@runbook/core/events";
-import type { SuspensionLatch } from "@runbook/core/handles";
+import type { RefireTarget, SuspensionLatch } from "@runbook/core/handles";
 import type { JournalEntry, ResolvedEntry } from "./t3team-sdk.journalReader.ts";
 import type { JournalSink } from "./t3team-sdk.journalStore.ts";
 import { createToolScriptCalls } from "./t3team-sdk.toolScriptCalls.ts";
@@ -20,6 +20,11 @@ export interface DurableRuntimeConfig {
   readonly scriptCtx: T.ScriptHandlerCtx;
   readonly scriptNames: ReadonlyMap<T.AnyScriptRef, string>;
   readonly filePath?: string;
+  /**
+   * Resume the seq counter from a checkpoint boundary (bounded execution). The run boundary seeds
+   * it from the replay window's active boundary; a fresh start omits it (counter starts at 0).
+   */
+  readonly initialSeq?: number;
   readonly nowIso: () => string;
   readonly runId?: string;
   readonly resolved?: ReadonlyMap<string, ResolvedEntry>;
@@ -32,6 +37,8 @@ export interface DurableRuntimeConfig {
   /** The run's suspension latch, shared with the run boundary so a body that CATCHES the
    * suspension signal still cannot complete the run. Absent = this runtime owns a private one. */
   readonly suspension?: SuspensionLatch;
+  /** The run boundary's one-shot re-fire target, when the host resumed with `refire`. */
+  readonly refire?: RefireTarget;
 }
 
 export type DurableWorkflowRuntime = Omit<DurablePrimitiveRuntime, "callPrimitive"> &
@@ -47,11 +54,13 @@ export function createDurableWorkflowRuntime(config: DurableRuntimeConfig): Dura
     source: hostSource(),
     nowIso: config.nowIso,
     ...(config.filePath === undefined ? {} : { filePath: config.filePath }),
+    ...(config.initialSeq === undefined ? {} : { initialSeq: config.initialSeq }),
     ...(config.runId === undefined ? {} : { runId: config.runId }),
     ...(config.resolved === undefined ? {} : { resolved: config.resolved }),
     ...(config.events === undefined ? {} : { events: config.events }),
     ...(config.abortSignal === undefined ? {} : { abortSignal: config.abortSignal }),
     ...(config.suspension === undefined ? {} : { suspension: config.suspension }),
+    ...(config.refire === undefined ? {} : { refire: config.refire }),
   });
 
   let toolScript!: ReturnType<typeof createToolScriptCalls>;

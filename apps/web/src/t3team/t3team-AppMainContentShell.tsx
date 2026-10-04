@@ -131,7 +131,6 @@ function ProjectBrowserEmpty({
 export function ProjectBrowserEmptyWithChat({
   onCreate,
   project,
-  projectThreads,
   providers,
   isConnected,
   onOpenThread,
@@ -144,7 +143,6 @@ export function ProjectBrowserEmptyWithChat({
 }: {
   onCreate: () => void;
   project: ProjectShellProject | null;
-  projectThreads: ProjectThread[];
   providers: ReadonlyArray<import("@t3tools/contracts").ServerProvider>;
   isConnected: boolean;
   onOpenThread: (threadId: string) => void;
@@ -188,7 +186,6 @@ export function ProjectBrowserEmptyWithChat({
           <ProjectDashboardKickoffAside
             project={project}
             dashboardMode="backlog"
-            projectThreads={projectThreads}
             activeThread={null}
             providers={providers}
             isConnected={isConnected}

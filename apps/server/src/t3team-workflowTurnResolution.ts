@@ -20,11 +20,13 @@
  *     completed assistant message — otherwise the `session.started` → `ready` write that lands
  *     right after the workflow dispatched its turn would resolve the ask before the agent spoke;
  *   • a dead session (`error` / `stopped`) always ends the wait: it can no longer answer, and
- *     parking the run forever would hide that. An `error` write that ends the wait settles the
- *     ask as {@link WorkflowTurnSettlement} `"failed"` carrying the session's `lastError` — the
- *     turn did not answer, it died — so the reactor can re-drive the step and, when the budget is
- *     spent, fail the run with the PROVIDER's reason (GHE #403: a gateway outage that exhausted
- *     the driver's retry ladder used to leave the run parked with nothing to say).
+ *     parking the run forever would hide that. Any DEAD-STATE write that ends the wait — `error`
+ *     (a gateway outage, an exhausted provider retry budget), `stopped` (the session exited
+ *     mid-turn), or `interrupted` (the turn was aborted — a host watchdog, a provider abort —
+ *     before it completed) — settles the ask as `"failed"` carrying the session's `lastError`
+ *     when it has one: the turn did not answer, it died, and its pre-death text was preamble.
+ *     The reactor re-drives the step and, when the budget is spent, fails the run with the
+ *     PROVIDER's reason instead of a loop that silently continues (GHE #403 / GHE #297).
  *
  * ── Which message is the answer ─────────────────────────────────────────────
  * The LAST substantive message of the turn, not the concatenation. A turn's messages are a
@@ -38,7 +40,12 @@
 /** How long after the turn-end signal the answer is taken. */
 export const WORKFLOW_TURN_SETTLE_MS = 250;
 
-/** Session statuses that end the wait even if no turn was ever seen running. */
+/**
+ * Session statuses that end the wait even if no turn was ever seen running. `interrupted` is
+ * deliberately NOT here: an interrupted session is still ALIVE and can take a new turn, so a
+ * stray `interrupted` write for a turn the watch never saw running must not end the wait —
+ * only the dead sessions do.
+ */
 const DEAD_SESSION_STATUS: ReadonlySet<string> = new Set(["error", "stopped"]);
 
 export type WorkflowTurnSessionNote = "running" | "ended" | "settling" | "pending";
@@ -48,11 +55,12 @@ export type WorkflowTurnSettlement =
   /** The turn ended without a single substantive assistant message. */
   | { readonly kind: "empty" }
   /**
-   * The turn ended because the provider session DIED (`status: "error"` — a gateway outage, a
-   * timeout, an exhausted provider retry budget). Whatever the agent streamed before that was
-   * preamble, never the answer: taking it would hand the body a truncated result and report the
-   * step as done. `error` is the session's `lastError`, so the run's failure reason names the
-   * actual provider fault instead of a generic "no reply text".
+   * The turn ended WITHOUT completing — the write that ended the wait was in a dead state
+   * (`error` / `stopped` / `interrupted`; see {@link TURN_FAILURE_REASONS}). Whatever the agent
+   * streamed before that was preamble, never the answer: taking it would hand the body a
+   * truncated result and report the step as done. `error` is the session's `lastError` (or the
+   * status reason), so the run's failure reason names the actual provider fault instead of a
+   * generic "no reply text".
    */
   | { readonly kind: "failed"; readonly error: string }
   /** The watch belongs to a different (or already settled) ask — do nothing. */
@@ -60,6 +68,18 @@ export type WorkflowTurnSettlement =
 
 /** The reason recorded when an `error` session write carries no `lastError` of its own. */
 export const UNKNOWN_TURN_FAILURE = "The provider session reported an error.";
+
+/**
+ * The fallback failure reason per dead-state session status, used when the write carries no
+ * `lastError` of its own (`stopped` / `interrupted` writes never do). A turn that ended on any
+ * of these statuses did NOT complete — its streamed text was preamble, so the ask fails (and
+ * re-drives) instead of settling with a truncated answer.
+ */
+const TURN_FAILURE_REASONS: ReadonlyMap<string, string> = new Map([
+  ["error", UNKNOWN_TURN_FAILURE],
+  ["stopped", "The provider session ended before the turn completed."],
+  ["interrupted", "The agent turn was interrupted before it completed."],
+]);
 
 export interface WorkflowTurnSessionInput {
   readonly status: string;
@@ -108,7 +128,7 @@ interface TurnWatch {
   readonly deltas: Map<string, string>;
   /** Finalized substantive assistant texts of this turn, in arrival order. */
   readonly candidates: string[];
-  /** Set when an `error` session write is what ended the wait — the turn failed. */
+  /** Set when a dead-state (`error`/`stopped`/`interrupted`) session write is what ended the wait. */
   failure: string | undefined;
 }
 
@@ -168,10 +188,12 @@ export function createWorkflowTurnTracker(): WorkflowTurnTracker {
       if (!endsTheWait) return "pending";
       if (watch.ended) return "settling";
       watch.ended = true;
-      // Only the write that ENDS the wait can mark the turn failed: a later `error` on an already
-      // ended watch (a session dying after it answered) must not retroactively discard the answer.
-      if (session.status === "error") {
-        watch.failure = session.lastError?.trim() || UNKNOWN_TURN_FAILURE;
+      // Only the write that ENDS the wait can mark the turn failed: a later dead-state write on
+      // an already ended watch (a session dying after it answered) must not retroactively
+      // discard the answer.
+      const failureReason = TURN_FAILURE_REASONS.get(session.status);
+      if (failureReason !== undefined) {
+        watch.failure = session.lastError?.trim() || failureReason;
       }
       return "ended";
     },

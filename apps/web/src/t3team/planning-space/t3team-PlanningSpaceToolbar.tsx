@@ -1,4 +1,4 @@
-/* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
+/* oxlint-disable t3code/no-native-title-tooltip --Existing merged lint debt; keep green while preserving behavior. */
 /**
  * The planning-space toolbar: grouping switch, assign/spotlight hint, filter
  * toggle + counts, and the collapsible filter bar (text search, planning-state
@@ -24,15 +24,15 @@ export function PlanningSpaceToolbar({ c }: { c: PlanningSpaceController }) {
               onClick={() => c.setGrouping(option.value)}
               className={
                 option.value === c.grouping
-                  ? "rounded px-2.5 py-1 text-[11px] font-medium bg-accent text-foreground"
-                  : "rounded px-2.5 py-1 text-[11px] text-muted-foreground hover:text-foreground"
+                  ? "rounded px-2.5 py-1 text-2xs font-medium bg-accent text-foreground"
+                  : "rounded px-2.5 py-1 text-2xs text-muted-foreground hover:text-foreground"
               }
             >
               {option.label}
             </button>
           ))}
         </div>
-        <span className="text-[11px] text-muted-foreground">
+        <span className="text-2xs text-muted-foreground">
           {c.assignTarget
             ? `Pick an owner for ${c.assignTarget.kind === "story" ? c.assignTarget.storyId : "the subtask"} · Esc cancels`
             : c.spotlight
@@ -44,7 +44,7 @@ export function PlanningSpaceToolbar({ c }: { c: PlanningSpaceController }) {
           aria-label="Toggle filters"
           aria-expanded={c.showFilters}
           onClick={() => c.setShowFilters((value) => !value)}
-          className={`relative ml-auto inline-flex size-7 items-center justify-center rounded-md border text-[12px] ${
+          className={`relative ml-auto inline-flex size-7 items-center justify-center rounded-md border text-xs ${
             c.showFilters || vm.filtersActive
               ? "border-primary/60 text-primary"
               : "border-border/60 text-muted-foreground hover:text-foreground"
@@ -52,12 +52,12 @@ export function PlanningSpaceToolbar({ c }: { c: PlanningSpaceController }) {
         >
           <SlidersHorizontal className="size-3.5" />
           {vm.filtersActive ? (
-            <span className="absolute -right-1 -top-1 flex size-3.5 items-center justify-center rounded-full bg-primary text-[8px] font-medium text-background">
+            <span className="absolute -right-1 -top-1 flex size-3.5 items-center justify-center rounded-full bg-primary text-4xs font-medium text-background">
               {(c.textFilter.trim() ? 1 : 0) + c.stateFilters.size + (c.spotlight ? 1 : 0)}
             </span>
           ) : null}
         </button>
-        <span className="text-[11px] text-muted-foreground">
+        <span className="text-2xs text-muted-foreground">
           {vm.data.stories.filter((s) => s.inSprint).length} in sprint ·{" "}
           {vm.data.stories.filter((s) => s.isContextParent).length} context · {vm.data.epics.length}{" "}
           epics
@@ -70,7 +70,7 @@ export function PlanningSpaceToolbar({ c }: { c: PlanningSpaceController }) {
           value={c.textFilter}
           onChange={(event) => c.setTextFilter(event.target.value)}
           placeholder="Search key or title…"
-          className="h-7 w-48 rounded-md border border-border/70 bg-background px-2 text-[11px] text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-1 focus:ring-primary/50"
+          className="h-7 w-48 rounded-md border border-border/70 bg-background px-2 text-2xs text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-1 focus:ring-primary/50"
           data-testid="planning-space-search"
         />
         {(
@@ -94,7 +94,7 @@ export function PlanningSpaceToolbar({ c }: { c: PlanningSpaceController }) {
                   return next;
                 })
               }
-              className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] ${
+              className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-3xs ${
                 active
                   ? "border-primary/70 text-foreground"
                   : "border-border/60 text-muted-foreground hover:text-foreground"
@@ -121,7 +121,7 @@ export function PlanningSpaceToolbar({ c }: { c: PlanningSpaceController }) {
                 c.machineState.current = { ...c.machineState.current, spotlight: next };
                 c.setSpotlight(next);
               }}
-              className={`inline-flex max-w-36 items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] ${
+              className={`inline-flex max-w-36 items-center gap-1 rounded-md border px-1.5 py-0.5 text-3xs ${
                 active
                   ? "border-primary/70 text-foreground"
                   : "border-border/60 text-muted-foreground hover:text-foreground"
@@ -137,7 +137,7 @@ export function PlanningSpaceToolbar({ c }: { c: PlanningSpaceController }) {
           type="button"
           onClick={() => c.setSolo((value) => !value)}
           title="Focus: collapse filtered-out items away so only matches stay, packed together (off = mute in place)"
-          className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] ${
+          className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-3xs ${
             c.solo
               ? "border-primary/70 text-primary"
               : "border-border/60 text-muted-foreground hover:text-foreground"
@@ -155,7 +155,7 @@ export function PlanningSpaceToolbar({ c }: { c: PlanningSpaceController }) {
               c.machineState.current = { ...c.machineState.current, spotlight: null };
               c.setSpotlight(null);
             }}
-            className="text-[10px] text-muted-foreground underline-offset-2 hover:underline"
+            className="text-3xs text-muted-foreground underline-offset-2 hover:underline"
           >
             Clear ({vm.storyMatches.size} match{vm.storyMatches.size === 1 ? "" : "es"})
           </button>

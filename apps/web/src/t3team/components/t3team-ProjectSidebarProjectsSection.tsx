@@ -89,9 +89,9 @@ export function ProjectSidebarProjectsSection({
     (settings) => settings.t3teamActivityLabelsEnabled,
   );
   return (
-    <SidebarGroup className="px-2 py-2">
+    <SidebarGroup>
       <div className="group/projects-header mb-1 flex items-center justify-between pl-2 pr-1.5">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+        <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground/60">
           Projects
         </span>
         <div className="flex items-center gap-1 opacity-0 transition-opacity duration-150 pointer-events-none group-hover/projects-header:opacity-100 group-hover/projects-header:pointer-events-auto group-focus-within/projects-header:opacity-100 group-focus-within/projects-header:pointer-events-auto">
@@ -139,7 +139,7 @@ export function ProjectSidebarProjectsSection({
             activityLabelsEnabled,
           });
           return (
-            <SidebarMenuItem key={project.id} className="mb-2 rounded-md last:mb-0">
+            <SidebarMenuItem key={project.id} className="mb-2 last:mb-0">
               <ProjectRowWithTickets
                 project={project}
                 projectThreads={projectThreads}

@@ -24,6 +24,31 @@ export function resolveHttpBaseUrl(rawUrl: string): string {
 
 const BACKEND_POST_TIMEOUT_MS = 15_000;
 
+/**
+ * The server dropped the account's dead Jira refresh token and wants a fresh sign-in. The client
+ * turns this into its "Your Jira session expired. Sign in again." state instead of a raw error.
+ */
+export const JIRA_SESSION_EXPIRED_CODE = "jira_session_expired";
+
+/**
+ * A backend response error. `code` carries the server's machine-readable classification when the
+ * response body had one (e.g. `jira_session_expired`), so views can branch on it without parsing
+ * the message.
+ */
+export class BackendApiError extends Error {
+  readonly code?: string | undefined;
+
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = "BackendApiError";
+    this.code = code;
+  }
+}
+
+export function isJiraSessionExpiredError(cause: unknown): boolean {
+  return cause instanceof BackendApiError && cause.code === JIRA_SESSION_EXPIRED_CODE;
+}
+
 function buildBackendFetchErrorMessage(input: { url: URL; error: unknown }): string {
   const reason = input.error instanceof Error ? input.error.message : String(input.error);
   const browserOrigin = globalThis.location?.origin;
@@ -89,14 +114,14 @@ async function requestJson<TResponse>(
     | null;
 
   if (!response.ok) {
+    const errorPayload = (payload ?? null) as { error?: unknown; code?: unknown } | null;
     const errorMessage =
-      payload &&
-      typeof payload === "object" &&
-      "error" in payload &&
-      typeof payload.error === "string"
-        ? payload.error
+      errorPayload && typeof errorPayload.error === "string"
+        ? errorPayload.error
         : `Request to ${url.pathname} failed with ${response.status}`;
-    throw new Error(errorMessage);
+    const code =
+      errorPayload && typeof errorPayload.code === "string" ? errorPayload.code : undefined;
+    throw new BackendApiError(errorMessage, code);
   }
 
   if (!payload) {

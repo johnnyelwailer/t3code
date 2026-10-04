@@ -2,12 +2,13 @@ import * as Effect from "effect/Effect";
 
 import { toPersistenceSqlError } from "./persistence/Errors.ts";
 import {
-  readCachedBacklogIssueRows,
+  readCachedBacklogIssueRowsByIds,
   readCachedBacklogViewRow,
 } from "./t3team-atlassian-backlog-cacheQueries.ts";
 import {
   fingerprintBacklogPayload,
   materializeBacklogPayload,
+  parseJson,
   type T3TeamBacklogCacheIdentity,
   type T3TeamBacklogSelectionInput,
   type T3TeamCachedAtlassianBacklogRecord,
@@ -27,7 +28,12 @@ export const readCachedT3TeamAtlassianBacklog = Effect.fn("t3team.atlassianBackl
         return null;
       }
 
-      const issueRows = yield* readCachedBacklogIssueRows(input);
+      const issueRows = yield* readCachedBacklogIssueRowsByIds({
+        provider: input.provider,
+        accountId: input.accountId,
+        externalProjectId: input.externalProjectId,
+        issueIds: parseJson<ReadonlyArray<string>>(resolvedRow.issueIdsJson) ?? [],
+      });
 
       const response = materializeBacklogPayload({ row: resolvedRow, issueRows });
       if (!response) {

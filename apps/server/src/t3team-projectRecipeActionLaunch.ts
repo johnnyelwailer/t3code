@@ -9,6 +9,7 @@
  * the pre-actions behavior: the launch descriptor's `workflowPath`, i.e. `defaultAction`.
  */
 
+import { toPhysicalProjectStatePath } from "@t3tools/project-context/t3teamProjectStateDir";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -22,7 +23,7 @@ import {
 import { importRecipeModuleRef } from "./t3team-projectRecipeDiscoveryModule.ts";
 
 /** The launch named an action that cannot be resolved to one of the recipe's declared workflows. */
-export class T3TeamRecipeActionResolutionError extends Data.TaggedError(
+class T3TeamRecipeActionResolutionError extends Data.TaggedError(
   "T3TeamRecipeActionResolutionError",
 )<{
   readonly message: string;
@@ -44,7 +45,8 @@ export const resolveLaunchWorkflowPath = Effect.fn("resolveLaunchWorkflowPath")(
     // literal `~` (see pathExpansion.ts), so expand it here: this is the single point every
     // downstream consumer (source reads, the persisted run row, the engine launch) is fed from,
     // and it must return the SAME absolute-path shape the named-action branch below produces.
-    return expandHomePath(input.workflowPath);
+    // Clients address bundled recipes under the canonical state dir name.
+    return toPhysicalProjectStatePath(expandHomePath(input.workflowPath));
   }
 
   const recipePath = expandHomePath(input.recipePath?.trim() ?? "");

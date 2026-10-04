@@ -141,11 +141,16 @@ function RealWorkingRow({
     <TimelineRowActivityCtx.Provider
       value={{
         isWorking: !mainThreadIdle,
+        isPreparingWorktree: false,
+        isCompacting: false,
         isRevertingCheckpoint: false,
         latestTurnId: "turn-design-pass" as TurnId,
         workingStepLabel,
         activeAgents,
+        backgroundJobs: [],
         onOpenAgents,
+        unsettledTurnId: null,
+        backgroundWorktreeSetup: null,
       }}
     >
       <WorkingTimelineRow row={WORKING_ROW} />
@@ -163,18 +168,18 @@ function DemoAgentsPanel({
 }) {
   if (!expanded || entries.length === 0) return null;
   return (
-    <div className="mb-1 ml-1 flex flex-col gap-1 border-l-2 border-sky-500/30 pl-3">
+    <div className="mb-1 ml-1 flex flex-col gap-1 border-l-2 border-info/30 pl-3">
       {entries.map((entry) => (
         <div key={entry.id} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500 animate-pulse" />
+          <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-info animate-pulse" />
           <span className="text-foreground/80">{entry.title}</span>
-          <span className="rounded-sm bg-accent/60 px-1 py-px text-[9px] text-muted-foreground/70">
+          <span className="rounded-sm bg-accent/60 px-1 py-px text-3xs text-muted-foreground/70">
             {entry.source === "child" ? "sub-run" : "subagent"}
           </span>
           <span className="text-muted-foreground/55">· {entry.statusLabel}</span>
         </div>
       ))}
-      <div className="text-[10px] text-muted-foreground/60">active agents</div>
+      <div className="text-3xs text-muted-foreground/60">active agents</div>
     </div>
   );
 }
@@ -280,20 +285,20 @@ function ActiveAgentsIndicatorStory({
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[10px] text-muted-foreground">Simulate live output from:</span>
+          <span className="text-3xs text-muted-foreground">Simulate live output from:</span>
           {entries.map((entry) => (
             <button
               key={entry.id}
               type="button"
               onClick={() => fire(entry.id)}
-              className="rounded-sm border border-border/70 bg-accent/40 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+              className="rounded-sm border border-border/70 bg-accent/40 px-1.5 py-0.5 text-3xs text-muted-foreground hover:text-foreground"
             >
               {entry.title.length > 24 ? `${entry.title.slice(0, 24)}…` : entry.title}
             </button>
           ))}
         </div>
 
-        <div className="text-[10px] text-muted-foreground">
+        <div className="text-3xs text-muted-foreground">
           This is the unmodified <code className="text-foreground/70">WorkingTimelineRow</code> from
           components/chat/MessagesTimeline.tsx — the &ldquo;Working for …&rdquo; timer is its own.
           The dots (<code className="text-foreground/70">T3TeamActiveAgentsIndicator</code>) and the
@@ -322,7 +327,7 @@ function ActiveAgentsIndicatorStory({
               mainThreadIdle
             />
           </div>
-          <div className="text-[10px] text-muted-foreground">
+          <div className="text-3xs text-muted-foreground">
             No &ldquo;Working for …&rdquo; when the main turn is idle: the same row surface leads
             with the active-agent count, and the label defaults to the most recent agent&rsquo;s
             live status (hover flips it, as usual). In the app, this row is appended by
@@ -357,7 +362,7 @@ function ActiveAgentsIndicatorStory({
           workingStepLabel="Refactoring the settings panel"
           onOpenAgents={() => {}}
         />
-        <div className="text-[10px] text-muted-foreground">
+        <div className="text-3xs text-muted-foreground">
           With <code className="text-foreground/70">prefers-reduced-motion</code> the pendulum and
           FLIP moves stop; an event still shows as a brightness-only change.
         </div>
@@ -367,7 +372,7 @@ function ActiveAgentsIndicatorStory({
 }
 
 const meta = {
-  title: "T3Team/Conversation/Active Agents Indicator (GHE #201)",
+  title: "T3Team/Chat/Active Agents Indicator (GHE #201)",
   component: ActiveAgentsIndicatorStory,
   args: {
     activeChildren: 3,

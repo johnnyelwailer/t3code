@@ -182,11 +182,11 @@ export function T3TeamAgentContextDropOverlay({
   return (
     <div
       className={cn(
-        "pointer-events-none absolute inset-0 z-20 border border-emerald-500/50 bg-emerald-500/8 shadow-[0_0_0_1px_rgba(16,185,129,0.2)]",
+        "pointer-events-none absolute inset-0 z-20 border border-success/50 bg-success/8 ring-1 ring-success/20",
         className,
       )}
     >
-      <div className="absolute inset-x-3 top-3 rounded-md bg-background/92 px-2.5 py-1 text-[11px] font-medium text-emerald-200 backdrop-blur-sm">
+      <div className="absolute inset-x-3 top-3 rounded-md bg-background/92 px-2.5 py-1 text-2xs font-medium text-success-foreground backdrop-blur-sm">
         {label}
       </div>
     </div>

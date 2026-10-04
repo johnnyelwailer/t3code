@@ -14,7 +14,6 @@ function createThread(overrides: Partial<ProjectThread> = {}): ProjectThread {
     title: "IES-18425 kickoff 1",
     status: "idle",
     lastMessageAt: "2026-05-26T12:00:00.000Z",
-    messageCount: 0,
     createdAt: "2026-05-26T12:00:00.000Z",
     ...overrides,
   };

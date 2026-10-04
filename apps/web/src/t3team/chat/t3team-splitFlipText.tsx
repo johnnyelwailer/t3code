@@ -39,7 +39,6 @@ export function SplitFlipText({
 
   useEffect(() => {
     onPhaseChange?.(phase);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
   useEffect(() => {

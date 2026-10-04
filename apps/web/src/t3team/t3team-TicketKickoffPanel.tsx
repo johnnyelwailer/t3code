@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { ScrollArea } from "~/t3team/components/ui/t3team-scroll-area";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
-import type { ProjectThread } from "~/t3team/t3team-types";
 import type { T3TeamContextAttachment } from "~/t3team/t3team-contextAttachment";
 import { mergeContextAttachmentsById } from "~/t3team/t3team-contextAttachmentMerge";
 import { T3TeamSidecarComposition } from "~/t3team/t3team-SidecarComposition";
@@ -25,7 +24,6 @@ type TicketKickoffPanelProps = {
   /** Present on the work item surface. It is half the key an action staged from the content column
    * is filed under, so without it nothing can be preselected here. */
   ticketId?: string;
-  issueThreads: ProjectThread[];
   quickStartRecipeInput: T3TeamSidecarRecipeInput & {
     readonly backend: BackendApi | null;
   };
@@ -39,7 +37,6 @@ export function TicketKickoffPanel({
   profileId,
   projectId,
   ticketId,
-  issueThreads,
   quickStartRecipeInput,
   injectedContextAttachments,
   onOpenThread,
@@ -133,15 +130,6 @@ export function TicketKickoffPanel({
                 ...(selectedRecipe?.recipe.id
                   ? { selectedRecipeId: selectedRecipe.recipe.id }
                   : {}),
-              };
-            }
-
-            if (sectionId === "recent-conversations") {
-              return {
-                threads: issueThreads,
-                emptyMessage: "No conversations started for this ticket yet.",
-                showSearch: false,
-                showCount: false,
               };
             }
 

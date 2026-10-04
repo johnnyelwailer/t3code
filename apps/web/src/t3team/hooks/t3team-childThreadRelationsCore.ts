@@ -22,6 +22,13 @@ export type ChildThreadRelations = {
    * is expanded, instead of only knowing the count.
    */
   readonly childThreadsByParentId: ReadonlyMap<string, ReadonlyArray<ProjectThread>>;
+  /**
+   * Thread ids whose local state carries `waitingDeclared` — the DECLARED
+   * waiting fact (a registered `t3team_children op:wait` is still pending).
+   * Distinct from the DERIVED fact (a parent has live children): declared
+   * reads "Waiting", derived reads "Monitoring"; declared outranks derived.
+   */
+  readonly waitingDeclaredThreadIds: ReadonlySet<string>;
 };
 
 /**
@@ -39,6 +46,12 @@ export function buildChildThreadRelations(
   const tree = buildProjectSidebarThreadTree(threads);
   const childThreadIds = new Set<string>();
   const subRunCountsByParentId = new Map<string, SubRunCounts>();
+  const waitingDeclaredThreadIds = new Set<string>();
+  for (const thread of threads) {
+    if (thread.waitingDeclared === true) {
+      waitingDeclaredThreadIds.add(thread.id);
+    }
+  }
 
   for (const [parentId, children] of tree.childThreadsByParentId) {
     let running = 0;
@@ -55,15 +68,16 @@ export function buildChildThreadRelations(
     childThreadIds,
     subRunCountsByParentId,
     childThreadsByParentId: tree.childThreadsByParentId,
+    waitingDeclaredThreadIds,
   };
 }
 
 /**
  * Cheap content signature over the fields that `buildChildThreadRelations` AND
  * `buildAttributionByThreadId` read: id, parentThreadId, status, title,
- * lastMessageAt, ticketId, ticketDisplayId. NOT the array identity of `threads`
- * itself, which upstream re-creates on every `useProjectStore()` update
- * (including plain thread selection). Order-independent (sorted by id) so
+ * lastMessageAt, ticketId, ticketDisplayId, waitingDeclared. NOT the array
+ * identity of `threads` itself, which upstream re-creates on every
+ * `useProjectStore()` update (including plain thread selection). Order-independent (sorted by id) so
  * re-fetching the same threads in a different order signs identically.
  */
 export function computeChildThreadRelationsSignature(
@@ -72,7 +86,7 @@ export function computeChildThreadRelationsSignature(
   return threads
     .map(
       (thread) =>
-        `${thread.id}:${thread.parentThreadId ?? ""}:${thread.status}:${thread.title}:${thread.lastMessageAt}:${thread.ticketId ?? ""}:${thread.ticketDisplayId ?? ""}`,
+        `${thread.id}:${thread.parentThreadId ?? ""}:${thread.status}:${thread.title}:${thread.lastMessageAt}:${thread.ticketId ?? ""}:${thread.ticketDisplayId ?? ""}:${thread.waitingDeclared === true ? 1 : 0}`,
     )
     .sort()
     .join("|");

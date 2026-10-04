@@ -1,4 +1,4 @@
-import Mime from "@effect/platform-node/Mime";
+import * as Mime from "effect/unstable/http/Mime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
@@ -36,17 +36,18 @@ function readAssetContentInput(
   };
 }
 
+const mimeTypeOrOctetStream = (filePath: string): string =>
+  Option.getOrElse(Mime.getType(filePath), () => "application/octet-stream");
+
 function resolveFallbackContentType(path: Path.Path, sourceUrl: string, mimeType?: string): string {
   if (mimeType) {
     return mimeType;
   }
 
   try {
-    return Mime.getType(new URL(sourceUrl).pathname) ?? "application/octet-stream";
+    return mimeTypeOrOctetStream(new URL(sourceUrl).pathname);
   } catch {
-    return path.extname(sourceUrl)
-      ? (Mime.getType(sourceUrl) ?? "application/octet-stream")
-      : "application/octet-stream";
+    return path.extname(sourceUrl) ? mimeTypeOrOctetStream(sourceUrl) : "application/octet-stream";
   }
 }
 
@@ -79,7 +80,7 @@ export const t3teamAtlassianAssetContentRouteLayer = HttpRouter.add(
           fileSystem.readFile(resolved.absolutePath).pipe(
             Effect.map((bytes) => ({
               bytes,
-              contentType: Mime.getType(resolved.absolutePath) ?? "application/octet-stream",
+              contentType: mimeTypeOrOctetStream(resolved.absolutePath),
             })),
           ),
         ),

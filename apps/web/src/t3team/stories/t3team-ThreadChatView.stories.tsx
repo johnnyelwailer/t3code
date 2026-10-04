@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { ThreadChatView } from "~/t3team/chat/t3team-ThreadChatView";
 
 const meta = {
-  title: "Archived/Chat/ThreadChatView",
+  title: "T3Team/Chat/Thread Chat View",
   component: ThreadChatView,
   parameters: {
     layout: "fullscreen",

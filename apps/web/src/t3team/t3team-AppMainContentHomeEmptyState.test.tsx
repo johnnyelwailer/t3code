@@ -32,7 +32,6 @@ describe("AppMainContentHomeEmptyState", () => {
         showInitialSetup
         showAside={false}
         homeChatProject={null}
-        homeChatProjectThreads={[]}
         providers={[]}
         isConnected
         onOpenHomeThread={() => {}}

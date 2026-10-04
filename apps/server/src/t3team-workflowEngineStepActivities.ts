@@ -167,8 +167,8 @@ export function createWorkflowStepActivityEmitter(opts: {
           ...(sent?.threadId === undefined ? {} : { threadId: sent.threadId }),
           // Re-stamp the SAME phase the step was SENT under (see `SentStepRecord.workflowPhase`)
           // rather than reading a live tracker here: `emitResolved` fires as soon as a reply is
-          // durably journaled, BEFORE the body replay that would advance it — see
-          // `t3team-workflowEngineResume.ts`'s `makeControllerResume`. Absent after a process
+          // durably journaled, BEFORE the body replay that would advance it — see the shared
+          // SDK host's `resume` (`t3team-sdk.workflowHost`). Absent after a process
           // restart (the in-memory map is empty), same as `detail`/`stepKind` above.
           ...(sent?.workflowPhase === undefined ? {} : { workflowPhase: sent.workflowPhase }),
           ...(durationMs === undefined ? {} : { durationMs }),

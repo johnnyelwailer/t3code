@@ -1,4 +1,3 @@
-/* oxlint-disable eslint/no-unused-expressions -- Existing merged lint debt; keep green while preserving behavior. */
 import { useCallback, useRef } from "react";
 import { usePrimaryEnvironmentId } from "~/state/environments";
 import { useThreadActions } from "~/hooks/useThreadActions";
@@ -10,7 +9,7 @@ import type {
   TicketKickoffThreadInput,
 } from "~/t3team/t3team-kickoffTypes";
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
-import { enqueueThreadKickoffAttachments } from "~/t3team/t3team-enqueueThreadKickoffAttachments";
+import { createProjectKickoffThread } from "~/t3team/t3team-useAppHandlers-kickoffThread";
 import { useLocalWorkspaceCommands } from "~/t3team/hooks/t3team-useLocalWorkspaceCommands";
 import {
   createTicketKickoffThread,
@@ -145,23 +144,8 @@ export function useAppHandlers({
   );
 
   const handleCreateProjectKickoffThread = useCallback(
-    (input: ProjectKickoffThreadInput) => {
-      const resolvedProjectId = store.resolveProjectId(input.projectId);
-      const thread = store.createThread(resolvedProjectId, {
-        ...(input.dashboardMode ? { dashboardMode: input.dashboardMode } : {}),
-        title: "Project kickoff",
-        kickoffMessage: input.kickoffMessage,
-        kickoffPending: input.kickoffPending ?? true,
-        kickoffModelSelection: input.kickoffModelSelection,
-        kickoffRuntimeMode: input.kickoffRuntimeMode,
-        kickoffInteractionMode: input.kickoffInteractionMode,
-        selectedToolIds: input.selectedToolIds,
-        ...(input.kickoffWorkflow ? { kickoffWorkflow: input.kickoffWorkflow } : {}),
-      });
-      enqueueThreadKickoffAttachments(thread.id, input.kickoffContextAttachments);
-      onOpenDashboard?.(resolvedProjectId, input.dashboardMode, thread.id);
-      return thread.id;
-    },
+    (input: ProjectKickoffThreadInput) =>
+      createProjectKickoffThread(input, { onOpenDashboard, store }),
     [onOpenDashboard, store],
   );
 

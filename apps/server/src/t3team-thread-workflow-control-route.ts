@@ -1,11 +1,15 @@
 import type { ControlProjectRecipeWorkflowRequest } from "@t3tools/project-recipes";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import { HttpRouter } from "effect/unstable/http";
 
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
 import {
   errorResponse,
   okJson,
@@ -14,6 +18,7 @@ import {
 } from "./t3team-atlassian-http.ts";
 import { toT3TeamError } from "./t3team-project-repository-utils.ts";
 import { nowIso } from "./t3team-thread-recipe-workflow-routes-resolve.ts";
+import { loadThreadProjectContext } from "./t3team-thread-recipe-workflow-routes-shared.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { controlWorkflowRun } from "./t3team-workflowRunControl.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
@@ -41,6 +46,10 @@ export const t3teamThreadWorkflowControlRouteLayer = HttpRouter.add(
     const scheduler = yield* T3TeamWorkflowScheduler;
     const orchestration = yield* OrchestrationEngineService;
     const threadQuery = yield* ProjectionSnapshotQuery;
+    const journalStore = yield* WorkflowJournalStore;
+    const signalStore = Option.getOrUndefined(yield* Effect.serviceOption(WorkflowSignalStore));
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
     const found = yield* repo.getById({ runId });
     if (Option.isNone(found)) {
       return yield* new T3TeamAtlassianError({
@@ -59,6 +68,19 @@ export const t3teamThreadWorkflowControlRouteLayer = HttpRouter.add(
           orchestration,
           threadQuery,
         }),
+        // GHE #332: a `watching` run's resume drains its bridged inbox events here.
+        ...(signalStore === undefined ? {} : { signalStore }),
+        // GHE #344: "Retry run" on a failed card re-drives the journal through this route too.
+        retryFailed: {
+          journalStore,
+          fileSystem,
+          path,
+          loadThreadProject: (id) =>
+            loadThreadProjectContext(id).pipe(
+              Effect.provideService(ProjectionSnapshotQuery, threadQuery),
+              Effect.mapError((error) => (error instanceof Error ? error.message : String(error))),
+            ),
+        },
         nowIso,
         // This route only runs off an authenticated user's explicit click on the workflow run
         // card — it IS user intent, so a stop is stamped like the composer's Stop button.

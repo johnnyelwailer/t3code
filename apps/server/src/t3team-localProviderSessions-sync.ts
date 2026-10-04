@@ -1,12 +1,4 @@
-import {
-  CommandId,
-  DEFAULT_MODEL_BY_PROVIDER,
-  MessageId,
-  ProviderDriverKind,
-  ProviderInstanceId,
-  ThreadId,
-  findLocalProviderKind,
-} from "@t3tools/contracts";
+import { CommandId, MessageId, ProviderDriverKind, ThreadId } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -24,37 +16,11 @@ import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnap
 import { ProviderSessionDirectory } from "./provider/Services/ProviderSessionDirectory.ts";
 import { ServerSettingsService } from "./serverSettings.ts";
 import { T3TeamAtlassianError } from "./t3team-atlassian-http.ts";
-
-// Both read the LOCAL_PROVIDER_KINDS table rather than branching on "codex": the resume shape and
-// the instance a thread lands on are per-provider facts, and they belong next to each other.
-const resumeCursor = (session: LocalProviderSession) =>
-  findLocalProviderKind(session.provider)?.buildResumeCursor(session.nativeId) ?? {
-    threadId: session.nativeId,
-  };
-
-const modelFor = (session: LocalProviderSession) => {
-  const provider = ProviderDriverKind.make(session.provider);
-  return {
-    instanceId:
-      findLocalProviderKind(session.provider)?.instanceId ??
-      ProviderInstanceId.make(session.provider),
-    model: session.model ?? DEFAULT_MODEL_BY_PROVIDER[provider]!,
-  };
-};
-
-const isSameNativeSession = (
-  binding: { readonly provider: string; readonly resumeCursor?: unknown | null },
-  session: LocalProviderSession,
-) => {
-  if (
-    binding.provider !== session.provider ||
-    !binding.resumeCursor ||
-    typeof binding.resumeCursor !== "object"
-  )
-    return false;
-  const cursor = binding.resumeCursor as { threadId?: unknown; resume?: unknown };
-  return cursor.threadId === session.nativeId || cursor.resume === session.nativeId;
-};
+import {
+  isSameNativeSession,
+  modelFor,
+  resumeCursor,
+} from "./t3team-localProviderSessions-syncSessionFacts.ts";
 
 export function syncLocalProviderSession(session: LocalProviderSession) {
   return Effect.gen(function* () {

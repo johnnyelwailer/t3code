@@ -28,7 +28,7 @@ export function ConfirmStepHeading({
         className="size-8 shrink-0 rounded-lg object-cover"
       />
       <div className="min-w-0">
-        <div className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
+        <div className="text-2xs font-semibold tracking-widest text-muted-foreground uppercase">
           Add project
         </div>
         <h2 className="truncate text-lg font-semibold tracking-tight text-foreground sm:text-xl">
