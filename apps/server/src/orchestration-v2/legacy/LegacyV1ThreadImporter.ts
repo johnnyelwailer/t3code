@@ -31,7 +31,12 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import * as EventSink from "../EventSink.ts";
 import { makeKeyedSerialExecutor } from "../KeyedSerialExecutor.ts";
-import { makeLegacyVisibleMessageFilter } from "./t3team-legacyHiddenMessages.ts";
+import { makeLegacyMessageColumns } from "./t3team-legacyMessageColumns.ts";
+import {
+  legacyForkMessagePayloads,
+  legacyForkTurnItemId,
+  legacyMessageContext,
+} from "./t3team-legacyMessageMapping.ts";
 import { randomUuidV4 } from "../RandomUuid.ts";
 
 const IMPORT_EVENT_PREFIX = "migration:v1";
@@ -71,10 +76,12 @@ interface LegacyRepairRow extends LegacyThreadRow {
 interface LegacyMessageRow {
   readonly message_id: string;
   readonly thread_id: string;
-  readonly role: "user" | "assistant";
+  // t3team: fork databases also import inter-agent `actor` rows and `system` notes.
+  readonly role: "user" | "assistant" | "actor" | "system";
   readonly text: string;
   readonly attachments_json: string | null;
   readonly context_json?: string | null;
+  readonly t3team_ext_json?: string | null;
   readonly is_streaming: number;
   readonly created_at: string;
   readonly updated_at: string;
@@ -243,7 +250,52 @@ function importedThread(row: LegacyThreadRow): OrchestrationV2AppThread {
   };
 }
 
+// t3team: fork rows keep the run-less recorder's turn item id (t3team-legacyMessageMapping.ts).
+function importedTurnItemId(row: LegacyMessageRow): TurnItemId {
+  return (
+    legacyForkTurnItemId(row) ??
+    TurnItemId.make(`${IMPORT_EVENT_PREFIX}:turn-item:${row.message_id}`)
+  );
+}
+
+function importEvents(
+  row: LegacyMessageRow,
+  message: OrchestrationV2ConversationMessage,
+  turnItem: OrchestrationV2TurnItem,
+): ReadonlyArray<OrchestrationV2DomainEvent> {
+  const threadId = ThreadId.make(row.thread_id);
+  const updatedAt = dateTime(row.updated_at);
+  return [
+    {
+      id: EventId.make(`${IMPORT_EVENT_PREFIX}:message:${row.message_id}`),
+      type: "message.updated",
+      threadId,
+      occurredAt: updatedAt,
+      payload: message,
+    },
+    {
+      id: EventId.make(`${IMPORT_EVENT_PREFIX}:turn-item:${row.message_id}`),
+      type: "turn-item.updated",
+      threadId,
+      occurredAt: updatedAt,
+      payload: turnItem,
+    },
+  ];
+}
+
 function messageEvents(row: LegacyMessageRow): ReadonlyArray<OrchestrationV2DomainEvent> {
+  // t3team: the V1 fork ext rides the context; actor/system rows take the fork's run-less shape.
+  const context = legacyMessageContext(
+    row,
+    row.context_json
+      ? Schema.decodeUnknownSync(OrchestrationMessageContext)(parseJson(row.context_json))
+      : undefined,
+  );
+  const forkPayloads = legacyForkMessagePayloads(row, context);
+  if (forkPayloads !== undefined) {
+    return importEvents(row, forkPayloads.message, forkPayloads.turnItem);
+  }
+  if (row.role !== "user" && row.role !== "assistant") return [];
   const threadId = ThreadId.make(row.thread_id);
   const messageId = MessageId.make(row.message_id);
   const createdAt = dateTime(row.created_at);
@@ -258,13 +310,7 @@ function messageEvents(row: LegacyMessageRow): ReadonlyArray<OrchestrationV2Doma
     nodeId: null,
     role: row.role,
     text: row.text,
-    ...(row.context_json
-      ? {
-          context: Schema.decodeUnknownSync(OrchestrationMessageContext)(
-            parseJson(row.context_json),
-          ),
-        }
-      : {}),
+    ...(context === undefined ? {} : { context }),
     attachments,
     streaming: false,
     createdAt,
@@ -296,13 +342,7 @@ function messageEvents(row: LegacyMessageRow): ReadonlyArray<OrchestrationV2Doma
           messageId,
           inputIntent: "turn_start",
           text: row.text,
-          ...(row.context_json
-            ? {
-                context: Schema.decodeUnknownSync(OrchestrationMessageContext)(
-                  parseJson(row.context_json),
-                ),
-              }
-            : {}),
+          ...(context === undefined ? {} : { context }),
           attachments,
         }
       : {
@@ -310,31 +350,10 @@ function messageEvents(row: LegacyMessageRow): ReadonlyArray<OrchestrationV2Doma
           type: "assistant_message",
           messageId,
           text: row.text,
-          ...(row.context_json
-            ? {
-                context: Schema.decodeUnknownSync(OrchestrationMessageContext)(
-                  parseJson(row.context_json),
-                ),
-              }
-            : {}),
+          ...(context === undefined ? {} : { context }),
           streaming: false,
         };
-  return [
-    {
-      id: EventId.make(`${IMPORT_EVENT_PREFIX}:message:${row.message_id}`),
-      type: "message.updated",
-      threadId,
-      occurredAt: updatedAt,
-      payload: message,
-    },
-    {
-      id: EventId.make(`${IMPORT_EVENT_PREFIX}:turn-item:${row.message_id}`),
-      type: "turn-item.updated",
-      threadId,
-      occurredAt: updatedAt,
-      payload: turnItem,
-    },
-  ];
+  return importEvents(row, message, turnItem);
 }
 
 function chunks<A>(items: ReadonlyArray<A>, size: number): Array<ReadonlyArray<A>> {
@@ -347,8 +366,8 @@ function chunks<A>(items: ReadonlyArray<A>, size: number): Array<ReadonlyArray<A
 
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
-  // t3team: skip V1 fork framing rows hidden from the user (t3team-legacyHiddenMessages.ts).
-  const visibleOnly = yield* makeLegacyVisibleMessageFilter;
+  // t3team: fork ext column, hidden framing rows and fork roles (t3team-legacyMessageColumns.ts).
+  const forkColumns = yield* makeLegacyMessageColumns;
   const eventSink = yield* EventSink.EventSinkV2;
   const transcriptImports = yield* makeKeyedSerialExecutor<ThreadId>();
 
@@ -361,6 +380,7 @@ const make = Effect.gen(function* () {
         text,
         attachments_json,
         context_json,
+        ${forkColumns.ext()},
         is_streaming,
         created_at,
         updated_at,
@@ -370,8 +390,8 @@ const make = Effect.gen(function* () {
         ) AS ordinal
       FROM projection_thread_messages
       WHERE thread_id = ${threadId}
-        AND role IN ('user', 'assistant')
-        ${visibleOnly()}
+        ${forkColumns.importedRoles()}
+        ${forkColumns.visibleOnly()}
       ORDER BY created_at ASC, message_id ASC
     `;
 
@@ -385,6 +405,7 @@ const make = Effect.gen(function* () {
           message.text,
           message.attachments_json,
           message.context_json,
+          ${forkColumns.ext("message")},
           message.is_streaming,
           message.created_at,
           message.updated_at,
@@ -392,8 +413,8 @@ const make = Effect.gen(function* () {
             SELECT COUNT(*)
             FROM projection_thread_messages AS earlier
             WHERE earlier.thread_id = message.thread_id
-              AND earlier.role IN ('user', 'assistant')
-              ${visibleOnly("earlier")}
+              ${forkColumns.importedRoles("earlier")}
+              ${forkColumns.visibleOnly("earlier")}
               AND (
                 earlier.created_at < message.created_at
                 OR (
@@ -405,7 +426,7 @@ const make = Effect.gen(function* () {
         FROM projection_thread_messages AS message
         WHERE message.thread_id = ${threadId}
           AND message.role IN ('user', 'assistant')
-          ${visibleOnly("message")}
+          ${forkColumns.visibleOnly("message")}
         ORDER BY message.created_at DESC, message.message_id DESC
         LIMIT 1
       `;
@@ -417,6 +438,7 @@ const make = Effect.gen(function* () {
           message.text,
           message.attachments_json,
           message.context_json,
+          ${forkColumns.ext("message")},
           message.is_streaming,
           message.created_at,
           message.updated_at,
@@ -424,8 +446,8 @@ const make = Effect.gen(function* () {
             SELECT COUNT(*)
             FROM projection_thread_messages AS earlier
             WHERE earlier.thread_id = message.thread_id
-              AND earlier.role IN ('user', 'assistant')
-              ${visibleOnly("earlier")}
+              ${forkColumns.importedRoles("earlier")}
+              ${forkColumns.visibleOnly("earlier")}
               AND (
                 earlier.created_at < message.created_at
                 OR (
@@ -437,7 +459,7 @@ const make = Effect.gen(function* () {
         FROM projection_thread_messages AS message
         WHERE message.thread_id = ${threadId}
           AND message.role = 'user'
-          ${visibleOnly("message")}
+          ${forkColumns.visibleOnly("message")}
         ORDER BY message.created_at DESC, message.message_id DESC
         LIMIT 1
       `;
@@ -628,7 +650,7 @@ const make = Effect.gen(function* () {
                 )
                 VALUES (
                   ${thread.id},
-                  ${TurnItemId.make(`${IMPORT_EVENT_PREFIX}:turn-item:${message.message_id}`)},
+                  ${importedTurnItemId(message)},
                   ${message.ordinal}
                 )
                 ON CONFLICT(thread_id, turn_item_id) DO NOTHING
@@ -741,7 +763,7 @@ const make = Effect.gen(function* () {
                 )
                 VALUES (
                   ${threadId},
-                  ${TurnItemId.make(`${IMPORT_EVENT_PREFIX}:turn-item:${message.message_id}`)},
+                  ${importedTurnItemId(message)},
                   ${message.ordinal}
                 )
                 ON CONFLICT(thread_id, turn_item_id) DO NOTHING
