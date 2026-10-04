@@ -925,21 +925,42 @@ const make = Effect.gen(function* () {
       requestedModelSelection !== undefined &&
       requestedModelSelection.instanceId !== currentInstanceId
     ) {
-      if (currentInfo.driverKind !== desiredInfo.driverKind) {
+      const incompatibleSwitchDetail =
+        currentInfo.driverKind !== desiredInfo.driverKind
+          ? `Thread '${threadId}' is bound to driver '${currentInfo.driverKind}' and cannot switch to '${desiredInfo.driverKind}'.`
+          : currentInfo.continuationIdentity.continuationKey !==
+              desiredInfo.continuationIdentity.continuationKey
+            ? `Thread '${threadId}' cannot switch from instance '${currentInstanceId}' to '${desiredInstanceId}' because their provider resume state is incompatible.`
+            : null;
+      if (incompatibleSwitchDetail !== null) {
+        // The client persists its selection before the turn starts. A rejected switch must
+        // not stay on the thread, or every later turn that inherits it fails the same way.
+        // Re-read so a selection persisted since this turn was requested is never overwritten.
+        const latestSelection = (yield* resolveThreadShell(threadId))?.modelSelection;
+        const boundModel = activeSession?.model;
+        if (
+          boundModel &&
+          latestSelection?.instanceId === desiredInstanceId &&
+          latestSelection.model === desiredModelSelection.model
+        ) {
+          // The last accepted selection keeps its options (effort, context window, …).
+          const accepted = threadModelSelections.get(threadId);
+          yield* orchestrationEngine
+            .dispatch({
+              type: "thread.meta.update",
+              commandId: yield* serverCommandId("rejected-provider-switch-rollback"),
+              threadId,
+              modelSelection:
+                accepted?.instanceId === currentInstanceId && accepted.model === boundModel
+                  ? accepted
+                  : { instanceId: currentInstanceId, model: boundModel },
+            })
+            .pipe(Effect.ignoreCause({ log: true }));
+        }
         return yield* new ProviderAdapterRequestError({
           provider: preferredProvider,
           method: "thread.turn.start",
-          detail: `Thread '${threadId}' is bound to driver '${currentInfo.driverKind}' and cannot switch to '${desiredInfo.driverKind}'.`,
-        });
-      }
-      if (
-        currentInfo.continuationIdentity.continuationKey !==
-        desiredInfo.continuationIdentity.continuationKey
-      ) {
-        return yield* new ProviderAdapterRequestError({
-          provider: preferredProvider,
-          method: "thread.turn.start",
-          detail: `Thread '${threadId}' cannot switch from instance '${currentInstanceId}' to '${desiredInstanceId}' because their provider resume state is incompatible.`,
+          detail: incompatibleSwitchDetail,
         });
       }
     }
