@@ -8799,7 +8799,8 @@ export default function ChatView(props: ChatViewProps) {
         }),
         t3teamMessageExt,
       );
-    const outgoingMessageContext = buildOutgoingMessageContext(
+    // `let`: rebuilt once the t3team ext is set (below), so the optimistic row carries it.
+    let outgoingMessageContext = buildOutgoingMessageContext(
       composerAttachmentsSnapshot.map((attachment) => attachment.id),
     );
     const messageIdForSend = newMessageId();
@@ -8991,6 +8992,9 @@ export default function ChatView(props: ChatViewProps) {
       t3teamMessageExt = buildContextAttachmentMessageExt(contextAttachmentsResult.value, {
         displayText: messageTextForSend,
       });
+      outgoingMessageContext = buildOutgoingMessageContext(
+        composerAttachmentsSnapshot.map((attachment) => attachment.id),
+      );
       outgoingMessageText = formatOutgoingPrompt({
         provider: ctxSelectedProvider,
         model: ctxSelectedModel,

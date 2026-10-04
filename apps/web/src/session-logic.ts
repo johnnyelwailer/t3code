@@ -43,6 +43,7 @@ import {
 } from "./types";
 import {
   isHiddenT3TeamFramingMessage,
+  t3teamOptimisticMessage,
   t3teamMessageExtOf,
 } from "./t3team/chat/t3team-messageFraming";
 import { t3teamRecorderNoteEntry } from "./t3team/chat/t3team-recorderNote";
@@ -746,7 +747,8 @@ export function deriveTimelineEntriesFromVisibleTurnItems(
         id: message.id,
         kind: "message",
         createdAt: message.createdAt,
-        message,
+        // t3team: the optimistic row reads its fork ext from its context like the echoed row.
+        message: t3teamOptimisticMessage(message),
       });
     }
   }

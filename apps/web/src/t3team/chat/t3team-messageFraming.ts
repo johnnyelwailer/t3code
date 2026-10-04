@@ -18,6 +18,29 @@ export function t3teamMessageExtOf(item: {
   return t3teamExt ? { t3teamExt } : {};
 }
 
+// One derived copy per optimistic message object, so a row keeps its identity across re-derives.
+const optimisticWithExt = new WeakMap<object, unknown>();
+
+/**
+ * An optimistic row as the timeline shows it: it reads its fork ext from its own context, exactly
+ * like the server-echoed row, so the bubble shows the typed `displayText` and work-item cards
+ * instead of the provider prompt with the appended context dump until the echo lands.
+ */
+export function t3teamOptimisticMessage<
+  M extends {
+    readonly context?: OrchestrationMessageContext | undefined;
+    readonly t3teamExt?: T3TeamMessageExt | undefined;
+  },
+>(message: M): M {
+  if (message.t3teamExt !== undefined || message.context === undefined) return message;
+  const cached = optimisticWithExt.get(message) as M | undefined;
+  if (cached !== undefined) return cached;
+  const t3teamExt = readT3TeamMessageExt(message.context);
+  const shown = t3teamExt === undefined ? message : { ...message, t3teamExt };
+  optimisticWithExt.set(message, shown);
+  return shown;
+}
+
 /**
  * The message as its bubble shows it: a fork send that appended context (work items) to the
  * provider prompt records the person's own words as ext `displayText`, so the bubble shows those
