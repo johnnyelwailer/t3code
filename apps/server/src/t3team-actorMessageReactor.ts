@@ -8,9 +8,10 @@
  *   re-open the turn the user just stopped;
  * - a message the user typed (`role: "user"`, `createdBy: "user"`) → lift
  *   the holds of the thread and of its held descendants, then deliver;
- * - a durable sweep (`Scheduler.register`, 5 s tick) → deliver every due
- *   digest. The sweep is what makes delivery restart-safe: it derives due
- *   work from the mailbox table, never from the live event tail.
+ * - a durable sweep (`Scheduler.register`, 5 s tick) → drop the holds of
+ *   deleted threads, then deliver every due digest. The sweep is what makes
+ *   delivery restart-safe: it derives due work from the mailbox table, never
+ *   from the live event tail.
  *
  * The reactor reads the LIVE tail only. Replaying history on boot would apply
  * old events to current durable state: an old user message would lift a hold
@@ -98,7 +99,12 @@ export const T3TeamActorMessageReactor = Layer.effectDiscard(
 
     const liftHolds = (threadId: string) =>
       Effect.gen(function* () {
-        const held = yield* mailbox.store.heldThreads();
+        const shell = yield* threads
+          .getThreadShell(ThreadId.make(threadId))
+          .pipe(Effect.orElseSucceed(() => null));
+        if (shell === null) return;
+        // Only this thread's own lineage tree can hold one of its descendants.
+        const held = yield* mailbox.store.heldThreadsInTree(shell.lineage.rootThreadId);
         const lifted: string[] = [];
         for (const heldId of held) {
           if (heldId === threadId || (yield* isDescendantOf(heldId, threadId))) lifted.push(heldId);
@@ -128,13 +134,12 @@ export const T3TeamActorMessageReactor = Layer.effectDiscard(
       return Effect.void;
     };
 
-    const sweep = mailbox.store
-      .threadsWithWork()
-      .pipe(
-        Effect.flatMap((threadIds) =>
-          Effect.forEach(threadIds, (threadId) => mailbox.drain(threadId), { discard: true }),
-        ),
-      );
+    const sweep = mailbox.store.pruneHolds().pipe(
+      Effect.andThen(mailbox.store.threadsWithWork()),
+      Effect.flatMap((threadIds) =>
+        Effect.forEach(threadIds, (threadId) => mailbox.drain(threadId), { discard: true }),
+      ),
+    );
 
     yield* forkParked(scheduler.register("t3team-actor-mailbox", sweep));
     yield* forkParked(

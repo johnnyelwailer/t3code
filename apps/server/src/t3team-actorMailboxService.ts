@@ -23,9 +23,9 @@ import type {
 } from "./mcp/t3team-threadMailboxDelivery.ts";
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
 import {
+  T3TeamActorMailboxError,
   T3TeamActorMailboxStore,
   T3TeamActorMailboxStoreLive,
-  type T3TeamActorMailboxError,
 } from "./t3team-actorMailbox.ts";
 import { makeMailboxDelivery, type MailboxDrainOutcome } from "./t3team-actorMailboxDelivery.ts";
 import { makeMailboxSend } from "./t3team-actorMailboxSend.ts";
@@ -58,8 +58,13 @@ const make = Effect.gen(function* () {
   const engagement = yield* T3TeamThreadEngagement;
   const scope = yield* Effect.scope;
 
+  // A failed read is an error, not "deleted": the drain retires a deleted recipient's messages.
   const loadShell = (threadId: string) =>
-    threads.getThreadShell(ThreadId.make(threadId)).pipe(Effect.orElseSucceed(() => null));
+    threads
+      .getThreadShell(ThreadId.make(threadId))
+      .pipe(
+        Effect.mapError((cause) => new T3TeamActorMailboxError({ operation: "loadThread", cause })),
+      );
 
   const delivery = makeMailboxDelivery({
     store,

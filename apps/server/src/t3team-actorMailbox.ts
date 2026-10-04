@@ -7,7 +7,8 @@
  * Being a table, it survives restarts without event replay: pending entries
  * stay pending, a digest that was claimed but not marked delivered is
  * re-dispatched with the same id (idempotent), and a hold stays until the
- * user writes again.
+ * user writes again (holds: t3team-actorMailboxHolds.ts). Entries for a
+ * deleted recipient are retired as `failed`.
  *
  * @module t3team-actorMailbox
  */
@@ -25,6 +26,8 @@ import {
   mailboxEntryFromRow,
   type T3TeamActorMailboxEntry,
 } from "./t3team-actorMailboxEntry.ts";
+
+import { makeMailboxHoldOps, type MailboxHoldOps } from "./t3team-actorMailboxHolds.ts";
 
 export type { ClaimedDigest, T3TeamActorMailboxEntry } from "./t3team-actorMailboxEntry.ts";
 
@@ -50,7 +53,7 @@ export class T3TeamActorMailboxStore extends Context.Service<
     readonly find: (threadId: string, messageId: string) => Op<T3TeamActorMailboxEntry | null>;
     /** Pending entries of a thread, oldest first. */
     readonly pending: (threadId: string) => Op<ReadonlyArray<T3TeamActorMailboxEntry>>;
-    /** Threads with pending or claimed entries. */
+    /** Threads with pending or claimed entries, except archived ones (they wait for unarchive). */
     readonly threadsWithWork: () => Op<ReadonlyArray<string>>;
     /** Moves exactly these pending entries to `claimed` under `digestMessageId`; false on a race. */
     readonly claim: (input: {
@@ -69,11 +72,12 @@ export class T3TeamActorMailboxStore extends Context.Service<
     readonly replyContext: (
       digestMessageId: string,
     ) => Op<{ readonly hopCount: number; readonly rootThreadId: string } | null>;
-    readonly hold: (threadId: string, heldAt: string) => Op<void>;
-    readonly releaseHolds: (threadIds: ReadonlyArray<string>) => Op<void>;
-    readonly isHeld: (threadId: string) => Op<boolean>;
-    readonly heldThreads: () => Op<ReadonlyArray<string>>;
-  }
+    /**
+     * A deleted recipient: its pending and claimed entries can never be delivered, so they
+     * become `failed` (out of every sweep), and its hold is dropped.
+     */
+    readonly retireRecipient: (threadId: string) => Op<void>;
+  } & MailboxHoldOps
 >()("t3/t3team-actorMailbox/T3TeamActorMailboxStore") {}
 
 const make = Effect.gen(function* () {
@@ -110,9 +114,13 @@ const make = Effect.gen(function* () {
         Effect.map((rows) => rows.map(mailboxEntryFromRow)),
         op("pending"),
       ),
+    // A deleted (or never projected) recipient stays in, so the drain retires it.
     threadsWithWork: () =>
-      sql<{ readonly to_thread_id: string }>`SELECT DISTINCT to_thread_id
-        FROM t3team_thread_mailbox WHERE state IN ('pending', 'claimed')`.pipe(
+      sql<{ readonly to_thread_id: string }>`SELECT DISTINCT m.to_thread_id
+        FROM t3team_thread_mailbox m
+        LEFT JOIN orchestration_v2_projection_threads t ON t.thread_id = m.to_thread_id
+        WHERE m.state IN ('pending', 'claimed')
+          AND (t.archived_at IS NULL OR t.deleted_at IS NOT NULL)`.pipe(
         Effect.map((rows) => rows.map((row) => row.to_thread_id)),
         op("threadsWithWork"),
       ),
@@ -175,29 +183,15 @@ const make = Effect.gen(function* () {
         ),
         op("replyContext"),
       ),
-    hold: (threadId, heldAt) =>
-      sql`INSERT INTO t3team_thread_mailbox_holds (thread_id, held_at)
-        VALUES (${threadId}, ${heldAt})
-        ON CONFLICT(thread_id) DO UPDATE SET held_at = excluded.held_at`.pipe(
+    retireRecipient: (threadId) =>
+      sql`UPDATE t3team_thread_mailbox SET state = 'failed'
+        WHERE to_thread_id = ${threadId} AND state IN ('pending', 'claimed')`.pipe(
+        Effect.andThen(sql`DELETE FROM t3team_thread_mailbox_holds WHERE thread_id = ${threadId}`),
+        sql.withTransaction,
         Effect.asVoid,
-        op("hold"),
+        op("retireRecipient"),
       ),
-    releaseHolds: (threadIds) =>
-      threadIds.length === 0
-        ? Effect.void
-        : sql`DELETE FROM t3team_thread_mailbox_holds
-            WHERE ${sql.in("thread_id", threadIds)}`.pipe(Effect.asVoid, op("releaseHolds")),
-    isHeld: (threadId) =>
-      sql<{ readonly thread_id: string }>`SELECT thread_id FROM t3team_thread_mailbox_holds
-        WHERE thread_id = ${threadId}`.pipe(
-        Effect.map((rows) => rows.length > 0),
-        op("isHeld"),
-      ),
-    heldThreads: () =>
-      sql<{ readonly thread_id: string }>`SELECT thread_id FROM t3team_thread_mailbox_holds`.pipe(
-        Effect.map((rows) => rows.map((row) => row.thread_id)),
-        op("heldThreads"),
-      ),
+    ...makeMailboxHoldOps(sql, op),
   });
 });
 

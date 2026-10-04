@@ -25,7 +25,7 @@ import {
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
-import type { T3TeamActorMailboxStore } from "./t3team-actorMailbox.ts";
+import type { T3TeamActorMailboxError, T3TeamActorMailboxStore } from "./t3team-actorMailbox.ts";
 import type { T3TeamActorMailboxEntry } from "./t3team-actorMailboxEntry.ts";
 import { isMailboxThreadBusy } from "./t3team-actorMessageReactorLimits.ts";
 import { buildActorReactionTurnInput } from "./t3team-actorReactionVisibility.ts";
@@ -46,8 +46,10 @@ export interface MailboxThreadState {
 
 export interface MailboxDeliveryDeps {
   readonly store: T3TeamActorMailboxStore["Service"];
-  /** The thread's shell, or null when it is gone. */
-  readonly loadThread: (threadId: string) => Effect.Effect<MailboxThreadState | null>;
+  /** The thread's shell, or null when it is deleted (a failed read FAILS, never reads as null). */
+  readonly loadThread: (
+    threadId: string,
+  ) => Effect.Effect<MailboxThreadState | null, T3TeamActorMailboxError>;
   /** The thread's user/assistant messages (human-steering suffix). */
   readonly loadMessages: (
     threadId: string,
@@ -142,9 +144,20 @@ export const makeMailboxDelivery = (deps: MailboxDeliveryDeps) => {
       }
       const pending = yield* deps.store.pending(threadId);
       if (pending.length === 0) return outcome({ state: "dispatched", entries: [] });
-      if (yield* deps.store.isHeld(threadId)) return outcome({ state: "held", pending });
       const thread = yield* deps.loadThread(threadId);
-      if (thread === null || thread.archivedAt !== null) return outcome({ state: "held", pending });
+      if (thread === null) {
+        // Deleted: nothing can deliver these any more; retire them so no sweep rescans them.
+        yield* Effect.logWarning("t3team mailbox recipient deleted; messages dropped", {
+          threadId,
+          dropped: pending.length,
+        });
+        yield* deps.store.retireRecipient(threadId);
+        return outcome({ state: "dispatched", entries: [] });
+      }
+      // Archived threads keep their messages (the sweep skips them until unarchived).
+      if (thread.archivedAt !== null || (yield* deps.store.isHeld(threadId))) {
+        return outcome({ state: "held", pending });
+      }
       if (isMailboxThreadBusy(thread)) return outcome({ state: "busy", pending });
       if (!force && !pending.some((entry) => entry.urgency === "urgent")) {
         const oldest = Date.parse(pending[0]!.createdAt);

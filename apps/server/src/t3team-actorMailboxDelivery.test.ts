@@ -222,4 +222,63 @@ it.layer(TestLayer)("inter-agent mailbox on V2", (it) => {
       assert.isDefined(messages.find((entry) => entry.id === `${MAILBOX_DIGEST_PREFIX}r1:1`));
     }),
   );
+
+  it.effect("retires a deleted recipient; an archived one waits outside the sweep", () =>
+    Effect.gen(function* () {
+      const clock = { now: T0 + 120_000 };
+      const { delivery, send, store } = yield* harness(clock);
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const lifecycle = (
+        type: "thread.delete" | "thread.archive" | "thread.unarchive",
+        id: string,
+      ) =>
+        orchestrator.dispatch({
+          type,
+          commandId: CommandId.make(`${type}:${id}`),
+          threadId: ThreadId.make(id),
+        });
+      for (const id of ["mb:from", "mb:gone", "mb:shelved"])
+        yield* createTestThread(ThreadId.make(id));
+      yield* send(message("mb:from", "mb:gone", "g1", "Never read"));
+      yield* send(message("mb:from", "mb:shelved", "s1", "Read after unarchive"));
+      yield* store.hold("mb:gone", iso(T0));
+      yield* lifecycle("thread.delete", "mb:gone");
+      yield* lifecycle("thread.archive", "mb:shelved");
+
+      // The archived recipient leaves the sweep but keeps its message; the deleted one stays in
+      // only until a drain retires it, hold included.
+      const swept = yield* store.threadsWithWork();
+      assert.include(swept, "mb:gone");
+      assert.notInclude(swept, "mb:shelved");
+      yield* delivery.drain("mb:gone");
+      assert.notInclude(yield* store.threadsWithWork(), "mb:gone");
+      assert.deepStrictEqual(yield* store.pending("mb:gone"), []);
+      assert.isFalse(yield* store.isHeld("mb:gone"));
+      assert.lengthOf(yield* store.pending("mb:shelved"), 1);
+
+      yield* lifecycle("thread.unarchive", "mb:shelved");
+      assert.include(yield* store.threadsWithWork(), "mb:shelved");
+      clock.now += 61_000;
+      assert.strictEqual((yield* delivery.drain("mb:shelved")).state, "dispatched");
+    }),
+  );
+
+  it.effect("drops the holds of deleted threads and lifts only within one lineage tree", () =>
+    Effect.gen(function* () {
+      const store = yield* T3TeamActorMailboxStore;
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      for (const id of ["mb:tree-a", "mb:tree-b", "mb:deleted"]) {
+        yield* createTestThread(ThreadId.make(id));
+        yield* store.hold(id, iso(T0));
+      }
+      yield* orchestrator.dispatch({
+        type: "thread.delete",
+        commandId: CommandId.make("thread.delete:mb:deleted"),
+        threadId: ThreadId.make("mb:deleted"),
+      });
+      yield* store.pruneHolds();
+      assert.isFalse(yield* store.isHeld("mb:deleted"));
+      assert.deepStrictEqual(yield* store.heldThreadsInTree("mb:tree-a"), ["mb:tree-a"]);
+    }),
+  );
 });
