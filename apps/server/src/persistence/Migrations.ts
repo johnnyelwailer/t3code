@@ -137,6 +137,7 @@ import Migration0091 from "./Migrations/t3team-069_LineageCutover.ts";
 import Migration0092 from "./Migrations/t3team-070_ThreadMailbox.ts";
 import Migration0097 from "./Migrations/t3team-075_DropProviderUsageHolds.ts";
 import Migration0098 from "./Migrations/t3team-076_ThreadSilenceWatches.ts";
+import Migration0099 from "./Migrations/t3team-077_RepairForkPortTables.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -233,9 +234,11 @@ export const migrationEntries = [
   [82, "ProjectionThreadShellT3TeamFacts", Migration0082],
   [83, "OrchestrationEventsTypeSequenceIndex", Migration0083],
   // Upstream 055/056 (orchestration V2) live at 84/85 in this fork's ledger; see the import comment.
-  // Preserve this migration's schema. Future V2 schema changes need new migrations, and every
-  // new fork migration takes an id >= 86. Upstream's reconcileV2PreviewMigration stays a no-op
-  // on fork ledgers (fork ids 53/54 are never named OrchestrationV2).
+  // Preserve this migration's schema. Future V2 schema changes need new migrations. A new
+  // migration must take an id ABOVE the highest id registered here (currently 99) — never one of
+  // the gaps (88-89, 93-96): upgraded databases have recorded the maximum, and the Migrator skips
+  // every id at or below it. Upstream's reconcileV2PreviewMigration stays a no-op on fork ledgers
+  // (fork ids 53/54 are never named OrchestrationV2).
   [84, "OrchestrationV2", Migration0084],
   [85, "RemoveRedundantProjectionIndexes", Migration0085],
   [86, "ThreadFacts", Migration0086],
@@ -245,6 +248,7 @@ export const migrationEntries = [
   [92, "ThreadMailbox", Migration0092],
   [97, "DropProviderUsageHolds", Migration0097],
   [98, "ThreadSilenceWatches", Migration0098],
+  [99, "RepairForkPortTables", Migration0099],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
