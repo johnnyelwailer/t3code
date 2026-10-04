@@ -48,6 +48,7 @@ import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { AgentElapsed } from "./AgentElapsed";
 import { ThreadRelationshipIcon, threadRelationshipStatusLabel } from "./ThreadRelationshipIcon";
+import { useT3TeamThreadSubRuns } from "~/t3team/chat/t3team-useThreadSubRuns";
 
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -208,15 +209,22 @@ export function ThreadRelationshipsPanel(props: {
   const [busyAction, setBusyAction] = useState<"merge" | "detach" | null>(null);
   const latestMergeBackRun = projection === null ? null : resolveLatestMergeBackRun(projection);
   const mergeTargetThreadId = resolveMergeBackTargetThreadId(projection);
+  // t3team: app-owned sub-runs render once, in the fork sub-run tree below the groups.
+  const t3teamSubRuns = useT3TeamThreadSubRuns(props.environmentId, props.threadId);
   const relationshipRows = useMemo(
     () =>
       orderWebThreadLineageRows({
         graph,
-        rows: immediateThreadRelationships(graph, props.threadId),
+        rows: immediateThreadRelationships(graph, props.threadId).filter(
+          ({ threadId, edge }) =>
+            edge.kind !== "subagent" ||
+            isParentThreadRelationship(edge, props.threadId) ||
+            !t3teamSubRuns.childThreadIds.has(threadId),
+        ),
         currentThreadId: props.threadId,
         mergeTargetThreadId,
       }),
-    [graph, mergeTargetThreadId, props.threadId],
+    [graph, mergeTargetThreadId, props.threadId, t3teamSubRuns.childThreadIds],
   );
   const canMerge = mergeTargetThreadId !== null && latestMergeBackRun !== null;
   const canDetach = projection ? canDetachThreadProviderSession(projection) : false;
@@ -243,7 +251,7 @@ export function ThreadRelationshipsPanel(props: {
     projection?.subagents.filter((agent) => agent.status === "running").length ??
     active.filter(({ edge }) => edge.status === "running").length;
 
-  if (relationshipRows.length === 0 && runningCount === 0) {
+  if (relationshipRows.length === 0 && runningCount === 0 && t3teamSubRuns.tree === null) {
     return null;
   }
 
@@ -479,6 +487,7 @@ export function ThreadRelationshipsPanel(props: {
           }
         </ThreadLineageGroup>
       ))}
+      {t3teamSubRuns.tree}
     </ThreadDetailsSection>
   );
 }
