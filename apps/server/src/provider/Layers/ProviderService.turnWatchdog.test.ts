@@ -385,7 +385,13 @@ const collectRuntimeEvents = (provider: ProviderService.ProviderService["Service
 
 const warningDetail = (event: ProviderRuntimeEvent) =>
   (event.type === "runtime.warning" ? event.payload.detail : undefined) as
-    | { code?: string; selfHealAttempt?: number }
+    | {
+        code?: string;
+        selfHealAttempt?: number;
+        selfHealAttempts?: number;
+        inactivitySeconds?: number;
+        turnId?: string;
+      }
     | undefined;
 
 const findInactivityWarningFor = (
