@@ -215,6 +215,7 @@ import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as HostResources from "./resourceTelemetry/HostResources.ts";
 import { T3TeamThreadEngagement } from "./t3team-threadEngagement.ts";
+import { T3TeamActorMailbox } from "./t3team-actorMailboxService.ts";
 import { stopThreadCascade } from "./t3team-threadStopCascade.ts";
 import { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
 import { T3TeamThreadArtifactsStore } from "./t3team-v2/t3team-threadArtifactsStore.ts";
@@ -1187,6 +1188,8 @@ const makeWsRpcLayer = (
       const threadArtifacts = Option.getOrUndefined(
         yield* Effect.serviceOption(T3TeamThreadArtifactsStore),
       );
+      // t3team: the inter-agent mailbox the stop cascade holds (optional, as above).
+      const actorMailbox = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamActorMailbox));
       const crypto = yield* Crypto.Crypto;
       const serverCommandId = (tag: string) =>
         crypto.randomUUIDv4.pipe(
@@ -2099,7 +2102,7 @@ const makeWsRpcLayer = (
         [WS_METHODS.t3teamStopThreadCascade]: (input) =>
           observeRpcEffect(
             WS_METHODS.t3teamStopThreadCascade,
-            stopThreadCascade(input).pipe(
+            stopThreadCascade(input, actorMailbox).pipe(
               Effect.provideService(
                 ThreadManagementService.ThreadManagementService,
                 threadManagement,
