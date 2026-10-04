@@ -105,6 +105,98 @@ describe("host-neutral ask dispatch", () => {
     expect(prompts[1]).toContain("previous reply did not match the required schema");
   });
 
+  it("self-corrects a prose reply: the re-ask quotes it back beside the schema, and JSON then decodes", async () => {
+    // The incident shape: the agent ended its turn to wait for a background job and answered in
+    // prose. The corrective turn must carry enough signal for the agent to repair it.
+    const prose = "I'm waiting for the deploy-check job to complete. It will notify me.";
+    let turns = 0;
+    const broker = createMockBroker((envelope) => {
+      if (envelope.kind !== "thread.turn") return { kind: "defer" };
+      turns += 1;
+      return {
+        kind: "resolve",
+        reply: turns === 1 ? prose : JSON.stringify({ deployed: true, message: "ok" }),
+      };
+    });
+    const ask = createAskVerb({
+      dispatch: dispatchFor(new Map()),
+      broker,
+      defaultModel: undefined,
+    });
+    const schema = Schema.Struct({
+      deployed: Schema.Boolean,
+      message: Schema.String,
+    }) as Schema.Schema<unknown>;
+
+    await expect(ask("thread.turn", "thread-1", "Check the deploy", { schema })).resolves.toEqual({
+      deployed: true,
+      message: "ok",
+    });
+    expect(broker.sent).toHaveLength(2);
+    const correction = ((broker.sent[1]?.payload ?? {}) as { prompt?: string }).prompt ?? "";
+    expect(correction).toContain("previous reply did not match the required schema");
+    expect(correction).toContain(prose);
+    expect(correction).toContain('"deployed": boolean');
+    expect(correction).toContain("no prose, no preamble");
+    // The first attempt is unchanged, so journals recorded before this change still replay.
+    const first = ((broker.sent[0]?.payload ?? {}) as { prompt?: string }).prompt ?? "";
+    expect(first).not.toContain("<<<");
+  });
+
+  it("offers the pre-rewording correction as legacyArgs, so old journals keep replaying", async () => {
+    const calls: Array<{ args: unknown; legacyArgs?: ReadonlyArray<unknown> }> = [];
+    const replies = new Map<string, unknown>();
+    const inner = dispatchFor(replies);
+    const dispatch: HandleDispatch = {
+      ...inner,
+      send: (call) => {
+        calls.push({
+          args: call.args,
+          ...(call.legacyArgs === undefined ? {} : { legacyArgs: call.legacyArgs }),
+        });
+        return inner.send(call);
+      },
+    };
+    const broker = createMockBroker((envelope) =>
+      envelope.kind === "thread.turn" ? { kind: "resolve", reply: "prose" } : { kind: "defer" },
+    );
+    const ask = createAskVerb({ dispatch, broker, defaultModel: undefined });
+    const schema = Schema.Struct({ deployed: Schema.Boolean }) as Schema.Schema<unknown>;
+
+    await ask("thread.turn", "t-1", "Check", { schema }).catch(() => undefined);
+    expect(calls).toHaveLength(3);
+    expect(calls[0]?.legacyArgs).toBeUndefined();
+    const legacy = calls[1]?.legacyArgs?.[0] as { prompt?: string; threadId?: string };
+    expect(legacy.threadId).toBe("t-1");
+    expect(legacy.prompt).toMatch(
+      /^Check\n\nYour previous reply did not match the required schema \(.+\)\. Respond with ONLY/,
+    );
+    expect(legacy.prompt).not.toContain("<<<");
+  });
+
+  it("still aborts after three prose replies, naming the schema and the last reply", async () => {
+    const broker = createMockBroker((envelope) =>
+      envelope.kind === "thread.turn"
+        ? { kind: "resolve", reply: "I'm waiting for the deploy-check job to finish." }
+        : { kind: "defer" },
+    );
+    const ask = createAskVerb({
+      dispatch: dispatchFor(new Map()),
+      broker,
+      defaultModel: undefined,
+    });
+    const schema = Schema.Struct({ deployed: Schema.Boolean }) as Schema.Schema<unknown>;
+
+    const failure = await ask("thread.turn", "run:64", "Check", { schema }).catch((e) => e);
+    expect(failure).toBeInstanceOf(SchemaExhaustedError);
+    const message = String((failure as Error).message);
+    expect(message).toContain("did not satisfy the response schema after 3 attempts");
+    expect(message).toContain("expected: ");
+    expect(message).toContain("deployed");
+    expect(message).toContain("last reply: I'm waiting for the deploy-check job");
+    expect(broker.sent).toHaveLength(3);
+  });
+
   it("retries schema-invalid replies exactly twice before exhausting", async () => {
     const broker = createMockBroker((envelope) =>
       envelope.kind === "thread.turn" ? { kind: "resolve", reply: "{}" } : { kind: "defer" },

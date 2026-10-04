@@ -5,9 +5,9 @@
  * `Thread` surface.
  *
  * One ask = one `sent`/`resolved` pair on the Handle dispatch. With a `schema`, a decode mismatch
- * re-asks (fresh turn, fresh `seq`) up to {@link MAX_SCHEMA_ATTEMPTS} times — restating the
- * schema-derived instruction each time — before throwing {@link SchemaExhaustedError}. Every
- * attempt is journaled, so the loop replays.
+ * re-asks (fresh turn, fresh `seq`) up to {@link MAX_SCHEMA_ATTEMPTS} times — quoting the agent's
+ * own reply back beside the schema (see schemaCorrection.ts) — before throwing
+ * {@link SchemaExhaustedError}. Every attempt is journaled, so the loop replays.
  *
  * The payload is a pure function of (replay-stable) schema + opts — including the derived schema
  * description and the named attachments — so it, and its `argsHash`, re-derive identically on
@@ -21,20 +21,10 @@ import type { FireDelivery, HandleDispatch, ReplyResolver } from "@runbook/core/
 import { decodeWithSchema } from "@runbook/core/schema";
 import type { AnyAskOpts } from "./types.ts";
 import type { ModelSelection } from "./models.ts";
+import { correctivePrompt, exhaustedReason, legacyCorrectivePrompt } from "./schemaCorrection.ts";
 
 /** One attempt + two corrective retries. */
 const MAX_SCHEMA_ATTEMPTS = 3;
-
-/**
- * A bounded, single-line view of the reply that last missed the schema, so the exhaustion error
- * names what actually arrived. Without it the decode detail is just "Expected object" and the
- * failure is unreadable — and the owner's contract is a decode error WITH the offending payload.
- */
-function offendingReply(reply: unknown): string {
-  const text = (typeof reply === "string" ? reply : JSON.stringify(reply)) ?? "undefined";
-  const flat = text.replace(/\s+/g, " ").trim();
-  return flat.length > 160 ? `${flat.slice(0, 157)}…` : flat;
-}
 
 export type ThreadEnvelopeKind = "thread.turn" | "thread.message" | "user.input";
 
@@ -85,22 +75,28 @@ export function createAskVerb(deps: {
       attachments: opts?.attachments,
       labels: opts?.labels,
     });
+    const payloadFor = (text: string) => ({
+      threadId,
+      [promptField]: text,
+      ...(opts?.label === undefined ? {} : { label: opts.label }),
+      ...plan.renderFields,
+      ...(model === undefined ? {} : { model }),
+      ...(opts?.effort === undefined ? {} : { effort: opts.effort }),
+    });
     let prompt = `${basePrompt}${plan.promptSuffix}`;
+    // The pre-rewording corrective prompt, so journals recorded by the previous version replay.
+    let legacyPrompt: string | undefined;
     let attempt = 0;
     for (;;) {
       attempt += 1;
-      const payload = {
-        threadId,
-        [promptField]: prompt,
-        ...(opts?.label === undefined ? {} : { label: opts.label }),
-        ...plan.renderFields,
-        ...(model === undefined ? {} : { model }),
-        ...(opts?.effort === undefined ? {} : { effort: opts.effort }),
-      };
+      const payload = payloadFor(prompt);
       const correlationId = await deps.dispatch.send({
         kind,
         refId: kind,
         args: payload,
+        ...(legacyPrompt === undefined || legacyPrompt === prompt
+          ? {}
+          : { legacyArgs: [payloadFor(legacyPrompt)] }),
         fire: fireEnvelope(kind, payload),
       });
       const reply = await deps.dispatch.awaitResolution<unknown>(correlationId, undefined);
@@ -111,11 +107,12 @@ export function createAskVerb(deps: {
         const detail = error instanceof Error ? error.message : String(error);
         if (attempt >= MAX_SCHEMA_ATTEMPTS) {
           throw new SchemaExhaustedError(
-            `${kind} on thread '${threadId}' did not satisfy the response schema after ${attempt} ` +
-              `attempts: ${detail}; last reply: ${offendingReply(reply)}`,
+            exhaustedReason({ kind, threadId, attempts: attempt, schema, detail, reply }),
           );
         }
-        prompt = `${basePrompt}\n\nYour previous reply did not match the required schema (${detail}). ${plan.correctiveInstruction}`;
+        const instruction = plan.correctiveInstruction;
+        prompt = correctivePrompt({ kind, basePrompt, detail, reply, instruction });
+        legacyPrompt = legacyCorrectivePrompt({ basePrompt, detail, instruction });
       }
     }
   };

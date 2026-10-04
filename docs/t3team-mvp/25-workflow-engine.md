@@ -503,6 +503,10 @@ notify = fire-and-forget):
   reply, no suspend.
 - A `schema` declared at the call is enforced by an internal corrective-retry loop (it re-asks
   on a mismatch, then throws `SchemaExhaustedError`) — the body sees a validated value or a throw.
+  The reply must parse whole (a fenced JSON reply is fine; JSON is never spliced out of prose).
+  An agent re-ask quotes the agent's own rejected reply back beside the schema shape, with a
+  JSON-only instruction and the rule that the step ends when the turn ends. The exhaustion
+  message names the schema shape, the decode detail and the last reply.
 
 ```ts
 const verdict = await agent("classify this", { schema: Verdict }); // one-shot, isolated thread
