@@ -1,4 +1,4 @@
-import { CommandId, MessageId, ThreadId, type ThreadId as ThreadIdType } from "@t3tools/contracts";
+import { CommandId, ThreadId, type ThreadId as ThreadIdType } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
