@@ -23,6 +23,7 @@ import { WorkflowInputDecodeError } from "./t3team-sdk.errors.ts";
 import type { HandleDispatch } from "./t3team-sdk.handles.ts";
 import { decodeWithSchema, setNestedValue } from "./t3team-sdk.internal.ts";
 import type { WorkflowPrimitives } from "./t3team-sdk.primitives.ts";
+import type { ReducePrimitives } from "./t3team-sdk.reducePrimitive.ts";
 import { createSchedulePrimitives } from "./t3team-sdk.schedulePrimitive.ts";
 import type { CheckpointPrimitives, CheckpointRecord } from "@runbook/core/checkpoint";
 import { createSignalPrimitives } from "./t3team-sdk.signalPrimitive.ts";
@@ -65,6 +66,8 @@ export async function runPreparedBody(opts: {
   readonly resume?: CheckpointRecord | undefined;
   /** A sub-workflow's refusing `watermark` stand-in; absent = the run's real primitive. */
   readonly watermark?: WatermarkPrimitives["watermark"];
+  /** The run's reducers (`accumulate`) — the refusing stand-in for a sub-workflow body. */
+  readonly reduce: ReducePrimitives;
   readonly handleDispatch: HandleDispatch;
   readonly broker?: MessageBroker;
   readonly launchThreadId?: string;
@@ -148,6 +151,7 @@ export async function runPreparedBody(opts: {
     checkpoint: bounded.checkpoint,
     resume: opts.resume,
     watermark: opts.watermark ?? bounded.watermark,
+    reduce: opts.reduce,
     threads,
     schedule,
     signals,

@@ -90,6 +90,10 @@
       "types": "./src/checkpoint.ts",
       "import": "./src/checkpoint.ts"
     },
+    "./reduce": {
+      "types": "./src/reduce.ts",
+      "import": "./src/reduce.ts"
+    },
     "./watermark": {
       "types": "./src/watermark.ts",
       "import": "./src/watermark.ts"

@@ -103,10 +103,11 @@ export class WorkflowRunNotFoundError extends WorkflowError {
 }
 
 /**
- * Raised when `checkpoint()` is called from inside a SUB-workflow body. A sub-workflow journals
- * into the same run sequence as its parent and shares the run's checkpoint primitive, so a
- * boundary committed there would move the run's SHARED replay window: a crash mid-sub-workflow
- * would re-drive the TOP-level body from the child's boundary, no longer at its journaled seqs —
+ * Raised when `checkpoint()` (or `accumulate()`, which commits one) is called from inside a
+ * SUB-workflow body. A sub-workflow journals into the same run sequence as its parent and shares
+ * the run's checkpoint primitive, so a boundary committed there would move the run's SHARED
+ * replay window: a crash mid-sub-workflow would re-drive the TOP-level body from the child's
+ * boundary, no longer at its journaled seqs —
  * the pre-loop setup and the child prefix would re-fire live (external effects double-execute)
  * or fail drift, silently breaking the no-refire guarantee. Checkpoints are only valid in the
  * top-level run body.
@@ -115,13 +116,17 @@ export class WorkflowRunNotFoundError extends WorkflowError {
  * is refused in a sub-workflow for the same reason.
  */
 export class SubWorkflowCheckpointError extends WorkflowError {
-  constructor(verb: "checkpoint()" | "watermark()" = "checkpoint()") {
+  /**
+   * `primitive` names the refused call — `watermark()` and `accumulate()` each commit a checkpoint
+   * boundary, so they are refused in a sub-workflow for the same reason as a raw `checkpoint()`.
+   */
+  constructor(primitive = "checkpoint()") {
     super(
-      `${verb} is not valid inside a sub-workflow body: checkpoints are only valid in the ` +
+      `${primitive} is not valid inside a sub-workflow body: checkpoints are only valid in the ` +
         "top-level run body. A sub-workflow journals into the same run sequence as its parent and " +
         "shares the run's checkpoint primitive, so a boundary committed here would move the run's " +
         "shared replay window and silently break the no-refire guarantee on crash-resume. Move the " +
-        `${verb} call to the top-level body.`,
+        `${primitive} call to the top-level body.`,
     );
     this.name = "SubWorkflowCheckpointError";
   }
