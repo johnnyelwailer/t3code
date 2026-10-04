@@ -15,7 +15,7 @@ interface RetriesRow {
   readonly turn_retries: number;
 }
 
-const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
+const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layer({ filename: ":memory:" })));
 
 layer("t3team-053_WorkflowTurnRetries", (it) => {
   it.effect("adds NOT NULL DEFAULT 0 turn_retries INTEGER to workflow_runs", () =>

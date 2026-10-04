@@ -14,6 +14,7 @@ import {
   type OrchestrationCheckpointSummary,
   type OrchestrationThreadActivity,
   type ProjectId,
+  type ProviderRequestKind,
   type ProviderRuntimeEvent,
   type ResponseStreamingMode,
   RuntimeRequestId,
@@ -48,7 +49,6 @@ import {
   ThreadBackgroundLivenessService,
 } from "../ThreadBackgroundLiveness.ts";
 import { ThreadPlanProgressService } from "../ThreadPlanProgress.ts";
-import { ThreadPlanStalenessService } from "../ThreadPlanStaleness.ts";
 import { ThreadSilenceWatchdogService } from "../ThreadSilenceWatchdog.ts";
 import {
   findClaimableJobNotificationMarker,
@@ -237,6 +237,12 @@ const BLANK_LINE_PATTERN = /^[ \t]*$/;
 // nested items count. The trailing space is required, so a partial `-` or
 // `1.` never matches before the model finishes the marker.
 const LIST_ITEM_START_PATTERN = /^[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]/;
+// A section title: an ATX heading, or a line of only bold text, which models
+// often use as a heading.
+const SECTION_TITLE_PATTERN = /^ {0,3}(?:#{1,6}(?:[ \t]|$)|\*\*(?:[^*]|\*(?!\*))+\*\*:?$)/;
+// An unindented ATX heading ends the paragraph or list above it, even with no
+// blank line between them. A bold line would continue the paragraph instead.
+const TOP_LEVEL_HEADING_PATTERN = /^#{1,6}(?:[ \t]|$)/;
 
 /**
  * Splits buffered assistant text at the last blank line, closing code fence,
@@ -247,17 +253,26 @@ const LIST_ITEM_START_PATTERN = /^[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]/;
  * never leaks; a list item start is the one lookahead that may sit on the
  * partial line, since tight lists have no blank lines between items and would
  * otherwise land all at once.
+ *
+ * A section title holds the boundary until a content line follows it, so a
+ * title never lands alone and waits above a block that is still streaming.
  */
 export function splitBufferedAssistantText(text: string): { ready: string; rest: string } {
   let openFence: { marker: string; indent: number } | null = null;
   let boundary = -1;
   let lineStart = 0;
+  let titleAwaitingContent = false;
   for (;;) {
     const newline = text.indexOf("\n", lineStart);
     const line = text
       .slice(lineStart, newline === -1 ? text.length : newline)
       .replace(/[ \t\r]+$/, "");
-    if (openFence === null && lineStart > 0 && LIST_ITEM_START_PATTERN.test(line)) {
+    if (
+      openFence === null &&
+      lineStart > 0 &&
+      !titleAwaitingContent &&
+      LIST_ITEM_START_PATTERN.test(line)
+    ) {
       boundary = lineStart;
     }
     if (newline === -1) {
@@ -269,6 +284,7 @@ export function splitBufferedAssistantText(text: string): { ready: string; rest:
       const marker = fenceMatch[2]!;
       if (openFence === null) {
         openFence = { marker, indent };
+        titleAwaitingContent = false;
       } else if (
         marker[0] === openFence.marker[0] &&
         marker.length >= openFence.marker.length &&
@@ -280,7 +296,14 @@ export function splitBufferedAssistantText(text: string): { ready: string; rest:
         boundary = newline + 1;
       }
     } else if (openFence === null && BLANK_LINE_PATTERN.test(line) && lineStart > 0) {
-      boundary = newline + 1;
+      if (!titleAwaitingContent) {
+        boundary = newline + 1;
+      }
+    } else if (openFence === null) {
+      if (lineStart > 0 && !titleAwaitingContent && TOP_LEVEL_HEADING_PATTERN.test(line)) {
+        boundary = lineStart;
+      }
+      titleAwaitingContent = SECTION_TITLE_PATTERN.test(line);
     }
     lineStart = newline + 1;
   }
@@ -427,7 +450,7 @@ function sessionStatusAllowsActiveTurn(
 
 function requestKindFromCanonicalRequestType(
   requestType: string | undefined,
-): "command" | "file-read" | "file-change" | "mcp-elicitation" | undefined {
+): ProviderRequestKind | undefined {
   switch (requestType) {
     case "command_execution_approval":
     case "exec_command_approval":
@@ -439,6 +462,8 @@ function requestKindFromCanonicalRequestType(
       return "file-change";
     case "mcp_elicitation_approval":
       return "mcp-elicitation";
+    case "permission_approval":
+      return "permission";
     default:
       return undefined;
   }
@@ -521,7 +546,9 @@ export function runtimeEventToActivities(
                   ? "File-change approval requested"
                   : requestKind === "mcp-elicitation"
                     ? "App access approval requested"
-                    : "Approval requested",
+                    : requestKind === "permission"
+                      ? "App permission approval requested"
+                      : "Approval requested",
           payload: {
             requestId: toApprovalRequestId(event.requestId),
             ...(requestKind ? { requestKind } : {}),
@@ -1064,7 +1091,6 @@ export function runtimeEventToActivities(
 const make = Effect.gen(function* () {
   const threadBackgroundLiveness = yield* ThreadBackgroundLivenessService;
   const threadPlanProgress = yield* ThreadPlanProgressService;
-  const threadPlanStaleness = yield* ThreadPlanStalenessService;
   const threadSilenceWatchdog = yield* ThreadSilenceWatchdogService;
 
   const crypto = yield* Crypto.Crypto;
@@ -2039,11 +2065,11 @@ const make = Effect.gen(function* () {
               : status === "ready" || status === "interrupted"
                 ? null
                 : // A fresh user message supersedes the previous turn's error:
-                // a supersede "interrupted" banner (or any stale lastError) must
-                // not carry into the running turn. Legit errors persist until
-                // the user retries — a rejected retry never reaches
-                // turn.started, so its lastError stays.
-                event.type === "turn.started"
+                  // a supersede "interrupted" banner (or any stale lastError) must
+                  // not carry into the running turn. Legit errors persist until
+                  // the user retries — a rejected retry never reaches
+                  // turn.started, so its lastError stays.
+                  event.type === "turn.started"
                   ? null
                   : (thread.session?.lastError ?? null);
         // The structured turn-supersede marker (stamped by the host's
@@ -2663,7 +2689,6 @@ const make = Effect.gen(function* () {
       } else if (!conflictsWithActiveTurn) {
         if (event.type === "turn.plan.updated") {
           threadPlanProgress.recordPlanProgress(thread.id, event.payload.plan);
-          threadPlanStaleness.recordPlanWrite(thread.id);
         } else if (isTerminalTurn && shouldApplyThreadLifecycle) {
           threadPlanProgress.clearThreadPlanProgress(thread.id);
         }
@@ -2708,12 +2733,10 @@ const make = Effect.gen(function* () {
       // Thread silence watchdog (GHE #63): in-progress tool items feed the
       // pending-tool distinction (silence WITH a pending tool call is a
       // legitimate long operation); session death drops the thread's state.
-      // Plan staleness: each tool start ages the thread's plan by one.
       if (event.type === "item.started" || event.type === "item.completed") {
         if (isToolLifecycleItemType(event.payload.itemType)) {
           if (event.type === "item.started") {
             threadSilenceWatchdog.recordToolItemStarted(thread.id);
-            threadPlanStaleness.recordToolActivity(thread.id);
           } else {
             threadSilenceWatchdog.recordToolItemCompleted(thread.id);
           }
@@ -2865,17 +2888,16 @@ const make = Effect.gen(function* () {
     (source: string, event: { readonly eventId: string; readonly type: string }) =>
     <E, R>(effect: Effect.Effect<void, E, R>) =>
       effect.pipe(
-        Effect.catchCause((cause) => {
-          if (Cause.hasInterruptsOnly(cause)) {
-            return Effect.failCause(cause);
-          }
-          return Effect.logWarning("provider runtime ingestion failed to process event", {
-            source,
-            eventId: event.eventId,
-            eventType: event.type,
-            cause: Cause.pretty(cause),
-          });
-        }),
+        Effect.catchCauseIf(
+          (cause) => !Cause.hasInterruptsOnly(cause),
+          (cause) =>
+            Effect.logWarning("provider runtime ingestion failed to process event", {
+              source,
+              eventId: event.eventId,
+              eventType: event.type,
+              cause: Cause.pretty(cause),
+            }),
+        ),
       );
 
   const worker = yield* makeDrainableWorker((input: RuntimeIngestionInput) =>

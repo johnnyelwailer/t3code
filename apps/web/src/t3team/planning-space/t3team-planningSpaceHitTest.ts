@@ -24,7 +24,7 @@ export function planningHitOf(target: Element | null): PlanningHit {
     };
   }
   const subtask = target.closest("[data-subtask-id]");
-  const frame = target.closest(".t3ps-node[data-node-id]");
+  const frame = target.closest('[data-t3ps~="node"][data-node-id]');
   const band = frame ? Number((frame as HTMLElement).dataset["band"] ?? 0) : 0;
   if (subtask && frame) {
     return {
@@ -36,7 +36,7 @@ export function planningHitOf(target: Element | null): PlanningHit {
   }
   if (frame) {
     const storyId = (frame as HTMLElement).dataset["nodeId"] ?? "";
-    if (band >= 5 && !target.closest(".t3ps-header")) {
+    if (band >= 5 && !target.closest('[data-t3ps~="header"]')) {
       return { type: "background" };
     }
     return { type: "frame", storyId, band };

@@ -32,10 +32,7 @@ import * as Effect from "effect/Effect";
 import { isPersistenceSqlError } from "./persistence/Errors.ts";
 import type { PullRequestError } from "./pullRequest/PullRequestService.ts";
 
-import {
-  diffScmEvents,
-  type ScmSnapshot,
-} from "./t3team-workflowSignalScmDiff.ts";
+import { diffScmEvents, type ScmSnapshot } from "./t3team-workflowSignalScmDiff.ts";
 
 const SIGNALS_BY_NAME: Readonly<Record<string, Signal<unknown>>> = Object.fromEntries(
   [
@@ -58,12 +55,8 @@ export function startScmSignalInstance(input: {
     repository: string;
     number: number;
   }>;
-  readonly detail: (
-    ref: PullRequestRef,
-  ) => Effect.Effect<PullRequestDetail, PullRequestError>;
-  readonly activity?: (
-    ref: PullRequestRef,
-  ) => Effect.Effect<PullRequestActivity, PullRequestError>;
+  readonly detail: (ref: PullRequestRef) => Effect.Effect<PullRequestDetail, PullRequestError>;
+  readonly activity?: (ref: PullRequestRef) => Effect.Effect<PullRequestActivity, PullRequestError>;
   readonly pollMs: number;
   readonly log: (message: string, fields?: unknown) => void;
 }): SignalSourceInstance & {

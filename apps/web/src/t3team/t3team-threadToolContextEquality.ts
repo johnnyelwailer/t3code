@@ -75,7 +75,6 @@ export function projectThreadsEqual(left: ProjectThread, right: ProjectThread): 
     left.dashboardMode === right.dashboardMode &&
     left.displayMode === right.displayMode &&
     left.title === right.title &&
-    left.messageCount === right.messageCount &&
     left.lastMessageAt === right.lastMessageAt &&
     left.createdAt === right.createdAt &&
     left.kickoffMessage === right.kickoffMessage &&

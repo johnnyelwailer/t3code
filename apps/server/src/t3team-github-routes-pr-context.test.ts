@@ -178,6 +178,9 @@ function pullRequestServiceLayer(
     labelCandidates: () => Effect.die("not used"),
     setLabels: () => Effect.die("not used"),
     detail: () => Effect.succeed(detail),
+    preview: () => Effect.die("not used"),
+    filesViewed: () => Effect.die("not used"),
+    setFilesViewed: () => Effect.die("not used"),
     activity: activityImpl ?? (() => Effect.succeed(activity)),
     diff:
       diffImpl ??

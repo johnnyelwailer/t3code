@@ -17,7 +17,7 @@
 import { planAskRender } from "./askRender.ts";
 import type { MessageBroker } from "./broker.ts";
 import { SchemaExhaustedError } from "@runbook/core/errors";
-import type { HandleDispatch, ReplyResolver } from "@runbook/core/handles";
+import type { FireDelivery, HandleDispatch, ReplyResolver } from "@runbook/core/handles";
 import { decodeWithSchema } from "@runbook/core/schema";
 import type { AnyAskOpts } from "./types.ts";
 import type { ModelSelection } from "./models.ts";
@@ -38,12 +38,21 @@ function offendingReply(reply: unknown): string {
 
 export type ThreadEnvelopeKind = "thread.turn" | "thread.message" | "user.input";
 
-/** Curried `broker.send` for one envelope, matching the `fire` shape the dispatch expects. */
+/** Curried `broker.send` for one envelope, matching the `fire` shape the dispatch expects. A
+ * re-fire's `delivery` marker rides on the envelope, never in the (hashed) payload. */
 export const createFireEnvelope =
   (broker: MessageBroker) =>
   (kind: ThreadEnvelopeKind, payload: unknown) =>
-  (correlationId: string, resolver: ReplyResolver): Promise<void> =>
-    broker.send({ correlationId, kind, payload }, resolver);
+  (correlationId: string, resolver: ReplyResolver, delivery?: FireDelivery): Promise<void> =>
+    broker.send(
+      {
+        correlationId,
+        kind,
+        payload,
+        ...(delivery?.redelivery === true ? { redelivery: true as const } : {}),
+      },
+      resolver,
+    );
 
 export type AskVerb = <R>(
   kind: "thread.turn" | "user.input",

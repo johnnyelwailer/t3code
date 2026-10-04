@@ -113,7 +113,7 @@ export function T3TeamWorkflowShapeStepRows({
                 key="workflow-steps-earlier"
                 type="button"
                 data-workflow-steps-earlier={hiddenCount}
-                className="rounded px-1 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="rounded px-1 py-0.5 text-2xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
                 onClick={() => setRevealedMiddleCount((count) => count + WORKFLOW_TOP_PAGE_SIZE)}
               >
                 … {hiddenCount} earlier
@@ -122,7 +122,7 @@ export function T3TeamWorkflowShapeStepRows({
           }
 
           const phaseHeader = showPhaseHeader ? (
-            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/65">
+            <p className="text-3xs font-medium uppercase tracking-widest text-muted-foreground/65">
               {phaseTitle}
             </p>
           ) : null;

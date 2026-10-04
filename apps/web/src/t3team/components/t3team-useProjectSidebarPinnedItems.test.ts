@@ -36,7 +36,6 @@ function createThread(overrides?: Partial<ProjectThread>): ProjectThread {
     title: "Investigate pinned activity behavior",
     status: "idle",
     lastMessageAt: "2026-05-26T12:00:00.000Z",
-    messageCount: 2,
     createdAt: "2026-05-26T11:00:00.000Z",
     ...overrides,
   };

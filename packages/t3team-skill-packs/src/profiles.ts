@@ -1,3 +1,4 @@
+import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import type { RecipeProfileContext, SidecarComposition } from "@t3tools/project-recipes";
 
 export type BundledT3TeamProfileId =
@@ -91,8 +92,8 @@ export type ResolveT3TeamProfileInput = {
   readonly allowFallback?: boolean;
 };
 
-export const T3TEAM_PROJECT_PROFILES_DIR = ".t3team/setup/profiles";
-export const T3TEAM_PROJECT_PROFILE_MANIFEST_PATH = ".t3team/setup/profile.json";
+export const T3TEAM_PROJECT_PROFILES_DIR = `${PROJECT_STATE_DIR}/setup/profiles`;
+export const T3TEAM_PROJECT_PROFILE_MANIFEST_PATH = `${PROJECT_STATE_DIR}/setup/profile.json`;
 
 export const DEFAULT_T3TEAM_PROFILE_ID: BundledT3TeamProfileId = "product-partner";
 

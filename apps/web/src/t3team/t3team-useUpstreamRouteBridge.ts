@@ -2,6 +2,7 @@ import { useCallback, useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
 import { useThreadShells } from "~/state/entities";
+import { usePrimaryEnvironmentId } from "~/state/environments";
 import { translateUpstreamPath } from "~/t3team/t3team-upstreamRouteBridge";
 
 /**
@@ -16,6 +17,7 @@ import { translateUpstreamPath } from "~/t3team/t3team-upstreamRouteBridge";
 export function useUpstreamRouteBridge(pathname: string, enabled: boolean): void {
   const navigate = useNavigate();
   const threadShells = useThreadShells();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
 
   const resolveProjectIdForThread = useCallback(
     ({ environmentId, threadId }: { environmentId: string; threadId: string }) =>
@@ -33,7 +35,10 @@ export function useUpstreamRouteBridge(pathname: string, enabled: boolean): void
       return;
     }
 
-    const translation = translateUpstreamPath(pathname, { resolveProjectIdForThread });
+    const translation = translateUpstreamPath(pathname, {
+      resolveProjectIdForThread,
+      primaryEnvironmentId,
+    });
     if (translation.kind === "ignore") {
       return;
     }
@@ -42,5 +47,5 @@ export function useUpstreamRouteBridge(pathname: string, enabled: boolean): void
       return;
     }
     void navigate(translation.target);
-  }, [enabled, navigate, pathname, resolveProjectIdForThread]);
+  }, [enabled, navigate, pathname, primaryEnvironmentId, resolveProjectIdForThread]);
 }

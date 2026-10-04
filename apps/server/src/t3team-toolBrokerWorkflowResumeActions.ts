@@ -25,7 +25,10 @@ import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 import type { InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
 import { replaceEphemeralWorkflowSourceAtomically } from "./t3team-workflowEphemeralSource.ts";
-import { pausedResumeBlocker, restorePausedRunContinuation } from "./t3team-workflowResumePausedTurn.ts";
+import {
+  pausedResumeBlocker,
+  restorePausedRunContinuation,
+} from "./t3team-workflowResumePausedTurn.ts";
 import { precheckWorkflowSource } from "./t3team-workflowSourcePrecheck.ts";
 
 export interface WorkflowResumeToolDeps<E = string> {

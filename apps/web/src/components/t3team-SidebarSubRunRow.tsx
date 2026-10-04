@@ -104,7 +104,7 @@ export const SidebarSubRunRow = memo(function SidebarSubRunRow(props: {
     <Tooltip>
       <TooltipTrigger
         render={
-          <span className="shrink-0 text-amber-600 dark:text-amber-400">
+          <span className="shrink-0 text-warning-foreground">
             <CircleQuestionMarkIcon aria-hidden className="size-3 shrink-0" />
           </span>
         }
@@ -112,7 +112,7 @@ export const SidebarSubRunRow = memo(function SidebarSubRunRow(props: {
       <TooltipPopup side="top">is asking you a question — open to answer</TooltipPopup>
     </Tooltip>
   ) : child.status === "running" ? (
-    <span className="shrink-0 text-sky-600 dark:text-sky-400">
+    <span className="shrink-0 text-info-foreground">
       <ThreadActivityMorphIcon solid={false} size="sm" pulse />
     </span>
   ) : child.status === "error" ? (
@@ -135,7 +135,7 @@ export const SidebarSubRunRow = memo(function SidebarSubRunRow(props: {
         onContextMenu={handleContextMenu}
         aria-current={props.isActive ? "page" : undefined}
         className={cn(
-          "relative flex h-7 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md pe-2.5 ps-[calc(var(--sidebar-content-inset)+0.5rem)] text-left text-xs outline-none",
+          "relative flex h-7 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-md pe-2.5 ps-4 text-left text-xs outline-none",
           props.isActive
             ? "bg-sidebar-row-active text-sidebar-foreground"
             : "text-sidebar-muted-foreground/80 hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
@@ -157,11 +157,11 @@ export const SidebarSubRunRow = memo(function SidebarSubRunRow(props: {
           <span className="min-w-0 flex-1 truncate">{child.title}</span>
         )}
         {childLabelMode === "dock" ? (
-          <span className="shrink-0 text-sky-600 dark:text-sky-400">
+          <span className="shrink-0 text-info-foreground">
             <span className="t3team-label-shimmer">{childLabel}</span>
           </span>
         ) : null}
-        <span className="shrink-0 text-[0.6875rem] text-muted-foreground/55 tabular-nums">
+        <span className="shrink-0 text-2xs text-muted-foreground/55 tabular-nums">
           {compactSidebarTimeLabel(formatRelativeTimeLabel(child.lastMessageAt))}
         </span>
         {/* sizers for the dock/flip decision (natural widths, hidden) */}
@@ -174,7 +174,7 @@ export const SidebarSubRunRow = memo(function SidebarSubRunRow(props: {
             <span data-sizer="__label" className="inline-block whitespace-nowrap">
               {childLabel}
             </span>
-            <span data-sizer="__time" className="inline-block whitespace-nowrap text-[0.6875rem]">
+            <span data-sizer="__time" className="inline-block whitespace-nowrap text-2xs">
               {compactSidebarTimeLabel(formatRelativeTimeLabel(child.lastMessageAt))}
             </span>
           </span>

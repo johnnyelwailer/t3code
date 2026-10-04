@@ -113,7 +113,9 @@ export function startWorkItemSignalInstance(input: {
     accountId?: string;
   }>;
   readonly pollMs: number;
-  readonly resolveProvider: (accountId?: string) => Promise<AtlassianIntegrationProvider | undefined>;
+  readonly resolveProvider: (
+    accountId?: string,
+  ) => Promise<AtlassianIntegrationProvider | undefined>;
   readonly log: (message: string, fields?: unknown) => void;
 }): SignalSourceInstance {
   const { ctx, pollMs, log } = input;
@@ -142,12 +144,10 @@ export function startWorkItemSignalInstance(input: {
         return undefined;
       });
       if (provider === undefined) return;
-      const snapshot = await provider
-        .getResource(ref)
-        .catch((error: unknown) => {
-          log("work-item signal poll: resource read failed", { error: String(error) });
-          return null;
-        });
+      const snapshot = await provider.getResource(ref).catch((error: unknown) => {
+        log("work-item signal poll: resource read failed", { error: String(error) });
+        return null;
+      });
       if (snapshot === null) return;
       const prev = await readCursor();
       const cursor = workItemCursorFromFields(snapshot.fields);

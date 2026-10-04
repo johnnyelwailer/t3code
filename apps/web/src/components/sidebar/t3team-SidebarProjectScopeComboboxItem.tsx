@@ -23,8 +23,7 @@ export function T3TeamSidebarProjectScopeComboboxItem({
     <ComboboxItem
       hideIndicator
       value={item}
-      className="h-8 min-h-8 py-0 font-medium"
-      contentClassName="flex min-w-0 items-center gap-2"
+      className="h-8 min-h-8"
       onContextMenu={(event) => {
         if (project) onProjectSettings(event, project);
       }}
@@ -34,7 +33,7 @@ export function T3TeamSidebarProjectScopeComboboxItem({
       ) : (
         <FolderIcon className="size-4 shrink-0" />
       )}
-      <span className="min-w-0 flex-1 truncate text-sm">{item.label}</span>
+      <span className="min-w-0 flex-1 truncate text-sm font-medium">{item.label}</span>
       {project ? (
         <Button
           size="icon-xs"
@@ -42,7 +41,7 @@ export function T3TeamSidebarProjectScopeComboboxItem({
           tabIndex={-1}
           aria-hidden="true"
           title={`Project settings for ${project.displayName}`}
-          className="ml-auto size-6 [--control-icon-color:currentColor] text-icon-muted focus-visible:bg-accent focus-visible:text-foreground"
+          className="ml-auto size-6"
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             onProjectSettings(event, project);

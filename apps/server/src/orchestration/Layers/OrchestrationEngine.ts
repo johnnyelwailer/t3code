@@ -445,7 +445,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
                   status: "rejected",
                   error: error.message,
                 })
-                .pipe(Effect.catch(() => Effect.void));
+                .pipe(Effect.ignore);
             }
           }
 
@@ -466,6 +466,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
 
   const readEvents: OrchestrationEngineShape["readEvents"] = (fromSequenceExclusive, limit) =>
     eventStore.readFromSequence(fromSequenceExclusive, limit);
+  const readEventsMatching = eventStore.readMatching;
 
   const readThreadEvents: OrchestrationEngineShape["readThreadEvents"] = ({ threadId, ...range }) =>
     eventStore.readAggregateRange({ ...range, aggregateKind: "thread", aggregateId: threadId });
@@ -494,6 +495,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
 
   return {
     readEvents,
+    ...(readEventsMatching !== undefined ? { readEventsMatching } : {}),
     readThreadEvents,
     getThreadReplayStats,
     dispatch,

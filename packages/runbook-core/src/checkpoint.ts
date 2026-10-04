@@ -40,6 +40,14 @@ export interface CheckpointInput<State> {
   readonly retention?: CheckpointRetention;
 }
 
+/** One retained iteration output: the checkpoint that closed it and the state it committed. */
+export interface HistoryEntry<State = unknown> {
+  /** The closing checkpoint entry's seq. */
+  readonly seq: number;
+  readonly state: State;
+  readonly at: string;
+}
+
 export interface CheckpointRecord<State = unknown> {
   /**
    * Highest EARLIER seq made unnecessary for active replay (the checkpoint's own boundary seq
@@ -50,6 +58,14 @@ export interface CheckpointRecord<State = unknown> {
   readonly state: State;
   readonly retainedHistory: number;
   readonly at: string;
+  /**
+   * The recorded `history(n)` ring at this boundary, oldest first, ending with this checkpoint's
+   * own entry: the previous record's ring plus this state, capped at `retainedHistory`. It is the
+   * last N checkpoints OF THE RUN (every checkpoint this primitives instance commits — a second
+   * loop or an inline sub-workflow composes into the same ring), not of one loop. Absent on
+   * records journaled before the ring was recorded; readers fall back to scanning for those.
+   */
+  readonly history?: ReadonlyArray<HistoryEntry>;
 }
 
 export interface CheckpointPrimitives {
@@ -71,6 +87,21 @@ export interface CheckpointPrimitivesDeps {
   /** Existing DurablePrimitiveRuntime cursor; read inside exec AFTER seq allocation. */
   readonly currentSeq: () => number;
   readonly nowIso: () => string;
+  /**
+   * The active boundary a checkpoint-aware resume restored (`RunResume.checkpoint`): its ring
+   * seeds the next commit, so the ring spans the resume. Absent on a fresh run.
+   */
+  readonly resumeFrom?: CheckpointRecord;
+}
+
+/** The ring a record carries, or — for a record journaled before rings were recorded — its own
+ * entry alone (a legacy record knows its boundary as `compactedThroughSeq + 1`). Journals written
+ * before the recorded-ring field retain at most the boundary entry; new checkpoints build the
+ * full ring from there. */
+function recordedRing(record: CheckpointRecord): ReadonlyArray<HistoryEntry> {
+  return (
+    record.history ?? [{ seq: record.compactedThroughSeq + 1, state: record.state, at: record.at }]
+  );
 }
 
 /** Normalize + validate the optional retention before anything is journaled. */
@@ -94,10 +125,12 @@ export function normalizeCheckpointRetention(retention: CheckpointRetention | un
 }
 
 export function createCheckpointPrimitives(deps: CheckpointPrimitivesDeps): CheckpointPrimitives {
+  // The latest record this run committed (live) or replayed: the base of the next ring.
+  let previous: CheckpointRecord | undefined = deps.resumeFrom;
   return {
     checkpoint: async <State>(input: CheckpointInput<State>): Promise<CheckpointRecord<State>> => {
       const retention = normalizeCheckpointRetention(input.retention);
-      return deps.callPrimitive<CheckpointRecord<State>>({
+      const record = await deps.callPrimitive<CheckpointRecord<State>>({
         kind: CHECKPOINT_KIND,
         refId: CHECKPOINT_REF_ID,
         // The full input is the journaled arg surface: state changes between the original run and
@@ -108,14 +141,23 @@ export function createCheckpointPrimitives(deps: CheckpointPrimitivesDeps): Chec
           // is everything BEFORE it. The reader materializes strictly AFTER the boundary entry,
           // because the boundary entry itself is what the compact state replaces.
           const boundary = deps.currentSeq();
+          const at = deps.nowIso();
+          const base = previous === undefined ? [] : recordedRing(previous);
+          const history =
+            retention.history === 0
+              ? []
+              : [...base, { seq: boundary, state: input.state, at }].slice(-retention.history);
           return {
             compactedThroughSeq: boundary - 1,
             state: input.state,
             retainedHistory: retention.history,
-            at: deps.nowIso(),
+            at,
+            history,
           };
         },
       });
+      previous = record;
+      return record;
     },
   };
 }
@@ -178,7 +220,24 @@ export function isCheckpointRecord(result: unknown): result is CheckpointRecord 
   if (record.retainedHistory < 0) return false;
   if (typeof record.at !== "string") return false;
   if (!("state" in record)) return false;
+  // `history` is optional (records journaled before the ring was recorded omit it); when present
+  // it must be a well-formed ring, or the record is not a valid boundary.
+  if (record.history !== undefined && !isHistoryRing(record.history)) return false;
   return true;
+}
+
+function isHistoryRing(value: unknown): value is ReadonlyArray<HistoryEntry> {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (item: unknown) =>
+        typeof item === "object" &&
+        item !== null &&
+        Number.isInteger((item as Record<string, unknown>).seq) &&
+        typeof (item as Record<string, unknown>).at === "string" &&
+        "state" in item,
+    )
+  );
 }
 
 /**

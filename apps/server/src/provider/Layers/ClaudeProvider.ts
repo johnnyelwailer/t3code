@@ -4,6 +4,7 @@ import {
   type ModelSelection,
   type ServerProviderModel,
   type ServerProviderSlashCommand,
+  type ServerProviderResetCredits,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -445,7 +446,7 @@ function formatClaudeOpus47UpgradeMessage(version: string | null): string {
   return `Claude Code ${versionLabel} is too old for Claude Opus 4.7. Upgrade to v${MINIMUM_CLAUDE_OPUS_4_7_VERSION} or newer to access it.`;
 }
 
-export function getClaudeModelCapabilities(model: string | null | undefined): ModelCapabilities {
+function getClaudeModelCapabilities(model: string | null | undefined): ModelCapabilities {
   const slug = model?.trim();
   return (
     BUILT_IN_MODELS.find((candidate) => candidate.slug === slug)?.capabilities ??
@@ -453,7 +454,7 @@ export function getClaudeModelCapabilities(model: string | null | undefined): Mo
   );
 }
 
-export function resolveClaudeEffort(
+function resolveClaudeEffort(
   caps: ModelCapabilities,
   raw: string | null | undefined,
 ): string | undefined {
@@ -476,7 +477,7 @@ export function resolveClaudeEffort(
  * because it is a prompt-prefix mode, and older model compatibility mappings
  * are preserved for current Claude Code behavior.
  */
-export function normalizeClaudeCliEffort(
+function normalizeClaudeCliEffort(
   effort: string | null | undefined,
   model: string | null | undefined,
 ): string | undefined {
@@ -502,11 +503,11 @@ export function normalizeClaudeCliEffort(
   return effort;
 }
 
-export function isClaudeUltracodeEffort(effort: string | null | undefined): boolean {
+function isClaudeUltracodeEffort(effort: string | null | undefined): boolean {
   return effort === "ultracode";
 }
 
-export function resolveClaudeContextWindow(
+function resolveClaudeContextWindow(
   modelSelection: ModelSelection | undefined,
 ): string | undefined {
   const caps = getClaudeModelCapabilities(modelSelection?.model);
@@ -520,7 +521,7 @@ export function resolveClaudeContextWindow(
   return typeof value === "string" ? value : undefined;
 }
 
-export function resolveClaudeApiModelId(modelSelection: ModelSelection): string {
+function resolveClaudeApiModelId(modelSelection: ModelSelection): string {
   switch (resolveClaudeContextWindow(modelSelection)) {
     case "1m":
       return `${modelSelection.model}[1m]`;
@@ -898,6 +899,8 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
   modelCatalog: ClaudeModelCatalog = BUNDLED_CLAUDE_MODEL_CATALOG,
   /** Shared with the adapter so turn events reuse the scoped-bucket names this probe saw. */
   scopedLimitNames?: Ref.Ref<ClaudeScopedLimitNames>,
+  /** Banked resets for a subscription login, given the CLI version for the user agent. */
+  resolveResetCredits?: (version: string) => Effect.Effect<ServerProviderResetCredits | undefined>,
 ): Effect.fn.Return<
   ServerProviderDraft,
   never,
@@ -1050,6 +1053,13 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
           checkedAt,
         })
       : claudeUsageResponseToLimits({ response: capabilities.usage, checkedAt }).limits;
+  const resetCredits =
+    resolveResetCredits &&
+    capabilities.subscriptionType &&
+    !usageLimits.unavailable &&
+    parsedVersion
+      ? yield* resolveResetCredits(parsedVersion)
+      : undefined;
   return buildServerProvider({
     presentation: CLAUDE_PRESENTATION,
     enabled: claudeSettings.enabled,
@@ -1067,7 +1077,7 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
         ...(authMetadata ? authMetadata : {}),
       },
       ...(versionUpgradeMessage ? { message: versionUpgradeMessage } : {}),
-      usageLimits,
+      usageLimits: resetCredits ? { ...usageLimits, resetCredits } : usageLimits,
     },
   });
 });

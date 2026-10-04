@@ -152,6 +152,7 @@ export type {
   CreateWorkflowRunHostConfig,
   WorkflowHostLifecycle,
   WorkflowHostPendingAsk,
+  WorkflowHostRedriveOptions,
   WorkflowHostRegisteredRun,
   WorkflowHostRegistry,
   WorkflowHostSleep,

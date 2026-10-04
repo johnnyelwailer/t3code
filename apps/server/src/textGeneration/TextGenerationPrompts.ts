@@ -344,7 +344,7 @@ export function buildThreadTitlePrompt(input: ThreadTitlePromptInput) {
  * last few meaningful activities plus an optional one-line user-intent gist —
  * never the whole thread, never tool results.
  */
-export const ACTIVITY_LABEL_CONTEXT_MAX_CHARS = 400;
+const ACTIVITY_LABEL_CONTEXT_MAX_CHARS = 400;
 
 export interface ActivityLabelPromptInput {
   /** Pre-capped, tiny context: recent activity lines + optional user-intent gist. */

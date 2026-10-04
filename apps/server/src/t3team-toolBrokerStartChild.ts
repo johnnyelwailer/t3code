@@ -73,6 +73,7 @@ export function makeStartChildThread(input: {
       const { repoFullName, repoRef, branch, worktreePath } = yield* resolveStartChildWorktree({
         services: input.services,
         projectWorkspaceRoot: project.workspaceRoot,
+        ...(project.mainRepository ? { projectMainRepository: project.mainRepository } : {}),
         args,
         childThreadId,
       });

@@ -22,16 +22,16 @@ import { T3TeamFixtureIntegrationProvider } from "./t3team-fixtureProjectProvide
  * code paths. No pack recipe currently gates on `projectSourceKinds`, so nothing in the
  * shipped library depends on either choice.
  */
-export const T3TEAM_FIXTURE_ACCOUNT_PREFIX = "fixture:";
+const T3TEAM_FIXTURE_ACCOUNT_PREFIX = "fixture:";
 
-export const T3TEAM_FIXTURE_PROJECT_ROOT_ENV = "T3TEAM_FIXTURE_PROJECT_ROOT";
-export const T3TEAM_FIXTURE_PROJECT_ACCOUNT_ENV = "T3TEAM_FIXTURE_PROJECT_ACCOUNT_ID";
+const T3TEAM_FIXTURE_PROJECT_ROOT_ENV = "T3TEAM_FIXTURE_PROJECT_ROOT";
+const T3TEAM_FIXTURE_PROJECT_ACCOUNT_ENV = "T3TEAM_FIXTURE_PROJECT_ACCOUNT_ID";
 
 const mockProvider = new MockIntegrationProvider();
 const fixtureProviders = new Map<string, T3TeamFixtureIntegrationProvider>();
 let envRegistrationDone = false;
 
-export function isT3TeamFixtureAccountId(accountId: string | null | undefined): boolean {
+function isT3TeamFixtureAccountId(accountId: string | null | undefined): boolean {
   return typeof accountId === "string" && accountId.startsWith(T3TEAM_FIXTURE_ACCOUNT_PREFIX);
 }
 
@@ -75,7 +75,7 @@ function registerFixtureProjectsFromEnv(): void {
   }
 }
 
-export function findT3TeamFixtureProvider(
+function findT3TeamFixtureProvider(
   accountId: string | null | undefined,
 ): T3TeamFixtureIntegrationProvider | null {
   registerFixtureProjectsFromEnv();

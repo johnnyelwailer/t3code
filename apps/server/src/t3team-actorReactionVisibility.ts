@@ -25,8 +25,6 @@ import {
   buildActorReactionDigestInput,
 } from "./t3team-actorReactionInput.ts";
 
-export { ACTOR_STANDING_INSTRUCTION } from "./t3team-actorReactionInput.ts";
-
 /**
  * The reaction turn's full input: the stable digest base, plus the standing
  * instruction ONLY when this is the thread's first digest since process start

@@ -41,7 +41,7 @@ export function DigestChips({
   const chips: ReactNode[] = [];
   for (const d of graph.decisions.filter((d) => d.ticketId === ticketId)) {
     chips.push(
-      <Badge key={d.id} variant="warning" className="max-w-full gap-1 font-normal leading-none">
+      <Badge key={d.id} variant="warning" className="max-w-full">
         <span className="truncate">{d.question}</span>
         <span className="opacity-70">· {formatDigestAgo(nowMs, d.askedAt)}</span>
       </Badge>,
@@ -52,11 +52,7 @@ export function DigestChips({
     (t) => t.ticketId === ticketId && Date.parse(t.at) > lastVisit,
   )) {
     chips.push(
-      <Badge
-        key={`${t.ticketId}-${t.at}`}
-        variant="outline"
-        className="gap-1 font-normal leading-none"
-      >
+      <Badge key={`${t.ticketId}-${t.at}`} variant="outline">
         {t.from} → {t.to}
       </Badge>,
     );
@@ -118,7 +114,7 @@ export function DigestItemRow({
         />
         <a
           href={ticket.ref.url}
-          className="shrink-0 font-mono text-[11.5px] text-muted-foreground hover:text-foreground hover:underline"
+          className="shrink-0 font-mono text-xs text-muted-foreground hover:text-foreground hover:underline"
           onClick={onAnchorClick}
         >
           {ticket.ref.displayId}
@@ -127,7 +123,7 @@ export function DigestItemRow({
             nothing when the unshrinkable key / status / people cells crowd a narrow card. */}
         <a
           href={ticket.ref.url}
-          className="min-w-0 flex-1 truncate text-left text-[13px] font-medium leading-5 hover:underline"
+          className="min-w-0 flex-1 truncate text-left text-sm font-medium leading-5 hover:underline"
           onClick={onAnchorClick}
         >
           {ticket.ref.title}
@@ -142,7 +138,7 @@ export function DigestItemRow({
         <div className="mt-0.5 flex min-w-0 items-center gap-2">
           <div className="min-w-0 space-y-0.5">
             {action ? (
-              <p className="text-[11.5px] leading-4 text-foreground/80">
+              <p className="text-xs leading-4 text-foreground/80">
                 {action.pr ? (
                   <>
                     {action.text.replace(`${action.pr.repo}#${action.pr.number}`, "").trim()}
@@ -161,7 +157,7 @@ export function DigestItemRow({
                 )}
               </p>
             ) : null}
-            {why ? <p className="text-[11.5px] leading-4 text-muted-foreground">{why}</p> : null}
+            {why ? <p className="text-xs leading-4 text-muted-foreground">{why}</p> : null}
           </div>
           {/* No PR row to carry the dots, so they trail the text instead of floating on their
               own line. */}

@@ -26,7 +26,6 @@ function createProjectThread(overrides: Partial<ProjectThread> = {}): ProjectThr
     title: "PROJ-9 kickoff 1",
     status: "idle",
     lastMessageAt: "2026-05-26T12:00:00.000Z",
-    messageCount: 0,
     createdAt: "2026-05-26T12:00:00.000Z",
     ...overrides,
   };
@@ -40,7 +39,6 @@ function createDashboardThread(): ProjectThread {
     title: "Project kickoff",
     status: "idle",
     lastMessageAt: "2026-05-26T12:00:00.000Z",
-    messageCount: 0,
     createdAt: "2026-05-26T12:00:00.000Z",
   };
 }

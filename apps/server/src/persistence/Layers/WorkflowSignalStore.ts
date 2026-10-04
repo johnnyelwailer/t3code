@@ -43,7 +43,7 @@ const SignalInboxDbRow = SignalInboxEntry.mapFields(
     delivered: Schema.Number.pipe(
       Schema.decodeTo(
         Schema.Boolean,
-        SchemaTransformation.transformOrFail({
+        SchemaTransformation.transformEffect({
           decode: (value) => Effect.succeed(value === 1),
           encode: (value) => Effect.succeed(value ? 1 : 0),
         }),

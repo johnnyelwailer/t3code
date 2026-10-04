@@ -145,7 +145,7 @@ export function T3TeamCommandPalette(props: T3TeamCommandPaletteProps) {
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandDialogPopup
         aria-label={`${APP_DISPLAY_NAME} search`}
-        className="overflow-hidden p-0"
+        className="overflow-hidden"
         finalFocus={() => false}
         onBackdropPointerDown={() => {
           onOpenChange(false);

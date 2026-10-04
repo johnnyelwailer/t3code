@@ -103,10 +103,9 @@ describe("makeT3TeamActorMailbox", () => {
       expect(peeked.map(({ messageId }) => messageId)).toEqual(["a", "b"]);
       // The peek did NOT flip reacting: the queue is still claimable in full.
       expect(yield* mailbox.isReacting("target")).toBe(false);
-      expect((yield* mailbox.takeNextForDispatch("target")).map(({ messageId }) => messageId)).toEqual([
-        "a",
-        "b",
-      ]);
+      expect(
+        (yield* mailbox.takeNextForDispatch("target")).map(({ messageId }) => messageId),
+      ).toEqual(["a", "b"]);
     }),
   );
 

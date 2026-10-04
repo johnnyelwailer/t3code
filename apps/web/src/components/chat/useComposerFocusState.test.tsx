@@ -16,7 +16,8 @@ function ComposerProbe() {
     isResting = shouldUseRestingComposerLayout({
       isExistingThread: true,
       isMobileViewport: false,
-      isFocused: true,
+      // Fork (e38a5e831a): a focused composer never rests; the reader scrolled the timeline.
+      isFocused: false,
       isScrollCollapsed: state.isComposerScrollCollapsed,
       hasExpandedChrome: false,
       hasMultilinePrompt: false,

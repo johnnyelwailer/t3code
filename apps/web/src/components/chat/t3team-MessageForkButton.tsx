@@ -1,7 +1,6 @@
 import { memo } from "react";
 import { GitFork } from "lucide-react";
 import { Button } from "../ui/button";
-import { cn } from "~/lib/utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 /**
@@ -13,13 +12,13 @@ export const MessageForkButton = memo(function MessageForkButton({
   messageId,
   onForkThread,
   size = "xs",
-  variant = "ghost",
+  variant = "ghost-muted",
   className,
 }: {
   messageId: string;
   onForkThread: (input: { readonly messageId: string }) => void | Promise<void>;
   size?: "xs" | "icon-xs";
-  variant?: "outline" | "ghost";
+  variant?: "outline" | "ghost-muted";
   className?: string;
 }) {
   return (
@@ -32,7 +31,7 @@ export const MessageForkButton = memo(function MessageForkButton({
             size={size}
             variant={variant}
             onClick={() => void onForkThread({ messageId })}
-            className={cn("text-muted-foreground hover:text-foreground", className)}
+            className={className}
           />
         }
       >

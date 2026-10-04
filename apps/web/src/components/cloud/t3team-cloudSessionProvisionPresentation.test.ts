@@ -6,6 +6,7 @@ import {
   isCloudSessionProvisionPending,
   presentCloudSession,
 } from "./t3team-cloudSessionProvisionPresentation";
+import { formatHoldDuration } from "./t3team-cloudSessionHoldFormat";
 
 const session = (overrides: Partial<CloudSession> = {}): CloudSession => ({
   sessionId: "s1",
@@ -62,7 +63,8 @@ describe("presentCloudSession", () => {
     );
     expect(presentation.title).toBe("Provisioning failed");
     expect(presentation.detail).toBe("The relay timed out.");
-    expect(presentation.actionLabel).toBe("Retry");
+    // A fresh session, not a replay of the failed one — the label says so.
+    expect(presentation.actionLabel).toBe("Start another");
   });
 
   it("never offers a secondary action outside the ready phase", () => {
@@ -71,6 +73,15 @@ describe("presentCloudSession", () => {
       if (phase === "ready") continue;
       expect(presentation.secondaryActionLabel, phase).toBeNull();
     }
+  });
+});
+
+describe("formatHoldDuration", () => {
+  it("tags the picker's choices compactly", () => {
+    expect(formatHoldDuration(3600)).toBe("1h");
+    expect(formatHoldDuration(4 * 3600)).toBe("4h");
+    expect(formatHoldDuration(90 * 60)).toBe("1h 30m");
+    expect(formatHoldDuration(45 * 60)).toBe("45m");
   });
 });
 

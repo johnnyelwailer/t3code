@@ -31,18 +31,18 @@ Worse, a suspended workflow **is not running at all**. It cannot hold a socket o
 listener alive, and cannot call a cleanup function on its way out if the host crashed.
 
 So the producer is not a function the workflow calls. It is a separate artifact with a different
-execution model, whose lifetime the *engine* owns.
+execution model, whose lifetime the _engine_ owns.
 
-| | `.workflow.ts` | `.source.ts` |
-|---|---|---|
-| execution | replayed, deterministic | runs once, for real, never replayed |
-| may perform | engine verbs only | OS, network, webhooks, sockets, subprocesses |
-| lifetime | suspends for weeks | must stay up while anyone needs it |
-| started by | a launch | the engine's reconciler |
+|             | `.workflow.ts`          | `.source.ts`                                 |
+| ----------- | ----------------------- | -------------------------------------------- |
+| execution   | replayed, deterministic | runs once, for real, never replayed          |
+| may perform | engine verbs only       | OS, network, webhooks, sockets, subprocesses |
+| lifetime    | suspends for weeks      | must stay up while anyone needs it           |
+| started by  | a launch                | the engine's reconciler                      |
 
 ## 2. Three concepts
 
-- **Signal** — a typed event *shape*. Declared once, imported by both sides.
+- **Signal** — a typed event _shape_. Declared once, imported by both sides.
 - **Source** — an effectful, supervised producer of one or more signals.
 - **Consumer** — a workflow suspended on a signal.
 
@@ -62,8 +62,8 @@ X") is ambiguous the moment two do. **So the binding is explicit** — see §3.
 ### Two SDK entrypoints, enforcing the split at the import
 
 ```ts
-import { waitUntil, getSignalSource } from "@t3team/sdk"          // replayed. no effects.
-import { defineSignalSource }         from "@t3team/sdk/source"   // effects. no engine verbs.
+import { waitUntil, getSignalSource } from "@t3team/sdk"; // replayed. no effects.
+import { defineSignalSource } from "@t3team/sdk/source"; // effects. no engine verbs.
 ```
 
 A workflow cannot reach `ctx.emit`; a source cannot reach `waitUntil`. The rule that would otherwise
@@ -73,10 +73,13 @@ live in documentation is enforced by what is importable.
 
 ```ts
 // signals.ts — imported by producer, consumer, and the HTTP boundary
-export const ChangeRequestMerged = defineSignal("scm.change-request.merged", Schema.Struct({
-  changeRequest: ChangeRequest,        // reuses the contracts type
-  mergedBy:      Schema.String,
-}))
+export const ChangeRequestMerged = defineSignal(
+  "scm.change-request.merged",
+  Schema.Struct({
+    changeRequest: ChangeRequest, // reuses the contracts type
+    mergedBy: Schema.String,
+  }),
+);
 ```
 
 One declaration is the single source of truth. It gives the consumer an inferred payload type, and
@@ -87,17 +90,21 @@ therefore cannot inject a shape the consumer is not typed for.
 
 ```ts
 export default defineSignalSource({
-  name:   "scm-change-requests",
+  name: "scm-change-requests",
   params: Schema.Struct({ repo: Schema.String }),
-  emits:  [ChangeRequestMerged, ChangeRequestOpened],
+  emits: [ChangeRequestMerged, ChangeRequestOpened],
   async start(ctx) {
-    const hook = await registerWebhook(ctx.params.repo, ctx.callbackUrl)
+    const hook = await registerWebhook(ctx.params.repo, ctx.callbackUrl);
     server.on("change_request", (e) =>
-      ctx.emit(ChangeRequestMerged, { key: String(e.number) },
-               { changeRequest: e.cr, mergedBy: e.sender }))
-    return { stop: () => hook.delete() }
+      ctx.emit(
+        ChangeRequestMerged,
+        { key: String(e.number) },
+        { changeRequest: e.cr, mergedBy: e.sender },
+      ),
+    );
+    return { stop: () => hook.delete() };
   },
-})
+});
 ```
 
 `ctx.emit` is narrowed by `emits`: emitting an undeclared signal, or a mistyped payload for a
@@ -106,8 +113,8 @@ declared one, is a compile error. That is the producer end of end-to-end type sa
 ### `getSignalSource` — the consumer's explicit bind
 
 ```ts
-const scm = getSignalSource(ScmChangeRequests, { repo: "nexplore/foo" })
-const ev  = await scm.waitFor(ChangeRequestMerged, { key: String(pr) })
+const scm = getSignalSource(ScmChangeRequests, { repo: "nexplore/foo" });
+const ev = await scm.waitFor(ChangeRequestMerged, { key: String(pr) });
 //    ^? { changeRequest: ChangeRequest; mergedBy: string }
 ```
 
@@ -129,11 +136,11 @@ workflow, a test — where there is nothing to start.
 `nexplore/foo` share **one** webhook registration; a fourth watching `nexplore/bar` gets its own.
 
 This is what makes one-shot watches free rather than a second mechanism. Granularity is a source
-*implementation* choice, expressed entirely through what goes in `params`:
+_implementation_ choice, expressed entirely through what goes in `params`:
 
 ```ts
-getSignalSource(ScmChangeRequests, { repo: "nexplore/foo" })            // one instance, all CRs
-getSignalSource(SingleChangeRequestHook, { repo: "nexplore/foo", pr: 123 }) // one instance per CR
+getSignalSource(ScmChangeRequests, { repo: "nexplore/foo" }); // one instance, all CRs
+getSignalSource(SingleChangeRequestHook, { repo: "nexplore/foo", pr: 123 }); // one instance per CR
 ```
 
 Ten workflows babysitting ten change requests on one repo share a single registration under the
@@ -180,7 +187,7 @@ and the run waits forever. So `(run, name, key)` needs a durable inbox: deliveri
 
 **Honest limitation: an inbox does not cover the restart window.** If the host is down when a webhook
 fires, there is no process to receive it and no inbox entry is written. A source that genuinely
-survives restart needs a durable cursor and a catch-up sweep in `start()` — i.e. push *plus* a
+survives restart needs a durable cursor and a catch-up sweep in `start()` — i.e. push _plus_ a
 reconciling poll. Any claim of pure-push durability is false about exactly this window.
 
 **`start()` runs again after every restart, so it must be idempotent** — re-registering must not
@@ -204,11 +211,11 @@ azure-devops / bitbucket via `SourceControlProviderRegistry`.
 
 ### Tier A — providers and payload types both already exist
 
-| source | signals | notes |
-|---|---|---|
-| `ChangeRequestWatch` | opened, merged, closed, draft→ready | payload reuses `ChangeRequest`, `ChangeRequestState` |
-| `ChangeRequestChecks` | checks passed / failed / running | reuses `PullRequestCheck`, `PullRequestChecksState`. **This is what "babysit until merged" actually waits on** — merge is the last event; checks are the interesting ones |
-| `ChangeRequestReview` | submitted, changes requested, thread replied | reuses `PullRequestReviewDecision`, `PullRequestReviewVerdict`, `PullRequestReviewThread` |
+| source                | signals                                      | notes                                                                                                                                                                     |
+| --------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ChangeRequestWatch`  | opened, merged, closed, draft→ready          | payload reuses `ChangeRequest`, `ChangeRequestState`                                                                                                                      |
+| `ChangeRequestChecks` | checks passed / failed / running             | reuses `PullRequestCheck`, `PullRequestChecksState`. **This is what "babysit until merged" actually waits on** — merge is the last event; checks are the interesting ones |
+| `ChangeRequestReview` | submitted, changes requested, thread replied | reuses `PullRequestReviewDecision`, `PullRequestReviewVerdict`, `PullRequestReviewThread`                                                                                 |
 
 Provider-agnostic for free by riding the existing registry.
 
@@ -233,28 +240,28 @@ Tier A, smaller than greenfield.
 The engine already knows all of this. Cheapest to build, and two of them are the highest-leverage
 items in the catalog.
 
-| source | fires when | why |
-|---|---|---|
-| `InboundWebhook` | anything POSTs its minted URL | **the escape hatch.** Decodes against the caller's schema, so a new SaaS needs zero shipped code. Without it, the catalog needs a source per vendor forever |
-| `ProviderHealth` | a credential goes invalid, auth expires | `SourceControlProviderAuthStatus` exists. Directly addresses the `invalid_mcp_credential` incident of 2026-08-30, where a healthy-looking app sat on a dead MCP backend for ~50 minutes |
-| `WorkflowCompleted` | another run finishes | fan-in between independent workflows with no parent/child ownership |
-| `ThreadActivity` | a message lands in a thread | "watch my conversation for X" |
-| `BudgetThreshold` | usage crosses a line | `getBudget` and `UsageProviderKind` both exist |
+| source              | fires when                              | why                                                                                                                                                                                     |
+| ------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `InboundWebhook`    | anything POSTs its minted URL           | **the escape hatch.** Decodes against the caller's schema, so a new SaaS needs zero shipped code. Without it, the catalog needs a source per vendor forever                             |
+| `ProviderHealth`    | a credential goes invalid, auth expires | `SourceControlProviderAuthStatus` exists. Directly addresses the `invalid_mcp_credential` incident of 2026-08-30, where a healthy-looking app sat on a dead MCP backend for ~50 minutes |
+| `WorkflowCompleted` | another run finishes                    | fan-in between independent workflows with no parent/child ownership                                                                                                                     |
+| `ThreadActivity`    | a message lands in a thread             | "watch my conversation for X"                                                                                                                                                           |
+| `BudgetThreshold`   | usage crosses a line                    | `getBudget` and `UsageProviderKind` both exist                                                                                                                                          |
 
 ### Tier C-OS — host and operating-system triggers
 
 Local, no auth, no provider, no network. The machine is already observable; these expose it.
 
-| source | fires when | why it earns a slot |
-|---|---|---|
-| `HostAwake` | host boots, wakes from sleep, or the app restarts | **this is the answer to §6's restart gap.** A source cannot receive events while the host is down, but a workflow *can* be told the gap happened and run its own catch-up. It turns an unclosable hole into a handled one |
-| `PathChanged` | file, directory, branch or tag changes | universal across platforms; the workhorse |
-| `ProcessLifecycle` | a named process starts or exits, with exit code | "when the build finishes"; "when the dev server dies, restart it and tell me" |
-| `PortReachable` | a TCP port becomes reachable, or stops being | dev-server up/down without a poll loop in the workflow body |
-| `VolumeMounted` | an external disk or share appears | backup and import workflows |
-| `NetworkChanged` | online/offline, or joined a named network | "when I'm on the office network, sync" |
-| `DiskSpace` | free space crosses a threshold | ordinary ops hygiene |
-| `PowerState` | AC vs battery, lid open/close | gate expensive work to when the machine is plugged in |
+| source             | fires when                                        | why it earns a slot                                                                                                                                                                                                       |
+| ------------------ | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HostAwake`        | host boots, wakes from sleep, or the app restarts | **this is the answer to §6's restart gap.** A source cannot receive events while the host is down, but a workflow _can_ be told the gap happened and run its own catch-up. It turns an unclosable hole into a handled one |
+| `PathChanged`      | file, directory, branch or tag changes            | universal across platforms; the workhorse                                                                                                                                                                                 |
+| `ProcessLifecycle` | a named process starts or exits, with exit code   | "when the build finishes"; "when the dev server dies, restart it and tell me"                                                                                                                                             |
+| `PortReachable`    | a TCP port becomes reachable, or stops being      | dev-server up/down without a poll loop in the workflow body                                                                                                                                                               |
+| `VolumeMounted`    | an external disk or share appears                 | backup and import workflows                                                                                                                                                                                               |
+| `NetworkChanged`   | online/offline, or joined a named network         | "when I'm on the office network, sync"                                                                                                                                                                                    |
+| `DiskSpace`        | free space crosses a threshold                    | ordinary ops hygiene                                                                                                                                                                                                      |
+| `PowerState`       | AC vs battery, lid open/close                     | gate expensive work to when the machine is plugged in                                                                                                                                                                     |
 
 `CommandOutput` — a long-running command emitting a line matching an author-supplied pattern — is
 plausible but deliberately parked. The pattern is user-written rather than system-inferred, so it
@@ -284,12 +291,12 @@ recreate the cron concept explicitly rejected:
 
 ## 9. The four driving examples
 
-| prompt | mechanism | new machinery |
-|---|---|---|
-| "every sunday morning at X do Y" | `while (true) { await waitUntil(nextSunday()); … }` | **none** — works today |
-| "babysit PR xyz until it is merged" | `getSignalSource(ChangeRequestChecks, {repo, pr})` then `waitFor` | Tier A |
-| "github maintainer for repo xx — watch issues and PRs, triage, review, merge easy ones, sync upstream" | one long-lived run, several `waitFor`s across Tier A + B sources | Tier A now, Tier B for issues |
-| "digest whenever something changes in this jira project related to my work" | Tier B source over the existing context-refresh path | work-item provider registry |
+| prompt                                                                                                 | mechanism                                                         | new machinery                 |
+| ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- | ----------------------------- |
+| "every sunday morning at X do Y"                                                                       | `while (true) { await waitUntil(nextSunday()); … }`               | **none** — works today        |
+| "babysit PR xyz until it is merged"                                                                    | `getSignalSource(ChangeRequestChecks, {repo, pr})` then `waitFor` | Tier A                        |
+| "github maintainer for repo xx — watch issues and PRs, triage, review, merge easy ones, sync upstream" | one long-lived run, several `waitFor`s across Tier A + B sources  | Tier A now, Tier B for issues |
+| "digest whenever something changes in this jira project related to my work"                            | Tier B source over the existing context-refresh path              | work-item provider registry   |
 
 All four must survive an app restart; §5 and §6 are what make that true, and §6 states precisely
 where it is not.

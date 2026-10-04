@@ -15,11 +15,14 @@ import * as CliTokenManager from "./CliTokenManager.ts";
 import { cancelRunInvocation } from "./t3team-githubActionsSessionClient.ts";
 import { isSessionCredentialIssueEnabled } from "./t3team-CloudSessionCredential.ts";
 import { makeSessionGh } from "./t3team-CloudSessionGh.ts";
-import { resolveFleetConfig } from "./t3team-CloudSessionFleet.ts";
+import { resolveFleetConfig, workflowHistoryUrl } from "./t3team-CloudSessionFleet.ts";
+import { makeFailureReasonCache } from "./t3team-cloudSessionFailureReason.ts";
 import { ConnectCredentialMinter } from "./t3team-ConnectCredentialMinter.ts";
 import { dispatchAndDiscoverSession } from "./t3team-CloudSessionDispatch.ts";
 import { dispatchCredentialHandoff } from "./t3team-CloudSessionMintGate.ts";
+import { makePayloadIssueCleanup } from "./t3team-CloudSessionPayloadCleanup.ts";
 import { makeSessionTag, projectCloudSession } from "./t3team-CloudSessionProjection.ts";
+import { NexiBrokerService } from "./t3team-NexiBrokerService.ts";
 
 /**
  * Starts and tracks *cloud sessions*: full Nexi workspaces provisioned on
@@ -60,19 +63,22 @@ export class CloudSessionService extends Context.Service<
   }
 >()("t3/cloud/t3team-CloudSessionService/CloudSessionService") {}
 
-export const make = Effect.fn("cloud.session_service.make")(function* () {
+const make = Effect.fn("cloud.session_service.make")(function* () {
   const github = yield* GitHubCli.GitHubCli;
   const cloudCli = yield* CliTokenManager.CloudCliTokenManager;
   const minter = yield* ConnectCredentialMinter;
+  const broker = yield* NexiBrokerService;
   const handoffEnabled = yield* isSessionCredentialIssueEnabled();
   const { repoRef, machineLabel } = yield* resolveFleetConfig();
 
   // `gh` needs a cwd; irrelevant for `gh api --hostname`, but the process starts somewhere.
-  const cwd = yield* Config.string("HOME").pipe(Config.withDefault("/"));
+  const cwd = yield* Config.String("HOME").pipe(Config.withDefault("/"));
 
   // The gh-execution half (run / listRunsFor / resolveLogin) lives in
   // `t3team-CloudSessionGh`; here we only orchestrate list/create/cancel on top.
   const gh = makeSessionGh(github, repoRef, cwd);
+  const payloadCleanup = yield* makePayloadIssueCleanup(repoRef, gh.run);
+  const failureReasons = makeFailureReasonCache();
 
   const list: CloudSessionService["Service"]["list"] = Effect.gen(function* () {
     // Hard isolation: resolve who the caller is BEFORE fetching, and scope the
@@ -81,12 +87,19 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
     const login = yield* gh.resolveLogin;
     const runs = yield* gh.listRunsFor(login);
     const nowMs = yield* Clock.currentTimeMillis;
-    const sessions = yield* Effect.forEach(
+    const projected = yield* Effect.forEach(
       runs.slice(0, SESSION_DISPLAY_LIMIT),
-      (item) => projectCloudSession(item, nowMs, machineLabel, repoRef, gh.run),
+      (run) =>
+        projectCloudSession(run, nowMs, machineLabel, repoRef, gh.run, failureReasons).pipe(
+          Effect.map((session) => ({ run, session })),
+        ),
       { concurrency: 4 },
     );
-    return { sessions, configured: true } satisfies CloudSessionListResult;
+    // Delete the credential payloads of sessions that have spent them.
+    yield* payloadCleanup.sweep(projected);
+    const sessions = projected.map((entry) => entry.session);
+    const historyUrl = workflowHistoryUrl(repoRef, login);
+    return { sessions, configured: true, historyUrl } satisfies CloudSessionListResult;
   }).pipe(
     // A server with no `gh` at all cannot ever start a session, so report it as
     // unconfigured and let the client offer setup.
@@ -116,19 +129,27 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
       // session, and then cancelling yours kills theirs.
       const sessionTag = yield* makeSessionTag;
 
+      // Broker mode: a grant only a run this login dispatched can redeem replaces the whole T3
+      // Connect handoff. Fails with `broker_sign_in_required` before any dispatch when signed out.
+      const brokerGrant = broker.enabled ? yield* broker.requestGrant(login) : null;
+
       // Credential handoff, with the in-app mint fallback: if this machine
       // has no usable T3 Connect credential yet, the mint (a browser
       // round-trip, zero manual steps) gets a bounded chance to finish here;
       // otherwise the user is told their sign-in is pending in the browser.
-      yield* dispatchCredentialHandoff({
-        repoRef,
-        sessionTag,
-        run: gh.run,
-        enabled: handoffEnabled,
-        readCredential: cloudCli.getExisting,
-        mint: minter.mint,
-        mintTimeout: CREATE_MINT_WAIT,
-      });
+      const payloadIssue =
+        brokerGrant !== null
+          ? null
+          : yield* dispatchCredentialHandoff({
+              repoRef,
+              sessionTag,
+              run: gh.run,
+              enabled: handoffEnabled,
+              readCredential: cloudCli.getExisting,
+              mint: minter.mint,
+              mintTimeout: CREATE_MINT_WAIT,
+            });
+      if (payloadIssue !== null) yield* payloadCleanup.track(sessionTag, payloadIssue);
 
       return yield* dispatchAndDiscoverSession({
         repoRef,
@@ -138,6 +159,7 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
         run: gh.run,
         listRuns: gh.listRunsFor(login),
         discoveryAttempts: DISPATCH_DISCOVERY_ATTEMPTS,
+        brokerGrant,
       });
     });
 
@@ -160,14 +182,32 @@ export const make = Effect.fn("cloud.session_service.make")(function* () {
       // session at all and from cancelling another user's session.
       const login = yield* gh.resolveLogin;
       const sessionRuns = yield* gh.listRunsFor(login);
-      if (!sessionRuns.some((item) => item.id === runId)) {
+      const sessionRun = sessionRuns.find((item) => item.id === runId);
+      if (sessionRun === undefined) {
         return yield* new CloudSessionFailedError({
           reason: "unknown_session",
           message: "That session does not exist.",
         });
       }
+      // Already over (an earlier stop, or its time ran out): stopping is done, not an error.
+      // GitHub refuses to cancel a completed run, which used to surface as "GitHub CLI failed".
+      if (sessionRun.status === "completed") return;
 
-      yield* gh.run(cancelRunInvocation(repoRef, runId)).pipe(Effect.asVoid);
+      yield* gh.run(cancelRunInvocation(repoRef, runId)).pipe(
+        Effect.asVoid,
+        // It can end between the listing and the cancel; only a run still going is a failure.
+        Effect.catch((error) =>
+          gh
+            .listRunsFor(login)
+            .pipe(
+              Effect.flatMap((runs) =>
+                runs.find((item) => item.id === runId)?.status === "completed"
+                  ? Effect.void
+                  : Effect.fail(error),
+              ),
+            ),
+        ),
+      );
     });
 
   return { list, create, cancel } as const;

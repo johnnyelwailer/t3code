@@ -30,6 +30,7 @@ export function loadSelection(
     readonly selectedSprintId?: string;
     readonly selectedFilterId?: string;
     readonly selectedFilterJql?: string;
+    readonly boardScopeMissing?: true;
   },
   T3TeamAtlassianError
 > {
@@ -94,7 +95,10 @@ export function loadLiveBacklogPayload(
 
     return {
       page,
-      capabilities,
+      capabilities: {
+        ...capabilities,
+        ...(selection.boardScopeMissing ? { boardScopeMissing: true as const } : {}),
+      },
       boards: selection.boards,
       sprints: selection.sprints,
       savedFilters: selection.savedFilters,

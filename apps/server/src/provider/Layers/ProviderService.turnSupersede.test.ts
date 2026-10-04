@@ -26,6 +26,7 @@ import {
   TurnId,
 } from "@t3tools/contracts";
 import { it, assert, afterAll } from "@effect/vitest";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as NodeFS from "node:fs";
@@ -36,7 +37,11 @@ import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 
-import { ProviderAdapterRequestError, ProviderAdapterSessionNotFoundError, type ProviderAdapterError } from "../Errors.ts";
+import {
+  ProviderAdapterRequestError,
+  ProviderAdapterSessionNotFoundError,
+  type ProviderAdapterError,
+} from "../Errors.ts";
 import type { ProviderAdapterShape } from "../Services/ProviderAdapter.ts";
 import * as ProviderAdapterRegistry from "../Services/ProviderAdapterRegistry.ts";
 import * as ProviderService from "../Services/ProviderService.ts";
@@ -68,12 +73,23 @@ type LegacyProviderRuntimeEvent = {
   readonly [key: string]: unknown;
 };
 
-function makeFakeAdapter(failSendTurnCalls: ReadonlySet<number> = new Set()) {
+/** The fake codex adapter plus the handle a test uses to emit its runtime events. */
+class FakeCodex extends Context.Service<
+  FakeCodex,
+  {
+    readonly adapter: ProviderAdapterShape<ProviderAdapterError>;
+    readonly emit: (event: LegacyProviderRuntimeEvent) => Effect.Effect<void>;
+  }
+>()("t3/provider/Layers/ProviderService.turnSupersede.test/FakeCodex") {}
+
+const makeFakeAdapter = Effect.fnUntraced(function* (failSendTurnCalls: ReadonlySet<number>) {
   const sessions = new Map<ThreadId, ProviderSession>();
-  const runtimeEventPubSub = Effect.runSync(PubSub.unbounded<ProviderRuntimeEvent>());
+  const runtimeEventPubSub = yield* PubSub.unbounded<ProviderRuntimeEvent>();
   const turnsPerThread = new Map<ThreadId, number>();
 
-  const startSession = (input: ProviderSessionStartInput): Effect.Effect<ProviderSession, ProviderAdapterError> =>
+  const startSession = (
+    input: ProviderSessionStartInput,
+  ): Effect.Effect<ProviderSession, ProviderAdapterError> =>
     Effect.sync(() => {
       const now = "2026-01-01T00:00:00.000Z";
       const session: ProviderSession = {
@@ -96,7 +112,10 @@ function makeFakeAdapter(failSendTurnCalls: ReadonlySet<number> = new Set()) {
   ): Effect.Effect<ProviderTurnStartResult, ProviderAdapterError> => {
     if (!sessions.has(input.threadId)) {
       return Effect.fail(
-        new ProviderAdapterSessionNotFoundError({ provider: CODEX_DRIVER, threadId: input.threadId }),
+        new ProviderAdapterSessionNotFoundError({
+          provider: CODEX_DRIVER,
+          threadId: input.threadId,
+        }),
       );
     }
     const n = (turnsPerThread.get(input.threadId) ?? 0) + 1;
@@ -114,7 +133,9 @@ function makeFakeAdapter(failSendTurnCalls: ReadonlySet<number> = new Set()) {
     }
     return Effect.succeed({
       threadId: input.threadId,
-      turnId: asTurnId(n === 1 ? `turn-${String(input.threadId)}` : `turn-${String(input.threadId)}-${n}`),
+      turnId: asTurnId(
+        n === 1 ? `turn-${String(input.threadId)}` : `turn-${String(input.threadId)}-${n}`,
+      ),
     });
   };
 
@@ -131,8 +152,10 @@ function makeFakeAdapter(failSendTurnCalls: ReadonlySet<number> = new Set()) {
     Effect.succeed(sessions.has(threadId));
   const readThread = (
     threadId: ThreadId,
-  ): Effect.Effect<{ threadId: ThreadId; turns: ReadonlyArray<{ id: TurnId; items: readonly [] }> }, ProviderAdapterError> =>
-    Effect.succeed({ threadId, turns: [{ id: asTurnId("turn-1"), items: [] }] });
+  ): Effect.Effect<
+    { threadId: ThreadId; turns: ReadonlyArray<{ id: TurnId; items: readonly [] }> },
+    ProviderAdapterError
+  > => Effect.succeed({ threadId, turns: [{ id: asTurnId("turn-1"), items: [] }] });
   const rollbackThread = (
     threadId: ThreadId,
     _numTurns: number,
@@ -162,14 +185,24 @@ function makeFakeAdapter(failSendTurnCalls: ReadonlySet<number> = new Set()) {
     },
   };
 
-  const emit = (event: LegacyProviderRuntimeEvent): void => {
-    Effect.runSync(PubSub.publish(runtimeEventPubSub, event as unknown as ProviderRuntimeEvent));
-  };
+  const emit = (event: LegacyProviderRuntimeEvent): Effect.Effect<void> =>
+    PubSub.publish(runtimeEventPubSub, event as unknown as ProviderRuntimeEvent).pipe(
+      Effect.asVoid,
+    );
 
   return { adapter, emit };
-}
+});
 
-const fixtureCwdRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "provider-turn-supersede-test-"));
+/** Emits a runtime event from the harness's fake codex adapter. */
+const emitCodexEvent = (event: LegacyProviderRuntimeEvent) =>
+  Effect.gen(function* () {
+    const codex = yield* FakeCodex;
+    yield* codex.emit(event);
+  });
+
+const fixtureCwdRoot = NodeFS.mkdtempSync(
+  NodePath.join(NodeOS.tmpdir(), "provider-turn-supersede-test-"),
+);
 afterAll(() => NodeFS.rmSync(fixtureCwdRoot, { recursive: true, force: true }));
 const PROJECT_CWD = NodePath.join(fixtureCwdRoot, "project");
 NodeFS.mkdirSync(PROJECT_CWD, { recursive: true });
@@ -180,10 +213,17 @@ const serverConfigTestLayer = ServerConfig.layerTest(process.cwd(), process.cwd(
 );
 
 function makeSupersedeHarness(failSendTurnCalls: ReadonlySet<number> = new Set()) {
-  const codex = makeFakeAdapter(failSendTurnCalls);
-  const registry = makeAdapterRegistryMock({ [CODEX_DRIVER]: codex.adapter });
-  const providerAdapterLayer = Layer.succeed(ProviderAdapterRegistry.ProviderAdapterRegistry, registry);
-  const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(Layer.provide(SqlitePersistenceMemory));
+  const fakeCodexLayer = Layer.effect(FakeCodex, makeFakeAdapter(failSendTurnCalls));
+  const providerAdapterLayer = Layer.effect(
+    ProviderAdapterRegistry.ProviderAdapterRegistry,
+    Effect.gen(function* () {
+      const codex = yield* FakeCodex;
+      return makeAdapterRegistryMock({ [CODEX_DRIVER]: codex.adapter });
+    }),
+  );
+  const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
+    Layer.provide(SqlitePersistenceMemory),
+  );
   const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
   const layer = it.layer(
     Layer.mergeAll(
@@ -202,9 +242,9 @@ function makeSupersedeHarness(failSendTurnCalls: ReadonlySet<number> = new Set()
       ),
       directoryLayer,
       runtimeRepositoryLayer,
-    ).pipe(Layer.provideMerge(NodeServices.layer)),
+    ).pipe(Layer.provideMerge(fakeCodexLayer), Layer.provideMerge(NodeServices.layer)),
   );
-  return { layer, codex };
+  return { layer };
 }
 
 const startCodexSession = (
@@ -264,7 +304,7 @@ supersedeHarness.layer("turn-supersede marker", (it) => {
         });
         assert.notEqual(secondTurn.turnId, firstTurn.turnId);
         // The pack settles the superseded (first) turn with a late abort.
-        supersedeHarness.codex.emit({
+        yield* emitCodexEvent({
           type: "turn.aborted",
           eventId: asEventId("evt-superseded-abort"),
           provider: CODEX_DRIVER,
@@ -279,7 +319,11 @@ supersedeHarness.layer("turn-supersede marker", (it) => {
         const onlyAborted = aborted[0];
         assert.ok(onlyAborted !== undefined);
         assert.equal(onlyAborted.turnId, firstTurn.turnId);
-        assert.equal(abortedPayload(onlyAborted).superseded, true, "late abort must carry the marker");
+        assert.equal(
+          abortedPayload(onlyAborted).superseded,
+          true,
+          "late abort must carry the marker",
+        );
       }),
   );
 
@@ -292,7 +336,7 @@ supersedeHarness.layer("turn-supersede marker", (it) => {
       const turn = yield* provider.sendTurn({ threadId, input: "hello", attachments: [] });
       // A genuine user interrupt: no new message replaced the turn.
       yield* provider.interruptTurn({ threadId, turnId: turn.turnId });
-      supersedeHarness.codex.emit({
+      yield* emitCodexEvent({
         type: "turn.aborted",
         eventId: asEventId("evt-genuine-abort"),
         provider: CODEX_DRIVER,
@@ -306,7 +350,11 @@ supersedeHarness.layer("turn-supersede marker", (it) => {
       assert.equal(aborted.length, 1);
       const onlyAborted = aborted[0];
       assert.ok(onlyAborted !== undefined);
-      assert.equal(abortedPayload(onlyAborted).superseded, undefined, "genuine stop must stay unmarked");
+      assert.equal(
+        abortedPayload(onlyAborted).superseded,
+        undefined,
+        "genuine stop must stay unmarked",
+      );
     }),
   );
 
@@ -319,7 +367,7 @@ supersedeHarness.layer("turn-supersede marker", (it) => {
       const firstTurn = yield* provider.sendTurn({ threadId, input: "first", attachments: [] });
       yield* provider.sendTurn({ threadId, input: "second", attachments: [] });
       for (const eventId of ["evt-dup-abort-1", "evt-dup-abort-2"]) {
-        supersedeHarness.codex.emit({
+        yield* emitCodexEvent({
           type: "turn.aborted",
           eventId: asEventId(eventId),
           provider: CODEX_DRIVER,
@@ -330,8 +378,8 @@ supersedeHarness.layer("turn-supersede marker", (it) => {
         });
       }
       yield* drainFibers;
-      const stamped = abortedEvents(yield* Ref.get(seen)).filter((event) =>
-        abortedPayload(event).superseded === true,
+      const stamped = abortedEvents(yield* Ref.get(seen)).filter(
+        (event) => abortedPayload(event).superseded === true,
       );
       assert.equal(stamped.length, 1, "the marker must be consumed by the first matching abort");
     }),
@@ -346,7 +394,7 @@ supersedeHarness.layer("turn-supersede marker", (it) => {
       const firstTurn = yield* provider.sendTurn({ threadId, input: "first", attachments: [] });
       yield* provider.sendTurn({ threadId, input: "second", attachments: [] });
       // The superseded turn somehow completes normally instead of aborting.
-      supersedeHarness.codex.emit({
+      yield* emitCodexEvent({
         type: "turn.completed",
         eventId: asEventId("evt-completed-superseded"),
         provider: CODEX_DRIVER,
@@ -387,7 +435,7 @@ supersedeHarness.layer("turn-supersede marker", (it) => {
       const evictedTurnId = turnIds[0];
       const freshestTurnId = turnIds[8];
       assert.ok(evictedTurnId !== undefined && freshestTurnId !== undefined);
-      supersedeHarness.codex.emit({
+      yield* emitCodexEvent({
         type: "turn.aborted",
         eventId: asEventId("evt-cap-evicted-abort"),
         provider: CODEX_DRIVER,
@@ -396,7 +444,7 @@ supersedeHarness.layer("turn-supersede marker", (it) => {
         createdAt: "2026-01-01T00:00:12.000Z",
         payload: { reason: "superseded by a new message" },
       });
-      supersedeHarness.codex.emit({
+      yield* emitCodexEvent({
         type: "turn.aborted",
         eventId: asEventId("evt-cap-fresh-abort"),
         provider: CODEX_DRIVER,
@@ -450,7 +498,7 @@ failingSupersedeHarness.layer("turn-supersede marker: sendTurn failure rollback"
       );
       assert.equal(rejected._tag, "Left", "the nudge must be rejected by the provider");
       // The user stops the still-in-flight first turn: a genuine stop.
-      failingSupersedeHarness.codex.emit({
+      yield* emitCodexEvent({
         type: "turn.aborted",
         eventId: asEventId("evt-rejected-nudge-abort"),
         provider: CODEX_DRIVER,

@@ -152,7 +152,7 @@ export function childStatusFromShell(
  * hasPendingUserInput flag is the same fact for live shells; detail loads do
  * not carry it, so the status op derives it here.)
  */
-export function detailHasOpenUserInputRequest(
+function detailHasOpenUserInputRequest(
   activities: ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>,
 ): boolean {
   const openRequestIds = new Set<string>();
@@ -174,7 +174,7 @@ export function detailHasOpenUserInputRequest(
 }
 
 /** The direct children of a thread, from its `t3team.handoff.started` activities. */
-export function directChildren(
+function directChildren(
   detail: ChildThreadDetail,
 ): ReadonlyArray<{ readonly threadId: string; readonly title: string | null }> {
   const seen = new Set<string>();

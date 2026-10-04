@@ -36,33 +36,32 @@ export const PlanningStoryFrame = memo(function PlanningStoryFrame({
   return (
     <div
       ref={frameRef}
-      className="t3ps-node"
+      data-t3ps="node"
       data-node-id={story.id}
       onContextMenu={onContextMenu ? (event) => onContextMenu(event, story.id) : undefined}
     >
-      <div className="t3ps-inner">
-        <span className="t3ps-dot" style={{ background: stateColor }} title={story.title} />
+      <div data-t3ps="inner">
+        <span data-t3ps="dot" style={{ background: stateColor }} title={story.title} />
         <div
-          className={`t3ps-card rounded-[10px] border bg-background/95 ${
+          className={`rounded-lg border bg-background/95 ${
             story.isContextParent || story.isPlaceholder ? "border-dashed opacity-90" : ""
           } ${story.resolved ? "opacity-60" : ""}`}
+          data-t3ps="card"
           style={{ borderColor: `${color}55` }}
           title={story.title}
         >
-          <div className="t3ps-header flex min-w-0 cursor-pointer items-center gap-1.5">
+          <div className="flex min-w-0 cursor-pointer items-center gap-1.5" data-t3ps="header">
             <JiraIssueTypeIcon
               issueType={story.issueType}
               issueTypeIconUrl={story.issueTypeIconUrl ?? undefined}
             />
-            <span className="t3ps-key truncate font-mono text-[10px] text-muted-foreground">
-              {story.key}
-            </span>
+            <span className="truncate font-mono text-3xs text-muted-foreground">{story.key}</span>
             {story.isContextParent ? (
-              <span className="rounded border border-dashed border-muted-foreground/50 px-1 text-[8px] text-muted-foreground">
+              <span className="rounded border border-dashed border-muted-foreground/50 px-1 text-4xs text-muted-foreground">
                 context
               </span>
             ) : null}
-            <span className="t3ps-sum ml-auto shrink-0 rounded-full bg-primary/10 px-1.5 text-[10px] tabular-nums text-primary">
+            <span className="ml-auto shrink-0 rounded-full bg-primary/10 px-1.5 text-3xs tabular-nums text-primary">
               {story.aggregateHoursSeconds > 0
                 ? `Σ ${formatHours(story.aggregateHoursSeconds)}`
                 : formatHours(story.ownHoursSeconds)}
@@ -71,9 +70,10 @@ export const PlanningStoryFrame = memo(function PlanningStoryFrame({
               type="button"
               data-owner-affordance="true"
               data-story-id={story.id}
-              className={`t3ps-avatar flex size-4 shrink-0 items-center justify-center rounded-full text-[7px] font-medium text-background ${
+              className={`flex size-4 shrink-0 items-center justify-center rounded-full text-5xs font-medium text-background ${
                 storyAffordanceActive ? "ring-2 ring-primary" : ""
               }`}
+              data-t3ps="avatar"
               style={{
                 background: story.ownerName ? stateColor : "transparent",
                 border: story.ownerName ? "none" : "1px dashed currentColor",
@@ -88,10 +88,10 @@ export const PlanningStoryFrame = memo(function PlanningStoryFrame({
               {story.ownerName ? initialsOf(story.ownerName) : "+"}
             </button>
           </div>
-          <div className="t3ps-title mt-1 line-clamp-2 text-[11.5px] leading-snug text-foreground">
+          <div className="mt-1 line-clamp-2 text-xs leading-snug text-foreground" data-t3ps="title">
             {story.title}
           </div>
-          <div className="t3ps-subdots mt-1.5 flex flex-wrap gap-[3px]">
+          <div className="mt-1.5 flex flex-wrap gap-0.75" data-t3ps="subdots">
             {story.subtasks.map((subtask) => (
               <span
                 key={subtask.id}
@@ -106,7 +106,7 @@ export const PlanningStoryFrame = memo(function PlanningStoryFrame({
               />
             ))}
           </div>
-          <div className="t3ps-subgrid mt-1.5 grid grid-cols-2 gap-1.5">
+          <div className="mt-1.5 grid grid-cols-2 gap-1.5" data-t3ps="subgrid">
             {story.subtasks.map((subtask) => {
               const subAffordanceActive =
                 assignTarget?.kind === "subtask" && assignTarget.subtaskId === subtask.id;
@@ -124,21 +124,23 @@ export const PlanningStoryFrame = memo(function PlanningStoryFrame({
                       type="button"
                       data-ps-chrome="true"
                       aria-label="Decrease estimate"
-                      className="t3ps-substep hidden size-3.5 items-center justify-center rounded border border-border/60 text-[9px] text-muted-foreground hover:text-foreground"
+                      className="hidden size-3.5 items-center justify-center rounded border border-border/60 text-3xs text-muted-foreground hover:text-foreground"
+                      data-t3ps="substep"
                       onClick={() =>
                         onSetSubtaskHours(subtask.id, steppedHours(subtask.hoursSeconds, -1))
                       }
                     >
                       <Minus className="size-2.5" />
                     </button>
-                    <span className="rounded bg-primary/10 px-1 text-[8.5px] tabular-nums text-primary">
+                    <span className="rounded bg-primary/10 px-1 text-4xs tabular-nums text-primary">
                       {formatHours(subtask.hoursSeconds)}
                     </span>
                     <button
                       type="button"
                       data-ps-chrome="true"
                       aria-label="Increase estimate"
-                      className="t3ps-substep hidden size-3.5 items-center justify-center rounded border border-border/60 text-[9px] text-muted-foreground hover:text-foreground"
+                      className="hidden size-3.5 items-center justify-center rounded border border-border/60 text-3xs text-muted-foreground hover:text-foreground"
+                      data-t3ps="substep"
                       onClick={() =>
                         onSetSubtaskHours(subtask.id, steppedHours(subtask.hoursSeconds, 1))
                       }
@@ -166,14 +168,17 @@ export const PlanningStoryFrame = memo(function PlanningStoryFrame({
                       }
                     />
                   </div>
-                  <div className="t3ps-subtitle mt-0.5 truncate text-[9px] leading-tight text-foreground/80">
+                  <div
+                    className="mt-0.5 truncate text-3xs leading-tight text-foreground/80"
+                    data-t3ps="subtitle"
+                  >
                     {subtask.title}
                   </div>
                 </div>
               );
             })}
             {story.subtasks.length === 0 ? (
-              <div className="col-span-2 px-1 py-0.5 text-[9px] text-muted-foreground">
+              <div className="col-span-2 px-1 py-0.5 text-3xs text-muted-foreground">
                 No subtasks yet — planning starts here.
               </div>
             ) : null}

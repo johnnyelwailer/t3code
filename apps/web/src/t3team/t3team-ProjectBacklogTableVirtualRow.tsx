@@ -1,5 +1,5 @@
 import { memo } from "react";
-import type { CSSProperties, MouseEvent } from "react";
+import type { MouseEvent } from "react";
 
 import type {
   AtlassianAssignableUser,
@@ -16,7 +16,8 @@ import type { ProjectBacklogSubtaskCreateInput, ProjectTicket } from "~/t3team/t
 
 type ProjectBacklogTableVirtualRowViewProps = {
   virtualRow: ProjectBacklogTableVirtualRowModel;
-  style: CSSProperties;
+  start: number;
+  size: number;
   measureRef: (element: Element | null) => void;
   dataIndex: number;
   tableMinWidth: number;
@@ -51,7 +52,8 @@ type ProjectBacklogTableVirtualRowViewProps = {
 
 export const ProjectBacklogTableVirtualRowView = memo(function ProjectBacklogTableVirtualRowView({
   virtualRow,
-  style,
+  start,
+  size,
   measureRef,
   dataIndex,
   tableMinWidth,
@@ -79,10 +81,10 @@ export const ProjectBacklogTableVirtualRowView = memo(function ProjectBacklogTab
       ref={measureRef}
       data-index={dataIndex}
       className="absolute left-0 top-0 w-full"
-      style={style}
+      style={{ height: `${size}px`, transform: `translateY(${start}px)` }}
     >
       <table
-        className="w-full table-fixed text-left text-[11px]"
+        className="w-full table-fixed text-left text-2xs"
         style={{ minWidth: `${tableMinWidth}px` }}
       >
         <ProjectBacklogTableColGroup visibleColumns={visibleColumns} />

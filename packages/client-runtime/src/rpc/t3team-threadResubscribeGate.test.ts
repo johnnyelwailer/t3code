@@ -16,7 +16,10 @@ import {
 } from "../connection/model.ts";
 import { EnvironmentSupervisor } from "../connection/supervisor.ts";
 import { subscribeDynamic } from "./client.ts";
-import { createThreadResubscribeGate, type ThreadResubscribeGate } from "./t3team-threadResubscribeGate.ts";
+import {
+  createThreadResubscribeGate,
+  type ThreadResubscribeGate,
+} from "./t3team-threadResubscribeGate.ts";
 import type { WsRpcProtocolClient } from "./protocol.ts";
 import type { RpcSession } from "./session.ts";
 
@@ -181,17 +184,17 @@ describe("staggered resubscribe wiring (GHE #382)", () => {
         { concurrency: "unbounded" },
       ).pipe(Effect.forkChild);
 
-      const awaitAllocations = Effect.fn("ThreadResubscribeGateTest.awaitAllocations")(
-        function* (count: number) {
-          for (let attempt = 0; attempt < 20_000; attempt += 1) {
-            if (delays.length >= count) return;
-            yield* Effect.yieldNow;
-          }
-          return yield* Effect.die(
-            new Error(`Expected ${count} beforeSubscribe allocations, saw ${delays.length}.`),
-          );
-        },
-      );
+      const awaitAllocations = Effect.fn("ThreadResubscribeGateTest.awaitAllocations")(function* (
+        count: number,
+      ) {
+        for (let attempt = 0; attempt < 20_000; attempt += 1) {
+          if (delays.length >= count) return;
+          yield* Effect.yieldNow;
+        }
+        return yield* Effect.die(
+          new Error(`Expected ${count} beforeSubscribe allocations, saw ${delays.length}.`),
+        );
+      });
 
       const awaitReceived = Effect.fn("ThreadResubscribeGateTest.awaitReceived")(function* (
         count: number,

@@ -50,8 +50,6 @@
  * lives in `t3team-activityStateTracker.ts`.
  */
 
-export { ACTIVITY_STATE_TOOL_STALL_CEILING_MS } from "./t3team-activityStateIdle.ts";
-
 export const ACTIVITY_STATE_IDLE_GAP_MS = 30_000;
 
 /**

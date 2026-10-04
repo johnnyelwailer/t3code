@@ -34,10 +34,7 @@ import { assertSignalName } from "./t3team-sdk.signal.ts";
  * for BUILT-IN catalog sources the host registers its own `start` under the same `name`
  * instead (see `builtinSignalSource`).
  */
-export function defineSignalSource<
-  const P,
-  Signals extends ReadonlyArray<Signal<unknown>>,
->(opts: {
+export function defineSignalSource<const P, Signals extends ReadonlyArray<Signal<unknown>>>(opts: {
   readonly name: string;
   readonly params: P;
   readonly emits: Signals;

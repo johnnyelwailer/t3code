@@ -47,9 +47,7 @@ export const t3teamThreadWorkflowControlRouteLayer = HttpRouter.add(
     const orchestration = yield* OrchestrationEngineService;
     const threadQuery = yield* ProjectionSnapshotQuery;
     const journalStore = yield* WorkflowJournalStore;
-    const signalStore = Option.getOrUndefined(
-      yield* Effect.serviceOption(WorkflowSignalStore),
-    );
+    const signalStore = Option.getOrUndefined(yield* Effect.serviceOption(WorkflowSignalStore));
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const found = yield* repo.getById({ runId });

@@ -1,6 +1,6 @@
 import { AlertTriangle } from "lucide-react";
 
-import { Button } from "~/t3team/components/ui/t3team-button";
+import { InlineButton } from "~/t3team/components/ui/t3team-button";
 import { cn } from "~/t3team/lib/t3team-utils";
 import type { T3TeamUserFacingError } from "./t3team-errorMessage";
 import { T3TeamErrorTechnicalDisclosure } from "./t3team-ErrorTechnicalDisclosure";
@@ -26,17 +26,7 @@ export function T3TeamErrorStateInline({
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-destructive">
         <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
         <span>{userFacing.headline}</span>
-        {showRetry ? (
-          <Button
-            type="button"
-            size="xs"
-            variant="ghost"
-            className="h-auto px-1.5 py-0 text-xs"
-            onClick={onRetry}
-          >
-            Try again
-          </Button>
-        ) : null}
+        {showRetry ? <InlineButton onClick={onRetry}>Try again</InlineButton> : null}
       </div>
       {userFacing.technical ? (
         <T3TeamErrorTechnicalDisclosure technical={userFacing.technical} compact />

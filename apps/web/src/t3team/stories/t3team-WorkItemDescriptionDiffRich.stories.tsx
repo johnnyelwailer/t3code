@@ -62,7 +62,7 @@ function MediaThumb({
           <Icon className="size-6 text-muted-foreground" aria-hidden="true" />
         </div>
       </div>
-      <figcaption className="mt-1 truncate text-[11px] text-muted-foreground">{label}</figcaption>
+      <figcaption className="mt-1 truncate text-2xs text-muted-foreground">{label}</figcaption>
     </figure>
   );
 }
@@ -101,7 +101,7 @@ function BlockBody({
     case "panel":
       return (
         <div className="rounded-md border-l-2 border-info bg-info/8 px-3 py-2">
-          <p className="text-[0.8125rem] leading-6">
+          <p className="text-sm leading-6">
             <T3TeamDiffText segments={applyCommentQuotes(block.segments, quotes)} />
           </p>
         </div>
@@ -111,9 +111,11 @@ function BlockBody({
       return (
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">{block.label}</span>
-          <Badge variant="secondary" className="line-through opacity-70">
-            {block.from}
-          </Badge>
+          <span className="inline-flex opacity-70">
+            <Badge variant="secondary" render={<del />}>
+              {block.from}
+            </Badge>
+          </span>
           <Badge variant="success">{block.to}</Badge>
         </div>
       );
@@ -200,7 +202,7 @@ function BlockBody({
       return (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
           {block.label}
-          <span className="text-[11px] italic">
+          <span className="text-2xs italic">
             changed — this node type cannot be compared field by field
           </span>
         </div>
@@ -283,7 +285,7 @@ function RichDiff() {
           <button
             type="button"
             onClick={() => setExpanded(true)}
-            className="ml-9 flex w-[calc(100%-2.25rem)] cursor-pointer items-center gap-2 rounded-md border border-dashed border-border/70 px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent/40"
+            className="ml-9 flex w-[calc(100%-2.25rem)] cursor-pointer items-center gap-2 rounded-md border border-dashed border-border/70 px-3 py-1.5 text-2xs text-muted-foreground transition-colors hover:bg-accent/40"
           >
             <span className="h-px flex-1 bg-border" />
             Show {DIFF_SAMPLE_HIDDEN.length} unchanged paragraphs

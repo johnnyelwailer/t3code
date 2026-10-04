@@ -130,4 +130,59 @@ describe("@runbook/core journal-derived run status", () => {
     expect(aborted.state).toBe("aborted");
     expect(aborted.usage).toEqual({ inputTokens: 4, outputTokens: 2, records: 1 });
   });
+
+  it("exposes the active boundary's history(n) ring alongside the checkpoint", async () => {
+    const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "runbook-status-"));
+    roots.push(runsRoot);
+    const store = new FsJournalStore(runsRoot);
+    await store.writeRunMeta("run-1", META);
+    let seq = 0;
+    for (let i = 0; i < 10; i++) {
+      await store.appendEntry("run-1", entry(++seq, "tool"));
+      seq++;
+      await store.appendEntry(
+        "run-1",
+        entry(seq, "tool", {
+          callId: `${seq}:checkpoint:checkpoint`,
+          kind: "checkpoint",
+          refId: "checkpoint",
+          result: { compactedThroughSeq: seq - 1, state: { i }, retainedHistory: 3, at: NOW },
+        }),
+      );
+    }
+    const status = await inspectRun(store, "run-1");
+    expect(status.checkpointSeq).toBe(20);
+    expect(status.history?.map((h) => h.state)).toEqual([{ i: 7 }, { i: 8 }, { i: 9 }]);
+    // A pre-checkpoint run carries no ring, like it carries no checkpoint.
+    await store.writeRunMeta("run-2", META);
+    await store.appendEntry("run-2", entry(1, "tool"));
+    expect((await inspectRun(store, "run-2")).history).toBeUndefined();
+  });
+
+  it("serves the recorded ring from the active record alone", async () => {
+    const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "runbook-status-"));
+    roots.push(runsRoot);
+    const store = new FsJournalStore(runsRoot);
+    await store.writeRunMeta("run-1", META);
+    // The superseded prefix is gone (pruned): a scan would find nothing but the boundary.
+    const ring = [4, 6, 8].map((seq) => ({ seq, state: { i: seq / 2 }, at: NOW }));
+    await store.appendEntry(
+      "run-1",
+      entry(8, "tool", {
+        callId: "8:checkpoint:checkpoint",
+        kind: "checkpoint",
+        refId: "checkpoint",
+        result: {
+          compactedThroughSeq: 7,
+          state: { i: 4 },
+          retainedHistory: 3,
+          at: NOW,
+          history: ring,
+        },
+      }),
+    );
+    const status = await inspectRun(store, "run-1");
+    expect(status.checkpointSeq).toBe(8);
+    expect(status.history).toEqual(ring);
+  });
 });

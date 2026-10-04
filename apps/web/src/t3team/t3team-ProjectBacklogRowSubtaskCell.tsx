@@ -113,7 +113,7 @@ export function ProjectBacklogRowSubtaskCell({
   return (
     <div className="min-w-0">
       {compact ? null : (
-        <div className="mb-1 text-[9px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+        <div className="mb-1 text-3xs font-medium uppercase tracking-widest text-muted-foreground">
           Subtasks
         </div>
       )}
@@ -137,7 +137,7 @@ export function ProjectBacklogRowSubtaskCell({
                           type="button"
                           aria-label={addSubtaskTooltip}
                           title={addSubtaskTooltip}
-                          className="inline-flex size-7 items-center justify-center rounded-md border border-transparent bg-transparent text-[11px] leading-none text-muted-foreground transition-[border-color,background-color,color] hover:border-border/70 hover:bg-background/90 hover:text-foreground focus-visible:border-border/70 focus-visible:bg-background/90 focus-visible:text-foreground"
+                          className="inline-flex size-7 items-center justify-center rounded-md border border-transparent bg-transparent text-2xs leading-none text-muted-foreground transition-[border-color,background-color,color] hover:border-border/70 hover:bg-background/90 hover:text-foreground focus-visible:border-border/70 focus-visible:bg-background/90 focus-visible:text-foreground"
                         />
                       }
                     >
@@ -151,7 +151,8 @@ export function ProjectBacklogRowSubtaskCell({
                 <PopoverPopup
                   align="start"
                   side="bottom"
-                  className="w-[22rem] max-w-[calc(100vw-2rem)] border-border/80 p-2.5 shadow-xl"
+                  padding="compact"
+                  className="w-88 max-w-[calc(100vw-2rem)]"
                 >
                   <ChildIssueCreatePanel {...panelProps} className="space-y-2" />
                 </PopoverPopup>

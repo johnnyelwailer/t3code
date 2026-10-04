@@ -7,7 +7,7 @@
  */
 import { ThreadId, type OrchestrationCommand, type OrchestrationEvent } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "@effect/vitest";
 
 import { makeTerminalNoticeResurfer } from "./t3team-workflowTerminalResurface.ts";
 
@@ -91,65 +91,69 @@ const sessionSet = (threadId: string, busy: boolean): SessionSetEvent =>
   }) as unknown as SessionSetEvent;
 
 describe("makeTerminalNoticeResurfer", () => {
-  it("re-posts the recent failed notice once, when the launch turn ends", async () => {
-    const posted: Array<Extract<OrchestrationCommand, { type: "thread.message.upsert" }>> = [];
-    const resurfer = makeTerminalNoticeResurfer({
-      runRepo: {
-        listRecent: () => Effect.succeed(ROWS),
-      } as never,
-      dispatch: async (command) => {
-        if (command.type === "thread.message.upsert") posted.push(command);
-      },
-      nowIso: () => new Date().toISOString(),
-      nowMs: () => Date.now(),
-    });
+  it.effect("re-posts the recent failed notice once, when the launch turn ends", () =>
+    Effect.gen(function* () {
+      const posted: Array<Extract<OrchestrationCommand, { type: "thread.message.upsert" }>> = [];
+      const resurfer = makeTerminalNoticeResurfer({
+        runRepo: {
+          listRecent: () => Effect.succeed(ROWS),
+        } as never,
+        dispatch: async (command) => {
+          if (command.type === "thread.message.upsert") posted.push(command);
+        },
+        nowIso: () => new Date().toISOString(),
+        nowMs: () => Date.now(),
+      });
 
-    // Turn starts — no post.
-    await Effect.runPromise(resurfer.onSessionSet(sessionSet("thread-a", true)));
-    expect(posted).toEqual([]);
+      // Turn starts — no post.
+      yield* resurfer.onSessionSet(sessionSet("thread-a", true));
+      expect(posted).toEqual([]);
 
-    // Idle churn before we ever saw the thread busy — no post (we cannot tell "the launch
-    // turn ended" from "this thread was always idle").
-    await Effect.runPromise(resurfer.onSessionSet(sessionSet("thread-b", false)));
-    expect(posted).toEqual([]);
+      // Idle churn before we ever saw the thread busy — no post (we cannot tell "the launch
+      // turn ended" from "this thread was always idle").
+      yield* resurfer.onSessionSet(sessionSet("thread-b", false));
+      expect(posted).toEqual([]);
 
-    // The launch turn ends — the recent failed run of THIS thread is re-anchored, exactly once.
-    await Effect.runPromise(resurfer.onSessionSet(sessionSet("thread-a", false)));
-    expect(posted.length).toBe(1);
-    const message = posted[0]!.message;
-    expect(String(message.messageId)).toBe("t3team-wf-result:run-fresh-failed");
-    expect(message.text).toContain("⚠️ The orchestration stopped");
-    expect(message.text).toContain("SyntaxError: Invalid or unexpected token");
+      // The launch turn ends — the recent failed run of THIS thread is re-anchored, exactly once.
+      yield* resurfer.onSessionSet(sessionSet("thread-a", false));
+      expect(posted.length).toBe(1);
+      const message = posted[0]!.message;
+      expect(String(message.messageId)).toBe("t3team-wf-result:run-fresh-failed");
+      expect(message.text).toContain("⚠️ The orchestration stopped");
+      expect(message.text).toContain("SyntaxError: Invalid or unexpected token");
 
-    // A further idle transition must not re-post (idempotent per run per uptime).
-    await Effect.runPromise(resurfer.onSessionSet(sessionSet("thread-a", false)));
-    expect(posted.length).toBe(1);
-  });
+      // A further idle transition must not re-post (idempotent per run per uptime).
+      yield* resurfer.onSessionSet(sessionSet("thread-a", false));
+      expect(posted.length).toBe(1);
+    }),
+  );
 
-  it("ignores failures outside the recent window and runs of other threads", async () => {
-    const posted: unknown[] = [];
-    const resurfer = makeTerminalNoticeResurfer({
-      runRepo: {
-        listRecent: () => Effect.succeed(ROWS),
-      } as never,
-      dispatch: async (command) => {
-        if (command.type === "thread.message.upsert") posted.push(command);
-      },
-      nowIso: () => new Date().toISOString(),
-      nowMs: () => Date.now(),
-    });
-    // thread-b: its only failure belongs to it and is recent → exactly one post.
-    await Effect.runPromise(resurfer.onSessionSet(sessionSet("thread-b", true)));
-    await Effect.runPromise(resurfer.onSessionSet(sessionSet("thread-b", false)));
-    // thread-c: we saw it busy, it goes idle, but it has NO failed run at all → no post.
-    await Effect.runPromise(resurfer.onSessionSet(sessionSet("thread-c", true)));
-    await Effect.runPromise(resurfer.onSessionSet(sessionSet("thread-c", false)));
-    // thread-d: its only failure is 3h old — outside the recent window → no post.
-    await Effect.runPromise(resurfer.onSessionSet(sessionSet("thread-d", true)));
-    await Effect.runPromise(resurfer.onSessionSet(sessionSet("thread-d", false)));
-    const ids = posted.map((c) =>
-      String((c as { message: { messageId: string } }).message.messageId),
-    );
-    expect(ids).toEqual(["t3team-wf-result:run-other-thread"]);
-  });
+  it.effect("ignores failures outside the recent window and runs of other threads", () =>
+    Effect.gen(function* () {
+      const posted: unknown[] = [];
+      const resurfer = makeTerminalNoticeResurfer({
+        runRepo: {
+          listRecent: () => Effect.succeed(ROWS),
+        } as never,
+        dispatch: async (command) => {
+          if (command.type === "thread.message.upsert") posted.push(command);
+        },
+        nowIso: () => new Date().toISOString(),
+        nowMs: () => Date.now(),
+      });
+      // thread-b: its only failure belongs to it and is recent → exactly one post.
+      yield* resurfer.onSessionSet(sessionSet("thread-b", true));
+      yield* resurfer.onSessionSet(sessionSet("thread-b", false));
+      // thread-c: we saw it busy, it goes idle, but it has NO failed run at all → no post.
+      yield* resurfer.onSessionSet(sessionSet("thread-c", true));
+      yield* resurfer.onSessionSet(sessionSet("thread-c", false));
+      // thread-d: its only failure is 3h old — outside the recent window → no post.
+      yield* resurfer.onSessionSet(sessionSet("thread-d", true));
+      yield* resurfer.onSessionSet(sessionSet("thread-d", false));
+      const ids = posted.map((c) =>
+        String((c as { message: { messageId: string } }).message.messageId),
+      );
+      expect(ids).toEqual(["t3team-wf-result:run-other-thread"]);
+    }),
+  );
 });

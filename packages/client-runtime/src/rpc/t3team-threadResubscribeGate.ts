@@ -61,15 +61,14 @@ export const createThreadResubscribeGate = (
   };
   return {
     allocateDelayMs: allocate,
-    allocateDelayMsEffect: Effect.fn("ThreadResubscribeGate.allocateDelayMsEffect")(
-      function* (burstKey: unknown) {
-        const now = yield* Clock.clockWith((clock) => clock.currentTimeMillis);
-        return allocate(burstKey, now);
-      },
-    ),
+    allocateDelayMsEffect: Effect.fn("ThreadResubscribeGate.allocateDelayMsEffect")(function* (
+      burstKey: unknown,
+    ) {
+      const now = yield* Clock.clockWith((clock) => clock.currentTimeMillis);
+      return allocate(burstKey, now);
+    }),
   };
 };
 
 /** The shared gate the thread-state wiring uses. One burst table per process. */
-export const defaultThreadResubscribeGate: ThreadResubscribeGate =
-  createThreadResubscribeGate();
+export const defaultThreadResubscribeGate: ThreadResubscribeGate = createThreadResubscribeGate();

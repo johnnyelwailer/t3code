@@ -114,6 +114,16 @@ import Migration0077 from "./Migrations/t3team-059_SignalSources.ts";
 // `idx_projection_thread_activities_kind_created` DDL for machines whose ledger
 // consumed id 60 with a different migration and therefore never ran it.
 import Migration0078 from "./Migrations/t3team-060_EnsureProjectionThreadActivitiesKindIndex.ts";
+import Migration0079 from "./Migrations/t3team-061_ResourcePressureEvents.ts";
+// New from the 2026-09-27 upstream sync (upstream 053/054). Appended above the fork's maximum id
+// rather than taking upstream's numbers, which this fork already uses — see the rule above.
+import Migration0080 from "./Migrations/053_PullRequestFilesViewed.ts";
+import Migration0081 from "./Migrations/054_ProjectionThreadsAutoSettleDisabledAt.ts";
+import Migration0082 from "./Migrations/t3team-062_ProjectionThreadShellT3TeamFacts.ts";
+import Migration0083 from "./Migrations/t3team-063_OrchestrationEventsTypeSequenceIndex.ts";
+// Project main repository (merged after the fork took 80-83 and t3team-062/063 above).
+import Migration0084 from "./Migrations/t3team-064_ProjectionProjectsMainRepository.ts";
+import Migration0085 from "./Migrations/t3team-065_FeatureFlags.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -204,6 +214,13 @@ const migrationEntries = [
   [76, "ProjectionThreadTitleState", Migration0076],
   [77, "SignalSources", Migration0077],
   [78, "EnsureProjectionThreadActivitiesKindIndex", Migration0078],
+  [79, "ResourcePressureEvents", Migration0079],
+  [80, "PullRequestFilesViewed", Migration0080],
+  [81, "ProjectionThreadsAutoSettleDisabledAt", Migration0081],
+  [82, "ProjectionThreadShellT3TeamFacts", Migration0082],
+  [83, "OrchestrationEventsTypeSequenceIndex", Migration0083],
+  [84, "ProjectionProjectsMainRepository", Migration0084],
+  [85, "FeatureFlags", Migration0085],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

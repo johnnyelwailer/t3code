@@ -10,10 +10,9 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import type { T3TeamBacklogCacheIdentity } from "./t3team-atlassian-backlog-cacheShared.ts";
 
-export const ensureDigestBurndownTables = Effect.fn("t3team.digestBurndown.ensureTables")(
-  function* () {
-    const sql = yield* SqlClient.SqlClient;
-    yield* sql`
+const ensureDigestBurndownTables = Effect.fn("t3team.digestBurndown.ensureTables")(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  yield* sql`
     CREATE TABLE IF NOT EXISTS t3team_digest_burndown_sprints (
       provider TEXT NOT NULL,
       account_id TEXT NOT NULL,
@@ -23,7 +22,7 @@ export const ensureDigestBurndownTables = Effect.fn("t3team.digestBurndown.ensur
       PRIMARY KEY (provider, account_id, external_project_id, sprint_id)
     )
   `;
-    yield* sql`
+  yield* sql`
     CREATE TABLE IF NOT EXISTS t3team_digest_burndown_transitions (
       provider TEXT NOT NULL,
       account_id TEXT NOT NULL,
@@ -36,8 +35,7 @@ export const ensureDigestBurndownTables = Effect.fn("t3team.digestBurndown.ensur
       PRIMARY KEY (provider, account_id, external_project_id, issue_id, at_ms, to_status)
     )
   `;
-  },
-);
+});
 
 export type DigestBurndownBackfillRow = {
   readonly issueId: string;

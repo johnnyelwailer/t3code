@@ -34,7 +34,7 @@ import {
 } from "./t3team-workflowCompletionMessage.ts";
 
 /** A failure older than this is history, not a live "did that just die?" question. */
-export const RECENT_FAILURE_WINDOW_MS = 30 * 60 * 1000;
+const RECENT_FAILURE_WINDOW_MS = 30 * 60 * 1000;
 
 export type TerminalNoticeResurfer = {
   /** Feed a `thread.session-set` event; re-posts at most one buried notice per idle transition. */

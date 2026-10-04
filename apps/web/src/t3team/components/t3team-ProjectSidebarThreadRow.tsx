@@ -2,14 +2,11 @@
 import { memo } from "react";
 import { EllipsisIcon, MessageSquareIcon } from "lucide-react";
 import type { ProjectThread } from "~/t3team/t3team-types";
-import { SidebarMenuSubButton, SidebarMenuSubItem } from "~/t3team/components/ui/t3team-sidebar";
+import { SidebarMenuSubItem } from "~/t3team/components/ui/t3team-sidebar";
+import { T3SidebarSubRow } from "~/t3team/components/ui/t3team-sidebar-row";
 import { usePrimarySettings } from "~/hooks/useSettings";
 import { formatRelativeTime, resolveThreadStatusPill } from "./t3team-projectSidebarShared";
-import {
-  getSidebarSurfaceClassName,
-  getSidebarWrappedButtonClassName,
-  type SidebarItemState,
-} from "./t3team-projectSidebarItemState";
+import type { SidebarItemState } from "./t3team-projectSidebarItemState";
 import { useAutoScrollIntoView } from "./t3team-useAutoScrollIntoView";
 import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay";
 import { useThreadRowMenuHandlers } from "~/t3team/components/t3team-threadRowMenuHandlers";
@@ -73,13 +70,12 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
   const { handleContextMenu, handleOpenMenu } = useThreadRowMenuHandlers(openThreadMenu);
 
   const content = (
-    <SidebarMenuSubButton
+    <T3SidebarSubRow
       ref={rowRef}
-      size="sm"
+      // A child thread's status line grows the row.
+      size={thread.childStatus ? "fit" : "sm"}
       isActive={state.isSelected}
-      className={`group/thread-row-button ${thread.childStatus ? "h-auto min-h-7 py-1" : "h-7"} w-full translate-x-0 cursor-pointer justify-start px-2 text-left select-none focus-visible:ring-1 focus-visible:ring-inset ${getSidebarWrappedButtonClassName(
-        state,
-      )}`}
+      className="group/thread-row-button select-none focus-visible:ring-1 focus-visible:ring-inset"
       onClick={onSelect}
     >
       <div className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
@@ -119,7 +115,7 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
             {thread.childStatus ? (
               <span
                 data-child-status={thread.childStatus}
-                className="block truncate text-[10px] text-muted-foreground/75"
+                className="block truncate text-3xs text-muted-foreground/75"
               >
                 {thread.childStatus}
               </span>
@@ -138,30 +134,24 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
           >
             <EllipsisIcon className="size-3.5" />
           </button>
-          <span className="pointer-events-none text-[10px] text-muted-foreground/40 transition-opacity duration-150 group-hover/thread-row-button:opacity-0 group-focus-within/thread-row-button:opacity-0">
+          <span className="pointer-events-none text-3xs text-muted-foreground/40 transition-opacity duration-150 group-hover/thread-row-button:opacity-0 group-focus-within/thread-row-button:opacity-0">
             {formatRelativeTime(thread.lastMessageAt)}
           </span>
         </div>
       </div>
-    </SidebarMenuSubButton>
+    </T3SidebarSubRow>
   );
 
   if (!wrapWithMenuItem) {
     return (
-      <div
-        className={`group/menu-sub-item relative w-full ${getSidebarSurfaceClassName(state)}`}
-        onContextMenu={handleContextMenu}
-      >
+      <div className="group/menu-sub-item relative w-full" onContextMenu={handleContextMenu}>
         {content}
       </div>
     );
   }
 
   return (
-    <SidebarMenuSubItem
-      className={`w-full ${getSidebarSurfaceClassName(state)}`}
-      onContextMenu={handleContextMenu}
-    >
+    <SidebarMenuSubItem className="w-full" onContextMenu={handleContextMenu}>
       {content}
     </SidebarMenuSubItem>
   );

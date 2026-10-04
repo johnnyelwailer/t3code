@@ -15,7 +15,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import type { T3TeamBacklogCacheIdentity } from "./t3team-atlassian-backlog-cacheShared.ts";
 
-export const DIGEST_TRANSITION_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const DIGEST_TRANSITION_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 export type DigestTransitionCaptureEntry = {
   readonly issueId: string;
@@ -23,7 +23,7 @@ export type DigestTransitionCaptureEntry = {
   readonly status: string;
 };
 
-export const ensureDigestTransitionTable = Effect.fn("t3team.digestStatusTransitions.ensureTable")(
+const ensureDigestTransitionTable = Effect.fn("t3team.digestStatusTransitions.ensureTable")(
   function* () {
     const sql = yield* SqlClient.SqlClient;
     yield* sql`

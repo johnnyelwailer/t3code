@@ -10,6 +10,8 @@
  */
 import * as NodeCrypto from "node:crypto";
 import { CommandId, EventId, ThreadId, type OrchestrationThreadActivity } from "@t3tools/contracts";
+import { DEFAULT_SIGNAL_EXPORT } from "@t3tools/shared/observability";
+import * as OtelEnvironment from "@t3tools/shared/otelEnvironment";
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -30,8 +32,6 @@ type ThreadPlan = { readonly threadId: string; readonly plan: PlanStep[] };
 export const makeTaskReplayConfig = Effect.fn("makeTaskReplayConfig")(function* (baseDir: string) {
   const derived = yield* ServerConfig.deriveServerPaths(baseDir, undefined);
   return ServerConfig.make({
-    otlpHeaders: undefined,
-    otlpProtocol: "http/protobuf",
     devAuthToken: undefined,
     logLevel: "Info",
     traceMinLevel: "Info",
@@ -41,8 +41,11 @@ export const makeTaskReplayConfig = Effect.fn("makeTaskReplayConfig")(function* 
     traceMaxFiles: 10,
     otlpTracesUrl: undefined,
     otlpMetricsUrl: undefined,
-    otlpExportIntervalMs: 10_000,
-    otlpServiceName: "t3-server",
+    otlpLogsUrl: undefined,
+    otlpTracesExport: DEFAULT_SIGNAL_EXPORT,
+    otlpMetricsExport: DEFAULT_SIGNAL_EXPORT,
+    otlpLogsExport: DEFAULT_SIGNAL_EXPORT,
+    otelEnvironment: OtelEnvironment.none,
     cwd: process.cwd(),
     baseDir,
     ...derived,

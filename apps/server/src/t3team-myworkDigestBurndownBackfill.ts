@@ -32,7 +32,7 @@ const BURNDOWN_BACKFILL_LIMIT = 100;
  * The one host read per sprint: changelog fetch for each issue (bounded,
  * four at a time), then the cache write + marker.
  */
-export function backfillDigestBurndown(
+function backfillDigestBurndown(
   identity: T3TeamBacklogCacheIdentity,
   sprintId: string,
   issues: ReadonlyArray<{ readonly issueId: string; readonly issueKey?: string }>,
@@ -86,7 +86,7 @@ function backfillKey(identity: T3TeamBacklogCacheIdentity, sprintId: string): st
   return `${identity.provider}|${identity.accountId}|${identity.externalProjectId}|${sprintId}`;
 }
 
-export function kickDigestBurndownBackfill(
+function kickDigestBurndownBackfill(
   identity: T3TeamBacklogCacheIdentity,
   sprintId: string,
   issues: ReadonlyArray<{ readonly issueId: string; readonly issueKey?: string }>,

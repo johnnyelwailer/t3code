@@ -19,7 +19,7 @@ export function setPackSetupProfileOverlay(
 }
 
 /** Full definitions (incl. behavior) for the server-side profile resolver. */
-export function getPackSetupProfiles(): readonly SetupProfileDefinition[] | undefined {
+function getPackSetupProfiles(): readonly SetupProfileDefinition[] | undefined {
   return overlay;
 }
 

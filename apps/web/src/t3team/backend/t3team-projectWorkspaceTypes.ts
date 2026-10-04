@@ -5,12 +5,18 @@
  * three describe one flow — materialising a workspace and seeding its context files — and are
  * re-exported from there, so existing importers are unaffected.
  */
+import type {
+  ProjectMainRepository,
+  ProjectMainRepositoryCandidate,
+  ProjectMainRepositorySelection,
+} from "@t3tools/contracts";
+
 import type { LinkedRepositorySyncResult } from "~/t3team/backend/t3team-types";
 
-export type ProjectWorkspaceBootstrapMetaRepository = {
+export type ProjectWorkspaceBootstrapMainRepository = {
   readonly url?: string;
   readonly localPath: string;
-  readonly status: "adopted";
+  readonly status: ProjectMainRepositorySelection;
 };
 
 export type ProjectWorkspaceBootstrapResult = {
@@ -18,9 +24,19 @@ export type ProjectWorkspaceBootstrapResult = {
   readonly workspaceRepositoryInitialized: boolean;
   readonly referencesRoot: string;
   readonly linkedRepositories: ReadonlyArray<LinkedRepositorySyncResult>;
-  /** Present when the workspace root is itself a git repository adopted as the meta-repo
+  /** Present when the workspace root is itself a git repository adopted as the main repository
    * (monorepo-as-metarepo, GHE #42): sub-work happens in worktrees of this repository. */
-  readonly metaRepository?: ProjectWorkspaceBootstrapMetaRepository;
+  readonly mainRepository?: ProjectWorkspaceBootstrapMainRepository;
+  /** Linked clones that already carry a project state dir (main-repository auto-detection). */
+  readonly mainRepositoryCandidates?: ReadonlyArray<ProjectMainRepositoryCandidate>;
+};
+
+/** Result of `POST /api/t3team/project/main-repository`. */
+export type ProjectMainRepositorySwitchResult = {
+  readonly changed: boolean;
+  readonly workspaceRoot: string;
+  readonly mainRepository?: ProjectMainRepository;
+  readonly migratedPaths: ReadonlyArray<string>;
 };
 
 export type ProjectWorkspaceContextFile = {

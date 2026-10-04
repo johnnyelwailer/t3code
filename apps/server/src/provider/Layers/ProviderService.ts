@@ -94,8 +94,6 @@ import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
 import * as ServerSettings from "../../serverSettings.ts";
 import * as ProjectionSnapshotQuery from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
-import * as ThreadPlanStaleness from "../../orchestration/ThreadPlanStaleness.ts";
-import { renderPlanStalenessNudge } from "../../orchestration/planStalenessNudge.ts";
 const isModelSelection = Schema.is(ModelSelection);
 const encodePromptJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
@@ -513,6 +511,14 @@ function readPersistedCwd(
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+/** Stopped rows with no active turn are settled; shutdown leaves them untouched. */
+function isSettledBinding(binding: ProviderSessionDirectory.ProviderRuntimeBinding): boolean {
+  if (binding.status !== "stopped") return false;
+  const payload = binding.runtimePayload;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return true;
+  return !("activeTurnId" in payload) || payload.activeTurnId == null;
+}
+
 const dieOnMissingBindingInstanceId = (
   operation: string,
   payload: {
@@ -567,11 +573,6 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const projectionQuery = yield* Effect.serviceOption(
     ProjectionSnapshotQuery.ProjectionSnapshotQuery,
-  );
-  // Optional: provider-only runtimes may omit the orchestration side, where
-  // the plan-staleness counter lives; without it no nudge is ever appended.
-  const threadPlanStaleness = yield* Effect.serviceOption(
-    ThreadPlanStaleness.ThreadPlanStalenessService,
   );
   const issueMcpCredential =
     options?.issueMcpCredential ?? McpSessionRegistry.issueActiveMcpCredential;
@@ -2156,10 +2157,12 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
             ? `[Pasted text "${attachment.name}" is saved at: ${attachmentPath}. Inspect it as needed.]`
             : `[Attached ${attachment.type} "${attachment.name}" is saved at: ${attachmentPath}]`,
       );
-      if (isPastedText && !appended) {
+      // Most adapters see generic files only through this path line, so a file
+      // without one would be silently dropped. Images still go natively.
+      if (!appended && attachment.type === "file") {
         return yield* toValidationError(
           "ProviderService.sendTurn",
-          `Input plus pasted-text attachment context exceeds the ${PROVIDER_SEND_TURN_MAX_INPUT_CHARS} character limit`,
+          `Input plus attachment context exceeds the ${PROVIDER_SEND_TURN_MAX_INPUT_CHARS} character limit`,
         );
       }
     }
@@ -2205,20 +2208,6 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         ? { input: inputTextWithAttachmentContext }
         : {}),
     };
-    // Plan-staleness nudge: when the thread's task list has gone stale
-    // (PLAN_STALENESS_NUDGE_THRESHOLD+ tool activities since the last plan
-    // write), append the reminder line to THIS turn's input so the model sees
-    // it once, on the turn it starts. Textless continuation turns carry no
-    // input, so they append nothing; the nudge is never persisted — it is
-    // provider-bound only.
-    const planStalenessNudge =
-      input.input === undefined || Option.isNone(threadPlanStaleness)
-        ? undefined
-        : renderPlanStalenessNudge(threadPlanStaleness.value.getPlanAge(input.threadId));
-    const turnInput =
-      input.input !== undefined && planStalenessNudge !== undefined
-        ? { ...input, input: `${input.input}\n\n${planStalenessNudge}` }
-        : input;
     yield* Effect.annotateCurrentSpan({
       "provider.operation": "send-turn",
       "provider.thread_id": input.threadId,
@@ -2292,7 +2281,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
             if (supersededTurnId !== undefined) {
               yield* markTurnSuperseded(input.threadId, supersededTurnId);
             }
-            const turn = yield* routed.adapter.sendTurn(turnInput).pipe(
+            const turn = yield* routed.adapter.sendTurn(input).pipe(
               // Provider rejected the nudge: no new turn started, and the
               // tracked turn is still the in-flight one. Disarm the marker so
               // a later GENUINE stop of that turn stays a terminal stop
@@ -2931,7 +2920,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     // Continuation is project-scopable, so decide it per session's project;
     // without orchestration the environment value is all there is.
     const stopSettings = yield* serverSettings.getSettings.pipe(
-      Effect.map(Option.some),
+      Effect.asSome,
       Effect.orElseSucceed(() => Option.none<ServerSettingsValue>()),
     );
     const continueAfterRestartFor = Effect.fn("continueAfterRestartFor")(function* (
@@ -2964,7 +2953,6 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       return [completed, state] as const;
     });
     yield* recordCompletedTurnProperties(properties);
-    const threadIds = yield* directory.listThreadIds();
     const currentAdapters = yield* getAdapterEntries;
     const activeSessions = yield* Effect.forEach(currentAdapters, ([instanceId, adapter]) =>
       adapter.listSessions().pipe(
@@ -2995,7 +2983,12 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     yield* Effect.forEach(currentAdapters, ([, adapter]) => adapter.stopAll()).pipe(Effect.asVoid);
     yield* McpSessionRegistry.revokeAllActiveMcpCredentials();
     McpProviderSession.clearAllMcpProviderSessions();
-    const bindings = yield* directory.listBindings().pipe(Effect.orElseSucceed(() => []));
+    // Stopped rows stay for their resume cursors, so long-lived installs hold
+    // thousands. Only rewrite the ones this shutdown actually stops.
+    const bindings = yield* directory.listBindings().pipe(
+      Effect.map((all) => all.filter((binding) => !isSettledBinding(binding))),
+      Effect.orElseSucceed(() => []),
+    );
     yield* Effect.forEach(bindings, (binding) =>
       Effect.gen(function* () {
         const providerInstanceId = dieOnMissingBindingInstanceId(
@@ -3015,8 +3008,10 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         });
       }),
     ).pipe(Effect.asVoid);
+    // Not `sessionCount`: that older property counted every row, so a new name
+    // keeps the two meanings in separate series.
     yield* analytics.record("provider.sessions.stopped_all", {
-      sessionCount: threadIds.length,
+      stoppedSessionCount: bindings.length,
     });
     yield* analytics.flush;
   });

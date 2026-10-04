@@ -299,12 +299,12 @@ stays a loop); it is an engine optimization that bounds replay cost when it matt
 
 Builds on the shipped Epic 25 engine + durability.
 
-| Phase | Scope                                                                                         | Status      |
-| ----- | --------------------------------------------------------------------------------------------- | ----------- |
-| 27.1  | `waitUntil(when)` primitive — journaled deadline, records `wake_at` on the run                | Implemented |
-| 27.2  | Scheduler service — arm soonest `wake_at`, fire → resume, re-arm on boot (the core new piece) | Implemented |
-| 27.3  | `sleeping` status + `wake_at` column + dormant-thread UX (state pill, run history, run-now)   | Implemented |
-| 27.4  | Lifecycle (pause/resume/run-now) + `"schedule"` capability + frequency floor                  | Implemented |
+| Phase | Scope                                                                                                               | Status                                  |
+| ----- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| 27.1  | `waitUntil(when)` primitive — journaled deadline, records `wake_at` on the run                                      | Implemented                             |
+| 27.2  | Scheduler service — arm soonest `wake_at`, fire → resume, re-arm on boot (the core new piece)                       | Implemented                             |
+| 27.3  | `sleeping` status + `wake_at` column + dormant-thread UX (state pill, run history, run-now)                         | Implemented                             |
+| 27.4  | Lifecycle (pause/resume/run-now) + `"schedule"` capability + frequency floor                                        | Implemented                             |
 | 27.5  | [Continue-as-new / journal checkpointing](../runbook/bounded-execution.md) — bounded replay for long-lived routines | Deferred to the bounded-execution track |
 
 27.2 is the load-bearing build — once the scheduler can durably wake a parked run on the

@@ -1,16 +1,16 @@
 import type { CloudSession } from "@t3tools/contracts";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { cn } from "~/lib/utils";
 import { ConnectionStatusDot } from "../ConnectionStatusDot";
 import { ITEM_ROW_CLASSNAME, ITEM_ROW_INNER_CLASSNAME } from "../settings/itemRows";
-import { Button } from "../ui/button";
 import { Skeleton } from "../ui/skeleton";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { CloudSessionRowActions } from "./t3team-CloudSessionRowActions";
 import {
   cloudSessionToneDotClassName,
   cloudSessionTonePingClassName,
   formatDuration,
-  isCloudSessionProvisionPending,
   presentCloudSession,
 } from "./t3team-cloudSessionProvisionPresentation";
 
@@ -50,10 +50,10 @@ export function CloudSessionRowsSkeleton() {
     <div className={ITEM_ROW_CLASSNAME}>
       <div className={ITEM_ROW_INNER_CLASSNAME}>
         <div className="min-w-0 flex-1 space-y-2">
-          <Skeleton className="h-4 w-40 rounded-full" />
-          <Skeleton className="h-3 w-56 rounded-full" />
+          <Skeleton shape="pill" className="h-4 w-40" />
+          <Skeleton shape="pill" className="h-3 w-56" />
         </div>
-        <Skeleton className="h-7 w-20 rounded-md" />
+        <Skeleton className="h-7 w-20" />
       </div>
     </div>
   );
@@ -104,6 +104,7 @@ export function CloudSessionRow({
   session,
   onAction,
   onSecondaryAction,
+  onForget,
   actionPending = false,
   secondaryActionPending = false,
   pendingLabel,
@@ -112,6 +113,8 @@ export function CloudSessionRow({
   readonly session: CloudSession;
   readonly onAction?: ((session: CloudSession) => void) | undefined;
   readonly onSecondaryAction?: ((session: CloudSession) => void) | undefined;
+  /** Forget the ready machine's saved connection; absent when it is not saved here. */
+  readonly onForget?: ((session: CloudSession) => void) | undefined;
   readonly actionPending?: boolean;
   readonly secondaryActionPending?: boolean;
   /** Label for the primary button while it is in flight; defaults to "Working…". */
@@ -120,16 +123,6 @@ export function CloudSessionRow({
   readonly showAction?: boolean;
 }) {
   const presentation = presentCloudSession(session);
-  const handleAction = useCallback(() => {
-    onAction?.(session);
-  }, [onAction, session]);
-  const handleSecondaryAction = useCallback(() => {
-    onSecondaryAction?.(session);
-  }, [onSecondaryAction, session]);
-  const hasSecondary =
-    showAction && presentation.secondaryActionLabel !== null && onSecondaryAction !== undefined;
-  const showDetails =
-    showAction && session.detailsUrl !== null && isCloudSessionProvisionPending(session.phase);
 
   return (
     <div className={ITEM_ROW_CLASSNAME}>
@@ -143,25 +136,35 @@ export function CloudSessionRow({
           </span>
           <div className="min-w-0 flex-1 space-y-1.5">
             <div className="truncate font-medium text-sm">{presentation.title}</div>
-            <div
-              className={cn(
-                "truncate text-xs",
-                presentation.tone === "error" ? "text-destructive" : "text-muted-foreground",
-              )}
-            >
-              {presentation.liveElapsed ? (
-                <CloudSessionLiveDetail
-                  detail={presentation.detail}
-                  elapsedSeconds={session.elapsedSeconds}
-                />
-              ) : (
-                presentation.detail
-              )}
-            </div>
+            {/* The detail truncates; the tooltip carries the full sentence. */}
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <div
+                    className={cn(
+                      "truncate text-xs",
+                      presentation.tone === "error" ? "text-destructive" : "text-muted-foreground",
+                    )}
+                  />
+                }
+              >
+                {presentation.liveElapsed ? (
+                  <CloudSessionLiveDetail
+                    detail={presentation.detail}
+                    elapsedSeconds={session.elapsedSeconds}
+                  />
+                ) : (
+                  presentation.detail
+                )}
+              </TooltipTrigger>
+              <TooltipPopup>{presentation.detail}</TooltipPopup>
+            </Tooltip>
             {presentation.progress === null ? null : (
               <CloudSessionProgressBar progress={presentation.progress} />
             )}
-            {showDetails && session.detailsUrl !== null ? (
+            {/* Every phase with a run page links it — a failed or finished
+                session is exactly the one a user needs to diagnose. */}
+            {session.detailsUrl !== null ? (
               <a
                 href={session.detailsUrl}
                 target="_blank"
@@ -174,28 +177,16 @@ export function CloudSessionRow({
           </div>
         </div>
         {showAction ? (
-          <div className="flex shrink-0 items-center gap-1.5">
-            {hasSecondary ? (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={secondaryActionPending}
-                onClick={handleSecondaryAction}
-              >
-                {secondaryActionPending ? "Stopping…" : presentation.secondaryActionLabel}
-              </Button>
-            ) : null}
-            {presentation.actionLabel === null ? null : (
-              <Button
-                size="sm"
-                variant={presentation.tone === "ready" ? "default" : "outline"}
-                disabled={actionPending}
-                onClick={handleAction}
-              >
-                {actionPending ? (pendingLabel ?? "Working…") : presentation.actionLabel}
-              </Button>
-            )}
-          </div>
+          <CloudSessionRowActions
+            session={session}
+            presentation={presentation}
+            onAction={onAction}
+            onSecondaryAction={onSecondaryAction}
+            onForget={onForget}
+            actionPending={actionPending}
+            secondaryActionPending={secondaryActionPending}
+            pendingLabel={pendingLabel}
+          />
         ) : null}
       </div>
     </div>

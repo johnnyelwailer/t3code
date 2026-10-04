@@ -79,6 +79,6 @@ export function hydrateT3TeamContextBackgroundJob(input: {
   });
 }
 
-export function loadT3TeamContextBackgroundJobRecord(jobId: string) {
+function loadT3TeamContextBackgroundJobRecord(jobId: string) {
   return loadT3TeamContextRefreshJob(jobId);
 }
