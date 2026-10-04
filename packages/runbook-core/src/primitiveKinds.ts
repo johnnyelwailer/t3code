@@ -19,6 +19,7 @@ export const PRIMITIVE_KINDS = [
   "artifact",
   "usage",
   "checkpoint",
+  "retry",
 ] as const;
 
 /** Open primitive-kind vocabulary for adapter and catalog extensions. */

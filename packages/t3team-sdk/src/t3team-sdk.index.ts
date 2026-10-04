@@ -20,10 +20,12 @@ export {
   PermissionDeniedError,
   ProviderUnavailableError,
   ReplayDriftError,
+  RetryExhaustedError,
   SchemaExhaustedError,
   SubWorkflowCheckpointError,
   TargetMissingError,
   TimeoutError,
+  WatermarkScopeError,
   WorkflowError,
   WorkflowInputDecodeError,
   WorkflowLoadError,
@@ -81,6 +83,7 @@ export {
 } from "./t3team-sdk.placements.ts";
 // The engine API as ordinary imports for orchestration bodies (Epic 25).
 export {
+  accumulate,
   agent,
   checkpoint,
   getArgs,
@@ -95,12 +98,16 @@ export {
   parallel,
   phase,
   pipeline,
+  retry,
+  reducerState,
   spawnThread,
   wait,
   waitUntil,
+  watermark,
   withBodyApi,
   workflow,
 } from "./t3team-sdk.engineApi.ts";
+export type { Watermark, WatermarkOptions, WatermarkState } from "@runbook/core/watermark";
 export { emit } from "./t3team-sdk.emit.ts";
 // Signal sources (design 42): the shared signal/source vocabulary + built-in Tier A/B
 // catalog declarations. `defineSignalSource` (the effectful producer half) lives on the
@@ -208,6 +215,8 @@ export type {
   WorkflowThreadPrimitives,
 } from "./t3team-sdk.threadPrimitives.ts";
 export type { ModelCascadeWireEntry } from "./t3team-sdk.modelCascade.ts";
+export type { RetryClassification, RetryOptions } from "@runbook/core/retryBackoff";
+export type { RetryClassifiedFailure } from "./t3team-sdk.errors.ts";
 export type { ReplayDriftFacet, ReplayDriftReason } from "./t3team-sdk.errors.ts";
 export type { RunMeta } from "./t3team-sdk.journal.ts";
 export type { JournalEntry, JournalMaps, ResolvedEntry } from "./t3team-sdk.journalReader.ts";
