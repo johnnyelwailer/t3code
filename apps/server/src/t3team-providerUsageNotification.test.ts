@@ -1,6 +1,8 @@
 import { ProjectId, ThreadId, type ServerProviderUsageWindow } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as DateTime from "effect/DateTime";
+import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 
 import type { ProjectionSnapshotQueryShape } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
@@ -163,5 +165,96 @@ it.effect("omits the block when the provider refresh fails", () =>
     expect(
       yield* read({ provider: "claudeAgent", parentThreadId: "parent", projectId: "project" }),
     ).toBe("");
+  }),
+);
+
+const liveProvider = (usedPercent: number, ageMs = 0): ServerProvider =>
+  ({
+    instanceId: "claudeAgent",
+    usageLimits: {
+      checkedAt: DateTime.formatIso(
+        DateTime.subtract(DateTime.nowUnsafe(), { milliseconds: ageMs }),
+      ),
+      windows: [
+        {
+          ...window,
+          usedPercent,
+          resetsAt: DateTime.formatIso(DateTime.add(DateTime.nowUnsafe(), { hours: 1 })),
+        },
+      ],
+    },
+  }) as unknown as ServerProvider;
+
+const makeReaderHarness = (
+  cached: ServerProvider,
+  refresh: Effect.Effect<ReadonlyArray<ServerProvider>>,
+) => {
+  const refreshedInstances: string[] = [];
+  const queriedParents: string[] = [];
+  const registry = {
+    getProviders: Effect.succeed([cached]),
+    refreshInstance: (instanceId: string) => {
+      refreshedInstances.push(instanceId);
+      return refresh;
+    },
+  } as unknown as ProviderRegistryShape;
+  const query = {
+    listChildThreadIdsByParent: (parentId: string, projectId: string) => {
+      queriedParents.push(`${parentId}:${projectId}`);
+      return Effect.succeed([ThreadId.make("live-child")]);
+    },
+    getThreadShellById: () => Effect.succeed(Option.some(shell("claudeAgent", "running"))),
+  } as unknown as ProjectionSnapshotQueryShape;
+  const read = makeProviderUsageNotificationLine({ registry, query });
+  return {
+    result: read({ provider: "claudeAgent", parentThreadId: "parent-1", projectId: "project-1" }),
+    refreshedInstances,
+    queriedParents,
+  };
+};
+
+it.effect("refreshes the selected instance and formats the fresh usage instead of the cache", () =>
+  Effect.gen(function* () {
+    const h = makeReaderHarness(liveProvider(83, 10_000), Effect.succeed([liveProvider(90)]));
+    const line = yield* h.result;
+    expect(line).toContain("\n[provider-usage] claudeAgent: 90% of 5h window");
+    expect(line).toContain("1 in-flight children on this provider");
+    expect(h.refreshedInstances).toEqual(["claudeAgent"]);
+    expect(h.queriedParents).toEqual(["parent-1:project-1"]);
+  }),
+);
+
+it.effect("uses recent cached usage when the refresh fails", () =>
+  Effect.gen(function* () {
+    const h = makeReaderHarness(liveProvider(83, 10_000), Effect.die("probe failed"));
+    expect(yield* h.result).toContain("claudeAgent: 83% of 5h window");
+    expect(h.queriedParents).toEqual(["parent-1:project-1"]);
+  }),
+);
+
+it.effect("bounds a hanging refresh and uses recent cached usage", () =>
+  Effect.gen(function* () {
+    const h = makeReaderHarness(liveProvider(83, 10_000), Effect.never);
+    const fiber = yield* h.result.pipe(Effect.forkScoped);
+    yield* Effect.yieldNow;
+    yield* TestClock.adjust(Duration.millis(PROVIDER_USAGE_NOTIFICATION_REFRESH_MS));
+    expect(yield* Fiber.join(fiber)).toContain("claudeAgent: 83% of 5h window");
+    expect(h.refreshedInstances).toEqual(["claudeAgent"]);
+  }).pipe(Effect.provide(TestClock.layer())),
+);
+
+it.effect("suppresses cached usage when refresh confirms the source is unsupported", () =>
+  Effect.gen(function* () {
+    const unsupported = {
+      ...liveProvider(90),
+      usageLimits: {
+        checkedAt: DateTime.formatIso(DateTime.nowUnsafe()),
+        windows: [],
+        unavailable: { reason: "unsupported" as const },
+      },
+    };
+    const h = makeReaderHarness(liveProvider(83, 10_000), Effect.succeed([unsupported]));
+    expect(yield* h.result).toBe("");
+    expect(h.queriedParents).toEqual([]);
   }),
 );
