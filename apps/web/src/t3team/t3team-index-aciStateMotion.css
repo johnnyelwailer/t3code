@@ -39,8 +39,8 @@
   }
 }
 
-/* Waiting dots get one soft breathing ring, synced to the 3.2s breath.
-   The cell's first span is the pulse wrapper (relative-anchored). */
+/* Waiting dots get one soft breathing halo, synced to the 3.2s breath.
+   Paint follows the orb token; the cell's first span is the pulse wrapper. */
 .t3team-aci-cell[data-t3team-state="waiting"] > span::before {
   content: "";
   position: absolute;
@@ -50,17 +50,13 @@
   height: 12px;
   margin: -6px 0 0 -6px;
   border-radius: 9999px;
-  border: 1px solid #94a3b8;
-  box-shadow: 0 0 5px 1px rgb(148 163 184 / 0.3);
+  border: 0;
+  box-shadow: 0 0 7px 2px
+    color-mix(in oklch, var(--t3team-orb-s, var(--muted-foreground)) 18%, transparent);
   opacity: 0;
   transform: scale(0.4);
   animation: t3team-aci-ring-breathe 3.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
   pointer-events: none;
-}
-
-.dark .t3team-aci-cell[data-t3team-state="waiting"] > span::before {
-  border-color: #cbd5e1;
-  box-shadow: 0 0 5px 1px rgb(203 213 225 / 0.25);
 }
 
 @keyframes t3team-aci-ring-breathe {

@@ -7,14 +7,13 @@
  *
  * Each indicator dot carries its own state (data-t3team-state, derived in
  * t3team-activeAgentsCore): thinking = cool wave, writing = cooler slower
- * wave, working = warm snappy pulse, waiting = muted breath + ring,
+ * wave, working = warm snappy pulse, waiting = muted breath + soft halo,
  * settled = dim still. Dots rest at scale(1.5); each state keyframe grows
  * around that rest so the dot swells instead of flickering at 4px.
  *
- * Color: a very subtle per-dot hue wander at rest (±6° over 15s, phase
- * offset by the dot index); the bigger one-shot swing (±30° + brightness
- * pop) fires on STATE CHANGE via the .t3team-aci-shift keyed remount in
- * the indicator.
+ * Paint lives in t3team-statusOrb.css (theme-aware palette, color shift,
+ * sheen). This layer owns motion: the per-dot hue wander, the one-shot
+ * swing on state change, and the S-bend proximity transforms.
  *
  * Proximity: the S-bend + snap transforms are written on .t3team-aci-cell
  * by the indicator's rAF loop (createSBendPhysics) — only the will-change
@@ -71,64 +70,27 @@
   }
 }
 
-.t3team-aci-cell[data-t3team-state] .t3team-aci-dot {
-  /* a status change crossfades the color (0.9s spring) instead of
-     snapping; keep the base opacity/transform transitions */
-  transition:
-    background 0.9s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 0.9s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 6s linear,
-    transform 140ms ease;
-}
-
 .t3team-aci-cell[data-t3team-state="thinking"] .t3team-aci-dot {
-  background: #38bdf8;
+  /* paint comes from t3team-statusOrb.css */
   animation: t3team-aci-wave 1.6s ease-in-out infinite;
-  box-shadow: 0 0 5px 0 rgb(56 189 248 / 0.35);
-}
-
-.dark .t3team-aci-cell[data-t3team-state="thinking"] .t3team-aci-dot {
-  background: #7dd3fc;
 }
 
 .t3team-aci-cell[data-t3team-state="writing"] .t3team-aci-dot {
-  background: #818cf8;
   animation: t3team-aci-wave 1.75s ease-in-out infinite;
-  box-shadow: 0 0 5px 0 rgb(129 140 248 / 0.35);
-}
-
-.dark .t3team-aci-cell[data-t3team-state="writing"] .t3team-aci-dot {
-  background: #a5b4fc;
 }
 
 .t3team-aci-cell[data-t3team-state="working"] .t3team-aci-dot {
-  background: #f59e0b;
   animation: t3team-aci-snap 1.05s cubic-bezier(0.22, 1, 0.36, 1) infinite;
-  box-shadow: 0 0 6px 0 rgb(245 158 11 / 0.4);
-}
-
-.dark .t3team-aci-cell[data-t3team-state="working"] .t3team-aci-dot {
-  background: #fbbf24;
 }
 
 .t3team-aci-cell[data-t3team-state="waiting"] .t3team-aci-dot {
-  background: #94a3b8;
   animation: t3team-aci-breathe 3.2s ease-in-out infinite;
 }
 
-.dark .t3team-aci-cell[data-t3team-state="waiting"] .t3team-aci-dot {
-  background: #cbd5e1;
-}
-
 .t3team-aci-cell[data-t3team-state="settled"] .t3team-aci-dot {
-  background: #a3a3a3;
   animation: none;
   opacity: 0.4;
   transform: scale(1.5);
-}
-
-.dark .t3team-aci-cell[data-t3team-state="settled"] .t3team-aci-dot {
-  background: #737373;
 }
 
 @media (prefers-reduced-motion: reduce) {
