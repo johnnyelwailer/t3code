@@ -106,6 +106,8 @@ type RuntimeWarningLike = {
 /**
  * Read the host-watchdog stall out of a `runtime.warning` event. Non-watchdog
  * warnings (and malformed details) return null — they never arm a retry.
+ * Self-heal notices leave the turn running; only exhaustion or a legacy
+ * hard-interrupt notice may arm the session retry tracker.
  */
 export function readWatchdogStallWarning(
   payload: RuntimeWarningLike,
@@ -113,7 +115,8 @@ export function readWatchdogStallWarning(
   const detail = payload.detail;
   if (typeof detail !== "object" || detail === null) return null;
   const code = (detail as { code?: unknown }).code;
-  if (code !== "turn.inactivity") return null;
+  if (code !== "turn.inactivity" && code !== "turn.inactivity.exhausted") return null;
+  if (code === "turn.inactivity" && "selfHealAttempt" in detail) return null;
   const seconds = (detail as { inactivitySeconds?: unknown }).inactivitySeconds;
   if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds <= 0) return null;
   return { inactivitySeconds: seconds };
