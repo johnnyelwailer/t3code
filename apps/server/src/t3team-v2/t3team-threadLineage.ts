@@ -26,9 +26,17 @@ import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
 import * as ThreadCommandExecutor from "../orchestration-v2/ThreadCommandExecutor.ts";
 import { T3TeamV2WriterLayerLive } from "./t3team-v2Layers.ts";
 
+/**
+ * `refused`: the link can never be written (self-parent, cycle, deleted or missing
+ * thread). `failed`: the write itself failed (lock, read, event sink); a retry may work.
+ */
 export class T3TeamThreadLineageError extends Schema.TaggedError<T3TeamThreadLineageError>()(
   "T3TeamThreadLineageError",
-  { threadId: Schema.String, cause: Schema.Defect() },
+  {
+    threadId: Schema.String,
+    reason: Schema.Literals(["refused", "failed"]),
+    cause: Schema.Defect(),
+  },
 ) {}
 
 export interface SetThreadLineageInput {
@@ -50,8 +58,9 @@ export class T3TeamThreadLineage extends Context.Service<
 const MAX_ANCESTOR_HOPS = 64;
 
 const isLineageError = Schema.is(T3TeamThreadLineageError);
+const isThreadNotFound = Schema.is(ProjectionStore.ProjectionStoreThreadNotFoundError);
 const lineageError = (input: SetThreadLineageInput, cause: string) =>
-  new T3TeamThreadLineageError({ threadId: input.threadId, cause });
+  new T3TeamThreadLineageError({ threadId: input.threadId, reason: "refused", cause });
 
 const sameLineage = (a: OrchestrationV2AppThreadLineage, b: OrchestrationV2AppThreadLineage) =>
   a.parentThreadId === b.parentThreadId &&
@@ -107,7 +116,11 @@ const make = Effect.gen(function* () {
         Effect.mapError((cause) =>
           isLineageError(cause)
             ? cause
-            : new T3TeamThreadLineageError({ threadId: input.threadId, cause }),
+            : new T3TeamThreadLineageError({
+                threadId: input.threadId,
+                reason: isThreadNotFound(cause) ? "refused" : "failed",
+                cause,
+              }),
         ),
         Effect.withSpan("t3team.threadLineage.set"),
       ),

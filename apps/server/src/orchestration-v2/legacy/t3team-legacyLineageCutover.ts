@@ -8,8 +8,10 @@
  *
  * Runs once per database (ledger step in `t3team_v2_cutover`, migration 91),
  * right after `reconcileShells` in startup. Each write is idempotent and never
- * overrides a lineage V2 already set, so a crash midway is repaired by the next
- * boot. A thread missing from V2 (deleted, never imported) is skipped.
+ * overrides a lineage V2 already set. A link V2 refuses (missing or deleted
+ * thread, cycle) is skipped; a write that FAILS fails the pass before it is
+ * ledgered, and the next boot re-runs it: children linked by the earlier
+ * attempt still get their ticket written.
  */
 import { ThreadEnvironmentBinding, ThreadId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
@@ -54,53 +56,61 @@ export const runLegacyLineageCutover = Effect.gen(function* () {
   const metadata = yield* T3TeamChildThreadMetadata;
   const facts = yield* T3TeamThreadFactsStore;
 
-  /** Live V2 threads, and the subset that has no parent yet (the only ones re-linked). */
-  const liveV2Threads = sql<{ readonly threadId: string; readonly hasParent: number }>`
+  /** Live V2 threads and their current lineage parent (null: not linked yet). */
+  const liveV2Threads = sql<{ readonly threadId: string; readonly parentThreadId: string | null }>`
     SELECT thread_id AS "threadId",
-      json_extract(payload_json, '$.lineage.parentThreadId') IS NOT NULL AS "hasParent"
+      json_extract(payload_json, '$.lineage.parentThreadId') AS "parentThreadId"
     FROM orchestration_v2_projection_threads WHERE deleted_at IS NULL
-  `.pipe(
-    Effect.map((rows) => ({
-      live: new Set(rows.map((row) => row.threadId)),
-      open: new Set(rows.filter((row) => !row.hasParent).map((row) => row.threadId)),
-    })),
-  );
+  `.pipe(Effect.map((rows) => new Map(rows.map((row) => [row.threadId, row.parentThreadId]))));
 
   const apply = Effect.gen(function* () {
     const relations = orderParentsFirst(yield* readLegacyRelations);
     const flags = yield* readLegacyThreadFlags;
-    const { live, open } = yield* liveV2Threads;
+    const parentOf = yield* liveV2Threads;
     let linked = 0;
     let unchanged = 0;
     let skipped = 0;
     let tickets = 0;
     let factCount = 0;
     for (const relation of relations) {
-      // Never override a relation V2 already carries (or re-link a missing thread).
-      if (!open.has(relation.childThreadId)) {
+      const current = parentOf.get(relation.childThreadId);
+      // Never override a relation V2 already carries (or link a missing thread). A child an
+      // earlier, failed attempt linked to this parent still needs its ticket below.
+      if (current === undefined || (current !== null && current !== relation.parentThreadId)) {
         unchanged += 1;
         continue;
       }
       const childThreadId = ThreadId.make(relation.childThreadId);
       const parentThreadId = ThreadId.make(relation.parentThreadId);
-      const written = yield* lineage
-        .setThreadLineage({
-          threadId: childThreadId,
-          parentThreadId,
-          relationshipToParent: relation.relationshipToParent,
-        })
-        .pipe(Effect.option);
-      if (Option.isNone(written)) {
-        skipped += 1;
-        continue;
+      if (current === null) {
+        // Only a refusal is skipped; a failed write fails the pass so it is not ledgered.
+        const written = yield* lineage
+          .setThreadLineage({
+            threadId: childThreadId,
+            parentThreadId,
+            relationshipToParent: relation.relationshipToParent,
+          })
+          .pipe(
+            Effect.map(Option.some),
+            Effect.catchIf(
+              (error) => error.reason === "refused",
+              () => Effect.succeed(Option.none()),
+            ),
+          );
+        if (Option.isNone(written)) {
+          skipped += 1;
+          continue;
+        }
+        linked += written.value ? 1 : 0;
+      } else {
+        unchanged += 1;
       }
-      linked += written.value ? 1 : 0;
       if (relation.ticketId !== null) {
         yield* metadata.upsert({ childThreadId, parentThreadId, ticketId: relation.ticketId });
         tickets += 1;
       }
     }
-    const known = (threadId: string) => live.has(threadId);
+    const known = (threadId: string) => parentOf.has(threadId);
     for (const threadId of flags.ephemeralThreadIds.filter(known)) {
       yield* facts.upsert(ThreadId.make(threadId), { retention: "ephemeral" });
       factCount += 1;

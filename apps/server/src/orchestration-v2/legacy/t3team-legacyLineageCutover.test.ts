@@ -10,7 +10,10 @@ import {
   T3TeamChildThreadMetadataLive,
 } from "../../t3team-childThreadMetadata.ts";
 import * as ThreadFactsStore from "../../t3team-v2/t3team-threadFactsStore.ts";
-import { T3TeamThreadLineage } from "../../t3team-v2/t3team-threadLineage.ts";
+import {
+  T3TeamThreadLineage,
+  T3TeamThreadLineageError,
+} from "../../t3team-v2/t3team-threadLineage.ts";
 import {
   createTestThread,
   makeT3TeamV2TestLayer,
@@ -159,6 +162,64 @@ it.layer(makeLayer("t3team-legacy-lineage-upstream-db"))("runLegacyLineageCutove
         ledger.map((row) => row.step),
         ["v1-lineage"],
       );
+    }),
+  );
+});
+
+it.layer(makeLayer("t3team-legacy-lineage-retry"))("runLegacyLineageCutover", (it) => {
+  it.effect("is not ledgered after a failed write and finishes the work on the retry", () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      for (const name of ["root", "child", "linked-before"]) yield* createTestThread(id(name));
+      yield* insertActivity(
+        "r1",
+        id("child"),
+        "t3team.handoff.created",
+        `{"parentThreadId":"${id("root")}","ticketId":"PROJ-1"}`,
+      );
+      yield* insertActivity(
+        "r2",
+        id("linked-before"),
+        "t3team.handoff.created",
+        `{"parentThreadId":"${id("root")}","ticketId":"PROJ-2"}`,
+      );
+      // An earlier attempt linked this child, then stopped before writing its ticket.
+      yield* (yield* T3TeamThreadLineage).setThreadLineage({
+        threadId: id("linked-before"),
+        parentThreadId: id("root"),
+        relationshipToParent: "subagent",
+      });
+
+      // A transient write failure (busy database, event sink) must not be ledgered as done.
+      const failing = T3TeamThreadLineage.of({
+        setThreadLineage: (input) =>
+          Effect.fail(
+            new T3TeamThreadLineageError({
+              threadId: input.threadId,
+              reason: "failed",
+              cause: "database is locked",
+            }),
+          ),
+      });
+      assert.isNull(
+        yield* runLegacyLineageCutover.pipe(Effect.provideService(T3TeamThreadLineage, failing)),
+      );
+      assert.deepStrictEqual(yield* sql`SELECT step FROM t3team_v2_cutover`, []);
+      assert.isNull((yield* lineageOf(id("child"))).parentThreadId);
+
+      assert.deepStrictEqual(yield* runLegacyLineageCutover, {
+        linked: 1,
+        unchanged: 1,
+        skipped: 0,
+        tickets: 2,
+        facts: 0,
+      });
+      assert.strictEqual((yield* lineageOf(id("child"))).parentThreadId, id("root"));
+      const metadata = yield* (yield* T3TeamChildThreadMetadata).listByChildThreadIds([
+        id("child"),
+        id("linked-before"),
+      ]);
+      assert.deepStrictEqual(metadata.map((row) => row.ticketId).toSorted(), ["PROJ-1", "PROJ-2"]);
     }),
   );
 });
