@@ -75,6 +75,7 @@ export {
 } from "./t3team-sdk.placements.ts";
 // The engine API as ordinary imports for orchestration bodies (Epic 25).
 export {
+  accumulate,
   agent,
   checkpoint,
   getArgs,
@@ -89,6 +90,7 @@ export {
   parallel,
   phase,
   pipeline,
+  reducerState,
   spawnThread,
   wait,
   waitUntil,

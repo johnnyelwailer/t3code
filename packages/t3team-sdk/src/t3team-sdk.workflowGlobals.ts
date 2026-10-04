@@ -28,6 +28,7 @@ import {
   WorkflowError,
 } from "./t3team-sdk.errors.ts";
 import type { WorkflowPrimitives } from "./t3team-sdk.primitives.ts";
+import type { ReducePrimitives } from "./t3team-sdk.reducePrimitive.ts";
 import type { SchedulePrimitives } from "./t3team-sdk.schedulePrimitive.ts";
 import type { SignalPrimitives } from "./t3team-sdk.signalPrimitive.ts";
 import { BUILTIN_SIGNAL_GLOBALS } from "./t3team-sdk.builtinSignals.ts";
@@ -62,6 +63,8 @@ export function buildWorkflowGlobals(opts: {
   readonly checkpoint: CheckpointPrimitives["checkpoint"];
   /** The compact state a checkpoint-window resume restored (absent = fresh / full-replay). */
   readonly resume?: CheckpointRecord | undefined;
+  /** The run's reducers (`accumulate` folds commit checkpoint boundaries). */
+  readonly reduce: ReducePrimitives;
   readonly threads: WorkflowThreadPrimitives;
   readonly schedule: SchedulePrimitives;
   readonly signals: SignalPrimitives;
@@ -89,6 +92,11 @@ export function buildWorkflowGlobals(opts: {
     // checkpoint — a plain loop is unchanged.
     checkpoint: opts.checkpoint,
     resume: opts.resume,
+    // `accumulate` folds an observation into a reducer and commits it as a checkpoint boundary;
+    // `reducerState` reads a reducer's restored-or-folded snapshot. Unconditionally bound, like
+    // `checkpoint` (a sub-workflow body gets the refusing stand-in instead).
+    accumulate: opts.reduce.accumulate,
+    reducerState: opts.reduce.reducerState,
     budget: p.budget,
     phase: p.phase,
     log: p.log,

@@ -23,6 +23,7 @@ import { WorkflowInputDecodeError } from "./t3team-sdk.errors.ts";
 import type { HandleDispatch } from "./t3team-sdk.handles.ts";
 import { decodeWithSchema, setNestedValue } from "./t3team-sdk.internal.ts";
 import type { WorkflowPrimitives } from "./t3team-sdk.primitives.ts";
+import type { ReducePrimitives } from "./t3team-sdk.reducePrimitive.ts";
 import { createSchedulePrimitives } from "./t3team-sdk.schedulePrimitive.ts";
 import type { CheckpointPrimitives, CheckpointRecord } from "@runbook/core/checkpoint";
 import { createSignalPrimitives } from "./t3team-sdk.signalPrimitive.ts";
@@ -59,6 +60,8 @@ export async function runPreparedBody(opts: {
    * Absent on a fresh start and on a full-replay resume; sub-workflow bodies never see one.
    */
   readonly resume?: CheckpointRecord | undefined;
+  /** The run's reducers (`accumulate`) — the refusing stand-in for a sub-workflow body. */
+  readonly reduce: ReducePrimitives;
   readonly handleDispatch: HandleDispatch;
   readonly broker?: MessageBroker;
   readonly launchThreadId?: string;
@@ -133,6 +136,7 @@ export async function runPreparedBody(opts: {
     primitives: opts.primitives,
     checkpoint: opts.checkpoint,
     resume: opts.resume,
+    reduce: opts.reduce,
     threads,
     schedule,
     signals,

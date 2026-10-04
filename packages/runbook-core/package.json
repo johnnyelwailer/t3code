@@ -90,6 +90,10 @@
       "types": "./src/checkpoint.ts",
       "import": "./src/checkpoint.ts"
     },
+    "./reduce": {
+      "types": "./src/reduce.ts",
+      "import": "./src/reduce.ts"
+    },
     "./scheduling": {
       "types": "./src/scheduling.ts",
       "import": "./src/scheduling.ts"
