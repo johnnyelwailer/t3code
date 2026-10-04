@@ -14,7 +14,7 @@ export function ProjectMyWorkDigestRetryState() {
     <div className="rounded-lg border border-border/70 bg-background/70 p-4 sm:p-5">
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <Spinner className="size-4 shrink-0 text-muted-foreground" />
+          <Spinner className="size-4 shrink-0" />
           <p className="text-sm font-medium">Connecting to your work server…</p>
         </div>
         <p className="max-w-prose text-xs leading-relaxed text-muted-foreground">
