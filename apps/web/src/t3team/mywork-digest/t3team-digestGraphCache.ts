@@ -37,7 +37,10 @@ export function digestScopeSignature(
   scope: MyWorkDigestScope,
   entries: ReadonlyArray<MyWorkDigestProjectInput>,
 ): string {
-  return `${scope}|${entries.map((entry) => `${entry.account.id}:${entry.externalProjectId}`).join("|")}`;
+  // appProjectId is part of the key: two app projects can bind the same Jira project.
+  return `${scope}|${entries
+    .map((entry) => `${entry.account.id}:${entry.externalProjectId}:${entry.appProjectId ?? ""}`)
+    .join("|")}`;
 }
 
 /** The hook's first-paint state for a scope: the cached graph (ready) or nothing yet (loading). */

@@ -117,6 +117,54 @@ describe("readWatchdogStallWarning", () => {
   });
 });
 
+describe("readWatchdogStallWarning — self-heal notices", () => {
+  it("ignores self-heal warnings while retaining legacy hard-interrupt notices", () => {
+    for (const selfHealAttempt of [1, 2, undefined]) {
+      expect(
+        readWatchdogStallWarning({
+          detail: {
+            code: "turn.inactivity",
+            inactivitySeconds: 600,
+            selfHealAttempt,
+            maxSelfHealAttempts: 2,
+          },
+        }),
+      ).toBeNull();
+    }
+    expect(
+      readWatchdogStallWarning({
+        detail: {
+          code: "turn.inactivity",
+          inactivitySeconds: 600,
+        },
+      }),
+    ).toEqual({ inactivitySeconds: 600 });
+  });
+
+  it("accepts exhausted self-heal warnings and validates their inactivity budget", () => {
+    expect(
+      readWatchdogStallWarning({
+        detail: {
+          code: "turn.inactivity.exhausted",
+          inactivitySeconds: 600,
+          selfHealAttempts: 2,
+        },
+      }),
+    ).toEqual({ inactivitySeconds: 600 });
+    for (const inactivitySeconds of [-1, 0, NaN, undefined]) {
+      expect(
+        readWatchdogStallWarning({
+          detail: {
+            code: "turn.inactivity.exhausted",
+            inactivitySeconds,
+            selfHealAttempts: 2,
+          },
+        }),
+      ).toBeNull();
+    }
+  });
+});
+
 describe("classifyTransientTurnFailure", () => {
   it("leaves a structured usage-limit failure to the usage watcher", () => {
     expect(
@@ -177,6 +225,51 @@ describe("createTransientTurnRetryTracker — retry policy", () => {
       detail: { code: "turn.inactivity", inactivitySeconds: 600 },
     },
   } as const;
+
+  it("does not retry an unrelated abort after a self-heal notice and recovery", () => {
+    const tracker = createTransientTurnRetryTracker();
+    tracker.onTurnStarted("thread-1");
+    tracker.onStallWarning("thread-1", "turn-1", {
+      detail: {
+        code: "turn.inactivity",
+        inactivitySeconds: 600,
+        selfHealAttempt: 1,
+        maxSelfHealAttempts: 2,
+      },
+    });
+    expect(tracker.state.get("thread-1")?.stall).toBeNull();
+    const decision = tracker.onTurnTerminal("thread-1", "turn-1", {
+      type: "turn.aborted",
+      payload: { reason: "Provider process exited unexpectedly" },
+    });
+    expect(decision).toEqual({
+      kind: "persist-reason",
+      reason: "Provider process exited unexpectedly",
+    });
+    expect(tracker.state.get("thread-1")?.attempts).toBe(0);
+  });
+
+  it("retries a hard watchdog abort after an exhausted self-heal notice", () => {
+    const tracker = createTransientTurnRetryTracker();
+    tracker.onTurnStarted("thread-1");
+    tracker.onStallWarning("thread-1", "turn-1", {
+      detail: {
+        code: "turn.inactivity.exhausted",
+        inactivitySeconds: 600,
+        selfHealAttempts: 2,
+      },
+    });
+    const decision = tracker.onTurnTerminal("thread-1", "turn-1", {
+      type: "turn.aborted",
+      payload: { reason: "interrupted" },
+    });
+    expect(decision).toMatchObject({
+      kind: "retry",
+      attempt: 1,
+      reason: "Provider stream stalled (no activity for 600s)",
+    });
+    expect(tracker.state.get("thread-1")?.stall).toBeNull();
+  });
 
   it("retries a watchdog stall up to the bound, then reports exhaustion", () => {
     const tracker = createTransientTurnRetryTracker();

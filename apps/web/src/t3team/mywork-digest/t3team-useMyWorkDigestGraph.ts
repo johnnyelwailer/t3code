@@ -32,9 +32,7 @@ import {
   readInitialDigestState,
   writeCachedDigestGraph,
 } from "./t3team-digestGraphCache";
-import { readLastVisitAt, writeLastVisitAt } from "./t3team-digestLastVisit";
 import { toDigestProjectEntries } from "./t3team-digestProjectEntries";
-import type { DigestGraph } from "~/t3team/t3team-projectMyWorkDigestPlan";
 
 export type {
   UseMyWorkDigestGraphInput,
@@ -44,6 +42,9 @@ import type {
   UseMyWorkDigestGraphInput,
   UseMyWorkDigestGraphResult,
 } from "./t3team-useMyWorkDigestGraphTypes";
+
+/** No visit receipt yet: everything counts as new since the last visit. */
+const LAST_VISIT_EPOCH = "1970-01-01T00:00:00.000Z";
 
 export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWorkDigestGraphResult {
   const backend = useBackend();
@@ -55,8 +56,8 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
   const resetSignature = digestScopeSignature(scope, entries);
   // The last graph for this scope paints at once; the poller revalidates it underneath.
   const [initial] = useState(() => readInitialDigestState(resetSignature));
-  const [graph, setGraph] = useState<DigestGraph | null>(initial.graph);
-  const [status, setStatus] = useState<"loading" | "ready" | "error">(initial.status);
+  const [graph, setGraph] = useState(initial.graph);
+  const [status, setStatus] = useState<"loading" | "ready" | "retrying" | "error">(initial.status);
   const [error, setError] = useState<string | undefined>(undefined);
   const [viewerUnresolved, setViewerUnresolved] = useState(initial.viewerUnresolved);
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -126,11 +127,9 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
         // only a fallback for a payload that could not resolve one.
         name: result.value.viewer?.name || viewerDisplayName() || "",
         role: input.viewer?.role?.trim() !== "" ? (input.viewer?.role as string) : "",
-        lastVisitAt: readLastVisitAt(scope),
+        // The server's visit receipt: the previous changed round is the cutoff.
+        lastVisitAt: result.value.viewer?.lastVisitAt ?? LAST_VISIT_EPOCH,
       };
-      // Seeing it now counts as "being here": stamp the visit after the
-      // request already captured the previous one.
-      writeLastVisitAt(scope, new Date().toISOString());
 
       const nextGraph = payloadToDigestGraph({
         payload: result.value,
@@ -157,16 +156,16 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
       lastCheckedAtRef.current = Date.now();
     } catch (cause) {
       if (generationRef.current !== gen) return;
-      // A dead refresh token is not a load failure to retry: the server cleared the credentials,
-      // so the only way forward is a fresh sign-in.
+      // A dead refresh token is terminal: the server cleared the credentials, only sign-in recovers.
       if (isJiraSessionExpiredError(cause)) {
         setSessionExpired(true);
         setError(undefined);
         setStatus("error");
         return;
       }
-      setError(cause instanceof Error ? cause.message : "Failed to load the My Work digest.");
-      setStatus("error");
+      // A failed fetch (backend booting, timeout, network) is transient: the poller retries.
+      setStatus("retrying");
+      setError(undefined);
     }
   };
 
@@ -208,6 +207,9 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
     ...(error !== undefined && !idle ? { error } : {}),
     viewerUnresolved,
     sessionExpired: idle ? false : sessionExpired,
+    ...(lastCheckedAtRef.current !== undefined && !idle
+      ? { updatedAt: lastCheckedAtRef.current }
+      : {}),
     reload: () => {
       void loadRef.current(scope, entries);
     },

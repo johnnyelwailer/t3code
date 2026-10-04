@@ -1,0 +1,166 @@
+/* ===========================================================================
+ * t3team-statusOrb.css — the PRODUCTION owner of the "porcelain orb" status
+ * dot paint + color-shift logic.
+ *
+ * This is the final-captured Storybook direction: the t3team-DotColorVariants
+ * story, variant "D. Porcelain orb (recommended)" (83afe68b7 color-shift
+ * directions + b2b3e08b9 "porcelain-orb focus story (final captured version)").
+ * That story's D card paints through THIS file — the story imports it, so the
+ * D variant has no story-side copy of the palette (one module owns the
+ * paint; the seams and the story all consume it).
+ *
+ * What this module owns — paint only. Geometry, the state-motion keyframes
+ * (wave / snap / breathe / ring-breathe), the hue wander, the S-bend physics
+ * and the state model (data-t3team-state + DotState/deriveDotState) all stay
+ * in t3team-index.css / the TS modules:
+ *   - the theme-aware state palette: accent-anchored role tokens via
+ *     color-mix(in oklch) — no hardcoded saturated primaries, so custom
+ *     themes (html[data-theme-id]) recolor the orbs too;
+ *   - the 420ms soft-out color morph (background / halo / opacity) — state
+ *     changes crossfade instead of snapping;
+ *   - the drifting specular sheen (the "lit orb" read);
+ *   - the dark-theme lift (brightness 1.16 / saturate 0.95; waiting lifted
+ *     toward white);
+ *   - the waiting soft halo (supersedes the old hard breathing ring's paint);
+ *   - the orb reduced-motion still.
+ *
+ * DOM contract (unchanged — a visual-layer swap, not a state-model change):
+ * a status dot element carries class `t3team-orb`; the state is stamped on
+ * that element (sidebar pills) or on its cell/ancestor (the ACI working-row
+ * + Agents-panel dots: `.t3team-aci-cell[data-t3team-state]` wrapping the
+ * `.t3team-aci-dot`). State → color resolution is pure custom-property
+ * inheritance: the carrier gets the palette + `--t3team-orb-s`, the orb (and
+ * the waiting halo) inherit it.
+ * ========================================================================= */
+
+/* 1 · State palette (variant D tokens) — built from the theme's role tokens
+      so light/dark/custom themes all shift the orbs with the theme. Defined
+      on the dot or its state carrier (not :root) so the var(--primary/…)
+      references resolve at the deepest level, after any theme override. */
+:is(.t3team-orb, [data-t3team-state]) {
+  --t3team-orb-thinking: color-mix(in oklch, var(--warning) 46%, var(--muted-foreground) 54%);
+  --t3team-orb-writing: color-mix(in oklch, var(--primary) 62%, var(--muted-foreground) 38%);
+  --t3team-orb-working: color-mix(in oklch, var(--primary) 90%, var(--warning) 10%);
+  --t3team-orb-waiting: color-mix(in oklch, var(--muted-foreground) 55%, var(--background) 45%);
+  --t3team-orb-settled: var(--muted-foreground);
+  --t3team-orb-done: color-mix(in oklch, var(--success) 82%, var(--muted-foreground) 18%);
+  --t3team-orb-error: var(--destructive);
+}
+.dark :is(.t3team-orb, [data-t3team-state]) {
+  /* Dark set (D): waiting lifts ~16% toward white; the live states lift via
+     the dot's brightness filter below. */
+  --t3team-orb-waiting: color-mix(in oklch, var(--muted-foreground) 84%, white 16%);
+}
+
+/* 2 · State → active color. Stamped on the carrier: the ACI cell (button /
+      wrapper span around the dot) or the dot element itself (sidebar pills).
+      Inherits down to the orb and the waiting halo. An unstamped / "settled"
+      orb falls back to the muted neutral at the paint site. */
+[data-t3team-state="thinking"] {
+  --t3team-orb-s: var(--t3team-orb-thinking);
+}
+[data-t3team-state="writing"] {
+  --t3team-orb-s: var(--t3team-orb-writing);
+}
+[data-t3team-state="working"] {
+  --t3team-orb-s: var(--t3team-orb-working);
+}
+[data-t3team-state="waiting"] {
+  --t3team-orb-s: var(--t3team-orb-waiting);
+}
+[data-t3team-state="settled"] {
+  --t3team-orb-s: var(--t3team-orb-settled);
+}
+[data-t3team-state="done"] {
+  --t3team-orb-s: var(--t3team-orb-done);
+}
+[data-t3team-state="error"] {
+  --t3team-orb-s: var(--t3team-orb-error);
+}
+
+/* 3 · Orb paint + the 420ms soft-out color morph (D). */
+.t3team-orb {
+  /* position:relative anchors the specular sheen; ACI dots already center in
+     a flex cell, sidebar dots are plain spans — no geometry changes. */
+  position: relative;
+  background-color: var(--t3team-orb-s, var(--muted-foreground));
+  box-shadow: 0 0 4px 0
+    color-mix(in oklch, var(--t3team-orb-s, var(--muted-foreground)) 22%, transparent);
+  transition:
+    background-color 420ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    box-shadow 420ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    opacity 420ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+.dark .t3team-orb {
+  filter: brightness(1.16) saturate(0.95);
+}
+
+/* ACI dots keep the working-row's opacity/transform timing (6s brightness
+   decay, 140ms hover scale) alongside the shared morph — the motion layer
+   (t3team-index.css) stays authoritative for movement, this module for
+   paint. Same pair for the hot window: fast 300ms brightness-in when a live
+   event fires. */
+.t3team-orb.t3team-aci-dot {
+  transition:
+    background-color 420ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    box-shadow 420ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    opacity 6s linear,
+    transform 140ms ease;
+}
+.t3team-orb.t3team-aci-hot {
+  transition:
+    background-color 420ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    box-shadow 420ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    opacity 300ms ease-out,
+    transform 140ms ease;
+}
+
+/* 4 · Orb sheen: a soft blurred highlight drifting in position + opacity
+      while its color keeps transitioning with the state — the dot behaves
+      like a lit orb, not a lit bead. Very subtle on purpose (D). */
+.t3team-orb::after {
+  content: "";
+  position: absolute;
+  inset: 14% 30% 34% 18%;
+  border-radius: 9999px;
+  background-color: color-mix(
+    in oklch,
+    var(--t3team-orb-s, var(--muted-foreground)) 26%,
+    white 74%
+  );
+  filter: blur(0.6px);
+  transition: background-color 420ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  animation: t3team-orb-drift 6s ease-in-out infinite;
+}
+
+@keyframes t3team-orb-drift {
+  0%,
+  100% {
+    transform: translate(-0.5px, -0.35px) scale(1);
+    opacity: 0.38;
+  }
+  50% {
+    transform: translate(0.45px, 0.35px) scale(1.18);
+    opacity: 0.6;
+  }
+}
+
+/* 5 · Reduced motion: still orbs — no sheen drift, no color transitions, no
+   halos. (The motion layer's stills in t3team-index.css cover the keyframes;
+   this covers the orb's own paint motion.) */
+@media (prefers-reduced-motion: reduce) {
+  .t3team-orb,
+  .t3team-orb::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .t3team-orb {
+    opacity: 0.55 !important;
+    box-shadow: none !important;
+  }
+
+  .t3team-orb::after {
+    display: none;
+  }
+}
