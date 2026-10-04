@@ -98,6 +98,10 @@
       "types": "./src/watermark.ts",
       "import": "./src/watermark.ts"
     },
+    "./retryBackoff": {
+      "types": "./src/retryBackoff.ts",
+      "import": "./src/retryBackoff.ts"
+    },
     "./scheduling": {
       "types": "./src/scheduling.ts",
       "import": "./src/scheduling.ts"

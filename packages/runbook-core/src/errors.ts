@@ -132,6 +132,43 @@ export class SubWorkflowCheckpointError extends WorkflowError {
   }
 }
 
+/** A retry attempt's failure, reduced to the canonical-JSON form the journal records. */
+export interface RetryClassifiedFailure {
+  readonly classification: "retryable" | "fatal";
+  readonly name: string;
+  readonly message: string;
+}
+
+/**
+ * Raised by `retry()` when it gives up: every one of `maxAttempts` attempts failed, or `classify`
+ * called a failure `"fatal"` (which short-circuits the remaining attempts). `lastFailure` is the
+ * journaled classified failure, so a resumed run raises the same error without re-running the
+ * attempt; `cause` is the original thrown value, present only on the run that observed it live.
+ */
+export class RetryExhaustedError extends WorkflowError {
+  readonly attempts: number;
+  readonly maxAttempts: number;
+  readonly lastFailure: RetryClassifiedFailure;
+  constructor(opts: {
+    readonly attempts: number;
+    readonly maxAttempts: number;
+    readonly lastFailure: RetryClassifiedFailure;
+    readonly cause?: unknown;
+  }) {
+    const failure = `${opts.lastFailure.name}: ${opts.lastFailure.message}`;
+    super(
+      opts.lastFailure.classification === "fatal"
+        ? `retry: attempt ${opts.attempts} of ${opts.maxAttempts} failed with a fatal classification and was not retried (${failure}).`
+        : `retry: all ${opts.maxAttempts} attempts failed; last failure (${failure}).`,
+    );
+    this.name = "RetryExhaustedError";
+    this.attempts = opts.attempts;
+    this.maxAttempts = opts.maxAttempts;
+    this.lastFailure = opts.lastFailure;
+    if (opts.cause !== undefined) (this as { cause?: unknown }).cause = opts.cause;
+  }
+}
+
 /**
  * Raised when a body mixes `watermark()` with a raw `checkpoint()`. Both commit the run's ONE
  * replay boundary, and a resume restores only the latest one: a raw checkpoint after a watermark

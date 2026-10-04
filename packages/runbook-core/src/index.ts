@@ -10,6 +10,7 @@ export * from "./checkpoint.ts";
 export * from "./historyView.ts";
 export * from "./reduce.ts";
 export * from "./watermark.ts";
+export * from "./retryBackoff.ts";
 export * from "./schema.ts";
 export * from "./errors.ts";
 export * from "./events.ts";

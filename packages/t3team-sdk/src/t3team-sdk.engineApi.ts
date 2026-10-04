@@ -25,6 +25,7 @@ import type {
   CheckpointPrimitives,
   CheckpointRecord,
 } from "@runbook/core/checkpoint";
+import type { RetryOptions, RetryPrimitives } from "@runbook/core/retryBackoff";
 import type { Watermark, WatermarkOptions, WatermarkPrimitives } from "@runbook/core/watermark";
 import type { AccumulateOptions, ReducePrimitives, ReducerSnapshot } from "@runbook/core/reduce";
 import type { AgentOpts, SpawnThreadOpts, Thread } from "./t3team-sdk.threadTypes.ts";
@@ -128,6 +129,16 @@ export const waitUntil = call<[number], Promise<void>>("waitUntil");
  */
 export function checkpoint<State>(input: CheckpointInput<State>): Promise<CheckpointRecord<State>> {
   return fromRun<CheckpointPrimitives["checkpoint"]>("checkpoint")(input);
+}
+
+/**
+ * Bounded execution: run `fn(attempt)` up to `maxAttempts` times with a durable, journaled backoff
+ * (`waitUntil`) between attempts. A resume never re-runs a settled attempt, and a crash mid-backoff
+ * wakes at the SAME deadline. Gives up with `RetryExhaustedError` (carrying the last classified
+ * failure) on exhaustion or a `"fatal"` classification. Requires the `'schedule'` capability.
+ */
+export function retry<T>(fn: (attempt: number) => Promise<T>, opts: RetryOptions): Promise<T> {
+  return fromRun<RetryPrimitives["retry"]>("retry")(fn, opts);
 }
 
 /**

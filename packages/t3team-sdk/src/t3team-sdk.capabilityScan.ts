@@ -10,6 +10,7 @@
  *   • `"user"`     → `askUser` / `notifyUser` / `showWidget` on a thread
  *                                                     (t3team-sdk.threadPrimitives.ts)
  *   • `"schedule"` → `waitUntil`                       (t3team-sdk.schedulePrimitive.ts)
+ *                  → `retry` (its backoff IS a waitUntil) (t3team-sdk.retryPrimitive.ts)
  *   • `"source:<name>"` → `getSignalSource(<built-in source>)` (t3team-sdk.signalPrimitive.ts)
  *                    and `watermark("<name>")`        (t3team-sdk.watermarkPrimitive.ts)
  *   • tool group   → `tools.<id>` at its call site     (t3team-sdk.capabilityGating.ts)
@@ -115,7 +116,36 @@ function scanScriptRefs(
   visit(sf);
 }
 
-/** Gated thread verbs + `waitUntil` + `tools.*` call sites. */
+/**
+ * True when the file itself declares or imports `name` (function, variable, parameter, import). `retry` is a common
+ * helper name, and in a legacy globals body (no SDK import) a bare call cannot be resolved by
+ * binding — so a locally declared `retry` is the author's own function, not the gated verb.
+ */
+function declaresLocal(ts: typeof TsApi, sf: TsApi.SourceFile, name: string): boolean {
+  let found = false;
+  const visit = (node: TsApi.Node): void => {
+    if (found) return;
+    if (
+      (ts.isFunctionDeclaration(node) ||
+        ts.isVariableDeclaration(node) ||
+        ts.isParameter(node) ||
+        ts.isImportClause(node) ||
+        ts.isImportSpecifier(node) ||
+        ts.isNamespaceImport(node)) &&
+      node.name !== undefined &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === name
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return found;
+}
+
+/** Gated thread verbs + `waitUntil` / `retry` + `tools.*` call sites. */
 function scanCallSites(
   ts: typeof TsApi,
   sf: TsApi.SourceFile,
@@ -124,20 +154,20 @@ function scanCallSites(
   into: WorkflowAuditFinding[],
 ): void {
   const { declared } = options;
+  const retryIsVerb = bindings.hasSdkImport || !declaresLocal(ts, sf, "retry");
   const visit = (node: TsApi.Node): void => {
     if (ts.isCallExpression(node)) {
       const callee = node.expression;
       // Resolved by binding so `import { waitUntil as at }` is still gated (bare-name matching
       // missed it, and the runtime gate would then be the only thing left).
-      const resolved = resolveVerb(ts, callee, bindings);
-      if (resolved === "waitUntil") {
-        if (!declared.has("schedule")) {
-          into.push(missing(ts, sf, node, "schedule", "`waitUntil(…)`"));
-        }
-      } else if (resolved === "getSignalSource" || resolved === "watermark") {
-        const name = staticSourceName(ts, resolved, node.arguments[0], bindings);
+      const verb = resolveVerb(ts, callee, bindings);
+      const needsSchedule = verb === "waitUntil" || (verb === "retry" && retryIsVerb);
+      if (needsSchedule && !declared.has("schedule")) {
+        into.push(missing(ts, sf, node, "schedule", `\`${verb}(…)\``));
+      } else if (verb === "getSignalSource" || verb === "watermark") {
+        const name = staticSourceName(ts, verb, node.arguments[0], bindings);
         if (name !== undefined && !declared.has(`source:${name}`)) {
-          into.push(missing(ts, sf, node, `source:${name}`, `\`${resolved}(${name})\``));
+          into.push(missing(ts, sf, node, `source:${name}`, `\`${verb}(${name})\``));
         }
       } else if (ts.isPropertyAccessExpression(callee)) {
         const verb = callee.name.text;
