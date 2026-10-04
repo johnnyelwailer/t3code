@@ -11,6 +11,7 @@ import {
   type WorkflowRunSummary,
 } from "./t3team-githubActionsSessionClient.ts";
 import { pendingCloudSession, projectCloudSession } from "./t3team-CloudSessionProjection.ts";
+import type { CloudSessionMachine } from "./t3team-CloudSessionMachine.ts";
 
 type RunExecutor = (
   invocation: GhInvocation,
@@ -38,6 +39,8 @@ export const dispatchAndDiscoverSession = Effect.fn("cloud.session.dispatch_and_
     readonly discoveryAttempts: number;
     /** Set when the session is reached through the Nexi broker instead of T3 Connect. */
     readonly brokerGrant?: string | null;
+    /** Set when the session runs in a project machine; its token is NOT an input (broker secret). */
+    readonly machine?: CloudSessionMachine | null;
   }) {
     const marker = sessionTagMarker(input.sessionTag);
 
@@ -46,6 +49,14 @@ export const dispatchAndDiscoverSession = Effect.fn("cloud.session.dispatch_and_
         hold_minutes: String(Math.max(1, Math.round(input.durationSeconds / 60))),
         session_tag: input.sessionTag,
         ...(input.brokerGrant ? { broker_grant: input.brokerGrant } : {}),
+        ...(input.machine
+          ? {
+              machine_repository: input.machine.repository.url,
+              machine_commit: input.machine.commit,
+              machine_devcontainer: input.machine.devcontainerPath,
+              workspace: input.machine.workspace,
+            }
+          : {}),
       }),
     );
 
@@ -68,6 +79,7 @@ export const dispatchAndDiscoverSession = Effect.fn("cloud.session.dispatch_and_
       return {
         ...pendingCloudSession(input.sessionTag, input.durationSeconds, input.machineLabel),
         transport: input.brokerGrant ? ("nexi_broker" as const) : ("t3_connect" as const),
+        ...(input.machine ? { projectMachine: true } : {}),
       };
     }
     return yield* projectCloudSession(

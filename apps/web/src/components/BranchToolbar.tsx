@@ -633,9 +633,23 @@ export const BranchToolbar = memo(function BranchToolbar({
     () => (cloudSessions.available ? runOnCloudSessions(cloudSessions.sessions) : []),
     [cloudSessions.available, cloudSessions.sessions],
   );
+  // A session runs in the project's machine only when the project lives where sessions are
+  // created (the primary environment); a thread on a remote environment starts a plain one.
+  const activeProjectEnvironmentId = activeProjectRef?.environmentId ?? null;
+  const activeProjectId = activeProjectRef?.projectId ?? null;
+  const primaryEnvironmentId = cloudSessions.primaryEnvironmentId;
+  const cloudSessionProject = useMemo(
+    () =>
+      activeProjectId !== null &&
+      activeProjectEnvironmentId !== null &&
+      activeProjectEnvironmentId === primaryEnvironmentId
+        ? { environmentId: activeProjectEnvironmentId, projectId: activeProjectId }
+        : undefined,
+    [activeProjectEnvironmentId, activeProjectId, primaryEnvironmentId],
+  );
   const onCreateCloudSession = useCallback(
-    () => cloudSessions.onCreate(cloudSessions.durationSeconds),
-    [cloudSessions.durationSeconds, cloudSessions.onCreate],
+    () => cloudSessions.onCreate(cloudSessions.durationSeconds, cloudSessionProject?.projectId),
+    [cloudSessions.durationSeconds, cloudSessions.onCreate, cloudSessionProject],
   );
   // Unconfigured: the entry is a setup affordance, not a machine promise.
   // The provisioning panel lives in the Connections settings, so the item
@@ -718,6 +732,7 @@ export const BranchToolbar = memo(function BranchToolbar({
                       pendingCloudSessions,
                       onCreateCloudSession,
                       cloudSessionDurationLabel: formatHoldDuration(cloudSessions.durationSeconds),
+                      ...(cloudSessionProject ? { cloudSessionProject } : {}),
                       onCloudSessionAction: cloudSessions.onSessionAction,
                       onCloudMenuOpenChange: cloudSessions.onCloudMenuOpenChange,
                     }

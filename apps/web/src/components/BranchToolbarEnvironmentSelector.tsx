@@ -1,4 +1,4 @@
-import type { CloudSession, EnvironmentId } from "@t3tools/contracts";
+import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { CloudIcon, ScaleIcon, SettingsIcon } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 
@@ -7,6 +7,7 @@ import { dedupeRunOnEnvironments } from "./BranchToolbar.logic";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useComposerMenuProps } from "./chat/composerEventScope";
 import { presentCloudSession } from "./cloud/t3team-cloudSessionProvisionPresentation";
+import { CloudSessionMachineHint } from "./cloud/t3team-CloudSessionMachineHint";
 import { cn } from "~/lib/utils";
 import {
   Select,
@@ -53,6 +54,11 @@ export interface BranchToolbarEnvironmentSelectorProps {
   /** The duration "New cloud session" will run for (e.g. "4h"), shown on the item. */
   cloudSessionDurationLabel?: string;
   /**
+   * The project "New cloud session" starts for, when it lives on the environment sessions are
+   * created on: the item then says which machine (devcontainer) the session will run in.
+   */
+  cloudSessionProject?: { readonly environmentId: EnvironmentId; readonly projectId: ProjectId };
+  /**
    * Present when a primary environment exists but the server has no provider
    * configured yet: the menu offers "Set up cloud sessions", which leaves for
    * the Connections settings instead of promising a machine. Mutually exclusive
@@ -83,6 +89,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   pendingCloudSessions,
   onCreateCloudSession,
   cloudSessionDurationLabel,
+  cloudSessionProject,
   onSetupCloudSessions,
   onCloudSessionAction,
   onCloudMenuOpenChange,
@@ -322,6 +329,9 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                   New cloud session
                   {cloudSessionDurationLabel ? (
                     <span className="text-muted-foreground">· {cloudSessionDurationLabel}</span>
+                  ) : null}
+                  {cloudSessionProject ? (
+                    <CloudSessionMachineHint {...cloudSessionProject} />
                   ) : null}
                 </span>
               </button>

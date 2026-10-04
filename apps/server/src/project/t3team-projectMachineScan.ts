@@ -33,8 +33,11 @@ const MAX_DEFINITION_FILE_BYTES = 1024 * 1024;
 const decodeMachineFile = Schema.decodeUnknownResult(fromLenientJson(ProjectMachineFile));
 const isRepositoryPath = Schema.is(RepositoryRelativePath);
 
+/** A candidate plus the repository-relative files its definition consists of (never on the wire). */
+export type ScannedMachine = ProjectMachineDefinition & { readonly files: ReadonlyArray<string> };
+
 export interface ProjectMachineScan {
-  readonly candidates: ReadonlyArray<ProjectMachineDefinition>;
+  readonly candidates: ReadonlyArray<ScannedMachine>;
   readonly rejected: ReadonlyArray<ProjectMachineRejectedCandidate>;
 }
 
@@ -139,6 +142,7 @@ export const scanCheckout = Effect.fn("projectMachine.scanCheckout")(function* (
             healthCheck: machine.healthCheck ?? null,
             secrets: machine.secrets ?? [],
             hash: hashDefinitionFiles([pointer, ...files]),
+            files: [pointer.path, ...files.map((f) => f.path)],
           },
         ],
         rejected: [],
@@ -173,6 +177,7 @@ export const scanCheckout = Effect.fn("projectMachine.scanCheckout")(function* (
                     healthCheck: null,
                     secrets: [],
                     hash: hashDefinitionFiles(files),
+                    files: files.map((f) => f.path),
                   },
                 ],
                 rejected: [],

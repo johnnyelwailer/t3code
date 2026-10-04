@@ -204,6 +204,7 @@ import {
   ProjectMachineDiscovery,
   layer as ProjectMachineDiscoveryLayer,
 } from "./project/t3team-ProjectMachineDiscovery.ts";
+import { layer as CloudSessionMachinesLayer } from "./cloud/t3team-CloudSessionMachine.ts";
 import * as CloudCliTokenManager from "./cloud/CliTokenManager.ts";
 import * as ConnectCredentialMinter from "./cloud/t3team-ConnectCredentialMinter.ts";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
@@ -4099,6 +4100,9 @@ export const websocketRpcRouteLayer = Layer.unwrap(
                   // The create path mints the caller's credential in-app
                   // before the handoff; the minter layer is self-contained.
                   Layer.provide(ConnectCredentialMinter.layer),
+                  // A session for a project runs in its machine; the resolver reads the
+                  // project's checkouts (discovery, provided below) and the user's gh login.
+                  Layer.provide(CloudSessionMachinesLayer.pipe(Layer.provide(GitHubCli.layer))),
                 ),
               ),
               Layer.provide(ProjectMachineDiscoveryLayer),

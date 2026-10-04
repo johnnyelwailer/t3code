@@ -60,10 +60,10 @@ export const makeNexiBrokerClient = Effect.fn("cloud.broker.client.make")(functi
 
   return {
     /** A grant for the next dispatch, redeemable only by a run the given GHE login dispatched. */
-    requestGrant: (gheLogin: string) =>
+    requestGrant: (gheLogin: string, secrets?: Readonly<Record<string, string>>) =>
       call(
         HttpClientRequest.post(`${config.url}/v1/grants`).pipe(
-          HttpClientRequest.bodyJsonUnsafe({ gheLogin }),
+          HttpClientRequest.bodyJsonUnsafe({ gheLogin, ...(secrets ? { secrets } : {}) }),
         ),
         GrantResponse,
         "the session grant",

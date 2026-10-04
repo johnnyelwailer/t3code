@@ -1,4 +1,4 @@
-import type { CloudSession, EnvironmentId } from "@t3tools/contracts";
+import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { useCallback, useMemo, useState } from "react";
 
 import { environmentCatalog } from "~/connection/catalog";
@@ -75,8 +75,9 @@ export function useCloudSessionController() {
     register: registerRelayEnvironment,
   });
 
+  /** `projectId` (a project on the primary environment) runs the session in its machine. */
   const onCreate = useCallback(
-    (seconds: number) => {
+    (seconds: number, projectId?: ProjectId) => {
       if (environmentId === null || createPending) return;
       setRelayIdsBefore(
         new Set(
@@ -84,7 +85,10 @@ export function useCloudSessionController() {
         ),
       );
       setCreatePending(true);
-      void createSession({ environmentId, input: { durationSeconds: seconds } })
+      void createSession({
+        environmentId,
+        input: { durationSeconds: seconds, ...(projectId ? { projectId } : {}) },
+      })
         .then((result) => {
           if (result._tag === "Success") {
             setLocalSession({
@@ -194,5 +198,7 @@ export function useCloudSessionController() {
     onCloudMenuOpenChange: useCallback((open: boolean) => setCloudMenuOpen(open), []),
     onPanelVisibilityChange: useCallback((open: boolean) => setPanelVisible(open), []),
     available: environmentId !== null,
+    /** Where sessions are created; a project must live here to run in its machine. */
+    primaryEnvironmentId: environmentId,
   };
 }

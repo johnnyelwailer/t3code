@@ -26,7 +26,14 @@ export class NexiBrokerService extends Context.Service<
     readonly status: Effect.Effect<CloudBrokerStatus>;
     readonly signIn: Effect.Effect<CloudBrokerStatus, CloudSessionFailedError>;
     readonly signOut: Effect.Effect<void>;
-    readonly requestGrant: (gheLogin: string) => Effect.Effect<string, CloudSessionFailedError>;
+    /**
+     * A grant for the next dispatch. `secrets` (name → value) are parked with it in the broker's
+     * memory and redeemed once by the session the grant belongs to; they never become an input.
+     */
+    readonly requestGrant: (
+      gheLogin: string,
+      secrets?: Readonly<Record<string, string>>,
+    ) => Effect.Effect<string, CloudSessionFailedError>;
     readonly attach: (
       sessionId: string,
     ) => Effect.Effect<CloudSessionAttachResult, CloudSessionFailedError>;

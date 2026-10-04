@@ -29,7 +29,14 @@ import {
   REFERENCES_DIR_NAME,
 } from "../t3team-project-repository-utils.ts";
 import { repositoryLookupCandidates } from "../t3team-toolBrokerStartChildLinkedRepository.ts";
-import { scanCheckout } from "./t3team-projectMachineScan.ts";
+import { type ScannedMachine, scanCheckout } from "./t3team-projectMachineScan.ts";
+
+/** The project's default machine and the checkout it was found in, for starting a session. */
+export interface ProjectMachineSource {
+  /** Absolute path of the checkout holding the definition. */
+  readonly root: string;
+  readonly machine: ScannedMachine;
+}
 
 export class ProjectMachineDiscovery extends Context.Service<
   ProjectMachineDiscovery,
@@ -37,6 +44,14 @@ export class ProjectMachineDiscovery extends Context.Service<
     readonly discover: (
       projectId: ProjectId,
     ) => Effect.Effect<Discovery, ProjectMachineDiscoveryError>;
+    /** Like `discover`, plus where the default definition lives (null when there is none). */
+    readonly resolveDefault: (projectId: ProjectId) => Effect.Effect<
+      {
+        readonly discovery: Discovery;
+        readonly source: ProjectMachineSource | null;
+      },
+      ProjectMachineDiscoveryError
+    >;
   }
 >()("t3/project/t3team-ProjectMachineDiscovery/ProjectMachineDiscovery") {}
 
@@ -89,7 +104,7 @@ const make = Effect.gen(function* () {
     return [...own, ...linked];
   });
 
-  const discover: ProjectMachineDiscovery["Service"]["discover"] = (projectId) =>
+  const resolveDefault: ProjectMachineDiscovery["Service"]["resolveDefault"] = (projectId) =>
     Effect.gen(function* () {
       const project = yield* projections.getProjectShellById(projectId).pipe(
         Effect.mapError(
@@ -108,22 +123,38 @@ const make = Effect.gen(function* () {
       }
       const scans = yield* Effect.forEach(
         yield* checkouts(project.value.workspaceRoot),
-        (checkout) => scanCheckout(checkout),
+        (checkout) =>
+          scanCheckout(checkout).pipe(
+            Effect.map((scan) => ({
+              rejected: scan.rejected,
+              sources: scan.candidates.map((machine) => ({ root: checkout.root, machine })),
+            })),
+          ),
         { concurrency: 4 },
       );
-      const candidates = scans.flatMap((scan) => scan.candidates).toSorted(byIntent);
+      const sources = scans
+        .flatMap((scan) => scan.sources)
+        .toSorted((a, b) => byIntent(a.machine, b.machine));
+      // The file list is how a session pins the definition; it never goes over the wire.
+      const candidates = sources.map(({ machine: { files: _files, ...definition } }) => definition);
       const first = candidates[0];
       return {
-        status: first === undefined ? { _tag: "None" } : { _tag: "Detected", definition: first },
-        candidates,
-        rejected: scans.flatMap((scan) => scan.rejected),
-      } satisfies Discovery;
+        discovery: {
+          status: first === undefined ? { _tag: "None" } : { _tag: "Detected", definition: first },
+          candidates,
+          rejected: scans.flatMap((scan) => scan.rejected),
+        } satisfies Discovery,
+        source: sources[0] ?? null,
+      };
     }).pipe(
       Effect.provideService(FileSystem.FileSystem, fileSystem),
       Effect.provideService(Path.Path, path),
     );
 
-  return ProjectMachineDiscovery.of({ discover });
+  const discover: ProjectMachineDiscovery["Service"]["discover"] = (projectId) =>
+    resolveDefault(projectId).pipe(Effect.map((resolved) => resolved.discovery));
+
+  return ProjectMachineDiscovery.of({ discover, resolveDefault });
 });
 
 export const layer = Layer.effect(ProjectMachineDiscovery, make);
