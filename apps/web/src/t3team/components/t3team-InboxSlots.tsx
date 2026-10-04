@@ -121,10 +121,8 @@ export function InboxSubRunsChip({ threadId }: { threadId: string }): ReactNode 
     >
       <ListTreeIcon aria-hidden className="size-3 shrink-0" />
       {/* The count speaks the state: the working-row hue while any sub-run is
-          running (same 4-state color as the pill), muted otherwise. No dot,
-          no word — the word "Settled" was dropped: the fold can hold
-          terminal-but-not-yet-settled children, so it miscounted (owner,
-          2026-09-13). */}
+          running, muted otherwise. No dot — the fold can hold terminal children
+          that are not settled yet, so a "Settled" word miscounted. */}
       <span className={active ? resolveActivityStatePill("working").colorClass : undefined}>
         {active ? counts.running : settledCount}
       </span>

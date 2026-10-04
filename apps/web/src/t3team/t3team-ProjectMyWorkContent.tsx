@@ -139,7 +139,7 @@ export function ProjectMyWorkContent({
       );
     }
 
-    if (viewMode === "table") {
+    if (viewMode === "table" && lens !== "hierarchy") {
       return (
         <ProjectMyWorkTableView
           projectId={project.id}
@@ -154,7 +154,9 @@ export function ProjectMyWorkContent({
       );
     }
 
-    if (isHierarchyMode) {
+    // The Hierarchy lens renders the depth-indented tree even when the legacy view mode is
+    // still "table". Table keeps winning over the older groupMode="hierarchy" switch.
+    if (lens === "hierarchy" || isHierarchyMode) {
       return (
         <ProjectMyWorkHierarchyView
           projectId={project.id}

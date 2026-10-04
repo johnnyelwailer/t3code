@@ -3498,6 +3498,8 @@ function ActivityGroupTimelineRow({
 function ThinkingTimelineRow() {
   const { isCompacting, isPreparingWorktree, suppressLiveActivityRow } =
     use(TimelineRowActivityCtx);
+  // GHE #397: the working row already shows "Thinking for Xs", so this row is
+  // dropped while that row is present. It stays when it is the only status.
   if (suppressLiveActivityRow) return null;
   // Reserve the activity row during setup so the handoff keeps the same height.
   return (
