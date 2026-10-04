@@ -28,6 +28,8 @@ export interface CloudSessionMachine {
   readonly repository: MachineRepository;
   readonly commit: string;
   readonly devcontainerPath: string;
+  /** Run inside the machine once it is up; a failure fails the session. Null when none. */
+  readonly healthCheck: string | null;
   readonly workspace: string;
   /** The user's token for `repository.host`; travels only to the broker, as a session secret. */
   readonly token: string;
@@ -157,6 +159,7 @@ const make = Effect.gen(function* () {
       repository,
       commit,
       devcontainerPath: machine.devcontainerPath,
+      healthCheck: machine.healthCheck,
       workspace: machineWorkspaceName(repository),
       token,
     } satisfies CloudSessionMachine;

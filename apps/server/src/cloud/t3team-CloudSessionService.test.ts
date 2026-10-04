@@ -498,6 +498,7 @@ describe("CloudSessionService.create over the Nexi broker", () => {
             },
             commit: "a".repeat(40),
             devcontainerPath: ".devcontainer/devcontainer.json",
+            healthCheck: "pnpm test --run smoke",
             workspace: "machine-acme.api",
             token: "ghp_never-an-input",
           }),
@@ -515,6 +516,7 @@ describe("CloudSessionService.create over the Nexi broker", () => {
         `"machine_commit":"${"a".repeat(40)}"`,
         '"machine_devcontainer":".devcontainer/devcontainer.json"',
         '"workspace":"machine-acme.api"',
+        '"machine_health_check":"pnpm test --run smoke"',
       ]) {
         assert.include(dispatch ?? "", input);
       }

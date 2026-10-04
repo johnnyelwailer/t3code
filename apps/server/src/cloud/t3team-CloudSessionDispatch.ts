@@ -54,6 +54,9 @@ export const dispatchAndDiscoverSession = Effect.fn("cloud.session.dispatch_and_
               machine_repository: input.machine.repository.url,
               machine_commit: input.machine.commit,
               machine_devcontainer: input.machine.devcontainerPath,
+              ...(input.machine.healthCheck
+                ? { machine_health_check: input.machine.healthCheck }
+                : {}),
               workspace: input.machine.workspace,
             }
           : {}),
