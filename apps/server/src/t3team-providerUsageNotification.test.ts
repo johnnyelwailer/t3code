@@ -65,7 +65,9 @@ describe("provider usage notification line", () => {
       format({
         providerUsageSample: {
           ...sample,
-          checkedAt: new Date(NOW - PROVIDER_USAGE_NOTIFICATION_MAX_AGE_MS - 1_000).toISOString(),
+          checkedAt: DateTime.formatIso(
+            DateTime.makeUnsafe(NOW - PROVIDER_USAGE_NOTIFICATION_MAX_AGE_MS - 1_000),
+          ),
         },
       }),
     ).toBe("");
