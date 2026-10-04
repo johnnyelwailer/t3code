@@ -5,7 +5,12 @@
  * Writers patch only the facts they own (`T3TeamThreadFactsPatch`); reads and
  * the stream return whole records. The change feed is in-memory: a subscriber
  * always starts from a snapshot, so a missed change is repaired by resubscribing.
- * Removing a deleted thread's facts is the owner's job (`remove`).
+ * A deleted thread's facts are removed by the thread-deletion reactor
+ * (`remove`), and the all-threads snapshot never includes a thread V2 deleted.
+ *
+ * A stored row this build cannot decode (written by a newer build) is never
+ * overwritten: reads skip it, an upsert onto it fails. Keys this build does not
+ * know survive an upsert.
  */
 import {
   T3TeamThreadFacts,
@@ -16,6 +21,7 @@ import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -56,7 +62,11 @@ export class T3TeamThreadFactsStore extends Context.Service<
 
 const FactsJson = Schema.fromJsonString(T3TeamThreadFacts);
 const decodeFacts = Schema.decodeUnknownEffect(FactsJson);
-const encodeFacts = Schema.encodeEffect(FactsJson);
+const encodeFacts = Schema.encodeEffect(T3TeamThreadFacts);
+// The stored object as-is, so keys this build does not know survive a re-write.
+const RawFactsJson = Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown));
+const decodeRaw = Schema.decodeUnknownOption(RawFactsJson);
+const encodeRaw = Schema.encodeEffect(RawFactsJson);
 
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -78,7 +88,13 @@ const make = Effect.gen(function* () {
 
   const list = (threadId?: ThreadId) =>
     (threadId === undefined
-      ? sql<{ readonly facts_json: string }>`SELECT facts_json FROM t3team_thread_facts`
+      ? // Rows of threads V2 deleted stay out of the all-threads snapshot every client receives.
+        sql<{ readonly facts_json: string }>`
+          SELECT facts.facts_json FROM t3team_thread_facts AS facts
+          WHERE NOT EXISTS (
+            SELECT 1 FROM orchestration_v2_projection_threads AS thread
+            WHERE thread.thread_id = facts.thread_id AND thread.deleted_at IS NOT NULL
+          )`
       : sql<{ readonly facts_json: string }>`
           SELECT facts_json FROM t3team_thread_facts WHERE thread_id = ${threadId}`
     ).pipe(Effect.flatMap(decodeRows), Effect.mapError(fail("list")));
@@ -90,11 +106,28 @@ const make = Effect.gen(function* () {
       const nowIso = DateTime.formatIso(yield* DateTime.now);
       const result = yield* sql.withTransaction(
         Effect.gen(function* () {
-          const current = yield* get(threadId);
+          const [stored] = yield* sql<{ readonly facts_json: string }>`
+            SELECT facts_json FROM t3team_thread_facts WHERE thread_id = ${threadId}`;
+          // Never merge onto an undecodable row as if it were absent: that would erase it.
+          const current =
+            stored === undefined
+              ? null
+              : yield* decodeFacts(stored.facts_json).pipe(
+                  Effect.tapError(() =>
+                    Effect.logWarning("t3team.threadFacts.upsert-onto-undecodable-row", {
+                      threadId,
+                    }),
+                  ),
+                );
           const next = mergeThreadFacts(threadId, current, patch, nowIso);
           if (next === null && current !== null) return { facts: current, changed: false };
           if (next === null) return yield* Effect.die("empty patch produced no facts record");
-          const json = yield* encodeFacts(next);
+          const json = yield* encodeRaw({
+            ...(stored === undefined
+              ? {}
+              : Option.getOrElse(decodeRaw(stored.facts_json), () => ({}))),
+            ...(yield* encodeFacts(next)),
+          });
           yield* sql`
             INSERT INTO t3team_thread_facts (thread_id, facts_json, updated_at)
             VALUES (${threadId}, ${json}, ${next.updatedAt})

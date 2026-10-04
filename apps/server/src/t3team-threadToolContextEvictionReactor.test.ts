@@ -16,8 +16,11 @@ import {
 } from "./t3team-threadToolContextStore.ts";
 import {
   T3TeamThreadToolContextEvictionReactor,
-  T3TeamThreadToolContextEvictionReactorLive,
+  T3TeamThreadToolContextEvictionReactorLayer,
 } from "./t3team-threadToolContextEvictionReactor.ts";
+import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import * as ThreadArtifactsStore from "./t3team-v2/t3team-threadArtifactsStore.ts";
+import * as ThreadFactsStore from "./t3team-v2/t3team-threadFactsStore.ts";
 
 const source = ThreadId.make("thread-source");
 const fork = ThreadId.make("thread-fork");
@@ -50,7 +53,13 @@ const runWith = (
 ) =>
   Effect.gen(function* () {
     const store = yield* T3TeamThreadToolContextStore;
-    for (const [threadId, toolContext] of seed) yield* store.put({ threadId, toolContext });
+    const facts = yield* ThreadFactsStore.T3TeamThreadFactsStore;
+    const artifacts = yield* ThreadArtifactsStore.T3TeamThreadArtifactsStore;
+    for (const [threadId, toolContext] of seed) {
+      yield* store.put({ threadId, toolContext });
+      yield* facts.upsert(threadId, { retention: "ephemeral" });
+      yield* artifacts.upsert({ id: `widget:${threadId}`, threadId, kind: "widget", payload: {} });
+    }
     const reactor = yield* T3TeamThreadToolContextEvictionReactor;
     yield* Effect.scoped(
       Effect.gen(function* () {
@@ -59,11 +68,19 @@ const runWith = (
         yield* reactor.drain;
       }),
     );
-    return { source: yield* store.get(source), fork: yield* store.get(fork) };
+    return {
+      source: yield* store.get(source),
+      fork: yield* store.get(fork),
+      sourceFacts: yield* facts.get(source),
+      sourceArtifacts: yield* artifacts.listByThread(source),
+      forkFacts: yield* facts.get(fork),
+    };
   }).pipe(
     Effect.provide(
-      T3TeamThreadToolContextEvictionReactorLive.pipe(
+      T3TeamThreadToolContextEvictionReactorLayer.pipe(
         Layer.provideMerge(T3TeamThreadToolContextStoreLive),
+        Layer.provideMerge(Layer.mergeAll(ThreadFactsStore.layer, ThreadArtifactsStore.layer)),
+        Layer.provide(SqlitePersistenceMemory),
         Layer.provide(
           Layer.succeed(ThreadManagementService, {
             streamDomainEvents: Stream.fromIterable(events),
@@ -73,10 +90,22 @@ const runWith = (
     ),
   );
 
-describe("T3TeamThreadToolContextEvictionReactorLive", () => {
-  it.effect("evicts the thread's entry on thread.deleted", () =>
-    runWith([deleted(source)], [[source, context]]).pipe(
-      Effect.map((result) => expect(result.source).toBeUndefined()),
+describe("T3TeamThreadToolContextEvictionReactorLayer", () => {
+  it.effect("evicts the thread's entry, facts and artifacts on thread.deleted", () =>
+    runWith(
+      [deleted(source)],
+      [
+        [source, context],
+        [fork, context],
+      ],
+    ).pipe(
+      Effect.map((result) => {
+        expect(result.source).toBeUndefined();
+        expect(result.sourceFacts).toBeNull();
+        expect(result.sourceArtifacts).toEqual([]);
+        // Other threads keep theirs.
+        expect(result.forkFacts?.retention).toBe("ephemeral");
+      }),
     ),
   );
 

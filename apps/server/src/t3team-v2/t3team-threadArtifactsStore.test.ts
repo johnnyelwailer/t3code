@@ -75,4 +75,41 @@ it.layer(TestLayer)("T3TeamThreadArtifactsStore", (it) => {
       assert.isNull(yield* store.get("widget:1"));
     }),
   );
+
+  it.effect("keeps an imported createdAt and removes a deleted thread's artifacts", () =>
+    Effect.gen(function* () {
+      const store = yield* ThreadArtifactsStore.T3TeamThreadArtifactsStore;
+      const deletedThread = ThreadId.make("thread:artifacts-deleted");
+      const imported = yield* store.upsert({
+        id: "widget:imported",
+        threadId: deletedThread,
+        kind: "widget",
+        payload: {},
+        createdAt: "2025-01-01T00:00:00.000Z",
+      });
+      assert.strictEqual(imported.createdAt, "2025-01-01T00:00:00.000Z");
+      yield* store.upsert({
+        id: "card:imported",
+        threadId: deletedThread,
+        kind: "card",
+        payload: 2,
+      });
+      const events = yield* collectAfterSnapshot(store.subscribe({ threadId: deletedThread }), 3);
+
+      yield* store.removeByThread(deletedThread);
+
+      // RETURNING order is unspecified: compare as a set after the snapshot.
+      const [first, ...removed] = Array.from(yield* Fiber.join(events));
+      assert.strictEqual(first?.type, "snapshot");
+      assert.deepStrictEqual(
+        removed
+          .map((event) => (event.type === "removed" ? event.artifactId : event.type))
+          .toSorted(),
+        ["card:imported", "widget:imported"],
+      );
+      assert.deepStrictEqual(yield* store.listByThread(deletedThread), []);
+      // Other threads keep theirs.
+      assert.lengthOf(yield* store.listByThread(thread), 1);
+    }),
+  );
 });

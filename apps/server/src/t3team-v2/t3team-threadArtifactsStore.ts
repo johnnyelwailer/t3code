@@ -23,6 +23,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as SqlSchema from "effect/unstable/sql/SqlSchema";
+import type * as Statement from "effect/unstable/sql/Statement";
 
 export class T3TeamThreadArtifactsStoreError extends Schema.TaggedError<T3TeamThreadArtifactsStoreError>()(
   "T3TeamThreadArtifactsStoreError",
@@ -35,6 +36,8 @@ export interface T3TeamThreadArtifactInput {
   readonly messageId?: MessageId | null;
   readonly kind: string;
   readonly payload: unknown;
+  /** Creation time of a NEW artifact (imported history); defaults to now. */
+  readonly createdAt?: string;
 }
 
 const isStoreError = Schema.is(T3TeamThreadArtifactsStoreError);
@@ -55,6 +58,10 @@ export class T3TeamThreadArtifactsStore extends Context.Service<
       threadId: ThreadId,
     ) => Effect.Effect<ReadonlyArray<T3TeamThreadArtifact>, T3TeamThreadArtifactsStoreError>;
     readonly remove: (artifactId: string) => Effect.Effect<void, T3TeamThreadArtifactsStoreError>;
+    /** Removes every artifact of a thread (the thread was deleted). */
+    readonly removeByThread: (
+      threadId: ThreadId,
+    ) => Effect.Effect<void, T3TeamThreadArtifactsStoreError>;
     readonly subscribe: (input: {
       readonly threadId: ThreadId;
     }) => Stream.Stream<T3TeamThreadArtifactsStreamEvent, T3TeamThreadArtifactsStoreError>;
@@ -123,7 +130,7 @@ const make = Effect.gen(function* () {
             messageId: input.messageId ?? null,
             kind: input.kind,
             payload: input.payload,
-            createdAt: existing?.createdAt ?? nowIso,
+            createdAt: existing?.createdAt ?? input.createdAt ?? nowIso,
             updatedAt: nowIso,
           });
           const payloadJson = yield* encodePayload(artifact.payload);
@@ -157,17 +164,21 @@ const make = Effect.gen(function* () {
       Effect.withSpan("t3team.threadArtifacts.upsert"),
     );
 
-  const remove = (artifactId: string) =>
-    Effect.gen(function* () {
-      const existing = yield* get(artifactId);
-      if (existing === null) return;
-      yield* sql`DELETE FROM t3team_thread_artifacts WHERE artifact_id = ${artifactId}`;
-      yield* PubSub.publish(changes, {
-        type: "removed",
-        threadId: existing.threadId,
-        artifactId: existing.id,
-      });
-    }).pipe(Effect.mapError(fail("remove")));
+  // One DELETE … RETURNING per removal; each removed row is published to its thread's feed.
+  const removeWhere = (operation: string, where: Statement.Fragment) =>
+    sql<{ readonly id: string; readonly threadId: ThreadId }>`DELETE FROM t3team_thread_artifacts
+      WHERE ${where} RETURNING artifact_id AS "id", thread_id AS "threadId"`.pipe(
+      Effect.flatMap((rows) =>
+        Effect.forEach(rows, ({ id, threadId }) =>
+          PubSub.publish(changes, { type: "removed", threadId, artifactId: id }),
+        ),
+      ),
+      Effect.asVoid,
+      Effect.mapError(fail(operation)),
+    );
+  const remove = (artifactId: string) => removeWhere("remove", sql`artifact_id = ${artifactId}`);
+  const removeByThread = (threadId: ThreadId) =>
+    removeWhere("removeByThread", sql`thread_id = ${threadId}`);
 
   const subscribe = (input: { readonly threadId: ThreadId }) =>
     Stream.unwrap(
@@ -193,7 +204,8 @@ const make = Effect.gen(function* () {
       }),
     );
 
-  return T3TeamThreadArtifactsStore.of({ upsert, get, listByThread, remove, subscribe });
+  const service = { upsert, get, listByThread, remove, removeByThread, subscribe };
+  return T3TeamThreadArtifactsStore.of(service);
 });
 
 export const layer = Layer.effect(T3TeamThreadArtifactsStore, make);
