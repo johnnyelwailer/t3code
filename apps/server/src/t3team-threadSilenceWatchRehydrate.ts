@@ -6,12 +6,23 @@
  * @module t3team-threadSilenceWatchRehydrate
  */
 import type { OrchestrationEvent } from "@t3tools/contracts";
+import * as Effect from "effect/Effect";
+import * as Stream from "effect/Stream";
 
 import { sessionStatusToWaitOutcome } from "./t3team-childWait.ts";
 import {
   parseThreadSilenceWatchEvent,
+  THREAD_SILENCE_WATCH_CANCELLED_KIND,
+  THREAD_SILENCE_WATCH_REGISTERED_KIND,
   type ThreadSilenceWatchRecord,
 } from "./t3team-threadSilenceWatch.ts";
+import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
+import {
+  readEventsMatching,
+  type OrchestrationEventReplayFilter,
+} from "./orchestration/t3team-eventReplayFilter.ts";
+import type { TerminalNotifyLedger } from "./t3team-terminalNotifyDedup.ts";
+import type { ThreadSilenceWatchEmitter } from "./t3team-threadSilenceWatchEmitTypes.ts";
 
 /**
  * Rebuild the pending watch set from persisted events: registered activities
@@ -19,6 +30,15 @@ import {
  * that target) and minus settlement-closed ones (a `thread.settled` drops
  * the settled thread's open watches as target or watcher).
  */
+/** The events `collectPendingThreadSilenceWatches` reads. */
+export const PENDING_SILENCE_WATCH_REPLAY_FILTERS: ReadonlyArray<OrchestrationEventReplayFilter> = [
+  {
+    type: "thread.activity-appended",
+    activityKinds: [THREAD_SILENCE_WATCH_REGISTERED_KIND, THREAD_SILENCE_WATCH_CANCELLED_KIND],
+  },
+  { type: "thread.settled" },
+];
+
 export function collectPendingThreadSilenceWatches(
   events: readonly OrchestrationEvent[],
 ): ThreadSilenceWatchRecord[] {
@@ -63,6 +83,13 @@ export function collectPendingThreadSilenceWatches(
   return Array.from(pending.values());
 }
 
+/** The events `lastTerminalSequenceByThread` reads. */
+export const LAST_TERMINAL_REPLAY_FILTERS: ReadonlyArray<OrchestrationEventReplayFilter> = [
+  { type: "thread.session-set" },
+  { type: "thread.deleted" },
+  { type: "thread.settled" },
+];
+
 /**
  * The sequence of each thread's LAST terminal event in a replay: its most
  * recent terminal `thread.session-set`, `thread.deleted`, or `thread.settled`.
@@ -102,3 +129,31 @@ export function lastTerminalSequenceByThread(
   }
   return lastByThread;
 }
+
+/**
+ * Boot rehydrate for the silence-watch reactor: fold the terminal-notify ledger
+ * and the pending watch set from the events they read, then re-arm every
+ * still-pending watch anchored on its target's last terminal sequence.
+ */
+export const rehydrateThreadSilenceWatches = (input: {
+  readonly engine: Pick<OrchestrationEngineShape, "readEvents" | "readEventsMatching">;
+  readonly dedup: Pick<TerminalNotifyLedger, "rehydrate" | "replayFilters">;
+  readonly emitter: Pick<ThreadSilenceWatchEmitter, "onRegistered">;
+}) =>
+  Effect.gen(function* () {
+    const replayed: ReadonlyArray<OrchestrationEvent> = yield* Stream.runCollect(
+      readEventsMatching(input.engine, [
+        ...input.dedup.replayFilters,
+        ...LAST_TERMINAL_REPLAY_FILTERS,
+        ...PENDING_SILENCE_WATCH_REPLAY_FILTERS,
+      ]),
+    ).pipe(Effect.map((chunk) => Array.from(chunk)));
+    input.dedup.rehydrate(replayed);
+    const lastTerminalByThread = lastTerminalSequenceByThread(replayed);
+    for (const record of collectPendingThreadSilenceWatches(replayed)) {
+      yield* input.emitter.onRegistered(
+        record,
+        lastTerminalByThread.get(record.targetThreadId) ?? 0,
+      );
+    }
+  });

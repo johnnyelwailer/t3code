@@ -13,6 +13,7 @@ export {
   type SshConnectionInput,
 } from "./onboarding.ts";
 export * from "./presentation.ts";
+export * from "./t3team-brokerConnection.ts";
 export * as ProfileStore from "./profileStore.ts";
 export {
   EnvironmentNotRegisteredError,

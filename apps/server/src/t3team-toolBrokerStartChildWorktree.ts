@@ -2,18 +2,21 @@
  * Worktree-isolation resolution for `t3team.thread.start_child` (split out of
  * `t3team-toolBrokerStartChild.ts` for the additive LOC budget): given the
  * parsed start-child args, decides which repository (linked, local, or adopted
- * meta-repo) the child isolates in and creates its dedicated worktree.
+ * main repository) the child isolates in and creates its dedicated worktree.
  * Returns nulls for the shared-isolation case. Behavior unchanged.
  *
  * @module t3team-toolBrokerStartChildWorktree
  */
+import type { ProjectMainRepository } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+
+import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
 
 import type { T3TeamStartChildArgs } from "./t3team-toolBrokerStartChildArgs.ts";
 import {
   hasLinkedRepositoryStartChildServices,
   linkedRepositoryManifestExists,
-  readMetaRepositoryFromWorkspace,
+  readMainRepositoryFromWorkspace,
   type T3TeamStartChildServices,
 } from "./t3team-toolBrokerStartChildContext.ts";
 import { repositoryLookupCandidates } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
@@ -30,6 +33,8 @@ export interface StartChildWorktreeResolution {
 export const resolveStartChildWorktree = (input: {
   readonly services: Partial<T3TeamStartChildServices>;
   readonly projectWorkspaceRoot: string;
+  /** The project record's main repository; honored when `NEXI_FF_MAIN_REPOSITORY` is on. */
+  readonly projectMainRepository?: ProjectMainRepository | undefined;
   readonly args: T3TeamStartChildArgs;
   readonly childThreadId: string;
 }): Effect.Effect<StartChildWorktreeResolution, string> =>
@@ -52,19 +57,33 @@ export const resolveStartChildWorktree = (input: {
         projectWorkspaceRoot: input.projectWorkspaceRoot,
       });
 
-      // Adopted meta-repo (monorepo project, GHE #42): the manifest carries a `metaRepository`
+      // Adopted main repository (monorepo project, GHE #42): the manifest carries a `mainRepository`
       // entry — sub-work happens in worktrees of the workspace repository itself. Legacy
       // wrapped projects have no such entry and keep the linked-repo-only behavior.
-      const metaRepository = manifestExists
-        ? yield* readMetaRepositoryFromWorkspace({
+      // A linked repository selected as the project's main repository IS the workspace checkout,
+      // so it isolates exactly like an adopted one even before a bootstrap rewrote the manifest.
+      const mainRepositoryEnabled = isMainRepositoryEnabled();
+      const selectedMain = mainRepositoryEnabled ? input.projectMainRepository : undefined;
+      const manifestMainRepository = manifestExists
+        ? yield* readMainRepositoryFromWorkspace({
             services: input.services,
             projectWorkspaceRoot: input.projectWorkspaceRoot,
           })
         : undefined;
-      const requestedRepoIsMetaRepository =
-        metaRepository?.url !== undefined &&
+      // Adopted monorepos predate the selection feature and retain their original behavior.
+      const mainRepository = selectedMain
+        ? {
+            localPath: selectedMain.checkoutPath,
+            status: selectedMain.selection,
+            ...(selectedMain.url ? { url: selectedMain.url } : {}),
+          }
+        : mainRepositoryEnabled || manifestMainRepository?.status === "adopted"
+          ? manifestMainRepository
+          : undefined;
+      const requestedRepoIsMainRepository =
+        mainRepository?.url !== undefined &&
         args.repoFullName !== undefined &&
-        repositoryLookupCandidates(metaRepository.url).some((candidate) =>
+        repositoryLookupCandidates(mainRepository.url).some((candidate) =>
           repositoryLookupCandidates(args.repoFullName as string).includes(candidate),
         );
 
@@ -75,8 +94,8 @@ export const resolveStartChildWorktree = (input: {
           );
         }
 
-        if (requestedRepoIsMetaRepository) {
-          const resolvedMetaRepository = yield* resolveLocalRepositoryWorktree({
+        if (requestedRepoIsMainRepository) {
+          const resolvedMainRepository = yield* resolveLocalRepositoryWorktree({
             services: input.services,
             projectWorkspaceRoot: input.projectWorkspaceRoot,
             ...(args.repoRef ? { repoRef: args.repoRef } : {}),
@@ -84,8 +103,8 @@ export const resolveStartChildWorktree = (input: {
             childThreadId: input.childThreadId,
           });
           ({ repoFullName, repoRef, branch, worktreePath } = {
-            repoFullName: metaRepository?.url ?? args.repoFullName,
-            ...resolvedMetaRepository,
+            repoFullName: mainRepository?.url ?? args.repoFullName,
+            ...resolvedMainRepository,
           });
         } else {
           const resolvedRepository = yield* resolveLinkedRepositoryWorktree({
@@ -99,7 +118,7 @@ export const resolveStartChildWorktree = (input: {
           ({ repoFullName, repoRef, branch, worktreePath } = resolvedRepository);
         }
       } else {
-        if (manifestExists && !metaRepository) {
+        if (manifestExists && !mainRepository) {
           return yield* Effect.fail(
             `This project has linked repositories; pass 'repo_full_name' to choose which one the child isolates in a worktree, or use isolation='shared' to run it in the shared project workspace.`,
           );
@@ -113,11 +132,11 @@ export const resolveStartChildWorktree = (input: {
           childThreadId: input.childThreadId,
         });
         ({ repoRef, branch, worktreePath } = resolvedLocalRepository);
-        if (metaRepository) {
-          repoFullName = metaRepository.url ?? null;
+        if (mainRepository) {
+          repoFullName = mainRepository.url ?? null;
         }
       }
     }
 
     return { repoFullName, repoRef, branch, worktreePath };
-  });
+  }).pipe(Effect.mapError((error) => (typeof error === "string" ? error : String(error))));

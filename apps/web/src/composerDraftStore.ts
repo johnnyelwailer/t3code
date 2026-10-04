@@ -71,7 +71,7 @@ import { create } from "zustand";
 import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
 import { createDeferredStorage, createMemoryStorage } from "./lib/storage";
-import { reportThreadComposing } from "./t3team/chat/t3team-threadComposingSignal";
+import { notifyThreadComposing } from "./t3team/chat/t3team-threadComposingSink";
 import { getDefaultServerModel } from "./providerModels";
 import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
 import { UnifiedSettings } from "@t3tools/contracts/settings";
@@ -3034,7 +3034,7 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
           // only targets have no server thread (null) and are skipped. The
           // signal is fire-and-forget and per-thread — it can never block this
           // write or affect another thread.
-          reportThreadComposing(resolveComposerThreadId(get(), threadRef));
+          notifyThreadComposing(resolveComposerThreadId(get(), threadRef));
           set((state) => {
             const existing = state.draftsByThreadKey[threadKey] ?? createEmptyThreadDraft();
             const nextDraft: ComposerThreadDraftState = {

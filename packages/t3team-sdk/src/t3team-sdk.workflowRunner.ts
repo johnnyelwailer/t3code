@@ -95,6 +95,9 @@ export async function executeWorkflowBody(
     // Share the run boundary's suspension latch: the runtime arms it, the boundary refuses to
     // report `completed` while it is armed (a body that caught the signal cannot fake a result).
     suspension: opts.suspension,
+    // Likewise the boundary's one-shot re-fire target: the runtime consumes it, the boundary
+    // fails the run if the replay never reached it.
+    ...(opts.refire === undefined ? {} : { refire: opts.refire }),
     ...(opts.options.beforePrimitive === undefined
       ? {}
       : { beforePrimitive: opts.options.beforePrimitive }),
@@ -115,6 +118,7 @@ export async function executeWorkflowBody(
     callPrimitive: runtime.callPrimitive,
     currentSeq: runtime.currentSeq,
     nowIso,
+    ...(opts.resume?.checkpoint === undefined ? {} : { resumeFrom: opts.resume.checkpoint }),
   }).checkpoint;
   return await runPreparedBody({
     runtime,

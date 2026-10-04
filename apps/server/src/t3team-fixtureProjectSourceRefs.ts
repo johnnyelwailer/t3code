@@ -16,7 +16,7 @@ function optionalString(value: unknown): string | undefined {
  * `listResources`. Keeping `provider: "atlassian"` is what lets the shared refresh path,
  * the backlog cache and the ticket surfaces treat a fixture project like a synced one.
  */
-export function fixtureTicketToResourceRef(input: {
+function fixtureTicketToResourceRef(input: {
   readonly ticket: T3TeamFixtureTicket;
   readonly externalProjectId: string;
 }): ExternalResourceRef {

@@ -17,7 +17,7 @@ import type { ToolAuthAdapter } from "./t3team-types.ts";
 export const EXPIRY_WARNING_MS = 3 * 24 * 60 * 60 * 1000;
 const MS_EPOCH_THRESHOLD = 1_000_000_000_000;
 
-export function resolveDotPath(record: unknown, dotPath: string): unknown {
+function resolveDotPath(record: unknown, dotPath: string): unknown {
   let cursor: unknown = record;
   for (const segment of dotPath.split(".")) {
     if (cursor === null || typeof cursor !== "object") return undefined;
@@ -27,7 +27,7 @@ export function resolveDotPath(record: unknown, dotPath: string): unknown {
 }
 
 /** Normalizes epoch-seconds, epoch-ms, or an ISO string into epoch-ms. */
-export function normalizeExpiry(raw: unknown): number | undefined {
+function normalizeExpiry(raw: unknown): number | undefined {
   if (typeof raw === "number" && Number.isFinite(raw)) {
     return raw < MS_EPOCH_THRESHOLD ? raw * 1000 : raw;
   }

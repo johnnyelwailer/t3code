@@ -13,9 +13,7 @@ import * as Struct from "effect/Struct";
 
 import { toPersistenceSqlError } from "../Errors.ts";
 import {
-  DeleteProjectionThreadInput,
   GetProjectionThreadInput,
-  ListProjectionThreadsByProjectInput,
   ProjectionThread,
   ProjectionThreadRepository,
   type ProjectionThreadRepositoryShape,
@@ -30,7 +28,6 @@ const ProjectionThreadDbRow = ProjectionThread.mapFields(
     branchPullRequest: Schema.NullOr(Schema.fromJsonString(ThreadLinkedPullRequest)),
   }),
 );
-type ProjectionThreadDbRow = typeof ProjectionThreadDbRow.Type;
 
 const makeProjectionThreadRepository = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -65,6 +62,7 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           pinned_at,
           pin_order_key,
           active_order_key,
+          auto_settle_disabled_at,
           title_regeneration_request_id,
           title_regeneration_started_at,
           latest_user_message_at,
@@ -105,6 +103,7 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           ${row.pinnedAt},
           ${row.pinOrderKey ?? null},
           ${row.activeOrderKey ?? null},
+          ${row.autoSettleDisabledAt ?? null},
           ${row.titleRegenerationRequestId ?? null},
           ${row.titleRegenerationStartedAt ?? null},
           ${row.latestUserMessageAt},
@@ -145,6 +144,7 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           pinned_at = excluded.pinned_at,
           pin_order_key = excluded.pin_order_key,
           active_order_key = excluded.active_order_key,
+          auto_settle_disabled_at = excluded.auto_settle_disabled_at,
           title_regeneration_request_id = excluded.title_regeneration_request_id,
           title_regeneration_started_at = excluded.title_regeneration_started_at,
           latest_user_message_at = excluded.latest_user_message_at,
@@ -192,6 +192,7 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           pinned_at AS "pinnedAt",
           pin_order_key AS "pinOrderKey",
           active_order_key AS "activeOrderKey",
+          auto_settle_disabled_at AS "autoSettleDisabledAt",
           title_regeneration_request_id AS "titleRegenerationRequestId",
           title_regeneration_started_at AS "titleRegenerationStartedAt",
           latest_user_message_at AS "latestUserMessageAt",
@@ -206,65 +207,6 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           activity_state AS "activityState",
           activity_state_updated_at AS "activityStateUpdatedAt"
         FROM projection_threads
-        WHERE thread_id = ${threadId}
-      `,
-  });
-
-  const listProjectionThreadRows = SqlSchema.findAll({
-    Request: ListProjectionThreadsByProjectInput,
-    Result: ProjectionThreadDbRow,
-    execute: ({ projectId }) =>
-      sql`
-        SELECT
-          thread_id AS "threadId",
-          project_id AS "projectId",
-          title,
-          title_state_json AS "titleState",
-          model_selection_json AS "modelSelection",
-          runtime_mode AS "runtimeMode",
-          interaction_mode AS "interactionMode",
-          branch,
-          worktree_path AS "worktreePath",
-          retention,
-          linked_pull_request_json AS "linkedPullRequest",
-          environment_json AS "environment",
-          branch_pull_request_json AS "branchPullRequest",
-          latest_turn_id AS "latestTurnId",
-          created_at AS "createdAt",
-          updated_at AS "updatedAt",
-          archived_at AS "archivedAt",
-          settled_override AS "settledOverride",
-          settled_at AS "settledAt",
-          unsettled_at AS "unsettledAt",
-          snoozed_until AS "snoozedUntil",
-          snoozed_at AS "snoozedAt",
-          pinned_at AS "pinnedAt",
-          pin_order_key AS "pinOrderKey",
-          active_order_key AS "activeOrderKey",
-          title_regeneration_request_id AS "titleRegenerationRequestId",
-          title_regeneration_started_at AS "titleRegenerationStartedAt",
-          latest_user_message_at AS "latestUserMessageAt",
-          pending_approval_count AS "pendingApprovalCount",
-          pending_user_input_count AS "pendingUserInputCount",
-          has_actionable_proposed_plan AS "hasActionableProposedPlan",
-          deleted_at AS "deletedAt",
-          child_status AS "childStatus",
-          child_status_updated_at AS "childStatusUpdatedAt",
-          activity_label AS "activityLabel",
-          activity_label_updated_at AS "activityLabelUpdatedAt",
-          activity_state AS "activityState",
-          activity_state_updated_at AS "activityStateUpdatedAt"
-        FROM projection_threads
-        WHERE project_id = ${projectId}
-        ORDER BY created_at ASC, thread_id ASC
-      `,
-  });
-
-  const deleteProjectionThreadRow = SqlSchema.void({
-    Request: DeleteProjectionThreadInput,
-    execute: ({ threadId }) =>
-      sql`
-        DELETE FROM projection_threads
         WHERE thread_id = ${threadId}
       `,
   });
@@ -282,6 +224,47 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
             AND (child_status_updated_at IS NULL OR child_status_updated_at <= ${updatedAt})`,
   });
 
+  // Open set as `hasOpenChildWaits` (packages/shared/t3team-childWaitFacts); the instance is the
+  // `<instanceId>` segment of the earliest `local:<instanceId>:…` message, validated on read.
+  const refreshT3TeamShellFactsRow = SqlSchema.void({
+    Request: GetProjectionThreadInput,
+    execute: ({ threadId }) =>
+      sql`UPDATE projection_threads
+          SET open_child_wait_count = (
+            SELECT COUNT(DISTINCT json_extract(r.payload_json, '$.waitId'))
+            FROM projection_thread_activities AS r
+            WHERE r.thread_id = ${threadId}
+              AND r.kind = 't3team.child_wait.registered'
+              AND json_extract(r.payload_json, '$.waitId') IS NOT NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM projection_thread_activities AS res
+                WHERE res.thread_id = r.thread_id
+                  AND res.kind = 't3team.child_wait.resolved'
+                  AND json_extract(res.payload_json, '$.waitId') =
+                    json_extract(r.payload_json, '$.waitId')
+              )
+          ),
+          local_session_instance_id = (
+            SELECT substr(m.message_id, 7, instr(substr(m.message_id, 7), ':') - 1)
+            FROM projection_thread_messages AS m
+            WHERE m.thread_id = ${threadId} AND m.message_id LIKE 'local:%:%'
+            ORDER BY m.created_at ASC, m.message_id ASC
+            LIMIT 1
+          )
+          WHERE thread_id = ${threadId}`,
+  });
+
+  const setLocalSessionInstanceIdRow = SqlSchema.void({
+    Request: Schema.Struct({
+      threadId: GetProjectionThreadInput.fields.threadId,
+      instanceId: Schema.String,
+    }),
+    execute: ({ threadId, instanceId }) =>
+      sql`UPDATE projection_threads
+          SET local_session_instance_id = ${instanceId}
+          WHERE thread_id = ${threadId} AND local_session_instance_id IS NULL`,
+  });
+
   const upsert: ProjectionThreadRepositoryShape["upsert"] = (row) =>
     upsertProjectionThreadRow(row).pipe(
       Effect.mapError(toPersistenceSqlError("ProjectionThreadRepository.upsert:query")),
@@ -292,26 +275,35 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
       Effect.mapError(toPersistenceSqlError("ProjectionThreadRepository.getById:query")),
     );
 
-  const listByProjectId: ProjectionThreadRepositoryShape["listByProjectId"] = (input) =>
-    listProjectionThreadRows(input).pipe(
-      Effect.mapError(toPersistenceSqlError("ProjectionThreadRepository.listByProjectId:query")),
-    );
-
-  const deleteById: ProjectionThreadRepositoryShape["deleteById"] = (input) =>
-    deleteProjectionThreadRow(input).pipe(
-      Effect.mapError(toPersistenceSqlError("ProjectionThreadRepository.deleteById:query")),
-    );
   const updateChildStatus: ProjectionThreadRepositoryShape["updateChildStatus"] = (input) =>
     updateChildStatusRow(input).pipe(
       Effect.mapError(toPersistenceSqlError("ProjectionThreadRepository.updateChildStatus:query")),
     );
 
+  const refreshT3TeamShellFacts: ProjectionThreadRepositoryShape["refreshT3TeamShellFacts"] = (
+    input,
+  ) =>
+    refreshT3TeamShellFactsRow(input).pipe(
+      Effect.mapError(
+        toPersistenceSqlError("ProjectionThreadRepository.refreshT3TeamShellFacts:query"),
+      ),
+    );
+
+  const setLocalSessionInstanceId: ProjectionThreadRepositoryShape["setLocalSessionInstanceId"] = (
+    input,
+  ) =>
+    setLocalSessionInstanceIdRow(input).pipe(
+      Effect.mapError(
+        toPersistenceSqlError("ProjectionThreadRepository.setLocalSessionInstanceId:query"),
+      ),
+    );
+
   return {
     upsert,
     getById,
-    listByProjectId,
-    deleteById,
     updateChildStatus,
+    refreshT3TeamShellFacts,
+    setLocalSessionInstanceId,
   } satisfies ProjectionThreadRepositoryShape;
 });
 

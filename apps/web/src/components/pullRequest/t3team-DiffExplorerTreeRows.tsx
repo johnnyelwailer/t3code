@@ -22,13 +22,10 @@ function DiffStat({
 }) {
   return (
     <span
-      className={cn(
-        "inline-flex items-center gap-1.5 font-mono text-[11px] tabular-nums",
-        className,
-      )}
+      className={cn("inline-flex items-center gap-1.5 font-mono text-2xs tabular-nums", className)}
     >
-      <span className="text-emerald-600 dark:text-emerald-500">+{additions}</span>
-      <span className="text-rose-600 dark:text-rose-500">-{deletions}</span>
+      <span className="text-diff-addition-foreground">+{additions}</span>
+      <span className="text-diff-deletion-foreground">-{deletions}</span>
     </span>
   );
 }
@@ -90,7 +87,7 @@ export function TreeLevel({
                   )}
                 </span>
                 <span className="min-w-0 flex-1 truncate">{node.name}</span>
-                <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/70">
+                <span className="shrink-0 text-3xs tabular-nums text-muted-foreground/70">
                   {diffExplorerFileCount(node.children)}
                 </span>
               </button>

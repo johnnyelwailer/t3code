@@ -32,7 +32,7 @@ import {
 } from "./provider/ProviderDriver.ts";
 import { makePackProviderAdapter } from "./t3team-pack-driverAdapter.ts";
 import { makeOpenCodeHarnessCapability } from "./t3team-pack-driverHarness.ts";
-import { makePackProviderSnapshot } from "./t3team-pack-driverSnapshot.ts";
+import { makePackProviderSnapshot } from "./t3team-pack-driverSnapshotShape.ts";
 import { bridgePackTextGeneration } from "./t3team-pack-textGenerationBridge.ts";
 
 const errorDetail = (cause: unknown): string =>
@@ -173,7 +173,7 @@ export const bridgePackProviderDriver = (
           instanceId,
           interruptSignal: Deferred.await(closed),
         });
-        const snapshot = makePackProviderSnapshot({
+        const snapshot = yield* makePackProviderSnapshot({
           packInstance,
           driverKind,
           instanceId,

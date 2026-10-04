@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@t3team/sdk": "workspace:*",
+    "@t3tools/project-context": "workspace:*",
     "@t3tools/project-recipes": "workspace:*"
   },
   "devDependencies": {

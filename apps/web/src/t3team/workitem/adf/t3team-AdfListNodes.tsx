@@ -16,7 +16,7 @@ const LIST_ITEM_CLASS = "text-sm leading-6 text-foreground marker:text-muted-for
 
 function T3TeamAdfBulletList({ node, ctx, depth }: AdfNodeProps): ReactNode {
   return (
-    <ul className={cn(LIST_CLASS, "list-disc [&_ul]:list-[circle] [&_ul_ul]:list-[square]")}>
+    <ul className={cn(LIST_CLASS, "t3team-adf-bullets")}>
       <T3TeamAdfNodes nodes={adfChildren(node)} ctx={ctx} depth={depth} />
     </ul>
   );
@@ -26,10 +26,7 @@ function T3TeamAdfOrderedList({ node, ctx, depth }: AdfNodeProps): ReactNode {
   const order = adfAttrNumber(node, "order");
   return (
     <ol
-      className={cn(
-        LIST_CLASS,
-        "list-decimal [&_ol]:list-[lower-alpha] [&_ol_ol]:list-[lower-roman]",
-      )}
+      className={cn(LIST_CLASS, "t3team-adf-numbers")}
       start={order !== undefined && order >= 0 ? Math.round(order) : undefined}
     >
       <T3TeamAdfNodes nodes={adfChildren(node)} ctx={ctx} depth={depth} />

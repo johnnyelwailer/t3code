@@ -19,7 +19,7 @@ describe("ResizableRightSidebarAside", () => {
     );
 
     expect(markup).toContain("workspace-titlebar-controls");
-    expect(markup).toContain("pt-[var(--workspace-topbar-height)]");
+    expect(markup).toContain("pt-(--workspace-topbar-height)");
     expect(markup).toContain('aria-label="Collapse right sidebar"');
   });
 });

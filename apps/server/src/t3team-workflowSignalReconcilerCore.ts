@@ -49,11 +49,7 @@ const EMITS_BY_SOURCE: Readonly<Record<string, ReadonlySet<string>>> = Object.fr
     [
       [
         "scm.change-request.watch",
-        [
-          ScmChangeRequestMerged.name,
-          ScmChangeRequestClosed.name,
-          ScmChangeRequestDraftReady.name,
-        ],
+        [ScmChangeRequestMerged.name, ScmChangeRequestClosed.name, ScmChangeRequestDraftReady.name],
       ],
       ["scm.change-request.checks", [ScmChangeRequestChecksConcluded.name]],
       ["scm.change-request.review", [ScmChangeRequestReviewActivity.name]],
@@ -78,15 +74,9 @@ export function makeMintedEmit(input: {
 }): SignalEmit {
   const declaredSignals = EMITS_BY_SOURCE[input.sourceName] ?? new Set<string>();
   const signalByName = new Map(BUILTIN_SIGNALS.map((s) => [s.name, s]));
-  return async <Payload>(
-    signal: Signal<Payload>,
-    key: string,
-    payload: Payload,
-  ): Promise<void> => {
+  return async <Payload>(signal: Signal<Payload>, key: string, payload: Payload): Promise<void> => {
     if (!declaredSignals.has(signal.name)) {
-      throw new Error(
-        `Source '${input.sourceName}' emitted undeclared signal '${signal.name}'.`,
-      );
+      throw new Error(`Source '${input.sourceName}' emitted undeclared signal '${signal.name}'.`);
     }
     const declared = signalByName.get(signal.name);
     if (declared === undefined) {

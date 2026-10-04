@@ -48,7 +48,7 @@ export const WORKFLOW_REPORT_JOURNAL_SEQ = 0;
 
 /** The journal `kind` for the report entry. `PrimitiveKind` is an open vocabulary by design
  * (`@runbook/core/primitiveKinds`: "adapters ... may add their own primitive identifiers"). */
-export const WORKFLOW_REPORT_JOURNAL_KIND = "workflow.report";
+const WORKFLOW_REPORT_JOURNAL_KIND = "workflow.report";
 
 // Hoisted: keep the compiled decoder at module scope (no-inline-schema-compile).
 const decodeReportRecord = Schema.decodeUnknownSync(WorkflowRunReportRecord);

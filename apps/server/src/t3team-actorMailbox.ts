@@ -242,9 +242,8 @@ export const makeT3TeamActorMailbox: Effect.Effect<T3TeamActorMailboxShape> = Ef
  * by {@link T3TeamActorMailboxLive} so the reactor, the `drain` tool op and
  * any other dispatcher claim/peek against the same state.
  */
-export const T3TeamActorMailbox = Context.Service<
+export const T3TeamActorMailbox = Context.Service<"T3TeamActorMailbox", T3TeamActorMailboxShape>(
   "T3TeamActorMailbox",
-  T3TeamActorMailboxShape
->("T3TeamActorMailbox");
+);
 
 export const T3TeamActorMailboxLive = Layer.effect(T3TeamActorMailbox, makeT3TeamActorMailbox);

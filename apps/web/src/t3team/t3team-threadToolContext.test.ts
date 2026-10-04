@@ -14,7 +14,6 @@ function makeThread(overrides: Partial<ProjectThread> = {}): ProjectThread {
     id: overrides.id ?? "thread-1",
     projectId: overrides.projectId ?? "project-1",
     title: overrides.title ?? "Thread",
-    messageCount: overrides.messageCount ?? 0,
     lastMessageAt: overrides.lastMessageAt ?? "2026-05-22T10:00:00.000Z",
     createdAt: overrides.createdAt ?? "2026-05-22T10:00:00.000Z",
     status: overrides.status ?? "idle",
@@ -186,6 +185,11 @@ describe("createT3TeamTurnToolContext", () => {
           capabilities: ["read"],
         },
         {
+          id: "t3team.thread.ask_user",
+          label: "Ask user a question",
+          capabilities: ["write"],
+        },
+        {
           id: "t3team.thread.start_child",
           label: "Start child session",
           capabilities: ["write"],
@@ -347,7 +351,6 @@ describe("mergeProjectThreads", () => {
       title: "Local title",
       status: "idle",
       lastMessageAt: "2026-05-20T10:00:00.000Z",
-      messageCount: 0,
       createdAt: "2026-05-20T10:00:00.000Z",
       kickoffMessage: "Investigate this ticket",
       selectedToolIds: [],
@@ -359,7 +362,6 @@ describe("mergeProjectThreads", () => {
       title: "Live title",
       status: "running",
       lastMessageAt: "2026-05-20T10:05:00.000Z",
-      messageCount: 3,
       createdAt: "2026-05-20T10:00:00.000Z",
     };
 

@@ -58,7 +58,7 @@ export function CreateProjectWizardFooter({
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
           {step === "account" ? (
             <Button
-              className="w-full justify-center gap-2 sm:min-w-[11rem] sm:w-auto"
+              className="w-full justify-center sm:min-w-[11rem] sm:w-auto"
               onClick={onContinueAccount}
               disabled={!canContinueAccount || loadingProjects}
             >

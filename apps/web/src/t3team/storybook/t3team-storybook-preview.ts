@@ -1,5 +1,9 @@
 import type { Decorator, Preview } from "@storybook/react";
 
+// The app's main stylesheet first, as main.tsx loads it: its @theme defines the type scale
+// (text-2xs, text-3xs, …). Without it those classes were never generated here and stories
+// rendered small labels at the inherited size, unlike the app.
+import "~/index.css";
 import "~/t3team/t3team-index.css";
 // Must come after the app stylesheet so it wins on the canvas-scrolling rules.
 import "~/t3team/storybook/t3team-storybook-canvas.css";

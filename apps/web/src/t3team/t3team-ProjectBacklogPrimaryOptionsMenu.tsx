@@ -6,7 +6,6 @@ import {
   MenuRadioGroup,
   MenuRadioItem,
   MenuSeparator,
-  MenuShortcut,
   MenuSub,
   MenuSubPopup,
   MenuSubTrigger,
@@ -18,10 +17,7 @@ import type { ProjectBacklogIssueTypeFilterKey } from "~/t3team/t3team-projectBa
 import { projectBacklogIssueTypeFilterOptions } from "~/t3team/t3team-projectBacklogUtils";
 import {
   getSelectedBacklogOptionLabel,
-  menuShortcutClassName,
-  menuSubPopupClassName,
-  radioItemClassName,
-  twoColumnRadioGroupClassName,
+  menuValueClassName,
 } from "~/t3team/t3team-ProjectBacklogOptionsMenuMeta";
 
 export function ProjectBacklogPrimaryOptionsMenu({
@@ -71,24 +67,20 @@ export function ProjectBacklogPrimaryOptionsMenu({
         <MenuGroupLabel>Display</MenuGroupLabel>
 
         <MenuSub>
-          <MenuSubTrigger className={radioItemClassName}>
+          <MenuSubTrigger>
             View
             {selectedViewLabel ? (
-              <MenuShortcut className={menuShortcutClassName}>{selectedViewLabel}</MenuShortcut>
+              <span className={menuValueClassName}>{selectedViewLabel}</span>
             ) : null}
           </MenuSubTrigger>
-          <MenuSubPopup className={menuSubPopupClassName}>
+          <MenuSubPopup className="min-w-60">
             <MenuRadioGroup
-              className={twoColumnRadioGroupClassName}
+              className="grid sm:grid-cols-2"
               value={viewMode}
               onValueChange={(value) => onViewModeChange(value as ProjectBacklogViewMode)}
             >
               {projectBacklogViewModes.map((option) => (
-                <MenuRadioItem
-                  key={option.value}
-                  value={option.value}
-                  className={radioItemClassName}
-                >
+                <MenuRadioItem key={option.value} value={option.value}>
                   {option.label}
                 </MenuRadioItem>
               ))}
@@ -97,17 +89,16 @@ export function ProjectBacklogPrimaryOptionsMenu({
         </MenuSub>
 
         <MenuSub>
-          <MenuSubTrigger className={radioItemClassName}>
+          <MenuSubTrigger>
             Issue types
-            <MenuShortcut className={menuShortcutClassName}>{selectedIssueTypeLabel}</MenuShortcut>
+            <span className={menuValueClassName}>{selectedIssueTypeLabel}</span>
           </MenuSubTrigger>
-          <MenuSubPopup className={menuSubPopupClassName}>
+          <MenuSubPopup className="min-w-60">
             <MenuGroup>
               {projectBacklogIssueTypeFilterOptions.map((option) => (
                 <MenuCheckboxItem
                   key={option.value}
                   checked={visibleIssueTypes.includes(option.value)}
-                  className={radioItemClassName}
                   onCheckedChange={(checked) => toggleIssueType(option.value, Boolean(checked))}
                 >
                   {option.label}

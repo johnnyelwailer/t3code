@@ -1,74 +1,101 @@
 /**
- * Decode/encode checks for the provider usage-limit contract
+ * Severity rule and tool-answer shape of the provider usage view
  * (`t3team-providerUsage.ts`).
  */
 import { describe, expect, it } from "vite-plus/test";
-import { ProviderDriverKind } from "@t3tools/contracts";
-import * as Exit from "effect/Exit";
 import * as Schema from "effect/Schema";
 
+import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
+import type { ServerProviderUsageLimits } from "./providerUsageLimits.ts";
 import {
   PROVIDER_USAGE_CONTRACT_VERSION,
   ProviderUsageQueryResult,
-  ProviderUsageReport,
-  ProviderUsageSample,
-  ProviderUsageSeverity,
+  exhaustedUsageWindows,
+  providerUsageSeverity,
+  sessionUsageWindow,
 } from "./t3team-providerUsage.ts";
 
-const CLAUDE = ProviderDriverKind.make("claudeAgent");
+const decodeResult = Schema.decodeSync(ProviderUsageQueryResult);
+const encodeResult = Schema.encodeSync(ProviderUsageQueryResult);
 
-const sample: ProviderUsageSample = {
-  provider: CLAUDE,
-  window: "primary",
-  percentUsed: 97,
-  resetsAt: "2026-09-03T18:09:59.994Z",
-  severity: "warning",
-  source: "anthropic-oauth-usage",
-  sampledAt: "2026-09-03T17:48:17.000Z",
-};
+const limits = (windows: ServerProviderUsageLimits["windows"]): ServerProviderUsageLimits => ({
+  checkedAt: "2026-09-28T10:00:00.000Z",
+  windows,
+});
 
-describe("ProviderUsageSample", () => {
-  it("round-trips a well-formed sample", () => {
-    const decoded = Schema.decodeUnknownSync(ProviderUsageSample)(sample);
-    expect(decoded).toEqual(sample);
-    expect(Schema.encodeSync(ProviderUsageSample)(decoded)).toEqual(sample);
+describe("providerUsageSeverity", () => {
+  it("maps used percent onto the 80/100 thresholds", () => {
+    expect(providerUsageSeverity(79.9)).toBe("normal");
+    expect(providerUsageSeverity(80)).toBe("warning");
+    expect(providerUsageSeverity(99.9)).toBe("warning");
+    expect(providerUsageSeverity(100)).toBe("critical");
+  });
+});
+
+describe("sessionUsageWindow", () => {
+  it("prefers the session kind", () => {
+    const window = sessionUsageWindow(
+      limits([
+        { id: "seven_day", kind: "weekly", label: "Weekly", usedPercent: 10 },
+        { id: "five_hour", kind: "session", label: "Session", usedPercent: 50 },
+      ]),
+    );
+    expect(window?.id).toBe("five_hour");
   });
 
-  it("rejects out-of-range percentages", () => {
-    expect(
-      Exit.isFailure(
-        Schema.decodeUnknownExit(ProviderUsageSample)({ ...sample, percentUsed: 101 }),
-      ),
-    ).toBe(true);
-    expect(
-      Exit.isFailure(Schema.decodeUnknownExit(ProviderUsageSample)({ ...sample, percentUsed: -1 })),
-    ).toBe(true);
+  it("falls back to the shortest window duration", () => {
+    const window = sessionUsageWindow(
+      limits([
+        { id: "a", kind: "other", label: "A", usedPercent: 1, windowDurationMins: 10_080 },
+        { id: "b", kind: "other", label: "B", usedPercent: 2, windowDurationMins: 300 },
+      ]),
+    );
+    expect(window?.id).toBe("b");
   });
 
-  it("accepts a null resetsAt and validates the severity set", () => {
-    const decoded = Schema.decodeUnknownSync(ProviderUsageSample)({ ...sample, resetsAt: null });
-    expect(decoded.resetsAt).toBeNull();
+  it("treats unavailable or empty limits as no data", () => {
+    expect(sessionUsageWindow(undefined)).toBeNull();
+    expect(sessionUsageWindow(limits([]))).toBeNull();
     expect(
-      Exit.isFailure(Schema.decodeUnknownExit(ProviderUsageSeverity)({ severity: "bogus" })),
-    ).toBe(true);
-    expect(Exit.isSuccess(Schema.decodeUnknownExit(ProviderUsageSeverity)("critical"))).toBe(true);
+      sessionUsageWindow({
+        ...limits([{ id: "five_hour", kind: "session", label: "Session", usedPercent: 100 }]),
+        unavailable: { reason: "probeFailed" },
+      }),
+    ).toBeNull();
+    expect(
+      exhaustedUsageWindows({
+        ...limits([{ id: "five_hour", kind: "session", label: "Session", usedPercent: 100 }]),
+        unavailable: { reason: "probeFailed" },
+      }),
+    ).toEqual([]);
   });
 });
 
 describe("ProviderUsageQueryResult", () => {
-  it("round-trips the full tool answer shape", () => {
-    const report: ProviderUsageReport = {
-      provider: CLAUDE,
-      plan: "team",
-      windows: [sample],
-    };
+  it("round-trips the tool answer shape", () => {
     const payload = {
       contractVersion: PROVIDER_USAGE_CONTRACT_VERSION,
-      reports: [report],
-      unavailable: [{ provider: CLAUDE, reason: "codex not installed" }],
+      instances: [
+        {
+          providerInstanceId: ProviderInstanceId.make("claude_work"),
+          driver: ProviderDriverKind.make("claudeAgent"),
+          checkedAt: "2026-09-28T10:00:00.000Z",
+          sessionSeverity: "warning" as const,
+          windows: [
+            {
+              id: "five_hour",
+              kind: "session" as const,
+              label: "Session",
+              usedPercent: 85,
+              resetsAt: "2026-09-28T12:00:00.000Z",
+              severity: "warning" as const,
+            },
+          ],
+        },
+      ],
+      hubAccounts: [],
+      hubErrors: [],
     };
-    const decoded = Schema.decodeUnknownSync(ProviderUsageQueryResult)(payload);
-    expect(decoded).toEqual(payload);
-    expect(Schema.encodeSync(ProviderUsageQueryResult)(decoded)).toEqual(payload);
+    expect(encodeResult(decodeResult(payload))).toEqual(payload);
   });
 });

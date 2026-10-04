@@ -93,7 +93,7 @@ function T3SidebarDot({ thread, flag }: { thread: T3Thread; flag: boolean }) {
         title={resolveActivityPillDisplay(pill)}
       />
       <span className="min-w-0 truncate text-xs">Refactor the settings panel</span>
-      <span className="ml-auto text-[10px] text-muted-foreground/40">2m</span>
+      <span className="ml-auto text-3xs text-muted-foreground/40">2m</span>
     </div>
   );
 }
@@ -109,7 +109,7 @@ function ProjectRollupRow({ threads, flag }: { threads: T3Thread[]; flag: boolea
         className={`inline-flex size-[9px] shrink-0 rounded-full ${rollup.dotClass} ${activityPulseClass(rollup)}`}
       />
       <span className="truncate text-xs">Alpha — settings overhaul</span>
-      <span className="ml-auto text-[10px] text-muted-foreground/40">
+      <span className="ml-auto text-3xs text-muted-foreground/40">
         {resolveActivityPillDisplay(rollup)}
       </span>
     </div>
@@ -125,7 +125,7 @@ function ActivityLabelPillStory({ thread, flag }: { thread: T3Thread; flag: bool
           <span className="truncate text-xs">Refactor the settings panel</span>
           {t3Pill ? <ThreadStatusLabel status={upstreamPill(t3Pill)} /> : null}
         </div>
-        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-2 text-3xs text-muted-foreground">
           <span>compact:</span>
           {t3Pill ? <ThreadStatusLabel status={upstreamPill(t3Pill)} compact /> : null}
         </div>

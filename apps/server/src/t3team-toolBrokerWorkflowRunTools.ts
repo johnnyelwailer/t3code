@@ -26,7 +26,7 @@ import { DEFAULT_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS } from "./t3team-workflowEphem
 import { resolveRunWorkflowPath } from "./t3team-workflowRunPathAuthorize.ts";
 
 /** Max ephemeral runs holding engine resources (running/suspended/sleeping) at once (spec D8). */
-export const T3TEAM_EPHEMERAL_RUN_CAP = DEFAULT_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS;
+const T3TEAM_EPHEMERAL_RUN_CAP = DEFAULT_EPHEMERAL_WORKFLOW_MAX_LIVE_RUNS;
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -40,7 +40,7 @@ export interface RunWorkflowHandlerArgs {
 }
 
 /** How recently a launch from the same thread blocks another one without `replaceRunId`. */
-export const RECENT_LAUNCH_WINDOW_MS = 2 * 60_000;
+const RECENT_LAUNCH_WINDOW_MS = 2 * 60_000;
 const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "cancelled"]);
 
 /**

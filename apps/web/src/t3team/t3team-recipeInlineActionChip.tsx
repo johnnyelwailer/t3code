@@ -17,7 +17,7 @@ export function InlineActionChip({
     <button
       type="button"
       className={cn(
-        "inline-flex items-center rounded-full border border-border/70 bg-background/70 px-2.5 py-1 text-[11px] font-medium text-foreground/80 transition-colors",
+        "inline-flex items-center rounded-full border border-border/70 bg-background/70 px-2.5 py-1 text-2xs font-medium text-foreground/80 transition-colors",
         "hover:border-border hover:bg-accent/40 hover:text-foreground",
       )}
       onClick={(event) => {

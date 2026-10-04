@@ -7,6 +7,7 @@ import {
   createHandleDispatch,
   createSuspensionLatch,
   type HandleDispatch,
+  type RefireTarget,
   type SuspensionLatch,
 } from "./handles.ts";
 import {
@@ -50,6 +51,12 @@ export interface DurableRuntimeConfig {
    * "body returned normally while suspended" check has nothing to read.
    */
   readonly suspension?: SuspensionLatch | undefined;
+  /**
+   * The RUN's opt-in re-fire of one recorded, unanswered ask (see {@link RefireTarget}), shared
+   * with the run boundary so it can fail a run whose target was never reached. Absent = replay
+   * never re-fires, exactly as before.
+   */
+  readonly refire?: RefireTarget | undefined;
 }
 
 export interface DurablePrimitiveRuntime extends PrimitiveRuntime {
@@ -120,6 +127,7 @@ export function createDurableRuntime(config: DurableRuntimeConfig): DurablePrimi
     events: config.events,
     abortSignal: config.abortSignal,
     suspension,
+    refire: config.refire,
   });
 
   return {

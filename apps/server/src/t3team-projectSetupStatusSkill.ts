@@ -1,3 +1,5 @@
+import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
+
 export function renderStatusAndContextSkill(): string {
   return `---
 name: t3team-status-and-context-summary
@@ -31,7 +33,7 @@ Use this workflow when a user asks for the current state of a Jira ticket, proje
 ## Response Rules
 
 - Do not narrate file exploration or quote internal paths in the main answer.
-- Do not mention entrypoint.json, metadata.json, snapshot.json, or .t3team/... unless the user explicitly asks where the answer came from.
+- Do not mention entrypoint.json, metadata.json, snapshot.json, or ${PROJECT_STATE_DIR}/... unless the user explicitly asks where the answer came from.
 - If the context is stale or contradictory, say that directly instead of guessing.
 - When the user asks for evidence, provide a short provenance note after the user-facing summary.
 
@@ -43,7 +45,7 @@ Use this workflow when a user asks for the current state of a Jira ticket, proje
 
 ## Avoid
 
-- "I checked entrypoint.json and metadata.json under .t3team/context/..."
+- "I checked entrypoint.json and metadata.json under ${PROJECT_STATE_DIR}/context/..."
 - Step-by-step terminal narration unless the user asked for the investigation details
 `;
 }

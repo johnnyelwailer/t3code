@@ -41,7 +41,7 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
  * message id makes ingestion idempotent: re-reading the thread re-reads the same id, so a draft the
  * reviewer already accepted or dismissed is never resurrected as a fresh proposal.
  */
-export function buildT3TeamDraftMutationAttachment(input: {
+function buildT3TeamDraftMutationAttachment(input: {
   readonly draftMutation: Record<string, unknown>;
   readonly messageId: string;
 }): T3TeamMessageDraftMutationAttachment {
@@ -55,7 +55,7 @@ export function buildT3TeamDraftMutationAttachment(input: {
 }
 
 /** `undefined` when the result carries no draft (an error result, or a non-draft tool). */
-export function readT3TeamDraftMutation(
+function readT3TeamDraftMutation(
   result: T3TeamToolCallResult,
 ): Record<string, unknown> | undefined {
   if (result.isError) return undefined;

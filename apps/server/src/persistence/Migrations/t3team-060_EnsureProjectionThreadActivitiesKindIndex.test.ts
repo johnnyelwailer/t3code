@@ -10,7 +10,7 @@ interface IndexRow {
   readonly name: string;
 }
 
-const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
+const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layer({ filename: ":memory:" })));
 
 const indexExists = Effect.fn("test.indexExists")(function* (name: string) {
   const sql = yield* SqlClient.SqlClient;
@@ -31,7 +31,16 @@ layer("t3team-060_EnsureProjectionThreadActivitiesKindIndex", (it) => {
       );
     }),
   );
+});
 
+// A second, separate layer block: the in-memory DB is shared across tests of one
+// block, and the migrator only runs ids above the latest recorded one, so a
+// ledger that already holds later migrations would never re-run the repair.
+const brokenLedgerLayer = it.layer(
+  Layer.mergeAll(NodeSqliteClient.layer({ filename: ":memory:" })),
+);
+
+brokenLedgerLayer("t3team-060_EnsureProjectionThreadActivitiesKindIndex repair", (it) => {
   it.effect("repairs a ledger where the index was silently never created", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
@@ -41,13 +50,6 @@ layer("t3team-060_EnsureProjectionThreadActivitiesKindIndex", (it) => {
       // consumed by a different migration on that machine).
       yield* runMigrations({ toMigrationInclusive: 77 });
       yield* sql`DROP INDEX idx_projection_thread_activities_kind_created`;
-      // The group's layer may be shared across tests, in which case test 1
-      // already applied this migration: force the ledger back to the
-      // broken state (the repair migration never ran on this machine).
-      yield* sql`
-        DELETE FROM effect_sql_migrations
-        WHERE name = 'EnsureProjectionThreadActivitiesKindIndex'
-      `;
       assert.strictEqual(
         yield* indexExists("idx_projection_thread_activities_kind_created"),
         0,

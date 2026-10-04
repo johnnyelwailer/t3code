@@ -12,10 +12,7 @@
  *
  * @module t3team-thread-jobsBackend
  */
-import type {
-  ProviderJobControlRequest,
-  ProviderJobControlResult,
-} from "@t3tools/contracts";
+import type { ProviderJobControlRequest, ProviderJobControlResult } from "@t3tools/contracts";
 
 import { postJson } from "./t3team-t3BackendHttp";
 

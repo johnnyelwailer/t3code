@@ -450,7 +450,15 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
   // timer, so those columns clear.
   const setWorkflowRunWatchingRow = SqlSchema.void({
     Request: SetWorkflowRunWatchingInput,
-    execute: ({ runId, correlationId, watchSourceName, watchParamsHash, watchSignalName, watchSignalKey, updatedAt }) =>
+    execute: ({
+      runId,
+      correlationId,
+      watchSourceName,
+      watchParamsHash,
+      watchSignalName,
+      watchSignalKey,
+      updatedAt,
+    }) =>
       sql`
         UPDATE workflow_runs
         SET status = 'watching',

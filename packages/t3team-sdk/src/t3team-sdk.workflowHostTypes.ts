@@ -58,6 +58,8 @@ export interface WorkflowHostLifecycle {
  * from whichever host surface the reply (or wake) arrives on. */
 export interface WorkflowHostRegisteredRun {
   readonly resume: (correlationId: string, reply: unknown) => Promise<void>;
+  /** Optional: see {@link WorkflowRunHost.redrive}. */
+  readonly redrive?: (opts?: WorkflowHostRedriveOptions) => Promise<void>;
   readonly cancel: () => void;
   /** Optional: fail from the HOST side for a condition the body can never
    * observe (an ask that will never be answered). */
@@ -95,10 +97,32 @@ export interface WorkflowHostSinks {
   readonly onAborted?: (detail: { readonly reason: string }) => Promise<void>;
 }
 
-/** The per-run control handle the host registry and host funnels drive. */
+/** Options for {@link WorkflowRunHost.redrive}. */
+export interface WorkflowHostRedriveOptions {
+  /** CorrelationId of the recorded, unanswered ask to send again (engine `refire`). */
+  readonly refire?: string;
+}
+
+/**
+ * The per-run control handle the host registry and host funnels drive.
+ *
+ * Drive serialization: `resume` and `redrive` share ONE in-flight slot per run. A call made while
+ * another replay drive of the same run is still settling is DROPPED — it resolves immediately and
+ * does nothing (no reply journaled, no replay, no re-fire). It is not queued, so the host must
+ * serialize drives per run itself (the portal does, via its admission queue) and issue the next
+ * one only after the previous call's promise settles.
+ */
 export interface WorkflowRunHost {
   readonly start: () => Promise<WorkflowLaunchStatus>;
+  /** Journal `reply` for `correlationId` and replay. Dropped while another drive is in flight
+   * (see the serialization note above). */
   readonly resume: (correlationId: string, reply: unknown) => Promise<void>;
+  /** Replay the run WITHOUT journaling a reply, under the same guard and funnel as `resume`.
+   * Plain, it re-drives from the journal (a crash inside a script step); with `refire`, the
+   * replay re-sends that one recorded, unanswered ask with its original payload. `refire` applies
+   * to this call only — one left on the static `runOptions` is ignored by every drive. Dropped
+   * while another drive is in flight (see the serialization note above). */
+  readonly redrive: (opts?: WorkflowHostRedriveOptions) => Promise<void>;
   readonly fail: (error: unknown) => Promise<void>;
   readonly cancel: () => void;
   readonly isCancelled: () => boolean;

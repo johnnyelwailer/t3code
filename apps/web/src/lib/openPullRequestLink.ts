@@ -1,6 +1,7 @@
-import type { EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
+import type { EnvironmentId, PullRequestRef, ScopedThreadRef } from "@t3tools/contracts";
+import { useAtomValue } from "@effect/atom-react";
 import { useNavigate } from "@tanstack/react-router";
-import { type MouseEvent, useCallback } from "react";
+import { type MouseEvent, useCallback, useMemo } from "react";
 
 import { pullRequestHostOf, type SourceControlProviderKind } from "@t3tools/contracts";
 import { parseChangeRequestUrl, type ChangeRequestLink } from "@t3tools/shared/changeRequestUrl";
@@ -15,7 +16,12 @@ import { useRightPanelStore } from "../rightPanelStore";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 
 import { useProjects, useServerConfigs } from "../state/entities";
+import { serverEnvironment } from "../state/server";
 import { usePrimaryEnvironmentId } from "../state/environments";
+import { PullRequestListSort } from "../components/pullRequest/pullRequestListPreferences";
+import * as Schema from "effect/Schema";
+
+const isPullRequestListSort = Schema.is(PullRequestListSort);
 
 export {
   parseChangeRequestUrl,
@@ -91,6 +97,51 @@ export function findProjectForChangeRequest(
         pullRequestHostOf(identity, kind) === link.authority)
     );
   });
+}
+
+export function resolvePullRequestPreviewTarget({
+  environmentId,
+  projects,
+  pullRequestsEnabled,
+  url,
+}: {
+  environmentId: EnvironmentId | null;
+  projects: ReadonlyArray<EnvironmentProject>;
+  pullRequestsEnabled: boolean;
+  url: string;
+}): { environmentId: EnvironmentId; input: PullRequestRef } | null {
+  if (!pullRequestsEnabled || environmentId === null) return null;
+  const parsed = parseChangeRequestUrl(url);
+  if (parsed === null) return null;
+  const project = findProjectForChangeRequest(
+    projects.filter((candidate) => candidate.environmentId === environmentId),
+    parsed,
+  );
+  if (project === undefined) return null;
+  return {
+    environmentId,
+    input: {
+      projectId: project.id,
+      host: parsed.authority ?? parsed.host,
+      repository: sourceControlRepositorySelector(project.repositoryIdentity) ?? parsed.repository,
+      number: parsed.number,
+    },
+  };
+}
+
+export function usePullRequestPreviewTarget(environmentId: EnvironmentId | null, url: string) {
+  const projects = useProjects();
+  const serverConfig = useAtomValue(serverEnvironment.configValueAtom(environmentId));
+  return useMemo(
+    () =>
+      resolvePullRequestPreviewTarget({
+        environmentId,
+        projects,
+        pullRequestsEnabled: serverConfig?.environment.capabilities.pullRequests === true,
+        url,
+      }),
+    [environmentId, projects, serverConfig, url],
+  );
 }
 
 /**
@@ -239,8 +290,12 @@ export function useOpenChangeRequestLink(
         if (!resolvedThreadRef) {
           void navigate({
             to: "/pull-requests",
-            search: (previous) => ({
+            search: ({ labels, sort, ...previous }) => ({
               ...previous,
+              // t3team: the backlog routes also carry `labels` (one string) and `sort` (a
+              // table column); only values the pull request list itself understands carry over.
+              ...(labels === undefined || typeof labels === "string" ? {} : { labels }),
+              ...(isPullRequestListSort(sort) ? { sort } : {}),
               involvement: previous.involvement ?? "all",
               state: previous.state ?? "all",
               repository,

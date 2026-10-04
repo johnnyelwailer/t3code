@@ -19,20 +19,16 @@
  *
  * @module t3team-jobNotificationFraming
  */
-import {
-  EventId,
-  MessageId,
-  type OrchestrationThreadActivity,
-} from "@t3tools/contracts";
+import { EventId, MessageId, type OrchestrationThreadActivity } from "@t3tools/contracts";
 
 /** Durable activity kind for a persisted (not yet consumed) job-notification marker. */
 export const JOB_NOTIFICATION_MARKER_KIND = "job-notification.pending";
 /** Durable activity kind recording which marker a forced turn consumed. */
 export const JOB_NOTIFICATION_CLAIMED_KIND = "job-notification.claimed";
 /** Markers older than this are stale: their forced turn already happened (or was lost). */
-export const JOB_NOTIFICATION_MARKER_MAX_AGE_MS = 5 * 60 * 1000;
+const JOB_NOTIFICATION_MARKER_MAX_AGE_MS = 5 * 60 * 1000;
 /** Tolerated marker-vs-host clock skew before a "future" marker is accepted. */
-export const JOB_NOTIFICATION_MARKER_CLOCK_SKEW_MS = 60 * 1000;
+const JOB_NOTIFICATION_MARKER_CLOCK_SKEW_MS = 60 * 1000;
 
 /** The marker the pack stamps on `thread.metadata.updated` at job completion. */
 export interface JobNotificationMarker {
@@ -49,9 +45,7 @@ export interface JobNotificationMarker {
  * arbitrary keys in `metadata`), so every field is shape-checked and anything
  * malformed yields `undefined` (no marker, no activity).
  */
-export function parseJobNotificationMarker(
-  record: unknown,
-): JobNotificationMarker | undefined {
+export function parseJobNotificationMarker(record: unknown): JobNotificationMarker | undefined {
   if (record === null || typeof record !== "object" || Array.isArray(record)) {
     return undefined;
   }
@@ -66,9 +60,7 @@ export function parseJobNotificationMarker(
     return undefined;
   }
   const requestId =
-    typeof entry.requestId === "string" && entry.requestId.length > 0
-      ? entry.requestId
-      : undefined;
+    typeof entry.requestId === "string" && entry.requestId.length > 0 ? entry.requestId : undefined;
   return { atIso, text: trimmedText, ...(requestId !== undefined ? { requestId } : {}) };
 }
 
@@ -101,7 +93,9 @@ export interface JobNotificationClaim {
  * completion, so it claims that one (the rest expire via the recency window).
  */
 export function findClaimableJobNotificationMarker(
-  activities: ReadonlyArray<Pick<OrchestrationThreadActivity, "id" | "kind" | "payload">> | undefined,
+  activities:
+    | ReadonlyArray<Pick<OrchestrationThreadActivity, "id" | "kind" | "payload">>
+    | undefined,
   nowIso: string,
 ): JobNotificationClaim | undefined {
   if (activities === undefined || activities.length === 0) {

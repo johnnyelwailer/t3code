@@ -70,7 +70,7 @@ export const foldResource = <A, E>(
     ),
   );
 
-export const readRenameTitle = (value: unknown): string | undefined => {
+const readRenameTitle = (value: unknown): string | undefined => {
   if (!value || typeof value !== "object" || globalThis.Array.isArray(value)) {
     return undefined;
   }

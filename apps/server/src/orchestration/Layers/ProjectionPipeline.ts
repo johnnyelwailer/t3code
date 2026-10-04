@@ -1,12 +1,17 @@
 import {
   ApprovalRequestId,
   isImportedAgentSessionMessageId,
+  readLocalProviderSessionInstanceId,
   UserInputAttachmentAnswerPayload,
   type ChatAttachment,
   type OrchestrationEvent,
   type OrchestrationSessionStatus,
   ThreadId,
 } from "@t3tools/contracts";
+import {
+  CHILD_WAIT_REGISTERED_KIND,
+  CHILD_WAIT_RESOLVED_KIND,
+} from "@t3tools/shared/t3team-childWaitFacts";
 import { compareDateTimeStrings } from "@t3tools/shared/dateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -549,6 +554,9 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             ...(event.payload.projectIcon !== undefined
               ? { projectIcon: event.payload.projectIcon }
               : {}),
+            ...(event.payload.mainRepository !== undefined
+              ? { mainRepository: event.payload.mainRepository }
+              : {}),
             ...(event.payload.scripts !== undefined ? { scripts: event.payload.scripts } : {}),
             updatedAt: event.payload.updatedAt,
           });
@@ -643,6 +651,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             pinnedAt: null,
             pinOrderKey: null,
             activeOrderKey: null,
+            autoSettleDisabledAt: null,
             titleRegenerationRequestId: null,
             titleRegenerationStartedAt: null,
             latestUserMessageAt: null,
@@ -652,6 +661,11 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             deletedAt: null,
             childStatus: null,
             childStatusUpdatedAt: null,
+          });
+          // A re-created id must not inherit the old incarnation's t3team shell facts; the
+          // message and activity projectors have already cleared its rows in this transaction.
+          yield* projectionThreadRepository.refreshT3TeamShellFacts({
+            threadId: event.payload.threadId,
           });
           return;
 
@@ -789,6 +803,21 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             ...existingRow.value,
             pinnedAt: null,
             pinOrderKey: null,
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
+        case "thread.auto-settle-set": {
+          const existingRow = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isNone(existingRow)) {
+            return;
+          }
+          yield* projectionThreadRepository.upsert({
+            ...existingRow.value,
+            autoSettleDisabledAt: event.payload.autoSettleDisabledAt,
             updatedAt: event.payload.updatedAt,
           });
           return;
@@ -1048,6 +1077,15 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
                 ? event.payload.createdAt
                 : previousLatest,
           });
+          const localSessionInstanceId = readLocalProviderSessionInstanceId(
+            event.payload.messageId,
+          );
+          if (localSessionInstanceId !== undefined) {
+            yield* projectionThreadRepository.setLocalSessionInstanceId({
+              threadId: event.payload.threadId,
+              instanceId: localSessionInstanceId,
+            });
+          }
           return;
         }
 
@@ -1067,6 +1105,15 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           });
           if (shouldRefreshThreadShellSummary(event)) {
             yield* refreshThreadShellSummary(event.payload.threadId);
+          }
+          if (
+            event.type === "thread.activity-appended" &&
+            (event.payload.activity.kind === CHILD_WAIT_REGISTERED_KIND ||
+              event.payload.activity.kind === CHILD_WAIT_RESOLVED_KIND)
+          ) {
+            yield* projectionThreadRepository.refreshT3TeamShellFacts({
+              threadId: event.payload.threadId,
+            });
           }
           return;
         }
@@ -1139,6 +1186,9 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             updatedAt: event.occurredAt,
           });
           yield* refreshThreadShellSummary(event.payload.threadId);
+          yield* projectionThreadRepository.refreshT3TeamShellFacts({
+            threadId: event.payload.threadId,
+          });
           return;
         }
 
@@ -2017,13 +2067,6 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
 
     const applyAttachmentSideEffects = Effect.fn("applyAttachmentSideEffects")(
       function* (event: OrchestrationEvent, sideEffects: AttachmentSideEffects) {
-        if (
-          sideEffects.deletedThreadIds.size === 0 &&
-          sideEffects.prunedThreadRelativePaths.size === 0
-        ) {
-          return;
-        }
-
         const deletedThreadIds = new Set<string>();
         for (const threadId of sideEffects.deletedThreadIds) {
           const recreatedLater = yield* eventStore.hasEventAfter({
@@ -2139,9 +2182,15 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
               );
             }),
           );
+          const hasCleanup =
+            attachmentSideEffects.deletedThreadIds.size > 0 ||
+            attachmentSideEffects.prunedThreadRelativePaths.size > 0;
           // Return the cleanup effect so the caller runs it after the outer transaction commits.
+          // Most events have no cleanup, so they skip the call and write no cleanup span.
           // @effect-diagnostics-next-line returnEffectInGen:off
-          return applyAttachmentSideEffects(event, attachmentSideEffects).pipe(Effect.asVoid);
+          return hasCleanup
+            ? applyAttachmentSideEffects(event, attachmentSideEffects).pipe(Effect.asVoid)
+            : Effect.void;
         },
         Effect.provideService(FileSystem.FileSystem, fileSystem),
         Effect.provideService(Path.Path, path),

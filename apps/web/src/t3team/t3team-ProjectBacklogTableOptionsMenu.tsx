@@ -6,7 +6,6 @@ import {
   MenuRadioGroup,
   MenuRadioItem,
   MenuSeparator,
-  MenuShortcut,
   MenuSub,
   MenuSubPopup,
   MenuSubTrigger,
@@ -22,10 +21,7 @@ import {
 } from "~/t3team/t3team-projectBacklogTable";
 import {
   getSelectedBacklogOptionLabel,
-  menuShortcutClassName,
-  menuSubPopupClassName,
-  radioItemClassName,
-  singleColumnRadioGroupClassName,
+  menuValueClassName,
 } from "~/t3team/t3team-ProjectBacklogOptionsMenuMeta";
 
 export function ProjectBacklogTableOptionsMenu({
@@ -80,22 +76,19 @@ export function ProjectBacklogTableOptionsMenu({
         <MenuGroupLabel>Table</MenuGroupLabel>
 
         <MenuSub>
-          <MenuSubTrigger className={radioItemClassName}>
+          <MenuSubTrigger>
             Visible columns
-            <MenuShortcut className={menuShortcutClassName}>
-              {selectedVisibleColumnsLabel}
-            </MenuShortcut>
+            <span className={menuValueClassName}>{selectedVisibleColumnsLabel}</span>
           </MenuSubTrigger>
-          <MenuSubPopup className={menuSubPopupClassName}>
+          <MenuSubPopup className="min-w-60">
             <MenuGroup>
-              <MenuGroupLabel className="max-w-[14rem] leading-4">
+              <MenuGroupLabel className="max-w-56">
                 Issue and row actions always stay visible.
               </MenuGroupLabel>
               {projectBacklogTableColumnOptions.map((option) => (
                 <MenuCheckboxItem
                   key={option.value}
                   checked={visibleTableColumns.includes(option.value)}
-                  className={radioItemClassName}
                   onCheckedChange={(checked) => toggleVisibleColumn(option.value, Boolean(checked))}
                 >
                   {option.label}
@@ -106,26 +99,19 @@ export function ProjectBacklogTableOptionsMenu({
         </MenuSub>
 
         <MenuSub>
-          <MenuSubTrigger className={radioItemClassName}>
+          <MenuSubTrigger>
             Group rows
             {selectedTableGroupLabel ? (
-              <MenuShortcut className={menuShortcutClassName}>
-                {selectedTableGroupLabel}
-              </MenuShortcut>
+              <span className={menuValueClassName}>{selectedTableGroupLabel}</span>
             ) : null}
           </MenuSubTrigger>
-          <MenuSubPopup className={menuSubPopupClassName}>
+          <MenuSubPopup className="min-w-60">
             <MenuRadioGroup
-              className={singleColumnRadioGroupClassName}
               value={tableGroupBy}
               onValueChange={(value) => onTableGroupByChange(value as ProjectBacklogTableGroupBy)}
             >
               {projectBacklogTableGroupOptions.map((option) => (
-                <MenuRadioItem
-                  key={option.value}
-                  value={option.value}
-                  className={radioItemClassName}
-                >
+                <MenuRadioItem key={option.value} value={option.value}>
                   {option.label}
                 </MenuRadioItem>
               ))}
@@ -134,26 +120,19 @@ export function ProjectBacklogTableOptionsMenu({
         </MenuSub>
 
         <MenuSub>
-          <MenuSubTrigger className={radioItemClassName}>
+          <MenuSubTrigger>
             Sort rows
             {selectedTableSortLabel ? (
-              <MenuShortcut className={menuShortcutClassName}>
-                {selectedTableSortLabel}
-              </MenuShortcut>
+              <span className={menuValueClassName}>{selectedTableSortLabel}</span>
             ) : null}
           </MenuSubTrigger>
-          <MenuSubPopup className={menuSubPopupClassName}>
+          <MenuSubPopup className="min-w-60">
             <MenuRadioGroup
-              className={singleColumnRadioGroupClassName}
               value={tableSortBy}
               onValueChange={(value) => onTableSortByChange(value as ProjectBacklogTableSortBy)}
             >
               {projectBacklogTableSortOptions.map((option) => (
-                <MenuRadioItem
-                  key={option.value}
-                  value={option.value}
-                  className={radioItemClassName}
-                >
+                <MenuRadioItem key={option.value} value={option.value}>
                   {option.label}
                 </MenuRadioItem>
               ))}
@@ -162,13 +141,12 @@ export function ProjectBacklogTableOptionsMenu({
         </MenuSub>
 
         <MenuItem
-          className={radioItemClassName}
           onClick={() => onTableSortDirectionChange(tableSortDirection === "asc" ? "desc" : "asc")}
         >
           Sort direction
-          <MenuShortcut className={menuShortcutClassName}>
+          <span className={menuValueClassName}>
             {tableSortDirection === "asc" ? "Ascending" : "Descending"}
-          </MenuShortcut>
+          </span>
         </MenuItem>
       </MenuGroup>
 
@@ -176,12 +154,8 @@ export function ProjectBacklogTableOptionsMenu({
 
       <MenuGroup>
         <MenuGroupLabel>Rows</MenuGroupLabel>
-        <MenuItem className={radioItemClassName} onClick={onCollapseTableGroups}>
-          Collapse groups
-        </MenuItem>
-        <MenuItem className={radioItemClassName} onClick={onExpandTableGroups}>
-          Expand groups
-        </MenuItem>
+        <MenuItem onClick={onCollapseTableGroups}>Collapse groups</MenuItem>
+        <MenuItem onClick={onExpandTableGroups}>Expand groups</MenuItem>
       </MenuGroup>
     </>
   );

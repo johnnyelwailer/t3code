@@ -27,6 +27,14 @@
     "./t3teamWidgetGuidance": {
       "types": "./src/t3teamWidgetGuidance.ts",
       "import": "./src/t3teamWidgetGuidance.ts"
+    },
+    "./t3teamProjectStateDir": {
+      "types": "./src/t3teamProjectStateDir.ts",
+      "import": "./src/t3teamProjectStateDir.ts"
+    },
+    "./t3teamFeatureFlags": {
+      "types": "./src/t3teamFeatureFlags.ts",
+      "import": "./src/t3teamFeatureFlags.ts"
     }
   },
   "scripts": {

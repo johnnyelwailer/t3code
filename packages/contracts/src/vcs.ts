@@ -124,6 +124,8 @@ export class VcsProcessExitError extends Schema.TaggedError<VcsProcessExitError>
     failureKind: Schema.optional(VcsProcessExitFailureKind),
     /** Truncated (< 4KB) stderr — the diagnostics that make a non-zero exit actionable. */
     stderr: Schema.optional(Schema.String),
+    /** Process-boundary hint for a recognized transient failure; absence is not retryable. */
+    retryable: Schema.optional(Schema.Boolean),
     stderrLength: Schema.optional(NonNegativeInt),
     stderrTruncated: Schema.optional(Schema.Boolean),
   },
@@ -138,6 +140,7 @@ export class VcsProcessExitError extends Schema.TaggedError<VcsProcessExitError>
     context: VcsProcessErrorContext,
     error: VcsProcessExitFailure,
     failureKind: VcsProcessExitFailureKind,
+    retryable?: boolean,
   ) {
     const detail =
       failureKind === "authentication"
@@ -159,6 +162,7 @@ export class VcsProcessExitError extends Schema.TaggedError<VcsProcessExitError>
       detail,
       failureKind,
       ...(trimmedStderr.length > 0 ? { stderr: truncateVcsProcessStderr(trimmedStderr) } : {}),
+      ...(retryable === true ? { retryable: true } : {}),
       stderrLength: error.originalStderrLength,
       stderrTruncated: error.stderrTruncated || trimmedStderr.length > VCS_PROCESS_STDERR_CAP,
     });

@@ -9,17 +9,17 @@
  * ========================================================================= */
 
 /* Story toggles: opt out of the shipped behaviors, card by card. */
-.sdv-no-ring .t3team-aci-cell[data-t3team-state="waiting"] > span::before {
+[data-sdv-no-ring] .t3team-aci-cell[data-t3team-state="waiting"] > span::before {
   display: none;
 }
 
-.sdv-no-hue .t3team-aci-cell {
+[data-sdv-no-hue] .t3team-aci-cell {
   animation: none !important;
 }
 
 /* Alignment test: the real lead timer still ticks, but shape changes
    apply instantly instead of gliding. */
-.sdv-frozen .t3team-aci-lead {
+[data-sdv-frozen] .t3team-aci-lead {
   transition: none !important;
 }
 
@@ -38,7 +38,7 @@
   }
 }
 
-.sdv-mixed .t3team-aci-cell.sdv-shift {
+[data-sdv-mixed] .t3team-aci-cell.sdv-shift {
   animation: t3team-sdv-shift 1.1s ease-out;
 }
 
@@ -47,41 +47,41 @@
  * dashed ring at each dot's true home, so trigger vs pointer vs home can
  * be compared pixel-by-pixel.
  * =========================================================================== */
-.sdv-mixed .sdv-debug {
+[data-sdv-mixed] .sdv-debug {
   position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 5;
 }
 
-.sdv-mixed .sdv-debug .sdv-debug-cross {
+[data-sdv-mixed] .sdv-debug .sdv-debug-cross {
   position: absolute;
   width: 0;
   height: 0;
 }
 
-.sdv-mixed .sdv-debug .sdv-debug-cross::before,
-.sdv-mixed .sdv-debug .sdv-debug-cross::after {
+[data-sdv-mixed] .sdv-debug .sdv-debug-cross::before,
+[data-sdv-mixed] .sdv-debug .sdv-debug-cross::after {
   content: "";
   position: absolute;
   background: rgb(244 63 94 / 0.9);
 }
 
-.sdv-mixed .sdv-debug .sdv-debug-cross::before {
+[data-sdv-mixed] .sdv-debug .sdv-debug-cross::before {
   left: -12px;
   top: -0.5px;
   width: 24px;
   height: 1px;
 }
 
-.sdv-mixed .sdv-debug .sdv-debug-cross::after {
+[data-sdv-mixed] .sdv-debug .sdv-debug-cross::after {
   left: -0.5px;
   top: -12px;
   width: 1px;
   height: 24px;
 }
 
-.sdv-mixed .sdv-debug .sdv-debug-home {
+[data-sdv-mixed] .sdv-debug .sdv-debug-home {
   position: absolute;
   width: 14px;
   height: 14px;
@@ -91,7 +91,7 @@
 }
 
 /* Click-to-capture readouts. */
-.sdv-snap-chip {
+[data-sdv="snap-chip"] {
   font-family: ui-monospace, "SF Mono", monospace;
   font-size: 10px;
   color: rgb(203 213 225);
@@ -105,7 +105,7 @@
   text-overflow: ellipsis;
 }
 
-.sdv-live {
+[data-sdv="live"] {
   font-family: ui-monospace, "SF Mono", monospace;
   font-size: 10px;
   color: rgb(148 163 184);

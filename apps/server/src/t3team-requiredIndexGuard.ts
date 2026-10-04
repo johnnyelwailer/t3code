@@ -28,12 +28,17 @@ export interface RequiredHotQueryIndex {
  *
  * The batched placement lookup filters `projection_thread_activities` by
  * `kind` and binds the requested child ids in SQL; without this index that
- * statement is a full-table scan on every call.
+ * statement is a full-table scan on every call. The startup rehydrates read a
+ * few event types out of the whole log through the type-first event index.
  */
 export const REQUIRED_HOT_QUERY_INDEXES: readonly RequiredHotQueryIndex[] = [
   {
     name: "idx_projection_thread_activities_kind_created",
     usedBy: "thread placement batch lookup (POST /api/t3team/thread/placements)",
+  },
+  {
+    name: "idx_orch_events_type_sequence",
+    usedBy: "startup rehydrate reads (OrchestrationEventStore.readMatching)",
   },
 ] as const;
 
@@ -53,7 +58,7 @@ export const findMissingRequiredIndexes = (
 ): readonly RequiredHotQueryIndex[] =>
   REQUIRED_HOT_QUERY_INDEXES.filter((index) => !presentIndexes.has(index.name));
 
-export const readPresentIndexNames = Effect.fn("t3team.requiredIndexGuard.read")(function* () {
+const readPresentIndexNames = Effect.fn("t3team.requiredIndexGuard.read")(function* () {
   const sql = yield* SqlClient.SqlClient;
   const rows = yield* sql<{ readonly name: string | null }>`
     SELECT name FROM sqlite_master WHERE type = 'index'
@@ -76,8 +81,6 @@ export const assertRequiredIndexesLive = Effect.fn("t3team.requiredIndexGuard.as
       missingIndexes: missing.map((index) => index.name),
       usedBy: missing.map((index) => index.usedBy),
     });
-    return yield* Effect.fail(
-      new MissingRequiredIndexError(missing.map((index) => index.name)),
-    );
+    return yield* Effect.fail(new MissingRequiredIndexError(missing.map((index) => index.name)));
   },
 );
