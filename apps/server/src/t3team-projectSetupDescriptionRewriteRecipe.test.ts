@@ -21,6 +21,8 @@ import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import { deriveWorkflowShape } from "@t3team/sdk";
 
+import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
+
 import { threadId } from "./t3team-toolBrokerTestUtils.ts";
 import { launchWorkflowRecipe } from "./t3team-workflowEngineLaunch.ts";
 import {
@@ -174,8 +176,8 @@ describe("describe-rewrite bundled workflow", () => {
     // …and WHERE to read the item from: the work tracker is mirrored to disk, so a writer left to
     // guess searches the workspace, finds nothing, and writes filler. The file name is the key
     // lowercased with non-alphanumerics collapsed, exactly as the context sync writes it.
-    expect(prompt).toContain(".t3team/context/work-items/t3-42.json");
-    expect(prompt).toContain(".t3team/context/work-items/index.json");
+    expect(prompt).toContain(`${PROJECT_STATE_DIR}/context/work-items/t3-42.json`);
+    expect(prompt).toContain(`${PROJECT_STATE_DIR}/context/work-items/index.json`);
     expect(prompt).toContain("availability");
     expect(prompt).toContain("fullBundleRootRelativePath");
     expect(prompt).toContain("ticketEntryPointRelativePath");

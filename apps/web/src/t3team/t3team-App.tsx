@@ -10,7 +10,10 @@ import { resolveViewStoredProject } from "~/t3team/t3team-appMainContentResoluti
 import { AppOverlays } from "~/t3team/t3team-AppOverlays";
 import { T3TeamLeftSidebarDesktopToggle } from "~/t3team/t3team-LeftSidebarDesktopToggle";
 import { useAppHandlers } from "~/t3team/t3team-useAppHandlers";
-import { useResolvedViewSync } from "~/t3team/t3team-useResolvedViewSync";
+import {
+  useMergedRouteAndStoreView,
+  useResolvedViewSync,
+} from "~/t3team/t3team-useResolvedViewSync";
 import { useHydratePinnedSidebarItems } from "~/t3team/hooks/t3team-useHydratePinnedSidebarItems";
 import {
   T3TEAM_LEFT_SIDEBAR_MIN_WIDTH,
@@ -45,7 +48,10 @@ export function App({
 
   const showCreate = showCreateProp ?? showCreateInternal;
   const setShowCreate = onCreateOpenChange ?? setShowCreateInternal;
-  const activeView = view ?? store.view;
+  // The route view wins; while URL navigation lags the store, the merged view
+  // keeps the store's embedded thread visible so sidebar chat survives a
+  // dashboard-mode switch (see mergeRouteAndStoreView).
+  const activeView = useMergedRouteAndStoreView(view, store.view);
   const resolvedView = useMemo(
     () => resolveViewStoredProject(activeView, store.resolveProjectId),
     [activeView, store.resolveProjectId],

@@ -1,3 +1,4 @@
+import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import {
   T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH,
   T3TEAM_PROJECT_CONTEXT_ROOT,
@@ -43,7 +44,7 @@ export function renderAgentsMd(profile: ProjectSetupProfileDefinition): string {
 
 ## What You Can Do, And Not Ask About
 
-Save reusable work as a project recipe (under \`.t3team/recipes/\`) in the background, as a matter of course -- no permission-seeking. Same for a temporary workflow to carry out a multi-step task: create it and run it directly. Mention what you made afterward, briefly. Only hold off if the user has asked you not to.
+Save reusable work as a project recipe (under \`${T3TEAM_PROJECT_RECIPES_ROOT}/\`) in the background, as a matter of course -- no permission-seeking. Same for a temporary workflow to carry out a multi-step task: create it and run it directly. Mention what you made afterward, briefly. Only hold off if the user has asked you not to.
 
 Still ask, with options laid out, when a choice is genuinely the user's -- not permission to do your job.
 
@@ -66,7 +67,7 @@ Use these project files internally before asking the user to restate context:
 
 - ${T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH}
 - ${T3TEAM_PROJECT_CONTEXT_ROOT}/
-- .t3team/references/reference-repositories.json
+- ${PROJECT_STATE_DIR}/references/reference-repositories.json
 - ${T3TEAM_PROJECT_PROFILE_MANIFEST_PATH}
 
 ## Working Separately
@@ -204,7 +205,7 @@ export function renderContextEntrypointPlaceholder(): string {
   return jsonFile({
     kind: "project-workspace-context",
     status: "pending-sync",
-    referencesManifestPath: ".t3team/references/reference-repositories.json",
+    referencesManifestPath: `${PROJECT_STATE_DIR}/references/reference-repositories.json`,
     profilePath: T3TEAM_PROJECT_PROFILE_MANIFEST_PATH,
     contextRoot: T3TEAM_PROJECT_CONTEXT_ROOT,
     paths: {

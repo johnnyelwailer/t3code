@@ -47,6 +47,9 @@ function createBackend(): BackendApi {
         referencesRoot: "/tmp/project-alpha/.t3team/references",
         linkedRepositories: [],
       })),
+      setMainRepository: vi.fn(async () => {
+        throw new Error("not used");
+      }),
       discoverRecipes: vi.fn(async () => ({
         workspaceRoot: "/tmp/project-alpha",
         hasProjectLocalRecipes: false,

@@ -159,6 +159,7 @@ export function createThreadPrimitives<Capabilities = WorkflowChildCapabilities>
               threadId: correlationId,
               ...(opts.name === undefined ? {} : { name: opts.name }),
               ...(model === undefined ? {} : { model }),
+              ...(model !== undefined && opts.model === undefined ? { modelIsDefault: true } : {}),
               ...(opts.effort === undefined ? {} : { effort: opts.effort }),
               retention,
               capabilities,
@@ -167,7 +168,7 @@ export function createThreadPrimitives<Capabilities = WorkflowChildCapabilities>
           resolver,
         ),
     });
-    return makeThread(threadId, { model, models: opts.models, effort: opts.effort });
+    return makeThread(threadId, { model: opts.model, models: opts.models, effort: opts.effort });
   };
 
   // `models` rides through to the spawned thread so `agent()`'s create + turn share ONE
@@ -188,6 +189,8 @@ export function createThreadPrimitives<Capabilities = WorkflowChildCapabilities>
       deps.launchThreadId === undefined
         ? undefined
         : makeThread(deps.launchThreadId, {
+            // The launch thread is the user's thread. Its omitted asks keep the
+            // current selection; only spawned children resolve a declared latest.
             model: deps.defaultModel,
             models: undefined,
             effort: undefined,

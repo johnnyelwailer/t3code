@@ -1,3 +1,4 @@
+import { PROJECT_STATE_DIR } from "./t3teamProjectStateDir.ts";
 import { EMPTY_OBJECT_INPUT_SCHEMA, type T3TeamToolCatalogEntry } from "./t3teamToolCatalogCore.ts";
 import {
   T3TEAM_WIDGET_AUTHORING_GUIDANCE,
@@ -171,8 +172,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     id: "t3team.recipe.list",
     label: "List project recipes",
     title: "List t3team project recipes",
-    description:
-      "List the t3team project recipes discovered in this project's workspace (.t3team/recipes/) — t3team project recipes are directories bundling a typed recipe.ts module (or legacy recipe.json manifest) with a .workflow.ts the t3team workflow engine runs; they are NOT Claude Code skills or provider-native workflows. Returns each recipe's id, title, shortDescription, surfaces, authoring form ('recipe-ts' typed module vs 'recipe-json' legacy manifest), recipe directory, and resolved workflow path, plus structured errors for recipes that failed to load. Read-only: nothing is written or launched.",
+    description: `List the t3team project recipes discovered in this project's workspace (${PROJECT_STATE_DIR}/recipes/) — t3team project recipes are directories bundling a typed recipe.ts module (or legacy recipe.json manifest) with a .workflow.ts the t3team workflow engine runs; they are NOT Claude Code skills or provider-native workflows. Returns each recipe's id, title, shortDescription, surfaces, authoring form ('recipe-ts' typed module vs 'recipe-json' legacy manifest), recipe directory, and resolved workflow path, plus structured errors for recipes that failed to load. Read-only: nothing is written or launched.`,
     capabilities: ["read"],
     kind: "read",
     surfaces: ["thread"],
@@ -209,8 +209,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     id: "t3team.orchestration.run",
     label: "Run ephemeral orchestration",
     title: "Run a temporary agent orchestration in this conversation",
-    description:
-      "Run a temporary agent orchestration immediately in this conversation — a durable, journaled t3team engine run that can pause for user decisions; NOT a Claude Code/Codex/CI workflow. Pass exactly one of 'source' (inline orchestration TypeScript, persisted under .t3team-runs/<runId>/) or 'workflowPath' (existing .workflow.ts in the workspace). Body format: .t3team/recipes/AUTHORING.md; validate with t3team.recipe.validate first. Returns {runId, status: accepted|completed|suspended|failed, handoff: 'workflow-ui', output?, error?}. A successful 'workflow-ui' handoff means the orchestration card owns progress: end the current turn immediately with no follow-up assistant prose. A user decision appears on that card and resumes the orchestration on reply — do not poll. On 'failed', fix the source using 'error' and re-run. No approval gate; at most 8 live ephemeral runs.",
+    description: `Run a temporary agent orchestration immediately in this conversation — a durable, journaled t3team engine run that can pause for user decisions; NOT a Claude Code/Codex/CI workflow. Pass exactly one of 'source' (inline orchestration TypeScript, persisted under .t3team-runs/<runId>/) or 'workflowPath' (existing .workflow.ts in the workspace). Body format: ${PROJECT_STATE_DIR}/recipes/AUTHORING.md; validate with t3team.recipe.validate first. Returns {runId, status: accepted|completed|suspended|failed, handoff: 'workflow-ui', output?, error?}. A successful 'workflow-ui' handoff means the orchestration card owns progress: end the current turn immediately with no follow-up assistant prose. A user decision appears on that card and resumes the orchestration on reply — do not poll. On 'failed', fix the source using 'error' and re-run. No approval gate; at most 8 live ephemeral runs.`,
     capabilities: ["write"],
     kind: "thread",
     surfaces: ["thread"],

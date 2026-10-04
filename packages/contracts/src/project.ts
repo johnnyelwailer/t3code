@@ -3,6 +3,7 @@ import * as SchemaTransformation from "effect/SchemaTransformation";
 import { RepositoryIdentity, ThreadEnvMode } from "./environment.ts";
 import { ModelSelection } from "./modelSelection.ts";
 import { ProjectSourceBinding } from "./t3team-orchestrationExt.ts";
+import { ProjectMainRepository } from "./t3team-projectMainRepository.ts";
 import {
   CommandId,
   IsoDateTime,
@@ -187,6 +188,8 @@ export const ProjectUpdatePayload = Schema.Struct({
   faviconPath: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   defaultThreadEnvMode: Schema.optional(Schema.NullOr(ThreadEnvMode)),
   scripts: Schema.optional(Schema.Array(ProjectScript)),
+  // Absent = leave unchanged; null = clear (t3team main repository).
+  mainRepository: Schema.optional(Schema.NullOr(ProjectMainRepository)),
 });
 export type ProjectUpdatePayload = typeof ProjectUpdatePayload.Type;
 

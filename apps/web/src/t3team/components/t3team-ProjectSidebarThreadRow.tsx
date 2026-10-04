@@ -9,6 +9,8 @@ import { formatRelativeTime, resolveThreadStatusPill } from "./t3team-projectSid
 import type { SidebarItemState } from "./t3team-projectSidebarItemState";
 import { useAutoScrollIntoView } from "./t3team-useAutoScrollIntoView";
 import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay";
+import { resolveStatusOrbState, STATUS_ORB_CLASS } from "~/t3team/t3team-statusOrb";
+import "~/t3team/t3team-statusOrb.css";
 import { useThreadRowMenuHandlers } from "~/t3team/components/t3team-threadRowMenuHandlers";
 import { useThreadRowRename } from "~/t3team/components/t3team-useThreadRowRename";
 import { useThreadRowContextMenu } from "./t3team-ProjectSidebarThreadRow-rowItem";
@@ -48,6 +50,10 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
     (settings) => settings.t3teamActivityLabelsEnabled,
   );
   const statusPill = resolveThreadStatusPill(thread, { activityLabelsEnabled });
+  // GHE #201 follow-up: the row's status dot paints through the shared
+  // porcelain-orb module when the pill maps onto the orb vocabulary; unmapped
+  // pills keep the legacy tailwind dot class.
+  const statusOrbState = resolveStatusOrbState(statusPill);
 
   const openThreadMenu = useThreadRowContextMenu({
     thread,
@@ -75,7 +81,8 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
         ) : null}
         {statusPill && (
           <span
-            className={`inline-flex size-1.5 shrink-0 rounded-full ${statusPill.dotClass} ${statusPill.pulse ? "animate-pulse" : ""}`}
+            data-t3team-state={statusOrbState ?? undefined}
+            className={`inline-flex size-1.5 shrink-0 rounded-full ${statusOrbState ? STATUS_ORB_CLASS : statusPill.dotClass} ${statusPill.pulse ? (statusPill.pulseClass ?? "animate-pulse") : ""}`}
             title={
               statusPill.detail
                 ? `${resolveActivityPillDisplay(statusPill)} ${statusPill.detail}`

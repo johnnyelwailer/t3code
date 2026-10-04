@@ -9,27 +9,19 @@
 
 export const T3TEAM_MODEL_SELECTION_MANUAL = `EXACT PROVIDER / MODEL SELECTION
 Provider instance ids and model slugs are live runtime facts, not an SDK catalog. Before naming an
-exact target, call orchestrator_capabilities and use one returned providers[].providerInstanceId
-+ providers[].models[].id verbatim. Never copy
-ids from examples or guess from a provider family name. Then construct the typed value generically:
-
-  import { agent, defineModel } from "@t3team/sdk"
-
-  const selected = {
-    provider: '<providerInstanceId returned by orchestrator_capabilities>',
-    model: defineModel({
-      provider: '<same runtime instanceId>',
-      id: '<models[].id returned for that instance>',
-    }),
-  }
+exact target, call t3team_models and use one returned instanceId + model slug verbatim. Never copy
+ids from examples or guess from a provider family name. agent is already in scope.
+Pass a plain string:
 
   await agent('Review this change', {
     label: 'Runtime-selected review',
     capabilities: 'inherit',
-    model: selected,
+    model: '<instanceId returned by t3team_models>/<model slug returned for that instance>',
   })
 
 The host validates this selection against the same live ProviderRegistry again when the child
-starts. Omit model to inherit the inheritedProviderInstanceId + inheritedModel reported by
-orchestrator_capabilities. Prefer effort:
+starts. Use only the instanceId to choose its declared default. Omit model on the current instance
+to use that declared default, or to keep the current model when the instance declares none.
+Another instance with no declared default fails and lists its valid slugs. An explicitly requested
+legacy slug still works. An invalid instance or slug reports the valid choices verbatim. Prefer effort:
 'light' | 'standard' | 'high' when the task needs a thinking tier rather than an exact model.`;

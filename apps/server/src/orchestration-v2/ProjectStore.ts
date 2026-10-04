@@ -5,6 +5,7 @@ import {
   type OrchestrationProjectShell,
   ProjectIconOverride,
   ProjectId,
+  ProjectMainRepository,
   ProjectScript,
   ThreadEnvMode,
 } from "@t3tools/contracts";
@@ -40,6 +41,7 @@ export const ProjectRow = Schema.Struct({
   autoPull: Schema.Boolean,
   faviconPath: Schema.NullOr(Schema.String),
   projectIcon: Schema.NullOr(ProjectIconOverride),
+  mainRepository: Schema.NullOr(ProjectMainRepository),
   scripts: Schema.Array(ProjectScript),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
@@ -52,6 +54,7 @@ const ProjectDbRow = Schema.Struct({
   defaultModelSelection: Schema.NullOr(Schema.fromJsonString(ModelSelection)),
   autoPull: Schema.BooleanFromBit,
   projectIcon: Schema.NullOr(Schema.fromJsonString(ProjectIconOverride)),
+  mainRepository: Schema.NullOr(Schema.fromJsonString(ProjectMainRepository)),
   scripts: Schema.fromJsonString(Schema.Array(ProjectScript)),
 });
 
@@ -67,6 +70,7 @@ function toShell(row: ProjectRow): OrchestrationProjectShell {
     autoPull: row.autoPull,
     faviconPath: row.faviconPath,
     projectIcon: row.projectIcon,
+    mainRepository: row.mainRepository,
     scripts: row.scripts,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -125,6 +129,7 @@ export const make = Effect.gen(function* () {
         auto_pull AS "autoPull",
         favicon_path AS "faviconPath",
         project_icon_json AS "projectIcon",
+        main_repository_json AS "mainRepository",
         scripts_json AS "scripts",
         created_at AS "createdAt",
         updated_at AS "updatedAt",
@@ -155,6 +160,7 @@ export const make = Effect.gen(function* () {
             auto_pull,
             favicon_path,
             project_icon_json,
+            main_repository_json,
             scripts_json,
             created_at,
             updated_at,
@@ -169,6 +175,7 @@ export const make = Effect.gen(function* () {
             ${encoded.autoPull},
             ${encoded.faviconPath},
             ${encoded.projectIcon},
+            ${encoded.mainRepository},
             ${encoded.scripts},
             ${encoded.createdAt},
             ${encoded.updatedAt},
@@ -183,6 +190,7 @@ export const make = Effect.gen(function* () {
             auto_pull = excluded.auto_pull,
             favicon_path = excluded.favicon_path,
             project_icon_json = excluded.project_icon_json,
+            main_repository_json = excluded.main_repository_json,
             scripts_json = excluded.scripts_json,
             created_at = excluded.created_at,
             updated_at = excluded.updated_at,
@@ -229,6 +237,7 @@ export const make = Effect.gen(function* () {
           autoPull: false,
           faviconPath: payload.faviconPath ?? null,
           projectIcon: payload.projectIcon ?? null,
+          mainRepository: null,
           scripts: payload.scripts,
           createdAt: payload.createdAt,
           updatedAt: payload.updatedAt,
@@ -259,6 +268,9 @@ export const make = Effect.gen(function* () {
         ...(payload.autoPull === undefined ? {} : { autoPull: payload.autoPull }),
         ...(payload.faviconPath === undefined ? {} : { faviconPath: payload.faviconPath }),
         ...(payload.projectIcon === undefined ? {} : { projectIcon: payload.projectIcon }),
+        ...(payload.mainRepository === undefined
+          ? {}
+          : { mainRepository: payload.mainRepository }),
         ...(payload.scripts === undefined ? {} : { scripts: payload.scripts }),
         updatedAt: payload.updatedAt,
       }).pipe(mapError("apply"));

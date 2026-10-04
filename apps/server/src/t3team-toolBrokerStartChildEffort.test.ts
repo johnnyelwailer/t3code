@@ -12,6 +12,8 @@
  *     wins when both are supplied (they write the same option).
  */
 import type { ModelSelection, ServerProvider } from "@t3tools/contracts";
+import { it as effectIt } from "@effect/vitest";
+import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { resolveStartChildModelSelection } from "./t3team-toolBrokerStartChildProvider.ts";
@@ -145,14 +147,19 @@ describe("child effort — documented no-op degrade", () => {
     expect(value.options).toEqual([]);
   });
 
-  it("is a no-op when the provider snapshot is unknown, rather than failing the spawn", () => {
-    const value = resolve({
-      parentModelSelection: parentOn("ladder", "ladder-a"),
-      effort: "high",
-      providers: [],
-    });
-    expect(value.options).toEqual([]);
-  });
+  effectIt.effect(
+    "rejects an unknown provider snapshot because no latest catalog model can be chosen",
+    () =>
+      Effect.sync(() => {
+        const result = resolveStartChildModelSelection({
+          parentModelSelection: parentOn("ladder", "ladder-a"),
+          effort: "high",
+          providers: [],
+        });
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.error.reason).toBe("unknown_instance");
+      }),
+  );
 
   it("leaves a boolean control untouched for the standard tier (provider default wins)", () => {
     expect(

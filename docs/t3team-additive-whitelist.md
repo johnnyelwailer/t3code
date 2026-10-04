@@ -263,6 +263,13 @@ Upstream files the cloud-sessions stack (branch `work/cloud-sessions-stack`) tou
 - `apps/web/src/components/cloud/CloudEnvironmentConnectList.tsx`
   - The same rule for discovered T3 Connect computers: an offline relay is listed but not auto-ticked.
 
+## Runbook-core lane (2026-10-04) — bounded-execution primitives
+
+- `packages/runbook-core/src/errors.ts`
+  - Error types for the reduce/watermark/retry bounded-execution primitives (lane PRs #314/#316/#318/#320): the sub-workflow checkpoint refusal now names the refused primitive (`watermark()`/`accumulate()`), and `RetryExhaustedError` + `RetryClassifiedFailure` are added for `retry()` giving up.
+- `docs/runbook/bounded-execution.md`
+  - Document the `retry` primitive's journal/replay semantics (attempt re-drive, the fn-catches-gap drift limit, `RetryExhaustedError`) alongside the existing bounded-execution spec.
+
 ## Allowed Unprefixed New Files
 
 Whole trees the fork owns outright. The `t3team-` prefix exists so a file added by

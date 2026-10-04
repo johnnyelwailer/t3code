@@ -26,6 +26,8 @@ export interface ThreadCreatePayload {
   readonly threadId: string;
   readonly name?: string;
   readonly model?: WorkflowModelSelection;
+  /** Broker-only provenance: injected host defaults do not pin the catalog model. */
+  readonly modelIsDefault?: boolean;
   /** Provider-agnostic thinking level; see `resolveWorkflowChildModel`. */
   readonly effort?: import("@t3team/sdk").AgentEffort;
   /** Omitted is ephemeral, preserving one-shot agent() as a hidden child. */
@@ -35,6 +37,8 @@ export interface ThreadTurnPayload {
   readonly threadId: string;
   readonly prompt: string;
   readonly model?: WorkflowModelSelection;
+  /** Broker-only provenance: injected host defaults do not pin the catalog model. */
+  readonly modelIsDefault?: boolean;
   /** Short human-facing status label, separate from the provider prompt. */
   readonly label?: string;
   /** Provider-agnostic thinking level; see `resolveWorkflowChildModel`. */

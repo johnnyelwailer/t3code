@@ -38,7 +38,7 @@ export type {
   WorkflowCapability,
   WorkflowChildCapabilities,
 } from "./t3team-sdk.capabilityVocabulary.ts";
-export type { ModelRef, ModelSelection } from "@runbook/threads/models";
+export type { ModelOption, ModelRef, ModelSelection } from "@runbook/threads/models";
 
 export type IntegrationMethod = (...args: ReadonlyArray<unknown>) => Promise<unknown>;
 

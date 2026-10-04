@@ -138,6 +138,11 @@ import Migration0092 from "./Migrations/t3team-070_ThreadMailbox.ts";
 import Migration0097 from "./Migrations/t3team-075_DropProviderUsageHolds.ts";
 import Migration0098 from "./Migrations/t3team-076_ThreadSilenceWatches.ts";
 import Migration0099 from "./Migrations/t3team-077_RepairForkPortTables.ts";
+// Project main repository + feature flags: main's sprint migrations. Main originally registered
+// these at 84/85, which this fork's V2 sync already uses, so they move above the current maximum
+// id (now 101) to keep the ledger monotonic on every existing fork install.
+import Migration0100 from "./Migrations/t3team-064_ProjectionProjectsMainRepository.ts";
+import Migration0101 from "./Migrations/t3team-065_FeatureFlags.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -235,7 +240,7 @@ export const migrationEntries = [
   [83, "OrchestrationEventsTypeSequenceIndex", Migration0083],
   // Upstream 055/056 (orchestration V2) live at 84/85 in this fork's ledger; see the import comment.
   // Preserve this migration's schema. Future V2 schema changes need new migrations. A new
-  // migration must take an id ABOVE the highest id registered here (currently 99) — never one of
+  // migration must take an id ABOVE the highest id registered here (currently 101) — never one of
   // the gaps (88-89, 93-96): upgraded databases have recorded the maximum, and the Migrator skips
   // every id at or below it. Upstream's reconcileV2PreviewMigration stays a no-op on fork ledgers
   // (fork ids 53/54 are never named OrchestrationV2).
@@ -249,6 +254,8 @@ export const migrationEntries = [
   [97, "DropProviderUsageHolds", Migration0097],
   [98, "ThreadSilenceWatches", Migration0098],
   [99, "RepairForkPortTables", Migration0099],
+  [100, "ProjectionProjectsMainRepository", Migration0100],
+  [101, "FeatureFlags", Migration0101],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

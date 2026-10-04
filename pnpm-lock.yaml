@@ -1407,6 +1407,9 @@ importers:
       '@t3team/sdk':
         specifier: workspace:*
         version: link:../t3team-sdk
+      '@t3tools/project-context':
+        specifier: workspace:*
+        version: link:../project-context
       '@t3tools/project-recipes':
         specifier: workspace:*
         version: link:../project-recipes

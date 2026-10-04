@@ -3,6 +3,8 @@ import "./t3team-sdk.globals.ts";
 export { schemaToAffordance } from "./t3team-sdk.affordance.ts";
 export { asNamedAttachments, renderAgentAttachments } from "./t3team-sdk.askAttachments.ts";
 export { appendResolvedEntry, createHostBroker, createMockBroker } from "./t3team-sdk.broker.ts";
+export type { HandleDispatch } from "@runbook/core/handles";
+export { createThreadPrimitives } from "./t3team-sdk.threadPrimitives.ts";
 export { hashArgs } from "./t3team-sdk.canonicalJson.ts";
 export {
   createDurableWorkflowRuntime,
@@ -17,10 +19,12 @@ export {
   PermissionDeniedError,
   ProviderUnavailableError,
   ReplayDriftError,
+  RetryExhaustedError,
   SchemaExhaustedError,
   SubWorkflowCheckpointError,
   TargetMissingError,
   TimeoutError,
+  WatermarkScopeError,
   WorkflowError,
   WorkflowInputDecodeError,
   WorkflowLoadError,
@@ -35,10 +39,15 @@ export {
   t3teamRecipeRead,
   t3teamThreadWrite,
 } from "./t3team-sdk.groups.ts";
-export { createStoreSink, defaultRunsRoot, FsJournalStore } from "./t3team-sdk.journalStore.ts";
+export {
+  createStoreSink,
+  defaultRunsRoot,
+  FsJournalStore,
+  runReplayWindowConformance,
+  selectReplayWindow,
+} from "./t3team-sdk.journalStore.ts";
 export { buildJournalMaps, insertWireEntry } from "./t3team-sdk.journalReader.ts";
 export { toResolvedWire, toWire } from "./t3team-sdk.journalWriter.ts";
-export { models } from "./t3team-sdk.models.ts";
 export {
   buildScriptTree,
   buildToolTree,
@@ -73,6 +82,7 @@ export {
 } from "./t3team-sdk.placements.ts";
 // The engine API as ordinary imports for orchestration bodies (Epic 25).
 export {
+  accumulate,
   agent,
   checkpoint,
   getArgs,
@@ -87,12 +97,16 @@ export {
   parallel,
   phase,
   pipeline,
+  retry,
+  reducerState,
   spawnThread,
   wait,
   waitUntil,
+  watermark,
   withBodyApi,
   workflow,
 } from "./t3team-sdk.engineApi.ts";
+export type { Watermark, WatermarkOptions, WatermarkState } from "@runbook/core/watermark";
 export { emit } from "./t3team-sdk.emit.ts";
 // Signal sources (design 42): the shared signal/source vocabulary + built-in Tier A/B
 // catalog declarations. `defineSignalSource` (the effectful producer half) lives on the
@@ -199,10 +213,17 @@ export type {
   WorkflowThreadPrimitives,
 } from "./t3team-sdk.threadPrimitives.ts";
 export type { ModelCascadeWireEntry } from "./t3team-sdk.modelCascade.ts";
+export type { RetryClassification, RetryOptions } from "@runbook/core/retryBackoff";
+export type { RetryClassifiedFailure } from "./t3team-sdk.errors.ts";
 export type { ReplayDriftFacet, ReplayDriftReason } from "./t3team-sdk.errors.ts";
 export type { RunMeta } from "./t3team-sdk.journal.ts";
 export type { JournalEntry, JournalMaps, ResolvedEntry } from "./t3team-sdk.journalReader.ts";
-export type { JournalSink, JournalStore } from "./t3team-sdk.journalStore.ts";
+export type {
+  JournalSink,
+  JournalStore,
+  ReplayWindow,
+  ReplayWindowConformanceReport,
+} from "./t3team-sdk.journalStore.ts";
 export type { ResolvedWireInput } from "./t3team-sdk.journalWriter.ts";
 export type { WorkflowMeta } from "./t3team-sdk.loader.ts";
 export type { CapabilityScanOptions } from "./t3team-sdk.capabilityScan.ts";
@@ -224,6 +245,7 @@ export type {
   FetchLike,
   IntegrationClient,
   IntegrationMethod,
+  ModelOption,
   ModelRef,
   ModelSelection,
   RecipeApplicabilitySpec,

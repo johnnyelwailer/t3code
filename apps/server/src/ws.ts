@@ -143,6 +143,13 @@ import {
   threadReplayEncodedBytes,
   THREAD_RESUME_MAX_REPLAY_EVENTS,
 } from "./orchestration-v2/ThreadStream.ts";
+import { T3TeamThreadEngagement } from "./t3team-threadEngagement.ts";
+import { isThreadResubscribeStaggerEnabled } from "./t3team-threadResubscribeStaggerFlag.ts";
+import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
+import { isNexiStateDirSelectedAtStartup } from "@t3tools/project-context/t3teamProjectStateDir";
+import { isResourcePressureEnabled } from "./t3team-resourcePressureFlag.ts";
+import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
+import { sweepStorageNow } from "./t3team-resourcePressureSweep.ts";
 import {
   buildBoundedThreadProjection,
   THREAD_HISTORY_PAGE_POLICY,
@@ -1752,6 +1759,10 @@ const makeWsRpcLayer = (
               onSome: (root) => ({ scratchWorkspaceRoot: root }),
             }),
             newProjectsRoot: managedFolders.namedProjectsRoot,
+            // Runtime feature flags (env NEXI_FF_MAIN_REPOSITORY / NEXI_FF_NEXI_STATE_DIR,
+            // default on): project main repository, and the `.nexi` state dir name.
+            mainRepository: isMainRepositoryEnabled(),
+            nexiStateDir: isNexiStateDirSelectedAtStartup(),
           };
         });
 

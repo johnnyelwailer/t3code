@@ -8,6 +8,7 @@ import { syncProjectWorkspaceContext } from "~/t3team/t3team-projectWorkspaceSyn
 import { getConfiguredDefaultModelSelection } from "~/t3team-configuredDefaultModelSelection";
 
 import { applyWorkspaceBootstrapToProject } from "./t3team-createProjectBootstrap";
+import { applyMainRepositoryAutoDetection } from "./t3team-projectMainRepository";
 import { isWorkProject } from "~/t3team/t3team-isWorkProject";
 import { toSourceBindingCommand } from "~/t3team/t3team-projectSourceBinding";
 import { isDuplicateProjectBindingError } from "~/t3team/chat/t3team-duplicateThreadCreateError";
@@ -54,7 +55,11 @@ export async function finalizeCreatedProject(input: {
       setupProfileId: input.setupProfileId,
       ...(input.customProfile ? { customProfile: input.customProfile } : {}),
     });
-    const bootstrappedProject = applyWorkspaceBootstrapToProject(input.project, bootstrap);
+    const bootstrappedProject = await applyMainRepositoryAutoDetection({
+      backend: input.backend,
+      project: applyWorkspaceBootstrapToProject(input.project, bootstrap),
+      bootstrap,
+    });
     try {
       await syncProjectWorkspaceContext({
         backend: input.backend,
@@ -62,7 +67,9 @@ export async function finalizeCreatedProject(input: {
         linkedRepositoryUrls: input.linkedRepositoryUrls,
         projectTickets: [],
         setupProfileId: input.setupProfileId,
-        ensureBootstrap: false,
+        // A detected main repository moved the workspace: scaffold the new root.
+        ensureBootstrap:
+          bootstrappedProject.workspace?.rootPath !== input.project.workspace.rootPath,
       });
     } catch {
       return bootstrappedProject;

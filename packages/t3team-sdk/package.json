@@ -27,10 +27,6 @@
       "types": "./src/t3team-sdk.groups.ts",
       "import": "./src/t3team-sdk.groups.ts"
     },
-    "./models": {
-      "types": "./src/t3team-sdk.models.ts",
-      "import": "./src/t3team-sdk.models.ts"
-    },
     "./time": {
       "types": "./src/t3team-sdk.time.ts",
       "import": "./src/t3team-sdk.time.ts"

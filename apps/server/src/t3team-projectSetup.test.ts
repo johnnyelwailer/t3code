@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 
 import {
   createT3TeamProjectSetupContentHash,
@@ -64,7 +65,7 @@ describe("renderT3TeamProjectSetupFiles", () => {
     expect(agents?.contents).toContain(T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH);
     expect(agents?.contents).toContain("prefer a read-only subagent");
     expect(agents?.contents).toContain(
-      "Save reusable work as a project recipe (under `.t3team/recipes/`) in the background",
+      `Save reusable work as a project recipe (under \`${PROJECT_STATE_DIR}/recipes/\`) in the background`,
     );
     expect(agents?.contents).toContain("do it in a separate thread scoped to the right repository");
     expect(agents?.contents).toContain("surface that thread as a link");
@@ -94,6 +95,7 @@ describe("renderT3TeamProjectSetupFiles", () => {
     expect(entrypoint?.contents).toContain("pending-sync");
     expect(statusSkill?.contents).toContain("name: t3team-status-and-context-summary");
     expect(statusSkill?.contents).toContain("Do not narrate file exploration");
+    expect(statusSkill?.contents).toContain(`under ${PROJECT_STATE_DIR}/context/`);
     // A prompt-only starter: its default action is the prompt.md beside it.
     expect(starterRecipeModule?.contents).toContain("import { definePrompt, defineRecipe }");
     expect(starterRecipeModule?.contents).toContain('defaultAction: definePrompt("./prompt.md")');
@@ -101,6 +103,7 @@ describe("renderT3TeamProjectSetupFiles", () => {
     expect(starterRecipePrompt?.contents).toContain("Explain this simply");
     expect(manageRecipeModule?.contents).toContain('defaultAction: definePrompt("./prompt.md")');
     expect(manageRecipePrompt?.contents).toContain("Create or edit a t3team recipe");
+    expect(manageRecipePrompt?.contents).toContain(`${PROJECT_STATE_DIR}/recipes/<recipe-id>/`);
     expect(manageRecipeWorkflow).toBeUndefined();
     expect(skillTemplate?.contents).toContain("use a read-only subagent");
     expect(recipesAuthoringGuide?.writeMode).toBe("if-missing");

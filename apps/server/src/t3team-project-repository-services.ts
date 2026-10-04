@@ -4,6 +4,7 @@ import * as Path from "effect/Path";
 import { SourceControlRepositoryService } from "./sourceControl/SourceControlRepositoryService.ts";
 import type { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
 import { toAtlassianError } from "./t3team-atlassian-http.ts";
+import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
 import {
   deriveReferenceDirectoryName,
   formatReferenceManifestJson,
@@ -12,7 +13,7 @@ import {
 } from "./t3team-project-repository-utils.ts";
 import type {
   LinkedRepositoryBootstrapResult,
-  MetaRepositoryBootstrapResult,
+  MainRepositoryBootstrapResult,
   ReferenceManifestFile,
 } from "./t3team-project-repository-utils.ts";
 import { VcsProvisioningService } from "./vcs/VcsProvisioningService.ts";
@@ -58,10 +59,10 @@ export const ensureWorkspaceGitignore = Effect.fn("ensureWorkspaceGitignore")(fu
 });
 
 /** Detects whether the workspace root is itself a git repository (a monorepo or wrapper repo)
- * and adopts it as the project meta-repo instead of wrapping it with reference clones
+ * and adopts it as the project main repository instead of wrapping it with reference clones
  * (GHE #42). `url` is the detected origin remote when the source-control registry can resolve
  * one; absent remotes or detection failures still adopt the repository without a url. */
-export const detectMetaRepository = Effect.fn("detectMetaRepository")(function* (input: {
+export const detectMainRepository = Effect.fn("detectMainRepository")(function* (input: {
   readonly workspaceRoot: string;
   readonly sourceControlProviders?: SourceControlProviderRegistry["Service"];
 }) {
@@ -72,6 +73,22 @@ export const detectMetaRepository = Effect.fn("detectMetaRepository")(function* 
     .exists(gitDirectory)
     .pipe(Effect.orElseSucceed(() => false));
   if (!isGitRepository) return undefined;
+  // A repository without a commit is the wrapper T3 initialized for a managed workspace (e.g. the
+  // project home a main-repository switch returns to), not a repository to adopt: there is
+  // nothing to branch a child worktree from.
+  if (isMainRepositoryEnabled()) {
+    const head = yield* (yield* VcsProcess)
+      .run({
+        operation: "t3team.mainRepository.head",
+        command: "git",
+        args: ["rev-parse", "--verify", "--quiet", "HEAD"],
+        cwd: input.workspaceRoot,
+        allowNonZeroExit: true,
+        timeoutMs: 15_000,
+      })
+      .pipe(Effect.orElseSucceed(() => undefined));
+    if (!head || head.exitCode !== 0) return undefined;
+  }
   let url: string | undefined;
   if (input.sourceControlProviders) {
     const handle = yield* input.sourceControlProviders
@@ -79,12 +96,12 @@ export const detectMetaRepository = Effect.fn("detectMetaRepository")(function* 
       .pipe(Effect.orElseSucceed(() => undefined));
     url = handle?.context?.remoteUrl;
   }
-  const metaRepository: MetaRepositoryBootstrapResult = {
+  const mainRepository: MainRepositoryBootstrapResult = {
     ...(url ? { url } : {}),
     localPath: input.workspaceRoot,
     status: "adopted",
   };
-  return metaRepository;
+  return mainRepository;
 });
 
 export const syncLinkedRepository = Effect.fn("syncLinkedRepository")(function* (input: {
@@ -92,16 +109,24 @@ export const syncLinkedRepository = Effect.fn("syncLinkedRepository")(function* 
   readonly referencesRoot: string;
   readonly url: string;
   readonly index: number;
+  /** A clone recorded by an earlier bootstrap (possibly under another workspace's state dir,
+   * after a main-repository switch); reused instead of cloning again. */
+  readonly existingLocalPath?: string;
 }) {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const sourceControl = yield* SourceControlRepositoryService;
   const vcsProcess = yield* VcsProcess;
   const baseName = deriveReferenceDirectoryName(input.url);
-  const localDirectory = path.join(
-    input.referencesRoot,
-    `${String(input.index + 1).padStart(2, "0")}-${baseName}`,
-  );
+  const existingIsClone = input.existingLocalPath
+    ? yield* fileSystem
+        .exists(path.join(input.existingLocalPath, ".git"))
+        .pipe(Effect.orElseSucceed(() => false))
+    : false;
+  const localDirectory =
+    existingIsClone && input.existingLocalPath
+      ? input.existingLocalPath
+      : path.join(input.referencesRoot, `${String(input.index + 1).padStart(2, "0")}-${baseName}`);
   const localGitDirectory = path.join(localDirectory, ".git");
   const alreadyCloned = yield* fileSystem
     .exists(localGitDirectory)

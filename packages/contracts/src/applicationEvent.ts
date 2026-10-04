@@ -15,6 +15,7 @@ import { RepositoryIdentity, ThreadEnvMode } from "./environment.ts";
 import { ModelSelection } from "./modelSelection.ts";
 import type { OrchestrationV2StoredEvent } from "./orchestrationV2.ts";
 import { ProjectIconOverride, ProjectScript } from "./project.ts";
+import { ProjectMainRepository } from "./t3team-projectMainRepository.ts";
 
 /**
  * Which client dispatched the command that produced this event (#7774).
@@ -69,6 +70,8 @@ export const ApplicationProjectMetaUpdatedPayload = Schema.Struct({
   autoPull: Schema.optional(Schema.Boolean),
   faviconPath: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   projectIcon: Schema.optional(Schema.NullOr(ProjectIconOverride)),
+  // Absent = leave unchanged; null = clear.
+  mainRepository: Schema.optional(Schema.NullOr(ProjectMainRepository)),
   scripts: Schema.optional(Schema.Array(ProjectScript)),
   updatedAt: IsoDateTime,
 });

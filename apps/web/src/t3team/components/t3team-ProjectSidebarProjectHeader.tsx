@@ -1,6 +1,8 @@
 /* oxlint-disable t3code/no-native-title-tooltip -- Existing merged lint debt; keep green while preserving behavior. */
 import { ChevronRightIcon, EllipsisIcon, SquarePenIcon } from "lucide-react";
 import { resolveActivityPillDisplay } from "~/t3team/t3team-activityStateDisplay";
+import { resolveStatusOrbState, STATUS_ORB_CLASS } from "~/t3team/t3team-statusOrb";
+import "~/t3team/t3team-statusOrb.css";
 import type { KeyboardEvent, MouseEvent, RefObject } from "react";
 import { T3SidebarRow } from "~/t3team/components/ui/t3team-sidebar-row";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
@@ -83,7 +85,8 @@ export function ProjectSidebarProjectHeader({
             >
               <span className="absolute inset-0 flex items-center justify-center transition-opacity duration-150 group-hover/project-header:opacity-0">
                 <span
-                  className={`size-[9px] rounded-full ${projectStatus.dotClass} ${projectStatus.pulse ? "animate-pulse" : ""}`}
+                  data-t3team-state={resolveStatusOrbState(projectStatus) ?? undefined}
+                  className={`size-[9px] rounded-full ${resolveStatusOrbState(projectStatus) ? STATUS_ORB_CLASS : projectStatus.dotClass} ${projectStatus.pulse ? (projectStatus.pulseClass ?? "animate-pulse") : ""}`}
                 />
               </span>
               <ChevronRightIcon className="absolute inset-0 m-auto size-3.5 opacity-0 transition-opacity duration-150 group-hover/project-header:opacity-100" />

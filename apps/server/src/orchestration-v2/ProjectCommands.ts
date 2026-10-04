@@ -5,6 +5,7 @@ import {
   type ModelSelection,
   type ProjectIconOverride,
   ProjectId,
+  type ProjectMainRepository,
   type ProjectScript,
   SCRIPT_RUN_COMMAND_PATTERN,
   type ThreadEnvMode,
@@ -36,6 +37,7 @@ export interface ProjectMetaUpdateCommand {
   readonly autoPull?: boolean;
   readonly faviconPath?: string | null;
   readonly projectIcon?: ProjectIconOverride | null;
+  readonly mainRepository?: ProjectMainRepository | null;
   readonly scripts?: ReadonlyArray<ProjectScript>;
 }
 
@@ -222,6 +224,9 @@ export function planProjectCommand(input: {
           ...(command.autoPull === undefined ? {} : { autoPull: command.autoPull }),
           ...(command.faviconPath === undefined ? {} : { faviconPath: command.faviconPath }),
           ...(command.projectIcon === undefined ? {} : { projectIcon: command.projectIcon }),
+          ...(command.mainRepository === undefined
+            ? {}
+            : { mainRepository: command.mainRepository }),
           ...(command.scripts === undefined ? {} : { scripts: command.scripts }),
           updatedAt: occurredAt,
         },

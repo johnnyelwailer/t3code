@@ -6,6 +6,7 @@ import {
 } from "@t3tools/contracts";
 import { PROJECT_RECIPE_ACTIVITY_KIND_LAUNCH } from "@t3tools/project-recipes";
 import type { LaunchProjectRecipeWorkflowRequest } from "@t3tools/project-recipes";
+import { toPhysicalProjectStatePath } from "@t3tools/project-context/t3teamProjectStateDir";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -81,7 +82,9 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
     }
     // Single expansion point (pathExpansion.ts): a workspace-root recipePath may carry a literal
     // `~`; expand it ONCE so every downstream use below — plus the persisted run row — agrees.
-    const recipePath = input.launch.recipePath && expandHomePath(input.launch.recipePath);
+    const recipePath =
+      input.launch.recipePath &&
+      toPhysicalProjectStatePath(expandHomePath(input.launch.recipePath));
     // One recipe, several actions (Epic 16): a named action is resolved from the recipe's own
     // module, so it can only select a workflow the recipe declares. No name ⇒ defaultAction.
     const workflowPath = yield* resolveLaunchWorkflowPath({

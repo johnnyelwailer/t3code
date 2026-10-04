@@ -3,6 +3,7 @@
  * (Epic 24 ad-hoc widget tier). Effectful orchestration lives in `t3team-widgetShowTool.ts`.
  */
 
+import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import type { T3TeamMessageWidgetAttachment } from "@t3tools/contracts";
 
 import { resolveWidgetCapabilityPolicy } from "./t3team-widgetCapabilityPolicy.ts";
@@ -149,7 +150,7 @@ export function buildT3TeamWidgetArtifactRelativePath(input: {
   readonly title: string;
   readonly widgetId: string;
 }): string {
-  return `.t3team/artifacts/widgets/${input.title}-${input.widgetId}.html`;
+  return `${PROJECT_STATE_DIR}/artifacts/widgets/${input.title}-${input.widgetId}.html`;
 }
 
 export function buildT3TeamWidgetAttachment(input: {

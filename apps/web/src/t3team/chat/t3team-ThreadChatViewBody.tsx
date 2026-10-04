@@ -1,6 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import type { EnvironmentId } from "@t3tools/contracts";
 import ChatView from "~/components/ChatView";
+import type { ChatComposerHandle } from "~/components/chat/ChatComposer";
+import { ComposerHandleContext, useComposerHandleContext } from "~/composerHandleContext";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { ThreadPendingChat } from "~/t3team/chat/t3team-threadPendingChat";
 import type { ThreadBootstrapStatus } from "~/t3team/chat/t3team-useThreadBootstrap";
@@ -97,6 +99,10 @@ export function ThreadChatViewBody({
       onRemoveAttachment={removeContextAttachment}
     />
   );
+  // ChatView reads its send model from the context handle, and the app-wide one belongs to the
+  // primary thread. An embedded peer thread scopes its own, or its composer hijacks the primary's.
+  const appComposerHandleRef = useComposerHandleContext();
+  const embeddedComposerHandleRef = useRef<ChatComposerHandle | null>(null);
   const outboxEntries = useThreadOutbox(environmentId, threadId, backend);
   const outboxSnapshot = useT3TeamOutboxStore();
   // Re-built only when the outbox actually changes, so composer churn does not re-render it.
@@ -131,31 +137,35 @@ export function ThreadChatViewBody({
       {hasServerThread ? (
         <>
           {kickoffPlaceholder}
-          <ChatView
-            environmentId={environmentId}
-            threadId={threadId as never}
-            routeKind="server"
-            {...(kickoffHistoryMessage ? { syntheticMessages: [kickoffHistoryMessage] } : {})}
-            {...(onBack ? { onBack } : {})}
-            {...(titleBarControlsAccessory ? { titleBarControlsAccessory } : {})}
-            hideHeader={hideHeader || embeddedMode}
-            hideBranchToolbar={embeddedMode}
-            minimalComposer={embeddedMode}
-            beforeDispatchTurnStart={prepareTurnStart}
-            dispatchTurnStartOverride={dispatchTurnStartOverride}
-            enqueueOfflineTurnStart={enqueueOfflineTurnStart}
-            composerContextAttachmentSlot={contextAttachmentSlot}
-            composerContainerProps={composerDropTarget.composerContainerProps}
-            composerContainerOverlay={composerDropTarget.composerContainerOverlay}
-            composerContextAttachments={contextAttachments}
-            prepareComposerContextAttachments={prepareComposerContextAttachments}
-            onComposerContextAttachmentsConsumed={clearThreadAttachments}
-            onSubmitRecipeCardAction={submitRecipeCardAction}
-            dispatchWorkflowDecision={resolveWorkflowDecision}
-            {...(controlWorkflow ? { onControlWorkflow: controlWorkflow } : {})}
-            onOpenThread={onOpenThread}
-            {...(outboxDock ? { composerBannerLeading: outboxDock } : {})}
-          />
+          <ComposerHandleContext
+            value={embeddedMode ? embeddedComposerHandleRef : appComposerHandleRef}
+          >
+            <ChatView
+              environmentId={environmentId}
+              threadId={threadId as never}
+              routeKind="server"
+              {...(kickoffHistoryMessage ? { syntheticMessages: [kickoffHistoryMessage] } : {})}
+              {...(onBack ? { onBack } : {})}
+              {...(titleBarControlsAccessory ? { titleBarControlsAccessory } : {})}
+              hideHeader={hideHeader || embeddedMode}
+              hideBranchToolbar={embeddedMode}
+              minimalComposer={embeddedMode}
+              beforeDispatchTurnStart={prepareTurnStart}
+              dispatchTurnStartOverride={dispatchTurnStartOverride}
+              enqueueOfflineTurnStart={enqueueOfflineTurnStart}
+              composerContextAttachmentSlot={contextAttachmentSlot}
+              composerContainerProps={composerDropTarget.composerContainerProps}
+              composerContainerOverlay={composerDropTarget.composerContainerOverlay}
+              composerContextAttachments={contextAttachments}
+              prepareComposerContextAttachments={prepareComposerContextAttachments}
+              onComposerContextAttachmentsConsumed={clearThreadAttachments}
+              onSubmitRecipeCardAction={submitRecipeCardAction}
+              dispatchWorkflowDecision={resolveWorkflowDecision}
+              {...(controlWorkflow ? { onControlWorkflow: controlWorkflow } : {})}
+              onOpenThread={onOpenThread}
+              {...(outboxDock ? { composerBannerLeading: outboxDock } : {})}
+            />
+          </ComposerHandleContext>
         </>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">

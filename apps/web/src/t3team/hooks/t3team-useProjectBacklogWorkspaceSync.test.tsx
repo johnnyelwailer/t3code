@@ -120,6 +120,9 @@ describe("useProjectBacklog workspace sync", () => {
           referencesRoot: "/tmp/project-1-backlog-sync-test/.t3team/references",
           linkedRepositories: [],
         })),
+        setMainRepository: vi.fn(async () => {
+          throw new Error("not used");
+        }),
         discoverRecipes: vi.fn(async () => ({
           workspaceRoot: "/tmp/project-1-backlog-sync-test",
           hasProjectLocalRecipes: false,
