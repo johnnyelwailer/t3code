@@ -13,7 +13,7 @@ import type { ModelRef, ModelOption } from "./models.ts";
 /**
  * One rung of a {@link ModelCascade}. All three shapes are legal:
  *   • `{ instanceId, model }` — a specific model on a specific provider instance;
- *   • `{ instanceId }`        — that instance, on its latest provider-declared default;
+ *   • `{ instanceId }`        — that instance's declared default, or the current model when it is the current instance;
  *   • `{ model }`             — that model on the run's CURRENT provider instance.
  * `model` may be a typed `ModelRef` from a host's model catalog or a raw provider slug.
  */

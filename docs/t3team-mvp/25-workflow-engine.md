@@ -224,15 +224,17 @@ await agent("Review this change", {
 });
 ```
 
-When no exact model is supplied, latest means the provider-declared non-legacy default
-(`isDefault`), otherwise the first non-legacy catalog entry. Legacy entries become defaults
-only when no non-legacy entry exists. An explicitly requested legacy slug still works.
+When no exact model is supplied, latest means only the provider-declared non-legacy default
+(`isDefault`). If that instance declares none and it is the current instance, the current model
+is kept. Any other instance with no declared default fails and lists its valid slugs. An
+explicitly requested legacy slug still works.
 Unknown instance ids or slugs fail with the valid choices verbatim, so the next edit can
 use an exact catalog value. The runtime does not infer slugs from natural-language names.
 
 Individual `agent(prompt, { model })` / `askAgent(prompt, { model })` calls and
 `spawnThread({ model })` can use the same string
-form. Omit `model` to use the current instance's latest available model. `effort` is
+form. Omit `model` to use the current instance's declared default, or to keep the current
+model when that instance declares none. `effort` is
 independent: use `"light"`, `"standard"`, or `"high"` when the task needs a thinking tier.
 
 #### Model cascade — `models: [...]`
@@ -246,7 +248,7 @@ await agent("Judge this gate", {
   label: "Judge gate",
   models: [
     { instanceId: "<primary instanceId>", model: "<slug for that instance>" },
-    { instanceId: "<fallback instanceId>" }, // its latest available model
+    { instanceId: "<fallback instanceId>" }, // its declared default, or the current model on the current instance
     { model: "<slug for the current instance>" },
   ],
   effort: "high",
@@ -1320,10 +1322,10 @@ decides whether a human is needed. Small migration, large payoff.
    `T3TeamWorkflowEngineRehydrateLive`, sequenced after the reactor layer, in both
    `apps/server/src/server.ts` and `apps/server/src/t3team-server.ts`.
 
-3. **Per-call model selection for cost discipline.** When `meta.model` declares a default and
-   a single `agent` / `askAgent` call wants a cheaper model, the per-call `model:` override
-   should be a strict subset of the orchestration's declared capability for that provider. Surface
-   the rule in the lint.
+3. **Per-call model selection for cost discipline.** A per-call `model:` string overrides the
+   child's declared latest model, or the launch thread's current selection. Whether a cheaper
+   override must stay inside the orchestration's declared capability is still open; surface the
+   rule in the lint.
 4. **Cancellation semantics for spawned-thread orphans.** When a parent orchestration throws without
    resolving a spawned thread's pending turn, does the engine cascade-cancel the child? Default
    proposal: yes, on parent failure or cancellation, propagate `CancelledError` to all open

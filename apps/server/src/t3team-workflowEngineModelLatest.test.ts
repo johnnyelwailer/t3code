@@ -7,8 +7,7 @@ import {
   type OrchestrationCommand,
   type ServerProvider,
 } from "@t3tools/contracts";
-import { createThreadPrimitives, createMockBroker } from "@runbook/threads";
-import type { HandleDispatch } from "@runbook/core/handles";
+import { createMockBroker, createThreadPrimitives, type HandleDispatch } from "@t3team/sdk";
 
 import { setChildProviderCatalog } from "./t3team-childProviderCatalog.ts";
 import { createWorkflowEngineBroker } from "./t3team-workflowEngineBroker.ts";
@@ -132,4 +131,57 @@ it.effect(
         );
       }
     }),
+);
+
+it.effect("keeps the user's launch thread on its current model", () =>
+  Effect.gen(function* () {
+    setChildProviderCatalog(async () => [makeProvider("parent")]);
+    const h = harness();
+    yield* Effect.tryPromise(() =>
+      h.send("thread.turn", {
+        threadId: "launch",
+        prompt: "stale default",
+        model: toWorkflowModelSelection(base),
+        modelIsDefault: true,
+      }),
+    );
+    const replies = new Map<string, unknown>();
+    let seq = 0;
+    const dispatch: HandleDispatch = {
+      send: async (call) => {
+        const id = `run:${++seq}`;
+        await call.fire(id, { resolve: (r) => replies.set(id, r), reject: () => {} });
+        return id;
+      },
+      sendOneWay: (call) => {
+        const id = `run:${++seq}`;
+        void call.fire(id, { resolve: () => {}, reject: () => {} });
+        return id;
+      },
+      awaitResolution: async <R>(id: string) => replies.get(id) as R,
+    };
+    const replyBroker = createMockBroker(() => ({ kind: "resolve", reply: "done" }));
+    const primitives = createThreadPrimitives({
+      dispatch,
+      capabilities: new Set(),
+      launchThreadId: "launch",
+      defaultModel: toWorkflowModelSelection(base),
+      broker: {
+        send: async (e, r) => {
+          await h.broker.send(e, r);
+          await replyBroker.send(e, r);
+        },
+      },
+    });
+    yield* Effect.tryPromise(() => primitives.thread!.askAgent("Review the launch thread"));
+    const launchTurns = h.commands.filter(
+      (command) => command.type === "thread.turn.start" && command.threadId === "launch",
+    );
+    expect(launchTurns).toHaveLength(2);
+    for (const command of launchTurns) {
+      expect(command).toMatchObject({
+        modelSelection: expect.objectContaining({ instanceId: "parent", model: "retired" }),
+      });
+    }
+  }),
 );

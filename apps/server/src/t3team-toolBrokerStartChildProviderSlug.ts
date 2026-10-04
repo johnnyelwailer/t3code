@@ -6,6 +6,8 @@
 
 import {
   isProviderAvailable,
+  type ModelSelection,
+  type ProviderOptionSelection,
   type ServerProvider,
   type ServerProviderModel,
 } from "@t3tools/contracts";
@@ -37,18 +39,16 @@ export const formatList = (values: ReadonlyArray<string>): string => {
   return values.map((value) => `'${value}'`).join(", ");
 };
 
-/** Catalog order is authoritative; model identifiers carry no version semantics. */
-export const defaultProviderModel = (
+/** The provider-declared current default. There is no latest model when this is absent. */
+const declaredDefault = (
   provider: Pick<ServerProvider, "models">,
 ): ServerProviderModel | undefined =>
-  provider.models.find((model) => model.isDefault === true && model.isLegacy !== true) ??
-  provider.models.find((model) => model.isLegacy !== true) ??
-  provider.models[0];
+  provider.models.find((model) => model.isDefault === true && model.isLegacy !== true);
 
 const modelChoices = (provider: ServerProvider): ReadonlyArray<string> => {
   const current = provider.models.filter((model) => model.isLegacy !== true);
   const choices = current.length === 0 ? provider.models : current;
-  const preferred = defaultProviderModel(provider);
+  const preferred = declaredDefault(provider);
   return [
     ...(preferred ? [preferred.slug] : []),
     ...choices.filter((model) => model !== preferred).map((model) => model.slug),
@@ -75,6 +75,7 @@ export type SlugResult =
 export const resolveSlug = (
   provider: ServerProvider,
   requestedModel: string | undefined,
+  parent: ModelSelection,
 ): SlugResult => {
   if (requestedModel !== undefined) {
     const wanted = requestedModel.trim().toLowerCase();
@@ -93,13 +94,59 @@ export const resolveSlug = (
     return { ok: true, slug: match.slug };
   }
 
-  const chosen = defaultProviderModel(provider);
-  if (!chosen) {
-    const error = new WorkflowModelSelectionError(
-      "no_models",
-      `Provider instance '${provider.instanceId}' has no models configured to run a child on.`,
-    );
-    return { ok: false, message: error.message, error };
-  }
-  return { ok: true, slug: chosen.slug };
+  const chosen = declaredDefault(provider) ?? inheritedParentModel(provider, parent);
+  if (chosen) return { ok: true, slug: chosen.slug };
+  const choices = modelChoices(provider);
+  const error = new WorkflowModelSelectionError(
+    "no_models",
+    provider.models.length === 0
+      ? `Provider instance '${provider.instanceId}' has no models configured to run a child on.`
+      : `Provider instance '${provider.instanceId}' has no declared default model. Valid models: ${formatList(choices)}. Use model: "${provider.instanceId}/<slug>" with one of these exact slugs.`,
+    choices,
+  );
+  return { ok: false, message: error.message, error };
+};
+
+const inheritedParentModel = (
+  provider: ServerProvider,
+  parent: ModelSelection,
+): ServerProviderModel | undefined => {
+  if (provider.instanceId.toLowerCase() !== parent.instanceId.toLowerCase()) return undefined;
+  const wanted = parent.model.trim().toLowerCase();
+  return provider.models.find((model) => model.slug.toLowerCase() === wanted);
+};
+
+/** Parent options the resolved model actually advertises. Unsupported values are dropped. */
+export const optionsSupportedByModel = (
+  provider: ServerProvider,
+  slug: string,
+  options: ReadonlyArray<ProviderOptionSelection> | undefined,
+): ReadonlyArray<ProviderOptionSelection> => {
+  const descriptors =
+    provider.models.find((model) => model.slug === slug)?.capabilities?.optionDescriptors ?? [];
+  return (options ?? []).filter((selection) => {
+    const descriptor = descriptors.find((candidate) => candidate.id === selection.id);
+    if (!descriptor) return false;
+    if (descriptor.type === "boolean") return typeof selection.value === "boolean";
+    return descriptor.options.some((choice) => choice.id === selection.value);
+  });
+};
+
+/**
+ * When the unknown instance token is a catalog model slug, name the real
+ * instance id so a bare slug can be rewritten as instance/slug.
+ */
+export const slugPrefixHint = (
+  requestedInstance: string,
+  requestedModel: string | undefined,
+  providers: ReadonlyArray<ServerProvider>,
+): string => {
+  const wanted = requestedInstance.trim().toLowerCase();
+  const owners = providers.filter((provider) =>
+    provider.models.some((model) => model.slug.toLowerCase() === wanted),
+  );
+  if (owners.length === 0) return "";
+  const rest = requestedModel === undefined ? "" : `/${requestedModel}`;
+  const forms = owners.map((provider) => `${provider.instanceId}/${requestedInstance}${rest}`);
+  return ` If '${requestedInstance}' is a model slug, prefix the instance id: ${forms.join(", ")}.`;
 };

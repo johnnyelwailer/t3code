@@ -19,7 +19,7 @@ import { parseWorkflowModelOption } from "./t3team-workflowModelSelection.ts";
 
 const model = (
   slug: string,
-  flags: Pick<ServerProviderModel, "isDefault" | "isLegacy"> = {},
+  flags: Partial<Pick<ServerProviderModel, "isDefault" | "isLegacy" | "capabilities">> = {},
 ): ServerProviderModel => ({ slug, name: slug, isCustom: false, capabilities: null, ...flags });
 
 const provider = (instanceId: string, models: ReadonlyArray<ServerProviderModel>): ServerProvider =>
@@ -52,7 +52,7 @@ describe("live model defaults", () => {
     }),
   );
 
-  it.effect("uses the first non-legacy model when no current model is declared default", () =>
+  it.effect("fails a different instance that declares no default, listing its current models", () =>
     Effect.sync(() => {
       const result = resolveStartChildModelSelection({
         parentModelSelection: parent,
@@ -65,12 +65,30 @@ describe("live model defaults", () => {
           ]),
         ],
       });
-      expect(result.ok).toBe(true);
-      if (result.ok) expect(result.value.model).toBe("first-current");
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.reason).toBe("no_models");
+        expect(result.error.choices).toEqual(["first-current", "later-current"]);
+        expect(result.message).not.toContain("old-default");
+      }
     }),
   );
 
-  it.effect("falls back to the catalog's first model when all models are legacy", () =>
+  it.effect("inherits the current model when this instance declares no default", () =>
+    Effect.sync(() => {
+      const result = resolveStartChildModelSelection({
+        parentModelSelection: {
+          ...parent,
+          model: "later-current",
+        },
+        providers: [provider("instance-a", [model("first-current"), model("later-current")])],
+      });
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value.model).toBe("later-current");
+    }),
+  );
+
+  it.effect("lists every legacy slug when another instance declares no current default", () =>
     Effect.sync(() => {
       const result = resolveStartChildModelSelection({
         parentModelSelection: parent,
@@ -82,8 +100,8 @@ describe("live model defaults", () => {
           ]),
         ],
       });
-      expect(result.ok).toBe(true);
-      if (result.ok) expect(result.value.model).toBe("only-old-a");
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.choices).toEqual(["only-old-a", "retired"]);
     }),
   );
 

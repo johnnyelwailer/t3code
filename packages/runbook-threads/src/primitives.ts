@@ -189,7 +189,9 @@ export function createThreadPrimitives<Capabilities = WorkflowChildCapabilities>
       deps.launchThreadId === undefined
         ? undefined
         : makeThread(deps.launchThreadId, {
-            model: undefined,
+            // The launch thread is the user's thread. Its omitted asks keep the
+            // current selection; only spawned children resolve a declared latest.
+            model: deps.defaultModel,
             models: undefined,
             effort: undefined,
           }),

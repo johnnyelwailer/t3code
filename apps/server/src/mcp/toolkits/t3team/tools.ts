@@ -171,7 +171,7 @@ const T3TeamStartChildTool = Tool.make("t3team_start_child", {
     }),
     model: Schema.optional(Schema.String).annotate({
       description:
-        "Optional exact model slug override for the child session. Prefer inheriting; otherwise read the slug from t3team_models for the selected provider instance.",
+        "Optional model slug for the child. Omit it to use that instance's declared default (isDefault). The same instance with no declared default keeps the parent model; another instance with no declared default fails and lists its slugs. Pass an exact slug from t3team_models, including a legacy one, when you need a specific model.",
     }),
     reasoning_effort: Schema.optional(Schema.Literals(["low", "medium", "high"])).annotate({
       description:

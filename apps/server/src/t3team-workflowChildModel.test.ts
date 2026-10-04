@@ -69,13 +69,13 @@ describe("resolveWorkflowChildModel", () => {
     ).rejects.toThrow("Unknown provider instance");
   });
 
-  it("picks the target provider's default model when none is requested", async () => {
+  it("fails a different instance that declares no default when the model id is empty", async () => {
     setChildProviderCatalog(async () => providers);
-    const result = await resolveWorkflowChildModel(
-      base,
-      workflowModel("codex", "") as unknown as WorkflowModelSelection,
-    );
-    expect(result.instanceId).toBe("codex");
-    expect(result.model).toBe("codex-a");
+    await expect(
+      resolveWorkflowChildModel(
+        base,
+        workflowModel("codex", "") as unknown as WorkflowModelSelection,
+      ),
+    ).rejects.toThrow(/codex-a/);
   });
 });

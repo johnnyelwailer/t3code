@@ -11,7 +11,9 @@ import {
 import { applyWorkflowEffort, effortIsHonored } from "./t3team-workflowEffortOptions.ts";
 import {
   formatList,
+  optionsSupportedByModel,
   resolveSlug,
+  slugPrefixHint,
   unusableReason,
   WorkflowModelSelectionError,
 } from "./t3team-toolBrokerStartChildProviderSlug.ts";
@@ -51,8 +53,9 @@ export type ResolveStartChildModelSelectionResult =
 /**
  * Resolve the child's `ModelSelection`.
  *
- * The instance defaults to the parent's instance. The model defaults to the
- * live catalog's declared non-legacy default, regardless of the parent's model.
+ * The instance defaults to the parent's instance. The model is that instance's
+ * declared non-legacy default. With no declared default, the same instance keeps
+ * the parent's model; any other instance fails with its valid slugs.
  * Explicit models use exact catalog matching, including explicitly chosen legacy models.
  */
 export function resolveStartChildModelSelection(
@@ -71,11 +74,12 @@ export function resolveStartChildModelSelection(
   );
   if (!target) {
     const choices = input.providers.map((provider) => provider.instanceId);
+    const hint = slugPrefixHint(requested, input.requestedModel, input.providers);
     const error = new WorkflowModelSelectionError(
       "unknown_instance",
       `Unknown provider instance '${requested}'. Available provider instances: ` +
         `${formatList(choices)}. Use model: "<instanceId>" or "<instanceId>/<slug>" ` +
-        `with one of these exact instance ids.`,
+        `with one of these exact instance ids.${hint}`,
       choices,
     );
     return { ok: false, message: error.message, error };
@@ -90,16 +94,17 @@ export function resolveStartChildModelSelection(
     return { ok: false, message: error.message, error };
   }
 
-  const slug = resolveSlug(target, input.requestedModel);
+  const slug = resolveSlug(target, input.requestedModel, input.parentModelSelection);
   if (!slug.ok) return slug;
 
+  const sameInstance =
+    target.instanceId.toLowerCase() === input.parentModelSelection.instanceId.toLowerCase();
   const base: ModelSelection = {
     instanceId: ProviderInstanceId.make(target.instanceId),
     model: slug.slug,
-    options:
-      target.instanceId === input.parentModelSelection.instanceId
-        ? (input.parentModelSelection.options ?? [])
-        : [],
+    options: sameInstance
+      ? optionsSupportedByModel(target, slug.slug, input.parentModelSelection.options)
+      : [],
   };
   return {
     ok: true,

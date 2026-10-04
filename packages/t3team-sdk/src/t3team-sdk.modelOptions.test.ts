@@ -70,9 +70,14 @@ it.effect("marks injected defaults only in broker payloads and keeps historical 
     const child = h.spawnThread({ capabilities: "inherit", name: "Review" });
     yield* Effect.tryPromise(() => child.askAgent("review"));
     yield* Effect.tryPromise(() => h.thread!.askAgent("judge"));
-    for (const envelope of h.broker.sent) {
-      assert.propertyVal(envelope.payload, "modelIsDefault", true);
-    }
+    const [created, childTurn, launchTurn] = h.broker.sent;
+    assert.propertyVal(created?.payload, "modelIsDefault", true);
+    assert.propertyVal(childTurn?.payload, "modelIsDefault", true);
+    assert.notProperty(launchTurn?.payload, "modelIsDefault");
+    assert.deepStrictEqual(
+      (launchTurn?.payload as { model?: unknown } | undefined)?.model,
+      inherited,
+    );
     const historical = { threadId: "run:1", prompt: "review", model: inherited };
     assert.strictEqual(JSON.stringify(h.args[1]?.args), JSON.stringify(historical));
     assert.strictEqual(canonicalJsonStringify(h.args[1]?.args), canonicalJsonStringify(historical));

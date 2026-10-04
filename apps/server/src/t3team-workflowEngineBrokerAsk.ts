@@ -23,6 +23,7 @@ import {
 } from "./t3team-workflowEngineBrokerContext.ts";
 import { getChildProviderCatalog } from "./t3team-childProviderCatalog.ts";
 import { resolveWorkflowChildModel } from "./t3team-workflowChildModel.ts";
+import { toWorkflowModelSelection } from "./t3team-workflowModelSelection.ts";
 import { dispatchThreadTurnStartWithRetry } from "./t3team-workflowEngineTurnStartBusyRetry.ts";
 import { workflowTurnAuthor } from "./t3team-workflowTurnAuthor.ts";
 import { workflowTurnText } from "./t3team-workflowTurnText.ts";
@@ -36,10 +37,18 @@ export async function handleBrokerAskVerb(core: BrokerCore, s: BrokerSend): Prom
     // provider/model must reject this ask cleanly, not park the run on an undispatched turn.
     // Stay SYNCHRONOUS in catalog-free harnesses: awaiting unconditionally would yield a
     // microtask before `setPending`, and callers observe the pending entry right after `send`.
+    const pinLaunchModel =
+      p.threadId === deps.launchThreadId && (p.model === undefined || p.modelIsDefault === true);
     const modelSelection =
-      p.model === undefined && p.effort === undefined && getChildProviderCatalog() === undefined
+      ((p.model === undefined && p.effort === undefined) || pinLaunchModel) &&
+      getChildProviderCatalog() === undefined
         ? deps.modelSelection
-        : await resolveWorkflowChildModel(deps.modelSelection, p.model, p.effort, p.modelIsDefault);
+        : await resolveWorkflowChildModel(
+            deps.modelSelection,
+            pinLaunchModel ? toWorkflowModelSelection(deps.modelSelection) : p.model,
+            p.effort,
+            pinLaunchModel ? false : p.modelIsDefault,
+          );
     step(correlationId, kind, "started", p.label ?? p.prompt, p.threadId);
     const liveSettlement = isLiveCompositionAsk ? makeLiveSettlement() : null;
     // ONE author for the whole step: it rides the prompt below, and the reactor reuses it to
