@@ -116,8 +116,15 @@ const childProjection = {
   turnItems: [],
 } as unknown as OrchestrationV2ThreadProjection;
 
-const makeDependencies = (dispatched: Ref.Ref<ReadonlyArray<unknown>>) => {
-  let delegated = false;
+const makeDependencies = (
+  dispatched: Ref.Ref<ReadonlyArray<unknown>>,
+  options: {
+    /** The parent already holds the task: a retried request replays its receipt. */
+    readonly alreadyDelegated?: boolean;
+    readonly rejectDispatch?: boolean;
+  } = {},
+) => {
+  let delegated = options.alreadyDelegated === true;
   return Layer.mergeAll(
     NodeServices.layer,
     Layer.mock(ThreadManagementService.ThreadManagementService)({
@@ -127,7 +134,11 @@ const makeDependencies = (dispatched: Ref.Ref<ReadonlyArray<unknown>>) => {
         ),
       dispatch: (command) =>
         Ref.update(dispatched, (commands) => [...commands, command]).pipe(
-          Effect.andThen(Effect.sync(() => void (delegated = true))),
+          Effect.andThen(
+            options.rejectDispatch === true
+              ? Effect.fail(new Error(`Parent run ${parentRunId} is not active.`) as never)
+              : Effect.sync(() => void (delegated = true)),
+          ),
           Effect.as({
             sequence: 1,
             storedEvents: [
@@ -244,6 +255,67 @@ describe("OrchestratorMcpService delegateTask preparation hook", () => {
           OrchestratorMcpService.layer.pipe(
             Layer.provide(makeDependencies(dispatched)),
             Layer.provide(preparation),
+          ),
+        ),
+      );
+    }),
+  );
+
+  const trackingPreparation = (calls: Ref.Ref<ReadonlyArray<string>>) =>
+    Layer.succeed(DelegatedTaskPreparation, {
+      workspaceIsolation: true,
+      extensions: [],
+      prepare: () =>
+        Effect.succeed({
+          modelSelection,
+          workspace: { branch: "child-branch", worktreePath: "/tmp/child" },
+          notes: ["prepared"],
+          afterCreate: () =>
+            Ref.update(calls, (all) => [...all, "afterCreate"]).pipe(Effect.as(["after create"])),
+          release: Ref.update(calls, (all) => [...all, "release"]),
+        }),
+    });
+
+  it.effect("releases what prepare created when the dispatch creates no child", () =>
+    Effect.gen(function* () {
+      const dispatched = yield* Ref.make<ReadonlyArray<unknown>>([]);
+      const calls = yield* Ref.make<ReadonlyArray<string>>([]);
+      yield* Effect.gen(function* () {
+        const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+        const failure = yield* service
+          .delegateTask(scope, { task: "Fix the bug.", workspace: { isolation: "worktree" } })
+          .pipe(Effect.flip);
+        assert.equal(failure.code, "orchestration_error");
+        assert.deepEqual(yield* Ref.get(calls), ["release"]);
+      }).pipe(
+        Effect.provide(
+          OrchestratorMcpService.layer.pipe(
+            Layer.provide(makeDependencies(dispatched, { rejectDispatch: true })),
+            Layer.provide(trackingPreparation(calls)),
+          ),
+        ),
+      );
+    }),
+  );
+
+  it.effect("a retried request whose child exists does not run afterCreate again", () =>
+    Effect.gen(function* () {
+      const dispatched = yield* Ref.make<ReadonlyArray<unknown>>([]);
+      const calls = yield* Ref.make<ReadonlyArray<string>>([]);
+      yield* Effect.gen(function* () {
+        const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+        const result = yield* service.delegateTask(scope, {
+          task: "Fix the bug.",
+          workspace: { isolation: "worktree" },
+          clientRequestId: "retry-1",
+        });
+        assert.deepEqual(result.notes, ["prepared"]);
+        assert.deepEqual(yield* Ref.get(calls), []);
+      }).pipe(
+        Effect.provide(
+          OrchestratorMcpService.layer.pipe(
+            Layer.provide(makeDependencies(dispatched, { alreadyDelegated: true })),
+            Layer.provide(trackingPreparation(calls)),
           ),
         ),
       );

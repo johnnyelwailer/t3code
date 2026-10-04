@@ -10,6 +10,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { it as effectIt } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as FileSystem from "effect/FileSystem";
@@ -19,7 +20,11 @@ import { afterAll, describe, expect, it } from "vite-plus/test";
 import { ServerConfig } from "./config.ts";
 import type { GitWorkflowService } from "./git/GitWorkflowService.ts";
 import type { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
-import { delegatedWorktreeKey, resolveDelegatedWorkspace } from "./t3team-delegateTaskWorkspace.ts";
+import {
+  delegatedWorktreeKey,
+  releaseDelegatedWorkspace,
+  resolveDelegatedWorkspace,
+} from "./t3team-delegateTaskWorkspace.ts";
 import {
   HIDDEN_T3TEAM_DIR,
   MANIFEST_FILE_NAME,
@@ -183,5 +188,32 @@ describe("resolveDelegatedWorkspace", () => {
     const second = await ok({ workspaceRoot: localWorkspace, key: "retry" });
     expect(second.worktreePath).toBe(first.worktreePath);
     expect(second.branch).toBe(first.branch);
+    expect([first.created, second.created]).toEqual([true, false]);
   });
+
+  effectIt.effect("releases only the worktree and branch its own request created", () =>
+    Effect.gen(function* () {
+      const created = yield* Effect.promise(() =>
+        ok({ workspaceRoot: localWorkspace, key: "release" }),
+      );
+      const reused = yield* Effect.promise(() =>
+        ok({ workspaceRoot: localWorkspace, key: "release" }),
+      );
+      const gitWorkflow = {
+        removeWorktree: (input: { readonly cwd: string; readonly path: string }) =>
+          Effect.sync(() => void git(input.cwd, ["worktree", "remove", "--force", input.path])),
+        deleteLocalBranch: (input: { readonly cwd: string; readonly refName: string }) =>
+          Effect.sync(() => void git(input.cwd, ["branch", "-D", input.refName])),
+      };
+      const branches = () => git(localWorkspace, ["branch", "--list", created.branch]);
+
+      yield* releaseDelegatedWorkspace(gitWorkflow, reused);
+      expect(NodeFS.existsSync(created.worktreePath)).toBe(true);
+      expect(branches()).toContain(created.branch);
+
+      yield* releaseDelegatedWorkspace(gitWorkflow, created);
+      expect(NodeFS.existsSync(created.worktreePath)).toBe(false);
+      expect(branches()).toBe("");
+    }),
+  );
 });

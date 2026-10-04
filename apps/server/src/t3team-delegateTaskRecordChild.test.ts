@@ -117,6 +117,22 @@ describe("makeDelegatedChildRecorder", () => {
     }),
   );
 
+  it.effect("keeps a child's tool context a client synced when recorded again", () =>
+    Effect.gen(function* () {
+      const { deps, contexts } = makeDeps();
+      const synced: T3TeamTurnToolContext = { ...parentToolContext, state: { view: "synced" } };
+      contexts.set(childThreadId, synced);
+      yield* makeDelegatedChildRecorder(deps)({
+        parentThread,
+        childThreadId,
+        title: "Fix login",
+        ticketId: undefined,
+        environment: undefined,
+      });
+      assert.strictEqual(contexts.get(childThreadId), synced);
+    }),
+  );
+
   it.effect(
     "writes nothing when there is no ticket or placement, and degrades failures to notes",
     () =>

@@ -35,6 +35,7 @@ import { makeDelegatedChildRecorder } from "./t3team-delegateTaskRecordChild.ts"
 import {
   delegatedWorktreeKey,
   describeDelegatedWorkspace,
+  releaseDelegatedWorkspace,
   resolveDelegatedWorkspace,
 } from "./t3team-delegateTaskWorkspace.ts";
 import { startChildSetupScript } from "./t3team-toolBrokerStartChildContext.ts";
@@ -146,7 +147,10 @@ const make = Effect.gen(function* () {
           modelSelection: effort.modelSelection,
           ...(workspace === undefined
             ? {}
-            : { workspace: { branch: workspace.branch, worktreePath: workspace.worktreePath } }),
+            : {
+                workspace: { branch: workspace.branch, worktreePath: workspace.worktreePath },
+                release: releaseDelegatedWorkspace(services.gitWorkflow, workspace),
+              }),
           notes,
           afterCreate,
         };

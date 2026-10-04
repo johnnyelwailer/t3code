@@ -86,7 +86,12 @@ export const makeDelegatedChildRecorder =
               .pipe(noteOnFailure("environment"));
 
       const store = deps.toolContexts;
-      const project = store ? yield* deps.loadProject(parentThread.projectId) : undefined;
+      // A child that already has a context keeps it: a client may have synced it since.
+      const existingChildContext = store ? yield* store.get(childThreadId) : undefined;
+      const project =
+        store && existingChildContext === undefined
+          ? yield* deps.loadProject(parentThread.projectId)
+          : undefined;
       const childToolContext =
         project === undefined
           ? undefined

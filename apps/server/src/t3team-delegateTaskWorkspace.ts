@@ -9,6 +9,7 @@
  */
 import * as Effect from "effect/Effect";
 
+import type { GitWorkflowService } from "./git/GitWorkflowService.ts";
 import {
   linkedRepositoryManifestExists,
   readMetaRepositoryFromWorkspace,
@@ -23,6 +24,10 @@ export interface DelegatedWorkspaceResolution {
   readonly baseRef: string;
   readonly branch: string;
   readonly worktreePath: string;
+  /** The repository checkout the worktree belongs to. */
+  readonly repositoryPath: string;
+  /** True when this call created the worktree and branch; false when it reused a retry's. */
+  readonly created: boolean;
 }
 
 export const resolveDelegatedWorkspace = (input: {
@@ -76,6 +81,8 @@ export const resolveDelegatedWorkspace = (input: {
           baseRef: linked.repoRef,
           branch: linked.branch,
           worktreePath: linked.worktreePath,
+          repositoryPath: linked.repositoryPath,
+          created: linked.created,
         };
       }
     } else if (manifestExists && metaRepository === undefined) {
@@ -90,8 +97,43 @@ export const resolveDelegatedWorkspace = (input: {
       baseRef: local.repoRef,
       branch: local.branch,
       worktreePath: local.worktreePath,
+      repositoryPath: local.repositoryPath,
+      created: local.created,
     };
   });
+
+/**
+ * Undoes a worktree and branch this delegation created when the child was never created (the
+ * dispatch was rejected). A reused worktree belongs to an earlier attempt and is left alone.
+ * Best effort: a failure is logged, never raised.
+ */
+export const releaseDelegatedWorkspace = (
+  gitWorkflow: Pick<GitWorkflowService["Service"], "removeWorktree" | "deleteLocalBranch">,
+  workspace: DelegatedWorkspaceResolution,
+): Effect.Effect<void> =>
+  workspace.created
+    ? gitWorkflow
+        .removeWorktree({
+          cwd: workspace.repositoryPath,
+          path: workspace.worktreePath,
+          force: true,
+        })
+        .pipe(
+          Effect.andThen(
+            gitWorkflow.deleteLocalBranch({
+              cwd: workspace.repositoryPath,
+              refName: workspace.branch,
+              force: true,
+            }),
+          ),
+          Effect.catchCause((cause) =>
+            Effect.logWarning("t3team.delegate-task.workspace-release-failed", {
+              worktreePath: workspace.worktreePath,
+              cause,
+            }),
+          ),
+        )
+    : Effect.void;
 
 /** Short stable directory key for a delegation (FNV-1a over thread + request key). */
 export const delegatedWorktreeKey = (threadId: string, requestKey: string): string => {

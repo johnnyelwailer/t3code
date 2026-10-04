@@ -1433,6 +1433,8 @@ const make = Effect.gen(function* () {
             ...(prepared.workspace === undefined ? {} : { workspace: prepared.workspace }),
           })
           .pipe(
+            // t3team: no child was created, so undo what prepare created (its worktree).
+            Effect.tapError(() => prepared.release ?? Effect.void),
             Effect.mapError((error) =>
               failure(
                 "orchestration_error",
@@ -1445,6 +1447,7 @@ const make = Effect.gen(function* () {
             stored.event.type === "subagent.updated" && stored.event.payload.origin === "app_owned",
         );
         if (taskEvent?.event.type !== "subagent.updated") {
+          yield* prepared.release ?? Effect.void;
           return yield* failure(
             "orchestration_error",
             "Delegated task command did not produce a task projection.",
@@ -1452,9 +1455,12 @@ const make = Effect.gen(function* () {
         }
         const taskId = taskEvent.event.payload.id;
         const childThreadId = taskEvent.event.payload.childThreadId;
+        // t3team: a retried request whose child already existed replays the receipt; its
+        // post-create effects (setup script, tool context) already ran once.
+        const replayed = parent.subagents.some((existing) => existing.id === taskId);
         const notes = [
           ...prepared.notes,
-          ...(childThreadId === null ? [] : yield* prepared.afterCreate(childThreadId)),
+          ...(childThreadId === null || replayed ? [] : yield* prepared.afterCreate(childThreadId)),
         ];
         const withNotes = (taskResult: OrchestratorMcpDelegateTaskResult) =>
           notes.length === 0 ? taskResult : { ...taskResult, notes };

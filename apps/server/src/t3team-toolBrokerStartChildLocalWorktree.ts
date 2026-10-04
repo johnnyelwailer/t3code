@@ -111,7 +111,8 @@ export const resolveLocalRepositoryWorktree = (input: {
   }).pipe(Effect.mapError((error) => (error instanceof Error ? error.message : String(error))));
 
 /** Creates the child's worktree on a new branch, or reuses the one a retried delegation
- * (same request key, so same scoped path) already created. */
+ * (same request key, so same scoped path) already created. `created` tells which, so only the
+ * call that created a worktree undoes it when its delegation fails (`releaseDelegatedWorkspace`). */
 export const createOrReuseChildWorktree = (input: {
   readonly services: Pick<T3TeamStartChildLinkedRepositoryServices, "fileSystem" | "gitWorkflow">;
   readonly cwd: string;
@@ -124,7 +125,12 @@ export const createOrReuseChildWorktree = (input: {
     if (yield* fileSystem.exists(input.worktreePath).pipe(Effect.orElseSucceed(() => false))) {
       const status = yield* gitWorkflow.localStatus({ cwd: input.worktreePath });
       if (status.isRepo && status.refName !== null) {
-        return { branch: status.refName, worktreePath: input.worktreePath };
+        return {
+          branch: status.refName,
+          worktreePath: input.worktreePath,
+          repositoryPath: input.cwd,
+          created: false,
+        };
       }
     }
     const worktree = yield* gitWorkflow.createWorktree({
@@ -133,5 +139,10 @@ export const createOrReuseChildWorktree = (input: {
       newRefName: buildChildBranchName(input.sessionName),
       path: input.worktreePath,
     });
-    return { branch: worktree.worktree.refName, worktreePath: worktree.worktree.path };
+    return {
+      branch: worktree.worktree.refName,
+      worktreePath: worktree.worktree.path,
+      repositoryPath: input.cwd,
+      created: true,
+    };
   });

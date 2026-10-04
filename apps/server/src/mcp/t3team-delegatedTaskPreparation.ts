@@ -7,7 +7,9 @@
  * returned model selection and workspace go into that one command. Once the
  * child exists it calls `afterCreate(childThreadId)` (outside any thread lock,
  * so it may write side stores but must not wait on the child) and appends all
- * returned notes to the tool result.
+ * returned notes to the tool result. A retried request (same clientRequestId)
+ * whose child already existed skips `afterCreate`; a request whose dispatch
+ * created no child runs `release` instead, to undo what `prepare` created.
  *
  * The default rejects `workspace.isolation: "worktree"` and every extension
  * key with `invalid_request`, so a host without a registered implementation
@@ -51,6 +53,8 @@ export interface DelegatedTaskPrepared {
   readonly notes: ReadonlyArray<string>;
   /** Runs once the child thread exists; returns extra notes. Must not fail the delegation. */
   readonly afterCreate: (childThreadId: ThreadId) => Effect.Effect<ReadonlyArray<string>>;
+  /** Undoes what `prepare` created (e.g. a worktree) when no child was created. Never fails. */
+  readonly release?: Effect.Effect<void>;
 }
 
 export interface DelegatedTaskExtensionOption {
