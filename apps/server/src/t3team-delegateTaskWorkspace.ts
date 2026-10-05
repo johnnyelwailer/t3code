@@ -12,7 +12,7 @@ import * as Effect from "effect/Effect";
 import type { GitWorkflowService } from "./git/GitWorkflowService.ts";
 import {
   linkedRepositoryManifestExists,
-  readMetaRepositoryFromWorkspace,
+  readMainRepositoryFromWorkspace,
   type T3TeamStartChildLinkedRepositoryServices,
 } from "./t3team-toolBrokerStartChildContext.ts";
 import { repositoryLookupCandidates } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
@@ -54,9 +54,13 @@ export const resolveDelegatedWorkspace = (input: {
       projectWorkspaceRoot,
     });
     // An adopted meta-repo (monorepo project) carries a `metaRepository` manifest entry: its
-    // sub-work happens in worktrees of the workspace repository itself.
+    // sub-work happens in worktrees of the workspace repository itself. The main-repo entry is
+    // optional legacy data, so a failed read degrades to "no main repository" rather than
+    // aborting worktree resolution.
     const metaRepository = manifestExists
-      ? yield* readMetaRepositoryFromWorkspace({ services, projectWorkspaceRoot })
+      ? yield* readMainRepositoryFromWorkspace({ services, projectWorkspaceRoot }).pipe(
+          Effect.orElseSucceed(() => undefined),
+        )
       : undefined;
 
     if (repository !== undefined) {
@@ -100,7 +104,7 @@ export const resolveDelegatedWorkspace = (input: {
       repositoryPath: local.repositoryPath,
       created: local.created,
     };
-  });
+  }).pipe(Effect.mapError((error) => (error instanceof Error ? error.message : String(error))));
 
 /**
  * Undoes a worktree and branch this delegation created when the child was never created (the

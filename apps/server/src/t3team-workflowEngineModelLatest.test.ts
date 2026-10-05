@@ -1,18 +1,14 @@
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import { afterEach, expect } from "vite-plus/test";
-import {
-  ProjectId,
-  ProviderInstanceId,
-  type OrchestrationCommand,
-  type ServerProvider,
-} from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId, type ServerProvider } from "@t3tools/contracts";
 import { createMockBroker, createThreadPrimitives, type HandleDispatch } from "@t3team/sdk";
 
 import { setChildProviderCatalog } from "./t3team-childProviderCatalog.ts";
 import { createWorkflowEngineBroker } from "./t3team-workflowEngineBroker.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { toWorkflowModelSelection } from "./t3team-workflowModelSelection.ts";
+import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
 
 const base = { instanceId: ProviderInstanceId.make("parent"), model: "retired", options: [] };
 const makeProvider = (instanceId: string): ServerProvider =>
@@ -29,8 +25,28 @@ const makeProvider = (instanceId: string): ServerProvider =>
   }) as unknown as ServerProvider;
 
 function harness() {
-  const commands: OrchestrationCommand[] = [];
+  const commands: { type: string; threadId: string; modelSelection?: unknown }[] = [];
   let id = 0;
+  const host: WorkflowHostPort = {
+    createThread: async (input) => {
+      commands.push({
+        type: "thread.create",
+        threadId: input.threadId,
+        modelSelection: input.modelSelection,
+      });
+    },
+    startTurn: async (input) => {
+      commands.push({
+        type: "thread.turn.start",
+        threadId: input.threadId,
+        modelSelection: input.modelSelection,
+      });
+    },
+    postMessage: async () => {},
+    upsertActivity: async () => {},
+    interrupt: async () => {},
+    syncRunFacts: async () => {},
+  };
   const broker = createWorkflowEngineBroker({
     runId: "run",
     launchThreadId: "launch",
@@ -39,9 +55,7 @@ function harness() {
     runtimeMode: "full-access",
     interactionMode: "default",
     registry: makeWorkflowEngineRegistry(),
-    dispatch: async (command) => {
-      commands.push(command);
-    },
+    host,
     newId: () => `id-${++id}`,
     nowIso: () => "2026-10-04T00:00:00.000Z",
   });

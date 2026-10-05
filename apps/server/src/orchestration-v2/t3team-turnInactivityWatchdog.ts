@@ -24,7 +24,11 @@ import * as Fiber from "effect/Fiber";
 import * as Ref from "effect/Ref";
 
 import type { ProviderAdapterV2Event } from "./ProviderAdapter.ts";
-import { budgetAfterEvent, INTERRUPT_SETTLE_GRACE_MS } from "./t3team-turnInactivityPolicy.ts";
+import {
+  budgetAfterEvent,
+  INTERRUPT_SETTLE_GRACE_MS,
+  MAX_TURN_INACTIVITY_SELFHEAL_ATTEMPTS,
+} from "./t3team-turnInactivityPolicy.ts";
 import {
   outcomeFor,
   type SettleCode,
@@ -63,6 +67,8 @@ type Phase =
       readonly budgetMs: number;
       /** A runtime request was awaiting its answer at the last check. */
       readonly waiting: boolean;
+      /** Self-heal re-arms used on this turn; reset to 0 on any stream activity. */
+      readonly selfHealAttempts: number;
     }
   | { readonly type: "settling"; readonly deadline: number; readonly code: SettleCode };
 
@@ -74,6 +80,7 @@ export const makeTurnInactivityWatchdog = (baseBudgetMs: number) =>
       lastActivityAt: startedAt,
       budgetMs: baseBudgetMs,
       waiting: false,
+      selfHealAttempts: 0,
     });
     const waits = yield* makeTurnInactivityWaits;
     const pendingStop = yield* Ref.make<Effect.Effect<boolean>>(Effect.succeed(false));
@@ -90,6 +97,7 @@ export const makeTurnInactivityWatchdog = (baseBudgetMs: number) =>
                 lastActivityAt: now,
                 budgetMs: budgetAfterEvent(baseBudgetMs, event),
                 waiting: false,
+                selfHealAttempts: 0,
               }
             : current,
         );
@@ -145,7 +153,8 @@ export const makeTurnInactivityWatchdog = (baseBudgetMs: number) =>
             });
             continue;
           }
-          const deadline = current.lastActivityAt + (yield* waits.budgetMs(current.budgetMs));
+          const stretchedMs = yield* waits.budgetMs(current.budgetMs);
+          const deadline = current.lastActivityAt + stretchedMs;
           if (current.waiting || now >= deadline) {
             // Waiting for a person is healthy however long it takes; once the answer lands the
             // budget runs from the last time the wait was seen.
@@ -162,6 +171,33 @@ export const makeTurnInactivityWatchdog = (baseBudgetMs: number) =>
           }
           if (now < deadline) {
             yield* Effect.sleep(Math.min(deadline - now, STOP_POLL_MS));
+            continue;
+          }
+          // Self-heal first (GHE #113): a stalled stream is usually a transient gateway flap, not
+          // a dead turn. Re-arm a fresh PLAIN window instead of interrupting; any stream activity
+          // from the recovery resets the counter via `touch`. Only for a genuinely-silent turn — an
+          // open tool call or pending approval keeps its own backstop (never self-heals forever).
+          // Bounded, so a genuinely-wedged turn still falls through to the hard interrupt below.
+          if (
+            stretchedMs === current.budgetMs &&
+            current.selfHealAttempts < MAX_TURN_INACTIVITY_SELFHEAL_ATTEMPTS
+          ) {
+            yield* Effect.logWarning("t3team.turn-watchdog.self-heal", {
+              selfHealAttempt: current.selfHealAttempts + 1,
+              maxSelfHealAttempts: MAX_TURN_INACTIVITY_SELFHEAL_ATTEMPTS,
+              budgetMs: current.budgetMs,
+            });
+            yield* Ref.update(phase, (latest): Phase =>
+              latest.type === "watching"
+                ? {
+                    ...latest,
+                    lastActivityAt: now,
+                    budgetMs: baseBudgetMs,
+                    selfHealAttempts: latest.selfHealAttempts + 1,
+                  }
+                : latest,
+            );
+            yield* Effect.sleep(STOP_POLL_MS);
             continue;
           }
           yield* Effect.logWarning("t3team.turn-watchdog.inactive", { budgetMs: current.budgetMs });

@@ -199,6 +199,7 @@ function makeHarness(options: HarnessOptions = {}) {
               autoPull: false,
               faviconPath: null,
               projectIcon: null,
+              mainRepository: null,
               scripts: project.scripts,
               createdAt: project.createdAt,
               updatedAt: project.updatedAt,

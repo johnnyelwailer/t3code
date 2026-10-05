@@ -181,7 +181,8 @@ describe("turn inactivity watchdog", () => {
   it.effect("interrupts a silent turn at the budget and settles it after the grace", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness();
-      yield* harness.advance(BUDGET_MS - 1_000);
+      // Two self-heal re-arms first (GHE #113): the hard interrupt lands after three windows.
+      yield* harness.advance(BUDGET_MS * 3 - 1_000);
       assert.equal(yield* harness.interrupts, 0);
       yield* harness.advance(1_000);
       assert.equal(yield* harness.interrupts, 1);
@@ -192,10 +193,36 @@ describe("turn inactivity watchdog", () => {
     }),
   );
 
-  it.effect("does not settle when the provider ends the turn within the grace", () =>
+  it.effect("re-arms a silent turn on its own up to the self-heal budget, then interrupts", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness();
       yield* harness.advance(BUDGET_MS);
+      assert.equal(yield* harness.interrupts, 0); // self-heal 1, still watching
+      yield* harness.advance(BUDGET_MS);
+      assert.equal(yield* harness.interrupts, 0); // self-heal 2, still watching
+      yield* harness.advance(BUDGET_MS);
+      assert.equal(yield* harness.interrupts, 1); // budget spent, hard interrupt
+    }),
+  );
+
+  it.effect("a stream event during self-heal resets the re-arm counter", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness();
+      yield* harness.advance(BUDGET_MS); // self-heal 1
+      yield* harness.watchdog.touch(activity); // recovery: counter back to 0, fresh plain window
+      yield* harness.advance(BUDGET_MS * 2 - 1_000);
+      assert.equal(yield* harness.interrupts, 0);
+      yield* harness.advance(1_000 + BUDGET_MS - 1_000);
+      assert.equal(yield* harness.interrupts, 0);
+      yield* harness.advance(1_000 + BUDGET_MS);
+      assert.equal(yield* harness.interrupts, 1);
+    }),
+  );
+
+  it.effect("does not settle when the provider ends the turn within the grace", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness();
+      yield* harness.advance(BUDGET_MS * 3);
       assert.equal(yield* harness.interrupts, 1);
       yield* Ref.set(harness.settled, true);
       yield* harness.advance(60_000);
@@ -208,7 +235,7 @@ describe("turn inactivity watchdog", () => {
     (interrupt) =>
       Effect.gen(function* () {
         const harness = yield* makeHarness({ interrupt });
-        yield* harness.advance(BUDGET_MS);
+        yield* harness.advance(BUDGET_MS * 3);
         assert.deepEqual(yield* harness.codes, ["failed:turn_inactivity"]);
       }),
   );
@@ -230,7 +257,8 @@ describe("turn inactivity watchdog", () => {
       yield* harness.watchdog.touch(retryAnnouncement(1_024_000));
       yield* harness.advance(1_024_000);
       assert.equal(yield* harness.interrupts, 0);
-      yield* harness.advance(120_000);
+      // After the extended window: two self-heal re-arms on the plain budget, then the interrupt.
+      yield* harness.advance(BUDGET_MS * 3 + 120_000);
       assert.equal(yield* harness.interrupts, 1);
     }),
   );
@@ -240,7 +268,7 @@ describe("turn inactivity watchdog", () => {
       const harness = yield* makeHarness();
       yield* harness.watchdog.touch(retryAnnouncement(1_024_000));
       yield* harness.watchdog.touch(activity);
-      yield* harness.advance(BUDGET_MS);
+      yield* harness.advance(BUDGET_MS * 3);
       assert.equal(yield* harness.interrupts, 1);
     }),
   );
@@ -260,7 +288,7 @@ describe("turn inactivity watchdog", () => {
   it.effect("a Stop pressed while its own interrupt is unanswered stays the user's Stop", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness();
-      yield* harness.advance(BUDGET_MS);
+      yield* harness.advance(BUDGET_MS * 3);
       assert.equal(yield* harness.interrupts, 1);
       yield* Ref.set(harness.pendingStop, true);
       yield* harness.advance(10_000);
@@ -275,12 +303,10 @@ describe("turn inactivity watchdog", () => {
       yield* harness.watchdog.touch(approvalRequest("pending"));
       yield* harness.advance(BUDGET_MS * 5);
       assert.equal(yield* harness.interrupts, 0);
-      // Answered (the projection says so; the adapter never reported it): a full budget again.
+      // Answered (the projection says so; the adapter never reported it): a full budget again,
+      // then the two self-heal re-arms before the interrupt.
       yield* Ref.set(harness.requestPending, false);
-      yield* harness.advance(10_000);
-      yield* harness.advance(BUDGET_MS - 20_000);
-      assert.equal(yield* harness.interrupts, 0);
-      yield* harness.advance(20_000);
+      yield* harness.advance(BUDGET_MS * 3 + 60_000);
       assert.equal(yield* harness.interrupts, 1);
     }),
   );
@@ -301,7 +327,7 @@ describe("turn inactivity watchdog", () => {
       const harness = yield* makeHarness();
       yield* harness.watchdog.touch(toolCall("running"));
       yield* harness.watchdog.touch(toolCall("completed"));
-      yield* harness.advance(BUDGET_MS);
+      yield* harness.advance(BUDGET_MS * 3);
       assert.equal(yield* harness.interrupts, 1);
     }),
   );

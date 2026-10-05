@@ -143,13 +143,8 @@ import {
   threadReplayEncodedBytes,
   THREAD_RESUME_MAX_REPLAY_EVENTS,
 } from "./orchestration-v2/ThreadStream.ts";
-import { T3TeamThreadEngagement } from "./t3team-threadEngagement.ts";
-import { isThreadResubscribeStaggerEnabled } from "./t3team-threadResubscribeStaggerFlag.ts";
 import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
 import { isNexiStateDirSelectedAtStartup } from "@t3tools/project-context/t3teamProjectStateDir";
-import { isResourcePressureEnabled } from "./t3team-resourcePressureFlag.ts";
-import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
-import { sweepStorageNow } from "./t3team-resourcePressureSweep.ts";
 import {
   buildBoundedThreadProjection,
   THREAD_HISTORY_PAGE_POLICY,

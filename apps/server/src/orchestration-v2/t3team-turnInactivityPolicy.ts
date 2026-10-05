@@ -25,6 +25,13 @@ import type { ProviderAdapterV2Event } from "./ProviderAdapter.ts";
 export const DEFAULT_TURN_INACTIVITY_TIMEOUT_MS = 600_000;
 /** A Stop (or the watchdog's own interrupt) must produce a terminal within this window. */
 export const INTERRUPT_SETTLE_GRACE_MS = 30_000;
+/**
+ * How many times the watchdog may re-arm a stalled turn (self-heal) before it falls back to a
+ * hard interrupt (GHE #113 self-heal). Each re-arm gives the provider a fresh full window to
+ * recover on its own; any stream activity resets the counter. Bounded, so a genuinely-wedged
+ * turn still cannot hang indefinitely.
+ */
+export const MAX_TURN_INACTIVITY_SELFHEAL_ATTEMPTS = 2;
 /** An announced retry backoff arms `max(budget, delay + slack)`: the sleep plus the next request. */
 const RETRY_ANNOUNCE_SLACK_MS = 120_000;
 /** So a buggy announcement cannot disable the backstop indefinitely. */
