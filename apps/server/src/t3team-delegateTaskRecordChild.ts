@@ -1,8 +1,9 @@
 /**
  * Records what a delegated child carries beyond V2 lineage, right after
- * delegate_task created it: its ticket and placement (`t3team_child_thread_metadata`),
- * a cross-environment binding (thread facts), and the parent's t3team tool
- * context (so the child gets the same host tools and view, re-pointed at itself).
+ * delegate_task created it: its ticket, placement and requested skills
+ * (`t3team_child_thread_metadata`), a cross-environment binding (thread facts),
+ * and the parent's t3team tool context (so the child gets the same host tools
+ * and view, re-pointed at itself).
  *
  * Every write degrades to a note: a delegation never fails after the child exists.
  */
@@ -39,6 +40,8 @@ export interface DelegatedChildRecord {
   readonly title: string | undefined;
   readonly ticketId: string | undefined;
   readonly environment: ThreadEnvironmentBinding | undefined;
+  /** Requested skill names (format-validated by the host; resolved pack-side). */
+  readonly skills: ReadonlyArray<string> | undefined;
 }
 
 const noteOnFailure =
@@ -67,7 +70,7 @@ export const makeDelegatedChildRecorder =
         launchThreadId !== undefined && launchThreadId !== parentThread.id ? launchThreadId : null;
 
       const metadataNotes =
-        ticketId === undefined && placementThreadId === null
+        ticketId === undefined && placementThreadId === null && record.skills === undefined
           ? []
           : yield* deps.metadata
               .upsert({
@@ -75,8 +78,9 @@ export const makeDelegatedChildRecorder =
                 parentThreadId: parentThread.id,
                 placementThreadId,
                 ticketId: ticketId ?? null,
+                skills: record.skills ?? null,
               })
-              .pipe(noteOnFailure("ticket"));
+              .pipe(noteOnFailure("delegation metadata"));
 
       const environmentNotes =
         record.environment === undefined

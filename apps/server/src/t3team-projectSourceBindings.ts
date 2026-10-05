@@ -37,7 +37,7 @@ import {
   type ProjectSourceMutationHookShape,
 } from "./t3team-projectSourceMutationHook.ts";
 
-export class ProjectSourceBindingClaimedError extends Data.TaggedError(
+class ProjectSourceBindingClaimedError extends Data.TaggedError(
   "ProjectSourceBindingClaimedError",
 )<{ readonly source: string; readonly claimedByProjectId: ProjectId }> {
   override get message(): string {
@@ -46,7 +46,7 @@ export class ProjectSourceBindingClaimedError extends Data.TaggedError(
   }
 }
 
-export const describeSource = (source: ProjectSourceBinding): string =>
+const describeSource = (source: ProjectSourceBinding): string =>
   source.provider === "local"
     ? "local"
     : `${source.provider}:${source.accountId}/${source.externalProjectId}`;
@@ -59,7 +59,7 @@ export const projectSourceClaimMessage = (cause: unknown): string | undefined =>
     ? cause.cause.message
     : undefined;
 
-export const makeProjectSourceMutationHook = Effect.gen(function* () {
+const makeProjectSourceMutationHook = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const bindings = yield* ProjectionProjectSourceBindingRepository;
   const projects = yield* ProjectStoreV2;

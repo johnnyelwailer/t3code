@@ -143,6 +143,10 @@ import Migration0099 from "./Migrations/t3team-077_RepairForkPortTables.ts";
 // id (now 101) to keep the ledger monotonic on every existing fork install.
 import Migration0100 from "./Migrations/t3team-064_ProjectionProjectsMainRepository.ts";
 import Migration0101 from "./Migrations/t3team-065_FeatureFlags.ts";
+// Skills-as-subagents Phase 1 (WI-1): delegate_task `extensions.skills` persists the
+// REQUESTED skill names on the child's metadata row. The host never resolves them — the
+// child's driver loads them from its pack registry at session start (no second catalog).
+import Migration0102 from "./Migrations/t3team-078_SkillDelegationMetadata.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -256,6 +260,7 @@ export const migrationEntries = [
   [99, "RepairForkPortTables", Migration0099],
   [100, "ProjectionProjectsMainRepository", Migration0100],
   [101, "FeatureFlags", Migration0101],
+  [102, "SkillDelegationMetadata", Migration0102],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

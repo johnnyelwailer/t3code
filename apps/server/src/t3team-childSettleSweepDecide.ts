@@ -101,11 +101,11 @@ const TERMINAL_STATUSES: ReadonlySet<string> = new Set([
   "cancelled",
 ]);
 
-export const isSubagentChild = (shell: Pick<SettleSweepShell, "lineage">) =>
+const isSubagentChild = (shell: Pick<SettleSweepShell, "lineage">) =>
   shell.lineage.parentThreadId !== null && shell.lineage.relationshipToParent === "subagent";
 
 /** Live work the sweep never settles over (the same signals upstream's Waiting pill reads). */
-export const hasLiveWork = (shell: SettleSweepShell) =>
+const hasLiveWork = (shell: SettleSweepShell) =>
   (shell.activityRunStatus ?? null) !== null ||
   (shell.pendingBackgroundTasks?.length ?? 0) > 0 ||
   shell.pendingRuntimeRequest !== null;

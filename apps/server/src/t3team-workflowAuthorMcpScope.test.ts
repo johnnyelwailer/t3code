@@ -161,6 +161,7 @@ it.effect(
         { name: "t3team_children", arguments: { op: "environments" } },
         { name: "t3team_orchestration_stop", arguments: { runId: "run-other" } },
         { name: "t3team_ask_user", arguments: { question: "Approve?" } },
+        { name: "t3team_thread_skill_metadata", arguments: {} },
       ];
       for (const refusal of refusals) {
         const refused = yield* server.callTool(refusal);

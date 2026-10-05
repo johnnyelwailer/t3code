@@ -5,6 +5,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { McpSchema, McpServer } from "effect/unstable/ai";
 
+import { T3TeamChildThreadMetadata } from "../../../t3team-childThreadMetadata.ts";
 import { T3TeamToolBroker, type T3TeamToolBinding } from "../../../t3team-toolBroker.ts";
 import { T3TeamToolkitRegistrationLive } from "../../McpHttpServer.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
@@ -269,6 +270,86 @@ it("no longer registers t3team_help: tool descriptions alone must be enough", ()
 
 // In-app agents read the BROKER catalog (TOOL_SPECS copies its descriptions); MCP agents read the
 // toolkit. One description source, rendered with each surface's tool names (fork #350 review).
+// (`t3team_models` is not on the V2 surface — upstream's `orchestrator_capabilities` replaces it.)
+
+// Skills-as-subagents Phase 1 read path: t3team_thread_skill_metadata answers from the
+// delegated-child metadata table, with a clean EMPTY result (never an error) for threads
+// without skill delegation — the driver's soft-fail then yields today's behavior.
+const skillMetadataCall = Effect.fn("T3TeamToolkitTest.skillMetadataCall")(function* (
+  expectedForThread: ReadonlyArray<string>,
+) {
+  const server = yield* McpServer.McpServer;
+  // No threadId: the invocation's own thread (none of these fixtures has skill metadata).
+  const withoutArg = yield* server.callTool({
+    name: "t3team_thread_skill_metadata",
+    arguments: {},
+  });
+  expect(withoutArg.structuredContent).toEqual({ skills: [] });
+  const forThread = yield* server.callTool({
+    name: "t3team_thread_skill_metadata",
+    arguments: { threadId: "thread:child-skills" },
+  });
+  expect(forThread.structuredContent).toEqual({ skills: expectedForThread });
+  const unknownThread = yield* server.callTool({
+    name: "t3team_thread_skill_metadata",
+    arguments: { threadId: "thread:unknown" },
+  });
+  expect(unknownThread.structuredContent).toEqual({ skills: [] });
+});
+
+const emptySkillMetadataLayer = T3TeamToolkitRegistrationLive.pipe(
+  Layer.provideMerge(McpServer.McpServer.layer),
+  Layer.provideMerge(
+    Layer.succeed(
+      T3TeamToolBroker,
+      T3TeamToolBroker.of({
+        bindSession: () => Effect.succeed(undefined),
+        bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
+      }),
+    ),
+  ),
+);
+
+it.effect("t3team_thread_skill_metadata yields an empty result without a metadata store", () =>
+  skillMetadataCall([]).pipe(
+    Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+    Effect.provideService(McpSchema.McpServerClient, client),
+    Effect.provide(emptySkillMetadataLayer),
+  ),
+);
+
+it.effect(
+  "t3team_thread_skill_metadata reads the requested names from child-thread metadata",
+  () => {
+    const store = T3TeamChildThreadMetadata.of({
+      upsert: () => Effect.void,
+      listByChildThreadIds: (childThreadIds) =>
+        Effect.succeed(
+          childThreadIds.includes("thread:child-skills")
+            ? [
+                {
+                  childThreadId: "thread:child-skills",
+                  parentThreadId: "thread:parent",
+                  placementThreadId: null,
+                  ticketId: null,
+                  skills: ["deploy-staging"],
+                  createdAt: "2026-10-05T00:00:00.000Z",
+                },
+              ]
+            : [],
+        ),
+    });
+    const TestLayer = emptySkillMetadataLayer.pipe(
+      Layer.provideMerge(Layer.succeed(T3TeamChildThreadMetadata, store)),
+    );
+    return skillMetadataCall(["deploy-staging"]).pipe(
+      Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+      Effect.provideService(McpSchema.McpServerClient, client),
+      Effect.provide(TestLayer),
+    );
+  },
+);
+
 it("MCP and broker surfaces expose the SAME description text for run and resume", () => {
   const cases = [
     ["t3team_orchestration_run", "t3team.orchestration.run"],

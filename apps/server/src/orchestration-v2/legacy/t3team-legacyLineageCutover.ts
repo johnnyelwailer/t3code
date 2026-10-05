@@ -30,7 +30,7 @@ import {
   readLegacyThreadFlags,
 } from "./t3team-legacyLineageRead.ts";
 
-export const LINEAGE_CUTOVER_STEP = "v1-lineage";
+const LINEAGE_CUTOVER_STEP = "v1-lineage";
 
 export interface LegacyLineageCutoverSummary {
   readonly linked: number;

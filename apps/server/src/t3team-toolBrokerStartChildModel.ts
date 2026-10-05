@@ -67,12 +67,3 @@ export const buildStartChildModelSelection = (
     ...(nextSelections ? { options: nextSelections } : {}),
   };
 };
-
-export const readModelSelectionReasoningEffort = (
-  modelSelection: ModelSelection,
-): string | undefined => {
-  const selection = modelSelection.options?.find(
-    (option) => typeof option.value === "string" && /reason|effort/i.test(option.id),
-  );
-  return typeof selection?.value === "string" ? selection.value : undefined;
-};

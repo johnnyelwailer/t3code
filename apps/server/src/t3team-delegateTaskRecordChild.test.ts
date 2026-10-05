@@ -67,6 +67,7 @@ describe("makeDelegatedChildRecorder", () => {
         title: "Fix login",
         ticketId: undefined,
         environment: undefined,
+        skills: undefined,
       });
       assert.deepEqual(notes, []);
       assert.deepEqual(metadata, [
@@ -75,6 +76,7 @@ describe("makeDelegatedChildRecorder", () => {
           parentThreadId: parentThread.id,
           placementThreadId: null,
           ticketId: "T-7",
+          skills: null,
         },
       ]);
       assert.deepEqual(facts, []);
@@ -104,6 +106,7 @@ describe("makeDelegatedChildRecorder", () => {
         title: undefined,
         ticketId: "T-9",
         environment,
+        skills: ["deploy-staging"],
       });
       assert.deepEqual(metadata, [
         {
@@ -111,6 +114,7 @@ describe("makeDelegatedChildRecorder", () => {
           parentThreadId: parentThread.id,
           placementThreadId: "thread:launcher",
           ticketId: "T-9",
+          skills: ["deploy-staging"],
         },
       ]);
       assert.deepEqual(facts, [{ threadId: childThreadId, patch: { environment } }]);
@@ -128,6 +132,7 @@ describe("makeDelegatedChildRecorder", () => {
         title: "Fix login",
         ticketId: undefined,
         environment: undefined,
+        skills: undefined,
       });
       assert.strictEqual(contexts.get(childThreadId), synced);
     }),
@@ -144,6 +149,7 @@ describe("makeDelegatedChildRecorder", () => {
           title: undefined,
           ticketId: undefined,
           environment: undefined,
+          skills: undefined,
         });
         assert.deepEqual(quiet.metadata, []);
 
@@ -160,9 +166,10 @@ describe("makeDelegatedChildRecorder", () => {
           title: undefined,
           ticketId: "T-1",
           environment: undefined,
+          skills: undefined,
         });
         assert.deepEqual(notes, [
-          "Could not record the child's ticket; the child runs without it.",
+          "Could not record the child's delegation metadata; the child runs without it.",
         ]);
       }),
   );
