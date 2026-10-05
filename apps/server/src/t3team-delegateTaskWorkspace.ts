@@ -7,6 +7,7 @@
  *
  * @module t3team-delegateTaskWorkspace
  */
+import type { ProjectMainRepository } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
 import type { GitWorkflowService } from "./git/GitWorkflowService.ts";
@@ -15,6 +16,8 @@ import {
   readMainRepositoryFromWorkspace,
   type T3TeamStartChildLinkedRepositoryServices,
 } from "./t3team-toolBrokerStartChildContext.ts";
+import { selectDelegatedMainRepository } from "./t3team-delegateTaskMainRepository.ts";
+import { isMainRepositoryEnabled } from "./t3team-mainRepositoryFlag.ts";
 import { repositoryLookupCandidates } from "./t3team-toolBrokerStartChildLinkedRepository.ts";
 import { resolveLinkedRepositoryWorktree } from "./t3team-toolBrokerStartChildLinkedWorktree.ts";
 import { resolveLocalRepositoryWorktree } from "./t3team-toolBrokerStartChildLocalWorktree.ts";
@@ -35,6 +38,8 @@ export const resolveDelegatedWorkspace = (input: {
   readonly projectWorkspaceRoot: string;
   readonly repository: string | undefined;
   readonly baseRef: string | undefined;
+  /** The project record's selected main repository, when it has one. */
+  readonly projectMainRepository?: ProjectMainRepository | null | undefined;
   /** Seeds the new branch name (the child's title or task). */
   readonly branchSeed: string;
   /** Stable per delegation; keeps a retried request on the same worktree path. */
@@ -53,15 +58,18 @@ export const resolveDelegatedWorkspace = (input: {
       services,
       projectWorkspaceRoot,
     });
-    // An adopted meta-repo (monorepo project) carries a `metaRepository` manifest entry: its
-    // sub-work happens in worktrees of the workspace repository itself. The main-repo entry is
-    // optional legacy data, so a failed read degrades to "no main repository" rather than
-    // aborting worktree resolution.
-    const metaRepository = manifestExists
-      ? yield* readMainRepositoryFromWorkspace({ services, projectWorkspaceRoot }).pipe(
-          Effect.orElseSucceed(() => undefined),
-        )
-      : undefined;
+    // A main repository (adopted monorepo or selected linked clone) is the workspace repository
+    // itself: its sub-work happens in worktrees of that checkout. The manifest entry is optional
+    // legacy data, so a failed read degrades to "no main repository" rather than aborting.
+    const metaRepository = selectDelegatedMainRepository({
+      projectMainRepository: input.projectMainRepository,
+      manifestMainRepository: manifestExists
+        ? yield* readMainRepositoryFromWorkspace({ services, projectWorkspaceRoot }).pipe(
+            Effect.orElseSucceed(() => undefined),
+          )
+        : undefined,
+      mainRepositoryEnabled: isMainRepositoryEnabled(),
+    });
 
     if (repository !== undefined) {
       if (!manifestExists) {

@@ -4,33 +4,24 @@
  * repositories: a linked repository, a plain local repository, an adopted
  * meta-repo, the validation errors, and the retry reuse of one worktree.
  */
-import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
-import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it as effectIt } from "@effect/vitest";
+import { PROJECT_STATE_DIR } from "@t3tools/project-context/t3teamProjectStateDir";
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
-import * as FileSystem from "effect/FileSystem";
-import * as Path from "effect/Path";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { ServerConfig } from "./config.ts";
-import type { GitWorkflowService } from "./git/GitWorkflowService.ts";
-import type { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
+import { releaseDelegatedWorkspace } from "./t3team-delegateTaskWorkspace.ts";
 import {
-  delegatedWorktreeKey,
-  releaseDelegatedWorkspace,
-  resolveDelegatedWorkspace,
-} from "./t3team-delegateTaskWorkspace.ts";
-import {
-  HIDDEN_T3TEAM_DIR,
-  MANIFEST_FILE_NAME,
-  REFERENCES_DIR_NAME,
-} from "./t3team-project-repository-utils.ts";
-import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
+  commonDir,
+  fails,
+  git,
+  initRepo,
+  ok,
+  writeManifest,
+} from "./t3team-delegateTaskWorkspaceTestUtils.ts";
 
 const LINKED = "eval-owner/eval-repo";
 const META = "eval-owner/eval-monorepo";
@@ -40,26 +31,6 @@ const linkedWorkspace = NodePath.join(root, "linked-workspace");
 const localWorkspace = NodePath.join(root, "local-workspace");
 const metaWorkspace = NodePath.join(root, "meta-workspace");
 
-const git = (cwd: string, args: ReadonlyArray<string>) => {
-  const result = NodeChildProcess.spawnSync("git", args, { cwd, encoding: "utf8" });
-  if (result.status !== 0) throw new Error(`git ${args.join(" ")}: ${result.stderr}`);
-  return result.stdout.trim();
-};
-const initRepo = (dir: string) => {
-  NodeFS.mkdirSync(dir, { recursive: true });
-  git(dir, ["init"]);
-  git(dir, ["config", "user.email", "eval@test.com"]);
-  git(dir, ["config", "user.name", "Eval"]);
-  NodeFS.writeFileSync(NodePath.join(dir, "README.md"), "# eval\n");
-  git(dir, ["add", "."]);
-  git(dir, ["commit", "-m", "initial"]);
-  git(dir, ["branch", "-M", "main"]);
-};
-const writeManifest = (workspace: string, manifest: unknown) => {
-  const dir = NodePath.join(workspace, HIDDEN_T3TEAM_DIR, REFERENCES_DIR_NAME);
-  NodeFS.mkdirSync(dir, { recursive: true });
-  NodeFS.writeFileSync(NodePath.join(dir, MANIFEST_FILE_NAME), JSON.stringify(manifest));
-};
 const linkedEntry = {
   url: `https://github.com/${LINKED}`,
   localPath: linkedRepo,
@@ -80,60 +51,6 @@ writeManifest(metaWorkspace, {
   linkedRepositories: [linkedEntry],
 });
 afterAll(() => NodeFS.rmSync(root, { recursive: true, force: true }));
-
-const resolve = (input: {
-  readonly workspaceRoot: string;
-  readonly repository?: string;
-  readonly key?: string;
-}) =>
-  Effect.gen(function* () {
-    const driver = yield* GitVcsDriver.GitVcsDriver;
-    const services = {
-      fileSystem: yield* FileSystem.FileSystem,
-      path: yield* Path.Path,
-      gitWorkflow: {
-        createWorktree: (args: Parameters<GitWorkflowService["Service"]["createWorktree"]>[0]) =>
-          driver.createWorktree(args),
-        localStatus: ({ cwd }: { readonly cwd: string }) =>
-          Effect.sync(() => ({ isRepo: true, refName: git(cwd, ["branch", "--show-current"]) })),
-      } as unknown as GitWorkflowService["Service"],
-      sourceControlProviders: {
-        resolve: () => Effect.succeed({ getDefaultBranch: () => Effect.succeed("main") }),
-      } as unknown as SourceControlProviderRegistry["Service"],
-    };
-    return yield* resolveDelegatedWorkspace({
-      services,
-      projectWorkspaceRoot: input.workspaceRoot,
-      repository: input.repository,
-      baseRef: undefined,
-      branchSeed: "Fix checkout",
-      worktreeKey: delegatedWorktreeKey("thread:parent", input.key ?? NodePath.basename(root)),
-    }).pipe(Effect.result);
-  }).pipe(
-    Effect.provide(
-      GitVcsDriver.layer.pipe(
-        Layer.provideMerge(
-          ServerConfig.layerTest(process.cwd(), { prefix: "t3-delegate-ws-git-" }),
-        ),
-        Layer.provideMerge(NodeServices.layer),
-      ),
-    ),
-    Effect.scoped,
-    Effect.runPromise,
-  );
-
-const ok = async (input: Parameters<typeof resolve>[0]) => {
-  const result = await resolve(input);
-  if (result._tag !== "Success") throw new Error(`expected success: ${String(result.failure)}`);
-  return result.success;
-};
-const fails = async (input: Parameters<typeof resolve>[0]) => {
-  const result = await resolve(input);
-  if (result._tag !== "Failure") throw new Error("expected a failure");
-  return result.failure;
-};
-const commonDir = (worktree: string) =>
-  NodePath.resolve(worktree, git(worktree, ["rev-parse", "--git-common-dir"]));
 
 describe("resolveDelegatedWorkspace", () => {
   it("creates a worktree of the named linked repository", async () => {
@@ -156,7 +73,7 @@ describe("resolveDelegatedWorkspace", () => {
     expect(resolved.repository).toBeNull();
     expect(resolved.worktreePath.startsWith(localWorkspace)).toBe(true);
     expect(NodeFS.readFileSync(NodePath.join(localWorkspace, ".gitignore"), "utf8")).toContain(
-      ".t3team/",
+      `${PROJECT_STATE_DIR}/`,
     );
   });
 

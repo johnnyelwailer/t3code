@@ -74,12 +74,12 @@ const make = Effect.gen(function* () {
     workflowLaunchThreadFor: workflows?.launchThreadForChildThread,
   });
 
-  const loadWorkspaceRoot = (projectId: Parameters<typeof projects.getShell>[0]) =>
+  const loadProjectShell = (projectId: Parameters<typeof projects.getShell>[0]) =>
     projects.getShell(projectId).pipe(
       Effect.mapError((error) => failure("orchestration_error", error.message)),
       Effect.flatMap((shell) =>
         Option.isSome(shell)
-          ? Effect.succeed(shell.value.workspaceRoot)
+          ? Effect.succeed(shell.value)
           : Effect.fail(failure("thread_not_found", `Project ${projectId} was not found.`)),
       ),
     );
@@ -105,12 +105,15 @@ const make = Effect.gen(function* () {
 
         const { parentThread } = input;
         const isolated = input.workspace?.isolation === "worktree" ? input.workspace : undefined;
+        const project =
+          isolated === undefined ? undefined : yield* loadProjectShell(parentThread.projectId);
         const workspace =
-          isolated === undefined
+          isolated === undefined || project === undefined
             ? undefined
             : yield* resolveDelegatedWorkspace({
                 services,
-                projectWorkspaceRoot: yield* loadWorkspaceRoot(parentThread.projectId),
+                projectWorkspaceRoot: project.workspaceRoot,
+                projectMainRepository: project.mainRepository,
                 repository: isolated.repository,
                 baseRef: isolated.baseRef,
                 branchSeed: input.title ?? "child",
