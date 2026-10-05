@@ -131,7 +131,7 @@ export function LocalWorkspaceSidebarRow({
               <span className="absolute inset-0 flex items-center justify-center transition-opacity duration-150 group-hover/project-header:opacity-0">
                 <span
                   data-t3team-state={resolveStatusOrbState(projectStatus) ?? undefined}
-                  className={`size-[9px] rounded-full ${resolveStatusOrbState(projectStatus) ? STATUS_ORB_CLASS : projectStatus.dotClass} ${projectStatus.pulse ? "animate-pulse" : ""}`}
+                  className={`size-[9px] rounded-full ${resolveStatusOrbState(projectStatus) ? STATUS_ORB_CLASS : projectStatus.dotClass} ${projectStatus.pulse ? (projectStatus.pulseClass ?? "animate-pulse") : ""}`}
                 />
               </span>
               <ChevronRightIcon className="absolute inset-0 m-auto size-3.5 text-muted-foreground/70 opacity-0 transition-opacity duration-150 group-hover/project-header:opacity-100" />

@@ -17,6 +17,8 @@ type ProjectStatus = {
   colorClass: string;
   dotClass: string;
   pulse?: boolean;
+  /** Optional override of the pulse animation (e.g. the slower "waiting" motion). */
+  pulseClass?: string;
 };
 
 type ProjectSidebarProjectHeaderProps = {
@@ -86,7 +88,7 @@ export function ProjectSidebarProjectHeader({
               <span className="absolute inset-0 flex items-center justify-center transition-opacity duration-150 group-hover/project-header:opacity-0">
                 <span
                   data-t3team-state={resolveStatusOrbState(projectStatus) ?? undefined}
-                  className={`size-[9px] rounded-full ${resolveStatusOrbState(projectStatus) ? STATUS_ORB_CLASS : projectStatus.dotClass} ${projectStatus.pulse ? "animate-pulse" : ""}`}
+                  className={`size-[9px] rounded-full ${resolveStatusOrbState(projectStatus) ? STATUS_ORB_CLASS : projectStatus.dotClass} ${projectStatus.pulse ? (projectStatus.pulseClass ?? "animate-pulse") : ""}`}
                 />
               </span>
               <ChevronRightIcon className="absolute inset-0 m-auto size-3.5 opacity-0 transition-opacity duration-150 group-hover/project-header:opacity-100" />
