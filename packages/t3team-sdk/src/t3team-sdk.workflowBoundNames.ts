@@ -17,9 +17,12 @@ import { hostSource } from "@runbook/ts/globals";
 import type { CheckpointPrimitives } from "@runbook/core/checkpoint";
 
 import type { WorkflowPrimitives } from "./t3team-sdk.primitives.ts";
+import type { ReducePrimitives } from "./t3team-sdk.reducePrimitive.ts";
+import type { RetryPrimitives } from "./t3team-sdk.retryPrimitive.ts";
 import type { SchedulePrimitives } from "./t3team-sdk.schedulePrimitive.ts";
 import type { SignalPrimitives } from "./t3team-sdk.signalPrimitive.ts";
 import type { WorkflowThreadPrimitives } from "./t3team-sdk.threadPrimitives.ts";
+import type { WatermarkPrimitives } from "./t3team-sdk.watermarkPrimitive.ts";
 import { buildWorkflowGlobals } from "./t3team-sdk.workflowGlobals.ts";
 
 const inert = (): never => {
@@ -45,6 +48,9 @@ export const WORKFLOW_BOUND_GLOBAL_NAMES: ReadonlyArray<string> = Object.freeze(
       } as unknown as WorkflowThreadPrimitives,
       schedule: { waitUntil: inert } as unknown as SchedulePrimitives,
       signals: { getSignalSource: inert } as unknown as SignalPrimitives,
+      watermark: inert as unknown as WatermarkPrimitives["watermark"],
+      reduce: { accumulate: inert, reducerState: inert } as unknown as ReducePrimitives,
+      retry: { retry: inert } as unknown as RetryPrimitives,
     }),
   ),
 );
