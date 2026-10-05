@@ -209,7 +209,7 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
     id: "t3team.orchestration.run",
     label: "Run ephemeral orchestration",
     title: "Run a temporary agent orchestration in this conversation",
-    description: `Run a temporary agent orchestration immediately in this conversation — a durable, journaled t3team engine run that can pause for user decisions; NOT a Claude Code/Codex/CI workflow. Pass exactly one of 'source' (inline orchestration TypeScript, persisted under .t3team-runs/<runId>/) or 'workflowPath' (existing .workflow.ts in the workspace). Body format: ${PROJECT_STATE_DIR}/recipes/AUTHORING.md; validate with t3team.recipe.validate first. Returns {runId, status: accepted|completed|suspended|failed, handoff: 'workflow-ui', output?, error?}. A successful 'workflow-ui' handoff means the orchestration card owns progress: end the current turn immediately with no follow-up assistant prose. A user decision appears on that card and resumes the orchestration on reply — do not poll. On 'failed', fix the source using 'error' and re-run. No approval gate; at most 8 live ephemeral runs.`,
+    description: `Run a temporary agent orchestration immediately in this conversation — a durable, journaled t3team engine run that can pause for user decisions; NOT a Claude Code/Codex/CI workflow. Pass exactly one of 'source' (inline orchestration TypeScript, persisted under .t3team-runs/<runId>/) or 'workflowPath' (existing .workflow.ts in the workspace), plus the required 'intent' ({goal, expectedOutcome, guardrails}) — the run's contract. Body format: ${PROJECT_STATE_DIR}/recipes/AUTHORING.md; validate with t3team.recipe.validate first. Returns {runId, status: accepted|completed|suspended|failed, handoff: 'workflow-ui', output?, error?}. A successful 'workflow-ui' handoff means the orchestration card owns progress: end the current turn immediately with no follow-up assistant prose. A user decision appears on that card and resumes the orchestration on reply — do not poll. On 'failed', fix the source using 'error' and re-run. No approval gate; at most 8 live ephemeral runs.`,
     capabilities: ["write"],
     kind: "thread",
     surfaces: ["thread"],
@@ -234,7 +234,25 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
         args: {
           description: "Launch arguments decoded by the orchestration's meta.inputs schema.",
         },
+        intent: {
+          type: "object",
+          description:
+            "The run's contract: goal, expectedOutcome, guardrails (at least one). Natural-language constraints (provider/model, scope) belong here.",
+          properties: {
+            goal: { type: "string", minLength: 1 },
+            expectedOutcome: { type: "string", minLength: 1 },
+            guardrails: { type: "array", items: { type: "string", minLength: 1 }, minItems: 1 },
+          },
+          required: ["goal", "expectedOutcome", "guardrails"],
+        },
+        replaceRunId: {
+          type: "string",
+          description:
+            "A still-active run this thread launched; it is stopped before the new one launches.",
+          minLength: 1,
+        },
       },
+      required: ["intent"],
     },
   },
   "t3team.orchestration.status": {
