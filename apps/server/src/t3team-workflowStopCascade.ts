@@ -1,7 +1,10 @@
 import { CommandId, ThreadId, type OrchestrationCommand } from "@t3tools/contracts";
 
+import { retireWorkflowAuthorThread } from "./t3team-workflowAuthorThreadCleanup.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
+
+let childrenRetired = 0;
 
 export async function stopWorkflowsOwnedByThread(input: {
   readonly registry: T3TeamWorkflowEngineRegistryShape;
@@ -26,5 +29,11 @@ export async function stopWorkflowsOwnedByThread(input: {
         createdAt: input.createdAt,
       });
     }
+    await retireWorkflowAuthorThread({
+      runId,
+      dispatch: input.dispatch,
+      newId: () => `${runId}:${childrenRetired++}`,
+      nowIso: () => input.createdAt,
+    });
   }
 }

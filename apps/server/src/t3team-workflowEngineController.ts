@@ -13,6 +13,7 @@
  */
 // @effect-diagnostics globalConsole:off -- onComplete sink failure log in a plain Promise path, outside any Effect runtime.
 
+import { retireWorkflowAuthorThread } from "./t3team-workflowAuthorThreadCleanup.ts";
 import { createWorkflowRunHost } from "@t3team/sdk";
 
 import { summarizeCompositionBranchFailures } from "./t3team-workflowEngineCompositionFailure.ts";
@@ -64,7 +65,7 @@ export function createWorkflowRunController(
           nowIso: input.nowIso,
         });
         // A throwing output sink must not flip the run to "failed" after the completion
-        // message already posted (double-notify).
+        // message already posted (double-notify), and must not skip retiring the author.
         try {
           await input.onComplete?.(result.result);
         } catch (sinkError) {
@@ -73,6 +74,12 @@ export function createWorkflowRunController(
             sinkError,
           );
         }
+        await retireWorkflowAuthorThread({
+          runId: input.runId,
+          dispatch: input.dispatch,
+          newId: input.newId,
+          nowIso: input.nowIso,
+        });
       },
       onFailed: async ({ phase, error }) => {
         await settleWorkflowRunFailure({

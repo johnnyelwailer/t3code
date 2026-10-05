@@ -359,3 +359,38 @@ it.live(
       });
     }).pipe(Effect.provide(TestLayer)),
 );
+
+// Review of fork #349: corrected source used to pass only the format precheck; the incident's
+// unbound import would have been accepted here and died at the re-drive.
+it.effect("refuses corrected source that fails the full check (unbound @t3team/sdk import)", () =>
+  Effect.gen(function* () {
+    const repo = yield* WorkflowRunRepository;
+    const handlers = yield* makeHandlers;
+    const runId = "failed-bad-fix";
+    const runDir = NodePath.join(cwd, ".t3team-runs", runId);
+    NodeFS.mkdirSync(runDir, { recursive: true });
+    NodeFS.writeFileSync(NodePath.join(runDir, "workflow.ts"), failingSource);
+    yield* repo.upsert({ ...baseRow(runId), status: "failed" });
+
+    const refused = yield* handlers
+      .resumeWorkflowRun({
+        runId,
+        source: [
+          `import { defineModelX } from "@t3team/sdk";`,
+          `export const meta = { name: "resume-tool.fixture" } as const;`,
+          `export default async function run() { return defineModelX({}); }`,
+        ].join("\n"),
+      })
+      .pipe(Effect.result);
+    assert.strictEqual(refused._tag, "Failure");
+    if (refused._tag === "Failure") {
+      assert.include(refused.failure, "defineModelX");
+      assert.include(refused.failure, "[bindings]");
+    }
+    // Nothing was swapped in.
+    assert.strictEqual(
+      NodeFS.readFileSync(NodePath.join(runDir, "workflow.ts"), "utf8"),
+      failingSource,
+    );
+  }).pipe(Effect.provide(TestLayer)),
+);

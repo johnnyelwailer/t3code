@@ -13,7 +13,6 @@ import {
   T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION,
 } from "@t3tools/project-context/t3teamWidgetGuidance";
 import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
-import { T3TEAM_WORKFLOW_TAGLINE } from "../../../t3team-workflowManual.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
 const dependencies = [McpInvocationContext.McpInvocationContext, T3TeamToolBroker];
@@ -410,13 +409,17 @@ const orchestrationRunParameters = Schema.Struct({
 });
 
 const orchestrationRunDescription =
-  `${T3TEAM_WORKFLOW_TAGLINE} Pass \`source\` (the orchestration body — MUST be orchestration ` +
-  "TypeScript starting with `export const meta = {...}`, NEVER YAML or JSON) or `workflowPath` " +
-  "(an existing `.workflow.ts`), required `intent` ({goal, expectedOutcome, guardrails}), and " +
-  "optional `args`. Returns {runId, status: accepted|completed|suspended|failed, " +
-  "handoff: 'workflow-ui', output?, error?}. After a successful handoff, end the current turn " +
-  "with no assistant prose; the orchestration card owns progress and user decisions. ONE launch " +
-  "per turn: while a run this thread launched is still active, a second call is refused — pass " +
+  "Agent orchestration: run a structure that fans work out to several agents (parallel or in " +
+  "sequence), enforces result contracts, and can wake itself on durable timers. Use it for " +
+  "complex or long work; for a simple single-agent task, just do it directly. You describe, the " +
+  "host authors: pass `intent` ({goal, expectedOutcome, guardrails} — put constraints such as " +
+  "which provider/model to use in plain language here) and optional `args` (the orchestration's " +
+  "input); a dedicated author agent writes, validates and launches the source. Pass " +
+  "`workflowPath` only to run an existing saved `.workflow.ts` as-is. Returns {runId, status: " +
+  "authoring|accepted, handoff: 'workflow-ui'} immediately; the orchestration card shows " +
+  "authoring → running → the result, and only a genuinely unfixable outcome is reported back, " +
+  "once. After the handoff, end the current turn with no assistant prose. ONE launch per turn: " +
+  "while a run this thread launched is still active, a second call is refused — pass " +
   "`replaceRunId` to stop that run and launch the replacement instead.";
 
 const T3TeamOrchestrationRunTool = Tool.make("t3team_orchestration_run", {

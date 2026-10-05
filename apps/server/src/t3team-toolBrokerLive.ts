@@ -118,7 +118,12 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
       threadId,
       title,
     });
-  const recipeToolsForThread = makeRecipeToolHandlers({ fileSystem, path, loadThreadProject });
+  const recipeToolsForThread = makeRecipeToolHandlers({
+    fileSystem,
+    path,
+    loadThreadProject,
+    ...(providerRegistry ? { listProviders: () => providerRegistry.getProviders } : {}),
+  });
   // Ephemeral workflow tools (undefined per-tool when unwired) — see the wiring module.
   const workflowTools = yield* makeWorkflowToolsForThread({
     fileSystem,

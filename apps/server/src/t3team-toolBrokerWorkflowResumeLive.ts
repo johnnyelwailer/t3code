@@ -16,6 +16,7 @@ import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnap
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
+import { ProviderRegistry } from "./provider/Services/ProviderRegistry.ts";
 import type { WorkflowResumeToolDeps } from "./t3team-toolBrokerWorkflowResumeActions.ts";
 import {
   makeWorkflowResumeToolHandlers,
@@ -52,6 +53,7 @@ export const makeWorkflowResumeToolsForThread = Effect.fn("makeWorkflowResumeToo
     );
     const threadQuery = Option.getOrUndefined(yield* Effect.serviceOption(ProjectionSnapshotQuery));
     const signalStore = Option.getOrUndefined(yield* Effect.serviceOption(WorkflowSignalStore));
+    const providerRegistry = Option.getOrUndefined(yield* Effect.serviceOption(ProviderRegistry));
     const turnRedrive =
       orchestration === undefined || threadQuery === undefined
         ? undefined
@@ -73,6 +75,9 @@ export const makeWorkflowResumeToolsForThread = Effect.fn("makeWorkflowResumeToo
       ...(turnRedrive === undefined ? {} : { turnRedrive }),
       // GHE #332: a `watching` run's resume drains its bridged inbox events here.
       ...(signalStore === undefined ? {} : { signalStore }),
+      ...(providerRegistry === undefined
+        ? {}
+        : { listProviders: () => providerRegistry.getProviders }),
     }) as (threadId: ThreadId) => T3TeamWorkflowResumeToolHandlers;
   },
 );
