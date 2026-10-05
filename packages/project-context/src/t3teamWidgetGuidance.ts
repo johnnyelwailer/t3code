@@ -13,11 +13,8 @@
  *   `t3team-mcpToolInputSchema.test.ts`.
  * - the tool-level description ({@link T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION}), used by
  *   the same live toolkit and catalog entry.
- * - the agent-orchestration manual's `thread.showWidget` entry
- *   (`apps/server/src/t3team-workflowManual.ts`) via its `t3team_help("widget-guidance")`
- *   topic (`apps/server/src/t3team-help.ts`) — that path calls `thread.showWidget`
- *   directly instead of going through the MCP tool catalog, so it never saw this text
- *   before this constant existed.
+ * - orchestration bodies calling `thread.showWidget` directly reach the same rules through the
+ *   reporting contract the author agent reads (`apps/server/src/t3team-workflowReportContract.ts`).
  *
  * All surfaces import these constants instead of copy-pasting the guidance, so there
  * is exactly one place to change it.

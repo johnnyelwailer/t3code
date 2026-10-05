@@ -6,6 +6,8 @@
  */
 import { WORKFLOW_AUTHOR_REFERENCE, type WorkflowRunIntent } from "@t3team/sdk";
 
+import { WORKFLOW_REPORTING_CONTRACT } from "./t3team-workflowReportContract.ts";
+
 /** Keep a pathological draft from blowing the author's context. */
 const MAX_EMBEDDED_SOURCE_CHARS = 16_000;
 
@@ -57,6 +59,7 @@ export function buildWorkflowAuthorKickoff(input: {
           "```",
         ]),
     WORKFLOW_AUTHOR_REFERENCE,
+    WORKFLOW_REPORTING_CONTRACT,
   ].join("\n\n");
 }
 
