@@ -13,7 +13,11 @@ import {
   registerContextRefreshTestCleanup,
   writeContextRefreshTestJson,
 } from "./t3team-contextRefreshTestFixtures.ts";
-import { buildJiraTicketEntryPoint, T3TEAM_PROJECT_CONTEXT_ROOT, T3TEAM_WORK_ITEMS_INDEX_PATH } from "@t3tools/project-context/t3teamContextPaths";
+import {
+  buildJiraTicketEntryPoint,
+  T3TEAM_PROJECT_CONTEXT_ROOT,
+  T3TEAM_WORK_ITEMS_INDEX_PATH,
+} from "@t3tools/project-context/t3teamContextPaths";
 
 registerContextRefreshTestCleanup();
 

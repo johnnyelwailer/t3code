@@ -15,7 +15,11 @@ import {
   createTicket,
 } from "~/t3team/t3team-githubActivityContextPayload.testFixtures";
 
-const GH_ACTIVITY_INPUT = { projectId: "Project Alpha", repository: "example/project-alpha", activityId: "PR-42" };
+const GH_ACTIVITY_INPUT = {
+  projectId: "Project Alpha",
+  repository: "example/project-alpha",
+  activityId: "PR-42",
+};
 const GH_ROOT = buildGitHubActivityCacheRoot(GH_ACTIVITY_INPUT);
 const GH_ENTRY = buildGitHubActivityEntryPoint(GH_ACTIVITY_INPUT);
 const LINKED_TICKET_ROOT = buildJiraTicketCacheRoot("Project Alpha", "PROJ-7");
@@ -85,9 +89,9 @@ describe("buildGitHubActivityContextBundle", () => {
       ]),
     );
 
-    expect(bundle.files.some((file) => file.relativePath === `${GH_ROOT}/pull-request/diff.diff`)).toBe(
-      true,
-    );
+    expect(
+      bundle.files.some((file) => file.relativePath === `${GH_ROOT}/pull-request/diff.diff`),
+    ).toBe(true);
     expect(
       bundle.files.some(
         (file) => file.relativePath === `${GH_ROOT}/pull-request/snapshots/head/src/context.ts`,

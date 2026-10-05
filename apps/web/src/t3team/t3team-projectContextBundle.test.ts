@@ -105,9 +105,9 @@ describe("buildProjectContextBundle", () => {
       },
     });
 
-    expect(
-      bundle.files.some((file) => file.relativePath === T3TEAM_WORK_ITEMS_INDEX_PATH),
-    ).toBe(false);
+    expect(bundle.files.some((file) => file.relativePath === T3TEAM_WORK_ITEMS_INDEX_PATH)).toBe(
+      false,
+    );
     expect(
       JSON.parse(
         bundle.files.find((file) => file.relativePath === T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH)
@@ -146,7 +146,9 @@ describe("buildProjectContextBundle", () => {
     });
 
     expect(
-      bundle.files.some((file) => file.relativePath === `${T3TEAM_PROJECT_CONTEXT_ROOT}/threads/index.json`),
+      bundle.files.some(
+        (file) => file.relativePath === `${T3TEAM_PROJECT_CONTEXT_ROOT}/threads/index.json`,
+      ),
     ).toBe(true);
     expect(
       bundle.files.some(

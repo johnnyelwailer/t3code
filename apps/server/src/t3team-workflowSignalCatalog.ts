@@ -78,6 +78,7 @@ async function validateParams<Value>(
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(
       `Stored params for signal source '${sourceName}' failed its declaration schema: ${detail}`,
+      { cause: error },
     );
   }
 }

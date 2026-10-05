@@ -188,7 +188,9 @@ describe("listProjectRecipesForAgent with pack-shipped recipes", () => {
         ]);
         const triage = result.recipes.find((recipe) => recipe.id === "triage");
         expect(triage?.title).toBe("Project triage");
-        expect(triage?.recipePath).toBe(path.join(workspaceRoot, `${HIDDEN_T3TEAM_DIR}/recipes/triage`));
+        expect(triage?.recipePath).toBe(
+          path.join(workspaceRoot, `${HIDDEN_T3TEAM_DIR}/recipes/triage`),
+        );
         expect(triage?.packId).toBeUndefined();
         expect(result.diagnostics?.join(" ")).toContain("shadowed by project-local");
       }),

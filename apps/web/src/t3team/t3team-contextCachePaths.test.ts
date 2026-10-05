@@ -18,7 +18,9 @@ import {
 describe("t3team context cache paths", () => {
   it("creates stable shared roots for project and ticket context", () => {
     expect(buildProjectContextCacheRoot("Project Alpha")).toBe(T3TEAM_PROJECT_CONTEXT_ROOT);
-    expect(buildProjectContextEntryPoint("Project Alpha")).toBe(T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH);
+    expect(buildProjectContextEntryPoint("Project Alpha")).toBe(
+      T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH,
+    );
 
     expect(buildJiraTicketCacheRoot("Project Alpha", "IES-17820")).toBe(
       `${T3TEAM_PROJECT_CONTEXT_ROOT}/jira/project-alpha/items/ies-17820`,
@@ -32,7 +34,9 @@ describe("t3team context cache paths", () => {
         ticketKey: "IES-17820",
         focus: "Sent requests / comments",
       }),
-    ).toBe(`${T3TEAM_PROJECT_CONTEXT_ROOT}/jira/project-alpha/items/ies-17820/focus/sent-requests-comments.json`);
+    ).toBe(
+      `${T3TEAM_PROJECT_CONTEXT_ROOT}/jira/project-alpha/items/ies-17820/focus/sent-requests-comments.json`,
+    );
   });
 
   it("sanitizes github cache roots without duplicating repository separators", () => {
@@ -42,7 +46,9 @@ describe("t3team context cache paths", () => {
       activityId: "PR-123 review_requested",
     });
 
-    expect(root).toBe(`${T3TEAM_PROJECT_CONTEXT_ROOT}/github/project-alpha/foo-bar-baz/pr-123-review-requested`);
+    expect(root).toBe(
+      `${T3TEAM_PROJECT_CONTEXT_ROOT}/github/project-alpha/foo-bar-baz/pr-123-review-requested`,
+    );
     expect(
       buildGitHubActivityEntryPoint({
         projectId: "Project Alpha",

@@ -51,9 +51,7 @@ it.effect("refreshes a work-item bundle server-side without browser sync", () =>
     assert.equal(entrypoint.key, "AC-91");
     assert.isTrue(NodeFS.existsSync(manifestPath));
     assert.isTrue(
-      NodeFS.existsSync(
-        NodePath.join(root, `${T3TEAM_PROJECT_CONTEXT_ROOT}/.sync-commit.json`),
-      ),
+      NodeFS.existsSync(NodePath.join(root, `${T3TEAM_PROJECT_CONTEXT_ROOT}/.sync-commit.json`)),
     );
 
     const cached = yield* service.refreshWorkItem(input);

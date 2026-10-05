@@ -2,7 +2,10 @@
 // @effect-diagnostics preferSchemaOverJson:off - fixture JSON keeps the test compact.
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { T3TEAM_PROJECT_CONTEXT_ROOT, T3TEAM_WORK_ITEMS_INDEX_PATH } from "@t3tools/project-context/t3teamContextPaths";
+import {
+  T3TEAM_PROJECT_CONTEXT_ROOT,
+  T3TEAM_WORK_ITEMS_INDEX_PATH,
+} from "@t3tools/project-context/t3teamContextPaths";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";

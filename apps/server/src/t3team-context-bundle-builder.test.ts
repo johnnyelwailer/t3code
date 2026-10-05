@@ -43,9 +43,7 @@ describe("buildT3TeamWorkItemContextBundle", () => {
     });
 
     const paths = bundle.files.map((file) => file.relativePath);
-    expect(
-      paths.indexOf(ATTACHMENT_INDEX),
-    ).toBeLessThan(paths.indexOf(ENTRY_POINT));
+    expect(paths.indexOf(ATTACHMENT_INDEX)).toBeLessThan(paths.indexOf(ENTRY_POINT));
     expect(bundle.files.at(-1)?.contents).toContain('"availability": "full"');
   });
 });

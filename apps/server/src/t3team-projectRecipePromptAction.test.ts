@@ -36,7 +36,12 @@ afterAll(() => {
   NodeFS.rmSync(workspaceRoot, { recursive: true, force: true });
 });
 
-const recipeRoot = NodePath.join(workspaceRoot, HIDDEN_T3TEAM_DIR, "recipes", "explain-selected-work");
+const recipeRoot = NodePath.join(
+  workspaceRoot,
+  HIDDEN_T3TEAM_DIR,
+  "recipes",
+  "explain-selected-work",
+);
 NodeFS.mkdirSync(recipeRoot, { recursive: true });
 NodeFS.writeFileSync(
   NodePath.join(recipeRoot, "prompt.md"),

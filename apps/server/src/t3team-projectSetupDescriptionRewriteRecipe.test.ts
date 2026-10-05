@@ -287,14 +287,19 @@ describe("describe-rewrite bundled workflow", () => {
   it("ships to a workspace as a workflow-backed bundled recipe, with no authoring by the user", () => {
     const files = renderBundledRecipeSetupFiles();
     const paths = files.map((file) => file.relativePath);
-    expect(paths).toContain(`${PROJECT_STATE_DIR}/recipes/${DESCRIPTION_REWRITE_RECIPE_ID}/workflow.ts`);
-    expect(paths).toContain(`${PROJECT_STATE_DIR}/recipes/${DESCRIPTION_REWRITE_RECIPE_ID}/recipe.ts`);
+    expect(paths).toContain(
+      `${PROJECT_STATE_DIR}/recipes/${DESCRIPTION_REWRITE_RECIPE_ID}/workflow.ts`,
+    );
+    expect(paths).toContain(
+      `${PROJECT_STATE_DIR}/recipes/${DESCRIPTION_REWRITE_RECIPE_ID}/recipe.ts`,
+    );
 
     // The recipe module must point its default action at that workflow, or discovery would treat
     // the recipe as prompt-backed and the body would never run.
     const module = files.find(
       (file) =>
-        file.relativePath === `${PROJECT_STATE_DIR}/recipes/${DESCRIPTION_REWRITE_RECIPE_ID}/recipe.ts`,
+        file.relativePath ===
+        `${PROJECT_STATE_DIR}/recipes/${DESCRIPTION_REWRITE_RECIPE_ID}/recipe.ts`,
     );
     expect(module?.contents).toContain('defineWorkflow<typeof Workflow>("./workflow.ts")');
     expect(module?.contents).toContain('"mutation.draft"');

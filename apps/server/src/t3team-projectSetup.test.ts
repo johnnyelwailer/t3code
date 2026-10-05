@@ -42,18 +42,24 @@ describe("renderT3TeamProjectSetupFiles", () => {
     const entrypoint = files.find(
       (file) => file.relativePath === T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH,
     );
-    const statusSkill = files.find((file) => file.relativePath === T3TEAM_PROJECT_STATUS_SKILL_PATH);
+    const statusSkill = files.find(
+      (file) => file.relativePath === T3TEAM_PROJECT_STATUS_SKILL_PATH,
+    );
     const starterRecipeModule = files.find(
-      (file) => file.relativePath === `${T3TEAM_PROJECT_RECIPES_ROOT}/explain-selected-work/recipe.ts`,
+      (file) =>
+        file.relativePath === `${T3TEAM_PROJECT_RECIPES_ROOT}/explain-selected-work/recipe.ts`,
     );
     const starterRecipePrompt = files.find(
-      (file) => file.relativePath === `${T3TEAM_PROJECT_RECIPES_ROOT}/explain-selected-work/prompt.md`,
+      (file) =>
+        file.relativePath === `${T3TEAM_PROJECT_RECIPES_ROOT}/explain-selected-work/prompt.md`,
     );
     const manageRecipeModule = files.find(
-      (file) => file.relativePath === `${T3TEAM_PROJECT_RECIPES_ROOT}/manage-project-recipes/recipe.ts`,
+      (file) =>
+        file.relativePath === `${T3TEAM_PROJECT_RECIPES_ROOT}/manage-project-recipes/recipe.ts`,
     );
     const manageRecipePrompt = files.find(
-      (file) => file.relativePath === `${T3TEAM_PROJECT_RECIPES_ROOT}/manage-project-recipes/prompt.md`,
+      (file) =>
+        file.relativePath === `${T3TEAM_PROJECT_RECIPES_ROOT}/manage-project-recipes/prompt.md`,
     );
     const manageRecipeWorkflow = files.find(
       (file) =>
@@ -61,7 +67,8 @@ describe("renderT3TeamProjectSetupFiles", () => {
     );
     const skillTemplate = files.find(
       (file) =>
-        file.relativePath === `${T3TEAM_PROJECT_TEMPLATES_ROOT}/skills/repeatable-workflow/SKILL.md`,
+        file.relativePath ===
+        `${T3TEAM_PROJECT_TEMPLATES_ROOT}/skills/repeatable-workflow/SKILL.md`,
     );
     const recipesAuthoringGuide = files.find(
       (file) => file.relativePath === `${T3TEAM_PROJECT_RECIPES_ROOT}/AUTHORING.md`,

@@ -69,10 +69,16 @@ describe("project state dir resolver", () => {
     // is not the state dir: already-physical paths pass through, and the state-dir segment wins
     // over an ancestor of the same name.
     expect(
-      toPhysicalProjectStatePath("/anc/.t3team/worktrees/ws/.nexi/recipes/r/plan.workflow.ts", ".nexi"),
+      toPhysicalProjectStatePath(
+        "/anc/.t3team/worktrees/ws/.nexi/recipes/r/plan.workflow.ts",
+        ".nexi",
+      ),
     ).toBe("/anc/.t3team/worktrees/ws/.nexi/recipes/r/plan.workflow.ts");
     expect(
-      toPhysicalProjectStatePath("/anc/.t3team/worktrees/ws/.t3team/recipes/r/plan.workflow.ts", ".nexi"),
+      toPhysicalProjectStatePath(
+        "/anc/.t3team/worktrees/ws/.t3team/recipes/r/plan.workflow.ts",
+        ".nexi",
+      ),
     ).toBe("/anc/.t3team/worktrees/ws/.nexi/recipes/r/plan.workflow.ts");
   });
 });

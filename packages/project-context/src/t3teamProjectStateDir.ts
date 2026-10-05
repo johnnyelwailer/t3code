@@ -67,9 +67,5 @@ export function toPhysicalProjectStatePath(
   const last = matches[matches.length - 1]!;
   const tail = normalized.slice(last.index! + last[0].length);
   if (PHYSICAL_STATE_DIR_SEGMENT.test(tail)) return statePath;
-  return (
-    normalized.slice(0, last.index! + (last[1]?.length ?? 0)) +
-    stateDirName +
-    tail
-  );
+  return normalized.slice(0, last.index! + (last[1]?.length ?? 0)) + stateDirName + tail;
 }
