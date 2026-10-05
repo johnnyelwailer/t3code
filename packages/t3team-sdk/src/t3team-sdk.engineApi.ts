@@ -25,6 +25,9 @@ import type {
   CheckpointPrimitives,
   CheckpointRecord,
 } from "@runbook/core/checkpoint";
+import type { RetryOptions, RetryPrimitives } from "@runbook/core/retryBackoff";
+import type { Watermark, WatermarkOptions, WatermarkPrimitives } from "@runbook/core/watermark";
+import type { AccumulateOptions, ReducePrimitives, ReducerSnapshot } from "@runbook/core/reduce";
 import type { AgentOpts, SpawnThreadOpts, Thread } from "./t3team-sdk.threadTypes.ts";
 import type { WorkflowInvokeOpts, WorkflowRef } from "./t3team-sdk.types.ts";
 import type { Signal, SignalSourceHandle, SignalSourceRef } from "./t3team-sdk.signal.ts";
@@ -129,6 +132,44 @@ export function checkpoint<State>(input: CheckpointInput<State>): Promise<Checkp
 }
 
 /**
+ * Bounded execution: run `fn(attempt)` up to `maxAttempts` times with a durable, journaled backoff
+ * (`waitUntil`) between attempts. A resume never re-runs a settled attempt, and a crash mid-backoff
+ * wakes at the SAME deadline. Gives up with `RetryExhaustedError` (carrying the last classified
+ * failure) on exhaustion or a `"fatal"` classification. Requires the `'schedule'` capability.
+ */
+export function retry<T>(fn: (attempt: number) => Promise<T>, opts: RetryOptions): Promise<T> {
+  return fromRun<RetryPrimitives["retry"]>("retry")(fn, opts);
+}
+
+/**
+ * Bounded execution: fold `observation` into the reducer's current state and commit it as a
+ * checkpoint boundary; a resume continues folding from the recorded state. `fold` receives
+ * `undefined` on the reducer's first observation and must be deterministic (its result is part of
+ * the journaled boundary, so a drifting fold fails loud). `retention.ring` keeps the last N
+ * observations. `reducerId` is the reducer's identity: calls with the same id fold into one state.
+ * Refused inside sub-workflow bodies and parallel/pipeline branches; once a reducer is active, a
+ * plain `checkpoint()` is refused (its boundary would drop the reducer state).
+ */
+export function accumulate<State, Observation>(
+  reducerId: string,
+  fold: (current: State | undefined, observation: Observation) => State,
+  observation: Observation,
+  opts?: AccumulateOptions,
+): Promise<State> {
+  return fromRun<ReducePrimitives["accumulate"]>("accumulate")(reducerId, fold, observation, opts);
+}
+
+/**
+ * The reducer's latest snapshot (`current` + retained `ring`) in this drive — restored by a
+ * checkpoint-window resume or folded since; `undefined` before its first fold.
+ */
+export function reducerState<State = unknown, Observation = unknown>(
+  reducerId: string,
+): ReducerSnapshot<State, Observation> | undefined {
+  return fromRun<ReducePrimitives["reducerState"]>("reducerState")<State, Observation>(reducerId);
+}
+
+/**
  * The compact state a checkpoint-window resume restored — seed your carried state from it so the
  * body continues from the boundary instead of re-running the superseded prefix.
  * `undefined` on a fresh start, a full-replay resume, and inside sub-workflow bodies.
@@ -141,6 +182,19 @@ export function getResume(): CheckpointRecord | undefined {
     );
   }
   return surface.resume as CheckpointRecord | undefined;
+}
+
+/**
+ * A durable cursor over a data source (bounded execution). `current()` is the cursor a resume
+ * restored (else `opts.initial`); `advance(next)` commits it as the run's checkpoint boundary, so
+ * the next resume reads strictly after it. Requires the `'source:<sourceKey>'` capability, and
+ * owns the run's boundary: a body that uses `watermark` cannot also call a raw `checkpoint()`.
+ */
+export function watermark<Cursor>(
+  sourceKey: string,
+  opts?: WatermarkOptions<Cursor>,
+): Watermark<Cursor> {
+  return fromRun<WatermarkPrimitives["watermark"]>("watermark")(sourceKey, opts);
 }
 
 /**

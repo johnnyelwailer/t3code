@@ -120,11 +120,13 @@ export function assertAsarClosure(asarPath: string): void {
     throw new OrchestrationBundleClosureError({ detail: `asar not found: ${asarPath}` });
   }
   // listPackage prefixes every path with "/"; normalize to asar-relative.
-  const listing = Asar.listPackage(asarPath, { isPack: false }).map((entry) =>
-    entry.startsWith("/") ? entry.slice(1) : entry,
+  const listing = new Set(
+    Asar.listPackage(asarPath, { isPack: false }).map((entry) =>
+      entry.startsWith("/") ? entry.slice(1) : entry,
+    ),
   );
   const required = [SDK_SOURCE_ENTRY, ...TYPECHECKER_DTS_SPOT_CHECK_FILES];
-  const missing = required.filter((file) => !listing.includes(file));
+  const missing = required.filter((file) => !listing.has(file));
   if (missing.length > 0) {
     throw new OrchestrationBundleClosureError({
       detail: `asar is missing the typechecker closure files: ${missing.join(", ")}`,
@@ -135,7 +137,7 @@ export function assertAsarClosure(asarPath: string): void {
   // @t3team/sdk manifest's pnpm-protocol specs (workspace: and catalog:) are
   // expected and harmless; see ASAR_AUTHORING_TYPE_PACKAGES.
   const missingPackages = ASAR_AUTHORING_TYPE_PACKAGES.filter(
-    (name) => !listing.includes(`node_modules/${name}/package.json`),
+    (name) => !listing.has(`node_modules/${name}/package.json`),
   );
   if (missingPackages.length > 0) {
     throw new OrchestrationBundleClosureError({

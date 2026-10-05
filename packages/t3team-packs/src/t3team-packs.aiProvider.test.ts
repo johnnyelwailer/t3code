@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - test reads real provider files off disk.
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";

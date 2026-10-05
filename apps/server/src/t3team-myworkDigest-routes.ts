@@ -17,6 +17,7 @@
  */
 
 import * as Clock from "effect/Clock";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { HttpRouter } from "effect/unstable/http";
@@ -35,8 +36,8 @@ import type {
   T3TeamMyWorkDigestPollInput,
 } from "./t3team-myworkDigestTypes.ts";
 
-/** Wall-clock millis → ISO string, the one Date construction in this route. */
-const millisToIso = (ms: number): string => new Date(ms).toISOString();
+/** Wall-clock millis → ISO string. */
+const millisToIso = (ms: number): string => DateTime.formatIso(DateTime.makeUnsafe(ms));
 
 /** Stamp the previous visit receipt into the payload's viewer (read-only). */
 function stampDigestLastVisit(input: T3TeamMyWorkDigestInput, payload: T3TeamMyWorkDigestPayload) {
