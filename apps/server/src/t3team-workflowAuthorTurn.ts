@@ -24,9 +24,9 @@ import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineR
 /**
  * The author runs in PLAN interaction mode (drivers that honor it drop native edit/shell tools)
  * AND always in `approval-required`, never the caller's runtime mode. A driver that still asks
- * before a command or file change is declined by the host
- * (`t3team-workflowAuthorApproval.ts`) — the prompt never reaches a user who cannot see this
- * hidden thread. The author's own MCP tools are the broker allowlist below, not these approvals.
+ * the host (`t3team-workflowAuthorApproval.ts`) is answered there: the allowlist below is
+ * accepted, and a command, file change, or any other tool is declined. The prompt never
+ * reaches a user who cannot see this hidden thread.
  */
 export const WORKFLOW_AUTHOR_INTERACTION_MODE = "plan" as const;
 

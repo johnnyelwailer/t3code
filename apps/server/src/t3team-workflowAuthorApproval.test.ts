@@ -1,7 +1,8 @@
 /**
- * A provider approval for an author thread is declined by the production runtime
- * ingestion path — the same function that turns `request.opened` into a user-visible
- * activity — and that activity is never dispatched.
+ * Author-thread approvals are settled by the production runtime ingestion path —
+ * the same function that turns `request.opened` into a user-visible activity —
+ * and that activity is never dispatched. An allowlisted broker tool is accepted;
+ * a command or file change is declined.
  */
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -11,11 +12,12 @@ import {
   ProviderInstanceId,
   RuntimeRequestId,
   ThreadId,
+  type CanonicalRequestType,
   type OrchestrationCommand,
   type ProviderRuntimeEvent,
+  type RuntimeEventRawSource,
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
-import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -44,17 +46,161 @@ import {
 
 const AUTHOR_THREAD = "run-author:author";
 const events = Effect.runSync(Queue.unbounded<ProviderRuntimeEvent>());
-const decided = Deferred.makeUnsafe<{ readonly threadId: string; readonly decision: string }>();
+const decisions = Effect.runSync(
+  Queue.unbounded<{ readonly threadId: string; readonly decision: string }>(),
+);
 const dispatched: OrchestrationCommand[] = [];
 
 const provider = {
   streamEvents: Stream.fromQueue(events),
   respondToRequest: (input: { readonly threadId: ThreadId; readonly decision: string }) =>
-    Deferred.succeed(decided, {
+    Queue.offer(decisions, {
       threadId: String(input.threadId),
       decision: input.decision,
     }).pipe(Effect.asVoid),
 } as unknown as ProviderServiceShape;
+
+const opened = (
+  id: string,
+  providerKind: string,
+  requestType: CanonicalRequestType,
+  source: RuntimeEventRawSource,
+  method: string,
+  args: unknown,
+): ProviderRuntimeEvent => ({
+  type: "request.opened",
+  eventId: EventId.make(id),
+  provider: ProviderDriverKind.make(providerKind),
+  createdAt: "2026-07-18T00:00:00.000Z",
+  threadId: ThreadId.make(AUTHOR_THREAD),
+  requestId: RuntimeRequestId.make(id),
+  payload: { requestType, args },
+  raw: { source, method, payload: args },
+});
+
+const cases: ReadonlyArray<{ readonly event: ProviderRuntimeEvent; readonly decision: string }> = [
+  {
+    decision: "accept",
+    event: opened(
+      "claude-validate",
+      "claudeAgent",
+      "dynamic_tool_call",
+      "claude.sdk.permission",
+      "canUseTool/request",
+      { toolName: "mcp__t3-code__t3team_recipe_validate", input: { source: "export default {}" } },
+    ),
+  },
+  {
+    decision: "decline",
+    event: opened(
+      "claude-bash",
+      "claudeAgent",
+      "command_execution_approval",
+      "claude.sdk.permission",
+      "canUseTool/request",
+      { toolName: "Bash", input: { command: "rm -rf /" } },
+    ),
+  },
+  {
+    decision: "decline",
+    event: opened(
+      "claude-edit",
+      "claudeAgent",
+      "file_change_approval",
+      "claude.sdk.permission",
+      "canUseTool/request",
+      { toolName: "Edit", input: { file_path: "secret.ts" } },
+    ),
+  },
+  {
+    decision: "decline",
+    event: opened(
+      "claude-status",
+      "claudeAgent",
+      "dynamic_tool_call",
+      "claude.sdk.permission",
+      "canUseTool/request",
+      { toolName: "mcp__t3-code__t3team_orchestration_status" },
+    ),
+  },
+  {
+    decision: "decline",
+    event: opened(
+      "claude-other-server",
+      "claudeAgent",
+      "dynamic_tool_call",
+      "claude.sdk.permission",
+      "canUseTool/request",
+      { toolName: "mcp__other__t3team_recipe_validate" },
+    ),
+  },
+  {
+    decision: "accept",
+    event: opened(
+      "codex-validate",
+      "codex",
+      "dynamic_tool_call",
+      "codex.app-server.request",
+      "item/tool/call",
+      { tool: "t3team_recipe_validate", namespace: "t3-code", arguments: {} },
+    ),
+  },
+  {
+    decision: "decline",
+    event: opened(
+      "codex-command",
+      "codex",
+      "command_execution_approval",
+      "codex.app-server.request",
+      "item/commandExecution/requestApproval",
+      { command: "rm -rf /" },
+    ),
+  },
+  {
+    decision: "decline",
+    event: opened(
+      "codex-file",
+      "codex",
+      "file_change_approval",
+      "codex.app-server.request",
+      "item/fileChange/requestApproval",
+      { grantRoot: "/tmp" },
+    ),
+  },
+  {
+    decision: "accept",
+    event: opened(
+      "cursor-validate",
+      "cursor",
+      "dynamic_tool_call",
+      "acp.jsonrpc",
+      "session/request_permission",
+      { toolCall: { toolCallId: "call-1", title: "t3team_recipe_validate", kind: "other" } },
+    ),
+  },
+  {
+    decision: "decline",
+    event: opened(
+      "cursor-shell",
+      "cursor",
+      "command_execution_approval",
+      "acp.jsonrpc",
+      "session/request_permission",
+      { toolCall: { toolCallId: "call-2", title: "rm -rf /", kind: "execute" } },
+    ),
+  },
+  {
+    decision: "decline",
+    event: opened(
+      "cursor-edit",
+      "cursor",
+      "file_change_approval",
+      "acp.jsonrpc",
+      "session/request_permission",
+      { toolCall: { toolCallId: "call-3", title: "Edit secret.ts", kind: "edit" } },
+    ),
+  },
+];
 
 const engine = {
   dispatch: (command: OrchestrationCommand) =>
@@ -79,7 +225,7 @@ const layer = ProviderRuntimeIngestionLive.pipe(
   Layer.provideMerge(NodeServices.layer),
 );
 
-it.live("declines request.opened for an author thread and does not surface it", () =>
+it.live("accepts an author tool and declines shell and file requests", () =>
   Effect.scoped(
     Effect.gen(function* () {
       resetWorkflowAuthorSessions();
@@ -126,25 +272,14 @@ it.live("declines request.opened for an author thread and does not surface it", 
         declined: false,
       });
 
-      const event = {
-        type: "request.opened",
-        eventId: EventId.make("evt-author-approval"),
-        provider: ProviderDriverKind.make("codex"),
-        createdAt: "2026-07-18T00:00:00.000Z",
-        threadId: ThreadId.make(AUTHOR_THREAD),
-        requestId: RuntimeRequestId.make("approval-author"),
-        payload: {
-          requestType: "command_execution_approval",
-          detail: "rm -rf /",
-        },
-      } satisfies ProviderRuntimeEvent;
-
       yield* ingestion.start();
-      yield* Queue.offer(events, event);
-      const decision = yield* Deferred.await(decided).pipe(Effect.timeout("5 seconds"));
+      for (const item of cases) {
+        yield* Queue.offer(events, item.event);
+        const decision = yield* Queue.take(decisions).pipe(Effect.timeout("5 seconds"));
+        assert.strictEqual(decision.threadId, AUTHOR_THREAD);
+        assert.strictEqual(decision.decision, item.decision);
+      }
       yield* ingestion.drain;
-      assert.strictEqual(decision.threadId, AUTHOR_THREAD);
-      assert.strictEqual(decision.decision, "decline");
       assert.isFalse(
         dispatched.some(
           (command) =>
