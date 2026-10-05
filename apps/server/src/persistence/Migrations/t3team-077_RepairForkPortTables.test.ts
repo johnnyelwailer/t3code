@@ -41,9 +41,10 @@ it.layer(NodeSqliteClient.layer({ filename: ":memory:" }))("t3team-077 repair", 
       assert.deepStrictEqual(yield* portTables, []);
 
       const executed = yield* runMigrations();
+      // 98 and 99 are the repair; 100+ are later migrations that run on any ledger at 97.
       assert.deepStrictEqual(
         executed.map(([id]) => id),
-        [98, 99],
+        [98, 99, 100, 101],
       );
       assert.deepStrictEqual(yield* portTables, PORT_TABLES);
     }),

@@ -150,7 +150,7 @@ describe("resolveStartChildModelSelection", () => {
   });
 
   it("drops parent options the resolved model does not advertise", () => {
-    const declared = makeProvider("nexplore", [], {
+    const declared = makeProvider("gateway", [], {
       models: [
         {
           slug: "declared",
