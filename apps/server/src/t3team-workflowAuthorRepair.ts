@@ -12,6 +12,7 @@
  * "Cannot fix" — the author ending its turn without submitting — is TERMINAL: the author with full
  * context declined, and asking again blind is what produced the incident.
  */
+import { getChildProviderCatalog } from "./t3team-childProviderCatalog.ts";
 import type { GenerateWorkflowRepair } from "./t3team-workflowSelfHeal.ts";
 import type { LaunchWorkflowRecipeInput } from "./t3team-workflowEngineLaunchTypes.ts";
 import { buildWorkflowAuthorRepairTurn } from "./t3team-workflowAuthorPrompt.ts";
@@ -50,9 +51,14 @@ export async function generateWorkflowRepairViaAuthor(ctx: {
     };
   }
   let submitted: string | undefined;
+  // The live catalog (the same seam the engine spawns children with) feeds the model gate, so a
+  // repair cannot submit a slug the first launch would have refused.
+  const catalog = getChildProviderCatalog();
+  const providers = catalog === undefined ? undefined : await catalog();
   session.submit = async (candidate) => {
     const verdict = checkWorkflowSource({
       source: candidate,
+      providers,
       baseModelSelection: input.modelSelection,
     });
     if (!verdict.ok) return verdict;

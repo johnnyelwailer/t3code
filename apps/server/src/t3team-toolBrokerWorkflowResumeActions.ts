@@ -5,7 +5,7 @@
  * restore (mirrors the HTTP control route). The failed-run journal re-drive lives in
  * ./t3team-toolBrokerWorkflowResumeFailed.ts (additive size budget).
  */
-import type { OrchestrationCommand, ThreadId } from "@t3tools/contracts";
+import type { OrchestrationCommand, ServerProvider, ThreadId } from "@t3tools/contracts";
 import { workflowSourceVersion, type JournalStore, type WorkflowRef } from "@t3team/sdk";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -29,7 +29,7 @@ import {
   pausedResumeBlocker,
   restorePausedRunContinuation,
 } from "./t3team-workflowResumePausedTurn.ts";
-import { precheckWorkflowSource } from "./t3team-workflowSourcePrecheck.ts";
+import { checkWorkflowSource, formatWorkflowSourceFindings } from "./t3team-workflowSourceCheck.ts";
 
 export interface WorkflowResumeToolDeps<E = string> {
   readonly fileSystem?: FileSystem.FileSystem | undefined;
@@ -51,6 +51,8 @@ export interface WorkflowResumeToolDeps<E = string> {
   /** Durable signal-source state (GHE #332); absent in test/broker layers without the engine —
    * the signal-park resume then skips the inbox drain (there is no inbox to drain there). */
   readonly signalStore?: WorkflowSignalStoreShape | undefined;
+  /** Live provider snapshots for the corrected-source check's model gate; absent skips that gate. */
+  readonly listProviders?: (() => Effect.Effect<ReadonlyArray<ServerProvider>>) | undefined;
 }
 
 export const nowIso = (): string => DateTime.formatIso(DateTime.nowUnsafe());
@@ -81,11 +83,24 @@ export const replaceRunSourceIfRequested = <E>(
         "Filesystem services are not available for t3team.orchestration.resume in this runtime.",
       );
     }
-    const precheckError = precheckWorkflowSource(trimmed);
-    if (precheckError !== null) return yield* Effect.fail(precheckError);
     const workspaceRoot = yield* workspaceRootFor(deps, threadId);
     const runsRoot = deps.path.join(workspaceRoot, ".t3team-runs");
     const ephemeralPath = deps.path.join(runsRoot, run.runId, "workflow.ts");
+    // The SAME full check every launch and author submission passes — never the format precheck
+    // alone (review of fork #349): a corrected source with an unbound import or a dead model slug
+    // must be refused here, not die at the re-drive.
+    const providers = deps.listProviders === undefined ? undefined : yield* deps.listProviders();
+    const verdict = checkWorkflowSource({
+      source: trimmed,
+      absolutePath: ephemeralPath,
+      providers,
+      baseModelSelection: run.modelSelection,
+    });
+    if (!verdict.ok) {
+      return yield* Effect.fail(
+        `Corrected source was not accepted:\n${formatWorkflowSourceFindings(verdict.findings)}`,
+      );
+    }
     if (run.workflowPath !== ephemeralPath) {
       return yield* Effect.fail(
         "Corrected source is only supported for ephemeral runs (source under .t3team-runs); " +

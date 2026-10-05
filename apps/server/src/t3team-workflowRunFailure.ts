@@ -9,6 +9,7 @@
 
 import type { OrchestrationCommand } from "@t3tools/contracts";
 
+import { retireWorkflowAuthorThread } from "./t3team-workflowAuthorThreadCleanup.ts";
 import { deliverWorkflowFailure } from "./t3team-workflowCompletionMessage.ts";
 import {
   workflowFailureReasonText,
@@ -64,4 +65,10 @@ export async function settleWorkflowRunFailure(input: {
     nowIso: input.nowIso,
   });
   await input.onError?.(input.error);
+  await retireWorkflowAuthorThread({
+    runId: input.runId,
+    dispatch: input.dispatch,
+    newId: input.newId,
+    nowIso: input.nowIso,
+  });
 }

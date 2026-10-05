@@ -1,13 +1,25 @@
 /**
  * GHE #415: one agent turn launched 87 runs in a loop because nothing enforced "a successful
- * handoff ends the turn". A second launch from the same thread while a run it launched moments ago
- * is still active is refused with the way out spelled out: observe it, or pass `replaceRunId` to
- * stop it and launch the replacement in one call. An authoring run counts as active.
+ * handoff ends the turn". A second launch from the same thread while a run it launched is still
+ * ACTIVE is refused with the way out spelled out: observe it, or pass `replaceRunId` to stop it and
+ * launch the replacement in one call.
+ *
+ * Keyed on the run's live state, never on a time window (review of fork #349: authoring can take
+ * longer than any window, after which a copy slipped through and `replaceRunId` was ignored).
+ * Active = the run is being authored, waiting for capacity, executing, or parked on an agent/user
+ * ask. A run parked on the clock or an event (`sleeping`/`watching`) or deliberately `paused` is
+ * not consuming the thread's attention, so it does not block a new launch — a daily routine must
+ * not lock its thread out of orchestration for the rest of its life. `replaceRunId` still targets
+ * any non-terminal run of this thread.
  */
 
-/** How recently a launch from the same thread blocks another one without `replaceRunId`. */
-const RECENT_LAUNCH_WINDOW_MS = 2 * 60_000;
-const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "cancelled"]);
+const ACTIVE_STATUSES: ReadonlySet<string> = new Set([
+  "authoring",
+  "queued",
+  "running",
+  "suspended",
+]);
+const TERMINAL_RUN_STATUSES: ReadonlySet<string> = new Set(["completed", "failed", "cancelled"]);
 
 export function recentActiveLaunchBlocker(
   rows: ReadonlyArray<{
@@ -18,6 +30,7 @@ export function recentActiveLaunchBlocker(
   }>,
   input: {
     readonly threadId: string;
+    /** Kept for the message only (how long ago); never decides. */
     readonly nowMs: number;
     readonly replaceRunId?: string | undefined;
   },
@@ -25,17 +38,16 @@ export function recentActiveLaunchBlocker(
   | { readonly kind: "ok" }
   | { readonly kind: "replace"; readonly runId: string }
   | { readonly kind: "refuse"; readonly message: string } {
-  const recent = rows.filter(
-    (row) =>
-      row.launchThreadId === input.threadId &&
-      !TERMINAL_RUN_STATUSES.has(row.status) &&
-      input.nowMs - Date.parse(row.createdAt) < RECENT_LAUNCH_WINDOW_MS,
-  );
-  if (recent.length === 0) return { kind: "ok" };
-  if (input.replaceRunId !== undefined && recent.some((row) => row.runId === input.replaceRunId)) {
+  const own = rows.filter((row) => row.launchThreadId === input.threadId);
+  if (
+    input.replaceRunId !== undefined &&
+    own.some((row) => row.runId === input.replaceRunId && !TERMINAL_RUN_STATUSES.has(row.status))
+  ) {
     return { kind: "replace", runId: input.replaceRunId };
   }
-  const newest = recent[0]!;
+  const active = own.filter((row) => ACTIVE_STATUSES.has(row.status));
+  if (active.length === 0) return { kind: "ok" };
+  const newest = active[0]!;
   const ageSeconds = Math.max(0, Math.round((input.nowMs - Date.parse(newest.createdAt)) / 1000));
   return {
     kind: "refuse",

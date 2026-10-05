@@ -133,7 +133,9 @@ const testLayer = it.layer(
 
 /** Real fs/path + real durable seams over an in-memory DB; dispatch is captured. */
 let harnessCount = 0;
-const makeHarness = Effect.fn("makeHarness")(function* () {
+const makeHarness = Effect.fn("makeHarness")(function* (
+  options: { readonly authorTurnTimeoutMs?: number } = {},
+) {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const repo = yield* WorkflowRunRepository;
@@ -164,6 +166,9 @@ const makeHarness = Effect.fn("makeHarness")(function* () {
       put: ({ threadId: id, toolContext }) =>
         Effect.sync(() => void toolContexts.set(id, toolContext)),
     },
+    ...(options.authorTurnTimeoutMs === undefined
+      ? {}
+      : { authorTurnTimeoutMs: options.authorTurnTimeoutMs }),
     loadThreadProject: () =>
       Effect.succeed({
         project: { workspaceRoot, defaultModelSelection: modelSelection },
@@ -188,6 +193,10 @@ const makeHarness = Effect.fn("makeHarness")(function* () {
       assert.isDefined(pending?.resolveLive, "the author turn must be parked on the registry");
       await pending!.resolveLive!(reply);
     });
+  const authorArchives = (runId: string) =>
+    dispatched.filter(
+      (command) => command.type === "thread.archive" && command.threadId === `${runId}:author`,
+    );
   const failureNotices = (runId: string) =>
     dispatched.filter(
       (command) =>
@@ -201,6 +210,7 @@ const makeHarness = Effect.fn("makeHarness")(function* () {
     authorSubmits,
     endAuthorTurn,
     failureNotices,
+    authorArchives,
     toolContexts,
     dispatched,
     workspaceRoot,
@@ -286,13 +296,38 @@ testLayer("t3team.orchestration.run — authored ephemeral orchestrations", (it)
             (command) => command.type === "thread.create" && command.threadId === authorThreadId,
           );
           assert.isDefined(created);
-          if (created?.type === "thread.create") assert.strictEqual(created.retention, "ephemeral");
+          if (created?.type === "thread.create") {
+            assert.strictEqual(created.retention, "ephemeral");
+            // Production default: the author runs in PLAN mode (no native edit/shell tools) even
+            // though the caller's thread is in "default" mode — the restriction is the host's.
+            assert.strictEqual(created.interactionMode, "plan");
+          }
+          const kickoff = h.dispatched.find(
+            (command) =>
+              command.type === "thread.turn.start" && command.threadId === authorThreadId,
+          );
+          if (kickoff?.type === "thread.turn.start") {
+            assert.strictEqual(kickoff.interactionMode, "plan");
+          }
+          // The card's "Authoring" step carries NO thread id: the author is not openable.
+          const authorStep = h.dispatched.find(
+            (command) =>
+              command.type === "thread.activity.append" &&
+              command.activity.id === `t3team-wf-step:${runId}:author`,
+          );
+          if (authorStep?.type === "thread.activity.append") {
+            assert.isUndefined((authorStep.activity.payload as { threadId?: string }).threadId);
+          }
           assert.deepStrictEqual(
             h.toolContexts.get(authorThreadId)?.tools.map((tool) => tool.id),
             [...WORKFLOW_AUTHOR_TOOL_IDS],
           );
-          // The run already exists for the caller: a queued row and a plan card in its thread.
-          assert.strictEqual(Option.getOrThrow(yield* h.repo.getById({ runId })).status, "queued");
+          // The run already exists for the caller: an AUTHORING row (its own status, so a boot
+          // can never launch it without source) and a plan card in its thread.
+          assert.strictEqual(
+            Option.getOrThrow(yield* h.repo.getById({ runId })).status,
+            "authoring",
+          );
           assert.isTrue(
             h.dispatched.some(
               (command) =>
@@ -325,6 +360,8 @@ testLayer("t3team.orchestration.run — authored ephemeral orchestrations", (it)
               command.activity.id === `t3team-wf-step:${runId}:author`,
           );
           assert.isAtLeast(authorSteps.length, 2);
+          // A completed run has no repairs left to ask for: its author thread is retired.
+          assert.strictEqual(h.authorArchives(runId).length, 1);
         }),
       ),
   );
@@ -351,8 +388,38 @@ testLayer("t3team.orchestration.run — authored ephemeral orchestrations", (it)
         // A late submission has nobody waiting for it.
         const late = yield* h.authorSubmits(runId, PURE_SUM_SOURCE).pipe(Effect.result);
         assert.strictEqual(late._tag, "Failure");
+        assert.strictEqual(h.authorArchives(runId).length, 1);
       }),
     ),
+  );
+
+  it.effect(
+    "author timeout: the turn is interrupted, the run fails once, the author is retired",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const h = yield* makeHarness({ authorTurnTimeoutMs: 50 });
+          const result = yield* h.handlers.runWorkflow({ intent });
+          const { runId } = result;
+          yield* waitForAuthorTurn(h.registry, `${runId}:author`);
+          const row = yield* waitForRunStatus(h.repo, runId, "failed");
+          assert.strictEqual(row.status, "failed");
+          assert.isTrue(
+            h.dispatched.some(
+              (command) =>
+                command.type === "thread.turn.interrupt" && command.threadId === `${runId}:author`,
+            ),
+            "the provider keeps spending unless the turn is interrupted",
+          );
+          const notices = h.failureNotices(runId);
+          assert.strictEqual(notices.length, 1);
+          if (notices[0]?.type === "thread.message.upsert") {
+            assert.include(notices[0].message.text, "did not finish");
+          }
+          assert.isUndefined(h.registry.peekPending(`${runId}:author`));
+          assert.strictEqual(h.authorArchives(runId).length, 1);
+        }),
+      ),
   );
 
   it.effect(
@@ -564,8 +631,11 @@ const _handlersType: T3TeamWorkflowRunToolHandlers | undefined = undefined;
 void _handlersType;
 
 // GHE #415: one agent turn launched 87 runs because nothing enforced "a handoff ends the turn".
+// Review of fork #349: the verdict keys on the run's LIVE STATE, never on how long ago it was
+// launched — authoring can outlast any window, and after one a copy slipped through.
 describe("recentActiveLaunchBlocker", () => {
   const now = Date.parse("2026-09-03T15:00:00.000Z");
+  const HOUR = 3600;
   const row = (runId: string, status: string, ageSeconds: number, launchThreadId = "thread-1") => ({
     runId,
     launchThreadId,
@@ -573,36 +643,57 @@ describe("recentActiveLaunchBlocker", () => {
     createdAt: DateTime.formatIso(DateTime.makeUnsafe(now - ageSeconds * 1000)),
   });
 
-  it("refuses a second launch while a run from this thread is still active", () => {
-    const verdict = recentActiveLaunchBlocker([row("run-a", "suspended", 30)], {
-      threadId: "thread-1",
-      nowMs: now,
-    });
-    assert.strictEqual(verdict.kind, "refuse");
-    if (verdict.kind === "refuse") {
-      assert.include(verdict.message, "run-a");
-      assert.include(verdict.message, "replaceRunId");
-      assert.include(verdict.message, "t3team_orchestration_status");
+  it("refuses while a run from this thread is authoring, queued, running or suspended — however old", () => {
+    for (const status of ["authoring", "queued", "running", "suspended"]) {
+      const verdict = recentActiveLaunchBlocker([row("run-a", status, 6 * HOUR)], {
+        threadId: "thread-1",
+        nowMs: now,
+      });
+      assert.strictEqual(verdict.kind, "refuse", status);
+      if (verdict.kind === "refuse") {
+        assert.include(verdict.message, "run-a");
+        assert.include(verdict.message, "replaceRunId");
+      }
     }
   });
 
-  it("allows a launch when the earlier run is terminal, old, or another thread's", () => {
+  it("allows a launch when this thread's runs are parked, terminal, or another thread's", () => {
     const rows = [
-      row("run-done", "completed", 10),
-      row("run-old", "suspended", 10 * 60),
-      row("run-other", "suspended", 5, "thread-2"),
+      row("run-sleeping", "sleeping", 5),
+      row("run-watching", "watching", 5),
+      row("run-paused", "paused", 5),
+      row("run-done", "completed", 5),
+      row("run-failed", "failed", 5),
+      row("run-cancelled", "cancelled", 5),
+      row("run-other", "running", 5, "thread-2"),
     ];
     assert.deepStrictEqual(recentActiveLaunchBlocker(rows, { threadId: "thread-1", nowMs: now }), {
       kind: "ok",
     });
   });
 
-  it("replaces the named active run instead of refusing", () => {
-    const verdict = recentActiveLaunchBlocker([row("run-a", "running", 20)], {
+  it("replaces the named non-terminal run instead of refusing — also past any window", () => {
+    const verdict = recentActiveLaunchBlocker([row("run-a", "authoring", 6 * HOUR)], {
       threadId: "thread-1",
       nowMs: now,
       replaceRunId: "run-a",
     });
     assert.deepStrictEqual(verdict, { kind: "replace", runId: "run-a" });
+    assert.deepStrictEqual(
+      recentActiveLaunchBlocker([row("run-s", "sleeping", 5)], {
+        threadId: "thread-1",
+        nowMs: now,
+        replaceRunId: "run-s",
+      }),
+      { kind: "replace", runId: "run-s" },
+    );
+    assert.deepStrictEqual(
+      recentActiveLaunchBlocker([row("run-d", "completed", 5)], {
+        threadId: "thread-1",
+        nowMs: now,
+        replaceRunId: "run-d",
+      }),
+      { kind: "ok" },
+    );
   });
 });

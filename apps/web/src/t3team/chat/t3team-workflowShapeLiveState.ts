@@ -116,7 +116,8 @@ export function useT3TeamWorkflowShapeLiveState(input: {
         : status === "failed"
           ? "Failed"
           : liveRunLabel(progress.steps);
-  const queued = status === "queued";
+  // Authoring is "not started yet" for every control the card offers, exactly like queued.
+  const queued = status === "queued" || status === "authoring";
   const canPause = status === "suspended" || status === "sleeping";
   // A failed run is resumable too (GHE #344 journal re-drive): the server is the source of
   // truth on whether a given run can actually replay, and answers a non-resumable one with a

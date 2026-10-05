@@ -836,6 +836,7 @@ export type OrchestrationLatestTurn = typeof OrchestrationLatestTurn.Type;
 export const OrchestrationWorkflowRunStatus = Schema.Struct({
   runId: Schema.optional(Schema.String),
   status: Schema.Literals([
+    "authoring",
     "queued",
     "running",
     "suspended",

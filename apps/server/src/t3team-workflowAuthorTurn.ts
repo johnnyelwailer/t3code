@@ -21,6 +21,15 @@ import * as Effect from "effect/Effect";
 import type { T3TeamThreadToolContextStoreShape } from "./t3team-threadToolContextStore.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 
+/**
+ * The author runs in PLAN interaction mode: the strongest provider-honored restriction that removes
+ * native edit/shell tools without routing approval prompts to a user who cannot see this hidden
+ * thread — Claude maps it to the SDK's `plan` permission mode, Codex to the `plan` collaboration
+ * mode, Cursor and OpenCode to their plan modes. (`approval-required` would instead turn every
+ * tool call, including the author's own MCP tools, into an approval nobody answers.)
+ */
+export const WORKFLOW_AUTHOR_INTERACTION_MODE = "plan" as const;
+
 /** The author's entire tool surface. `t3team.orchestration.run` from this thread is a submission. */
 export const WORKFLOW_AUTHOR_TOOL_IDS = [
   "t3team.runtime.models",
@@ -41,6 +50,7 @@ export interface WorkflowAuthorThreadInput {
   readonly projectId: ProjectId;
   readonly authorModelSelection: ModelSelection;
   readonly runtimeMode: RuntimeMode;
+  /** The CALLER's mode; the author thread always runs in {@link WORKFLOW_AUTHOR_INTERACTION_MODE}. */
   readonly interactionMode: ProviderInteractionMode;
 }
 
@@ -59,7 +69,7 @@ export async function createWorkflowAuthorThread(
     title: "Orchestration author",
     modelSelection: input.authorModelSelection,
     runtimeMode: input.runtimeMode,
-    interactionMode: input.interactionMode,
+    interactionMode: WORKFLOW_AUTHOR_INTERACTION_MODE,
     branch: null,
     worktreePath: null,
     createdAt: deps.nowIso(),
@@ -115,6 +125,15 @@ export function driveWorkflowAuthorTurn(
     });
     timer = setTimeout(() => {
       deps.registry.takePending(input.authorThreadId);
+      // The provider keeps spending otherwise: stop the turn, not just our wait on it.
+      void deps
+        .dispatch({
+          type: "thread.turn.interrupt",
+          commandId: CommandId.make(`t3team-wf:author:interrupt:${deps.newId()}`),
+          threadId: ThreadId.make(input.authorThreadId),
+          createdAt: deps.nowIso(),
+        })
+        .catch(() => {});
       reject(new Error(`The orchestration author did not finish within ${input.timeoutMs} ms.`));
     }, input.timeoutMs);
     deps
@@ -132,7 +151,7 @@ export function driveWorkflowAuthorTurn(
         },
         modelSelection: input.authorModelSelection,
         runtimeMode: input.runtimeMode,
-        interactionMode: input.interactionMode,
+        interactionMode: WORKFLOW_AUTHOR_INTERACTION_MODE,
         createdAt: deps.nowIso(),
       })
       .catch((error: unknown) => {

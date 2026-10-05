@@ -34,6 +34,9 @@ export { WorkflowRunIntent };
  * (design 42): a run parked on a `signal.wait`, woken by the delivery port when the awaited
  * `(signal, key)` is delivered. */
 export const WorkflowRunStatus = Schema.Literals([
+  // The hidden author agent is writing this run's source; no source exists yet. Boot
+  // rehydration must never launch such a row (t3team-workflowEngineRehydrate.ts).
+  "authoring",
   "queued",
   "running",
   "suspended",

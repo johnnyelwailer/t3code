@@ -136,6 +136,7 @@ export async function renderTimeline(
       | "queued"
       | "running"
       | "suspended"
+      | "authoring"
       | "sleeping"
       | "paused"
       | "completed"

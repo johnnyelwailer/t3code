@@ -18,6 +18,7 @@ import {
   type WorkflowAuthorSession,
 } from "./t3team-workflowAuthorSession.ts";
 import { admitAuthoringRun } from "./t3team-workflowAuthorAdmit.ts";
+import { retireWorkflowAuthorThread } from "./t3team-workflowAuthorThreadCleanup.ts";
 import {
   driveWorkflowAuthorTurn,
   WorkflowAuthorTurnStopped,
@@ -141,24 +142,33 @@ export const startAuthoredWorkflowRun = Effect.fn("startAuthoredWorkflowRun")(fu
     ),
   );
   session.submit = undefined;
+  const retire = () =>
+    retireWorkflowAuthorThread({
+      runId: input.runId,
+      dispatch: launch.dispatch,
+      newId: deps.author.newId,
+      nowIso,
+    });
   if (
     isStopped() ||
     (outcome.kind === "failed" && outcome.error instanceof WorkflowAuthorTurnStopped)
   ) {
+    yield* Effect.promise(retire);
     return;
   }
   if (launched) {
+    // Kept alive for runtime repairs; retired when the run ends (settle/complete/stop paths).
     yield* Effect.promise(() => stepActivities.emitResolved(authorStepId, "completed"));
     return;
   }
-  // Unfixable, or the author ran out of time: ONE failure, through the run's own terminal funnel.
+  // Unfixable, or the author ran out of time (the failure funnel below retires the author thread): ONE failure, through the run's own terminal funnel.
   const reason =
     outcome.kind === "failed"
       ? outcome.error instanceof Error
         ? outcome.error.message
         : String(outcome.error)
       : outcome.reply.trim().length > 0
-        ? `The orchestration could not be authored: ${outcome.reply.trim()}`
+        ? `The orchestration could not be authored: ${outcome.reply.trim().slice(0, 240)}`
         : "The orchestration could not be authored: the author ended without producing a source.";
   // The session stays registered (with nothing waiting): the author thread must never fall
   // through to launching a NEW run, and a late submission is refused by name.

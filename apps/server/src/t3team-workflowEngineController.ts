@@ -13,6 +13,7 @@
  */
 // @effect-diagnostics globalConsole:off -- onComplete sink failure log in a plain Promise path, outside any Effect runtime.
 
+import { retireWorkflowAuthorThread } from "./t3team-workflowAuthorThreadCleanup.ts";
 import { createWorkflowRunHost } from "@t3team/sdk";
 
 import { summarizeCompositionBranchFailures } from "./t3team-workflowEngineCompositionFailure.ts";
@@ -67,6 +68,13 @@ export function createWorkflowRunController(
         // message already posted (double-notify).
         try {
           await input.onComplete?.(result.result);
+          // A completed run has no more repairs to ask its author for.
+          await retireWorkflowAuthorThread({
+            runId: input.runId,
+            dispatch: input.dispatch,
+            newId: input.newId,
+            nowIso: input.nowIso,
+          });
         } catch (sinkError) {
           console.warn(
             `[t3team-workflow] onComplete sink failed for run ${input.runId}:`,

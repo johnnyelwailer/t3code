@@ -69,15 +69,32 @@ export function scanBindings(
     }
     for (const element of bindings.elements) {
       if (element.isTypeOnly) continue;
-      const imported = element.propertyName?.text ?? element.name.text;
-      if (bound.has(imported)) continue;
+      const local = element.name.text;
+      const imported = element.propertyName?.text;
+      // The loader ERASES the import; it never rewrites identifiers. So the body's LOCAL name is
+      // what must resolve against the bound surface — an alias `{ agent as ask }` leaves `ask`
+      // undefined even though `agent` is bound, and `{ notBound as agent }` would wrongly pass.
+      if (imported !== undefined && imported !== local) {
+        findings.push(
+          finding(ts, sf, element, {
+            facet: "bindings",
+            rule: "aliased-import",
+            message:
+              `\`import { ${imported} as ${local} }\` — aliases are not supported because imports ` +
+              `are erased and names resolve from the run's bound surface; \`${local}\` would be ` +
+              `undefined at runtime. Write \`import { ${imported} }\` and call \`${imported}\`.`,
+          }),
+        );
+        continue;
+      }
+      if (bound.has(local)) continue;
       findings.push(
         finding(ts, sf, element, {
           facet: "bindings",
           rule: "unbound-import",
           message:
-            `\`${imported}\` is imported from \`${ENGINE_API}\` but the engine does not bind it ` +
-            `into the body, so calling it throws \`ReferenceError: ${imported} is not defined\`. ` +
+            `\`${local}\` is imported from \`${ENGINE_API}\` but the engine does not bind it ` +
+            `into the body, so calling it throws \`ReferenceError: ${local} is not defined\`. ` +
             `Use \`import type\` if it is only a type; otherwise use a bound name. ${describeBound(bound)}`,
         }),
       );

@@ -38,6 +38,11 @@ export const admitAuthoringRun = Effect.fn("admitAuthoringRun")(function* (input
   // Durable first: a disconnect after this point leaves a row (queued) that status/stop can see.
   const lifecycle = buildPreparedWorkflowLifecycle({ deps: launch, run: prepared, nowIso });
   yield* Effect.promise(() => lifecycle.recordRunning());
+  // Distinct status (not `queued`): there is NO source yet, so boot rehydration must not treat
+  // this row as a restartable launch; the launch funnel moves it to queued → running later.
+  yield* launch.runRepository
+    .setStatus({ runId: prepared.runId, status: "authoring", updatedAt: nowIso() })
+    .pipe(Effect.orDie);
   launch.registry.registerOwnership(prepared.runId, prepared.launchThreadId);
   let stopped = false;
   launch.registry.registerMasterStop(prepared.runId, async () => {
@@ -79,13 +84,14 @@ export const admitAuthoringRun = Effect.fn("admitAuthoringRun")(function* (input
     }),
   );
   const authorStepId = `${prepared.runId}:author`;
+  // Deliberately NO threadId on this step: the card's status strip opens `step.threadId`, and the
+  // author thread is hidden host machinery (review of fork #349) — nothing to open.
   yield* Effect.promise(() =>
     stepActivities.emitSent({
       correlationId: authorStepId,
       stepKind: "workflow.author",
       phase: "started",
       detail: "Authoring orchestration",
-      threadId: authorThreadId,
     }),
   );
   return { lifecycle, stepActivities, authorThreadId, authorStepId, isStopped: () => stopped };

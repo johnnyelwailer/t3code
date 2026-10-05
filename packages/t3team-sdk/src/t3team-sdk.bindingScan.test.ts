@@ -48,15 +48,29 @@ describe("bindings audit facet", () => {
     expect(findings.map((item) => item.rule)).toEqual(["unbound-import", "unbound-import"]);
   });
 
-  it("stays silent for bound names, aliased bound names and type-only imports", () => {
+  it("stays silent for bound names and type-only imports", () => {
     const findings = audit(
       [
-        `import { agent as ask, phase, type AgentOpts } from "@t3team/sdk";`,
+        `import { agent, phase, type AgentOpts } from "@t3team/sdk";`,
         `import type { Thread } from "@t3team/sdk";`,
+        `export const meta = { name: "probe" } as const;`,
+        `export default async function run() { phase("x"); return agent("p", { capabilities: "inherit" }); }`,
+      ].join("\n"),
+    );
+    expect(findings).toEqual([]);
+  });
+
+  it("rejects aliases both ways: the loader erases imports and never rewrites identifiers", () => {
+    // `{ agent as ask }`: `agent` is bound but the body calls `ask` → ReferenceError at runtime.
+    // `{ notBound as agent }`: `agent` resolves, but to the engine's agent — not what was imported.
+    const findings = audit(
+      [
+        `import { agent as ask, notBound as phase } from "@t3team/sdk";`,
         `export const meta = { name: "probe" } as const;`,
         `export default async function run() { phase("x"); return ask("p", { capabilities: "inherit" }); }`,
       ].join("\n"),
     );
-    expect(findings).toEqual([]);
+    expect(findings.map((item) => item.rule)).toEqual(["aliased-import", "aliased-import"]);
+    expect(findings[0]!.message).toContain("import { agent }");
   });
 });

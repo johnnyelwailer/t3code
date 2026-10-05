@@ -1318,6 +1318,9 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             ON projects.project_id = threads.project_id
           WHERE threads.deleted_at IS NULL
             AND threads.archived_at IS NULL
+            -- Ephemeral threads (workflow children, the orchestration author) are host machinery
+            -- hidden from the sidebar; the palette must not surface their transcripts either.
+            AND threads.retention = 'retained'
             AND projects.deleted_at IS NULL
             AND messages.is_streaming = 0
             -- Only these two roles are searchable, and the CASE above depends

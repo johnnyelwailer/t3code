@@ -2684,6 +2684,36 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         (yield* snapshotQuery.searchThreads({ query: "hidden needle" })).matches,
         [],
       );
+      // t3team: an EPHEMERAL thread (a workflow child, the orchestration author) is host
+      // machinery hidden from the sidebar; its transcript must not surface in search either.
+      yield* sql`
+        INSERT INTO projection_threads (
+          thread_id, project_id, title, model_selection_json, runtime_mode, interaction_mode,
+          branch, worktree_path, latest_turn_id, latest_user_message_at, pending_approval_count,
+          pending_user_input_count, has_actionable_proposed_plan, created_at, updated_at,
+          archived_at, deleted_at, retention
+        )
+        VALUES (
+          'thread-ephemeral', 'project-search', 'Orchestration author',
+          '{"provider":"codex","model":"gpt-5-codex"}', 'full-access', 'plan', NULL, NULL, NULL,
+          NULL, 0, 0, 0, '2026-05-01T00:00:17.000Z', '2026-05-01T00:00:18.000Z', NULL, NULL,
+          'ephemeral'
+        )
+      `;
+      yield* sql`
+        INSERT INTO projection_thread_messages (
+          message_id, thread_id, turn_id, role, text, is_streaming, created_at, updated_at
+        )
+        VALUES (
+          'message-ephemeral', 'thread-ephemeral', NULL, 'user',
+          'Ephemeral needle: author the orchestration.', 0,
+          '2026-05-01T00:00:19.000Z', '2026-05-01T00:00:19.000Z'
+        )
+      `;
+      assert.deepStrictEqual(
+        (yield* snapshotQuery.searchThreads({ query: "ephemeral needle" })).matches,
+        [],
+      );
       yield* sql`
         UPDATE projection_threads
         SET deleted_at = '2026-05-01T00:00:20.000Z'
