@@ -1,6 +1,5 @@
 import * as Effect from "effect/Effect";
 
-import { t3teamHelp } from "../../../t3team-help.ts";
 import { T3TEAM_MCP_SERVER_NAME, T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { t3TeamAskUser, type T3TeamAskUserOption } from "./t3team-askUser.ts";
@@ -106,7 +105,6 @@ export const T3TeamToolkitHandlersLive = T3TeamToolkit.toLayer({
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_orchestration_resume, input),
   t3team_show_widget: (input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_show_widget, input),
-  t3team_help: (input) => Effect.succeed(t3teamHelp(input.topic)),
   t3team_recipe_list: (input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_recipe_list, input),
   t3team_recipe_validate: (input) =>

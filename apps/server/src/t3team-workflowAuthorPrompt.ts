@@ -5,6 +5,9 @@
  * instruction seam a child has, and that is the one used.
  */
 import { WORKFLOW_AUTHOR_REFERENCE, type WorkflowRunIntent } from "@t3team/sdk";
+import { T3TEAM_WIDGET_AUTHORING_GUIDANCE } from "@t3tools/project-context/t3teamWidgetGuidance";
+
+import { WORKFLOW_REPORTING_CONTRACT } from "./t3team-workflowReportContract.ts";
 
 /** Keep a pathological draft from blowing the author's context. */
 const MAX_EMBEDDED_SOURCE_CHARS = 16_000;
@@ -57,6 +60,8 @@ export function buildWorkflowAuthorKickoff(input: {
           "```",
         ]),
     WORKFLOW_AUTHOR_REFERENCE,
+    WORKFLOW_REPORTING_CONTRACT,
+    `## Widget authoring (thread.showWidget)\n${T3TEAM_WIDGET_AUTHORING_GUIDANCE}`,
   ].join("\n\n");
 }
 
