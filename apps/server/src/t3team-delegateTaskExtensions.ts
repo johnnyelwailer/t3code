@@ -7,10 +7,8 @@
  * - `ticketId`: work item the child belongs to; defaults to the parent's ticket.
  * - `environment`: `{ id, label? }` — record the child as bound to another
  *   execution environment (another T3 server). Same-environment ids are no-ops.
- * - `skills`: 1-5 skill names the child should run (skills-as-subagents Phase 1).
- *   FORMAT-validated only — the host does not know the skill catalog; the child's
- *   driver resolves the names from its pack registry at session start (no second
- *   catalog), so the host persists the REQUESTED names, not resolved data.
+ * - `skills`: 1-5 skill names the child should run. FORMAT-validated only — the
+ *   host persists the REQUESTED names; the child's driver resolves them pack-side.
  */
 import type { AgentEffort } from "@t3team/sdk";
 import {
@@ -94,11 +92,7 @@ export function parseEnvironmentExtension(
   return { ok: true, value: label === undefined ? { environmentId } : { environmentId, label } };
 }
 
-/**
- * `skills`: 1-5 skill names, format-checked against the skill-name charset. The host
- * does NOT resolve names against any catalog ("no second catalog") — the child's
- * driver resolves them from its pack registry at session start.
- */
+/** `skills`: 1-5 skill names, format-checked against the skill-name charset only — the child's driver resolves them pack-side. */
 export function parseSkillsExtension(
   value: unknown,
 ): ParseResult<ReadonlyArray<string> | undefined> {
