@@ -4,7 +4,7 @@
  * the broker's optional FileSystem/Path services. Kept out of {@link ./t3team-toolBrokerLive.ts}
  * so the broker file stays within the additive size budget.
  */
-import type { ThreadId } from "@t3tools/contracts";
+import type { ModelSelection, ServerProvider, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -13,19 +13,28 @@ import type { ValidateRecipeToolResult } from "@t3team/sdk";
 
 import { listProjectRecipesForAgent } from "./t3team-recipeAgentList.ts";
 import { validateProjectRecipeWorkflowForAgent } from "./t3team-recipeAgentValidate.ts";
-import { validateInlineWorkflowSourceForAgent } from "./t3team-recipeAgentValidateStatic.ts";
 import type { T3TeamRecipeToolHandlers } from "./t3team-toolBrokerBindingRecipes.ts";
+import { checkWorkflowSourceForValidate } from "./t3team-workflowSourceCheck.ts";
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-type LoadThreadProject<E> = (
-  threadId: ThreadId,
-) => Effect.Effect<{ readonly project: { readonly workspaceRoot: string | null | undefined } }, E>;
+type LoadThreadProject<E> = (threadId: ThreadId) => Effect.Effect<
+  {
+    readonly project: {
+      readonly workspaceRoot: string | null | undefined;
+      readonly defaultModelSelection?: ModelSelection | null | undefined;
+    };
+    readonly thread?: { readonly modelSelection?: ModelSelection | null | undefined } | undefined;
+  },
+  E
+>;
 
 export function makeRecipeToolHandlers<E>(deps: {
   readonly fileSystem?: FileSystem.FileSystem | undefined;
   readonly path?: Path.Path | undefined;
   readonly loadThreadProject: LoadThreadProject<E>;
+  /** Live provider snapshots for the inline check's model gate; absent skips that gate. */
+  readonly listProviders?: (() => Effect.Effect<ReadonlyArray<ServerProvider>>) | undefined;
 }): (threadId: ThreadId) => T3TeamRecipeToolHandlers {
   const { fileSystem, path } = deps;
 
@@ -45,7 +54,26 @@ export function makeRecipeToolHandlers<E>(deps: {
       readonly source?: string;
     }): Effect.Effect<ValidateRecipeToolResult, string> => {
       if (typeof args.source === "string" && args.source.trim().length > 0) {
-        return Effect.sync(() => validateInlineWorkflowSourceForAgent(args.source!));
+        // Inline source gets the FULL launch check (format, audit + types, live model slugs), so
+        // the author's validate and the launch gate can never disagree.
+        const source = args.source;
+        return Effect.gen(function* () {
+          const loaded = yield* deps.loadThreadProject(threadId).pipe(Effect.result);
+          const baseModelSelection =
+            loaded._tag === "Success"
+              ? (loaded.success.thread?.modelSelection ??
+                loaded.success.project.defaultModelSelection)
+              : undefined;
+          const providers =
+            deps.listProviders === undefined || !baseModelSelection
+              ? undefined
+              : yield* deps.listProviders();
+          return checkWorkflowSourceForValidate({
+            source,
+            providers,
+            baseModelSelection: baseModelSelection ?? undefined,
+          });
+        });
       }
       if (!fileSystem || !path) {
         return Effect.fail(

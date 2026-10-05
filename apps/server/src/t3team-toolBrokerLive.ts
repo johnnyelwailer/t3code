@@ -101,7 +101,12 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
             mailbox.find(threadId, messageId).pipe(Effect.mapError((error) => error.operation)),
     loadThreadView: makeLoadThreadView(loadThreadProject, reads.loadThreadStats),
     manageChildren,
-    recipeToolsForThread: makeRecipeToolHandlers({ fileSystem, path, loadThreadProject }),
+    recipeToolsForThread: makeRecipeToolHandlers({
+      fileSystem,
+      path,
+      loadThreadProject,
+      ...(providerRegistry ? { listProviders: () => providerRegistry.getProviders } : {}),
+    }),
     workflowTools,
   });
 

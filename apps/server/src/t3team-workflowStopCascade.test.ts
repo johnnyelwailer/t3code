@@ -22,6 +22,7 @@ describe("stopWorkflowsOwnedByThread", () => {
         interrupt: async ({ threadId }) => {
           interrupted.push(threadId);
         },
+        archiveThread: async () => {},
       },
     });
 
@@ -56,7 +57,7 @@ describe("stopWorkflowsOwnedByThread", () => {
     const stopping = stopWorkflowsOwnedByThread({
       registry,
       threadId: "master",
-      host: { interrupt: async () => {} },
+      host: { interrupt: async () => {}, archiveThread: async () => {} },
     });
 
     expect(durableStop).toHaveBeenCalledOnce();

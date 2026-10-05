@@ -63,13 +63,16 @@ op: "drain"` delivers the caller's pending mail now when idle, else reports `que
 Kept (`apps/server/src/mcp/toolkits/t3team/tools.ts`): `t3team_provider_usage`,
 `t3team_children`, `t3team_search_thread`, `t3team_search_source`, `t3team_read_message`,
 `t3team_orchestration_{run,status,resume,pause,stop}`, `t3team_ask_user`, `t3team_show_widget`,
-`t3team_help`, `t3team_recipe_list`, `t3team_recipe_validate`.
+`t3team_recipe_list`, `t3team_recipe_validate`. `t3team_help` is gone (fork #350): its topics live in
+the tool descriptions and the orchestration author's generated reference.
 
 Behaviour changes:
 
-- Every `t3team_*` tool except `t3team_help` requires the `orchestration` MCP capability: `This MCP
+- Every `t3team_*` tool requires the `orchestration` MCP capability: `This MCP
 credential does not grant orchestration capabilities.`
-  (`apps/server/src/mcp/toolkits/t3team/handlers.ts`).
+  (`apps/server/src/mcp/toolkits/t3team/handlers.ts`). The hidden orchestration author's
+  credential resolves with NO capabilities and reaches only `t3team_recipe_validate` and
+  `t3team_orchestration_run` (`apps/server/src/t3team-workflowAuthorMcpScope.ts`).
 - `t3team_ask_user` (parameters unchanged) is a pending V2 runtime request `t3team-ask:<uuid>`
   (`kind: "user_input"`, `responseCapability: {type: "message"}`) on the calling thread's active
   run, plus a `user_input_request` turn item. Outside an active turn it fails (`t3team_ask_user can
@@ -85,8 +88,9 @@ string[]}}` (multi-select joined with `•`), dismissal through `thread.user-inp
 - The `[host] memory pressure` line in tool results is advisory only ("do not start new children or
   parallel work; finish in-flight work and end the turn"); `delegate_task` carries it as a result
   note; no turn is held (`apps/server/src/t3team-resourcePressureToolLine.ts`).
-- `t3team_help("model-selection")` points at `orchestrator_capabilities` and `delegate_task`
-  (`apps/server/src/t3team-workflowManualModelSelection.ts`).
+- Model selection guidance points at `orchestrator_capabilities` and `delegate_task` (tool
+  descriptions); the orchestration author gets the live catalog in its kickoff
+  (`apps/server/src/t3team-workflowAuthorCatalog.ts`).
 
 Broker tool ids `t3team.thread.rename`, `t3team.runtime.models`, `t3team.thread.start_child` are
 gone from the catalog (`packages/project-context/src/t3teamToolCatalogImplemented.ts`), the recipe

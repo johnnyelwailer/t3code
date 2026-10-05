@@ -3,6 +3,7 @@ import * as Option from "effect/Option";
 
 import { T3TeamChildThreadMetadata } from "../../../t3team-childThreadMetadata.ts";
 import { T3TEAM_MCP_SERVER_NAME, T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
+import { mayCallT3TeamBrokerTool } from "../../../t3team-workflowAuthorMcpScope.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { t3TeamAskUser, type T3TeamAskUserOption } from "./t3team-askUser.ts";
 import { T3TEAM_MCP_CANONICAL_TOOL_MAP, T3TeamMcpToolError, T3TeamToolkit } from "./tools.ts";
@@ -25,7 +26,16 @@ const callBroker = Effect.fn("T3TeamMcpToolkit.callBroker")(function* (
   tool: string,
   arguments_: unknown,
 ) {
-  const invocation = yield* requireOrchestrationScope;
+  // The hidden orchestration author holds no capabilities and reaches only its own tools.
+  const invocation = yield* McpInvocationContext.McpInvocationContext.pipe(
+    Effect.filterOrFail(
+      (scope) => mayCallT3TeamBrokerTool(scope, tool),
+      () =>
+        new T3TeamMcpToolError({
+          message: "This MCP credential does not grant orchestration capabilities.",
+        }),
+    ),
+  );
   const broker = yield* T3TeamToolBroker;
   const binding = yield* broker.bindSession({ threadId: invocation.threadId });
   if (!binding) {

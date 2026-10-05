@@ -25,6 +25,15 @@ export function resolveThreadStatusPill(
   const run = thread.workflowRunStatus;
   if (run !== undefined) {
     const waitingSince = formatRelativeTime(run.updatedAt);
+    if (run.status === "authoring") {
+      return {
+        label: "Working",
+        detail: "Authoring the orchestration",
+        colorClass: "text-slate-500 dark:text-slate-300/80",
+        dotClass: "bg-slate-400 dark:bg-slate-300/80",
+        pulse: true,
+      };
+    }
     if (run.status === "queued") {
       return {
         label: "Queued",

@@ -54,6 +54,8 @@ export type OrchestrationThreadActivityState = typeof OrchestrationThreadActivit
 export const OrchestrationWorkflowRunStatus = Schema.Struct({
   runId: Schema.optional(Schema.String),
   status: Schema.Literals([
+    // The run exists and its hidden author is writing the source (no source yet).
+    "authoring",
     "queued",
     "running",
     "suspended",

@@ -214,7 +214,8 @@ What's forbidden in `meta`:
 
 `model` is a plain string: `"<instanceId>/<modelSlug>"` for an exact model, or
 `"<instanceId>"` for that instance's latest available model. Instance ids and model slugs
-come from the live runtime catalog (`t3team_models`); copy them verbatim rather than
+come from the live runtime catalog (`orchestrator_capabilities`, or the catalog the author's
+kickoff carries); copy them verbatim rather than
 guessing from a provider name. The SDK keeps no static model catalog.
 
 ```ts

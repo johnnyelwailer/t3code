@@ -30,8 +30,8 @@ The host (`ProviderContinuationRequests.offer`, mapped in `t3team-pack-driverAda
   One-thread-per-session packs may ignore it (same value). Refs `t3team-pack-driverMcp.ts`
   `withPackMcp`.
 - Host-issued credentials carry upstream's baseline capabilities (`orchestration`, `worktree`,
-  `pull-requests`; `apps/server/src/mcp/McpSessionRegistry.ts`). Every `t3team_*` tool except
-  `t3team_help` needs `orchestration` (3.5).
+  `pull-requests`; `apps/server/src/mcp/McpSessionRegistry.ts`). Every `t3team_*` tool needs
+  `orchestration` (3.5); the orchestration author's credential resolves with none.
 
 ## Per-job control and background work
 

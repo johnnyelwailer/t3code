@@ -553,3 +553,78 @@ it.live("rehydrates a watching run with no inbox entry: rebuilt, still parked, u
     assert.strictEqual(row.watchSignalName, "scm.change-request.merged");
   }).pipe(Effect.provide(TestLayer)),
 );
+
+// Review of fork #349: a restart mid-authoring left a `queued`-looking row that boot would launch
+// as a real workflow before any source existed. The row now carries its own status and boot
+// settles it: failed once, the launch thread told once, the author thread retired, nothing run.
+it.effect(
+  "boot never launches an AUTHORING row: fails it once, notifies once, retires the author",
+  () =>
+    Effect.gen(function* () {
+      const repo = yield* WorkflowRunRepository;
+      const runId = "rehydrate-authoring";
+      yield* repo.upsert({
+        ...buildRunningWorkflowRunRow({
+          runId,
+          workflowPath: NodePath.join(cwd, ".t3team-runs", runId, "workflow.ts"),
+          args: {},
+          launchThreadId: "authoring-launch-thread",
+          projectId,
+          modelSelection,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          origin: "ephemeral",
+          nowIso: nowIso(),
+        }),
+        status: "authoring",
+      });
+      const fake = makeFakeWorkflowHostLayer();
+      yield* rehydrateSuspendedWorkflowRuns().pipe(Effect.provide(fake.layer));
+
+      const registry = yield* T3TeamWorkflowEngineRegistry;
+      assert.isUndefined(registry.getRun(runId));
+      assert.isFalse(workflowAdmissionQueue.snapshot().queued.includes(runId));
+      const row = Option.getOrThrow(yield* repo.getById({ runId }));
+      assert.strictEqual(row.status, "failed");
+      assert.strictEqual(row.failureStep, "authoring");
+      const notices = fake
+        .messages()
+        .filter(
+          (message) =>
+            message.threadId === "authoring-launch-thread" &&
+            message.text.includes("being authored"),
+        );
+      assert.strictEqual(notices.length, 1);
+      assert.isTrue(
+        fake.calls.some((call) => call.op === "archiveThread" && call.input === `${runId}:author`),
+      );
+    }).pipe(Effect.provide(TestLayer)),
+);
+
+it.effect("boot of an interrupted running row retires its author thread", () =>
+  Effect.gen(function* () {
+    const repo = yield* WorkflowRunRepository;
+    const runId = "rehydrate-running-author";
+    yield* repo.upsert(
+      buildRunningWorkflowRunRow({
+        runId,
+        workflowPath: NodePath.join(cwd, ".t3team-runs", runId, "workflow.ts"),
+        args: {},
+        launchThreadId: "running-launch-thread",
+        projectId,
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        origin: "ephemeral",
+        nowIso: nowIso(),
+      }),
+    );
+    const fake = makeFakeWorkflowHostLayer();
+    yield* rehydrateSuspendedWorkflowRuns().pipe(Effect.provide(fake.layer));
+    const row = Option.getOrThrow(yield* repo.getById({ runId }));
+    assert.strictEqual(row.status, "failed");
+    assert.isTrue(
+      fake.calls.some((call) => call.op === "archiveThread" && call.input === `${runId}:author`),
+    );
+  }).pipe(Effect.provide(TestLayer)),
+);

@@ -43,6 +43,7 @@ export function recordingWorkflowHostPort(
     postMessage: record("postMessage"),
     upsertActivity: record("upsertActivity"),
     interrupt: record("interrupt"),
+    archiveThread: record("archiveThread"),
     syncRunFacts: record("syncRunFacts"),
   };
 }

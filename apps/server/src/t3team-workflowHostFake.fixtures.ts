@@ -40,6 +40,7 @@ export function makeFakeWorkflowHost(options: { readonly failOn?: keyof Workflow
     postMessage: record("postMessage"),
     upsertActivity: record("upsertActivity"),
     interrupt: record("interrupt"),
+    archiveThread: record("archiveThread"),
     syncRunFacts: record("syncRunFacts"),
   };
   const inputsOf = <K extends keyof WorkflowHostPort>(op: K) =>
@@ -79,6 +80,7 @@ export function makeFakeWorkflowHostLayer(
     postMessage: lift("postMessage"),
     upsertActivity: lift("upsertActivity"),
     interrupt: lift("interrupt"),
+    archiveThread: lift("archiveThread"),
     syncRunFacts: lift("syncRunFacts"),
     flushHeld: () => Effect.void,
     heldThreadIds: () => [],

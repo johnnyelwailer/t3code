@@ -366,7 +366,7 @@ it("MCP and broker surfaces expose the SAME description text for run and resume"
     }
     expect(unmapped).toBe(broker);
     expect(broker).toContain(
-      canonicalId === "t3team.orchestration.resume" ? "corrected 'args'" : "'source'",
+      canonicalId === "t3team.orchestration.resume" ? "corrected 'args'" : "'intent'",
     );
   }
 });

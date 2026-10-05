@@ -85,6 +85,8 @@ export interface WorkflowHostPort {
   readonly upsertActivity: (input: WorkflowHostActivityInput) => Promise<void>;
   /** Stop the thread's active run, if any. */
   readonly interrupt: (input: WorkflowHostInterruptInput) => Promise<void>;
+  /** Archive a host-owned thread (the retired orchestration author). */
+  readonly archiveThread: (threadId: string) => Promise<void>;
   /** Refresh the launch thread's workflow run facts (status pill, sleeping-until). */
   readonly syncRunFacts: (launchThreadId: string) => Promise<void>;
 }

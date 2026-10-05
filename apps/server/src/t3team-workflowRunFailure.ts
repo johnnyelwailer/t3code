@@ -7,6 +7,7 @@
  * "agent hallucinates the run is still going" bug happened the first time.
  */
 
+import { retireWorkflowAuthorThread } from "./t3team-workflowAuthorThreadCleanup.ts";
 import { deliverWorkflowFailure } from "./t3team-workflowCompletionMessage.ts";
 import {
   workflowFailureReasonText,
@@ -59,4 +60,5 @@ export async function settleWorkflowRunFailure(input: {
     host: input.host,
   });
   await input.onError?.(input.error);
+  await retireWorkflowAuthorThread({ runId: input.runId, host: input.host });
 }

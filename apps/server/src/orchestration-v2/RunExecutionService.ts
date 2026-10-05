@@ -52,6 +52,7 @@ import * as RunFinalizationService from "./RunFinalizationService.ts";
 import { TurnInactivityPolicy } from "./t3team-turnInactivityPolicy.ts";
 import { makeTurnInactivitySettlement } from "./t3team-turnInactivitySettlement.ts";
 import { makeTurnInactivityWatchdog } from "./t3team-turnInactivityWatchdog.ts";
+import { makeWorkflowAuthorRunGate } from "./t3team-workflowAuthorGate.ts";
 
 export interface ProviderEventRoutingState {
   readonly ownedThreadIds: ReadonlySet<ThreadId>;
@@ -1172,6 +1173,10 @@ export const layer: Layer.Layer<
             return true;
           });
           const filterAssistantEvent = makeAssistantStreamingFilter(responseStreamingMode);
+          const authorGate = makeWorkflowAuthorRunGate({
+            runThreadId: input.run.threadId,
+            session: input.session,
+          });
           // t3team: turn-inactivity watchdog + Stop backstop (t3team-turnInactivityWatchdog.ts).
           const inactivityBudgetMs = yield* inactivityPolicy.budgetMs(input.run.providerInstanceId);
           const watchdog =
@@ -1206,10 +1211,12 @@ export const layer: Layer.Layer<
                   yield* settlement.observe(event);
                 }
                 let storedEventCount = 0;
-                const deliveredEvent = filterAssistantEvent(
-                  event,
-                  DateTime.toEpochMillis(yield* DateTime.now),
-                );
+                // t3team: a hidden author thread's approvals are answered here and never
+                // ingested (t3team-workflowAuthorGate.ts).
+                const settledByAuthorGate = yield* authorGate.settle(event);
+                const deliveredEvent = settledByAuthorGate
+                  ? null
+                  : filterAssistantEvent(event, DateTime.toEpochMillis(yield* DateTime.now));
                 if (deliveredEvent) {
                   // Root provider_thread.updated always uses an ownership gate:
                   // pre-terminal writeIfRunCurrent (attempt still running), or

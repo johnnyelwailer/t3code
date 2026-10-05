@@ -343,7 +343,7 @@ describe("resolveRunWorkflowPath — execution authorization", () => {
         if (refused._tag === "Failure") {
           expect(refused.failure).toContain("rejected before launch");
           expect(refused.failure).toContain("unparseable workflow TypeScript");
-          // The reason only: the manuals were deleted (#350); no manual rides the rejection.
+          // The reason only: the author agent carries the generated reference itself.
           expect(refused.failure).not.toContain("MANUAL");
         }
         // Nothing durable was created: no snapshot, no run directory.
