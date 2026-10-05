@@ -4986,6 +4986,11 @@ export default function Sidebar() {
   const newThreadShortcutLabel =
     shortcutLabelForCommand(keybindings, "chat.new") ??
     shortcutLabelForCommand(keybindings, "chat.newLocal");
+  // The header keeps an optional second tooltip line for multi-project setups;
+  // pass false so the button always shows the single "New thread (<shortcut>)"
+  // line, matching the fact that a plain click creates in the contextual
+  // project now. The prop stays on the header's API: it is an upstream file.
+  const newThreadInProjectShortcutLabel = shortcutLabelForCommand(keybindings, "chat.newLocal");
   return (
     <>
       {/* t3team: Team chrome so the Work lens keeps the pack brand + header background. */}
@@ -5135,6 +5140,8 @@ export default function Sidebar() {
               onNewThread={handleNewThreadClick}
               newThreadDisabled={projects.length === 0}
               newThreadShortcutLabel={newThreadShortcutLabel}
+              newThreadInProjectShortcutLabel={newThreadInProjectShortcutLabel}
+              showNewThreadInProjectHint={false}
               searchInputRef={threadSearchInputRef}
               searchQuery={threadSearchQuery}
               onSearchQueryChange={(value) => {

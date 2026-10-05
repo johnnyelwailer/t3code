@@ -14,6 +14,7 @@ import { FolderPlusIcon, SearchIcon, SquarePenIcon, XIcon } from "lucide-react";
 import {
   type ComponentProps,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -31,9 +32,13 @@ export interface SidebarThreadHeaderProps {
   /** The project scope combobox, rendered as the first icon of the group. */
   projectScope: ReactNode;
   onNewProject: () => void;
-  onNewThread: () => void;
+  /** Receives the click so Shift+click can skip the project picker. */
+  onNewThread: (event: ReactMouseEvent) => void;
   newThreadDisabled: boolean;
   newThreadShortcutLabel: string | null | undefined;
+  newThreadInProjectShortcutLabel: string | null | undefined;
+  /** Shift+click only matters once there is more than one project to pick. */
+  showNewThreadInProjectHint: boolean;
   searchInputRef: RefObject<HTMLInputElement | null>;
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
@@ -52,6 +57,8 @@ export function SidebarThreadHeader({
   onNewThread,
   newThreadDisabled,
   newThreadShortcutLabel,
+  newThreadInProjectShortcutLabel,
+  showNewThreadInProjectHint,
   searchInputRef,
   searchQuery,
   onSearchQueryChange,
@@ -127,7 +134,19 @@ export function SidebarThreadHeader({
         ) : null}
         <SidebarHeaderIconButton
           label="New thread"
-          tooltip={newThreadLabel}
+          tooltip={
+            showNewThreadInProjectHint ? (
+              <span className="flex flex-col gap-0.5">
+                <span>{newThreadLabel}</span>
+                <span className="text-muted-foreground">
+                  New thread in current project: Shift+click
+                  {newThreadInProjectShortcutLabel ? ` (${newThreadInProjectShortcutLabel})` : ""}
+                </span>
+              </span>
+            ) : (
+              newThreadLabel
+            )
+          }
           disabled={newThreadDisabled}
           onClick={onNewThread}
         >
