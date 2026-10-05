@@ -10,8 +10,11 @@ import {
   T3TEAM_WIDGET_AUTHORING_GUIDANCE,
   T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION,
 } from "@t3tools/project-context/t3teamWidgetGuidance";
+import {
+  getT3TeamToolDefinition,
+  type T3TeamImplementedToolId,
+} from "@t3tools/project-context/t3teamToolCatalog";
 import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
-import { T3TEAM_WORKFLOW_TAGLINE } from "../../../t3team-workflowManual.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { T3TeamAskUserWriter } from "./t3team-askUserWriter.ts";
 
@@ -41,6 +44,18 @@ export const T3TEAM_MCP_CANONICAL_TOOL_MAP = {
   t3team_recipe_list: "t3team.recipe.list",
   t3team_recipe_validate: "t3team.recipe.validate",
 } as const;
+
+/**
+ * The broker catalog's description for a canonical tool, with every canonical id the text names
+ * rewritten to its MCP tool name (table-driven through the map above, so it is exact).
+ */
+export function mcpDescriptionOf(canonicalId: T3TeamImplementedToolId): string {
+  let text: string = getT3TeamToolDefinition(canonicalId).description;
+  for (const [mcpName, id] of Object.entries(T3TEAM_MCP_CANONICAL_TOOL_MAP)) {
+    text = text.replaceAll(id, mcpName);
+  }
+  return text;
+}
 
 /**
  * Canonical tools deliberately NOT on the provider `/mcp` surface. The parity test forces an
@@ -225,15 +240,10 @@ const orchestrationRunParameters = Schema.Struct({
   }),
 });
 
-const orchestrationRunDescription =
-  `${T3TEAM_WORKFLOW_TAGLINE} Pass \`source\` (the orchestration body — MUST be orchestration ` +
-  "TypeScript starting with `export const meta = {...}`, NEVER YAML or JSON) or `workflowPath` " +
-  "(an existing `.workflow.ts`), required `intent` ({goal, expectedOutcome, guardrails}), and " +
-  "optional `args`. Returns {runId, status: accepted|completed|suspended|failed, " +
-  "handoff: 'workflow-ui', output?, error?}. After a successful handoff, end the current turn " +
-  "with no assistant prose; the orchestration card owns progress and user decisions. ONE launch " +
-  "per turn: while a run this thread launched is still active, a second call is refused — pass " +
-  "`replaceRunId` to stop that run and launch the replacement instead.";
+// ONE description source: the broker catalog entry is what in-app agents read (TOOL_SPECS copies
+// it), so the MCP surface renders the same text with MCP tool names substituted — never a second
+// hand-written copy that drifts (review of fork #350).
+const orchestrationRunDescription = mcpDescriptionOf("t3team.orchestration.run");
 
 const T3TeamOrchestrationRunTool = Tool.make("t3team_orchestration_run", {
   description: orchestrationRunDescription,
@@ -265,15 +275,11 @@ const T3TeamOrchestrationStatusTool = Tool.make("t3team_orchestration_status", {
 // past the recorded frontier). Routes to the t3team.orchestration.resume broker
 // tool. Prefer this over re-running from scratch when the executed prefix should
 // be kept.
-const orchestrationResumeDescription =
-  "Resume a paused or failed agent-orchestration run from its journal. Pass the `runId` from " +
-  "t3team_orchestration_run/t3team_orchestration_status; optionally pass corrected `source` for " +
-  "an ephemeral run (same-prefix replay — do not change already-executed steps). Returns " +
-  "{runId, status: accepted|suspended|sleeping, hint}; observe progress via " +
-  "t3team_orchestration_status.";
+const orchestrationResumeDescription = mcpDescriptionOf("t3team.orchestration.resume");
 const orchestrationResumeParameters = Schema.Struct({
   runId: Schema.String,
   source: Schema.optional(Schema.String),
+  args: Schema.optional(Schema.Unknown),
 });
 
 const T3TeamOrchestrationResumeTool = Tool.make("t3team_orchestration_resume", {
@@ -411,28 +417,6 @@ export const T3TeamShowWidgetTool = Tool.make("t3team_show_widget", {
   dependencies,
 });
 
-// On-demand reference docs — one generic tool for any topic (see t3team-help.ts),
-// so tool descriptions stay lean and agents discover detail proactively.
-// Every slug is named here on purpose. This description previously offered
-// "agent-orchestration" as its single example, and in a 31-hour orchestration run
-// the agent called this tool twice, asked for that exact slug both times, and never
-// discovered the others — including `timers`, which documents the durable routine
-// loop it needed. One named example reads as the whole menu. Keep this list in sync
-// with TOPICS in t3team-help.ts.
-const T3TeamHelpTool = Tool.make("t3team_help", {
-  description:
-    "Get t3team reference docs on demand. Omit `topic` to list available topics, or pass a " +
-    "slug: 'agent-orchestration' (authoring a t3team_orchestration_run body), 'timers' " +
-    "(durable waits and recurring routines — how to make a run wake itself on a schedule " +
-    "instead of ending), 'reporting' (how to report an outcome to the human), " +
-    "'model-selection' (choosing a provider/model for delegate_task and orchestration agents), " +
-    "'widget-guidance' (rendering a widget).",
-  parameters: Schema.Struct({ topic: Schema.optional(Schema.String) }),
-  success: Schema.String,
-  failure: T3TeamMcpToolError,
-  dependencies,
-});
-
 // Read-only listing of the project's saved recipe workflows. Routes to the
 // t3team.recipe.list broker tool. This tool takes no arguments; declared via
 // Tool.dynamic with an explicit `{type:"object"}` JSON schema because an effect
@@ -493,7 +477,6 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamOrchestrationPauseTool,
   T3TeamOrchestrationStopTool,
   T3TeamShowWidgetTool,
-  T3TeamHelpTool,
   T3TeamRecipeListTool,
   T3TeamRecipeValidateTool,
 );

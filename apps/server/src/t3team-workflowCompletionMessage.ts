@@ -98,9 +98,8 @@ export async function deliverWorkflowCompletion(input: {
  *
  * A BUNDLED or project recipe is shipped code. Its run was started by a human clicking a button, and
  * that human cannot edit the recipe's source; self-heal does not apply either (`repairIntent` is only
- * set for the ephemeral case). Handing them "Fix the orchestration source … call
- * t3team_help("agent-orchestration")" is agent-facing text pointed at the one reader who has no way to
- * comply, and it hides the only thing they can do.
+ * set for the ephemeral case). Handing them "Fix the orchestration source" is agent-facing text
+ * pointed at the one reader who has no way to comply, and it hides the only thing they can do.
  */
 /**
  * `errorText` sometimes carries a raw JSON object as its message (a thrown HTTP/tool error whose

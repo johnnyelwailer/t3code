@@ -18,6 +18,7 @@ import type { WorkflowRun } from "./persistence/Services/WorkflowRuns.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import {
   makeResumePausedRun,
+  replaceRunArgsIfRequested,
   replaceRunSourceIfRequested,
   type WorkflowResumeToolDeps,
 } from "./t3team-toolBrokerWorkflowResumeActions.ts";
@@ -26,6 +27,10 @@ import { makeResumeFailedRun } from "./t3team-toolBrokerWorkflowResumeFailed.ts"
 export interface ResumeWorkflowHandlerArgs {
   readonly runId?: string | undefined;
   readonly source?: string | undefined;
+  /** Corrected launch args for a run that failed its `meta.inputs` decode — the decision "re-run
+   * this same run with these inputs" as a tool argument, so an input fault never needs a second
+   * run (and a second card). Persisted on the row before the journal re-drive reads it. */
+  readonly args?: unknown;
 }
 
 export interface WorkflowResumeToolValue {
@@ -69,12 +74,12 @@ export function makeWorkflowResumeToolHandlers<E>(
         if (Option.isNone(found) || found.value.launchThreadId !== String(threadId)) {
           return yield* Effect.fail(notFoundHint(runId));
         }
-        const run: WorkflowRun = found.value;
-        if (run.status !== "paused" && run.status !== "failed") {
+        if (found.value.status !== "paused" && found.value.status !== "failed") {
           return yield* Effect.fail(
-            `Workflow run '${runId}' is ${run.status}; only a paused or failed run can be resumed.`,
+            `Workflow run '${runId}' is ${found.value.status}; only a paused or failed run can be resumed.`,
           );
         }
+        const run: WorkflowRun = yield* replaceRunArgsIfRequested(deps, found.value, args.args);
         yield* replaceRunSourceIfRequested(deps, threadId, run, args.source);
         if (run.status === "paused") {
           return yield* makeResumePausedRun(deps)(run);

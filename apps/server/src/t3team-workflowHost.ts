@@ -20,7 +20,6 @@ import { CommandId, MessageId, ThreadId } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
@@ -41,13 +40,11 @@ import type {
   WorkflowHostPort,
   WorkflowHostStartTurnInput,
 } from "./t3team-workflowHostPort.ts";
+import { failAs, T3TeamWorkflowHostError } from "./t3team-workflowHostFail.ts";
 import { readWorkflowRunFacts } from "./t3team-workflowHostRunFacts.ts";
 import { workflowPromptContext } from "./t3team-workflowTurnPrompt.ts";
 
-export class T3TeamWorkflowHostError extends Schema.TaggedError<T3TeamWorkflowHostError>()(
-  "T3TeamWorkflowHostError",
-  { operation: Schema.String, message: Schema.String },
-) {}
+export { T3TeamWorkflowHostError };
 
 type HostEffect = Effect.Effect<void, T3TeamWorkflowHostError>;
 
@@ -57,6 +54,7 @@ export interface T3TeamWorkflowHostShape {
   readonly postMessage: (input: WorkflowHostMessageInput) => HostEffect;
   readonly upsertActivity: (input: WorkflowHostActivityInput) => HostEffect;
   readonly interrupt: (input: WorkflowHostInterruptInput) => HostEffect;
+  readonly archiveThread: (threadId: string) => HostEffect;
   readonly syncRunFacts: (launchThreadId: string) => HostEffect;
   /** Post the held `afterActiveRun` messages of a thread whose run has ended. */
   readonly flushHeld: (threadId: string) => HostEffect;
@@ -68,22 +66,6 @@ export class T3TeamWorkflowHost extends Context.Service<
   T3TeamWorkflowHost,
   T3TeamWorkflowHostShape
 >()("t3/t3team-workflowHost/T3TeamWorkflowHost") {}
-
-const describe = (cause: unknown): string =>
-  typeof cause === "object" && cause !== null && "message" in cause
-    ? String((cause as { readonly message: unknown }).message)
-    : String(cause);
-
-const failAs =
-  (operation: string) =>
-  <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<void, T3TeamWorkflowHostError, R> =>
-    effect.pipe(
-      Effect.asVoid,
-      Effect.mapError(
-        (cause) => new T3TeamWorkflowHostError({ operation, message: describe(cause) }),
-      ),
-      Effect.withSpan(`t3team.workflowHost.${operation}`),
-    );
 
 const make = Effect.gen(function* () {
   const threads = yield* ThreadManagementService;
@@ -185,6 +167,16 @@ const make = Effect.gen(function* () {
       });
     }).pipe(failAs("interrupt"));
 
+  // Deterministic id: retiring the same thread twice is one archive, not a second command.
+  const archiveThread = (threadId: string) =>
+    failAs("archiveThread")(
+      threads.dispatch({
+        type: "thread.archive",
+        commandId: CommandId.make(`t3team-wf:archive:${threadId}`),
+        threadId: ThreadId.make(threadId),
+      }),
+    );
+
   const syncRunFacts = (launchThreadId: string) =>
     readWorkflowRunFacts(sql, launchThreadId).pipe(
       Effect.flatMap((patch) => facts.upsert(ThreadId.make(launchThreadId), patch)),
@@ -197,6 +189,7 @@ const make = Effect.gen(function* () {
     postMessage,
     upsertActivity,
     interrupt,
+    archiveThread,
     syncRunFacts,
     flushHeld,
     heldThreadIds: held.heldThreadIds,
@@ -212,5 +205,6 @@ export const toWorkflowHostPort = (host: T3TeamWorkflowHostShape): WorkflowHostP
   postMessage: (input) => Effect.runPromise(host.postMessage(input)),
   upsertActivity: (input) => Effect.runPromise(host.upsertActivity(input)),
   interrupt: (input) => Effect.runPromise(host.interrupt(input)),
+  archiveThread: (threadId) => Effect.runPromise(host.archiveThread(threadId)),
   syncRunFacts: (launchThreadId) => Effect.runPromise(host.syncRunFacts(launchThreadId)),
 });

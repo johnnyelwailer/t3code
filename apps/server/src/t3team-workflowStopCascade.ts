@@ -6,11 +6,12 @@
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
+import { retireWorkflowAuthorThread } from "./t3team-workflowAuthorThreadCleanup.ts";
 
 export async function stopWorkflowsOwnedByThread(input: {
   readonly registry: T3TeamWorkflowEngineRegistryShape;
   readonly threadId: string;
-  readonly host: Pick<WorkflowHostPort, "interrupt">;
+  readonly host: Pick<WorkflowHostPort, "interrupt" | "archiveThread">;
 }): Promise<void> {
   for (const runId of input.registry.runsOwnedByThread(input.threadId)) {
     const children = input.registry.childThreadsForRun(runId);
@@ -28,5 +29,6 @@ export async function stopWorkflowsOwnedByThread(input: {
         origin: "user",
       });
     }
+    await retireWorkflowAuthorThread({ runId, host: input.host });
   }
 }

@@ -1,7 +1,8 @@
 /**
  * The load-time static audit entry point (Epic 25 phase 25.5): parse a `.workflow.ts` once and
- * run both scans over it — determinism ({@link ./t3team-sdk.determinismScan.ts}) and
- * `meta.capabilities` ({@link ./t3team-sdk.capabilityScan.ts}). Never executes the body.
+ * run the scans over it — determinism ({@link ./t3team-sdk.determinismScan.ts}), runtime bindings
+ * ({@link ./t3team-sdk.bindingScan.ts}) and `meta.capabilities`
+ * ({@link ./t3team-sdk.capabilityScan.ts}). Never executes the body.
  *
  * Wired into the static validate path (`t3team.recipe.validate`) so an authoring agent sees these
  * errors BEFORE a run, rather than as a `PermissionDeniedError` mid-flight. The runtime gates stay
@@ -14,7 +15,9 @@ import { scanCapabilities } from "./t3team-sdk.capabilityScan.ts";
 import { isEsmShapedBody, scanDeterminism } from "./t3team-sdk.determinismScan.ts";
 import { extractMeta, prepareWorkflow, type WorkflowSource } from "./t3team-sdk.loader.ts";
 import type { WorkflowAuditFinding } from "./t3team-sdk.staticAuditTypes.ts";
+import { scanBindings } from "./t3team-sdk.bindingScan.ts";
 import { typeCheckWorkflowSource } from "./t3team-sdk.typeCheck.ts";
+import { WORKFLOW_BOUND_GLOBAL_NAME_SET } from "./t3team-sdk.workflowBoundNames.ts";
 import { getRegisteredTool } from "./t3team-sdk.ts";
 import { loadTypeScript } from "@runbook/ts/typescript";
 
@@ -58,7 +61,12 @@ export function auditWorkflowSourceStatic(
     ts.ScriptKind.TS,
   );
 
-  const findings: WorkflowAuditFinding[] = [...scanDeterminism(ts, sf)];
+  // Bindings always run: an unbound `@t3team/sdk` import is a guaranteed ReferenceError, and the
+  // runtime list it checks against is derived from the loader's own surface.
+  const findings: WorkflowAuditFinding[] = [
+    ...scanDeterminism(ts, sf),
+    ...scanBindings(ts, sf, WORKFLOW_BOUND_GLOBAL_NAME_SET),
+  ];
 
   let declared = options.declared;
   if (declared === undefined) {

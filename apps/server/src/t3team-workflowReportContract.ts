@@ -1,9 +1,7 @@
 /**
- * How an orchestration should report back to the human.
- *
- * Its own module, and its own `t3team_help("reporting")` entry, for the same reason the timers
- * manual is: the orchestration manual is loaded into context every turn and is two lines under the
- * additive guard's hard 200-line ceiling, so on-demand topics live beside it rather than inside it.
+ * How an orchestration should report back to the human — the contract the report composer is
+ * instructed with (`t3team-workflowReportPrompt.ts`) and the author agent reads in its kickoff
+ * (`t3team-workflowAuthorPrompt.ts`). It is authoring knowledge, so no parent-facing tool carries it.
  *
  * Written because of a real run on 2026-08-29. A delivery orchestration finished, failed its QA
  * gate, and reported via `notifyUser` in a single 4460-character block of unbroken prose —
@@ -16,14 +14,11 @@
  * ("Delivered: false / Reason: QA failed"), which is why RETURN-DON'T-NARRATE leads the contract:
  * the good path already existed and went unused.
  *
- * @module t3team-workflowManualReporting
+ * @module t3team-workflowReportContract
  */
 
-/**
- * The reporting contract, surfaced as `t3team_help("reporting")` and pointed at from the RULES
- * section of the main manual.
- */
-export const T3TEAM_REPORTING_MANUAL = `REPORTING — what the human actually reads.
+/** The reporting contract. */
+export const WORKFLOW_REPORTING_CONTRACT = `REPORTING — what the human actually reads.
 
 Your orchestration's report is read by a person who did not watch it run. Every step thread stays
 inspectable in the UI, so the report is a SUMMARY, not a transcript. Detail belongs in the steps;
@@ -35,9 +30,10 @@ garnish, and text is what you fall back to when there is genuinely nothing to sh
 
   await getThread().showWidget({ title: 'QA verdict', widgetCode: html, format: 'html' })
 
-Requires capabilities: ['user']. The authoring contract — host theme variables, the icon sprite, no
-hard-coded colours, works in light and dark — is t3team_help("widget-guidance"). Follow it; a
-widget that ignores the theme looks broken in half the app.
+Requires capabilities: ['user']. Colour everything with the host theme variables (var(--background),
+var(--success), var(--warning), var(--info), …), never hard-coded hex; render icons from the host
+sprite (t3w-icon), not emoji; the same markup must work in light and dark. A widget that ignores the
+theme looks broken in half the app.
 
 Reach for a widget whenever the report contains:
 - numbers to compare (benchmarks, timings, counts, before/after) — a chart or table, never a

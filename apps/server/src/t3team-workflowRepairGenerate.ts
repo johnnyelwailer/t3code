@@ -2,10 +2,12 @@
  * Producing one candidate replacement for a failing agent-authored workflow.
  *
  * Split from `t3team-workflowEngineRepair.ts`, which owns the bounded attempt loop (budget,
- * ceilings, audit, resume). This is the part that asks a model for a fix, and it has two paths that
- * must not be confused: structured generation, which is what production wires and which exposes NO
- * shell, file, or browser tools to the repair model; and a compatibility fallback driving a real
- * child thread. `allowRepairThreadFallback === false` is what keeps that fallback off in production.
+ * ceilings, audit, resume). This is the part that asks for a fix, and it has three paths that must
+ * not be confused: the run's own AUTHOR conversation (`t3team-workflowAuthorRepair.ts`) — the
+ * production path for a run authored this uptime, because that conversation holds the context a
+ * context-free model never had; structured generation, the context-free fallback (after a restart)
+ * which exposes NO tools to the repair model; and a compatibility fallback driving a fresh child
+ * thread. `allowRepairThreadFallback === false` is what keeps that last one off in production.
  *
  * The child id is reported through `onRepairChildId` rather than returned: the caller reads it much
  * later, on the audit path, and only the fallback branch ever sets it.
@@ -13,6 +15,8 @@
 import * as Effect from "effect/Effect";
 
 import type { LaunchWorkflowRecipeInput } from "./t3team-workflowEngineLaunchTypes.ts";
+import { generateWorkflowRepairViaAuthor } from "./t3team-workflowAuthorRepair.ts";
+import { workflowAuthorSessionForRun } from "./t3team-workflowAuthorSession.ts";
 import { buildWorkflowRepairPrompt } from "./t3team-workflowRepairPrompt.ts";
 import { newWorkflowStepPromptMessageId } from "./t3team-workflowTurnPrompt.ts";
 import {
@@ -59,6 +63,18 @@ export function makeWorkflowRepairGenerator(ctx: WorkflowRepairGenerateContext) 
     // Local to one attempt: the original declared it in the loop scope but never read it outside.
     let repairReason: string | undefined;
     if (stopped()) throw new Error("Workflow was stopped");
+    const authorSession = workflowAuthorSessionForRun(input.runId);
+    if (authorSession !== undefined) {
+      return generateWorkflowRepairViaAuthor({
+        session: authorSession,
+        input,
+        source,
+        failure,
+        priorReasons,
+        timeoutMs,
+        stopped,
+      });
+    }
     const prompt = buildWorkflowRepairPrompt({
       intent,
       failure,

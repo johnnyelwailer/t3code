@@ -14,6 +14,7 @@ import type {
 } from "./persistence/Services/WorkflowRuns.ts";
 import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
+import { retireWorkflowAuthorThread } from "./t3team-workflowAuthorThreadCleanup.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 import type { InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
 import type { T3TeamWorkflowHostShape } from "./t3team-workflowHost.ts";
@@ -176,6 +177,16 @@ export const controlWorkflowRun = Effect.fn("controlWorkflowRun")(function* (
         .interrupt({ threadId: childThreadId, reason: "Workflow stopped", origin: deps.stopOrigin })
         .pipe(Effect.mapError(errorMessage));
     }
+    // A stopped run's author has nothing left to write or repair.
+    yield* Effect.promise(() =>
+      retireWorkflowAuthorThread({
+        runId,
+        host: {
+          interrupt: (input) => Effect.runPromise(deps.host.interrupt(input)),
+          archiveThread: (threadId) => Effect.runPromise(deps.host.archiveThread(threadId)),
+        },
+      }),
+    );
     yield* Effect.promise(() => deps.rearmScheduler());
     status = "cancelled";
   }

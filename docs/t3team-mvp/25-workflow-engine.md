@@ -214,7 +214,8 @@ What's forbidden in `meta`:
 
 `model` is a plain string: `"<instanceId>/<modelSlug>"` for an exact model, or
 `"<instanceId>"` for that instance's latest available model. Instance ids and model slugs
-come from the live runtime catalog (`t3team_models`); copy them verbatim rather than
+come from the live runtime catalog (`orchestrator_capabilities`, or the catalog the author's
+kickoff carries); copy them verbatim rather than
 guessing from a provider name. The SDK keeps no static model catalog.
 
 ```ts
@@ -1186,7 +1187,10 @@ longer a `recipe.json` / step-union path.
 The engine already has a **reactive** repair path: `t3team-workflowSelfHeal.ts`,
 `t3team-workflowEngineRepair.ts`, and `t3team-workflowRepair{Generate,Guardrails,Policy,Prompt}.ts`,
 with a distribution-tunable `t3team-pack-workflowRepairPolicy.ts`. It fires _after_ a run fails,
-hands a no-tools structured repair model the failure plus `T3TEAM_WORKFLOW_MANUAL`, and retries.
+hands a no-tools structured repair model the failure plus the generated author reference
+(`WORKFLOW_AUTHOR_REFERENCE`), and retries. Built 2026-10 (fork #349): the proactive counterpart is the
+encapsulated author agent (`t3team-workflowAuthorLaunch.ts`), and runtime repairs go back to that
+same author conversation first (`t3team-workflowAuthorRepair.ts`).
 
 The intent is a **proactive** counterpart that reuses the same machinery:
 

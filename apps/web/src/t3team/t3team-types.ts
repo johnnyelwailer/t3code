@@ -66,6 +66,7 @@ export type ProjectThread = {
   workflowRunStatus?: {
     readonly runId?: string;
     readonly status:
+      | "authoring"
       | "queued"
       | "running"
       | "suspended"

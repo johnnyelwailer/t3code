@@ -11,8 +11,10 @@ import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import {
   T3TEAM_MCP_CANONICAL_TOOL_MAP,
   T3TEAM_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS,
+  mcpDescriptionOf,
   T3TeamToolkit,
 } from "./tools.ts";
+import { TOOL_SPECS } from "../../../t3team-toolBrokerHelpers.ts";
 
 it("maps or explicitly policy-excludes every canonical implemented tool", () => {
   const exposed: ReadonlySet<string> = new Set(Object.values(T3TEAM_MCP_CANONICAL_TOOL_MAP));
@@ -257,3 +259,33 @@ it.effect(
     );
   },
 );
+// Hand-written help drifted from the runtime (it taught an unbound name) and flooded the parent's
+// context. The topics now live where they are needed: tool descriptions and the author agent's
+// generated reference. A `t3team_help` tool must never come back.
+it("no longer registers t3team_help: tool descriptions alone must be enough", () => {
+  expect(Object.keys(T3TeamToolkit.tools)).not.toContain("t3team_help");
+  expect(Object.keys(T3TEAM_MCP_CANONICAL_TOOL_MAP)).not.toContain("t3team_help");
+});
+
+// In-app agents read the BROKER catalog (TOOL_SPECS copies its descriptions); MCP agents read the
+// toolkit. One description source, rendered with each surface's tool names (fork #350 review).
+it("MCP and broker surfaces expose the SAME description text for run and resume", () => {
+  const cases = [
+    ["t3team_orchestration_run", "t3team.orchestration.run"],
+    ["t3team_orchestration_resume", "t3team.orchestration.resume"],
+  ] as const;
+  for (const [mcpName, canonicalId] of cases) {
+    const mcp = (T3TeamToolkit.tools as Record<string, { readonly description?: string }>)[mcpName];
+    const broker = TOOL_SPECS[canonicalId].description;
+    expect(mcp?.description).toBe(mcpDescriptionOf(canonicalId));
+    // Same text modulo tool naming: undo the MCP rename and the broker text must come back.
+    let unmapped = mcp?.description ?? "";
+    for (const [name, id] of Object.entries(T3TEAM_MCP_CANONICAL_TOOL_MAP)) {
+      unmapped = unmapped.replaceAll(name, id);
+    }
+    expect(unmapped).toBe(broker);
+    expect(broker).toContain(
+      canonicalId === "t3team.orchestration.resume" ? "corrected 'args'" : "'intent'",
+    );
+  }
+});

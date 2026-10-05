@@ -164,9 +164,16 @@ describe("capability check resolves imported bindings", () => {
       `}`,
     ]);
 
-    expect(findings).toHaveLength(1);
-    expect(findings[0]?.rule).toBe("missing-capability");
-    expect(findings[0]?.message).toContain("'schedule'");
+    // The capability facet still sees through the alias (gates `at` as waitUntil); the bindings
+    // facet additionally rejects the alias itself — the loader erases imports, so `at` would be
+    // undefined at runtime regardless of the capability.
+    const capability = findings.filter((item) => item.facet === "capability");
+    expect(capability).toHaveLength(1);
+    expect(capability[0]?.rule).toBe("missing-capability");
+    expect(capability[0]?.message).toContain("'schedule'");
+    expect(findings.filter((item) => item.facet === "bindings").map((item) => item.rule)).toEqual([
+      "aliased-import",
+    ]);
   });
 
   it("gates an author-named scripts tree", () => {

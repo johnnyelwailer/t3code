@@ -11,6 +11,7 @@ import type { WorkflowRunRepositoryShape } from "./persistence/Services/Workflow
 /** Non-terminal statuses stop's compare-and-set write is allowed to move away from — the
  * complement of `completed` / `failed` / `cancelled`. */
 export const NON_TERMINAL_STATUSES = [
+  "authoring",
   "queued",
   "running",
   "suspended",
