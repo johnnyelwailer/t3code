@@ -29,7 +29,7 @@ import * as Effect from "effect/Effect";
 
 import { resolveStartChildModelSelection } from "./t3team-toolBrokerStartChildProvider.ts";
 
-export const APPROVAL_RESTRICTED_DRIVERS: ReadonlySet<string> = new Set([
+const APPROVAL_RESTRICTED_DRIVERS: ReadonlySet<string> = new Set([
   "claudeAgent",
   "codex",
   "cursor",

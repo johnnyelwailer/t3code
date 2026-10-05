@@ -30,10 +30,10 @@ import { newWorkflowStepPromptMessageId } from "./t3team-workflowTurnPrompt.ts";
  * event stream): a command, file read or change, or any non-host tool is declined. The prompt
  * never reaches a user who cannot see this hidden thread.
  */
-export const WORKFLOW_AUTHOR_INTERACTION_MODE = "plan" as const;
+const WORKFLOW_AUTHOR_INTERACTION_MODE = "plan" as const;
 
 /** Codex maps this to approvalPolicy `untrusted` and a read-only sandbox. Never the caller's mode. */
-export const WORKFLOW_AUTHOR_RUNTIME_MODE = "approval-required" as const;
+const WORKFLOW_AUTHOR_RUNTIME_MODE = "approval-required" as const;
 
 /**
  * The author's entire tool surface. `t3team.orchestration.run` from this thread is a submission.

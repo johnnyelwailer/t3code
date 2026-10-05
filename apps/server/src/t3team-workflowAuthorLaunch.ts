@@ -32,7 +32,7 @@ import type {
 import { checkWorkflowSource } from "./t3team-workflowSourceCheck.ts";
 
 /** Ceiling for one authoring turn; a turn that outlives it is a failed authoring, reported once. */
-export const WORKFLOW_AUTHOR_TURN_TIMEOUT_MS = 15 * 60_000;
+const WORKFLOW_AUTHOR_TURN_TIMEOUT_MS = 15 * 60_000;
 
 export interface WorkflowAuthorLaunchDeps {
   readonly launch: PreparedWorkflowLaunchDeps;
