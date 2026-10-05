@@ -217,8 +217,10 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       "directly. You describe, the host authors: pass 'intent' ({goal, expectedOutcome, " +
       "guardrails} — put constraints such as which provider/model to use in plain language " +
       "here) and optional 'args' (the orchestration's input); a dedicated author agent writes, " +
-      "validates and launches the source. Pass 'workflowPath' only to run an existing saved " +
-      ".workflow.ts as-is. Returns {runId, status: authoring|accepted, handoff: 'workflow-ui'} " +
+      "validates and launches the source (persisted under .t3team-runs/<runId>/). Pass " +
+      "'workflowPath' only to run an existing saved .workflow.ts as-is (body format: " +
+      `${PROJECT_STATE_DIR}/recipes/AUTHORING.md). Returns {runId, status: authoring|accepted, ` +
+      "handoff: 'workflow-ui'} " +
       "immediately; the orchestration card shows authoring → running → the result, and only a " +
       "genuinely unfixable outcome is reported back, once. After the handoff, end the current " +
       "turn with no assistant prose. ONE launch per turn: while a run this thread launched is " +
