@@ -44,11 +44,17 @@ export function resolveThreadStatusPill(
             pulse: false,
           }
         : {
+            // A suspended agent turn is still LIVE work parked on a background
+            // subagent — the thread is waiting, not stopped. Pulse it with the
+            // slower "waiting" motion (the GHE #208 waiting-state language) so it
+            // reads as alive-but-parked, distinct from the actively-working pulse
+            // and from the static user-input wait.
             label: "Waiting for agent",
-            detail: `Waiting since ${waitingSince}`,
+            detail: `since ${waitingSince}`,
             colorClass: "text-sky-600 dark:text-sky-300/80",
             dotClass: "bg-sky-500 dark:bg-sky-300/80",
-            pulse: false,
+            pulse: true,
+            pulseClass: "animate-status-pulse-slow",
           };
     }
     if (run.status === "sleeping") {

@@ -82,7 +82,7 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
         {statusPill && (
           <span
             data-t3team-state={statusOrbState ?? undefined}
-            className={`inline-flex size-1.5 shrink-0 rounded-full ${statusOrbState ? STATUS_ORB_CLASS : statusPill.dotClass} ${statusPill.pulse ? "animate-pulse" : ""}`}
+            className={`inline-flex size-1.5 shrink-0 rounded-full ${statusOrbState ? STATUS_ORB_CLASS : statusPill.dotClass} ${statusPill.pulse ? (statusPill.pulseClass ?? "animate-pulse") : ""}`}
             title={
               statusPill.detail
                 ? `${resolveActivityPillDisplay(statusPill)} ${statusPill.detail}`
