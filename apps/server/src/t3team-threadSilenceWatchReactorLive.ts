@@ -38,7 +38,7 @@ export class T3TeamThreadSilenceWatch extends Context.Service<
   ThreadSilenceWatchCore
 >()("t3/t3team-threadSilenceWatchReactorLive/T3TeamThreadSilenceWatch") {}
 
-export const T3TeamThreadSilenceWatchLive = Layer.effect(
+const T3TeamThreadSilenceWatchLive = Layer.effect(
   T3TeamThreadSilenceWatch,
   Effect.gen(function* () {
     const threads = yield* ThreadManagementService;

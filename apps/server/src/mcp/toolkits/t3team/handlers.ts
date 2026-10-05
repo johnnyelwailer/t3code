@@ -1,5 +1,7 @@
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
+import { T3TeamChildThreadMetadata } from "../../../t3team-childThreadMetadata.ts";
 import { T3TEAM_MCP_SERVER_NAME, T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import { t3TeamAskUser, type T3TeamAskUserOption } from "./t3team-askUser.ts";
@@ -57,6 +59,32 @@ const askUser = Effect.fn("T3TeamMcpToolkit.askUser")(function* (input: {
   return yield* t3TeamAskUser(input, invocation.threadId);
 });
 
+// Skills-as-subagents Phase 1 read path: the child's driver asks its OWN thread for the
+// skill names the delegate_task requested, then resolves them from the pack's skill
+// registry. The host stores requested names only; it never resolves them (no second
+// catalog). Unknown threads and threads without skill delegation yield a clean
+// { skills: [] }, never an error — the driver's soft-fail then yields today's behavior.
+const threadSkillMetadata = Effect.fn("T3TeamMcpToolkit.threadSkillMetadata")(function* (input: {
+  readonly threadId?: string | undefined;
+}) {
+  const invocation = yield* requireOrchestrationScope;
+  const threadId =
+    typeof input.threadId === "string" && input.threadId.length > 0
+      ? input.threadId
+      : invocation.threadId;
+  const store = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamChildThreadMetadata));
+  if (store === undefined) return { skills: [] };
+  const rows = yield* store.listByChildThreadIds([threadId]).pipe(
+    Effect.mapError(
+      (error) =>
+        new T3TeamMcpToolError({
+          message: `Could not read the thread's skill metadata (${error.operation}).`,
+        }),
+    ),
+  );
+  return { skills: [...(rows[0]?.skills ?? [])] };
+});
+
 export const T3TeamToolkitHandlersLive = T3TeamToolkit.toLayer({
   t3team_provider_usage: (input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_provider_usage, input),
@@ -84,4 +112,5 @@ export const T3TeamToolkitHandlersLive = T3TeamToolkit.toLayer({
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_recipe_list, input),
   t3team_recipe_validate: (input) =>
     callBroker(T3TEAM_MCP_CANONICAL_TOOL_MAP.t3team_recipe_validate, input),
+  t3team_thread_skill_metadata: (input) => threadSkillMetadata(input),
 });

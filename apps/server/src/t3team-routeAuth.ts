@@ -18,7 +18,7 @@ import { HttpRouter, HttpServerRequest, HttpServerRespondable } from "effect/uns
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import { authenticateRawRouteWithScope } from "./http.ts";
 
-export const t3teamRouteScope = (method: string) =>
+const t3teamRouteScope = (method: string) =>
   method === "GET" || method === "HEAD"
     ? AuthOrchestrationReadScope
     : AuthOrchestrationOperateScope;

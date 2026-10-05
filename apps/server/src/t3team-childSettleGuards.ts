@@ -33,7 +33,7 @@ const ACTIVE_RUN_STATUSES = ["preparing", "starting", "running", "waiting"] as c
 const OPEN_TASK_STATUSES = ["pending", "running", "waiting"] as const;
 const UNDELIVERED_STATES = ["pending", "claimed"] as const;
 
-export const makeChildSettleGuardChecks = Effect.gen(function* () {
+const makeChildSettleGuardChecks = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const exists = <E>(label: string, query: Effect.Effect<ReadonlyArray<unknown>, E>) =>
     query.pipe(

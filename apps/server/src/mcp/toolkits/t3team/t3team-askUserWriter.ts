@@ -59,7 +59,7 @@ export class T3TeamAskUserWriter extends Context.Service<
   }
 >()("t3/mcp/toolkits/t3team/t3team-askUserWriter/T3TeamAskUserWriter") {}
 
-export const askUserRequestId = (askId: string) => RuntimeRequestId.make(`t3team-ask:${askId}`);
+const askUserRequestId = (askId: string) => RuntimeRequestId.make(`t3team-ask:${askId}`);
 
 const isAskUserError = Schema.is(T3TeamAskUserError);
 const fail = (message: string) => Effect.fail(new T3TeamAskUserError({ message }));

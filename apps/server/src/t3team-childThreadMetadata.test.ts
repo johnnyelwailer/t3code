@@ -34,8 +34,29 @@ it.layer(TestLayer)("T3TeamChildThreadMetadata", (it) => {
         parentThreadId: "thread:parent",
         placementThreadId: "thread:launcher",
         ticketId: "T-2",
+        skills: null,
       });
       assert.deepEqual(yield* store.listByChildThreadIds([]), []);
+    }),
+  );
+
+  it.effect("round-trips the requested skill names and clears them on the next upsert", () =>
+    Effect.gen(function* () {
+      const store = yield* T3TeamChildThreadMetadata;
+      const child = ThreadId.make("thread:child-skills");
+      yield* store.upsert({
+        childThreadId: child,
+        parentThreadId: ThreadId.make("thread:parent"),
+        skills: ["deploy-staging", "review-fixes"],
+      });
+      const named = yield* store.listByChildThreadIds([child]);
+      assert.deepEqual(named[0]?.skills, ["deploy-staging", "review-fixes"]);
+      yield* store.upsert({
+        childThreadId: child,
+        parentThreadId: ThreadId.make("thread:parent"),
+      });
+      const cleared = yield* store.listByChildThreadIds([child]);
+      assert.equal(cleared[0]?.skills, null);
     }),
   );
 });

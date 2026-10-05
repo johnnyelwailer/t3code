@@ -45,7 +45,7 @@ const threadId = ThreadId.make("thread-1");
 const projectId = ProjectId.make("project-1");
 const epoch = DateTime.makeUnsafe(Date.parse("2026-01-01T00:00:00.000Z"));
 
-export const testBrokerThread = {
+const testBrokerThread = {
   id: threadId,
   projectId,
   title: "Original title",
@@ -60,7 +60,7 @@ export const testBrokerThread = {
   deletedAt: null,
 } as unknown as OrchestrationV2AppThread;
 
-export const testBrokerProject = {
+const testBrokerProject = {
   id: projectId,
   title: "Project One",
   workspaceRoot: "/workspace/project-1",

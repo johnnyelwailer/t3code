@@ -26,7 +26,7 @@ export const T3TEAM_ACTOR_MESSAGE_HOP_CAP = 6;
  * immediately, still batched). An `urgent` entry in the pending batch
  * bypasses the window entirely (claims immediately; see the reactor's drain).
  */
-export const T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS = 60_000;
+const T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS = 60_000;
 const T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS_ENV = "T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS";
 
 /** Resolve the coalescing debounce window, honoring the env override. */

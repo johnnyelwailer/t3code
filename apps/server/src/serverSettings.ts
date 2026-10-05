@@ -455,7 +455,7 @@ function restoreUsedProviders(
  * check would reject them and force the text-generation model back to the
  * legacy default.
  */
-export const isModelSelectionProviderEnabledPackAware = (
+const isModelSelectionProviderEnabledPackAware = (
   settings: ServerSettings,
   selection: ModelSelection,
 ): boolean =>

@@ -870,7 +870,7 @@ const commandReadinessLayer = HttpRouter.middleware(
   { global: true },
 );
 
-export const makeRoutesLayer = Layer.mergeAll(
+const makeRoutesLayer = Layer.mergeAll(
   Layer.mergeAll(
     HttpApiBuilder.layer(EnvironmentHttpApi).pipe(
       Layer.provide(authHttpApiLayer),

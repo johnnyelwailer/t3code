@@ -25,7 +25,7 @@ import {
 /** True for a decider rejection of `thread.turn.start` because the thread is already busy — the
  * ONE `OrchestrationCommandInvariantError` shape this retry treats as transient. Any other
  * rejection (an invalid command, a different invariant) is permanent and must propagate. */
-export function isThreadTurnStartBusyRejection(error: unknown): boolean {
+function isThreadTurnStartBusyRejection(error: unknown): boolean {
   if (typeof error !== "object" || error === null) return false;
   const tagged = error as { _tag?: unknown; detail?: unknown };
   return (

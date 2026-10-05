@@ -24,7 +24,7 @@ import * as TurnItemPositionStore from "../orchestration-v2/TurnItemPositionStor
 import { OrchestrationV2EventSinkLayerLive } from "../orchestration-v2/runtimeLayer.ts";
 
 /** The orchestrator's own thread lock (same reference `Orchestrator.layer` provides). */
-export const T3TeamThreadLockLayer = ThreadCommandExecutor.layer;
+const T3TeamThreadLockLayer = ThreadCommandExecutor.layer;
 
 /** The runtime's shared event sink (same reference the V2 runtime layer provides). */
 export const T3TeamEventSinkLayer = OrchestrationV2EventSinkLayerLive;

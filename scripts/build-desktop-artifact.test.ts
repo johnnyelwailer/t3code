@@ -396,15 +396,13 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         mockUpdates: false,
       });
 
-      const previewChannel = yield* createBuildConfig(
-        "mac",
-        "dmg",
-        "0.0.41-preview.20260912.1589",
-        false,
-        false,
-        undefined,
-        undefined,
-      );
+      const previewChannel = yield* createBuildConfig({
+        platform: "mac",
+        target: "dmg",
+        version: "0.0.41-preview.20260912.1589",
+        signed: false,
+        mockUpdates: false,
+      });
 
       assert.notProperty(preview, "publish");
       assert.notProperty(previewChannel, "publish");
@@ -730,7 +728,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       ]);
       // No Linux CLI archive means staging never writes the runtime, so
       // listing it here would fail the build on a missing source file.
-      assert.deepStrictEqual(winWithoutWslRuntime.extraResources, [
+      assert.deepStrictEqual(winWithoutWslPrebuild.extraResources, [
         ...DESKTOP_EXTRA_RESOURCES,
         ...WINDOWS_SERVER_EXTRA_RESOURCES,
       ]);
@@ -766,7 +764,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.deepStrictEqual(mac.files, [...DESKTOP_FILE_EXCLUSIONS, ...MAC_FILE_EXCLUSIONS]);
       assert.deepStrictEqual(linux.files, [...DESKTOP_FILE_EXCLUSIONS, ...LINUX_FILE_EXCLUSIONS]);
       assert.deepStrictEqual(win.files, DESKTOP_FILE_EXCLUSIONS);
-      assert.deepStrictEqual(winWithoutWslRuntime.files, win.files);
+      assert.deepStrictEqual(winWithoutWslPrebuild.files, win.files);
       assert.notProperty(mac.mac as Record<string, unknown>, "sign");
       for (const config of [linux, win]) {
         assert.deepStrictEqual(config.electronLanguages, DESKTOP_ELECTRON_LANGUAGES);
@@ -2162,6 +2160,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           stageDistDir: fixture.stageDistDir,
           appExecutableName: fixture.appExecutableName,
           targetArch: "x64",
+          appVersion: WINDOWS_PAYLOAD_FIXTURE_VERSION,
           fileLimit: 10,
         });
 
