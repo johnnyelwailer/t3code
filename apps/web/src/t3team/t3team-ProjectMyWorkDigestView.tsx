@@ -74,12 +74,17 @@ export function ProjectMyWorkDigestView({
           Nothing needs you right now
         </T3SurfacePanel>
       ) : (
-        <div className="grid gap-x-6 gap-y-8 sm:gap-x-10 xl:grid-cols-[minmax(16rem,2fr)_minmax(0,5fr)]">
-          <div className="min-w-0 space-y-8">
-            {side.map((s) => (
-              <SideSection key={s.id} section={s} {...lane} />
-            ))}
-          </div>
+        // Nothing for the side lane: the main lane takes the row instead of leaving a blank band.
+        <div
+          className={`grid gap-x-6 gap-y-8 sm:gap-x-10 ${side.length > 0 ? "xl:grid-cols-[minmax(16rem,2fr)_minmax(0,5fr)]" : ""}`}
+        >
+          {side.length > 0 ? (
+            <div className="min-w-0 space-y-8">
+              {side.map((s) => (
+                <SideSection key={s.id} section={s} {...lane} />
+              ))}
+            </div>
+          ) : null}
           <div className="min-w-0 space-y-8">
             {main.map((s) => (
               <MainSection key={s.id} section={s} {...lane} />

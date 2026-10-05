@@ -23,7 +23,6 @@ export type {
 import type {
   DigestFacet,
   DigestGraph,
-  DigestPlacement,
   DigestPlan,
   ResolvedDigestPlan,
 } from "./t3team-projectMyWorkDigestTypes";
@@ -73,57 +72,7 @@ export function digestFacetsFor(
   return facets;
 }
 
-type Bucket = {
-  readonly id: string;
-  readonly heading: string;
-  readonly placement: DigestPlacement;
-  readonly accepts: (facets: readonly DigestFacet[], ticket: ProjectTicket) => boolean;
-};
-
-const BUCKETS: readonly Bucket[] = [
-  {
-    id: "needs-you",
-    heading: "Needs you",
-    placement: "side",
-    accepts: (f) => f.includes("decision"),
-  },
-  {
-    id: "review",
-    heading: "Waiting for your review",
-    placement: "side",
-    accepts: (f) => f.includes("changeRequest"),
-  },
-  {
-    id: "order",
-    heading: "Priority",
-    placement: "main",
-    accepts: (f) => f.includes("claim") || f.includes("moved"),
-  },
-  {
-    id: "stalled",
-    heading: "Stalled agents",
-    placement: "footer",
-    accepts: (f) => f.includes("stalled"),
-  },
-  // The viewer's own board state, so work nobody has touched lately still reads as work, not as
-  // "parked": what is moving (in progress / review), then what the current sprint queues next.
-  {
-    id: "in-progress",
-    heading: "In progress",
-    placement: "main",
-    accepts: (_f, ticket) => {
-      const lane = getProjectTicketKanbanLane(ticket.status);
-      return lane === "inProgress" || lane === "review";
-    },
-  },
-  {
-    id: "up-next",
-    heading: "Up next this sprint",
-    placement: "main",
-    accepts: (_f, ticket) => ticket.sprintState?.toLowerCase() === "active",
-  },
-  { id: "rest", heading: "Parked", placement: "footer", accepts: () => true },
-];
+import { DIGEST_BUCKETS } from "./t3team-projectMyWorkDigestBuckets";
 
 function byRecency(left: ProjectTicket, right: ProjectTicket): number {
   return Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
@@ -139,17 +88,20 @@ export function buildHeuristicDigestPlan(
     .filter((ticket) => onlyTicketIds === undefined || onlyTicketIds.has(ticket.id))
     .toSorted(byRecency);
   const placed = new Set<string>();
-  const sections = BUCKETS.map((bucket) => ({
+  const sections = DIGEST_BUCKETS.map((bucket) => ({
     id: bucket.id,
     kind: "items" as const,
     placement: bucket.placement,
     heading: bucket.heading,
+    ...(bucket.hint !== undefined ? { hint: bucket.hint } : {}),
     items: candidates
       .filter((ticket) => !placed.has(ticket.id))
-      .filter((ticket) => bucket.accepts(digestFacetsFor(graph, ticket.id, nowMs), ticket))
+      .filter((ticket) => bucket.accepts(digestFacetsFor(graph, ticket.id, nowMs), ticket, nowMs))
       .map((ticket) => {
         placed.add(ticket.id);
-        return { ticketId: ticket.id };
+        return bucket.why
+          ? { ticketId: ticket.id, why: bucket.why(ticket, nowMs) }
+          : { ticketId: ticket.id };
       }),
   })).filter((section) => section.items.length > 0);
   return { producer: "heuristic", producedAt: new Date(nowMs).toISOString(), sections };

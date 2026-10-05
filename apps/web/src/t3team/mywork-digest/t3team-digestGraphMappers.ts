@@ -25,36 +25,21 @@ import type {
 } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
+import {
+  buildTicketIndex,
+  countUnhandledThreads,
+  digestSprintGoals,
+  oldestJiraSync,
+  resolveIndexedTicketId,
+  type DigestTicketRefLike,
+  type TicketIndex,
+} from "./t3team-digestGraphHelpers";
+
 export type DigestViewer = {
   readonly name: string;
   readonly role: string;
   readonly lastVisitAt: string;
 };
-
-type TicketIndex = Map<string, string>;
-
-function buildTicketIndex(
-  tickets: readonly ProjectTicket[],
-  ids: ReadonlyArray<string>,
-): TicketIndex {
-  const index: TicketIndex = new Map();
-  tickets.forEach((ticket, position) => {
-    const refId = ids[position];
-    if (refId !== undefined) index.set(refId.toUpperCase(), ticket.id);
-    const key = ticket.ref.displayId.toUpperCase();
-    if (key !== "") index.set(key, ticket.id);
-  });
-  return index;
-}
-
-/** Split a Jira sprint goal (one string, possibly bulleted) into goal lines. */
-export function digestSprintGoals(goal: string | undefined): readonly string[] {
-  if (goal === undefined) return [];
-  return goal
-    .split(/\r?\n/)
-    .map((line) => line.replace(/^[-•*\s]+/, "").trim())
-    .filter((line) => line !== "");
-}
 
 /**
  * Joins one server payload into the `DigestGraph` the views consume.
@@ -115,22 +100,8 @@ export function payloadToDigestGraph(input: {
     }
   });
 
-  const resolveTicketId = (
-    position: number,
-    ref: { readonly issueId?: string; readonly issueKey?: string },
-  ): string => {
-    const index = indexByProject[position]?.index;
-    if (index === undefined) return "";
-    if (ref.issueId !== undefined) {
-      const byId = index.get(ref.issueId.toUpperCase());
-      if (byId !== undefined) return byId;
-    }
-    if (ref.issueKey !== undefined) {
-      const byKey = index.get(ref.issueKey.toUpperCase());
-      if (byKey !== undefined) return byKey;
-    }
-    return "";
-  };
+  const resolveTicketId = (position: number, ref: DigestTicketRefLike): string =>
+    resolveIndexedTicketId(indexByProject[position]?.index, ref);
 
   const claims: DigestClaim[] = [];
   const decisions: DigestDecision[] = [];
@@ -139,13 +110,7 @@ export function payloadToDigestGraph(input: {
   const transitions: DigestTransition[] = [];
   let burndown: DigestGraph["burndown"];
 
-  // "Unhandled" = unresolved AND newer than the last visit; untimed threads count always.
   const lastVisitMs = Date.parse(input.viewer.lastVisitAt);
-  const unhandledCount = (threads: ReadonlyArray<{ readonly lastCommentAt?: string }>): number =>
-    threads.reduce((count, thread) => {
-      const at = thread.lastCommentAt !== undefined ? Date.parse(thread.lastCommentAt) : NaN;
-      return Number.isNaN(at) ? count + 1 : at > lastVisitMs ? count + 1 : count;
-    }, 0);
 
   input.payload.projects.forEach((data, position) => {
     for (const claim of data.claims) {
@@ -186,7 +151,7 @@ export function payloadToDigestGraph(input: {
         // TODO(digest-data): per-reviewer verdicts have no host source yet; PR-level only.
         reviewers: pr.reviewers ?? [],
         ...(pr.unhandledReviewThreads !== undefined
-          ? { unhandledComments: unhandledCount(pr.unhandledReviewThreads) }
+          ? { unhandledComments: countUnhandledThreads(pr.unhandledReviewThreads, lastVisitMs) }
           : {}),
       });
     }
@@ -221,9 +186,11 @@ export function payloadToDigestGraph(input: {
     return { id, name: title !== "" ? title : data.project.name };
   });
 
+  const jiraSyncedAt = oldestJiraSync(input.payload.projects);
   return {
     scope: input.payload.scope,
     projects,
+    ...(jiraSyncedAt !== undefined ? { jiraSyncedAt } : {}),
     viewer: input.viewer,
     ...(sprint !== undefined ? { sprint } : {}),
     ...(burndown !== undefined ? { burndown } : {}),

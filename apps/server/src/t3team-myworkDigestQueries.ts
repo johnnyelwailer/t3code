@@ -6,7 +6,6 @@
  */
 
 import { ThreadId } from "@t3tools/contracts";
-import type { AtlassianBacklogSprint } from "@t3tools/integrations-atlassian";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
@@ -99,16 +98,6 @@ export function readDigestToolContextTickets(threadIds: ReadonlyArray<string>) {
 }
 
 /** Sprint metadata from the newest persisted backlog view (fallback included). */
-export function readDigestSprints(identity: T3TeamBacklogCacheIdentity) {
-  return Effect.gen(function* () {
-    const row = yield* readCachedBacklogViewRow(identity).pipe(
-      Effect.catch(() => Effect.succeed(null)),
-    );
-    if (row === null) return [];
-    return parseJson<AtlassianBacklogSprint[]>(row.sprintsJson) ?? [];
-  });
-}
-
 /**
  * Every suspended workflow parked on a user ask, narrowed to these app
  * projects. `listByStatus('suspended')` is one indexed scan; the filter keeps

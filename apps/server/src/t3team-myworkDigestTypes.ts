@@ -128,6 +128,8 @@ export type T3TeamDigestProjectData = {
   readonly burndown?: T3TeamDigestBurndown;
   /** Set when the PR host could not be read this round (the list degrades, it does not fail). */
   readonly changeRequestNote?: string;
+  /** When the project's Jira tickets last matched Jira (ISO); absent before any sync. */
+  readonly jiraSyncedAt?: string;
 };
 
 export type T3TeamMyWorkDigestPayload = {
@@ -199,6 +201,7 @@ export type T3TeamDigestProjectSource = {
   }>;
   /** Set when the PR host could not be read this round; carried to the payload. */
   readonly changeRequestNote?: string;
+  readonly jiraSyncedAt?: string;
   /** The round's clock, so the burndown "today" and unhandled-comment cutoffs are deterministic. */
   readonly nowIso: string;
 };
