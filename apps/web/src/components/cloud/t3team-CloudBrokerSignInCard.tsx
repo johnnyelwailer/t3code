@@ -39,13 +39,11 @@ export function CloudBrokerSignInCard({
       ) : status.auth._tag === "SigningIn" ? (
         <>
           <div className="min-w-0 space-y-0.5">
-            <p className="text-sm">
-              Enter{" "}
-              <span className="font-mono font-semibold tracking-wider">{status.auth.userCode}</span>{" "}
-              at Microsoft to sign in.
-            </p>
+            <p className="text-sm">Finish signing in in the browser window that opened.</p>
             <p className="text-muted-foreground text-xs">
-              Waiting for you to finish in the browser…
+              No window? Enter{" "}
+              <span className="font-mono font-semibold tracking-wider">{status.auth.userCode}</span>{" "}
+              at Microsoft instead.
             </p>
           </div>
           <Button size="sm" onClick={onOpenVerification}>

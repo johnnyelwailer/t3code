@@ -1,6 +1,8 @@
 import { type CloudBrokerStatus, CloudSessionFailedError } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
+import * as Crypto from "effect/Crypto";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
@@ -10,13 +12,17 @@ import * as Semaphore from "effect/Semaphore";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
+import * as ExternalLauncher from "../process/externalLauncher.ts";
+import { NO_BROWSER, runEntraBrowserSignIn } from "./t3team-NexiBrokerBrowserSignIn.ts";
 import { type NexiBrokerConfig, resolveNexiBrokerConfig } from "./t3team-NexiBrokerConfig.ts";
 import { type Tokens, makeEntraClient } from "./t3team-NexiBrokerEntra.ts";
 
 /**
- * The user's Entra sign-in for the Nexi broker: device code, so nothing listens on localhost — the
- * user enters a short code on microsoft.com from any browser while this server polls. The refresh
- * token lives in this install's secret store; access tokens are cached in memory.
+ * The user's Entra sign-in for the Nexi broker. Two ways in run at once and the first to finish
+ * wins: the browser sign-in (`t3team-NexiBrokerBrowserSignIn` — opens the default browser, which
+ * completes on its own when it is already signed in to Microsoft) and the device code (a short code
+ * entered on microsoft.com from any browser, for a server that cannot open one). The refresh token
+ * lives in this install's secret store; access tokens are cached in memory.
  */
 
 const REFRESH_TOKEN_SECRET = "nexi-broker-refresh-token";
@@ -71,6 +77,8 @@ const make = Effect.fn("cloud.broker.auth.make")(function* () {
   const config = yield* resolveNexiBrokerConfig();
   const secrets = yield* ServerSecretStore.ServerSecretStore;
   const http = yield* HttpClient.HttpClient;
+  const launcher = yield* ExternalLauncher.ExternalLauncher;
+  const crypto = yield* Crypto.Crypto;
   const entra = Option.map(config, (cfg) => makeEntraClient(cfg, http));
   const pending = yield* Ref.make(Option.none<Pending>());
   const cached = yield* Ref.make(Option.none<CachedAccess>());
@@ -123,7 +131,26 @@ const make = Effect.fn("cloud.broker.auth.make")(function* () {
     );
     const startedIn = yield* Ref.get(generation);
     yield* Ref.set(lastError, null);
-    const fiber = yield* entra.value.pollDeviceToken(code).pipe(
+    const timeout = Duration.seconds(code.expires_in);
+    // Whichever finishes first signs in; the loser is interrupted. The device code decides the end:
+    // an expired or declined code ends the attempt. A browser that cannot open (a VM, a remote host)
+    // or a sign-in abandoned there never does — the code keeps working.
+    const browser = runEntraBrowserSignIn({
+      entra: entra.value,
+      launchBrowser: launcher.launchBrowser,
+      timeout,
+    }).pipe(
+      // No browser on this host is expected; anything else (declined, blocked by policy, a failed
+      // exchange) is something the user should see, while the code stays usable.
+      Effect.tapError((reason) =>
+        reason === NO_BROWSER
+          ? Effect.logInfo("Nexi broker browser sign-in unavailable", { reason })
+          : Ref.set(lastError, reason),
+      ),
+      Effect.provideService(Crypto.Crypto, crypto),
+      Effect.catch(() => Effect.never),
+    );
+    const fiber = yield* Effect.raceFirst(entra.value.pollDeviceToken(code), browser).pipe(
       Effect.flatMap((tokens) =>
         Effect.gen(function* () {
           if ((yield* Ref.get(generation)) === startedIn) yield* storeTokens(tokens);

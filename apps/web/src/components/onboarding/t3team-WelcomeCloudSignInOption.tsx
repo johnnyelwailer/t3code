@@ -23,7 +23,7 @@ export function WelcomeCloudSignInOption({ fallback }: { readonly fallback: Reac
         ? `Signed in as ${state.name}`
         : "Signed in"
       : state._tag === "SigningIn"
-        ? `Enter ${state.userCode} at Microsoft`
+        ? `Finish in your browser, or enter ${state.userCode} at Microsoft`
         : auth.pending
           ? "Starting…"
           : "Sign in";
@@ -42,8 +42,8 @@ export function WelcomeCloudSignInOption({ fallback }: { readonly fallback: Reac
         <span className="text-xs text-muted-foreground">
           {state._tag === "SigningIn" ? (
             <>
-              Enter <span className="font-mono font-semibold">{state.userCode}</span> at Microsoft ·
-              copy & open
+              Finish in your browser, or enter{" "}
+              <span className="font-mono font-semibold">{state.userCode}</span> · copy & open
             </>
           ) : (
             detail

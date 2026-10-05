@@ -44,7 +44,7 @@ export function CloudBrokerSidebarEntry() {
           >
             <LogInIcon />
             <span className="truncate">
-              Enter <span className="font-mono font-semibold">{state.userCode}</span> at Microsoft
+              Signing in… or enter <span className="font-mono font-semibold">{state.userCode}</span>
             </span>
           </SidebarMenuButton>
         ) : (
