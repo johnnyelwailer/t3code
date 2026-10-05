@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - temp eval harness uses node git setup helpers.
 /**
  * delegate_task worktree isolation in a project whose main repository is a selected linked clone
  * (the workspace IS that checkout) and whose manifest does not name it yet. With
