@@ -37,6 +37,7 @@ import {
   stageAuthoringTypes,
 } from "./lib/t3team-authoring-types.ts";
 import { getDefaultBuildArch } from "./lib/build-target-arch.ts";
+import { preflightInlinedTypeScript } from "./lib/t3team-inlined-typescript-preflight.ts";
 import {
   findInlinedExternalPackages,
   selectCliRuntimeExternalDependencies,
@@ -3963,6 +3964,9 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   const bundledClientEntry = path.join(distDirs.serverDist, "client/index.html");
 
   if (!options.skipBuild) {
+    // Catch a stale install (tsgo resolved instead of runbook-ts's classic
+    // compiler) before the build, not at the self-containment probe after it.
+    yield* preflightInlinedTypeScript(repoRoot);
     yield* Effect.log("[desktop-artifact] Building desktop/server/web artifacts...");
     const spawnCommand = yield* resolveWorkspaceVpCommand(repoRoot, ["run", "build:desktop"]);
     yield* runCommand(

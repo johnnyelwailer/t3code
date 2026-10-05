@@ -32,7 +32,7 @@ export interface T3TeamAskUserInput {
 }
 
 /** Normalize string-or-structured options; keep only non-empty labels. */
-export const normalizeAskUserOptions = (
+const normalizeAskUserOptions = (
   options: ReadonlyArray<string | T3TeamAskUserOption> | undefined,
 ): Array<{ readonly label: string; readonly description: string }> =>
   (options ?? [])

@@ -56,7 +56,7 @@ export interface ResolveInput {
   readonly projectMainRepository?: ProjectMainRepository;
 }
 
-export const resolve = (input: ResolveInput) =>
+const resolve = (input: ResolveInput) =>
   Effect.gen(function* () {
     const driver = yield* GitVcsDriver.GitVcsDriver;
     const services = {

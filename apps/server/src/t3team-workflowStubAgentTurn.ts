@@ -89,7 +89,7 @@ const assistantEvents = (turn: PackTurnInput, texts: ReadonlyArray<string>): Pac
   });
 
 /** The adapter events one scripted turn emits, in the order a real adapter emits them. */
-export function stubAgentTurnEvents(turn: PackTurnInput, reply: WorkflowStubReply): PackJson[] {
+function stubAgentTurnEvents(turn: PackTurnInput, reply: WorkflowStubReply): PackJson[] {
   const [running, completed, terminal] = completedTurnEvents(turn) as [
     PackJson,
     PackJson,

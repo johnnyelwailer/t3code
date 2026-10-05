@@ -66,7 +66,7 @@ export const loadPackCompletionWakeRenderer = async (
   return renderer;
 };
 
-export const toCompletionWakeTasks = (
+const toCompletionWakeTasks = (
   subagents: ReadonlyArray<OrchestrationV2Subagent>,
   taskIds: ReadonlyArray<string>,
 ): ReadonlyArray<CompletionWakeTask> =>

@@ -47,7 +47,7 @@ const CLOSE_TIMEOUT = Duration.seconds(5);
 
 const decodeNotification = Schema.decodeUnknownOption(PackCodec.notification);
 
-export const toContinuationRequest = (
+const toContinuationRequest = (
   driver: ProviderDriverKind,
   request: PackContinuationRequest,
 ): ProviderContinuationRequest => {

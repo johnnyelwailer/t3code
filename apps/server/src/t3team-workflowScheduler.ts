@@ -48,7 +48,7 @@ export interface WorkflowWakeGate extends WorkflowScheduler {
   readonly opened: Promise<void>;
 }
 
-export function makeWorkflowWakeGate(): WorkflowWakeGate {
+function makeWorkflowWakeGate(): WorkflowWakeGate {
   let open: () => void = () => undefined;
   const opened = new Promise<void>((resolve) => {
     open = resolve;

@@ -1,21 +1,12 @@
 import { ThreadId } from "@t3tools/contracts";
-import * as Effect from "effect/Effect";
-
-import type { TestDispatch } from "./t3team-toolBrokerTestLayers.ts";
 
 export {
   makeBrokerLayer,
   makeBrokerLayerWithLiveContextRefresh,
-  testBrokerProject,
-  testBrokerThread,
   type TestDispatch,
 } from "./t3team-toolBrokerTestLayers.ts";
 
 export const threadId = ThreadId.make("thread-1");
-
-/** A V2 command dispatch for the broker test layers; defaults to accepting everything. */
-export const makeOrchestrationMock = (dispatch: TestDispatch = () => Effect.void): TestDispatch =>
-  dispatch;
 
 type TestToolContextTool = {
   id: string;
@@ -52,18 +43,4 @@ export function createThreadToolContext(input: {
       },
     },
   };
-}
-
-export function joinPosix(...segments: ReadonlyArray<string>): string {
-  const normalized = segments
-    .filter((segment) => segment.length > 0)
-    .join("/")
-    .replace(/\/+/g, "/");
-  return normalized.startsWith("/") ? normalized : `/${normalized}`;
-}
-
-export function dirnamePosix(value: string): string {
-  const normalized = value.replace(/\/+/g, "/");
-  const lastSlashIndex = normalized.lastIndexOf("/");
-  return lastSlashIndex <= 0 ? "/" : normalized.slice(0, lastSlashIndex);
 }
