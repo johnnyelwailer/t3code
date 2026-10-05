@@ -53,30 +53,39 @@ export default async function run() {
 `,
   },
   {
-    title: "Durable routine",
-    when: "Work that must wake itself on a schedule; the loop is the schedule, waitUntil parks the run.",
-    source: `import { agent, getThread, now, waitUntil } from "@t3team/sdk";
+    title: "Durable routine that keeps the launch thread working",
+    when: "Work that must wake itself on a schedule and continue in the user's own thread. The loop is the schedule; waitUntil parks the run (survives restarts, catches up when overdue); each wake drives a TURN on the launch thread via thread.askAgent — agent()/spawnThread() would do the work elsewhere and leave that thread idle. The turn re-reads its plan from a durable place and the loop ends on a real condition.",
+    source: `import { Schema } from "effect";
+import { getArgs, getThread, now, waitUntil } from "@t3team/sdk";
+
+const Inputs = Schema.Struct({ planPath: Schema.String, maxWakes: Schema.Number });
+const Progress = Schema.Struct({ done: Schema.Boolean, summary: Schema.String });
 
 export const meta = {
-  name: "daily-check",
-  description: "Once a day for a week, check the state and report only actionable changes.",
+  name: "keep-working",
+  description: "Every 20 minutes, continue the standing goal in the launch thread until it is done.",
+  inputs: Inputs,
   capabilities: ["schedule", "user"],
 } as const;
 
-const DAY = 24 * 60 * 60 * 1000;
+const MINUTE = 60 * 1000;
 
 export default async function run() {
+  const { planPath, maxWakes } = Schema.decodeUnknownSync(Inputs)(getArgs());
   const thread = getThread();
-  if (thread === undefined) throw new Error("daily-check needs a launch thread");
-  for (let day = 1; day <= 7; day += 1) {
-    await waitUntil(now() + DAY);
-    const report = await agent("Check the current state and report only actionable changes.", {
-      label: "Daily check",
-      capabilities: "inherit",
-    });
-    thread.notifyUser(report);
+  if (thread === undefined) throw new Error("keep-working needs a launch thread");
+  for (let wake = 1; wake <= maxWakes; wake += 1) {
+    await waitUntil(now() + 20 * MINUTE);
+    const progress = await thread.askAgent(
+      \`Re-read the plan at \${planPath}, do the next item, update the plan, and report {done, summary}.\`,
+      { label: "Heartbeat", schema: Progress },
+    );
+    if (progress.done) {
+      thread.notifyUser(\`Standing goal finished: \${progress.summary}\`);
+      return { wakes: wake, summary: progress.summary };
+    }
   }
-  return { days: 7 };
+  return { wakes: maxWakes, summary: "wake budget exhausted" };
 }
 `,
   },

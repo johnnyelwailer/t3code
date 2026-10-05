@@ -6,7 +6,7 @@
  * ./t3team-toolBrokerWorkflowResumeFailed.ts (additive size budget).
  */
 import type { OrchestrationCommand, ThreadId } from "@t3tools/contracts";
-import { workflowSourceVersion, type JournalStore, type WorkflowRef } from "@t3team/sdk";
+import { hashArgs, workflowSourceVersion, type JournalStore, type WorkflowRef } from "@t3team/sdk";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -63,6 +63,39 @@ export const workspaceRootFor = <E>(deps: WorkflowResumeToolDeps<E>, threadId: T
       return yield* Effect.fail("Current t3team project has no workspace root.");
     }
     return deps.path!.resolve(project.workspaceRoot);
+  });
+
+/**
+ * Persist corrected launch args before a FAILED run's journal re-drive reads them. Only a failed
+ * run: a paused run is mid-flight, and the body already read its inputs. The engine decodes the
+ * new args against `meta.inputs` when it re-drives (`WorkflowInputDecodeError` names an input
+ * fault precisely), so a still-wrong value fails the same way and the caller learns it at once.
+ */
+export const replaceRunArgsIfRequested = <E>(
+  deps: WorkflowResumeToolDeps<E>,
+  run: WorkflowRun,
+  args: ResumeWorkflowHandlerArgs["args"],
+): Effect.Effect<WorkflowRun, string> =>
+  Effect.gen(function* () {
+    if (args === undefined) return run;
+    if (run.status !== "failed") {
+      return yield* Effect.fail(
+        "Corrected args are only supported for a FAILED run (its body re-reads them on the " +
+          "re-drive); a paused run keeps the inputs it is already running with.",
+      );
+    }
+    const argsHash = hashArgs(args);
+    yield* deps.runRepository
+      .updateArgs({ runId: run.runId, args, argsHash, updatedAt: nowIso() })
+      .pipe(Effect.mapError(errorMessage));
+    // The journal's run meta pins the launch args too (`engineValidation.ts` refuses a resume whose
+    // args hash differs — replay drift). A supplied correction is an explicit decision, so it becomes
+    // the new baseline there as well, exactly as a corrected source re-baselines `workflowVersion`.
+    const meta = yield* Effect.promise(() => deps.journalStore.readRunMeta(run.runId));
+    if (meta !== undefined) {
+      yield* Effect.promise(() => deps.journalStore.writeRunMeta(run.runId, { ...meta, argsHash }));
+    }
+    return { ...run, args, argsHash };
   });
 
 /** Swap in corrected source before resuming — ephemeral runs only (their source lives under
