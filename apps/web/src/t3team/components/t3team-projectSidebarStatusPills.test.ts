@@ -85,3 +85,60 @@ describe("resolveThreadStatusPill (live label, GHE #40)", () => {
     expect(resolveActivityPillDisplay(gated!)).toBe("Working");
   });
 });
+
+describe("resolveThreadStatusPill (waiting on a background agent)", () => {
+  const at = "2026-06-14T08:00:00.000Z";
+
+  it("pulses a suspended agent turn with the slower waiting motion, not the active pulse", () => {
+    const pill = resolveThreadStatusPill({
+      status: "running",
+      workflowRunStatus: {
+        status: "suspended",
+        pendingKind: "thread.turn",
+        wakeAt: null,
+        updatedAt: at,
+      },
+    });
+    expect(pill).toMatchObject({
+      label: "Waiting for agent",
+      pulse: true,
+      pulseClass: "animate-status-pulse-slow",
+    });
+    // The tooltip reads "Waiting for agent since …", never "Waiting … Waiting".
+    expect(pill?.detail).toMatch(/^since /);
+  });
+
+  it("keeps the user-input wait static and amber", () => {
+    const pill = resolveThreadStatusPill({
+      status: "running",
+      workflowRunStatus: {
+        status: "suspended",
+        pendingKind: "user.input",
+        wakeAt: null,
+        updatedAt: at,
+      },
+    });
+    expect(pill).toMatchObject({ label: "Waiting for your answer", pulse: false });
+    expect(pill?.pulseClass).toBeUndefined();
+  });
+
+  it("rolls a waiting thread up into the project indicator with the pulse intact", () => {
+    const threads = [
+      { status: "completed" as const },
+      {
+        status: "running" as const,
+        workflowRunStatus: {
+          status: "suspended",
+          pendingKind: "thread.turn",
+          wakeAt: null,
+          updatedAt: at,
+        },
+      },
+    ] as ProjectThread[];
+    expect(resolveProjectStatusIndicator(threads)).toMatchObject({
+      label: "Waiting for agent",
+      pulse: true,
+      pulseClass: "animate-status-pulse-slow",
+    });
+  });
+});

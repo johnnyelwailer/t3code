@@ -26,4 +26,7 @@ export type ThreadStatusPill = {
   colorClass: string;
   dotClass: string;
   pulse: boolean;
+  /** Optional override of the pulse animation (e.g. the slower "waiting" motion).
+   *  When `pulse` is true and this is absent, the standard pulse is used. */
+  pulseClass?: string;
 };
