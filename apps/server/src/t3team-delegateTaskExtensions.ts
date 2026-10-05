@@ -7,6 +7,10 @@
  * - `ticketId`: work item the child belongs to; defaults to the parent's ticket.
  * - `environment`: `{ id, label? }` — record the child as bound to another
  *   execution environment (another T3 server). Same-environment ids are no-ops.
+ * - `skills`: 1-5 skill names the child should run (skills-as-subagents Phase 1).
+ *   FORMAT-validated only — the host does not know the skill catalog; the child's
+ *   driver resolves the names from its pack registry at session start (no second
+ *   catalog), so the host persists the REQUESTED names, not resolved data.
  */
 import type { AgentEffort } from "@t3team/sdk";
 import {
@@ -39,12 +43,19 @@ export const T3TEAM_DELEGATION_EXTENSIONS: ReadonlyArray<DelegatedTaskExtensionO
     description:
       "{ id, label? }: bind the child to another execution environment (T3 server). Messaging and completion wakes stay in this environment.",
   },
+  {
+    key: "skills",
+    description:
+      "Array of 1-5 skill names the child should run. A skill name is 1-64 characters of lowercase letters, digits and dashes (e.g. 'deploy-staging'). Names are resolved by the child's skill registry; unknown names fail at session start.",
+  },
 ];
 
 export interface T3TeamDelegationExtensions {
   readonly effort?: AgentEffort;
   readonly ticketId?: string;
   readonly environment?: ThreadEnvironmentBinding;
+  /** Requested skill names (format-validated by the host; resolved pack-side). */
+  readonly skills?: ReadonlyArray<string>;
 }
 
 export type ParseResult<T> =
@@ -52,6 +63,13 @@ export type ParseResult<T> =
   | { readonly ok: false; readonly message: string };
 
 const EFFORTS = new Set<string>(["light", "standard", "high"]);
+
+/** Skill-name charset: lowercase letters, digits, dashes; 1-64 characters. */
+const SKILL_NAME = /^[a-z0-9-]{1,64}$/;
+const MAX_SKILLS = 5;
+
+const SKILL_NAME_SHAPE =
+  "a skill name is 1-64 characters of lowercase letters, digits and dashes (e.g. 'deploy-staging')";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -76,6 +94,48 @@ export function parseEnvironmentExtension(
   return { ok: true, value: label === undefined ? { environmentId } : { environmentId, label } };
 }
 
+/**
+ * `skills`: 1-5 skill names, format-checked against the skill-name charset. The host
+ * does NOT resolve names against any catalog ("no second catalog") — the child's
+ * driver resolves them from its pack registry at session start.
+ */
+export function parseSkillsExtension(
+  value: unknown,
+): ParseResult<ReadonlyArray<string> | undefined> {
+  if (value === undefined || value === null) return { ok: true, value: undefined };
+  if (!Array.isArray(value)) {
+    return {
+      ok: false,
+      message:
+        "extensions.skills must be a non-empty array of up to " +
+        `${MAX_SKILLS} skill names; ${SKILL_NAME_SHAPE}.`,
+    };
+  }
+  if (value.length === 0) {
+    return {
+      ok: false,
+      message: `extensions.skills must name at least one skill; ${SKILL_NAME_SHAPE}.`,
+    };
+  }
+  if (value.length > MAX_SKILLS) {
+    return {
+      ok: false,
+      message: `extensions.skills accepts at most ${MAX_SKILLS} skills (got ${value.length}).`,
+    };
+  }
+  for (const entry of value) {
+    if (typeof entry !== "string" || entry.length === 0 || !SKILL_NAME.test(entry)) {
+      return {
+        ok: false,
+        message: `extensions.skills contains an invalid skill name ${
+          typeof entry === "string" ? JSON.stringify(entry) : String(entry)
+        }; ${SKILL_NAME_SHAPE}.`,
+      };
+    }
+  }
+  return { ok: true, value: value as ReadonlyArray<string> };
+}
+
 export function parseDelegationExtensions(
   raw: Readonly<Record<string, unknown>> | undefined,
 ): ParseResult<T3TeamDelegationExtensions> {
@@ -93,6 +153,8 @@ export function parseDelegationExtensions(
   }
   const environment = parseEnvironmentExtension(raw.environment);
   if (!environment.ok) return environment;
+  const skills = parseSkillsExtension(raw.skills);
+  if (!skills.ok) return skills;
   const ticketId = trimmedString(raw.ticketId);
   return {
     ok: true,
@@ -100,6 +162,7 @@ export function parseDelegationExtensions(
       ...(typeof effort === "string" ? { effort: effort.trim() as AgentEffort } : {}),
       ...(ticketId === undefined ? {} : { ticketId }),
       ...(environment.value === undefined ? {} : { environment: environment.value }),
+      ...(skills.value === undefined ? {} : { skills: skills.value }),
     },
   };
 }
