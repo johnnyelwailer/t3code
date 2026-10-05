@@ -64,9 +64,9 @@ const askUser = Effect.fn("T3TeamMcpToolkit.askUser")(function* (input: {
 // registry. The host stores requested names only; it never resolves them (no second
 // catalog). Unknown threads and threads without skill delegation yield a clean
 // { skills: [] }, never an error — the driver's soft-fail then yields today's behavior.
-const threadSkillMetadata = Effect.fn("T3TeamMcpToolkit.threadSkillMetadata")(function* (
-  input: { readonly threadId?: string | undefined },
-) {
+const threadSkillMetadata = Effect.fn("T3TeamMcpToolkit.threadSkillMetadata")(function* (input: {
+  readonly threadId?: string | undefined;
+}) {
   const invocation = yield* requireOrchestrationScope;
   const threadId =
     typeof input.threadId === "string" && input.threadId.length > 0

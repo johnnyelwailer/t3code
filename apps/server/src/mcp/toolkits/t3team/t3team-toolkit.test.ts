@@ -318,34 +318,37 @@ it.effect("t3team_thread_skill_metadata yields an empty result without a metadat
   ),
 );
 
-it.effect("t3team_thread_skill_metadata reads the requested names from child-thread metadata", () => {
-  const store = T3TeamChildThreadMetadata.of({
-    upsert: () => Effect.void,
-    listByChildThreadIds: (childThreadIds) =>
-      Effect.succeed(
-        childThreadIds.includes("thread:child-skills")
-          ? [
-              {
-                childThreadId: "thread:child-skills",
-                parentThreadId: "thread:parent",
-                placementThreadId: null,
-                ticketId: null,
-                skills: ["deploy-staging"],
-                createdAt: "2026-10-05T00:00:00.000Z",
-              },
-            ]
-          : [],
-      ),
-  });
-  const TestLayer = emptySkillMetadataLayer.pipe(
-    Layer.provideMerge(Layer.succeed(T3TeamChildThreadMetadata, store)),
-  );
-  return skillMetadataCall(["deploy-staging"]).pipe(
-    Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
-    Effect.provideService(McpSchema.McpServerClient, client),
-    Effect.provide(TestLayer),
-  );
-});
+it.effect(
+  "t3team_thread_skill_metadata reads the requested names from child-thread metadata",
+  () => {
+    const store = T3TeamChildThreadMetadata.of({
+      upsert: () => Effect.void,
+      listByChildThreadIds: (childThreadIds) =>
+        Effect.succeed(
+          childThreadIds.includes("thread:child-skills")
+            ? [
+                {
+                  childThreadId: "thread:child-skills",
+                  parentThreadId: "thread:parent",
+                  placementThreadId: null,
+                  ticketId: null,
+                  skills: ["deploy-staging"],
+                  createdAt: "2026-10-05T00:00:00.000Z",
+                },
+              ]
+            : [],
+        ),
+    });
+    const TestLayer = emptySkillMetadataLayer.pipe(
+      Layer.provideMerge(Layer.succeed(T3TeamChildThreadMetadata, store)),
+    );
+    return skillMetadataCall(["deploy-staging"]).pipe(
+      Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+      Effect.provideService(McpSchema.McpServerClient, client),
+      Effect.provide(TestLayer),
+    );
+  },
+);
 
 it("MCP and broker surfaces expose the SAME description text for run and resume", () => {
   const cases = [
