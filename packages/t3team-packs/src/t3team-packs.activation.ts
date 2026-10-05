@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - activation reads the real on-disk pack layout.
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";

@@ -10,7 +10,7 @@ import { type ChildWaitRecord } from "./t3team-childWait.ts";
 
 export interface ChildWaitIndex {
   readonly add: (record: ChildWaitRecord) => void;
-  readonly remove: (waitId: string) => void;
+  readonly remove: (waitId: string) => boolean;
   readonly forChild: (childThreadId: string) => readonly ChildWaitRecord[];
   readonly all: () => readonly ChildWaitRecord[];
   readonly soonestDeadlineMs: (nowMs: number) => number | undefined;
@@ -30,15 +30,16 @@ export function makeChildWaitIndex(): ChildWaitIndex {
     }
     set.add(record.waitId);
   };
-  const remove = (waitId: string): void => {
+  const remove = (waitId: string): boolean => {
     const record = byWaitId.get(waitId);
-    if (!record) return;
+    if (!record) return false;
     byWaitId.delete(waitId);
     const set = byChild.get(record.childThreadId);
     if (set) {
       set.delete(waitId);
       if (set.size === 0) byChild.delete(record.childThreadId);
     }
+    return true;
   };
   const forChild = (childThreadId: string): readonly ChildWaitRecord[] => {
     const set = byChild.get(childThreadId);

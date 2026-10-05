@@ -108,11 +108,13 @@ export function readDigestPendingDecisions(appProjectIds: ReadonlyArray<string>)
   return Effect.gen(function* () {
     const repo = yield* WorkflowRunRepository;
     const suspended = yield* repo.listByStatus({ status: "suspended" });
-    const projects = appProjectIds.map((id) => id as (typeof suspended)[number]["projectId"]);
+    const projects = new Set(
+      appProjectIds.map((id) => id as (typeof suspended)[number]["projectId"]),
+    );
     return suspended.filter(
       (run) =>
         run.pendingKind === "user.input" &&
-        projects.includes(run.projectId) &&
+        projects.has(run.projectId) &&
         run.pendingThreadId !== null &&
         run.pendingCorrelationId !== null,
     );

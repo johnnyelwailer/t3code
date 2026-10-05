@@ -145,6 +145,7 @@ interface Harness {
 function makeHarness(
   details: ReadonlyMap<string, OrchestrationThread> = defaultDetails(),
   replayed: OrchestrationEvent[] = [],
+  usageLine?: () => Effect.Effect<string>,
 ): Harness {
   const dispatches: OrchestrationCommand[] = [];
   const engine = {
@@ -166,7 +167,12 @@ function makeHarness(
   const fake = makeFakeClock();
   // Uses the DEFAULT quiet period — the regression test pins the default, not a
   // caller-supplied zero.
-  const reactor = makeChildWaitReactor({ engine, query, clock: fake.clock });
+  const reactor = makeChildWaitReactor({
+    engine,
+    query,
+    clock: fake.clock,
+    ...(usageLine ? { usageLine } : {}),
+  });
   return { dispatches, reactor, advance: fake.advance };
 }
 
@@ -202,6 +208,36 @@ const markerSummaries = (dispatches: OrchestrationCommand[]): string[] =>
   );
 
 describe("makeChildWaitReactor abnormal-stop notification", () => {
+  it.effect("enriches a registered-wait failure without a second message", () =>
+    Effect.gen(function* () {
+      const h = makeHarness(defaultDetails(), [], () =>
+        Effect.succeed("\n[provider-usage] claudeAgent: 83% of 5h window"),
+      );
+      yield* h.reactor.handleEvent(waitRegistered());
+      yield* h.reactor.handleEvent(sessionSet("error", "usage limit reached"));
+      yield* settle();
+      const messages = texts(h.dispatches);
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain("[Child wait reached failed]");
+      expect(messages[0]).toContain("Reason: provider timeout");
+      expect(messages[0]).toContain("\n[provider-usage] claudeAgent:");
+    }),
+  );
+
+  it.effect("enriches a registered-wait normal completion", () =>
+    Effect.gen(function* () {
+      const h = makeHarness(defaultDetails(), [], () =>
+        Effect.succeed("\n[provider-usage] claudeAgent: 83% of 5h window"),
+      );
+      yield* h.reactor.handleEvent(waitRegistered());
+      yield* h.reactor.handleEvent(sessionSet("ready", null));
+      h.advance(COMPLETION_QUIET_PERIOD_MS + 1000);
+      yield* settle();
+      expect(texts(h.dispatches)).toHaveLength(1);
+      expect(texts(h.dispatches)[0]).toContain("[Child wait reached completed]");
+      expect(texts(h.dispatches)[0]).toContain("\n[provider-usage] claudeAgent:");
+    }),
+  );
   it.effect("notifies the parent when a child dies with NO wait registered", () =>
     Effect.gen(function* () {
       const h = makeHarness();
