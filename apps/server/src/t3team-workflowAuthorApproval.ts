@@ -7,6 +7,7 @@
 import { ApprovalRequestId, type ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
+import type { ProviderServiceError } from "./provider/Errors.ts";
 import { workflowAuthorSessionForThread } from "./t3team-workflowAuthorSession.ts";
 
 export const declineAuthorThreadApproval = (input: {
@@ -16,8 +17,8 @@ export const declineAuthorThreadApproval = (input: {
     readonly threadId: ThreadId;
     readonly requestId: ApprovalRequestId;
     readonly decision: "decline";
-  }) => Effect.Effect<void, unknown>;
-}): Effect.Effect<boolean, unknown> => {
+  }) => Effect.Effect<void, ProviderServiceError>;
+}): Effect.Effect<boolean, ProviderServiceError> => {
   if (workflowAuthorSessionForThread(String(input.threadId)) === undefined) {
     return Effect.succeed(false);
   }
