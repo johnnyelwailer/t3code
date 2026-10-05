@@ -50,6 +50,7 @@ export const makeWorkflowResumeToolsForThread = Effect.fn("makeWorkflowResumeToo
     // reports itself unavailable instead of silently replaying into a dead `sent` entry.
     const threads = Option.getOrUndefined(yield* Effect.serviceOption(ThreadManagementService));
     const signalStore = Option.getOrUndefined(yield* Effect.serviceOption(WorkflowSignalStore));
+    // Live provider snapshots for the corrected-source check's model gate (absent skips it).
     const providerRegistry = Option.getOrUndefined(yield* Effect.serviceOption(ProviderRegistry));
     const turnRedrive =
       threads === undefined
