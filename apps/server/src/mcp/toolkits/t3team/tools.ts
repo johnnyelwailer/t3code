@@ -111,7 +111,11 @@ const T3TeamModelsTool = Tool.make("t3team_models", {
   description:
     "Read the current thread's true model selection and the live provider instances/models " +
     "available to this runtime. Call before setting an exact provider or model; never guess " +
-    "from examples or static SDK constants.",
+    "from examples or static SDK constants. Selection rules: name a target as " +
+    "'<instanceId>' (its declared default — isDefault and not legacy) or '<instanceId>/<slug>' " +
+    "(an exact slug, legacy allowed). The same instance with no declared default keeps the " +
+    "current model; another instance with no declared default fails and lists its slugs. Prefer " +
+    "effort ('light' | 'standard' | 'high') when you need a thinking tier, not a specific model.",
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
   dependencies,
@@ -368,7 +372,9 @@ const T3TeamSendMessageTool = Tool.make("t3team_send_message", {
     "recipient's decision. NEVER send acknowledgment, thanks, status-only, or 'noted/received' " +
     "messages, and NEVER send incremental progress pings — report ONCE, when you are " +
     "completely done. Solve simple blockers yourself first; escalate only when truly stuck. " +
-    "If your reply would not change what the recipient does, do not send it. The recipient " +
+    "If your reply would not change what the recipient does, do not send it. A final result is " +
+    "ONE verdict line plus where the evidence lives (a file path, a widget, a structured " +
+    "return) — never the report body pasted in. The recipient " +
     "reacts to every message automatically, so an ack triggers another turn on the other " +
     "side. Delivery: 'summary' is the SUBJECT of the message — a very short line (a few " +
     "words) that titles the card and the digest one-liner. Keep the " +
@@ -457,7 +463,11 @@ const orchestrationResumeDescription =
   "t3team_orchestration_run/t3team_orchestration_status; optionally pass corrected `source` for " +
   "an ephemeral run (same-prefix replay — do not change already-executed steps). Returns " +
   "{runId, status: accepted|suspended|sleeping, hint}; observe progress via " +
-  "t3team_orchestration_status.";
+  't3team_orchestration_status. Reading a failure: "Invalid inputs for workflow" means your ' +
+  'launch `args` were wrong — resume with corrected `args`, never a new run; "The agent turn ' +
+  "failed\" means a step's provider turn died — resume the same runId and it re-drives that " +
+  "step; anything else is a source defect the run's author handles, so resume only once the " +
+  "card offers it.";
 const orchestrationResumeParameters = Schema.Struct({
   runId: Schema.String,
   source: Schema.optional(Schema.String),
@@ -628,28 +638,6 @@ export const T3TeamShowWidgetTool = Tool.make("t3team_show_widget", {
   dependencies,
 });
 
-// On-demand reference docs — one generic tool for any topic (see t3team-help.ts),
-// so tool descriptions stay lean and agents discover detail proactively.
-// Every slug is named here on purpose. This description previously offered
-// "agent-orchestration" as its single example, and in a 31-hour orchestration run
-// the agent called this tool twice, asked for that exact slug both times, and never
-// discovered the others — including `timers`, which documents the durable routine
-// loop it needed. One named example reads as the whole menu. Keep this list in sync
-// with TOPICS in t3team-help.ts.
-const T3TeamHelpTool = Tool.make("t3team_help", {
-  description:
-    "Get t3team reference docs on demand. Omit `topic` to list available topics, or pass a " +
-    "slug: 'agent-orchestration' (authoring a t3team_orchestration_run body), 'timers' " +
-    "(durable waits and recurring routines — how to make a run wake itself on a schedule " +
-    "instead of ending), 'reporting' (how to report an outcome to the human), " +
-    "'model-selection' (choosing a provider/model for start_child and orchestration agents), " +
-    "'widget-guidance' (rendering a widget).",
-  parameters: Schema.Struct({ topic: Schema.optional(Schema.String) }),
-  success: Schema.String,
-  failure: T3TeamMcpToolError,
-  dependencies,
-});
-
 // Read-only listing of the project's saved recipe workflows. Routes to the
 // t3team.recipe.list broker tool. This tool takes no arguments; declared via
 // Tool.dynamic with an explicit `{type:"object"}` JSON schema because an effect
@@ -717,7 +705,6 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamWorkflowStatusTool,
   T3TeamWorkflowResumeTool,
   T3TeamShowWidgetTool,
-  T3TeamHelpTool,
   T3TeamRecipeListTool,
   T3TeamRecipeValidateTool,
 );

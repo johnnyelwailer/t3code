@@ -12,6 +12,7 @@ import {
   T3TEAM_MCP_CANONICAL_TOOL_MAP,
   T3TEAM_MCP_DEPRECATED_TOOL_ALIASES,
   T3TEAM_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS,
+  T3TeamToolkit,
 } from "./tools.ts";
 
 it("maps or explicitly policy-excludes every canonical implemented tool", () => {
@@ -272,4 +273,12 @@ it.effect("routes t3team_recipe_validate through the bound broker callTool dispa
     Effect.provideService(McpSchema.McpServerClient, client),
     Effect.provide(TestLayer),
   );
+});
+
+// Hand-written help drifted from the runtime (it taught an unbound name) and flooded the parent's
+// context. The topics now live where they are needed: tool descriptions and the author agent's
+// generated reference. A `t3team_help` tool must never come back.
+it("no longer registers t3team_help: tool descriptions alone must be enough", () => {
+  expect(Object.keys(T3TeamToolkit.tools)).not.toContain("t3team_help");
+  expect(Object.keys(T3TEAM_MCP_CANONICAL_TOOL_MAP)).not.toContain("t3team_help");
 });

@@ -1,9 +1,9 @@
 /**
  * The report composer's instructions, and the facts it composes from.
  *
- * The instructions are NOT a second set of rules. `T3TEAM_REPORTING_MANUAL`
- * (`t3team-workflowManualReporting.ts`) is the contract this repo already publishes for whoever
- * writes a run's report — surfaced to authoring agents as `t3team_help("reporting")`. The composer
+ * The instructions are NOT a second set of rules. `WORKFLOW_REPORTING_CONTRACT`
+ * (`t3team-workflowReportContract.ts`) is the contract this repo already publishes for whoever
+ * writes a run's report — the author agent reads it in its kickoff. The composer
  * is simply the specialist that contract was written for, so it is quoted verbatim and then
  * re-addressed by a short preamble. Writing a divergent set here is how the two would drift, and
  * the manual is the one PJ actually reviewed.
@@ -22,7 +22,7 @@
  *
  * @module t3team-workflowReportPrompt
  */
-import { T3TEAM_REPORTING_MANUAL } from "./t3team-workflowManualReporting.ts";
+import { WORKFLOW_REPORTING_CONTRACT } from "./t3team-workflowReportContract.ts";
 import {
   renderWorkflowReportOutput,
   renderWorkflowReportSteps,
@@ -68,7 +68,7 @@ Output fields:
 export const WORKFLOW_REPORT_COMPOSER_INSTRUCTIONS = `${COMPOSER_PREAMBLE}
 --- THE REPORTING CONTRACT ---
 
-${T3TEAM_REPORTING_MANUAL}`;
+${WORKFLOW_REPORTING_CONTRACT}`;
 
 function renderIntent(facts: WorkflowRunReportFacts): string {
   if (facts.intent == null) {
