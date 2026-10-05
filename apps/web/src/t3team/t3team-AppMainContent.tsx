@@ -11,11 +11,10 @@ import { AppMainContentHomeBrowser } from "~/t3team/t3team-AppMainContentHomeBro
 import { AllProjectsMyWorkView } from "~/t3team/t3team-AllProjectsMyWorkView";
 import { AppDraftPane } from "~/t3team/t3team-AppDraftPane";
 import { AppThreadPane } from "~/t3team/t3team-AppThreadPane";
-import { useHomeProjectChat } from "./t3team-AppMainContentShell";
+import { useT3TeamScratchHomeChat } from "~/t3team/t3team-useScratchHomeChat";
 import { resolveWorkHomeProject } from "~/t3team/t3team-appMainContentResolution";
 import { resolveT3TeamSetupSurfaceReason } from "~/t3team/t3team-setupSurfaceReason";
 import { useAppMainContentThreadResolution } from "~/t3team/t3team-useAppMainContentThreadResolution";
-import { useLocalProviderSessionThreadFilter } from "~/t3team/hooks/t3team-useLocalProviderSessionThreadFilter";
 
 type MainContentProps = {
   view: ViewState | null;
@@ -70,16 +69,8 @@ export function AppMainContent({
   onThreadDisplayModeChange,
 }: MainContentProps) {
   const backendState = useBackendState();
-  // Display-only hiding of adopted local provider sessions (the "Local provider sessions"
-  // toggle). Thread resolution below intentionally keeps the full getThreadsForProject, so
-  // an external session that is open while the toggle turns off stays open — it just
-  // leaves the lists.
-  const { filterForProject: visibleThreadsForProject } =
-    useLocalProviderSessionThreadFilter(getThreadsForProject);
-  const { homeChatProject, homeChatThreadId } = useHomeProjectChat({
-    projects,
-    getThreadsForProject,
-  });
+  // Project-less chats live in upstream's Scratch project ("No project").
+  const { scratchProject, startScratch } = useT3TeamScratchHomeChat(allProjects);
   const showInitialSetup = !view && (reopenInitialSetup || allProjects.length === 0);
   const setupSurfaceReason = resolveT3TeamSetupSurfaceReason({
     allProjects,
@@ -100,11 +91,12 @@ export function AppMainContent({
       setupSurfaceReason={setupSurfaceReason}
       showAside={!reopenInitialSetup && projects.length > 0}
       shouldInsetDesktopHeader={shouldInsetDesktopHeader}
-      homeChatProject={homeChatProject}
+      scratchProject={scratchProject}
+      onStartScratch={startScratch}
       providers={backendState.providers}
       isConnected={backendState.connectionStatus === "connected"}
       onOpenHomeThread={(threadId) => {
-        if (homeChatProject) onOpenThread(homeChatProject.id, threadId);
+        if (scratchProject) onOpenThread(scratchProject.id, threadId);
       }}
       onKickoffProjectThread={onKickoffProjectThread}
     />
@@ -114,8 +106,6 @@ export function AppMainContent({
     view,
     allProjects,
     homeProject,
-    homeChatProject,
-    homeChatThreadId,
     getThreadsForProject,
   });
 
@@ -125,7 +115,7 @@ export function AppMainContent({
         <AppDashboardPane
           activeDashboardMode={activeDashboardMode}
           project={homeProject}
-          projectThreads={visibleThreadsForProject(homeProject.id)}
+          projectThreads={getThreadsForProject(homeProject.id)}
           activeThread={null}
           activeThreadId={null}
           providers={backendState.providers}
@@ -181,7 +171,7 @@ export function AppMainContent({
       <AppDashboardPane
         activeDashboardMode={activeDashboardMode}
         project={project}
-        projectThreads={visibleThreadsForProject(project.id)}
+        projectThreads={getThreadsForProject(project.id)}
         activeThread={resolvedThread}
         activeThreadId={view.embeddedThreadId ?? null}
         providers={backendState.providers}

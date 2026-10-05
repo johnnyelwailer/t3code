@@ -14,8 +14,8 @@
  * scheduler's `orphanSleepingRun` — otherwise the event is dropped and the row parks forever,
  * re-flagged on every later event. While boot rehydration is still in flight the "no
  * controller yet" state is TRANSIENT: the port leaves the run parked and the next event
- * retries it (GHE #332 review — the reconciler's boot reconcile is layer-ordered after
- * rehydration, and this gate is the safety net if that ordering is ever bypassed).
+ * retries it (GHE #332 review — the reconciler waits on the rehydrate gate before it starts any
+ * source, and this flag is the safety net if that ordering is ever bypassed).
  *
  * At-least-once delivery (GHE #332 review): a failed resume FAILS the emit, so the source's
  * poller holds its durable cursor and re-emits the transition next tick; the engine's

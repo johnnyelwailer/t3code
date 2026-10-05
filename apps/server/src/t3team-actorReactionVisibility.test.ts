@@ -5,19 +5,18 @@ import {
   buildActorReactionDigestInput,
 } from "./t3team-actorReactionInput.ts";
 import { buildActorReactionTurnInput } from "./t3team-actorReactionVisibility.ts";
-import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
+import type { T3TeamActorMailboxEntry } from "./t3team-actorMailboxEntry.ts";
 
 const entry: T3TeamActorMailboxEntry = {
   messageId: "delivery-a",
+  toThreadId: "target",
   fromThreadId: "sender",
   fromTitle: "Sender",
-  fromProjectId: "project",
   text: "first body",
   urgency: "normal",
   hopCount: 3,
   rootThreadId: "root",
   createdAt: "2026-07-19T08:00:00.000Z",
-  dispatchAttempts: 0,
 };
 
 describe("buildActorReactionTurnInput", () => {
@@ -28,14 +27,19 @@ describe("buildActorReactionTurnInput", () => {
     expect(buildActorReactionTurnInput([entry], false)).not.toContain(ACTOR_STANDING_INSTRUCTION);
   });
 
-  it("appends the standing instruction as a well-known SUFFIX (rehydrate prefix-matching)", () => {
+  it("appends the standing instruction after the digest base", () => {
     const input = buildActorReactionTurnInput([entry], true);
     const base = buildActorReactionDigestInput([entry]);
     expect(input.startsWith(base)).toBe(true);
     expect(input).toBe(`${base}\n\n${ACTOR_STANDING_INSTRUCTION}`);
   });
 
-  it("is deterministic for a given batch and briefing state", () => {
+  it("appends the human-steering line last, and is deterministic", () => {
+    const base = buildActorReactionDigestInput([entry]);
+    expect(buildActorReactionTurnInput([entry], true, "[steer]")).toBe(
+      `${base}\n\n${ACTOR_STANDING_INSTRUCTION}\n\n[steer]`,
+    );
+    expect(buildActorReactionTurnInput([entry], false, "[steer]")).toBe(`${base}\n\n[steer]`);
     const second: T3TeamActorMailboxEntry = { ...entry, messageId: "delivery-b", text: "second" };
     expect(buildActorReactionTurnInput([entry, second], true)).toBe(
       buildActorReactionTurnInput([entry, second], true),

@@ -1,108 +1,65 @@
 /**
- * The pure half of recording a verdict. The round trip through the real engine + projection lives in
+ * The pure half of recording a verdict. The round trip through the real store and route lives in
  * `t3team-draftMutationStatusRoundTrip.integration.test.ts`; these pin the rules that decide WHAT is
- * written, because each of them is a way to silently damage a carrier.
+ * written, because each of them is a way to silently damage a proposal.
  */
 
-import { T3TeamMessageExt } from "@t3tools/contracts";
+import { T3TeamMessageDraftMutationAttachment } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  carrierMessageIdFromDraftId,
+  draftArtifactIdFromDraftId,
   withDraftMutationStatus,
 } from "./t3team-draftMutationStatus.ts";
 
-const decodeExt = Schema.decodeUnknownSync(T3TeamMessageExt);
+const decodeAttachment = Schema.decodeUnknownSync(T3TeamMessageDraftMutationAttachment);
 
-const carrierExt = (): T3TeamMessageExt =>
-  decodeExt({
-    author: { kind: "system" },
-    visibleToUser: false,
-    visibleToAgent: false,
-    attachments: [
-      {
-        kind: "draft-mutation",
-        draft: {
-          id: "jira-draft:carrier-1",
-          kind: "jira-work-item-draft",
-          tool: "t3team.work_item.description.draft_update",
-          target: { provider: "jira", issueIdOrKey: "NXAI-6" },
-          field: "description",
-          patch: { description: "## Goal\nRound to two decimals." },
-          status: "draft",
-          summary: "Rewrote the description",
-          commitPolicy: { requiresUserApproval: true, commitSurface: "work-item" },
-        },
-      },
-    ],
+const draftPayload = () =>
+  decodeAttachment({
+    kind: "draft-mutation",
+    draft: {
+      id: "jira-draft:draft-1",
+      kind: "jira-work-item-draft",
+      tool: "t3team.work_item.description.draft_update",
+      target: { provider: "jira", issueIdOrKey: "PROJ-6" },
+      field: "description",
+      patch: { description: "## Goal\nRound to two decimals." },
+      status: "draft",
+      summary: "Rewrote the description",
+      commitPolicy: { requiresUserApproval: true, commitSurface: "work-item" },
+    },
   });
 
-describe("carrierMessageIdFromDraftId", () => {
-  it("addresses the same carrier from a draft id or a bare message id", () => {
-    expect(carrierMessageIdFromDraftId("jira-draft:carrier-1")).toBe("carrier-1");
-    expect(carrierMessageIdFromDraftId("  carrier-1 ")).toBe("carrier-1");
+describe("draftArtifactIdFromDraftId", () => {
+  it("addresses the same artifact from a draft id or the bare id", () => {
+    expect(draftArtifactIdFromDraftId("jira-draft:draft-1")).toBe("jira-draft:draft-1");
+    expect(draftArtifactIdFromDraftId("  draft-1 ")).toBe("jira-draft:draft-1");
   });
 
-  it("refuses what cannot address a carrier", () => {
-    expect(carrierMessageIdFromDraftId("")).toBeUndefined();
-    expect(carrierMessageIdFromDraftId("   ")).toBeUndefined();
-    expect(carrierMessageIdFromDraftId("jira-draft:")).toBeUndefined();
+  it("refuses what cannot address a draft", () => {
+    expect(draftArtifactIdFromDraftId("")).toBeUndefined();
+    expect(draftArtifactIdFromDraftId("   ")).toBeUndefined();
+    expect(draftArtifactIdFromDraftId("jira-draft:")).toBeUndefined();
   });
 });
 
 describe("withDraftMutationStatus", () => {
-  it("records the verdict and preserves everything that keeps the carrier hidden", () => {
-    const updated = withDraftMutationStatus(carrierExt(), "applied");
-    const attachment = updated?.attachments?.[0];
-
-    expect(attachment?.kind === "draft-mutation" ? attachment.draft.status : undefined).toBe(
-      "applied",
-    );
-    // The carrier must stay invisible: surfacing it would put an empty message in the chat.
-    expect(updated?.visibleToUser).toBe(false);
-    expect(updated?.visibleToAgent).toBe(false);
-    expect(updated?.author).toEqual({ kind: "system" });
-    // A verdict never rewrites the proposal it settles.
-    expect(attachment?.kind === "draft-mutation" ? attachment.draft.patch : undefined).toEqual({
-      description: "## Goal\nRound to two decimals.",
-    });
-    expect(decodeExt(updated)).toEqual(updated);
+  it("records the verdict and never rewrites the proposal", () => {
+    const updated = withDraftMutationStatus(draftPayload(), "applied");
+    expect(updated?.draft.status).toBe("applied");
+    expect(updated?.draft.id).toBe("jira-draft:draft-1");
+    expect(updated?.draft.patch).toEqual({ description: "## Goal\nRound to two decimals." });
+    expect(decodeAttachment(updated)).toEqual(updated);
   });
 
   it("carries a dismissal the same way", () => {
-    const updated = withDraftMutationStatus(carrierExt(), "dismissed");
-    const attachment = updated?.attachments?.[0];
-    expect(attachment?.kind === "draft-mutation" ? attachment.draft.status : undefined).toBe(
-      "dismissed",
-    );
+    expect(withDraftMutationStatus(draftPayload(), "dismissed")?.draft.status).toBe("dismissed");
   });
 
-  it("leaves non-draft attachments on the message untouched", () => {
-    const ext = decodeExt({
-      ...carrierExt(),
-      attachments: [
-        { kind: "artifact", artifact: { kind: "report", label: "Run log" } },
-        ...(carrierExt().attachments ?? []),
-      ],
-    });
-    const updated = withDraftMutationStatus(ext, "applied");
-    expect(updated?.attachments?.[0]).toEqual({
-      kind: "artifact",
-      artifact: { kind: "report", label: "Run log" },
-    });
-    const draft = updated?.attachments?.[1];
-    expect(draft?.kind === "draft-mutation" ? draft.draft.status : undefined).toBe("applied");
-  });
-
-  it("reports a message that carries no draft instead of upserting a no-op", () => {
+  it("reports a payload that carries no draft instead of writing a no-op", () => {
     expect(withDraftMutationStatus(undefined, "applied")).toBeUndefined();
-    expect(withDraftMutationStatus({ visibleToUser: false }, "applied")).toBeUndefined();
-    expect(
-      withDraftMutationStatus(
-        decodeExt({ attachments: [{ kind: "artifact", artifact: { kind: "r", label: "l" } }] }),
-        "applied",
-      ),
-    ).toBeUndefined();
+    expect(withDraftMutationStatus({ kind: "widget", widget: {} }, "applied")).toBeUndefined();
+    expect(withDraftMutationStatus({ kind: "draft-mutation" }, "applied")).toBeUndefined();
   });
 });

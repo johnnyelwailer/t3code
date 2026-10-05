@@ -25,12 +25,9 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
-import * as Stream from "effect/Stream";
 import { afterAll } from "vite-plus/test";
 
 import { ServerConfig } from "./config.ts";
-import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStore.ts";
 import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
@@ -46,6 +43,11 @@ import {
   T3TeamWorkflowEngineRegistry,
   T3TeamWorkflowEngineRegistryLive,
 } from "./t3team-workflowEngineRegistry.ts";
+import { T3TeamWorkflowHost } from "./t3team-workflowHost.ts";
+import {
+  makeFakeWorkflowHost,
+  makeFakeWorkflowHostLayer,
+} from "./t3team-workflowHostFake.fixtures.ts";
 import {
   T3TeamWorkflowScheduler,
   T3TeamWorkflowSchedulerLive,
@@ -103,7 +105,7 @@ const fakeControlDeps = (
   repo: {} as never,
   registry: {} as never,
   rearmScheduler: () => Promise.resolve(),
-  dispatch: () => Effect.succeed(null),
+  host: makeFakeWorkflowHostLayer().service,
   nowIso,
   stopOrigin: "user",
   ...overrides,
@@ -281,6 +283,7 @@ it.effect(
           turnRedrive: {
             processTurnRetry: () => Effect.fail("turn re-issue lost the race"),
             settleNoText: () => Effect.void,
+            releaseHeldRun: () => Effect.succeed(true),
             settleFailedTurn: () => Effect.void,
           } as never,
           retryFailed: {
@@ -313,16 +316,7 @@ it.effect(
 // t3team-toolBrokerWorkflowResumeTool.test.ts).
 // ---------------------------------------------------------------------------
 
-const stubEngine: OrchestrationEngineShape = {
-  readEvents: () => Stream.empty,
-  readThreadEvents: () => Stream.empty,
-  getThreadReplayStats: () => Effect.never,
-  dispatch: () => Effect.succeed({ sequence: 0 }),
-  streamDomainEvents: Stream.never,
-  subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
-  latestSequence: Effect.succeed(0),
-};
-const OrchestrationEngineTestLive = Layer.succeed(OrchestrationEngineService, stubEngine);
+const hostFake = makeFakeWorkflowHostLayer();
 
 const WorkflowEngineDurabilityTestLive = T3TeamWorkflowSchedulerLive.pipe(
   Layer.provideMerge(
@@ -337,7 +331,7 @@ const WorkflowEngineDurabilityTestLive = T3TeamWorkflowSchedulerLive.pipe(
 
 const TestLayer = Layer.mergeAll(
   WorkflowEngineDurabilityTestLive,
-  OrchestrationEngineTestLive,
+  hostFake.layer,
   ServerConfig.layerTest(cwd, { prefix: "t3-run-control-retry-test-" }),
 ).pipe(Layer.provideMerge(NodeServices.layer));
 
@@ -351,7 +345,7 @@ const makeCardControlDeps = Effect.gen(function* () {
       repo,
       registry,
       rearmScheduler: () => scheduler.rearm(),
-      dispatch: () => Effect.succeed(null),
+      host: yield* T3TeamWorkflowHost,
       nowIso,
       stopOrigin: "user" as const,
       // Fake turn re-drive: the re-issued ask is recorded, nothing else happens (the test then
@@ -359,6 +353,7 @@ const makeCardControlDeps = Effect.gen(function* () {
       turnRedrive: {
         processTurnRetry: () => Effect.void,
         settleNoText: () => Effect.void,
+        releaseHeldRun: () => Effect.succeed(true),
         settleFailedTurn: () => Effect.void,
       } as never,
       retryFailed: {
@@ -443,7 +438,7 @@ it.live(
           runtimeMode: "full-access",
           interactionMode: "default",
           registry: throwaway,
-          dispatch: () => Promise.resolve(),
+          host: makeFakeWorkflowHost().host,
           newId: () => `id-${(seq += 1)}`,
           nowIso,
           store,

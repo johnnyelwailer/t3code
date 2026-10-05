@@ -14,8 +14,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { HttpRouter } from "effect/unstable/http";
 
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
-import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as ProjectService from "./project/ProjectService.ts";
 import {
   errorResponse,
   okJson,
@@ -48,10 +47,8 @@ export const t3teamProjectMainRepositoryRouteLayer = HttpRouter.add(
         message: "projectId is required, and url must be a repository URL or null.",
       });
     }
-    const query = yield* ProjectionSnapshotQuery;
-    const project = Option.getOrUndefined(
-      yield* query.getProjectShellById(ProjectId.make(projectId)),
-    );
+    const projects = yield* ProjectService.ProjectService;
+    const project = Option.getOrUndefined(yield* projects.getShell(ProjectId.make(projectId)));
     if (!project) {
       return yield* new T3TeamAtlassianError({ message: `Project '${projectId}' was not found.` });
     }
@@ -62,9 +59,7 @@ export const t3teamProjectMainRepositoryRouteLayer = HttpRouter.add(
       selection: input.selection === "detected" ? "detected" : "user",
     });
     if (result.changed && result.mainRepository) {
-      const engine = yield* OrchestrationEngineService;
-      yield* engine.dispatch({
-        type: "project.meta.update",
+      yield* projects.update({
         commandId: CommandId.make(`server:t3team:main-repository:${t3teamRandomUUID()}`),
         projectId: project.id,
         ...(result.workspaceRoot !== project.workspaceRoot

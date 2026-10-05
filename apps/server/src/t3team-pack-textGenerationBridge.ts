@@ -7,7 +7,7 @@
  * is already covered by `t3team-pack-textGenerationBridge.test.ts`.
  */
 import { ProviderDriverKind, TextGenerationError } from "@t3tools/contracts";
-import type { PackProviderDriverDefinition } from "@t3team/packs";
+import type { PackProviderDriverDefinition } from "@t3team/pack-api";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 

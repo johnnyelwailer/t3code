@@ -1,4 +1,4 @@
-import { type OrchestrationThreadActivity } from "@t3tools/contracts";
+import type { T3TeamThreadActivityRecord } from "~/t3team/chat/t3team-threadActivityRecord";
 import {
   isProjectRecipeLaunchActivityPayload,
   isProjectRecipeWorkflowCardActivityPayload,
@@ -25,7 +25,7 @@ export type T3TeamRecipeActivityCardEntry =
       card: ProjectRecipeWorkflowCardActivityPayload;
     };
 
-export function isT3TeamRecipeActivity(activity: OrchestrationThreadActivity): boolean {
+export function isT3TeamRecipeActivity(activity: T3TeamThreadActivityRecord): boolean {
   return (
     activity.kind === PROJECT_RECIPE_ACTIVITY_KIND_LAUNCH ||
     activity.kind === PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_CARD ||
@@ -34,7 +34,7 @@ export function isT3TeamRecipeActivity(activity: OrchestrationThreadActivity): b
 }
 
 export function deriveT3TeamRecipeActivityCardEntries(
-  activities: ReadonlyArray<OrchestrationThreadActivity>,
+  activities: ReadonlyArray<T3TeamThreadActivityRecord>,
 ): T3TeamRecipeActivityCardEntry[] {
   const entries: T3TeamRecipeActivityCardEntry[] = [];
 
@@ -72,8 +72,8 @@ export function deriveT3TeamRecipeActivityCardEntries(
 
 /** Timeline order for thread activities: sequence, then createdAt, then lifecycle rank, then id. */
 export function compareT3TeamActivitiesByOrder(
-  left: OrchestrationThreadActivity,
-  right: OrchestrationThreadActivity,
+  left: T3TeamThreadActivityRecord,
+  right: T3TeamThreadActivityRecord,
 ): number {
   if (left.sequence !== undefined && right.sequence !== undefined) {
     if (left.sequence !== right.sequence) {

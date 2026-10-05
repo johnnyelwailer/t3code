@@ -9,7 +9,7 @@
  * a distribution repo (or CI) can exercise its recipe library unattended:
  *
  *   node vendor/t3code/apps/server/src/t3team-recipeWorkflowE2e.ts \
- *     --recipe packs/nexplore-global/recipes/discussion-recap \
+ *     --recipe packs/<pack>/recipes/discussion-recap \
  *     --fixture fixtures/demo-backlog \
  *     --replies '["{\"decisions\":[]}"]' --answers '["{}"]'
  *
@@ -21,18 +21,10 @@
  * @module t3team-recipeWorkflowE2e
  */
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
 
 import { runT3TeamRecipeWorkflowHarness } from "./t3team-recipeWorkflowHarness.ts";
-import * as ThreadBackgroundLiveness from "./orchestration/ThreadBackgroundLiveness.ts";
-import {
-  makeT3TeamRecipeHarnessEngineLayer,
-  makeT3TeamRecipeHarnessReactorLayer,
-} from "./t3team-recipeWorkflowHarnessLayers.ts";
-import {
-  makeT3TeamRecipeHarnessStubProvider,
-  type T3TeamRecipeHarnessCapture,
-} from "./t3team-recipeWorkflowHarnessStub.ts";
+import { makeT3TeamRecipeHarnessLayer } from "./t3team-recipeWorkflowHarnessLayers.ts";
+import type { T3TeamRecipeHarnessCapture } from "./t3team-recipeWorkflowHarnessStub.ts";
 
 function readFlag(name: string): string | undefined {
   const index = process.argv.indexOf(`--${name}`);
@@ -51,33 +43,21 @@ if (!recipeDir || !fixtureRoot) {
   process.exit(2);
 }
 
-// Typed as the harness's own capture shape, not `unknown[]`: the stub appends real
-// `OrchestrationCommand`s, and the loose type made `spec` unassignable to
-// `T3TeamRecipeHarnessSpec` (and forced a cast to read `.type` below).
-const capture: T3TeamRecipeHarnessCapture = {
-  commands: [],
-  agentPrompts: [],
-};
+const capture: T3TeamRecipeHarnessCapture = { operations: [], agentPrompts: [] };
 
 const spec = {
   recipeDir,
   fixtureRoot,
-  replies: readJsonFlag("replies", ["{}"]) as ReadonlyArray<string>,
   answers: readJsonFlag("answers", []) as ReadonlyArray<string>,
   args: readJsonFlag("args", {}),
   capture,
 };
 
-const layer = Layer.mergeAll(
-  makeT3TeamRecipeHarnessReactorLayer(),
-  makeT3TeamRecipeHarnessStubProvider({ replies: spec.replies, capture }),
-).pipe(
-  Layer.provideMerge(
-    makeT3TeamRecipeHarnessEngineLayer("t3team-recipe-e2e-").pipe(
-      Layer.provideMerge(ThreadBackgroundLiveness.layer),
-    ),
-  ),
-);
+const layer = makeT3TeamRecipeHarnessLayer({
+  prefix: "t3team-recipe-e2e-",
+  replies: readJsonFlag("replies", ["{}"]) as ReadonlyArray<string>,
+  capture,
+});
 
 const exitCode = await Effect.runPromise(
   Effect.scoped(
@@ -101,11 +81,11 @@ const exitCode = await Effect.runPromise(
         Effect.sync(() => {
           console.error(String(cause));
           // On failure the capture is the only window into how far the body got:
-          // which orchestration commands were dispatched, and what was asked.
+          // which host operations the run performed, and what was asked.
           console.error(
             `capture: ${JSON.stringify(
               {
-                commandTypes: capture.commands.map((command) => command.type),
+                hostOperations: capture.operations.map(({ op }) => op),
                 agentPrompts: capture.agentPrompts.length,
               },
               null,

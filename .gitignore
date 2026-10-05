@@ -34,6 +34,7 @@ apps/server/__fixtures__/t3team-timer-e2e-*/
 apps/server/__fixtures__/t3team-context-refresh-e2e-*/
 worktrees/
 .plans/
+/audits/
 dist-electron/
 .electron-runtime/
 apps/desktop/.dev-electron-supervisor.pid

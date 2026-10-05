@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 
 import type { ProjectShellProject } from "@t3tools/project-context";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
+import { createRecordingOrchestrationApi } from "~/t3team/backend/t3team-orchestrationApi.testSupport";
 import { finalizeCreatedProject } from "~/t3team/hooks/t3team-createProjectFinalization";
 
 /**
@@ -12,13 +13,12 @@ import { finalizeCreatedProject } from "~/t3team/hooks/t3team-createProjectFinal
  * `apps/web/src/t3team/t3team-projectSourceBinding.ts` and `t3team-projectStoreUtils.ts`.
  */
 
-function createBackend(dispatchCommand: BackendApi["dispatchCommand"]): BackendApi {
+function createBackend(createProject: BackendApi["orchestration"]["createProject"]): BackendApi {
   return {
     state: { connectionStatus: "connected", serverConfig: null, providers: [], error: null },
     connect: vi.fn(async () => undefined),
     disconnect: vi.fn(async () => undefined),
-    dispatchCommand,
-    forkThread: vi.fn(async () => ({ ok: true as const, childThreadId: "child-thread" })),
+    orchestration: { ...createRecordingOrchestrationApi(), createProject },
     launchRecipeWorkflow: vi.fn(async () => ({ ok: true })),
     submitRecipeCardAction: vi.fn(async () => ({ ok: true })),
     resolveWorkflowInput: vi.fn(async () => undefined),
@@ -82,9 +82,11 @@ function createLocalProject(): ProjectShellProject {
 }
 
 describe("finalizeCreatedProject", () => {
-  it("dispatches project.create carrying the work-source binding (Defect 1)", async () => {
-    const dispatchCommand = vi.fn().mockResolvedValue(undefined);
-    const backend = createBackend(dispatchCommand);
+  it("creates the project carrying the work-source binding (Defect 1)", async () => {
+    const createProject = vi.fn<BackendApi["orchestration"]["createProject"]>(
+      async () => undefined,
+    );
+    const backend = createBackend(createProject);
 
     await finalizeCreatedProject({
       backend,
@@ -93,9 +95,9 @@ describe("finalizeCreatedProject", () => {
       setupProfileId: "product-partner",
     });
 
-    expect(dispatchCommand).toHaveBeenCalledTimes(1);
-    const dispatched = dispatchCommand.mock.calls[0]?.[0] as { source?: unknown };
-    expect(dispatched.source).toEqual({
+    expect(createProject).toHaveBeenCalledTimes(1);
+    const dispatched = createProject.mock.calls[0]?.[0];
+    expect(dispatched?.source).toEqual({
       provider: "atlassian",
       accountId: "acc-1",
       externalProjectId: "10001",
@@ -103,9 +105,11 @@ describe("finalizeCreatedProject", () => {
     });
   });
 
-  it("dispatches project.create with a local binding for a loose workspace", async () => {
-    const dispatchCommand = vi.fn().mockResolvedValue(undefined);
-    const backend = createBackend(dispatchCommand);
+  it("creates the project with a local binding for a loose workspace", async () => {
+    const createProject = vi.fn<BackendApi["orchestration"]["createProject"]>(
+      async () => undefined,
+    );
+    const backend = createBackend(createProject);
 
     await finalizeCreatedProject({
       backend,
@@ -114,18 +118,18 @@ describe("finalizeCreatedProject", () => {
       setupProfileId: "product-partner",
     });
 
-    expect(dispatchCommand).toHaveBeenCalledTimes(1);
-    const dispatched = dispatchCommand.mock.calls[0]?.[0] as { source?: unknown };
-    expect(dispatched.source).toEqual({ provider: "local" });
+    expect(createProject).toHaveBeenCalledTimes(1);
+    const dispatched = createProject.mock.calls[0]?.[0];
+    expect(dispatched?.source).toEqual({ provider: "local" });
   });
 
   it("surfaces a friendly message when the binding is already claimed", async () => {
-    const dispatchCommand = vi.fn(async () => {
+    const createProject = vi.fn(async () => {
       throw new Error(
         "Work source 'atlassian:acc-1/10001' is already bound to project 'project-other'.",
       );
     });
-    const backend = createBackend(dispatchCommand);
+    const backend = createBackend(createProject);
 
     await expect(
       finalizeCreatedProject({

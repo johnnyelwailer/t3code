@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo } from "react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 
 import { usePrimaryEnvironmentId } from "~/state/environments";
-import { useThread } from "~/state/entities";
+import { useThreadProjection, useThreadShell } from "~/state/entities";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { prepareThreadContextAttachments } from "~/t3team/chat/t3team-prepareThreadContextAttachments";
 import { isThreadWaitingForRecipeInput } from "~/t3team/chat/t3team-recipeAwaitingInput";
@@ -38,8 +38,9 @@ export function useThreadChatComposerState(input: {
     () => (environmentId ? scopeThreadRef(environmentId, input.threadId as never) : null),
     [environmentId, input.threadId],
   );
-  const serverThread = useThread(threadRef);
-  const waitingForRecipeInput = isThreadWaitingForRecipeInput(serverThread ?? undefined);
+  const threadShell = useThreadShell(threadRef);
+  const threadDetail = useThreadProjection(threadRef);
+  const waitingForRecipeInput = isThreadWaitingForRecipeInput(threadDetail?.projection.messages);
 
   const submitStagedAction = useThreadStagedComposerAction({
     projectId: input.projectId,
@@ -76,7 +77,7 @@ export function useThreadChatComposerState(input: {
     projectId: input.projectId,
     threadId: input.threadId,
     ...(input.ticketId ? { ticketId: input.ticketId } : {}),
-    serverThreadExists: serverThread !== null,
+    serverThreadExists: threadShell !== null || threadDetail !== null,
     waitingForRecipeInput,
   });
 

@@ -1,26 +1,22 @@
 /**
  * Shared types, constants, and op vocabulary for the `t3team.thread.children`
- * meta tool (GHE #55). Kept free of behavior so the op modules can import the
- * shapes without a cycle.
+ * meta tool. Kept free of behavior so the op modules can import the shapes
+ * without a cycle.
+ *
+ * Only ops without an upstream equivalent remain: child lifecycle reads and
+ * control (list / status / wait / stop) are upstream `t3_thread_list`,
+ * `task_status`, `t3_thread_wait`, `task_cancel` / `t3_thread_interrupt`.
  *
  * @module t3team-toolBrokerChildrenTypes
  */
-import { ProjectId, type ThreadId as ThreadIdType } from "@t3tools/contracts";
-import * as Effect from "effect/Effect";
-
-import { type ThreadRunStatusInput } from "@t3tools/shared/t3team-threadRunStatus";
-import { type ThreadRunState } from "@t3tools/shared/t3team-threadRunStatus";
+import type { OrchestrationV2ThreadShell, ProjectId, ThreadId } from "@t3tools/contracts";
+import type * as Effect from "effect/Effect";
 
 export const T3TEAM_CHILDREN_TOOL_ID = "t3team.thread.children";
 
 export const T3TEAM_CHILD_OPS = [
-  "list",
-  "status",
-  "wait",
   "watch",
   "unwatch",
-  "stop",
-  "close",
   "sweep",
   "drain",
   "environments",
@@ -28,14 +24,20 @@ export const T3TEAM_CHILD_OPS = [
 ] as const;
 export type T3TeamChildOp = (typeof T3TEAM_CHILD_OPS)[number];
 
-export const T3TEAM_CHILD_WAIT_OUTCOMES = ["terminal", "completed", "failed"] as const;
-export type T3TeamChildWaitOutcome = (typeof T3TEAM_CHILD_WAIT_OUTCOMES)[number];
+/** Ops that moved to upstream tools; a call names the replacement instead of failing blind. */
+export const T3TEAM_CHILD_REMOVED_OPS: Readonly<Record<string, string>> = {
+  list: "use t3_thread_list (includeSubagents: true) — children carry parentThreadId",
+  status: "use task_status with the taskId delegate_task returned, or t3_thread_read",
+  wait:
+    "delegated children wake this thread automatically when they finish; end the turn, or " +
+    "use delegate_task mode:'wait' / t3_thread_wait when the result is needed in this turn",
+  stop: "use task_cancel (taskId) or t3_thread_interrupt (threadId)",
+  close: "nothing to do: a delegated task is done once its result is available",
+};
 
 /**
- * Outcome of the `drain` op: the caller's OWN inter-agent mailbox, claimed
- * now instead of waiting for the boundary drain. One of the three states:
- * dispatched (idle → digest turn started now), queued (busy → arrives when
- * the turn ends), or held (suppressed → visible in the timeline only).
+ * Outcome of the `drain` op: the caller's OWN inter-agent mailbox, claimed now
+ * instead of waiting for the boundary drain.
  */
 export type ChildrenDrainOutcome =
   | {
@@ -56,137 +58,60 @@ export type ChildrenDrainOutcome =
       readonly note: string;
     };
 
-// ── Structural input shapes (decoupled from the full projection types) ─────
-
-export type ChildThreadShell = ThreadRunStatusInput;
-
-export interface ChildThreadMessage {
-  readonly role: string;
-  readonly text?: string | null;
-  readonly createdAt?: string | null;
+/** Durable silence-watch registration, provided by the silence-watch layer. */
+export interface ChildrenSilenceWatchPort {
+  /** Upserts the (watcher, target) watch; `timeoutMs` omitted = the watch default. */
+  readonly register: (input: {
+    readonly watcherThreadId: ThreadId;
+    readonly targetThreadId: ThreadId;
+    readonly targetTitle: string;
+    readonly timeoutMs: number | undefined;
+  }) => Effect.Effect<{ readonly watchId: string; readonly timeoutMs: number }, string>;
+  readonly cancel: (input: {
+    readonly watcherThreadId: ThreadId;
+    readonly targetThreadId: ThreadId;
+  }) => Effect.Effect<{ readonly cancelled: number }, string>;
 }
 
-export interface ChildThreadActivity {
-  readonly kind: string;
-  readonly summary: string;
-  readonly createdAt: string;
-  readonly payload: unknown;
+export interface EnvironmentBindingSummary {
+  readonly environmentId: string;
+  readonly label?: string;
+  readonly threadCount: number;
+  readonly latestThreadAt: string;
 }
-
-export interface ChildThreadDetail extends ThreadRunStatusInput {
-  readonly projectId: string;
-  readonly activities: ReadonlyArray<ChildThreadActivity>;
-  readonly messages: ReadonlyArray<ChildThreadMessage>;
-  /** The thread's proposed-plan records (durable provider-observed plans).
-   *   The status op derives `awaitingParent`'s actionable-plan fact from this
-   *   list — detail loads carry no shell `hasActionableProposedPlan` flag. */
-  readonly proposedPlans?: ReadonlyArray<{
-    readonly id: string;
-    readonly turnId: string | null;
-    readonly implementedAt: string | null;
-    readonly updatedAt: string;
-  }>;
-}
-
-export type ParentChildRelation = {
-  readonly childThreadId: string;
-  readonly parentThreadId: string;
-};
 
 export interface T3TeamChildrenToolDeps {
-  readonly callerThreadId: ThreadIdType;
+  readonly callerThreadId: ThreadId;
   readonly callerProjectId: ProjectId;
-  /** This server's own EnvironmentId — the `environments` op marks it as the
-   *  default target and drops it from the cross-environment history.
-   *  `string | undefined` (not a bare optional) so structural fakes that
-   *  spread `Partial<T>` overrides stay assignable under
-   *  exactOptionalPropertyTypes. */
+  /** This server's own EnvironmentId; `environments` marks it as the default target. */
   readonly localEnvironmentId?: string | undefined;
-  readonly loadThreadDetail: (
-    threadId: ThreadIdType,
-  ) => Effect.Effect<ChildThreadDetail | undefined, string>;
+  /** A thread's V2 shell; undefined when missing or deleted. */
   readonly loadThreadShell: (
-    threadId: ThreadIdType,
-  ) => Effect.Effect<ChildThreadShell | undefined, string>;
+    threadId: ThreadId,
+  ) => Effect.Effect<OrchestrationV2ThreadShell | undefined, string>;
+  /** Every shell of a project, delegated (subagent) children included. */
   readonly listProjectThreadShells: (
     projectId: ProjectId,
-  ) => Effect.Effect<ReadonlyArray<ChildThreadShell>, string>;
-  /**
-   * The active child thread ids of a parent, derived from the durable
-   * parent/child relation (handoff.created parentThreadId / handoff.started
-   * childThreadId) rather than the parent's own activity load — so a
-   * coordinator with a large child fleet lists every child, matching the
-   * sidebar/fork section. Newest first. (GHE #178)
-   */
-  readonly listChildThreadIds: (
-    parentThreadId: ThreadIdType,
-    projectId: ProjectId,
-  ) => Effect.Effect<ReadonlyArray<string>, string>;
-  /**
-   * ALL durable parent/child relations in the store, one query — the canonical
-   * handoff.created / handoff.started source (same query the child-settle
-   * sweeper reads; the legacy `parent:N` sub-run scheme never emits handoff
-   * events and so never appears). Store-wide by design; the op scopes it to
-   * its project by matching parents against its own thread ids.
-   */
-  readonly listParentChildRelations: () => Effect.Effect<
-    ReadonlyArray<ParentChildRelation>,
-    string
-  >;
-  /** Append a durable activity to a thread (wait registration, close marker). */
-  readonly appendActivity: (
-    threadId: ThreadIdType,
-    input: { readonly kind: string; readonly summary: string; readonly payload: unknown },
-  ) => Effect.Effect<void, string>;
-  /** Interrupt a thread's active turn (the stop op). */
-  readonly interruptTurn: (threadId: ThreadIdType) => Effect.Effect<void, string>;
-  /**
-   * Settle a thread (the sweep op): dispatches the durable `thread.settle`
-   * command. The decider's invariants still apply — running sessions and
-   * blocked-on-user work refuse the settle and surface as sweep errors.
-   */
-  readonly settleThread: (threadId: ThreadIdType) => Effect.Effect<void, string>;
-  /**
-   * The `drain` op: claim the CALLER's own inter-agent mailbox now — idle →
-   * dispatch the digest immediately; busy → report it is queued; suppressed
-   * → report it is held. No target thread: it always drains the calling
-   * thread's own inbox (the inter-agent messages this thread is owed).
-   */
-  readonly drainOwnMailbox: () => Effect.Effect<ChildrenDrainOutcome, string>;
-  /**
-   * The `environments` op: the distinct cross-environment bindings recorded
-   * on threads in this store — the environments this host has previously
-   * targeted through start_child `environment`, with the newest recorded
-   * label, bound-thread count, and most-recent activity. Own-environment
-   * threads never carry a binding, so the op merges `localEnvironmentId`
-   * in front of this history. Host adapters may supply a richer source here
-   * (a real environment registry); the op's result shape (`source`:
-   * "own" | "history") is what a host-specific enrichment would extend.
-   */
+  ) => Effect.Effect<ReadonlyArray<OrchestrationV2ThreadShell>, string>;
+  /** Settles one thread (`thread.settle`); settle guards still apply. */
+  readonly settleThread: (threadId: ThreadId) => Effect.Effect<void, string>;
+  /** Recorded cross-environment bindings (thread facts), newest first. */
   readonly listEnvironmentBindings: () => Effect.Effect<
-    ReadonlyArray<{
-      readonly environmentId: string;
-      readonly label?: string;
-      readonly threadCount: number;
-      readonly latestThreadAt: string;
-    }>,
+    ReadonlyArray<EnvironmentBindingSummary>,
     string
   >;
+  /** Absent when this host runs no inter-agent mailbox. */
+  readonly drainOwnMailbox: (() => Effect.Effect<ChildrenDrainOutcome, string>) | undefined;
+  /** Absent when this host runs no silence watch. */
+  readonly silenceWatch: ChildrenSilenceWatchPort | undefined;
   readonly nowIso: () => string;
-  readonly newId: () => string;
 }
 
 export type ChildrenArgs = {
   readonly op?: unknown;
   readonly thread_id?: unknown;
-  readonly on?: unknown;
-  readonly timeout?: unknown;
-  readonly all?: unknown;
-  readonly all_older_than_hours?: unknown;
   readonly thread_ids?: unknown;
-  readonly include_settled?: unknown;
-  readonly reason?: unknown;
+  readonly timeout?: unknown;
+  readonly all_older_than_hours?: unknown;
   readonly op_name?: unknown;
 };
-
-export type { ThreadRunState };

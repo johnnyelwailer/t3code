@@ -4,11 +4,9 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
-import * as Stream from "effect/Stream";
 import { describe, expect, it } from "vite-plus/test";
 import { createQueryable } from "@t3tools/project-context";
 
-import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import { discoverProjectRecipes } from "./t3team-projectRecipeDiscovery.js";
 import { makeBrokerLayer } from "./t3team-toolBrokerTestUtils.ts";
 
@@ -312,16 +310,6 @@ export function visible(ctx) {
   });
 
   it("binds visible.ts to the no-thread read-only tool surface", async () => {
-    const orchestrationMock: OrchestrationEngineShape = {
-      readEvents: () => Stream.empty,
-      readThreadEvents: () => Stream.empty,
-      getThreadReplayStats: () => Effect.die("unused"),
-      dispatch: () => Effect.succeed({ sequence: 1 }),
-      streamDomainEvents: Stream.empty,
-      subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
-      latestSequence: Effect.succeed(0),
-    };
-
     await Effect.runPromise(
       Effect.scoped(
         Effect.gen(function* () {
@@ -346,7 +334,7 @@ export function visible(ctx) {
 export async function visible(_ctx, api) {
   const view = await api.tools.call("t3team.view.read");
   try {
-    await api.tools.call("t3team.thread.rename", { title: "Nope" });
+    await api.tools.call("t3team.backlog.set_assignee_filter", { assignee: "nobody" });
     return { visible: false };
   } catch (error) {
     return {
@@ -415,9 +403,7 @@ export async function visible(_ctx, api) {
             rank: 88,
             reason: expect.stringContaining("requires group 'view.state'"),
           });
-        }).pipe(
-          Effect.provide(Layer.mergeAll(makeBrokerLayer(orchestrationMock), NodeServices.layer)),
-        ),
+        }).pipe(Effect.provide(Layer.mergeAll(makeBrokerLayer(), NodeServices.layer))),
       ),
     );
   });

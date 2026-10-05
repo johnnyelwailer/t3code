@@ -54,6 +54,7 @@ vi.mock("@t3tools/integrations-atlassian", () => ({
 }));
 
 import { useAtlassianOAuth, type OAuthState } from "./t3team-useAtlassianOAuth";
+import { createRecordingOrchestrationApi } from "~/t3team/backend/t3team-orchestrationApi.testSupport";
 
 const SHARE_URL = "https://example.test/api/t3team/atlassian/oauth/begin/server-state";
 const SERVER_ORIGIN_URL = "http://127.0.0.1:13773/api/t3team/atlassian/oauth/begin/server-state";
@@ -63,7 +64,7 @@ function makeBackend(): BackendApi {
     state: { connectionStatus: "connected", serverConfig: null, providers: [], error: null },
     connect: async () => undefined,
     disconnect: async () => undefined,
-    dispatchCommand: async () => undefined,
+    orchestration: createRecordingOrchestrationApi(),
     launchRecipeWorkflow: async () => ({ ok: true }),
     submitRecipeCardAction: async () => ({ ok: true }),
     resolveWorkflowInput: async () => undefined,

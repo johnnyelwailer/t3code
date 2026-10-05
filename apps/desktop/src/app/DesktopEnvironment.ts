@@ -90,6 +90,7 @@ export class DesktopEnvironment extends Context.Service<
     readonly linuxWmClass: string;
     readonly linuxApplicationsDir: string;
     readonly appImagePath: Option.Option<string>;
+    /** t3team: app-data directory name, overridable by packaged branding. */
     readonly userDataDirName: string;
     readonly legacyUserDataDirName: string;
     readonly defaultDesktopSettings: DesktopAppSettings.DesktopSettings;
@@ -221,6 +222,8 @@ const make = Effect.fn("desktop.environment.make")(function* (
     joinPath: path.join,
     t3Home: config.t3Home,
   });
+  // t3team: branded installs keep their own app-data directory names (read by the
+  // branded T3 home in DesktopBackendConfiguration).
   const userDataDirName =
     packagedBranding?.userDataDirName?.trim() || (isDevelopment ? "t3code-dev" : "t3code");
   const legacyUserDataDirName =

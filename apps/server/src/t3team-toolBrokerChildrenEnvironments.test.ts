@@ -1,12 +1,10 @@
 /**
- * `environments` op for t3team.thread.children — the DISCOVERY half of the
- * cross-environment start_child feature. Covers the pure entry builder
+ * `environments` op for t3team.thread.children — discovery for delegate_task's
+ * `extensions.environment`. Covers the pure entry builder
  * (own environment, recorded cross-env bindings, dedup, exclusions) and the
  * op's result shape (default case stays own-only with the "no other
  * environments" hint; cross-env entries carry the delivery boundary; the
  * history read failure surfaces as a tool error, not a throw).
- *
- * Kept in a t3team-prefixed file per the additive guard.
  */
 import * as Effect from "effect/Effect";
 import { assert, describe, it } from "@effect/vitest";
@@ -15,6 +13,7 @@ import {
   buildChildrenEnvironmentEntries,
   opEnvironments,
 } from "./t3team-toolBrokerChildrenEnvironments.ts";
+import { summarizeEnvironmentBindings } from "./t3team-toolBrokerChildrenLive.ts";
 import type { T3TeamChildrenToolDeps } from "./t3team-toolBrokerChildrenTypes.ts";
 
 type HistoryRow = {
@@ -36,21 +35,16 @@ function mkDeps(
     callerThreadId: "thread-1" as never,
     callerProjectId: "project-1" as never,
     localEnvironmentId: overrides.localEnvironmentId,
-    loadThreadDetail: () => Effect.succeed(undefined),
     loadThreadShell: () => Effect.succeed(undefined),
     listProjectThreadShells: () => Effect.succeed([]),
-    listChildThreadIds: () => Effect.succeed([]),
-    listParentChildRelations: () => Effect.succeed([]),
     listEnvironmentBindings: () =>
       historyError !== undefined
         ? Effect.fail(historyError)
         : Effect.succeed(overrides.history ?? []),
-    appendActivity: () => Effect.void,
-    interruptTurn: () => Effect.void,
     settleThread: () => Effect.void,
-    drainOwnMailbox: () => Effect.succeed({ state: "dispatched", delivered: 0, subjects: [] }),
+    drainOwnMailbox: undefined,
+    silenceWatch: undefined,
     nowIso: () => "2026-09-14T00:00:00.000Z",
-    newId: () => "id",
   };
 }
 
@@ -72,7 +66,7 @@ describe("buildChildrenEnvironmentEntries", () => {
     });
     assert.strictEqual(entries[0]!.isDefault, true);
     assert.strictEqual(entries[0]!.source, "own");
-    assert.ok(entries[0]!.delivery.includes("fully reachable"));
+    assert.ok(entries[0]!.delivery.includes("completion wakes this thread"));
   });
 
   it("omits the own entry when the host has no local environment id", () => {
@@ -130,7 +124,7 @@ describe("opEnvironments", () => {
   it.effect("default case: own environment only, with the discovery hint", () =>
     Effect.gen(function* () {
       const deps = mkDeps({ localEnvironmentId: "env-local" });
-      const result = yield* opEnvironments(deps, {});
+      const result = yield* opEnvironments(deps);
       const payload = result.structuredContent as {
         ok: boolean;
         op?: string;
@@ -164,7 +158,7 @@ describe("opEnvironments", () => {
           },
         ],
       });
-      const result = yield* opEnvironments(deps, {});
+      const result = yield* opEnvironments(deps);
       const payload = result.structuredContent as {
         ok: boolean;
         environments: Array<{ environmentId: string; isDefault: boolean; childrenCount: number }>;
@@ -181,7 +175,7 @@ describe("opEnvironments", () => {
   it.effect("history read failure surfaces as a tool error", () =>
     Effect.gen(function* () {
       const deps = mkDeps({ localEnvironmentId: "env-local", historyError: "store offline" });
-      const result = yield* opEnvironments(deps, {});
+      const result = yield* opEnvironments(deps);
       assert.strictEqual(result.isError, true);
       assert.match(
         String((result.structuredContent as { error?: unknown }).error),
@@ -189,4 +183,24 @@ describe("opEnvironments", () => {
       );
     }),
   );
+});
+
+describe("summarizeEnvironmentBindings", () => {
+  it("groups environment facts per environment, newest label first, skipping unbound threads", () => {
+    const summary = summarizeEnvironmentBindings([
+      { environment: { environmentId: "env-a", label: "Old" }, updatedAt: "2026-09-01T00:00:00Z" },
+      { environment: null, updatedAt: "2026-09-05T00:00:00Z" },
+      { environment: { environmentId: "env-a", label: "New" }, updatedAt: "2026-09-03T00:00:00Z" },
+      { environment: { environmentId: "env-b" }, updatedAt: "2026-09-02T00:00:00Z" },
+    ]);
+    assert.deepStrictEqual(summary, [
+      {
+        environmentId: "env-a",
+        label: "New",
+        threadCount: 2,
+        latestThreadAt: "2026-09-03T00:00:00Z",
+      },
+      { environmentId: "env-b", threadCount: 1, latestThreadAt: "2026-09-02T00:00:00Z" },
+    ]);
+  });
 });

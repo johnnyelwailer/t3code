@@ -26,12 +26,9 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
-import * as Stream from "effect/Stream";
 import { afterAll } from "vite-plus/test";
 
 import { ServerConfig } from "./config.ts";
-import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import { WorkflowSignalStoreLive } from "./persistence/Layers/WorkflowSignalStore.ts";
 import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStore.ts";
@@ -52,6 +49,10 @@ import {
   T3TeamWorkflowEngineRegistryLive,
 } from "./t3team-workflowEngineRegistry.ts";
 import {
+  makeFakeWorkflowHost,
+  makeFakeWorkflowHostLayer,
+} from "./t3team-workflowHostFake.fixtures.ts";
+import {
   T3TeamWorkflowScheduler,
   T3TeamWorkflowSchedulerLive,
 } from "./t3team-workflowScheduler.ts";
@@ -64,18 +65,9 @@ const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "
 const threadId = ThreadId.make("resume-tool-thread");
 const nowIso = (): string => "2026-07-20T00:00:00.000Z";
 
-const stubEngine: OrchestrationEngineShape = {
-  readEvents: () => Stream.empty,
-  readThreadEvents: () => Stream.empty,
-  getThreadReplayStats: () => Effect.die("unused"),
-  dispatch: () => Effect.succeed({ sequence: 0 }),
-  streamDomainEvents: Stream.never,
-  subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
-  // Required by OrchestrationEngineShape since main's sidebar/turn work; this stub never
-  // dispatches, so the latest sequence is simply 0.
-  latestSequence: Effect.succeed(0),
-};
-const OrchestrationEngineTestLive = Layer.succeed(OrchestrationEngineService, stubEngine);
+// The resume path talks to orchestration only through the workflow host; a recording fake
+// stands in for it (the handlers take it directly; the scheduler gate needs no host).
+const fakeHost = makeFakeWorkflowHostLayer();
 
 const WorkflowEngineDurabilityTestLive = T3TeamWorkflowSchedulerLive.pipe(
   Layer.provideMerge(
@@ -90,7 +82,7 @@ const WorkflowEngineDurabilityTestLive = T3TeamWorkflowSchedulerLive.pipe(
 
 const TestLayer = Layer.mergeAll(
   WorkflowEngineDurabilityTestLive,
-  OrchestrationEngineTestLive,
+  fakeHost.layer,
   WorkflowSignalStoreLive.pipe(Layer.provide(SqlitePersistenceMemory)),
   ServerConfig.layerTest(cwd, { prefix: "t3-resume-tool-test-" }),
 ).pipe(Layer.provideMerge(NodeServices.layer));
@@ -105,7 +97,7 @@ const makeHandlers = Effect.gen(function* () {
     registry: yield* T3TeamWorkflowEngineRegistry,
     journalStore: yield* WorkflowJournalStore,
     rearmScheduler: () => scheduler.rearm(),
-    dispatch: () => Promise.resolve(),
+    host: fakeHost.host,
     loadThreadProject: () => Effect.succeed({ project: { workspaceRoot: cwd } }),
     signalStore: yield* WorkflowSignalStore,
   };
@@ -327,7 +319,7 @@ it.live(
           runtimeMode: "full-access",
           interactionMode: "default",
           registry: throwaway,
-          dispatch: () => Promise.resolve(),
+          host: makeFakeWorkflowHost().host,
           newId: () => `id-${(seq += 1)}`,
           nowIso,
           store,
@@ -433,7 +425,7 @@ it.live("failed on invalid inputs + corrected args: the SAME run re-drives and c
         runtimeMode: "full-access",
         interactionMode: "default",
         registry: throwaway,
-        dispatch: () => Promise.resolve(),
+        host: makeFakeWorkflowHost().host,
         newId: () => `inputs-${(seq += 1)}`,
         nowIso,
         store,

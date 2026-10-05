@@ -71,8 +71,6 @@ const hintForStatus = (row: WorkflowRun): string => {
         : "Sleeping on a timer; the scheduler wakes it automatically.";
     case "watching":
       return "Parked waiting on a watched signal event; it resumes automatically when the event is delivered.";
-    case "authoring":
-      return "The orchestration is still being written; it has not started. Wait for it, or replace it.";
     case "queued":
       return "Queued for engine capacity; it starts automatically once a slot frees up.";
     case "running":

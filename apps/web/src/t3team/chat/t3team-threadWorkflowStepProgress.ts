@@ -10,7 +10,7 @@
  *   • the run-level terminal activity (stepId `run:<runId>`) is split out as the
  *     overall run status, not a step row.
  */
-import type { OrchestrationThreadActivity } from "@t3tools/contracts";
+import type { T3TeamThreadActivityRecord } from "~/t3team/chat/t3team-threadActivityRecord";
 import {
   isProjectRecipeWorkflowStepActivityPayload,
   PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP,
@@ -76,7 +76,7 @@ interface MutableRunProgress {
 
 /** Derive per-run live step progress from a thread's activities. */
 export function deriveT3TeamWorkflowStepRuns(
-  activities: ReadonlyArray<OrchestrationThreadActivity>,
+  activities: ReadonlyArray<T3TeamThreadActivityRecord>,
 ): ReadonlyMap<string, T3TeamWorkflowRunProgress> {
   const runs = new Map<string, MutableRunProgress>();
 

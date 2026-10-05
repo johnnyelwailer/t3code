@@ -3,7 +3,7 @@
  * function: derive the DESIRED live source set from the journaled registrations, start what is
  * missing, stop what is orphaned. Split from the Effect Live layer (in
  * t3team-workflowSignalReconciler.ts) so the reconcile + delivery-trust-boundary logic stays
- * testable without services or timers.
+ * testable without services or timers (the Live layer runs `sweep` on the server's `Scheduler`).
  *
  * Nobody in a body calls start/stop: a suspended workflow is not running, so the live set
  * cannot be commanded. It is derived — at boot, whenever a registration appears or disappears
@@ -41,7 +41,6 @@ import {
 import type { WorkflowSignalDeliveryShape } from "./t3team-workflowSignalDelivery.ts";
 import type { WorkflowSignalSourceCatalog } from "./t3team-workflowSignalCatalog.ts";
 import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
-import { startSignalSweep } from "./t3team-workflowSignalSweepTimer.ts";
 
 /** The delivery trust boundary per source name: only the declared signals may be emitted. */
 const EMITS_BY_SOURCE: Readonly<Record<string, ReadonlySet<string>>> = Object.fromEntries(
@@ -62,7 +61,6 @@ const EMITS_BY_SOURCE: Readonly<Record<string, ReadonlySet<string>>> = Object.fr
 export type ReconcilerCore = {
   readonly reconcile: () => Promise<void>;
   readonly sweep: () => Promise<void>;
-  readonly stop: () => void;
   readonly stopAll: () => Promise<void>;
 };
 
@@ -100,13 +98,10 @@ export function makeReconcilerCore(input: {
   readonly catalog: WorkflowSignalSourceCatalog;
   readonly delivery: WorkflowSignalDeliveryShape;
   readonly store: WorkflowSignalStoreShape;
-  readonly sweepMs: number;
   /** The durable inbox GC cutoff (ISO): entries older than it are purged by the sweep. */
   readonly inboxCutoffIso: () => string;
   readonly nowIso: () => string;
   readonly log: (message: string, fields?: unknown) => Effect.Effect<void>;
-  /** Tests run with the timer off; the Live layer keeps the periodic sweep on. */
-  readonly startTimer?: boolean;
 }): ReconcilerCore {
   const live = new Map<string, SignalSourceInstance>();
   const starting = new Set<string>();
@@ -190,17 +185,7 @@ export function makeReconcilerCore(input: {
     );
   };
 
-  let sweepTimer: ReturnType<typeof startSignalSweep> | undefined;
-  if (input.startTimer !== false) {
-    sweepTimer = startSignalSweep(sweep, input.sweepMs);
-  }
-  const stop = (): void => {
-    sweepTimer?.stop();
-    sweepTimer = undefined;
-  };
-
   const stopAll = async (): Promise<void> => {
-    stop();
     for (const handle of live.values()) {
       try {
         await handle.stop?.();
@@ -211,5 +196,5 @@ export function makeReconcilerCore(input: {
     live.clear();
   };
 
-  return { reconcile, sweep, stop, stopAll };
+  return { reconcile, sweep, stopAll };
 }

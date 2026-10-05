@@ -30,8 +30,8 @@ import "./t3team-DotColorVariantsCD.css";
  * done · error · base (no state stamped — the resting dot).
  */
 
-/** The full dot vocabulary: the five live states + the two roster result
- *  states (t3team-agentsPanelDots.logic) + the unstamped base dot. */
+/** The full dot vocabulary: the live states + the roster result states
+ *  (settled / done / error) + the unstamped base dot. */
 const STATES: readonly (string | null)[] = [
   "thinking",
   "writing",

@@ -1,8 +1,6 @@
 import {
-  CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
-  EventId,
   ProviderInstanceId,
   ThreadId,
 } from "@t3tools/contracts";
@@ -22,7 +20,6 @@ import {
   readJsonBody,
   T3TeamAtlassianError,
 } from "./t3team-atlassian-http.ts";
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { toT3TeamError } from "./t3team-project-repository-utils.ts";
@@ -35,8 +32,8 @@ import {
   isRuntimeMode,
   loadThreadProjectContext,
 } from "./t3team-thread-recipe-workflow-routes-shared.ts";
-import { nowIso } from "./t3team-thread-recipe-workflow-routes-resolve.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import { T3TeamWorkflowHost, toWorkflowHostPort } from "./t3team-workflowHost.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
 import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
@@ -56,7 +53,7 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
   "POST",
   "/api/t3team/thread/recipe-workflow/launch",
   Effect.gen(function* () {
-    const orchestration = yield* OrchestrationEngineService;
+    const host = toWorkflowHostPort(yield* T3TeamWorkflowHost);
     const registry = yield* T3TeamWorkflowEngineRegistry;
     const runRepository = yield* WorkflowRunRepository;
     const journalStore = yield* WorkflowJournalStore;
@@ -120,9 +117,6 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
     );
     const { project, thread } = yield* loadThreadProjectContext(threadId);
 
-    const dispatch = (command: Parameters<typeof orchestration.dispatch>[0]): Promise<void> =>
-      Effect.runPromise(orchestration.dispatch(command)).then(() => undefined);
-
     const runId = t3teamRandomUUID();
     const args = input.launch.parameters ?? {};
 
@@ -131,21 +125,15 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
     // kickoffWorkflow and no launch activity yet; without this stamp the override never disarms,
     // so the very first reply a user types to answer the workflow's `askUser` re-launches the
     // recipe instead of resolving the pending ask (and the initial launch can double-fire).
+    // On V2 the stamp is a keyed thread artifact (the host's activity), not a V1 activity.
     yield* Effect.promise(() =>
-      dispatch({
-        type: "thread.activity.append",
-        commandId: CommandId.make(`t3team-recipe-launch:${runId}`),
-        threadId,
-        activity: {
-          id: EventId.make(`t3team-recipe-launch:${runId}`),
-          tone: "info",
-          kind: PROJECT_RECIPE_ACTIVITY_KIND_LAUNCH,
-          summary: "Recipe started",
-          payload: { workflowRunId: runId },
-          turnId: null,
-          createdAt: nowIso(),
-        },
-        createdAt: nowIso(),
+      host.upsertActivity({
+        threadId: threadIdInput,
+        id: `t3team-recipe-launch:${runId}`,
+        kind: PROJECT_RECIPE_ACTIVITY_KIND_LAUNCH,
+        tone: "info",
+        summary: "Recipe started",
+        payload: { workflowRunId: runId },
       }),
     );
 
@@ -193,7 +181,7 @@ export const t3teamThreadRecipeWorkflowLaunchRouteLayer = HttpRouter.add(
         runRepository,
         journalStore,
         rearmScheduler: () => scheduler.rearm(),
-        dispatch,
+        host,
         fileSystem,
         ...(signalStore === undefined
           ? {}

@@ -1,18 +1,21 @@
 import { describe, expect, it } from "vite-plus/test";
 
+import { MessageId, RunId } from "@t3tools/contracts";
+
 import {
-  classifyTransientTurnFailure,
-  createTransientTurnRetryTracker,
   MAX_SESSION_TRANSIENT_RETRIES,
-  readWatchdogStallWarning,
   transientRetryExhaustedText,
   transientRetryInFlightText,
   transientTurnRetryBackoffMs,
   transientTurnRetryDelayMs,
   transientTurnReasonText,
   truncateStopReason,
-  watchdogStallReason,
-} from "./t3team-threadTransientTurnRetry.ts";
+} from "./t3team-threadTransientTurnRetryPolicy.ts";
+import {
+  planTransientRetry,
+  priorRetryAttempts,
+  transientRetryMessageId,
+} from "./t3team-threadTransientTurnRetryPlan.ts";
 import { retryDirectiveSeconds } from "./provider/Layers/t3team-claude-gateway-retry.ts";
 
 describe("transientTurnRetryDelayMs", () => {
@@ -83,13 +86,12 @@ describe("transientTurnRetryBackoffMs", () => {
 
 describe("reason text helpers", () => {
   it("formats the in-flight and exhausted stop reasons", () => {
-    expect(transientRetryInFlightText(1, "Provider stream stalled (no activity for 600s)")).toBe(
-      `Retrying (1/${MAX_SESSION_TRANSIENT_RETRIES}) — Provider stream stalled (no activity for 600s)`,
+    expect(transientRetryInFlightText(1, "Provider stream stalled", 15_000)).toBe(
+      `Retrying (1/${MAX_SESSION_TRANSIENT_RETRIES}) — Provider stream stalled, next attempt in ~15s`,
     );
     expect(transientRetryExhaustedText("423 GPU reservation")).toBe(
       `423 GPU reservation — automatic retries exhausted (${MAX_SESSION_TRANSIENT_RETRIES} attempts)`,
     );
-    expect(watchdogStallReason(600)).toBe("Provider stream stalled (no activity for 600s)");
   });
 
   it("truncates long provider reasons and flattens whitespace", () => {
@@ -100,437 +102,65 @@ describe("reason text helpers", () => {
   });
 });
 
-describe("readWatchdogStallWarning", () => {
-  it("reads the host watchdog detail and ignores everything else", () => {
+const run = (id: string, ordinal: number, userMessageId: string) => ({
+  id: RunId.make(id),
+  ordinal,
+  userMessageId: MessageId.make(userMessageId),
+});
+
+describe("priorRetryAttempts (durable episode count)", () => {
+  it("counts the consecutive retry runs that led to the failed run", () => {
+    const runs = [
+      run("r1", 1, "user-1"),
+      run("r2", 2, transientRetryMessageId(RunId.make("r1"))),
+      run("r3", 3, transientRetryMessageId(RunId.make("r2"))),
+    ];
+    expect(priorRetryAttempts(runs, RunId.make("r1"))).toBe(0);
+    expect(priorRetryAttempts(runs, RunId.make("r3"))).toBe(2);
+  });
+
+  it("restarts the count after a user message breaks the chain", () => {
+    const runs = [
+      run("r1", 1, "user-1"),
+      run("r2", 2, transientRetryMessageId(RunId.make("r1"))),
+      run("r3", 3, "user-2"),
+      run("r4", 4, transientRetryMessageId(RunId.make("r3"))),
+    ];
+    expect(priorRetryAttempts(runs, RunId.make("r4"))).toBe(1);
+    expect(priorRetryAttempts(runs, RunId.make("unknown"))).toBe(0);
+  });
+});
+
+describe("planTransientRetry", () => {
+  const failure = { message: "HTTP 503 service unavailable", directiveSeconds: null };
+  const delayMs = (attempt: number) => attempt * 1_000;
+
+  it("schedules the next attempt with the ladder delay and an in-flight note", () => {
     expect(
-      readWatchdogStallWarning({ detail: { code: "turn.inactivity", inactivitySeconds: 600 } }),
+      planTransientRetry({
+        runs: [run("r1", 1, "u")],
+        failedRunId: RunId.make("r1"),
+        failure,
+        delayMs,
+      }),
     ).toEqual({
-      inactivitySeconds: 600,
-    });
-    expect(
-      readWatchdogStallWarning({ detail: { code: "provider.gateway_retry", attempt: 1 } }),
-    ).toBeNull();
-    expect(readWatchdogStallWarning({})).toBeNull();
-    expect(
-      readWatchdogStallWarning({ detail: { code: "turn.inactivity", inactivitySeconds: -5 } }),
-    ).toBeNull();
-  });
-});
-
-describe("readWatchdogStallWarning — self-heal notices", () => {
-  it("ignores self-heal warnings while retaining legacy hard-interrupt notices", () => {
-    for (const selfHealAttempt of [1, 2, undefined]) {
-      expect(
-        readWatchdogStallWarning({
-          detail: {
-            code: "turn.inactivity",
-            inactivitySeconds: 600,
-            selfHealAttempt,
-            maxSelfHealAttempts: 2,
-          },
-        }),
-      ).toBeNull();
-    }
-    expect(
-      readWatchdogStallWarning({
-        detail: {
-          code: "turn.inactivity",
-          inactivitySeconds: 600,
-        },
-      }),
-    ).toEqual({ inactivitySeconds: 600 });
-  });
-
-  it("accepts exhausted self-heal warnings and validates their inactivity budget", () => {
-    expect(
-      readWatchdogStallWarning({
-        detail: {
-          code: "turn.inactivity.exhausted",
-          inactivitySeconds: 600,
-          selfHealAttempts: 2,
-        },
-      }),
-    ).toEqual({ inactivitySeconds: 600 });
-    for (const inactivitySeconds of [-1, 0, NaN, undefined]) {
-      expect(
-        readWatchdogStallWarning({
-          detail: {
-            code: "turn.inactivity.exhausted",
-            inactivitySeconds,
-            selfHealAttempts: 2,
-          },
-        }),
-      ).toBeNull();
-    }
-  });
-});
-
-describe("classifyTransientTurnFailure", () => {
-  it("leaves a structured usage-limit failure to the usage watcher", () => {
-    expect(
-      classifyTransientTurnFailure({
-        state: "failed",
-        errorMessage: 'Request failed with status 429: {"type":"rate_limit_error"}',
-        failureKind: "usage_limit",
-      }),
-    ).toBeNull();
-  });
-
-  it("classifies the observed 423 GPU reservation text transient", () => {
-    const result = classifyTransientTurnFailure({
-      state: "failed",
-      errorMessage: "423: Reservation owner is currently using the GPU; retry shortly",
-    });
-    expect(result?.reason).toContain("423");
-  });
-
-  it("classifies 429/5xx and retry directives transient", () => {
-    expect(
-      classifyTransientTurnFailure({
-        state: "failed",
-        errorMessage: 'Request failed with status 429: {"type":"rate_limit_error"}',
-      })?.reason,
-    ).toContain("429");
-    expect(
-      classifyTransientTurnFailure({
-        state: "failed",
-        errorMessage: "503 service unavailable",
-      })?.reason,
-    ).toContain("503");
-  });
-
-  it("never classifies auth/permanent errors transient", () => {
-    expect(
-      classifyTransientTurnFailure({ state: "failed", errorMessage: "401: invalid API key" }),
-    ).toBeNull();
-    expect(
-      classifyTransientTurnFailure({ state: "failed", errorMessage: "Max turns reached" }),
-    ).toBeNull();
-    expect(classifyTransientTurnFailure({ state: "completed", errorMessage: "429" })).toBeNull();
-    // A line-number mention of 423 in an ordinary error is not a capacity code.
-    expect(
-      classifyTransientTurnFailure({
-        state: "failed",
-        errorMessage: "SyntaxError at /app/src/x.ts:423",
-      }),
-    ).toBeNull();
-  });
-});
-
-describe("createTransientTurnRetryTracker — retry policy", () => {
-  const stallWarning = {
-    type: "runtime.warning",
-    payload: {
-      message: "Turn stalled",
-      detail: { code: "turn.inactivity", inactivitySeconds: 600 },
-    },
-  } as const;
-
-  it("does not retry an unrelated abort after a self-heal notice and recovery", () => {
-    const tracker = createTransientTurnRetryTracker();
-    tracker.onTurnStarted("thread-1");
-    tracker.onStallWarning("thread-1", "turn-1", {
-      detail: {
-        code: "turn.inactivity",
-        inactivitySeconds: 600,
-        selfHealAttempt: 1,
-        maxSelfHealAttempts: 2,
-      },
-    });
-    expect(tracker.state.get("thread-1")?.stall).toBeNull();
-    const decision = tracker.onTurnTerminal("thread-1", "turn-1", {
-      type: "turn.aborted",
-      payload: { reason: "Provider process exited unexpectedly" },
-    });
-    expect(decision).toEqual({
-      kind: "persist-reason",
-      reason: "Provider process exited unexpectedly",
-    });
-    expect(tracker.state.get("thread-1")?.attempts).toBe(0);
-  });
-
-  it("retries a hard watchdog abort after an exhausted self-heal notice", () => {
-    const tracker = createTransientTurnRetryTracker();
-    tracker.onTurnStarted("thread-1");
-    tracker.onStallWarning("thread-1", "turn-1", {
-      detail: {
-        code: "turn.inactivity.exhausted",
-        inactivitySeconds: 600,
-        selfHealAttempts: 2,
-      },
-    });
-    const decision = tracker.onTurnTerminal("thread-1", "turn-1", {
-      type: "turn.aborted",
-      payload: { reason: "interrupted" },
-    });
-    expect(decision).toMatchObject({
       kind: "retry",
       attempt: 1,
-      reason: "Provider stream stalled (no activity for 600s)",
+      delayMs: 1_000,
+      note: `Retrying (1/${MAX_SESSION_TRANSIENT_RETRIES}) — HTTP 503 service unavailable, next attempt in ~1s`,
     });
-    expect(tracker.state.get("thread-1")?.stall).toBeNull();
   });
 
-  it("retries a watchdog stall up to the bound, then reports exhaustion", () => {
-    const tracker = createTransientTurnRetryTracker();
-    const threadId = "thread-1";
-
-    tracker.onStallWarning(threadId, "turn-1", stallWarning.payload);
-    const d1 = tracker.onTurnTerminal(threadId, "turn-1", {
-      type: "turn.aborted",
-      payload: { reason: "This operation was aborted" },
-    });
-    expect(d1).toMatchObject({
-      kind: "retry",
-      attempt: 1,
-      reason: "Provider stream stalled (no activity for 600s)",
-      delayMs: 15_000,
-    });
-    expect((d1 as { inFlightText?: string }).inFlightText).toContain("Retrying (1/");
-    expect((d1 as { inFlightText?: string }).inFlightText).not.toContain("next attempt in");
-
-    tracker.onTurnStarted(threadId); // the auto-retry turn starts
-    tracker.onStallWarning(threadId, "turn-2", stallWarning.payload);
-    const d2 = tracker.onTurnTerminal(threadId, "turn-2", {
-      type: "turn.completed",
-      payload: { state: "interrupted", stopReason: "This operation was aborted" },
-    });
-    expect(d2).toMatchObject({ kind: "retry", attempt: 2 });
-
-    tracker.onTurnStarted(threadId);
-    tracker.onStallWarning(threadId, "turn-3", stallWarning.payload);
-    const d3 = tracker.onTurnTerminal(threadId, "turn-3", {
-      type: "turn.aborted",
-      payload: { reason: "This operation was aborted" },
-    });
-    expect(d3).toMatchObject({ kind: "retry", attempt: 3 });
-
-    tracker.onTurnStarted(threadId);
-    tracker.onStallWarning(threadId, "turn-4", stallWarning.payload);
-    const d4 = tracker.onTurnTerminal(threadId, "turn-4", {
-      type: "turn.aborted",
-      payload: { reason: "This operation was aborted" },
-    });
-    expect(d4).toMatchObject({
+  it("reports exhaustion once the budget is spent", () => {
+    const runs = [
+      run("r1", 1, "u"),
+      run("r2", 2, transientRetryMessageId(RunId.make("r1"))),
+      run("r3", 3, transientRetryMessageId(RunId.make("r2"))),
+      run("r4", 4, transientRetryMessageId(RunId.make("r3"))),
+    ];
+    expect(planTransientRetry({ runs, failedRunId: RunId.make("r4"), failure, delayMs })).toEqual({
       kind: "exhausted",
-      exhaustedText:
-        "Provider stream stalled (no activity for 600s) — automatic retries exhausted (3 attempts)",
+      note: transientRetryExhaustedText("HTTP 503 service unavailable"),
     });
-  });
-
-  it("retries a transient gateway turn failure (423) with the provider's text as reason", () => {
-    const tracker = createTransientTurnRetryTracker();
-    const threadId = "thread-1";
-    const decision = tracker.onTurnTerminal(threadId, "turn-1", {
-      type: "turn.completed",
-      payload: {
-        state: "failed",
-        errorMessage: "423: Reservation owner is currently using the GPU; retry shortly",
-      },
-    });
-    expect(decision).toMatchObject({ kind: "retry", attempt: 1, delayMs: 15_000 });
-    expect((decision as { inFlightText?: string }).inFlightText).toContain("423");
-  });
-
-  it("schedules a reservation retry at the directive expiry and advertises the wait", () => {
-    const tracker = createTransientTurnRetryTracker({
-      delayMs: (attempt, _reason, directiveSeconds) =>
-        transientTurnRetryDelayMs(attempt, directiveSeconds, undefined, () => 0),
-    });
-    const threadId = "thread-res";
-    const decision = tracker.onTurnTerminal(threadId, undefined, {
-      type: "turn.completed",
-      payload: {
-        state: "failed",
-        errorMessage:
-          '423: {"type":"reservation_error","code":"gpu_reserved","retry_after_seconds":12} Reservation owner is currently using the GPU; retry shortly',
-      },
-    });
-    // 12s directive + 5% cushion; reason summarized; wait advertised.
-    expect(decision).toMatchObject({
-      kind: "retry",
-      attempt: 1,
-      reason: "423 — GPU reserved by current owner",
-      delayMs: 12_600,
-    });
-    expect((decision as { inFlightText?: string }).inFlightText).toBe(
-      "Retrying (1/3) — 423 — GPU reserved by current owner, next attempt in ~13s",
-    );
-  });
-
-  it("does NOT retry a non-transient failure (auth) and clears the episode", () => {
-    const tracker = createTransientTurnRetryTracker();
-    const threadId = "thread-1";
-    const decision = tracker.onTurnTerminal(threadId, "turn-1", {
-      type: "turn.completed",
-      payload: { state: "failed", errorMessage: "401: invalid API key" },
-    });
-    expect(decision).toBeUndefined();
-    // Episode cleared: a later stall still gets the full budget.
-    tracker.onTurnStarted(threadId);
-    tracker.onStallWarning(threadId, "turn-2", stallWarning.payload);
-    const d = tracker.onTurnTerminal(threadId, "turn-2", {
-      type: "turn.aborted",
-      payload: { reason: "aborted" },
-    });
-    expect(d).toMatchObject({ kind: "retry", attempt: 1 });
-  });
-
-  it("succeeding turn ends the episode and resets the budget", () => {
-    const tracker = createTransientTurnRetryTracker();
-    const threadId = "thread-1";
-    tracker.onStallWarning(threadId, "turn-1", stallWarning.payload);
-    const d1 = tracker.onTurnTerminal(threadId, "turn-1", {
-      type: "turn.aborted",
-      payload: { reason: "aborted" },
-    });
-    expect(d1).toMatchObject({ kind: "retry", attempt: 1 });
-    tracker.onTurnStarted(threadId);
-    tracker.onTurnTerminal(threadId, "turn-2", {
-      type: "turn.completed",
-      payload: { state: "completed" },
-    });
-    tracker.onStallWarning(threadId, "turn-3", stallWarning.payload);
-    const d2 = tracker.onTurnTerminal(threadId, "turn-3", {
-      type: "turn.aborted",
-      payload: { reason: "aborted" },
-    });
-    expect(d2).toMatchObject({ kind: "retry", attempt: 1 });
-  });
-
-  it("keeps the scheduled retry when session.exited follows a transient death", () => {
-    // Live observed sequence: runtime.warning(stall) → turn.completed
-    // (state interrupted) → session.exited, milliseconds apart. The session
-    // exit is part of the SAME death; the re-issue starts a fresh session,
-    // so the episode bookkeeping must survive it (otherwise the re-validate
-    // guard sees attempts reset and bails, dead-ending the thread).
-    const tracker = createTransientTurnRetryTracker();
-    const threadId = "thread-1";
-    tracker.onTurnStarted(threadId);
-    tracker.onStallWarning(threadId, "turn-1", stallWarning.payload);
-    const decision = tracker.onTurnTerminal(threadId, "turn-1", {
-      type: "turn.completed",
-      payload: { state: "interrupted", stopReason: "Session stopped." },
-    });
-    expect(decision).toMatchObject({ kind: "retry", attempt: 1 });
-    tracker.onTurnTerminal(threadId, "turn-1", { type: "session.exited", payload: {} });
-    expect(tracker.state.get(threadId)?.attempts).toBe(1);
-    expect(tracker.state.get(threadId)?.lastTerminal).toBe("transient");
-  });
-
-  it("clears the episode on session.exited after a non-transient death", () => {
-    const tracker = createTransientTurnRetryTracker();
-    const threadId = "thread-1";
-    tracker.onTurnStarted(threadId);
-    tracker.onTurnTerminal(threadId, "turn-1", {
-      type: "turn.completed",
-      payload: { state: "failed", errorMessage: "401: invalid x-api-key" },
-    });
-    tracker.onTurnTerminal(threadId, "turn-1", { type: "session.exited", payload: {} });
-    expect(tracker.state.get(threadId)).toBeUndefined();
-  });
-
-  it("retries a watchdog stall that settles as turn.completed state 'interrupted'", () => {
-    // Some drivers (observed on claudeAgent) end a watchdog-interrupted turn
-    // with a turn.completed (state "interrupted"), not a turn.aborted (the
-    // Pi driver emits turn.aborted) — the stall marker must apply to both
-    // terminal shapes.
-    const tracker = createTransientTurnRetryTracker();
-    const threadId = "thread-1";
-    tracker.onStallWarning(threadId, "turn-1", stallWarning.payload);
-    const decision = tracker.onTurnTerminal(threadId, "turn-1", {
-      type: "turn.completed",
-      payload: { state: "interrupted", stopReason: "This operation was aborted" },
-    });
-    expect(decision).toMatchObject({
-      kind: "retry",
-      attempt: 1,
-      reason: "Provider stream stalled (no activity for 600s)",
-    });
-  });
-
-  it("persists a reason for provider-side aborts without retrying", () => {
-    const tracker = createTransientTurnRetryTracker();
-    const threadId = "thread-1";
-    const decision = tracker.onTurnTerminal(threadId, "turn-1", {
-      type: "turn.aborted",
-      payload: { reason: "Provider process exited unexpectedly" },
-    });
-    expect(decision).toEqual({
-      kind: "persist-reason",
-      reason: "Provider process exited unexpectedly",
-    });
-  });
-});
-
-describe("createTransientTurnRetryTracker — user-stop protection (no-resurrect)", () => {
-  it("never retries a user-stopped turn, even if the watchdog marker raced in", () => {
-    const tracker = createTransientTurnRetryTracker();
-    const threadId = "thread-1";
-    // Watchdog fires in the same window the user hits stop (marker already armed).
-    tracker.onStallWarning(threadId, "turn-1", {
-      detail: { code: "turn.inactivity", inactivitySeconds: 600 },
-    });
-    tracker.onInterruptRequested(threadId);
-    const decision = tracker.onTurnTerminal(threadId, "turn-1", {
-      type: "turn.aborted",
-      payload: { reason: "interrupted" },
-    });
-    expect(decision).toBeUndefined();
-    // The stall marker was consumed: nothing lingers for the next turn.
-    expect(tracker.state.get(threadId)?.stall).toBeNull();
-  });
-
-  it("does not resurrect a cascaded stop", () => {
-    const tracker = createTransientTurnRetryTracker();
-    const threadId = "child-thread";
-    tracker.onInterruptRequested(threadId);
-    const decision = tracker.onTurnTerminal(threadId, "turn-9", {
-      type: "turn.aborted",
-      payload: { reason: "interrupted by parent" },
-    });
-    expect(decision).toBeUndefined();
-  });
-
-  it("does not retry an interrupted result after a user stop", () => {
-    const tracker = createTransientTurnRetryTracker();
-    const threadId = "thread-1";
-    tracker.onInterruptRequested(threadId);
-    const decision = tracker.onTurnTerminal(threadId, "turn-1", {
-      type: "turn.completed",
-      payload: { state: "interrupted", stopReason: "interrupted" },
-    });
-    expect(decision).toBeUndefined();
-  });
-
-  it("a new user message resets the episode", () => {
-    const tracker = createTransientTurnRetryTracker();
-    const threadId = "thread-1";
-    tracker.onStallWarning(threadId, "turn-1", {
-      detail: { code: "turn.inactivity", inactivitySeconds: 600 },
-    });
-    tracker.onTurnTerminal(threadId, "turn-1", {
-      type: "turn.aborted",
-      payload: { reason: "aborted" },
-    });
-    tracker.onUserMessage(threadId);
-    tracker.onStallWarning(threadId, "turn-2", {
-      detail: { code: "turn.inactivity", inactivitySeconds: 600 },
-    });
-    const decision = tracker.onTurnTerminal(threadId, "turn-2", {
-      type: "turn.aborted",
-      payload: { reason: "aborted" },
-    });
-    expect(decision).toMatchObject({ kind: "retry", attempt: 1 });
-  });
-
-  it("session exit clears all bookkeeping", () => {
-    const tracker = createTransientTurnRetryTracker();
-    const threadId = "thread-1";
-    tracker.onStallWarning(threadId, "turn-1", {
-      detail: { code: "turn.inactivity", inactivitySeconds: 600 },
-    });
-    tracker.onTurnTerminal(threadId, "turn-1", { type: "session.exited", payload: {} });
-    expect(tracker.state.get(threadId)).toBeUndefined();
   });
 });

@@ -22,13 +22,6 @@ export type ChildThreadRelations = {
    * is expanded, instead of only knowing the count.
    */
   readonly childThreadsByParentId: ReadonlyMap<string, ReadonlyArray<ProjectThread>>;
-  /**
-   * Thread ids whose local state carries `waitingDeclared` — the DECLARED
-   * waiting fact (a registered `t3team_children op:wait` is still pending).
-   * Distinct from the DERIVED fact (a parent has live children): declared
-   * reads "Waiting", derived reads "Monitoring"; declared outranks derived.
-   */
-  readonly waitingDeclaredThreadIds: ReadonlySet<string>;
 };
 
 /**
@@ -46,36 +39,35 @@ export function buildChildThreadRelations(
   const tree = buildProjectSidebarThreadTree(threads);
   const childThreadIds = new Set<string>();
   const subRunCountsByParentId = new Map<string, SubRunCounts>();
-  const waitingDeclaredThreadIds = new Set<string>();
-  for (const thread of threads) {
-    if (thread.waitingDeclared === true) {
-      waitingDeclaredThreadIds.add(thread.id);
-    }
-  }
+  const childThreadsByParentId = new Map<string, ReadonlyArray<ProjectThread>>();
 
   for (const [parentId, children] of tree.childThreadsByParentId) {
     let running = 0;
+    const listed: ProjectThread[] = [];
     for (const child of children) {
+      // Every child stays out of the flat list; a finished ephemeral helper (fact
+      // `retention: "ephemeral"`: one-shot workflow children, repair helpers) also
+      // leaves the roster.
       childThreadIds.add(child.id);
+      if (child.retention === "ephemeral" && child.status !== "running") continue;
+      listed.push(child);
       if (child.status === "running") {
         running++;
       }
     }
-    subRunCountsByParentId.set(parentId, { total: children.length, running });
+    if (listed.length === 0) continue;
+    childThreadsByParentId.set(parentId, listed);
+    subRunCountsByParentId.set(parentId, { total: listed.length, running });
   }
 
-  return {
-    childThreadIds,
-    subRunCountsByParentId,
-    childThreadsByParentId: tree.childThreadsByParentId,
-    waitingDeclaredThreadIds,
-  };
+  return { childThreadIds, subRunCountsByParentId, childThreadsByParentId };
 }
 
 /**
  * Cheap content signature over the fields that `buildChildThreadRelations` AND
  * `buildAttributionByThreadId` read: id, parentThreadId, status, title,
- * lastMessageAt, ticketId, ticketDisplayId, waitingDeclared. NOT the array
+ * lastMessageAt, ticketId, ticketDisplayId — plus what the sub-run rows render from the
+ * cached children (settled fold, pending question, retention, activity label). NOT the array
  * identity of `threads` itself, which upstream re-creates on every
  * `useProjectStore()` update (including plain thread selection). Order-independent (sorted by id) so
  * re-fetching the same threads in a different order signs identically.
@@ -86,7 +78,7 @@ export function computeChildThreadRelationsSignature(
   return threads
     .map(
       (thread) =>
-        `${thread.id}:${thread.parentThreadId ?? ""}:${thread.status}:${thread.title}:${thread.lastMessageAt}:${thread.ticketId ?? ""}:${thread.ticketDisplayId ?? ""}:${thread.waitingDeclared === true ? 1 : 0}`,
+        `${thread.id}:${thread.parentThreadId ?? ""}:${thread.status}:${thread.title}:${thread.lastMessageAt}:${thread.ticketId ?? ""}:${thread.ticketDisplayId ?? ""}:${thread.settled === true}:${thread.pendingUserInput === true}:${thread.retention ?? ""}:${thread.activityLabel ?? ""}`,
     )
     .sort()
     .join("|");

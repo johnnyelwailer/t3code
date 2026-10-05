@@ -111,6 +111,9 @@
         "scripts/cli.ts",
         "scripts/evaluate-thread-titles.ts",
         "scripts/measure-pr-preview.ts",
+        "scripts/probe-claude-fork-local-rollback-replay.ts",
+        "scripts/update-test-shard-weights.ts",
+        "scripts/verify-background-live.ts",
         "src/provider/testFixtures/*.mjs",
         // One-off operator script, run by path (it imports its -run/-mapping/-layers siblings).
         "scripts/t3team-replay-task-records-to-plans.ts",
@@ -169,9 +172,10 @@
       },
     },
     "apps/mobile": {
-      // Expo loads plugins by string; Metro embeds the browser entry in the native WebView.
+      // Expo loads plugins and the fingerprint config by string; Metro embeds the browser entry in the native WebView.
       "entry": [
         "index.ts!",
+        "fingerprint.config.js",
         "plugins/*.cjs",
         "scripts/generate-device-stream.mts",
         "src/features/devices/device-stream.browser.ts!",

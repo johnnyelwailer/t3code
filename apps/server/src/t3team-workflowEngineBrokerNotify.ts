@@ -3,8 +3,13 @@
  *
  * Neither settles a resolver. `wait.until` parks the run out of band — it records the wake deadline
  * and its correlation so the scheduler can arm a timer and resolve it on fire, which is why there is
- * no orchestration command (a timer has no message). `thread.message` floats a message and returns.
- * Both swallow dispatch failures, unlike the ask verbs, so a lost notification cannot fail a run.
+ * no host call (a timer has no message). `thread.message` floats a message and returns.
+ * Both swallow host failures, unlike the ask verbs, so a lost notification cannot fail a run.
+ *
+ * An AGENT-directed message rides a queued turn: on orchestration V2 an agent reads only what a
+ * turn delivers, so a note posted beside the conversation would never reach it. The turn queues
+ * behind whatever runs on the thread and precedes the next `askAgent` there, so the agent reads
+ * the note before it answers. A USER-directed message is a run-less note (no turn).
  */
 import * as DateTime from "effect/DateTime";
 
@@ -13,19 +18,15 @@ import {
   TRUSTED_HTML_FRAGMENT,
   workflowWidgetAttachment,
 } from "./t3team-workflowEngineBrokerContext.ts";
-import {
-  messageUpsert,
-  type ThreadMessagePayload,
-  type WaitUntilPayload,
-} from "./t3team-workflowEngineBrokerTypes.ts";
+import type { ThreadMessagePayload, WaitUntilPayload } from "./t3team-workflowEngineBrokerTypes.ts";
 
 export async function handleBrokerNotifyVerb(core: BrokerCore, s: BrokerSend): Promise<void> {
   const { deps, enqueueOneWay, runPrimitive, step } = core;
   const { correlationId, kind, payload } = s;
   if (kind === "wait.until") {
     // The clock park (Epic 27): record the wake deadline + this `waitUntil` correlation so
-    // the scheduler can arm a timer and resolve it on fire. No orchestration command (a timer
-    // has no message) and no resolver settle — the run suspends out of band until the
+    // the scheduler can arm a timer and resolve it on fire. No host call (a timer has no
+    // message) and no resolver settle — the run suspends out of band until the
     // scheduler appends the resolved entry at the deadline.
     const p = payload as WaitUntilPayload;
     step(
@@ -39,8 +40,8 @@ export async function handleBrokerNotifyVerb(core: BrokerCore, s: BrokerSend): P
     });
     return;
   }
-  // thread.message — one-way; agent-directed messages read as a user turn-input, user-directed
-  // ones as a system (user-visible) note. No turn.start, no pending.
+  // thread.message — one-way; agent-directed messages ride a queued turn, user-directed ones are
+  // a system (user-visible) note. No pending ask either way.
   const p = payload as ThreadMessagePayload;
   if (p.widget !== undefined) {
     // Workflow semantic adapter: reuse the canonical widget parser/attachment factory rather
@@ -57,14 +58,18 @@ export async function handleBrokerNotifyVerb(core: BrokerCore, s: BrokerSend): P
     step(correlationId, kind, "completed", p.widget.title, p.threadId);
     await runPrimitive(() =>
       enqueueOneWay(() =>
-        deps.dispatch(
-          messageUpsert(deps, p.threadId, "system", "", {
+        deps.host.postMessage({
+          threadId: p.threadId,
+          messageId: `t3team-wf-msg:${correlationId}`,
+          role: "system",
+          text: "",
+          ext: {
             author: { kind: "system", workflowRunId: deps.runId },
             visibleToUser: true,
             visibleToAgent: false,
             attachments: [attachment],
-          }),
-        ),
+          },
+        }),
       ),
     );
     return;
@@ -78,54 +83,49 @@ export async function handleBrokerNotifyVerb(core: BrokerCore, s: BrokerSend): P
     step(correlationId, kind, "completed", "Workflow notification", p.threadId);
     await runPrimitive(() =>
       enqueueOneWay(() =>
-        deps.dispatch(
-          messageUpsert(deps, p.threadId, "system", "", {
+        deps.host.postMessage({
+          threadId: p.threadId,
+          messageId: `t3team-wf-msg:${correlationId}`,
+          role: "system",
+          text: "",
+          ext: {
             author: { kind: "system", workflowRunId: deps.runId },
             visibleToUser: true,
             visibleToAgent: false,
             attachments: [attachment],
-          }),
-        ),
+          },
+        }),
+      ),
+    );
+    return;
+  }
+  if (p.recipient === "agent") {
+    step(correlationId, kind, "completed", "Notified the agent", p.threadId);
+    await runPrimitive(() =>
+      enqueueOneWay(() =>
+        deps.host.startTurn({
+          threadId: p.threadId,
+          messageId: `t3team-wf-msg:${correlationId}`,
+          text: p.text,
+          author: { kind: "system", workflowRunId: deps.runId, stepId: correlationId },
+        }),
       ),
     );
     return;
   }
   // The notification itself is posted into the thread right below; repeating its clipped text
-  // as the step's label/detail only adds a truncated duplicate (GHE #417).
+  // as the step's label/detail only adds a truncated duplicate (GHE #417). The note is run-less:
+  // the person reads it; the agent learns the run's outcome from the run status tools.
   step(correlationId, kind, "completed", "Notified you", p.threadId);
   await runPrimitive(() =>
     enqueueOneWay(() =>
-      deps.dispatch(
-        messageUpsert(
-          deps,
-          p.threadId,
-          p.recipient === "agent" ? "user" : "system",
-          p.text,
-          p.recipient === "user"
-            ? {
-                author: { kind: "system", workflowRunId: deps.runId },
-                visibleToUser: true,
-                // Visible to the AGENT too, deliberately. `visibleToUser: true` with
-                // `visibleToAgent: false` puts the user and the agent in two different
-                // conversations, and this is the one message where that diverges hardest: it is
-                // the run's report. Observed 2026-08-29 — a delivery run posted its QA verdict
-                // here, the user then asked "can u summarize and tell me next step", and the
-                // agent answered that the pipeline was still running. The report was on screen
-                // and filtered out of its prompt (`describeAgentVisibleSystemMessage` drops
-                // system messages flagged false), so it had the completion line's verdict with
-                // none of the substance behind it and fell back to restating the launch plan.
-                //
-                // The cost is prompt weight when a workflow notifies often. That is the right
-                // trade: a chatty run makes the context longer, a hidden report makes the agent
-                // wrong. Brevity belongs to the author — see t3team-workflowReportContract.ts.
-                //
-                // The WIDGET branches above stay false on purpose: their payload is HTML the
-                // agent itself authored, so re-injecting it is cost without information.
-                visibleToAgent: true,
-              }
-            : undefined,
-        ),
-      ),
+      deps.host.postMessage({
+        threadId: p.threadId,
+        messageId: `t3team-wf-msg:${correlationId}`,
+        role: "system",
+        text: p.text,
+        ext: { author: { kind: "system", workflowRunId: deps.runId }, visibleToUser: true },
+      }),
     ),
   );
 }

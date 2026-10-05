@@ -15,6 +15,7 @@ import {
   WORK_ITEM_REWRITE_COMMENTS_PARAMETER,
   WORK_ITEM_REWRITE_INSTRUCTIONS_PARAMETER,
 } from "~/t3team/workitem/t3team-workItemRewriteWorkflowLaunch";
+import { createRecordingOrchestrationApi } from "~/t3team/backend/t3team-orchestrationApi.testSupport";
 
 const WORKSPACE_ROOT = "/tmp/project-alpha";
 const RECIPE_PATH = `${WORKSPACE_ROOT}/.t3team/recipes/describe-rewrite`;
@@ -42,10 +43,10 @@ const MODEL_SELECTION = { instanceId: "instance-1", model: "test-model" } as nev
 describe("launchStagedComposerActionOnThread", () => {
   it("launches the preselected workflow on the thread with both input channels", async () => {
     const launchRecipeWorkflow = vi.fn().mockResolvedValue({ ok: true });
-    const dispatchCommand = vi.fn();
+    const orchestration = createRecordingOrchestrationApi();
 
     const launched = await launchStagedComposerActionOnThread({
-      backend: { launchRecipeWorkflow, dispatchCommand } as unknown as BackendApi,
+      backend: { launchRecipeWorkflow, orchestration } as unknown as BackendApi,
       threadId: "thread-1",
       action: stagedRewrite(),
       composerText: "Keep it under 150 words.",
@@ -56,7 +57,7 @@ describe("launchStagedComposerActionOnThread", () => {
 
     expect(launched).toBe(true);
     // No turn: the run's own first step is the deterministic askUser.
-    expect(dispatchCommand).not.toHaveBeenCalled();
+    expect(orchestration.startThreadTurn).not.toHaveBeenCalled();
     expect(launchRecipeWorkflow).toHaveBeenCalledTimes(1);
 
     const request = launchRecipeWorkflow.mock.calls[0]?.[0] as {

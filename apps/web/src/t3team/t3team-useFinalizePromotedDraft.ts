@@ -2,7 +2,7 @@ import { useEffect } from "react";
 
 import { threadHasStarted } from "~/components/ChatView.logic";
 import { finalizePromotedDraftThreadByRef } from "~/composerDraftStore";
-import { useThread, useThreadRefs } from "~/state/entities";
+import { useThreadRefs, useThreadShell } from "~/state/entities";
 
 /**
  * Retires the draft record behind a thread once that thread really exists.
@@ -23,7 +23,7 @@ export function useFinalizePromotedDraft(threadId: string | null): void {
   const threadRef = threadId
     ? (threadRefs.find((candidate) => candidate.threadId === threadId) ?? null)
     : null;
-  const serverThread = useThread(threadRef);
+  const serverThread = useThreadShell(threadRef);
   const serverThreadStarted = threadHasStarted(serverThread);
 
   useEffect(() => {

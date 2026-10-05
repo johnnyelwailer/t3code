@@ -6,19 +6,17 @@
  * choreography, and run-level activity: the card and the tool can never disagree about what
  * "paused" or "stopped" means. Fails with a plain, agent-readable string; callers wrap it.
  */
-import { CommandId, ThreadId, type OrchestrationCommand } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
-import type { OrchestrationDispatchError } from "./orchestration/Errors.ts";
 import type {
   WorkflowRun,
   WorkflowRunRepositoryShape,
 } from "./persistence/Services/WorkflowRuns.ts";
 import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
-import { retireWorkflowAuthorThread } from "./t3team-workflowAuthorThreadCleanup.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 import type { InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
+import type { T3TeamWorkflowHostShape } from "./t3team-workflowHost.ts";
 import { NON_TERMINAL_STATUSES, reportStaleWrite } from "./t3team-workflowRunControlCas.ts";
 import { restorePausedRunContinuation } from "./t3team-workflowResumePausedTurn.ts";
 import {
@@ -72,9 +70,8 @@ export interface WorkflowRunControlDeps {
   readonly repo: WorkflowRunRepositoryShape;
   readonly registry: T3TeamWorkflowEngineRegistryShape;
   readonly rearmScheduler: () => Promise<void>;
-  readonly dispatch: (
-    command: OrchestrationCommand,
-  ) => Effect.Effect<unknown, OrchestrationDispatchError>;
+  /** The workflow host: child interrupts, the run banner, and a failed-run retry's launch. */
+  readonly host: T3TeamWorkflowHostShape;
   readonly nowIso: () => string;
   /**
    * Who is stopping. The card's Stop is the user's own click, stamped like the composer's Stop button
@@ -175,25 +172,10 @@ export const controlWorkflowRun = Effect.fn("controlWorkflowRun")(function* (
       .pipe(Effect.mapError(errorMessage));
     if (!affected) return yield* reportStaleWrite(repo, runId);
     for (const childThreadId of childThreads) {
-      yield* deps
-        .dispatch({
-          type: "thread.turn.interrupt",
-          commandId: CommandId.make(`t3team-wf-stop-child:${runId}:${childThreadId}`),
-          threadId: ThreadId.make(childThreadId),
-          t3teamStopOrigin: deps.stopOrigin,
-          createdAt: deps.nowIso(),
-        })
+      yield* deps.host
+        .interrupt({ threadId: childThreadId, reason: "Workflow stopped", origin: deps.stopOrigin })
         .pipe(Effect.mapError(errorMessage));
     }
-    // A stopped run's author has nothing left to write or repair.
-    yield* Effect.promise(() =>
-      retireWorkflowAuthorThread({
-        runId,
-        dispatch: (command) => Effect.runPromise(deps.dispatch(command)).then(() => undefined),
-        newId: () => `${runId}:stop:${deps.nowIso()}`,
-        nowIso: deps.nowIso,
-      }),
-    );
     yield* Effect.promise(() => deps.rearmScheduler());
     status = "cancelled";
   }
@@ -201,12 +183,11 @@ export const controlWorkflowRun = Effect.fn("controlWorkflowRun")(function* (
   // Run-level activity: what the card's banner reads ("Workflow paused" + when); the tool emits it exactly as the button.
   const phase = status === "cancelled" ? "cancelled" : status === "paused" ? "paused" : "started";
   yield* postWorkflowRunControlActivity({
-    dispatch: deps.dispatch,
+    host: deps.host,
     runId,
     threadId: input.threadId,
     projectId: run.projectId,
     phase,
-    nowIso: deps.nowIso,
   });
 
   return { status };

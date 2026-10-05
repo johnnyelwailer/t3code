@@ -14,9 +14,9 @@ import {
   EventId,
   MessageId,
   ThreadId,
-  type OrchestrationThreadActivity,
   type OrchestrationWorkflowRunStatus,
 } from "@t3tools/contracts";
+import type { T3TeamThreadActivityRecord } from "~/t3team/chat/t3team-threadActivityRecord";
 import {
   PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP,
   PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION,
@@ -83,7 +83,7 @@ function decisionMessage(id: string): ChatMessage {
     streaming: false,
     createdAt: "2026-06-09T00:00:00.000Z",
     updatedAt: "2026-06-09T00:00:00.000Z",
-    turnId: null,
+    runId: null,
     t3teamExt: {
       visibleToUser: true,
       status: "waiting-for-input",
@@ -146,22 +146,24 @@ function userReply(id: string, text: string): ChatMessage {
     streaming: false,
     createdAt: "2026-06-09T00:00:01.000Z",
     updatedAt: "2026-06-09T00:00:01.000Z",
-    turnId: null,
+    runId: null,
   };
 }
 
 async function renderTimeline(
   messages: ReadonlyArray<ChatMessage>,
   workflowRunStatus?: OrchestrationWorkflowRunStatus,
-  threadActivities?: ReadonlyArray<OrchestrationThreadActivity>,
+  threadActivities?: ReadonlyArray<T3TeamThreadActivityRecord>,
 ) {
   const { MessagesTimeline } = await import("~/components/chat/MessagesTimeline");
   return renderToStaticMarkup(
     <MessagesTimeline
       {...buildT3TeamMessagesTimelineTestProps()}
-      dispatchWorkflowDecision={async () => {}}
-      {...(workflowRunStatus ? { workflowRunStatus } : {})}
-      {...(threadActivities ? { threadActivities } : {})}
+      t3team={{
+        dispatchWorkflowDecision: async () => {},
+        ...(workflowRunStatus ? { workflowRunStatus } : {}),
+        ...(threadActivities ? { threadActivities } : {}),
+      }}
       timelineEntries={messages.map((message, index) => ({
         id: `timeline-${index}`,
         kind: "message" as const,
@@ -274,7 +276,7 @@ describe("workflow decision card in the timeline", () => {
   }, 10000);
 
   it("keeps an old stopped run's decision withdrawn after a newer run becomes current", async () => {
-    const stoppedRunActivity: OrchestrationThreadActivity = {
+    const stoppedRunActivity: T3TeamThreadActivityRecord = {
       id: EventId.make("activity-run-1-stopped"),
       tone: "info",
       kind: PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP,

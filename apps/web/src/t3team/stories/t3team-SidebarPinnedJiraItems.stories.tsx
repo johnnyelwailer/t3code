@@ -15,6 +15,7 @@ import type { T3TeamSidebarPinnedItem } from "~/t3team/t3team-sidebarPinningType
 import { useT3TeamPinnedSidebarStore } from "~/t3team/t3team-pinnedSidebarStore";
 import { useT3TeamSidebarNavPreferencesStore } from "~/t3team/t3team-sidebarNavPreferencesStore";
 import type { ProjectTicket } from "~/t3team/t3team-types";
+import { noopT3TeamOrchestrationApi } from "~/t3team/backend/t3team-orchestrationApiNoop";
 
 const project: ProjectShellProject = {
   id: "project-1",
@@ -48,7 +49,7 @@ const backend = {
   },
   connect: async () => {},
   disconnect: async () => {},
-  dispatchCommand: async () => {},
+  orchestration: noopT3TeamOrchestrationApi,
   listThreadPlacements: async () => [],
   syncThreadToolContext: async () => {},
   atlassian: {},

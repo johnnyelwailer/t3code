@@ -4,12 +4,7 @@
  * the run-level activity), scoped to the calling thread.
  */
 import { assert, it } from "@effect/vitest";
-import {
-  type OrchestrationCommand,
-  ProjectId,
-  ProviderInstanceId,
-  ThreadId,
-} from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -21,6 +16,7 @@ import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { makeWorkflowControlToolHandlers } from "./t3team-toolBrokerWorkflowControlTool.ts";
 import { buildRunningWorkflowRunRow } from "./t3team-workflowEngineDurability.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import { makeFakeWorkflowHostLayer } from "./t3team-workflowHostFake.fixtures.ts";
 import { controlWorkflowRun } from "./t3team-workflowRunControl.ts";
 import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
 import type { InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
@@ -73,11 +69,13 @@ repoLayer("t3team.orchestration.pause / stop", (it) => {
         correlationId: `${runId}:2`,
         kind: "thread.turn",
       });
-      const dispatched: OrchestrationCommand[] = [];
+      const fakeHost = makeFakeWorkflowHostLayer();
+      const host = fakeHost.service;
       const redriven: Array<{ threadId: string; correlationId: string }> = [];
       let rearmed = 0;
       const turnRedrive: InterruptedTurnRetry = {
         settleNoText: () => Effect.void,
+        releaseHeldRun: () => Effect.succeed(true),
         settleFailedTurn: () => Effect.void,
         processTurnRetry: (input) => {
           redriven.push(input);
@@ -91,10 +89,7 @@ repoLayer("t3team.orchestration.pause / stop", (it) => {
           rearmed += 1;
           return Promise.resolve();
         },
-        dispatch: (command: OrchestrationCommand) => {
-          dispatched.push(command);
-          return Effect.succeed({ sequence: dispatched.length });
-        },
+        host,
         turnRedrive,
       };
       const handlers = makeWorkflowControlToolHandlers(controlDeps);
@@ -102,7 +97,7 @@ repoLayer("t3team.orchestration.pause / stop", (it) => {
         repo,
         registry,
         handlers,
-        dispatched,
+        fakeHost,
         wasCancelled: () => cancelled,
         rearmed: () => rearmed,
         redriven,
@@ -121,10 +116,9 @@ repoLayer("t3team.orchestration.pause / stop", (it) => {
       assert.strictEqual(Option.getOrThrow(yield* h.repo.getById({ runId })).status, "paused");
       assert.strictEqual(h.registry.peekPending(`${runId}:child`), undefined);
       assert.strictEqual(h.rearmed(), 1);
-      const activity = h.dispatched.find((command) => command.type === "thread.activity.append");
-      assert.ok(activity !== undefined && activity.type === "thread.activity.append");
-      assert.strictEqual(activity.activity.summary, "Workflow paused");
-      assert.strictEqual(String(activity.threadId), String(launchThreadId));
+      const activity = h.fakeHost.activities().find((input) => input.id.endsWith(`${runId}:run`));
+      assert.strictEqual(activity?.summary, "Workflow paused");
+      assert.strictEqual(activity?.threadId, String(launchThreadId));
     }),
   );
 
@@ -147,8 +141,8 @@ repoLayer("t3team.orchestration.pause / stop", (it) => {
         runId,
         correlationId: `${runId}:2`,
         kind: "thread.turn",
+        // The journaled budget comes back; the re-drive itself (stubbed here) flags its schedule.
         turnRetries: 2,
-        redriveArmed: true,
       });
       assert.deepStrictEqual(h.redriven, [
         { threadId: `${runId}:child`, correlationId: `${runId}:2` },
@@ -258,13 +252,12 @@ repoLayer("t3team.orchestration.pause / stop", (it) => {
       const row = Option.getOrThrow(yield* h.repo.getById({ runId }));
       assert.strictEqual(row.status, "cancelled");
       assert.strictEqual(row.pendingCorrelationId, null);
-      const interrupt = h.dispatched.find((command) => command.type === "thread.turn.interrupt");
-      assert.ok(interrupt !== undefined && interrupt.type === "thread.turn.interrupt");
-      assert.strictEqual(String(interrupt.threadId), `${runId}:child`);
-      assert.strictEqual(interrupt.t3teamStopOrigin, "system");
-      const activity = h.dispatched.find((command) => command.type === "thread.activity.append");
-      assert.ok(activity !== undefined && activity.type === "thread.activity.append");
-      assert.strictEqual(activity.activity.summary, "Workflow stopped");
+      const interrupt = h.fakeHost.calls.find((call) => call.op === "interrupt");
+      assert.ok(interrupt !== undefined && interrupt.op === "interrupt");
+      assert.strictEqual(interrupt.input.threadId, `${runId}:child`);
+      assert.strictEqual(interrupt.input.origin, "system");
+      const activity = h.fakeHost.activities().find((input) => input.id.endsWith(`${runId}:run`));
+      assert.strictEqual(activity?.summary, "Workflow stopped");
     }),
   );
 
@@ -284,7 +277,7 @@ repoLayer("t3team.orchestration.pause / stop", (it) => {
       assert.match(unknown, /No orchestration run found for runId 'ctl-nope'/);
       // Nothing moved.
       assert.strictEqual(Option.getOrThrow(yield* h.repo.getById({ runId })).status, "suspended");
-      assert.strictEqual(h.dispatched.length, 0);
+      assert.strictEqual(h.fakeHost.calls.length, 0);
     }),
   );
 

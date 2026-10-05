@@ -7,15 +7,10 @@
  *
  * Returns true when the envelope was handled, so the broker's dispatch stays a flat chain.
  */
-import { CommandId, MessageId, ThreadId } from "@t3tools/contracts";
 import { PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_DECISION } from "@t3tools/project-recipes";
 
 import type { BrokerCore, BrokerSend } from "./t3team-workflowEngineBrokerContext.ts";
-import {
-  messageUpsert,
-  type ThreadTurnPayload,
-  type UserInputPayload,
-} from "./t3team-workflowEngineBrokerTypes.ts";
+import type { ThreadTurnPayload, UserInputPayload } from "./t3team-workflowEngineBrokerTypes.ts";
 import {
   isMessageResourceRef,
   TRUSTED_HTML_FRAGMENT,
@@ -26,6 +21,7 @@ import { resolveWorkflowChildModel } from "./t3team-workflowChildModel.ts";
 import { toWorkflowModelSelection } from "./t3team-workflowModelSelection.ts";
 import { dispatchThreadTurnStartWithRetry } from "./t3team-workflowEngineTurnStartBusyRetry.ts";
 import { workflowTurnAuthor } from "./t3team-workflowTurnAuthor.ts";
+import { newWorkflowStepPromptMessageId } from "./t3team-workflowTurnPrompt.ts";
 import { workflowTurnText } from "./t3team-workflowTurnText.ts";
 
 export async function handleBrokerAskVerb(core: BrokerCore, s: BrokerSend): Promise<boolean> {
@@ -54,39 +50,30 @@ export async function handleBrokerAskVerb(core: BrokerCore, s: BrokerSend): Prom
     // ONE author for the whole step: it rides the prompt below, and the reactor reuses it to
     // attribute the assistant messages that answer it.
     const author = workflowTurnAuthor(deps.runId, correlationId, p);
+    // The prompt's id is fixed BEFORE the dispatch: the run it starts is the run whose end
+    // answers this step, and a reactor check racing the dispatch must find the ask waiting on it.
+    const promptMessageId = newWorkflowStepPromptMessageId(correlationId);
     deps.registry.setPending(p.threadId, {
       runId: deps.runId,
       correlationId,
       kind: "thread.turn",
       author,
+      promptMessageId,
       ...(liveSettlement ? { resolveLive: liveSettlement.resolve } : {}),
     });
     await runPrimitive(
       () =>
-        dispatchThreadTurnStartWithRetry(
-          enqueue,
-          () =>
-            deps.dispatch({
-              type: "thread.turn.start",
-              commandId: CommandId.make(`t3team-wf:turn:${deps.newId()}`),
-              threadId: ThreadId.make(p.threadId),
-              message: {
-                messageId: MessageId.make(deps.newId()),
-                role: "user",
-                text: workflowTurnText(p),
-                attachments: [],
-                // `user` role because that is how a provider receives turn input — NOT because a
-                // person wrote it. The author says so: it marks the start as automated for decider
-                // turn admission AND is the only signal a client has for telling nine paragraphs of
-                // machine instructions apart from something the user typed.
-                t3teamExt: { author },
-              },
-              modelSelection,
-              runtimeMode: deps.runtimeMode,
-              interactionMode: deps.interactionMode,
-              createdAt: deps.nowIso(),
-            }),
-          deps.threadTurnBusyRetryDelay,
+        enqueue(() =>
+          // Queued behind any active run on the thread (a busy thread is not an error), so the
+          // step's own run answers it. `user` role because that is how a provider receives turn
+          // input — NOT because a person wrote it; the author stamp says so.
+          deps.host.startTurn({
+            threadId: p.threadId,
+            messageId: promptMessageId,
+            text: workflowTurnText(p),
+            modelSelection,
+            author,
+          }),
         ),
       liveSettlement
         ? undefined
@@ -132,8 +119,12 @@ export async function handleBrokerAskVerb(core: BrokerCore, s: BrokerSend): Prom
     await runPrimitive(
       () =>
         enqueue(() =>
-          deps.dispatch(
-            messageUpsert(deps, p.threadId, "system", visibleQuestion, {
+          deps.host.postMessage({
+            threadId: p.threadId,
+            messageId: `t3team-wf-ask:${correlationId}`,
+            role: "system",
+            text: visibleQuestion,
+            ext: {
               author: { kind: "system", workflowRunId: deps.runId },
               status: "waiting-for-input",
               visibleToUser: true,
@@ -155,8 +146,8 @@ export async function handleBrokerAskVerb(core: BrokerCore, s: BrokerSend): Prom
                     ],
                   }
                 : {}),
-            }),
-          ),
+            },
+          }),
         ),
       liveSettlement
         ? undefined

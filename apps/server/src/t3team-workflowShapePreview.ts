@@ -2,20 +2,22 @@
  * Launch-preview emission for the play-as-shape view (recipe-UX design pass). When a recipe's
  * `.workflow.ts` is launched, the host derives its read-only shape (SDK `deriveWorkflowShape` —
  * a static AST scan, no body execution) and posts it to the launching thread as a system message
- * carrying the `t3team.workflow.shape` view, so the user sees the plan before/while it runs. This
- * mirrors the broker's decision-card emission ({@link ./t3team-workflowEngineBroker.ts}).
+ * carrying the `t3team.workflow.shape` view (its `message-ext` artifact), so the user sees the plan
+ * before/while it runs. This mirrors the broker's decision-card emission
+ * ({@link ./t3team-workflowEngineBroker.ts}).
  *
  * A run must NEVER be invisible: a derivation failure or an empty shape (no phases, no steps —
  * e.g. an underivable/malformed source that slipped past the precheck) still builds the SAME
- * command with a minimal fallback shape (name from the workflow path, no phases/steps), so a plan
+ * message with a minimal fallback shape (name from the workflow path, no phases/steps), so a plan
  * card always appears. The caller reads the source and returns early only when it can't (unreadable
  * file / headless launch) — that is the one case this never blocks.
  */
 
-import { CommandId, MessageId, type OrchestrationCommand, ThreadId } from "@t3tools/contracts";
 import { PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_SHAPE } from "@t3tools/project-recipes";
 
 import { deriveWorkflowShape } from "@t3team/sdk";
+
+import type { WorkflowHostMessageInput } from "./t3team-workflowHostPort.ts";
 
 export interface WorkflowShapePreviewInput {
   readonly threadId: string;
@@ -23,10 +25,6 @@ export interface WorkflowShapePreviewInput {
   /** The `.workflow.ts` source, read by the caller (the route, via Effect `FileSystem`). */
   readonly sourceText: string;
   readonly runId: string;
-  readonly nowIso: string;
-  /** Card name when no shape can be derived yet (an authoring run has no source); defaults to
-   * the workflow path's basename. */
-  readonly fallbackName?: string | undefined;
 }
 
 /** Basename of `workflowPath` without its `.workflow.ts`/`.ts` extension, or "workflow". */
@@ -37,14 +35,14 @@ function deriveFallbackWorkflowName(workflowPath: string): string {
 }
 
 /**
- * Derive the workflow's shape from its source and build the system-message command that carries
- * the `workflow.shape` view. When the shape can't be derived or there is nothing to show (no
- * phases and no steps), builds the same command with a minimal fallback shape instead — a run
- * must never be invisible.
+ * Derive the workflow's shape from its source and build the system message that carries the
+ * `workflow.shape` view. When the shape can't be derived or there is nothing to show (no phases
+ * and no steps), builds the same message with a minimal fallback shape instead — a run must
+ * never be invisible.
  */
-export function buildWorkflowShapePreviewCommand(
+export function buildWorkflowShapePreviewMessage(
   input: WorkflowShapePreviewInput,
-): OrchestrationCommand {
+): WorkflowHostMessageInput {
   let derived: ReturnType<typeof deriveWorkflowShape> | null;
   try {
     derived = deriveWorkflowShape({
@@ -62,7 +60,7 @@ export function buildWorkflowShapePreviewCommand(
   const shape =
     derived === null || (derived.phases.length === 0 && derived.steps.length === 0)
       ? {
-          name: input.fallbackName ?? deriveFallbackWorkflowName(input.workflowPath),
+          name: deriveFallbackWorkflowName(input.workflowPath),
           description: undefined,
           phases: [],
           steps: [],
@@ -70,36 +68,29 @@ export function buildWorkflowShapePreviewCommand(
       : derived;
 
   return {
-    type: "thread.message.upsert",
-    commandId: CommandId.make(`t3team-wf:shape:${input.runId}`),
-    threadId: ThreadId.make(input.threadId),
-    message: {
-      // Run-stable id: any re-emission for the same run (repair relaunch, duplicate launch
-      // surface) UPSERTS the one plan card in place instead of appending another "Plan:" card.
-      messageId: MessageId.make(`t3team-wf-shape:${input.runId}`),
-      role: "system",
-      text: `Plan: ${shape.name}`,
-      turnId: null,
-      streaming: false,
-      t3teamExt: {
-        author: { kind: "system", workflowRunId: input.runId },
-        visibleToUser: true,
-        attachments: [
-          {
-            kind: "view",
-            miniappId: PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_SHAPE,
-            props: {
-              name: shape.name,
-              ...(shape.description === undefined ? {} : { description: shape.description }),
-              phases: shape.phases,
-              steps: shape.steps,
-              ...(capabilities.length === 0 ? {} : { capabilities }),
-              workflowRunId: input.runId,
-            },
+    threadId: input.threadId,
+    // Run-stable id: any re-emission for the same run (repair relaunch, duplicate launch
+    // surface) UPSERTS the one plan card in place instead of appending another "Plan:" card.
+    messageId: `t3team-wf-shape:${input.runId}`,
+    role: "system",
+    text: `Plan: ${shape.name}`,
+    ext: {
+      author: { kind: "system", workflowRunId: input.runId },
+      visibleToUser: true,
+      attachments: [
+        {
+          kind: "view",
+          miniappId: PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_SHAPE,
+          props: {
+            name: shape.name,
+            ...(shape.description === undefined ? {} : { description: shape.description }),
+            phases: shape.phases,
+            steps: shape.steps,
+            ...(capabilities.length === 0 ? {} : { capabilities }),
+            workflowRunId: input.runId,
           },
-        ],
-      },
+        },
+      ],
     },
-    createdAt: input.nowIso,
   };
 }

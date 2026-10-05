@@ -4,9 +4,10 @@
  * (`t3team-toolBrokerWorkflowResumeActions.ts`), so the two cannot drift (GHE #404).
  *
  * Pause removes the pending ask but leaves the child turn running; by the time Resume is clicked
- * that turn has usually finished, and nothing will ever settle a merely re-registered ask. So a
- * `thread.turn` ask is re-registered with its journaled re-drive budget and `redriveArmed`, then
- * handed to the re-drive, which consumes an already-produced answer or re-issues the prompt.
+ * that turn has usually finished, and its terminal `run.updated` went by while nothing was
+ * parked. So a `thread.turn` ask is re-registered with its journaled re-drive budget, then handed
+ * to the re-drive, which consumes an already-produced answer, waits for a run still in flight,
+ * or re-issues the prompt.
  */
 import * as Effect from "effect/Effect";
 
@@ -98,9 +99,7 @@ const restorePausedPendingAsk = Effect.fn("restorePausedPendingAsk")(function* (
     runId: run.runId,
     correlationId: run.pendingCorrelationId,
     kind: run.pendingKind,
-    ...(run.pendingKind === "thread.turn"
-      ? { turnRetries: run.turnRetries ?? 0, redriveArmed: true as const }
-      : {}),
+    ...(run.pendingKind === "thread.turn" ? { turnRetries: run.turnRetries ?? 0 } : {}),
   });
   if (run.pendingKind === "thread.turn" && deps.turnRedrive !== undefined) {
     yield* deps.turnRedrive.processTurnRetry({

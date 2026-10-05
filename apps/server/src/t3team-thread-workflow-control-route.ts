@@ -5,8 +5,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import { HttpRouter } from "effect/unstable/http";
 
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
-import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
@@ -18,8 +17,9 @@ import {
 } from "./t3team-atlassian-http.ts";
 import { toT3TeamError } from "./t3team-project-repository-utils.ts";
 import { nowIso } from "./t3team-thread-recipe-workflow-routes-resolve.ts";
-import { loadThreadProjectContext } from "./t3team-thread-recipe-workflow-routes-shared.ts";
+import { makeWorkflowRouteThreadReads } from "./t3team-thread-recipe-workflow-routes-shared.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import { T3TeamWorkflowHost } from "./t3team-workflowHost.ts";
 import { controlWorkflowRun } from "./t3team-workflowRunControl.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 import { makeWorkflowTurnRedriveLive } from "./t3team-workflowTurnRedriveLive.ts";
@@ -44,8 +44,9 @@ export const t3teamThreadWorkflowControlRouteLayer = HttpRouter.add(
     const repo = yield* WorkflowRunRepository;
     const registry = yield* T3TeamWorkflowEngineRegistry;
     const scheduler = yield* T3TeamWorkflowScheduler;
-    const orchestration = yield* OrchestrationEngineService;
-    const threadQuery = yield* ProjectionSnapshotQuery;
+    const host = yield* T3TeamWorkflowHost;
+    const threads = yield* ThreadManagementService;
+    const reads = yield* makeWorkflowRouteThreadReads;
     const journalStore = yield* WorkflowJournalStore;
     const signalStore = Option.getOrUndefined(yield* Effect.serviceOption(WorkflowSignalStore));
     const fileSystem = yield* FileSystem.FileSystem;
@@ -61,12 +62,12 @@ export const t3teamThreadWorkflowControlRouteLayer = HttpRouter.add(
         repo,
         registry,
         rearmScheduler: () => scheduler.rearm(),
-        dispatch: (command) => orchestration.dispatch(command),
+        host,
         turnRedrive: makeWorkflowTurnRedriveLive({
           registry,
+          threads,
+          host,
           runRepository: repo,
-          orchestration,
-          threadQuery,
         }),
         // GHE #332: a `watching` run's resume drains its bridged inbox events here.
         ...(signalStore === undefined ? {} : { signalStore }),
@@ -75,11 +76,7 @@ export const t3teamThreadWorkflowControlRouteLayer = HttpRouter.add(
           journalStore,
           fileSystem,
           path,
-          loadThreadProject: (id) =>
-            loadThreadProjectContext(id).pipe(
-              Effect.provideService(ProjectionSnapshotQuery, threadQuery),
-              Effect.mapError((error) => (error instanceof Error ? error.message : String(error))),
-            ),
+          loadThreadProject: reads.loadThreadProject,
         },
         nowIso,
         // This route only runs off an authenticated user's explicit click on the workflow run
