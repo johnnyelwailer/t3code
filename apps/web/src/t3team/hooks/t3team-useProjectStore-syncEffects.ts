@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
+import type { T3TeamThreadFacts } from "@t3tools/contracts";
 import type { Project, ThreadShell } from "~/types";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import { persistStoredThreads } from "./t3team-projectThreadPersistence";
@@ -15,6 +16,7 @@ export function useProjectStoreSyncEffects({
   storedProjects,
   liveProjects,
   liveThreads,
+  factsByThreadId,
   setThreads,
 }: {
   threads: ProjectThread[];
@@ -22,6 +24,8 @@ export function useProjectStoreSyncEffects({
   storedProjects: ProjectShellProject[];
   liveProjects: ReadonlyArray<Project>;
   liveThreads: ReadonlyArray<ThreadShell>;
+  /** Fork thread facts (workflow pills, child status, activity label, retention). */
+  factsByThreadId: ReadonlyMap<string, T3TeamThreadFacts>;
   setThreads: Dispatch<SetStateAction<ProjectThread[]>>;
 }) {
   useEffect(() => {
@@ -61,7 +65,8 @@ export function useProjectStoreSyncEffects({
         storedProjects,
         liveProjects,
         liveThreads,
+        factsByThreadId,
       }),
     );
-  }, [liveProjects, liveThreads, storedProjects]);
+  }, [factsByThreadId, liveProjects, liveThreads, storedProjects]);
 }

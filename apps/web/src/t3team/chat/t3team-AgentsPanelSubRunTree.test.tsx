@@ -181,7 +181,7 @@ describe("T3TeamAgentsPanelSubRunTree status language (GHE #254)", () => {
   });
 });
 
-describe("T3TeamAgentsPanelSubRunTree live status text (GHE #208 seam)", () => {
+describe("T3TeamAgentsPanelSubRunTree live status text (GHE #40 seam)", () => {
   const statusText = () => container!.querySelector("button .font-mono")?.textContent ?? "";
 
   it("a running sub-run with an LLM label shows the label (shared resolution, flag on)", () => {
@@ -189,7 +189,6 @@ describe("T3TeamAgentsPanelSubRunTree live status text (GHE #208 seam)", () => {
       node(
         createThread({
           status: "running",
-          activityState: "writing",
           activityLabel: "Editing the router",
         }),
       ),
@@ -197,18 +196,17 @@ describe("T3TeamAgentsPanelSubRunTree live status text (GHE #208 seam)", () => {
     expect(statusText()).toBe("Editing the router");
   });
 
-  it("a running sub-run with only a state word shows the word (flag off drops the label)", () => {
+  it("a running sub-run shows the stable label when the flag drops the LLM label", () => {
     settingsState.activityLabelsEnabled = false;
     render([
       node(
         createThread({
           status: "running",
-          activityState: "writing",
           activityLabel: "Editing the router",
         }),
       ),
     ]);
-    expect(statusText()).toBe("Writing");
+    expect(statusText()).toBe("Running");
     settingsState.activityLabelsEnabled = true;
   });
 

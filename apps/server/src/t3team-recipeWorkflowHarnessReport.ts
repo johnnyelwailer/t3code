@@ -1,7 +1,6 @@
 // @effect-diagnostics preferSchemaOverJson:off - the harness report is plain JSON for a CLI.
-import type { OrchestrationCommand } from "@t3tools/contracts";
-
 import type { T3TeamHarnessScriptLog } from "./t3team-recipeWorkflowHarnessScriptLog.ts";
+import type { T3TeamRecipeHarnessOperation } from "./t3team-recipeWorkflowHarnessStub.ts";
 
 export type T3TeamHarnessWidget = {
   readonly title: string;
@@ -36,7 +35,8 @@ export type T3TeamRecipeHarnessReport = {
     readonly status: string;
     readonly workflowPath: string;
   } | null;
-  readonly commandTypes: ReadonlyArray<string>;
+  /** The distinct workflow-host operations the run performed (`createThread`, `startTurn`, …). */
+  readonly hostOperations: ReadonlyArray<string>;
 };
 
 function readRecord(value: unknown): Record<string, unknown> | undefined {
@@ -61,18 +61,19 @@ function widgetFromAttachment(attachment: unknown): T3TeamHarnessWidget | null {
   };
 }
 
-/** Extract every widget, notification and step phase out of the captured command stream. */
-export function summarizeT3TeamHarnessCommands(commands: ReadonlyArray<OrchestrationCommand>) {
+/** Extract every widget, notification and step phase out of the recorded host operations. */
+export function summarizeT3TeamHarnessOperations(
+  operations: ReadonlyArray<T3TeamRecipeHarnessOperation>,
+) {
   const widgets: T3TeamHarnessWidget[] = [];
   const notifications: string[] = [];
   const phases: string[] = [];
   const steps: string[] = [];
-  for (const command of commands) {
-    const record = command as unknown as Record<string, unknown>;
-    if (record.type === "thread.activity.append") {
-      const activity = readRecord(record.activity);
-      const payload = readRecord(activity?.payload) ?? readRecord(activity?.data);
-      const phase = payload?.phase ?? activity?.phase;
+  for (const { op, input } of operations) {
+    const record = readRecord(input);
+    if (op === "upsertActivity") {
+      const payload = readRecord(record?.payload);
+      const phase = payload?.phase;
       if (typeof phase === "string" && !phases.includes(phase)) {
         phases.push(phase);
       }
@@ -85,11 +86,10 @@ export function summarizeT3TeamHarnessCommands(commands: ReadonlyArray<Orchestra
       }
       continue;
     }
-    if (record.type !== "thread.message.upsert") {
+    if (op !== "postMessage") {
       continue;
     }
-    const message = readRecord(record.message);
-    const ext = readRecord(message?.t3teamExt);
+    const ext = readRecord(record?.ext);
     const attachments = Array.isArray(ext?.attachments) ? ext.attachments : [];
     for (const attachment of attachments) {
       const widget = widgetFromAttachment(attachment);
@@ -97,7 +97,7 @@ export function summarizeT3TeamHarnessCommands(commands: ReadonlyArray<Orchestra
         widgets.push(widget);
       }
     }
-    const text = message?.text;
+    const text = record?.text;
     if (typeof text === "string" && text.trim().length > 0 && attachments.length === 0) {
       notifications.push(text);
     }
@@ -110,7 +110,7 @@ export function assembleT3TeamRecipeHarnessReport(input: {
   readonly recipeId: string;
   /** The journal-derived invocation log + declaration diff (`…HarnessScriptLog`). */
   readonly scriptLog: T3TeamHarnessScriptLog;
-  readonly commands: ReadonlyArray<OrchestrationCommand>;
+  readonly operations: ReadonlyArray<T3TeamRecipeHarnessOperation>;
   /** Outputs collected by the launch-time `onComplete` sink; non-empty means it fired. */
   readonly completed: ReadonlyArray<unknown>;
   readonly launchStatus: string;
@@ -118,7 +118,7 @@ export function assembleT3TeamRecipeHarnessReport(input: {
   readonly workflowRun: T3TeamRecipeHarnessReport["workflowRun"];
   readonly seededWorkItemCount: number;
 }) {
-  const summary = summarizeT3TeamHarnessCommands(input.commands);
+  const summary = summarizeT3TeamHarnessOperations(input.operations);
   return {
     recipeId: input.recipeId,
     status: input.completed.length > 0 ? "completed" : input.launchStatus,
@@ -128,15 +128,13 @@ export function assembleT3TeamRecipeHarnessReport(input: {
     launchStatus: input.launchStatus,
     widgets: summary.widgets,
     notifications: summary.notifications,
-    agentPromptCount: input.commands.filter(
-      (command) => (command as { type?: string }).type === "thread.turn.start",
-    ).length,
+    agentPromptCount: input.operations.filter(({ op }) => op === "startTurn").length,
     asksAnswered: input.asksAnswered,
     scriptCalls: input.scriptLog.scriptCalls,
     declaredScripts: input.scriptLog.declaredScripts,
     uncalledScripts: input.scriptLog.uncalledScripts,
     workflowRun: input.workflowRun,
-    commandTypes: [...new Set(input.commands.map((command) => command.type))],
+    hostOperations: [...new Set(input.operations.map(({ op }) => op))],
     seededWorkItemCount: input.seededWorkItemCount,
   } satisfies T3TeamRecipeHarnessReport & {
     readonly seededWorkItemCount: number;

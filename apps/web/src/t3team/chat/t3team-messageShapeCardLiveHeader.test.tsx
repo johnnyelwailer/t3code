@@ -18,7 +18,8 @@
  * `@legendapp/list/react` mock and `window.matchMedia` shim as module-level side effects — no
  * need to repeat them here.
  */
-import { EventId, MessageId, type OrchestrationThreadActivity } from "@t3tools/contracts";
+import { EventId, MessageId } from "@t3tools/contracts";
+import type { T3TeamThreadActivityRecord } from "~/t3team/chat/t3team-threadActivityRecord";
 import {
   PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP,
   PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_SHAPE,
@@ -43,7 +44,7 @@ describe("workflow card headline — description leads, slug demoted", () => {
       streaming: false,
       createdAt: "2026-07-17T09:59:00.000Z",
       updatedAt: "2026-07-17T09:59:00.000Z",
-      turnId: null,
+      runId: null,
       t3teamExt: {
         visibleToUser: true,
         attachments: [
@@ -127,12 +128,12 @@ describe("workflow card terminal outcome fold-in", () => {
       streaming: false,
       createdAt: "2026-07-17T10:06:00.000Z",
       updatedAt: "2026-07-17T10:06:00.000Z",
-      turnId: null,
+      runId: null,
     };
   }
 
   async function renderShapeAndResult(
-    activities: ReadonlyArray<OrchestrationThreadActivity>,
+    activities: ReadonlyArray<T3TeamThreadActivityRecord>,
     outcome: ChatMessage,
   ) {
     const { MessagesTimeline } = await import("~/components/chat/MessagesTimeline");
@@ -143,7 +144,7 @@ describe("workflow card terminal outcome fold-in", () => {
       streaming: false,
       createdAt: "2026-07-17T09:59:00.000Z",
       updatedAt: "2026-07-17T09:59:00.000Z",
-      turnId: null,
+      runId: null,
       t3teamExt: {
         visibleToUser: true,
         attachments: [
@@ -158,7 +159,7 @@ describe("workflow card terminal outcome fold-in", () => {
     return renderToStaticMarkup(
       <MessagesTimeline
         {...buildT3TeamMessagesTimelineTestProps()}
-        threadActivities={activities}
+        t3team={{ threadActivities: activities }}
         timelineEntries={[
           {
             id: "timeline-0",
@@ -262,7 +263,7 @@ describe("live card header — two-row layout", () => {
       streaming: false,
       createdAt: "2026-07-17T09:59:00.000Z",
       updatedAt: "2026-07-17T09:59:00.000Z",
-      turnId: null,
+      runId: null,
       t3teamExt: {
         visibleToUser: true,
         attachments: [
@@ -282,13 +283,13 @@ describe("live card header — two-row layout", () => {
     };
   }
 
-  async function renderHeaderCard(activities: ReadonlyArray<OrchestrationThreadActivity>) {
+  async function renderHeaderCard(activities: ReadonlyArray<T3TeamThreadActivityRecord>) {
     const { MessagesTimeline } = await import("~/components/chat/MessagesTimeline");
     const message = shapeWithDescriptionMessage();
     return renderToStaticMarkup(
       <MessagesTimeline
         {...buildT3TeamMessagesTimelineTestProps()}
-        threadActivities={activities}
+        t3team={{ threadActivities: activities }}
         timelineEntries={[
           { id: "timeline-0", kind: "message" as const, createdAt: message.createdAt, message },
         ]}

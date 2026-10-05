@@ -6,10 +6,12 @@ import {
   type ComposerPromptEditorHandle,
 } from "~/components/ComposerPromptEditor";
 import { EMPTY_COMPOSER_CONTEXT_RECORDS } from "~/components/composerContextPresentation";
-import { ComposerCommandMenu } from "~/components/chat/ComposerCommandMenu";
+import {
+  ComposerCommandMenu,
+  composerSuggestionOptionId,
+} from "~/components/chat/ComposerCommandMenu";
 import { useTheme } from "~/hooks/useTheme";
-import { t3teamComposerMenuOptionDomId } from "~/t3team/composer/t3team-composerMenuKeyboard";
-import { useT3TeamComposerActiveDescendant } from "~/t3team/composer/t3team-useComposerActiveDescendant";
+import { isT3TeamComposerMenuKey } from "~/t3team/composer/t3team-composerMenuKeyboard";
 import type { useT3TeamKickoffComposerMenu } from "~/t3team/composer/t3team-useKickoffComposerMenu";
 
 type KickoffComposerCommandMenu = ReturnType<typeof useT3TeamKickoffComposerMenu>;
@@ -35,16 +37,11 @@ export function KickoffComposerEditor(props: KickoffComposerEditorProps) {
   const { commandMenu } = props;
   const containerRef = useRef<HTMLDivElement>(null);
   const reactId = useId();
-  const listboxId = `t3team-composer-menu${reactId}`;
-
-  useT3TeamComposerActiveDescendant({
-    containerRef,
-    listboxId,
-    menuOpen: commandMenu.menuOpen,
-    activeOptionDomId: commandMenu.activeItemId
-      ? t3teamComposerMenuOptionDomId(listboxId, commandMenu.activeItemId)
-      : null,
-  });
+  const listId = `t3team-composer-menu${reactId}`;
+  const activeSuggestionId =
+    commandMenu.menuOpen && commandMenu.activeItemId
+      ? composerSuggestionOptionId(listId, commandMenu.activeItemId)
+      : undefined;
 
   return (
     <div
@@ -64,7 +61,7 @@ export function KickoffComposerEditor(props: KickoffComposerEditorProps) {
             resolvedTheme={resolvedTheme}
             isLoading={commandMenu.isPathSearchPending}
             triggerKind={commandMenu.trigger?.kind ?? null}
-            listboxId={listboxId}
+            listId={listId}
             activeItemId={commandMenu.activeItemId}
             onHighlightedItemChange={commandMenu.onHighlightedItemChange}
             onSelect={commandMenu.selectItem}
@@ -72,6 +69,8 @@ export function KickoffComposerEditor(props: KickoffComposerEditorProps) {
         </div>
       ) : null}
       <ComposerPromptEditor
+        suggestionListId={listId}
+        activeSuggestionId={activeSuggestionId}
         editorRef={props.editorRef}
         value={props.text}
         cursor={props.cursor}
@@ -81,7 +80,9 @@ export function KickoffComposerEditor(props: KickoffComposerEditorProps) {
           props.onChangeText(nextValue, nextCursor);
           commandMenu.handleEditorChange(nextValue, expandedCursor, cursorAdjacentToMention);
         }}
-        onCommandKeyDown={(key) => commandMenu.handleCommandKeyDown(key)}
+        onCommandKeyDown={(key) =>
+          isT3TeamComposerMenuKey(key) && commandMenu.handleCommandKeyDown(key)
+        }
         onPaste={() => {}}
         placeholder={props.placeholder}
         disabled={props.disabled}

@@ -1,4 +1,4 @@
-// Registered as migration 84 (see Migrations.ts).
+// Registered as migration 100 in this fork's ledger (main's 84 was taken by the V2 sync; see Migrations.ts).
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";

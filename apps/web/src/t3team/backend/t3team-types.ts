@@ -1,9 +1,4 @@
-import type {
-  ClientOrchestrationCommand,
-  ServerConfig,
-  ServerProvider,
-  ThreadId,
-} from "@t3tools/contracts";
+import type { ServerConfig, ServerProvider, ThreadId } from "@t3tools/contracts";
 import type {
   ProjectWorkspaceRefreshWorkItemContextResult,
   ProjectWorkspaceRefreshWorkItemSliceContextResult,
@@ -18,6 +13,7 @@ import type {
 } from "@t3tools/project-recipes";
 import type { AtlassianBackendApi } from "./t3team-atlassianBackendTypes";
 import type { GitHubBackendApi } from "./t3team-githubBackendTypes";
+import type { T3TeamOrchestrationApi } from "./t3team-orchestrationApi";
 import type { T3TeamTurnToolContext } from "~/t3team/t3team-threadToolContext";
 
 export type ConnectionStatus = "disconnected" | "connecting" | "connected" | "error";
@@ -40,13 +36,8 @@ export interface BackendApi {
   readonly state: BackendState;
   readonly connect: () => Promise<void>;
   readonly disconnect: () => Promise<void>;
-  readonly dispatchCommand: (command: ClientOrchestrationCommand) => Promise<void>;
-  readonly forkThread: (input: {
-    readonly threadId: string;
-    readonly title?: string;
-    /** Fork branch point: copy messages up to and including this message id. */
-    readonly upToMessageId?: string;
-  }) => Promise<{ readonly ok: true; readonly childThreadId: string }>;
+  /** Thread and project writes (V2 client operations) on the primary environment. */
+  readonly orchestration: T3TeamOrchestrationApi;
   readonly launchRecipeWorkflow: (
     input: LaunchProjectRecipeWorkflowRequest,
   ) => Promise<LaunchProjectRecipeWorkflowResponse>;

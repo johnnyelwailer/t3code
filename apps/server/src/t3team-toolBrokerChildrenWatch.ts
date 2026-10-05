@@ -1,23 +1,22 @@
 /**
- * `watch` / `unwatch` ops for `t3team.thread.children` (GHE #63): durably
- * register / cancel a per-subscription silence watch on a target thread.
+ * `watch` / `unwatch` ops for `t3team.thread.children`: register or cancel a
+ * per-subscription silence watch on a same-project thread through the
+ * silence-watch layer's port (durability and notification live there).
  *
  * @module t3team-toolBrokerChildrenWatch
  */
+import { ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
-import { okResult, errorResult } from "./t3team-toolBrokerHelpers.ts";
+import { type T3TeamToolCallResult } from "./t3team-toolBroker.ts";
 import { loadTarget, opUsage, readString } from "./t3team-toolBrokerChildrenShared.ts";
-import {
-  THREAD_SILENCE_DEFAULT_TIMEOUT_MS,
-  THREAD_SILENCE_WATCH_CANCELLED_KIND,
-  THREAD_SILENCE_WATCH_REGISTERED_KIND,
-} from "./t3team-threadSilenceWatch.ts";
 import {
   type ChildrenArgs,
   type T3TeamChildrenToolDeps,
 } from "./t3team-toolBrokerChildrenTypes.ts";
-import { type T3TeamToolCallResult } from "./t3team-toolBroker.ts";
+import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
+
+const UNAVAILABLE = "Silence watches are not available in this runtime.";
 
 export function opWatch(
   deps: T3TeamChildrenToolDeps,
@@ -27,90 +26,37 @@ export function opWatch(
   if (!threadId) {
     return Effect.succeed(errorResult(`${opUsage("watch")} — 'thread_id' is required.`));
   }
-  let timeoutMs = THREAD_SILENCE_DEFAULT_TIMEOUT_MS;
-  if (args.timeout !== undefined) {
-    if (typeof args.timeout !== "number" || !Number.isFinite(args.timeout) || args.timeout <= 0) {
-      return Effect.succeed(
-        errorResult(
-          `children({ op: "watch" }) 'timeout' must be a positive number of milliseconds.`,
-        ),
-      );
-    }
-    timeoutMs = Math.floor(args.timeout);
+  const timeout = args.timeout;
+  if (
+    timeout !== undefined &&
+    (typeof timeout !== "number" || !Number.isFinite(timeout) || timeout <= 0)
+  ) {
+    return Effect.succeed(
+      errorResult(`children({ op: "watch" }) 'timeout' must be a positive number of milliseconds.`),
+    );
   }
-
+  const port = deps.silenceWatch;
+  if (port === undefined) return Effect.succeed(errorResult(UNAVAILABLE));
   return loadTarget(deps, threadId).pipe(
-    Effect.flatMap((detail) =>
-      Effect.gen(function* () {
-        const watchId = deps.newId();
-        const payload = {
-          watchId,
-          targetThreadId: detail.id,
-          targetTitle: detail.title,
-          timeoutMs,
-        };
-        // Upsert: cancel semantics are per (watcher, target) - a re-watch must
-        // durably cancel any still-pending watch of this thread on the same
-        // target, or the old watch keeps notifying on every terminal stop
-        // (the terminal-notify ledger dedups by watchId, so two registered
-        // watches notify twice for one stop).
-        const callerDetail = yield* deps.loadThreadDetail(deps.callerThreadId);
-        if (
-          callerDetail !== undefined &&
-          hasPendingSilenceWatch(callerDetail.activities, detail.id)
-        ) {
-          yield* deps.appendActivity(deps.callerThreadId, {
-            kind: THREAD_SILENCE_WATCH_CANCELLED_KIND,
-            summary: `Superseded the previous silence watch on ${detail.title}`,
-            payload: { targetThreadId: detail.id },
-          });
-        }
-        yield* deps.appendActivity(deps.callerThreadId, {
-          kind: THREAD_SILENCE_WATCH_REGISTERED_KIND,
-          summary: `Watching ${detail.title} for silence (${Math.round(timeoutMs / 1000)}s)`,
-          payload,
-        });
-        return okResult({
-          ok: true,
-          status: "watching",
-          watchId,
-          targetThreadId: detail.id,
-          targetTitle: detail.title,
-          timeoutMs,
-          note:
-            "This thread will be notified when the target has had no activity for that long, " +
-            "re-notified at each multiple of the timeout while it stays silent. The notification " +
-            "flags whether a tool call was still in progress (legitimate long operation vs. the " +
-            "real stuck signal). If the target reaches a terminal state the watch closes with a " +
-            "stopped note. Cancel with children({ op: 'unwatch', thread_id }).",
-        });
-      }).pipe(Effect.catch((error) => Effect.succeed(errorResult(error)))),
+    Effect.flatMap((target) =>
+      port.register({
+        watcherThreadId: deps.callerThreadId,
+        targetThreadId: target.id,
+        targetTitle: target.title,
+        timeoutMs: typeof timeout === "number" ? Math.floor(timeout) : undefined,
+      }),
     ),
-    Effect.catch((error) => Effect.succeed(errorResult(error))),
+    Effect.map((registered) =>
+      okResult({
+        ok: true,
+        op: "watch",
+        threadId,
+        watchId: registered.watchId,
+        timeoutMs: registered.timeoutMs,
+      }),
+    ),
+    Effect.catch((error) => Effect.succeed(errorResult(`Watch failed: ${error}`))),
   );
-}
-
-/**
- * True when the caller's persisted activity log (sequence order) still holds a
- * pending silence watch on `targetThreadId`: a `watch.registered` activity
- * with no later `watch.cancelled` for that target - the same fact the
- * reactor's replay derives, so the tool sees what the durable log says.
- */
-function hasPendingSilenceWatch(
-  activities: ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>,
-  targetThreadId: unknown,
-): boolean {
-  let pending = false;
-  for (const activity of activities) {
-    const payload =
-      typeof activity.payload === "object" && activity.payload !== null
-        ? (activity.payload as { readonly targetThreadId?: unknown })
-        : null;
-    if (payload === null || payload.targetThreadId !== targetThreadId) continue;
-    if (activity.kind === THREAD_SILENCE_WATCH_REGISTERED_KIND) pending = true;
-    else if (activity.kind === THREAD_SILENCE_WATCH_CANCELLED_KIND) pending = false;
-  }
-  return pending;
 }
 
 export function opUnwatch(
@@ -121,29 +67,12 @@ export function opUnwatch(
   if (!threadId) {
     return Effect.succeed(errorResult(`${opUsage("unwatch")} — 'thread_id' is required.`));
   }
-  return loadTarget(deps, threadId).pipe(
-    Effect.flatMap((detail) =>
-      deps
-        .appendActivity(deps.callerThreadId, {
-          kind: THREAD_SILENCE_WATCH_CANCELLED_KIND,
-          summary: `Stopped watching ${detail.title} for silence`,
-          payload: { targetThreadId: detail.id },
-        })
-        .pipe(
-          Effect.map(() =>
-            okResult({
-              ok: true,
-              status: "unwatched",
-              targetThreadId: detail.id,
-              targetTitle: detail.title,
-              note: "All silence watches this thread had on that thread are cancelled.",
-            }),
-          ),
-          Effect.catch((error) =>
-            Effect.succeed(errorResult(`Failed to cancel the silence watch: ${error}`)),
-          ),
-        ),
-    ),
-    Effect.catch((error) => Effect.succeed(errorResult(error))),
-  );
+  const port = deps.silenceWatch;
+  if (port === undefined) return Effect.succeed(errorResult(UNAVAILABLE));
+  return port
+    .cancel({ watcherThreadId: deps.callerThreadId, targetThreadId: ThreadId.make(threadId) })
+    .pipe(
+      Effect.map(({ cancelled }) => okResult({ ok: true, op: "unwatch", threadId, cancelled })),
+      Effect.catch((error) => Effect.succeed(errorResult(`Unwatch failed: ${error}`))),
+    );
 }

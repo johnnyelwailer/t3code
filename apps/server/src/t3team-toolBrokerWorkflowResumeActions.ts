@@ -5,7 +5,7 @@
  * restore (mirrors the HTTP control route). The failed-run journal re-drive lives in
  * ./t3team-toolBrokerWorkflowResumeFailed.ts (additive size budget).
  */
-import type { OrchestrationCommand, ServerProvider, ThreadId } from "@t3tools/contracts";
+import type { ServerProvider, ThreadId } from "@t3tools/contracts";
 import { hashArgs, workflowSourceVersion, type JournalStore, type WorkflowRef } from "@t3team/sdk";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -25,6 +25,7 @@ import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 import type { InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
 import { replaceEphemeralWorkflowSourceAtomically } from "./t3team-workflowEphemeralSource.ts";
+import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
 import {
   pausedResumeBlocker,
   restorePausedRunContinuation,
@@ -38,7 +39,8 @@ export interface WorkflowResumeToolDeps<E = string> {
   readonly registry: T3TeamWorkflowEngineRegistryShape;
   readonly journalStore: JournalStore;
   readonly rearmScheduler: () => Promise<void>;
-  readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
+  /** The thread operations a re-driven run performs (`T3TeamWorkflowHost`). */
+  readonly host: WorkflowHostPort;
   readonly loadThreadProject: (
     threadId: ThreadId,
   ) => Effect.Effect<
@@ -46,7 +48,7 @@ export interface WorkflowResumeToolDeps<E = string> {
     E
   >;
   /** Re-issues a failed run's retained `thread.turn` step (GHE #403). Absent when the broker's
-   * environment has no thread query / engine dispatch; the failed-step resume then reports so. */
+   * environment has no workflow host; the failed-step resume then reports so. */
   readonly turnRedrive?: InterruptedTurnRetry | undefined;
   /** Durable signal-source state (GHE #332); absent in test/broker layers without the engine —
    * the signal-park resume then skips the inbox drain (there is no inbox to drain there). */

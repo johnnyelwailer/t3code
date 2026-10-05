@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { ProjectShellProject } from "@t3tools/project-context";
+import type { T3TeamThreadFacts } from "@t3tools/contracts";
 
 import type { Project, ThreadShell } from "~/types";
 import { useBackend, useBackendState } from "~/t3team/backend/t3team-index";
@@ -89,6 +90,7 @@ export function useHydrateThreadPlacements(input: {
   storedProjects: ReadonlyArray<ProjectShellProject>;
   liveProjects: ReadonlyArray<Project>;
   liveThreads: ReadonlyArray<ThreadShell>;
+  factsByThreadId: ReadonlyMap<string, T3TeamThreadFacts>;
 }) {
   const backend = useBackend();
   const backendState = useBackendState();
@@ -213,6 +215,7 @@ export function useHydrateThreadPlacements(input: {
             storedProjects,
             liveProjects,
             liveThreads,
+            factsByThreadId: input.factsByThreadId,
           }),
         );
       })

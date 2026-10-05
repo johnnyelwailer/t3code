@@ -1,7 +1,7 @@
 /**
  * Controller for the inline widget block: builds the sandboxed srcdoc, validates bridge
  * postMessages (source window + per-widget nonce), tracks reported content height, and
- * services the two bridge verbs — sendPrompt (dispatches a normal user turn on the thread)
+ * services the two bridge verbs — sendPrompt (queues a normal user message on the thread)
  * and callTool (POST /api/t3team/widget/tool-call; the server enforces the capability
  * allowlist through the tool broker). The parent handles only the fixed message types and
  * never evaluates strings from the iframe. Pure limits/transport live in the bridge client.
@@ -9,11 +9,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ScopedThreadRef, T3TeamMessageWidgetAttachment } from "@t3tools/contracts";
-import { CommandId, MessageId } from "@t3tools/contracts";
 
 import { useThemeSnapshot } from "~/hooks/useTheme";
 import { useBackend } from "~/t3team/backend/t3team-BackendContext";
-import { useThread } from "~/state/entities";
+import { useThreadShell } from "~/state/entities";
+import { sendT3TeamThreadTurn } from "~/t3team/chat/t3team-sendThreadTurn";
 import {
   claimWidgetPromptSlot,
   isWidgetCallId,
@@ -61,7 +61,7 @@ export function useT3TeamWidgetBlockController(input: {
 }) {
   const { widget, threadRef } = input;
   const backend = useBackend();
-  const thread = useThread(threadRef);
+  const thread = useThreadShell(threadRef);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [height, setHeight] = useState(T3TEAM_WIDGET_MIN_HEIGHT);
   const nonce = useMemo(randomWidgetNonce, []);
@@ -103,21 +103,11 @@ export function useT3TeamWidgetBlockController(input: {
         widgetTitle: widget.title,
         text: trimmed,
       });
-      await backend.dispatchCommand({
-        type: "thread.turn.start",
-        commandId: CommandId.make(`web:t3team-widget:turn:${randomWidgetNonce()}`),
+      await sendT3TeamThreadTurn({
+        backend,
         threadId: threadRef.threadId,
-        message: {
-          messageId: MessageId.make(randomWidgetNonce()),
-          role: "user",
-          text: transport.text,
-          attachments: [],
-          t3teamExt: transport.t3teamExt,
-        },
-        modelSelection: thread.modelSelection,
-        runtimeMode: thread.runtimeMode,
-        interactionMode: thread.interactionMode,
-        createdAt: new Date().toISOString(),
+        text: transport.text,
+        t3teamExt: transport.t3teamExt,
       });
     },
     [backend, thread, threadRef, widget.widgetId, widget.title],

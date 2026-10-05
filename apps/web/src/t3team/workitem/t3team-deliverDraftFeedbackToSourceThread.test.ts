@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vite-plus/test";
-import type { ClientOrchestrationCommand } from "@t3tools/contracts";
+import type { StartThreadTurnInput } from "@t3tools/client-runtime/operations";
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { useT3TeamDraftMutationStore } from "~/t3team/t3team-draftMutationStore";
@@ -20,14 +20,16 @@ const draft: T3TeamDraftMutation = {
 };
 
 function fakeBackend(input?: { readonly rejectWith?: string }) {
-  const commands: ClientOrchestrationCommand[] = [];
+  const turns: StartThreadTurnInput[] = [];
   const backend = {
-    async dispatchCommand(command: ClientOrchestrationCommand) {
-      if (input?.rejectWith) throw new Error(input.rejectWith);
-      commands.push(command);
+    orchestration: {
+      async startThreadTurn(turn: StartThreadTurnInput) {
+        if (input?.rejectWith) throw new Error(input.rejectWith);
+        turns.push(turn);
+      },
     },
   } as unknown as BackendApi;
-  return { backend, commands };
+  return { backend, commands: turns };
 }
 
 describe("deliverDraftFeedbackToSourceThread", () => {
@@ -48,8 +50,8 @@ describe("deliverDraftFeedbackToSourceThread", () => {
     });
 
     expect(commands).toHaveLength(1);
-    expect(commands[0]).toMatchObject({ type: "thread.turn.start", threadId: "thread-1" });
-    const text = (commands[0] as { message: { text: string } }).message.text;
+    expect(commands[0]).toMatchObject({ threadId: "thread-1" });
+    const text = commands[0]!.message.text;
     expect(text).toContain("Wrong person — it should go to Sam.");
     expect(text).toContain("PROJ-42");
     expect(useT3TeamDraftMutationStore.getState().drafts[0]).not.toHaveProperty("error");

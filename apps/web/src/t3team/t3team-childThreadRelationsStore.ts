@@ -17,7 +17,7 @@ import type { ProjectThread } from "~/t3team/t3team-types";
  * `ChatView` instance is also wasted work even when it does hydrate.
  *
  * So instead of a second `useProjectStore()`/`useT3TeamChildThreadRelations()` call anywhere else,
- * this one-field mirror lets other chrome (the Agents panel fork section) read the SAME relations
+ * this one-field mirror lets other chrome (the sub-run tree) read the SAME relations
  * the sidebar already computed, without a prop path through upstream's component tree.
  */
 type T3TeamChildThreadRelationsState = {

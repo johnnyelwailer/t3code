@@ -8,7 +8,7 @@
  * this server. Never a name or pattern. Anything that fails is listed as
  * skipped with its reason, never signaled.
  *
- * The agent session itself is stopped through its provider (`thread.session.stop`):
+ * The agent session itself is stopped through its provider (`provider-session.detach`):
  * no provider adapter reports its CLI's PID, so the provider's own stop is the
  * only per-thread identity for that process tree.
  *

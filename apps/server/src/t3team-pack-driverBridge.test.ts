@@ -1,331 +1,373 @@
 import { describe, expect, it } from "@effect/vitest";
-import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  ProviderInstanceId,
+  ProviderSessionId,
+  ProviderThreadId,
+  ProviderTurnId,
+  ThreadId,
+} from "@t3tools/contracts";
 import type {
   PackProviderDriverDefinition,
-  PackProviderInstance,
-  PackSendTurnInput,
-  PackSessionStartInput,
-} from "@t3team/packs";
+  PackSessionRuntime,
+  PackTurnInput,
+} from "@t3team/pack-api";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
 import { clearMcpProviderSession, setMcpProviderSession } from "./mcp/McpProviderSession.ts";
+import * as ProviderContinuationRequests from "./orchestration-v2/ProviderContinuationRequests.ts";
 import { layerTest as serverSettingsLayerTest } from "./serverSettings.ts";
+import {
+  CAPABILITIES_JSON,
+  makeScriptedPack,
+  PACK_DRIVER,
+  providerThreadJson,
+  turnInputJson,
+} from "./t3team-pack-driver.fixtures.ts";
 import { bridgePackProviderDriver } from "./t3team-pack-driverBridge.ts";
+import { PackCodec } from "./t3team-pack-driverCodec.ts";
 
-const validEvent = {
-  type: "session.started",
-  eventId: "e1",
-  createdAt: "2026-02-28T00:00:00.000Z",
-  threadId: "thread-1",
-  payload: { message: "hello" },
-};
+const decodeTurnInput = Schema.decodeUnknownEffect(PackCodec.turnInput);
 
-const baseInstance = (log: string[]): PackProviderInstance => ({
-  snapshot: () => ({
-    displayName: "Fake",
-    enabled: true,
-    installed: true,
-    version: null,
-    status: "ready",
-    models: [{ slug: "nexi/coding", name: "Coding" }],
-  }),
-  startSession: async (input) => {
-    log.push(`start:${input.threadId}:${String(input.resumeCursor)}`);
-    return {
-      threadId: input.threadId,
-      status: "ready",
-      runtimeMode: input.runtimeMode,
-      resumeCursor: input.resumeCursor ?? "cursor-default",
-    };
-  },
-  sendTurn: async (input) => ({ threadId: input.threadId, turnId: "turn-1" }),
-  interruptTurn: async () => undefined,
-  respondToRequest: async () => undefined,
-  respondToUserInput: async () => undefined,
-  stopSession: async () => undefined,
-  hasSession: async (threadId) => threadId === "known",
-  listSessions: async () => [{ threadId: "known", status: "ready", runtimeMode: "full-access" }],
-  readThread: async (threadId) => ({ threadId, turns: [] }),
-  rollbackThread: async (threadId) => ({ threadId, turns: [] }),
-  stopAll: async () => undefined,
-  events: async function* () {
-    yield validEvent;
-    yield { type: "not-a-real-event", eventId: "e2" };
-  },
-  dispose: async () => {
-    log.push("dispose");
-  },
-});
+const instanceId = ProviderInstanceId.make(PACK_DRIVER);
+const threadId = ThreadId.make("thread-1");
+const providerSessionId = ProviderSessionId.make("provider-session-1");
+const modelSelection = { instanceId, model: "example/model" };
+const runtimePolicy = {
+  runtimeMode: "full-access",
+  interactionMode: "default",
+  cwd: "/work",
+} as const;
 
-const makeInstance = (
-  log: string[],
-  overrides: Partial<PackProviderInstance> = {},
-): PackProviderInstance => ({ ...baseInstance(log), ...overrides });
-
-const definitionFor = (instance: PackProviderInstance): PackProviderDriverDefinition => ({
-  schemaVersion: 1,
-  driver: "nexi",
-  displayName: "Nexi",
-  create: async () => instance,
-});
-
-const createDefinitionInScope = (definition: PackProviderDriverDefinition) =>
+const createInScope = (definition: PackProviderDriverDefinition) =>
   Effect.gen(function* () {
     const scope = yield* Scope.make();
-    const built = yield* bridgePackProviderDriver(definition)
-      .create({
-        instanceId: ProviderInstanceId.make("nexi"),
-        displayName: "Nexi",
-        environment: [],
-        enabled: true,
-        config: {},
-      })
+    const instance = yield* bridgePackProviderDriver(definition)
+      .create({ instanceId, displayName: "Example", environment: [], enabled: true, config: {} })
       .pipe(Effect.provideService(Scope.Scope, scope));
-    return { scope, instance: built };
+    return { scope, instance };
   });
 
-const createInScope = (instance: PackProviderInstance) =>
+const openSession = (definition: PackProviderDriverDefinition) =>
   Effect.gen(function* () {
-    const scope = yield* Scope.make();
-    const built = yield* bridgePackProviderDriver(definitionFor(instance))
-      .create({
-        instanceId: ProviderInstanceId.make("nexi"),
-        displayName: "Nexi",
-        environment: [],
-        enabled: true,
-        config: {},
-      })
-      .pipe(Effect.provideService(Scope.Scope, scope));
-    return { scope, instance: built };
+    const { scope, instance } = yield* createInScope(definition);
+    const sessionScope = yield* Scope.make();
+    const runtime = yield* instance.orchestrationAdapter
+      .openSession({ threadId, providerSessionId, modelSelection, runtimePolicy })
+      .pipe(Effect.provideService(Scope.Scope, sessionScope));
+    return { scope, sessionScope, instance, runtime };
   });
 
-describe("bridgePackProviderDriver", () => {
-  it.effect("materializes an instance and round-trips the adapter surface", () =>
+const withSession = (session: Partial<PackSessionRuntime>) =>
+  makeScriptedPack({ session }).definition;
+
+describe("bridgePackProviderDriver (orchestration V2)", () => {
+  it.effect("maps the pack adapter and an open session one-to-one", () =>
     Effect.gen(function* () {
-      const log: string[] = [];
-      const { scope, instance } = yield* createInScope(makeInstance(log));
-      expect(instance.driverKind).toBe("nexi");
-
-      const session = yield* instance.adapter.startSession({
-        threadId: ThreadId.make("thread-1"),
-        runtimeMode: "full-access",
-        resumeCursor: "cursor-9",
-      });
-      expect(session.provider).toBe("nexi");
-      expect(session.providerInstanceId).toBe("nexi");
-      expect(session.resumeCursor).toBe("cursor-9");
-      expect(log).toContain("start:thread-1:cursor-9");
-
-      expect(yield* instance.adapter.hasSession(ThreadId.make("known"))).toBe(true);
-      expect(yield* instance.adapter.hasSession(ThreadId.make("missing"))).toBe(false);
-
-      const sessions = yield* instance.adapter.listSessions();
-      expect(sessions.map((entry) => entry.provider)).toEqual(["nexi"]);
-
-      const events = yield* Stream.runCollect(instance.adapter.streamEvents);
-      expect(events).toHaveLength(1);
-      expect(events[0]?.provider).toBe("nexi");
-      expect(events[0]?.type).toBe("session.started");
-
-      const snapshot = yield* instance.snapshot.getSnapshot;
-      expect(snapshot.driver).toBe("nexi");
-      expect(snapshot.configurationSource).toBe("pack");
-
-      expect(log).not.toContain("dispose");
-      yield* Scope.close(scope, Exit.void);
-      expect(log).toContain("dispose");
-    }),
-  );
-
-  it.effect("forwards all session and turn fields to the pack (fix 1)", () =>
-    Effect.gen(function* () {
-      const log: string[] = [];
-      const startArgs: PackSessionStartInput[] = [];
-      const turnArgs: PackSendTurnInput[] = [];
-      const { instance } = yield* createInScope(
-        makeInstance(log, {
-          startSession: async (input) => {
-            startArgs.push(input);
-            return { threadId: input.threadId, status: "ready", runtimeMode: input.runtimeMode };
-          },
-          sendTurn: async (input) => {
-            turnArgs.push(input);
-            return { threadId: input.threadId, turnId: "turn-1" };
-          },
-        }),
-      );
-
-      const modelSelection = { instanceId: "nexi", model: "nexi/coding" } as never;
-      const startThreadId = ThreadId.make("thread-1");
+      const pack = makeScriptedPack();
       setMcpProviderSession({
         environmentId: EnvironmentId.make("environment-1"),
-        threadId: startThreadId,
-        providerSessionId: "provider-session-1",
-        providerInstanceId: ProviderInstanceId.make("nexi"),
-        capabilities: new Set<never>(),
+        threadId,
+        providerSessionId,
+        providerInstanceId: instanceId,
+        browserToolsAvailable: false,
         endpoint: "http://127.0.0.1:3000/mcp",
         authorizationHeader: "Bearer provider-token",
       });
-      yield* instance.adapter
-        .startSession({
-          threadId: startThreadId,
-          runtimeMode: "full-access",
-          modelSelection,
-          approvalPolicy: "on-request",
-          sandboxMode: "workspace-write",
-        })
-        .pipe(Effect.ensuring(Effect.sync(() => clearMcpProviderSession(startThreadId))));
-      expect(startArgs[0]).toEqual(
-        expect.objectContaining({
-          mcp: {
-            endpoint: "http://127.0.0.1:3000/mcp",
-            authorizationHeader: "Bearer provider-token",
-          },
-        }),
-      );
-      expect(startArgs[0]?.modelSelection).toEqual({ instanceId: "nexi", model: "nexi/coding" });
-      expect(startArgs[0]?.approvalPolicy).toBe("on-request");
-      expect(startArgs[0]?.sandboxMode).toBe("workspace-write");
+      const { instance, runtime, sessionScope, scope } = yield* openSession(pack.definition);
+      clearMcpProviderSession(threadId);
 
-      yield* instance.adapter.sendTurn({
-        threadId: ThreadId.make("thread-1"),
-        input: "hi",
-        attachments: [{ type: "image", id: "a1", name: "x", mimeType: "image/png", sizeBytes: 1 }],
-        modelSelection,
-        interactionMode: "plan",
+      expect(instance.orchestrationAdapter.driver).toBe(PACK_DRIVER);
+      const capabilities = yield* instance.orchestrationAdapter.getCapabilities();
+      expect(capabilities.turns).toEqual((CAPABILITIES_JSON as { readonly turns: unknown }).turns);
+      expect(
+        yield* instance.orchestrationAdapter.planSelectionTransition({
+          current: modelSelection,
+          target: { ...modelSelection, model: "other" },
+          sessionCapabilities: capabilities,
+        }),
+      ).toEqual({ type: "apply_on_next_turn" });
+
+      const opened = pack.opened[0]!;
+      expect(opened.providerSessionId).toBe(providerSessionId);
+      expect(opened.runtimePolicy.cwd).toBe("/work");
+      expect(opened.mcp).toEqual({
+        endpoint: "http://127.0.0.1:3000/mcp",
+        authorizationHeader: "Bearer provider-token",
       });
-      expect(turnArgs[0]?.attachments).toHaveLength(1);
-      expect(turnArgs[0]?.modelSelection).toEqual({ instanceId: "nexi", model: "nexi/coding" });
-      expect(turnArgs[0]?.interactionMode).toBe("plan");
+      // The host stamps the session identity whatever the pack reports.
+      expect(runtime.providerSession.id).toBe(providerSessionId);
+      expect(runtime.providerSession.driver).toBe(PACK_DRIVER);
+      expect(runtime.providerSession.providerInstanceId).toBe(instanceId);
+
+      const providerThread = yield* runtime.ensureThread({
+        threadId,
+        modelSelection,
+        runtimePolicy,
+      });
+      expect(providerThread.id).toBe(ProviderThreadId.make("provider-thread:thread-1"));
+      const snapshot = yield* runtime.readThreadSnapshot({ providerThread });
+      expect(snapshot.providerThread.id).toBe(providerThread.id);
+
+      yield* Scope.close(sessionScope, Exit.void);
+      expect(pack.log).toContain("close");
+      yield* Scope.close(scope, Exit.void);
+      expect(pack.log.at(-1)).toBe("dispose");
     }),
   );
 
-  it.effect("ends the event stream when the instance scope closes (fix 2)", () =>
+  it.effect("gives every turn the MCP access of its own thread", () =>
     Effect.gen(function* () {
-      const log: string[] = [];
-      const { scope, instance } = yield* createInScope(
-        makeInstance(log, {
-          events: async function* () {
-            yield validEvent;
-            // Never terminates on its own — only scope close should end it.
-            await new Promise<void>(() => {});
+      const steered: Array<PackTurnInput["mcp"]> = [];
+      const pack = makeScriptedPack({
+        session: {
+          steerTurn: async (input) => {
+            steered.push(input.mcp);
           },
-        }),
+        },
+      });
+      const { runtime } = yield* openSession(pack.definition);
+      const secondThreadId = ThreadId.make("thread-2");
+      setMcpProviderSession({
+        environmentId: EnvironmentId.make("environment-1"),
+        threadId: secondThreadId,
+        providerSessionId,
+        providerInstanceId: instanceId,
+        browserToolsAvailable: false,
+        endpoint: "http://127.0.0.1:3000/mcp",
+        authorizationHeader: "Bearer thread-2-token",
+      });
+      const turn = yield* decodeTurnInput(turnInputJson(secondThreadId, providerSessionId));
+      yield* runtime.startTurn(turn);
+      yield* runtime.steerTurn({
+        threadId: secondThreadId,
+        runId: turn.runId,
+        providerThread: turn.providerThread,
+        providerTurnId: ProviderTurnId.make("provider-turn-1"),
+        message: turn.message,
+      });
+      clearMcpProviderSession(secondThreadId);
+      yield* runtime.startTurn(
+        yield* decodeTurnInput(turnInputJson("thread-3", providerSessionId)),
       );
-      const fiber = yield* Stream.runForEach(instance.adapter.streamEvents, () => Effect.void).pipe(
-        Effect.forkChild,
-      );
-      yield* Scope.close(scope, Exit.void);
+
+      const secondThreadAccess = {
+        endpoint: "http://127.0.0.1:3000/mcp",
+        authorizationHeader: "Bearer thread-2-token",
+      };
+      // The session was opened by thread-1, which had no access of its own.
+      expect(pack.opened[0]?.mcp).toBeUndefined();
+      expect(pack.turns.map((seen) => seen.mcp)).toEqual([secondThreadAccess, undefined]);
+      expect(steered).toEqual([secondThreadAccess]);
+    }),
+  );
+
+  it.effect("restamps and decodes events, dropping undecodable ones", () =>
+    Effect.gen(function* () {
+      const pack = makeScriptedPack();
+      const { runtime } = yield* openSession(pack.definition);
+      pack.events.push({ type: "not-a-real-event" });
+      pack.events.push({
+        type: "provider_thread.updated",
+        driver: "someone-else",
+        providerThread: providerThreadJson(threadId, providerSessionId),
+      });
+      const [event] = yield* runtime.events.pipe(Stream.take(1), Stream.runCollect);
+      expect(event?.type).toBe("provider_thread.updated");
+      expect(event?.driver).toBe(PACK_DRIVER);
+    }),
+  );
+
+  it.effect("fails the stream on an undecodable turn.terminal so the run cannot hang", () =>
+    Effect.gen(function* () {
+      const pack = makeScriptedPack();
+      const { runtime } = yield* openSession(pack.definition);
+      pack.events.push({ type: "turn.terminal", status: "completed" });
+      const error = yield* runtime.events.pipe(Stream.runDrain, Effect.flip);
+      expect(error._tag).toBe("ProviderAdapterProtocolError");
+    }),
+  );
+
+  it.effect("ends the event stream when the session scope closes", () =>
+    Effect.gen(function* () {
+      const pack = makeScriptedPack({ session: { close: async () => undefined } });
+      const { runtime, sessionScope } = yield* openSession(pack.definition);
+      const fiber = yield* runtime.events.pipe(Stream.runDrain, Effect.forkChild);
+      yield* Effect.yieldNow;
+      yield* Scope.close(sessionScope, Exit.void);
       const exit = yield* Fiber.await(fiber);
       expect(Exit.isSuccess(exit)).toBe(true);
     }),
   );
 
-  it.effect("synthesizes a turn failure for an undecodable terminal event (fix 6)", () =>
+  // Live clock: the late close runs on a detached fiber outside the test clock.
+  it.live("closes a pack session that resolves after its open was interrupted", () =>
     Effect.gen(function* () {
-      const log: string[] = [];
-      const { instance } = yield* createInScope(
-        makeInstance(log, {
-          events: async function* () {
-            yield { type: "bogus", eventId: "b1", threadId: "t1", turnId: "u1" };
-            yield { type: "bogus", eventId: "b2" };
-          },
-        }),
-      );
-      const events = yield* Stream.runCollect(instance.adapter.streamEvents);
-      expect(events).toHaveLength(1);
-      expect(events[0]?.type).toBe("turn.completed");
-      expect(events[0]?.provider).toBe("nexi");
-      expect(events[0]?.turnId).toBe("u1");
-    }),
-  );
-
-  it.effect("recovers when events() throws synchronously (fix 3a)", () =>
-    Effect.gen(function* () {
-      const log: string[] = [];
-      const { instance } = yield* createInScope(
-        makeInstance(log, {
-          events: () => {
-            throw new Error("sync boom");
-          },
-        }),
-      );
-      const events = yield* Stream.runCollect(instance.adapter.streamEvents);
-      expect(events).toHaveLength(0);
-    }),
-  );
-
-  it.effect("degrades a throwing snapshot to an error snapshot (fix 3b)", () =>
-    Effect.gen(function* () {
-      const log: string[] = [];
-      const { instance } = yield* createInScope(
-        makeInstance(log, {
-          snapshot: () => {
-            throw new Error("snap boom");
-          },
-        }),
-      );
-      const snapshot = yield* instance.snapshot.getSnapshot;
-      expect(snapshot.status).toBe("error");
-      expect(snapshot.installed).toBe(false);
-      expect(snapshot.message).toContain("snap boom");
-    }),
-  );
-
-  it.effect("tolerates a malformed thread snapshot (fix 3c)", () =>
-    Effect.gen(function* () {
-      const log: string[] = [];
-      const { instance } = yield* createInScope(
-        makeInstance(log, {
-          readThread: async (threadId) =>
-            ({ threadId, turns: "not-an-array" }) as unknown as {
-              threadId: string;
-              turns: readonly unknown[];
+      const pack = makeScriptedPack();
+      let started!: () => void;
+      const openStarted = new Promise<void>((resolve) => (started = resolve));
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      let closed!: () => void;
+      const closeCalled = new Promise<void>((resolve) => (closed = resolve));
+      const { instance } = yield* createInScope({
+        ...pack.definition,
+        create: async () => ({
+          ...pack.instance,
+          orchestration: {
+            ...pack.instance.orchestration,
+            openSession: async (input) => {
+              started();
+              await gate;
+              const session = await pack.instance.orchestration.openSession(input);
+              return {
+                ...session,
+                close: async () => {
+                  pack.log.push("close");
+                  closed();
+                },
+              };
             },
+          },
         }),
+      });
+      const sessionScope = yield* Scope.make();
+      const fiber = yield* instance.orchestrationAdapter
+        .openSession({ threadId, providerSessionId, modelSelection, runtimePolicy })
+        .pipe(Effect.provideService(Scope.Scope, sessionScope), Effect.forkChild);
+      yield* Effect.promise(() => openStarted);
+      yield* Fiber.interrupt(fiber);
+      expect(pack.log).not.toContain("close");
+
+      release();
+      // Bounded only so a regression fails instead of hanging; the close lands in a few ticks.
+      const outcome = yield* Effect.promise(() => closeCalled).pipe(
+        Effect.timeoutOption(Duration.seconds(2)),
       );
-      const snapshot = yield* instance.adapter.readThread(ThreadId.make("t1"));
-      expect(snapshot.turns).toEqual([]);
+      expect(Option.isSome(outcome)).toBe(true);
+      expect(pack.log.filter((entry) => entry === "close")).toEqual(["close"]);
     }),
   );
 
-  it.effect("bounds a hung dispose() with a timeout (fix 4)", () =>
+  it.effect("reports missing optional methods as the adapter's own errors", () =>
     Effect.gen(function* () {
-      const log: string[] = [];
+      const { runtime } = yield* openSession(makeScriptedPack().definition);
+      const providerThread = yield* runtime.ensureThread({
+        threadId,
+        modelSelection,
+        runtimePolicy,
+      });
+      const steer = yield* runtime
+        .steerTurn({
+          threadId,
+          runId: "run-1" as never,
+          providerThread,
+          providerTurnId: "turn-1" as never,
+          message: {
+            messageId: "message-1" as never,
+            text: "more",
+            attachments: [],
+            createdBy: "user",
+            creationSource: "web",
+          },
+        })
+        .pipe(Effect.flip);
+      expect(steer._tag).toBe("ProviderAdapterSteerRunUnsupportedError");
+      expect(runtime.jobControl).toBeUndefined();
+      expect(runtime.injectHistory).toBeUndefined();
+    }),
+  );
+
+  it.effect("forwards job control and decodes its result", () =>
+    Effect.gen(function* () {
+      const requests: unknown[] = [];
+      const { runtime } = yield* openSession(
+        withSession({
+          jobControl: async (input) => {
+            requests.push(input.request);
+            return { kind: "unknown-job", jobId: "job-1" };
+          },
+        }),
+      );
+      const providerThread = yield* runtime.ensureThread({
+        threadId,
+        modelSelection,
+        runtimePolicy,
+      });
+      const result = yield* runtime.jobControl!({
+        providerThread,
+        request: { kind: "cancel", jobId: "job-1" },
+      });
+      expect(result).toEqual({ kind: "unknown-job", jobId: "job-1" });
+      expect(requests).toEqual([{ kind: "cancel", jobId: "job-1" }]);
+    }),
+  );
+
+  it.effect("offers a pack wake request to the host continuation queue", () =>
+    Effect.gen(function* () {
+      const pack = makeScriptedPack();
+      yield* openSession(pack.definition);
+      pack.requestContinuation({
+        threadId,
+        providerThreadId: "provider-thread:thread-1",
+        detail: "Job job-1 finished.",
+        notification: {
+          source: { kind: "background_command" },
+          outcome: "completed",
+          summary: "Job finished",
+        },
+        delivery: "message_text",
+      });
+      const requests = yield* ProviderContinuationRequests.ProviderContinuationRequests;
+      const request = yield* requests.take;
+      expect(request.threadId).toBe(threadId);
+      expect(request.driver).toBe(PACK_DRIVER);
+      expect(request.detail).toBe("Job job-1 finished.");
+      expect(request.delivery).toBe("message_text");
+      expect(request.notification?.summary).toBe("Job finished");
+    }).pipe(Effect.provide(Layer.fresh(ProviderContinuationRequests.layer))),
+  );
+
+  it.effect("bounds a hung dispose() with a timeout", () =>
+    Effect.gen(function* () {
+      const pack = makeScriptedPack();
       let disposeCalled = false;
-      const { scope } = yield* createInScope(
-        makeInstance(log, {
+      const { scope } = yield* createInScope({
+        ...pack.definition,
+        create: async () => ({
+          ...pack.instance,
           dispose: () => {
             disposeCalled = true;
             return new Promise<void>(() => {});
           },
         }),
-      );
+      });
       const closeFiber = yield* Scope.close(scope, Exit.void).pipe(Effect.forkChild);
       yield* TestClock.adjust(Duration.seconds(5));
-      const exit = yield* Fiber.await(closeFiber);
-      expect(Exit.isSuccess(exit)).toBe(true);
+      expect(Exit.isSuccess(yield* Fiber.await(closeFiber))).toBe(true);
       expect(disposeCalled).toBe(true);
     }),
   );
 
   it.effect("surfaces a pack create rejection as ProviderDriverError", () =>
     Effect.gen(function* () {
-      const driver = bridgePackProviderDriver({
-        schemaVersion: 1,
+      const error = yield* bridgePackProviderDriver({
+        schemaVersion: 2,
         driver: "boom",
         displayName: "Boom",
         create: async () => {
           throw new Error("nope");
         },
-      });
-      const result = yield* driver
+      })
         .create({
           instanceId: ProviderInstanceId.make("boom"),
           displayName: "Boom",
@@ -334,52 +376,33 @@ describe("bridgePackProviderDriver", () => {
           config: {},
         })
         .pipe(Effect.scoped, Effect.flip);
-      expect(result._tag).toBe("ProviderDriverError");
-      expect(result.detail).toContain("nope");
+      expect(error._tag).toBe("ProviderDriverError");
+      expect(error.detail).toContain("nope");
     }),
   );
 
-  it.effect("passes the global agent-instructions setting to the pack create", () =>
+  it.effect("passes the agent-instructions setting to create, omitting it when unset", () =>
     Effect.gen(function* () {
-      let received: string | undefined;
-      const { scope } = yield* createDefinitionInScope({
-        schemaVersion: 1,
-        driver: "nexi",
-        displayName: "Nexi",
-        create: async (input) => {
-          received = input.agentInstructions;
-          return baseInstance([]);
-        },
-      }).pipe(Effect.provide(serverSettingsLayerTest({ agentInstructions: "Be brief." })));
-      expect(received).toBe("Be brief.");
-      yield* Scope.close(scope, Exit.void);
-    }),
-  );
-
-  it.effect("omits agent-instructions when the setting is empty or unreadable", () =>
-    Effect.gen(function* () {
+      const pack = makeScriptedPack();
       const capture = () => {
-        let received: string | undefined;
-        return createDefinitionInScope({
-          schemaVersion: 1,
-          driver: "nexi",
-          displayName: "Nexi",
+        const seen: Array<string | undefined> = [];
+        return createInScope({
+          ...pack.definition,
           create: async (input) => {
-            received = input.agentInstructions;
-            return baseInstance([]);
+            seen.push(input.agentInstructions);
+            return pack.instance;
           },
-        }).pipe(Effect.map(({ scope }) => ({ scope, received })));
+        }).pipe(Effect.map(({ scope }) => ({ scope, seen })));
       };
-
-      // Empty setting → field omitted (pack falls back to its default).
-      const emptyRun = yield* capture().pipe(Effect.provide(serverSettingsLayerTest({})));
-      expect(emptyRun.received).toBeUndefined();
-      yield* Scope.close(emptyRun.scope, Exit.void);
-
-      // No settings service at all → fail-open, still omitted.
-      const bareRun = yield* capture();
-      expect(bareRun.received).toBeUndefined();
-      yield* Scope.close(bareRun.scope, Exit.void);
+      const set = yield* capture().pipe(
+        Effect.provide(serverSettingsLayerTest({ agentInstructions: "Be brief." })),
+      );
+      expect(set.seen).toEqual(["Be brief."]);
+      const empty = yield* capture().pipe(Effect.provide(serverSettingsLayerTest({})));
+      expect(empty.seen).toEqual([undefined]);
+      const bare = yield* capture();
+      expect(bare.seen).toEqual([undefined]);
+      for (const run of [set, empty, bare]) yield* Scope.close(run.scope, Exit.void);
     }),
   );
 });

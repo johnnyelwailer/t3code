@@ -1,14 +1,21 @@
 /**
- * Launch-preview command builder for the play-as-shape view. `buildWorkflowShapePreviewCommand`
- * turns a `.workflow.ts` source into a `thread.message.upsert` carrying the `t3team.workflow.shape`
- * view (a system, user-visible message tagged with the owning run), or null when there is nothing
- * to show. The shape derivation itself is covered in the SDK's `deriveWorkflowShape` test.
+ * Launch-preview message builder for the play-as-shape view. `buildWorkflowShapePreviewMessage`
+ * turns a `.workflow.ts` source into a system, user-visible message carrying the
+ * `t3team.workflow.shape` view, tagged with the owning run. The shape derivation itself is covered
+ * in the SDK's `deriveWorkflowShape` test.
  */
 
 import { PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_SHAPE } from "@t3tools/project-recipes";
 import { describe, expect, it } from "vite-plus/test";
 
-import { buildWorkflowShapePreviewCommand } from "./t3team-workflowShapePreview.ts";
+import { buildWorkflowShapePreviewMessage } from "./t3team-workflowShapePreview.ts";
+import type { WorkflowHostMessageInput } from "./t3team-workflowHostPort.ts";
+
+const viewOf = (message: WorkflowHostMessageInput) => {
+  const attachment = message.ext?.attachments?.[0];
+  if (attachment?.kind !== "view") throw new Error("expected a view attachment");
+  return attachment;
+};
 
 const SOURCE = [
   `export const meta = {`,
@@ -26,32 +33,23 @@ const baseInput = {
   threadId: "thread-1",
   workflowPath: "/abs/shape.demo.workflow.ts",
   runId: "run-1",
-  nowIso: "2026-06-14T00:00:00.000Z",
 };
 
-describe("buildWorkflowShapePreviewCommand", () => {
+describe("buildWorkflowShapePreviewMessage", () => {
   it("builds a system message carrying the shape view", () => {
-    const command = buildWorkflowShapePreviewCommand({ ...baseInput, sourceText: SOURCE });
+    const message = buildWorkflowShapePreviewMessage({ ...baseInput, sourceText: SOURCE });
 
-    expect(command).not.toBeNull();
-    if (command === null || command.type !== "thread.message.upsert") {
-      throw new Error("expected a thread.message.upsert command");
-    }
-    expect(command.message.role).toBe("system");
+    expect(message.role).toBe("system");
+    expect(message.threadId).toBe("thread-1");
     // Run-stable message id: a re-emission for the same run replaces the plan card in place
     // (one card per run), it never appends a second "Plan:" card.
-    expect(String(command.message.messageId)).toBe("t3team-wf-shape:run-1");
-    const reEmitted = buildWorkflowShapePreviewCommand({ ...baseInput, sourceText: SOURCE });
-    if (reEmitted.type !== "thread.message.upsert") {
-      throw new Error("expected a thread.message.upsert command");
-    }
-    expect(String(reEmitted.message.messageId)).toBe("t3team-wf-shape:run-1");
-    expect(command.message.t3teamExt?.visibleToUser).toBe(true);
-    expect(command.message.t3teamExt?.author).toEqual({ kind: "system", workflowRunId: "run-1" });
+    expect(message.messageId).toBe("t3team-wf-shape:run-1");
+    const reEmitted = buildWorkflowShapePreviewMessage({ ...baseInput, sourceText: SOURCE });
+    expect(reEmitted.messageId).toBe("t3team-wf-shape:run-1");
+    expect(message.ext?.visibleToUser).toBe(true);
+    expect(message.ext?.author).toEqual({ kind: "system", workflowRunId: "run-1" });
 
-    const attachment = command.message.t3teamExt?.attachments?.[0];
-    expect(attachment?.kind).toBe("view");
-    if (attachment?.kind !== "view") throw new Error("expected a view attachment");
+    const attachment = viewOf(message);
     expect(attachment.miniappId).toBe(PROJECT_RECIPE_MESSAGE_VIEW_WORKFLOW_SHAPE);
     expect(attachment.props).toMatchObject({
       name: "shape.demo",
@@ -66,7 +64,7 @@ describe("buildWorkflowShapePreviewCommand", () => {
   });
 
   it("includes declared capabilities in the shape payload (pre-execution disclosure)", () => {
-    const command = buildWorkflowShapePreviewCommand({
+    const command = buildWorkflowShapePreviewMessage({
       ...baseInput,
       sourceText: [
         `export const meta = {`,
@@ -77,11 +75,7 @@ describe("buildWorkflowShapePreviewCommand", () => {
       ].join("\n"),
     });
 
-    if (command.type !== "thread.message.upsert") {
-      throw new Error("expected a thread.message.upsert command");
-    }
-    const attachment = command.message.t3teamExt?.attachments?.[0];
-    if (attachment?.kind !== "view") throw new Error("expected a view attachment");
+    const attachment = viewOf(command);
     expect(attachment.props).toMatchObject({
       name: "shape.gated",
       capabilities: [
@@ -92,27 +86,19 @@ describe("buildWorkflowShapePreviewCommand", () => {
   });
 
   it("omits the capabilities field entirely for a capability-less workflow", () => {
-    const command = buildWorkflowShapePreviewCommand({ ...baseInput, sourceText: SOURCE });
+    const command = buildWorkflowShapePreviewMessage({ ...baseInput, sourceText: SOURCE });
 
-    if (command.type !== "thread.message.upsert") {
-      throw new Error("expected a thread.message.upsert command");
-    }
-    const attachment = command.message.t3teamExt?.attachments?.[0];
-    if (attachment?.kind !== "view") throw new Error("expected a view attachment");
+    const attachment = viewOf(command);
     expect(attachment.props).not.toHaveProperty("capabilities");
   });
 
   it("keeps declared capabilities even when the shape falls back to the minimal card", () => {
-    const command = buildWorkflowShapePreviewCommand({
+    const command = buildWorkflowShapePreviewMessage({
       ...baseInput,
       sourceText: `export const meta = { name: "empty.gated", capabilities: ["schedule"] } as const;\nreturn 1;`,
     });
 
-    if (command.type !== "thread.message.upsert") {
-      throw new Error("expected a thread.message.upsert command");
-    }
-    const attachment = command.message.t3teamExt?.attachments?.[0];
-    if (attachment?.kind !== "view") throw new Error("expected a view attachment");
+    const attachment = viewOf(command);
     expect(attachment.props).toMatchObject({
       phases: [],
       steps: [],
@@ -121,17 +107,12 @@ describe("buildWorkflowShapePreviewCommand", () => {
   });
 
   it("falls back to a minimal shape (never null) for a source with no phases and no steps", () => {
-    const command = buildWorkflowShapePreviewCommand({
+    const command = buildWorkflowShapePreviewMessage({
       ...baseInput,
       sourceText: `export const meta = { name: "empty" } as const;\nreturn 1;`,
     });
 
-    expect(command).not.toBeNull();
-    if (command.type !== "thread.message.upsert") {
-      throw new Error("expected a thread.message.upsert command");
-    }
-    const attachment = command.message.t3teamExt?.attachments?.[0];
-    if (attachment?.kind !== "view") throw new Error("expected a view attachment");
+    const attachment = viewOf(command);
     expect(attachment.props).toMatchObject({
       name: "shape.demo",
       phases: [],
@@ -141,19 +122,14 @@ describe("buildWorkflowShapePreviewCommand", () => {
   });
 
   it("falls back to a minimal shape (never null) when derivation throws", () => {
-    const command = buildWorkflowShapePreviewCommand({
+    const command = buildWorkflowShapePreviewMessage({
       ...baseInput,
       workflowPath: "/abs/broken-workflow.ts",
       sourceText: "export const meta = {{{ not valid typescript at all (((",
     });
 
-    expect(command).not.toBeNull();
-    if (command.type !== "thread.message.upsert") {
-      throw new Error("expected a thread.message.upsert command");
-    }
-    expect(command.message.text).toBe("Plan: broken-workflow");
-    const attachment = command.message.t3teamExt?.attachments?.[0];
-    if (attachment?.kind !== "view") throw new Error("expected a view attachment");
+    expect(command.text).toBe("Plan: broken-workflow");
+    const attachment = viewOf(command);
     expect(attachment.props).toMatchObject({
       name: "broken-workflow",
       phases: [],

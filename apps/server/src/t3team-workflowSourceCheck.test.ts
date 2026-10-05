@@ -96,10 +96,11 @@ describe("checkWorkflowSource", () => {
     expect(result.workflowPath).toBe("<inline>");
   });
 
-  for (const example of WORKFLOW_REFERENCE_EXAMPLES) {
-    it(`reference example "${example.title}" passes the full launch check`, () => {
+  it.each(WORKFLOW_REFERENCE_EXAMPLES)(
+    'reference example "$title" passes the full launch check',
+    (example) => {
       const result = checkWorkflowSource({ source: example.source, providers, baseModelSelection });
       expect(result.ok ? [] : result.findings).toEqual([]);
-    });
-  }
+    },
+  );
 });

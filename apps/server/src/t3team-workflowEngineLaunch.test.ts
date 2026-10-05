@@ -2,7 +2,7 @@
 /**
  * Proves a recipe's `.workflow.ts` runs end-to-end through the REAL launch path
  * (`launchWorkflowRecipe` → `createWorkflowEngineBroker` → `T3TeamWorkflowEngineRegistry`),
- * with a fake orchestration `dispatch` standing in for the live engine. The test plays the
+ * with a recording fake workflow host standing in for the live one. The test plays the
  * resume reactor's role — reading the pending ask the broker registered and calling the run's
  * `resume` — exactly as `T3TeamWorkflowEngineReactorLive` does off real turn-done / user-reply
  * events. The example workflow does agent(schema) in an isolated thread + thread.askUser in the
@@ -14,13 +14,13 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 
-import { type OrchestrationCommand, ProjectId } from "@t3tools/contracts";
-import { ProviderInstanceId } from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import { launchWorkflowRecipe } from "./t3team-workflowEngineLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
 
 const workflowPath = NodeURL.fileURLToPath(
   new URL("../__fixtures__/t3team-exampleReview.workflow.ts", import.meta.url),
@@ -29,12 +29,9 @@ const runsRoot = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-launc
 afterAll(() => NodeFS.rmSync(runsRoot, { recursive: true, force: true }));
 
 describe("launchWorkflowRecipe — real launch path", () => {
-  it("dispatches orchestration commands, parks on each ask, and completes when replies land", async () => {
+  it("drives the workflow host, parks on each ask, and completes when replies land", async () => {
     const registry = makeWorkflowEngineRegistry();
-    const dispatched: OrchestrationCommand[] = [];
-    const dispatch = async (command: OrchestrationCommand): Promise<void> => {
-      dispatched.push(command);
-    };
+    const fake = makeFakeWorkflowHost();
     let seq = 0;
     let completed: unknown;
 
@@ -53,7 +50,7 @@ describe("launchWorkflowRecipe — real launch path", () => {
       runtimeMode: "full-access",
       interactionMode: "default",
       registry,
-      dispatch,
+      host: fake.host,
       newId: () => `id-${(seq += 1)}`,
       nowIso: () => "2026-01-01T00:00:00.000Z",
       onComplete: async (output) => {
@@ -61,27 +58,21 @@ describe("launchWorkflowRecipe — real launch path", () => {
       },
     });
 
-    // Step activities ride alongside the orchestration commands (UX slice 1); the command
+    // Step activities ride alongside the other host operations (UX slice 1); the operation
     // sequence assertions below check the non-activity stream, then the activity stream is
     // asserted separately at the end.
-    const commandTypes = () =>
-      dispatched.filter((c) => c.type !== "thread.activity.append").map((c) => c.type);
+    const operations = () =>
+      fake.ops().filter((op) => op !== "upsertActivity" && op !== "syncRunFacts");
     const stepActivities = () =>
-      dispatched.flatMap((c) =>
-        c.type === "thread.activity.append" && c.activity.kind === "t3team.recipe.workflow.step"
-          ? [c.activity]
-          : [],
-      );
+      fake.activities().filter((activity) => activity.kind === "t3team.recipe.workflow.step");
 
     // The first ask (agent's isolated-thread turn) parks the run.
     expect(result.status).toBe("suspended");
-    expect(commandTypes()).toEqual(["thread.create", "thread.turn.start"]);
-    const childPlacement = dispatched.find(
-      (command) =>
-        command.type === "thread.activity.append" &&
-        command.activity.kind === "t3team.handoff.created",
-    );
-    expect(childPlacement).toBeUndefined(); // agent() child is ephemeral unless explicitly retained
+    expect(operations()).toEqual(["createThread", "startTurn"]);
+    // agent() spawns a one-shot child linked under the launch thread.
+    expect(fake.calls.find((call) => call.op === "createThread")).toMatchObject({
+      input: { retention: "ephemeral", parentThreadId: launchThreadId },
+    });
 
     const run = registry.getRun(runId);
     expect(run).toBeDefined();
@@ -96,7 +87,7 @@ describe("launchWorkflowRecipe — real launch path", () => {
     await run!.resume(agentAsk!.correlationId, { summary: "Low risk; well tested." });
 
     // Resuming fired the user escalation as a system message into the launching thread.
-    expect(commandTypes()).toEqual(["thread.create", "thread.turn.start", "thread.message.upsert"]);
+    expect(operations()).toEqual(["createThread", "startTurn", "postMessage"]);
 
     // Reactor step 2: the user replied in the launching thread.
     const userAsk = registry.takePending(launchThreadId);
@@ -105,17 +96,13 @@ describe("launchWorkflowRecipe — real launch path", () => {
 
     expect(completed).toEqual({ summary: "Low risk; well tested.", merged: true });
     expect(registry.getRun(runId)).toBeUndefined(); // completed runs are unregistered
-    const completionMessage = dispatched.find(
-      (command) => command.type === "thread.message.upsert" && command.message.role === "assistant",
-    );
+    const completionMessage = fake.messages().find((message) => message.role === "assistant");
     expect(completionMessage).toMatchObject({
       threadId: launchThreadId,
-      message: {
-        messageId: `t3team-wf-result:${runId}`,
-        // formatWorkflowOutput deliberately prefers the readable `summary` field
-        // over a raw JSON dump of the full output record.
-        text: "Low risk; well tested.",
-      },
+      messageId: `t3team-wf-result:${runId}`,
+      // formatWorkflowOutput deliberately prefers the readable `summary` field
+      // over a raw JSON dump of the full output record.
+      text: "Low risk; well tested.",
     });
 
     // Step activities: every primitive emitted a `t3team.recipe.workflow.step` entry on the
@@ -124,7 +111,7 @@ describe("launchWorkflowRecipe — real launch path", () => {
     const steps = stepActivities();
     expect(steps.length).toBeGreaterThanOrEqual(2);
     for (const activity of steps) {
-      expect(activity.kind).toBe("t3team.recipe.workflow.step");
+      expect(activity.threadId).toBe(launchThreadId);
       expect(String(activity.id)).toMatch(/^t3team-wf-step:/);
     }
     const phasesById = new Map<string, string[]>();
@@ -150,10 +137,7 @@ describe("launchWorkflowRecipe — real launch path", () => {
     // Regression: a failed run only emitted Work Log step activities — no message ever
     // reached the launching conversation, so the agent hallucinated "still running".
     const registry = makeWorkflowEngineRegistry();
-    const dispatched: OrchestrationCommand[] = [];
-    const dispatch = async (command: OrchestrationCommand): Promise<void> => {
-      dispatched.push(command);
-    };
+    const fake = makeFakeWorkflowHost();
     // Invalid source (the YAML-instead-of-TS authoring failure seen live).
     const badPath = NodePath.join(runsRoot, "bad.workflow.ts");
     NodeFS.writeFileSync(badPath, "thread:\n  - agent: not typescript\n");
@@ -173,7 +157,7 @@ describe("launchWorkflowRecipe — real launch path", () => {
       runtimeMode: "full-access",
       interactionMode: "default",
       registry,
-      dispatch,
+      host: fake.host,
       newId: () => `fid-${(seq += 1)}`,
       nowIso: () => "2026-01-01T00:00:00.000Z",
       onError: async (error) => {
@@ -186,20 +170,15 @@ describe("launchWorkflowRecipe — real launch path", () => {
     expect(registry.getRun(runId)).toBeUndefined();
     // Failure and completion share ONE terminal message id per run, so whichever
     // outcome lands last overwrites the other instead of contradicting it.
-    const failureMessage = dispatched.find(
-      (command) =>
-        command.type === "thread.message.upsert" &&
-        String(command.message.messageId) === `t3team-wf-result:${runId}`,
-    );
+    const failureMessage = fake
+      .messages()
+      .find((message) => message.messageId === `t3team-wf-result:${runId}`);
     expect(failureMessage).toMatchObject({
       threadId: launchThreadId,
-      message: {
-        role: "assistant",
-        text: expect.stringContaining("The orchestration stopped"),
-      },
+      role: "assistant",
+      text: expect.stringContaining("The orchestration stopped"),
+      afterActiveRun: true,
     });
-    expect(
-      (failureMessage?.type === "thread.message.upsert" && failureMessage.message.text) || "",
-    ).toContain("nothing was saved");
+    expect(failureMessage?.text ?? "").toContain("nothing was saved");
   });
 });

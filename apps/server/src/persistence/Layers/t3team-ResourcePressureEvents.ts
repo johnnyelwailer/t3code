@@ -108,8 +108,8 @@ const makeResourcePressureEventRepository = Effect.gen(function* () {
           COUNT(*) AS "worktreeThreadCount",
           COALESCE(SUM(CASE WHEN archived_at IS NOT NULL THEN 1 ELSE 0 END), 0)
             AS "archivedWorktreeThreadCount"
-        FROM projection_threads
-        WHERE worktree_path IS NOT NULL AND deleted_at IS NULL
+        FROM orchestration_v2_projection_threads
+        WHERE json_extract(payload_json, '$.worktreePath') IS NOT NULL AND deleted_at IS NULL
       `,
   });
 

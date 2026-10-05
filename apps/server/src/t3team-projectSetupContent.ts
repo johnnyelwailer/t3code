@@ -73,12 +73,12 @@ Use these project files internally before asking the user to restate context:
 ## Working Separately
 
 - Treat the current thread as where you coordinate and synthesize.
-- Use one child-session tool, \`t3team.thread.start_child\`, and always pass \`isolation\`.
+- Use one child-session tool, \`delegate_task\`, and choose the workspace explicitly.
 - Decision table:
-  | Work | \`isolation\` | Repository fields |
+  | Work | \`workspace\` | Repository fields |
   | --- | --- | --- |
-  | Planning, triage, synthesis, project status | \`shared\` | Do not pass \`repo_full_name\` or \`repo_ref\` |
-  | Implementation, debugging, tests, review, PR work | \`own-worktree\` | Pass \`repo_full_name\` for a linked repo (omit it in a local workspace or a monorepo project where the workspace is the main repository, to isolate in that repository); pass \`repo_ref\` when the base matters |
+  | Planning, triage, synthesis, project status | omit (shared checkout) | none |
+  | Implementation, debugging, tests, review, PR work | \`{ isolation: "worktree" }\` | \`repository\` for a linked repo (omit it in a local workspace or a monorepo project where the workspace is the meta-repo, to isolate in that repository); \`baseRef\` when the base matters |
 - For work that means digging through a repository, changing code, debugging, validation, or code review, do it in a separate thread scoped to the right repository, and keep this thread clean.
 - Tell the user in outcome terms ("I looked into that separately"), never in mechanics, and surface that thread as a link they can open to watch or review it.
 - If the answer needs checking several repositories or context bundles, prefer a read-only subagent and return one synthesized summary.

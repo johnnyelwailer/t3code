@@ -11,8 +11,6 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { HttpRouter, HttpServerResponse } from "effect/unstable/http";
 
-import { browserApiCorsHeaders } from "./httpCors.ts";
-
 import { errorResponse, okJson, readJsonBody, toAtlassianError } from "./t3team-atlassian-http.ts";
 import { T3TEAM_MCP_SERVER_NAME, T3TeamToolBroker } from "./t3team-toolBroker.ts";
 import { T3TeamWidgetRegistry } from "./t3team-widgetRegistry.ts";
@@ -27,10 +25,7 @@ const encodeArgs = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 const denied = (error: string) => okJson({ ok: false, error });
 
 const badRequest = (error: string) =>
-  HttpServerResponse.jsonUnsafe(
-    { ok: false, error },
-    { status: 400, headers: browserApiCorsHeaders },
-  );
+  HttpServerResponse.jsonUnsafe({ ok: false, error }, { status: 400 });
 
 export const t3teamWidgetToolCallRouteLayer = HttpRouter.add(
   "POST",
@@ -57,10 +52,8 @@ export const t3teamWidgetToolCallRouteLayer = HttpRouter.add(
       return badRequest("Widget tool call arguments exceed the 32 KB limit.");
     }
 
-    // NOTE(auth): widgetId + threadId is the only credential here — acceptable under the
-    // current local single-user deployment assumption (same trust domain as the rest of the
-    // t3team HTTP routes). Any future multi-user or remote exposure MUST additionally bind
-    // this call to the requesting session identity before dispatching.
+    // The caller already holds an orchestration:operate session (t3team-routeAuth.ts); the
+    // registration additionally binds the call to the widget's own thread and allowlist.
     const registration = yield* registry.get(widgetId);
     if (!registration || registration.threadId !== threadId) {
       return denied(

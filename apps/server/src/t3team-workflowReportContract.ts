@@ -1,7 +1,7 @@
 /**
  * How an orchestration should report back to the human — the contract the report composer is
- * instructed with (`t3team-workflowReportPrompt.ts`) and the author agent reads in its kickoff
- * (`t3team-workflowAuthorPrompt.ts`). It is authoring knowledge, so no parent-facing tool carries it.
+ * instructed with (`t3team-workflowReportPrompt.ts`). It is authoring knowledge, so no
+ * parent-facing tool carries it.
  *
  * Written because of a real run on 2026-08-29. A delivery orchestration finished, failed its QA
  * gate, and reported via `notifyUser` in a single 4460-character block of unbroken prose —

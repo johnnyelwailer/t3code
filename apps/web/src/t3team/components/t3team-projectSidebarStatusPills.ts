@@ -12,7 +12,6 @@ import {
   formatRelativeTime,
   formatSleepingUntil,
 } from "~/t3team/components/t3team-projectSidebarTimeLabels";
-import { resolveActivityStatePill, type ActivityState } from "~/t3team/t3team-activityStateDisplay";
 
 export function resolveThreadStatusPill(
   thread: {
@@ -20,22 +19,12 @@ export function resolveThreadStatusPill(
     sleepingUntil?: string;
     workflowRunStatus?: ProjectThread["workflowRunStatus"];
     activityLabel?: string | null;
-    activityState?: ActivityState | null;
   },
   options: { readonly activityLabelsEnabled?: boolean } = {},
 ): ThreadStatusPill | null {
   const run = thread.workflowRunStatus;
   if (run !== undefined) {
     const waitingSince = formatRelativeTime(run.updatedAt);
-    if (run.status === "authoring") {
-      return {
-        label: "Working",
-        detail: "Authoring the orchestration",
-        colorClass: "text-slate-500 dark:text-slate-300/80",
-        dotClass: "bg-slate-400 dark:bg-slate-300/80",
-        pulse: true,
-      };
-    }
     if (run.status === "queued") {
       return {
         label: "Queued",
@@ -127,23 +116,18 @@ export function resolveThreadStatusPill(
   }
   switch (thread.status) {
     case "running": {
-      // GHE #40/#208: the live activity label is enrichment; the base word is the
-      // deterministic state (thinking/writing/working/waiting) while present, else
-      // today's static "Working" pill word.
+      // GHE #40: the live activity label is enrichment over the static "Working" word. The
+      // thinking/writing word needs turn items, which listed rows do not load (V2 shells only).
       const activityLabel =
         options.activityLabelsEnabled !== false && typeof thread.activityLabel === "string"
           ? thread.activityLabel.trim() || undefined
           : undefined;
-      const activityState = thread.activityState ?? undefined;
-      const statePill = activityState ? resolveActivityStatePill(activityState) : undefined;
       return {
         label: "Working",
         ...(activityLabel ? { activityLabel } : {}),
-        ...(activityState ? { activityState } : {}),
-        colorClass: statePill?.colorClass ?? "text-sky-600 dark:text-sky-300/80",
-        dotClass: statePill?.dotClass ?? "bg-sky-500 dark:bg-sky-300/80",
-        pulse: statePill ? statePill.pulse : true,
-        ...(statePill?.pulseClass ? { pulseClass: statePill.pulseClass } : {}),
+        colorClass: "text-sky-600 dark:text-sky-300/80",
+        dotClass: "bg-sky-500 dark:bg-sky-300/80",
+        pulse: true,
       };
     }
     case "completed":

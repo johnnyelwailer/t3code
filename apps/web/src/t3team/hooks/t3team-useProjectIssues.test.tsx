@@ -9,6 +9,7 @@ import type { T3TeamProjectIssuesResult } from "~/t3team/backend/t3team-projectI
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 
 import { useProjectIssues } from "./t3team-useProjectIssues";
+import { createRecordingOrchestrationApi } from "~/t3team/backend/t3team-orchestrationApi.testSupport";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -51,7 +52,7 @@ function createBackend(listProjectIssues: () => Promise<T3TeamProjectIssuesResul
     state: { connectionStatus: "connected", serverConfig: null, providers: [], error: null },
     connect: async () => undefined,
     disconnect: async () => undefined,
-    dispatchCommand: async () => undefined,
+    orchestration: createRecordingOrchestrationApi(),
     launchRecipeWorkflow: async () => ({ ok: true }),
     submitRecipeCardAction: async () => ({ ok: true }),
     resolveWorkflowInput: async () => undefined,

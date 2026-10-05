@@ -1,10 +1,11 @@
 /**
  * Resuming a run that failed at an unanswered agent step re-drives THAT step (GHE #403): the row
  * parks on the same ask again with a fresh re-drive budget, the registry gets the pending ask
- * back, and the step's prompt turn is re-issued — no journal replay into a dead `sent` entry.
+ * back, and the step's prompt is re-posted by the re-drive — no journal replay into a dead `sent`
+ * entry.
  */
 import { assert, it } from "@effect/vitest";
-import { type OrchestrationCommand, ProjectId, ProviderInstanceId } from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -22,6 +23,7 @@ import type { LaunchWorkflowRecipeInput } from "./t3team-workflowEngineLaunchTyp
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { resumeFailedTurnStep } from "./t3team-workflowEngineResumeFailedStep.ts";
 import type { InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
+import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
 
 const projectId = ProjectId.make("proj-resume-failed-step");
 const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
@@ -67,7 +69,6 @@ repoLayer("resumeFailedTurnStep", (it) => {
       assert.deepStrictEqual(step, { threadId: "child-thread", correlationId: `${runId}:3` });
 
       const registry = makeWorkflowEngineRegistry();
-      const dispatched: OrchestrationCommand[] = [];
       const launch: LaunchWorkflowRecipeInput = {
         runId,
         workflowPath: row.workflowPath,
@@ -79,10 +80,7 @@ repoLayer("resumeFailedTurnStep", (it) => {
         runtimeMode: "full-access",
         interactionMode: "default",
         registry,
-        dispatch: (command) => {
-          dispatched.push(command);
-          return Promise.resolve();
-        },
+        host: makeFakeWorkflowHost().host,
         newId: () => "id",
         nowIso,
         lifecycle: makeWorkflowRunLifecycle({ repo, row: failed, nowIso }),
@@ -90,15 +88,10 @@ repoLayer("resumeFailedTurnStep", (it) => {
       const redriven: Array<{ threadId: string; correlationId: string }> = [];
       const turnRedrive: InterruptedTurnRetry = {
         settleNoText: () => Effect.void,
+        releaseHeldRun: () => Effect.succeed(true),
         settleFailedTurn: () => Effect.void,
         processTurnRetry: (input) => {
           redriven.push(input);
-          const pending = registry.peekPending(input.threadId);
-          assert.strictEqual(pending?.redriveArmed, true);
-          if (pending !== undefined) {
-            const { redriveArmed: _armed, ...judging } = pending;
-            registry.setPending(input.threadId, judging);
-          }
           return Effect.void;
         },
       };
@@ -174,7 +167,7 @@ repoLayer("resumeFailedTurnStep", (it) => {
         runtimeMode: "full-access",
         interactionMode: "default",
         registry,
-        dispatch: () => Promise.resolve(),
+        host: makeFakeWorkflowHost().host,
         newId: () => "id",
         nowIso,
         lifecycle: {
@@ -183,6 +176,7 @@ repoLayer("resumeFailedTurnStep", (it) => {
       };
       const turnRedrive: InterruptedTurnRetry = {
         settleNoText: () => Effect.void,
+        releaseHeldRun: () => Effect.succeed(true),
         settleFailedTurn: () => Effect.void,
         processTurnRetry: () => Effect.void,
       };

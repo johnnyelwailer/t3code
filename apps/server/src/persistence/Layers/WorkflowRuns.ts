@@ -15,10 +15,8 @@ import {
   ClearWorkflowRunPendingInput,
   CountLiveWorkflowRunsByOriginInput,
   GetWorkflowRunInput,
-  ListLiveWorkflowRunsByLaunchThreadInput,
   ListRecentWorkflowRunsInput,
   ListWorkflowRunsByStatusInput,
-  WORKFLOW_RUN_NON_TERMINAL_STATUSES,
   MarkWorkflowRunFailedInput,
   ResumePausedWorkflowRunInput,
   SetWorkflowRunPendingInput,
@@ -283,46 +281,6 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       `,
   });
 
-  const listLiveWorkflowRunsByLaunchThread = SqlSchema.findAll({
-    Request: ListLiveWorkflowRunsByLaunchThreadInput,
-    Result: WorkflowRunDbRow,
-    execute: ({ launchThreadId }) =>
-      sql`
-        SELECT
-          run_id AS "runId",
-          workflow_path AS "workflowPath",
-          args_json AS "args",
-          args_hash AS "argsHash",
-          launch_thread_id AS "launchThreadId",
-          project_id AS "projectId",
-          model_json AS "modelSelection",
-          runtime_mode AS "runtimeMode",
-          interaction_mode AS "interactionMode",
-          status,
-          origin,
-          recipe_path AS "recipePath",
-          pending_thread_id AS "pendingThreadId",
-          pending_correlation_id AS "pendingCorrelationId",
-          pending_kind AS "pendingKind",
-          failure_reason AS "failureReason",
-          failure_step AS "failureStep",
-          host_tool_grant AS "hostToolGrant",
-          intent_json AS "intent",
-          wake_at AS "wakeAt",
-          turn_retries AS "turnRetries",
-          watch_source_name AS "watchSourceName",
-          watch_params_hash AS "watchParamsHash",
-          watch_signal_name AS "watchSignalName",
-          watch_signal_key AS "watchSignalKey",
-          created_at AS "createdAt",
-          updated_at AS "updatedAt"
-        FROM workflow_runs
-        WHERE launch_thread_id = ${launchThreadId}
-          AND ${sql.in("status", WORKFLOW_RUN_NON_TERMINAL_STATUSES)}
-        ORDER BY updated_at DESC, run_id DESC
-      `,
-  });
-
   // The ephemeral run-count cap's index: how many runs of one origin, launched from one thread,
   // still hold engine resources (running now, or parked and resumable). Scoped to
   // `launch_thread_id` so the cap is per-caller, not one budget shared by every thread on the
@@ -564,11 +522,6 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
       Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.listRecent:query")),
     );
 
-  const listLiveByLaunchThread: WorkflowRunRepositoryShape["listLiveByLaunchThread"] = (input) =>
-    listLiveWorkflowRunsByLaunchThread(input).pipe(
-      Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.listLiveByLaunchThread:query")),
-    );
-
   const countLiveByOrigin: WorkflowRunRepositoryShape["countLiveByOrigin"] = (input) =>
     countLiveWorkflowRunRowsByOrigin(input).pipe(
       Effect.map((rows) => rows[0]?.count ?? 0),
@@ -641,7 +594,6 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
     getById,
     listByStatus,
     listRecent,
-    listLiveByLaunchThread,
     countLiveByOrigin,
     setStatus,
     casSetStatus,

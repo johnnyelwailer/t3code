@@ -6,6 +6,8 @@
 
 import type { T3TeamWidgetToolCallResponse } from "@t3tools/contracts";
 
+import { primaryServerAuthInit } from "~/t3team/backend/t3team-t3BackendHttp";
+
 export const T3TEAM_WIDGET_MIN_HEIGHT = 48;
 /** Pathological-content ceiling; normal widgets grow with their content so chat owns scrolling. */
 export const T3TEAM_WIDGET_MAX_HEIGHT = 4_096;
@@ -65,9 +67,11 @@ export async function postWidgetToolCall(input: {
     return { ok: false, error: "Widget tool call arguments exceed the 32 KB limit." };
   }
   try {
+    const auth = await primaryServerAuthInit();
     const response = await fetch(`${input.httpBaseUrl}/api/t3team/widget/tool-call`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      credentials: auth.credentials,
+      headers: { ...auth.headers, "content-type": "application/json" },
       body,
       signal: input.signal,
     });

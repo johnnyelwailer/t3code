@@ -1,16 +1,20 @@
 /**
- * Evicts a thread's cached tool-context payload (t3team-threadToolContextStore.ts)
- * once the thread is deleted. Modeled on the upstream
- * `orchestration/Layers/ThreadDeletionReactor.ts` cleanup pattern, kept as a
- * separate t3team-* reactor (rather than editing the upstream file directly)
- * so upstream merges don't have to reconcile fork-specific cleanup logic
- * inline in that file.
+ * Keeps the fork's per-thread state in step with the V2 thread lifecycle:
  *
- * Without this, `T3TeamThreadToolContextStore`'s in-memory Map only ever grows:
- * its sole delete path is a client PUT with `toolContext: null`, which nothing
- * calls today.
+ * - `thread.deleted` evicts the thread's tool-context entry
+ *   (t3team-threadToolContextStore.ts) and removes its thread facts and
+ *   artifacts. Without this the in-memory Map and both side tables only ever
+ *   grow (V2 deletion is final), and every client's all-threads facts
+ *   snapshot carries the deleted threads.
+ * - `thread.created` for a FORK (`lineage.relationshipToParent === "fork"`,
+ *   upstream `thread.fork`) copies the source thread's tool context, so the
+ *   fork keeps the work-item / backlog binding its source had. Delegated
+ *   children get theirs from the delegate_task preparation instead.
+ *
+ * Live-tail only (`streamDomainEvents`): the store itself is process-local, so
+ * there is nothing to catch up on after a restart.
  */
-import type { OrchestrationEvent } from "@t3tools/contracts";
+import type { OrchestrationV2DomainEvent } from "@t3tools/contracts";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -19,10 +23,14 @@ import * as Layer from "effect/Layer";
 import type * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
+import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
 import { T3TeamThreadToolContextStore } from "./t3team-threadToolContextStore.ts";
+import { T3TeamThreadArtifactsStore } from "./t3team-v2/t3team-threadArtifactsStore.ts";
+import { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
+import { T3TeamV2FoundationLive } from "./t3team-v2/t3team-v2FoundationLive.ts";
 
-type ThreadDeletedEvent = Extract<OrchestrationEvent, { type: "thread.deleted" }>;
+const isToolContextLifecycleEvent = (event: OrchestrationV2DomainEvent) =>
+  event.type === "thread.created" || event.type === "thread.deleted";
 
 export interface T3TeamThreadToolContextEvictionReactorShape {
   readonly start: () => Effect.Effect<void, never, Scope.Scope>;
@@ -36,44 +44,71 @@ export class T3TeamThreadToolContextEvictionReactor extends Context.Service<
 >()("t3/t3team-threadToolContextEvictionReactor/T3TeamThreadToolContextEvictionReactor") {}
 
 const make = Effect.gen(function* () {
-  const orchestrationEngine = yield* OrchestrationEngineService;
+  const threads = yield* ThreadManagementService;
   const store = yield* T3TeamThreadToolContextStore;
+  const facts = yield* T3TeamThreadFactsStore;
+  const artifacts = yield* T3TeamThreadArtifactsStore;
 
-  const evict = (event: ThreadDeletedEvent) =>
-    store.put({ threadId: event.payload.threadId, toolContext: null }).pipe(
-      Effect.catchCause((cause) => {
-        if (Cause.hasInterruptsOnly(cause)) {
-          return Effect.failCause(cause);
-        }
-        return Effect.logWarning("t3team thread tool context eviction failed", {
-          threadId: event.payload.threadId,
-          cause: Cause.pretty(cause),
-        });
-      }),
+  const apply = (event: OrchestrationV2DomainEvent) => {
+    if (event.type === "thread.deleted") {
+      return Effect.all(
+        [
+          store.put({ threadId: event.threadId, toolContext: null }),
+          facts.remove(event.threadId),
+          artifacts.removeByThread(event.threadId),
+        ],
+        { discard: true },
+      );
+    }
+    if (event.type !== "thread.created") return Effect.void;
+    const lineage = event.payload.lineage;
+    if (lineage.relationshipToParent !== "fork" || lineage.parentThreadId === null) {
+      return Effect.void;
+    }
+    const sourceThreadId = lineage.parentThreadId;
+    return Effect.gen(function* () {
+      // Never overwrite a context the fork already received explicitly.
+      if ((yield* store.get(event.threadId)) !== undefined) return;
+      const source = yield* store.get(sourceThreadId);
+      if (source === undefined) return;
+      yield* store.put({ threadId: event.threadId, toolContext: source });
+    });
+  };
+
+  const handle = (event: OrchestrationV2DomainEvent) =>
+    apply(event).pipe(
+      Effect.catchCause((cause) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Effect.failCause(cause)
+          : Effect.logWarning("t3team thread tool context lifecycle update failed", {
+              threadId: event.threadId,
+              eventType: event.type,
+              cause: Cause.pretty(cause),
+            }),
+      ),
     );
 
-  const worker = yield* makeDrainableWorker(evict);
+  const worker = yield* makeDrainableWorker(handle);
 
   const start: T3TeamThreadToolContextEvictionReactorShape["start"] = Effect.fn("start")(
     function* () {
       yield* Effect.forkScoped(
-        Stream.runForEach(orchestrationEngine.streamDomainEvents, (event) => {
-          if (event.type !== "thread.deleted") {
-            return Effect.void;
-          }
-          return worker.enqueue(event);
-        }),
+        Stream.runForEach(threads.streamDomainEvents, (event) =>
+          isToolContextLifecycleEvent(event) ? worker.enqueue(event) : Effect.void,
+        ),
       );
     },
   );
 
-  return {
-    start,
-    drain: worker.drain,
-  } satisfies T3TeamThreadToolContextEvictionReactorShape;
+  return { start, drain: worker.drain } satisfies T3TeamThreadToolContextEvictionReactorShape;
 });
 
-export const T3TeamThreadToolContextEvictionReactorLive = Layer.effect(
+/** Over whichever facts/artifacts stores the caller provides (tests). */
+export const T3TeamThreadToolContextEvictionReactorLayer = Layer.effect(
   T3TeamThreadToolContextEvictionReactor,
   make,
 );
+
+/** Production: over the runtime's ONE facts/artifacts stores (same layer reference, memoized). */
+export const T3TeamThreadToolContextEvictionReactorLive =
+  T3TeamThreadToolContextEvictionReactorLayer.pipe(Layer.provide(T3TeamV2FoundationLive));

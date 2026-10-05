@@ -32,7 +32,7 @@ export interface RunThreadBootstrapEffectInput {
   kickoffWorkflow: T3TeamKickoffWorkflow | undefined;
   initialToolContext: T3TeamTurnToolContext | undefined;
   onInitialUserMessageSent: (() => void) | undefined;
-  serverThread: unknown | null | undefined;
+  serverThread: { readonly branch: string | null } | null | undefined;
   updateBootstrapStatus: (status: ThreadBootstrapStatus) => void;
 }
 
@@ -122,6 +122,7 @@ export function runThreadBootstrapEffect(input: RunThreadBootstrapEffectInput): 
       threadId,
       initialBranch,
       hasServerThread: serverThread != null,
+      serverBranch: serverThread?.branch,
       state: bootstrapPlan.state,
     });
     return;
@@ -131,7 +132,7 @@ export function runThreadBootstrapEffect(input: RunThreadBootstrapEffectInput): 
   // held for the branch query. The branch this dispatch carries is whatever is synchronously
   // known right now (often `undefined` on a fresh kickoff, since the environment the branch query
   // needs may not exist until this very dispatch creates it — holding on it deadlocks the launch).
-  // `maybeBackfillKickoffBranch` above sends the real branch via `thread.meta.update` once the
+  // `maybeBackfillKickoffBranch` above sends the real branch via `thread.metadata.update` once the
   // query resolves on a later pass.
   const dispatchedBranch = initialBranch ?? null;
   bootstrapPlan.state.dispatchedBranch = dispatchedBranch;

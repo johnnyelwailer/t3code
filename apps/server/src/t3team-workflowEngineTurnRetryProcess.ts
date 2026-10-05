@@ -1,36 +1,21 @@
 /**
- * The due re-drive for an interrupted `thread.turn` step (split out of
- * `t3team-workflowEngineTurnRetry.ts`): re-validate the prompt, consume an
- * already-answered reply, or re-issue the step's prompt turn via
- * `thread.turn.resume`.
+ * The due re-drive of an unanswered `thread.turn` step (split out of
+ * `t3team-workflowEngineTurnRetry.ts`): re-judge the step's run, consume an answer that landed in
+ * the meantime, wait for a run that took the step over, or re-post the step's prompt as a fresh
+ * queued turn.
  *
  * @module t3team-workflowEngineTurnRetryProcess
  */
-import {
-  CommandId,
-  MessageId,
-  ThreadId,
-  type OrchestrationCommand,
-  type OrchestrationThread,
-} from "@t3tools/contracts";
-import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
 
+import type { WorkflowRegisteredRun } from "./t3team-workflowEngineRegistry.ts";
 import {
-  findCompletedAnswer,
-  isAnsweredPromptInvariant,
-  promptIsLatestUserMessage,
-} from "./t3team-workflowTurnAnswerLookup.ts";
-import { t3teamRandomUUID } from "./t3team-random.ts";
-import type { WorkflowPendingAsk, WorkflowRegisteredRun } from "./t3team-workflowEngineRegistry.ts";
-import {
-  findInterruptedStepPrompt,
   interruptedTurnRetryBackoffMs,
-  MAX_INTERRUPTED_TURN_REDRIVES,
   PROMPT_LOST_ERROR,
   type InterruptedTurnRetryDeps,
 } from "./t3team-workflowEngineTurnRetrySupport.ts";
+import { newWorkflowStepPromptMessageId } from "./t3team-workflowTurnPrompt.ts";
+import { readWorkflowStepPrompt, readWorkflowTurnState } from "./t3team-workflowTurnState.ts";
 
 /** The shared closures the re-drive needs, built by `makeInterruptedTurnRetry`. */
 export interface ProcessTurnRetryContext {
@@ -41,22 +26,11 @@ export interface ProcessTurnRetryContext {
     correlationId: string,
     error: unknown,
   ) => Effect.Effect<void>;
-  /** Thread read that swallows a failed read as "thread unavailable". */
-  readonly readThreadSafe: (threadId: string) => Effect.Effect<Option.Option<OrchestrationThread>>;
-  /** Clear the `redriveArmed` flag when the in-flight turn is confirmed to be ours. */
-  readonly disarmRedrive: (threadId: string, correlationId: string) => void;
-  /** Hand an already-present reply to the run instead of stacking a second turn. */
-  readonly consumeExistingAnswer: (
-    threadId: string,
-    pending: WorkflowPendingAsk,
-    run: WorkflowRegisteredRun,
-    answer: { readonly messageId: string; readonly text: string },
-  ) => Effect.Effect<void>;
+  readonly releaseHeldRun: (threadId: string, runId: string) => Effect.Effect<boolean>;
 }
 
-/** The due re-drive: re-validate, then re-issue the step's prompt turn. */
 export function makeProcessTurnRetry(ctx: ProcessTurnRetryContext) {
-  const { deps, failRun, readThreadSafe, disarmRedrive, consumeExistingAnswer } = ctx;
+  const { deps, failRun, releaseHeldRun } = ctx;
 
   return Effect.fn("InterruptedTurnRetry.processTurnRetry")(function* ({
     threadId,
@@ -65,119 +39,83 @@ export function makeProcessTurnRetry(ctx: ProcessTurnRetryContext) {
     readonly threadId: string;
     readonly correlationId: string;
   }) {
-    const pending = deps.registry.peekPending(threadId);
+    const found = deps.registry.peekPending(threadId);
     if (
-      pending?.kind !== "thread.turn" ||
-      pending.correlationId !== correlationId ||
-      pending.resolveLive !== undefined
+      found?.kind !== "thread.turn" ||
+      found.correlationId !== correlationId ||
+      found.resolveLive !== undefined
     )
       return; // the ask moved on (replied, advanced, cancelled) — nothing to re-drive
-    const run = deps.registry.getRun(pending.runId);
+    const run = deps.registry.getRun(found.runId);
     if (run === undefined) return;
+    const { redriveScheduled: _scheduled, ...pending } = found;
+    deps.registry.setPending(threadId, pending);
 
-    const thread = Option.getOrUndefined(yield* readThreadSafe(threadId));
-    const prompt =
-      thread === undefined ? null : findInterruptedStepPrompt(thread, pending.runId, correlationId);
-    if (prompt === null) {
+    const fail = (error: string) =>
+      Effect.sync(() => deps.registry.takePending(threadId)).pipe(
+        Effect.andThen(failRun(run, correlationId, new Error(error))),
+      );
+    // The thread could not be read: nothing is known, so try again later without spending budget.
+    const rearm = Effect.suspend(() => {
+      deps.registry.setPending(threadId, { ...pending, redriveScheduled: true });
+      const delayMs = interruptedTurnRetryBackoffMs(0, deps.backoffOverrideMs);
+      return deps.armTurnRetry(threadId, correlationId, delayMs);
+    });
+    const state = yield* readWorkflowTurnState(deps.threads, threadId, pending);
+    if (state.kind === "unreadable") return yield* rearm;
+    if (state.kind === "missing") {
       yield* Effect.logWarning("t3team workflow step re-drive: prompt not found on thread", {
         threadId,
         stepId: correlationId,
-        threadRead: thread !== undefined,
-        messages: thread?.messages.length ?? 0,
       });
-      yield* failRun(run, correlationId, new Error(PROMPT_LOST_ERROR));
-      return;
+      return yield* fail(PROMPT_LOST_ERROR);
     }
-    // The reply already exists (the child finished while the run was paused): consume it.
-    const answered = thread === undefined ? null : findCompletedAnswer(thread, prompt.messageId);
-    if (answered !== null) {
-      yield* consumeExistingAnswer(threadId, pending, run, answered);
-      return;
+    const { settlement } = state;
+    if (settlement.kind === "answer") {
+      // The step answered while the re-drive waited (a restart continuation finished it):
+      // hand that reply to the run instead of stacking a second turn (GHE #404).
+      deps.registry.takePending(threadId);
+      yield* Effect.logInfo("t3team workflow step re-drive consumed the existing reply", {
+        threadId,
+        runId: pending.runId,
+        stepId: correlationId,
+      });
+      return yield* Effect.promise(() => run.resume(correlationId, settlement.text));
     }
-    // A turn is in flight. If our prompt is still the thread's last user message, that turn IS
-    // the step (its own settle decides it — do not stack a second turn on top). Otherwise a
-    // human steer or another automation owns it: stay armed and look again after the backoff,
-    // rather than adopting a reply that answers a different prompt (GHE #405).
-    const status = thread?.session?.status;
-    if (status === "running" || status === "starting") {
-      const ours = thread !== undefined && promptIsLatestUserMessage(thread, prompt.messageId);
-      if (ours) disarmRedrive(threadId, correlationId);
-      else {
-        yield* deps.armTurnRetry(
-          threadId,
-          correlationId,
-          interruptedTurnRetryBackoffMs(MAX_INTERRUPTED_TURN_REDRIVES, deps.backoffOverrideMs),
-        );
-      }
-      yield* Effect.logInfo("t3team workflow interrupted step re-drive skipped: thread busy", {
+    if (settlement.kind === "pending") {
+      // A run already owns the step again (a restart continuation, or a prompt still queued):
+      // its own end settles the step — do not stack a second turn on top.
+      return yield* Effect.logInfo("t3team workflow step re-drive skipped: step run in flight", {
         threadId,
         stepId: correlationId,
-        status,
-        ours,
       });
-      return;
     }
-    const command: OrchestrationCommand = {
-      type: "thread.turn.resume",
-      commandId: CommandId.make(`server:t3team:wf-turn-retry:${t3teamRandomUUID()}`),
-      threadId: ThreadId.make(threadId),
-      messageId: MessageId.make(prompt.messageId),
-      createdAt: DateTime.formatIso(yield* DateTime.now),
-    };
-    yield* deps.dispatch(command).pipe(
-      Effect.catch((error) => {
-        // Decider invariant: a turn is ALREADY in progress — that turn's own settle will
-        // decide this step, so leave it parked (fail-open, as the transient turn retry).
-        if (
-          error._tag === "OrchestrationCommandInvariantError" &&
-          error.detail.includes("turn in progress")
-        ) {
-          disarmRedrive(threadId, correlationId);
-          return Effect.logInfo(
-            "t3team workflow interrupted step re-drive skipped: turn in progress",
-            { threadId, stepId: correlationId },
-          );
-        }
-        // The thread already ends in a reply to our prompt (the projection we read was
-        // stale): consume it instead of failing the run.
-        if (
-          error._tag === "OrchestrationCommandInvariantError" &&
-          isAnsweredPromptInvariant(error.detail)
-        ) {
-          return readThreadSafe(threadId).pipe(
-            Effect.flatMap((fresh) => {
-              const thread = Option.getOrUndefined(fresh);
-              const late =
-                thread === undefined ? null : findCompletedAnswer(thread, prompt.messageId);
-              return late === null
-                ? failRun(run, correlationId, new Error(PROMPT_LOST_ERROR))
-                : consumeExistingAnswer(threadId, pending, run, late);
-            }),
-          );
-        }
-        // Any other dispatch failure cannot recover on its own (nothing else will settle
-        // this ask): fail the run instead of parking it forever.
-        return Effect.logWarning("t3team workflow interrupted step re-drive dispatch failed", {
-          threadId,
-          stepId: correlationId,
-          error: error.message,
-        }).pipe(
-          Effect.andThen(
-            failRun(
-              run,
-              correlationId,
-              new Error(`The interrupted step could not be re-driven: ${error.message}`),
-            ),
-          ),
-        );
-      }),
-      Effect.andThen(() =>
-        Effect.logInfo("t3team workflow interrupted step re-issued", {
+    // A held run would start a second copy of the step once the queue resumes: take it out first.
+    if (settlement.kind === "failed" && settlement.heldRunId !== undefined) {
+      if (!(yield* releaseHeldRun(threadId, settlement.heldRunId))) return yield* rearm;
+    }
+    const prompt = yield* readWorkflowStepPrompt(deps.threads, threadId, pending).pipe(
+      Effect.catch(() => Effect.succeed("unreadable" as const)),
+    );
+    if (prompt === "unreadable") return yield* rearm;
+    if (prompt === null) return yield* fail(PROMPT_LOST_ERROR);
+    const messageId = newWorkflowStepPromptMessageId(correlationId);
+    // Recorded BEFORE the dispatch so a check racing it waits for this prompt's run.
+    deps.registry.setPending(threadId, {
+      ...pending,
+      promptMessageId: messageId,
+      author: prompt.author,
+    });
+    yield* deps.startTurn({ threadId, messageId, text: prompt.text, author: prompt.author }).pipe(
+      Effect.tap(() =>
+        Effect.logInfo("t3team workflow step re-drive issued", {
           threadId,
           stepId: correlationId,
           attempt: pending.turnRetries ?? 0,
         }),
       ),
+      // Nothing else will settle this ask: fail the run instead of parking it forever.
+      Effect.catch((error) => fail(`The interrupted step could not be re-driven: ${error}`)),
     );
   });
 }

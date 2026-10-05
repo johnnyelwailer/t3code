@@ -9,6 +9,7 @@ import type { BackendApi } from "~/t3team/backend/t3team-types";
 import type { T3TeamPollResult } from "~/t3team/backend/t3team-pollingBackend";
 
 import { useProjectMyWork } from "./t3team-useProjectMyWork";
+import { createRecordingOrchestrationApi } from "~/t3team/backend/t3team-orchestrationApi.testSupport";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -93,7 +94,7 @@ describe("useProjectMyWork stale-response race", () => {
       state: { connectionStatus: "connected", serverConfig: null, providers: [], error: null },
       connect: async () => undefined,
       disconnect: async () => undefined,
-      dispatchCommand: async () => undefined,
+      orchestration: createRecordingOrchestrationApi(),
       launchRecipeWorkflow: async () => ({ ok: true }),
       submitRecipeCardAction: async () => ({ ok: true }),
       resolveWorkflowInput: async () => undefined,

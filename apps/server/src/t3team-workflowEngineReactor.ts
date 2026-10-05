@@ -1,133 +1,99 @@
 /**
- * The workflow-engine resume reactor (Epic 25 §Host wiring) — the one genuinely new production
- * mechanism. It watches orchestration domain events and turns a FINISHED agent turn / a user
- * reply into `appendResolvedEntry` + `resumeWorkflow`, driving a parked run forward.
+ * The workflow-engine resume reactor (Epic 25 §Host wiring). It watches orchestration V2 and turns
+ * a FINISHED agent step / a user reply into `appendResolvedEntry` + `resumeWorkflow`, driving a
+ * parked run forward.
  *
- * This module owns the wiring: the subscription, the two serial lanes, and the settle timer. The
- * per-task rules live in `t3team-workflowEngineReactorTasks.ts`, and WHICH message of a turn is
- * the answer lives in `t3team-workflowTurnResolution.ts`.
+ * This module owns the wiring: the event subscription, the two serial lanes and the durable
+ * sweep. The per-task rules live in `t3team-workflowEngineReactorTasks.ts`, and WHICH message of
+ * a step's run is the answer lives in `t3team-workflowTurnRun.ts`.
  *
- * Events are drained through a single worker so resumes never interleave: `resume` awaits the
- * replay to its next suspension (which re-registers the new pending ask) before the next task is
- * processed. The due-settlement task rides the same lane for that reason.
+ * Triggers:
+ *   • a terminal `run.updated` re-checks the thread's pending `askAgent` step and posts the
+ *     run's held terminal notices (t3team-workflowHost.ts `flushHeld`);
+ *   • a message a person posts answers the thread's pending `askUser`;
+ *   • a user Stop (`run_interrupt_request` from a client command) on a launch thread stops the
+ *     workflows it launched;
+ *   • a durable sweep (`Scheduler.register`, 5 s tick) re-checks every pending `askAgent` step.
+ *     The live tail does not replay events missed across a restart or a race with the step's
+ *     own dispatch; the sweep derives due work from the registry and V2 state instead.
  *
- * ── Why the settle is delayed ───────────────────────────────────────────────
- * `ProviderRuntimeIngestion` publishes the idle session (the turn-end signal) BEFORE it flushes
- * an assistant message the provider left unclosed at `turn.completed`. Taking the answer
- * {@link WORKFLOW_TURN_SETTLE_MS} after the signal lets such a straggler land and BE the answer,
- * instead of resolving with the second-to-last message of the turn.
+ * Tasks drain through one worker per lane so resumes never interleave: `resume` awaits the replay
+ * to its next suspension (which re-registers the new pending ask) before the next task runs.
  */
-
-import { ThreadId } from "@t3tools/contracts";
-import type { OrchestrationCommand, OrchestrationEvent } from "@t3tools/contracts";
+import type { OrchestrationV2StoredEvent } from "@t3tools/contracts";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 import * as Cause from "effect/Cause";
-import * as DateTime from "effect/DateTime";
-import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
 
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
-import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as EventSink from "./orchestration-v2/EventSink.ts";
+import {
+  isTerminalRunStatus,
+  ThreadManagementService,
+} from "./orchestration-v2/ThreadManagementService.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import * as Scheduler from "./scheduling/Scheduler.ts";
+import { forkParked } from "./serverActivation.ts";
+import { isUserStopCommandId } from "./t3team-actorMessageReactor.ts";
+import { T3TeamThreadArtifactsStore } from "./t3team-v2/t3team-threadArtifactsStore.ts";
+import { T3TeamEventSinkLayer } from "./t3team-v2/t3team-v2Layers.ts";
+import { workflowAnswerAttributionArtifact } from "./t3team-workflowAnswerAttribution.ts";
 import {
   createWorkflowReactorTaskHandler,
   type WorkflowReactorTask,
 } from "./t3team-workflowEngineReactorTasks.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
-import {
-  makeInterruptedTurnRetry,
-  type InterruptedTurnRetryDeps,
-} from "./t3team-workflowEngineTurnRetry.ts";
-import { makeTerminalNoticeResurfer } from "./t3team-workflowTerminalResurface.ts";
+import { T3TeamWorkflowHost, toWorkflowHostPort } from "./t3team-workflowHost.ts";
 import { stopWorkflowsOwnedByThread } from "./t3team-workflowStopCascade.ts";
-import {
-  createWorkflowTurnTracker,
-  WORKFLOW_TURN_SETTLE_MS,
-} from "./t3team-workflowTurnResolution.ts";
+import { makeWorkflowTurnRedriveLive } from "./t3team-workflowTurnRedriveLive.ts";
 
-export const T3TeamWorkflowEngineReactorLive = Layer.effectDiscard(
+/** Reply message ids already folded in: an update of the same message never answers twice. */
+const MAX_SEEN_REPLIES = 512;
+
+/**
+ * The reactor over whatever `EventSinkV2` the build provides — tests hand it their orchestrator's
+ * own sink; production uses {@link T3TeamWorkflowEngineReactorLive}.
+ */
+export const T3TeamWorkflowEngineReactorLayer = Layer.effectDiscard(
   Effect.gen(function* () {
-    const orchestration = yield* OrchestrationEngineService;
+    const threads = yield* ThreadManagementService;
+    const sink = yield* EventSink.EventSinkV2;
     const registry = yield* T3TeamWorkflowEngineRegistry;
-    // Re-issuing an interrupted step re-reads the step's prompt off the projected thread
-    // detail and journals its attempt on the run row — so the query + repo share this layer.
-    const threadQuery = yield* ProjectionSnapshotQuery;
     const runRepo = yield* WorkflowRunRepository;
-    const tracker = createWorkflowTurnTracker();
-    // The reactor's own lifetime scope: the grace-window fibers are attached to it, so shutdown
-    // interrupts a pending settle instead of leaking it.
+    const host = yield* T3TeamWorkflowHost;
+    const artifacts = yield* T3TeamThreadArtifactsStore;
+    const scheduler = yield* Scheduler.Scheduler;
     const reactorScope = yield* Effect.scope;
-    // The settle task is armed from inside a handler, so its lane choice needs the workers built
+    // The re-drive is armed from inside a handler, so its lane choice needs the workers built
     // below — hence the late binding.
-    let enqueueSettle!: (threadId: string, correlationId: string) => Effect.Effect<void>;
-    let enqueueTurnRetry!: (task: {
-      readonly threadId: string;
-      readonly correlationId: string;
-    }) => Effect.Effect<void>;
-    // e2e backoff override (same pattern as the transient turn retry): the delay resolver reads
-    // the env once, at layer build.
-    const backoffOverrideRaw = process.env.T3TEAM_INTERRUPTED_TURN_RETRY_BACKOFF_MS;
-    const backoffOverride =
-      backoffOverrideRaw === undefined
-        ? undefined
-        : (() => {
-            const parsed = Number.parseInt(backoffOverrideRaw, 10);
-            return Number.isFinite(parsed) ? parsed : undefined;
-          })();
-    const turnRetryDeps: InterruptedTurnRetryDeps = {
+    let enqueue!: (task: WorkflowReactorTask) => Effect.Effect<void>;
+
+    // A due re-drive rides the SAME serial lane as the step's checks: it re-judges the step
+    // before re-issuing, so an answer or a continuation in the meantime wins.
+    const turnRetry = makeWorkflowTurnRedriveLive({
       registry,
-      readThread: (threadId) => threadQuery.getThreadDetailById(ThreadId.make(threadId)),
-      recordTurnRetries: (runId, turnRetries) =>
-        runRepo.setTurnRetries({
-          runId,
-          turnRetries,
-          updatedAt: DateTime.formatIso(DateTime.nowUnsafe()),
-        }),
-      // Registers the forked fiber in the registry's turn-retry handle map (GHE #411 §3), so a
-      // pause/stop that clears this step's pending ask can interrupt it before it fires.
-      armTurnRetry: (threadId, correlationId, delayMs) =>
-        Effect.suspend(() => {
-          registry.removeTurnRetryFiber(threadId, correlationId);
-          return enqueueTurnRetry({ threadId, correlationId });
-        }).pipe(
-          Effect.delay(Duration.millis(delayMs)),
-          Effect.forkIn(reactorScope),
-          Effect.tap((fiber) =>
-            Effect.sync(() => registry.registerTurnRetryFiber(threadId, correlationId, fiber)),
-          ),
-          Effect.asVoid,
-        ),
-      dispatch: (command: OrchestrationCommand) => orchestration.dispatch(command),
-      ...(backoffOverride === undefined ? {} : { backoffOverrideMs: backoffOverride }),
-    };
+      threads,
+      host,
+      runRepository: runRepo,
+      runDue: (task) => enqueue({ kind: "turn-retry", ...task }),
+      scope: reactorScope,
+    });
     const handle = createWorkflowReactorTaskHandler({
       registry,
-      tracker,
-      // Attribution is cosmetic: `result` swallows a failed stamp so a run never dies because a
-      // label could not be written onto its answer.
-      dispatch: (command) => orchestration.dispatch(command).pipe(Effect.result),
-      armSettle: (threadId, correlationId) =>
-        Effect.suspend(() => enqueueSettle(threadId, correlationId)).pipe(
-          Effect.delay(Duration.millis(WORKFLOW_TURN_SETTLE_MS)),
-          Effect.forkIn(reactorScope),
-          Effect.asVoid,
-        ),
-      turnRetry: makeInterruptedTurnRetry(turnRetryDeps),
-    });
-    // A terminal failure notice that lands WHILE the launch turn is still active is buried in
-    // that turn; re-anchor it when the thread's session goes idle (live incident: a run died
-    // 30 ms after launch and its notice sat unseen in the transcript for 40 minutes).
-    const resurfaceTerminalNotice = makeTerminalNoticeResurfer({
-      runRepo: runRepo,
-      dispatch: (command: OrchestrationCommand) =>
-        Effect.runPromise(orchestration.dispatch(command)).then(() => undefined),
-      nowIso: () => DateTime.formatIso(DateTime.nowUnsafe()),
-      nowMs: () => DateTime.toEpochMillis(DateTime.nowUnsafe()),
+      threads,
+      turnRetry,
+      // Attribution is cosmetic: a failed stamp never fails the run it answered.
+      attributeAnswer: ({ threadId, messageId, pending }) =>
+        pending.author === undefined
+          ? Effect.void
+          : artifacts
+              .upsert(
+                workflowAnswerAttributionArtifact({ threadId, messageId, author: pending.author }),
+              )
+              .pipe(Effect.ignore),
     });
     const traced = Effect.fn("processWorkflowEngineReactorTask")(handle);
-
     const processSafely = (task: WorkflowReactorTask) =>
       traced(task).pipe(
         Effect.catchCause((cause) => {
@@ -142,52 +108,98 @@ export const T3TeamWorkflowEngineReactorLive = Layer.effectDiscard(
     const worker = yield* makeDrainableWorker(processSafely);
     // A durable resume may replay into a live composition (for example parallel(agent(...))).
     // That replay waits for its live child turns. If those replies use the same serial worker,
-    // the worker waits for the replay while the replay waits for events queued behind itself.
-    // Keep live settlements ordered on a separate lane so they can unblock the parent replay.
+    // the worker waits for the replay while the replay waits for tasks queued behind itself.
+    // Keep live settlements on a separate lane so they can unblock the parent replay.
     const liveWorker = yield* makeDrainableWorker(processSafely);
     const lane = (threadId: string) =>
       registry.peekPending(threadId)?.resolveLive === undefined ? worker : liveWorker;
-    enqueueSettle = (threadId, correlationId) =>
-      lane(threadId).enqueue({ kind: "settle", threadId, correlationId });
-    // The re-drive rides the SAME serial lane as its settle: the due task re-validates the
-    // pending ask before re-issuing, so a reply/advance in the meantime wins.
-    enqueueTurnRetry = (task) => lane(task.threadId).enqueue({ kind: "turn-retry", ...task });
+    enqueue = (task) => lane(task.threadId).enqueue(task);
 
-    const stopOwnedWorkflows = Effect.fn("stopOwnedWorkflows")(function* (
-      event: Extract<OrchestrationEvent, { type: "thread.turn-interrupt-requested" }>,
-    ) {
-      tracker.forget(event.payload.threadId);
-      yield* Effect.promise(() =>
+    const seenReplies = new Set<string>();
+    const firstSighting = (messageId: string) => {
+      if (seenReplies.has(messageId)) return false;
+      seenReplies.add(messageId);
+      if (seenReplies.size > MAX_SEEN_REPLIES) {
+        seenReplies.delete(seenReplies.values().next().value!);
+      }
+      return true;
+    };
+
+    // Log a failure and carry on; an interruption (shutdown) still ends the fiber.
+    const logged =
+      (message: string) =>
+      <A, E>(effect: Effect.Effect<A, E>): Effect.Effect<A | void> =>
+        effect.pipe(
+          Effect.catchCause((cause) =>
+            Cause.hasInterruptsOnly(cause)
+              ? Effect.interrupt
+              : Effect.logWarning(message, { cause: Cause.pretty(cause) }),
+          ),
+        );
+
+    const stopOwnedWorkflows = (threadId: string) =>
+      Effect.promise(() =>
         stopWorkflowsOwnedByThread({
           registry,
-          threadId: event.payload.threadId,
-          createdAt: event.payload.createdAt,
-          dispatch: (command) =>
-            Effect.runPromise(orchestration.dispatch(command)).then(() => undefined),
+          threadId,
+          host: toWorkflowHostPort(host),
         }),
       );
+
+    const onStored = ({ commandId, event }: OrchestrationV2StoredEvent): Effect.Effect<void> => {
+      const threadId: string = event.threadId;
+      if (event.type === "run.updated" && isTerminalRunStatus(event.payload.status)) {
+        return Effect.all(
+          [
+            enqueue({ kind: "check", threadId }),
+            host.flushHeld(threadId).pipe(logged("t3team workflow held notice flush failed")),
+          ],
+          { discard: true },
+        );
+      }
+      if (
+        event.type === "message.updated" &&
+        event.payload.role === "user" &&
+        event.payload.createdBy === "user" &&
+        firstSighting(event.payload.id)
+      ) {
+        return enqueue({ kind: "user-message", threadId, message: event.payload });
+      }
+      if (
+        event.type === "turn-item.updated" &&
+        event.payload.type === "run_interrupt_request" &&
+        isUserStopCommandId(commandId === null ? null : String(commandId))
+      ) {
+        return stopOwnedWorkflows(threadId);
+      }
+      return Effect.void;
+    };
+
+    const sweep = Effect.gen(function* () {
+      for (const threadId of registry.pendingThreadIds()) {
+        if (registry.peekPending(threadId)?.kind === "thread.turn") {
+          yield* enqueue({ kind: "check", threadId });
+        }
+      }
+      for (const threadId of host.heldThreadIds()) {
+        yield* host.flushHeld(threadId).pipe(Effect.ignore);
+      }
     });
 
-    yield* Effect.forkScoped(
-      Stream.runForEach(orchestration.streamDomainEvents, (event) => {
-        if (event.type === "thread.message-sent" || event.type === "thread.session-set") {
-          // The session-set event ALSO feeds the terminal-notice resurfer: when the launch
-          // turn just ended, re-anchor the buried failure notice behind it. Independent of
-          // the pending-ask lane — a run with no parked ask still needs its notice surfaced,
-          // and a lane hiccup must not swallow the resurface.
-          return Effect.all(
-            [
-              lane(event.payload.threadId).enqueue({ kind: "event", event }),
-              event.type === "thread.session-set"
-                ? resurfaceTerminalNotice.onSessionSet(event)
-                : Effect.void,
-            ],
-            { discard: true },
-          );
-        }
-        if (event.type === "thread.turn-interrupt-requested") return stopOwnedWorkflows(event);
-        return Effect.void;
-      }),
+    // Live tail only: history before this point is covered by boot rehydration and the sweep.
+    const liveTail = Stream.unwrap(
+      sink.latestSequence().pipe(Effect.map((latest) => sink.stream({ afterSequence: latest }))),
+    );
+    yield* forkParked(scheduler.register("t3team-workflow-turns", sweep));
+    yield* forkParked(
+      Stream.runForEach(liveTail, (stored) =>
+        onStored(stored).pipe(logged("t3team workflow reactor event handling failed")),
+      ).pipe(logged("t3team workflow reactor event stream failed")),
     );
   }),
+).pipe(Layer.provide(Scheduler.layer));
+
+/** Production wiring: the runtime's shared event sink, by reference (t3team-v2Layers.ts). */
+export const T3TeamWorkflowEngineReactorLive = T3TeamWorkflowEngineReactorLayer.pipe(
+  Layer.provide(T3TeamEventSinkLayer),
 );

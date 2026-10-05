@@ -17,7 +17,6 @@ import {
   callT3TeamProjectRefreshContextBundleEffect,
   callT3TeamWorkItemRefreshContextBundleEffect,
 } from "./t3team-toolBrokerContextSync.ts";
-import { callT3TeamRenameTool } from "./t3team-toolBrokerBindingRename.ts";
 import {
   callT3TeamRecipeTool,
   isT3TeamRecipeTool,
@@ -44,9 +43,6 @@ export function dispatchT3TeamToolCall(input: {
   threadId?: ThreadId;
   toolContext?: T3TeamTurnToolContext;
   readView: () => Effect.Effect<unknown, string>;
-  renameThread?: (title: string) => Effect.Effect<unknown, unknown>;
-  renameThreadResult?: (title: string) => unknown;
-  startChild?: (arguments_: unknown) => Effect.Effect<unknown, string>;
   setBacklogAssigneeFilter?: (mode: "current-user") => Effect.Effect<unknown, string>;
   refreshContextBundle?: T3TeamContextRefreshServiceShape;
   recipeTools?: T3TeamRecipeToolHandlers;
@@ -62,7 +58,6 @@ export function dispatchT3TeamToolCall(input: {
     toolArgs: unknown,
     callerThreadId: ThreadId,
   ) => Effect.Effect<T3TeamToolCallResult>;
-  readRuntimeModels?: () => Effect.Effect<T3TeamToolCallResult>;
   /** Live plan-limit samples for the configured provider instances. */
   readProviderUsage?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   publishDraft?: T3TeamDraftMutationPublisher;
@@ -79,15 +74,6 @@ export function dispatchT3TeamToolCall(input: {
   }
   if (state.effectiveGroups && !state.allowedToolIdSet.has(tool)) {
     return Effect.succeed(errorResult(permissionMessage(tool, state.effectiveGroups)));
-  }
-  if (tool === "t3team.thread.rename") {
-    return callT3TeamRenameTool({
-      tool,
-      scopeLabel: input.scopeLabel,
-      toolArgs,
-      ...(input.renameThread ? { renameThread: input.renameThread } : {}),
-      ...(input.renameThreadResult ? { renameThreadResult: input.renameThreadResult } : {}),
-    });
   }
   if (isT3TeamRecipeTool(tool)) {
     return callT3TeamRecipeTool({
@@ -114,7 +100,6 @@ export function dispatchT3TeamToolCall(input: {
     scopeLabel: input.scopeLabel,
     toolArgs,
     ...(input.threadId ? { threadId: input.threadId } : {}),
-    ...(input.startChild ? { startChild: input.startChild } : {}),
     ...(input.setBacklogAssigneeFilter
       ? { setBacklogAssigneeFilter: input.setBacklogAssigneeFilter }
       : {}),
@@ -123,7 +108,6 @@ export function dispatchT3TeamToolCall(input: {
     ...(input.searchThread ? { searchThread: input.searchThread } : {}),
     ...(input.readMessageThread ? { readMessageThread: input.readMessageThread } : {}),
     ...(input.manageChildren ? { manageChildren: input.manageChildren } : {}),
-    ...(input.readRuntimeModels ? { readRuntimeModels: input.readRuntimeModels } : {}),
     ...(input.readProviderUsage ? { readProviderUsage: input.readProviderUsage } : {}),
   });
   if (threadScopedToolCall !== undefined) {

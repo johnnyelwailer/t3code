@@ -4,8 +4,8 @@
  * run a turn.
  *
  * There is deliberately no second availability check here. Each rung is handed to
- * {@link resolveStartChildModelSelection} — the same resolver `t3team.thread.start_child` uses for
- * free cross-provider spawning — so "available" means exactly what it means for start_child: the
+ * {@link resolveStartChildModelSelection} — the one resolver for cross-provider fork child turns —
+ * so "available" means exactly what it means for any child turn: the
  * instance exists, its driver is available, it is installed and enabled, and it owns the requested
  * model (or has one to fall back on). A rung that fails becomes a skip reason, not an error.
  *

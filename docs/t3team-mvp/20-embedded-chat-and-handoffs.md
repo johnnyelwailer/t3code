@@ -202,85 +202,51 @@ Example:
 
 ```text
 User: "start a handoff to inspect the payment repo."
-Agent uses tool: t3team.thread.start_child
-Child thread appears under the selected work item or parent thread.
+Agent uses tool: delegate_task
+Child thread appears under the parent thread (and its work item).
 User stays on current page.
 ```
 
 ## Handoff Tool
 
-The provider tool should create a child thread and optionally start its first turn.
+Handoffs use the orchestrator MCP tool `delegate_task` (the same tool every T3 agent has); the
+fork adds its options through the delegate_task preparation hook rather than a separate tool.
 
-Effective live tool shape:
+Fork-relevant input beyond `task`, `title`, `target`, `mode`, `runtimeMode`, `interactionMode`:
 
 ```ts
-type StartChildThreadInput = {
-  name: string;
-  isolation: "shared" | "own-worktree";
-  kickoff_prompt?: string;
-  kickoff_mode?: "plan" | "interactive" | "autopilot";
-  // Optional provider instance id to run the child on a DIFFERENT provider than the
-  // parent (cross-provider handoff, e.g. a Claude parent spawning a Codex child).
-  // Omitted = inherit the parent's provider. `model` must be one of that provider's models.
-  provider?: string;
-  model?: string;
-  reasoning_effort?: "low" | "medium" | "high";
-  repo_full_name?: string;
-  repo_ref?: string;
+type DelegateTaskWorkspace = {
+  isolation: "inherit" | "worktree";
+  repository?: string; // a linked repository, or the adopted meta-repo
+  baseRef?: string; // defaults to the repository's default branch
 };
-
-type StartChildThreadResult = {
-  ok: true;
-  project_id: string;
-  project_session_id: string;
-  name: string;
-  isolation: "shared" | "own-worktree";
-  execution_scope: "metarepo" | "repository"; // legacy mirror of isolation
-  started: boolean;
-  interaction_mode: "plan" | "default";
-  runtime_mode: "approval-required" | "auto-accept-edits" | "full-access";
-  provider: string;
-  model: string;
-  requested_kickoff_mode?: "plan" | "interactive" | "autopilot";
-  reasoning_effort?: string;
-  repo_full_name?: string;
-  branch?: string;
-  worktree_path?: string;
-  setup_script_status: "not-requested" | "no-script" | "started" | "failed";
-  navigate_to: {
-    target: "project_session";
-    project_session_id: string;
-  };
-  startup_error?: string;
+type DelegateTaskExtensions = {
+  effort?: "light" | "standard" | "high"; // provider-agnostic thinking tier
+  ticketId?: string; // defaults to the parent's ticket
+  environment?: { id: string; label?: string }; // bind to another T3 server
 };
 ```
 
 Rules:
 
-- no user approval required for MVP
-- child thread is created in background
-- current page does not navigate
-- `isolation` is required on every call — the runtime never defaults it
-- `isolation: "own-worktree"` gives the child a dedicated branch + worktree: with `repo_full_name` it selects a linked repository; without it (local workspace, no linked repos) it isolates the child in a worktree of the local repository
-- `isolation: "shared"` forbids `repo_full_name` and `repo_ref`, and keeps the child in the project's shared checkout
-- legacy `execution_scope` (`metarepo`/`repository`) is accepted as a deprecated alias of `isolation` (`shared`/`own-worktree`) and noted in the result
-- `kickoff_prompt` is optional; when present, the first turn starts immediately
-- a recipe-owned kickoff flow may still pause after thread creation and wait for a structured kickoff submission before the first agent turn starts
-- durable handoff activity cards are recorded on both the parent and child threads
-- server validates project, repository, and workspace access
-
-First live-slice limitation:
-
-- visual parent-thread and work-item attachment metadata is not persisted yet
-- child sessions are currently linked through project membership plus durable activity/result metadata
-- true nested parent-thread or ticket attachment remains a follow-up schema/UI change
+- no user approval required for MVP; the child is created in the background and the current
+  page does not navigate
+- `workspace.isolation: "worktree"` gives the child a dedicated branch + worktree (linked
+  repository via `repository`, the adopted meta-repo, or the local repository) and starts the
+  project setup script there; without `workspace` the child shares the parent's checkout
+- the result's `notes` report the branch, worktree, setup script, effort and environment outcome
+- the child's final result wakes the parent automatically (upstream delegated-completion wake);
+  children do not report back with a message
+- the child's lineage parent is the calling thread; its ticket and, for children of hidden
+  workflow helpers, its visible placement live in the fork child-metadata table
 
 ## Workspace And Worktree Policy
 
 Default depends on the task.
 
-If the handoff is repository work, call `t3team.thread.start_child` with
-`isolation: "own-worktree"`, a linked `repo_full_name`, and a new worktree.
+If the handoff is repository work, call `delegate_task` with
+`workspace: { isolation: "worktree", repository }` (repository: the linked repository) so the
+child gets a new branch and worktree.
 
 Example:
 
@@ -289,8 +255,8 @@ Goal: "Fix flaky checkout tests in repo payments-api."
 Workspace: linked repository payments-api, new worktree required.
 ```
 
-If the handoff is meta-level project work, call `t3team.thread.start_child` with
-`isolation: "shared"` and no repository fields. The project metarepo is the
+If the handoff is meta-level project work, call `delegate_task` without `workspace` (the child
+shares the project checkout). The project metarepo is the
 workspace that holds project context, references, recipes, skills, and synthesis outputs;
 it is not a linked implementation repository.
 

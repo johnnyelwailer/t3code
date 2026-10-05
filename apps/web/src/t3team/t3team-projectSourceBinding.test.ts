@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
+import type { ProjectSourceBinding } from "@t3tools/contracts";
 import type { ProjectShellProject } from "@t3tools/project-context";
 import type { Project } from "~/types";
 import {
@@ -19,7 +20,7 @@ function stored(source: ProjectShellProject["source"]): ProjectShellProject {
   };
 }
 
-function live(source: Project["source"]): Project {
+function live(source: ProjectSourceBinding | undefined): Project {
   return {
     id: "project-alpha" as Project["id"],
     title: "Project Alpha",

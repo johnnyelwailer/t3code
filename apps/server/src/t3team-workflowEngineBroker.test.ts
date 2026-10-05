@@ -1,25 +1,41 @@
-import { type OrchestrationCommand, ProjectId, ProviderInstanceId } from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import { describe, expect, it } from "vite-plus/test";
 
 import { createWorkflowEngineBroker } from "./t3team-workflowEngineBroker.ts";
+import type { WorkflowEngineBrokerDeps } from "./t3team-workflowEngineBrokerTypes.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
 
-describe("createWorkflowEngineBroker", () => {
-  it("routes explicit, notifyUser, and askUser HTML through typed widget attachments", async () => {
-    const dispatched: OrchestrationCommand[] = [];
-    let id = 0;
-    const broker = createWorkflowEngineBroker({
-      runId: "run-widget",
+const ignore = { resolve: () => {}, reject: () => {} };
+
+const brokerDeps = (
+  runId: string,
+  overrides: Partial<WorkflowEngineBrokerDeps> = {},
+): { deps: WorkflowEngineBrokerDeps; fake: ReturnType<typeof makeFakeWorkflowHost> } => {
+  const fake = makeFakeWorkflowHost();
+  let id = 0;
+  return {
+    fake,
+    deps: {
+      runId,
       projectId: ProjectId.make("project-1"),
       modelSelection: createModelSelection(ProviderInstanceId.make("instance-1"), "model-1"),
       runtimeMode: "full-access",
       interactionMode: "default",
       registry: makeWorkflowEngineRegistry(),
-      dispatch: async (command) => void dispatched.push(command),
+      host: fake.host,
       newId: () => `id-${++id}`,
       nowIso: () => "2026-01-01T00:00:00.000Z",
-    });
+      ...overrides,
+    },
+  };
+};
+
+describe("createWorkflowEngineBroker", () => {
+  it("routes explicit, notifyUser, and askUser HTML through typed widget attachments", async () => {
+    const { deps, fake } = brokerDeps("run-widget");
+    const broker = createWorkflowEngineBroker(deps);
 
     await broker.send(
       {
@@ -36,22 +52,19 @@ describe("createWorkflowEngineBroker", () => {
           },
         },
       },
-      { resolve: () => {}, reject: () => {} },
+      ignore,
     );
-    const widgetMessage = dispatched.find((command) => command.type === "thread.message.upsert");
-    expect(widgetMessage).toMatchObject({
-      type: "thread.message.upsert",
-      message: {
-        text: "",
-        t3teamExt: {
-          visibleToAgent: false,
-          attachments: [
-            {
-              kind: "widget",
-              widget: { title: "release_approval", html: "<button>Approve</button>" },
-            },
-          ],
-        },
+    expect(fake.messages()[0]).toMatchObject({
+      threadId: "parent-1",
+      text: "",
+      ext: {
+        visibleToAgent: false,
+        attachments: [
+          {
+            kind: "widget",
+            widget: { title: "release_approval", html: "<button>Approve</button>" },
+          },
+        ],
       },
     });
 
@@ -65,20 +78,14 @@ describe("createWorkflowEngineBroker", () => {
           text: "<div>Trusted workflow notification</div>",
         },
       },
-      { resolve: () => {}, reject: () => {} },
+      ignore,
     );
-    expect(dispatched[1]).toMatchObject({
-      type: "thread.message.upsert",
-      message: {
-        text: "",
-        t3teamExt: {
-          attachments: [
-            {
-              kind: "widget",
-              widget: { html: "<div>Trusted workflow notification</div>" },
-            },
-          ],
-        },
+    expect(fake.messages()[1]).toMatchObject({
+      text: "",
+      ext: {
+        attachments: [
+          { kind: "widget", widget: { html: "<div>Trusted workflow notification</div>" } },
+        ],
       },
     });
 
@@ -93,43 +100,53 @@ describe("createWorkflowEngineBroker", () => {
           affordance: { kind: "choice", options: ["approve", "reject"] },
         },
       },
-      { resolve: () => {}, reject: () => {} },
+      ignore,
     );
-    expect(dispatched[2]).toMatchObject({
-      type: "thread.message.upsert",
-      message: {
-        text: "Release decision",
-        t3teamExt: {
-          status: "waiting-for-input",
-          attachments: [
-            { kind: "view", props: { question: "Release decision" } },
-            {
-              kind: "widget",
-              widget: { html: "<section><strong>Approve release?</strong></section>" },
-            },
-          ],
-        },
+    expect(fake.messages()[2]).toMatchObject({
+      role: "system",
+      text: "Release decision",
+      ext: {
+        status: "waiting-for-input",
+        attachments: [
+          { kind: "view", props: { question: "Release decision" } },
+          {
+            kind: "widget",
+            widget: { html: "<section><strong>Approve release?</strong></section>" },
+          },
+        ],
       },
     });
-    expect(dispatched).toHaveLength(3);
+    expect(fake.messages()).toHaveLength(3);
+  });
+
+  it("delivers agent-directed notes as a queued turn and user-directed ones as a note", async () => {
+    const { deps, fake } = brokerDeps("run-notify");
+    const broker = createWorkflowEngineBroker(deps);
+    await broker.send(
+      {
+        correlationId: "run-notify:1",
+        kind: "thread.message",
+        payload: { threadId: "child-1", recipient: "agent", text: "Prefer terse output." },
+      },
+      ignore,
+    );
+    await broker.send(
+      {
+        correlationId: "run-notify:2",
+        kind: "thread.message",
+        payload: { threadId: "parent-1", recipient: "user", text: "Halfway there." },
+      },
+      ignore,
+    );
+    expect(fake.turns()).toMatchObject([{ threadId: "child-1", text: "Prefer terse output." }]);
+    expect(fake.messages()).toMatchObject([
+      { threadId: "parent-1", role: "system", text: "Halfway there." },
+    ]);
   });
 
   it("attributes the turn prompt to the workflow step that authored it", async () => {
-    const dispatched: OrchestrationCommand[] = [];
-    const broker = createWorkflowEngineBroker({
-      runId: "run-attr",
-      launchThreadId: "parent-attr",
-      projectId: ProjectId.make("project-1"),
-      modelSelection: createModelSelection(ProviderInstanceId.make("instance-1"), "model-1"),
-      runtimeMode: "full-access",
-      interactionMode: "default",
-      registry: makeWorkflowEngineRegistry(),
-      dispatch: async (command) => {
-        dispatched.push(command);
-      },
-      newId: () => "id-1",
-      nowIso: () => "2026-01-01T00:00:00.000Z",
-    });
+    const { deps, fake } = brokerDeps("run-attr", { launchThreadId: "parent-attr" });
+    const broker = createWorkflowEngineBroker(deps);
     await broker.send(
       {
         correlationId: "run-attr:4",
@@ -140,51 +157,45 @@ describe("createWorkflowEngineBroker", () => {
           label: "Rewrite the description of T3-42",
         },
       },
-      { resolve: () => {}, reject: () => {} },
+      ignore,
     );
-
     // The prompt is a `user`-role message (that is how a provider takes turn input), so the author
     // is the ONLY thing telling a client it was machine-written — and it carries the summary line a
     // collapsed row renders, plus the step id the live plan card is keyed by.
-    const turn = dispatched.find((command) => command.type === "thread.turn.start");
-    expect(turn?.type === "thread.turn.start" ? turn.message.role : undefined).toBe("user");
-    expect(turn?.type === "thread.turn.start" ? turn.message.t3teamExt?.author : undefined).toEqual(
-      {
-        kind: "workflow",
-        workflowRunId: "run-attr",
-        stepId: "run-attr:4",
-        label: "Rewrite the description of T3-42",
-      },
-    );
+    const [turn] = fake.turns();
+    expect(turn?.author).toEqual({
+      kind: "workflow",
+      workflowRunId: "run-attr",
+      stepId: "run-attr:4",
+      label: "Rewrite the description of T3-42",
+    });
+    // The pending ask waits on exactly this prompt's run.
+    expect(deps.registry.peekPending("parent-attr")?.promptMessageId).toBe(turn?.messageId);
   });
 
-  it("persists an ask continuation before dispatching the child turn", async () => {
+  it("persists an ask continuation before the host call", async () => {
     const events: string[] = [];
-    const broker = createWorkflowEngineBroker({
-      runId: "run-order",
-      projectId: ProjectId.make("project-1"),
-      modelSelection: createModelSelection(ProviderInstanceId.make("instance-1"), "model-1"),
-      runtimeMode: "full-access",
-      interactionMode: "default",
-      registry: makeWorkflowEngineRegistry(),
-      dispatch: async (command) => {
-        events.push(command.type);
+    const fake = makeFakeWorkflowHost();
+    const { deps } = brokerDeps("run-order", {
+      host: {
+        ...fake.host,
+        startTurn: async () => void events.push("startTurn"),
+        postMessage: async () => void events.push("postMessage"),
       },
       recordPending: async () => {
         events.push("pending-persisted");
       },
-      newId: () => "id-1",
-      nowIso: () => "2026-01-01T00:00:00.000Z",
     });
+    const broker = createWorkflowEngineBroker(deps);
     await broker.send(
       {
         correlationId: "run-order:1",
         kind: "thread.turn",
         payload: { threadId: "child-order", prompt: "Review" },
       },
-      { resolve: () => {}, reject: () => {} },
+      ignore,
     );
-    expect(events).toEqual(["pending-persisted", "thread.turn.start"]);
+    expect(events).toEqual(["pending-persisted", "startTurn"]);
 
     events.length = 0;
     await broker.send(
@@ -193,37 +204,26 @@ describe("createWorkflowEngineBroker", () => {
         kind: "user.input",
         payload: { threadId: "parent-order", question: "Approve?" },
       },
-      { resolve: () => {}, reject: () => {} },
+      ignore,
     );
-    expect(events).toEqual(["pending-persisted", "thread.message.upsert"]);
+    expect(events).toEqual(["pending-persisted", "postMessage"]);
   });
 
   it("uses an explicit workflow step model for child creation and turns", async () => {
-    const registry = makeWorkflowEngineRegistry();
-    const dispatched: OrchestrationCommand[] = [];
     const permits: string[] = [];
-    const broker = createWorkflowEngineBroker({
-      runId: "run-explicit",
+    const { deps, fake } = brokerDeps("run-explicit", {
       launchThreadId: "parent-1",
-      projectId: ProjectId.make("project-1"),
       modelSelection: createModelSelection(ProviderInstanceId.make("launch"), "launch-model"),
-      runtimeMode: "full-access",
-      interactionMode: "default",
-      registry,
       beforePrimitive: async () => {
         permits.push("acquire");
         return true;
       },
       afterPrimitive: () => permits.push("release"),
-      dispatch: async (command) => {
-        dispatched.push(command);
-      },
-      newId: () => "id-1",
-      nowIso: () => "2026-01-01T00:00:00.000Z",
     });
+    const broker = createWorkflowEngineBroker(deps);
     const explicitModel = {
-      provider: "nexplore",
-      model: { kind: "model" as const, id: "nexplore/coding", provider: "nexplore" },
+      provider: "pack-provider",
+      model: { kind: "model" as const, id: "pack-provider/coding", provider: "pack-provider" },
     };
 
     await broker.send(
@@ -237,7 +237,7 @@ describe("createWorkflowEngineBroker", () => {
           model: explicitModel,
         },
       },
-      { resolve: () => {}, reject: () => {} },
+      ignore,
     );
     const turn = broker.send(
       {
@@ -245,65 +245,45 @@ describe("createWorkflowEngineBroker", () => {
         kind: "thread.turn",
         payload: { threadId: "child-1", prompt: "Review", model: explicitModel },
       },
-      { resolve: () => {}, reject: () => {} },
+      ignore,
     );
     // Explicit-model turns resolve the child model BEFORE recording pending state, so
     // pending appears only after the resolution microtask(s) — poll for it.
-    let pending = registry.takePending("child-1");
+    let pending = deps.registry.takePending("child-1");
     for (let attempt = 0; pending === undefined && attempt < 10; attempt += 1) {
       await Promise.resolve();
-      pending = registry.takePending("child-1");
+      pending = deps.registry.takePending("child-1");
     }
     await pending!.resolveLive!("done");
     await turn;
 
-    expect(dispatched).toEqual(
+    const selection = { instanceId: "pack-provider", model: "pack-provider/coding" };
+    expect(fake.calls).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          type: "thread.create",
-          title: "Review release risks",
-          modelSelection: { instanceId: "nexplore", model: "nexplore/coding" },
-        }),
-        expect.objectContaining({
-          type: "thread.turn.start",
-          modelSelection: { instanceId: "nexplore", model: "nexplore/coding" },
-        }),
+        {
+          op: "createThread",
+          input: expect.objectContaining({
+            title: "Review release risks",
+            modelSelection: selection,
+            retention: "retained",
+            parentThreadId: "parent-1",
+          }),
+        },
+        { op: "startTurn", input: expect.objectContaining({ modelSelection: selection }) },
       ]),
     );
     expect(permits).toEqual(["acquire", "release", "acquire", "release"]);
-    expect(dispatched).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          type: "thread.activity.append",
-          activity: expect.objectContaining({
-            payload: expect.objectContaining({ childTitle: "Review release risks" }),
-          }),
-        }),
-      ]),
-    );
   });
 
   it("settles black-boxed asks live without recording a durable pending entry", async () => {
-    const registry = makeWorkflowEngineRegistry();
-    const dispatched: OrchestrationCommand[] = [];
     const durablePending: unknown[] = [];
     const resolved: unknown[] = [];
-    const broker = createWorkflowEngineBroker({
-      runId: "run-1",
-      projectId: ProjectId.make("project-1"),
-      modelSelection: createModelSelection(ProviderInstanceId.make("instance-1"), "model-1"),
-      runtimeMode: "full-access",
-      interactionMode: "default",
-      registry,
-      dispatch: async (command) => {
-        dispatched.push(command);
-      },
+    const { deps, fake } = brokerDeps("run-1", {
       recordPending: async (pending) => {
         durablePending.push(pending);
       },
-      newId: () => "id-1",
-      nowIso: () => "2026-01-01T00:00:00.000Z",
     });
+    const broker = createWorkflowEngineBroker(deps);
 
     const send = broker.send(
       {
@@ -311,19 +291,16 @@ describe("createWorkflowEngineBroker", () => {
         kind: "thread.turn",
         payload: { threadId: "child-1", prompt: "Review this" },
       },
-      {
-        resolve: (reply) => resolved.push(reply),
-        reject: () => {},
-      },
+      { resolve: (reply) => resolved.push(reply), reject: () => {} },
     );
 
-    const pending = registry.takePending("child-1");
-    for (let attempt = 0; dispatched.length === 0 && attempt < 10; attempt += 1) {
+    const pending = deps.registry.takePending("child-1");
+    for (let attempt = 0; fake.calls.length === 0 && attempt < 10; attempt += 1) {
       await Promise.resolve();
     }
     expect(pending?.resolveLive).toBeDefined();
     expect(durablePending).toEqual([]);
-    expect(dispatched.map((command) => command.type)).toEqual(["thread.turn.start"]);
+    expect(fake.ops()).toEqual(["startTurn"]);
 
     await pending!.resolveLive!({ summary: "Looks good" });
     await send;
@@ -331,206 +308,66 @@ describe("createWorkflowEngineBroker", () => {
     expect(resolved).toEqual([{ summary: "Looks good" }]);
   });
 
-  it("emits BOTH placement halves for a retained child so the sidebar nests it immediately", async () => {
-    const dispatched: OrchestrationCommand[] = [];
-    let id = 0;
-    const broker = createWorkflowEngineBroker({
-      runId: "run-nest",
-      launchThreadId: "parent-1",
-      projectId: ProjectId.make("project-1"),
-      modelSelection: createModelSelection(ProviderInstanceId.make("instance-1"), "model-1"),
-      runtimeMode: "full-access",
-      interactionMode: "default",
-      registry: makeWorkflowEngineRegistry(),
-      dispatch: async (command) => void dispatched.push(command),
-      newId: () => `id-${++id}`,
-      nowIso: () => "2026-01-01T00:00:00.000Z",
-    });
-
+  it("links every spawned child under the launch thread, with its retention", async () => {
+    const { deps, fake } = brokerDeps("run-nest", { launchThreadId: "parent-1" });
+    const broker = createWorkflowEngineBroker(deps);
     await broker.send(
       {
         correlationId: "run-nest:1",
         kind: "thread.create",
         payload: { threadId: "child-1", name: "Risk analysis", retention: "retained" },
       },
-      { resolve: () => {}, reject: () => {} },
+      ignore,
     );
-
-    const placements = dispatched.filter(
-      (command) => command.type === "thread.activity.append",
-    ) as Array<Extract<OrchestrationCommand, { type: "thread.activity.append" }>>;
-    // handoff.created lands on the CHILD (placement route + child-side reads)...
-    const created = placements.find((c) => c.activity.kind === "t3team.handoff.created");
-    expect(created).toMatchObject({
-      threadId: "child-1",
-      activity: {
-        payload: {
-          parentThreadId: "parent-1",
-          childThreadId: "child-1",
-          workflowRunId: "run-nest",
-        },
-      },
-    });
-    // ...and handoff.started on the PARENT (what indexT3TeamChildParentThreads reads, so the
-    // child nests before its own thread detail is ever opened).
-    const started = placements.find((c) => c.activity.kind === "t3team.handoff.started");
-    expect(started).toMatchObject({
-      threadId: "parent-1",
-      activity: {
-        payload: {
-          parentThreadId: "parent-1",
-          childThreadId: "child-1",
-          childTitle: "Risk analysis",
-          workflowRunId: "run-nest",
-        },
-      },
-    });
-  });
-
-  it("emits NO placement for a default (ephemeral) child — one-shots never become navigation", async () => {
-    const dispatched: OrchestrationCommand[] = [];
-    let id = 0;
-    const broker = createWorkflowEngineBroker({
-      runId: "run-eph",
-      launchThreadId: "parent-1",
-      projectId: ProjectId.make("project-1"),
-      modelSelection: createModelSelection(ProviderInstanceId.make("instance-1"), "model-1"),
-      runtimeMode: "full-access",
-      interactionMode: "default",
-      registry: makeWorkflowEngineRegistry(),
-      dispatch: async (command) => void dispatched.push(command),
-      newId: () => `id-${++id}`,
-      nowIso: () => "2026-01-01T00:00:00.000Z",
-    });
-
     await broker.send(
       {
-        correlationId: "run-eph:1",
+        correlationId: "run-nest:2",
         kind: "thread.create",
-        payload: { threadId: "child-1", name: "One shot" },
+        payload: { threadId: "child-2", name: "One shot" },
       },
-      { resolve: () => {}, reject: () => {} },
+      ignore,
     );
-
-    expect(dispatched.some((command) => command.type === "thread.activity.append")).toBe(false);
+    expect(fake.calls).toMatchObject([
+      {
+        op: "createThread",
+        input: { threadId: "child-1", parentThreadId: "parent-1", retention: "retained" },
+      },
+      {
+        op: "createThread",
+        input: { threadId: "child-2", parentThreadId: "parent-1", retention: "ephemeral" },
+      },
+    ]);
   });
 
   it("does not create the same workflow child twice for a retried thread.create", async () => {
-    const dispatched: OrchestrationCommand[] = [];
-    const registry = makeWorkflowEngineRegistry();
-    const broker = createWorkflowEngineBroker({
-      runId: "run-idempotent",
-      projectId: ProjectId.make("project-1"),
-      modelSelection: createModelSelection(ProviderInstanceId.make("instance-1"), "model-1"),
-      runtimeMode: "full-access",
-      interactionMode: "default",
-      registry,
-      dispatch: async (command) => void dispatched.push(command),
-      newId: () => "id-1",
-      nowIso: () => "2026-01-01T00:00:00.000Z",
-    });
-
-    await broker.send(
-      {
-        correlationId: "run-idempotent:1",
-        kind: "thread.create",
-        payload: { threadId: "child-1", name: "Retry target" },
-      },
-      { resolve: () => {}, reject: () => {} },
-    );
-    await broker.send(
-      {
-        correlationId: "run-idempotent:2",
-        kind: "thread.create",
-        payload: { threadId: "child-1", name: "Retry target" },
-      },
-      { resolve: () => {}, reject: () => {} },
-    );
-
-    expect(dispatched.filter((command) => command.type === "thread.create")).toHaveLength(1);
+    const { deps, fake } = brokerDeps("run-idempotent");
+    const broker = createWorkflowEngineBroker(deps);
+    for (const correlationId of ["run-idempotent:1", "run-idempotent:2"]) {
+      await broker.send(
+        {
+          correlationId,
+          kind: "thread.create",
+          payload: { threadId: "child-1", name: "Retry target" },
+        },
+        ignore,
+      );
+    }
+    expect(fake.ops().filter((op) => op === "createThread")).toHaveLength(1);
   });
 
-  it("retries a busy-thread turn-start rejection and starts the turn once the thread frees up", async () => {
-    const registry = makeWorkflowEngineRegistry();
-    const dispatched: OrchestrationCommand[] = [];
-    const delays: number[] = [];
-    let turnStartAttempts = 0;
-    const broker = createWorkflowEngineBroker({
-      runId: "run-busy",
-      projectId: ProjectId.make("project-1"),
-      modelSelection: createModelSelection(ProviderInstanceId.make("instance-1"), "model-1"),
-      runtimeMode: "full-access",
-      interactionMode: "default",
-      registry,
-      dispatch: async (command) => {
-        if (command.type === "thread.turn.start") {
-          turnStartAttempts += 1;
-          if (turnStartAttempts < 3) {
-            throw {
-              _tag: "OrchestrationCommandInvariantError",
-              commandType: "thread.turn.start",
-              detail: "Thread 'child-busy' already has a turn in progress.",
-            };
-          }
-        }
-        dispatched.push(command);
-      },
-      threadTurnBusyRetryDelay: async (ms) => {
-        delays.push(ms);
-      },
-      newId: () => "id-1",
-      nowIso: () => "2026-01-01T00:00:00.000Z",
-    });
-
-    await broker.send(
-      {
-        correlationId: "run-busy:1",
-        kind: "thread.turn",
-        payload: { threadId: "child-busy", prompt: "Review" },
-      },
-      { resolve: () => {}, reject: () => {} },
-    );
-
-    expect(turnStartAttempts).toBe(3);
-    expect(delays).toEqual([5_000, 30_000]);
-    expect(dispatched.filter((command) => command.type === "thread.turn.start")).toHaveLength(1);
-  });
-
-  it("fails the run once the busy-thread retry budget is exhausted", async () => {
-    const registry = makeWorkflowEngineRegistry();
-    let turnStartAttempts = 0;
-    const busyRejection = {
-      _tag: "OrchestrationCommandInvariantError",
-      commandType: "thread.turn.start",
-      detail: "Thread 'child-stuck' already has a turn in progress.",
-    };
-    const broker = createWorkflowEngineBroker({
-      runId: "run-stuck",
-      projectId: ProjectId.make("project-1"),
-      modelSelection: createModelSelection(ProviderInstanceId.make("instance-1"), "model-1"),
-      runtimeMode: "full-access",
-      interactionMode: "default",
-      registry,
-      dispatch: async (command) => {
-        if (command.type === "thread.turn.start") turnStartAttempts += 1;
-        throw busyRejection;
-      },
-      threadTurnBusyRetryDelay: async () => {},
-      newId: () => "id-1",
-      nowIso: () => "2026-01-01T00:00:00.000Z",
-    });
-
+  it("fails the ask when the host cannot start the step's turn", async () => {
+    const fake = makeFakeWorkflowHost({ failOn: "startTurn" });
+    const { deps } = brokerDeps("run-reject", { host: fake.host });
+    const broker = createWorkflowEngineBroker(deps);
     await expect(
       broker.send(
         {
-          correlationId: "run-stuck:1",
+          correlationId: "run-reject:1",
           kind: "thread.turn",
-          payload: { threadId: "child-stuck", prompt: "Review" },
+          payload: { threadId: "child-reject", prompt: "Review" },
         },
-        { resolve: () => {}, reject: () => {} },
+        ignore,
       ),
-    ).rejects.toBe(busyRejection);
-    // 1 initial attempt + MAX_INTERRUPTED_TURN_REDRIVES (3) retries.
-    expect(turnStartAttempts).toBe(4);
+    ).rejects.toThrow("host startTurn failed");
   });
 });

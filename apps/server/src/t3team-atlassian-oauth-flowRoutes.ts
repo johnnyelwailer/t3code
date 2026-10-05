@@ -31,7 +31,8 @@ function absoluteBeginUrl(request: HttpServerRequest.HttpServerRequest, beginPat
   return `${scheme}://${host}${beginPath}`;
 }
 
-const t3teamAtlassianOAuthBeginRouteLayer = HttpRouter.add(
+/** Starts a flow for the signed-in app (authenticated with the t3team route group, server.ts). */
+export const t3teamAtlassianOAuthBeginRouteLayer = HttpRouter.add(
   "POST",
   ATLASSIAN_OAUTH_BEGIN_ROUTE,
   Effect.gen(function* () {
@@ -104,8 +105,11 @@ const t3teamAtlassianOAuthStatusRouteLayer = HttpRouter.add(
   }),
 );
 
-export const t3teamAtlassianOAuthFlowRouteLayer = Layer.mergeAll(
-  t3teamAtlassianOAuthBeginRouteLayer,
+/**
+ * The routes a browser with no session finishes sign-in through. `state` is the whole capability,
+ * and only an authenticated `begin` issues one, so these stay outside the t3team session check.
+ */
+export const t3teamAtlassianOAuthCallbackRouteLayer = Layer.mergeAll(
   t3teamAtlassianOAuthBeginRedirectRouteLayer,
   t3teamAtlassianOAuthCompleteRouteLayer,
   t3teamAtlassianOAuthStatusRouteLayer,

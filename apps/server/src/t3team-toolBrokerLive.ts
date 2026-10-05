@@ -1,84 +1,71 @@
-import { CommandId, type ThreadId as ThreadIdType } from "@t3tools/contracts";
+/**
+ * The live t3team tool broker over orchestration V2: thread and project reads
+ * come from `ThreadManagementService` / `ProjectStoreV2`, commands go through
+ * `ThreadManagementService.dispatch`. Child-thread lifecycle tools are upstream's
+ * (`delegate_task`, `task_*`, `t3_thread_*`); this broker serves the fork's own
+ * host tools.
+ */
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-
-import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
-import { GitWorkflowService } from "./git/GitWorkflowService.ts";
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
-import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
-import { ProjectSetupScriptRunner } from "./project/ProjectSetupScriptRunner.ts";
+
+import { ServerEnvironmentIdentity } from "./environment/ServerEnvironment.ts";
+import { ProjectStoreV2 } from "./orchestration-v2/ProjectStore.ts";
+import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
 import { ProviderRegistry } from "./provider/Services/ProviderRegistry.ts";
-import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
+import { bindChildProviderCatalog } from "./t3team-childProviderCatalog.ts";
+import { T3TeamContextRefreshService } from "./t3team-contextRefreshService.ts";
+import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
+import { T3TeamThreadToolContextStore } from "./t3team-threadToolContextStore.ts";
 import { T3TeamToolBroker, type T3TeamToolBrokerShape } from "./t3team-toolBroker.ts";
 import { createT3TeamPrelaunchToolBinding } from "./t3team-toolBrokerBinding.ts";
-import { t3teamRandomUUID } from "./t3team-random.ts";
-import { makeActorSendMessage } from "./t3team-actorSendMessage.ts";
 import { makeManageChildrenHandler } from "./t3team-toolBrokerChildrenLive.ts";
-import { T3TeamActorMailbox } from "./t3team-actorMailbox.ts";
-import { buildPrelaunchView } from "./t3team-toolBrokerPrelaunchView.ts";
-import { makeStartChildThread } from "./t3team-toolBrokerStartChild.ts";
-import { T3TeamThreadToolContextStore } from "./t3team-threadToolContextStore.ts";
-import { makeLoadThreadView } from "./t3team-toolBrokerViewWorkspace.ts";
-import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
-import { bindChildProviderCatalog } from "./t3team-childProviderCatalog.ts";
-import { ServerEnvironmentIdentity } from "./environment/ServerEnvironment.ts";
-import { makeRecipeToolHandlers } from "./t3team-toolBrokerRecipeTools.ts";
-import { makeWorkflowToolsForThread } from "./t3team-toolBrokerWorkflowToolsWiring.ts";
-import { T3TeamContextRefreshService } from "./t3team-contextRefreshService.ts";
-import { makeT3TeamWidgetShowBinder } from "./t3team-toolBrokerWidgetShow.ts";
 import { makeBindSession } from "./t3team-toolBrokerLiveSession.ts";
+import { buildPrelaunchView } from "./t3team-toolBrokerPrelaunchView.ts";
+import { makeRecipeToolHandlers } from "./t3team-toolBrokerRecipeTools.ts";
+import { makeT3TeamThreadReads } from "./t3team-toolBrokerThreadReads.ts";
+import { makeLoadThreadView } from "./t3team-toolBrokerViewWorkspace.ts";
+import { makeT3TeamWidgetShowBinder } from "./t3team-toolBrokerWidgetShow.ts";
+import { makeT3TeamDraftMutationPublisherBinder } from "./t3team-draftMutationPublish.ts";
+import { T3TeamActorMailboxStore } from "./t3team-actorMailbox.ts";
+import { makeWorkflowToolsForThread } from "./t3team-toolBrokerWorkflowToolsWiring.ts";
 import { UsageLimitSources } from "./usage/UsageLimitSources.ts";
-import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";
+
+/** Host tools every provider may call without an explicit `surface:"t3team"` tool context
+ * (e.g. a pack driver reaching the /mcp endpoint). */
+export const T3TEAM_GENERIC_THREAD_TOOL_IDS = [
+  "t3team.runtime.provider_usage",
+  "t3team.thread.children",
+  "t3team.thread.search",
+  "t3team.thread.search_source",
+  "t3team.thread.read_message",
+  "t3team.orchestration.run",
+  "t3team.orchestration.status",
+  "t3team.orchestration.resume",
+  "t3team.orchestration.pause",
+  "t3team.orchestration.stop",
+  "t3team.widget.show",
+  "t3team.recipe.list",
+  "t3team.recipe.validate",
+] as const;
 
 const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () {
-  // Host tools every provider may call without an explicit `surface:"t3team"`
-  // tool-context (e.g. a pack driver reaching the /mcp endpoint): thread rename,
-  // child spawning, reading the thread's own transcript (search / search_source /
-  // read_message — all read-only), running an ephemeral agent orchestration, and
-  // inspecting/validating saved or inline recipe orchestrations.
-  const genericThreadToolIds = [
-    "t3team.runtime.models",
-    "t3team.runtime.provider_usage",
-    "t3team.thread.rename",
-    "t3team.thread.start_child",
-    "t3team.thread.children",
-    "t3team.thread.search",
-    "t3team.thread.search_source",
-    "t3team.thread.read_message",
-    "t3team.orchestration.run",
-    "t3team.orchestration.status",
-    "t3team.orchestration.resume",
-    "t3team.orchestration.pause",
-    "t3team.orchestration.stop",
-    "t3team.widget.show",
-    "t3team.recipe.list",
-    "t3team.recipe.validate",
-  ] as const;
-  const query = yield* ProjectionSnapshotQuery;
-  const orchestration = yield* OrchestrationEngineService;
+  const threads = yield* ThreadManagementService;
+  const reads = makeT3TeamThreadReads({ threads, projects: yield* ProjectStoreV2 });
   const contextStore = yield* T3TeamThreadToolContextStore;
   const contextRefresh = yield* T3TeamContextRefreshService;
   const fileSystem = Option.getOrUndefined(yield* Effect.serviceOption(FileSystem.FileSystem));
   const path = Option.getOrUndefined(yield* Effect.serviceOption(Path.Path));
-  const gitWorkflow = Option.getOrUndefined(yield* Effect.serviceOption(GitWorkflowService));
-  const sourceControlProviders = Option.getOrUndefined(
-    yield* Effect.serviceOption(SourceControlProviderRegistry),
-  );
-  const projectSetupScriptRunner = Option.getOrUndefined(
-    yield* Effect.serviceOption(ProjectSetupScriptRunner),
-  );
   const providerRegistry = Option.getOrUndefined(yield* Effect.serviceOption(ProviderRegistry));
   const usageLimitSources = Option.getOrUndefined(yield* Effect.serviceOption(UsageLimitSources));
+  // Inter-agent mailbox (t3_thread_send mode "mailbox"): `read_message` reads full bodies.
+  const mailbox = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamActorMailboxStore));
   const resourcePressure = Option.getOrUndefined(
     yield* Effect.serviceOption(ResourcePressureMonitor),
   );
-  const workflowRegistry = Option.getOrUndefined(
-    yield* Effect.serviceOption(T3TeamWorkflowEngineRegistry),
-  );
-  // This server's own EnvironmentId: tells a same-environment start_child
-  // `environment` argument apart from a cross-environment binding.
+  // This server's own EnvironmentId: the children `environments` op marks it as the default.
   const serverEnvironmentIdentity = Option.getOrUndefined(
     yield* Effect.serviceOption(ServerEnvironmentIdentity),
   );
@@ -86,93 +73,36 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
     ? yield* serverEnvironmentIdentity.getEnvironmentId
     : undefined;
   bindChildProviderCatalog(providerRegistry);
-  const bindShowWidget = yield* makeT3TeamWidgetShowBinder();
 
-  // Shared inter-agent mailbox: the `drain` op claims the caller's own mailbox through the
-  // SAME shared service the reactor uses (absent in hosts without the reactor, in which
-  // case `drain` reports the mailbox is unavailable).
-  const mailbox = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamActorMailbox));
-
-  const loadThreadProject = (threadId: ThreadIdType) =>
-    Effect.gen(function* () {
-      const thread = Option.getOrUndefined(yield* query.getThreadDetailById(threadId));
-      if (!thread) return yield* Effect.fail("Current t3team thread was not found.");
-
-      const project = Option.getOrUndefined(yield* query.getProjectShellById(thread.projectId));
-      if (!project) {
-        return yield* Effect.fail("Current t3team project was not found.");
-      }
-
-      return { project, thread };
-    });
-
-  // Extracted to t3team-toolBrokerViewWorkspace.ts (additive LOC budget) — behavior unchanged.
-  const loadThreadView = makeLoadThreadView(loadThreadProject);
-
-  const dispatchCommand: typeof orchestration.dispatch = (command) =>
-    orchestration.dispatch(command);
-  const renameThread = (threadId: ThreadIdType, title: string) =>
-    orchestration.dispatch({
-      type: "thread.meta.update",
-      commandId: CommandId.make(`server:t3team:rename:${t3teamRandomUUID()}`),
-      threadId,
-      title,
-    });
-  const recipeToolsForThread = makeRecipeToolHandlers({
-    fileSystem,
-    path,
-    loadThreadProject,
-    ...(providerRegistry ? { listProviders: () => providerRegistry.getProviders } : {}),
-  });
-  // Ephemeral workflow tools (undefined per-tool when unwired) — see the wiring module.
+  const loadThreadProject = reads.loadThreadProject;
   const workflowTools = yield* makeWorkflowToolsForThread({
     fileSystem,
     path,
     loadThreadProject,
-    dispatch: (command) => Effect.runPromise(orchestration.dispatch(command)).then(() => undefined),
   });
-  const startChildThread = makeStartChildThread({
-    loadThreadProject,
-    orchestration,
-    contextStore,
-    services: {
-      ...(fileSystem ? { fileSystem } : {}),
-      ...(path ? { path } : {}),
-      ...(gitWorkflow ? { gitWorkflow } : {}),
-      ...(sourceControlProviders ? { sourceControlProviders } : {}),
-      ...(projectSetupScriptRunner ? { projectSetupScriptRunner } : {}),
-      ...(providerRegistry ? { listProviders: () => providerRegistry.getProviders } : {}),
-      ...(workflowRegistry
-        ? { workflowLaunchThreadForChild: workflowRegistry.launchThreadForChildThread }
-        : {}),
-      ...(localEnvironmentId !== undefined ? { localEnvironmentId } : {}),
-    },
-  });
-  const manageChildren = makeManageChildrenHandler({
-    query,
-    orchestration,
-    ...(mailbox !== undefined ? { mailbox } : {}),
-    ...(localEnvironmentId !== undefined ? { localEnvironmentId } : {}),
-  });
+  const manageChildren = yield* makeManageChildrenHandler(
+    localEnvironmentId === undefined ? {} : { localEnvironmentId },
+  );
 
-  // Extracted to t3team-toolBrokerLiveSession.ts (additive LOC budget) — behavior unchanged.
   const bindSession = makeBindSession({
     contextStore,
-    genericThreadToolIds,
-    query,
+    genericThreadToolIds: T3TEAM_GENERIC_THREAD_TOOL_IDS,
+    reads,
     providerRegistry,
     usageLimitSources,
     resourcePressure,
     contextRefresh,
-    dispatchCommand,
-    bindShowWidget,
-    loadThreadView,
-    renameThread,
-    startChildThread,
+    bindShowWidget: yield* makeT3TeamWidgetShowBinder(),
+    bindPublishDraft: yield* makeT3TeamDraftMutationPublisherBinder(),
+    readMailboxMessage:
+      mailbox === undefined
+        ? undefined
+        : (threadId, messageId) =>
+            mailbox.find(threadId, messageId).pipe(Effect.mapError((error) => error.operation)),
+    loadThreadView: makeLoadThreadView(loadThreadProject, reads.loadThreadStats),
     manageChildren,
-    recipeToolsForThread,
+    recipeToolsForThread: makeRecipeToolHandlers({ fileSystem, path, loadThreadProject }),
     workflowTools,
-    loadThreadProject,
   });
 
   const bindReadOnly: T3TeamToolBrokerShape["bindReadOnly"] = ({
@@ -191,14 +121,7 @@ const createT3TeamToolBroker = Effect.fn("createT3TeamToolBroker")(function* () 
       }),
     );
 
-  // Deliver a first-class inter-agent ("actor") message into another thread
-  // (see t3team-actorSendMessage.ts / t3team-actorMessageReactor.ts).
-  const sendMessage: T3TeamToolBrokerShape["sendMessage"] = makeActorSendMessage({
-    query,
-    orchestration,
-  });
-
-  return { sendMessage, bindSession, bindReadOnly } satisfies T3TeamToolBrokerShape;
+  return { bindSession, bindReadOnly } satisfies T3TeamToolBrokerShape;
 });
 
 export const T3TeamToolBrokerLive = Layer.effect(T3TeamToolBroker, createT3TeamToolBroker());

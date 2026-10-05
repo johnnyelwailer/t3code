@@ -9,7 +9,6 @@ import type * as FileSystem from "effect/FileSystem";
 import type * as Path from "effect/Path";
 import type {
   ModelSelection,
-  OrchestrationCommand,
   ProjectId,
   ProviderInteractionMode,
   RuntimeMode,
@@ -24,19 +23,21 @@ import type {
 import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
 import type { LaunchWorkflowRecipeInput } from "./t3team-workflowEngineLaunchTypes.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
+import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
 
 export interface PreparedWorkflowLaunchDeps {
   readonly registry: T3TeamWorkflowEngineRegistryShape;
   readonly runRepository: WorkflowRunRepositoryShape;
   readonly journalStore: JournalStore;
-  /** Scheduler poke re-arming the soonest-deadline timer after a `waitUntil` park (Epic 27). */
+  /** Scheduler poke after a `waitUntil` park (Epic 27); opens the wake sweep if still shut. */
   readonly rearmScheduler: () => Promise<void>;
-  readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
+  /** The thread operations the run performs (`T3TeamWorkflowHost`). */
+  readonly host: WorkflowHostPort;
   /** Backs the best-effort shape preview; absent = preview skipped, launch unchanged. */
   readonly fileSystem?: FileSystem.FileSystem | undefined;
   /** Needed only to verify and atomically replace an ephemeral workflow source. */
   readonly path?: Path.Path | undefined;
-  /** Distribution policy. Omitted uses Nexi's default of three bounded attempts. */
+  /** Distribution policy. Omitted uses the default of three bounded attempts. */
   readonly repairMaxAttempts?: number;
   readonly repairModelSelection?: "inherit" | ModelSelection;
   readonly repairTotalTimeBudgetMs?: number;

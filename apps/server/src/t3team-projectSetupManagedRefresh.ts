@@ -8,6 +8,7 @@ import {
   renderPreviousAgentsMd,
   renderPreviousAgentsMdOfferFirst,
 } from "./t3team-projectSetupAgentsManagedRefresh.ts";
+import { renderPreviousAgentsMdStartChild } from "./t3team-projectSetupAgentsPreviousStartChild.ts";
 import {
   T3TEAM_PROJECT_SETUP_VERSION,
   type ProjectSetupProfileDefinition,
@@ -38,9 +39,14 @@ export function buildT3TeamProjectAgentsManagedRefresh(profile: ProjectSetupProf
   );
   const previousHash = createT3TeamProjectSetupContentHash(renderPreviousAgentsMd(profile));
   const legacyHash = createT3TeamProjectSetupContentHash(renderLegacyAgentsMd(profile));
+  const startChildHash = createT3TeamProjectSetupContentHash(
+    renderPreviousAgentsMdStartChild(profile),
+  );
 
   return {
-    knownContentHashes: [...new Set([legacyHash, previousHash, offerFirstHash, currentHash])],
+    knownContentHashes: [
+      ...new Set([legacyHash, previousHash, offerFirstHash, startChildHash, currentHash]),
+    ],
   };
 }
 

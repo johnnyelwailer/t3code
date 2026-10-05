@@ -55,7 +55,7 @@ function shapeMessage(runId: string, name: string): ChatMessage {
     streaming: false,
     createdAt: "2026-07-19T10:00:00.000Z",
     updatedAt: "2026-07-19T10:00:00.000Z",
-    turnId: null,
+    runId: null,
     t3teamExt: {
       visibleToUser: true,
       attachments: [
@@ -202,7 +202,7 @@ describe("active workflow dock", () => {
         timelineEntries={[
           { id: "timeline-shape", kind: "message", createdAt: message.createdAt, message },
         ]}
-        workflowCardNavigationRequest={{ messageId: message.id, requestId: 1 }}
+        t3team={{ workflowCardNavigationRequest: { messageId: message.id, requestId: 1 } }}
       />,
     );
 

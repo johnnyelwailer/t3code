@@ -1,29 +1,23 @@
 /**
- * Pack driver event bridge.
+ * Pack session event bridge.
  *
- * Converts a pack instance's `events()` AsyncIterable into the host's
- * canonical `Stream<ProviderRuntimeEvent>`. Every event is defensively
- * re-stamped with the bridged driver kind + instance id so the strict
- * correlation check in `ProviderService` (which compares `event.provider`
- * against the adapter's `provider`) can never tear the pipeline down, then
- * runtime-decoded against the contracts schema.
+ * Turns a pack session's `events()` AsyncIterable of `ProviderAdapterV2Event`
+ * JSON into the host's adapter event stream. Each event's `driver` is
+ * re-stamped with the bridged driver kind, then decoded against the host
+ * schema — there is no translation.
  *
- * Undecodable events are dropped and logged rather than crashing the
- * subscription. Because a dropped *terminal* event (turn completed/failed)
- * would otherwise leave a turn spinning forever, when the raw event carries
- * both a string `threadId` and `turnId` we synthesize a canonical
- * `turn.completed` failure so the turn settles. Without a `turnId` we cannot
- * safely target an in-flight turn, so we drop + logError. Iteration failures
- * are logged (error) and terminate the stream cleanly.
+ * An undecodable event is dropped and logged, except an undecodable
+ * `turn.terminal`: losing a terminal would leave the run spinning, so it fails
+ * the stream with a protocol error. The session manager then releases the
+ * session (`runtime_error`) and the run settles as failed. A throwing or
+ * failing iterable fails the stream the same way. The stream ends when the
+ * session scope closes, because a custom iterable does not self-terminate;
+ * the pack iterator is then released without awaiting its `return()`.
  *
  * @module t3team-pack-driverEvents
  */
-import {
-  ProviderRuntimeEvent,
-  type ProviderDriverKind,
-  type ProviderInstanceId,
-} from "@t3tools/contracts";
-import * as DateTime from "effect/DateTime";
+import type { ProviderDriverKind, ProviderSessionId } from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Filter from "effect/Filter";
 import * as Option from "effect/Option";
@@ -31,85 +25,74 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
-const decodeEvent = Schema.decodeUnknownOption(ProviderRuntimeEvent);
+import {
+  ProviderAdapterEventStreamError,
+  ProviderAdapterProtocolError,
+  type ProviderAdapterV2Error,
+  type ProviderAdapterV2Event,
+} from "./orchestration-v2/ProviderAdapter.ts";
+import { PackCodec } from "./t3team-pack-driverCodec.ts";
 
-const restamp = (
-  raw: unknown,
-  driverKind: ProviderDriverKind,
-  instanceId: ProviderInstanceId,
-): unknown => {
-  if (!raw || typeof raw !== "object") return raw;
-  return {
-    ...(raw as Record<string, unknown>),
-    provider: driverKind,
-    providerInstanceId: instanceId,
-  };
-};
+const decodeEvent = Schema.decodeUnknownOption(PackCodec.event);
 
-const nonEmptyString = (value: unknown): string | undefined =>
-  typeof value === "string" && value.trim().length > 0 ? value : undefined;
+const restamp = (raw: unknown, driver: ProviderDriverKind): unknown =>
+  raw !== null && typeof raw === "object" && !Array.isArray(raw)
+    ? { ...(raw as Record<string, unknown>), driver }
+    : raw;
 
-/** Extract both ids only when present — required to safely target a live turn. */
-const extractTurnIds = (raw: unknown): { threadId: string; turnId: string } | undefined => {
-  if (!raw || typeof raw !== "object") return undefined;
-  const record = raw as Record<string, unknown>;
-  const threadId = nonEmptyString(record.threadId);
-  const turnId = nonEmptyString(record.turnId);
-  return threadId && turnId ? { threadId, turnId } : undefined;
-};
+const eventType = (raw: unknown): unknown =>
+  raw !== null && typeof raw === "object" ? (raw as { readonly type?: unknown }).type : undefined;
 
 export const packEventsToStream = (input: {
-  readonly events: AsyncIterable<unknown>;
-  readonly driverKind: ProviderDriverKind;
-  readonly instanceId: ProviderInstanceId;
-}): Stream.Stream<ProviderRuntimeEvent> =>
-  Stream.fromAsyncIterable(input.events, (cause) => cause).pipe(
-    Stream.filterMapEffect(
-      Filter.makeEffect((raw: unknown) =>
-        Effect.gen(function* () {
-          const decoded = decodeEvent(restamp(raw, input.driverKind, input.instanceId));
-          if (Option.isSome(decoded)) {
-            return Result.succeed(decoded.value);
-          }
-          const ids = extractTurnIds(raw);
-          if (ids) {
-            const createdAt = yield* DateTime.now.pipe(Effect.map(DateTime.formatIso));
-            const synthetic = decodeEvent({
-              type: "turn.completed",
-              eventId: `pack-undecodable-${ids.threadId}-${ids.turnId}`,
-              provider: input.driverKind,
-              providerInstanceId: input.instanceId,
-              threadId: ids.threadId,
-              turnId: ids.turnId,
-              createdAt,
-              payload: {
-                state: "failed",
-                errorMessage: "pack provider emitted an undecodable event",
-              },
-            });
-            if (Option.isSome(synthetic)) {
-              yield* Effect.logError(
-                "Pack provider emitted an undecodable event; synthesizing turn failure",
-                { driver: input.driverKind, instanceId: input.instanceId, ...ids },
-              );
-              return Result.succeed(synthetic.value);
-            }
-          }
-          yield* Effect.logError("Dropping undecodable pack provider event", {
-            driver: input.driverKind,
-            instanceId: input.instanceId,
-          });
-          return Result.fail(raw);
+  readonly events: () => AsyncIterable<unknown>;
+  readonly driver: ProviderDriverKind;
+  readonly providerSessionId: ProviderSessionId;
+  /** Completes when the session scope closes. */
+  readonly closed: Effect.Effect<void>;
+}): Stream.Stream<ProviderAdapterV2Event, ProviderAdapterV2Error> => {
+  const { driver, providerSessionId } = input;
+  const streamError = (cause: unknown) =>
+    new ProviderAdapterEventStreamError({ driver, providerSessionId, cause });
+  const toEvent = (
+    raw: unknown,
+  ): Effect.Effect<Result.Result<ProviderAdapterV2Event, unknown>, ProviderAdapterV2Error> => {
+    const decoded = decodeEvent(restamp(raw, driver));
+    if (Option.isSome(decoded)) return Effect.succeed(Result.succeed(decoded.value));
+    if (eventType(raw) === "turn.terminal") {
+      return Effect.fail(
+        new ProviderAdapterProtocolError({
+          driver,
+          detail: "pack provider emitted an undecodable turn.terminal event",
+          payload: raw,
         }),
+      );
+    }
+    return Effect.logError("Dropping undecodable pack provider event", {
+      driver,
+      providerSessionId,
+      type: eventType(raw),
+    }).pipe(Effect.as(Result.fail(raw)));
+  };
+  const pulls = Effect.gen(function* () {
+    const iterator = yield* Effect.try({
+      try: () => input.events()[Symbol.asyncIterator](),
+      catch: streamError,
+    });
+    // An async-generator `return()` does not settle while the generator is suspended inside its
+    // own `await`, so a pack iterator is released without waiting (fire-and-forget).
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => {
+        void iterator.return?.()?.catch(() => undefined);
+      }),
+    );
+    return Stream.fromEffectRepeat(
+      Effect.tryPromise({ try: () => iterator.next(), catch: streamError }).pipe(
+        Effect.flatMap((next) => (next.done ? Cause.done() : Effect.succeed(next.value))),
       ),
-    ),
-    Stream.catchCause((cause) =>
-      Stream.fromEffect(
-        Effect.logError("Pack provider event stream terminated", {
-          driver: input.driverKind,
-          instanceId: input.instanceId,
-          cause,
-        }),
-      ).pipe(Stream.drain),
-    ),
+    );
+  });
+  return Stream.unwrap(pulls).pipe(
+    Stream.filterMapEffect(Filter.makeEffect(toEvent)),
+    Stream.interruptWhen(input.closed),
   );
+};

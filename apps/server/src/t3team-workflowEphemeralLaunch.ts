@@ -80,8 +80,7 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
     launchThreadId: input.launchThreadId,
     workflowPath: input.workflowPath,
     runId: input.runId,
-    nowIso,
-    dispatch: deps.dispatch,
+    host: deps.host,
   });
   if (input.onAdmitted !== undefined) {
     yield* Effect.promise(input.onAdmitted);
@@ -110,7 +109,7 @@ export const launchPreparedWorkflow = Effect.fn("launchPreparedWorkflow")(functi
       runtimeMode: input.runtimeMode,
       interactionMode: input.interactionMode,
       registry: deps.registry,
-      dispatch: deps.dispatch,
+      host: deps.host,
       newId: () => t3teamRandomUUID(),
       nowIso,
       store: deps.journalStore,

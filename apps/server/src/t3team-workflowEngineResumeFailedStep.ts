@@ -12,8 +12,8 @@
  * (`WorkflowRunLifecycle.recordFailed({ retainPending })`), and this path re-drives THAT step
  * instead of replaying: rebuild the controller (so the reactor can `resume` the run when the
  * re-driven turn answers), park the row on the same ask again with a fresh re-drive budget,
- * re-register the pending ask, and re-issue the step's prompt through the same
- * `thread.turn.resume` command the Continue button and the interrupted-turn re-drive use.
+ * re-register the pending ask, and re-issue the step's prompt through the same re-drive the
+ * interrupted-turn path uses (a fresh queued turn carrying the step's prompt).
  */
 import * as Effect from "effect/Effect";
 
@@ -79,9 +79,6 @@ export const resumeFailedTurnStep = Effect.fn("resumeFailedTurnStep")(function* 
     correlationId: step.correlationId,
     kind: "thread.turn",
     turnRetries: 0,
-    // The dead session's tail writes must not count against the fresh budget before the
-    // re-driven turn starts (see `WorkflowPendingAsk.redriveArmed`).
-    redriveArmed: true,
   });
   yield* input.turnRedrive.processTurnRetry({
     threadId: step.threadId,

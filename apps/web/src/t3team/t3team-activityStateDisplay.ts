@@ -2,10 +2,12 @@
  * GHE #208 — display-side rendering of the deterministic 4-state activity
  * word + the optional LLM enrichment detail.
  *
- * The base word is ALWAYS deterministic (zero inference): the server
- * classifier (t3team-activityState.ts) persists `activityState` on the thread
- * and it flows to the UI through the same shell/thread plumbing as the #40
- * activity label.
+ * The base word is ALWAYS deterministic (zero inference): the client derives
+ * `activityState` from the active V2 run's in-flight turn item
+ * (t3team-activityStateDerive.ts), so only the open thread's working row has
+ * one — listed rows (sidebar, sub-run tree) load shells, not turn items, and
+ * show the label or the stable status word. The #40 activity label arrives as
+ * the `activityLabel` thread fact.
  *
  * Display precedence: the LLM free-text label REPLACES the state word when it
  * is present (it is shorter and already names the activity) — the two never

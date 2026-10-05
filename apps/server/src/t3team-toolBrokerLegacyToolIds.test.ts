@@ -31,7 +31,7 @@ describe("t3team legacy canonical tool ids", () => {
       "t3work.orchestration.status": T3TEAM_WORKFLOW_STATUS_TOOL_ID,
       "t3work.orchestration.resume": T3TEAM_WORKFLOW_RESUME_TOOL_ID,
     });
-    expect(resolveT3TeamCanonicalToolId("t3team.thread.rename")).toBe("t3team.thread.rename");
+    expect(resolveT3TeamCanonicalToolId("t3team.thread.search")).toBe("t3team.thread.search");
   });
 
   it.effect("dispatches the deprecated status id to the current handler", () =>

@@ -1,19 +1,19 @@
-import type { OrchestrationEvent } from "@t3tools/contracts";
+import { type OrchestrationV2DomainEvent, RunId, ThreadId } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  buildSilenceDetectedPayload,
-  buildSilenceMessageText,
+  buildSilentNoticeText,
+  buildStoppedNoticeText,
+  classifySilenceWatchTarget,
   isReNotifyDue,
   isSilentBreach,
-  parseThreadSilenceWatchEvent,
-  THREAD_SILENCE_DEFAULT_TIMEOUT_MS,
-  THREAD_SILENCE_DETECTED_KIND,
-  THREAD_SILENCE_WATCH_CANCELLED_KIND,
-  THREAD_SILENCE_WATCH_REGISTERED_KIND,
+  type SilenceWatchTargetView,
+  silentNoticeMessageId,
+  stoppedNoticeMessageId,
   type ThreadSilenceWatchRecord,
 } from "./t3team-threadSilenceWatch.ts";
-import { collectPendingThreadSilenceWatches } from "./t3team-threadSilenceWatchRehydrate.ts";
+import { makeSilenceActivityTracker } from "./t3team-threadSilenceWatchActivity.ts";
 
 const watch = (over: Partial<ThreadSilenceWatchRecord> = {}): ThreadSilenceWatchRecord => ({
   watchId: "w1",
@@ -21,248 +21,142 @@ const watch = (over: Partial<ThreadSilenceWatchRecord> = {}): ThreadSilenceWatch
   targetThreadId: "target",
   targetTitle: "QA child",
   timeoutMs: 900_000,
+  notifyCount: 0,
+  lastNotifiedAtMs: null,
   ...over,
 });
 
-describe("isSilentBreach", () => {
-  it("breaches exactly at the per-subscription timeout", () => {
-    expect(isSilentBreach({ lastActivityAtMs: 0, nowMs: 899_999, timeoutMs: 900_000 })).toBe(false);
-    expect(isSilentBreach({ lastActivityAtMs: 0, nowMs: 900_000, timeoutMs: 900_000 })).toBe(true);
-    expect(isSilentBreach({ lastActivityAtMs: 0, nowMs: 1_000_000, timeoutMs: 900_000 })).toBe(
-      true,
+const target = (over: Partial<SilenceWatchTargetView> = {}): SilenceWatchTargetView => ({
+  status: "completed",
+  latestRunId: RunId.make("run-1"),
+  activityRunStatus: null,
+  pendingBackgroundTasks: [],
+  settledAt: null,
+  ...over,
+});
+
+const event = (type: string, payload: unknown, atMs: number, threadId = "target") =>
+  ({
+    type,
+    threadId: ThreadId.make(threadId),
+    occurredAt: DateTime.makeUnsafe(atMs),
+    payload,
+  }) as unknown as OrchestrationV2DomainEvent;
+
+const toolItem = (id: string, status: string, type = "command_execution") =>
+  event("turn-item.updated", { id, type, status }, 1_000);
+
+describe("classifySilenceWatchTarget", () => {
+  it("keeps watching an active run, pending background work or a thread with no run yet", () => {
+    expect(classifySilenceWatchTarget(target({ activityRunStatus: "running" }))).toEqual({
+      kind: "live",
+    });
+    const task = { taskId: "t1", kind: "command" } as never;
+    expect(classifySilenceWatchTarget(target({ pendingBackgroundTasks: [task] })).kind).toBe(
+      "live",
+    );
+    expect(classifySilenceWatchTarget(target({ status: "idle", latestRunId: null })).kind).toBe(
+      "live",
     );
   });
 
-  it("honors different per-subscription timeouts", () => {
-    // QA child: 900s; build child: 30m.
-    expect(isSilentBreach({ lastActivityAtMs: 0, nowMs: 900_000, timeoutMs: 900_000 })).toBe(true);
-    expect(isSilentBreach({ lastActivityAtMs: 0, nowMs: 900_000, timeoutMs: 1_800_000 })).toBe(
-      false,
-    );
-    expect(isSilentBreach({ lastActivityAtMs: 0, nowMs: 1_800_000, timeoutMs: 1_800_000 })).toBe(
-      true,
-    );
+  it("closes silently when the turn ended normally and nothing keeps the thread busy", () => {
+    expect(classifySilenceWatchTarget(target({ status: "completed" })).kind).toBe("resting");
+    expect(classifySilenceWatchTarget(target({ status: "idle" })).kind).toBe("resting");
+  });
+
+  it("reports true stops with a per-episode key", () => {
+    expect(classifySilenceWatchTarget(target({ status: "failed" }))).toEqual({
+      kind: "stopped",
+      status: "failed",
+      episode: "run:run-1",
+    });
+    expect(classifySilenceWatchTarget(null)).toEqual({
+      kind: "stopped",
+      status: "deleted",
+      episode: "deleted",
+    });
+    const settledAt = DateTime.makeUnsafe("2026-10-01T00:00:00.000Z");
+    expect(classifySilenceWatchTarget(target({ settledAt }))).toEqual({
+      kind: "stopped",
+      status: "settled",
+      episode: "settled:2026-10-01T00:00:00.000Z",
+    });
   });
 });
 
-describe("isReNotifyDue", () => {
-  it("fires immediately when never notified", () => {
-    expect(isReNotifyDue({ lastNotifiedAtMs: undefined, nowMs: 0, timeoutMs: 900_000 })).toBe(true);
+describe("breach and re-notify rules", () => {
+  it("breaches exactly at the per-subscription timeout", () => {
+    expect(isSilentBreach({ lastActivityAtMs: 0, nowMs: 899_999, timeoutMs: 900_000 })).toBe(false);
+    expect(isSilentBreach({ lastActivityAtMs: 0, nowMs: 900_000, timeoutMs: 900_000 })).toBe(true);
   });
 
-  it("re-fires at each multiple of the timeout, not before", () => {
+  it("fires when never notified, then only at each multiple of the timeout", () => {
+    expect(isReNotifyDue({ lastNotifiedAtMs: null, nowMs: 0, timeoutMs: 900_000 })).toBe(true);
     expect(isReNotifyDue({ lastNotifiedAtMs: 900_000, nowMs: 1_799_999, timeoutMs: 900_000 })).toBe(
       false,
     );
     expect(isReNotifyDue({ lastNotifiedAtMs: 900_000, nowMs: 1_800_000, timeoutMs: 900_000 })).toBe(
       true,
     );
-    expect(
-      isReNotifyDue({ lastNotifiedAtMs: 1_800_000, nowMs: 2_700_000, timeoutMs: 900_000 }),
-    ).toBe(true);
   });
 });
 
-describe("collectPendingThreadSilenceWatches", () => {
-  const registered = (
-    watcher: string,
-    target: string,
-    watchId: string,
-    timeoutMs?: number,
-  ): OrchestrationEvent =>
-    ({
-      type: "thread.activity-appended",
-      payload: {
-        threadId: watcher,
-        activity: {
-          kind: THREAD_SILENCE_WATCH_REGISTERED_KIND,
-          payload: {
-            watchId,
-            targetThreadId: target,
-            targetTitle: "QA child",
-            ...(timeoutMs !== undefined ? { timeoutMs } : {}),
-          },
-        },
-      },
-    }) as unknown as OrchestrationEvent;
-
-  const cancelled = (watcher: string, target: string): OrchestrationEvent =>
-    ({
-      type: "thread.activity-appended",
-      payload: {
-        threadId: watcher,
-        activity: {
-          kind: THREAD_SILENCE_WATCH_CANCELLED_KIND,
-          payload: { targetThreadId: target },
-        },
-      },
-    }) as unknown as OrchestrationEvent;
-
-  const settled = (threadId: string): OrchestrationEvent =>
-    ({
-      type: "thread.settled",
-      payload: {
-        threadId,
-        settledAt: "2026-08-23T12:00:00.000Z",
-        updatedAt: "2026-08-23T12:00:00.000Z",
-      },
-    }) as unknown as OrchestrationEvent;
-
-  it("keeps registered watches and drops cancelled ones", () => {
-    const events = [registered("w", "t1", "a"), registered("w", "t2", "b"), cancelled("w", "t1")];
-    const pending = collectPendingThreadSilenceWatches(events);
-    expect(pending.map((record) => record.watchId)).toEqual(["b"]);
-    expect(pending[0]).toMatchObject({
-      watcherThreadId: "w",
-      targetThreadId: "t2",
-      targetTitle: "QA child",
-      timeoutMs: THREAD_SILENCE_DEFAULT_TIMEOUT_MS,
-    });
+describe("notice text and ids", () => {
+  it("distinguishes silence with and without a tool call in progress", () => {
+    const withTool = buildSilentNoticeText(watch(), { silentForMs: 900_000, pendingToolCount: 2 });
+    expect(withTool).toContain("[Thread silent]");
+    expect(withTool).toContain("A tool call was still in progress (2 open)");
+    expect(withTool).toContain("15m");
+    const noTool = buildSilentNoticeText(watch(), { silentForMs: 900_000, pendingToolCount: 0 });
+    expect(noTool).toContain("may be wedged");
+    expect(buildStoppedNoticeText(watch(), "failed")).toContain("terminal state (failed)");
   });
 
-  it("a cancel only drops that watcher's watches on that target", () => {
-    const events = [
-      registered("w1", "t", "a"),
-      registered("w2", "t", "b"),
-      registered("w1", "other", "c"),
-      cancelled("w1", "t"),
-    ];
-    const pending = collectPendingThreadSilenceWatches(events);
-    expect(pending.map((record) => record.watchId).sort()).toEqual(["b", "c"]);
-  });
-
-  it("defaults missing/invalid timeouts to the default and dedupes watch ids", () => {
-    const events = [
-      registered("w", "t1", "a", 1_800_000),
-      registered("w", "t1", "a", 1), // duplicate id: first wins
-      registered("w", "t2", "b", Number.NaN as unknown as number),
-    ];
-    const pending = collectPendingThreadSilenceWatches(events);
-    expect(pending).toHaveLength(2);
-    expect(pending.find((record) => record.watchId === "a")?.timeoutMs).toBe(1_800_000);
-    expect(pending.find((record) => record.watchId === "b")?.timeoutMs).toBe(
-      THREAD_SILENCE_DEFAULT_TIMEOUT_MS,
+  it("numbers silent notices per watch and keys stop notices per watcher, target and episode", () => {
+    expect(silentNoticeMessageId("w1", 2)).toBe("t3team-silence:w1:silent:2");
+    expect(stoppedNoticeMessageId(watch(), "run:r1")).toBe(
+      stoppedNoticeMessageId(watch({ watchId: "w2" }), "run:r1"),
     );
   });
-
-  it("a settled thread drops its pending watches on both sides (target and watcher)", () => {
-    const events = [
-      registered("w1", "t", "a"), // w1 watches t
-      registered("w1", "other", "b"), // w1 also watches other
-      registered("w2", "t", "c"), // w2 watches t
-      settled("t"),
-    ];
-    const pending = collectPendingThreadSilenceWatches(events);
-    expect(pending.map((record) => record.watchId)).toEqual(["b"]);
-  });
-  describe("parseThreadSilenceWatchEvent", () => {
-    it("parses a registered watch event into a record", () => {
-      const event = registered("watcher-1", "target-1", "w-1", 1_800_000);
-      const action = parseThreadSilenceWatchEvent(event);
-      expect(action).toEqual({
-        type: "registered",
-        record: {
-          watchId: "w-1",
-          watcherThreadId: "watcher-1",
-          targetThreadId: "target-1",
-          targetTitle: "QA child",
-          timeoutMs: 1_800_000,
-        },
-      });
-    });
-
-    it("parses a cancelled watch event", () => {
-      const event = cancelled("watcher-1", "target-1");
-      expect(parseThreadSilenceWatchEvent(event)).toEqual({
-        type: "cancelled",
-        watcherThreadId: "watcher-1",
-        targetThreadId: "target-1",
-      });
-    });
-
-    it("returns null for non-watch events and malformed payloads", () => {
-      const other = {
-        type: "thread.activity-appended",
-        payload: {
-          threadId: "w",
-          activity: { kind: "t3team.child_wait.registered", payload: {} },
-        },
-      } as unknown as OrchestrationEvent;
-      expect(parseThreadSilenceWatchEvent(other)).toBeNull();
-
-      const malformed = {
-        type: "thread.activity-appended",
-        payload: {
-          threadId: "w",
-          activity: { kind: THREAD_SILENCE_WATCH_REGISTERED_KIND, payload: { watchId: 42 } },
-        },
-      } as unknown as OrchestrationEvent;
-      expect(parseThreadSilenceWatchEvent(malformed)).toBeNull();
-    });
-  });
 });
 
-describe("buildSilenceDetectedPayload / buildSilenceMessageText", () => {
-  it("carries the pending-tool distinction in the payload", () => {
-    const withTool = buildSilenceDetectedPayload({
-      watch: watch(),
-      reason: "silent",
-      silentSinceIso: "2026-08-23T10:00:00.000Z",
-      silentForMs: 900_000,
-      pendingToolCall: true,
-      pendingToolCount: 2,
-    });
-    expect(withTool).toEqual({
-      watchId: "w1",
-      targetThreadId: "target",
-      targetTitle: "QA child",
-      reason: "silent",
-      silentSinceIso: "2026-08-23T10:00:00.000Z",
-      silentForMs: 900_000,
-      timeoutMs: 900_000,
-      pendingToolCall: true,
-      pendingToolCount: 2,
-    });
-    expect(withTool).not.toHaveProperty("stoppedStatus");
-    expect(buildSilenceMessageText(withTool)).toContain(
-      "A tool call was still in progress (2 open)",
-    );
-    expect(buildSilenceMessageText(withTool)).toContain("[Thread silent]");
-
-    const noTool = buildSilenceDetectedPayload({
-      watch: watch(),
-      reason: "silent",
-      silentSinceIso: "2026-08-23T10:00:00.000Z",
-      silentForMs: 900_000,
-      pendingToolCall: false,
-      pendingToolCount: 0,
-    });
-    expect(noTool.pendingToolCall).toBe(false);
-    expect(buildSilenceMessageText(noTool)).toContain("No tool call was in progress");
-    expect(buildSilenceMessageText(noTool)).toContain("may be wedged");
+describe("makeSilenceActivityTracker", () => {
+  it("tracks only seeded threads and keeps the latest activity stamp", () => {
+    const tracker = makeSilenceActivityTracker();
+    tracker.note(event("message.updated", {}, 5_000));
+    expect(tracker.get("target")).toBeUndefined();
+    tracker.seed("target", 2_000, []);
+    tracker.note(event("message.updated", {}, 5_000));
+    tracker.note(event("message.updated", {}, 4_000));
+    expect(tracker.get("target")).toEqual({ lastActivityAtMs: 5_000, pendingToolCount: 0 });
+    tracker.note(event("thread.visited", {}, 9_000));
+    expect(tracker.get("target")?.lastActivityAtMs).toBe(5_000);
   });
 
-  it("the stopped payload carries the terminal status", () => {
-    const payload = buildSilenceDetectedPayload({
-      watch: watch(),
-      reason: "stopped",
-      silentSinceIso: "2026-08-23T11:00:00.000Z",
-      silentForMs: 12_000,
-      pendingToolCall: false,
-      pendingToolCount: 0,
-      stoppedStatus: "error",
-    });
-    expect(payload.reason).toBe("stopped");
-    expect(payload.stoppedStatus).toBe("error");
-    expect(buildSilenceMessageText(payload)).toContain("[Thread stopped]");
-    expect(buildSilenceMessageText(payload)).toContain("terminal state (error)");
+  it("counts in-progress tool items by id, so repeats and lost updates cannot drift", () => {
+    const tracker = makeSilenceActivityTracker();
+    tracker.seed("target", 0, ["seeded"]);
+    tracker.note(toolItem("a", "running"));
+    tracker.note(toolItem("a", "running"));
+    tracker.note(toolItem("b", "pending", "dynamic_tool"));
+    tracker.note(toolItem("c", "running", "assistant_message"));
+    expect(tracker.get("target")?.pendingToolCount).toBe(3);
+    tracker.note(toolItem("a", "completed"));
+    tracker.note(toolItem("unknown", "completed"));
+    expect(tracker.get("target")?.pendingToolCount).toBe(2);
+    tracker.note(event("run.updated", { status: "interrupted" }, 2_000));
+    expect(tracker.get("target")?.pendingToolCount).toBe(0);
   });
-});
 
-describe("activity kinds", () => {
-  it("uses the t3team durable-activity namespace", () => {
-    expect(THREAD_SILENCE_WATCH_REGISTERED_KIND).toBe("t3team.thread_silence.watch.registered");
-    expect(THREAD_SILENCE_WATCH_CANCELLED_KIND).toBe("t3team.thread_silence.watch.cancelled");
-    expect(THREAD_SILENCE_DETECTED_KIND).toBe("t3team.thread_silence.detected");
+  it("live state wins over a later seed; retain drops unwatched threads", () => {
+    const tracker = makeSilenceActivityTracker();
+    tracker.seed("target", 7_000, []);
+    tracker.seed("target", 1_000, ["x"]);
+    expect(tracker.get("target")).toEqual({ lastActivityAtMs: 7_000, pendingToolCount: 0 });
+    tracker.seed("other", 0, []);
+    tracker.retain(new Set(["other"]));
+    expect(tracker.isTracked("target")).toBe(false);
+    expect(tracker.isTracked("other")).toBe(true);
   });
 });

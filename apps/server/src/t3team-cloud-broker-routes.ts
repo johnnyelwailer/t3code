@@ -10,7 +10,6 @@ import * as Schema from "effect/Schema";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
 
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
-import { browserApiCorsHeaders } from "./httpCors.ts";
 import { NexiBrokerService } from "./cloud/t3team-NexiBrokerService.ts";
 
 /**
@@ -60,13 +59,10 @@ const requireScope = (scope: AuthEnvironmentScope) =>
     }
   });
 
-// The environment API's CORS policy (`*`, no credentials): the desktop renderer is another origin
-// and reads these with its bearer; a cookie-authenticated cross-origin read stays impossible.
+// CORS comes from upstream's global layer (http.ts): the desktop renderer is another origin and
+// reads these with its bearer; a cookie-authenticated cross-origin read stays impossible.
 const json = (body: unknown, status = 200) =>
-  HttpServerResponse.jsonUnsafe(body, {
-    status,
-    headers: { ...browserApiCorsHeaders, "cache-control": "no-store" },
-  });
+  HttpServerResponse.jsonUnsafe(body, { status, headers: { "cache-control": "no-store" } });
 
 const readSessionId = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest;

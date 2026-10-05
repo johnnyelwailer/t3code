@@ -108,12 +108,7 @@ describe("createT3TeamTurnToolContext", () => {
       surface: "t3team",
       tools: [
         // Catalog order: the defaultEnabled entries of IMPLEMENTED_T3TEAM_TOOL_CATALOG, starting
-        // with t3team.runtime.models (GHE #339), then provider usage, then widget.show.
-        {
-          id: "t3team.runtime.models",
-          label: "List runtime models",
-          capabilities: ["read"],
-        },
+        // with provider usage, then widget.show.
         {
           id: "t3team.runtime.provider_usage",
           label: "Read provider usage limits",
@@ -165,11 +160,6 @@ describe("createT3TeamTurnToolContext", () => {
           capabilities: ["write"],
         },
         {
-          id: "t3team.thread.rename",
-          label: "Rename thread",
-          capabilities: ["write"],
-        },
-        {
           id: "t3team.thread.search",
           label: "Search this thread",
           capabilities: ["read"],
@@ -190,13 +180,8 @@ describe("createT3TeamTurnToolContext", () => {
           capabilities: ["write"],
         },
         {
-          id: "t3team.thread.start_child",
-          label: "Start child session",
-          capabilities: ["write"],
-        },
-        {
           id: "t3team.thread.children",
-          label: "Manage child sessions",
+          label: "Child-thread operations",
           capabilities: ["write"],
         },
         {
@@ -232,8 +217,8 @@ describe("createT3TeamTurnToolContext", () => {
       selectedToolIds: [
         "t3team.view.read",
         "t3team.view.read",
-        "t3team.thread.rename",
-        "t3team.thread.start_child",
+        "t3team.thread.search",
+        "t3team.thread.children",
       ],
     });
 
@@ -246,13 +231,13 @@ describe("createT3TeamTurnToolContext", () => {
           capabilities: ["read"],
         },
         {
-          id: "t3team.thread.rename",
-          label: "Rename thread",
-          capabilities: ["write"],
+          id: "t3team.thread.search",
+          label: "Search this thread",
+          capabilities: ["read"],
         },
         {
-          id: "t3team.thread.start_child",
-          label: "Start child session",
+          id: "t3team.thread.children",
+          label: "Child-thread operations",
           capabilities: ["write"],
         },
       ],

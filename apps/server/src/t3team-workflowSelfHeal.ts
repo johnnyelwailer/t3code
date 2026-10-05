@@ -25,13 +25,7 @@ export type GenerateWorkflowRepair = (input: {
   readonly workspaceRoot: string;
 }) => Promise<
   | { readonly kind: "replacement"; readonly source: string; readonly summary?: string }
-  | {
-      readonly kind: "cannotRepair";
-      readonly reason?: string;
-      /** The repairer, with the run's full context, said it cannot fix this: no further attempt
-       * may ask again (a blind repeat is the incident this flag exists to prevent). */
-      readonly terminal?: boolean;
-    }
+  | { readonly kind: "cannotRepair"; readonly reason?: string }
 >;
 
 /**
@@ -59,12 +53,7 @@ export type WorkflowRepairCoordinatorInput = {
 export type WorkflowRepairCoordinatorResult =
   | { readonly kind: "not-attempted" }
   | { readonly kind: "recovered"; readonly repairAttempts: 1 }
-  | {
-      readonly kind: "failed";
-      readonly repairAttempts: 1;
-      readonly reason: string;
-      readonly terminal?: boolean;
-    };
+  | { readonly kind: "failed"; readonly repairAttempts: 1; readonly reason: string };
 
 /** Run one hidden repair. It has no thread/run id input, so it cannot create a card or sidebar item. */
 export const coordinateWorkflowRepair = async (
@@ -93,12 +82,7 @@ export const coordinateWorkflowRepair = async (
     const reason = generated.reason ?? "Provider cannot repair this workflow.";
     await input.recordAudit({ originalSource: input.source, failure, outcome: "failed", reason });
     await input.activity("failed", reason);
-    return {
-      kind: "failed",
-      repairAttempts: 1,
-      reason,
-      ...(generated.terminal === true ? { terminal: true } : {}),
-    };
+    return { kind: "failed", repairAttempts: 1, reason };
   }
   await input.activity("repairing");
   const source = (input.validateSource ?? ((value) => validateRepairedWorkflowSource(value)))(

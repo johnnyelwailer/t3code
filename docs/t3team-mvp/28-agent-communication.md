@@ -125,12 +125,12 @@ conversation-style section, "answer in user-facing terms," "keep exploration int
 
 1. **No translation discipline.** "Hide complexity" is vague; the renderer gains the
    internal→user-facing table + the never-say list.
-2. **Explicit child-session scope.** The current "Child Sessions" / "Parent And Child
-   Coordination" sections must keep the single `t3team.thread.start_child` tool while
-   requiring `isolation`: `shared` for planning/triage/synthesis in the project's shared
-   checkout, and `own-worktree` for implementation, debugging, tests, review, or PR work in a
-   dedicated worktree — with `repo_full_name` when the workspace has linked repositories, or
-   without it in a local workspace (worktree of the local repository).
+2. **Explicit child-session scope.** The "Child Sessions" / "Parent And Child Coordination"
+   sections use the single child tool `delegate_task`: no `workspace` for planning/triage/
+   synthesis in the project's shared checkout, and `workspace: { isolation: "worktree" }` for
+   implementation, debugging, tests, review, or PR work in a dedicated worktree — with
+   `repository` when the workspace has linked repositories, or without it in a local workspace
+   (worktree of the local repository).
 3. **Capabilities not framed as offers.** "Durable Outputs" touches it; the renderer gains
    the full capability-as-offers framing + the proactivity triggers.
 
@@ -194,12 +194,12 @@ Use the project context files internally before asking the user to restate anyth
 ## Working separately
 
 - Treat the current thread as the place you coordinate and synthesize.
-- Use one child-session tool, `t3team.thread.start_child`, and always pass `isolation`.
+- Use one child-session tool, `delegate_task`, and choose the workspace explicitly.
 - Decision table:
-  | Work                                              | `isolation`    | Repository fields                                                                                                                                |
-  | ------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-  | Planning, triage, synthesis, project status       | `shared`       | Do not pass `repo_full_name` or `repo_ref`                                                                                                       |
-  | Implementation, debugging, tests, review, PR work | `own-worktree` | Pass `repo_full_name` for a linked repo (omit it in a local workspace to isolate in the local repository); pass `repo_ref` when the base matters |
+  | Work                                              | `workspace`                 | Repository fields                                                                                                                 |
+  | ------------------------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+  | Planning, triage, synthesis, project status       | omit (shared checkout)      | none                                                                                                                              |
+  | Implementation, debugging, tests, review, PR work | `{ isolation: "worktree" }` | `repository` for a linked repo (omit it in a local workspace to isolate in the local repository); `baseRef` when the base matters |
 - For work that means digging through a repo, changing code, debugging, or reviewing,
   do it in a separate thread scoped to the right repo — keep this thread clean.
 - Tell the user in outcome terms ("I'll look into that separately"), never in mechanics —

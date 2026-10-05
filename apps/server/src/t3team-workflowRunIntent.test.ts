@@ -27,6 +27,7 @@ import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts"
 import { WorkflowRunRepository, type WorkflowRun } from "./persistence/Services/WorkflowRuns.ts";
 import { buildRunningWorkflowRunRow } from "./t3team-workflowEngineDurability.ts";
 import { buildPreparedWorkflowLifecycle } from "./t3team-workflowEphemeralLifecycle.ts";
+import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
 
 const projectId = ProjectId.make("project-intent");
 const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
@@ -133,7 +134,7 @@ layer("workflow run intent persistence (migration 051)", (it) => {
           runRepository: repo,
           journalStore: {} as never,
           rearmScheduler: async () => {},
-          dispatch: async () => {},
+          host: makeFakeWorkflowHost().host,
         },
         run: {
           runId: "run-intent-funnel",
