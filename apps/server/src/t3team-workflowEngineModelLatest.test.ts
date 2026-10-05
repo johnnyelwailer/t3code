@@ -69,8 +69,9 @@ function harness() {
 
 afterEach(() => setChildProviderCatalog(undefined));
 
-for (const model of [undefined, "parent", "parent/first", "parent/retired"]) {
-  it.effect(`routes workflow create and turn model ${String(model)} through the live catalog`, () =>
+it.effect.each([undefined, "parent", "parent/first", "parent/retired"])(
+  "routes workflow create and turn model %s through the live catalog",
+  (model) =>
     Effect.gen(function* () {
       setChildProviderCatalog(async () => [makeProvider("parent")]);
       const h = harness();
@@ -93,8 +94,7 @@ for (const model of [undefined, "parent", "parent/first", "parent/retired"]) {
         );
       }
     }),
-  );
-}
+);
 
 it.effect(
   "runs an author-omitted model on the host policy instance's latest through SDK and broker",

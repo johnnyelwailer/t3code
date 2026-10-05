@@ -39,8 +39,9 @@ function harness(defaultModel: ModelSelection | undefined = inherited) {
   return { ...primitives, args, broker };
 }
 
-for (const model of ["primary/model-a", "primary", "primary/vendor/model-a"]) {
-  it.effect(`accepts model: "${model}" on agent, spawnThread and thread turns with effort`, () =>
+it.effect.each(["primary/model-a", "primary", "primary/vendor/model-a"])(
+  'accepts model: "%s" on agent, spawnThread and thread turns with effort',
+  (model) =>
     Effect.gen(function* () {
       const h = harness();
       yield* Effect.tryPromise(() =>
@@ -61,8 +62,7 @@ for (const model of ["primary/model-a", "primary", "primary/vendor/model-a"]) {
         assert.notProperty(envelope.payload, "modelIsDefault");
       }
     }),
-  );
-}
+);
 
 it.effect("marks injected defaults only in broker payloads and keeps historical turn args", () =>
   Effect.gen(function* () {

@@ -10,7 +10,12 @@ import { it as vpIt } from "vite-plus/test";
 
 export { assert } from "vite-plus/test";
 
-export const it = {
-  effect: <A, E>(name: string, self: () => Effect.Effect<A, E>) =>
-    vpIt(name, () => Effect.runPromise(Effect.asVoid(self()))),
-};
+const effect = <A, E>(name: string, self: () => Effect.Effect<A, E>) =>
+  vpIt(name, () => Effect.runPromise(Effect.asVoid(self())));
+
+const each =
+  <T>(cases: ReadonlyArray<T>) =>
+  <A, E>(name: string, self: (testCase: T) => Effect.Effect<A, E>) =>
+    vpIt.for(cases)(name, (testCase) => Effect.runPromise(Effect.asVoid(self(testCase))));
+
+export const it = { effect: Object.assign(effect, { each }) };
