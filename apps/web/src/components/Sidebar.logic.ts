@@ -1006,17 +1006,6 @@ export function searchSidebarThreads<
   return [...titleMatches, ...contentMatches];
 }
 
-// Shift+click on the new thread button creates directly in the current
-// project, skipping the command palette's project picker. With a single
-// project there is nothing to pick, so a plain click already creates
-// immediately and the modifier changes nothing.
-export function shouldCreateNewThreadInCurrentProject(
-  shiftKey: boolean,
-  projectGroupCount: number,
-): boolean {
-  return shiftKey || projectGroupCount <= 1;
-}
-
 export function filterSidebarProjectScopeItems<TItem extends { readonly value: string }>(input: {
   items: readonly TItem[];
   query: string;
