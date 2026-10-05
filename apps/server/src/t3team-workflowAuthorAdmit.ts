@@ -19,6 +19,7 @@ import type {
   PreparedWorkflowLaunchDeps,
   PreparedWorkflowLaunchInput,
 } from "./t3team-workflowEphemeralLaunchTypes.ts";
+import { workflowAuthorStepDetail } from "./t3team-workflowAuthorModel.ts";
 import { buildPreparedWorkflowLifecycle } from "./t3team-workflowEphemeralLifecycle.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
 import { buildWorkflowShapePreviewCommand } from "./t3team-workflowShapePreview.ts";
@@ -35,14 +36,15 @@ export const admitAuthoringRun = Effect.fn("admitAuthoringRun")(function* (input
   const { launch, authorDeps, prepared } = input;
   const nowIso = authorDeps.nowIso;
 
-  // Durable first: a disconnect after this point leaves a row (queued) that status/stop can see.
-  const lifecycle = buildPreparedWorkflowLifecycle({ deps: launch, run: prepared, nowIso });
+  // Durable first, already `authoring`: one upsert, so a disconnect never leaves a `queued`
+  // row that boot would try to launch before any source exists.
+  const lifecycle = buildPreparedWorkflowLifecycle({
+    deps: launch,
+    run: prepared,
+    nowIso,
+    initialStatus: "authoring",
+  });
   yield* Effect.promise(() => lifecycle.recordRunning());
-  // Distinct status (not `queued`): there is NO source yet, so boot rehydration must not treat
-  // this row as a restartable launch; the launch funnel moves it to queued → running later.
-  yield* launch.runRepository
-    .setStatus({ runId: prepared.runId, status: "authoring", updatedAt: nowIso() })
-    .pipe(Effect.orDie);
   launch.registry.registerOwnership(prepared.runId, prepared.launchThreadId);
   let stopped = false;
   launch.registry.registerMasterStop(prepared.runId, async () => {
@@ -91,7 +93,10 @@ export const admitAuthoringRun = Effect.fn("admitAuthoringRun")(function* (input
       correlationId: authorStepId,
       stepKind: "workflow.author",
       phase: "started",
-      detail: "Authoring orchestration",
+      detail: workflowAuthorStepDetail({
+        caller: prepared.modelSelection,
+        author: input.authorModelSelection,
+      }),
     }),
   );
   return { lifecycle, stepActivities, authorThreadId, authorStepId, isStopped: () => stopped };

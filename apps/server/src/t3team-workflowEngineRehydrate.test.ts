@@ -625,3 +625,46 @@ it.effect(
       );
     }).pipe(Effect.provide(TestLayer)),
 );
+
+it.effect("boot of an interrupted running row retires its author thread", () =>
+  Effect.gen(function* () {
+    const repo = yield* WorkflowRunRepository;
+    const runId = "rehydrate-running-author";
+    yield* repo.upsert(
+      buildRunningWorkflowRunRow({
+        runId,
+        workflowPath: NodePath.join(cwd, ".t3team-runs", runId, "workflow.ts"),
+        args: {},
+        launchThreadId: "running-launch-thread",
+        projectId,
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        origin: "ephemeral",
+        nowIso: nowIso(),
+      }),
+    );
+    const commands: Array<{ readonly type: string; readonly threadId?: string }> = [];
+    const capturing: OrchestrationEngineShape = {
+      ...stubEngine,
+      dispatch: (command) =>
+        Effect.sync(() => {
+          commands.push({
+            type: command.type,
+            ...("threadId" in command ? { threadId: String(command.threadId) } : {}),
+          });
+          return { sequence: commands.length };
+        }),
+    };
+    yield* rehydrateSuspendedWorkflowRuns().pipe(
+      Effect.provide(Layer.succeed(OrchestrationEngineService, capturing)),
+    );
+    const row = Option.getOrThrow(yield* repo.getById({ runId }));
+    assert.strictEqual(row.status, "failed");
+    assert.isTrue(
+      commands.some(
+        (command) => command.type === "thread.archive" && command.threadId === `${runId}:author`,
+      ),
+    );
+  }).pipe(Effect.provide(TestLayer)),
+);

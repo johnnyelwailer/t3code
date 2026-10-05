@@ -142,6 +142,29 @@ export type ListWorkflowRunsByStatusInput = typeof ListWorkflowRunsByStatusInput
 export const ListRecentWorkflowRunsInput = Schema.Struct({ limit: Schema.Number });
 export type ListRecentWorkflowRunsInput = typeof ListRecentWorkflowRunsInput.Type;
 
+/**
+ * Non-terminal statuses the one-launch guard must read for the calling thread.
+ * `authoring`/`queued`/`running`/`suspended` block a second launch; `paused`/
+ * `sleeping`/`watching` do not, but `replaceRunId` still has to find them.
+ * A global `ORDER BY updated_at LIMIT` hides a live row once enough other runs
+ * move, so the guard queries this set by launch thread instead.
+ */
+export const WORKFLOW_RUN_NON_TERMINAL_STATUSES = [
+  "authoring",
+  "queued",
+  "running",
+  "suspended",
+  "sleeping",
+  "watching",
+  "paused",
+] as const;
+
+export const ListLiveWorkflowRunsByLaunchThreadInput = Schema.Struct({
+  launchThreadId: Schema.String,
+});
+export type ListLiveWorkflowRunsByLaunchThreadInput =
+  typeof ListLiveWorkflowRunsByLaunchThreadInput.Type;
+
 export const SetWorkflowRunStatusInput = Schema.Struct({
   runId: Schema.String,
   status: WorkflowRunStatus,
@@ -290,6 +313,10 @@ export interface WorkflowRunRepositoryShape {
   /** The N most recently updated runs, any status (observability listing, not boot rehydration). */
   readonly listRecent: (
     input: ListRecentWorkflowRunsInput,
+  ) => Effect.Effect<ReadonlyArray<WorkflowRun>, ProjectionRepositoryError>;
+  /** This launch thread's non-terminal runs, ignoring how recently other threads updated. */
+  readonly listLiveByLaunchThread: (
+    input: ListLiveWorkflowRunsByLaunchThreadInput,
   ) => Effect.Effect<ReadonlyArray<WorkflowRun>, ProjectionRepositoryError>;
   /** Set a run's status (without touching the pending ask). */
   readonly setStatus: (
