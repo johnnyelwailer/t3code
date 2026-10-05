@@ -20,6 +20,7 @@ import {
 import { EditorId, FileManagerRevealKind, RemoteOpenTarget } from "./editor.ts";
 import { ModelCapabilities } from "./model.ts";
 import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
+import { ServerProviderUsageLimits, UsageLimitSourceSnapshots } from "./providerUsageLimits.ts";
 import { ServerSettings } from "./settings.ts";
 
 const KeybindingsMalformedConfigIssue = Schema.Struct({
@@ -217,6 +218,8 @@ export const ServerProvider = Schema.Struct({
   ),
   skills: Schema.Array(ServerProviderSkill).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   workspaceSnapshots: Schema.optionalKey(Schema.Array(ServerProviderWorkspaceSnapshot)),
+  // Absent when the driver has no notion of subscription usage.
+  usageLimits: Schema.optional(ServerProviderUsageLimits),
   versionAdvisory: Schema.optionalKey(ServerProviderVersionAdvisory),
   updateState: Schema.optionalKey(ServerProviderUpdateState),
 });
@@ -571,6 +574,12 @@ export const ServerConfig = Schema.Struct({
    * and it stays absent for subscribers that did not opt in.
    */
   environmentThemes: Schema.optional(Schema.Array(EnvironmentTheme)),
+  /**
+   * Quota reported by configured `usageLimitSources`. Like themes, never in
+   * a snapshot: the source stream emits the current set on subscribe, and it
+   * stays absent for subscribers that did not opt in.
+   */
+  usageLimitSources: Schema.optional(UsageLimitSourceSnapshots),
 });
 export type ServerConfig = typeof ServerConfig.Type;
 
