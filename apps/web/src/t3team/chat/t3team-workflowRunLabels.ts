@@ -59,31 +59,13 @@ export function inferredRunStatus(
   return "running";
 }
 
-/** Host-owned steps that are run state, not plan rows: the author writing the source, and self-heal. */
-export const HOST_RUN_STATE_STEP_KINDS: ReadonlySet<string> = new Set([
-  "workflow.author",
-  "workflow.self-heal",
-]);
-
 export function repairStatus(steps: ReadonlyArray<T3TeamWorkflowStepEntry>): {
   readonly label: string;
   readonly reason?: string;
   readonly step: T3TeamWorkflowStepEntry;
 } | null {
-  const latest = [...steps]
-    .toReversed()
-    .find((step) => HOST_RUN_STATE_STEP_KINDS.has(step.stepKind));
+  const latest = [...steps].toReversed().find((step) => step.stepKind === "workflow.self-heal");
   if (latest === undefined) return null;
-  if (latest.stepKind === "workflow.author") {
-    if (latest.phase === "failed")
-      return {
-        label: "Could not be authored",
-        ...(latest.error ? { reason: latest.error } : {}),
-        step: latest,
-      };
-    if (latest.phase === "completed") return null; // authored → the run's own rows take over
-    return { label: "Authoring orchestration", step: latest };
-  }
   const reason = [...steps]
     .toReversed()
     .find((step) => step.stepKind === "workflow.self-heal" && step.error)?.error;

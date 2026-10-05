@@ -1,10 +1,10 @@
+import { ProjectId } from "@t3tools/contracts";
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import type { T3TeamProfile } from "@t3tools/t3team-skill-packs";
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { syncProjectWorkspaceContext } from "~/t3team/t3team-projectWorkspaceSync";
-import { randomUUID } from "~/lib/utils";
 import { getConfiguredDefaultModelSelection } from "~/t3team-configuredDefaultModelSelection";
 
 import { applyWorkspaceBootstrapToProject } from "./t3team-createProjectBootstrap";
@@ -25,15 +25,12 @@ export async function finalizeCreatedProject(input: {
   }
 
   try {
-    await input.backend.dispatchCommand({
-      type: "project.create",
-      commandId: randomUUID() as any,
-      projectId: input.project.id as any,
+    await input.backend.orchestration.createProject({
+      projectId: ProjectId.make(input.project.id),
       title: input.project.title,
       workspaceRoot: input.project.workspace.rootPath,
       createWorkspaceRootIfMissing: true,
       defaultModelSelection: getConfiguredDefaultModelSelection(),
-      createdAt: new Date().toISOString(),
       source: toSourceBindingCommand(input.project.source),
     });
   } catch (error) {

@@ -8,7 +8,6 @@
  */
 import type {
   ModelSelection,
-  OrchestrationCommand,
   ProjectId,
   ProviderInteractionMode,
   RuntimeMode,
@@ -30,6 +29,7 @@ import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineR
 import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
 import type { WorkflowRepairIntent } from "./t3team-workflowSelfHeal.ts";
 import type { WorkflowStepActivityEmitter } from "./t3team-workflowEngineStepActivities.ts";
+import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
 
 export type WorkflowLaunchStatus = "completed" | "suspended" | "failed";
 
@@ -53,7 +53,8 @@ export interface LaunchWorkflowRecipeInput {
   readonly runtimeMode: RuntimeMode;
   readonly interactionMode: ProviderInteractionMode;
   readonly registry: T3TeamWorkflowEngineRegistryShape;
-  readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
+  /** The thread operations the run performs (`T3TeamWorkflowHost`). */
+  readonly host: WorkflowHostPort;
   readonly newId: () => string;
   readonly nowIso: () => string;
   /** DB-backed journal store; defaults to the fs store rooted at `runsRoot` when absent. */

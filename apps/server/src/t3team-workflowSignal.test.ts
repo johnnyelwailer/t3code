@@ -356,11 +356,9 @@ const coreInput = (fakes: ReturnType<typeof makeFakes>, overrides: CoreInputOver
   catalog: overrides.catalog ?? fakes.catalog,
   delivery: fakes.delivery,
   store: fakes.store,
-  sweepMs: 60_000,
   inboxCutoffIso: () => "2025-12-01T00:00:00Z",
   nowIso: () => "2026-01-01T00:00:00Z",
   log: () => Effect.void,
-  startTimer: false,
 });
 
 describe("makeReconcilerCore", () => {
@@ -385,7 +383,7 @@ describe("makeReconcilerCore", () => {
     fakes.setLive([]);
     await core.reconcile();
     expect(fakes.stopped).toEqual(["scm.change-request.watch"]);
-    core.stop();
+    await core.stopAll();
   });
 
   it("minted emit: an undeclared signal rejects; a declared one is delivered + schema-validated", async () => {
@@ -429,7 +427,7 @@ describe("makeReconcilerCore", () => {
     ).rejects.toThrow(/emitted undeclared signal/);
     // Declared but mistyped payload → rejects at the schema boundary.
     await expect(mintedEmit!(ScmChangeRequestMerged, "42", { nope: true })).rejects.toThrow();
-    core.stop();
+    await core.stopAll();
   });
 
   it("cursor round-trips through the store under the instance key", async () => {
@@ -464,7 +462,7 @@ describe("makeReconcilerCore", () => {
     expect(await minted!.getCursor()).toBe(null);
     await minted!.setCursor('{"status":"To Do"}');
     expect(await minted!.getCursor()).toBe('{"status":"To Do"}');
-    core.stop();
+    await core.stopAll();
   });
 });
 

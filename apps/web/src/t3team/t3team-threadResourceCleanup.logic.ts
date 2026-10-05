@@ -1,8 +1,7 @@
 /**
  * Pure pieces of the memory-pressure thread surfaces (flag
- * `NEXI_FF_RESOURCE_PRESSURE`): the paused state folded from the thread's
- * `resource-pressure.*` activity trail (survives reloads, shows on every
- * client), and the cleanup confirm/result texts. The confirm text lists every
+ * `NEXI_FF_RESOURCE_PRESSURE`): the cleanup confirm/result texts (the paused
+ * state is the thread fact `resourcePressurePaused`). The confirm text lists every
  * PID that will get SIGINT and why, and what is skipped — the dialog is the
  * user's only view of exactly what the one click does.
  */
@@ -10,25 +9,6 @@ import type {
   ResourcePressureCleanupPlan,
   ResourcePressureCleanupResult,
 } from "@t3tools/contracts";
-
-export const KIND_PRESSURE_PAUSED = "resource-pressure.paused";
-export const KIND_PRESSURE_RESUMED = "resource-pressure.resumed";
-
-export interface ResourcePressurePauseState {
-  readonly since: string;
-}
-
-/** Latest paused/resumed activity wins; null = not paused. */
-export function deriveResourcePressurePause(
-  activities: ReadonlyArray<{ readonly kind: string; readonly createdAt: string }>,
-): ResourcePressurePauseState | null {
-  let state: ResourcePressurePauseState | null = null;
-  for (const activity of activities) {
-    if (activity.kind === KIND_PRESSURE_PAUSED) state = { since: activity.createdAt };
-    else if (activity.kind === KIND_PRESSURE_RESUMED) state = null;
-  }
-  return state;
-}
 
 const mb = (bytes: number): string => `${Math.round(bytes / 1024 ** 2)} MB`;
 

@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
-import { ProjectId, type EnvironmentId } from "@t3tools/contracts";
+import { ProjectId, ThreadId, type EnvironmentId } from "@t3tools/contracts";
 
 import { resolveProjectThreadsForQuery } from "./t3team-useProjectStoreQueries";
 import {
   makeLiveProject,
+  makeLiveThreadShell,
   makeProjectThread,
   makeStoredProject,
 } from "./t3team-threadBridge.testSupport";
@@ -93,5 +94,50 @@ describe("resolveProjectThreadsForQuery", () => {
         ticketId: "IES-18425",
       }),
     ]);
+  });
+
+  it("keeps a live thread's fork facts over its synced local row", () => {
+    // The live row is merged over the local one: mapped without facts it would drop the
+    // workflow pill and child status the sync already stored.
+    const live = makeLiveThreadShell({
+      id: ThreadId.make("thread-launch"),
+      projectId: ProjectId.make("live-saved"),
+    });
+    const workflowRunStatus = {
+      runId: "run-1",
+      status: "sleeping" as const,
+      pendingKind: null,
+      wakeAt: "2026-05-23T09:00:00.000Z",
+      updatedAt: "2026-05-22T10:00:00.000Z",
+    };
+
+    const [thread] = resolveProjectThreadsForQuery({
+      projectId: "stored-project",
+      projects: [makeStoredProject()],
+      threads: [
+        makeProjectThread({ id: "thread-launch", workflowRunStatus, childStatus: "Stale" }),
+      ],
+      liveProjects: [
+        makeLiveProject({ id: ProjectId.make("live-saved"), workspaceRoot: "/workspace/saved" }),
+      ],
+      liveThreads: [live],
+      factsByThreadId: new Map([
+        [
+          "thread-launch",
+          {
+            threadId: live.id,
+            updatedAt: "2026-05-22T10:00:00.000Z",
+            workflowRunStatus,
+            childStatus: "Waiting on the review child",
+          },
+        ],
+      ]),
+    });
+
+    expect(thread).toMatchObject({
+      id: "thread-launch",
+      workflowRunStatus: { status: "sleeping" },
+      childStatus: "Waiting on the review child",
+    });
   });
 });

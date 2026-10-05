@@ -7,12 +7,14 @@ import {
   type ProjectEntry,
   type ProviderDriverKind,
   type PullRequestContextMetadata,
+  type ScopedThreadRef,
   type ServerProviderSkill,
   type ServerProviderSlashCommand,
 } from "@t3tools/contracts";
 import {
   BlocksIcon,
   FolderIcon,
+  MessagesSquareIcon,
   PackageIcon,
   SettingsIcon,
   UserRoundIcon,
@@ -22,7 +24,6 @@ import { memo, useLayoutEffect, useRef } from "react";
 
 import { type ComposerSlashCommand, type ComposerTriggerKind } from "../../composer-logic";
 import { cn } from "~/lib/utils";
-import { t3teamComposerMenuOptionDomId } from "~/t3team/composer/t3team-composerMenuKeyboard";
 import type { T3TeamSidecarRecipeQuickStart } from "~/t3team/t3team-sidecarRecipeTypes";
 import { Badge } from "../ui/badge";
 import { Command, CommandGroup, CommandItem, CommandList } from "../ui/command";
@@ -83,40 +84,35 @@ export type ComposerCommandItem =
       pullRequest: PullRequestContextMetadata;
       label: string;
       description: string;
+    }
+  | {
+      id: string;
+      type: "thread";
+      thread: ScopedThreadRef;
+      label: string;
+      description: string;
     };
 
 export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
+  listId: string;
   items: ReadonlyArray<ComposerCommandItem>;
   resolvedTheme: "light" | "dark";
   isLoading: boolean;
   triggerKind: ComposerTriggerKind | null;
   emptyStateText?: string;
-  /**
-   * Enables the listbox/option ARIA wiring. The caller owns the id because it
-   * also has to publish it (plus the active option id) on the prompt editor's
-   * editable element as `aria-controls` / `aria-activedescendant`.
-   */
-  listboxId?: string;
   activeItemId: string | null;
   onHighlightedItemChange: (itemId: string | null) => void;
   onSelect: (item: ComposerCommandItem) => void;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
 
-  const listboxId = props.listboxId;
   useLayoutEffect(() => {
     if (!props.activeItemId || !listRef.current) return;
-    // With a listbox id the option ids are stable (t3teamComposerMenuOptionDomId),
-    // so the active row is found by id and no selector escaping is needed.
-    const el = listboxId
-      ? listRef.current.ownerDocument.getElementById(
-          t3teamComposerMenuOptionDomId(listboxId, props.activeItemId),
-        )
-      : listRef.current.querySelector<HTMLElement>(
-          `[data-composer-item-id="${CSS.escape(props.activeItemId)}"]`,
-        );
-    el?.scrollIntoView?.({ block: "nearest" });
-  }, [listboxId, props.activeItemId]);
+    const el = listRef.current.querySelector<HTMLElement>(
+      `[data-composer-item-id="${CSS.escape(props.activeItemId)}"]`,
+    );
+    el?.scrollIntoView({ block: "nearest" });
+  }, [props.activeItemId]);
 
   return (
     <Command
@@ -135,20 +131,19 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
       >
         {props.items.length > 0 ? (
           <CommandList
-            {...(props.listboxId ? { id: props.listboxId, role: "listbox" as const } : {})}
+            id={props.listId}
+            aria-label={props.triggerKind ? LISTBOX_LABEL_BY_TRIGGER[props.triggerKind] : undefined}
             className="max-h-72 min-h-0 scroll-pb-6"
           >
             <CommandGroup>
               {props.items.map((item) => (
                 <ComposerCommandMenuItem
                   key={item.id}
+                  optionId={composerSuggestionOptionId(props.listId, item.id)}
                   item={item}
                   triggerKind={props.triggerKind}
                   resolvedTheme={props.resolvedTheme}
                   isActive={props.activeItemId === item.id}
-                  {...(props.listboxId
-                    ? { optionDomId: t3teamComposerMenuOptionDomId(props.listboxId, item.id) }
-                    : {})}
                   onHighlight={props.onHighlightedItemChange}
                   onSelect={props.onSelect}
                 />
@@ -179,11 +174,11 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
 });
 
 const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
+  optionId: string;
   item: ComposerCommandItem;
   triggerKind: ComposerTriggerKind | null;
   resolvedTheme: "light" | "dark";
   isActive: boolean;
-  optionDomId?: string;
   onHighlight: (itemId: string | null) => void;
   onSelect: (item: ComposerCommandItem) => void;
 }) {
@@ -196,17 +191,9 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
 
   return (
     <CommandItem
+      render={<div id={props.optionId} />}
+      aria-selected={props.isActive}
       value={props.item.id}
-      {...(props.optionDomId
-        ? {
-            // Base UI owns `id` on its item props, so the stable
-            // aria-activedescendant target is supplied through the rendered
-            // element instead.
-            render: <div id={props.optionDomId} />,
-            role: "option" as const,
-            "aria-selected": props.isActive,
-          }
-        : {})}
       data-composer-item-id={props.item.id}
       active={props.isActive}
       onMouseMove={() => {
@@ -226,6 +213,9 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
           theme={props.resolvedTheme}
         />
       ) : null}
+      {props.item.type === "thread" ? (
+        <MessagesSquareIcon aria-hidden="true" className="size-4 shrink-0 text-secondary-label" />
+      ) : null}
       {pullRequestPresentation ? (
         <pullRequestPresentation.Icon
           role="img"
@@ -244,7 +234,7 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
             props.item.label
           )}
         </span>
-        <span className="min-w-0 max-w-[48ch] flex-1 truncate text-left text-secondary-label text-xs">
+        <span className="min-w-0 flex-1 truncate text-left text-secondary-label text-xs">
           {props.item.description}
         </span>
         {skillSourceKind ? (
@@ -257,6 +247,18 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
     </CommandItem>
   );
 });
+
+export function composerSuggestionOptionId(listId: string, itemId: string): string {
+  // JSON escapes lone UTF-16 surrogates before URI encoding without losing identity.
+  return `${listId}-${encodeURIComponent(JSON.stringify(itemId))}`;
+}
+
+const LISTBOX_LABEL_BY_TRIGGER: Record<ComposerTriggerKind, string> = {
+  path: "Files and folders",
+  "pull-request": "Pull requests",
+  "slash-command": "Commands",
+  skill: "Skills",
+};
 
 const SKILL_SOURCE_ICON_BY_KIND: Record<ProviderSkillSourceKind, LucideIcon> = {
   app: BlocksIcon,

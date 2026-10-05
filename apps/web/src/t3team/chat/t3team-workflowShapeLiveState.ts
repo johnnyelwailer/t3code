@@ -13,7 +13,6 @@ import type { OrchestrationWorkflowRunStatus } from "@t3tools/contracts";
 
 import type { T3TeamWorkflowRunProgress } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
 import {
-  HOST_RUN_STATE_STEP_KINDS,
   inferredRunStatus,
   liveRunLabel,
   repairStatus,
@@ -57,9 +56,7 @@ export function useT3TeamWorkflowShapeLiveState(input: {
 
   // Repair activities are workflow-owned state, not plan steps. Rendering them inline avoids
   // a standalone "Analysing failure" row and keeps the authored plan stable.
-  const planRuntimeSteps = progress.steps.filter(
-    (step) => !HOST_RUN_STATE_STEP_KINDS.has(step.stepKind),
-  );
+  const planRuntimeSteps = progress.steps.filter((step) => step.stepKind !== "workflow.self-heal");
   const visiblePlanSteps = shape.steps.filter((step) => step.label !== "Scheduled work");
   const runtimeStepsForRows = planRuntimeSteps.filter((step) => step.stepKind !== "wait.until");
   const { rows: reconciledRows } = reconcileT3TeamWorkflowShapeProgress(
@@ -116,8 +113,7 @@ export function useT3TeamWorkflowShapeLiveState(input: {
         : status === "failed"
           ? "Failed"
           : liveRunLabel(progress.steps);
-  // Authoring is "not started yet" for every control the card offers, exactly like queued.
-  const queued = status === "queued" || status === "authoring";
+  const queued = status === "queued";
   const canPause = status === "suspended" || status === "sleeping";
   // A failed run is resumable too (GHE #344 journal re-drive): the server is the source of
   // truth on whether a given run can actually replay, and answers a non-resumable one with a

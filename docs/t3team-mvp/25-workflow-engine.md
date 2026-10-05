@@ -14,10 +14,11 @@ change, not a cleanup:
 - **Engine internals** — module filenames (`t3team-workflow*.ts`), exported symbols, DB tables
   and columns, journal `refId` / `PrimitiveKind` strings (replay-stable: renaming them breaks
   resume of in-flight runs), and the `handoff: 'workflow-ui'` wire literal.
-- **The old tool ids remain as deprecated aliases.** `t3team_workflow_run` / `_status` /
-  `_resume` (MCP) and `t3team.workflow.run` / `.status` / `.resume` (canonical broker) resolve
-  to the `t3team_orchestration_*` / `t3team.orchestration.*` names and dispatch to the same
-  handlers, so pack configs and already-running agents keep working. Prefer the new names.
+- **Old broker ids still resolve; the old MCP names are gone.** The canonical broker ids
+  `t3team.workflow.run` / `.status` / `.resume` resolve to `t3team.orchestration.*` before the
+  permission gate (stored widget allowlists may carry them; they never appear in a catalog). The
+  MCP tools `t3team_workflow_run` / `_status` / `_resume` were removed: each was a second full
+  tool definition in every agent's context. Agents and packs call `t3team_orchestration_*`.
 
 ## Purpose
 
@@ -257,8 +258,8 @@ await agent("Judge this gate", {
 
 Rules:
 
-- **Availability** is exactly `t3team.thread.start_child`'s definition (same resolver,
-  `resolveStartChildModelSelection`): the instance exists, its driver is available, it is
+- **Availability** uses the shared child model resolver (`resolveStartChildModelSelection`):
+  the instance exists, its driver is available, it is
   installed and enabled, and it owns the requested model. A rung that fails any of these falls
   through — it is a skip, not an error.
 - **Nothing available** → the run's current/default selection is kept. A cascade is a preference
@@ -509,10 +510,19 @@ await thread.askAgent("respond to their question"); // interactive, in the launc
 const ok = await thread.askUser("approve?", { schema: Approve }); // typed user escalation
 ```
 
-Each verb maps onto orchestration via the host broker: `spawnThread` → `thread.create`,
-`askAgent`/`agent` → `thread.turn.start` (resolved on turn-done), `notifyAgent`/`notifyUser`
-→ `thread.message.upsert` (one-way), `askUser` → a system message requesting input (resolved
-on the user's reply). See [§Agents vs. orchestrations](#agents-vs-orchestrations).
+Each verb maps onto orchestration V2 through the server's workflow host
+(`apps/server/src/t3team-workflowHost.ts`), the only place the engine touches orchestration:
+`spawnThread` / `agent` → a thread linked under the launch thread as a `subagent` child;
+`askAgent` / `agent` → a prompt message queued after any active run (resolved when the run that
+prompt starts ends — with its last assistant message, never an opening preamble — and re-driven a
+bounded number of times when that run fails or is interrupted); `notifyAgent` → a queued prompt
+that starts a turn (one-way: nothing waits for the reply); `notifyUser` → a run-less system
+message (the run's own completion or failure notice is held while the launch thread has an active
+run, so it lands after that run instead of inside it); `askUser` → a
+run-less system message tagged `waiting-for-input` (resolved on the next message a person posts on
+the thread, or on the decision card's structured reply pinned to that ask). Rich parts that V2
+messages cannot carry — decision cards, plan views, step pips, run status — ride the fork's thread
+artifacts and facts side stores. See [§Agents vs. orchestrations](#agents-vs-orchestrations).
 
 ### Other primitives — durable timers and journaled side effects
 
@@ -1158,15 +1168,15 @@ inbound message; the orchestration does the suspension.
 
 The step-union runtime has been **deleted** — the durable engine is the only orchestration runtime.
 
-| Phase | Scope                                                                                                                                                                                                                                                                                                                                                    | Status      |
-| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| 25.1  | `.workflow.ts` file loader + `meta` static extractor + `defineWorkflow` / `defineTool` / `defineToolGroup` / `defineScript` SDK + ambient `tools.*` / `scripts.*` trees + ambient types                                                                                                                                                                  | Implemented |
-| 25.2  | Durable-execution engine: journal, replay, `argsHash`, `ReplayDriftError`                                                                                                                                                                                                                                                                                | Implemented |
-| 25.3  | Composition primitives: `parallel`, `pipeline`, `phase`, `log`, `args`, `budget`, `workflow`; plus the journaled-value primitives `random`, `now`, `uuid`, `wait`, and the `script` / `tool` invocation primitives                                                                                                                                       | Implemented |
-| 25.4  | Handle pattern: the `sent`/`resolved` journal split, deterministic `correlationId`, durable suspension (`SuspendedResult`), and the `MessageBroker` host seam                                                                                                                                                                                            | Implemented |
-| 25.x  | **Thread model + host wiring + legacy deletion:** `thread`/`spawnThread`/`agent` + the `Thread` verbs over the Handle pattern; the orchestration-backed broker, the launch path (`startWorkflow`), and the resume reactor (turn-done / user-reply → `appendResolvedEntry` + `resumeWorkflow`); the step-union runtime, its routes, and its tests removed | Implemented |
-| 25.x  | **DB-backed durability:** the `JournalStore` seam (default `FsJournalStore`), the server's SQLite store (`workflow_journal`) + `WorkflowRunRepository` (`workflow_runs`), launch/broker write-through, and boot rehydration of suspended runs (§Open question 2). The in-memory registry is now a hot index over a durable DB source of truth            | Implemented |
-| 25.5  | Determinism enforcement: lint rules flagging nondeterminism patterns, capability gating at load time                                                                                                                                                                                                                                                     | Planned     |
+| Phase | Scope                                                                                                                                                                                                                                                                                                                                                         | Status      |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| 25.1  | `.workflow.ts` file loader + `meta` static extractor + `defineWorkflow` / `defineTool` / `defineToolGroup` / `defineScript` SDK + ambient `tools.*` / `scripts.*` trees + ambient types                                                                                                                                                                       | Implemented |
+| 25.2  | Durable-execution engine: journal, replay, `argsHash`, `ReplayDriftError`                                                                                                                                                                                                                                                                                     | Implemented |
+| 25.3  | Composition primitives: `parallel`, `pipeline`, `phase`, `log`, `args`, `budget`, `workflow`; plus the journaled-value primitives `random`, `now`, `uuid`, `wait`, and the `script` / `tool` invocation primitives                                                                                                                                            | Implemented |
+| 25.4  | Handle pattern: the `sent`/`resolved` journal split, deterministic `correlationId`, durable suspension (`SuspendedResult`), and the `MessageBroker` host seam                                                                                                                                                                                                 | Implemented |
+| 25.x  | **Thread model + host wiring + legacy deletion:** `thread`/`spawnThread`/`agent` + the `Thread` verbs over the Handle pattern; the orchestration-backed broker, the launch path (`startWorkflow`), and the resume reactor (step run ended / user reply → `appendResolvedEntry` + `resumeWorkflow`); the step-union runtime, its routes, and its tests removed | Implemented |
+| 25.x  | **DB-backed durability:** the `JournalStore` seam (default `FsJournalStore`), the server's SQLite store (`workflow_journal`) + `WorkflowRunRepository` (`workflow_runs`), launch/broker write-through, and boot rehydration of suspended runs (§Open question 2). The in-memory registry is now a hot index over a durable DB source of truth                 | Implemented |
+| 25.5  | Determinism enforcement: lint rules flagging nondeterminism patterns, capability gating at load time                                                                                                                                                                                                                                                          | Planned     |
 
 Every recipe is authored against the engine (`recipe.ts` + `*.workflow.ts`); there is no
 longer a `recipe.json` / step-union path.
@@ -1290,9 +1300,9 @@ decides whether a human is needed. Small migration, large payoff.
 **Hazards.**
 
 - Routing to `agent` starts a turn, so it needs a loop bound (report → agent → repair → report …).
-- It must never land on a thread with an in-flight turn. That is the same failure as
-  `nexi-distribution#317`, where a message sent into a busy child stranded the server's
-  turn-tracking. Building this promotes #317 from "file for later" to a blocker.
+- It must never interrupt a thread's in-flight run. On orchestration V2 the workflow host queues
+  every prompt after the thread's active run (`queue_after_active`), so routing to `agent` must go
+  through the host rather than dispatching a turn directly.
 
 ## Open questions
 
@@ -1316,14 +1326,16 @@ decides whether a human is needed. Small migration, large payoff.
    to the same DB, so there is no split-brain where the DB says "resume" but the journal is gone.
    On boot, `rehydrateSuspendedWorkflowRuns` reads `workflow_runs WHERE status='suspended'` and
    rebuilds each run's resume closure: DATA (orchestration path, args, project/model/mode, pending
-   ask) from the row, CODE (broker, dispatch, store, registry, lifecycle) reconstructed from host
-   layers, then `registry.registerRun` + restore the pending ask. The reactor then resolves it
-   identically whether the ask was set this uptime or a prior one. Journal compaction/retention
+   ask) from the row, CODE (broker, workflow host, store, registry, lifecycle) reconstructed from
+   host layers, then `registry.registerRun` + restore the pending ask. The reactor then resolves
+   it identically whether the ask was set this uptime or a prior one: a restored `askAgent` ask
+   finds its prompt again by the workflow author stamp on the prompt message, and the bounded
+   re-drive budget comes back from the run row. Journal compaction/retention
    for completed runs, and multi-instance locking, remain future work (single-instance assumed).
 
    `rehydrateSuspendedWorkflowRuns` is wired into server boot via
-   `T3TeamWorkflowEngineRehydrateLive`, sequenced after the reactor layer, in both
-   `apps/server/src/server.ts` and `apps/server/src/t3team-server.ts`.
+   `T3TeamWorkflowEngineRehydrateLive`, sequenced after the reactor layer, in
+   `apps/server/src/server.ts`.
 
 3. **Per-call model selection for cost discipline.** A per-call `model:` string overrides the
    child's declared latest model, or the launch thread's current selection. Whether a cheaper

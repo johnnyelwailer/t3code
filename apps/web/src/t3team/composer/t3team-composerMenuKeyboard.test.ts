@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  isT3TeamComposerMenuKey,
   resolveT3TeamComposerMenuKey,
-  t3teamComposerMenuOptionDomId,
 } from "~/t3team/composer/t3team-composerMenuKeyboard";
 
 const items = [{ id: "one" }, { id: "two" }, { id: "three" }];
@@ -14,20 +14,13 @@ function resolve(
   return resolveT3TeamComposerMenuKey({ key, items, activeItemId });
 }
 
-describe("t3teamComposerMenuOptionDomId", () => {
-  it("is stable and escapes item ids injectively", () => {
-    expect(t3teamComposerMenuOptionDomId("box", "recipe-slash-command:qa-plan")).toBe(
-      t3teamComposerMenuOptionDomId("box", "recipe-slash-command:qa-plan"),
-    );
-    expect(t3teamComposerMenuOptionDomId("box", "path:file:a/b")).not.toBe(
-      t3teamComposerMenuOptionDomId("box", "path:file:a:b"),
-    );
-    expect(t3teamComposerMenuOptionDomId("box", "a_b")).not.toBe(
-      t3teamComposerMenuOptionDomId("box", "a-b"),
-    );
-    expect(/^[A-Za-z0-9_-]+$/.test(t3teamComposerMenuOptionDomId("box", "path:file:a/b.ts"))).toBe(
+describe("isT3TeamComposerMenuKey", () => {
+  it("claims only the menu keys", () => {
+    expect(["ArrowDown", "ArrowUp", "Enter", "Tab", "Escape"].every(isT3TeamComposerMenuKey)).toBe(
       true,
     );
+    expect(isT3TeamComposerMenuKey("Backspace")).toBe(false);
+    expect(isT3TeamComposerMenuKey("a")).toBe(false);
   });
 });
 

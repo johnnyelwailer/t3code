@@ -1,7 +1,6 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { isWorkProject } from "~/t3team/t3team-isWorkProject";
-import { isHomeProjectId } from "~/t3team/t3team-homeProject";
 import type { ProjectThread, ViewState } from "~/t3team/t3team-types";
 import { readProjectIdFromView } from "~/t3team/t3team-types";
 
@@ -46,13 +45,10 @@ export function resolveThreadProject(input: {
   readonly activeThreadId: string | null;
   readonly view: ViewState | null;
   readonly allProjects: readonly ProjectShellProject[];
-  readonly homeChatProject: ProjectShellProject | null;
 }): ProjectShellProject | null {
   if (!input.activeThreadId || !input.view) return null;
   return (
     input.allProjects.find((project) => project.id === readProjectIdFromView(input.view ?? null)) ??
-    (input.view.type === "thread" && isHomeProjectId(input.view.projectId)
-      ? input.homeChatProject
-      : null)
+    null
   );
 }

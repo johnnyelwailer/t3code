@@ -93,4 +93,20 @@ describe("ExecutionEnvironmentDescriptor", () => {
       decodeDescriptor({ ...descriptor, serverStartedAtMs: 1_700_000_000_000 }).serverStartedAtMs,
     ).toBe(1_700_000_000_000);
   });
+
+  it("treats missing server-resolved command context as unsupported", () => {
+    expect(decodeDescriptor(descriptor).capabilities.serverResolvedCommandContext).toBeUndefined();
+  });
+
+  it("preserves advertised server-resolved command context", () => {
+    expect(
+      decodeDescriptor({
+        ...descriptor,
+        capabilities: {
+          ...descriptor.capabilities,
+          serverResolvedCommandContext: true,
+        },
+      }).capabilities.serverResolvedCommandContext,
+    ).toBe(true);
+  });
 });

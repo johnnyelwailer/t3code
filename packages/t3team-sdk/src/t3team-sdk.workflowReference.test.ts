@@ -28,8 +28,9 @@ describe("workflow author reference", () => {
     }
   });
 
-  for (const example of WORKFLOW_REFERENCE_EXAMPLES) {
-    it(`example "${example.title}" passes the static audit, loader and compile`, () => {
+  it.each(WORKFLOW_REFERENCE_EXAMPLES)(
+    'example "$title" passes the static audit, loader and compile',
+    (example) => {
       const source = {
         absolutePath: `/reference/${example.title}.workflow.ts`,
         sourceText: example.source,
@@ -39,6 +40,7 @@ describe("workflow author reference", () => {
       const prepared = prepareWorkflow(source);
       expect(() => new NodeVM.Script(prepared.metaScript)).not.toThrow();
       expect(() => new NodeVM.Script(prepared.bodyScript)).not.toThrow();
-    }, 60_000);
-  }
+    },
+    60_000,
+  );
 });

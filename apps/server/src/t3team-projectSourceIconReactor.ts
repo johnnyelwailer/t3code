@@ -1,22 +1,23 @@
 /**
- * Project source-icon reactor (t3team).
+ * Project source-icon reactor (t3team), on the V2 application event log.
  *
- * Runs the Jira avatar ingest (t3team-projectSourceIconIngest.ts) OUTSIDE
- * the orchestration command-decide path: the engine's command queue must
- * stay free of network I/O, so when a project gains or re-points an
- * atlassian source binding this reactor downloads the avatar on its own
- * worker and dispatches a follow-up `project.meta.update` carrying the
- * stored `faviconPath` — a normal dispatch; it omits `source`, so it
- * cannot re-trigger this reactor.
+ * Runs the Jira avatar ingest (`t3team-projectSourceIconIngest.ts`) outside the
+ * project command path: when a project event (`project.created` /
+ * `project.meta-updated`) lands for a project whose shell carries an atlassian
+ * binding, this reactor downloads the avatar on its own worker and writes the
+ * stored `faviconPath` with `ProjectService.update` (no `source`, so the
+ * binding hook is not involved). The binding is written before the project
+ * event commits (`t3team-projectSourceBindings.ts`), so the shell read here
+ * already carries it.
  *
- * Triggers: `project.created` / `project.meta-updated` events carrying an
- * atlassian source, plus an initial startup sync for source-bound projects
- * without an icon. Re-ingest happens only when the binding moved to a
- * different Jira project than the stored icon came from; a user-chosen
- * icon on the unchanged binding is never touched. Gated by
- * `t3teamProjectSourceIconIngestEnabled` (on by default, fail-open).
+ * Re-ingest happens only when the binding moved to a different Jira project
+ * than the stored icon came from; a user-chosen icon on the unchanged binding
+ * is never touched. Startup: an initial sync for source-bound projects without
+ * an icon, and a sweep of bindings whose project no longer exists.
+ * `project.deleted` removes the binding row (deletes from any path: MCP, CLI).
+ * Gated by `t3teamProjectSourceIconIngestEnabled` (on by default, fail-open).
  */
-import { CommandId, type OrchestrationEvent } from "@t3tools/contracts";
+import { type ApplicationStoredEvent, CommandId, type ProjectId } from "@t3tools/contracts";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
@@ -26,24 +27,16 @@ import * as Option from "effect/Option";
 import type * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
-import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import { ProjectionProjectSourceBindingRepositoryLive } from "./persistence/Layers/t3team-ProjectionProjectSourceBindings.ts";
+import { OrchestrationEventStore } from "./persistence/Services/OrchestrationEventStore.ts";
+import { ProjectionProjectSourceBindingRepository } from "./persistence/Services/t3team-ProjectionProjectSourceBindings.ts";
+import { ProjectService } from "./project/ProjectService.ts";
 import {
-  type AtlassianBinding,
   ingestFlagEnabled,
   ingestProjectSourceIcon,
   isAtlassianBinding,
 } from "./t3team-projectSourceIconIngest.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
-
-type SourceIconCandidate = { readonly projectId: string; readonly source: AtlassianBinding };
-
-const candidateFromEvent = (event: OrchestrationEvent): SourceIconCandidate | undefined => {
-  if (event.type !== "project.created" && event.type !== "project.meta-updated") return undefined;
-  const source = event.payload.source;
-  if (!isAtlassianBinding(source)) return undefined;
-  return { projectId: event.payload.projectId, source };
-};
 
 export interface T3TeamProjectSourceIconReactorShape {
   readonly start: () => Effect.Effect<void, never, Scope.Scope>;
@@ -56,90 +49,75 @@ export class T3TeamProjectSourceIconReactor extends Context.Service<
   T3TeamProjectSourceIconReactorShape
 >()("t3/t3team-projectSourceIconReactor/T3TeamProjectSourceIconReactor") {}
 
+const logSkipped = (message: string, projectId?: ProjectId) => (cause: Cause.Cause<unknown>) =>
+  Cause.hasInterruptsOnly(cause)
+    ? Effect.void
+    : Effect.logDebug(message, { projectId, cause: Cause.pretty(cause) });
+
 const make = Effect.gen(function* () {
-  const orchestrationEngine = yield* OrchestrationEngineService;
-  const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
+  const projects = yield* ProjectService;
+  const events = yield* OrchestrationEventStore;
+  const bindings = yield* ProjectionProjectSourceBindingRepository;
   // projectId -> external Jira project id the stored favicon came from
   // (empty after a restart; then icon-bearing projects are left untouched).
-  const ingestedFrom = new Map<string, string>();
+  const ingestedFrom = new Map<ProjectId, string>();
 
-  const processCandidate = (candidate: SourceIconCandidate): Effect.Effect<void, never, never> =>
+  const processProject = (projectId: ProjectId): Effect.Effect<void> =>
     Effect.gen(function* () {
       if (!(yield* ingestFlagEnabled())) return;
-      const snapshotOption = yield* projectionSnapshotQuery.getShellSnapshot().pipe(Effect.option);
-      if (Option.isNone(snapshotOption)) return;
-      const snapshot = snapshotOption.value;
-      const project = snapshot.projects.find((item) => item.id === candidate.projectId);
-      if (project === undefined || !isAtlassianBinding(project.source)) return;
-      // The binding already moved past this candidate; a newer event handles it.
-      if (project.source.externalProjectId !== candidate.source.externalProjectId) return;
+      const shell = yield* projects.getShell(projectId);
+      if (Option.isNone(shell) || !isAtlassianBinding(shell.value.source)) return;
+      const project = shell.value;
+      const source = shell.value.source;
       const hasIcon =
         (project.faviconPath ?? null) !== null || (project.projectIcon ?? null) !== null;
-      const ingestedFromId = ingestedFrom.get(project.id);
-      if (
-        hasIcon &&
-        !(ingestedFromId !== undefined && ingestedFromId !== project.source.externalProjectId)
-      ) {
-        return;
-      }
-      const faviconPath = yield* ingestProjectSourceIcon({
-        projectId: project.id,
-        source: project.source,
-      });
+      const ingestedFromId = ingestedFrom.get(projectId);
+      const rebound = ingestedFromId !== undefined && ingestedFromId !== source.externalProjectId;
+      if (hasIcon && !rebound) return;
+      const faviconPath = yield* ingestProjectSourceIcon({ projectId, source });
       if (faviconPath === null) return;
-      ingestedFrom.set(project.id, project.source.externalProjectId);
-      yield* orchestrationEngine
-        .dispatch({
-          type: "project.meta.update",
-          commandId: CommandId.make(t3teamRandomUUID()),
-          projectId: project.id,
-          faviconPath,
-        })
-        .pipe(
-          Effect.catchCause((cause) =>
-            Effect.logDebug("project source icon follow-up dispatch failed", {
-              projectId: project.id,
-              cause: Cause.pretty(cause),
-            }),
-          ),
-        );
-    }).pipe(
-      Effect.catchCause((cause) =>
-        Cause.hasInterruptsOnly(cause)
-          ? // Best-effort: let the in-flight item finish; the next take stops with the scope.
-            Effect.void
-          : Effect.logDebug("project source icon sync skipped", {
-              projectId: candidate.projectId,
-              cause: Cause.pretty(cause),
-            }),
-      ),
-    );
+      ingestedFrom.set(projectId, source.externalProjectId);
+      yield* projects.update({
+        commandId: CommandId.make(`t3team-source-icon:${t3teamRandomUUID()}`),
+        projectId,
+        faviconPath,
+      });
+    }).pipe(Effect.catchCause(logSkipped("project source icon sync skipped", projectId)));
 
-  const worker = yield* makeDrainableWorker(processCandidate);
+  const worker = yield* makeDrainableWorker(processProject);
+
+  const onEvent = (event: ApplicationStoredEvent): Effect.Effect<void> => {
+    if (!("aggregateKind" in event) || event.aggregateKind !== "project") return Effect.void;
+    if (event.type === "project.deleted") {
+      return bindings
+        .deleteById({ projectId: event.aggregateId })
+        .pipe(Effect.catchCause(logSkipped("project source binding cleanup failed")));
+    }
+    return worker.enqueue(event.aggregateId);
+  };
+
+  const startupSync = Effect.gen(function* () {
+    const shells = yield* projects.listShells();
+    const active = new Set(shells.map((shell) => shell.id));
+    for (const row of yield* bindings.listAll()) {
+      if (!active.has(row.projectId)) yield* bindings.deleteById({ projectId: row.projectId });
+    }
+    for (const shell of shells) {
+      const hasIcon = (shell.faviconPath ?? null) !== null || (shell.projectIcon ?? null) !== null;
+      if (isAtlassianBinding(shell.source) && !hasIcon) yield* worker.enqueue(shell.id);
+    }
+  }).pipe(Effect.catchCause(logSkipped("project source icon initial sync skipped")));
 
   const start = Effect.fn("T3TeamProjectSourceIconReactor.start")(function* () {
-    // Initial sync: source-bound projects without an icon — enqueue only.
-    yield* projectionSnapshotQuery.getShellSnapshot().pipe(
-      Effect.flatMap((snapshot) =>
-        Effect.forEach(snapshot.projects, (project) => {
-          if (!isAtlassianBinding(project.source)) return Effect.void;
-          if ((project.faviconPath ?? null) !== null || (project.projectIcon ?? null) !== null) {
-            return Effect.void;
-          }
-          return worker.enqueue({ projectId: project.id, source: project.source });
-        }),
-      ),
-      Effect.catchCause((cause) =>
-        Effect.logDebug("project source icon initial sync skipped", {
-          cause: Cause.pretty(cause),
-        }),
-      ),
+    // Live tail from now: the startup sync covers everything before it.
+    const afterSequence = yield* events.latestApplicationSequence.pipe(
+      Effect.orElseSucceed(() => 0),
     );
+    yield* startupSync;
     yield* Effect.forkScoped(
-      Stream.runForEach(orchestrationEngine.streamDomainEvents, (event) => {
-        const candidate = candidateFromEvent(event);
-        return candidate === undefined ? Effect.void : worker.enqueue(candidate);
-      }),
+      Stream.runForEach(events.streamApplicationEvents({ afterSequence }), onEvent).pipe(
+        Effect.catchCause(logSkipped("project source event stream stopped")),
+      ),
     );
   });
 
@@ -149,4 +127,4 @@ const make = Effect.gen(function* () {
 export const T3TeamProjectSourceIconReactorLive = Layer.effect(
   T3TeamProjectSourceIconReactor,
   make,
-);
+).pipe(Layer.provide(ProjectionProjectSourceBindingRepositoryLive));

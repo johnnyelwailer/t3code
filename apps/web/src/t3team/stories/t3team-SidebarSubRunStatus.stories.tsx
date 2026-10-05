@@ -1,13 +1,12 @@
 /**
- * GHE #40/#208 — sub-run (child) thread rows, sidebar v2.
+ * GHE #40 — sub-run (child) thread rows, sidebar v2.
  *
  * Child rows share ONE status path with their parent card:
  *   - the SAME ring icon — `ThreadActivityMorphIcon` (sm variant so it fits
  *     the h-7 row; the parent card uses the md variant)
  *   - the SAME live status summary — `resolveActivityPillDisplay` over the
- *     thread's deterministic state word + LLM detail ("Thinking · Reading
- *     contracts"), with the detail gated on `t3teamActivityLabelsEnabled`
- *     exactly like the parent's status slot
+ *     thread's LLM label ("Reading contracts", else "Working"), gated on
+ *     `t3teamActivityLabelsEnabled` exactly like the parent's status slot
  *
  * Production component: `t3team-SidebarSubRunRow.tsx` (rendered below the
  * parent row when its "N sub-runs" chip is expanded). The rows below use
@@ -46,21 +45,20 @@ function SectionTitle({ children }: { children: ReactNode }) {
  */
 function SubRunStatusRow({
   title,
-  activityState,
+  running = false,
   activityLabel,
   time,
 }: {
   title: string;
-  activityState?: "thinking" | "writing" | "working" | "waiting";
+  running?: boolean;
   activityLabel?: string;
   time?: string;
 }) {
-  const settled = activityState === undefined;
+  const settled = !running;
   const summary = settled
     ? undefined
     : resolveActivityPillDisplay({
         label: "Working",
-        activityState,
         ...(activityLabel ? { activityLabel } : {}),
       });
   return (
@@ -106,16 +104,10 @@ export const ChildRowStatus: Story = {
         <div className="space-y-1.5">
           <SectionTitle>
             running sub-runs: the parent's ring (sm) + the parent's live summary (
-            <code className="font-mono">state word · detail</code>, shimmers)
+            <code className="font-mono">label, else Working</code>, shimmers)
           </SectionTitle>
-          <SubRunStatusRow
-            title="Fix auth regression"
-            activityState="thinking"
-            activityLabel="Reading contracts"
-          />
-          <SubRunStatusRow title="Write release notes draft" activityState="writing" time="1m" />
-          <SubRunStatusRow title="Run checkout test matrix" activityState="working" time="2m" />
-          <SubRunStatusRow title="Sync project template" activityState="waiting" time="5m" />
+          <SubRunStatusRow title="Fix auth regression" running activityLabel="Reading contracts" />
+          <SubRunStatusRow title="Write release notes draft" running time="1m" />
         </div>
         {DIVIDER}
         <div className="space-y-1.5">
@@ -150,7 +142,6 @@ export const ParentChildSideBySide: Story = {
               <span className="t3team-label-shimmer">
                 {resolveActivityPillDisplay({
                   label: "Working",
-                  activityState: "thinking",
                   activityLabel: "Reading contracts",
                 })}
               </span>
@@ -159,7 +150,7 @@ export const ParentChildSideBySide: Story = {
           <div className="ml-4">
             <SubRunStatusRow
               title="Fix auth regression"
-              activityState="thinking"
+              running
               activityLabel="Reading contracts"
             />
           </div>

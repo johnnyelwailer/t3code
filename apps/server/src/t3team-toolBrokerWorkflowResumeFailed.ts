@@ -78,8 +78,7 @@ export const makeResumeFailedRun =
         onSleep: () => {
           void deps.rearmScheduler();
         },
-        dispatch: deps.dispatch,
-        newId,
+        host: deps.host,
       });
       const launch: LaunchWorkflowRecipeInput = {
         runId: run.runId,
@@ -94,7 +93,7 @@ export const makeResumeFailedRun =
         runtimeMode: run.runtimeMode,
         interactionMode: run.interactionMode,
         registry: deps.registry,
-        dispatch: deps.dispatch,
+        host: deps.host,
         newId,
         nowIso,
         store: deps.journalStore,
@@ -111,7 +110,7 @@ export const makeResumeFailedRun =
       if (retained !== null) {
         if (deps.turnRedrive === undefined) {
           return yield* Effect.fail(
-            "Re-driving a failed agent step is not available in this runtime (no thread query / dispatch).",
+            "Re-driving a failed agent step is not available in this runtime (no workflow host).",
           );
         }
         yield* resumeFailedTurnStep({

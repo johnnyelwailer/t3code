@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
+import { ProjectId } from "@t3tools/contracts";
 import type {
   ProjectShellProject,
   ProjectSource,
   ProjectSourceKind,
 } from "@t3tools/project-context";
 
-import { randomUUID } from "~/lib/utils";
 import { isDuplicateProjectBindingError } from "~/t3team/chat/t3team-duplicateThreadCreateError";
 import { toSourceBindingCommand } from "~/t3team/t3team-projectSourceBinding";
 import { useBackend } from "~/t3team/backend/t3team-index";
@@ -62,10 +62,8 @@ export function useRepairProjectBinding(project: ProjectShellProject) {
         ...(setup.selectedProject.url ? { externalProjectUrl: setup.selectedProject.url } : {}),
         ...(project.source.raw !== undefined ? { raw: project.source.raw } : {}),
       };
-      await backend.dispatchCommand({
-        type: "project.meta.update",
-        commandId: randomUUID() as any,
-        projectId: project.id as any,
+      await backend.orchestration.updateProjectSource({
+        projectId: ProjectId.make(project.id),
         source: toSourceBindingCommand(nextSource),
       });
       return { ...project, source: nextSource };

@@ -14,11 +14,6 @@ import "~/t3team/t3team-statusOrb.css";
 import { useThreadRowMenuHandlers } from "~/t3team/components/t3team-threadRowMenuHandlers";
 import { useThreadRowRename } from "~/t3team/components/t3team-useThreadRowRename";
 import { useThreadRowContextMenu } from "./t3team-ProjectSidebarThreadRow-rowItem";
-import {
-  ExternalSessionActiveLock,
-  ExternalSessionProviderMark,
-  isExternalSessionActive,
-} from "~/t3team/components/t3team-ExternalSessionThreadMarks";
 
 interface ThreadRowProps {
   thread: ProjectThread;
@@ -59,10 +54,6 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
   // porcelain-orb module when the pill maps onto the orb vocabulary; unmapped
   // pills keep the legacy tailwind dot class.
   const statusOrbState = resolveStatusOrbState(statusPill);
-  const externalActive = isExternalSessionActive({
-    providerKind: thread.providerKind,
-    lastMessageAt: thread.lastMessageAt,
-  });
 
   const openThreadMenu = useThreadRowContextMenu({
     thread,
@@ -85,14 +76,13 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
       onClick={onSelect}
     >
       <div className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
-        <ExternalSessionProviderMark providerKind={thread.providerKind} active={externalActive} />
         {variant === "issue" ? (
           <MessageSquareIcon className="size-3 shrink-0 text-muted-foreground/70" />
         ) : null}
         {statusPill && (
           <span
             data-t3team-state={statusOrbState ?? undefined}
-            className={`inline-flex size-1.5 shrink-0 rounded-full ${statusOrbState ? STATUS_ORB_CLASS : statusPill.dotClass} ${statusPill.pulse ? (statusPill.pulseClass ?? "animate-pulse") : ""}`}
+            className={`inline-flex size-1.5 shrink-0 rounded-full ${statusOrbState ? STATUS_ORB_CLASS : statusPill.dotClass} ${statusPill.pulse ? "animate-pulse" : ""}`}
             title={
               statusPill.detail
                 ? `${resolveActivityPillDisplay(statusPill)} ${statusPill.detail}`
@@ -129,7 +119,6 @@ export const ThreadRow = memo(function ThreadRow(props: ThreadRowProps) {
             ) : null}
           </span>
         )}
-        <ExternalSessionActiveLock active={externalActive} />
       </div>
       <div className="ml-auto flex shrink-0 items-center">
         <div className="relative flex min-w-12 justify-end pr-1">

@@ -59,7 +59,6 @@ function makeStubRepository(rows: ReadonlyArray<WorkflowRun>): WorkflowRunReposi
       Effect.succeed(
         [...rows].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, limit),
       ),
-    listLiveByLaunchThread: notImplemented("listLiveByLaunchThread"),
     setStatus: notImplemented("setStatus"),
     casSetStatus: notImplemented("casSetStatus"),
     resumePaused: notImplemented("resumePaused"),
@@ -95,22 +94,6 @@ describe("t3team.orchestration.status", () => {
         updatedAt: row.updatedAt,
         hint: "Parked waiting on user.input; it resumes automatically when that resolves.",
       });
-    }),
-  );
-
-  it.effect("explains an authoring run instead of calling the status unrecognized", () =>
-    Effect.gen(function* () {
-      const handlers = makeWorkflowStatusToolHandlers({
-        runRepository: makeStubRepository([
-          baseRow({ runId: "run-authoring", status: "authoring" }),
-        ]),
-      })(threadId);
-      const value = yield* handlers.getStatus({ runId: "run-authoring" });
-      assert.isTrue("hint" in value);
-      if ("hint" in value) {
-        assert.strictEqual(value.status, "authoring");
-        assert.isFalse(value.hint.includes("Unrecognized"));
-      }
     }),
   );
 

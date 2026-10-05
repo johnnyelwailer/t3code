@@ -2,7 +2,7 @@
  * The My Work Digest loader: one call joins the whole graph.
  *
  * Round trips, per request: one mirror ticket read per project, one thread
- * projection read, one agents GROUP BY, one handoff fallback, one suspended
+ * shell snapshot + facts read, one child-metadata fallback, one suspended
  * workflow scan + one journal read, one transition read per project, and the
  * pull request list straight off the shared TTL cache (zero host calls while
  * the cache is warm). No per-ticket work.
@@ -12,7 +12,6 @@ import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
-import { readDigestThreadAgents } from "./t3team-myworkDigestAgents.ts";
 import { loadDigestBurndownContext } from "./t3team-myworkDigestBurndownBackfill.ts";
 import { toDigestPrEntries } from "./t3team-myworkDigestPr.ts";
 import { loadDigestPrEntries } from "./t3team-myworkDigestPrCache.ts";
@@ -67,7 +66,7 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
     // mirror tickets.
     const threads = yield* readDigestThreads(appProjectIds);
     const threadIds = threads.map((thread) => thread.threadId);
-    const agentByThread = yield* readDigestThreadAgents(threadIds);
+    const agentByThread = new Map(threads.map((thread) => [thread.threadId, thread.agent]));
     const hotTickets = yield* readDigestToolContextTickets(threadIds);
     const missingThreadIds = threadIds.filter((threadId) => !hotTickets.has(threadId));
     const coldTickets =

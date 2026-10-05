@@ -5,6 +5,7 @@ import {
 
 import type { WorkspacePackHostDiagnostic } from "./t3team-pack-host.ts";
 import type { WorkflowEphemeralConcurrencyPolicy } from "./t3team-workflowEphemeralConcurrencyPolicy.ts";
+import { inertPackActivationContext } from "./t3team-pack-activationContext.ts";
 
 const CAPABILITY = "workflow-ephemeral-concurrency-policy:v1";
 
@@ -15,12 +16,7 @@ export const loadPackWorkflowEphemeralConcurrencyPolicy = async (
   for (const pack of diagnostic.resolution?.packs ?? []) {
     if (!pack.manifest.entrypoints?.activate) continue;
     await activateWorkspacePack(pack, {
-      defineAgentProvider: () => undefined,
-      defineProviderDriver: () => undefined,
-      defineTheme: () => undefined,
-      defineSetupProfile: () => undefined,
-      defineWorkflowRepairPolicy: () => undefined,
-      defineWorkflowAgentModelPolicy: () => undefined,
+      ...inertPackActivationContext,
       defineWorkflowEphemeralConcurrencyPolicy: (definition) => {
         if (!pack.manifest.capabilities.includes(CAPABILITY)) {
           throw new Error(
@@ -33,9 +29,6 @@ export const loadPackWorkflowEphemeralConcurrencyPolicy = async (
           );
         }
         policy = definition;
-      },
-      resolveAssetDataUrl: async () => {
-        throw new Error("Asset resolution is only available to pack activation code");
       },
     });
   }

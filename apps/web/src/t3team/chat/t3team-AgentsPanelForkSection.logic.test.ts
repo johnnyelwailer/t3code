@@ -180,11 +180,10 @@ describe("SUB_RUN_LIFECYCLE_RANK", () => {
   });
 });
 
-describe("resolveSubRunStatusLabel (GHE #208 panel/sidebar seam)", () => {
+describe("resolveSubRunStatusLabel (GHE #40 panel/sidebar seam)", () => {
   it("shows the LLM activity label when it flows and the flag is on", () => {
     const thread = createThread({
       status: "running",
-      activityState: "writing",
       activityLabel: "Editing the router",
     });
     expect(resolveSubRunStatusLabel(thread, { activityLabelsEnabled: true })).toBe(
@@ -192,18 +191,15 @@ describe("resolveSubRunStatusLabel (GHE #208 panel/sidebar seam)", () => {
     );
   });
 
-  it("falls back to the deterministic state word when no label flows (flag off or absent)", () => {
-    const thread = createThread({ status: "running", activityState: "writing" });
-    expect(resolveSubRunStatusLabel(thread, { activityLabelsEnabled: true })).toBe("Writing");
+  it("keeps the stable status label when no label flows (flag off or absent)", () => {
     const labeled = createThread({
       status: "running",
-      activityState: "writing",
       activityLabel: "Editing the router",
     });
-    expect(resolveSubRunStatusLabel(labeled, { activityLabelsEnabled: false })).toBe("Writing");
+    expect(resolveSubRunStatusLabel(labeled, { activityLabelsEnabled: false })).toBe("Running");
   });
 
-  it("keeps the stable status label when neither label nor state is available", () => {
+  it("keeps the stable status label when no label is available", () => {
     const thread = createThread({ status: "running" });
     expect(resolveSubRunStatusLabel(thread, { activityLabelsEnabled: true })).toBe("Running");
   });
@@ -216,7 +212,6 @@ describe("resolveSubRunStatusLabel (GHE #208 panel/sidebar seam)", () => {
     ] as const) {
       const thread = createThread({
         status,
-        activityState: "working",
         activityLabel: "Editing the router",
       });
       expect(resolveSubRunStatusLabel(thread, { activityLabelsEnabled: true })).toBe(label);
@@ -228,7 +223,6 @@ describe("resolveSubRunStatusLabel (GHE #208 panel/sidebar seam)", () => {
     // stable label — the parent's next action is to look at that question.
     const running = createThread({
       status: "running",
-      activityState: "writing",
       activityLabel: "Editing the router",
       pendingUserInput: true,
     });
@@ -271,19 +265,17 @@ describe("resolveSubRunStatusLabel (GHE #208 panel/sidebar seam)", () => {
     );
   });
 
-  it("shows 'Monitoring' while the thread's own work is settled but a t3team child is live (derived)", () => {
-    // The DERIVED waiting fact (live children) reads "Monitoring" — replacing
+  it("shows 'Waiting' while the thread's own work is settled but child work is live", () => {
+    // The waiting fact (live child work) reads "Waiting" — replacing
     // the would-be stable label (Completed/Idle) but keeping its own live work
     // (running) and a failed row (error) intact — the same precedence as the
     // server primitive.
     const completed = createThread({ status: "completed", waitingOnChildren: true });
-    expect(resolveSubRunStatusLabel(completed, { activityLabelsEnabled: true })).toBe("Monitoring");
+    expect(resolveSubRunStatusLabel(completed, { activityLabelsEnabled: true })).toBe("Waiting");
     const idle = createThread({ status: "idle", waitingOnChildren: true });
-    expect(resolveSubRunStatusLabel(idle, { activityLabelsEnabled: true })).toBe("Monitoring");
+    expect(resolveSubRunStatusLabel(idle, { activityLabelsEnabled: true })).toBe("Waiting");
     const running = createThread({ status: "running", waitingOnChildren: true });
-    expect(resolveSubRunStatusLabel(running, { activityLabelsEnabled: true })).not.toBe(
-      "Monitoring",
-    );
+    expect(resolveSubRunStatusLabel(running, { activityLabelsEnabled: true })).not.toBe("Waiting");
     const errored = createThread({ status: "error", waitingOnChildren: true });
     expect(resolveSubRunStatusLabel(errored, { activityLabelsEnabled: true })).toBe("Error");
     // A docked question still outranks waiting.
@@ -301,32 +293,5 @@ describe("resolveSubRunStatusLabel (GHE #208 panel/sidebar seam)", () => {
         activityLabelsEnabled: true,
       }),
     ).toBe("Completed");
-  });
-
-  it("shows 'Waiting' when the thread declared a blocking child wait (declared outranks derived)", () => {
-    // The DECLARED fact (a registered `op: wait` still pending) is the stronger
-    // state: "Waiting", even when the derived fact is absent (children all
-    // terminal) and when both are present at once.
-    const declaredOnly = createThread({ status: "completed", waitingDeclared: true });
-    expect(resolveSubRunStatusLabel(declaredOnly, { activityLabelsEnabled: true })).toBe("Waiting");
-    const both = createThread({
-      status: "completed",
-      waitingOnChildren: true,
-      waitingDeclared: true,
-    });
-    expect(resolveSubRunStatusLabel(both, { activityLabelsEnabled: true })).toBe("Waiting");
-    // Absent / false falls back to the derived word.
-    expect(
-      resolveSubRunStatusLabel(
-        createThread({ status: "idle", waitingOnChildren: true, waitingDeclared: false }),
-        { activityLabelsEnabled: true },
-      ),
-    ).toBe("Monitoring");
-    // Own live work and errors still outrank the declared fact.
-    expect(
-      resolveSubRunStatusLabel(createThread({ status: "running", waitingDeclared: true }), {
-        activityLabelsEnabled: true,
-      }),
-    ).toBe("Running");
   });
 });

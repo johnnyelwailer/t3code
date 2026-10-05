@@ -8,15 +8,13 @@
  * t3team_read_message pointer) instead of one verbose block each.
  *
  * The fold is a DELIVERY-LEVEL concern, not a per-notifier one: it sits beside
- * the digest framing and the restart-hold summary, so EVERY automated source
- * inherits it just by passing through this one renderer — no notifier copies
- * the compact form. Two call sites: buildActorReactionDigestInput and
- * buildActorRestartHoldSummary.
+ * the digest framing, so EVERY automated source inherits it just by passing
+ * through this one renderer — no notifier copies the compact form. One call
+ * site: buildActorReactionDigestInput.
  *
  * Invariants the fold relies on:
- *   - DEDUP runs FIRST (the server-side terminal-notify ledger, GHE #157 /
- *     #222), so the fold renders an already-deduplicated set — it never
- *     re-collapses repeats on its own.
+ *   - The fold renders the batch as given — it never re-collapses repeats
+ *     on its own.
  *   - URGENT entries BYPASS the fold: they keep their own full block so a
  *     hard blocker is never buried in a compact list.
  *   - HUMAN messages never fold. The actor mailbox is inter-agent-only
@@ -25,7 +23,7 @@
  *
  * @module t3team-actorBurstFold
  */
-import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
+import type { T3TeamActorMailboxEntry } from "./t3team-actorMailboxEntry.ts";
 import {
   autoSummarizeActorMessage,
   capActorMessageSummary,

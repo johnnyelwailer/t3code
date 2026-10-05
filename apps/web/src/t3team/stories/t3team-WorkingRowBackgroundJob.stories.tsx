@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { useEffect } from "react";
 
 import type { BackgroundJobState } from "@t3tools/client-runtime/work-log/background-jobs";
-import type { TurnId } from "@t3tools/contracts";
+import type { RunId } from "@t3tools/contracts";
 import { TimelineRowActivityCtx, WorkingTimelineRow } from "~/components/chat/MessagesTimeline";
 
 /**
@@ -43,16 +43,16 @@ function Row({
     <TimelineRowActivityCtx.Provider
       value={{
         isWorking,
+        activeTurnInProgress: isWorking,
         isPreparingWorktree: false,
         isCompacting: false,
         isRevertingCheckpoint: false,
-        latestTurnId: "turn-background-job" as TurnId,
+        latestRunId: "turn-background-job" as RunId,
         workingStepLabel,
         activeAgents: [],
         backgroundJobs,
         onOpenAgents: () => {},
         threadActivityState: isWorking ? "thinking" : null,
-        unsettledTurnId: null,
         backgroundWorktreeSetup: null,
       }}
     >

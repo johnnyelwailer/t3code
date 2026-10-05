@@ -6,7 +6,6 @@ import type {
   RecipeSurface,
 } from "@t3tools/project-recipes";
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
-import type { ActivityState } from "~/t3team/t3team-activityStateDisplay";
 
 export type T3TeamThreadToolId = T3TeamToolId;
 
@@ -39,8 +38,6 @@ export type ProjectThread = {
   dashboardMode?: ProjectDashboardMode;
   displayMode?: ProjectThreadDisplayMode;
   title: string;
-  /** Instance id of a mirrored native local session (see t3team-localProviderKinds). */
-  providerKind?: string;
   lastMessageAt: string;
   createdAt: string;
   kickoffMessage?: string;
@@ -69,7 +66,6 @@ export type ProjectThread = {
   workflowRunStatus?: {
     readonly runId?: string;
     readonly status:
-      | "authoring"
       | "queued"
       | "running"
       | "suspended"
@@ -88,10 +84,6 @@ export type ProjectThread = {
   /** GHE #40: live LLM-generated 2–4 word label for what an active thread is working
    *  on NOW; rendered on the Working pill while present. Absent/idle = static "Working". */
   activityLabel?: string | null;
-  /** GHE #208: deterministic 4-state activity word (thinking/writing/working/waiting);
-   *  the base pill word while a turn runs. Absent/idle = null. */
-  activityState?: ActivityState | null;
-  activityStateUpdatedAt?: string | null;
   /**
    * True while the thread has a pending user-input request (a question docked
    * in its composer). Shell-sourced live state — absent/cleared when no
@@ -112,23 +104,12 @@ export type ProjectThread = {
    */
   awaitingParent?: boolean;
   /**
-   * True while this thread's own work is settled but it has one or more
-   * non-terminal, non-settled t3team children (durable handoff relation —
-   * legacy `parent:N` sub-runs never count). The DERIVED waiting fact: the
-   * row reads "Monitoring", not "Done"/"Completed" — mirrors the server
-   * primitive's `waiting` run state (t3team-threadRunStatus). Recomputed on
-   * every live sync; absence clears.
+   * True while this thread's own work is settled but child work is still live: a pending
+   * `subagent` background task on its V2 shell, or a live app-owned child in the lineage
+   * (`deriveThreadRunState` "waiting"). The row reads "Waiting", not "Done"/"Completed".
+   * Recomputed on every live sync; absence clears.
    */
   waitingOnChildren?: boolean;
-  /**
-   * True while this thread has registered a `t3team_children` wait (`op: wait`)
-   * that is still pending — the DECLARED waiting fact: a genuine blocking
-   * relationship, not just "children are live". Derived from the thread's own
-   * durable activities (open registered/resolved pair) — no flag anyone sets.
-   * The row reads "Waiting" (declared outranks derived "Monitoring"); both
-   * keep the standard working/in-progress colour. Absence clears.
-   */
-  waitingDeclared?: boolean;
   childStatusUpdatedAt?: string | null;
 };
 

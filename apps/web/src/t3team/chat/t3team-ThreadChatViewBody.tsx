@@ -9,7 +9,7 @@ import type { ThreadBootstrapStatus } from "~/t3team/chat/t3team-useThreadBootst
 import { useThreadChatComposerState } from "~/t3team/chat/t3team-useThreadChatComposerState";
 import { ThreadKickoffPlaceholder } from "~/t3team/chat/t3team-threadKickoffPlaceholder";
 import { T3TeamThreadComposerAccessory } from "~/t3team/chat/t3team-ThreadComposerAccessory";
-import { t3TeamOutboxTimelineExtensions } from "~/t3team/outbox/t3team-outboxTimelineRows";
+import { T3TeamOutboxQueueDock } from "~/t3team/outbox/t3team-outboxQueueDock";
 import { useT3TeamOutboxStore } from "~/t3team/outbox/t3team-outboxStore";
 import { useT3TeamOutboxDrain } from "~/t3team/outbox/t3team-useOutboxDrain";
 import type { T3TeamKickoffWorkflow } from "~/t3team/t3team-types";
@@ -18,8 +18,6 @@ import type { ChatMessage } from "~/types";
 type ThreadChatComposerState = ReturnType<typeof useThreadChatComposerState>;
 
 export interface ThreadChatViewBodyProps {
-  /** Covers the composer when an external Codex/Claude session still owns this thread. */
-  composerReadOnlyOverlay?: React.ReactNode;
   environmentId: EnvironmentId;
   threadId: string;
   projectId: string;
@@ -35,8 +33,6 @@ export interface ThreadChatViewBodyProps {
   titleBarControlsAccessory: React.ReactNode | undefined;
   hideHeader: boolean;
   embeddedMode: boolean;
-  /** Fork the thread from a message (branch point); rendered next to each message's copy button. */
-  onForkThread?: ((input: { readonly messageId: string }) => void | Promise<void>) | undefined;
   backend: BackendApi | null | undefined;
   bootstrapStatus: ThreadBootstrapStatus;
   retryThreadBootstrap: () => void;
@@ -62,7 +58,6 @@ function useThreadOutbox(
 
 /** Presentational body for {@link ThreadChatView}: kickoff placeholder + ChatView/pending-chat split. */
 export function ThreadChatViewBody({
-  composerReadOnlyOverlay,
   environmentId,
   threadId,
   projectId,
@@ -77,7 +72,6 @@ export function ThreadChatViewBody({
   titleBarControlsAccessory,
   hideHeader,
   embeddedMode,
-  onForkThread,
   backend,
   bootstrapStatus,
   retryThreadBootstrap,
@@ -111,14 +105,15 @@ export function ThreadChatViewBody({
   const embeddedComposerHandleRef = useRef<ChatComposerHandle | null>(null);
   const outboxEntries = useThreadOutbox(environmentId, threadId, backend);
   const outboxSnapshot = useT3TeamOutboxStore();
-  // Stable row nodes for the native queued surface: re-built only when the
-  // outbox actually changes, so composer churn does not re-render the rows.
-  const outboxTimelineExtensions = useMemo(
+  // Re-built only when the outbox actually changes, so composer churn does not re-render it.
+  const outboxDock = useMemo(
     () =>
-      t3TeamOutboxTimelineExtensions(
-        outboxEntries,
-        outboxSnapshot.dispatchingEntryId,
-        outboxSnapshot.failures,
+      outboxEntries.length === 0 ? undefined : (
+        <T3TeamOutboxQueueDock
+          entries={outboxEntries}
+          dispatchingEntryId={outboxSnapshot.dispatchingEntryId}
+          failures={outboxSnapshot.failures}
+        />
       ),
     [outboxEntries, outboxSnapshot.dispatchingEntryId, outboxSnapshot.failures],
   );
@@ -160,16 +155,7 @@ export function ThreadChatViewBody({
               enqueueOfflineTurnStart={enqueueOfflineTurnStart}
               composerContextAttachmentSlot={contextAttachmentSlot}
               composerContainerProps={composerDropTarget.composerContainerProps}
-              composerContainerOverlay={
-                composerReadOnlyOverlay ? (
-                  <>
-                    {composerDropTarget.composerContainerOverlay}
-                    {composerReadOnlyOverlay}
-                  </>
-                ) : (
-                  composerDropTarget.composerContainerOverlay
-                )
-              }
+              composerContainerOverlay={composerDropTarget.composerContainerOverlay}
               composerContextAttachments={contextAttachments}
               prepareComposerContextAttachments={prepareComposerContextAttachments}
               onComposerContextAttachmentsConsumed={clearThreadAttachments}
@@ -177,8 +163,7 @@ export function ThreadChatViewBody({
               dispatchWorkflowDecision={resolveWorkflowDecision}
               {...(controlWorkflow ? { onControlWorkflow: controlWorkflow } : {})}
               onOpenThread={onOpenThread}
-              {...(onForkThread ? { onForkThread } : {})}
-              queuedExtensions={outboxTimelineExtensions}
+              {...(outboxDock ? { composerBannerLeading: outboxDock } : {})}
             />
           </ComposerHandleContext>
         </>

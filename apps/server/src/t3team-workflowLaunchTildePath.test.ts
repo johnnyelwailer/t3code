@@ -39,6 +39,7 @@ import { expandHomePath } from "./pathExpansion.ts";
 import { resolveLaunchWorkflowPath } from "./t3team-projectRecipeActionLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { launchPreparedWorkflow } from "./t3team-workflowEphemeralLaunch.ts";
+import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
 
 // `<apps/server>/.t3team-runs/` — gitignored, so a crashed run cannot leave files the additive
 // guard would report as new unprefixed sources (same trick as the scope-fixture tests).
@@ -100,7 +101,7 @@ it.effect(
           runRepository,
           journalStore,
           rearmScheduler: () => Promise.resolve(),
-          dispatch: async () => undefined,
+          host: makeFakeWorkflowHost().host,
           fileSystem,
           path: pathService,
         },

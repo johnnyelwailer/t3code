@@ -62,6 +62,8 @@ type ModelPickerItem = {
   instanceDisplayName: string;
   instanceAccentColor?: string | undefined;
   instanceIconDataUrl?: string | undefined;
+  acpRegistryAgentId?: string | undefined;
+  acpRegistryIconUrl?: string | undefined;
   continuationGroupKey?: string | undefined;
   isLegacy?: boolean | undefined;
   isUnavailable?: boolean | undefined;
@@ -393,6 +395,8 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
           instanceDisplayName: entry.displayName,
           ...(entry.accentColor ? { instanceAccentColor: entry.accentColor } : {}),
           ...(entry.iconDataUrl ? { instanceIconDataUrl: entry.iconDataUrl } : {}),
+          ...(entry.acpRegistryAgentId ? { acpRegistryAgentId: entry.acpRegistryAgentId } : {}),
+          ...(entry.acpRegistryIconUrl ? { acpRegistryIconUrl: entry.acpRegistryIconUrl } : {}),
           ...(entry.continuationGroupKey
             ? { continuationGroupKey: entry.continuationGroupKey }
             : {}),
@@ -1033,6 +1037,8 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                             providerDisplayName={model.instanceDisplayName}
                             providerAccentColor={model.instanceAccentColor}
                             providerIconDataUrl={model.instanceIconDataUrl}
+                            acpRegistryAgentId={model.acpRegistryAgentId}
+                            acpRegistryIconUrl={model.acpRegistryIconUrl}
                             isFavorite={favoritesSet.has(
                               providerModelKey(model.instanceId, model.slug),
                             )}

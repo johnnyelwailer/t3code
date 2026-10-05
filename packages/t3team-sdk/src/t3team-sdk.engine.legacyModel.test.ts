@@ -1,7 +1,7 @@
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
-import { assert, it } from "@effect/vitest";
+import { assert, it } from "./t3team-sdk.testEffect.ts";
 import * as Effect from "effect/Effect";
 import { withAgentStepContract } from "@runbook/threads";
 

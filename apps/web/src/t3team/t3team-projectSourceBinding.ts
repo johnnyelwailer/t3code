@@ -20,6 +20,15 @@ import type { Project } from "~/types";
 export type ProjectBindingState = "local" | "bound" | "needs-repair";
 
 /**
+ * The live project's server binding: the fork field `source` on the V2 project shell (contracts
+ * C13). A shell without it (an upstream server, or a project with no binding) reads as "no
+ * binding".
+ */
+export function readLiveProjectSourceBinding(project: Project): ProjectSourceBinding | undefined {
+  return project.source;
+}
+
+/**
  * Classifies a client-shape source: `"local"` (no work-source binding), `"bound"` (a non-local
  * provider with both ids needed to read it), or `"needs-repair"` (a non-local provider missing
  * `accountId`/`externalProjectId` — a drifted or legacy binding the repair UI must fix).
@@ -99,7 +108,7 @@ export function reconcileStoredProjectSource(
   live: Project,
 ): ProjectShellProject {
   const raw = stored.source.raw;
-  const liveSource = toProjectSource(live.source);
+  const liveSource = toProjectSource(readLiveProjectSourceBinding(live));
   const nextSource: ProjectSource =
     liveSource ?? (stored.source.provider === "local" ? { provider: "local" } : stored.source);
   const withRaw = raw !== undefined ? { ...nextSource, raw } : nextSource;

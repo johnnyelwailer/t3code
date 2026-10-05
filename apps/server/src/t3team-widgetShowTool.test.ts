@@ -1,12 +1,16 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 
-import type { OrchestrationCommand, T3TeamMessageWidgetAttachment } from "@t3tools/contracts";
+import type { T3TeamMessageWidgetAttachment } from "@t3tools/contracts";
 
 import { dispatchT3TeamToolCall } from "./t3team-toolBrokerBindingDispatch.ts";
 import { buildBindingState } from "./t3team-toolBrokerBindingPermissions.ts";
 import { createT3TeamWidgetRegistry } from "./t3team-widgetRegistry.ts";
-import { callT3TeamWidgetShowTool } from "./t3team-widgetShowTool.ts";
+import {
+  T3TeamThreadArtifactsStoreError,
+  type T3TeamThreadArtifactInput,
+} from "./t3team-v2/t3team-threadArtifactsStore.ts";
+import { callT3TeamWidgetShowTool, t3teamWidgetArtifactId } from "./t3team-widgetShowTool.ts";
 import { parseT3TeamWidgetShowInput } from "./t3team-widgetShowCore.ts";
 
 const validArgs = {
@@ -17,18 +21,24 @@ const validArgs = {
 };
 
 function makeDeps() {
-  const commands: OrchestrationCommand[] = [];
+  const artifacts: T3TeamThreadArtifactInput[] = [];
   const registry = createT3TeamWidgetRegistry();
   return {
-    commands,
+    artifacts,
     registry,
     deps: {
       threadId: "thread-1",
       workspaceRoot: undefined,
       registry,
-      dispatch: (command: OrchestrationCommand) =>
+      recordArtifact: (input: T3TeamThreadArtifactInput) =>
         Effect.sync(() => {
-          commands.push(command);
+          artifacts.push(input);
+          return {
+            ...input,
+            messageId: null,
+            createdAt: "2026-10-03T00:00:00.000Z",
+            updatedAt: "2026-10-03T00:00:00.000Z",
+          };
         }),
       persistenceContext: undefined,
     },
@@ -112,9 +122,9 @@ describe("parseT3TeamWidgetShowInput", () => {
 });
 
 describe("callT3TeamWidgetShowTool", () => {
-  it.effect("registers the allowlist and posts a widget attachment message", () =>
+  it.effect("registers the allowlist and records a widget thread artifact", () =>
     Effect.gen(function* () {
-      const { commands, registry, deps } = makeDeps();
+      const { artifacts, registry, deps } = makeDeps();
       const result = yield* callT3TeamWidgetShowTool({ toolArgs: validArgs, deps });
       assert.notStrictEqual(result.isError, true);
       const structured = result.structuredContent as { widgetId: string; format: string };
@@ -124,13 +134,13 @@ describe("callT3TeamWidgetShowTool", () => {
       assert.deepStrictEqual(registration?.tools, ["t3team.view.read"]);
       assert.strictEqual(registration?.threadId, "thread-1");
 
-      assert.strictEqual(commands.length, 1);
-      const command = commands[0]!;
-      assert.strictEqual(command.type, "thread.message.upsert");
-      const upsert = command as Extract<OrchestrationCommand, { type: "thread.message.upsert" }>;
-      const attachment = upsert.message.t3teamExt?.attachments?.[0] as
-        | T3TeamMessageWidgetAttachment
-        | undefined;
+      assert.strictEqual(artifacts.length, 1);
+      const artifact = artifacts[0]!;
+      assert.strictEqual(artifact.id, t3teamWidgetArtifactId(structured.widgetId));
+      assert.strictEqual(artifact.threadId, "thread-1");
+      assert.strictEqual(artifact.kind, "widget");
+      assert.strictEqual(artifact.messageId, null);
+      const attachment = artifact.payload as T3TeamMessageWidgetAttachment | undefined;
       assert.strictEqual(attachment?.kind, "widget");
       assert.strictEqual(attachment?.widget.html, "<div>hello</div>");
       assert.deepStrictEqual(attachment?.widget.capabilities?.tools, ["t3team.view.read"]);
@@ -140,16 +150,16 @@ describe("callT3TeamWidgetShowTool", () => {
     }),
   );
 
-  it.effect("returns an error result for invalid input without dispatching", () =>
+  it.effect("returns an error result for invalid input without recording", () =>
     Effect.gen(function* () {
-      const { commands, deps } = makeDeps();
+      const { artifacts, deps } = makeDeps();
       const result = yield* callT3TeamWidgetShowTool({ toolArgs: { title: "x" }, deps });
       assert.strictEqual(result.isError, true);
-      assert.strictEqual(commands.length, 0);
+      assert.strictEqual(artifacts.length, 0);
     }),
   );
 
-  it.effect("fails when the message dispatch fails and does NOT consume a registry slot", () =>
+  it.effect("fails when the artifact write fails and does NOT consume a registry slot", () =>
     Effect.gen(function* () {
       const registry = createT3TeamWidgetRegistry();
       const seen: string[] = [];
@@ -166,12 +176,15 @@ describe("callT3TeamWidgetShowTool", () => {
           threadId: "thread-1",
           workspaceRoot: undefined,
           registry: wrapped,
-          dispatch: () => Effect.fail("boom"),
+          recordArtifact: () =>
+            Effect.fail(
+              new T3TeamThreadArtifactsStoreError({ operation: "upsert", cause: "boom" }),
+            ),
           persistenceContext: undefined,
         },
       });
       assert.strictEqual(result.isError, true);
-      // Registration happens only AFTER a successful dispatch.
+      // Registration happens only AFTER a successful artifact write.
       assert.strictEqual(seen.length, 0);
     }),
   );

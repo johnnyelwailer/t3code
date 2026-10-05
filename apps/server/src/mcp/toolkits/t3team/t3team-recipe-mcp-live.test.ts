@@ -101,7 +101,6 @@ const realBinding: T3TeamToolBinding = {
 };
 
 const broker = T3TeamToolBroker.of({
-  sendMessage: () => Effect.succeed(undefined),
   bindSession: ({ threadId: boundThreadId }) =>
     Effect.succeed(boundThreadId === threadId ? realBinding : undefined),
   bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
@@ -158,7 +157,7 @@ it.effect(
             threadId,
             providerSessionId: "provider-session-recipe-mcp-live",
             providerInstanceId,
-            capabilities: new Set<McpInvocationContext.McpCapability>(),
+            capabilities: new Set<McpInvocationContext.McpCapability>(["orchestration"]),
             issuedAt: 1,
           }),
           Effect.provideService(McpSchema.McpServerClient, client),
@@ -191,7 +190,7 @@ it.effect(
             threadId,
             providerSessionId: "provider-session-recipe-mcp-live",
             providerInstanceId,
-            capabilities: new Set<McpInvocationContext.McpCapability>(),
+            capabilities: new Set<McpInvocationContext.McpCapability>(["orchestration"]),
             issuedAt: 1,
           }),
           Effect.provideService(McpSchema.McpServerClient, client),

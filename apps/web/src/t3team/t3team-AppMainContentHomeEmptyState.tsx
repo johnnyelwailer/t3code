@@ -19,7 +19,8 @@ export function AppMainContentHomeEmptyState({
   setupSurfaceReason = T3TEAM_FIRST_PROJECT_SETUP_REASON,
   showAside,
   shouldInsetDesktopHeader = false,
-  homeChatProject,
+  scratchProject,
+  onStartScratch,
   providers,
   isConnected,
   onOpenHomeThread,
@@ -31,7 +32,8 @@ export function AppMainContentHomeEmptyState({
   setupSurfaceReason?: T3TeamSetupSurfaceReason;
   showAside: boolean;
   shouldInsetDesktopHeader?: boolean;
-  homeChatProject: ProjectShellProject | null;
+  scratchProject: ProjectShellProject | null;
+  onStartScratch: (() => void) | undefined;
   providers: ReadonlyArray<ServerProvider>;
   isConnected: boolean;
   onOpenHomeThread: (threadId: string) => void;
@@ -75,7 +77,8 @@ export function AppMainContentHomeEmptyState({
         ) : undefined
       }
       showInlineCreateWizard={showInlineCreateWizard}
-      project={homeChatProject}
+      project={scratchProject}
+      onStartScratch={onStartScratch}
       providers={providers}
       isConnected={isConnected}
       onOpenThread={onOpenHomeThread}

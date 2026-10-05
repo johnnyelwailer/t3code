@@ -4,11 +4,13 @@ This is the **manual acceptance gate** for "the workflow engine is live-proven a
 provider." It complements, but does not replace, the automated proof:
 
 - `apps/server/src/t3team-workflowEngineReactor.integration.test.ts` drives the **real**
-  production reactor (`T3TeamWorkflowEngineReactorLive`) through the **real** OrchestrationEngine
-  - projection pipeline, with a _stub_ provider that emits real-shaped domain events. It proves
-    the suspend→resume loop end to end with nobody manually resolving.
-- This checklist proves the one thing a stub provider cannot: that a **real configured provider**
-  emits the turn lifecycle in the shapes the reactor expects, and that the loop runs against it.
+  production reactor and workflow host on a **real** orchestration V2 runtime, with a _scripted_
+  pack provider answering each turn through the real provider seam
+  (`apps/server/src/t3team-workflowStubRuntime.ts`). It proves the suspend→resume loop end to end
+  with nobody manually resolving, and that a step run's terminal `run.updated` is committed after
+  its last assistant message.
+- This checklist proves the one thing a scripted provider cannot: that a **real configured
+  provider**'s runs end the way the reactor expects, and that the loop runs against it.
 
 Only a human with a real provider configured can sign this off.
 
@@ -23,14 +25,16 @@ does two interactive things through the durable engine:
    the user's reply. The run **suspends** here too.
 
 Each suspension parks the run in `workflow_runs` (status `suspended`) plus a pending-ask record.
-The production reactor (`apps/server/src/t3team-workflowEngineReactor.ts`) watches
-`orchestration.streamDomainEvents` and resumes the parked run when the matching domain event lands:
+The production reactor (`apps/server/src/t3team-workflowEngineReactor.ts`) tails the V2 event
+sink and resumes the parked run when the matching event lands:
 
-- a **final assistant message** (`thread.message-sent`, `role: "assistant"`, `streaming: false`)
-  resolves the `thread.turn` ask — with the assistant text **assembled from the streaming
-  deltas** (the final marker event itself carries empty text; see Part 1 of the phase notes);
-- a **user message** (`thread.message-sent`, `role: "user"`, `streaming: false`) resolves the
-  `user.input` ask with the user's text.
+- the step's **run reaching a terminal status** (`run.updated`, completed) resolves the
+  `thread.turn` ask with that run's **last substantive assistant message** — never a preamble the
+  turn opened with. A run that fails or is interrupted is re-driven as a fresh queued turn, up to
+  the budget journaled on the run row;
+- a **person's message** on the thread (`message.updated`, `role: "user"`, created by the user)
+  resolves the `user.input` ask with its text, or with the structured value of a decision-card
+  reply pinned to that ask.
 
 ## Preconditions
 
@@ -81,13 +85,13 @@ FROM workflow_runs WHERE run_id = '<runId>';
 SELECT seq, phase, kind FROM workflow_journal WHERE run_id = '<runId>' ORDER BY seq;
 `
       Expect `sent` entries for `thread.create` and `thread.turn`, with **no** `resolved` entry yet.
-- [ ] **Logs:** the orchestration engine dispatched `thread.create` then `thread.turn.start` for
-      the spawned thread; the provider command reactor started a real provider turn.
+- [ ] **Logs / UI:** the spawned thread exists, linked under the launching thread as a `subagent`
+      child, and its prompt started a real provider run.
 
 ### 2. Agent turn completes → reactor resumes → run advances to `askUser`
 
 - [ ] **UI/stream:** the agent turn finishes in the spawned thread (final assistant message rendered).
-- [ ] **Logs:** **no** warning from `t3team workflow-engine reactor failed to process event`.
+- [ ] **Logs:** **no** warning from `t3team workflow-engine reactor failed to process a task`.
       (Any such warning is a real bug — capture the cause.)
 - [ ] **DB:** the run flipped its pending ask to the user escalation:
       `sql
@@ -99,9 +103,8 @@ SELECT status, pending_thread_id, pending_kind FROM workflow_runs WHERE run_id =
       new `sent` entry for `user.input`.
 - [ ] **UI/stream:** the launching thread shows the escalation question
       (`Merge "Fix the billing rounding bug"? …`) carrying the agent's summary — **confirm the
-      summary text is the real assistant output, not blank.** A blank summary is the Part 1
-      empty-text regression; it means the reactor resolved the turn with the marker event's empty
-      text instead of the assembled delta text.
+      summary text is the real final assistant output, not blank and not the turn's opening
+      preamble.**
 
 ### 3. User replies → reactor resumes → run completes
 
@@ -122,7 +125,7 @@ SELECT status, pending_thread_id, pending_correlation_id FROM workflow_runs WHER
 
 - [ ] Launch again, stop at the `askUser` suspension (step 2 state), then **restart the server**.
 - [ ] On boot, `rehydrateSuspendedWorkflowRuns` re-registers the parked run (look for the
-      `rehydrated suspended workflow runs` log line with a non-zero `restored` count).
+      `rehydrated durable workflow runs` log line with a non-zero `restored` count).
 - [ ] Reply in the launching thread → the run resumes and completes exactly as in step 3, proving
       the parked run survived the restart purely from the DB-backed journal + run record.
 
@@ -130,7 +133,7 @@ SELECT status, pending_thread_id, pending_correlation_id FROM workflow_runs WHER
 
 The engine is "live-proven" when steps 1–3 pass against a real provider with **no manual
 intervention** beyond launching and replying — specifically: the agent-turn resolution and the
-user-input resolution were both driven by the production reactor off real domain events, and the
+user-input resolution were both driven by the production reactor off real V2 events, and the
 escalation carried the **real** (non-empty) assistant summary.
 
 | Check                                                            | Result | Notes                  |

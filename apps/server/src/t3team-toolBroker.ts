@@ -85,26 +85,6 @@ export interface T3TeamPrelaunchToolBinding extends T3TeamBoundToolSurface {
 }
 
 export interface T3TeamToolBrokerShape {
-  /**
-   * Deliver a first-class inter-agent ("actor") message from one thread into
-   * another. It is recorded as an `actor`-role message attributed to the sender
-   * (never role `user`/`system`) and drives the receiving thread's agent to
-   * react to it (auto-run a turn). The canonical use is a delegated child thread
-   * reporting progress/results back to its parent, which then reacts. The hop
-   * count is derived from the sender's active reaction turn input.
-   */
-  readonly sendMessage: (input: {
-    readonly toThreadId: string;
-    readonly fromThreadId: string;
-    readonly text: string;
-    /**
-     * Optional short summary of `text` for delivery. When the body exceeds the
-     * delivery cap, the recipient's reaction input carries this summary (or an
-     * auto-generated one when absent) plus the message id; the full body stays
-     * retrievable with t3team_read_message.
-     */
-    readonly summary?: string;
-  }) => Effect.Effect<unknown, string>;
   readonly bindSession: (input: {
     readonly threadId: ThreadId;
     readonly toolContext?: T3TeamTurnToolContext;
@@ -123,7 +103,6 @@ export class T3TeamToolBroker extends Context.Service<T3TeamToolBroker, T3TeamTo
 ) {}
 
 export const NoopT3TeamToolBroker: T3TeamToolBrokerShape = {
-  sendMessage: () => Effect.fail("The t3team tool broker is not available in this runtime."),
   bindSession: () => Effect.void.pipe(Effect.as(undefined)),
   bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
 };
