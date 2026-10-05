@@ -25,63 +25,30 @@ import * as Ref from "effect/Ref";
 
 import type { ProviderAdapterV2Event } from "./ProviderAdapter.ts";
 import {
+  canSelfHeal,
+  observeWaiting,
+  selfHealed,
+  type TurnInactivityPhase as Phase,
+  type TurnInactivityWatchdogControls,
+  watchingPhase,
+} from "./t3team-turnInactivityPhase.ts";
+import {
   budgetAfterEvent,
   INTERRUPT_SETTLE_GRACE_MS,
   MAX_TURN_INACTIVITY_SELFHEAL_ATTEMPTS,
 } from "./t3team-turnInactivityPolicy.ts";
-import {
-  outcomeFor,
-  type SettleCode,
-  stallFailure,
-  type TurnInactivityOutcome,
-} from "./t3team-turnInactivitySettlement.ts";
-import {
-  makeTurnInactivityWaits,
-  type TurnRuntimeRequestRef,
-} from "./t3team-turnInactivityWaits.ts";
+import { outcomeFor, stallFailure } from "./t3team-turnInactivitySettlement.ts";
+import { makeTurnInactivityWaits } from "./t3team-turnInactivityWaits.ts";
 
 /** How often a quiet run re-checks for a pending Stop (and a waiting one for its answer). */
 const STOP_POLL_MS = 10_000;
 
 type TerminalEvent = Extract<ProviderAdapterV2Event, { readonly type: "turn.terminal" }>;
 
-export interface TurnInactivityWatchdogControls<EI, ES> {
-  /** True once the root terminal was seen or the run was finalized. */
-  readonly isSettled: Effect.Effect<boolean>;
-  readonly hasPendingStop: Effect.Effect<boolean>;
-  /** Whether a runtime request the run raised still waits for its answer. */
-  readonly isRuntimeRequestPending: (request: TurnRuntimeRequestRef) => Effect.Effect<boolean>;
-  /**
-   * Interrupts the root provider turn; `false` (no provider turn yet) or a failure settles the
-   * run at once.
-   */
-  readonly interruptTurn: Effect.Effect<boolean, EI>;
-  /** Settles the run with this outcome (idempotent on the caller's side). */
-  readonly settle: (outcome: TurnInactivityOutcome) => Effect.Effect<void, ES>;
-}
-
-type Phase =
-  | {
-      readonly type: "watching";
-      readonly lastActivityAt: number;
-      readonly budgetMs: number;
-      /** A runtime request was awaiting its answer at the last check. */
-      readonly waiting: boolean;
-      /** Self-heal re-arms used on this turn; reset to 0 on any stream activity. */
-      readonly selfHealAttempts: number;
-    }
-  | { readonly type: "settling"; readonly deadline: number; readonly code: SettleCode };
-
 export const makeTurnInactivityWatchdog = (baseBudgetMs: number) =>
   Effect.gen(function* () {
     const startedAt = yield* Clock.currentTimeMillis;
-    const phase = yield* Ref.make<Phase>({
-      type: "watching",
-      lastActivityAt: startedAt,
-      budgetMs: baseBudgetMs,
-      waiting: false,
-      selfHealAttempts: 0,
-    });
+    const phase = yield* Ref.make<Phase>(watchingPhase(startedAt, baseBudgetMs));
     const waits = yield* makeTurnInactivityWaits;
     const pendingStop = yield* Ref.make<Effect.Effect<boolean>>(Effect.succeed(false));
     const fiber = yield* Ref.make<Fiber.Fiber<void> | null>(null);
@@ -92,13 +59,7 @@ export const makeTurnInactivityWatchdog = (baseBudgetMs: number) =>
         const now = yield* Clock.currentTimeMillis;
         yield* Ref.update(phase, (current): Phase =>
           current.type === "watching"
-            ? {
-                type: "watching",
-                lastActivityAt: now,
-                budgetMs: budgetAfterEvent(baseBudgetMs, event),
-                waiting: false,
-                selfHealAttempts: 0,
-              }
+            ? watchingPhase(now, budgetAfterEvent(baseBudgetMs, event))
             : current,
         );
       });
@@ -160,11 +121,7 @@ export const makeTurnInactivityWatchdog = (baseBudgetMs: number) =>
             // budget runs from the last time the wait was seen.
             const waiting = yield* waits.awaitingAnswer(controls.isRuntimeRequestPending);
             if (waiting || current.waiting) {
-              yield* Ref.update(phase, (latest): Phase =>
-                latest.type === "watching"
-                  ? { ...latest, lastActivityAt: waiting ? now : latest.lastActivityAt, waiting }
-                  : latest,
-              );
+              yield* Ref.update(phase, observeWaiting(now, waiting));
               if (waiting) yield* Effect.sleep(STOP_POLL_MS);
               continue;
             }
@@ -175,28 +132,15 @@ export const makeTurnInactivityWatchdog = (baseBudgetMs: number) =>
           }
           // Self-heal first (GHE #113): a stalled stream is usually a transient gateway flap, not
           // a dead turn. Re-arm a fresh PLAIN window instead of interrupting; any stream activity
-          // from the recovery resets the counter via `touch`. Only for a genuinely-silent turn — an
-          // open tool call or pending approval keeps its own backstop (never self-heals forever).
-          // Bounded, so a genuinely-wedged turn still falls through to the hard interrupt below.
-          if (
-            stretchedMs === current.budgetMs &&
-            current.selfHealAttempts < MAX_TURN_INACTIVITY_SELFHEAL_ATTEMPTS
-          ) {
+          // from the recovery resets the counter via `touch`. Bounded, so a genuinely-wedged turn
+          // still falls through to the hard interrupt below.
+          if (canSelfHeal(current, stretchedMs)) {
             yield* Effect.logWarning("t3team.turn-watchdog.self-heal", {
               selfHealAttempt: current.selfHealAttempts + 1,
               maxSelfHealAttempts: MAX_TURN_INACTIVITY_SELFHEAL_ATTEMPTS,
               budgetMs: current.budgetMs,
             });
-            yield* Ref.update(phase, (latest): Phase =>
-              latest.type === "watching"
-                ? {
-                    ...latest,
-                    lastActivityAt: now,
-                    budgetMs: baseBudgetMs,
-                    selfHealAttempts: latest.selfHealAttempts + 1,
-                  }
-                : latest,
-            );
+            yield* Ref.update(phase, selfHealed(now, baseBudgetMs));
             yield* Effect.sleep(STOP_POLL_MS);
             continue;
           }
@@ -241,4 +185,5 @@ export const makeTurnInactivityWatchdog = (baseBudgetMs: number) =>
 
 export type TurnInactivityWatchdog = Effect.Success<ReturnType<typeof makeTurnInactivityWatchdog>>;
 
+export type { TurnInactivityWatchdogControls } from "./t3team-turnInactivityPhase.ts";
 export type { TurnInactivityOutcome } from "./t3team-turnInactivitySettlement.ts";

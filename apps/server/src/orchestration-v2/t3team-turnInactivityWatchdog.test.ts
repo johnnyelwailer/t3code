@@ -347,7 +347,7 @@ describe("turn inactivity watchdog", () => {
         event.type === "turn.terminal" ? event.status : event.type;
       // Before the watchdog fired, an interrupted terminal is a plain stop.
       assert.equal(statusOf(yield* revise), "interrupted");
-      yield* harness.advance(BUDGET_MS);
+      yield* harness.advance(BUDGET_MS * 3);
       const revised = yield* revise;
       assert.equal(statusOf(revised), "failed");
       assert.equal(

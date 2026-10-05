@@ -31,7 +31,10 @@ import * as EffectWorker from "./EffectWorker.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProviderAdapterRegistry from "./ProviderAdapterRegistry.ts";
 import * as ProviderContinuationRequests from "./ProviderContinuationRequests.ts";
-import { TurnInactivityPolicy } from "./t3team-turnInactivityPolicy.ts";
+import {
+  MAX_TURN_INACTIVITY_SELFHEAL_ATTEMPTS,
+  TurnInactivityPolicy,
+} from "./t3team-turnInactivityPolicy.ts";
 import { makeOrchestratorV2ReplayLayerWithRegistry } from "./testkit/ProviderReplayHarness.ts";
 import { checkpointWorkspace } from "./testkit/ReplayFixtureWorkspace.ts";
 
@@ -140,7 +143,10 @@ const runScenario = (name: string, scenario: Scenario) =>
         // Stop: the backstop's poll notices the pending Stop, then waits out the grace.
         // Silence: the budget expires, the interrupt is swallowed, then the grace runs out.
         // Acknowledged: the budget expires and the provider ends the turn `interrupted` at once.
-        yield* TestClock.adjust(stop ? 10_000 : BUDGET_MS);
+        // A silent turn is first re-armed by every self-heal attempt before the interrupt.
+        yield* TestClock.adjust(
+          stop ? 10_000 : BUDGET_MS * (MAX_TURN_INACTIVITY_SELFHEAL_ATTEMPTS + 1),
+        );
         if (scenario !== "acknowledged") yield* TestClock.adjust(30_000);
         yield* Fiber.join(settled);
         yield* worker.drain();
