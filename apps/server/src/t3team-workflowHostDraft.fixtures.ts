@@ -1,4 +1,3 @@
-/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- The launch API is promise-shaped; the fixture bridges the broker layer once. */
 /**
  * The real tool broker (`T3TeamToolBrokerLive` over the V2 test fakes) for workflow tests whose
  * body proposes a work-item draft: the launch thread's tool context is seeded the way the web

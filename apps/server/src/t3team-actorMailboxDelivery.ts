@@ -34,7 +34,7 @@ import { humanSteeringInstructionForThread } from "./t3team-actorSteeringContext
 /** Message (and command) id prefix of a digest run's user message. */
 export const MAILBOX_DIGEST_PREFIX = "t3team-mailbox-digest:";
 
-export const mailboxDigestId = (firstMessageId: string, attempt: number) =>
+const mailboxDigestId = (firstMessageId: string, attempt: number) =>
   `${MAILBOX_DIGEST_PREFIX}${firstMessageId}:${attempt}`;
 
 export interface MailboxThreadState {

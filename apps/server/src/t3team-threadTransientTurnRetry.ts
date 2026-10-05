@@ -8,9 +8,4 @@
  *
  * @module t3team-threadTransientTurnRetry
  */
-export {
-  MAX_SESSION_TRANSIENT_RETRIES,
-  transientTurnRetryBackoffMs,
-  transientTurnRetryDelayMs,
-} from "./t3team-threadTransientTurnRetryPolicy.ts";
 export { T3TeamThreadTransientTurnRetryLive } from "./t3team-threadTransientTurnRetryReactor.ts";

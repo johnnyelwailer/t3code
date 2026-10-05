@@ -59,7 +59,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const trimmedString = (value: unknown): string | undefined =>
   typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 
-export function parseEnvironmentExtension(
+function parseEnvironmentExtension(
   value: unknown,
 ): ParseResult<ThreadEnvironmentBinding | undefined> {
   if (value === undefined || value === null) return { ok: true, value: undefined };

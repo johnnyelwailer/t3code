@@ -46,7 +46,7 @@ export interface ChildSettleSweeperDeps<E1, E2> {
   }) => Effect.Effect<unknown, E2>;
 }
 
-export const settleCommandId = (candidate: SettleSweepCandidate, nonce: string) =>
+const settleCommandId = (candidate: SettleSweepCandidate, nonce: string) =>
   CommandId.make(
     `${candidate.rule === "settled-parent" ? SETTLED_PARENT_SETTLE_COMMAND_PREFIX : TTL_SETTLE_COMMAND_PREFIX}${nonce}`,
   );

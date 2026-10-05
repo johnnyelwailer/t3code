@@ -6,7 +6,6 @@ import * as NodeURL from "node:url";
 
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
 
 import {
   declaredMajor,
@@ -108,13 +107,11 @@ describe("preflightInlinedTypeScript", () => {
   it.effect("fails with an actionable install hint on the stale layout", () =>
     Effect.gen(function* () {
       const root = makeWorkspace({ rootTsgo: true, runbookTs: "missing" });
-      const exit = yield* Effect.exit(preflightInlinedTypeScript(root));
-      assert.isTrue(Exit.isFailure(exit));
-      const error = Exit.isFailure(exit) ? exit.cause : undefined;
-      const message = String(error);
-      assert.include(message, "InlinedTypeScriptResolutionError");
-      assert.include(message, "pnpm install --frozen-lockfile");
-      assert.include(message, "7.0.2");
+      const error = yield* Effect.flip(preflightInlinedTypeScript(root));
+      assert.instanceOf(error, InlinedTypeScriptResolutionError);
+      assert.strictEqual(error.declared, "~6.0.3");
+      assert.strictEqual(error.resolvedVersion, "7.0.2");
+      assert.include(error.message, "pnpm install --frozen-lockfile");
     }),
   );
 

@@ -31,7 +31,7 @@ import {
   legacySystemRowArtifacts,
 } from "./t3team-legacyRichMessages.ts";
 
-export const RICH_MESSAGES_CUTOVER_STEP = "v1-rich-messages";
+const RICH_MESSAGES_CUTOVER_STEP = "v1-rich-messages";
 
 export interface LegacyRichMessageCutoverSummary {
   readonly artifacts: number;

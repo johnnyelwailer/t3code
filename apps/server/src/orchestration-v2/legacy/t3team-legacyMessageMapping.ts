@@ -75,7 +75,7 @@ export function legacyMessageExt(json: string | null | undefined): T3TeamMessage
 }
 
 /** `context` carrying `ext`: all of it when it fits one context record, else its small fields. */
-export function withLegacyMessageExt(
+function withLegacyMessageExt(
   ext: T3TeamMessageExt | undefined,
   context: OrchestrationMessageContext | undefined,
 ): OrchestrationMessageContext | undefined {
@@ -87,7 +87,7 @@ export function withLegacyMessageExt(
 }
 
 /** The ext without attachments: what a system note's own context carries. */
-export const smallLegacyMessageExt = (ext: T3TeamMessageExt | undefined) => {
+const smallLegacyMessageExt = (ext: T3TeamMessageExt | undefined) => {
   if (ext === undefined) return undefined;
   const { attachments: _artifacts, ...small } = ext;
   return small;

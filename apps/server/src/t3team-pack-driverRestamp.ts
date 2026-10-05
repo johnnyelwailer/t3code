@@ -28,7 +28,7 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
 };
 
 /** Replaces every `driver: from` in plain objects/arrays with `to`; class instances (DateTime) pass through. */
-export const restampDriver = <A>(value: A, from: ProviderDriverKind, to: ProviderDriverKind): A => {
+const restampDriver = <A>(value: A, from: ProviderDriverKind, to: ProviderDriverKind): A => {
   if (from === to) return value;
   const walk = (node: unknown): unknown => {
     if (Array.isArray(node)) return node.map(walk);

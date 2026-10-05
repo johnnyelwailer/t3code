@@ -36,7 +36,7 @@ export class InlinedTypeScriptResolutionError extends Schema.TaggedError<Inlined
   },
 ) {
   override get message(): string {
-    return `packages/runbook-ts declares typescript "${this.declared}", but resolving it the way the server bundler does yields typescript ${this.resolvedVersion} (${this.resolvedPath}). The server bundle must inline the classic compiler (lib/typescript.js); TypeScript 7 (tsgo) cannot be inlined, so the bundle would fail the self-containment probe after the full build. The workspace install is out of sync with pnpm-lock.yaml (packages/runbook-ts/node_modules/typescript is missing or wrong). Run \`pnpm install --frozen-lockfile\` in ${this.repoRoot} and rebuild.`;
+    return `packages/runbook-ts declares typescript "${this.declared}", but resolving it the way the server bundler does yields typescript ${this.resolvedVersion} (${this.resolvedPath}). The server bundle must inline the classic compiler (lib/typescript.js); TypeScript 7 (tsgo) cannot be inlined, so the bundle would fail the self-containment probe after the full build. The workspace install is out of sync with pnpm-lock.yaml (packages/runbook-ts/node_modules/typescript is missing or wrong). Run \`pnpm install --frozen-lockfile\` in ${this.repoRoot} (with CI=true in a non-interactive shell, or pnpm aborts instead of purging a stale node_modules) and rebuild.`;
   }
 }
 
@@ -73,7 +73,9 @@ export const resolveInlinedTypeScript = (repoRoot: string): ResolvedInlinedTypeS
     dependencies?: Record<string, string>;
   };
   const declared = manifest.dependencies?.["typescript"] ?? "<undeclared>";
-  const entry = NodeModule.createRequire(runbookTsManifest).resolve("typescript");
+  // Anchor on the importing module itself, as the bundler resolves it.
+  const importer = NodePath.join(repoRoot, "packages", "runbook-ts", "src", "typescript.ts");
+  const entry = NodeModule.createRequire(importer).resolve("typescript");
   const packageDir = findTypeScriptPackageDir(entry) ?? NodePath.dirname(entry);
   const packageJsonPath = NodePath.join(packageDir, "package.json");
   const version = NodeFS.existsSync(packageJsonPath)
