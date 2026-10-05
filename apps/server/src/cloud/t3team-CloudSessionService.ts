@@ -146,7 +146,16 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       // Broker mode: a grant only a run this login dispatched can redeem replaces the whole T3
       // Connect handoff. Fails with `broker_sign_in_required` before any dispatch when signed out.
       const brokerGrant = broker.enabled
-        ? yield* broker.requestGrant(login, machine ? { GIT_TOKEN: machine.token } : undefined)
+        ? yield* broker.requestGrant(
+            login,
+            machine
+              ? {
+                  GIT_TOKEN: machine.token,
+                  GIT_AUTHOR_NAME: machine.author.name,
+                  GIT_AUTHOR_EMAIL: machine.author.email,
+                }
+              : undefined,
+          )
         : null;
 
       // Credential handoff, with the in-app mint fallback: if this machine

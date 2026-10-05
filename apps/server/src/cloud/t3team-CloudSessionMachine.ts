@@ -14,12 +14,15 @@ import { CloudSessionFailedError, type ProjectId } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 
 import { ProjectMachineDiscovery } from "../project/t3team-ProjectMachineDiscovery.ts";
 import * as GitHubCli from "../sourceControl/GitHubCli.ts";
 import { VcsProcess } from "../vcs/VcsProcess.ts";
 import {
+  type MachineGitAuthor,
   type MachineRepository,
+  machineGitAuthor,
   machineRepositoryFromRemote,
   machineWorkspaceName,
 } from "./t3team-cloudSessionMachineNames.ts";
@@ -33,12 +36,24 @@ export interface CloudSessionMachine {
   readonly workspace: string;
   /** The user's token for `repository.host`; travels only to the broker, as a session secret. */
   readonly token: string;
+  /** The user's commit identity, so the machine's commits carry their name like their pushes do. */
+  readonly author: MachineGitAuthor;
 }
 
 const unavailable = (message: string) =>
   new CloudSessionFailedError({ reason: "machine_unavailable", message });
 
 const SHA = /^[0-9a-f]{40}$/;
+const decodeProfile = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(
+    Schema.Struct({
+      login: Schema.String,
+      id: Schema.Number,
+      name: Schema.optional(Schema.NullOr(Schema.String)),
+      email: Schema.optional(Schema.NullOr(Schema.String)),
+    }),
+  ),
+);
 
 export class CloudSessionMachines extends Context.Service<
   CloudSessionMachines,
@@ -155,9 +170,26 @@ const make = Effect.gen(function* () {
         message: `Sign in to ${repository.host} with gh (gh auth login --hostname ${repository.host}) so the session can clone ${repository.owner}/${repository.name}.`,
       });
     }
+    const profile = yield* github
+      .execute({
+        cwd: root,
+        args: ["api", "--hostname", repository.host, "user"],
+        timeoutMs: 15_000,
+      })
+      .pipe(
+        Effect.flatMap((out) => decodeProfile(out.stdout)),
+        Effect.mapError(
+          () =>
+            new CloudSessionFailedError({
+              reason: "repository_sign_in_required",
+              message: `Could not read your ${repository.host} profile with gh; sign in again (gh auth login --hostname ${repository.host}).`,
+            }),
+        ),
+      );
     return {
       repository,
       commit,
+      author: machineGitAuthor(profile, repository.host),
       devcontainerPath: machine.devcontainerPath,
       healthCheck: machine.healthCheck,
       workspace: machineWorkspaceName(repository),

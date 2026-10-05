@@ -501,6 +501,7 @@ describe("CloudSessionService.create over the Nexi broker", () => {
             healthCheck: "pnpm test --run smoke",
             workspace: "machine-acme.api",
             token: "ghp_never-an-input",
+            author: { name: "Pj", email: "pj@example.test" },
           }),
       });
       const broker = brokerMock((_login, secrets) =>
@@ -509,7 +510,13 @@ describe("CloudSessionService.create over the Nexi broker", () => {
       yield* runPastDiscoveryPoll(
         create(providersWith(execute, broker, machines), ProjectId.make("p1")),
       );
-      assert.deepEqual(parked, [{ GIT_TOKEN: "ghp_never-an-input" }]);
+      assert.deepEqual(parked, [
+        {
+          GIT_TOKEN: "ghp_never-an-input",
+          GIT_AUTHOR_NAME: "Pj",
+          GIT_AUTHOR_EMAIL: "pj@example.test",
+        },
+      ]);
       const dispatch = calls.find((call) => call.args.join(" ").includes("/dispatches"))?.stdin;
       for (const input of [
         '"machine_repository":"https://nexplore.ghe.com/acme/api.git"',

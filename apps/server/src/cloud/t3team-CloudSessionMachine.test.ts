@@ -63,7 +63,13 @@ const resolveIn = (root: string, token = "ghp_user-token") => {
     execute: (input) =>
       input.args.join(" ") === "auth token --hostname nexplore.ghe.com" && token !== ""
         ? Effect.succeed({ exitCode: 0, stdout: `${token}\n`, stderr: "" } as never)
-        : Effect.fail({ _tag: "GitHubCliError" } as never),
+        : input.args.join(" ") === "api --hostname nexplore.ghe.com user" && token !== ""
+          ? Effect.succeed({
+              exitCode: 0,
+              stdout: JSON.stringify({ login: "pj", id: 7, name: "Philip J", email: null }),
+              stderr: "",
+            } as never)
+          : Effect.fail({ _tag: "GitHubCliError" } as never),
   });
   const dependencies = Layer.mergeAll(
     ProjectMachineDiscovery.layer.pipe(Layer.provide(projections)),
@@ -93,6 +99,7 @@ describe("CloudSessionMachines.resolve", () => {
         healthCheck: null,
         workspace: "machine-acme.api",
         token: "ghp_user-token",
+        author: { name: "Philip J", email: "7+pj@users.noreply.nexplore.ghe.com" },
       });
     }),
   );

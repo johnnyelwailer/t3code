@@ -44,6 +44,30 @@ export function machineRepositoryFromRemote(remote: string): MachineRepository |
   return { url: `https://${host}/${owner}/${name}.git`, host, owner, name };
 }
 
+/** The commit identity for the user's work in the machine, from their `gh api user` profile. */
+export interface MachineGitAuthor {
+  readonly name: string;
+  readonly email: string;
+}
+
+/**
+ * Name and email as the forge shows them; a private email falls back to the forge's noreply
+ * address (`<id>+<login>@users.noreply.<host>`), which it attributes to the same account.
+ */
+export function machineGitAuthor(
+  profile: {
+    readonly login: string;
+    readonly id: number;
+    readonly name?: string | null | undefined;
+    readonly email?: string | null | undefined;
+  },
+  host: string,
+): MachineGitAuthor {
+  const name = profile.name?.trim() || profile.login;
+  const email = profile.email?.trim() || `${profile.id}+${profile.login}@users.noreply.${host}`;
+  return { name, email };
+}
+
 /** At most 64 characters of `[A-Za-z0-9._-]`, as the session workflow's `workspace` input requires. */
 export function machineWorkspaceName(repository: MachineRepository): string {
   return `machine-${repository.owner}.${repository.name}`.slice(0, 64);
