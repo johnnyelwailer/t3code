@@ -12,6 +12,10 @@ import {
   T3TEAM_WIDGET_AUTHORING_GUIDANCE,
   T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION,
 } from "@t3tools/project-context/t3teamWidgetGuidance";
+import {
+  getT3TeamToolDefinition,
+  type T3TeamImplementedToolId,
+} from "@t3tools/project-context/t3teamToolCatalog";
 import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 
@@ -52,6 +56,18 @@ export const T3TEAM_MCP_CANONICAL_TOOL_MAP = {
   t3team_recipe_list: "t3team.recipe.list",
   t3team_recipe_validate: "t3team.recipe.validate",
 } as const;
+
+/**
+ * The broker catalog's description for a canonical tool, with every canonical id the text names
+ * rewritten to its MCP tool name (table-driven through the map above, so it is exact).
+ */
+export function mcpDescriptionOf(canonicalId: T3TeamImplementedToolId): string {
+  let text: string = getT3TeamToolDefinition(canonicalId).description;
+  for (const [mcpName, id] of Object.entries(T3TEAM_MCP_CANONICAL_TOOL_MAP)) {
+    text = text.replaceAll(id, mcpName);
+  }
+  return text;
+}
 
 /** Deprecated MCP tool name → its replacement. The old agent-orchestration names
  * (`t3team_workflow_*`) stay callable so pack configs, agent prompts, and live
@@ -108,14 +124,7 @@ const T3TeamRenameThreadTool = Tool.make("t3team_rename_thread", {
 });
 
 const T3TeamModelsTool = Tool.make("t3team_models", {
-  description:
-    "Read the current thread's true model selection and the live provider instances/models " +
-    "available to this runtime. Call before setting an exact provider or model; never guess " +
-    "from examples or static SDK constants. Selection rules: name a target as " +
-    "'<instanceId>' (its declared default — isDefault and not legacy) or '<instanceId>/<slug>' " +
-    "(an exact slug, legacy allowed). The same instance with no declared default keeps the " +
-    "current model; another instance with no declared default fails and lists its slugs. Prefer " +
-    "effort ('light' | 'standard' | 'high') when you need a thinking tier, not a specific model.",
+  description: mcpDescriptionOf("t3team.runtime.models"),
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
   dependencies,
@@ -414,19 +423,10 @@ const orchestrationRunParameters = Schema.Struct({
   }),
 });
 
-const orchestrationRunDescription =
-  "Agent orchestration: run a structure that fans work out to several agents (parallel or in " +
-  "sequence), enforces result contracts, and can wake itself on durable timers. Use it for " +
-  "complex or long work; for a simple single-agent task, just do it directly. You describe, the " +
-  "host authors: pass `intent` ({goal, expectedOutcome, guardrails} — put constraints such as " +
-  "which provider/model to use in plain language here) and optional `args` (the orchestration's " +
-  "input); a dedicated author agent writes, validates and launches the source. Pass " +
-  "`workflowPath` only to run an existing saved `.workflow.ts` as-is. Returns {runId, status: " +
-  "authoring|accepted, handoff: 'workflow-ui'} immediately; the orchestration card shows " +
-  "authoring → running → the result, and only a genuinely unfixable outcome is reported back, " +
-  "once. After the handoff, end the current turn with no assistant prose. ONE launch per turn: " +
-  "while a run this thread launched is still active, a second call is refused — pass " +
-  "`replaceRunId` to stop that run and launch the replacement instead.";
+// ONE description source: the broker catalog entry is what in-app agents read (TOOL_SPECS copies
+// it), so the MCP surface renders the same text with MCP tool names substituted — never a second
+// hand-written copy that drifts (review of fork #350).
+const orchestrationRunDescription = mcpDescriptionOf("t3team.orchestration.run");
 
 const T3TeamOrchestrationRunTool = Tool.make("t3team_orchestration_run", {
   description: orchestrationRunDescription,
@@ -458,19 +458,11 @@ const T3TeamOrchestrationStatusTool = Tool.make("t3team_orchestration_status", {
 // past the recorded frontier). Routes to the t3team.orchestration.resume broker
 // tool. Prefer this over re-running from scratch when the executed prefix should
 // be kept.
-const orchestrationResumeDescription =
-  "Resume a paused or failed agent-orchestration run from its journal. Pass the `runId` from " +
-  "t3team_orchestration_run/t3team_orchestration_status; optionally pass corrected `source` for " +
-  "an ephemeral run (same-prefix replay — do not change already-executed steps). Returns " +
-  "{runId, status: accepted|suspended|sleeping, hint}; observe progress via " +
-  't3team_orchestration_status. Reading a failure: "Invalid inputs for workflow" means your ' +
-  'launch `args` were wrong — resume with corrected `args`, never a new run; "The agent turn ' +
-  "failed\" means a step's provider turn died — resume the same runId and it re-drives that " +
-  "step; anything else is a source defect the run's author handles, so resume only once the " +
-  "card offers it.";
+const orchestrationResumeDescription = mcpDescriptionOf("t3team.orchestration.resume");
 const orchestrationResumeParameters = Schema.Struct({
   runId: Schema.String,
   source: Schema.optional(Schema.String),
+  args: Schema.optional(Schema.Unknown),
 });
 
 const T3TeamOrchestrationResumeTool = Tool.make("t3team_orchestration_resume", {
