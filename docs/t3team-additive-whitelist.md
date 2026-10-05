@@ -297,3 +297,15 @@ existing `docs/t3team-mvp/**` and `.claude/**` entries.
 - Prefer additive `t3team-*` or `t3team.*` files over editing upstream files.
 - Additive `.test`, `.browser`, `.stories`, and `*Fixtures` files use a higher LOC ceiling because they are validation/demo artifacts rather than shipped runtime surfaces.
 - Remove entries when no longer needed.
+
+## PR #344 main-repository port onto orchestration V2 (2026-10-05)
+
+Owner-approved 2026-10-05. Exact paths; each is upstream orchestration V2 surface, integrated via PR #344:
+
+- `apps/server/src/orchestration-v2/ProjectCommands.test.ts` — upstream orchestration V2 surface, integrated via PR #344: ProjectRow fixture gains `mainRepository: null`.
+- `apps/server/src/orchestration-v2/ProjectCommands.ts` — upstream orchestration V2 surface, integrated via PR #344: project meta-update command carries `mainRepository`.
+- `apps/server/src/orchestration-v2/RuntimePolicy.test.ts` — upstream orchestration V2 surface, integrated via PR #344: ProjectRow fixture gains `mainRepository: null`.
+- `apps/server/src/orchestration-v2/ThreadLaunchService.test.ts` — upstream orchestration V2 surface, integrated via PR #344: ProjectRow fixture gains `mainRepository: null`.
+- `apps/server/src/orchestration-v2/ThreadTitleRegenerationService.test.ts` — upstream orchestration V2 surface, integrated via PR #344: ProjectRow fixture gains `mainRepository: null`.
+- `apps/server/src/project/ProjectService.ts` — upstream orchestration V2 surface, integrated via PR #344: forwards `mainRepository` on project meta updates.
+- `packages/contracts/src/applicationEvent.ts` — upstream orchestration V2 surface, integrated via PR #344: project meta-updated payload gains optional `mainRepository`.
