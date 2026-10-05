@@ -1,12 +1,11 @@
 /**
- * Prompt construction for the no-tools structured repair surface. The repair
- * model gets no shell/file/browser access, so everything it needs — including
- * the authoring format contract — must ride in the prompt: the most common
- * authoring failure is wrong format entirely (YAML/JSON instead of the
- * workflow TypeScript), which is unfixable blind.
+ * Prompt construction for the no-tools structured repair surface — the context-free fallback used
+ * when a run's author conversation is gone (server restart). The repair model gets no
+ * shell/file/browser access, so everything it needs — including the authoring contract, which is
+ * the SAME generated reference the author reads — must ride in the prompt.
  */
 
-import { T3TEAM_WORKFLOW_MANUAL } from "./t3team-workflowManual.ts";
+import { WORKFLOW_AUTHOR_REFERENCE } from "@t3team/sdk";
 
 /** Keep pathological sources from blowing the repair model's context budget. */
 const MAX_EMBEDDED_SOURCE_CHARS = 16_000;
@@ -30,7 +29,7 @@ export function buildWorkflowRepairPrompt(input: {
   return [
     "Repair this t3team workflow.",
     'Return exact JSON only: {"safeToResume":true,"correctedWorkflow":"...","summary":"..."} or {"safeToResume":false,"cancelReason":"..."}.',
-    `The corrected workflow MUST be valid workflow TypeScript per this contract (never YAML or JSON):\n${T3TEAM_WORKFLOW_MANUAL}`,
+    `The corrected workflow MUST be valid workflow TypeScript per this reference (never YAML or JSON):\n${WORKFLOW_AUTHOR_REFERENCE}`,
     `Intent goal: ${input.intent.goal}`,
     `Expected outcome: ${input.intent.expectedOutcome}`,
     `Guardrails (must not widen): ${input.intent.guardrails.join(" | ")}`,

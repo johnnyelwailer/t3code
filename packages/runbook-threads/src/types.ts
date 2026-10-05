@@ -156,10 +156,25 @@ export interface ShowWidgetInput {
 
 /** The one Thread type, shared by the ambient launching thread and any spawned one. */
 export interface Thread {
+  /**
+   * Drive a TURN on this thread and park until it answers. On the LAUNCH thread (`getThread()`)
+   * this is how a routine keeps the user's own thread working — each wake becomes a turn there,
+   * so that thread is both the worker and the log; `agent()`/`spawnThread()` run the work somewhere
+   * else and leave it idle. Give the turn a durable place to read its plan from (the thread's task
+   * journal, an issue, a file): a wake that only says "continue" has no memory of what continue
+   * means once the context window has been compacted. End the loop on a real condition.
+   */
   askAgent<R = string>(prompt: string, opts?: AskOpts<R>): Promise<R>;
+  /** Fire-and-forget: posts to the thread's agent and returns at once; never parks the run. */
   notifyAgent(msg: string): void;
+  /** Park until the human answers in this thread. Requires the `user` capability; a spawned
+   * child's ask is routed to the launch thread. Surface the evidence the decision depends on
+   * first (`showWidget`/`notifyUser`), and give a `schema` so the card renders controls. */
   askUser<R = string>(question: string, opts?: AskUserOpts<R>): Promise<R>;
+  /** Fire-and-forget verdict line for the human; never parks the run. Requires `user`. */
   notifyUser(msg: string): void;
+  /** Sandboxed inline HTML/SVG for the human (theme variables, host icon sprite). Requires `user`.
+   * Fire-and-forget. */
   showWidget(input: ShowWidgetInput): void;
   readonly id: ThreadRef;
 }

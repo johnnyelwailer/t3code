@@ -273,10 +273,14 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
       "Resume a paused or failed run launched via t3team.orchestration.run, from its durable " +
       "journal (same-prefix replay: journaled steps return their recorded results, execution " +
       "continues live past the recorded frontier). Pass the 'runId' from " +
-      "t3team.orchestration.run or t3team.orchestration.status; optionally pass a corrected " +
-      "'source' for an ephemeral run (same-prefix replay — do not change already-executed " +
-      "steps). Scoped to the calling thread's own runs. Returns {runId, status: " +
-      "accepted|suspended|sleeping, hint}; observe progress via t3team.orchestration.status.",
+      "t3team.orchestration.run or t3team.orchestration.status. Scoped to the calling thread's " +
+      "own runs. Returns {runId, status: accepted|suspended|sleeping, hint}; observe progress " +
+      'via t3team.orchestration.status. Reading a failure: "Invalid inputs for workflow" means ' +
+      "the launch args were wrong — resume the same runId with corrected 'args' (never a new " +
+      'run); "The agent turn failed" means a step\'s provider turn died — resume the same runId ' +
+      "and it re-drives that step; anything else is a source defect — for an ephemeral run, " +
+      "resume with a corrected 'source' (same-prefix replay — do not change already-executed " +
+      "steps).",
     capabilities: ["write"],
     kind: "thread",
     surfaces: ["thread"],
@@ -297,6 +301,11 @@ export const IMPLEMENTED_T3TEAM_TOOL_CATALOG = {
             "Optional corrected orchestration TypeScript, applied before resuming an ephemeral " +
             "run past its recorded frontier.",
           minLength: 1,
+        },
+        args: {
+          description:
+            "Optional corrected launch args for a run that failed its meta.inputs decode; the " +
+            "same run re-drives with them.",
         },
       },
       required: ["runId"],
