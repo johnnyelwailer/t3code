@@ -2,6 +2,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import type { ProjectShellProject, ProjectShellProjectId } from "@t3tools/project-context";
 import {
+  T3TEAM_PROJECT_CONTEXT_ROOT,
   T3TEAM_WORK_ITEMS_INDEX_PATH,
   buildJiraTicketEntryPoint,
 } from "@t3tools/project-context/t3teamContextPaths";
@@ -69,7 +70,7 @@ export function makeContextRefreshTestWorkspace(
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
   };
-  writeContextRefreshTestJson(root, ".t3team/context/metadata.json", { project });
+  writeContextRefreshTestJson(root, `${T3TEAM_PROJECT_CONTEXT_ROOT}/metadata.json`, { project });
   writeContextRefreshTestJson(root, T3TEAM_WORK_ITEMS_INDEX_PATH, {
     workItems: [
       {

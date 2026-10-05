@@ -2,6 +2,10 @@
 // @effect-diagnostics preferSchemaOverJson:off - fixture JSON keeps the test compact.
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import {
+  T3TEAM_PROJECT_CONTEXT_ROOT,
+  T3TEAM_WORK_ITEMS_INDEX_PATH,
+} from "@t3tools/project-context/t3teamContextPaths";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -180,7 +184,7 @@ it.effect("ingests a fixture directory through the live refresh pipeline", () =>
     assert.isAtLeast(Number(search[0]!.count), 2);
 
     // The on-disk context the agents read is written by the shared bundle builder.
-    const indexPath = NodePath.join(workspaceRoot, ".t3team/context/work-items/index.json");
+    const indexPath = NodePath.join(workspaceRoot, T3TEAM_WORK_ITEMS_INDEX_PATH);
     assert.isTrue(NodeFS.existsSync(indexPath));
     const index = JSON.parse(NodeFS.readFileSync(indexPath, "utf8")) as {
       workItems: ReadonlyArray<{ key: string }>;
@@ -190,7 +194,10 @@ it.effect("ingests a fixture directory through the live refresh pipeline", () =>
       ["FX-1", "FX-2"],
     );
     const metadata = JSON.parse(
-      NodeFS.readFileSync(NodePath.join(workspaceRoot, ".t3team/context/metadata.json"), "utf8"),
+      NodeFS.readFileSync(
+        NodePath.join(workspaceRoot, `${T3TEAM_PROJECT_CONTEXT_ROOT}/metadata.json`),
+        "utf8",
+      ),
     ) as { project: { source: { provider: string; accountId: string } } };
     assert.equal(metadata.project.source.provider, "atlassian");
     assert.equal(metadata.project.source.accountId, "fixture:demo");

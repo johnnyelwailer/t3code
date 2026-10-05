@@ -14,7 +14,13 @@ import {
   T3TEAM_PROJECT_PROFILE_MANIFEST_PATH,
 } from "./t3team-projectSetup.js";
 import { renderPreviousAgentsMdStartChild } from "./t3team-projectSetupAgentsPreviousStartChild.ts";
-import { resolveT3TeamProjectSetupProfile } from "./t3team-projectSetupShared.ts";
+import {
+  resolveT3TeamProjectSetupProfile,
+  T3TEAM_PROJECT_CONTEXT_ROOT,
+  T3TEAM_PROJECT_RECIPES_ROOT,
+  T3TEAM_PROJECT_STATUS_SKILL_PATH,
+  T3TEAM_PROJECT_TEMPLATES_ROOT,
+} from "./t3team-projectSetupShared.ts";
 
 describe("resolveT3TeamProjectSetupProfileId", () => {
   it("preserves unknown ids while surfacing fallback preferences", () => {
@@ -27,7 +33,9 @@ describe("renderT3TeamProjectSetupFiles", () => {
     const files = renderT3TeamProjectSetupFiles();
     const agents = files.find((file) => file.relativePath === T3TEAM_PROJECT_AGENTS_PATH);
     const claude = files.find((file) => file.relativePath === T3TEAM_PROJECT_CLAUDE_PATH);
-    const contextReadme = files.find((file) => file.relativePath === ".t3team/context/README.md");
+    const contextReadme = files.find(
+      (file) => file.relativePath === `${T3TEAM_PROJECT_CONTEXT_ROOT}/README.md`,
+    );
     const manifest = files.find(
       (file) => file.relativePath === T3TEAM_PROJECT_PROFILE_MANIFEST_PATH,
     );
@@ -35,28 +43,35 @@ describe("renderT3TeamProjectSetupFiles", () => {
       (file) => file.relativePath === T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH,
     );
     const statusSkill = files.find(
-      (file) => file.relativePath === ".t3team/skills/status-and-context-summary/SKILL.md",
+      (file) => file.relativePath === T3TEAM_PROJECT_STATUS_SKILL_PATH,
     );
     const starterRecipeModule = files.find(
-      (file) => file.relativePath === ".t3team/recipes/explain-selected-work/recipe.ts",
+      (file) =>
+        file.relativePath === `${T3TEAM_PROJECT_RECIPES_ROOT}/explain-selected-work/recipe.ts`,
     );
     const starterRecipePrompt = files.find(
-      (file) => file.relativePath === ".t3team/recipes/explain-selected-work/prompt.md",
+      (file) =>
+        file.relativePath === `${T3TEAM_PROJECT_RECIPES_ROOT}/explain-selected-work/prompt.md`,
     );
     const manageRecipeModule = files.find(
-      (file) => file.relativePath === ".t3team/recipes/manage-project-recipes/recipe.ts",
+      (file) =>
+        file.relativePath === `${T3TEAM_PROJECT_RECIPES_ROOT}/manage-project-recipes/recipe.ts`,
     );
     const manageRecipePrompt = files.find(
-      (file) => file.relativePath === ".t3team/recipes/manage-project-recipes/prompt.md",
+      (file) =>
+        file.relativePath === `${T3TEAM_PROJECT_RECIPES_ROOT}/manage-project-recipes/prompt.md`,
     );
     const manageRecipeWorkflow = files.find(
-      (file) => file.relativePath === ".t3team/recipes/manage-project-recipes/workflow.ts",
+      (file) =>
+        file.relativePath === `${T3TEAM_PROJECT_RECIPES_ROOT}/manage-project-recipes/workflow.ts`,
     );
     const skillTemplate = files.find(
-      (file) => file.relativePath === ".t3team/templates/skills/repeatable-workflow/SKILL.md",
+      (file) =>
+        file.relativePath ===
+        `${T3TEAM_PROJECT_TEMPLATES_ROOT}/skills/repeatable-workflow/SKILL.md`,
     );
     const recipesAuthoringGuide = files.find(
-      (file) => file.relativePath === ".t3team/recipes/AUTHORING.md",
+      (file) => file.relativePath === `${T3TEAM_PROJECT_RECIPES_ROOT}/AUTHORING.md`,
     );
 
     expect(agents?.contents).toContain("Use plain, non-technical language");

@@ -1,4 +1,5 @@
 import type { ProjectShellProjectId } from "@t3tools/project-context";
+import { T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH } from "@t3tools/project-context/t3teamContextPaths";
 import { describe, expect, it } from "vite-plus/test";
 
 import { buildT3TeamProjectContextBundle } from "./t3team-context-project-bundle-builder.ts";
@@ -41,6 +42,6 @@ describe("buildT3TeamProjectContextBundle", () => {
     expect(bundle.files.some((file) => file.relativePath.endsWith("work-items/index.json"))).toBe(
       true,
     );
-    expect(bundle.files.at(-1)?.relativePath).toBe(".t3team/context/entrypoint.json");
+    expect(bundle.files.at(-1)?.relativePath).toBe(T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH);
   });
 });

@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import type { ProjectShellProject } from "@t3tools/project-context";
-import { T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH } from "~/t3team/t3team-projectSetup";
+import {
+  T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH,
+  T3TEAM_PROJECT_CONTEXT_ROOT,
+} from "~/t3team/t3team-projectSetup";
+import { T3TEAM_PROJECT_PROFILE_MANIFEST_PATH } from "@t3tools/t3team-skill-packs";
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import {
@@ -101,18 +105,22 @@ describe("buildProjectWorkspaceSyncFiles", () => {
     expect(files.some((file) => file.relativePath === T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH)).toBe(
       true,
     );
-    expect(files.some((file) => file.relativePath === ".t3team/context/metadata.json")).toBe(true);
-    expect(files.some((file) => file.relativePath === ".t3team/context/project.json")).toBe(false);
+    expect(
+      files.some((file) => file.relativePath === `${T3TEAM_PROJECT_CONTEXT_ROOT}/metadata.json`),
+    ).toBe(true);
+    expect(
+      files.some((file) => file.relativePath === `${T3TEAM_PROJECT_CONTEXT_ROOT}/project.json`),
+    ).toBe(false);
 
     const entrypoint = files.find(
       (file) => file.relativePath === T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH,
     );
     expect(JSON.parse(entrypoint?.contents ?? "{}")).toMatchObject({
-      contextRoot: ".t3team/context",
-      projectEntryPointPath: ".t3team/context/entrypoint.json",
-      profilePath: ".t3team/setup/profile.json",
+      contextRoot: T3TEAM_PROJECT_CONTEXT_ROOT,
+      projectEntryPointPath: T3TEAM_PROJECT_CONTEXT_ENTRYPOINT_PATH,
+      profilePath: T3TEAM_PROJECT_PROFILE_MANIFEST_PATH,
       paths: {
-        metadata: ".t3team/context/metadata.json",
+        metadata: `${T3TEAM_PROJECT_CONTEXT_ROOT}/metadata.json`,
       },
     });
   });

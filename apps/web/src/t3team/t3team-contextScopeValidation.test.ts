@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { buildJiraTicketEntryPoint } from "@t3tools/project-context/t3teamContextPaths";
 
 import {
   assertContextRelativePathInProjectWorkspace,
@@ -62,7 +63,7 @@ describe("assertContextRelativePathInProjectWorkspace", () => {
     expect(() =>
       assertContextRelativePathInProjectWorkspace({
         projectId: "Project Alpha",
-        relativePath: ".t3team/context/jira/other-project/items/proj-1/entrypoint.json",
+        relativePath: buildJiraTicketEntryPoint("other-project", "PROJ-1"),
       }),
     ).toThrow("current project cache");
   });

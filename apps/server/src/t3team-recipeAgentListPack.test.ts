@@ -22,6 +22,7 @@ import {
   setPackRecipeSources,
 } from "./t3team-packRecipeSources.ts";
 import { listProjectRecipesForAgent } from "./t3team-recipeAgentList.ts";
+import { HIDDEN_T3TEAM_DIR } from "./t3team-project-repository-utils.ts";
 import { validateProjectRecipeWorkflowForAgent } from "./t3team-recipeAgentValidate.ts";
 
 const fixturesRoot = NodeURL.fileURLToPath(new URL("../__fixtures__/", import.meta.url));
@@ -167,7 +168,7 @@ describe("listProjectRecipesForAgent with pack-shipped recipes", () => {
           displayName: "Pack audit",
         });
         yield* writeRecipeDir({
-          root: path.join(workspaceRoot, ".t3team/recipes/triage"),
+          root: path.join(workspaceRoot, `${HIDDEN_T3TEAM_DIR}/recipes/triage`),
           id: "triage",
           displayName: "Project triage",
         });
@@ -187,7 +188,9 @@ describe("listProjectRecipesForAgent with pack-shipped recipes", () => {
         ]);
         const triage = result.recipes.find((recipe) => recipe.id === "triage");
         expect(triage?.title).toBe("Project triage");
-        expect(triage?.recipePath).toBe(path.join(workspaceRoot, ".t3team/recipes/triage"));
+        expect(triage?.recipePath).toBe(
+          path.join(workspaceRoot, `${HIDDEN_T3TEAM_DIR}/recipes/triage`),
+        );
         expect(triage?.packId).toBeUndefined();
         expect(result.diagnostics?.join(" ")).toContain("shadowed by project-local");
       }),

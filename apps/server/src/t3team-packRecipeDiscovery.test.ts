@@ -19,6 +19,7 @@ import {
   setPackRecipeSources,
 } from "./t3team-packRecipeSources.ts";
 import { discoverProjectRecipes } from "./t3team-projectRecipeDiscovery.ts";
+import { HIDDEN_T3TEAM_DIR } from "./t3team-project-repository-utils.ts";
 import { makeBrokerLayer } from "./t3team-toolBrokerTestUtils.ts";
 
 const orchestrationMock = {} as never;
@@ -161,7 +162,7 @@ describe("pack-provided recipe discovery", () => {
           displayName: "Pack triage",
         });
         yield* writeRecipeDir({
-          root: path.join(workspaceRoot, ".t3team/recipes/triage"),
+          root: path.join(workspaceRoot, `${HIDDEN_T3TEAM_DIR}/recipes/triage`),
           id: "triage",
           displayName: "Project triage",
         });
@@ -199,7 +200,7 @@ describe("pack-provided recipe discovery", () => {
           displayName: "Pack triage",
         });
         yield* writeRecipeDir({
-          root: path.join(workspaceRoot, ".t3team/recipes/risk"),
+          root: path.join(workspaceRoot, `${HIDDEN_T3TEAM_DIR}/recipes/risk`),
           id: "risk",
           displayName: "Project risk",
         });

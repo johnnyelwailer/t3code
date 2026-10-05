@@ -8,6 +8,9 @@ import type { AddToChatPayloadInput } from "~/t3team/t3team-addToChatUtils";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { syncContextAttachmentFromRequest } from "~/t3team/t3team-contextAttachmentSync";
 import { createContextAttachmentRequest } from "~/t3team/t3team-contextAttachmentSync.testHelpers";
+import { T3TEAM_PROJECT_CONTEXT_ROOT } from "~/t3team/t3team-projectSetup";
+
+const FALLBACK_SNAPSHOT_PATH = `${T3TEAM_PROJECT_CONTEXT_ROOT}/misc/project-alpha/project-alpha-proj-7-work-item/entrypoint.json`;
 
 beforeEach(() => {
   backendHarness.writeContextFiles.mockReset();
@@ -42,8 +45,7 @@ describe("syncContextAttachmentFromRequest", () => {
       workspaceRoot: "/tmp/project-alpha",
       files: [
         {
-          relativePath:
-            ".t3team/context/misc/project-alpha/project-alpha-proj-7-work-item/entrypoint.json",
+          relativePath: FALLBACK_SNAPSHOT_PATH,
           contents: '{\n  "ok": true\n}',
         },
       ],
@@ -53,9 +55,7 @@ describe("syncContextAttachmentFromRequest", () => {
       syncStatus: "synced",
       kind: "jira-work-item",
     });
-    expect(attachment.contextText).toContain(
-      ".t3team/context/misc/project-alpha/project-alpha-proj-7-work-item/entrypoint.json",
-    );
+    expect(attachment.contextText).toContain(FALLBACK_SNAPSHOT_PATH);
   });
 
   it("emits sync progress updates while persisting payloads", async () => {
