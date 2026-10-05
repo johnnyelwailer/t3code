@@ -72,9 +72,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery — authoring runs", (it) => {
       `;
 
       const shell = yield* snapshotQuery.getShellSnapshot();
-      const thread = shell.threads.find(
-        (entry) => entry.id === ThreadId.make("thread-authoring"),
-      );
+      const thread = shell.threads.find((entry) => entry.id === ThreadId.make("thread-authoring"));
       assert.strictEqual(thread?.workflowRunStatus?.status, "authoring");
       assert.strictEqual(thread?.workflowRunStatus?.runId, "run-authoring");
 
