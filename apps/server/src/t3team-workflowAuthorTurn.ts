@@ -22,13 +22,16 @@ import type { T3TeamThreadToolContextStoreShape } from "./t3team-threadToolConte
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 
 /**
- * The author runs in PLAN interaction mode: the strongest provider-honored restriction that removes
- * native edit/shell tools without routing approval prompts to a user who cannot see this hidden
- * thread — Claude maps it to the SDK's `plan` permission mode, Codex to the `plan` collaboration
- * mode, Cursor and OpenCode to their plan modes. (`approval-required` would instead turn every
- * tool call, including the author's own MCP tools, into an approval nobody answers.)
+ * The author runs in PLAN interaction mode (drivers that honor it drop native edit/shell tools)
+ * AND always in `approval-required`, never the caller's runtime mode. A driver that still asks
+ * before a command or file change is declined by the host
+ * (`t3team-workflowAuthorApproval.ts`) — the prompt never reaches a user who cannot see this
+ * hidden thread. The author's own MCP tools are the broker allowlist below, not these approvals.
  */
 export const WORKFLOW_AUTHOR_INTERACTION_MODE = "plan" as const;
+
+/** Codex maps this to approvalPolicy `untrusted` and a read-only sandbox. Never the caller's mode. */
+export const WORKFLOW_AUTHOR_RUNTIME_MODE = "approval-required" as const;
 
 /** The author's entire tool surface. `t3team.orchestration.run` from this thread is a submission. */
 export const WORKFLOW_AUTHOR_TOOL_IDS = [
@@ -49,8 +52,9 @@ export interface WorkflowAuthorThreadInput {
   readonly runId: string;
   readonly projectId: ProjectId;
   readonly authorModelSelection: ModelSelection;
+  /** The caller's mode. The author thread ignores it and uses {@link WORKFLOW_AUTHOR_RUNTIME_MODE}. */
   readonly runtimeMode: RuntimeMode;
-  /** The CALLER's mode; the author thread always runs in {@link WORKFLOW_AUTHOR_INTERACTION_MODE}. */
+  /** The caller's mode. The author thread always runs in {@link WORKFLOW_AUTHOR_INTERACTION_MODE}. */
   readonly interactionMode: ProviderInteractionMode;
 }
 
@@ -68,7 +72,7 @@ export async function createWorkflowAuthorThread(
     projectId: input.projectId,
     title: "Orchestration author",
     modelSelection: input.authorModelSelection,
-    runtimeMode: input.runtimeMode,
+    runtimeMode: WORKFLOW_AUTHOR_RUNTIME_MODE,
     interactionMode: WORKFLOW_AUTHOR_INTERACTION_MODE,
     branch: null,
     worktreePath: null,
@@ -150,7 +154,7 @@ export function driveWorkflowAuthorTurn(
           t3teamExt: { author: { kind: "system" } },
         },
         modelSelection: input.authorModelSelection,
-        runtimeMode: input.runtimeMode,
+        runtimeMode: WORKFLOW_AUTHOR_RUNTIME_MODE,
         interactionMode: WORKFLOW_AUTHOR_INTERACTION_MODE,
         createdAt: deps.nowIso(),
       })

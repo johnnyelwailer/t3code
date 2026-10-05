@@ -21,11 +21,9 @@ import type * as Path from "effect/Path";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import type { T3TeamThreadToolContextStoreShape } from "./t3team-threadToolContextStore.ts";
 import { startAuthoredWorkflowRun } from "./t3team-workflowAuthorLaunch.ts";
+import { resolveWorkflowAuthorModel } from "./t3team-workflowAuthorModel.ts";
 import { workflowAuthorSessionForThread } from "./t3team-workflowAuthorSession.ts";
-import {
-  resolveWorkflowAuthorModel,
-  submitAuthoredWorkflowSource,
-} from "./t3team-workflowAuthorSubmit.ts";
+import { submitAuthoredWorkflowSource } from "./t3team-workflowAuthorSubmit.ts";
 import type { PreparedWorkflowLaunchDeps } from "./t3team-workflowEphemeralLaunch.ts";
 import {
   launchDetachedWorkflow,
@@ -131,7 +129,7 @@ export function makeWorkflowRunToolHandlers<E>(
 
         // Arguments are valid; now the one launch-per-turn rule (GHE #415), before anything durable.
         const recentRows = yield* deps.launch.runRepository
-          .listRecent({ limit: 25 })
+          .listLiveByLaunchThread({ launchThreadId: String(threadId) })
           .pipe(Effect.mapError(errorMessage));
         const verdict = recentActiveLaunchBlocker(recentRows, {
           threadId: String(threadId),
@@ -172,6 +170,7 @@ export function makeWorkflowRunToolHandlers<E>(
           admittedResolve = resolve;
           admittedReject = reject;
         });
+        const authorModelSelection = yield* resolveWorkflowAuthorModel(modelSelection, providers);
         const authoring = startAuthoredWorkflowRun(
           {
             launch,
@@ -185,7 +184,7 @@ export function makeWorkflowRunToolHandlers<E>(
           {
             ...common,
             intent: args.intent,
-            authorModelSelection: resolveWorkflowAuthorModel(modelSelection, providers),
+            authorModelSelection,
             draftSource: args.source?.trim() || undefined,
             onAdmitted: async () => admittedResolve?.(),
           },

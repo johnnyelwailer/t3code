@@ -65,22 +65,21 @@ export function createWorkflowRunController(
           nowIso: input.nowIso,
         });
         // A throwing output sink must not flip the run to "failed" after the completion
-        // message already posted (double-notify).
+        // message already posted (double-notify), and must not skip retiring the author.
         try {
           await input.onComplete?.(result.result);
-          // A completed run has no more repairs to ask its author for.
-          await retireWorkflowAuthorThread({
-            runId: input.runId,
-            dispatch: input.dispatch,
-            newId: input.newId,
-            nowIso: input.nowIso,
-          });
         } catch (sinkError) {
           console.warn(
             `[t3team-workflow] onComplete sink failed for run ${input.runId}:`,
             sinkError,
           );
         }
+        await retireWorkflowAuthorThread({
+          runId: input.runId,
+          dispatch: input.dispatch,
+          newId: input.newId,
+          nowIso: input.nowIso,
+        });
       },
       onFailed: async ({ phase, error }) => {
         await settleWorkflowRunFailure({

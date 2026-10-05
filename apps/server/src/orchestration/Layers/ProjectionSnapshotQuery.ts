@@ -334,6 +334,7 @@ const WorkflowRunStatusRowSchema = Schema.Struct({
   threadId: ThreadId,
   runId: Schema.String,
   status: Schema.Literals([
+    "authoring",
     "queued",
     "running",
     "suspended",
@@ -351,6 +352,7 @@ const WorkflowRunStatusRowSchema = Schema.Struct({
 const WorkflowRunStatusByThreadRowSchema = Schema.Struct({
   runId: Schema.String,
   status: Schema.Literals([
+    "authoring",
     "queued",
     "running",
     "suspended",
@@ -4614,6 +4616,7 @@ pending_approval_requests AS (
     );
 
   const NON_TERMINAL_WORKFLOW_RUN_STATUSES = new Set([
+    "authoring",
     "queued",
     "running",
     "suspended",
@@ -4672,7 +4675,7 @@ pending_approval_requests AS (
             OR EXISTS (
               SELECT 1 FROM workflow_runs AS w
               WHERE w.launch_thread_id = c.thread_id
-                AND w.status IN ('queued', 'running', 'suspended', 'sleeping', 'watching', 'paused')
+                AND w.status IN ('authoring', 'queued', 'running', 'suspended', 'sleeping', 'watching', 'paused')
             )
           )
         LIMIT 1

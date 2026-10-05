@@ -138,6 +138,17 @@ const rehydrateSuspendedWorkflowRunsCore = Effect.fn("rehydrateSuspendedWorkflow
           nowIso,
         }),
       );
+      // A running row may still hold the author thread that repairs it. The process
+      // that owned that conversation is gone, so the thread is retired with the run.
+      yield* Effect.promise(() =>
+        retireWorkflowAuthorThread({
+          runId: run.runId,
+          dispatch,
+          newId: () => t3teamRandomUUID(),
+          nowIso,
+          force: true,
+        }),
+      );
     }
     if (
       suspended.length === 0 &&

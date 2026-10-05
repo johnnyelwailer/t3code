@@ -71,6 +71,7 @@ import { forkParked } from "../../serverActivation.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { canReplaceThreadTitle } from "../threadTitles.ts";
+import { declineAuthorThreadApproval } from "../../t3team-workflowAuthorApproval.ts";
 
 const providerTurnKey = (threadId: ThreadId, turnId: TurnId) => `${threadId}:${turnId}`;
 // Suffixed, not prefixed: `clearTurnStateForSession` sweeps by thread prefix.
@@ -1899,6 +1900,18 @@ const make = Effect.gen(function* () {
 
       const thread = yield* resolveThreadRuntimeContext(event.threadId);
       if (!thread) return;
+
+      // An author thread's provider approvals are declined here, before they become an
+      // activity. This is the driver-agnostic gate: every adapter that emits `request.opened`
+      // lands in this function.
+      if (event.type === "request.opened") {
+        const declined = yield* declineAuthorThreadApproval({
+          threadId: thread.id,
+          requestId: toApprovalRequestId(event.requestId),
+          respondToRequest: (request) => providerService.respondToRequest(request),
+        });
+        if (declined) return;
+      }
 
       // Thread silence watchdog (GHE #63): ANY runtime event is activity -
       // this is the lightweight last-activity hook on the existing event bus.

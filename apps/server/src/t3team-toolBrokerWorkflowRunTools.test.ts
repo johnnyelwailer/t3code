@@ -16,7 +16,9 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   type OrchestrationCommand,
   ProjectId,
+  ProviderDriverKind,
   ProviderInstanceId,
+  type ServerProvider,
   ThreadId,
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
@@ -133,8 +135,31 @@ const testLayer = it.layer(
 
 /** Real fs/path + real durable seams over an in-memory DB; dispatch is captured. */
 let harnessCount = 0;
+const makeProvider = (
+  instanceId: string,
+  driver: string,
+  modelSlugs: ReadonlyArray<string>,
+  isDefault = false,
+): ServerProvider =>
+  ({
+    instanceId,
+    driver: ProviderDriverKind.make(driver),
+    enabled: true,
+    installed: true,
+    models: modelSlugs.map((slug) => ({
+      slug,
+      name: slug,
+      isCustom: false,
+      isDefault,
+      capabilities: null,
+    })),
+  }) as unknown as ServerProvider;
+
 const makeHarness = Effect.fn("makeHarness")(function* (
-  options: { readonly authorTurnTimeoutMs?: number } = {},
+  options: {
+    readonly authorTurnTimeoutMs?: number;
+    readonly providers?: ReadonlyArray<ServerProvider>;
+  } = {},
 ) {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -169,6 +194,9 @@ const makeHarness = Effect.fn("makeHarness")(function* (
     ...(options.authorTurnTimeoutMs === undefined
       ? {}
       : { authorTurnTimeoutMs: options.authorTurnTimeoutMs }),
+    ...(options.providers === undefined
+      ? {}
+      : { listProviders: () => Effect.succeed(options.providers!) }),
     loadThreadProject: () =>
       Effect.succeed({
         project: { workspaceRoot, defaultModelSelection: modelSelection },
@@ -298,9 +326,9 @@ testLayer("t3team.orchestration.run — authored ephemeral orchestrations", (it)
           assert.isDefined(created);
           if (created?.type === "thread.create") {
             assert.strictEqual(created.retention, "ephemeral");
-            // Production default: the author runs in PLAN mode (no native edit/shell tools) even
-            // though the caller's thread is in "default" mode — the restriction is the host's.
+            // The caller's thread is full-access / default. The author never inherits that.
             assert.strictEqual(created.interactionMode, "plan");
+            assert.strictEqual(created.runtimeMode, "approval-required");
           }
           const kickoff = h.dispatched.find(
             (command) =>
@@ -308,6 +336,7 @@ testLayer("t3team.orchestration.run — authored ephemeral orchestrations", (it)
           );
           if (kickoff?.type === "thread.turn.start") {
             assert.strictEqual(kickoff.interactionMode, "plan");
+            assert.strictEqual(kickoff.runtimeMode, "approval-required");
           }
           // The card's "Authoring" step carries NO thread id: the author is not openable.
           const authorStep = h.dispatched.find(
@@ -621,6 +650,96 @@ testLayer("t3team.orchestration.run — authored ephemeral orchestrations", (it)
           Option.getOrThrow(yield* repo.getById({ runId: row.runId })).status,
           "paused",
         );
+      }),
+    ),
+  );
+
+  it.effect(
+    "refuses a second launch when this thread's authoring run is older than every other recent update",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const h = yield* makeHarness();
+          const stale = "2020-01-01T00:00:00.000Z";
+          yield* h.repo.upsert({
+            ...buildRunningWorkflowRunRow({
+              runId: "authoring-stale",
+              workflowPath: `${h.workspaceRoot}/stale.workflow.ts`,
+              args: {},
+              launchThreadId: h.threadId,
+              projectId,
+              modelSelection,
+              runtimeMode: "full-access",
+              interactionMode: "default",
+              origin: "ephemeral",
+              nowIso: stale,
+            }),
+            status: "authoring",
+          });
+          for (let index = 0; index < 30; index += 1) {
+            const stamp = `2026-02-01T00:00:${String(index).padStart(2, "0")}.000Z`;
+            yield* h.repo.upsert(
+              buildRunningWorkflowRunRow({
+                runId: `other-${index}`,
+                workflowPath: `${h.workspaceRoot}/other-${index}.workflow.ts`,
+                args: {},
+                launchThreadId: `other-thread-${index}`,
+                projectId,
+                modelSelection,
+                runtimeMode: "full-access",
+                interactionMode: "default",
+                origin: "ephemeral",
+                nowIso: stamp,
+              }),
+            );
+          }
+          const second = yield* h.handlers.runWorkflow({ intent }).pipe(Effect.result);
+          assert.strictEqual(second._tag, "Failure");
+          if (second._tag === "Failure") {
+            assert.include(second.failure, "authoring-stale");
+            assert.include(second.failure, "authoring");
+          }
+        }),
+      ),
+  );
+
+  it.effect("never chooses an unrestrictable driver for the author", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const only = makeProvider("inst-1", "custom-driver", ["model-x"], true);
+        const h = yield* makeHarness({ providers: [only] });
+        const refused = yield* h.handlers.runWorkflow({ intent }).pipe(Effect.result);
+        assert.strictEqual(refused._tag, "Failure");
+        if (refused._tag === "Failure") {
+          assert.include(refused.failure, "custom-driver");
+          assert.include(refused.failure, "Cannot author");
+        }
+
+        const relocated = yield* makeHarness({
+          providers: [only, makeProvider("codex-safe", "codex", ["gpt"], true)],
+        });
+        const started = yield* relocated.handlers.runWorkflow({ intent });
+        assert.strictEqual(started.status, "authoring");
+        const created = relocated.dispatched.find(
+          (command) =>
+            command.type === "thread.create" && command.threadId === `${started.runId}:author`,
+        );
+        assert.isTrue(created?.type === "thread.create");
+        if (created?.type === "thread.create") {
+          assert.strictEqual(String(created.modelSelection.instanceId), "codex-safe");
+          assert.strictEqual(created.runtimeMode, "approval-required");
+        }
+        const step = relocated.dispatched.find(
+          (command) =>
+            command.type === "thread.activity.append" &&
+            command.activity.id === `t3team-wf-step:${started.runId}:author`,
+        );
+        assert.isTrue(step?.type === "thread.activity.append");
+        if (step?.type === "thread.activity.append") {
+          const detail = (step.activity.payload as { detail?: string }).detail ?? "";
+          assert.include(detail, "codex-safe");
+          assert.include(detail, "inst-1");
+        }
       }),
     ),
   );
