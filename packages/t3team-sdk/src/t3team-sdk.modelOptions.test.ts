@@ -1,4 +1,4 @@
-import { assert, it } from "@effect/vitest";
+import { assert, it } from "./t3team-sdk.testEffect.ts";
 import * as Effect from "effect/Effect";
 import type { HandleDispatch } from "@runbook/core/handles";
 import { canonicalJsonStringify, hashArgs } from "@runbook/core/canonicalJson";
