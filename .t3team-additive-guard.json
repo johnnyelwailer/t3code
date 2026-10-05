@@ -411,6 +411,7 @@
     "packages/runbook-threads/src/models.ts",
     "packages/runbook-threads/src/primitives.ts",
     "packages/runbook-threads/src/types.ts",
+    "packages/runbook-ts/src/staticAuditTypes.ts",
     "packages/shared/package.json",
     "packages/shared/src/git.test.ts",
     "packages/shared/src/git.ts",

@@ -1,11 +1,11 @@
 // @effect-diagnostics nodeBuiltinImport:off - test asserts persisted run files on local disk.
 /**
- * `t3team.orchestration.run` (ephemeral workflows, slice 1) — handler-level acceptance against the
- * REAL durable engine seams: an in-memory SQLite run repo + journal store (post-039 schema with
- * `origin`), the real launch funnel, and a captured orchestration dispatch standing in for the
- * live engine. Covers: argument validation (exactly one of source/workflowPath), pure-compute
- * inline source (completed + output + persisted file), askUser suspension (decision card on the
- * calling thread + `origin='ephemeral'` row), workspace containment, and the concurrency cap.
+ * `t3team.orchestration.run` — handler-level acceptance against the REAL durable engine seams: an
+ * in-memory SQLite run repo + journal store, the real launch funnel, the real author session /
+ * turn machinery, and a captured orchestration dispatch standing in for the live engine. The test
+ * plays the AUTHOR: it answers the captured author turn by calling the same broker handler from the
+ * author thread (a submission), then ends the turn through the registry's pending ask — exactly the
+ * path the reactor takes when the provider's final message lands.
  */
 
 import * as NodeFS from "node:fs";
@@ -32,6 +32,7 @@ import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStor
 import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import type { T3TeamTurnToolContext } from "./t3team-toolBroker.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import {
   buildRunningWorkflowRunRow,
@@ -43,6 +44,8 @@ import {
   recentActiveLaunchBlocker,
   type T3TeamWorkflowRunToolHandlers,
 } from "./t3team-toolBrokerWorkflowRunTools.ts";
+import { WORKFLOW_AUTHOR_TOOL_IDS } from "./t3team-workflowAuthorTurn.ts";
+import { resetWorkflowAuthorSessions } from "./t3team-workflowAuthorSession.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
 import { setWorkflowEphemeralConcurrencyPolicy } from "./t3team-workflowEphemeralConcurrencyPolicy.ts";
 
@@ -62,6 +65,17 @@ export const Outputs = Schema.Struct({ sum: Schema.Number });
 export const meta = { name: "temp.sum", inputs: Inputs, outputs: Outputs } as const;
 const input = Schema.decodeSync(Inputs)(args);
 return { sum: input.a + input.b };
+`;
+
+/** The incident shape: a name imported from the engine API that the runtime never binds. */
+const UNBOUND_IMPORT_SOURCE = `
+import { Schema } from "effect";
+import { defineModelX } from "@t3team/sdk";
+export const Inputs = Schema.Struct({ a: Schema.Number, b: Schema.Number });
+export const meta = { name: "temp.sum", inputs: Inputs } as const;
+export default async function run() {
+  return defineModelX({ provider: "x", id: "y" });
+}
 `;
 
 const ASK_USER_SOURCE = `
@@ -84,9 +98,9 @@ return { approved: decision.approved };
 const waitForRunStatus = Effect.fn("waitForRunStatus")(function* (
   repo: typeof WorkflowRunRepository.Service,
   runId: string,
-  status: "completed" | "suspended",
+  status: "completed" | "suspended" | "failed",
 ) {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
     const row = yield* repo.getById({ runId });
     if (Option.isSome(row) && row.value.status === status) return row.value;
     // Detached workflow fibers run on the live runtime. Poll with a real timer rather than the
@@ -94,6 +108,18 @@ const waitForRunStatus = Effect.fn("waitForRunStatus")(function* (
     yield* Effect.promise(() => NodeTimersPromises.setTimeout(10));
   }
   return yield* Effect.fail(`workflow ${runId} did not reach ${status}`);
+});
+
+/** The author's turn is dispatched by the detached authoring fiber; wait for its pending ask. */
+const waitForAuthorTurn = Effect.fn("waitForAuthorTurn")(function* (
+  registry: ReturnType<typeof makeWorkflowEngineRegistry>,
+  authorThreadId: string,
+) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (registry.peekPending(authorThreadId) !== undefined) return;
+    yield* Effect.promise(() => NodeTimersPromises.setTimeout(10));
+  }
+  return yield* Effect.fail(`author turn for ${authorThreadId} was never dispatched`);
 });
 
 const testLayer = it.layer(
@@ -116,10 +142,12 @@ const makeHarness = Effect.fn("makeHarness")(function* () {
     prefix: "t3team-ephemeral-run-",
   });
   const dispatched: OrchestrationCommand[] = [];
+  const toolContexts = new Map<string, T3TeamTurnToolContext | null | undefined>();
   const registry = makeWorkflowEngineRegistry();
+  resetWorkflowAuthorSessions();
   harnessCount += 1;
   const harnessThreadId = ThreadId.make(`${threadId}-${harnessCount}`);
-  const handlers = makeWorkflowRunToolHandlers({
+  const factory = makeWorkflowRunToolHandlers({
     fileSystem,
     path,
     launch: {
@@ -131,6 +159,10 @@ const makeHarness = Effect.fn("makeHarness")(function* () {
         dispatched.push(command);
         return Promise.resolve();
       },
+    },
+    contextStore: {
+      put: ({ threadId: id, toolContext }) =>
+        Effect.sync(() => void toolContexts.set(id, toolContext)),
     },
     loadThreadProject: () =>
       Effect.succeed({
@@ -145,36 +177,65 @@ const makeHarness = Effect.fn("makeHarness")(function* () {
     // Each harness is its own launch thread: the in-memory DB is shared across the file, and the
     // one-launch-per-turn guard (GHE #415) would otherwise see an earlier test's still-suspended
     // run as this thread's own.
-  })(harnessThreadId);
-  return { handlers, dispatched, workspaceRoot, repo, registry, threadId: harnessThreadId };
+  });
+  const handlers = factory(harnessThreadId);
+  /** Play the author: submit `source` from the author thread (the same broker handler). */
+  const authorSubmits = (runId: string, source: string) =>
+    factory(ThreadId.make(`${runId}:author`)).runWorkflow({ source, intent });
+  const endAuthorTurn = (runId: string, reply: string) =>
+    Effect.promise(async () => {
+      const pending = registry.takePending(`${runId}:author`);
+      assert.isDefined(pending?.resolveLive, "the author turn must be parked on the registry");
+      await pending!.resolveLive!(reply);
+    });
+  const failureNotices = (runId: string) =>
+    dispatched.filter(
+      (command) =>
+        command.type === "thread.message.upsert" &&
+        command.message.messageId === `t3team-wf-result:${runId}` &&
+        command.message.text.includes("⚠️"),
+    );
+  return {
+    handlers,
+    factory,
+    authorSubmits,
+    endAuthorTurn,
+    failureNotices,
+    toolContexts,
+    dispatched,
+    workspaceRoot,
+    repo,
+    registry,
+    threadId: harnessThreadId,
+  };
 });
 
-testLayer("t3team.orchestration.run — ephemeral workflow tool", (it) => {
+testLayer("t3team.orchestration.run — authored ephemeral orchestrations", (it) => {
   it.effect("returns an explicit workflow-UI handoff through the broker result", () =>
     Effect.gen(function* () {
       const result = yield* callT3TeamWorkflowRunTool({
         scopeLabel: "for this thread.",
-        toolArgs: { source: PURE_SUM_SOURCE, intent },
+        toolArgs: { intent },
         workflowRunTools: {
           runWorkflow: () =>
             Effect.succeed({
               ok: true as const,
               runId: "run-handoff",
-              status: "accepted" as const,
+              status: "authoring" as const,
               handoff: "workflow-ui" as const,
             }),
         },
       });
 
       assert.deepInclude(result.structuredContent, {
-        status: "accepted",
+        status: "authoring",
         handoff: "workflow-ui",
       });
       assert.include(result.content[0]?.text ?? "", '"handoff": "workflow-ui"');
     }),
   );
 
-  it.effect("rejects a call with BOTH source and workflowPath, and one with NEITHER", () =>
+  it.effect("rejects BOTH source and workflowPath, source WITHOUT intent, and a blank intent", () =>
     Effect.scoped(
       Effect.gen(function* () {
         const { handlers } = yield* makeHarness();
@@ -184,89 +245,166 @@ testLayer("t3team.orchestration.run — ephemeral workflow tool", (it) => {
             toolArgs,
             workflowRunTools: handlers,
           });
-
         const errorText = (result: { readonly structuredContent?: unknown }) =>
           String((result.structuredContent as { readonly error?: unknown } | undefined)?.error);
 
         const both = yield* call({ source: "return 1;", workflowPath: "x.workflow.ts", intent });
         assert.isTrue(both.isError);
-        assert.include(errorText(both), "exactly one");
+        assert.include(errorText(both), "at most one");
 
-        const neither = yield* call({ intent });
-        assert.isTrue(neither.isError);
-        assert.include(errorText(neither), "exactly one");
+        // `source` is supported but never a substitute for the contract: intent stays required.
+        const sourceOnly = yield* call({ source: PURE_SUM_SOURCE });
+        assert.isTrue(sourceOnly.isError);
+        assert.include(errorText(sourceOnly).toLowerCase(), "intent");
 
-        const blankGoal = yield* call({
-          source: PURE_SUM_SOURCE,
-          intent: { ...intent, goal: "  " },
-        });
+        const blankGoal = yield* call({ intent: { ...intent, goal: "  " } });
         assert.isTrue(blankGoal.isError);
         assert.include(errorText(blankGoal), "nonblank intent.goal");
 
-        const blankGuardrail = yield* call({
-          source: PURE_SUM_SOURCE,
-          intent: { ...intent, guardrails: [" "] },
-        });
+        const blankGuardrail = yield* call({ intent: { ...intent, guardrails: [" "] } });
         assert.isTrue(blankGuardrail.isError);
         assert.include(errorText(blankGuardrail), "nonblank guardrail");
       }),
     ),
   );
 
-  it.effect("runs a pure-compute inline source to completion and persists the file", () =>
+  it.effect(
+    "intent-only: the author's fixable first draft never reaches the caller; the second draft launches and completes",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const h = yield* makeHarness();
+          const result = yield* h.handlers.runWorkflow({ args: { a: 2, b: 40 }, intent });
+          assert.strictEqual(result.status, "authoring");
+          assert.strictEqual(result.handoff, "workflow-ui");
+          const { runId } = result;
+          const authorThreadId = `${runId}:author`;
+          yield* waitForAuthorTurn(h.registry, authorThreadId);
+
+          // A hidden, ephemeral author thread scoped to exactly its three tools.
+          const created = h.dispatched.find(
+            (command) => command.type === "thread.create" && command.threadId === authorThreadId,
+          );
+          assert.isDefined(created);
+          if (created?.type === "thread.create") assert.strictEqual(created.retention, "ephemeral");
+          assert.deepStrictEqual(
+            h.toolContexts.get(authorThreadId)?.tools.map((tool) => tool.id),
+            [...WORKFLOW_AUTHOR_TOOL_IDS],
+          );
+          // The run already exists for the caller: a queued row and a plan card in its thread.
+          assert.strictEqual(Option.getOrThrow(yield* h.repo.getById({ runId })).status, "queued");
+          assert.isTrue(
+            h.dispatched.some(
+              (command) =>
+                command.type === "thread.message.upsert" &&
+                command.message.messageId === `t3team-wf-shape:${runId}`,
+            ),
+          );
+
+          // First draft: the incident's unbound import. The verdict is a TOOL RESULT for the author.
+          const first = yield* h.authorSubmits(runId, UNBOUND_IMPORT_SOURCE).pipe(Effect.result);
+          assert.strictEqual(first._tag, "Failure");
+          if (first._tag === "Failure") {
+            assert.include(first.failure, "defineModelX");
+            assert.include(first.failure, "ReferenceError");
+          }
+          // Second draft launches the SAME run.
+          const second = yield* h.authorSubmits(runId, PURE_SUM_SOURCE);
+          assert.strictEqual(second.status, "accepted");
+          assert.strictEqual(second.runId, runId);
+          yield* h.endAuthorTurn(runId, "Launched.");
+
+          const row = yield* waitForRunStatus(h.repo, runId, "completed");
+          assert.strictEqual(row.origin, "ephemeral");
+          assert.isTrue(NodeFS.existsSync(`${h.workspaceRoot}/.t3team-runs/${runId}/workflow.ts`));
+          // Nothing fixable ever reached the caller's thread.
+          assert.deepStrictEqual(h.failureNotices(runId), []);
+          const authorSteps = h.dispatched.filter(
+            (command) =>
+              command.type === "thread.activity.append" &&
+              command.activity.id === `t3team-wf-step:${runId}:author`,
+          );
+          assert.isAtLeast(authorSteps.length, 2);
+        }),
+      ),
+  );
+
+  it.effect("unfixable: the author declines → the run fails and the caller gets ONE notice", () =>
     Effect.scoped(
       Effect.gen(function* () {
-        const { handlers, workspaceRoot, repo } = yield* makeHarness();
+        const h = yield* makeHarness();
+        const result = yield* h.handlers.runWorkflow({ intent });
+        assert.strictEqual(result.status, "authoring");
+        const { runId } = result;
+        yield* waitForAuthorTurn(h.registry, `${runId}:author`);
+        yield* h.endAuthorTurn(runId, "This intent needs file writes the guardrails forbid.");
 
-        const result = yield* handlers.runWorkflow({
-          source: PURE_SUM_SOURCE,
-          args: { a: 2, b: 40 },
-          intent,
-        });
-
-        assert.strictEqual(result.status, "accepted");
-        assert.strictEqual(result.handoff, "workflow-ui");
-        // The source file must OUTLIVE the call — resume/rehydrate re-read it from disk.
-        const workflowFile = `${workspaceRoot}/.t3team-runs/${result.runId}/workflow.ts`;
-        assert.isTrue(NodeFS.existsSync(workflowFile));
-
-        const row = yield* waitForRunStatus(repo, result.runId, "completed");
-        assert.strictEqual(row.status, "completed");
-        assert.strictEqual(row.origin, "ephemeral");
+        const row = yield* waitForRunStatus(h.repo, runId, "failed");
+        assert.strictEqual(row.status, "failed");
+        const notices = h.failureNotices(runId);
+        assert.strictEqual(notices.length, 1);
+        if (notices[0]?.type === "thread.message.upsert") {
+          assert.strictEqual(notices[0].threadId, h.threadId);
+          assert.include(notices[0].message.text, "cannot continue");
+          assert.include(notices[0].message.text, "guardrails forbid");
+        }
+        // A late submission has nobody waiting for it.
+        const late = yield* h.authorSubmits(runId, PURE_SUM_SOURCE).pipe(Effect.result);
+        assert.strictEqual(late._tag, "Failure");
       }),
     ),
   );
 
   it.effect(
-    "suspends an askUser body: decision card on the calling thread + origin='ephemeral' row",
+    "a caller-supplied source is a DRAFT: it reaches the author and goes through the same loop",
     () =>
       Effect.scoped(
         Effect.gen(function* () {
-          const { handlers, dispatched, repo, threadId } = yield* makeHarness();
-
-          const result = yield* handlers.runWorkflow({
+          const h = yield* makeHarness();
+          const result = yield* h.handlers.runWorkflow({
             source: ASK_USER_SOURCE,
             args: { question: "Ship it?" },
             intent,
           });
-
-          assert.strictEqual(result.status, "accepted");
-          assert.strictEqual(result.handoff, "workflow-ui");
-
-          // The ask posted a decision-card message into the CALLING thread and parked there.
-          const cards = dispatched.filter(
-            (command) => command.type === "thread.message.upsert" && command.threadId === threadId,
+          assert.strictEqual(result.status, "authoring");
+          const { runId } = result;
+          yield* waitForAuthorTurn(h.registry, `${runId}:author`);
+          const kickoff = h.dispatched.find(
+            (command) =>
+              command.type === "thread.turn.start" && command.threadId === `${runId}:author`,
           );
-          assert.isAbove(cards.length, 0);
+          assert.isDefined(kickoff);
+          if (kickoff?.type === "thread.turn.start") {
+            assert.include(kickoff.message.text, "temp.approval");
+            assert.include(kickoff.message.text, intent.goal);
+          }
+          const launched = yield* h.authorSubmits(runId, ASK_USER_SOURCE);
+          assert.strictEqual(launched.status, "accepted");
+          yield* h.endAuthorTurn(runId, "Launched.");
 
-          const row = yield* waitForRunStatus(repo, result.runId, "suspended");
-          assert.strictEqual(row.status, "suspended");
-          assert.strictEqual(row.origin, "ephemeral");
-          assert.strictEqual(row.launchThreadId, threadId);
-          assert.strictEqual(row.pendingThreadId, threadId);
+          // The launched run parks on the CALLER's thread with its decision card, as before.
+          const row = yield* waitForRunStatus(h.repo, runId, "suspended");
+          assert.strictEqual(row.launchThreadId, h.threadId);
+          assert.strictEqual(row.pendingThreadId, h.threadId);
           assert.strictEqual(row.pendingKind, "user.input");
+          assert.deepStrictEqual(h.failureNotices(runId), []);
         }),
       ),
+  );
+
+  it.effect("an authoring run already counts for the one-launch-per-turn rule", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const h = yield* makeHarness();
+        const first = yield* h.handlers.runWorkflow({ intent });
+        yield* waitForAuthorTurn(h.registry, `${first.runId}:author`);
+        const second = yield* h.handlers.runWorkflow({ intent }).pipe(Effect.result);
+        assert.strictEqual(second._tag, "Failure");
+        if (second._tag === "Failure") assert.include(second.failure, first.runId);
+        yield* h.endAuthorTurn(first.runId, "declined");
+        yield* waitForRunStatus(h.repo, first.runId, "failed");
+      }),
+    ),
   );
 
   it.effect("rejects a workflowPath escaping the workspace root", () =>
@@ -285,7 +423,7 @@ testLayer("t3team.orchestration.run — ephemeral workflow tool", (it) => {
   );
 
   it.effect(
-    "accepts a valid run immediately and durably queues it until FIFO capacity is free",
+    "a saved workflowPath launches directly: accepted immediately, durably queued until FIFO capacity is free",
     () =>
       Effect.scoped(
         Effect.gen(function* () {
@@ -299,9 +437,10 @@ testLayer("t3team.orchestration.run — ephemeral workflow tool", (it) => {
           );
           yield* Effect.promise(() => workflowAdmissionQueue.acquire("blocker"));
           const { handlers, workspaceRoot, repo } = yield* makeHarness();
+          NodeFS.writeFileSync(`${workspaceRoot}/sum.workflow.ts`, PURE_SUM_SOURCE);
 
           const result = yield* handlers.runWorkflow({
-            source: PURE_SUM_SOURCE,
+            workflowPath: "sum.workflow.ts",
             args: { a: 2, b: 3 },
             intent,
           });

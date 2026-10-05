@@ -2,7 +2,7 @@
 
 import type * as TsApi from "typescript";
 
-export type WorkflowAuditFacet = "determinism" | "capability" | "types";
+export type WorkflowAuditFacet = "determinism" | "capability" | "types" | "bindings";
 
 export interface WorkflowAuditFinding {
   readonly facet: WorkflowAuditFacet;

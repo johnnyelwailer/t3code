@@ -4,8 +4,10 @@
  * unescaped backtick inside a template literal. The run was "accepted", then failed
  * asynchronously at body execution with a bare `SyntaxError: Invalid or unexpected token` — the
  * author saw no actionable feedback in the tool result, and no plan card ever appeared. This
- * precheck runs BEFORE the run is admitted/persisted, so a bad submission fails the tool call
- * synchronously and carries the full authoring manual for an immediate fix + resubmit.
+ * precheck runs BEFORE the run is admitted/persisted, so a bad submission fails synchronously with
+ * a precise reason. It is the first gate of the full launch check
+ * ({@link ./t3team-workflowSourceCheck.ts}); the author agent that reads these findings carries the
+ * generated reference itself, so no manual rides along.
  *
  * The gates are static, in execution order of the real load path:
  *  1. a substring-tolerant `export const meta` probe (the cheap, specific YAML/JSON catch);
@@ -25,13 +27,11 @@ import * as NodeVM from "node:vm";
 
 import { deriveWorkflowShape, prepareWorkflow } from "@t3team/sdk";
 
-import { T3TEAM_WORKFLOW_MANUAL } from "./t3team-workflowManual.ts";
-
 /** Synthetic path for the precheck-only parse — never written to disk. */
 const PRECHECK_SYNTHETIC_PATH = "/precheck/workflow.ts";
 
 function rejectionMessage(reason: string): string {
-  return `Workflow source rejected before launch: ${reason}.\n\n${T3TEAM_WORKFLOW_MANUAL}`;
+  return `Workflow source rejected before launch: ${reason}.`;
 }
 
 function detail(error: unknown): string {
@@ -39,8 +39,7 @@ function detail(error: unknown): string {
 }
 
 /**
- * Returns null when `source` looks like a valid workflow module, else a human-readable error
- * (the specific reason, followed by the full authoring manual).
+ * Returns null when `source` looks like a valid workflow module, else the specific reason.
  */
 export function precheckWorkflowSource(source: string): string | null {
   // Whitespace-tolerant: the loader finds `meta` via the TypeScript AST, so a

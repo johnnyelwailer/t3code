@@ -13,6 +13,7 @@ import type { OrchestrationWorkflowRunStatus } from "@t3tools/contracts";
 
 import type { T3TeamWorkflowRunProgress } from "~/t3team/chat/t3team-threadWorkflowStepProgress";
 import {
+  HOST_RUN_STATE_STEP_KINDS,
   inferredRunStatus,
   liveRunLabel,
   repairStatus,
@@ -56,7 +57,9 @@ export function useT3TeamWorkflowShapeLiveState(input: {
 
   // Repair activities are workflow-owned state, not plan steps. Rendering them inline avoids
   // a standalone "Analysing failure" row and keeps the authored plan stable.
-  const planRuntimeSteps = progress.steps.filter((step) => step.stepKind !== "workflow.self-heal");
+  const planRuntimeSteps = progress.steps.filter(
+    (step) => !HOST_RUN_STATE_STEP_KINDS.has(step.stepKind),
+  );
   const visiblePlanSteps = shape.steps.filter((step) => step.label !== "Scheduled work");
   const runtimeStepsForRows = planRuntimeSteps.filter((step) => step.stepKind !== "wait.until");
   const { rows: reconciledRows } = reconcileT3TeamWorkflowShapeProgress(
