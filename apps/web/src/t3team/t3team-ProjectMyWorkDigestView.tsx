@@ -16,17 +16,24 @@ export function ProjectMyWorkDigestView({
   nowMs,
   onOpenTicket,
   burndownVariant = "off",
+  updatedAtMs,
 }: {
   plan: ResolvedDigestPlan;
   graph: DigestGraph;
   nowMs: number;
   onOpenTicket?: ((ticketId: string) => void) | undefined;
   burndownVariant?: DigestBurndownVariant;
+  updatedAtMs?: number;
 }) {
   const ticketsById = new Map(graph.tickets.map((ticket) => [ticket.id, ticket]));
   const lane = { graph, ticketsById, nowMs, onOpenTicket };
   const header = (
-    <ProjectMyWorkDigestHeader graph={graph} nowMs={nowMs} burndownVariant={burndownVariant} />
+    <ProjectMyWorkDigestHeader
+      graph={graph}
+      nowMs={nowMs}
+      burndownVariant={burndownVariant}
+      {...(updatedAtMs !== undefined ? { updatedAtMs } : {})}
+    />
   );
   if (plan.sections.length === 0) {
     return (
@@ -45,7 +52,8 @@ export function ProjectMyWorkDigestView({
   const main = plan.sections.filter((s) => s.placement === "main");
   const footer = plan.sections.filter((s) => s.placement === "footer");
   // Only parked / stalled items: say so in one line instead of leaving the two-lane grid as a
-  // blank band between the header and the footer.
+  // blank band between the header and the footer. Width is the parent's job: the digest lens
+  // drops the centered max-width cap so a widescreen uses the whole pane.
   const lanesEmpty = side.length === 0 && main.length === 0;
   // A lone footer section spans the row; the 2/3-column split only applies once there is more than
   // one, so a single "Parked" card never gets squeezed into a third of the width.

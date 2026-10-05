@@ -47,7 +47,10 @@ describe("resolveStartChildModelSelection", () => {
   it("inherits the parent's provider when none is requested", () => {
     const result = resolveStartChildModelSelection({ parentModelSelection: parent, providers });
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.instanceId).toBe("nexplore");
+    if (result.ok) {
+      expect(result.value.instanceId).toBe("nexplore");
+      expect(result.value.model).toBe("nexplore-a");
+    }
   });
 
   it("runs the child on a different provider + model (cross-provider)", () => {
@@ -64,16 +67,16 @@ describe("resolveStartChildModelSelection", () => {
     }
   });
 
-  it("defaults to the target provider's first model when none is requested", () => {
+  it("fails a different instance that declares no default instead of picking its first model", () => {
     const result = resolveStartChildModelSelection({
       parentModelSelection: parent,
       requestedProvider: "claude",
       providers,
     });
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value.instanceId).toBe("claude");
-      expect(result.value.model).toBe("claude-a");
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain("no declared default");
+      expect(result.error.choices).toEqual(["claude-a", "claude-b"]);
     }
   });
 
@@ -147,11 +150,68 @@ describe("resolveStartChildModelSelection", () => {
     const result = resolveStartChildModelSelection({
       parentModelSelection: parent,
       requestedProvider: "target",
+      requestedModel: "model",
       reasoningEffort: "high",
       providers: [target],
     });
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value.options).toEqual([{ id: "effort", value: "high" }]);
+  });
+
+  it("drops parent options the resolved model does not advertise", () => {
+    const declared = makeProvider("nexplore", [], {
+      models: [
+        {
+          slug: "declared",
+          name: "declared",
+          isCustom: false,
+          isDefault: true,
+          capabilities: {
+            optionDescriptors: [
+              {
+                id: "reasoningEffort",
+                label: "Reasoning",
+                type: "select",
+                options: [
+                  { id: "low", label: "Low" },
+                  { id: "high", label: "High" },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const dropped = resolveStartChildModelSelection({
+      parentModelSelection: {
+        ...parent,
+        options: [
+          { id: "reasoningEffort", value: "xhigh" },
+          { id: "fastMode", value: true },
+        ],
+      },
+      providers: [declared],
+    });
+    const kept = resolveStartChildModelSelection({
+      parentModelSelection: {
+        ...parent,
+        options: [{ id: "reasoningEffort", value: "high" }],
+      },
+      providers: [declared],
+    });
+    expect(dropped.ok && dropped.value.options).toEqual([]);
+    expect(kept.ok && kept.value.options).toEqual([{ id: "reasoningEffort", value: "high" }]);
+  });
+
+  it("names the owning instance when an unknown instance token is a model slug", () => {
+    const result = resolveStartChildModelSelection({
+      parentModelSelection: parent,
+      requestedProvider: "opencode-go",
+      requestedModel: "glm-5.3",
+      providers: [makeProvider("opencode", ["opencode-go"])],
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain("opencode/opencode-go/glm-5.3");
   });
 });
 

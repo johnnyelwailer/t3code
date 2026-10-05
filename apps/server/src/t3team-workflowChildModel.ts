@@ -1,18 +1,16 @@
 import type { ModelSelection } from "@t3tools/contracts";
-import type {
-  AgentEffort,
-  ModelCascadeWireEntry,
-  ModelSelection as WorkflowModelSelection,
-} from "@t3team/sdk";
+import type { AgentEffort, ModelCascadeWireEntry, ModelOption } from "@t3team/sdk";
 
 import { getChildProviderCatalog } from "./t3team-childProviderCatalog.ts";
-import { applyWorkflowEffort } from "./t3team-workflowEffortOptions.ts";
 import { resolveStartChildModelSelection } from "./t3team-toolBrokerStartChildProvider.ts";
 import {
   resolveModelCascade,
   type WorkflowModelCascadeChoice,
 } from "./t3team-workflowModelCascade.ts";
-import { fromWorkflowModelSelection } from "./t3team-workflowModelSelection.ts";
+import {
+  fromWorkflowModelSelection,
+  parseWorkflowModelOption,
+} from "./t3team-workflowModelSelection.ts";
 
 /**
  * Resolve a workflow-engine child's model selection (`thread.turn` / `thread.create`) the same
@@ -25,7 +23,7 @@ import { fromWorkflowModelSelection } from "./t3team-workflowModelSelection.ts";
  * via {@link applyWorkflowEffort} (a no-op when the provider exposes neither a reasoning control
  * nor tier models).
  *
- * - Neither a `requested` selection nor an `effort` → inherit the run's base model unchanged.
+ * - No requested model → select the base instance's live catalog default, avoiding legacy models.
  * - No catalog wired (some test/SDK harnesses don't set one) → fall back to the legacy blind
  *   `fromWorkflowModelSelection` mapping so existing SDK/test behavior is preserved.
  * - Catalog wired → fetch the live provider snapshots and defer to the same pure resolver
@@ -33,11 +31,11 @@ import { fromWorkflowModelSelection } from "./t3team-workflowModelSelection.ts";
  */
 export async function resolveWorkflowChildModel(
   base: ModelSelection,
-  requested: WorkflowModelSelection | undefined,
+  requested: ModelOption | undefined,
   effort?: AgentEffort,
+  /** Host-injected defaults choose the latest model on their policy's instance. */
+  requestedIsDefault = false,
 ): Promise<ModelSelection> {
-  if (requested === undefined && effort === undefined) return base;
-
   const catalog = getChildProviderCatalog();
   // No catalog (some test/SDK harnesses): legacy blind mapping, and `effort` degrades to a no-op
   // because the provider's option descriptors are only knowable from a live snapshot.
@@ -46,17 +44,17 @@ export async function resolveWorkflowChildModel(
   }
 
   const providers = await catalog();
-  if (requested === undefined) return applyWorkflowEffort(base, effort, providers);
-
+  const parsed = requested === undefined ? undefined : parseWorkflowModelOption(requested);
   const result = resolveStartChildModelSelection({
     parentModelSelection: base,
-    requestedProvider: requested.provider,
-    requestedModel: requested.model.id,
+    requestedProvider: parsed?.provider,
+    requestedModel: requestedIsDefault ? undefined : parsed?.model,
+    effort,
     providers,
   });
 
-  if (!result.ok) throw new Error(result.message);
-  return applyWorkflowEffort(result.value, effort, providers);
+  if (!result.ok) throw result.error;
+  return result.value;
 }
 
 /**

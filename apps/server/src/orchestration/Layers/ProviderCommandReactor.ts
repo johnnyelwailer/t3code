@@ -470,6 +470,9 @@ const make = Effect.gen(function* () {
     );
 
   const threadModelSelections = new Map<string, ModelSelection>();
+  // The selection of each thread's last turn its provider accepted, options included. A
+  // rejected provider switch is rolled back to it.
+  const acceptedModelSelections = new Map<ThreadId, ModelSelection>();
   const compactingThreadIds = new Set<ThreadId>();
   type QueuedTurnStart = Extract<ProviderIntentEvent, { type: "thread.turn-start-requested" }>;
   // Turn starts received while a thread compacts, replayed in order once its session is restored.
@@ -925,21 +928,42 @@ const make = Effect.gen(function* () {
       requestedModelSelection !== undefined &&
       requestedModelSelection.instanceId !== currentInstanceId
     ) {
-      if (currentInfo.driverKind !== desiredInfo.driverKind) {
+      const incompatibleSwitchDetail =
+        currentInfo.driverKind !== desiredInfo.driverKind
+          ? `Thread '${threadId}' is bound to driver '${currentInfo.driverKind}' and cannot switch to '${desiredInfo.driverKind}'.`
+          : currentInfo.continuationIdentity.continuationKey !==
+              desiredInfo.continuationIdentity.continuationKey
+            ? `Thread '${threadId}' cannot switch from instance '${currentInstanceId}' to '${desiredInstanceId}' because their provider resume state is incompatible.`
+            : null;
+      if (incompatibleSwitchDetail !== null) {
+        // The client persists its selection before the turn starts. A rejected switch must
+        // not stay on the thread, or every later turn that inherits it fails the same way.
+        // Re-read last, so a selection persisted since this turn was requested is not overwritten.
+        const rollbackCommandId = yield* serverCommandId("rejected-provider-switch-rollback");
+        const latestSelection = (yield* resolveThreadShell(threadId))?.modelSelection;
+        const boundModel = activeSession?.model;
+        if (
+          boundModel &&
+          latestSelection?.instanceId === desiredInstanceId &&
+          latestSelection.model === desiredModelSelection.model
+        ) {
+          const accepted = acceptedModelSelections.get(threadId);
+          yield* orchestrationEngine
+            .dispatch({
+              type: "thread.meta.update",
+              commandId: rollbackCommandId,
+              threadId,
+              modelSelection:
+                accepted?.instanceId === currentInstanceId && accepted.model === boundModel
+                  ? accepted
+                  : { instanceId: currentInstanceId, model: boundModel },
+            })
+            .pipe(Effect.ignoreCause({ log: true }));
+        }
         return yield* new ProviderAdapterRequestError({
           provider: preferredProvider,
           method: "thread.turn.start",
-          detail: `Thread '${threadId}' is bound to driver '${currentInfo.driverKind}' and cannot switch to '${desiredInfo.driverKind}'.`,
-        });
-      }
-      if (
-        currentInfo.continuationIdentity.continuationKey !==
-        desiredInfo.continuationIdentity.continuationKey
-      ) {
-        return yield* new ProviderAdapterRequestError({
-          provider: preferredProvider,
-          method: "thread.turn.start",
-          detail: `Thread '${threadId}' cannot switch from instance '${currentInstanceId}' to '${desiredInstanceId}' because their provider resume state is incompatible.`,
+          detail: incompatibleSwitchDetail,
         });
       }
     }
@@ -1160,12 +1184,15 @@ const make = Effect.gen(function* () {
         : input.modelSelection;
 
     return {
-      threadId: input.threadId,
-      ...(effectiveInput ? { input: effectiveInput } : {}),
-      ...(normalizedAttachments.length > 0 ? { attachments: normalizedAttachments } : {}),
-      ...(modelForTurn !== undefined ? { modelSelection: modelForTurn } : {}),
-      ...(input.interactionMode !== undefined ? { interactionMode: input.interactionMode } : {}),
-      ...(input.turnOrigin !== undefined ? { turnOrigin: input.turnOrigin } : {}),
+      request: {
+        threadId: input.threadId,
+        ...(effectiveInput ? { input: effectiveInput } : {}),
+        ...(normalizedAttachments.length > 0 ? { attachments: normalizedAttachments } : {}),
+        ...(modelForTurn !== undefined ? { modelSelection: modelForTurn } : {}),
+        ...(input.interactionMode !== undefined ? { interactionMode: input.interactionMode } : {}),
+        ...(input.turnOrigin !== undefined ? { turnOrigin: input.turnOrigin } : {}),
+      },
+      modelSelection: modelForTurn ?? requestedModelSelection,
     };
   });
 
@@ -1828,9 +1855,14 @@ const make = Effect.gen(function* () {
       return;
     }
 
-    const send = providerService
-      .sendTurn(sendTurnRequest.value)
-      .pipe(Effect.asVoid, Effect.catchCause(recoverTurnStartFailure));
+    const { request, modelSelection: turnModelSelection } = sendTurnRequest.value;
+    const send = providerService.sendTurn(request).pipe(
+      Effect.tap(() =>
+        Effect.sync(() => acceptedModelSelections.set(request.threadId, turnModelSelection)),
+      ),
+      Effect.asVoid,
+      Effect.catchCause(recoverTurnStartFailure),
+    );
     // The forked send settles `sent` from here on, so drop the entry the post-processing hook uses.
     if (resumed && event.commandId !== null) resumedTurnStarts.delete(event.commandId);
     yield* send.pipe(

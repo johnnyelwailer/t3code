@@ -101,7 +101,11 @@ export function createAskVerb(deps: {
         kind,
         refId: kind,
         args: payload,
-        fire: fireEnvelope(kind, payload),
+        // Host defaults keep their historical journal shape, but are not author overrides.
+        fire: fireEnvelope(kind, {
+          ...payload,
+          ...(model !== undefined && opts?.model === undefined ? { modelIsDefault: true } : {}),
+        }),
       });
       const reply = await deps.dispatch.awaitResolution<unknown>(correlationId, undefined);
       if (schema === undefined) return String(reply) as R;

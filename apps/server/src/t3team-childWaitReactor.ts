@@ -44,11 +44,7 @@ import {
 } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { type OrchestrationEventStoreError } from "./persistence/Errors.ts";
 import { readEventsMatching } from "./orchestration/t3team-eventReplayFilter.ts";
-import {
-  collectPendingChildWaits,
-  PENDING_CHILD_WAIT_REPLAY_FILTERS,
-  type ChildWaitRecord,
-} from "./t3team-childWait.ts";
+import { collectPendingChildWaits, PENDING_CHILD_WAIT_REPLAY_FILTERS } from "./t3team-childWait.ts";
 import { makeAbnormalStopGuards } from "./t3team-childAbnormalStopDedup.ts";
 import { makeChildCompletionQuiet } from "./t3team-childCompletionQuiet.ts";
 import { makeChildWaitEventRouter } from "./t3team-childWaitEventRouter.ts";
@@ -60,10 +56,16 @@ import {
 } from "./t3team-childWaitScheduler.ts";
 import { makeResolveWait } from "./t3team-childWaitResolve.ts";
 import { makeChildWaitTerminal } from "./t3team-childWaitTerminal.ts";
+import { ProviderRegistry } from "./provider/Services/ProviderRegistry.ts";
+import {
+  makeProviderUsageNotificationLine,
+  type ProviderUsageNotificationReader,
+} from "./t3team-providerUsageNotification.ts";
 
 export interface ChildWaitReactorDeps {
   readonly engine: OrchestrationEngineShape;
   readonly query: ProjectionSnapshotQueryShape;
+  readonly usageLine?: ProviderUsageNotificationReader;
   /** One clock for the wait-deadline scheduler and the completion quiet gate. */
   readonly clock?: ChildWaitClock;
   /** Override the default completion quiet period (tests drive it deterministically). */
@@ -89,7 +91,13 @@ export function makeChildWaitReactor(deps: ChildWaitReactorDeps): ChildWaitReact
   const index = makeChildWaitIndex();
   let scheduler: ChildWaitScheduler;
   const rearm = () => scheduler.rearm();
-  const resolveWait = makeResolveWait({ engine, query, index, rearm });
+  const resolveWait = makeResolveWait({
+    engine,
+    query,
+    index,
+    rearm,
+    ...(deps.usageLine ? { usageLine: deps.usageLine } : {}),
+  });
   const {
     noteResume,
     notifyAbnormalStop,
@@ -98,6 +106,7 @@ export function makeChildWaitReactor(deps: ChildWaitReactorDeps): ChildWaitReact
   } = makeAbnormalStopGuards({
     engine,
     query,
+    ...(deps.usageLine ? { usageLine: deps.usageLine } : {}),
   });
   const { resolveChildOutcome, notifyTerminalIfNoWait } = makeChildWaitTerminal({
     index,
@@ -193,7 +202,12 @@ export const T3TeamChildWaitReactorLive = Layer.effectDiscard(
   Effect.gen(function* () {
     const engine = yield* OrchestrationEngineService;
     const query = yield* ProjectionSnapshotQuery;
-    const reactor = makeChildWaitReactor({ engine, query });
+    const registry = yield* ProviderRegistry;
+    const reactor = makeChildWaitReactor({
+      engine,
+      query,
+      usageLine: makeProviderUsageNotificationLine({ query, registry }),
+    });
     yield* reactor.rehydrate;
     yield* reactor.startEventStream();
     yield* Effect.addFinalizer(() => Effect.sync(() => reactor.stop()));

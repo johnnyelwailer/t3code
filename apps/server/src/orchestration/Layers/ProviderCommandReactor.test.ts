@@ -3961,6 +3961,82 @@ describe("ProviderCommandReactor", () => {
     });
   });
 
+  it("rolls back a persisted selection whose driver switch was rejected", async () => {
+    const acceptedSelection = {
+      instanceId: ProviderInstanceId.make("codex"),
+      model: "gpt-5-codex",
+      options: [{ id: "reasoningEffort", value: "high" }],
+    };
+    const harness = await createHarness({ threadModelSelection: acceptedSelection });
+    const now = "2026-01-01T00:00:00.000Z";
+    const threadId = ThreadId.make("thread-1");
+    const readThread = async () =>
+      (await harness.readModel()).threads.find((entry) => entry.id === threadId);
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-rollback-1"),
+        threadId,
+        message: {
+          messageId: asMessageId("user-message-rollback-1"),
+          role: "user",
+          text: "first",
+          attachments: [],
+        },
+        // No explicit selection: the turn inherits the thread's, options included.
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+
+    // The web client persists its selection before it requests the turn.
+    const rejectedSelection = {
+      instanceId: ProviderInstanceId.make("claudeAgent"),
+      model: "claude-opus-4-6",
+    };
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.meta.update",
+        commandId: CommandId.make("cmd-meta-update-rollback"),
+        threadId,
+        modelSelection: rejectedSelection,
+      }),
+    );
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-rollback-2"),
+        threadId,
+        message: {
+          messageId: asMessageId("user-message-rollback-2"),
+          role: "user",
+          text: "second",
+          attachments: [],
+        },
+        modelSelection: rejectedSelection,
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(
+      async () =>
+        (await readThread())?.activities.some(
+          (activity) => activity.kind === "provider.turn.start.failed",
+        ) ?? false,
+    );
+    const thread = await readThread();
+    expect(thread?.modelSelection).toEqual(acceptedSelection);
+    expect(
+      thread?.activities.find((activity) => activity.kind === "provider.turn.start.failed"),
+    ).toMatchObject({ payload: { detail: expect.stringContaining("cannot switch to") } });
+    expect(harness.sendTurn.mock.calls.length).toBe(1);
+  });
+
   it("rejects cross-driver provider changes after the existing thread session has stopped", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";

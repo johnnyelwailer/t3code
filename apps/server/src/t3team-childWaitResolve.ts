@@ -34,12 +34,14 @@ import {
   type ChildWaitRecord,
 } from "./t3team-childWait.ts";
 import { type ChildWaitIndex } from "./t3team-childWaitIndex.ts";
+import type { ProviderUsageNotificationReader } from "./t3team-providerUsageNotification.ts";
 
 export interface ChildWaitResolveDeps {
   readonly engine: OrchestrationEngineShape;
   readonly query: ProjectionSnapshotQueryShape;
   readonly index: ChildWaitIndex;
   readonly rearm: () => Promise<void>;
+  readonly usageLine?: ProviderUsageNotificationReader;
 }
 
 export type ResolveWait = (
@@ -51,6 +53,8 @@ export const makeResolveWait =
   (deps: ChildWaitResolveDeps): ResolveWait =>
   (record, outcome) =>
     Effect.gen(function* () {
+      // Claim synchronously before any reads or usage refresh can yield to the deadline timer.
+      if (!deps.index.remove(record.waitId)) return;
       const outcomeLabel = outcome === "timeout" ? "timed out" : `reached ${outcome}`;
       const nowIso = DateTime.formatIso(DateTime.nowUnsafe());
       // The child's project (children always live in the parent's project) and
@@ -76,7 +80,16 @@ export const makeResolveWait =
         `[Child wait ${outcomeLabel}] You were waiting (wait ${record.waitId}) on ` +
         `child «${fromTitle}» (thread ${record.childThreadId}); it ${outcomeLabel}.` +
         (detail ? ` ${detail}.` : "") +
-        ` Continue with the result.`;
+        ` Continue with the result.` +
+        (outcome === "timeout"
+          ? ""
+          : yield* (
+              deps.usageLine?.({
+                provider: child?.modelSelection?.instanceId,
+                parentThreadId: record.parentThreadId,
+                projectId: String(fromProjectId),
+              }) ?? Effect.succeed("")
+            ));
       yield* deps.engine
         .dispatch({
           type: "thread.actor.message",
@@ -124,6 +137,5 @@ export const makeResolveWait =
             }),
           ),
         );
-      deps.index.remove(record.waitId);
       yield* Effect.promise(() => deps.rearm());
     });
