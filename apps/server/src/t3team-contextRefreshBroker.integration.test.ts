@@ -13,7 +13,7 @@ import {
   registerContextRefreshTestCleanup,
   writeContextRefreshTestJson,
 } from "./t3team-contextRefreshTestFixtures.ts";
-import { buildJiraTicketEntryPoint } from "@t3tools/project-context/t3teamContextPaths";
+import { buildJiraTicketEntryPoint, T3TEAM_PROJECT_CONTEXT_ROOT, T3TEAM_WORK_ITEMS_INDEX_PATH } from "@t3tools/project-context/t3teamContextPaths";
 
 registerContextRefreshTestCleanup();
 
@@ -149,17 +149,17 @@ describe("T3TeamToolBroker refresh_context_bundle integration", () => {
 
   it("resolves bound thread context displayId when refresh_context_bundle omits ticket_key", async () => {
     const { root, project } = makeContextRefreshTestWorkspace();
-    writeContextRefreshTestJson(root, ".t3team/context/work-items/ac-91.json", {
+    writeContextRefreshTestJson(root, `${T3TEAM_PROJECT_CONTEXT_ROOT}/work-items/ac-91.json`, {
       ticket: {
         id: "10001",
         ref: { id: "10001", displayId: "AC-91" },
       },
     });
-    writeContextRefreshTestJson(root, ".t3team/context/work-items/index.json", {
+    writeContextRefreshTestJson(root, T3TEAM_WORK_ITEMS_INDEX_PATH, {
       workItems: [
         {
           key: "ac-91",
-          relativePath: ".t3team/context/work-items/ac-91.json",
+          relativePath: `${T3TEAM_PROJECT_CONTEXT_ROOT}/work-items/ac-91.json`,
           ticketEntryPointRelativePath: buildJiraTicketEntryPoint(project.id, "ac-91"),
         },
       ],

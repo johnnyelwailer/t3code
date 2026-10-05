@@ -13,6 +13,7 @@ import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+import { HIDDEN_T3TEAM_DIR } from "../t3team-project-repository-utils.ts";
 import type {
   OrchestrationProjectShell,
   ProjectId,
@@ -5585,14 +5586,14 @@ const encodeLinkedRepositoryContext = Schema.encodeSync(
   Schema.fromJsonString(LinkedRepositoryContextFixtureJson),
 );
 
-/** A real directory whose `.t3team/context/linked-repositories.json` carries the given URLs. */
+/** A real directory whose `${HIDDEN_T3TEAM_DIR}/context/linked-repositories.json` carries the given URLs. */
 const workspaceWithLinkedRepositories = (urls: ReadonlyArray<string> | null) =>
   Effect.gen(function* () {
     const path = yield* Path.Path;
     const fs = yield* FileSystem.FileSystem;
     const root = yield* fs.makeTempDirectory({ prefix: "t3-pr-linked-repos-" });
     if (urls !== null) {
-      const dir = path.join(root, ".t3team", "context");
+      const dir = path.join(root, HIDDEN_T3TEAM_DIR, "context");
       yield* fs.makeDirectory(dir, { recursive: true });
       yield* fs.writeFileString(
         path.join(dir, "linked-repositories.json"),

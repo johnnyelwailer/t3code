@@ -21,6 +21,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { discoverProjectRecipes } from "./t3team-projectRecipeDiscovery.ts";
 import { backlogRenderContext } from "./t3team-projectRecipeRenderContext.fixtures.ts";
+import { HIDDEN_T3TEAM_DIR } from "./t3team-project-repository-utils.ts";
 
 const fixturesRoot = NodeURL.fileURLToPath(new URL("../__fixtures__/", import.meta.url));
 
@@ -37,7 +38,7 @@ const writeRecipe = Effect.fn("writeRecipe")(function* (input: {
 }) {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const recipeRoot = path.join(input.workspaceRoot, ".t3team/recipes", input.id);
+  const recipeRoot = path.join(input.workspaceRoot, `${HIDDEN_T3TEAM_DIR}/recipes`, input.id);
   yield* fileSystem.makeDirectory(recipeRoot, { recursive: true });
   yield* fileSystem.writeFileString(
     path.join(recipeRoot, "main.workflow.ts"),

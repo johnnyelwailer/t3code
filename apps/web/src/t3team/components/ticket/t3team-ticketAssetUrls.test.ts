@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
+import { buildJiraTicketAttachmentAssetPath } from "@t3tools/project-context/t3teamContextPaths";
 import { createJiraTicketAssetUrlResolver } from "./t3team-ticketAssetUrls";
+
+const ASSET_RELATIVE_PATH = buildJiraTicketAttachmentAssetPath({
+  projectId: "project-alpha",
+  ticketKey: "PROJ-7",
+  attachmentId: "34816",
+  filename: "image-20260226-084855.png",
+});
 
 describe("createJiraTicketAssetUrlResolver", () => {
   it("rewrites matching Jira attachment URLs to the local-first asset content route", () => {
@@ -32,9 +40,7 @@ describe("createJiraTicketAssetUrlResolver", () => {
     expect(fromAbsolute.searchParams.get("url")).toBe(
       "https://nexwork.atlassian.net/rest/api/3/attachment/content/34816",
     );
-    expect(fromAbsolute.searchParams.get("relativePath")).toBe(
-      ".t3team/context/jira/project-alpha/items/proj-7/attachments/files/34816-image-20260226-084855.png",
-    );
+    expect(fromAbsolute.searchParams.get("relativePath")).toBe(ASSET_RELATIVE_PATH);
 
     const fromRelativeThumbnail = new URL(
       resolveAssetUrl!("/rest/api/3/attachment/thumbnail/34816"),
@@ -43,9 +49,7 @@ describe("createJiraTicketAssetUrlResolver", () => {
     expect(fromRelativeThumbnail.searchParams.get("url")).toBe(
       "https://nexwork.atlassian.net/rest/api/3/attachment/content/34816",
     );
-    expect(fromRelativeThumbnail.searchParams.get("relativePath")).toBe(
-      ".t3team/context/jira/project-alpha/items/proj-7/attachments/files/34816-image-20260226-084855.png",
-    );
+    expect(fromRelativeThumbnail.searchParams.get("relativePath")).toBe(ASSET_RELATIVE_PATH);
   });
 
   it("leaves unrelated URLs unchanged", () => {
