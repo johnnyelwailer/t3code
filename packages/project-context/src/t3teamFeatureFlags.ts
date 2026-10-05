@@ -28,7 +28,7 @@ export function replaceFeatureFlagDatabaseValues(
   for (const [key, enabled] of values) databaseValues.set(key, enabled);
 }
 
-const EXPLICIT_FLAG_OFF = new Set(["0", "false", "off"]);
+const EXPLICIT_FLAG_OFF = ["0", "false", "off"];
 const EXPLICIT_FLAG_ON = ["1", "true", "on"];
 
 /** NEXI_FF_<KEY> > feature_flags row > registered code default (on).
@@ -41,7 +41,7 @@ export function readFeatureFlag(
   const raw = readEnv(`NEXI_FF_${key}`);
   if (raw !== undefined) {
     const normalized = raw.trim().toLowerCase();
-    if (EXPLICIT_FLAG_OFF.has(normalized)) return false;
+    if (EXPLICIT_FLAG_OFF.includes(normalized)) return false;
     if (EXPLICIT_FLAG_ON.includes(normalized)) return true;
   }
   return databaseValues.get(key) ?? FEATURE_FLAG_DEFINITIONS[key].defaultEnabled;
