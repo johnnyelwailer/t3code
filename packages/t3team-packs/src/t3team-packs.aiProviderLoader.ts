@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - loads provider definitions from the real filesystem.
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @effect-diagnostics nodeBuiltinImport:off globalConsole:off - dev CLI: spawns the dev stack as a Node subprocess; stdout/stderr are its operator contract.
 /**
  * dev-nexi — start the dev stack with the full Nexi distribution.
  *
