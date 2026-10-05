@@ -60,21 +60,21 @@ const fail = (operation: string) => (cause: unknown) =>
   new T3TeamChildThreadMetadataError({ operation, cause });
 
 /**
- * The `skills` column is a JSON array of the requested names. A malformed row means the
- * table was written outside this host (or corrupted): raise, never return a lie.
+ * The `skills` column is a JSON string of the requested names (an array of strings).
+ * A malformed row means the table was written outside this host (or corrupted):
+ * raise, never return a lie.
  */
+const SkillsJsonString = Schema.fromJsonString(Schema.Array(Schema.String));
+const decodeSkillsJsonString = Schema.decodeSync(SkillsJsonString);
+const encodeSkillsJsonString = Schema.encodeSync(SkillsJsonString);
+
 const parseSkillsColumn = (raw: string | null): ReadonlyArray<string> | null => {
   if (raw === null) return null;
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(raw);
+    return decodeSkillsJsonString(raw);
   } catch (cause) {
     throw new T3TeamChildThreadMetadataError({ operation: "listByChildThreadIds", cause });
   }
-  if (!Array.isArray(parsed) || parsed.some((entry) => typeof entry !== "string")) {
-    throw new T3TeamChildThreadMetadataError({ operation: "listByChildThreadIds", cause: raw });
-  }
-  return parsed;
 };
 
 const make = Effect.gen(function* () {
@@ -88,9 +88,11 @@ const make = Effect.gen(function* () {
           (child_thread_id, parent_thread_id, placement_thread_id, ticket_id, skills, created_at)
         VALUES (${input.childThreadId}, ${input.parentThreadId},
           ${input.placementThreadId ?? null}, ${input.ticketId ?? null},
-          ${input.skills === undefined || input.skills === null
-            ? null
-            : JSON.stringify(input.skills)}, ${createdAt})
+          ${
+            input.skills === undefined || input.skills === null
+              ? null
+              : encodeSkillsJsonString(input.skills)
+          }, ${createdAt})
         ON CONFLICT (child_thread_id) DO UPDATE SET
           parent_thread_id = excluded.parent_thread_id,
           placement_thread_id = excluded.placement_thread_id,
@@ -104,7 +106,14 @@ const make = Effect.gen(function* () {
   ) =>
     childThreadIds.length === 0
       ? Effect.succeed([])
-      : sql<{ readonly childThreadId: string; readonly parentThreadId: string; readonly placementThreadId: string | null; readonly ticketId: string | null; readonly skills: string | null; readonly createdAt: string }>`
+      : sql<{
+          readonly childThreadId: string;
+          readonly parentThreadId: string;
+          readonly placementThreadId: string | null;
+          readonly ticketId: string | null;
+          readonly skills: string | null;
+          readonly createdAt: string;
+        }>`
           SELECT child_thread_id AS "childThreadId", parent_thread_id AS "parentThreadId",
             placement_thread_id AS "placementThreadId", ticket_id AS "ticketId",
             skills, created_at AS "createdAt"
