@@ -464,6 +464,34 @@ const T3TeamRecipeValidateTool = Tool.make("t3team_recipe_validate", {
   dependencies,
 });
 
+// Read the skill names this thread's delegate_task requested (skills-as-subagents Phase 1):
+// the child's driver calls it at session start, then resolves the names, bodies and
+// allowed-tools from the PACK's skill registry. The host persists REQUESTED names only
+// (it does not know the skill catalog — no second catalog), so nothing is resolved here.
+// Clean empty result for threads without skill delegation: the driver's soft-fail yields
+// today's behavior.
+const T3TeamThreadSkillMetadataTool = Tool.make("t3team_thread_skill_metadata", {
+  description:
+    "Read the skill names this thread's delegate_task requested. Call it at session start " +
+    "with this thread's own id to get { skills: string[] } — the REQUESTED skill names to " +
+    "resolve against your skill registry (bodies, allowed-tools). An empty array means this " +
+    "thread was not started with skill delegation. The host stores requested names only, so " +
+    "resolve names, bodies and allowed tools yourself; an unresolvable name is a driver-level " +
+    "error that enumerates the available skills.",
+  parameters: Schema.Struct({
+    threadId: Schema.optional(Schema.String).annotate({
+      description: "Thread to read; defaults to this thread. Pass the child thread's own id.",
+    }),
+  }),
+  success: Schema.Struct({
+    skills: Schema.Array(Schema.String).annotate({
+      description: "Requested skill names; empty when this thread has no skill delegation.",
+    }),
+  }),
+  failure: T3TeamMcpToolError,
+  dependencies: [McpInvocationContext.McpInvocationContext],
+});
+
 export const T3TeamToolkit = Toolkit.make(
   T3TeamProviderUsageTool,
   T3TeamSearchThreadTool,
@@ -479,4 +507,5 @@ export const T3TeamToolkit = Toolkit.make(
   T3TeamShowWidgetTool,
   T3TeamRecipeListTool,
   T3TeamRecipeValidateTool,
+  T3TeamThreadSkillMetadataTool,
 );

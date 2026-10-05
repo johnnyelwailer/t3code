@@ -1,8 +1,8 @@
 /**
  * This host's delegate_task preparation hook (`mcp/t3team-delegatedTaskPreparation.ts`):
  * worktree isolation (linked repo, meta-repo or local repository, plus the project setup
- * script) and the `effort` / `ticketId` / `environment` extensions. Provided once to
- * `McpHttpServer.layer` in server.ts. Side effects after the child exists (`afterCreate`)
+ * script) and the `effort` / `ticketId` / `environment` / `skills` extensions. Provided once
+ * to `McpHttpServer.layer` in server.ts. Side effects after the child exists (`afterCreate`)
  * never fail the delegation: each one degrades to a note in the tool result.
  */
 import { OrchestratorMcpFailure, type ThreadId } from "@t3tools/contracts";
@@ -135,6 +135,7 @@ const make = Effect.gen(function* () {
               title: input.title,
               ticketId: extensions.ticketId,
               environment: environment.binding,
+              skills: extensions.skills,
             });
             if (workspace === undefined) return childNotes;
             const setup = yield* startChildSetupScript({
