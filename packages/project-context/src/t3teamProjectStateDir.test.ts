@@ -65,5 +65,14 @@ describe("project state dir resolver", () => {
       "/ws/.t3team-runs/r/workflow.ts",
     );
     expect(toPhysicalProjectStatePath("/ws/my.t3team/x", ".nexi")).toBe("/ws/my.t3team/x");
+    // An unrelated ANCESTOR directory named .t3team (e.g. this app's own child-worktree roots)
+    // is not the state dir: already-physical paths pass through, and the state-dir segment wins
+    // over an ancestor of the same name.
+    expect(
+      toPhysicalProjectStatePath("/anc/.t3team/worktrees/ws/.nexi/recipes/r/plan.workflow.ts", ".nexi"),
+    ).toBe("/anc/.t3team/worktrees/ws/.nexi/recipes/r/plan.workflow.ts");
+    expect(
+      toPhysicalProjectStatePath("/anc/.t3team/worktrees/ws/.t3team/recipes/r/plan.workflow.ts", ".nexi"),
+    ).toBe("/anc/.t3team/worktrees/ws/.nexi/recipes/r/plan.workflow.ts");
   });
 });

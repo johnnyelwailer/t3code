@@ -46,21 +46,30 @@ export function isNexiStateDirSelectedAtStartup(): boolean {
   return PROJECT_STATE_DIR === NEXI_PROJECT_STATE_DIR;
 }
 
-const CANONICAL_STATE_DIR_SEGMENT = /(^|[\\/])\.t3team(?=[\\/]|$)/;
+const CANONICAL_STATE_DIR_SEGMENT = /(^|[\\/])\.t3team(?=[\\/]|$)/g;
+const PHYSICAL_STATE_DIR_SEGMENT = /(^|[\\/])\.nexi(?=[\\/]|$)/;
 
 /** Maps a path addressed with the canonical state dir name onto the physical one: a
  * workspace-relative path (`.t3team/recipes/x`) or an absolute one (`/ws/.t3team/recipes/x`).
- * Only the first whole `.t3team` segment is mapped, so `.t3team-runs/` and paths outside the
- * state dir (and already-physical paths) pass through unchanged. */
+ * The LAST whole `.t3team` segment is the state dir being addressed, so unrelated ancestor
+ * directories that happen to be named `.t3team` (for example this app's own child-worktree
+ * roots) are left alone when the path already contains a whole `.nexi` segment after them.
+ * `.t3team-runs/` and paths without a state dir (and already-physical paths) pass through
+ * unchanged. */
 export function toPhysicalProjectStatePath(
   statePath: string,
   stateDirName: string = PROJECT_STATE_DIR,
 ): string {
   if (stateDirName === T3TEAM_PROJECT_STATE_DIR) return statePath;
   const normalized = statePath.replace(/^\.\/+/, "");
-  if (!CANONICAL_STATE_DIR_SEGMENT.test(normalized)) return statePath;
-  return normalized.replace(
-    CANONICAL_STATE_DIR_SEGMENT,
-    (_match, separator: string) => `${separator}${stateDirName}`,
+  const matches = [...normalized.matchAll(CANONICAL_STATE_DIR_SEGMENT)];
+  if (matches.length === 0) return statePath;
+  const last = matches[matches.length - 1]!;
+  const tail = normalized.slice(last.index! + last[0].length);
+  if (PHYSICAL_STATE_DIR_SEGMENT.test(tail)) return statePath;
+  return (
+    normalized.slice(0, last.index! + (last[1]?.length ?? 0)) +
+    stateDirName +
+    tail
   );
 }
