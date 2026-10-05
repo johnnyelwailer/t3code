@@ -268,9 +268,7 @@ export const make = Effect.gen(function* () {
         ...(payload.autoPull === undefined ? {} : { autoPull: payload.autoPull }),
         ...(payload.faviconPath === undefined ? {} : { faviconPath: payload.faviconPath }),
         ...(payload.projectIcon === undefined ? {} : { projectIcon: payload.projectIcon }),
-        ...(payload.mainRepository === undefined
-          ? {}
-          : { mainRepository: payload.mainRepository }),
+        ...(payload.mainRepository === undefined ? {} : { mainRepository: payload.mainRepository }),
         ...(payload.scripts === undefined ? {} : { scripts: payload.scripts }),
         updatedAt: payload.updatedAt,
       }).pipe(mapError("apply"));
