@@ -200,6 +200,18 @@ const cases: ReadonlyArray<{ readonly event: ProviderRuntimeEvent; readonly deci
       { toolCall: { toolCallId: "call-3", title: "Edit secret.ts", kind: "edit" } },
     ),
   },
+  {
+    // A terminal call whose CLI-generated title equals an allowlisted tool name is still exec.
+    decision: "decline",
+    event: opened(
+      "cursor-exec-spoofed-title",
+      "cursor",
+      "command_execution_approval",
+      "acp.jsonrpc",
+      "session/request_permission",
+      { toolCall: { toolCallId: "call-4", title: "t3team_recipe_validate", kind: "execute" } },
+    ),
+  },
 ];
 
 const engine = {

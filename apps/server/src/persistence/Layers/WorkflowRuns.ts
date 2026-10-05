@@ -566,9 +566,7 @@ const makeWorkflowRunRepository = Effect.gen(function* () {
 
   const listLiveByLaunchThread: WorkflowRunRepositoryShape["listLiveByLaunchThread"] = (input) =>
     listLiveWorkflowRunsByLaunchThread(input).pipe(
-      Effect.mapError(
-        toPersistenceSqlError("WorkflowRunRepository.listLiveByLaunchThread:query"),
-      ),
+      Effect.mapError(toPersistenceSqlError("WorkflowRunRepository.listLiveByLaunchThread:query")),
     );
 
   const countLiveByOrigin: WorkflowRunRepositoryShape["countLiveByOrigin"] = (input) =>

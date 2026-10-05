@@ -49,9 +49,7 @@ export function buildPreparedWorkflowLifecycle(input: {
       // with no intent) leaves the column NULL — the domain field is optional, not defaulted, so
       // "never given one" and "given an empty one" stay distinguishable.
       ...(run.intent === undefined ? {} : { intent: run.intent }),
-      ...(run.origin === "ephemeral"
-        ? { status: input.initialStatus ?? ("queued" as const) }
-        : {}),
+      ...(run.origin === "ephemeral" ? { status: input.initialStatus ?? ("queued" as const) } : {}),
     },
     nowIso,
     onSleep: () => {

@@ -37,6 +37,14 @@ const CLAUDE_T3_TOOL_PREFIX = `mcp__${T3_MCP_SERVER_NAME}__`;
 const MCP_BROKER_ID: Readonly<Record<string, string>> = T3TEAM_MCP_CANONICAL_TOOL_MAP;
 const MCP_ALIAS: Readonly<Record<string, string>> = T3TEAM_MCP_DEPRECATED_TOOL_ALIASES;
 const AUTHOR_BROKER_IDS: ReadonlySet<string> = new Set(WORKFLOW_AUTHOR_TOOL_IDS);
+/** ACP `ToolKind`s that run commands, change files or reach the network. */
+const ACP_NON_AUTHOR_TOOL_KINDS: ReadonlySet<string> = new Set([
+  "execute",
+  "edit",
+  "delete",
+  "move",
+  "fetch",
+]);
 
 const brokerIdForMcpName = (mcpName: string): string | undefined => {
   const canonicalName = MCP_ALIAS[mcpName] ?? mcpName;
@@ -81,7 +89,12 @@ const authorOwnsOpenedRequest = (
     return isAuthorToolName(readString(args.tool));
   }
   if (method === "session/request_permission") {
-    return isAuthorToolName(readString(readRecord(args.toolCall)?.title));
+    // The ACP title is CLI-generated and may carry command text, so a matching title is not
+    // enough: a call the protocol classifies as exec/write/network is never the author's tool.
+    const toolCall = readRecord(args.toolCall);
+    const kind = readString(toolCall?.kind);
+    if (kind !== undefined && ACP_NON_AUTHOR_TOOL_KINDS.has(kind)) return false;
+    return isAuthorToolName(readString(toolCall?.title));
   }
   return false;
 };
