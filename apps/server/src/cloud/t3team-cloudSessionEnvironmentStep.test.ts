@@ -46,6 +46,7 @@ const inProgressRun: WorkflowRunSummary = {
   updatedAt: "2026-09-27T10:03:00Z",
   htmlUrl: "https://ghe.example/hive/nx-nexi/actions/runs/42",
   name: "nexi-session [s1]",
+  actor: "pj",
 };
 
 const step = (name: string, status = "completed", conclusion: string | null = "success") => ({
