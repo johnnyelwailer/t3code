@@ -136,10 +136,20 @@ export const runT3TeamServerCommand = (
         try: () => loadPackAccounts(packDiagnostic),
         catch: (cause) => new WorkspacePackLoadError({ cause }),
       }).pipe(
-        // Added to the compiled-in distribution's accounts; a duplicate id rejects the whole set.
+        // Added to the compiled-in distribution's accounts, which win on a shared id.
         Effect.tap((accounts) =>
-          Effect.sync(() => {
-            if (accounts.length > 0) setPackAccounts([...packAccounts(), ...accounts]);
+          Effect.gen(function* () {
+            const taken = new Set(packAccounts().map((account) => account.id));
+            const added = accounts.filter((account) => !taken.has(account.id));
+            for (const skipped of accounts.filter((account) => taken.has(account.id))) {
+              yield* Effect.logWarning(
+                "Workspace pack account skipped: the id is already defined",
+                {
+                  account: skipped.id,
+                },
+              );
+            }
+            if (added.length > 0) setPackAccounts([...packAccounts(), ...added]);
           }),
         ),
         Effect.catch((cause) =>

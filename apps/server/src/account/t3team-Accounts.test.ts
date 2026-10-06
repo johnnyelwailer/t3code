@@ -448,4 +448,27 @@ it.layer(NodeServices.layer)("Accounts", (it) => {
       assert.isFalse(fake.requests.some((r) => r.path.endsWith("/devicecode")));
     }).pipe(Effect.provide(accountsWith(fake, memorySecrets(), noBrowser, [{ ...ACME, issuer }])));
   });
+
+  it.effect("a restart still knows who is signed in, before any token is minted", () => {
+    const fake: IssuerFake = {
+      requests: [],
+      tokenReplies: [
+        {
+          status: 200,
+          body: { access_token: accessTokenFor("PJ"), refresh_token: "rt-2", expires_in: 3600 },
+        },
+      ],
+    };
+    const secrets = memorySecrets({ [SECRET]: "rt-1" });
+    return Effect.gen(function* () {
+      yield* acme.pipe(
+        Effect.flatMap((first) => first.accessToken),
+        Effect.provide(accountsWith(fake, secrets)),
+      );
+      const restarted = yield* acme.pipe(Effect.provide(accountsWith(fake, secrets)));
+      assert.deepEqual((yield* restarted.status).auth, { _tag: "SignedIn", name: "PJ" });
+      yield* restarted.signOut;
+      assert.equal(secrets.read("account.acme.name"), undefined);
+    });
+  });
 });

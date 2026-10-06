@@ -36,8 +36,17 @@ export const makeAccountTokenStore = Effect.fn("account.tokens.make")(function* 
   secrets: ServerSecretStore.ServerSecretStore["Service"],
 ) {
   const secretName = `account.${accountId}.refresh-token`;
+  /** Kept beside the grant so a restart still shows who is signed in before any token is minted. */
+  const nameSecret = `account.${accountId}.name`;
   const cached = yield* Ref.make(new Map<string, CachedAccess>());
-  const name = yield* Ref.make<string | null>(null);
+  const name = yield* Ref.make<string | null>(
+    Option.getOrNull(
+      Option.map(
+        yield* secrets.get(nameSecret).pipe(Effect.orElseSucceed(() => Option.none())),
+        (bytes) => new TextDecoder().decode(bytes),
+      ),
+    ),
+  );
 
   const grant = secrets.get(secretName).pipe(
     Effect.map(Option.map((bytes) => new TextDecoder().decode(bytes))),
@@ -55,7 +64,10 @@ export const makeAccountTokenStore = Effect.fn("account.tokens.make")(function* 
       new Map(map).set(resource, { token: body.access_token, expiresAtMs }),
     );
     const named = nameOf(body.access_token);
-    if (named !== null) yield* Ref.set(name, named);
+    if (named !== null && named !== (yield* Ref.get(name))) {
+      yield* Ref.set(name, named);
+      yield* secrets.set(nameSecret, new TextEncoder().encode(named)).pipe(Effect.ignore);
+    }
     return body.access_token;
   });
 
@@ -77,6 +89,7 @@ export const makeAccountTokenStore = Effect.fn("account.tokens.make")(function* 
 
   const clear = Effect.gen(function* () {
     yield* secrets.remove(secretName).pipe(Effect.ignore);
+    yield* secrets.remove(nameSecret).pipe(Effect.ignore);
     yield* Ref.set(cached, new Map());
     yield* Ref.set(name, null);
   });
