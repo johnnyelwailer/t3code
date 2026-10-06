@@ -11,7 +11,11 @@ import * as Option from "effect/Option";
 
 import { Accounts } from "../account/t3team-Accounts.ts";
 import { BROKER_RESOURCE, resolveNexiBrokerConfig } from "./t3team-NexiBrokerConfig.ts";
-import { makeNexiBrokerClient } from "./t3team-NexiBrokerClient.ts";
+import {
+  type BrokerSession,
+  makeNexiBrokerClient,
+  type StandbyClaim,
+} from "./t3team-NexiBrokerClient.ts";
 import { type BrokerForwarder, startBrokerForwarder } from "./t3team-NexiBrokerForwarder.ts";
 
 /**
@@ -39,6 +43,12 @@ export class NexiBrokerService extends Context.Service<
     ) => Effect.Effect<CloudSessionAttachResult, CloudSessionFailedError>;
     /** A fresh one-time pairing credential from the session's own server (first connect only). */
     readonly pair: (sessionId: string) => Effect.Effect<string, CloudSessionFailedError>;
+    /** A warm standby of the project for this user (its run id), or null when none is idle. */
+    readonly claimStandby: (
+      claim: StandbyClaim,
+    ) => Effect.Effect<string | null, CloudSessionFailedError>;
+    /** This user's sessions as the broker knows them (claimed standbys included). */
+    readonly sessions: Effect.Effect<ReadonlyArray<BrokerSession>, CloudSessionFailedError>;
   }
 >()("t3/cloud/t3team-NexiBrokerService/NexiBrokerService") {}
 
@@ -77,6 +87,8 @@ const disabled: NexiBrokerService["Service"] = {
   requestGrant: () => Effect.fail(notEnabled),
   attach: () => Effect.fail(notEnabled),
   pair: () => Effect.fail(notEnabled),
+  claimStandby: () => Effect.succeed(null),
+  sessions: Effect.succeed([]),
 };
 
 const make = Effect.fn("cloud.broker.service.make")(function* () {
@@ -151,6 +163,8 @@ const make = Effect.fn("cloud.broker.service.make")(function* () {
     requestGrant: client.requestGrant,
     attach,
     pair: client.mintPairing,
+    claimStandby: client.claimStandby,
+    sessions: client.listSessions,
   } satisfies NexiBrokerService["Service"];
 });
 
