@@ -242,6 +242,7 @@
     "apps/web/src/components/ui/textarea.tsx",
     "apps/web/src/composerDraftStore.ts",
     "apps/web/src/connection/platform.ts",
+    "apps/web/src/hooks/useHandleNewThread.ts",
     "apps/web/src/hooks/useTheme.ts",
     "apps/web/src/index.css",
     "apps/web/src/lib/attachmentUploadQueue.test.ts",
