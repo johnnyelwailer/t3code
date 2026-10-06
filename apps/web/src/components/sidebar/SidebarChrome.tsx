@@ -37,6 +37,7 @@ import { SidebarThreadUndoNotice } from "./SidebarThreadUndoNotice";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
 import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
+import { readScopeFooterActiveEntry } from "~/t3team/t3team-scopeRouteSync.logic";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
@@ -205,6 +206,12 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   // "Backlog" only exists scoped — flattened across projects it loses the hierarchy that IS
   // the view.
   const scopedProjectId = useT3TeamSidebarProjectScope((state) => state.scopedProjectId);
+  // Which board (if any) the current route shows — lights the matching entry. A primitive
+  // selection, so only a change of board re-renders the chrome, not every navigation.
+  const activeBoardEntry = useLocation({
+    select: (location) =>
+      readScopeFooterActiveEntry(location.pathname, location.search as Record<string, unknown>),
+  });
   const handleMyWorkClick = useCallback(() => {
     if (isMobile) {
       setOpenMobile(false);
@@ -244,14 +251,20 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
       {showTeamNav ? (
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={handleMyWorkClick}>
+            <SidebarMenuButton
+              isActive={activeBoardEntry === "my-work"}
+              onClick={handleMyWorkClick}
+            >
               <InboxIcon />
               <span>My work</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           {scopedProjectId !== null ? (
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={handleBacklogClick}>
+              <SidebarMenuButton
+                isActive={activeBoardEntry === "backlog"}
+                onClick={handleBacklogClick}
+              >
                 <ListTreeIcon />
                 <span>Backlog</span>
               </SidebarMenuButton>
