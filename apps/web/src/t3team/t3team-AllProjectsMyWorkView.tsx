@@ -24,6 +24,8 @@ import { JiraSignInPanel } from "~/t3team/components/t3team-JiraSignInPanel";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
 import { useProjectDashboardMyWorkState } from "~/t3team/t3team-projectDashboardMyWorkState";
+import { projectBacklogViewModes } from "~/t3team/t3team-projectBacklogPresentation";
+import { readPersistedProjectDashboardBacklogState } from "~/t3team/t3team-projectDashboardBacklogState";
 import { buildDigestPlan } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
 import { AllProjectsMyWorkSection } from "~/t3team/t3team-AllProjectsMyWorkSection";
@@ -62,7 +64,23 @@ export function AllProjectsMyWorkView({
       void navigate({
         to: "/t3team/projects/$projectId",
         params: { projectId },
-        search: { projectView: "backlog" },
+        search: {
+          projectView: "backlog",
+          // A backlog last left in the planning space would reopen there: Backlog is the table.
+          ...(readPersistedProjectDashboardBacklogState(projectId)?.viewMode === "planning-space"
+            ? { view: projectBacklogViewModes[0]?.value ?? "table" }
+            : {}),
+        },
+      }),
+    [navigate],
+  );
+  // The planning space is that project's backlog in its planning-space view mode (`?view=`).
+  const openPlanning = useCallback(
+    (projectId: string) =>
+      void navigate({
+        to: "/t3team/projects/$projectId",
+        params: { projectId },
+        search: { projectView: "backlog", view: "planning-space" },
       }),
     [navigate],
   );
@@ -176,6 +194,7 @@ export function AllProjectsMyWorkView({
             lens={lens}
             onLensChange={setLens}
             backlog={{ kind: "pick-project", projects: boundProjects, onPick: openBacklog }}
+            planning={{ kind: "pick-project", projects: boundProjects, onPick: openPlanning }}
           />
         </div>
         {lens === "digest"

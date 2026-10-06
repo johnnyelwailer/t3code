@@ -35,8 +35,11 @@ export function ProjectDashboard({
   const {
     mode: dashboardMode,
     lens,
+    backlogActive,
+    planningActive,
     selectLens,
     selectBacklog,
+    selectPlanning,
   } = useProjectDashboardViewTab(project.id);
   // Every lens is the same centered column, so switching lenses never jumps the width. The digest
   // grows with its content (min-h-full) so the bottom padding survives a tall digest instead of
@@ -78,7 +81,8 @@ export function ProjectDashboard({
         <ProjectMyWorkViewSwitch
           lens={lens}
           onLensChange={selectLens}
-          backlog={{ kind: "select", active: dashboardMode === "backlog", onSelect: selectBacklog }}
+          backlog={{ kind: "select", active: backlogActive, onSelect: selectBacklog }}
+          planning={{ kind: "select", active: planningActive, onSelect: selectPlanning }}
         />
       </header>
 
