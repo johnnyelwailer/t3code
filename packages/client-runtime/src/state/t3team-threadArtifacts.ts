@@ -80,7 +80,7 @@ export function createT3TeamThreadArtifactsAtoms<R, E>(
         subscribeWhenSupported(WS_METHODS.t3teamSubscribeThreadArtifacts, input, {
           supported: supportsT3TeamThreadArtifacts,
           unsupported: { type: "snapshot", threadId: input.threadId, artifacts: [] },
-        }).pipe(Stream.scan(EMPTY_T3TEAM_THREAD_ARTIFACTS, applyT3TeamThreadArtifactsEvent)),
+        }).pipe(Stream.scan(() => EMPTY_T3TEAM_THREAD_ARTIFACTS, applyT3TeamThreadArtifactsEvent)),
     }),
   };
 }

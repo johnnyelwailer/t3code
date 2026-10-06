@@ -70,7 +70,7 @@ export function createT3TeamThreadFactsAtoms<R, E>(
         subscribeWhenSupported(WS_METHODS.t3teamSubscribeThreadFacts, input, {
           supported: supportsT3TeamThreadFacts,
           unsupported: { type: "snapshot", facts: [] },
-        }).pipe(Stream.scan(EMPTY_T3TEAM_THREAD_FACTS, applyT3TeamThreadFactsEvent)),
+        }).pipe(Stream.scan(() => EMPTY_T3TEAM_THREAD_FACTS, applyT3TeamThreadFactsEvent)),
     }),
   };
 }

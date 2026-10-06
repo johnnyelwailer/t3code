@@ -181,7 +181,7 @@ it.effect("parks automatic pull until activation without delaying command readin
         T3TeamChildThreadMetadataLive,
         T3TeamThreadFactsStore.layer,
         T3TeamThreadArtifactsStore.layer,
-      ).pipe(Layer.provide(Persistence.layerMemory), Layer.orDie);
+      ).pipe(Layer.provideMerge(Persistence.layerMemory), Layer.orDie);
 
       yield* Effect.gen(function* () {
         const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;

@@ -38,7 +38,7 @@ export function createToolAuthEnvironmentAtoms<R, E>(
       label: "environment-data:toolauth:stream",
       subscribe: (_input: null) =>
         subscribe(WS_METHODS.subscribeToolAuth, {}).pipe(
-          Stream.scan(EMPTY_TOOLAUTH_STATES, applyToolAuthStreamEvent),
+          Stream.scan(() => EMPTY_TOOLAUTH_STATES, applyToolAuthStreamEvent),
         ),
     }),
     start: createEnvironmentRpcCommand(runtime, {
