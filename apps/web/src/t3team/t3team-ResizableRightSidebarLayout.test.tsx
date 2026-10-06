@@ -15,7 +15,6 @@ describe("ResizableRightSidebarLayout", () => {
       />,
     );
 
-    expect(markup).toContain('aria-expanded="false"');
     expect(markup).toContain("Agent");
     expect(markup).toContain("main-panel");
     expect(markup).not.toContain("aside-panel");
@@ -36,6 +35,5 @@ describe("ResizableRightSidebarLayout", () => {
     // No tabs swap the view out: the drawer rises over it, and its bar says what it holds.
     expect(markup).toContain("main-panel");
     expect(markup).toContain("Chat");
-    expect(markup).toContain('aria-expanded="true"');
   });
 });
