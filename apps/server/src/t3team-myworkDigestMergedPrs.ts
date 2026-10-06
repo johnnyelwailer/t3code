@@ -9,7 +9,7 @@
  * side (the date is read in UTC, the window in the viewer's zone) and the exact window filters.
  */
 
-import { homedir } from "node:os";
+import * as NodeOS from "node:os";
 
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -49,7 +49,7 @@ function searchHost(
 ): Effect.Effect<DigestPrEntry[]> {
   return gh
     .execute({
-      cwd: homedir(),
+      cwd: NodeOS.homedir(),
       args: [
         "search",
         "prs",
@@ -102,7 +102,7 @@ export function loadViewerMergedPrEntries(
   return Effect.gen(function* () {
     const gh = yield* GitHubCli.GitHubCli;
     const status = yield* gh
-      .execute({ cwd: homedir(), args: ["auth", "status", "--json", "hosts"] })
+      .execute({ cwd: NodeOS.homedir(), args: ["auth", "status", "--json", "hosts"] })
       .pipe(Effect.option);
     const parsed = status._tag === "Some" ? decodeHosts(status.value.stdout) : undefined;
     const hosts = parsed?._tag === "Some" ? Object.keys(parsed.value.hosts) : [];

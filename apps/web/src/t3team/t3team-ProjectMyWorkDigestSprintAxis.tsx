@@ -123,7 +123,8 @@ export function DigestSprintAxis({ graph, nowMs }: { graph: DigestGraph; nowMs: 
           {steps.length > 1 ? (
             <polyline
               points={steps.join(" ")}
-              className="fill-none stroke-foreground/80"
+              fill="none"
+              className="stroke-foreground/80"
               strokeWidth={1.5}
               vectorEffect="non-scaling-stroke"
             />
