@@ -58,6 +58,8 @@
     "apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts",
     "apps/server/src/orchestration-v2/Adapters/CodexAdapterV2.ts",
     "apps/server/src/orchestration-v2/Adapters/OpenCodeAdapterV2.ts",
+    "apps/server/src/orchestration-v2/CommandPolicy.test.ts",
+    "apps/server/src/orchestration-v2/CommandPolicy.ts",
     "apps/server/src/orchestration-v2/DelegatedCompletionDelivery.test.ts",
     "apps/server/src/orchestration-v2/Orchestrator.ts",
     "apps/server/src/orchestration-v2/ProjectCommands.test.ts",

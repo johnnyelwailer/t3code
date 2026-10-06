@@ -75,7 +75,11 @@ import {
   SHARED_WORKSPACE_RESTORE_MESSAGE,
 } from "./CheckpointRestoreSafety.ts";
 import { CheckpointServiceV2 } from "./CheckpointService.ts";
-import { CommandPolicyV2, resolveMessageDispatchIntent } from "./CommandPolicy.ts";
+import {
+  CommandPolicyV2,
+  redirectUnsupportedQueue,
+  resolveMessageDispatchIntent,
+} from "./CommandPolicy.ts";
 import { CommandReceiptStoreV2 } from "./CommandReceiptStore.ts";
 import { ContextHandoffServiceV2 } from "./ContextHandoffService.ts";
 import { notificationTurnItem } from "./Notification.ts";
@@ -4832,6 +4836,49 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         const queuedCapabilities =
           selectedProviderSession?.capabilities ??
           (yield* queuedAdapter.getCapabilities().pipe(mapDispatchError(command)));
+        // Same-provider follow-ups only. A switch still has to queue on the
+        // selected provider, and that capability check stays below.
+        const queueRedirect =
+          activeRun.providerInstanceId === modelSelection.instanceId &&
+          !isNativeMaintenanceCommand(command) &&
+          !isGoalCommand(command)
+            ? redirectUnsupportedQueue({
+                activeRun,
+                providerTurns: projection.providerTurns,
+                capabilities: queuedCapabilities,
+                allowInterruptRestart:
+                  command.notification === undefined && delegatedCompletion === undefined,
+              })
+            : undefined;
+        if (queueRedirect !== undefined) {
+          yield* dispatchSteerIntoRun({
+            command,
+            events,
+            effects,
+            projection,
+            modelSelection:
+              delegatedCompletion === undefined
+                ? modelSelection
+                : (projection.runs.find((run) => run.id === queueRedirect.targetRunId)
+                    ?.modelSelection ?? modelSelection),
+            delegatedCompletion,
+            targetRunId: queueRedirect.targetRunId,
+            messageId: command.messageId,
+            text: dispatchText,
+            ...(command.context ? { context: command.context } : {}),
+            attachments: command.attachments,
+            createdBy: command.createdBy,
+            creationSource: command.creationSource,
+            ...(command.scheduledTaskId === undefined
+              ? {}
+              : { scheduledTaskId: command.scheduledTaskId }),
+            ...(command.senderThreadId === undefined
+              ? {}
+              : { senderThreadId: command.senderThreadId }),
+            forceRestart: queueRedirect.type === "restart_active",
+          });
+          return;
+        }
         yield* enforceCommandPolicy(command)(
           commandPolicy.ensureQueuedMessages({
             commandId: command.commandId,
