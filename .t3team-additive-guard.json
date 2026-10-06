@@ -41,6 +41,7 @@
     "apps/server/src/diagnostics/ProcessDiagnostics.ts",
     "apps/server/src/environment/ServerEnvironment.test.ts",
     "apps/server/src/environment/ServerEnvironment.ts",
+    "apps/server/src/git/GitManager.test.ts",
     "apps/server/src/http.ts",
     "apps/server/src/httpCors.ts",
     "apps/server/src/mcp/McpHttpServer.ts",
