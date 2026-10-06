@@ -8,13 +8,14 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
-import { NexiBrokerAuth } from "./t3team-NexiBrokerAuth.ts";
+import { Accounts } from "../account/t3team-Accounts.ts";
+import { BROKER_RESOURCE, resolveNexiBrokerConfig } from "./t3team-NexiBrokerConfig.ts";
 import { makeNexiBrokerClient } from "./t3team-NexiBrokerClient.ts";
 import { type BrokerForwarder, startBrokerForwarder } from "./t3team-NexiBrokerForwarder.ts";
 
 /**
- * Cloud sessions over the Nexi broker, from this machine's side: sign-in state, grants for new
- * dispatches, and `attach` — which makes a ready session reachable here (a loopback forwarder) and
+ * Cloud sessions over the Nexi broker, from this machine's side: which account it authenticates
+ * with (the sign-in itself belongs to `t3team-Accounts`), grants for new dispatches, and `attach` — which makes a ready session reachable here (a loopback forwarder) and
  * hands the client a fresh one-time pairing credential minted by the session's own server. The
  * client then connects exactly as it does to an SSH environment: pairing → bearer → WebSocket.
  */
@@ -23,9 +24,7 @@ export class NexiBrokerService extends Context.Service<
   NexiBrokerService,
   {
     readonly enabled: boolean;
-    readonly status: Effect.Effect<CloudBrokerStatus>;
-    readonly signIn: Effect.Effect<CloudBrokerStatus, CloudSessionFailedError>;
-    readonly signOut: Effect.Effect<void>;
+    readonly status: CloudBrokerStatus;
     /**
      * A grant for the next dispatch. `secrets` (name → value) are parked with it in the broker's
      * memory and redeemed once by the session the grant belongs to; they never become an input.
@@ -47,24 +46,33 @@ const notEnabled = new CloudSessionFailedError({
   message: "This build has no Nexi broker configured.",
 });
 
+const disabled: NexiBrokerService["Service"] = {
+  enabled: false,
+  status: { enabled: false, accountId: null },
+  requestGrant: () => Effect.fail(notEnabled),
+  attach: () => Effect.fail(notEnabled),
+  pair: () => Effect.fail(notEnabled),
+};
+
 const make = Effect.fn("cloud.broker.service.make")(function* () {
-  const auth = yield* NexiBrokerAuth;
-  if (Option.isNone(auth.config)) {
-    return {
-      enabled: false,
-      status: auth.status,
-      signIn: auth.signIn,
-      signOut: auth.signOut,
-      requestGrant: () => Effect.fail(notEnabled),
-      attach: () => Effect.fail(notEnabled),
-      pair: () => Effect.fail(notEnabled),
-    } satisfies NexiBrokerService["Service"];
-  }
-  const config = auth.config.value;
-  const client = yield* makeNexiBrokerClient(config, auth.accessToken);
+  const resolved = yield* resolveNexiBrokerConfig();
+  if (Option.isNone(resolved)) return disabled;
+  const config = resolved.value;
+  const accounts = yield* Accounts;
+  const accessToken = accounts.accessToken(config.account, BROKER_RESOURCE).pipe(
+    Effect.mapError(
+      (error) =>
+        new CloudSessionFailedError({
+          reason:
+            error.reason === "sign_in_required" ? "broker_sign_in_required" : "broker_unavailable",
+          message: error.message,
+        }),
+    ),
+  );
+  const client = yield* makeNexiBrokerClient(config, accessToken);
   const forwarders = new Map<string, BrokerForwarder>();
   yield* Effect.addFinalizer(() => Effect.sync(() => forwarders.forEach((f) => f.close())));
-  const tokenPromise = () => Effect.runPromise(auth.accessToken);
+  const tokenPromise = () => Effect.runPromise(accessToken);
   const streamUrl = (runId: string) =>
     `${config.url.replace(/^http/, "ws")}/v1/client/stream?session=${encodeURIComponent(runId)}`;
 
@@ -112,13 +120,7 @@ const make = Effect.fn("cloud.broker.service.make")(function* () {
 
   return {
     enabled: true,
-    status: auth.status,
-    signIn: auth.signIn,
-    signOut: Effect.gen(function* () {
-      yield* auth.signOut;
-      forwarders.forEach((f) => f.close());
-      forwarders.clear();
-    }),
+    status: { enabled: true, accountId: config.account },
     requestGrant: client.requestGrant,
     attach,
     pair: client.mintPairing,
@@ -128,12 +130,4 @@ const make = Effect.fn("cloud.broker.service.make")(function* () {
 export const layer = Layer.effect(NexiBrokerService, make());
 
 /** No broker: sessions use T3 Connect. For builds without a broker URL and for tests. */
-export const layerDisabled = Layer.succeed(NexiBrokerService, {
-  enabled: false,
-  status: Effect.succeed({ enabled: false, auth: { _tag: "SignedOut" as const }, lastError: null }),
-  signIn: Effect.fail(notEnabled),
-  signOut: Effect.void,
-  requestGrant: () => Effect.fail(notEnabled),
-  attach: () => Effect.fail(notEnabled),
-  pair: () => Effect.fail(notEnabled),
-});
+export const layerDisabled = Layer.succeed(NexiBrokerService, disabled);

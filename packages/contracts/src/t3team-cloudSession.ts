@@ -170,7 +170,7 @@ export const CloudSessionFailureReasonSchema = Schema.Literals([
   "payload_issue_failed",
   /**
    * The Nexi broker is this server's transport and the user is not signed in to it (Entra). The
-   * remediation is the in-app Nexplore sign-in (a device code), not a retry.
+   * remediation is the in-app account sign-in, not a retry.
    */
   "broker_sign_in_required",
   /** The Nexi broker could not be reached or refused the request. */

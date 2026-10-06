@@ -1,31 +1,29 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import type { CloudBrokerStatus, CloudSession } from "@t3tools/contracts";
+import type { AccountStatus, CloudSession } from "@t3tools/contracts";
 
-import { CloudBrokerSignInCard } from "~/components/cloud/t3team-CloudBrokerSignInCard";
+import { AccountSignInCard } from "~/components/account/t3team-AccountSignInCard";
 import { CloudSessionProvisionPanel } from "~/components/cloud/t3team-CloudSessionProvisionPanel";
 
-/** The Nexplore sign-in cloud sessions need when they run over the Nexi broker. */
+/** The account sign-in a feature asks for where it needs one; here, cloud sessions. */
 
-const status = (
-  auth: CloudBrokerStatus["auth"],
-  lastError: string | null = null,
-): CloudBrokerStatus => ({
-  enabled: true,
+const account = (auth: AccountStatus["auth"], lastError: string | null = null): AccountStatus => ({
+  id: "acme",
+  label: "Acme",
   auth,
   lastError,
 });
 
 const meta = {
-  title: "Cloud/CloudBrokerSignInCard",
-  component: CloudBrokerSignInCard,
+  title: "Account/AccountSignInCard",
+  component: AccountSignInCard,
   parameters: { layout: "padded" },
   args: {
-    status: status({ _tag: "SignedOut" }),
+    account: account({ _tag: "SignedOut" }),
+    purpose: "to use cloud sessions",
     onSignIn: () => {},
-    onSignOut: () => {},
     onOpenVerification: () => {},
   },
-} satisfies Meta<typeof CloudBrokerSignInCard>;
+} satisfies Meta<typeof AccountSignInCard>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -36,30 +34,38 @@ export const Starting: Story = { args: { pending: true } };
 
 export const WaitingForCode: Story = {
   args: {
-    status: status({
+    account: account({
       _tag: "SigningIn",
       userCode: "LD5PUZ45H",
-      verificationUri: "https://login.microsoft.com/device",
+      verificationUri: "https://id.example.com/device",
       expiresAtMs: Date.now() + 900_000,
     }),
   },
 };
 
+/** An issuer without a device code: the browser is the only way in. */
+export const WaitingForBrowser: Story = {
+  args: {
+    account: account({
+      _tag: "SigningIn",
+      userCode: null,
+      verificationUri: null,
+      expiresAtMs: Date.now() + 600_000,
+    }),
+  },
+};
+
 export const CodeExpired: Story = {
-  args: { status: status({ _tag: "SignedOut" }, "The sign-in code expired. Start again.") },
+  args: { account: account({ _tag: "SignedOut" }, "The sign-in code expired. Start again.") },
 };
 
 export const ServerUnreachable: Story = {
   args: { error: "Could not reach this machine's server: TypeError: Failed to fetch" },
 };
 
+/** Signed in: nothing to ask for here; the account lives in the app's account entry. */
 export const SignedIn: Story = {
-  args: { status: status({ _tag: "SignedIn", name: "Philip Jonientz" }) },
-};
-
-/** No broker configured on this build: the card renders nothing and the panel is unchanged. */
-export const NoBrokerConfigured: Story = {
-  args: { status: { enabled: false, auth: { _tag: "SignedOut" }, lastError: null } },
+  args: { account: account({ _tag: "SignedIn", name: "Philip Jonientz" }) },
 };
 
 const readySession: CloudSession = {
@@ -83,10 +89,10 @@ export const InTheProvisionPanel: StoryObj<typeof CloudSessionProvisionPanel> = 
       onCreate={() => {}}
       onSessionAction={() => {}}
       banner={
-        <CloudBrokerSignInCard
-          status={status({ _tag: "SignedIn", name: "Philip Jonientz" })}
+        <AccountSignInCard
+          account={account({ _tag: "SignedOut" })}
+          purpose="to use cloud sessions"
           onSignIn={() => {}}
-          onSignOut={() => {}}
           onOpenVerification={() => {}}
         />
       }

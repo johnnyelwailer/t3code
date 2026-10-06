@@ -51,7 +51,7 @@ import {
 } from "./settingsSearch";
 import { useAvailableSettingsSearchItems } from "./useAvailableSettingsSearchItems";
 import { validateSettingsScopeSearch } from "./settingsScope";
-import { CloudBrokerSidebarEntry } from "../cloud/t3team-CloudBrokerSidebarEntry";
+import { AccountSidebarEntry } from "../account/t3team-AccountSidebarEntry";
 
 const SnapShotIcon = createLucideIcon("snap-shot", [
   [
@@ -381,7 +381,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <CloudBrokerSidebarEntry />
+        <AccountSidebarEntry />
         <Suspense fallback={null}>
           <T3ConnectSidebarSignIn />
         </Suspense>

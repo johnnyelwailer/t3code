@@ -429,9 +429,7 @@ describe("CloudSessionService.create over the Nexi broker", () => {
   ) =>
     Layer.succeed(NexiBrokerService.NexiBrokerService, {
       enabled: true,
-      status: Effect.die("unused"),
-      signIn: Effect.die("unused"),
-      signOut: Effect.void,
+      status: { enabled: true, accountId: "acme" },
       requestGrant,
       attach: () => Effect.die("unused"),
       pair: () => Effect.die("unused"),

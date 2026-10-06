@@ -22,6 +22,8 @@ import {
   loadPackWorkflowRepairPolicy,
 } from "../t3team-pack-host.ts";
 import { setDistributionModelPolicy } from "../t3team-configuredDefaultModelSelection.ts";
+import { packAccounts, setPackAccounts } from "../account/t3team-packAccounts.ts";
+import { loadPackAccounts } from "../t3team-pack-accounts.ts";
 import {
   loadPackCompletionWakeRenderer,
   setPackCompletionWakeRenderer,
@@ -126,6 +128,22 @@ export const runT3TeamServerCommand = (
         ),
         Effect.catch((cause) =>
           Effect.logWarning("Workspace pack setup profile loading failed", { cause }).pipe(
+            Effect.as(undefined),
+          ),
+        ),
+      );
+      yield* Effect.tryPromise({
+        try: () => loadPackAccounts(packDiagnostic),
+        catch: (cause) => new WorkspacePackLoadError({ cause }),
+      }).pipe(
+        // Added to the compiled-in distribution's accounts; a duplicate id rejects the whole set.
+        Effect.tap((accounts) =>
+          Effect.sync(() => {
+            if (accounts.length > 0) setPackAccounts([...packAccounts(), ...accounts]);
+          }),
+        ),
+        Effect.catch((cause) =>
+          Effect.logWarning("Workspace pack account loading failed", { cause }).pipe(
             Effect.as(undefined),
           ),
         ),

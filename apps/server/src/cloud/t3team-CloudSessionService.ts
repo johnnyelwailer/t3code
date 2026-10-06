@@ -139,7 +139,8 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       if (machine !== null && !broker.enabled) {
         return yield* new CloudSessionFailedError({
           reason: "machine_unavailable",
-          message: "Project machines need the Nexplore sign-in, which is not set up here.",
+          message:
+            "Project machines need the cloud-session broker and its account sign-in, which this build does not have.",
         });
       }
 
