@@ -100,6 +100,7 @@ import {
 } from "./pullRequestDiff.logic";
 import { PullRequestDiffStat, PullRequestMetaLine } from "./pullRequestPresentation";
 import { DiffExplorerFileTree } from "./t3team-DiffExplorerFileTree";
+import { useElementFitsWidth } from "~/t3team/t3team-ResizableRightSidebarLayoutShared";
 import {
   diffExplorerFileInfo,
   markAllFilesViewed,
@@ -273,11 +274,19 @@ function PullRequestCodeTab({
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(settings.diffIgnoreWhitespace);
   // The file tree is the diff explorer's primary navigation, so it starts open: a reader lands
   // here to pick which changed file to look at first.
-  const [fileTreeOpen, setFileTreeOpen] = useLocalStorage(
+  const [storedFileTreeOpen, setStoredFileTreeOpen] = useLocalStorage(
     PULL_REQUEST_FILE_TREE_STORAGE_KEY,
     true,
     Schema.Boolean,
   );
+  // Too narrow for the tree beside the diff (a drawer, a phone, a slim aside): it starts closed
+  // and opens over the diff instead, closing again once a file is picked. The stored preference
+  // is the wide layout's alone.
+  const treeRow = useElementFitsWidth(50 * 16);
+  const [overlayTreeOpen, setOverlayTreeOpen] = useState(false);
+  const treeAsOverlay = !treeRow.fits;
+  const fileTreeOpen = treeAsOverlay ? overlayTreeOpen : storedFileTreeOpen;
+  const setFileTreeOpen = treeAsOverlay ? setOverlayTreeOpen : setStoredFileTreeOpen;
   const [selectedLines, setSelectedLines] = useState<{
     id: string;
     range: SelectedLineRange;
@@ -794,6 +803,7 @@ function PullRequestCodeTab({
   const handleTreeSelect = useCallback(
     (key: string) => {
       setSelectedKey(key);
+      setOverlayTreeOpen(false);
       if (diffMode === "all") {
         const item = items.find((candidate) => candidate.id === key);
         if (item !== undefined && item.collapsed === true) toggleFile(key);
@@ -1800,7 +1810,7 @@ function PullRequestCodeTab({
           </Collapsible>
         </div>
       ) : null}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div ref={treeRow.ref} className="relative flex min-h-0 flex-1 overflow-hidden">
         {/* Relative wrapper so the review overlay floats over the diff rather than pushing it
             up; the viewer inside still owns its own scrolling. */}
         <div
@@ -1860,8 +1870,22 @@ function PullRequestCodeTab({
             unsafeCSSExtra={REPLACE_FILE_COUNTS_CSS}
           />
         </div>
+        {fileTreeOpen && treeAsOverlay ? (
+          <button
+            type="button"
+            aria-label="Hide file tree"
+            className="absolute inset-0 z-20 bg-background/60"
+            onClick={() => setOverlayTreeOpen(false)}
+          />
+        ) : null}
         {fileTreeOpen ? (
-          <div className="flex min-h-0 w-[min(20rem,40%)] min-w-56 shrink-0">
+          <div
+            className={
+              treeAsOverlay
+                ? "absolute inset-y-0 right-0 z-20 flex min-h-0 w-[min(20rem,85%)] shadow-lg"
+                : "flex min-h-0 w-[min(20rem,40%)] min-w-56 shrink-0"
+            }
+          >
             <DiffExplorerFileTree
               files={explorerFiles}
               selectedKey={activeKey}
