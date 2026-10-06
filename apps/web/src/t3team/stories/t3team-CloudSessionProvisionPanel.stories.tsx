@@ -101,6 +101,37 @@ export const Failed: Story = {
   },
 };
 
+/** A session in the project's machine names each machine milestone while it prepares. */
+export const ProjectMachineStages: Story = {
+  args: {
+    sessions: [
+      session({
+        sessionId: "m-start",
+        phase: "preparing",
+        projectMachine: true,
+        elapsedSeconds: 21,
+      }),
+      ...(["building", "checking", "installing"] as const).map((machineStage, index) =>
+        session({
+          sessionId: `m-${machineStage}`,
+          phase: "preparing",
+          projectMachine: true,
+          machineStage,
+          elapsedSeconds: 70 + index * 40,
+        }),
+      ),
+      session({
+        sessionId: "m-lost",
+        phase: "failed",
+        projectMachine: true,
+        elapsedSeconds: 610,
+        failureReason:
+          "The cloud machine stopped responding at “Install Node 24 and pnpm 11.10.0”. Start another to try again.",
+      }),
+    ],
+  },
+};
+
 const LIFECYCLE: ReadonlyArray<{
   readonly phase: CloudSessionProvisionPhase;
   readonly untilSeconds: number;

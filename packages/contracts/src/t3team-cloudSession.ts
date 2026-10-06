@@ -49,6 +49,18 @@ export const CloudSessionPhaseSchema = Schema.Literals([
 ]);
 export type CloudSessionPhase = typeof CloudSessionPhaseSchema.Type;
 
+/**
+ * Where a project-machine session is while it prepares: its devcontainer being built, its health
+ * check running, then the session server being installed into it. The slowest part of a machine
+ * session, so the client names it instead of one long "preparing".
+ */
+export const CloudSessionMachineStageSchema = Schema.Literals([
+  "building",
+  "checking",
+  "installing",
+]);
+export type CloudSessionMachineStage = typeof CloudSessionMachineStageSchema.Type;
+
 export const CloudSessionSchema = Schema.Struct({
   /** Stable per attempt. Opaque to the client — do not parse it. */
   sessionId: Schema.String,
@@ -86,6 +98,8 @@ export const CloudSessionSchema = Schema.Struct({
   transport: Schema.optional(CloudSessionTransportSchema),
   /** True when the session runs inside a project machine (its devcontainer); absent means not. */
   projectMachine: Schema.optional(Schema.Boolean),
+  /** A project-machine session's milestone, present only while `phase` is `preparing`. */
+  machineStage: Schema.optional(CloudSessionMachineStageSchema),
 });
 export type CloudSession = typeof CloudSessionSchema.Type;
 

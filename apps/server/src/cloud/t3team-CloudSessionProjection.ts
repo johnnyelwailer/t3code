@@ -7,6 +7,7 @@ import {
   cloudSessionDurationSeconds,
   cloudSessionElapsedSeconds,
   deriveCloudSessionPhase,
+  deriveMachineStage,
 } from "./t3team-cloudSessionPhase.ts";
 import { environmentIdFromSteps } from "./t3team-cloudSessionEnvironmentStep.ts";
 import {
@@ -123,6 +124,9 @@ export const projectCloudSession = (
     // `undefined`, and the client then correlates from the relay instead.
     const environmentId = phase === "ready" ? environmentIdFromSteps(steps) : undefined;
     const settled = sessionRun.status === "completed";
+    const projectMachine = sessionRun.name.includes(MACHINE_RUN_NAME_MARKER);
+    const machineStage =
+      projectMachine && phase === "preparing" ? deriveMachineStage(steps) : undefined;
     return {
       sessionId: String(sessionRun.id),
       providerKind: "github_actions",
@@ -136,7 +140,8 @@ export const projectCloudSession = (
       detailsUrl: sessionRun.htmlUrl === "" ? null : sessionRun.htmlUrl,
       ...(environmentId !== undefined ? { environmentId } : {}),
       transport: sessionRun.name.includes(BROKER_RUN_NAME_MARKER) ? "nexi_broker" : "t3_connect",
-      ...(sessionRun.name.includes(MACHINE_RUN_NAME_MARKER) ? { projectMachine: true } : {}),
+      ...(projectMachine ? { projectMachine: true } : {}),
+      ...(machineStage !== undefined ? { machineStage } : {}),
       // Only a settled run has a real "how long did it run" figure; a live
       // session would be reporting its age, not its duration.
       ...(settled ? { durationSeconds: cloudSessionDurationSeconds(sessionRun) } : {}),

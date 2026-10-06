@@ -295,7 +295,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                 const presentation = presentCloudSession(cloudSession);
                 const isReady = cloudSession.phase === "ready";
                 const rowClasses =
-                  "flex w-full items-center gap-1.5 px-2 py-1.5 text-muted-foreground text-xs";
+                  "flex w-full items-start gap-1.5 px-2 py-1.5 text-muted-foreground text-xs";
                 // A ready machine is a real connectable row (it must not vanish
                 // the moment it comes up). A still-provisioning one is
                 // read-only: it cannot run anything yet, and a disabled item
@@ -307,25 +307,19 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                     onClick={() => onCloudSessionAction?.(cloudSession)}
                     className={cn(rowClasses, "cursor-pointer text-foreground hover:bg-muted/40")}
                   >
-                    <EnvironmentMachineIcon kind="cloud" className="size-3 shrink-0" />
-                    <span className="shrink-0">{presentation.title}</span>
-                    <span className="min-w-0 flex-1 truncate opacity-70">
-                      {presentation.detail}
-                    </span>
+                    <EnvironmentMachineIcon kind="cloud" className="mt-0.5 size-3 shrink-0" />
+                    <CloudRowText title={presentation.title} detail={presentation.detail} />
                   </button>
                 ) : (
                   <div key={cloudSession.sessionId} className={rowClasses}>
                     <EnvironmentMachineIcon
                       kind="cloud"
                       className={cn(
-                        "size-3 shrink-0",
+                        "mt-0.5 size-3 shrink-0",
                         presentation.tone === "working" && "animate-pulse",
                       )}
                     />
-                    <span className="shrink-0">{presentation.title}</span>
-                    <span className="min-w-0 flex-1 truncate opacity-70">
-                      {presentation.detail}
-                    </span>
+                    <CloudRowText title={presentation.title} detail={presentation.detail} />
                   </div>
                 );
               })}
@@ -335,16 +329,20 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
               <button
                 type="button"
                 onClick={() => onCreateCloudSession?.()}
-                className="flex w-full cursor-pointer items-center gap-1.5 rounded-sm px-2 py-1.5 text-foreground hover:bg-muted/40 sm:text-sm"
+                className="flex w-full cursor-pointer items-start gap-1.5 rounded-sm px-2 py-1.5 text-foreground hover:bg-muted/40 sm:text-sm"
               >
-                <span className="inline-flex items-center gap-1.5">
-                  <CloudIcon className="size-3" aria-hidden="true" />
-                  New cloud session
-                  {cloudSessionDurationLabel ? (
-                    <span className="text-muted-foreground">· {cloudSessionDurationLabel}</span>
-                  ) : null}
-                  {cloudSessionProject ? (
-                    <CloudSessionMachineHint {...cloudSessionProject} />
+                <CloudIcon className="mt-0.5 size-3 shrink-0 self-start" aria-hidden="true" />
+                <span className="flex min-w-0 flex-col items-start text-left">
+                  <span>New cloud session</span>
+                  {cloudSessionDurationLabel || cloudSessionProject ? (
+                    <span className="flex min-w-0 max-w-full gap-1 text-muted-foreground text-xs">
+                      {cloudSessionDurationLabel ? (
+                        <span className="shrink-0">Runs {cloudSessionDurationLabel}</span>
+                      ) : null}
+                      {cloudSessionProject ? (
+                        <CloudSessionMachineHint {...cloudSessionProject} />
+                      ) : null}
+                    </span>
                   ) : null}
                 </span>
               </button>
@@ -369,3 +367,13 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
     </Select>
   );
 });
+
+/** A cloud row's title over its detail, so a narrow menu truncates the detail, never the title. */
+function CloudRowText({ title, detail }: { readonly title: string; readonly detail: string }) {
+  return (
+    <span className="flex min-w-0 flex-1 flex-col items-start text-left">
+      <span className="max-w-full truncate">{title}</span>
+      <span className="max-w-full truncate opacity-70">{detail}</span>
+    </span>
+  );
+}

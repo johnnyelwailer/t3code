@@ -76,6 +76,30 @@ describe("presentCloudSession", () => {
   });
 });
 
+describe("presentCloudSession for a project machine", () => {
+  const preparing = (overrides: Partial<CloudSession>) =>
+    presentCloudSession(session({ phase: "preparing", elapsedSeconds: 75, ...overrides }));
+
+  it("names each machine milestone instead of building the workspace", () => {
+    expect(preparing({ projectMachine: true, machineStage: "building" })).toMatchObject({
+      title: "Building the project machine",
+      detail: "From its devcontainer · 1m 15s",
+      tone: "working",
+    });
+    expect(preparing({ projectMachine: true, machineStage: "checking" }).title).toBe(
+      "Checking the project machine",
+    );
+    expect(preparing({ projectMachine: true, machineStage: "installing" }).title).toBe(
+      "Setting up Nexi in the machine",
+    );
+    expect(preparing({ projectMachine: true }).title).toBe("Preparing the project machine");
+  });
+
+  it("keeps the plain session's words", () => {
+    expect(preparing({}).title).toBe("Building the workspace");
+  });
+});
+
 describe("formatHoldDuration", () => {
   it("tags the picker's choices compactly", () => {
     expect(formatHoldDuration(3600)).toBe("1h");
