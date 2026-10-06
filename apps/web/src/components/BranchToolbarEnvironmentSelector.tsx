@@ -3,7 +3,7 @@ import { ComposerContextLabel } from "./ComposerContextLabel";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
 import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { CloudIcon, ScaleIcon, SettingsIcon, XIcon } from "lucide-react";
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 
 import type { EnvironmentOption } from "./BranchToolbar.logic";
 import { dedupeRunOnEnvironments } from "./BranchToolbar.logic";
@@ -126,6 +126,35 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   // never triggers Base UI's select-and-close — the menu stays open and keeps
   // polling, and the just-created session appears in the open list.
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // t3team: one entry per cloud machine. A ready session already connected here IS an environment
+  // row (selectable like any machine), so it is not listed a second time as a session.
+  const connectedEnvironmentIds = useMemo(
+    () => new Set<string>(runOnEnvironments.map((env) => env.environmentId)),
+    [runOnEnvironments],
+  );
+  const cloudSessionRows = useMemo(
+    () =>
+      (pendingCloudSessions ?? []).filter(
+        (session) =>
+          !(
+            session.phase === "ready" &&
+            session.environmentId !== undefined &&
+            connectedEnvironmentIds.has(session.environmentId)
+          ),
+      ),
+    [connectedEnvironmentIds, pendingCloudSessions],
+  );
+  // Clicking a ready machine connects it, then runs the thread there: once its environment
+  // registers, it is selected and the menu closes. Until then the row says it is connecting.
+  const [selectWhenConnected, setSelectWhenConnected] = useState<string | null>(null);
+  useEffect(() => {
+    if (selectWhenConnected === null || !connectedEnvironmentIds.has(selectWhenConnected)) return;
+    setSelectWhenConnected(null);
+    onEnvironmentChange?.(selectWhenConnected as EnvironmentId);
+    setMenuOpen(false);
+    onCloudMenuOpenChange?.(false);
+  }, [connectedEnvironmentIds, onCloudMenuOpenChange, onEnvironmentChange, selectWhenConnected]);
 
   const environmentItems = useMemo(
     () => [
@@ -298,9 +327,12 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
             <SelectSeparator />
             <SelectGroup>
               <SelectGroupLabel>Cloud</SelectGroupLabel>
-              {pendingCloudSessions?.map((cloudSession) => {
+              {cloudSessionRows.map((cloudSession) => {
                 const presentation = presentCloudSession(cloudSession);
                 const isReady = cloudSession.phase === "ready";
+                const connecting =
+                  selectWhenConnected !== null &&
+                  selectWhenConnected === cloudSession.environmentId;
                 const rowClasses =
                   "flex w-full items-start gap-1.5 px-2 py-1.5 text-muted-foreground text-xs";
                 // A ready machine is a real connectable row (it must not vanish
@@ -311,11 +343,32 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                   <button
                     key={cloudSession.sessionId}
                     type="button"
-                    onClick={() => onCloudSessionAction?.(cloudSession)}
-                    className={cn(rowClasses, "cursor-pointer text-foreground hover:bg-muted/40")}
+                    disabled={connecting}
+                    onClick={() => {
+                      onCloudSessionAction?.(cloudSession);
+                      if (cloudSession.environmentId !== undefined) {
+                        setSelectWhenConnected(cloudSession.environmentId);
+                      }
+                    }}
+                    className={cn(
+                      rowClasses,
+                      connecting
+                        ? "cursor-default"
+                        : "cursor-pointer text-foreground hover:bg-muted",
+                    )}
                   >
-                    <EnvironmentMachineIcon kind="cloud" className="mt-0.5 size-3 shrink-0" />
-                    <CloudRowText title={presentation.title} detail={presentation.detail} />
+                    <EnvironmentMachineIcon
+                      kind="cloud"
+                      className={cn("mt-0.5 size-3 shrink-0", connecting && "animate-pulse")}
+                    />
+                    <CloudRowText
+                      title={connecting ? "Connecting…" : presentation.title}
+                      detail={
+                        connecting
+                          ? "It is selected for this thread once connected"
+                          : presentation.detail
+                      }
+                    />
                   </button>
                 ) : (
                   <div key={cloudSession.sessionId} className={rowClasses}>
