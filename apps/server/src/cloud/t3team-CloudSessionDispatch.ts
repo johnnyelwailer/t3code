@@ -47,6 +47,8 @@ export const dispatchAndDiscoverSession = Effect.fn("cloud.session.dispatch_and_
     readonly discoveryAttempts: number;
     /** Set when the session is reached through the Nexi broker instead of T3 Connect. */
     readonly brokerGrant?: string | null;
+    /** The creator's own workspace (`sessionWorkspaceName`); never shared between users. */
+    readonly workspace: string;
     /** Set when the session runs in a project machine; its token is NOT an input (broker secret). */
     readonly machine?: CloudSessionMachine | null;
   }) {
@@ -56,6 +58,7 @@ export const dispatchAndDiscoverSession = Effect.fn("cloud.session.dispatch_and_
       dispatchSessionInvocation(input.repoRef, {
         hold_minutes: String(Math.max(1, Math.round(input.durationSeconds / 60))),
         session_tag: input.sessionTag,
+        workspace: input.workspace,
         server_ref: sessionServerRef,
         ...(input.brokerGrant ? { broker_grant: input.brokerGrant } : {}),
         ...(input.machine
@@ -66,7 +69,6 @@ export const dispatchAndDiscoverSession = Effect.fn("cloud.session.dispatch_and_
               ...(input.machine.healthCheck
                 ? { machine_health_check: input.machine.healthCheck }
                 : {}),
-              workspace: input.machine.workspace,
             }
           : {}),
       }),

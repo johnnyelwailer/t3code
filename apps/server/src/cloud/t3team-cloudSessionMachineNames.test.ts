@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 
 import {
   machineRepositoryFromRemote,
-  machineWorkspaceName,
+  sessionWorkspaceName,
 } from "./t3team-cloudSessionMachineNames.ts";
 
 const API = {
@@ -48,11 +48,20 @@ describe("machineRepositoryFromRemote", () => {
   });
 });
 
-describe("machineWorkspaceName", () => {
-  it("stays within the workflow's workspace rule", () => {
-    const long = machineWorkspaceName({ ...API, owner: "o".repeat(40), name: "n".repeat(40) });
-    expect(machineWorkspaceName(API)).toBe("machine-acme.api");
-    expect(long).toHaveLength(64);
-    expect(long).toMatch(/^[A-Za-z0-9._-]{1,64}$/);
+describe("sessionWorkspaceName", () => {
+  it("is the creator's own: two users on one project never share a snapshot", () => {
+    expect(sessionWorkspaceName("pj", API)).toBe("m-pj.acme.api");
+    expect(sessionWorkspaceName("other", API)).toBe("m-other.acme.api");
+    expect(sessionWorkspaceName("pj", null)).toBe("u-pj");
+  });
+
+  it("stays within the workflow's workspace rule, and long names stay distinct", () => {
+    const a = sessionWorkspaceName("pj", { owner: "o".repeat(40), name: `${"n".repeat(40)}-a` });
+    const b = sessionWorkspaceName("pj", { owner: "o".repeat(40), name: `${"n".repeat(40)}-b` });
+    for (const name of [a, b]) {
+      expect(name).toHaveLength(64);
+      expect(name).toMatch(/^[A-Za-z0-9._-]{1,64}$/);
+    }
+    expect(a).not.toBe(b);
   });
 });

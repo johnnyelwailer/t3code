@@ -96,7 +96,6 @@ describe("CloudSessionMachines.resolve", () => {
         commit: git(root, "rev-parse", "HEAD"),
         devcontainerPath: ".devcontainer/devcontainer.json",
         healthCheck: null,
-        workspace: "machine-acme.api",
         token: "ghp_user-token",
         author: { name: "Philip J", email: "7+pj@users.noreply.nexplore.ghe.com" },
       });

@@ -1,6 +1,6 @@
 /**
- * Pure naming rules for a cloud session that runs in a project machine (issue #562): the https
- * clone URL the session fetches, and the session workspace its conversations persist under.
+ * Pure naming rules for cloud sessions: the https clone URL a project machine fetches (issue
+ * #562), and the per-user workspace a session's conversations persist under.
  *
  * @module t3team-cloudSessionMachineNames
  */
@@ -69,6 +69,35 @@ export function machineGitAuthor(
 }
 
 /** At most 64 characters of `[A-Za-z0-9._-]`, as the session workflow's `workspace` input requires. */
-export function machineWorkspaceName(repository: MachineRepository): string {
-  return `machine-${repository.owner}.${repository.name}`.slice(0, 64);
+const WORKSPACE_LIMIT = 64;
+const workspaceSegment = (value: string) => value.replace(/[^A-Za-z0-9._-]/g, "-");
+
+/** FNV-1a, as 8 hex digits: keeps two long names that share a prefix apart once truncated. */
+const shortHash = (value: string) => {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index++) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+};
+
+/**
+ * The workspace a session's conversations persist under (the session workflow's snapshot key).
+ * Always the creator's own: the snapshot holds their threads and the environment's keypair, and
+ * the fleet's cache is shared by everyone who dispatches sessions there. `u-<login>` for a plain
+ * session, `m-<login>.<owner>.<repo>` for one in a project machine; at most 64 characters of
+ * `[A-Za-z0-9._-]`, the workflow's rule.
+ */
+export function sessionWorkspaceName(
+  login: string,
+  repository: Pick<MachineRepository, "owner" | "name"> | null,
+): string {
+  const name =
+    repository === null
+      ? `u-${workspaceSegment(login)}`
+      : `m-${workspaceSegment(login)}.${workspaceSegment(repository.owner)}.${workspaceSegment(repository.name)}`;
+  return name.length <= WORKSPACE_LIMIT
+    ? name
+    : `${name.slice(0, WORKSPACE_LIMIT - 9)}-${shortHash(name)}`;
 }
