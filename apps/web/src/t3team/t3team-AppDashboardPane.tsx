@@ -96,6 +96,9 @@ export function AppDashboardPane({
                 projectId={project.id}
                 fallback={
                   <ProjectDashboardKickoffAside
+                    // One composer per project: a recipe staged for project A's PR must not stay
+                    // staged (and launch) once the dashboard shows project B.
+                    key={project.id}
                     project={project}
                     dashboardMode={activeDashboardMode}
                     activeThread={activeThread}
