@@ -25,7 +25,6 @@ export const makeSessionTag = (name: string | null) =>
 
 /** The name a run's tag carries, or undefined for a plain session (or a run that predates names). */
 export function sessionNameFromRunName(runName: string): string | undefined {
-  const tag = /\[([^\]]+)\]/.exec(runName)?.[1];
-  const dot = tag?.lastIndexOf(".") ?? -1;
-  return tag !== undefined && dot > 0 ? tag.slice(0, dot) : undefined;
+  // The tag's own shape, wherever it sits: a run name can carry other bracketed parts.
+  return /\[([A-Za-z0-9_-]+)\.s[0-9a-z]+\]/.exec(runName)?.[1];
 }

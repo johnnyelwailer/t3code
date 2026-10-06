@@ -23,4 +23,9 @@ describe("session names", () => {
     const tag = Effect.runSync(makeSessionTag("web.app]v2"));
     expect(sessionNameFromRunName(runName(tag))).toBe("web-app-v2");
   });
+
+  it("finds the tag among other bracketed parts of a run name", () => {
+    expect(sessionNameFromRunName("hive/nx-nexi [main] [api.s1x2] · broker")).toBe("api");
+    expect(sessionNameFromRunName("hive/nx-nexi [main] [s1x2]")).toBeUndefined();
+  });
 });
