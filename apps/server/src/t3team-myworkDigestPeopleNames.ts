@@ -2,21 +2,26 @@
  * Full names for PR people the host only named by login. GitHub's PR reads often carry `login`
  * alone ("kba"), which reads as noise in the digest and cannot be matched to the same person's
  * Jira identity; the host's profile has the real name. One `gh api users/<login>` per person per
- * host, remembered for the server's lifetime (names barely change), a bounded handful per round.
+ * host, remembered for the server's lifetime (names barely change). The lookups run beside the
+ * poll, never inside it: a round shows the names known so far, the next one the rest. At most a
+ * dozen are in flight across all projects, and a person two projects share is asked once.
  */
 
 import { homedir } from "node:os";
 
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Schema from "effect/Schema";
 
 import * as GitHubCli from "./sourceControl/GitHubCli.ts";
 import type { T3TeamDigestPerson } from "./t3team-myworkDigestTypesPrs.ts";
 
 const LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
-const LOOKUPS_PER_ROUND = 12;
+const MAX_IN_FLIGHT = 12;
 const MAX_REMEMBERED = 500;
 const known = new Map<string, string | null>();
+const inFlight = new Set<string>();
+const running: Array<Fiber.Fiber<unknown>> = [];
 
 const decodeProfile = Schema.decodeUnknownOption(
   Schema.fromJsonString(Schema.Struct({ name: Schema.NullOr(Schema.String) })),
@@ -70,16 +75,21 @@ export function withProfileNames<E extends Entry>(
       for (const person of people(entry))
         if (person.name === person.login && LOGIN.test(person.login)) {
           const key = `${entry.host}:${person.login}`;
-          if (!known.has(key)) missing.set(key, { host: entry.host, login: person.login });
+          if (!known.has(key) && !inFlight.has(key) && inFlight.size + missing.size < MAX_IN_FLIGHT)
+            missing.set(key, { host: entry.host, login: person.login });
         }
     if (missing.size > 0) {
       const gh = yield* GitHubCli.GitHubCli;
-      yield* Effect.all(
-        [...missing.values()]
-          .slice(0, LOOKUPS_PER_ROUND)
-          .map(({ host, login }) => lookup(gh, host, login)),
+      for (const key of missing.keys()) inFlight.add(key);
+      const fiber = yield* Effect.all(
+        [...missing.values()].map(({ host, login }) => lookup(gh, host, login)),
         { concurrency: 4 },
+      ).pipe(
+        Effect.ensuring(Effect.sync(() => missing.forEach((_, key) => inFlight.delete(key)))),
+        Effect.forkDetach,
       );
+      running.push(fiber);
+      if (running.length > 50) running.splice(0, running.length - 50);
     }
     const named = (host: string) => (person: T3TeamDigestPerson) => {
       const name = person.name === person.login ? known.get(`${host}:${person.login}`) : null;
@@ -99,4 +109,11 @@ export function withProfileNames<E extends Entry>(
 
 export function resetDigestPeopleNamesForTests(): void {
   known.clear();
+  inFlight.clear();
+  running.length = 0;
 }
+
+/** Waits for the lookups a round started (tests only; production never waits on them). */
+export const awaitDigestPeopleNamesForTests = Effect.suspend(() =>
+  Effect.forEach(running.splice(0), (fiber) => Fiber.await(fiber), { discard: true }),
+);

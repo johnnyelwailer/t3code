@@ -5,7 +5,8 @@ import type { DigestGraph, DigestPrPerson } from "~/t3team/t3team-projectMyWorkD
  * reviewer (GitHub avatar, full name where their profile has one) and as a Jira assignee (Jira
  * avatar, which only arrives once the mirror has re-read their tickets). Where the full names are
  * the same — case, accents and spacing aside — whichever side has a face lends it to the other.
- * A bare login ("bm") matches nothing: no guessing from fragments.
+ * A bare login ("bm") matches nothing: no guessing from fragments. A name two different GitHub
+ * accounts carry lends no face at all: which of them a Jira person is cannot be told.
  */
 function nameKey(name: string | undefined): string | null {
   const key = (name ?? "")
@@ -19,18 +20,27 @@ function nameKey(name: string | undefined): string | null {
 
 export function withSharedFaces(graph: DigestGraph): DigestGraph {
   const faces = new Map<string, string>();
-  const remember = (name: string | undefined, avatarUrl: string | undefined) => {
+  const loginsByName = new Map<string, string>();
+  const ambiguous = new Set<string>();
+  const remember = (name: string | undefined, avatarUrl: string | undefined, login?: string) => {
     const key = nameKey(name);
-    if (key && avatarUrl && !faces.has(key)) faces.set(key, avatarUrl);
+    if (!key) return;
+    if (login !== undefined) {
+      const seen = loginsByName.get(key);
+      if (seen !== undefined && seen !== login) ambiguous.add(key);
+      loginsByName.set(key, login);
+    }
+    if (avatarUrl && !faces.has(key)) faces.set(key, avatarUrl);
   };
   const prPeople: DigestPrPerson[] = (graph.reviewRequests ?? []).flatMap((review) => [
     ...(review.author ? [review.author] : []),
     ...(review.reviewers ?? []),
     ...(review.engaged ?? []),
   ]);
-  for (const person of prPeople) remember(person.name, person.avatarUrl);
+  for (const person of prPeople) remember(person.name, person.avatarUrl, person.login);
   for (const pr of graph.changeRequests)
-    for (const reviewer of pr.reviewers) remember(reviewer.name, reviewer.avatarUrl);
+    for (const reviewer of pr.reviewers)
+      remember(reviewer.name, reviewer.avatarUrl, reviewer.login);
   for (const ticket of graph.tickets) remember(ticket.assignee, ticket.assigneeAvatarUrl);
   for (const dependency of graph.dependencies ?? [])
     remember(dependency.other.assignee, dependency.other.assigneeAvatarUrl);
@@ -38,7 +48,7 @@ export function withSharedFaces(graph: DigestGraph): DigestGraph {
 
   const face = (name: string | undefined) => {
     const key = nameKey(name);
-    return key ? faces.get(key) : undefined;
+    return key && !ambiguous.has(key) ? faces.get(key) : undefined;
   };
   const lend = <T extends { readonly name: string; readonly avatarUrl?: string }>(person: T): T => {
     const url = person.avatarUrl ?? face(person.name);

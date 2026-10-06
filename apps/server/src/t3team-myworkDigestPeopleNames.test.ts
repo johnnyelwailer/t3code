@@ -4,6 +4,7 @@ import * as Layer from "effect/Layer";
 
 import * as GitHubCli from "./sourceControl/GitHubCli.ts";
 import {
+  awaitDigestPeopleNamesForTests,
   resetDigestPeopleNamesForTests,
   withProfileNames,
 } from "./t3team-myworkDigestPeopleNames.ts";
@@ -38,6 +39,10 @@ it.effect("names login-only people from the host profile, once per person", () =
       { host: "ghe.example", engaged: [person("kba"), person("ghost")] },
     ];
     const gh = makeGh({ kba: "Katharina Bähr", bm: "Benjamin Müller" }, calls);
+    // The round itself never waits on the host: it shows what is known, the lookups run beside it.
+    const first = yield* withProfileNames(entries).pipe(Effect.provide(gh));
+    assert.strictEqual(first[0]?.author?.name, "kba");
+    yield* awaitDigestPeopleNamesForTests;
     const named = yield* withProfileNames(entries).pipe(Effect.provide(gh));
     assert.strictEqual(named[0]?.author?.name, "Katharina Bähr");
     assert.deepStrictEqual(
@@ -75,8 +80,11 @@ it.effect("asks again after a failed lookup instead of remembering it as nameles
     });
     const entries = [{ host: "h", author: person("ada") }];
     const first = yield* withProfileNames(entries).pipe(Effect.provide(gh));
+    yield* awaitDigestPeopleNamesForTests;
     assert.strictEqual(first[0]?.author?.name, "ada");
     fail = false;
+    yield* withProfileNames(entries).pipe(Effect.provide(gh));
+    yield* awaitDigestPeopleNamesForTests;
     const second = yield* withProfileNames(entries).pipe(Effect.provide(gh));
     assert.strictEqual(second[0]?.author?.name, "Ada Lovelace");
     assert.strictEqual(calls, 2);
