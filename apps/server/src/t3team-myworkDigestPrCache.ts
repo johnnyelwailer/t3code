@@ -23,7 +23,9 @@ import * as Option from "effect/Option";
 
 import type { PullRequestService } from "./pullRequest/PullRequestService.ts";
 import { loadPrEntries, type PrReadResult } from "./t3team-myworkDigestPr.ts";
+import { loadViewerMergedPrEntries } from "./t3team-myworkDigestMergedPrs.ts";
 import { loadViewerPrEntries } from "./t3team-myworkDigestViewerPrs.ts";
+import type { DigestYesterdayWindow } from "./t3team-myworkDigestYesterdayWindow.ts";
 
 /** How long a cold first read may hold the digest before it ships without change requests. */
 const DIGEST_PR_FIRST_READ_WAIT = Duration.millis(1_200);
@@ -95,6 +97,15 @@ export function loadDigestPrEntries(
 /** The viewer's PRs across every signed-in host — one read shared by every project. */
 export function loadDigestViewerPrEntries() {
   return readCached("viewer", loadViewerPrEntries(), [] as ViewerPrs);
+}
+
+/** The viewer's merged PRs inside the window; keyed by both ends (a zone shifts them), so another window never reads this one. */
+export function loadDigestViewerMergedPrEntries(window: DigestYesterdayWindow) {
+  return readCached(
+    `merged:${window.fromMs}:${window.untilMs}`,
+    loadViewerMergedPrEntries(window),
+    [] as ViewerPrs,
+  );
 }
 
 type ViewerPrs = Effect.Success<ReturnType<typeof loadViewerPrEntries>>;

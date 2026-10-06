@@ -8,6 +8,7 @@ import { bundledDashboardWidget } from "@t3tools/t3team-skill-packs";
 import type { DashboardWidgetPlacement } from "@t3team/sdk/placements";
 import type { ReactNode } from "react";
 
+import { DigestYesterdayWidget } from "~/t3team/t3team-ProjectMyWorkDigestYesterday";
 import { DigestReviewSection } from "~/t3team/t3team-ProjectMyWorkDigestReviewSection";
 import {
   FooterSection,
@@ -32,6 +33,8 @@ function DigestTicketsWidget({ placement, ...props }: DashboardWidgetProps) {
 const DASHBOARD_WIDGET_COMPONENTS: Record<string, (props: DashboardWidgetProps) => ReactNode> = {
   "digest-tickets": DigestTicketsWidget,
   "digest-reviews": ({ placement: _placement, ...props }) => <DigestReviewSection {...props} />,
+  // Reads the graph itself; the compact list is the same in the side lane and the footer.
+  "digest-yesterday": ({ placement: _placement, ...props }) => <DigestYesterdayWidget {...props} />,
 };
 
 /** The widget a section names, or the default for what it lists (`items` → tickets). */

@@ -28,6 +28,8 @@ export type MyWorkDigestPollInput = {
   readonly projects: ReadonlyArray<MyWorkDigestProjectInput>;
   /** The Jira display name the mirror assigns to the viewer (drives the burndown). */
   readonly viewer?: { readonly name?: string };
+  /** The viewer's IANA time zone: the server's "yesterday" is their previous working day. */
+  readonly timeZone?: string;
   /** The fingerprint from the previous round; lets the server answer `unchanged`. */
   readonly knownFingerprint?: string;
 };
@@ -121,6 +123,27 @@ export type MyWorkDigestPayload = {
     readonly sprint?: DigestSprint;
     readonly changeRequestNote?: string;
     readonly jiraSyncedAt?: string;
+    /** The previous working day: PRs the viewer merged, tickets of theirs that moved. */
+    readonly yesterday?: {
+      readonly from: string;
+      readonly until: string;
+      readonly merged: ReadonlyArray<{
+        readonly id: string;
+        readonly host: string;
+        readonly repo: string;
+        readonly number: number;
+        readonly title: string;
+        readonly mergedAt: string;
+        readonly workItemKey?: string;
+      }>;
+      /** `from`/`to` are absent for a ticket Jira merely updated; present when a move was seen. */
+      readonly moved: ReadonlyArray<{
+        readonly ticketRef: DigestTicketRef;
+        readonly from?: string;
+        readonly to?: string;
+        readonly at: string;
+      }>;
+    };
   }>;
 };
 
@@ -142,6 +165,7 @@ export function createMyWorkDigestBackendApi(httpBaseUrl: string) {
           readonly scope: MyWorkDigestScope;
           readonly projects: ReadonlyArray<MyWorkDigestProjectInput>;
           readonly viewer?: { readonly name?: string };
+          readonly timeZone?: string;
           readonly poll: { readonly enabled: true; readonly knownFingerprint?: string };
         },
         MyWorkDigestPollResult
@@ -152,6 +176,7 @@ export function createMyWorkDigestBackendApi(httpBaseUrl: string) {
           scope: input.scope,
           projects: input.projects,
           ...(input.viewer !== undefined ? { viewer: input.viewer } : {}),
+          ...(input.timeZone !== undefined ? { timeZone: input.timeZone } : {}),
           poll: {
             enabled: true,
             ...(input.knownFingerprint !== undefined

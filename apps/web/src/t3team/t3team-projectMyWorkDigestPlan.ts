@@ -16,6 +16,9 @@ export type {
   DigestProject,
   DigestGraph,
   DigestFacet,
+  DigestYesterday,
+  DigestYesterdayMerged,
+  DigestYesterdayMoved,
   DigestItemRef,
   DigestPlacement,
   DigestSection,
@@ -77,6 +80,11 @@ export function digestFacetsFor(
 }
 
 import { DIGEST_BUCKETS } from "./t3team-projectMyWorkDigestBuckets";
+import {
+  DIGEST_YESTERDAY_WIDGET_ID,
+  digestYesterdaySection,
+  isDigestGraphSectionLive,
+} from "./t3team-projectMyWorkDigestYesterdaySection";
 
 /** Reviews the viewer owes, ahead of their own work: someone is blocked on each of them. */
 function reviewSections(graph: DigestGraph): DigestSection[] {
@@ -130,7 +138,10 @@ export function buildHeuristicDigestPlan(
   return {
     producer: "heuristic",
     producedAt: new Date(nowMs).toISOString(),
-    sections: onlyTicketIds === undefined ? [...reviewSections(graph), ...sections] : sections,
+    sections:
+      onlyTicketIds === undefined
+        ? [...reviewSections(graph), ...sections, ...digestYesterdaySection(graph)]
+        : sections,
   };
 }
 
@@ -160,9 +171,15 @@ export function resolveDigestPlan(
         ? { reviewIds: section.reviewIds.filter((id) => reviewIds.has(id)) }
         : {}),
     }))
-    .filter((section) =>
-      section.kind === "reviews" ? (section.reviewIds?.length ?? 0) > 0 : section.items.length > 0,
-    );
+    .filter((section) => {
+      if (section.kind === "graph") return isDigestGraphSectionLive(section, graph);
+      return section.kind === "reviews"
+        ? (section.reviewIds?.length ?? 0) > 0
+        : section.items.length > 0;
+    });
+  // An arrangement made before Yesterday existed has no place for it: it trails in the footer,
+  // like a ticket the arrangement has not seen.
+  const hasYesterdayWidget = sections.some((s) => s.widget === DIGEST_YESTERDAY_WIDGET_ID);
   const unseen = new Set(
     graph.tickets
       .filter((t) => live.has(t.id) && isMine(t, graph) && !referenced.has(t.id))
@@ -175,7 +192,11 @@ export function resolveDigestPlan(
   }));
   return {
     ...plan,
-    sections: [...sections, ...trailing],
+    sections: [
+      ...sections,
+      ...trailing,
+      ...(hasYesterdayWidget ? [] : digestYesterdaySection(graph)),
+    ],
     droppedTicketIds,
     newSinceTicketIds: [...unseen],
   };

@@ -191,6 +191,7 @@ export function assembleMyWorkDigestProjectData(
       : {}),
     ...(source.jiraSyncedAt !== undefined ? { jiraSyncedAt: source.jiraSyncedAt } : {}),
     ...(source.dependencies?.length ? { dependencies: source.dependencies } : {}),
+    ...(source.yesterday !== undefined ? { yesterday: source.yesterday } : {}),
   };
 }
 

@@ -29,6 +29,7 @@ import type {
 } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
+import { digestYesterday } from "./t3team-digestGraphYesterday";
 import {
   buildTicketIndex,
   digestSprintGoals,
@@ -179,6 +180,7 @@ export function payloadToDigestGraph(input: {
   const changeRequests = digestTicketChangeRequests(...joins, projectIdAt, lastVisitMs);
   const reviewRequests = digestReviewRequests(...joins, projectIdAt);
   const dependencies = digestDependencies(...joins);
+  const yesterday = digestYesterday(...joins, projectIdAt);
   return {
     scope: input.payload.scope,
     projects,
@@ -192,6 +194,7 @@ export function payloadToDigestGraph(input: {
     changeRequests,
     reviewRequests,
     dependencies,
+    ...(yesterday !== undefined ? { yesterday } : {}),
     ...(input.payload.arrangement !== undefined ? { arrangement: input.payload.arrangement } : {}),
     transitions,
     blockers,

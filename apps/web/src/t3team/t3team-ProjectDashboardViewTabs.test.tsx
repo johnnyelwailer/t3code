@@ -4,7 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 /**
- * The header's Digest | List | Board | Backlog control ↔ dashboard mode ↔ My Work lens ↔ URL. The
+ * The header's Digest | List | Board | Backlog | Planning control ↔ dashboard mode ↔ My Work lens ↔
+ * backlog view mode ↔ URL. The
  * router is a tiny in-memory location: `navigate` applies the `search` updater the persisted-route
  * hook passes, exactly as TanStack Router would.
  */
@@ -37,13 +38,15 @@ const { ProjectMyWorkViewSwitch } = await import("~/t3team/t3team-ProjectMyWorkV
 
 // Mirrors ProjectDashboard: one hook call feeds both the control and the rendered body.
 function Harness() {
-  const { mode, lens, selectLens, selectBacklog } = useProjectDashboardViewTab("p1");
+  const { mode, lens, backlogActive, planningActive, selectLens, selectBacklog, selectPlanning } =
+    useProjectDashboardViewTab("p1");
   return (
     <>
       <ProjectMyWorkViewSwitch
         lens={lens}
         onLensChange={selectLens}
-        backlog={{ kind: "select", active: mode === "backlog", onSelect: selectBacklog }}
+        backlog={{ kind: "select", active: backlogActive, onSelect: selectBacklog }}
+        planning={{ kind: "select", active: planningActive, onSelect: selectPlanning }}
       />
       <main data-body={mode === "backlog" ? "backlog" : lens} />
     </>
@@ -133,5 +136,74 @@ describe("project dashboard view tabs", () => {
         window.sessionStorage.getItem("t3team:project-dashboard-mode-state:v1:p1") ?? "{}",
       ),
     ).toEqual({ dashboardMode: "my-work" });
+  });
+
+  it("Planning is the Backlog in its planning-space view mode: one URL key, no new route", async () => {
+    location = { pathname: "/t3team/projects/p1", search: {} };
+    await render();
+    await click("planning");
+    expect(pressed()).toBe("planning");
+    expect(body()).toBe("backlog");
+    expect(location.search).toMatchObject({ projectView: "backlog", view: "planning-space" });
+    // The dashboard mode is still the one `?projectView=` it always was.
+    expect(
+      JSON.parse(
+        window.sessionStorage.getItem("t3team:project-dashboard-mode-state:v1:p1") ?? "{}",
+      ),
+    ).toEqual({ dashboardMode: "backlog" });
+  });
+
+  it("honours an incoming ?view=planning-space link on the Backlog", async () => {
+    location = {
+      pathname: "/t3team/projects/p1",
+      search: { projectView: "backlog", view: "planning-space" },
+    };
+    await render();
+    expect(pressed()).toBe("planning");
+  });
+
+  it("Backlog from the planning space returns to the table, Planning back again", async () => {
+    location = {
+      pathname: "/t3team/projects/p1",
+      search: { projectView: "backlog", view: "planning-space" },
+    };
+    await render();
+    await click("backlog");
+    expect(pressed()).toBe("backlog");
+    expect(body()).toBe("backlog");
+    expect(location.search).toMatchObject({ projectView: "backlog", view: "table" });
+    await click("planning");
+    expect(pressed()).toBe("planning");
+    expect(location.search).toMatchObject({ view: "planning-space" });
+  });
+
+  it("Backlog keeps the view mode it is already in", async () => {
+    location = {
+      pathname: "/t3team/projects/p1",
+      search: { projectView: "backlog", view: "hierarchy" },
+    };
+    await render();
+    expect(pressed()).toBe("backlog");
+    await click("digest");
+    await click("backlog");
+    expect(pressed()).toBe("backlog");
+    expect(location.search).toMatchObject({ projectView: "backlog", view: "hierarchy" });
+  });
+
+  it("opening My work never writes the backlog's own params into the URL", async () => {
+    location = { pathname: "/t3team/projects/p1", search: {} };
+    await render();
+    const backlogKeys = [
+      "q",
+      "focus",
+      "assignee",
+      "view",
+      "group",
+      "sort",
+      "dir",
+      "board",
+      "sprint",
+    ];
+    expect(Object.keys(location.search).filter((key) => backlogKeys.includes(key))).toEqual([]);
   });
 });

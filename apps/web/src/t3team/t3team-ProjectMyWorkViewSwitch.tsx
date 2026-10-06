@@ -1,5 +1,5 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
-import { Columns3, ListTodo, ListTree, Sparkles } from "lucide-react";
+import { Columns3, ListTodo, ListTree, Orbit, Sparkles } from "lucide-react";
 import type { ComponentType } from "react";
 
 import {
@@ -10,6 +10,7 @@ import {
   MenuPopup,
   MenuTrigger,
 } from "~/t3team/components/ui/t3team-menu";
+import { planningSpaceEnabled } from "~/t3team/planning-space/t3team-planningSpaceFlag";
 
 export type ProjectMyWorkLens = "digest" | "hierarchy" | "board";
 
@@ -22,11 +23,12 @@ const LENSES: ReadonlyArray<{ value: ProjectMyWorkLens; label: string; Icon: Ico
 ];
 
 /**
- * How the Backlog segment behaves. A project dashboard already knows its project, so it just
- * selects; the all-projects view has no project in hand and asks which one first (a backlog is
- * one project's hierarchy plus its own Jira planning, so several are never flattened together).
+ * How the Backlog and Planning segments behave. A project dashboard already knows its project, so
+ * it just selects; the all-projects view has no project in hand and asks which one first (a
+ * backlog is one project's hierarchy plus its own Jira planning, so several are never flattened
+ * together; the planning space is the same backlog in another view).
  */
-export type ProjectMyWorkBacklogSegment =
+export type ProjectMyWorkProjectSegment =
   | { readonly kind: "select"; readonly active: boolean; readonly onSelect: () => void }
   | {
       readonly kind: "pick-project";
@@ -54,25 +56,35 @@ function SegmentLabel({ Icon, label }: { Icon: IconComponent; label: string }) {
   );
 }
 
+/** The two segments that open a project's backlog: which view of it, under which name. */
+const BACKLOG_SEGMENTS = {
+  backlog: { label: "Backlog", Icon: ListTodo, pickerLabel: "Backlog of…" },
+  planning: { label: "Planning", Icon: Orbit, pickerLabel: "Planning space of…" },
+} as const;
+type BacklogSegmentKey = keyof typeof BACKLOG_SEGMENTS;
+
 function BacklogProjectPicker({
+  segment,
   projects,
   onPick,
 }: {
+  segment: BacklogSegmentKey;
   projects: ReadonlyArray<ProjectShellProject>;
   onPick: (projectId: string) => void;
 }) {
+  const { label, Icon, pickerLabel } = BACKLOG_SEGMENTS[segment];
   return (
     <Menu>
       <MenuTrigger
-        data-segment="backlog"
+        data-segment={segment}
         className={segmentClassName(false)}
         render={<button type="button" />}
       >
-        <SegmentLabel Icon={ListTodo} label="Backlog" />
+        <SegmentLabel Icon={Icon} label={label} />
       </MenuTrigger>
       <MenuPopup side="bottom" align="end" className="min-w-56">
         <MenuGroup>
-          <MenuGroupLabel>Backlog of…</MenuGroupLabel>
+          <MenuGroupLabel>{pickerLabel}</MenuGroupLabel>
           {projects.length === 0 ? (
             <MenuItem disabled>No project with a backlog yet</MenuItem>
           ) : (
@@ -88,20 +100,58 @@ function BacklogProjectPicker({
   );
 }
 
+function BacklogSegment({
+  segment,
+  behavior,
+}: {
+  segment: BacklogSegmentKey;
+  behavior: ProjectMyWorkProjectSegment;
+}) {
+  if (behavior.kind === "pick-project") {
+    return (
+      <BacklogProjectPicker
+        segment={segment}
+        projects={behavior.projects}
+        onPick={behavior.onPick}
+      />
+    );
+  }
+  const { label, Icon } = BACKLOG_SEGMENTS[segment];
+  return (
+    <button
+      type="button"
+      data-segment={segment}
+      aria-pressed={behavior.active}
+      onClick={() => {
+        if (!behavior.active) behavior.onSelect();
+      }}
+      className={segmentClassName(behavior.active)}
+    >
+      <SegmentLabel Icon={Icon} label={label} />
+    </button>
+  );
+}
+
 /**
- * The My Work lens switch and, when `backlog` is given, the Backlog view as one segmented control:
- * Digest | List | Board | Backlog. Lives in the dashboard header.
+ * The My Work lens switch and, when `backlog` / `planning` are given, the two views of the Backlog
+ * as one segmented control: Digest | List | Board | Backlog | Planning. Lives in the dashboard
+ * header. Planning (the backlog's planning-space view) shows behind the planning-space flag.
  */
 export function ProjectMyWorkViewSwitch({
   lens,
   onLensChange,
   backlog,
+  planning,
 }: {
   lens: ProjectMyWorkLens;
   onLensChange: (value: ProjectMyWorkLens) => void;
-  backlog?: ProjectMyWorkBacklogSegment;
+  backlog?: ProjectMyWorkProjectSegment;
+  planning?: ProjectMyWorkProjectSegment;
 }) {
-  const backlogActive = backlog?.kind === "select" && backlog.active;
+  const planningSegment = planningSpaceEnabled ? planning : undefined;
+  const backlogActive =
+    (backlog?.kind === "select" && backlog.active) ||
+    (planningSegment?.kind === "select" && planningSegment.active);
   return (
     <div
       className="inline-flex shrink-0 items-center gap-0.5 rounded-lg bg-input/40 p-0.5"
@@ -123,21 +173,8 @@ export function ProjectMyWorkViewSwitch({
           </button>
         );
       })}
-      {backlog?.kind === "select" ? (
-        <button
-          type="button"
-          data-segment="backlog"
-          aria-pressed={backlog.active}
-          onClick={() => {
-            if (!backlog.active) backlog.onSelect();
-          }}
-          className={segmentClassName(backlog.active)}
-        >
-          <SegmentLabel Icon={ListTodo} label="Backlog" />
-        </button>
-      ) : backlog?.kind === "pick-project" ? (
-        <BacklogProjectPicker projects={backlog.projects} onPick={backlog.onPick} />
-      ) : null}
+      {backlog ? <BacklogSegment segment="backlog" behavior={backlog} /> : null}
+      {planningSegment ? <BacklogSegment segment="planning" behavior={planningSegment} /> : null}
     </div>
   );
 }

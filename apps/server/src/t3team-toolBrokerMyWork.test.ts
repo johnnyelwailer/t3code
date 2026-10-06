@@ -247,10 +247,15 @@ it.effect("the catalog text matches the bundled widgets", () =>
     );
     for (const widget of BUNDLED_DASHBOARD_WIDGETS) {
       // "my-work.tickets lists tickets, placements side|main|footer"
+      // "my-work.yesterday reads the digest itself, placements side|footer"
+      const what = {
+        tickets: "lists tickets",
+        reviews: "lists review-owed pull requests",
+        none: "reads the digest itself",
+      }[widget.content];
       assert.include(
         arrange.description,
-        `${widget.id} lists ${widget.content === "tickets" ? "tickets" : "review-owed pull requests"}, ` +
-          `placements ${widget.placements.join("|")}`,
+        `${widget.id} ${what}, placements ${widget.placements.join("|")}`,
       );
     }
   }),

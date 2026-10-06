@@ -130,6 +130,41 @@ arrangementLayer("t3team digest arrangement store", (it) => {
       }),
   );
 
+  it.effect("accepts the yesterday widget as a graph section, and holds it to its rules", () =>
+    Effect.gen(function* () {
+      const yesterday = {
+        id: "yesterday",
+        kind: "graph",
+        widget: "my-work.yesterday",
+        placement: "footer",
+        heading: "Yesterday",
+        items: [],
+      };
+      const stored = yield* storeDigestArrangement(identity, "all", {
+        ...plan(),
+        sections: [yesterday],
+      });
+      assert.equal(stored.sections[0]?.kind, "graph");
+
+      const reject = (section: object) =>
+        storeDigestArrangement(identity, "all", { ...plan(), sections: [section] }).pipe(
+          Effect.exit,
+        );
+      // No default widget for a graph section: it must say which one.
+      const { widget: _widget, ...unnamedSection } = yesterday;
+      const unnamed = yield* reject(unnamedSection);
+      assert.include(String(unnamed), "a 'graph' section must name its widget");
+      // The widget stands in the side lane or the footer, not the main lane.
+      const inMain = yield* reject({ ...yesterday, placement: "main" });
+      assert.include(String(inMain), "cannot stand in 'main' (allowed: side, footer)");
+      // It reads the digest itself: a tickets widget under a graph section is a mismatch.
+      const mismatch = yield* reject({ ...yesterday, widget: "my-work.tickets" });
+      assert.include(String(mismatch), "needs a widget that lists none");
+      const withItems = yield* reject({ ...yesterday, items: [{ ticketId: "t-1" }] });
+      assert.include(String(withItems), "a 'graph' section lists nothing");
+    }),
+  );
+
   it.effect("rejects an unparseable shape and a bad timestamp", () =>
     Effect.gen(function* () {
       assert.isTrue(

@@ -14,6 +14,8 @@ import { loadDigestBurndownContext } from "./t3team-myworkDigestBurndownBackfill
 import { kickDigestMirrorSync, readDigestJiraSyncedAtMs } from "./t3team-myworkDigestFreshness.ts";
 import { toDigestPrEntries } from "./t3team-myworkDigestPr.ts";
 import { loadDigestPrEntries, loadDigestViewerPrEntries } from "./t3team-myworkDigestPrCache.ts";
+import { readDigestYesterday } from "./t3team-myworkDigestYesterdayRead.ts";
+import type { DigestYesterdayWindow } from "./t3team-myworkDigestYesterdayWindow.ts";
 import { viewerPrsForProject } from "./t3team-myworkDigestViewerPrs.ts";
 import { enrichDigestReviewEntries } from "./t3team-myworkDigestReviewEnrich.ts";
 import {
@@ -38,6 +40,7 @@ type DigestSharedReads = {
   readonly nowMs: number;
   readonly nowIso: string;
   readonly requestedViewerName: string | undefined;
+  readonly yesterdayWindow: DigestYesterdayWindow;
   readonly threads: ReadonlyArray<DigestThreadRow>;
   readonly agentByThread: ReadonlyMap<string, string>;
   readonly rawTicketByThread: ReadonlyMap<string, string>;
@@ -71,12 +74,27 @@ export function loadDigestProjectSource(
     const boardSprints = yield* readDigestSprints(identity);
     const { tickets, sprints } = alignDigestSprints(viewer.tickets, boardSprints, ctx.nowMs);
     const estimateUnit = yield* readDigestEstimateUnit(identity);
-    const transitions = yield* readDigestStatusTransitionsSince({
+    const transitionRows = yield* readDigestStatusTransitionsSince({
       ...identity,
       sinceMs: ctx.nowMs - DIGEST_TRANSITION_LOOKBACK_MS,
     });
+    const transitions = transitionRows.map((row) => ({
+      ticketRef: {
+        issueId: row.issueId,
+        ...(row.issueKey !== null ? { issueKey: row.issueKey } : {}),
+      },
+      from: row.from,
+      to: row.to,
+      at: millisToIso(row.atMs),
+    }));
     const { read: prRead, pending: projectPrsPending } = yield* loadDigestPrEntries(appProjectId);
     const viewerPrs = yield* loadDigestViewerPrEntries();
+    const yesterdayRead = yield* readDigestYesterday({
+      window: ctx.yesterdayWindow,
+      assigned: viewer.assigned,
+      tickets,
+      transitions,
+    });
     const jiraSyncedAtMs = yield* readDigestJiraSyncedAtMs(project);
     const dependencies = yield* readDigestDependencies({ identity, assigned: viewer.assigned });
 
@@ -134,7 +152,8 @@ export function loadDigestProjectSource(
       }),
       appProjectId,
     );
-    const pending = projectPrsPending || viewerPrs.pending || reviewRead.pending;
+    const pending =
+      projectPrsPending || viewerPrs.pending || reviewRead.pending || yesterdayRead.pending;
 
     const source: T3TeamDigestProjectSource = {
       input: project,
@@ -146,15 +165,7 @@ export function loadDigestProjectSource(
       claims,
       decisions,
       prEntries: reviewRead.entries,
-      transitions: transitions.map((row) => ({
-        ticketRef: {
-          issueId: row.issueId,
-          ...(row.issueKey !== null ? { issueKey: row.issueKey } : {}),
-        },
-        from: row.from,
-        to: row.to,
-        at: millisToIso(row.atMs),
-      })),
+      transitions,
       ...(burndownTransitions.length > 0 ? { burndownTransitions } : {}),
       ...(viewerName !== undefined ? { viewerName } : {}),
       ...(estimateUnit !== undefined ? { estimateUnit } : {}),
@@ -163,6 +174,7 @@ export function loadDigestProjectSource(
       ...(prRead?.note !== undefined ? { changeRequestNote: prRead.note } : {}),
       ...(jiraSyncedAtMs !== undefined ? { jiraSyncedAt: millisToIso(jiraSyncedAtMs) } : {}),
       ...(dependencies.length > 0 ? { dependencies } : {}),
+      ...(yesterdayRead.yesterday !== undefined ? { yesterday: yesterdayRead.yesterday } : {}),
     };
     return { source, viewerUnresolved: viewer.unresolved, changeRequestsPending: pending };
   });

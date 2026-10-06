@@ -12,6 +12,7 @@ import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 
+import { digestYesterdayWindow } from "./t3team-myworkDigestYesterdayWindow.ts";
 import { assembleMyWorkDigestPayload } from "./t3team-myworkDigestAggregation.ts";
 import { loadDigestProjectSource } from "./t3team-myworkDigestProjectSource.ts";
 import {
@@ -33,6 +34,7 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
     const nowMs = yield* Clock.currentTimeMillis;
     const nowIso = DateTime.formatIso(DateTime.makeUnsafe(nowMs));
     const requestedViewerName = input.viewer?.name?.trim() || undefined;
+    const yesterdayWindow = digestYesterdayWindow(nowMs, input.timeZone);
     const appProjectIds = [
       ...new Set(
         projects
@@ -71,6 +73,7 @@ export function loadT3TeamMyWorkDigestGraph(input: T3TeamMyWorkDigestInput) {
             nowMs,
             nowIso,
             requestedViewerName,
+            yesterdayWindow,
             threads,
             agentByThread,
             rawTicketByThread,

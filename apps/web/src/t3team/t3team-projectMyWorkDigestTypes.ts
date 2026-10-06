@@ -173,8 +173,40 @@ export type DigestGraph = {
   readonly dependencies?: readonly DigestDependency[];
   readonly transitions: readonly DigestTransition[];
   readonly blockers: readonly DigestBlocker[];
+  /** The previous working day (merged PRs, moved tickets); absent when there is nothing. */
+  readonly yesterday?: DigestYesterday;
   /** The arrangement an agent stored for this scope (the arrange-my-work recipe); absent = default. */
   readonly arrangement?: DigestPlan;
+};
+
+/** A PR the viewer merged in the previous working day; `ticketId` when it names a held ticket. */
+export type DigestYesterdayMerged = {
+  readonly id: string;
+  /** The app project whose digest carried it — the PR detail panel reads through that project. */
+  readonly projectId: string;
+  readonly host?: string;
+  readonly repo: string;
+  readonly number: number;
+  readonly title: string;
+  readonly mergedAt: string;
+  readonly workItemKey?: string;
+  readonly ticketId?: string;
+};
+
+/**
+ * One of the viewer's tickets that moved in the previous working day. `from`/`to` are the statuses
+ * when the mirror saw the move; a ticket Jira merely updated carries neither.
+ */
+export type DigestYesterdayMoved = {
+  readonly ticketId: string;
+  readonly from?: string;
+  readonly to?: string;
+  readonly at: string;
+};
+
+export type DigestYesterday = {
+  readonly merged: readonly DigestYesterdayMerged[];
+  readonly moved: readonly DigestYesterdayMoved[];
 };
 
 export type DigestFacet = "decision" | "claim" | "changeRequest" | "moved" | "stalled";
@@ -186,11 +218,12 @@ export type DigestPlacement = "side" | "main" | "footer";
 /**
  * One block of the digest. `items` sections list tickets; `reviews` sections list the PRs in
  * `reviewIds` (graph `reviewRequests` ids) — PRs, because a review owed is not one of the viewer's
- * tickets. A plan from any producer (the heuristic, an agent) arranges these same kinds.
+ * tickets; `graph` sections list nothing, their widget reads the graph itself (yesterday). A plan
+ * from any producer (the heuristic, an agent) arranges these same kinds.
  */
 export type DigestSection = {
   readonly id: string;
-  readonly kind: "items" | "reviews";
+  readonly kind: "items" | "reviews" | "graph";
   /** The `dashboard.widget` that renders it; absent means the default for its `kind`. */
   readonly widget?: string;
   readonly reviewIds?: readonly string[];

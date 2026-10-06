@@ -32,9 +32,11 @@ const ArrangeItem = Schema.Struct({
 
 const ArrangeSection = Schema.Struct({
   id: Schema.String.annotate({ description: "Unique within the plan." }),
-  kind: Schema.Literals(["items", "reviews"]),
+  kind: Schema.Literals(["items", "reviews", "graph"]),
   widget: Schema.optional(Schema.String).annotate({
-    description: "my-work.tickets or my-work.reviews; defaults to the widget for the kind.",
+    description:
+      "my-work.tickets, my-work.reviews or my-work.yesterday; defaults to the widget for the kind " +
+      "(a 'graph' section must name one).",
   }),
   placement: Schema.Literals(["side", "main", "footer"]),
   heading: Schema.String,

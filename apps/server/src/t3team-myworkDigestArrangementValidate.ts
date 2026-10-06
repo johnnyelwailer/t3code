@@ -2,7 +2,8 @@
  * Write-side validation of a My Work arrangement. The wire schema
  * (`T3TeamMyWorkDigestPlan`, packages/contracts) is structural; what only the server knows is the
  * bundled widget list: a section may name only a bundled widget, in a placement that widget
- * allows, and the widget's content type must match the section's kind.
+ * allows, and the widget's content type must match the section's kind (`items` → tickets,
+ * `reviews` → reviews, `graph` → a widget that reads the digest itself, content `none`).
  */
 
 import { T3TeamMyWorkDigestPlan, type T3TeamMyWorkDigestSection } from "@t3tools/contracts";
@@ -22,11 +23,22 @@ class T3TeamMyWorkArrangementInvalidError extends Data.TaggedError(
   }
 }
 
-/** A section's widget: the named one, or the default for its kind (its bundled widget). */
-const DEFAULT_WIDGET_BY_KIND = { items: "my-work.tickets", reviews: "my-work.reviews" } as const;
+/**
+ * A section's widget: the named one, or the default for its kind (its bundled widget). A `graph`
+ * section has no default — which graph widget it shows is the point of it.
+ */
+const DEFAULT_WIDGET_BY_KIND = {
+  items: "my-work.tickets",
+  reviews: "my-work.reviews",
+  graph: undefined,
+} as const;
+const CONTENT_BY_KIND = { items: "tickets", reviews: "reviews", graph: "none" } as const;
 
 const sectionIssues = (section: T3TeamMyWorkDigestSection): ReadonlyArray<string> => {
   const widgetId = section.widget ?? DEFAULT_WIDGET_BY_KIND[section.kind];
+  if (widgetId === undefined) {
+    return [`Section '${section.id}': a 'graph' section must name its widget.`];
+  }
   const widget = bundledDashboardWidget(widgetId);
   if (widget === undefined) {
     return [`Section '${section.id}': unknown widget '${widgetId}'.`];
@@ -38,7 +50,7 @@ const sectionIssues = (section: T3TeamMyWorkDigestSection): ReadonlyArray<string
         `(allowed: ${widget.placements.join(", ")}).`,
     );
   }
-  const expectedContent = section.kind === "items" ? "tickets" : "reviews";
+  const expectedContent = CONTENT_BY_KIND[section.kind];
   if (widget.content !== expectedContent) {
     issues.push(
       `Section '${section.id}': widget '${widgetId}' lists ${widget.content}, ` +
@@ -50,6 +62,14 @@ const sectionIssues = (section: T3TeamMyWorkDigestSection): ReadonlyArray<string
   }
   if (section.kind === "reviews" && section.items.length > 0) {
     issues.push(`Section '${section.id}': a 'reviews' section lists reviewIds, not items.`);
+  }
+  if (
+    section.kind === "graph" &&
+    (section.items.length > 0 || (section.reviewIds?.length ?? 0) > 0)
+  ) {
+    issues.push(
+      `Section '${section.id}': a 'graph' section lists nothing; its widget reads the digest.`,
+    );
   }
   return issues;
 };
