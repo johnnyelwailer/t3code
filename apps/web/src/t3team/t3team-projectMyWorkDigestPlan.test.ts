@@ -133,7 +133,7 @@ describe("heuristic digest plan, anchored on now", () => {
 
 describe("digest story groups", () => {
   it("shows a story that is itself in the section once, as its group's header", async () => {
-    const { groupByParent } = await import("./t3team-ProjectMyWorkDigestSections");
+    const { groupByParent } = await import("./t3team-projectMyWorkDigestGroups");
     const withRef = (id: string, parentId?: string) =>
       ({
         ...ticket(id, "In Progress", "active"),

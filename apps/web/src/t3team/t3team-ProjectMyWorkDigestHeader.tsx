@@ -81,7 +81,7 @@ export function ProjectMyWorkDigestHeader({
               ))
             : null}
           <span>
-            {[graph.viewer.name, graph.viewer.role].filter((part) => part !== "").join(" · ")}
+            {[graph.viewer.name, graph.viewer.role].filter((part) => part?.trim()).join(" · ")}
           </span>
           <DigestAutoStatus
             updatedAtMs={updatedAtMs}
@@ -122,7 +122,7 @@ export function ProjectMyWorkDigestHeader({
             </span>
           ) : null}
           <span>
-            {[graph.viewer.name, graph.viewer.role].filter((part) => part !== "").join(" · ")}
+            {[graph.viewer.name, graph.viewer.role].filter((part) => part?.trim()).join(" · ")}
           </span>
           <DigestAutoStatus
             updatedAtMs={updatedAtMs}

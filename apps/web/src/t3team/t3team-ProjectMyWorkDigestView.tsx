@@ -1,4 +1,5 @@
 import { digestLaneLayout } from "~/t3team/t3team-projectMyWorkDigestLaneLayout";
+import { digestShownTicketIds } from "~/t3team/t3team-projectMyWorkDigestGroups";
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import {
   FooterSection,
@@ -65,6 +66,7 @@ export function ProjectMyWorkDigestView({
         ? "@3xl/digest:grid-cols-2"
         : "";
   const lanes = digestLaneLayout({ side: side.length, main: main.length });
+  const shownTicketIds = digestShownTicketIds([...side, ...main], graph);
   return (
     <div className="@container/digest space-y-8">
       {header}
@@ -87,7 +89,7 @@ export function ProjectMyWorkDigestView({
           {lanes.showMain ? (
             <div className="@container/lane min-w-0 space-y-8">
               {main.map((s) => (
-                <MainSection key={s.id} section={s} {...lane} />
+                <MainSection key={s.id} section={s} {...lane} shownTicketIds={shownTicketIds} />
               ))}
             </div>
           ) : null}
