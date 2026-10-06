@@ -2,7 +2,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { createCloudSessionAtoms } from "@t3tools/client-runtime/state/cloud-sessions";
 import type { CloudSession } from "@t3tools/contracts";
 import * as Option from "effect/Option";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 
 import { cloudSessionFailureDescription } from "../cloud/t3team-cloudSessionFailureDescription";
 import { connectionAtomRuntime } from "../connection/runtime";

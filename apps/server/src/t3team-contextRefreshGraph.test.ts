@@ -3,7 +3,7 @@ import type { IntegrationProvider } from "@t3tools/integrations-core";
 import type { ProjectShellProject, ResourceSnapshot } from "@t3tools/project-context";
 import * as Effect from "effect/Effect";
 
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import { ensureT3TeamContextCacheTables } from "./t3team-context-cache-tables.ts";
 import { buildT3TeamForegroundContextGraph } from "./t3team-contextRefreshGraph.ts";
 

@@ -8,7 +8,7 @@
 import type { ThreadId as ThreadIdType } from "@t3tools/contracts";
 import type * as Effect from "effect/Effect";
 
-import type { ProviderRegistryShape } from "./provider/Services/ProviderRegistry.ts";
+import type { ProviderRegistryShape } from "./provider/ProviderRegistry.ts";
 import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshService.ts";
 import type { T3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
 import type { ResourcePressureMonitorShape } from "./t3team-resourcePressureMonitor.ts";

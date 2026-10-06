@@ -22,15 +22,15 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { makeKeyedSerialExecutor } from "./orchestration-v2/KeyedSerialExecutor.ts";
 import { ProjectStoreV2 } from "./orchestration-v2/ProjectStore.ts";
-import { ProjectionProjectSourceBindingRepositoryLive } from "./persistence/Layers/t3team-ProjectionProjectSourceBindings.ts";
+import { ProjectionProjectSourceBindingRepositoryLive } from "./persistence/t3team-ProjectionProjectSourceBindings.ts";
 import {
   type ProjectionProjectSourceBinding,
   ProjectionProjectSourceBindingRepository,
-} from "./persistence/Services/t3team-ProjectionProjectSourceBindings.ts";
+} from "./persistence/t3team-ProjectionProjectSourceBindings.ts";
 import { ProjectOperationError } from "./project/ProjectService.ts";
 import {
   ProjectSourceMutationHook,

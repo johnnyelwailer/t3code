@@ -7,9 +7,9 @@ import type {
 } from "@t3tools/integrations-atlassian";
 import type { ExternalResourceRef, ResourcePage } from "@t3tools/project-context";
 import * as Effect from "effect/Effect";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import {
   appendCachedT3TeamAtlassianBacklogSyncPage,
   readCachedT3TeamAtlassianBacklog,

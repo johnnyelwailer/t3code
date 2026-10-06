@@ -5,7 +5,7 @@
  * cannot carry. Written by `t3team-v2/t3team-threadArtifactsStore.ts` and
  * streamed per thread over `t3team.subscribeThreadArtifacts`.
  */
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as Effect from "effect/Effect";
 
 export default Effect.gen(function* () {

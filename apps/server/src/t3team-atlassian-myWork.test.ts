@@ -19,7 +19,7 @@ import * as Layer from "effect/Layer";
 import { afterEach, vi } from "vite-plus/test";
 
 import * as ServerConfig from "./config.ts";
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import { replaceAtlassianAuths } from "./t3team-atlassian-auth-store.ts";
 import { writeCachedT3TeamAtlassianBacklog } from "./t3team-atlassian-backlog-cache.ts";
 import type { BacklogResourceRef } from "./t3team-atlassian-backlog-cacheShared.ts";

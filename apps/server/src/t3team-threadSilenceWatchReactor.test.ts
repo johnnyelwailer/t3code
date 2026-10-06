@@ -10,7 +10,7 @@ import * as Layer from "effect/Layer";
 import * as TestClock from "effect/testing/TestClock";
 
 import type { ThreadMailboxSendInput } from "./mcp/t3team-threadMailboxDelivery.ts";
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import {
   makeThreadSilenceWatchCore,
   type SilenceWatchShell,

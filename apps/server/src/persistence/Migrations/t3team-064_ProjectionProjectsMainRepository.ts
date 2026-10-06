@@ -4,7 +4,7 @@
  * PRAGMA-guarded so a re-run on a machine whose ledger already holds the column is a no-op.
  */
 import * as Effect from "effect/Effect";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;

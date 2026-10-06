@@ -16,7 +16,7 @@
  * or a fork database from before the column existed) by reading nothing.
  */
 import * as Effect from "effect/Effect";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 export interface LegacyRelation {
   readonly childThreadId: string;

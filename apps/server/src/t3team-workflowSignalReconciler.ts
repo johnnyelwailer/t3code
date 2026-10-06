@@ -31,7 +31,7 @@ import {
   assertCatalogCoversDeclarations,
   makeWorkflowSignalSourceCatalog,
 } from "./t3team-workflowSignalCatalog.ts";
-import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
+import { WorkflowSignalStore } from "./persistence/WorkflowSignalStore.ts";
 import { PullRequestService } from "./pullRequest/PullRequestService.ts";
 import { makeReconcilerCore } from "./t3team-workflowSignalReconcilerCore.ts";
 import {

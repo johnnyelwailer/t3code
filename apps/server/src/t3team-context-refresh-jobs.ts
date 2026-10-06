@@ -1,6 +1,6 @@
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { ensureT3TeamContextCacheTables } from "./t3team-context-cache-tables.ts";
 import type { T3TeamContextBackgroundQueueItem } from "./t3team-contextRefreshBackgroundQueue.ts";

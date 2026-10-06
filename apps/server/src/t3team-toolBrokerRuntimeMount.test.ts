@@ -5,9 +5,9 @@ import * as Option from "effect/Option";
 import { vi } from "vite-plus/test";
 
 import { GitWorkflowService } from "./git/GitWorkflowService.ts";
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
-import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStore.ts";
-import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
+import { SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
+import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
 import { mountT3TeamBrokerBeforeRuntimeServices } from "./server.ts";
 import { makeWorkflowRunToolsForThread } from "./t3team-toolBrokerWorkflowRunLive.ts";
 import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistry.ts";

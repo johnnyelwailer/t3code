@@ -11,7 +11,7 @@ import type * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import type * as Path from "effect/Path";
-import type * as SqlClient from "effect/unstable/sql/SqlClient";
+import type * as SqlClient from "effect/sql/SqlClient";
 
 import type { WorkspacePaths } from "./workspace/WorkspacePaths.ts";
 import { writeT3TeamContextCasFile } from "./t3team-context-blob-store.ts";

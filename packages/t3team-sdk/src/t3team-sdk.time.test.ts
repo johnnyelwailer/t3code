@@ -2,14 +2,14 @@
  * `@t3team/sdk/time` (Epic 27 §Time & scheduling helpers): `nextWeekday` and `nextCron` must be
  * pure transforms of their `fromEpochMs` input — a workflow body replays them from the journal,
  * never from the real clock. These tests pin known dates, purity across repeat calls, and (via
- * `effect/unstable/arbitrary`) the properties the spec calls out: the result is
+ * `effect/arbitrary`) the properties the spec calls out: the result is
  * always strictly after `fromEpochMs`, and it's the MINIMAL matching instant, not just *a*
  * later one.
  */
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import * as Arbitrary from "effect/unstable/arbitrary/Arbitrary";
+import * as Arbitrary from "effect/Arbitrary";
 import { describe, expect, it } from "vite-plus/test";
 
 import { it as effectIt } from "./t3team-sdk.testEffect.ts";

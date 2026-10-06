@@ -9,15 +9,15 @@ import { assert, describe, it } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcessSpawner } from "effect/process";
 
 import { runMigrations } from "./persistence/Migrations.ts";
-import { ResourcePressureEventRepositoryLive } from "./persistence/Layers/t3team-ResourcePressureEvents.ts";
+import { ResourcePressureEventRepositoryLive } from "./persistence/t3team-ResourcePressureEvents.ts";
 import {
   RESOURCE_PRESSURE_EVENT_RETENTION,
   ResourcePressureEventRepository,
   type ResourcePressureEventInput,
-} from "./persistence/Services/t3team-ResourcePressureEvents.ts";
+} from "./persistence/t3team-ResourcePressureEvents.ts";
 import * as HostResources from "./resourceTelemetry/HostResources.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import { DISABLED_REPORT, makeResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";

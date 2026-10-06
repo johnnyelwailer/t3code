@@ -12,7 +12,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
 import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import { projectMutationOperation } from "./project/ProjectMutation.ts";
 import { ProjectOperationError, type ProjectService } from "./project/ProjectService.ts";
 import {

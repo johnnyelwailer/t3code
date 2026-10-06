@@ -1,7 +1,7 @@
 import { AuthAccessWriteScope, AuthOrchestrationReadScope } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { HttpRouter } from "effect/unstable/http";
+import { HttpRouter } from "effect/http";
 
 import { Accounts } from "./account/t3team-Accounts.ts";
 import type { AccountError } from "./account/t3team-AccountError.ts";

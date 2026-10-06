@@ -17,7 +17,7 @@ import * as Option from "effect/Option";
 import type {
   WorkflowRun,
   WorkflowRunRepositoryShape,
-} from "./persistence/Services/WorkflowRuns.ts";
+} from "./persistence/WorkflowRuns.ts";
 import { deliverWorkflowFailure } from "./t3team-workflowCompletionMessage.ts";
 import { workflowFailureStepText } from "./t3team-workflowFailureReason.ts";
 import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";

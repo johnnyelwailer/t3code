@@ -14,10 +14,10 @@ import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
 import * as ServerConfig from "./config.ts";
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
-import { ProjectionProjectSourceBindingRepositoryLive } from "./persistence/Layers/t3team-ProjectionProjectSourceBindings.ts";
-import { OrchestrationEventStore } from "./persistence/Services/OrchestrationEventStore.ts";
-import { ProjectionProjectSourceBindingRepository } from "./persistence/Services/t3team-ProjectionProjectSourceBindings.ts";
+import { SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { ProjectionProjectSourceBindingRepositoryLive } from "./persistence/t3team-ProjectionProjectSourceBindings.ts";
+import { OrchestrationEventStore } from "./persistence/OrchestrationEventStore.ts";
+import { ProjectionProjectSourceBindingRepository } from "./persistence/t3team-ProjectionProjectSourceBindings.ts";
 import { ProjectService } from "./project/ProjectService.ts";
 import * as ServerSettings from "./serverSettings.ts";
 import {

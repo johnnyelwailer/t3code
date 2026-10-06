@@ -20,7 +20,7 @@ import * as Option from "effect/Option";
 import type {
   WorkflowRun,
   WorkflowRunRepositoryShape,
-} from "./persistence/Services/WorkflowRuns.ts";
+} from "./persistence/WorkflowRuns.ts";
 import type { WorkflowRunLifecycle } from "./t3team-workflowEngineLaunch.ts";
 import { makeOrphanIfSleeping } from "./t3team-workflowEngineDurabilityOrphan.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";

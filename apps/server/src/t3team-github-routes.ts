@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import { HttpRouter } from "effect/unstable/http";
+import { HttpRouter } from "effect/http";
 import { VcsProcess } from "./vcs/VcsProcess.ts";
 import { errorResponse, okJson, readJsonBody } from "./t3team-atlassian-http.ts";
 import type { GitHubAssetDownloadRequest } from "./t3team-github-routes-asset-types.ts";

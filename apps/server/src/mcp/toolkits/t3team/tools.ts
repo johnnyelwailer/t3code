@@ -4,7 +4,7 @@
  * dispatch/catalog once, then adding only a small static Tool.make wrapper here.
  */
 import * as Schema from "effect/Schema";
-import { Tool, Toolkit } from "effect/unstable/ai";
+import { Tool, Toolkit } from "effect/ai";
 
 import {
   T3TEAM_WIDGET_AUTHORING_GUIDANCE,

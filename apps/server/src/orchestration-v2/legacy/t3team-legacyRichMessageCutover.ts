@@ -19,7 +19,7 @@ import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { T3TEAM_ACTOR_MESSAGE_HOP_CAP } from "../../t3team-actorMessageReactorLimits.ts";
 import { T3TeamThreadArtifactsStore } from "../../t3team-v2/t3team-threadArtifactsStore.ts";

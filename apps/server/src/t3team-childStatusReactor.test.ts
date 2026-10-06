@@ -13,7 +13,7 @@ import * as Stream from "effect/Stream";
 import { TestClock } from "effect/testing";
 
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import { TextGeneration } from "./textGeneration/TextGeneration.ts";
 import { T3TeamChildStatusReactorLive } from "./t3team-childStatusReactor.ts";
 import * as ThreadFactsStore from "./t3team-v2/t3team-threadFactsStore.ts";

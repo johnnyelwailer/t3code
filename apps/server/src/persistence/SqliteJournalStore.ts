@@ -31,7 +31,7 @@ import {
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 /**
  * WorkflowJournalStore - service tag wrapping the SDK's {@link JournalStore} seam.
@@ -44,7 +44,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
  * `startWorkflow` / `resumeWorkflow` / `appendResolvedEntry`.
  */
 export class WorkflowJournalStore extends Context.Service<WorkflowJournalStore, JournalStore>()(
-  "t3/persistence/Services/WorkflowJournalStore",
+  "t3/persistence/SqliteJournalStore",
 ) {}
 
 interface EntryJsonRow {

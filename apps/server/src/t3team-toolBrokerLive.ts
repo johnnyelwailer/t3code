@@ -14,7 +14,7 @@ import * as Path from "effect/Path";
 import { ServerEnvironmentIdentity } from "./environment/ServerEnvironment.ts";
 import { ProjectStoreV2 } from "./orchestration-v2/ProjectStore.ts";
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
-import { ProviderRegistry } from "./provider/Services/ProviderRegistry.ts";
+import { ProviderRegistry } from "./provider/ProviderRegistry.ts";
 import { bindChildProviderCatalog } from "./t3team-childProviderCatalog.ts";
 import { T3TeamContextRefreshService } from "./t3team-contextRefreshService.ts";
 import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";

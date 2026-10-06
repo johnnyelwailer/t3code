@@ -14,8 +14,8 @@
  *   draft carrier) is carried as a thread artifact by the rich-message cutover.
  */
 import * as Effect from "effect/Effect";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
-import type { Fragment } from "effect/unstable/sql/Statement";
+import * as SqlClient from "effect/sql/SqlClient";
+import type { Fragment } from "effect/sql/Statement";
 
 /** The fork ext column of `projection_thread_messages`, if this database has one. */
 export const readLegacyExtColumn = Effect.gen(function* () {

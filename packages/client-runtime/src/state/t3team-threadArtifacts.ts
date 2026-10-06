@@ -6,7 +6,7 @@ import {
   type T3TeamThreadArtifactsStreamEvent,
 } from "@t3tools/contracts";
 import * as Stream from "effect/Stream";
-import type { Atom } from "effect/unstable/reactivity";
+import type { Atom } from "effect/reactivity";
 
 import type { EnvironmentRegistry } from "../connection/registry.ts";
 import { subscribeWhenSupported } from "../rpc/t3team-capabilityGatedSubscription.ts";

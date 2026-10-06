@@ -1,7 +1,7 @@
 import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import * as Option from "effect/Option";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 
 import { cloudSessionEnvironment } from "../../state/t3team-cloudSessions";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";

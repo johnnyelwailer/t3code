@@ -12,7 +12,7 @@ import * as Option from "effect/Option";
 import type {
   WorkflowRun,
   WorkflowRunRepositoryShape,
-} from "./persistence/Services/WorkflowRuns.ts";
+} from "./persistence/WorkflowRuns.ts";
 
 const RECENT_RUNS_LIMIT = 10;
 

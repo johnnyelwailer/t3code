@@ -17,7 +17,7 @@ import {
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId, T3TeamThreadFacts, ThreadId } from "@t3tools/contracts";
 import * as Option from "effect/Option";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import { useCallback, useMemo } from "react";
 
 import { connectionAtomRuntime } from "../connection/runtime";

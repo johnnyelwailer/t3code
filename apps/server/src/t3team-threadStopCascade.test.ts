@@ -12,7 +12,7 @@ import * as Layer from "effect/Layer";
 
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
 import * as ThreadManagementService from "./orchestration-v2/ThreadManagementService.ts";
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import { T3TeamActorMailboxStore, T3TeamActorMailboxStoreLive } from "./t3team-actorMailbox.ts";
 import { T3TeamActorMailbox } from "./t3team-actorMailboxService.ts";
 import { isUserStopCommandId } from "./t3team-actorMessageReactor.ts";

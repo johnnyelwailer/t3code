@@ -2,7 +2,7 @@ import { assert, it } from "@effect/vitest";
 import type { ExternalResourceRef, ResourcePage } from "@t3tools/project-context";
 import * as Effect from "effect/Effect";
 
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import { writeCachedT3TeamAtlassianBacklog } from "./t3team-atlassian-backlog-cache.ts";
 import { searchOfflineBacklogCache } from "./t3team-atlassian-backlogSearch.ts";
 

@@ -15,7 +15,7 @@ import * as PubSub from "effect/PubSub";
 import * as Stream from "effect/Stream";
 
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import * as ServerSettings from "./serverSettings.ts";
 import { TextGeneration } from "./textGeneration/TextGeneration.ts";
 import {

@@ -7,7 +7,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as ConfigProvider from "effect/ConfigProvider";
-import * as HttpClient from "effect/unstable/http/HttpClient";
+import * as HttpClient from "effect/http/HttpClient";
 
 import * as ExternalLauncher from "../process/externalLauncher.ts";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";

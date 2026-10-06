@@ -13,7 +13,7 @@ import * as Option from "effect/Option";
 import type {
   WorkflowRun,
   WorkflowRunRepositoryShape,
-} from "./persistence/Services/WorkflowRuns.ts";
+} from "./persistence/WorkflowRuns.ts";
 import { makeWorkflowStatusToolHandlers } from "./t3team-toolBrokerWorkflowStatusTool.ts";
 
 const threadId = ThreadId.make("thread-status");
