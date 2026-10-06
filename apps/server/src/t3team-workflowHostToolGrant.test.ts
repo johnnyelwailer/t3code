@@ -32,7 +32,7 @@ import * as Option from "effect/Option";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import { ServerConfig } from "./config.ts";
-import { SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
 import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
 import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";

@@ -2,7 +2,7 @@ import { assert, it } from "@effect/vitest";
 import type { ResourcePage } from "@t3tools/project-context";
 import * as Effect from "effect/Effect";
 
-import { SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import {
   hasMirrorRowsForProject,
   readCachedBacklogIssueRowsByIds,

@@ -12,7 +12,7 @@ import * as Layer from "effect/Layer";
 
 import * as Orchestrator from "../../../orchestration-v2/Orchestrator.ts";
 import * as ProjectionStore from "../../../orchestration-v2/ProjectionStore.ts";
-import { SqlitePersistenceMemory } from "../../../persistence/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "../../../persistence/Sqlite.ts";
 import {
   createTestThread,
   makeT3TeamV2TestLayer,

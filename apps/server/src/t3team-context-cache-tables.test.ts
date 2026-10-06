@@ -3,7 +3,7 @@ import type { ResourceSnapshot } from "@t3tools/project-context";
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/sql/SqlClient";
 
-import { SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import {
   ensureT3TeamContextCacheTables,
   upsertT3TeamContextResource,

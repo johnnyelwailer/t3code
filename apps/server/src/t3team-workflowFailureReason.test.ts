@@ -32,7 +32,7 @@ import * as Path from "effect/Path";
 import { afterAll, describe, expect, it as vitestIt } from "vite-plus/test";
 
 import { ServerConfig } from "./config.ts";
-import { SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
 import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
 import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";

@@ -5,7 +5,7 @@ import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/sql/SqlClient";
 
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
-import { SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import { T3TeamSettleGuardsLive } from "./t3team-childSettleGuards.ts";
 import { SETTLED_PARENT_SETTLE_COMMAND_PREFIX } from "./t3team-childSettleSweepDecide.ts";
 import { makeChildSettleSweeper } from "./t3team-childSettleSweeper.ts";

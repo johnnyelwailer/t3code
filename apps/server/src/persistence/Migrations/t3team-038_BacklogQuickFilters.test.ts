@@ -2,7 +2,7 @@ import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/sql/SqlClient";
 
-import { SqlitePersistenceMemory } from "../Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "../Sqlite.ts";
 import Migration0038 from "./t3team-038_BacklogQuickFilters.ts";
 
 const layer = it.layer(SqlitePersistenceMemory);

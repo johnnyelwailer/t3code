@@ -12,7 +12,7 @@ import * as SqlClient from "effect/sql/SqlClient";
 
 import { runReplayWindowConformance } from "@t3team/sdk";
 
-import { SqlitePersistenceMemory } from "./Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./Sqlite.ts";
 import { buildSqliteJournalStore } from "./SqliteJournalStore.ts";
 
 const layer = it.layer(SqlitePersistenceMemory);

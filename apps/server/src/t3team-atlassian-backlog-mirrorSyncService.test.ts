@@ -18,7 +18,7 @@ import * as SqlClient from "effect/sql/SqlClient";
 import { vi } from "vite-plus/test";
 
 import * as ServerConfig from "./config.ts";
-import { SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import { serializeBacklogCacheJson } from "./t3team-atlassian-backlog-cacheQueries.ts";
 import { parseJson } from "./t3team-atlassian-backlog-cacheShared.ts";
 import { ensureBacklogCacheTables } from "./t3team-atlassian-backlog-cacheTables.ts";

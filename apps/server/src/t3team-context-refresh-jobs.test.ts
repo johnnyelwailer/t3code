@@ -3,7 +3,7 @@ import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import { afterEach } from "vite-plus/test";
 
-import { SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import { ensureT3TeamContextCacheTables } from "./t3team-context-cache-tables.ts";
 import {
   loadT3TeamContextRefreshJobQueue,

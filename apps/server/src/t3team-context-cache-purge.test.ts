@@ -9,7 +9,7 @@ import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/sql/SqlClient";
 import { afterEach } from "vite-plus/test";
 
-import { SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import {
   buildT3TeamContextBlobRelativePath,
   hashT3TeamContextBytes,

@@ -6,7 +6,7 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 
-import { SqlitePersistenceMemory } from "../persistence/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "../persistence/Sqlite.ts";
 import { mergeThreadFacts } from "./t3team-threadFactsMerge.ts";
 import * as ThreadFactsStore from "./t3team-threadFactsStore.ts";
 import { collectAfterSnapshot } from "./t3team-v2Streams.testkit.ts";

@@ -21,7 +21,7 @@ import {
   type ReplayWindow,
 } from "@t3team/sdk";
 
-import { SqlitePersistenceMemory } from "./Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./Sqlite.ts";
 import { buildSqliteJournalStore } from "./SqliteJournalStore.ts";
 
 const NOW = "2026-10-01T00:00:00.000Z";
