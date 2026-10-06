@@ -288,6 +288,7 @@ import {
 } from "~/t3team/components/t3team-projectSidebarThreadTree";
 import type { ProjectThread } from "~/t3team/t3team-types";
 import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
+import { useT3TeamScopeRouteSync } from "~/t3team/hooks/t3team-useScopeRouteSync";
 import { useT3TeamSidebarRowFacts } from "~/t3team/hooks/t3team-useSidebarRowFacts";
 import { withT3TeamWorkflowRunStatus } from "~/t3team/t3team-workflowRunLiveness";
 import { T3TeamSidebarProjectScopePills } from "./sidebar/t3team-SidebarProjectScopePills";
@@ -2761,6 +2762,12 @@ export default function Sidebar() {
       scopedProjectGroup?.memberProjectRefs ?? null,
     );
   }, [scopedProjectGroup, setScopedProjectForChrome]);
+  const scopedProjectIds = useMemo(
+    () => scopedProjectGroup?.memberProjectRefs.map((projectRef) => projectRef.projectId as string),
+    [scopedProjectGroup],
+  );
+  // t3team: a scope pick re-targets the active My work / Backlog board (never a thread or draft).
+  useT3TeamScopeRouteSync(projectScopeKey, scopedProjectGroup?.id ?? null, scopedProjectIds);
   // t3team: one-click recent-project pills in place of the dropdown alone (feature flag).
   const projectScopePillsEnabled = usePrimarySettings(
     (settings) => settings.t3teamProjectScopePillsEnabled,

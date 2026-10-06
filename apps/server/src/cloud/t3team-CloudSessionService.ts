@@ -20,13 +20,19 @@ import { resolveFleetConfig, workflowHistoryUrl } from "./t3team-CloudSessionFle
 import { makeFailureReasonCache } from "./t3team-cloudSessionFailureReason.ts";
 import { ConnectCredentialMinter } from "./t3team-ConnectCredentialMinter.ts";
 import { dispatchAndDiscoverSession } from "./t3team-CloudSessionDispatch.ts";
-import { sessionWorkspaceName } from "./t3team-cloudSessionMachineNames.ts";
+import { sessionWorkspaceName, standbyPoolKey } from "./t3team-cloudSessionMachineNames.ts";
 import { dispatchCredentialHandoff } from "./t3team-CloudSessionMintGate.ts";
 import { makePayloadIssueCleanup } from "./t3team-CloudSessionPayloadCleanup.ts";
 import { projectCloudSession } from "./t3team-CloudSessionProjection.ts";
 import { makeSessionTag } from "./t3team-cloudSessionName.ts";
 import { NexiBrokerService } from "./t3team-NexiBrokerService.ts";
 import { CloudSessionMachines } from "./t3team-CloudSessionMachine.ts";
+import {
+  claimStandby,
+  claimedSessions,
+  isClaimed,
+  makeClaimLedger,
+} from "./t3team-CloudSessionClaim.ts";
 
 /**
  * Starts and tracks *cloud sessions*: full Nexi workspaces provisioned on
@@ -84,6 +90,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
   const gh = makeSessionGh(github, repoRef, cwd);
   const payloadCleanup = yield* makePayloadIssueCleanup(repoRef, gh.run);
   const failureReasons = makeFailureReasonCache();
+  const claims = yield* makeClaimLedger();
 
   const list: CloudSessionService["Service"]["list"] = Effect.gen(function* () {
     // Hard isolation: resolve who the caller is BEFORE fetching, and scope the
@@ -102,7 +109,21 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
     );
     // Delete the credential payloads of sessions that have spent them.
     yield* payloadCleanup.sweep(projected);
-    const sessions = projected.map((entry) => entry.session);
+    const dispatched = projected.map((entry) => entry.session);
+    // Claimed standbys run under the pool controller, not this login: the broker knows them.
+    const brokerSessions = broker.enabled
+      ? yield* broker.sessions.pipe(Effect.orElseSucceed(() => []))
+      : [];
+    const claimed = yield* claimedSessions({
+      ledger: claims,
+      login,
+      brokerSessions,
+      knownRunIds: new Set(dispatched.map((session) => session.sessionId)),
+      nowMs,
+      machineLabel,
+      repoRef,
+    });
+    const sessions = [...claimed, ...dispatched];
     const historyUrl = workflowHistoryUrl(repoRef, login);
     return { sessions, configured: true, historyUrl } satisfies CloudSessionListResult;
   }).pipe(
@@ -147,6 +168,43 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
         });
       }
 
+      // A warm standby of the project, when the broker has one idle: seconds instead of minutes.
+      const workspace = sessionWorkspaceName(login, machine?.repository ?? null);
+      if (machine !== null) {
+        // The project is in use: the broker warms its next machine now, not at the next report.
+        yield* broker.reportInterest([standbyPoolKey(machine.repository)]).pipe(Effect.ignore);
+        const nowMs = yield* Clock.currentTimeMillis;
+        const claimedRun = yield* claimStandby({
+          broker,
+          machine,
+          workspace,
+          login,
+          name: input.name ?? machine.repository.name,
+          ledger: claims,
+          nowMs,
+        });
+        // Claimed: this is the session. Never also dispatch one — the standby is spent.
+        if (claimedRun !== null) {
+          const pending = yield* claimedSessions({
+            ledger: claims,
+            login,
+            brokerSessions: [],
+            knownRunIds: new Set(),
+            nowMs,
+            machineLabel,
+            repoRef,
+          });
+          const session = pending.find((item) => item.sessionId === claimedRun);
+          if (session === undefined) {
+            return yield* new CloudSessionFailedError({
+              reason: "unknown_session",
+              message: "The claimed machine could not be listed; it will appear shortly.",
+            });
+          }
+          return session;
+        }
+      }
+
       // Broker mode: a grant only a run this login dispatched can redeem replaces the whole T3
       // Connect handoff. Fails with `broker_sign_in_required` before any dispatch when signed out.
       const brokerGrant = broker.enabled
@@ -159,6 +217,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
                   GIT_AUTHOR_EMAIL: machine.author.email,
                 }
               : undefined,
+            machine ? standbyPoolKey(machine.repository) : undefined,
           )
         : null;
 
@@ -190,7 +249,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
         discoveryAttempts: DISPATCH_DISCOVERY_ATTEMPTS,
         brokerGrant,
         machine,
-        workspace: sessionWorkspaceName(login, machine?.repository ?? null),
+        workspace,
       });
     });
 
@@ -214,6 +273,19 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       const login = yield* gh.resolveLogin;
       const sessionRuns = yield* gh.listRunsFor(login);
       const sessionRun = sessionRuns.find((item) => item.id === runId);
+      // A claimed standby runs under the pool controller: this server's own claim proves it is
+      // this user's session.
+      // After a restart this server's ledger is empty; the broker still lists the user's sessions.
+      const claimedHere =
+        sessionRun === undefined &&
+        ((yield* isClaimed(claims, input.sessionId, login)) ||
+          (broker.enabled &&
+            (yield* broker.sessions.pipe(Effect.orElseSucceed(() => []))).some(
+              (session) => session.runId === input.sessionId,
+            )));
+      if (claimedHere) {
+        return yield* gh.run(cancelRunInvocation(repoRef, runId)).pipe(Effect.asVoid);
+      }
       if (sessionRun === undefined) {
         return yield* new CloudSessionFailedError({
           reason: "unknown_session",

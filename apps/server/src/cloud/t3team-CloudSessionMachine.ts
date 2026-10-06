@@ -24,6 +24,7 @@ import {
   type MachineRepository,
   machineGitAuthor,
   machineRepositoryFromRemote,
+  standbyPoolKey,
 } from "./t3team-cloudSessionMachineNames.ts";
 
 export interface CloudSessionMachine {
@@ -60,6 +61,11 @@ export class CloudSessionMachines extends Context.Service<
     readonly resolve: (
       projectId: ProjectId,
     ) => Effect.Effect<CloudSessionMachine | null, CloudSessionFailedError>;
+    /**
+     * The project's warm pool (`<owner>.<repo>`) when it has a usable machine definition and an
+     * https origin, else null. Needs no sign-in: it only reads the checkout.
+     */
+    readonly poolKeyOf: (projectId: ProjectId) => Effect.Effect<string | null>;
   }
 >()("t3/cloud/t3team-CloudSessionMachine/CloudSessionMachines") {}
 
@@ -194,7 +200,16 @@ const make = Effect.gen(function* () {
     } satisfies CloudSessionMachine;
   });
 
-  return CloudSessionMachines.of({ resolve });
+  const poolKeyOf = (projectId: ProjectId) =>
+    Effect.gen(function* () {
+      const { source } = yield* discovery.resolveDefault(projectId);
+      if (source === null) return null;
+      const origin = yield* git(source.root, "machine.origin", ["remote", "get-url", "origin"]);
+      const repository = origin.ok ? machineRepositoryFromRemote(origin.stdout) : null;
+      return repository === null ? null : standbyPoolKey(repository);
+    }).pipe(Effect.orElseSucceed(() => null));
+
+  return CloudSessionMachines.of({ resolve, poolKeyOf });
 });
 
 export const layer = Layer.effect(CloudSessionMachines, make);

@@ -104,11 +104,20 @@ export function assembleMyWorkDigestChangeRequests(
     const workItemKey = matchDigestWorkItemKey(entry.title, entry.headBranch, ticketKeys);
     changeRequests.push({
       id: `${entry.host}:${entry.repository}#${entry.number}`,
+      host: entry.host,
       repo: entry.repository,
       number: entry.number,
       state: digestChangeRequestStateFromPr(entry),
       updatedAt: entry.updatedAt,
       ...(workItemKey !== undefined ? { workItemKey } : {}),
+      title: entry.title,
+      ...(entry.viewerAuthored !== undefined ? { viewerAuthored: entry.viewerAuthored } : {}),
+      ...(entry.viewerReviewRequested ? { viewerReviewRequested: true } : {}),
+      ...(entry.authorLogin !== undefined ? { authorLogin: entry.authorLogin } : {}),
+      ...(entry.author !== undefined ? { author: entry.author } : {}),
+      ...(entry.engaged !== undefined ? { engaged: entry.engaged } : {}),
+      ...(entry.additions !== undefined ? { additions: entry.additions } : {}),
+      ...(entry.deletions !== undefined ? { deletions: entry.deletions } : {}),
       ...(entry.reviewers !== undefined ? { reviewers: entry.reviewers } : {}),
       ...(entry.unhandledReviewThreads !== undefined
         ? { unhandledReviewThreads: entry.unhandledReviewThreads }
@@ -128,6 +137,7 @@ export function pickDigestSprint(
   if (chosen === undefined) return undefined;
   return {
     name: chosen.name,
+    ...(chosen.state !== undefined && chosen.state.trim() !== "" ? { state: chosen.state } : {}),
     ...(chosen.goal !== undefined && chosen.goal.trim() !== "" ? { goal: chosen.goal } : {}),
     ...(chosen.startDate !== undefined ? { startDate: chosen.startDate } : {}),
     ...(chosen.endDate !== undefined ? { endDate: chosen.endDate } : {}),
@@ -179,6 +189,9 @@ export function assembleMyWorkDigestProjectData(
     ...(source.changeRequestNote !== undefined
       ? { changeRequestNote: source.changeRequestNote }
       : {}),
+    ...(source.jiraSyncedAt !== undefined ? { jiraSyncedAt: source.jiraSyncedAt } : {}),
+    ...(source.dependencies?.length ? { dependencies: source.dependencies } : {}),
+    ...(source.yesterday !== undefined ? { yesterday: source.yesterday } : {}),
   };
 }
 

@@ -2,12 +2,16 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3
 import type { ProjectTicket } from "~/t3team/t3team-types";
 import { WorkItemPersonAvatar } from "~/t3team/workitem/t3team-WorkItemPersonAvatar";
 
-type PersonSlot = { readonly role: string; readonly name: string; readonly isViewer: boolean };
+type PersonSlot = {
+  readonly role: string;
+  readonly name: string;
+  readonly avatarUrl?: string;
+};
 
 /**
  * The people a ticket is about, as small avatars in the row's right cluster: the assignee
  * always, plus the reporter for bugs (who hit the problem). Names live in the tooltip only —
- * the avatar's initials carry the identity. The viewer's own avatar gets the current-user ring.
+ * the avatar carries the identity. The viewer is left out: in My Work their own face says nothing.
  */
 export function DigestPeoplePills({
   ticket,
@@ -17,21 +21,21 @@ export function DigestPeoplePills({
   viewerName: string;
 }) {
   const slots: PersonSlot[] = [];
-  if (ticket.assignee)
+  if (ticket.assignee && ticket.assignee !== viewerName)
     slots.push({
       role: "Assignee",
       name: ticket.assignee,
-      isViewer: ticket.assignee === viewerName,
+      ...(ticket.assigneeAvatarUrl ? { avatarUrl: ticket.assigneeAvatarUrl } : {}),
     });
   if (
     ticket.issueType?.toLowerCase() === "bug" &&
     ticket.reporter &&
-    ticket.reporter !== ticket.assignee
+    ticket.reporter !== ticket.assignee &&
+    ticket.reporter !== viewerName
   ) {
     slots.push({
       role: "Reporter",
       name: ticket.reporter,
-      isViewer: ticket.reporter === viewerName,
     });
   }
   if (slots.length === 0) return null;
@@ -43,9 +47,11 @@ export function DigestPeoplePills({
             render={
               <span aria-label={`${slot.role}: ${slot.name}`}>
                 <WorkItemPersonAvatar
-                  person={{ displayName: slot.name }}
+                  person={{
+                    displayName: slot.name,
+                    ...(slot.avatarUrl ? { avatarUrl: slot.avatarUrl } : {}),
+                  }}
                   size="sm"
-                  isCurrentUser={slot.isViewer}
                 />
               </span>
             }

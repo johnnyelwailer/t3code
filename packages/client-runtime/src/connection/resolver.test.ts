@@ -200,7 +200,7 @@ const makeDependencies = Effect.fn("TestConnectionResolver.makeDependencies")((o
       ClientCapabilities.ClientPresentation,
       ClientCapabilities.ClientPresentation.of({
         metadata: { label: "Test Client", deviceType: "desktop", surface: "web" },
-        scopes: [],
+        scopes: ["orchestration:read", "relay:write"],
       }),
     ),
     Layer.succeed(RemoteEnvironmentAuthorization.RemoteEnvironmentAuthorization, remote),
@@ -296,6 +296,8 @@ describe("ConnectionResolver", () => {
         new URLSearchParams(harness.tokenExchanges[0]).get("subject_token") ??
           harness.tokenExchanges[0],
       ).toContain("broker-pairing");
+      // The session's server may be older and grant narrower scopes: never ask for more.
+      expect(new URLSearchParams(harness.tokenExchanges[0]).get("scope")).toBeNull();
 
       yield* harness.resolver.prepare(catalogEntry(BROKER_TARGET));
       expect(yield* Ref.get(harness.attached)).toEqual([

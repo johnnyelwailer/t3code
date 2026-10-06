@@ -6,10 +6,12 @@ import {
 } from "~/t3team/t3team-ProjectDashboardKanban";
 import { ProjectMyWorkHierarchyView } from "~/t3team/t3team-ProjectMyWorkHierarchyView";
 import { ProjectMyWorkSimpleViews } from "~/t3team/t3team-ProjectMyWorkSimpleViews";
+import { ProjectMyWorkLoadFailure } from "~/t3team/t3team-ProjectMyWorkLoadFailure";
 import { ProjectMyWorkTableView } from "~/t3team/t3team-ProjectMyWorkTableView";
 import {
   ProjectMyWorkLoadingState,
   resolveProjectMyWorkContentState,
+  type ProjectMyWorkLoadStatus,
 } from "~/t3team/t3team-projectMyWorkContentState";
 import {
   buildProjectMyWorkTableRows,
@@ -17,10 +19,8 @@ import {
 } from "~/t3team/t3team-projectMyWorkContentHelpers";
 import { ProjectMyWorkDigestContent } from "~/t3team/t3team-ProjectMyWorkDigestContent";
 import type { DigestFilterState } from "~/t3team/t3team-projectMyWorkDigestTypes";
-import {
-  ProjectMyWorkViewSwitch,
-  type ProjectMyWorkLens,
-} from "~/t3team/t3team-ProjectMyWorkViewSwitch";
+import type { ProjectMyWorkLens } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
+import type { ProjectDashboardKanbanColumnCollapse } from "~/t3team/t3team-projectDashboardKanbanCollapse";
 import type {
   ProjectMyWorkTableSortBy,
   ProjectMyWorkTableSortDirection,
@@ -33,13 +33,13 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 
 export function ProjectMyWorkContent({
   loading,
+  loadStatus,
   project,
   tickets,
   assignedWorkItems,
   filteredWorkItems,
   visibleHierarchy,
   lens,
-  onLensChange,
   viewMode,
   groupMode,
   tableSortBy,
@@ -49,19 +49,20 @@ export function ProjectMyWorkContent({
   githubActivityByWorkItem,
   jiraLastCheckedAt,
   digestFilters,
+  columnCollapse,
   onTableSortByChange,
   onTableSortDirectionChange,
   onMoveTicketToStatus,
   onOpenTicket,
 }: {
   loading: boolean;
+  loadStatus?: ProjectMyWorkLoadStatus;
   project: ProjectShellProject;
   tickets: readonly ProjectTicket[];
   assignedWorkItems: readonly ProjectTicket[];
   filteredWorkItems: readonly ProjectTicket[];
   visibleHierarchy: ProjectMyWorkVisibleHierarchy;
   lens: ProjectMyWorkLens;
-  onLensChange: (value: ProjectMyWorkLens) => void;
   viewMode: "table" | "list" | "grid" | "kanban";
   groupMode: "flat" | "hierarchy";
   tableSortBy: ProjectMyWorkTableSortBy;
@@ -71,6 +72,7 @@ export function ProjectMyWorkContent({
   githubActivityByWorkItem: ReadonlyMap<string, ReadonlyArray<GitHubWorkActivityItem>>;
   jiraLastCheckedAt?: number;
   digestFilters?: DigestFilterState | undefined;
+  columnCollapse?: ProjectDashboardKanbanColumnCollapse;
   onTableSortByChange: (value: ProjectMyWorkTableSortBy) => void;
   onTableSortDirectionChange: (value: ProjectMyWorkTableSortDirection) => void;
   onMoveTicketToStatus?: (ticket: ProjectTicket, targetStatus: string) => Promise<string>;
@@ -91,9 +93,10 @@ export function ProjectMyWorkContent({
     loading,
     assignedWorkItemsCount: assignedWorkItems.length,
     filteredWorkItemsCount: filteredWorkItems.length,
+    ...loadStatus,
   });
   const renderTicketExtra = (ticket: ProjectTicket, compact?: boolean) =>
-    renderProjectMyWorkTicketExtra({ ticket, compact });
+    renderProjectMyWorkTicketExtra({ ticket, compact, githubActivityByWorkItem });
 
   const renderBody = () => {
     // The digest lens has its own server-aggregated data and its own loading/empty states, so it
@@ -110,6 +113,10 @@ export function ProjectMyWorkContent({
       );
     }
 
+    if (contentState.kind === "sessionExpired" || contentState.kind === "error") {
+      return <ProjectMyWorkLoadFailure state={contentState} onRetry={loadStatus?.onRetry} />;
+    }
+
     if (contentState.kind === "loading") {
       return <ProjectMyWorkLoadingState />;
     }
@@ -122,7 +129,9 @@ export function ProjectMyWorkContent({
       );
     }
 
-    if (lens === "board" || viewMode === "kanban") {
+    // The lens decides the layout: the Hierarchy lens is the tree even though the default
+    // view mode is still "kanban", so `?myWorkLens=hierarchy` never renders a board.
+    if (lens === "board" || (viewMode === "kanban" && lens !== "hierarchy")) {
       return (
         <ProjectDashboardKanban
           kanbanColumns={kanbanColumns}
@@ -134,6 +143,7 @@ export function ProjectMyWorkContent({
           onOpenTicket={onOpenTicket}
           onTicketContextMenu={openTicketAgentContextMenu}
           renderTicketExtra={renderTicketExtra}
+          {...(columnCollapse ? { columnCollapse } : {})}
           {...(onMoveTicketToStatus ? { onMoveTicketToStatus } : {})}
         />
       );
@@ -164,6 +174,8 @@ export function ProjectMyWorkContent({
           hierarchy={visibleHierarchy.hierarchy}
           contextByTicketId={visibleHierarchy.contextByTicketId}
           matchedTicketIds={visibleHierarchy.matchedTicketIds}
+          sortBy={tableSortBy}
+          sortDirection={tableSortDirection}
           {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
           onTicketContextMenu={openTicketAgentContextMenu}
           getTicketAgentContext={getTicketAgentContext}
@@ -189,12 +201,5 @@ export function ProjectMyWorkContent({
     );
   };
 
-  return (
-    <div className="space-y-4">
-      <div>
-        <ProjectMyWorkViewSwitch lens={lens} onLensChange={onLensChange} />
-      </div>
-      {renderBody()}
-    </div>
-  );
+  return <div className="space-y-4">{renderBody()}</div>;
 }

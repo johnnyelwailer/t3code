@@ -54,7 +54,7 @@ export function DigestStoryGroupHeader({
   };
   return (
     <div
-      className="flex cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 border-b border-border/60 bg-muted/40 py-1.5 px-3 text-xs"
+      className="flex min-w-0 cursor-pointer flex-nowrap items-center gap-2 overflow-hidden border-b border-border/60 bg-muted/40 px-3 py-1.5 text-xs"
       onClick={() =>
         onOpenTicket ? onOpenTicket(story.id) : window.open(story.ref.url, "_blank", "noopener")
       }
@@ -66,20 +66,20 @@ export function DigestStoryGroupHeader({
       />
       <a
         href={story.ref.url}
-        className="font-mono text-2xs text-muted-foreground hover:text-foreground hover:underline"
+        className="shrink-0 font-mono text-2xs text-muted-foreground hover:text-foreground hover:underline"
         onClick={onAnchorClick}
       >
         {story.ref.displayId}
       </a>
       <a
         href={story.ref.url}
-        className="min-w-0 truncate font-medium hover:underline"
+        className="min-w-0 flex-1 truncate font-medium hover:underline"
         onClick={onAnchorClick}
       >
         {story.ref.title}
       </a>
       <DigestProjectChip graph={graph} projectId={story.projectId} />
-      <span className="ml-auto flex shrink-0 items-center gap-2">
+      <span className="flex shrink-0 items-center gap-2">
         {progress ? <DigestStoryProgress done={progress.done} total={progress.total} /> : null}
         <DigestAgentDots claims={claims} nowMs={nowMs} />
         <DigestStatusDot status={story.status} />
@@ -125,9 +125,11 @@ export function DigestOtherChildren({
           </span>
           {child.assignee ? (
             <WorkItemPersonAvatar
-              person={{ displayName: child.assignee }}
+              person={{
+                displayName: child.assignee,
+                ...(child.assigneeAvatarUrl ? { avatarUrl: child.assigneeAvatarUrl } : {}),
+              }}
               size="sm"
-              isCurrentUser={child.assignee === viewerName}
             />
           ) : null}
         </a>

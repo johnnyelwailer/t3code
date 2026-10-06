@@ -6,13 +6,17 @@ import {
   buildDistinctOptions,
   buildProjectMyWorkStatusOptions,
   countProjectMyWorkActiveOptions,
+  buildProjectMyWorkIdentity,
   hasProjectMyWorkDisplayNameDependentAssignments,
+  isAwaitingFirstProjectMyWorkLoad,
+  PROJECT_MY_WORK_RESET_OPTIONS_PATCH,
   setSortedStringMembership,
   shouldShowProjectMyWorkLoadingState,
 } from "~/t3team/hooks/t3team-projectMyWorkStateHelpers";
 import { useAtlassianCurrentUserDisplayNameState } from "~/t3team/hooks/t3team-useAtlassianCurrentUserDisplayName";
 import { readProjectSetupProfileIdFromProject } from "~/t3team/hooks/t3team-createProjectBootstrap";
 import { useProjectMyWorkDerivedData } from "~/t3team/hooks/t3team-useProjectMyWorkDerivedData";
+import { useProjectKanbanColumnCollapse } from "~/t3team/hooks/t3team-useProjectKanbanColumnCollapse";
 import { useProjectKanbanBoardColumns } from "~/t3team/hooks/t3team-useProjectKanbanBoardColumns";
 import { useProjectMyWork } from "~/t3team/hooks/t3team-useProjectMyWork";
 import { type ProjectMyWorkStatusCategory } from "~/t3team/t3team-projectMyWork";
@@ -36,19 +40,21 @@ export function useProjectMyWorkState({
     useAtlassianCurrentUserDisplayNameState(project.source.accountId);
   const {
     tickets: fetchedTickets,
+    viewerAccountId,
     lastCheckedAt,
     reload,
     loading: resourcesLoading,
+    error: loadError,
+    sessionExpired,
+    isLinked,
   } = useProjectMyWork(project);
+  const loadStatus = { loadError, sessionExpired, isLinked, onRetry: reload };
   const { boardColumns, availableStatuses } = useProjectKanbanBoardColumns(project);
   const tickets = fetchedTickets.length > 0 ? fetchedTickets : fallbackTickets;
   const kanbanProfileId = useMemo(() => readProjectSetupProfileIdFromProject(project), [project]);
   const identity = useMemo(
-    () => ({
-      ...(project.source.accountId ? { accountId: project.source.accountId } : {}),
-      ...(currentUserDisplayName ? { displayName: currentUserDisplayName } : {}),
-    }),
-    [currentUserDisplayName, project.source.accountId],
+    () => buildProjectMyWorkIdentity(viewerAccountId, currentUserDisplayName),
+    [currentUserDisplayName, viewerAccountId],
   );
 
   const { state, setState } = useProjectDashboardMyWorkState(project.id);
@@ -67,6 +73,7 @@ export function useProjectMyWorkState({
     tableSortDirection,
   } = state;
   const deferredQuery = useDeferredValue(query);
+  const columnCollapse = useProjectKanbanColumnCollapse({ state, setState });
   const updateState = useCallback(
     (partial: Partial<typeof state>) => {
       setState((current) => ({ ...current, ...partial }));
@@ -100,14 +107,16 @@ export function useProjectMyWorkState({
     boardColumns,
     availableStatuses,
     kanbanProfileId,
+    lens,
   });
   const loading = shouldShowProjectMyWorkLoadingState({
     resourcesLoading,
+    awaitingFirstLoad: isAwaitingFirstProjectMyWorkLoad(loadStatus, lastCheckedAt),
     ticketCount: tickets.length,
     currentUserDisplayNameLoading,
     hasDisplayNameDependentAssignments: hasProjectMyWorkDisplayNameDependentAssignments(
       tickets,
-      project.source.accountId,
+      viewerAccountId,
     ),
     assignedWorkItemsCount: assignedWorkItems.length,
   });
@@ -118,6 +127,7 @@ export function useProjectMyWorkState({
 
   return {
     loading,
+    loadStatus,
     tickets,
     reloadTickets: reload,
     currentUserDisplayName,
@@ -134,6 +144,7 @@ export function useProjectMyWorkState({
     setStatusCategory: (value: ProjectMyWorkStatusCategory) =>
       updateState({ statusCategory: value }),
     hiddenKanbanColumnIds: normalizedHiddenKanbanColumnIds,
+    columnCollapse,
     toggleKanbanLaneVisibility: (columnId: string, visible: boolean) =>
       setState((current) => ({
         ...current,
@@ -171,6 +182,7 @@ export function useProjectMyWorkState({
     setTableSortDirection: (value: ProjectMyWorkTableSortDirection) =>
       updateState({ tableSortDirection: value }),
     activeOptionsCount: countProjectMyWorkActiveOptions({
+      lens,
       statusCategory,
       selectedPriority,
       selectedStatus,
@@ -178,16 +190,7 @@ export function useProjectMyWorkState({
       hiddenKanbanColumnIds: normalizedHiddenKanbanColumnIds,
       excludedTypeKeys: normalizedExcludedTypeKeys,
     }),
-    resetOptionsFilters: () => {
-      updateState({
-        statusCategory: "all",
-        hiddenKanbanColumnIds: [],
-        hasCustomizedKanbanLanes: false,
-        excludedTypeKeys: [],
-        selectedPriority: "all",
-        selectedStatus: "all",
-      });
-    },
+    resetOptionsFilters: () => updateState(PROJECT_MY_WORK_RESET_OPTIONS_PATCH),
     assignedWorkItems,
     filteredWorkItems,
     visibleHierarchy,

@@ -31,13 +31,13 @@ export function ProjectDashboardMyWorkView({
   });
   const {
     loading,
+    loadStatus,
     tickets,
     reloadTickets,
     jiraLastCheckedAt,
     query,
     setQuery,
     lens,
-    setLens,
     viewMode,
     setViewMode,
     groupMode,
@@ -50,6 +50,7 @@ export function ProjectDashboardMyWorkView({
     epicsHidden,
     setEpicsHidden,
     toggleKanbanLaneVisibility,
+    columnCollapse,
     toggleTypeVisibility,
     typeOptions,
     kanbanLaneOptions,
@@ -95,6 +96,7 @@ export function ProjectDashboardMyWorkView({
       statusCategory,
       hiddenKanbanColumnIds,
       hasCustomizedKanbanLanes: hiddenKanbanColumnIds.length > 0,
+      collapsedKanbanColumnIds: [...columnCollapse.collapsedIds].toSorted(),
       excludedTypeKeys,
       selectedPriority,
       selectedStatus,
@@ -135,6 +137,7 @@ export function ProjectDashboardMyWorkView({
     <div className="space-y-6">
       <section>
         <ProjectMyWorkFilterBar
+          lens={lens}
           query={query}
           onQueryChange={setQuery}
           viewMode={viewMode}
@@ -167,13 +170,13 @@ export function ProjectDashboardMyWorkView({
 
         <ProjectMyWorkContent
           loading={loading}
+          loadStatus={loadStatus}
           project={project}
           tickets={tickets}
           assignedWorkItems={assignedWorkItems}
           filteredWorkItems={filteredWorkItems}
           visibleHierarchy={visibleHierarchy}
           lens={lens}
-          onLensChange={setLens}
           viewMode={viewMode}
           groupMode={groupMode}
           tableSortBy={tableSortBy}
@@ -182,6 +185,7 @@ export function ProjectDashboardMyWorkView({
           parentChildGroups={parentChildGroups}
           githubActivityByWorkItem={githubActivity.activityByWorkItem}
           digestFilters={digestFilters}
+          columnCollapse={columnCollapse}
           {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
           onTableSortByChange={setTableSortBy}
           onTableSortDirectionChange={setTableSortDirection}

@@ -64,6 +64,7 @@ function liveJiraIssue(key: string, projectId: string) {
       summary: `Live ${key}`,
       issuetype: { name: "Task" },
       status: { name: "To Do" },
+      assignee: { accountId: "viewer-1", displayName: "Viewer" },
       project: { id: projectId },
       updated: "2026-06-01T00:00:00.000Z",
     },
@@ -172,6 +173,7 @@ myWorkLayer("t3team Atlassian My Work page selection", (it) => {
 
         assert.deepStrictEqual(page.items, []);
         assert.strictEqual(page.totalCount, 0);
+        assert.strictEqual(page.viewerAccountId, "viewer-1");
         assert.ok(
           !urls.some((url) => url.includes(currentUserJqlMarker)),
           "live listResources (assignee = currentUser()) must not be queried",
@@ -197,6 +199,14 @@ myWorkLayer("t3team Atlassian My Work page selection", (it) => {
       assert.deepStrictEqual(
         page.items.map((item) => item.displayId),
         ["PRL-1"],
+      );
+      // The live path must carry the viewer's Jira user id too, so the client can
+      // tell assigned rows from parent context without a display-name lookup.
+      assert.strictEqual(page.viewerAccountId, "viewer-1");
+      // ...and rows must carry their assignee's accountId so they match that id.
+      assert.strictEqual(
+        (page.items[0] as { assigneeAccountId?: string }).assigneeAccountId,
+        "viewer-1",
       );
       assert.ok(
         urls.some((url) => url.includes(currentUserJqlMarker)),
@@ -233,6 +243,7 @@ myWorkLayer("t3team Atlassian My Work page selection", (it) => {
           page.items.map((item) => item.displayId),
           ["PRC-1"],
         );
+        assert.strictEqual(page.viewerAccountId, undefined);
         assert.ok(urls.some((url) => url.includes(currentUserJqlMarker)));
       }),
   );

@@ -24,6 +24,8 @@ import type {
   ProjectMyWorkTableSortBy,
   ProjectMyWorkTableSortDirection,
 } from "~/t3team/t3team-projectDashboardMyWorkState";
+import { shouldHideDoneWork } from "~/t3team/t3team-projectMyWorkLensOptions";
+import type { ProjectMyWorkLens } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
 export function useProjectMyWorkDerivedData({
@@ -42,6 +44,7 @@ export function useProjectMyWorkDerivedData({
   boardColumns,
   availableStatuses,
   kanbanProfileId,
+  lens,
 }: {
   tickets: readonly ProjectTicket[];
   identity: ProjectMyWorkIdentity;
@@ -58,7 +61,9 @@ export function useProjectMyWorkDerivedData({
   boardColumns?: ReadonlyArray<ProjectTicketKanbanBoardColumn>;
   availableStatuses?: ReadonlyArray<ProjectTicketKanbanBoardColumn["statuses"][number]>;
   kanbanProfileId?: string;
+  lens: ProjectMyWorkLens;
 }) {
+  const hideDone = shouldHideDoneWork({ lens, statusCategory, selectedStatus });
   const assignedWorkItems = useMemo(
     () => buildAssignedWorkItems(tickets, identity),
     [identity, tickets],
@@ -75,9 +80,11 @@ export function useProjectMyWorkDerivedData({
       selectedStatus,
       tableSortBy,
       tableSortDirection,
+      hideDone,
     });
   }, [
     deferredQuery,
+    hideDone,
     identity,
     selectedPriority,
     selectedStatus,
@@ -119,9 +126,11 @@ export function useProjectMyWorkDerivedData({
       selectedStatus,
       tableSortBy,
       tableSortDirection,
+      hideDone,
     });
   }, [
     deferredQuery,
+    hideDone,
     identity,
     normalizedExcludedTypeKeys,
     selectedPriority,

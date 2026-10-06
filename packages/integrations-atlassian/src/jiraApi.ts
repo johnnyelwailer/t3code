@@ -45,6 +45,9 @@ export type JiraApiAuth =
     };
 
 export const JIRA_API_TIMEOUT_MS = 10_000;
+/** `project/search` returns at most 100 per page; the page cap only guards a server that never says "last". */
+const PROJECT_SEARCH_PAGE_SIZE = 100;
+const MAX_PROJECT_SEARCH_PAGES = 100;
 
 export function jiraCloudApiBaseUrl(cloudId: string): string {
   return `https://api.atlassian.com/ex/jira/${cloudId}`;
@@ -304,10 +307,26 @@ export class JiraApiClient {
     return this.fetchJson<JiraMyself>("/rest/api/3/myself");
   }
 
+  /**
+   * Every project the caller can browse. `project/search` caps a page at 100, so this walks
+   * `startAt` until Jira says the last page arrived (or a page comes back empty).
+   */
   async searchProjects(): Promise<JiraProjectSearchResponse> {
-    return this.fetchJson<JiraProjectSearchResponse>(
-      "/rest/api/3/project/search?maxResults=100&orderBy=name",
-    );
+    const values: JiraProject[] = [];
+    let startAt = 0;
+    for (let page = 0; page < MAX_PROJECT_SEARCH_PAGES; page += 1) {
+      const response = await this.fetchJson<JiraProjectSearchResponse>(
+        `/rest/api/3/project/search?maxResults=${PROJECT_SEARCH_PAGE_SIZE}&startAt=${startAt}&orderBy=name`,
+      );
+      values.push(...response.values);
+      startAt += response.values.length;
+      const done =
+        response.isLast === true ||
+        response.values.length === 0 ||
+        (response.isLast === undefined && startAt >= response.total);
+      if (done) break;
+    }
+    return { values, total: values.length, isLast: true };
   }
 
   async getProject(projectIdOrKey: string): Promise<JiraProject> {

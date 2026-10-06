@@ -172,6 +172,7 @@ export function filterProjectMyWorkTickets({
   excludedTypeKeys = [],
   selectedPriority,
   selectedStatus,
+  hideDone = false,
 }: {
   tickets: readonly ProjectTicket[];
   identity: ProjectMyWorkIdentity;
@@ -180,25 +181,36 @@ export function filterProjectMyWorkTickets({
   excludedTypeKeys?: ReadonlyArray<string>;
   selectedPriority: string;
   selectedStatus: string;
+  /** Drops Done tickets on top of the status category (the list lens defaults to open work). */
+  hideDone?: boolean;
 }): ProjectTicket[] {
   const excludedTypeKeySet = new Set(excludedTypeKeys);
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const ticketById = new Map(tickets.map((ticket) => [ticket.id, ticket]));
 
-  return tickets
-    .filter((ticket) => isProjectMyWorkTicket(ticket, identity))
-    .filter((ticket) => matchesStatusCategory(ticket, statusCategory))
-    .filter((ticket) => !excludedTypeKeySet.has(getProjectTicketIssueTypeKey(ticket)))
-    .filter((ticket) => selectedPriority === "all" || ticket.priority === selectedPriority)
-    .filter((ticket) => selectedStatus === "all" || ticket.status === selectedStatus)
-    .filter((ticket) => {
-      if (!normalizedQuery) {
-        return true;
-      }
+  return (
+    tickets
+      .filter((ticket) => isProjectMyWorkTicket(ticket, identity))
+      .filter((ticket) => matchesStatusCategory(ticket, statusCategory))
+      // A search is the user looking for a specific ticket, finished or not: it lifts the hiding.
+      .filter(
+        (ticket) =>
+          !hideDone ||
+          normalizedQuery !== "" ||
+          !matchesProjectTicketStatusCategory(ticket.status, "done"),
+      )
+      .filter((ticket) => !excludedTypeKeySet.has(getProjectTicketIssueTypeKey(ticket)))
+      .filter((ticket) => selectedPriority === "all" || ticket.priority === selectedPriority)
+      .filter((ticket) => selectedStatus === "all" || ticket.status === selectedStatus)
+      .filter((ticket) => {
+        if (!normalizedQuery) {
+          return true;
+        }
 
-      return buildProjectMyWorkSearchHaystack(ticket, ticketById).includes(normalizedQuery);
-    })
-    .toSorted(compareProjectBacklogTickets);
+        return buildProjectMyWorkSearchHaystack(ticket, ticketById).includes(normalizedQuery);
+      })
+      .toSorted(compareProjectBacklogTickets)
+  );
 }
 
 /**

@@ -360,6 +360,17 @@ t3team.my_work.reset_advanced_filters
 t3team.my_work.open_item
 ```
 
+Implemented: the digest an agent arranges. These are the only My Work tools that exist today
+(the `t3team.my_work.*` rows above are still planned). The read returns the digest payload,
+including the stored `arrangement`; the write validates a plan against the bundled dashboard
+widgets and stores it per viewer and scope, or resets it (groups `integration.read` and
+`view.state`).
+
+```text
+t3team.mywork.digest.read
+t3team.mywork.arrange
+```
+
 Draft mutation tools should reuse item-level tools when the target is a Jira work item:
 
 ```text

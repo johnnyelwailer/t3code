@@ -1,10 +1,4 @@
-import {
-  ArrowLeftIcon,
-  ChartNoAxesColumnIcon,
-  InboxIcon,
-  ListTreeIcon,
-  SettingsIcon,
-} from "lucide-react";
+import { ArrowLeftIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { memo, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
@@ -36,7 +30,7 @@ import { isSidebarUtilityPage, useNavigateToMainApp } from "./mainAppLocation";
 import { SidebarThreadUndoNotice } from "./SidebarThreadUndoNotice";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
-import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
+import { T3TeamSidebarWorkNavItems } from "~/t3team/components/t3team-SidebarWorkNav";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
@@ -245,40 +239,6 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     void navigate({ to: "/usage" });
   }, [isMobile, navigate, setOpenMobile]);
 
-  // t3team: the sidebar's project-scope selection, mirrored out of Sidebar.tsx. "My work"
-  // follows it (scoped → that project's my-work board, otherwise the global view), and
-  // "Backlog" only exists scoped — flattened across projects it loses the hierarchy that IS
-  // the view.
-  const scopedProjectId = useT3TeamSidebarProjectScope((state) => state.scopedProjectId);
-  const handleMyWorkClick = useCallback(() => {
-    if (isMobile) {
-      setOpenMobile(false);
-    }
-    void (scopedProjectId === null
-      ? navigate({ to: "/t3team/my-work" })
-      : navigate({
-          to: "/t3team/projects/$projectId",
-          params: { projectId: scopedProjectId },
-          search: { projectView: "my-work" },
-        }));
-  }, [isMobile, navigate, scopedProjectId, setOpenMobile]);
-  const handleBacklogClick = useCallback(() => {
-    if (isMobile) {
-      setOpenMobile(false);
-    }
-    if (scopedProjectId === null) {
-      return;
-    }
-    void navigate({
-      to: "/t3team/projects/$projectId",
-      params: { projectId: scopedProjectId },
-      search: { projectView: "backlog" },
-    });
-  }, [isMobile, navigate, scopedProjectId, setOpenMobile]);
-  // t3team: the Team shell is the permanent product shell, so its nav targets exist from every
-  // route — including upstream-shell pages like /pull-requests or /settings. Hiding these rows
-  // off /t3team/* made "My work" vanish the moment the user opened the PR page.
-  const showTeamNav = true;
   const handleBackClick = useCallback(() => {
     closeMobileSidebar();
     void navigateToMainApp();
@@ -286,25 +246,10 @@ export const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
 
   return (
     <>
-      {showTeamNav ? (
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton onClick={handleMyWorkClick}>
-              <InboxIcon />
-              <span>My work</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          {scopedProjectId !== null ? (
-            <SidebarMenuItem>
-              <SidebarMenuButton onClick={handleBacklogClick}>
-                <ListTreeIcon />
-                <span>Backlog</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ) : null}
-        </SidebarMenu>
-      ) : null}
       <SidebarMenu className="flex-row items-center">
+        {/* t3team: the Team shell's work surfaces, reachable from every route — including
+            upstream-shell pages like /pull-requests or /settings. */}
+        <T3TeamSidebarWorkNavItems />
         {isOnUtilityPage ? (
           <SidebarMenuItem className="min-w-0 flex-1">
             <SidebarMenuButton onClick={handleBackClick}>
@@ -345,9 +290,8 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
       <SidebarThreadUndoNotice />
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
-      {/* The fork's t3team team-nav rows live inside SidebarUtilityMenu (top of
-          its render) so they stay visible on every route, matching the fork's
-          pre-extraction footer behavior. */}
+      {/* The fork's t3team work-nav items (My work, Backlog) sit inline in
+          SidebarUtilityMenu's icon row so they stay visible on every route. */}
       <SidebarUtilityMenu />
     </SidebarFooter>
   );

@@ -8,6 +8,7 @@ import type {
 import type { ExternalResourceRef, ResourcePage } from "@t3tools/project-context";
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/sql/SqlClient";
+import * as TestClock from "effect/testing/TestClock";
 
 import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import {
@@ -20,6 +21,7 @@ import {
   type T3TeamAtlassianBacklogPayload,
 } from "./t3team-atlassian-backlog-cache.ts";
 import type { BacklogResourceRef } from "./t3team-atlassian-backlog-cacheShared.ts";
+import { readDigestStatusTransitionsSince } from "./t3team-digestStatusTransitions.ts";
 
 const backlogCacheLayer = it.layer(SqlitePersistenceMemory);
 
@@ -352,6 +354,39 @@ backlogCacheLayer("t3team Atlassian backlog cache", (it) => {
       assert.deepStrictEqual(
         cached?.response.page.items.map((item) => item.displayId),
         ["PROJ-1", "PROJ-2"],
+      );
+    }),
+  );
+
+  it.effect("records the status changes a backlog view write and a sync page deliver", () =>
+    Effect.gen(function* () {
+      const identity = {
+        provider: "atlassian",
+        accountId: "a-moves",
+        externalProjectId: "p-moves",
+      };
+      const write = (status: string) =>
+        writeCachedT3TeamAtlassianBacklog({
+          ...identity,
+          requestSelection: {},
+          response: createBacklogPayload({
+            page: { items: [createIssue({ status })], totalCount: 1 },
+          }),
+        });
+      yield* write("To Do");
+      yield* write("To Do");
+      yield* TestClock.adjust("1 minute");
+      yield* write("In Progress");
+      yield* TestClock.adjust("1 minute");
+      yield* appendCachedT3TeamAtlassianBacklogSyncPage({
+        ...identity,
+        selectionKeys: [],
+        items: [createIssue({ status: "Code Review" })],
+      });
+      const moves = yield* readDigestStatusTransitionsSince({ ...identity, sinceMs: 0 });
+      assert.deepStrictEqual(
+        moves.map((move) => `${move.issueKey}:${move.from}->${move.to}`),
+        ["PROJ-1:To Do->In Progress", "PROJ-1:In Progress->Code Review"],
       );
     }),
   );

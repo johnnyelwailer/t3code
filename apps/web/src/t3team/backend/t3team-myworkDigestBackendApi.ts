@@ -1,3 +1,4 @@
+import type { T3TeamMyWorkDigestPlan } from "@t3tools/contracts";
 /**
  * Client half of the My Work Digest graph endpoint
  * (`POST /api/t3team/mywork-digest/graph/poll`).
@@ -8,6 +9,7 @@
  * adds the fingerprint envelope so unchanged digests cost one word of body.
  */
 
+import type { MyWorkDigestChangeRequest } from "./t3team-myworkDigestBackendPrTypes";
 import { postJson } from "./t3team-t3BackendHttp";
 
 type DigestAccountRef = { readonly id: string; readonly provider: string };
@@ -26,6 +28,8 @@ export type MyWorkDigestPollInput = {
   readonly projects: ReadonlyArray<MyWorkDigestProjectInput>;
   /** The Jira display name the mirror assigns to the viewer (drives the burndown). */
   readonly viewer?: { readonly name?: string };
+  /** The viewer's IANA time zone: the server's "yesterday" is their previous working day. */
+  readonly timeZone?: string;
   /** The fingerprint from the previous round; lets the server answer `unchanged`. */
   readonly knownFingerprint?: string;
 };
@@ -33,6 +37,7 @@ export type MyWorkDigestPollInput = {
 type DigestTicketRef = { readonly issueId?: string; readonly issueKey?: string };
 type DigestSprint = {
   readonly name: string;
+  readonly state?: string;
   readonly goal?: string;
   readonly startDate?: string;
   readonly endDate?: string;
@@ -51,6 +56,8 @@ export type MyWorkDigestTicketRef = {
 
 export type MyWorkDigestPayload = {
   readonly scope: MyWorkDigestScope;
+  /** The arrangement an agent stored for this scope; absent means the default. */
+  readonly arrangement?: T3TeamMyWorkDigestPlan;
   /**
    * The viewer as the server resolved them; fills in when the client has no cached name.
    * `unresolved` means a project had no Jira identity (stale or missing token).
@@ -81,23 +88,19 @@ export type MyWorkDigestPayload = {
       readonly question: string;
       readonly askedAt: string;
     }>;
-    readonly changeRequests: ReadonlyArray<{
-      readonly id: string;
-      readonly repo: string;
-      readonly number: number;
-      readonly state:
-        | "draft"
-        | "open"
-        | "needs-you"
-        | "changes-requested"
-        | "ci-failing"
-        | "approved"
-        | "merged";
-      readonly updatedAt: string;
-      readonly workItemKey?: string;
-      /** Open PRs only, off the server's cached detail read. */
-      readonly reviewers?: ReadonlyArray<{ readonly name: string; readonly login: string }>;
-      readonly unhandledReviewThreads?: ReadonlyArray<{ readonly lastCommentAt?: string }>;
+    readonly changeRequests: ReadonlyArray<MyWorkDigestChangeRequest>;
+    /** Who the viewer's tickets hang together with: Jira `blocks` links both ways, same story. */
+    readonly dependencies?: ReadonlyArray<{
+      readonly ticketKey: string;
+      readonly relation: "waits-on-you" | "you-wait-on" | "same-story";
+      readonly other: {
+        readonly key: string;
+        readonly title: string;
+        readonly status: string;
+        readonly assignee?: string;
+        readonly assigneeAvatarUrl?: string;
+        readonly url?: string;
+      };
     }>;
     /** PRs that gate a ticket: Jira "is blocked by" links or PR body mentions. */
     readonly blockers?: ReadonlyArray<{
@@ -119,6 +122,28 @@ export type MyWorkDigestPayload = {
     }>;
     readonly sprint?: DigestSprint;
     readonly changeRequestNote?: string;
+    readonly jiraSyncedAt?: string;
+    /** The previous working day: PRs the viewer merged, tickets of theirs that moved. */
+    readonly yesterday?: {
+      readonly from: string;
+      readonly until: string;
+      readonly merged: ReadonlyArray<{
+        readonly id: string;
+        readonly host: string;
+        readonly repo: string;
+        readonly number: number;
+        readonly title: string;
+        readonly mergedAt: string;
+        readonly workItemKey?: string;
+      }>;
+      /** `from`/`to` are absent for a ticket Jira merely updated; present when a move was seen. */
+      readonly moved: ReadonlyArray<{
+        readonly ticketRef: DigestTicketRef;
+        readonly from?: string;
+        readonly to?: string;
+        readonly at: string;
+      }>;
+    };
   }>;
 };
 
@@ -140,6 +165,7 @@ export function createMyWorkDigestBackendApi(httpBaseUrl: string) {
           readonly scope: MyWorkDigestScope;
           readonly projects: ReadonlyArray<MyWorkDigestProjectInput>;
           readonly viewer?: { readonly name?: string };
+          readonly timeZone?: string;
           readonly poll: { readonly enabled: true; readonly knownFingerprint?: string };
         },
         MyWorkDigestPollResult
@@ -150,6 +176,7 @@ export function createMyWorkDigestBackendApi(httpBaseUrl: string) {
           scope: input.scope,
           projects: input.projects,
           ...(input.viewer !== undefined ? { viewer: input.viewer } : {}),
+          ...(input.timeZone !== undefined ? { timeZone: input.timeZone } : {}),
           poll: {
             enabled: true,
             ...(input.knownFingerprint !== undefined
