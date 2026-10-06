@@ -217,8 +217,10 @@ describe("static capability scan treats retry() as a schedule use", () => {
       `  await again(async () => 1, { maxAttempts: 1, backoff: () => 0 });`,
       `}`,
     ]);
-    expect(findings).toHaveLength(1);
-    expect(findings[0]?.message).toContain("'schedule'");
+    // The binding scan separately (and rightly) rejects the alias; the capability scan must still
+    // resolve `again` back to `retry` and demand 'schedule'.
+    expect(findings.map((item) => item.rule)).toEqual(["aliased-import", "missing-capability"]);
+    expect(findings[1]?.message).toContain("'schedule'");
   });
 
   it("does not gate an author's own retry helper in a globals body", () => {
