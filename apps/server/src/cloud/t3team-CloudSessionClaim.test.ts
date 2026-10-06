@@ -2,7 +2,12 @@ import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
 
-import { claimedSessions, makeClaimLedger, standbyPoolKey } from "./t3team-CloudSessionClaim.ts";
+import {
+  claimedSessions,
+  isClaimed,
+  makeClaimLedger,
+  standbyPoolKey,
+} from "./t3team-CloudSessionClaim.ts";
 
 const repoRef = {
   host: "ghe.test",
@@ -14,9 +19,13 @@ const T0 = 1_800_000_000_000;
 const phasesAt = (minutes: number, broker: Array<{ runId: string; environmentId?: string }>) =>
   Effect.gen(function* () {
     const ledger = yield* makeClaimLedger();
-    yield* Ref.set(ledger, new Map([["9", { name: "api", startedAtMs: T0, seen: false }]]));
+    yield* Ref.set(
+      ledger,
+      new Map([["9", { login: "pj", name: "api", startedAtMs: T0, seen: false }]]),
+    );
     return yield* claimedSessions({
       ledger,
+      login: "pj",
       brokerSessions: broker,
       knownRunIds: new Set(),
       nowMs: T0 + minutes * 60_000,
@@ -50,10 +59,14 @@ describe("standby claims", () => {
   it.effect("a session that came up and then left the broker has stopped", () =>
     Effect.gen(function* () {
       const ledger = yield* makeClaimLedger();
-      yield* Ref.set(ledger, new Map([["9", { name: "api", startedAtMs: T0, seen: false }]]));
+      yield* Ref.set(
+        ledger,
+        new Map([["9", { login: "pj", name: "api", startedAtMs: T0, seen: false }]]),
+      );
       const at = (min: number, broker: Array<{ runId: string }>) =>
         claimedSessions({
           ledger,
+          login: "pj",
           brokerSessions: broker,
           knownRunIds: new Set(),
           nowMs: T0 + min * 60_000,
@@ -62,6 +75,28 @@ describe("standby claims", () => {
         });
       yield* at(2, [{ runId: "9" }]);
       expect((yield* at(30, [])).map((s) => s.phase)).toEqual(["stopped"]);
+    }),
+  );
+
+  it.effect("another login on the same server never sees or owns the claim", () =>
+    Effect.gen(function* () {
+      const ledger = yield* makeClaimLedger();
+      yield* Ref.set(
+        ledger,
+        new Map([["9", { login: "pj", name: "api", startedAtMs: T0, seen: false }]]),
+      );
+      const other = yield* claimedSessions({
+        ledger,
+        login: "someone",
+        brokerSessions: [],
+        knownRunIds: new Set(),
+        nowMs: T0,
+        machineLabel: "m",
+        repoRef,
+      });
+      expect(other).toEqual([]);
+      expect(yield* isClaimed(ledger, "9", "someone")).toBe(false);
+      expect(yield* isClaimed(ledger, "9", "pj")).toBe(true);
     }),
   );
 });

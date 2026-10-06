@@ -116,6 +116,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       : [];
     const claimed = yield* claimedSessions({
       ledger: claims,
+      login,
       brokerSessions,
       knownRunIds: new Set(dispatched.map((session) => session.sessionId)),
       nowMs,
@@ -175,13 +176,16 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
           broker,
           machine,
           workspace,
+          login,
           name: input.name ?? machine.repository.name,
           ledger: claims,
           nowMs,
         });
+        // Claimed: this is the session. Never also dispatch one — the standby is spent.
         if (claimedRun !== null) {
           const pending = yield* claimedSessions({
             ledger: claims,
+            login,
             brokerSessions: [],
             knownRunIds: new Set(),
             nowMs,
@@ -189,7 +193,13 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
             repoRef,
           });
           const session = pending.find((item) => item.sessionId === claimedRun);
-          if (session !== undefined) return session;
+          if (session === undefined) {
+            return yield* new CloudSessionFailedError({
+              reason: "unknown_session",
+              message: "The claimed machine could not be listed; it will appear shortly.",
+            });
+          }
+          return session;
         }
       }
 
@@ -262,7 +272,15 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       const sessionRun = sessionRuns.find((item) => item.id === runId);
       // A claimed standby runs under the pool controller: this server's own claim proves it is
       // this user's session.
-      if (sessionRun === undefined && (yield* isClaimed(claims, input.sessionId))) {
+      // After a restart this server's ledger is empty; the broker still lists the user's sessions.
+      const claimedHere =
+        sessionRun === undefined &&
+        ((yield* isClaimed(claims, input.sessionId, login)) ||
+          (broker.enabled &&
+            (yield* broker.sessions.pipe(Effect.orElseSucceed(() => []))).some(
+              (session) => session.runId === input.sessionId,
+            )));
+      if (claimedHere) {
         return yield* gh.run(cancelRunInvocation(repoRef, runId)).pipe(Effect.asVoid);
       }
       if (sessionRun === undefined) {

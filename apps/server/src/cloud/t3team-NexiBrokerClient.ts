@@ -102,7 +102,8 @@ export const makeNexiBrokerClient = Effect.fn("cloud.broker.client.make")(functi
             ),
           )
           .pipe(Effect.mapError(() => failed("The Nexi broker could not be reached (a claim).")));
-        if (response.status === 404) return null;
+        // None idle (404), or too many starting for this user right now (429): start cold instead.
+        if (response.status === 404 || response.status === 429) return null;
         if (response.status >= 400) {
           return yield* failed(
             `The Nexi broker refused a claim (HTTP ${response.status}).`,

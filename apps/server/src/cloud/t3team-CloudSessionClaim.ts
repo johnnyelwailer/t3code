@@ -34,6 +34,8 @@ const CLAIM_GRACE_MS = 12 * 60_000;
 const CLAIM_KEEP_MS = 60 * 60_000;
 
 interface ClaimedEntry {
+  /** The GHE login the claim was made for: the list and cancel only ever show it that login's. */
+  readonly login: string;
   readonly name: string;
   readonly startedAtMs: number;
   /** Seen in the broker's list at least once: it came up. */
@@ -48,6 +50,7 @@ export const claimStandby = (input: {
   readonly broker: NexiBrokerService["Service"];
   readonly machine: CloudSessionMachine;
   readonly workspace: string;
+  readonly login: string;
   readonly name: string;
   readonly ledger: ClaimLedger;
   readonly nowMs: number;
@@ -71,7 +74,12 @@ export const claimStandby = (input: {
     });
     if (runId === null) return null;
     yield* Ref.update(input.ledger, (ledger) =>
-      new Map(ledger).set(runId, { name: input.name, startedAtMs: input.nowMs, seen: false }),
+      new Map(ledger).set(runId, {
+        login: input.login,
+        name: input.name,
+        startedAtMs: input.nowMs,
+        seen: false,
+      }),
     );
     return runId;
   });
@@ -83,6 +91,7 @@ export const claimStandby = (input: {
  */
 export const claimedSessions = (input: {
   readonly ledger: ClaimLedger;
+  readonly login: string;
   readonly brokerSessions: ReadonlyArray<BrokerSession>;
   readonly knownRunIds: ReadonlySet<string>;
   readonly nowMs: number;
@@ -101,7 +110,7 @@ export const claimedSessions = (input: {
       // stays visible for a while, then the ledger forgets it.
       if (brokerSession === undefined && age > CLAIM_KEEP_MS) continue;
       next.set(runId, { ...entry, seen });
-      if (input.knownRunIds.has(runId)) continue;
+      if (entry.login !== input.login || input.knownRunIds.has(runId)) continue;
       const phase: CloudSession["phase"] =
         brokerSession !== undefined
           ? "ready"
@@ -129,6 +138,6 @@ export const claimedSessions = (input: {
     return [sessions, next] as const;
   });
 
-/** True when `runId` is a session this server claimed for its user. */
-export const isClaimed = (ledger: ClaimLedger, runId: string) =>
-  Ref.get(ledger).pipe(Effect.map((entries) => entries.has(runId)));
+/** True when `runId` is a session this server claimed for `login`. */
+export const isClaimed = (ledger: ClaimLedger, runId: string, login: string) =>
+  Ref.get(ledger).pipe(Effect.map((entries) => entries.get(runId)?.login === login));
