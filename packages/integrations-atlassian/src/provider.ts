@@ -41,6 +41,7 @@ import {
   readJiraSubtaskCount,
   readJiraTimeTracking,
   selectJiraPrimarySprint,
+  withJiraAssigneeAccountIds,
   type JiraEstimateField,
   type JiraSprintField,
   findJiraSprintField,
@@ -752,7 +753,10 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
       [],
       input.limit,
     );
-    const assignedItems = normalizeIssueSearch({ issues: assignedSearch.issues }, entry.siteUrl);
+    const assignedItems = withJiraAssigneeAccountIds(
+      assignedSearch.issues as ReadonlyArray<JiraIssue>,
+      normalizeIssueSearch({ issues: assignedSearch.issues }, entry.siteUrl),
+    );
 
     const parentKeys = new Set<string>();
     for (const issue of assignedSearch.issues) {
@@ -775,7 +779,10 @@ export class AtlassianIntegrationProvider implements IntegrationProvider {
       const quotedParentKeys = missingParentKeys.map((key) => `"${key.replace(/"/g, '\\"')}"`);
       const parentJql = `key in (${quotedParentKeys.join(", ")}) ORDER BY updated DESC`;
       const parentResponse = await entry.client.searchIssues(parentJql, missingParentKeys.length);
-      parentItems = normalizeIssueSearch(parentResponse, entry.siteUrl);
+      parentItems = withJiraAssigneeAccountIds(
+        parentResponse.issues as ReadonlyArray<JiraIssue>,
+        normalizeIssueSearch(parentResponse, entry.siteUrl),
+      );
     }
 
     const itemsById = new Map<string, (typeof assignedItems)[number]>();

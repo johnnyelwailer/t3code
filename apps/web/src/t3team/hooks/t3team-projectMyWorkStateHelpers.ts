@@ -3,15 +3,22 @@ import type {
   ProjectMyWorkKanbanLaneOption,
   ProjectMyWorkStatusCategory,
 } from "~/t3team/t3team-projectMyWork";
+import type { ProjectDashboardMyWorkState } from "~/t3team/t3team-projectDashboardMyWorkState";
 import type { ProjectTicketKanbanBoardColumn } from "~/t3team/t3team-projectTicketStatus";
 import { matchesProjectTicketStatusCategory } from "~/t3team/t3team-projectTicketStatus";
 import type { ProjectTicket } from "~/t3team/t3team-types";
 
+/**
+ * True when at least one assigned ticket can only be matched to the viewer by
+ * display name — i.e. its `assigneeAccountId` is not the viewer's Jira user id.
+ * `viewerAccountId` is the Jira *user* id from the My Work page, never the
+ * Jira site id (`project.source.accountId`).
+ */
 export function hasProjectMyWorkDisplayNameDependentAssignments(
   tickets: readonly ProjectTicket[],
-  accountId?: string,
+  viewerAccountId?: string,
 ): boolean {
-  const normalizedAccountId = accountId?.trim();
+  const normalizedAccountId = viewerAccountId?.trim();
 
   return tickets.some((ticket) => {
     if (!ticket.assignee?.trim()) {
@@ -91,6 +98,17 @@ export function countMatchingStatusCategory(
     .length;
 }
 
+/** State patch applied by "Reset" in the My Work options menu. */
+export const PROJECT_MY_WORK_RESET_OPTIONS_PATCH: Partial<ProjectDashboardMyWorkState> = {
+  showGitHubActivity: true,
+  statusCategory: "all",
+  hiddenKanbanColumnIds: [],
+  hasCustomizedKanbanLanes: false,
+  excludedTypeKeys: [],
+  selectedPriority: "all",
+  selectedStatus: "all",
+};
+
 export function countProjectMyWorkActiveOptions(input: {
   showGitHubActivity: boolean;
   statusCategory: ProjectMyWorkStatusCategory | "all";
@@ -121,6 +139,8 @@ export function buildProjectMyWorkMetrics(tickets: readonly ProjectTicket[]) {
 
 export function shouldShowProjectMyWorkLoadingState(input: {
   resourcesLoading: boolean;
+  /** Linked project whose first My Work response has neither arrived nor failed yet. */
+  awaitingFirstLoad?: boolean;
   ticketCount: number;
   currentUserDisplayNameLoading: boolean;
   hasDisplayNameDependentAssignments: boolean;
@@ -128,6 +148,7 @@ export function shouldShowProjectMyWorkLoadingState(input: {
 }): boolean {
   return (
     (input.resourcesLoading && input.ticketCount === 0) ||
+    input.awaitingFirstLoad === true ||
     (input.currentUserDisplayNameLoading &&
       input.hasDisplayNameDependentAssignments &&
       input.ticketCount > 0 &&

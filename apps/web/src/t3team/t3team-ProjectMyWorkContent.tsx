@@ -1,3 +1,4 @@
+import { T3TeamErrorState } from "~/t3team/components/error/t3team-ErrorState";
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { useTicketAgentContext } from "~/t3team/hooks/t3team-useTicketAgentContext";
 import {
@@ -27,6 +28,9 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 
 export function ProjectMyWorkContent({
   loading,
+  loadError,
+  isLinked,
+  onRetryLoad,
   project,
   tickets,
   assignedWorkItems,
@@ -48,6 +52,9 @@ export function ProjectMyWorkContent({
   onOpenTicket,
 }: {
   loading: boolean;
+  loadError?: string | null;
+  isLinked?: boolean;
+  onRetryLoad?: () => void;
   project: ProjectShellProject;
   tickets: readonly ProjectTicket[];
   assignedWorkItems: readonly ProjectTicket[];
@@ -84,6 +91,8 @@ export function ProjectMyWorkContent({
     loading,
     assignedWorkItemsCount: assignedWorkItems.length,
     filteredWorkItemsCount: filteredWorkItems.length,
+    loadError,
+    isLinked,
   });
   const renderTicketExtra = (ticket: ProjectTicket, compact?: boolean) =>
     renderProjectMyWorkTicketExtra({
@@ -98,6 +107,16 @@ export function ProjectMyWorkContent({
 
   if (contentState.kind === "loading") {
     return <ProjectMyWorkLoadingState />;
+  }
+
+  if (contentState.kind === "error") {
+    return (
+      <T3TeamErrorState
+        error={new Error(contentState.message)}
+        action="load your Jira work"
+        {...(onRetryLoad ? { onRetry: onRetryLoad } : {})}
+      />
+    );
   }
 
   if (contentState.kind === "empty") {

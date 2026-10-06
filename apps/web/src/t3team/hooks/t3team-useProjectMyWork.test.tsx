@@ -160,3 +160,123 @@ describe("useProjectMyWork stale-response race", () => {
     expect(latest.result?.error).toBeNull();
   });
 });
+
+describe("useProjectMyWork load/error bookkeeping", () => {
+  let root: Root | null = null;
+  let host: HTMLDivElement | null = null;
+
+  afterEach(async () => {
+    if (root) {
+      await act(async () => root?.unmount());
+    }
+    host?.remove();
+    root = null;
+    host = null;
+  });
+
+  function createBackend(
+    pollMyWork: (input: { externalProjectId: string }) => Promise<T3TeamPollResult<ResourcePage>>,
+  ): BackendApi {
+    return {
+      state: { connectionStatus: "connected", serverConfig: null, providers: [], error: null },
+      connect: async () => undefined,
+      disconnect: async () => undefined,
+      atlassian: { pollMyWork } as unknown as BackendApi["atlassian"],
+      github: {} as BackendApi["github"],
+      projectWorkspace: {} as BackendApi["projectWorkspace"],
+    } as unknown as BackendApi;
+  }
+
+  async function mount(backend: BackendApi, project: ProjectShellProject) {
+    const latest: { result: ReturnType<typeof useProjectMyWork> | null } = { result: null };
+    function Harness({ current }: { current: ProjectShellProject }) {
+      latest.result = useProjectMyWork(current);
+      return null;
+    }
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    const render = async (current: ProjectShellProject) => {
+      await act(async () => {
+        root?.render(
+          <BackendProvider backend={backend}>
+            <Harness current={current} />
+          </BackendProvider>,
+        );
+      });
+    };
+    await render(project);
+    return { latest, render };
+  }
+
+  it("does not stay 'loading' after switching to a project with no Jira link mid-fetch", async () => {
+    const linked = createProject({ id: "project-linked", externalProjectId: "L-1" });
+    const unlinked = {
+      ...createProject({ id: "project-unlinked", externalProjectId: "" }),
+      source: { provider: "atlassian", raw: {} },
+    } as unknown as ProjectShellProject;
+    const backend = createBackend(() => new Promise(() => undefined));
+
+    const { latest, render } = await mount(backend, linked);
+    await vi.waitFor(() => expect(latest.result?.loading).toBe(true));
+
+    await render(unlinked);
+
+    expect(latest.result?.isLinked).toBe(false);
+    expect(latest.result?.loading).toBe(false);
+  });
+
+  it("keeps a failed load as an error until a poll succeeds", async () => {
+    const project = createProject({ id: "project-flaky", externalProjectId: "F-1" });
+    let attempts = 0;
+    const backend = createBackend(async () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error("Jira request failed (503)");
+      return { unchanged: false, fingerprint: "sha256:ok", value: createResourcePage("F-ISSUE") };
+    });
+
+    const { latest } = await mount(backend, project);
+    await vi.waitFor(() => expect(latest.result?.error).toBe("Jira request failed (503)"));
+
+    await act(async () => {
+      await latest.result?.reload();
+    });
+
+    expect(latest.result?.error).toBeNull();
+    expect(latest.result?.resources?.items[0]?.id).toBe("F-ISSUE");
+  });
+
+  it("ignores an older request's failure that lands after a newer request succeeded", async () => {
+    const project = createProject({ id: "project-overlap", externalProjectId: "O-1" });
+    const rejectors: Array<(error: Error) => void> = [];
+    let call = 0;
+    const backend = createBackend(() => {
+      call += 1;
+      if (call === 1) {
+        return new Promise((_resolve, reject) => rejectors.push(reject));
+      }
+      return Promise.resolve({
+        unchanged: false as const,
+        fingerprint: "sha256:new",
+        value: createResourcePage("O-ISSUE"),
+      });
+    });
+
+    const { latest } = await mount(backend, project);
+    await vi.waitFor(() => expect(rejectors).toHaveLength(1));
+
+    // A card-move reload overlaps the still-pending poll and succeeds first.
+    await act(async () => {
+      await latest.result?.reload();
+    });
+    expect(latest.result?.resources?.items[0]?.id).toBe("O-ISSUE");
+
+    await act(async () => {
+      rejectors[0]?.(new Error("old poll failed"));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(latest.result?.error).toBeNull();
+  });
+});

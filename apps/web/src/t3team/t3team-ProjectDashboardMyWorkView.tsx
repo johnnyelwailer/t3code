@@ -32,6 +32,8 @@ export function ProjectDashboardMyWorkView({
   });
   const {
     loading,
+    loadError,
+    isLinked,
     tickets,
     reloadTickets,
     jiraLastCheckedAt,
@@ -160,6 +162,9 @@ export function ProjectDashboardMyWorkView({
 
         <ProjectMyWorkContent
           loading={loading}
+          loadError={loadError}
+          isLinked={isLinked}
+          onRetryLoad={reloadTickets}
           project={project}
           tickets={tickets}
           assignedWorkItems={assignedWorkItems}

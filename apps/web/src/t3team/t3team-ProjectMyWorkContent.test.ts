@@ -26,6 +26,39 @@ describe("project my work content", () => {
     });
   });
 
+  it("shows a load failure as an error, never as an empty board", () => {
+    expect(
+      resolveProjectMyWorkContentState({
+        loading: false,
+        assignedWorkItemsCount: 0,
+        filteredWorkItemsCount: 0,
+        loadError: "Jira request failed (503)",
+      }),
+    ).toEqual({ kind: "error", message: "Jira request failed (503)" });
+  });
+
+  it("keeps already-loaded work visible when a later refresh fails", () => {
+    expect(
+      resolveProjectMyWorkContentState({
+        loading: false,
+        assignedWorkItemsCount: 2,
+        filteredWorkItemsCount: 2,
+        loadError: "Jira request failed (503)",
+      }),
+    ).toEqual({ kind: "ready" });
+  });
+
+  it("explains an unlinked project instead of claiming nothing is assigned", () => {
+    expect(
+      resolveProjectMyWorkContentState({
+        loading: false,
+        assignedWorkItemsCount: 0,
+        filteredWorkItemsCount: 0,
+        isLinked: false,
+      }).kind,
+    ).toBe("empty");
+  });
+
   it("shows the filtered empty state after assigned work has loaded", () => {
     expect(
       resolveProjectMyWorkContentState({

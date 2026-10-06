@@ -7,6 +7,7 @@ import {
   buildProjectMyWorkStatusOptions,
   countProjectMyWorkActiveOptions,
   hasProjectMyWorkDisplayNameDependentAssignments,
+  PROJECT_MY_WORK_RESET_OPTIONS_PATCH,
   setSortedStringMembership,
   shouldShowProjectMyWorkLoadingState,
 } from "~/t3team/hooks/t3team-projectMyWorkStateHelpers";
@@ -35,19 +36,25 @@ export function useProjectMyWorkState({
     useAtlassianCurrentUserDisplayNameState(project.source.accountId);
   const {
     tickets: fetchedTickets,
+    viewerAccountId,
     lastCheckedAt,
     reload,
     loading: resourcesLoading,
+    error: loadError,
+    isLinked,
   } = useProjectMyWork(project);
   const { boardColumns, availableStatuses } = useProjectKanbanBoardColumns(project);
   const tickets = fetchedTickets.length > 0 ? fetchedTickets : fallbackTickets;
   const kanbanProfileId = useMemo(() => readProjectSetupProfileIdFromProject(project), [project]);
+  // `project.source.accountId` is the Jira *site* id and can never equal a
+  // ticket's `assigneeAccountId`; the viewer's Jira user id comes from the
+  // server-scoped My Work page. Display name is only a fallback.
   const identity = useMemo(
     () => ({
-      ...(project.source.accountId ? { accountId: project.source.accountId } : {}),
+      ...(viewerAccountId ? { accountId: viewerAccountId } : {}),
       ...(currentUserDisplayName ? { displayName: currentUserDisplayName } : {}),
     }),
-    [currentUserDisplayName, project.source.accountId],
+    [currentUserDisplayName, viewerAccountId],
   );
 
   const { state, setState } = useProjectDashboardMyWorkState(project.id);
@@ -102,11 +109,12 @@ export function useProjectMyWorkState({
   });
   const loading = shouldShowProjectMyWorkLoadingState({
     resourcesLoading,
+    awaitingFirstLoad: isLinked && lastCheckedAt === undefined && loadError === null,
     ticketCount: tickets.length,
     currentUserDisplayNameLoading,
     hasDisplayNameDependentAssignments: hasProjectMyWorkDisplayNameDependentAssignments(
       tickets,
-      project.source.accountId,
+      viewerAccountId,
     ),
     assignedWorkItemsCount: assignedWorkItems.length,
   });
@@ -117,6 +125,8 @@ export function useProjectMyWorkState({
 
   return {
     loading,
+    loadError,
+    isLinked,
     tickets,
     reloadTickets: reload,
     currentUserDisplayName,
@@ -178,17 +188,7 @@ export function useProjectMyWorkState({
       hiddenKanbanColumnIds: normalizedHiddenKanbanColumnIds,
       excludedTypeKeys: normalizedExcludedTypeKeys,
     }),
-    resetOptionsFilters: () => {
-      updateState({
-        showGitHubActivity: true,
-        statusCategory: "all",
-        hiddenKanbanColumnIds: [],
-        hasCustomizedKanbanLanes: false,
-        excludedTypeKeys: [],
-        selectedPriority: "all",
-        selectedStatus: "all",
-      });
-    },
+    resetOptionsFilters: () => updateState(PROJECT_MY_WORK_RESET_OPTIONS_PATCH),
     assignedWorkItems,
     filteredWorkItems,
     visibleHierarchy,
