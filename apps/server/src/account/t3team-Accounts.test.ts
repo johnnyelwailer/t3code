@@ -1,7 +1,6 @@
-// @effect-diagnostics preferSchemaOverJson:off - the fake Entra endpoint writes raw JSON bodies, as the real one does.
+// @effect-diagnostics preferSchemaOverJson:off - the fake issuer writes raw JSON bodies, as a real one does.
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
-import * as ConfigProvider from "effect/ConfigProvider";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -11,12 +10,26 @@ import * as HttpClient from "effect/unstable/http/HttpClient";
 import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 
 import { ExternalLauncherBrowserSpawnError } from "@t3tools/contracts";
+import type { AccountDefinition } from "@t3team/pack-api";
 
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import * as ExternalLauncher from "../process/externalLauncher.ts";
-import { NexiBrokerAuth, layer as NexiBrokerAuthLayer } from "./t3team-NexiBrokerAuth.ts";
+import { Accounts, layerFor } from "./t3team-Accounts.ts";
 
-const SECRET = "nexi-broker-refresh-token";
+const ACME: AccountDefinition = {
+  id: "acme",
+  label: "Acme",
+  issuer: {
+    clientId: "client-1",
+    authorizationEndpoint: "https://id.example.test/oauth2/authorize",
+    tokenEndpoint: "https://id.example.test/oauth2/token",
+    deviceAuthorizationEndpoint: "https://id.example.test/oauth2/devicecode",
+  },
+  baseScopes: "openid profile offline_access",
+  resources: { broker: "api://acme-broker/access", knowledge: "api://acme-knowledge/read" },
+  signInResource: "broker",
+};
+const SECRET = "account.acme.refresh-token";
 const accessTokenFor = (name: string) =>
   `h.${Buffer.from(JSON.stringify({ name })).toString("base64url")}.s`;
 
@@ -24,13 +37,13 @@ interface Reply {
   readonly status: number;
   readonly body: unknown;
 }
-interface EntraFake {
+interface IssuerFake {
   readonly requests: Array<{ readonly path: string; readonly params: URLSearchParams }>;
   /** Replies to the token endpoint, consumed in order; the last one repeats. */
   readonly tokenReplies: Array<Reply>;
 }
 
-const entraLayer = (fake: EntraFake) =>
+const issuerLayer = (fake: IssuerFake) =>
   Layer.succeed(
     HttpClient.HttpClient,
     HttpClient.make((request) =>
@@ -45,7 +58,7 @@ const entraLayer = (fake: EntraFake) =>
               body: {
                 device_code: "dc-1",
                 user_code: "ABCD-EFGH",
-                verification_uri: "https://microsoft.com/devicelogin",
+                verification_uri: "https://id.example.test/device",
                 expires_in: 900,
                 interval: 5,
               },
@@ -91,43 +104,53 @@ const noBrowser = Layer.mock(ExternalLauncher.ExternalLauncher)({
     ),
 });
 
-const withBroker = (
-  env: Record<string, string> = { T3CODE_NEXI_BROKER_URL: "https://broker.test/" },
-) => ConfigProvider.layer(ConfigProvider.fromEnv({ env }));
-
-const authWith = (
-  fake: EntraFake,
+const accountsWith = (
+  fake: IssuerFake,
   secrets: ReturnType<typeof memorySecrets>,
-  env?: Record<string, string>,
+  launcher: Layer.Layer<ExternalLauncher.ExternalLauncher> = noBrowser,
+  definitions: ReadonlyArray<AccountDefinition> = [ACME],
 ) =>
-  NexiBrokerAuthLayer.pipe(
-    Layer.provide(Layer.mergeAll(entraLayer(fake), secrets.layer, withBroker(env), noBrowser)),
+  layerFor(definitions).pipe(
+    Layer.provide(Layer.mergeAll(issuerLayer(fake), secrets.layer, launcher)),
   );
 
-it.layer(NodeServices.layer)("NexiBrokerAuth", (it) => {
-  it.effect("is disabled without a broker URL and says so instead of asking for a sign-in", () =>
+/** The account under test, with its operations bound to `acme`. */
+const acme = Effect.gen(function* () {
+  const accounts = yield* Accounts;
+  return {
+    status: accounts.list.pipe(Effect.map((list) => list.find((a) => a.id === "acme")!)),
+    signIn: accounts.signIn("acme"),
+    signOut: accounts.signOut("acme"),
+    accessToken: accounts.accessToken("acme", "broker"),
+    accessTokenFor: (resource: string) => accounts.accessToken("acme", resource),
+  };
+});
+
+it.layer(NodeServices.layer)("Accounts", (it) => {
+  it.effect("an account the build does not define says so instead of asking for a sign-in", () =>
     Effect.gen(function* () {
-      const auth = yield* NexiBrokerAuth;
-      assert.equal((yield* auth.status).enabled, false);
-      const failure = yield* Effect.flip(auth.accessToken);
-      assert.equal(failure.reason, "broker_unavailable");
-    }).pipe(Effect.provide(authWith({ requests: [], tokenReplies: [] }, memorySecrets(), {}))),
+      const accounts = yield* Accounts;
+      const failure = yield* Effect.flip(accounts.accessToken("other", "broker"));
+      assert.equal(failure.reason, "unavailable");
+      assert.deepEqual(
+        (yield* accounts.list).map((a) => a.id),
+        ["acme"],
+      );
+    }).pipe(Effect.provide(accountsWith({ requests: [], tokenReplies: [] }, memorySecrets()))),
+  );
+
+  it.effect("signed out: an access token asks for the sign-in, never a technical error", () =>
+    Effect.gen(function* () {
+      const auth = yield* acme;
+      assert.equal((yield* auth.status).auth._tag, "SignedOut");
+      assert.equal((yield* Effect.flip(auth.accessToken)).reason, "sign_in_required");
+    }).pipe(Effect.provide(accountsWith({ requests: [], tokenReplies: [] }, memorySecrets()))),
   );
 
   it.effect(
-    "signed out: an access token asks for the Nexplore sign-in, never a technical error",
-    () =>
-      Effect.gen(function* () {
-        const auth = yield* NexiBrokerAuth;
-        assert.equal((yield* auth.status).auth._tag, "SignedOut");
-        assert.equal((yield* Effect.flip(auth.accessToken)).reason, "broker_sign_in_required");
-      }).pipe(Effect.provide(authWith({ requests: [], tokenReplies: [] }, memorySecrets()))),
-  );
-
-  it.effect(
-    "device code: shows the code, polls until Entra grants, then holds the refresh token",
+    "device code: shows the code, polls until the issuer grants, then holds the refresh token",
     () => {
-      const fake: EntraFake = {
+      const fake: IssuerFake = {
         requests: [],
         tokenReplies: [
           { status: 400, body: { error: "authorization_pending" } },
@@ -139,18 +162,18 @@ it.layer(NodeServices.layer)("NexiBrokerAuth", (it) => {
       };
       const secrets = memorySecrets();
       return Effect.gen(function* () {
-        const auth = yield* NexiBrokerAuth;
+        const auth = yield* acme;
         const started = yield* auth.signIn;
         assert.deepEqual(started.auth, {
           _tag: "SigningIn",
           userCode: "ABCD-EFGH",
-          verificationUri: "https://microsoft.com/devicelogin",
+          verificationUri: "https://id.example.test/device",
           expiresAtMs: 900_000,
         });
         const devicecode = fake.requests[0]!;
         assert.equal(
           devicecode.params.get("scope"),
-          "api://9fff57c4-d8ab-4d4c-9267-c5528b7ae345/relay.access openid profile offline_access",
+          "api://acme-broker/access openid profile offline_access",
         );
         yield* TestClock.adjust(Duration.seconds(11));
         assert.deepEqual((yield* auth.status).auth, { _tag: "SignedIn", name: "PJ" });
@@ -161,12 +184,12 @@ it.layer(NodeServices.layer)("NexiBrokerAuth", (it) => {
           2,
           "the cached token is reused",
         );
-      }).pipe(Effect.provide(authWith(fake, secrets)));
+      }).pipe(Effect.provide(accountsWith(fake, secrets)));
     },
   );
 
   it.effect("a browser that is already signed in finishes the sign-in without the code", () => {
-    const fake: EntraFake = {
+    const fake: IssuerFake = {
       requests: [],
       tokenReplies: [
         {
@@ -180,7 +203,7 @@ it.layer(NodeServices.layer)("NexiBrokerAuth", (it) => {
       ],
     };
     const secrets = memorySecrets();
-    // Stands in for a browser with a live Microsoft session: it follows the authorize URL straight
+    // Stands in for a browser with a live session at the issuer: it follows the authorize URL straight
     // to its redirect, carrying a code — over the real loopback listener.
     const opened: Array<URL> = [];
     const signedInBrowser = Layer.mock(ExternalLauncher.ExternalLauncher)({
@@ -198,7 +221,7 @@ it.layer(NodeServices.layer)("NexiBrokerAuth", (it) => {
     // @effect-diagnostics-next-line globalTimers:off - Real time: the loopback round trip is real I/O, not TestClock time.
     const realWait = (ms: number) => Effect.promise(() => new Promise((r) => setTimeout(r, ms)));
     return Effect.gen(function* () {
-      const auth = yield* NexiBrokerAuth;
+      const auth = yield* acme;
       yield* auth.signIn;
       for (let i = 0; i < 100 && (yield* auth.status).auth._tag !== "SignedIn"; i++) {
         yield* realWait(20);
@@ -221,19 +244,11 @@ it.layer(NodeServices.layer)("NexiBrokerAuth", (it) => {
       assert.isFalse(
         fake.requests.some((r) => r.params.get("grant_type")?.endsWith("device_code")),
       );
-    }).pipe(
-      Effect.provide(
-        NexiBrokerAuthLayer.pipe(
-          Layer.provide(
-            Layer.mergeAll(entraLayer(fake), secrets.layer, withBroker(), signedInBrowser),
-          ),
-        ),
-      ),
-    );
+    }).pipe(Effect.provide(accountsWith(fake, secrets, signedInBrowser)));
   });
 
   it.effect("a sign-in declined in the browser is shown, and the code still works", () => {
-    const fake: EntraFake = {
+    const fake: IssuerFake = {
       requests: [],
       tokenReplies: [{ status: 400, body: { error: "authorization_pending" } }],
     };
@@ -253,7 +268,7 @@ it.layer(NodeServices.layer)("NexiBrokerAuth", (it) => {
     // @effect-diagnostics-next-line globalTimers:off - Real time: the loopback round trip is real I/O, not TestClock time.
     const realWait = (ms: number) => Effect.promise(() => new Promise((r) => setTimeout(r, ms)));
     return Effect.gen(function* () {
-      const auth = yield* NexiBrokerAuth;
+      const auth = yield* acme;
       yield* auth.signIn;
       for (let i = 0; i < 100 && (yield* auth.status).lastError === null; i++) yield* realWait(20);
       const status = yield* auth.status;
@@ -261,20 +276,12 @@ it.layer(NodeServices.layer)("NexiBrokerAuth", (it) => {
       assert.equal(status.auth._tag, "SigningIn");
       assert.include(page, "did not finish");
       assert.notInclude(page, "You're signed in");
-    }).pipe(
-      Effect.provide(
-        NexiBrokerAuthLayer.pipe(
-          Layer.provide(
-            Layer.mergeAll(entraLayer(fake), memorySecrets().layer, withBroker(), decliningBrowser),
-          ),
-        ),
-      ),
-    );
+    }).pipe(Effect.provide(accountsWith(fake, memorySecrets(), decliningBrowser)));
   });
 
   it.effect("an expired code ends the sign-in with a reason the user can act on", () =>
     Effect.gen(function* () {
-      const auth = yield* NexiBrokerAuth;
+      const auth = yield* acme;
       yield* auth.signIn;
       yield* TestClock.adjust(Duration.seconds(6));
       const status = yield* auth.status;
@@ -282,7 +289,7 @@ it.layer(NodeServices.layer)("NexiBrokerAuth", (it) => {
       assert.equal(status.lastError, "The sign-in code expired. Start again.");
     }).pipe(
       Effect.provide(
-        authWith(
+        accountsWith(
           { requests: [], tokenReplies: [{ status: 400, body: { error: "expired_token" } }] },
           memorySecrets(),
         ),
@@ -291,7 +298,7 @@ it.layer(NodeServices.layer)("NexiBrokerAuth", (it) => {
   );
 
   it.effect("refreshes with the stored token and keeps the rotated one", () => {
-    const fake: EntraFake = {
+    const fake: IssuerFake = {
       requests: [],
       tokenReplies: [
         {
@@ -302,13 +309,13 @@ it.layer(NodeServices.layer)("NexiBrokerAuth", (it) => {
     };
     const secrets = memorySecrets({ [SECRET]: "rt-1" });
     return Effect.gen(function* () {
-      const auth = yield* NexiBrokerAuth;
+      const auth = yield* acme;
       assert.equal(yield* auth.accessToken, accessTokenFor("PJ"));
       const refresh = fake.requests.at(-1)!;
       assert.equal(refresh.params.get("grant_type"), "refresh_token");
       assert.equal(refresh.params.get("refresh_token"), "rt-1");
       assert.equal(secrets.read(SECRET), "rt-2");
-    }).pipe(Effect.provide(authWith(fake, secrets)));
+    }).pipe(Effect.provide(accountsWith(fake, secrets)));
   });
 
   it.effect(
@@ -316,14 +323,14 @@ it.layer(NodeServices.layer)("NexiBrokerAuth", (it) => {
     () => {
       const secrets = memorySecrets({ [SECRET]: "rt-dead" });
       return Effect.gen(function* () {
-        const auth = yield* NexiBrokerAuth;
+        const auth = yield* acme;
         const failure = yield* Effect.flip(auth.accessToken);
-        assert.equal(failure.reason, "broker_sign_in_required");
+        assert.equal(failure.reason, "sign_in_required");
         assert.equal(secrets.read(SECRET), undefined);
         assert.equal((yield* auth.status).auth._tag, "SignedOut");
       }).pipe(
         Effect.provide(
-          authWith(
+          accountsWith(
             { requests: [], tokenReplies: [{ status: 400, body: { error: "invalid_grant" } }] },
             secrets,
           ),
@@ -335,17 +342,17 @@ it.layer(NodeServices.layer)("NexiBrokerAuth", (it) => {
   it.effect("sign-out forgets the refresh token", () => {
     const secrets = memorySecrets({ [SECRET]: "rt-1" });
     return Effect.gen(function* () {
-      const auth = yield* NexiBrokerAuth;
+      const auth = yield* acme;
       assert.equal((yield* auth.status).auth._tag, "SignedIn");
       yield* auth.signOut;
       assert.equal(secrets.read(SECRET), undefined);
       assert.equal((yield* auth.status).auth._tag, "SignedOut");
-    }).pipe(Effect.provide(authWith({ requests: [], tokenReplies: [] }, secrets)));
+    }).pipe(Effect.provide(accountsWith({ requests: [], tokenReplies: [] }, secrets)));
   });
   it.effect(
     "sign-out during a pending code: approving that old code later does not sign back in",
     () => {
-      const fake: EntraFake = {
+      const fake: IssuerFake = {
         requests: [],
         tokenReplies: [
           { status: 400, body: { error: "authorization_pending" } },
@@ -361,21 +368,21 @@ it.layer(NodeServices.layer)("NexiBrokerAuth", (it) => {
       };
       const secrets = memorySecrets();
       return Effect.gen(function* () {
-        const auth = yield* NexiBrokerAuth;
+        const auth = yield* acme;
         yield* auth.signIn;
         yield* auth.signOut;
         assert.equal((yield* auth.status).auth._tag, "SignedOut");
         yield* TestClock.adjust(Duration.seconds(30));
         assert.equal((yield* auth.status).auth._tag, "SignedOut");
         assert.equal(secrets.read(SECRET), undefined, "the late approval stored nothing");
-      }).pipe(Effect.provide(authWith(fake, secrets)));
+      }).pipe(Effect.provide(accountsWith(fake, secrets)));
     },
   );
 
   it.effect(
     "concurrent token requests share one refresh (a rotating token is never spent twice)",
     () => {
-      const fake: EntraFake = {
+      const fake: IssuerFake = {
         requests: [],
         tokenReplies: [
           {
@@ -387,7 +394,7 @@ it.layer(NodeServices.layer)("NexiBrokerAuth", (it) => {
       };
       const secrets = memorySecrets({ [SECRET]: "rt-1" });
       return Effect.gen(function* () {
-        const auth = yield* NexiBrokerAuth;
+        const auth = yield* acme;
         const tokens = yield* Effect.all([auth.accessToken, auth.accessToken, auth.accessToken], {
           concurrency: "unbounded",
         });
@@ -398,7 +405,70 @@ it.layer(NodeServices.layer)("NexiBrokerAuth", (it) => {
         ]);
         assert.equal(fake.requests.filter((r) => r.path.endsWith("/token")).length, 1);
         assert.equal(secrets.read(SECRET), "rt-2", "still signed in with the rotated token");
-      }).pipe(Effect.provide(authWith(fake, secrets)));
+      }).pipe(Effect.provide(accountsWith(fake, secrets)));
     },
   );
+
+  it.effect("one sign-in serves every resource: each is redeemed with its own scope", () => {
+    const fake: IssuerFake = {
+      requests: [],
+      tokenReplies: [
+        {
+          status: 200,
+          body: { access_token: accessTokenFor("PJ"), refresh_token: "rt-2", expires_in: 3600 },
+        },
+      ],
+    };
+    const secrets = memorySecrets({ [SECRET]: "rt-1" });
+    return Effect.gen(function* () {
+      const auth = yield* acme;
+      yield* auth.accessTokenFor("knowledge");
+      assert.equal(
+        fake.requests.at(-1)?.params.get("scope"),
+        "api://acme-knowledge/read openid profile offline_access",
+      );
+      const unknown = yield* Effect.flip(auth.accessTokenFor("payroll"));
+      assert.equal(unknown.reason, "unavailable");
+    }).pipe(Effect.provide(accountsWith(fake, secrets)));
+  });
+
+  it.effect("an issuer without a device code signs in through the browser alone", () => {
+    const fake: IssuerFake = { requests: [], tokenReplies: [] };
+    const { deviceAuthorizationEndpoint: _, ...issuer } = ACME.issuer;
+    return Effect.gen(function* () {
+      const auth = yield* acme;
+      const started = yield* auth.signIn;
+      assert.equal(started.auth._tag, "SigningIn");
+      assert.deepEqual(
+        started.auth._tag === "SigningIn"
+          ? [started.auth.userCode, started.auth.verificationUri]
+          : [],
+        [null, null],
+      );
+      assert.isFalse(fake.requests.some((r) => r.path.endsWith("/devicecode")));
+    }).pipe(Effect.provide(accountsWith(fake, memorySecrets(), noBrowser, [{ ...ACME, issuer }])));
+  });
+
+  it.effect("a restart still knows who is signed in, before any token is minted", () => {
+    const fake: IssuerFake = {
+      requests: [],
+      tokenReplies: [
+        {
+          status: 200,
+          body: { access_token: accessTokenFor("PJ"), refresh_token: "rt-2", expires_in: 3600 },
+        },
+      ],
+    };
+    const secrets = memorySecrets({ [SECRET]: "rt-1" });
+    return Effect.gen(function* () {
+      yield* acme.pipe(
+        Effect.flatMap((first) => first.accessToken),
+        Effect.provide(accountsWith(fake, secrets)),
+      );
+      const restarted = yield* acme.pipe(Effect.provide(accountsWith(fake, secrets)));
+      assert.deepEqual((yield* restarted.status).auth, { _tag: "SignedIn", name: "PJ" });
+      yield* restarted.signOut;
+      assert.equal(secrets.read("account.acme.name"), undefined);
+    });
+  });
 });

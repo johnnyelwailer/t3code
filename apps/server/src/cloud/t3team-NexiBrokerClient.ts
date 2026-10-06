@@ -8,7 +8,7 @@ import * as HttpClientResponse from "effect/unstable/http/HttpClientResponse";
 import type { NexiBrokerConfig } from "./t3team-NexiBrokerConfig.ts";
 
 /**
- * The broker's v1 HTTP API (distribution `services/nexi-broker`), called with the user's Entra
+ * The broker's v1 HTTP API (distribution `services/nexi-broker`), called with the user's account
  * access token. Grants go into the session workflow's inputs; pairing credentials are minted by the
  * VM's own server on demand and are one-time.
  */
@@ -26,7 +26,7 @@ const SessionsResponse = Schema.Struct({ sessions: Schema.Array(BrokerSession) }
 const failed = (message: string, status?: number) =>
   new CloudSessionFailedError({
     reason: status === 401 ? "broker_sign_in_required" : "broker_unavailable",
-    message: status === 401 ? "Your Nexplore sign-in was not accepted. Sign in again." : message,
+    message: status === 401 ? "Your sign-in was not accepted. Sign in again." : message,
   });
 
 export const makeNexiBrokerClient = Effect.fn("cloud.broker.client.make")(function* (

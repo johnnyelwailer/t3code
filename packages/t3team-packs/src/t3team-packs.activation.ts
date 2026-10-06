@@ -65,6 +65,21 @@ export type WorkflowEphemeralConcurrencyPolicyDefinition = {
   readonly maxActiveSteps: number | "unlimited";
 };
 
+/** An account the pack signs the user in to; mirrors `@t3team/pack-api` `AccountDefinition`. */
+export type AccountRegistration = {
+  readonly id: string;
+  readonly label: string;
+  readonly issuer: {
+    readonly clientId: string;
+    readonly authorizationEndpoint: string;
+    readonly tokenEndpoint: string;
+    readonly deviceAuthorizationEndpoint?: string;
+  };
+  readonly baseScopes: string;
+  readonly resources: Readonly<Record<string, string>>;
+  readonly signInResource: string;
+};
+
 export type PackActivationContext = {
   readonly pack: { readonly directory: string; readonly manifest: WorkspacePackManifest };
   readonly defineAgentProvider: (definition: LoadedAiProviderDefinition) => void;
@@ -78,6 +93,8 @@ export type PackActivationContext = {
   ) => void;
   readonly defineModelPolicy: (definition: ModelPolicyDefinition) => void;
   readonly defineCompletionWakeRenderer: (definition: CompletionWakeRendererRegistration) => void;
+  /** Requires the `account:<id>` capability. */
+  readonly defineAccount: (definition: AccountRegistration) => void;
   readonly resolveAssetDataUrl: (relativePath: string, mimeType: string) => Promise<string>;
 };
 export type PackActivate = (context: PackActivationContext) => void | Promise<void>;

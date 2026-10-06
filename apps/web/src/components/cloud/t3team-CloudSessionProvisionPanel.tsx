@@ -68,7 +68,7 @@ export function CloudSessionProvisionPanel({
   /** Whether that session's machine is saved here, so Forget would do something. */
   readonly canForgetSession?: ((session: CloudSession) => boolean) | undefined;
   readonly empty?: ReactNode;
-  /** Shown under the header, e.g. the Nexplore sign-in the broker needs. */
+  /** Shown under the header, e.g. the account sign-in the broker needs. */
   readonly banner?: ReactNode;
 }) {
   const handleCreate = useCallback(() => onCreate(), [onCreate]);

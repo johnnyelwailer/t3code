@@ -5,7 +5,8 @@ import {
 } from "@t3tools/client-runtime/connection";
 import * as Effect from "effect/Effect";
 
-import { CloudBrokerRequestError, cloudBrokerApi } from "~/cloud/t3team-cloudBrokerApi";
+import { CredentialRequestError } from "~/account/t3team-credentialRequest";
+import { cloudBrokerApi } from "~/cloud/t3team-cloudBrokerApi";
 import { resolvePrimaryEnvironmentHttpUrl } from "~/environments/primary/target";
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
@@ -28,7 +29,7 @@ const call = <A>(run: () => Promise<A>) =>
     try: run,
     catch: (cause) => {
       if (
-        cause instanceof CloudBrokerRequestError &&
+        cause instanceof CredentialRequestError &&
         (cause.reason === "broker_sign_in_required" || cause.reason === "unauthorized")
       ) {
         return new ConnectionBlockedError({ reason: "authentication", detail: cause.message });
