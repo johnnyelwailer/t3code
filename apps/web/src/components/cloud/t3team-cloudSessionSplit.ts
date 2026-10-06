@@ -62,20 +62,26 @@ export function splitCloudSessions(
 }
 
 /**
- * The sessions the composer's "Run on" menu shows under "Cloud": everything
- * still provisioning (the machine the user just asked for, phases ticking
- * live while the menu polls) PLUS any ready session (it stays a
- * "Ready · Connect" row instead of vanishing the moment it comes up), plus the
- * most recent terminal session (failed or cancelled), so a failed or stopped
- * provisioning is never silently forgotten.
+ * The sessions the composer's "Run on" menu shows under "Cloud": everything still provisioning (the
+ * machine the user just asked for, phases ticking live while the menu polls) and any ready session
+ * (it stays a "Ready · Connect" row instead of vanishing the moment it comes up).
+ *
+ * Of the sessions that ended, only a failure is surfaced, because it is the one ending the user did
+ * not cause and may not have seen: the newest session, if it failed and was not dismissed. A cancel
+ * or a normal stop is the user's own doing and stays in the Settings history. A failure stops
+ * showing once dismissed or once a newer session exists.
  *
  * List order (newest first, from the server) is preserved.
  */
-export function runOnCloudSessions(sessions: readonly CloudSession[]): readonly CloudSession[] {
-  const mostRecentTerminal =
-    sessions.find((session) => isTerminalCloudSessionPhase(session.phase)) ?? null;
+export function runOnCloudSessions(
+  sessions: readonly CloudSession[],
+  dismissedSessionIds: ReadonlySet<string> = new Set(),
+): readonly CloudSession[] {
+  const newest = sessions[0];
+  const surfacedFailure =
+    newest?.phase === "failed" && !dismissedSessionIds.has(newest.sessionId) ? newest : null;
   return sessions.filter(
-    (session) => !isTerminalCloudSessionPhase(session.phase) || session === mostRecentTerminal,
+    (session) => !isTerminalCloudSessionPhase(session.phase) || session === surfacedFailure,
   );
 }
 
