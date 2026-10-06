@@ -42,10 +42,15 @@ function readCachedProjects(
   );
 }
 
-function readCachedCatalog(): ReadonlyArray<JiraCatalogProject> {
-  const accounts =
+export function readCachedJiraAccounts(): ReadonlyArray<IntegrationAccount> {
+  return (
     readIntegrationCache<ReadonlyArray<IntegrationAccount>>(ATLASSIAN_ACCOUNTS_CACHE_KEY)?.value ??
-    [];
+    []
+  );
+}
+
+export function readCachedCatalog(): ReadonlyArray<JiraCatalogProject> {
+  const accounts = readCachedJiraAccounts();
   const byAccount = new Map<string, ReadonlyArray<ExternalProject>>();
   for (const account of accounts) {
     const cached = readCachedProjects(account);
@@ -70,14 +75,28 @@ async function fetchLiveCatalog(backend: BackendApi): Promise<{
         listProjects: () =>
           backend.atlassian.listProjects({ id: account.id, provider: account.provider }),
       });
-      if (result.failure === null && result.projects) {
+      if (result.projects) {
         writeIntegrationCache(atlassianProjectsCacheKey(account), result.projects);
+        byAccount.set(account.id, result.projects);
       }
-      if (result.projects) byAccount.set(account.id, result.projects);
       if (result.failure) siteFailures.push(result.failure);
     }),
   );
   return { catalog: buildJiraCatalog(accounts, byAccount), siteFailures };
+}
+
+/** The connected sites and every project on them; `accounts` is empty when Jira is not connected. */
+export async function fetchLiveJiraCatalog(backend: BackendApi): Promise<{
+  readonly accounts: ReadonlyArray<IntegrationAccount>;
+  readonly catalog: ReadonlyArray<JiraCatalogProject>;
+}> {
+  const { catalog, siteFailures } = await fetchLiveCatalog(backend);
+  const accounts = readCachedJiraAccounts();
+  // Every site failing and nothing cached is "Jira is unreachable", not "there are no projects".
+  if (accounts.length > 0 && siteFailures.length === accounts.length && catalog.length === 0) {
+    throw new Error(siteFailures[0]?.error ?? "Could not reach Jira.");
+  }
+  return { accounts, catalog };
 }
 
 /**
@@ -113,10 +132,7 @@ export function useJiraProjectCatalog(): JiraProjectCatalog {
   const retrySite = useCallback(
     (accountId: string) => {
       if (!backend) return;
-      const account = (
-        readIntegrationCache<ReadonlyArray<IntegrationAccount>>(ATLASSIAN_ACCOUNTS_CACHE_KEY)
-          ?.value ?? []
-      ).find((entry) => entry.id === accountId);
+      const account = readCachedJiraAccounts().find((entry) => entry.id === accountId);
       if (!account) return;
       void loadJiraCatalogAccount({
         account,

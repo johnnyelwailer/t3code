@@ -1,11 +1,8 @@
-import { useEffect } from "react";
-
 import type { ProjectShellProject } from "@t3tools/project-context";
 
 import { T3TeamCommandPalette } from "~/t3team/components/t3team-CommandPalette";
 import { ManageProjectRepositoriesDialog } from "~/t3team/t3team-ManageProjectRepositoriesDialog";
-import { CreateProjectDialog } from "~/t3team/t3team-CreateProjectDialog";
-import { useT3TeamCreateProjectRequestStore } from "~/t3team/t3team-createProjectRequest";
+import { CreateProjectRoute } from "~/t3team/t3team-CreateProjectRoute";
 import type { ProjectTicket, ProjectThread, ThreadSortOrder } from "~/t3team/t3team-types";
 
 type AppOverlaysProps = {
@@ -47,27 +44,14 @@ export function AppOverlays({
   setManageRepositoriesProjectId,
   updateProject,
 }: AppOverlaysProps) {
-  // The Add-project palette cannot reach `showCreate`, so it raises a request instead
-  // ({@link ./t3team-createProjectRequest.ts}). Honour it here, where the wizard already lives.
-  const createProjectRequestId = useT3TeamCreateProjectRequestStore((state) => state.requestId);
-  const clearCreateProjectRequest = useT3TeamCreateProjectRequestStore((state) => state.clear);
-  useEffect(() => {
-    if (createProjectRequestId === 0) return;
-    clearCreateProjectRequest();
-    setShowCreate(true);
-  }, [clearCreateProjectRequest, createProjectRequestId, setShowCreate]);
-
   return (
     <>
       {showCreate ? (
-        <CreateProjectDialog
-          onClose={() => setShowCreate(false)}
+        <CreateProjectRoute
           onCreated={(project) => {
             addProject(project);
-            onProjectCreated?.(project);
-            if (!onProjectCreated) {
-              setShowCreate(false);
-            }
+            if (onProjectCreated) onProjectCreated(project);
+            else setShowCreate(false);
           }}
         />
       ) : null}
