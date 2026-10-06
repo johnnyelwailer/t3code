@@ -16,7 +16,9 @@ import type { T3TeamDigestProjectSource } from "./t3team-myworkDigestTypes.ts";
 
 type DigestPrEntry = T3TeamDigestProjectSource["prEntries"][number];
 
-const ENRICH_LIMIT = 16;
+const ENRICH_LIMIT = 30;
+// Reviewers, comments and size move slowly; re-reading 30 PRs every half minute would not.
+const ENRICH_FRESH_MS = 5 * 60_000;
 
 const needsEnrichment = (entry: DigestPrEntry) =>
   entry.state === "open" && entry.engaged === undefined;
@@ -57,7 +59,7 @@ export function enrichDigestReviewEntries(
       }),
     );
   });
-  return readCached(key, load, new Map()).pipe(
+  return readCached(key, load, new Map(), ENRICH_FRESH_MS).pipe(
     Effect.map(({ read, pending }) => ({
       pending,
       entries: entries.map((entry) => {
