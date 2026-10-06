@@ -99,9 +99,13 @@ export function loadDigestViewerPrEntries() {
   return readCached("viewer", loadViewerPrEntries(), [] as ViewerPrs);
 }
 
-/** The viewer's merged PRs inside the window; keyed by it, so the next working day reads afresh. */
+/** The viewer's merged PRs inside the window; keyed by both ends (a zone shifts them), so another window never reads this one. */
 export function loadDigestViewerMergedPrEntries(window: DigestYesterdayWindow) {
-  return readCached(`merged:${window.fromMs}`, loadViewerMergedPrEntries(window), [] as ViewerPrs);
+  return readCached(
+    `merged:${window.fromMs}:${window.untilMs}`,
+    loadViewerMergedPrEntries(window),
+    [] as ViewerPrs,
+  );
 }
 
 type ViewerPrs = Effect.Success<ReturnType<typeof loadViewerPrEntries>>;
