@@ -1,5 +1,7 @@
 import type { ProjectShellProject } from "@t3tools/project-context";
+import { useAllEnvironmentShellsBootstrapped } from "~/state/entities";
 import { useBackendState } from "~/t3team/backend/t3team-index";
+import { ProjectMyWorkLoadingState } from "~/t3team/t3team-projectMyWorkContentState";
 import type {
   ProjectKickoffThreadInput,
   TicketKickoffThreadInput,
@@ -74,7 +76,12 @@ export function AppMainContent({
   const backendState = useBackendState();
   // Project-less chats live in upstream's Scratch project ("No project").
   const { scratchProject, startScratch } = useT3TeamScratchHomeChat(allProjects);
-  const showInitialSetup = !view && (reopenInitialSetup || allProjects.length === 0);
+  // Until the environments bootstrap, an empty list means "not loaded yet", not "first run":
+  // judging it as first run flashed the setup surface on every launch. Bootstrapped also settles
+  // for an environment that stays disconnected, so this can never hold the skeleton forever.
+  const projectsLoading = !useAllEnvironmentShellsBootstrapped() && allProjects.length === 0;
+  const showInitialSetup =
+    !view && (reopenInitialSetup || (!projectsLoading && allProjects.length === 0));
   const setupSurfaceReason = resolveT3TeamSetupSurfaceReason({
     allProjects,
     selectedProjectId,
@@ -142,6 +149,13 @@ export function AppMainContent({
       })
     ) {
       return <AllProjectsMyWorkView onOpenTicket={onOpenTicket} />;
+    }
+    if (projectsLoading && !reopenInitialSetup) {
+      return (
+        <div className="flex w-full flex-col p-4 sm:p-6">
+          <ProjectMyWorkLoadingState />
+        </div>
+      );
     }
 
     return homeBrowser;

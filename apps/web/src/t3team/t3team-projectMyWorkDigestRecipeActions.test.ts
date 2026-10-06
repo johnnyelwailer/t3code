@@ -96,6 +96,28 @@ describe("digest recipe actions", () => {
     expect(second?.href).toBe("https://ghe.example.com/hive/app/pull/9");
   });
 
+  it("names each PR and offers a review for every one awaiting review when a ticket has several", () => {
+    const graph = graphWith("needs-you");
+    const second = { ...graph.changeRequests[0]!, id: "pr-12", number: 12 };
+    const actions = digestItemActions(
+      { ...graph, changeRequests: [...graph.changeRequests, second] },
+      "t1",
+      0,
+    );
+    expect(actions.map((action) => action.label)).toEqual([
+      "Review #9",
+      "Review #9 with agent",
+      "Review #12",
+      "Review #12 with agent",
+    ]);
+    expect(actions[3]?.scope?.changeRequest.number).toBe(12);
+  });
+
+  it("keeps the unnumbered labels when the ticket has a single PR", () => {
+    const labels = digestItemActions(graphWith("needs-you"), "t1", 0).map((a) => a.label);
+    expect(labels).toEqual(["Review PR", "Review with agent"]);
+  });
+
   it("keeps the CI link primary and adds the fix-checks recipe on a failing PR", () => {
     const actions = digestItemActions(graphWith("ci-failing"), "t1", 0);
     expect(actions.map((action) => action.recipe ?? action.href)).toEqual([

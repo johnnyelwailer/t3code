@@ -5,6 +5,15 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { AppMainContent } from "./t3team-AppMainContent";
 
 const useProjectWorkspaceAutoSyncMock = vi.fn();
+let shellsBootstrapped = true;
+
+vi.mock("~/state/entities", () => ({
+  useAllEnvironmentShellsBootstrapped: () => shellsBootstrapped,
+}));
+
+vi.mock("~/t3team/t3team-projectMyWorkContentState", () => ({
+  ProjectMyWorkLoadingState: () => <div>projects-loading</div>,
+}));
 
 vi.mock("~/t3team/backend/t3team-index", () => ({
   useBackendState: () => ({
@@ -81,6 +90,41 @@ const looseProjectThread = {
 describe("AppMainContent", () => {
   beforeEach(() => {
     useProjectWorkspaceAutoSyncMock.mockClear();
+    shellsBootstrapped = true;
+  });
+
+  const renderHome = () =>
+    renderToStaticMarkup(
+      <AppMainContent
+        view={null}
+        activeDashboardMode="my-work"
+        selectedProjectId={null}
+        projects={[]}
+        allProjects={[]}
+        getThreadsForProject={() => []}
+        onOpenTicket={() => {}}
+        onOpenThread={() => {}}
+        onOpenFullThread={() => {}}
+        onOpenEmbeddedThread={() => {}}
+        onKickoffProjectThread={() => {}}
+        onKickoffTicketThread={() => {}}
+        onThreadKickoffConsumed={() => {}}
+        onThreadDisplayModeChange={() => {}}
+        onBackToDashboard={() => {}}
+        onCreate={() => {}}
+        onInlineProjectCreated={() => {}}
+        renderDashboard={() => null}
+        renderTicketDetail={() => null}
+      />,
+    );
+
+  it("shows a loading state, not first-run setup, before the environments have bootstrapped", () => {
+    shellsBootstrapped = false;
+    expect(renderHome()).toContain("projects-loading");
+  });
+
+  it("falls through to the home surface once bootstrapping confirms there are no projects", () => {
+    expect(renderHome()).not.toContain("projects-loading");
   });
 
   it("passes standalone thread routes to workspace auto-sync", () => {
