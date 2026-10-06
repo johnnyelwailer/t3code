@@ -8,6 +8,10 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
+import {
+  ProjectDashboardKanbanCollapsedColumn,
+  ProjectDashboardKanbanColumnHeader,
+} from "~/t3team/t3team-ProjectDashboardKanbanColumnChrome";
 import type { ProjectTicketKanbanColumnId } from "~/t3team/t3team-projectTicketStatus";
 
 const lanePrefix = "kanban-lane:";
@@ -35,29 +39,46 @@ export function ProjectDashboardKanbanDroppableLane({
   title,
   count,
   dragging,
+  collapsed = false,
+  onToggleCollapsed,
   children,
 }: {
   columnId: ProjectTicketKanbanColumnId;
   title: string;
   count: number;
   dragging: boolean;
+  collapsed?: boolean;
+  onToggleCollapsed?: (collapsed: boolean) => void;
   children: React.ReactNode;
 }) {
+  // A collapsed strip stays a drop target: dropping on it moves the ticket into that status.
   const { isOver, setNodeRef } = useDroppable({ id: `${lanePrefix}${columnId}` });
 
   return (
-    <div ref={setNodeRef} className="min-w-[17rem] self-stretch">
+    <div
+      ref={setNodeRef}
+      className={collapsed ? "w-11 self-stretch" : "min-w-[17rem] self-stretch"}
+    >
       <T3SurfacePanel
         tone="soft"
-        className={`flex h-full flex-col border-border/85 p-2 @container/kanban-lane ${dragging && isOver ? "bg-primary/5 ring-1 ring-primary/40" : ""}`}
+        className={`flex h-full flex-col border-border/85 @container/kanban-lane ${collapsed ? "p-0" : "p-2"} ${dragging && isOver ? "bg-primary/5 ring-1 ring-primary/40" : ""}`}
       >
-        <div className="mb-2 flex items-center justify-between border-b border-border/85 pb-2">
-          <h4 className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {title}
-          </h4>
-          <span className="text-2xs text-muted-foreground">{count}</span>
-        </div>
-        <div className="min-h-[12rem] flex-1">{children}</div>
+        {collapsed ? (
+          <ProjectDashboardKanbanCollapsedColumn
+            title={title}
+            count={count}
+            onExpand={() => onToggleCollapsed?.(false)}
+          />
+        ) : (
+          <>
+            <ProjectDashboardKanbanColumnHeader
+              title={title}
+              count={count}
+              {...(onToggleCollapsed ? { onCollapse: () => onToggleCollapsed(true) } : {})}
+            />
+            <div className="min-h-[12rem] flex-1">{children}</div>
+          </>
+        )}
       </T3SurfacePanel>
     </div>
   );
@@ -68,6 +89,8 @@ export function ProjectDashboardKanbanDroppableColumnBody({
   title,
   count,
   dragging,
+  collapsed = false,
+  onToggleCollapsed,
   className,
   style,
 }: {
@@ -75,6 +98,8 @@ export function ProjectDashboardKanbanDroppableColumnBody({
   title: string;
   count: number;
   dragging: boolean;
+  collapsed?: boolean;
+  onToggleCollapsed?: (collapsed: boolean) => void;
   className?: string;
   style?: React.CSSProperties;
 }) {
@@ -83,20 +108,29 @@ export function ProjectDashboardKanbanDroppableColumnBody({
   return (
     <div
       ref={setNodeRef}
-      className={`relative min-w-[17rem] self-stretch ${className ?? ""}`}
+      className={`relative self-stretch ${collapsed ? "w-11" : "min-w-[17rem]"} ${className ?? ""}`}
       style={style}
     >
       <T3SurfacePanel
         tone="soft"
-        className={`flex h-full min-h-[12rem] flex-col rounded-xl border-border/85 p-2 @container/kanban-lane ${dragging && isOver ? "bg-primary/5 ring-1 ring-primary/40" : ""}`}
+        className={`flex h-full min-h-[12rem] flex-col rounded-xl border-border/85 @container/kanban-lane ${collapsed ? "p-0" : "p-2"} ${dragging && isOver ? "bg-primary/5 ring-1 ring-primary/40" : ""}`}
       >
-        <div className="mb-2 flex items-center justify-between border-b border-border/85 pb-2">
-          <h4 className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {title}
-          </h4>
-          <span className="text-2xs text-muted-foreground">{count}</span>
-        </div>
-        <div className="min-h-[12rem] flex-1" />
+        {collapsed ? (
+          <ProjectDashboardKanbanCollapsedColumn
+            title={title}
+            count={count}
+            onExpand={() => onToggleCollapsed?.(false)}
+          />
+        ) : (
+          <>
+            <ProjectDashboardKanbanColumnHeader
+              title={title}
+              count={count}
+              {...(onToggleCollapsed ? { onCollapse: () => onToggleCollapsed(true) } : {})}
+            />
+            <div className="min-h-[12rem] flex-1" />
+          </>
+        )}
       </T3SurfacePanel>
     </div>
   );

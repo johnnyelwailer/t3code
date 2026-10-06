@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  areProjectDashboardMyWorkStatesEqual,
   buildProjectDashboardMyWorkRouteSearch,
   parseProjectDashboardMyWorkRouteSearch,
+  readPersistedProjectDashboardMyWorkState,
   resolveProjectDashboardMyWorkState,
+  writePersistedProjectDashboardMyWorkState,
   type PersistedProjectDashboardMyWorkState,
   type ProjectDashboardMyWorkRouteSearch,
 } from "~/t3team/t3team-projectDashboardMyWorkState";
@@ -18,6 +21,7 @@ describe("project dashboard my work state", () => {
       statusCategory: "all",
       hiddenKanbanColumnIds: [],
       hasCustomizedKanbanLanes: false,
+      collapsedKanbanColumnIds: [],
       excludedTypeKeys: [],
       selectedPriority: "all",
       selectedStatus: "all",
@@ -63,6 +67,7 @@ describe("project dashboard my work state", () => {
       statusCategory: "active",
       hiddenKanbanColumnIds: ["accepted", "in-test"],
       hasCustomizedKanbanLanes: true,
+      collapsedKanbanColumnIds: [],
       excludedTypeKeys: ["epic", "story"],
       selectedPriority: "Critical",
       selectedStatus: "In Progress",
@@ -80,6 +85,7 @@ describe("project dashboard my work state", () => {
       statusCategory: "all",
       hiddenKanbanColumnIds: ["done"],
       hasCustomizedKanbanLanes: true,
+      collapsedKanbanColumnIds: [],
       excludedTypeKeys: [],
       selectedPriority: "all",
       selectedStatus: "all",
@@ -101,6 +107,7 @@ describe("project dashboard my work state", () => {
       statusCategory: "all",
       hiddenKanbanColumnIds: [],
       hasCustomizedKanbanLanes: false,
+      collapsedKanbanColumnIds: [],
       excludedTypeKeys: [],
       selectedPriority: "all",
       selectedStatus: "all",
@@ -204,5 +211,51 @@ describe("project dashboard my work state", () => {
     expect(resolveProjectDashboardMyWorkState({ persisted: { lens: "hierarchy" } }).lens).toBe(
       "hierarchy",
     );
+  });
+
+  describe("collapsed board columns", () => {
+    const storage = new Map<string, string>();
+    const stubWindow = () =>
+      Object.defineProperty(globalThis, "window", {
+        value: {
+          localStorage: {
+            getItem: (key: string) => storage.get(key) ?? null,
+            setItem: (key: string, value: string) => void storage.set(key, value),
+            removeItem: (key: string) => void storage.delete(key),
+          },
+        } as unknown as Window & typeof globalThis,
+        configurable: true,
+        writable: true,
+      });
+
+    it("persists per project and comes back through the next load", () => {
+      stubWindow();
+      const collapsed = {
+        ...resolveProjectDashboardMyWorkState({}),
+        collapsedKanbanColumnIds: ["done", "review"],
+      };
+      writePersistedProjectDashboardMyWorkState("t3team:project-my-work-state:v1:p1", collapsed);
+
+      const persisted = readPersistedProjectDashboardMyWorkState(
+        "t3team:project-my-work-state:v1:p1",
+      );
+      expect(resolveProjectDashboardMyWorkState({ persisted }).collapsedKanbanColumnIds).toEqual([
+        "done",
+        "review",
+      ]);
+      // Another project's key is untouched.
+      expect(
+        readPersistedProjectDashboardMyWorkState("t3team:project-my-work-state:v1:p2"),
+      ).toBeNull();
+    });
+
+    it("counts as a state change but never reaches the URL", () => {
+      const base = resolveProjectDashboardMyWorkState({});
+      const collapsed = { ...base, collapsedKanbanColumnIds: ["done"] };
+      expect(areProjectDashboardMyWorkStatesEqual(base, collapsed)).toBe(false);
+      expect(buildProjectDashboardMyWorkRouteSearch(collapsed)).toEqual(
+        buildProjectDashboardMyWorkRouteSearch(base),
+      );
+    });
   });
 });

@@ -32,6 +32,8 @@ export interface ProjectDashboardMyWorkState {
   statusCategory: ProjectMyWorkStatusCategory;
   hiddenKanbanColumnIds: ReadonlyArray<string>;
   hasCustomizedKanbanLanes: boolean;
+  /** Board columns folded into a narrow strip. Persisted per project, never in the URL. */
+  collapsedKanbanColumnIds: ReadonlyArray<string>;
   excludedTypeKeys: ReadonlyArray<string>;
   selectedPriority: string;
   selectedStatus: string;
@@ -130,6 +132,7 @@ export function createDefaultProjectDashboardMyWorkState(): ProjectDashboardMyWo
     statusCategory: "all",
     hiddenKanbanColumnIds: [],
     hasCustomizedKanbanLanes: false,
+    collapsedKanbanColumnIds: [],
     excludedTypeKeys: [],
     selectedPriority: "all",
     selectedStatus: "all",

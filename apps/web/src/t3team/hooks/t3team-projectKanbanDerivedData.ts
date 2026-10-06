@@ -45,6 +45,7 @@ export function filterAndSortProjectMyWorkItems(input: {
   selectedStatus: string;
   tableSortBy: ProjectMyWorkTableSortBy;
   tableSortDirection: ProjectMyWorkTableSortDirection;
+  hideDone?: boolean;
 }) {
   const filtered = filterProjectMyWorkTickets({
     tickets: input.tickets,
@@ -54,6 +55,7 @@ export function filterAndSortProjectMyWorkItems(input: {
     excludedTypeKeys: input.excludedTypeKeys,
     selectedPriority: input.selectedPriority,
     selectedStatus: input.selectedStatus,
+    ...(input.hideDone ? { hideDone: true } : {}),
   });
   return sortProjectMyWorkTickets({
     tickets: filtered,

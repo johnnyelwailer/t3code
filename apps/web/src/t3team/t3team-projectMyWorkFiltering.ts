@@ -172,6 +172,7 @@ export function filterProjectMyWorkTickets({
   excludedTypeKeys = [],
   selectedPriority,
   selectedStatus,
+  hideDone = false,
 }: {
   tickets: readonly ProjectTicket[];
   identity: ProjectMyWorkIdentity;
@@ -180,6 +181,8 @@ export function filterProjectMyWorkTickets({
   excludedTypeKeys?: ReadonlyArray<string>;
   selectedPriority: string;
   selectedStatus: string;
+  /** Drops Done tickets on top of the status category (the list lens defaults to open work). */
+  hideDone?: boolean;
 }): ProjectTicket[] {
   const excludedTypeKeySet = new Set(excludedTypeKeys);
   const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -188,6 +191,7 @@ export function filterProjectMyWorkTickets({
   return tickets
     .filter((ticket) => isProjectMyWorkTicket(ticket, identity))
     .filter((ticket) => matchesStatusCategory(ticket, statusCategory))
+    .filter((ticket) => !hideDone || !matchesProjectTicketStatusCategory(ticket.status, "done"))
     .filter((ticket) => !excludedTypeKeySet.has(getProjectTicketIssueTypeKey(ticket)))
     .filter((ticket) => selectedPriority === "all" || ticket.priority === selectedPriority)
     .filter((ticket) => selectedStatus === "all" || ticket.status === selectedStatus)
