@@ -745,7 +745,7 @@ const RuntimeCoreDependenciesBaseLive = Layer.mergeAll(
   T3TeamV2FoundationLive,
   // t3team: delegated-child ticket/placement store (delegate_task extension, placement readers).
   T3TeamChildThreadMetadataLive,
-  // t3team: t3team_ask_user questions as V2 message-capability runtime requests.
+  // t3team: t3_ask_user questions as V2 message-capability runtime requests.
   T3TeamAskUserWriterLive,
   // t3team: the process's ONE inter-agent mailbox (durable store + delivery) and the composing
   // heartbeat it backs off on; ws.ts (noteComposing), the broker drain port and the

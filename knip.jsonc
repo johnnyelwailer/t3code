@@ -124,7 +124,9 @@
       ],
       // Keep the transitive Effect runtime pinned for standalone npm installs.
       // The Vite+ web build prerequisite.
-      "ignoreDependencies": ["@effect/platform-node-shared", "@t3tools/web"],
+      // undici: a bundle external (Cursor's closure) that inlined pi-coding-agent imports at
+      // runtime; no source file imports it, but dist/ cannot start without it.
+      "ignoreDependencies": ["@effect/platform-node-shared", "@t3tools/web", "undici"],
     },
     "apps/desktop": {
       // Electron loads these bundles by filename rather than importing them.

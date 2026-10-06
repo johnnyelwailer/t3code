@@ -20,9 +20,9 @@ const PROTOCOL = [
   "the intent below, then launch it. Work only through your tools:",
   "- The live provider catalog below lists every instance and model slug; never name a `model`",
   "  that is not in it.",
-  "- t3team_recipe_validate({ source }): the full static check (format, determinism, runtime",
+  "- t3_recipe_validate({ source }): the full static check (format, determinism, runtime",
   "  bindings, capabilities, types, model slugs). Iterate until it reports no errors.",
-  "- t3team_orchestration_run({ source, intent }): launches the validated source as THIS run. It",
+  "- t3_orchestration_run({ source, intent }): launches the validated source as THIS run. It",
   "  runs the same check and refuses with the findings if anything is still wrong; fix and call it",
   "  again. Call it successfully exactly once, then end your turn with one line.",
   "If the intent genuinely cannot be fulfilled as an orchestration, do not launch; end your turn",
@@ -84,7 +84,7 @@ export function buildWorkflowAuthorRepairTurn(input: {
     ...(input.priorReasons.length === 0
       ? []
       : [`Earlier repair attempts failed: ${input.priorReasons.join(" | ")}`]),
-    "Fix the source and submit it with t3team_orchestration_run({ source, intent }) — the same run",
+    "Fix the source and submit it with t3_orchestration_run({ source, intent }) — the same run",
     "resumes from its checkpoint with your corrected source (already-executed steps replay from the",
     "journal, so do not change them). Validate first. If it cannot be fixed, do not submit; end",
     "your turn with one line that says why.",

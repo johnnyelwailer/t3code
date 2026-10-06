@@ -54,8 +54,8 @@ export function recentActiveLaunchBlocker(
     message:
       `This thread launched orchestration run '${newest.runId}' ${ageSeconds}s ago and it is still ` +
       `${newest.status}. A successful launch ends your turn — do not launch another copy. ` +
-      `Observe it with t3team_orchestration_status('${newest.runId}'); to replace it, call ` +
-      `t3team_orchestration_run again with replaceRunId: '${newest.runId}' (the old run is stopped first); ` +
-      `to change its inputs or source, use t3team_orchestration_resume('${newest.runId}', …).`,
+      `Observe it with t3_orchestration_status('${newest.runId}'); to replace it, call ` +
+      `t3_orchestration_run again with replaceRunId: '${newest.runId}' (the old run is stopped first); ` +
+      `to change its inputs or source, use t3_orchestration_resume('${newest.runId}', …).`,
   };
 }

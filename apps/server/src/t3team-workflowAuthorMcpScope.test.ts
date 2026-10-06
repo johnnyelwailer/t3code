@@ -20,6 +20,7 @@ import * as McpInvocationContext from "./mcp/McpInvocationContext.ts";
 import * as McpSessionRegistry from "./mcp/McpSessionRegistry.ts";
 import { readCaller } from "./mcp/threadAccess.ts";
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
+import { T3TEAM_DEPRECATED_MCP_TOOL_ALIASES } from "./mcp/toolkits/t3team/t3team-mcpToolAliases.ts";
 import { T3TEAM_MCP_CANONICAL_TOOL_MAP } from "./mcp/toolkits/t3team/tools.ts";
 import { T3TeamToolBroker, type T3TeamToolBinding } from "./t3team-toolBroker.ts";
 import { WORKFLOW_AUTHOR_MCP_TOOL_NAMES } from "./t3team-workflowAuthorApproval.ts";
@@ -61,9 +62,11 @@ const registry = McpSessionRegistry.__testing
 
 it("pins the approval gate's author MCP names to the toolkit map and the author tool ids", () => {
   for (const [mcpName, brokerId] of Object.entries(WORKFLOW_AUTHOR_MCP_TOOL_NAMES)) {
-    expect((T3TEAM_MCP_CANONICAL_TOOL_MAP as Record<string, string>)[mcpName]).toBe(brokerId);
+    const current =
+      (T3TEAM_DEPRECATED_MCP_TOOL_ALIASES as Record<string, string>)[mcpName] ?? mcpName;
+    expect((T3TEAM_MCP_CANONICAL_TOOL_MAP as Record<string, string>)[current]).toBe(brokerId);
   }
-  expect(Object.values(WORKFLOW_AUTHOR_MCP_TOOL_NAMES).toSorted()).toEqual(
+  expect([...new Set(Object.values(WORKFLOW_AUTHOR_MCP_TOOL_NAMES))].toSorted()).toEqual(
     [...WORKFLOW_AUTHOR_TOOL_IDS].toSorted(),
   );
 });
@@ -150,7 +153,7 @@ it.effect(
     return Effect.gen(function* () {
       const server = yield* McpServer.McpServer;
       const submitted = yield* server.callTool({
-        name: "t3team_orchestration_run",
+        name: "t3_orchestration_run",
         arguments: {
           source: "export const meta = {}",
           intent: { goal: "g", expectedOutcome: "o", guardrails: ["x"] },
@@ -158,9 +161,9 @@ it.effect(
       });
       expect(submitted.isError).not.toBe(true);
       const refusals = [
-        { name: "t3team_children", arguments: { op: "environments" } },
-        { name: "t3team_orchestration_stop", arguments: { runId: "run-other" } },
-        { name: "t3team_ask_user", arguments: { question: "Approve?" } },
+        { name: "t3_task_ops", arguments: { op: "environments" } },
+        { name: "t3_orchestration_stop", arguments: { runId: "run-other" } },
+        { name: "t3_ask_user", arguments: { question: "Approve?" } },
         { name: "t3team_thread_skill_metadata", arguments: {} },
       ];
       for (const refusal of refusals) {

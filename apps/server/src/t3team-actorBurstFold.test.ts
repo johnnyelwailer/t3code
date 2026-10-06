@@ -88,10 +88,10 @@ describe("renderAutomatedBurstBlock", () => {
   it("renders one compact list: count header, one line per item, and the read pointer", () => {
     const block = renderAutomatedBurstBlock(burst(7));
     expect(block).toContain("[Inter-agent burst: 7 messages folded");
-    expect(block).toContain("read any in full with t3team_read_message");
+    expect(block).toContain("read any in full with t3_read_message");
     const itemLines = block.split("\n").filter((l) => l.startsWith("- id "));
     expect(itemLines).toHaveLength(7);
-    // Every item's id is retrievable on demand via t3team_read_message.
+    // Every item's id is retrievable on demand via t3_read_message.
     for (let i = 1; i <= 7; i += 1) expect(block).toContain(`id msg-${i} `);
   });
 });
@@ -195,7 +195,7 @@ describe("buildActorReactionDigestInput · real-row savings (fbdb583b shape)", (
     // Strictly smaller, and every id is still retrievable on demand.
     expect(bytes(after)).toBeLessThan(bytes(before));
     expect(after).toContain("[Inter-agent burst: 12 messages folded");
-    expect(after).toContain("read any in full with t3team_read_message");
+    expect(after).toContain("read any in full with t3_read_message");
     for (let i = 1; i <= 12; i += 1) expect(after).toContain(`id r-${i} `);
     // The compact form does NOT inline the full bodies (one line each, capped).
     expect(after).not.toContain("reached a terminal state");

@@ -237,7 +237,7 @@ Until the new tag is pushed, the guard fails loudly on CI (missing tag), never s
 ## ask-user context — docked question references prior content
 
 - `packages/contracts/src/providerRuntime.ts`
-  - Optional `context` field on `UserInputQuestion` so a docked `t3team_ask_user` question can carry the content it refers to; shared with provider-native questions, but the field is optional so existing adapter payloads stay valid.
+  - Optional `context` field on `UserInputQuestion` so a docked `t3_ask_user` question can carry the content it refers to; shared with provider-native questions, but the field is optional so existing adapter payloads stay valid.
 
 ## Cloud-sessions stack re-land (2026-09-15)
 
@@ -252,7 +252,7 @@ Upstream files the cloud-sessions stack (branch `work/cloud-sessions-stack`) tou
 - `apps/web/src/hooks/useTheme.ts`
   - Expose the theme-snapshot trigger so widget iframes resnapshot on host theme flips.
 - `packages/project-context/src/t3teamWidgetGuidance.ts`
-  - Widget guidance carries the theme-token + icon-sprite contract so `t3team_show_widget` renders against the host theme.
+  - Widget guidance carries the theme-token + icon-sprite contract so `t3_show_widget` renders against the host theme.
 
 ## Cloud-sessions UI fixes (2026-09-28)
 

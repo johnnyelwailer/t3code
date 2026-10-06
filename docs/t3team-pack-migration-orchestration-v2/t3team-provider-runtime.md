@@ -25,7 +25,7 @@ The host (`ProviderContinuationRequests.offer`, mapped in `t3team-pack-driverAda
 
 - A pack whose capabilities declare `sessions.supportsMultipleProviderThreadsPerSession: true`
   must re-point its `t3-code` MCP server / header to the per-turn `mcp` for each turn. Otherwise
-  tool calls (`delegate_task`, `t3_thread_*`, `t3team_ask_user`) during another thread's turn act
+  tool calls (`delegate_task`, `t3_thread_*`, `t3_ask_user`) during another thread's turn act
   as the opening thread, and break once that thread detaches and its credential is revoked.
   One-thread-per-session packs may ignore it (same value). Refs `t3team-pack-driverMcp.ts`
   `withPackMcp`.
