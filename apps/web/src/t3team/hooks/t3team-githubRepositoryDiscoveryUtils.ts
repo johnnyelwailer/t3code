@@ -1,4 +1,5 @@
 import type { SourceControlDiscoveryResult } from "@t3tools/contracts";
+import type { GitHubRepositoryCandidate } from "~/t3team/backend/t3team-githubBackendTypes";
 
 export type GitHubAuthCache = {
   readonly githubHost: string;
@@ -26,6 +27,7 @@ export type GitHubDiscoveryResult = {
   readonly host: string;
   readonly account?: string;
   readonly suggestedRepositoryUrls: ReadonlyArray<string>;
+  readonly repositories?: ReadonlyArray<GitHubRepositoryCandidate>;
   readonly inboxWarning?: string;
 };
 

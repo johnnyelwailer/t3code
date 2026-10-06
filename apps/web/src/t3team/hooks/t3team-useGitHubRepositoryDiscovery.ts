@@ -3,6 +3,7 @@ import { useBackend } from "~/t3team/backend/t3team-index";
 import { readIntegrationCache } from "./t3team-integrationCache";
 import { useGitHubAuthProbe } from "./t3team-useGitHubAuthProbe";
 import { useGitHubRepositoryDiscoveryFetchers } from "./t3team-useGitHubRepositoryDiscoveryFetchers";
+import type { GitHubRepositoryCandidate } from "~/t3team/backend/t3team-githubBackendTypes";
 import type {
   GitHubAuthAccount,
   GitHubAuthCache,
@@ -45,6 +46,7 @@ export function useGitHubRepositoryDiscovery({
   const [discoveryWarning, setDiscoveryWarning] = useState<string | undefined>(
     discoveryCache?.discoveryWarning,
   );
+  const [catalog, setCatalog] = useState<ReadonlyArray<GitHubRepositoryCandidate>>([]);
   const [authenticatedHosts, setAuthenticatedHosts] = useState<ReadonlyArray<GitHubAuthAccount>>(
     authCache?.accounts ?? [],
   );
@@ -74,6 +76,7 @@ export function useGitHubRepositoryDiscovery({
       setGithubHost,
       setGithubAccount,
       setSuggestedUrls,
+      setCatalog,
     });
 
   useGitHubAuthProbe({
@@ -134,6 +137,7 @@ export function useGitHubRepositoryDiscovery({
     loadingDiscovery,
     suggestedUrls,
     visibleSuggestedUrls,
+    catalog,
     discoveryWarning,
     authenticatedHosts,
     setGithubHost,
