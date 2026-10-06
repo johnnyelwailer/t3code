@@ -682,6 +682,19 @@ export const BranchToolbar = memo(function BranchToolbar({
     >
       {showGitControls ? (
         <div className="contents @3xl/composer-surface:hidden">
+          {/* t3team: cloud sessions keep their Run-on entry in the narrow strip too; the compact
+              selector below then leaves the environment to it. */}
+          {cloudSessions.available && runOnEnvironments ? (
+            <BranchToolbarEnvironmentSelector
+              autoEnvironmentLabel={autoEnvironmentLabel}
+              onAutoEnvironment={onAutoEnvironment}
+              envLocked={envLocked}
+              environmentId={environmentId}
+              availableEnvironments={runOnEnvironments}
+              {...(showEnvironmentPicker && onEnvironmentChange ? { onEnvironmentChange } : {})}
+              {...cloudSessions.selectorProps}
+            />
+          ) : null}
           <MobileRunContextSelector
             forceNewWorktree={forceNewWorktree}
             autoEnvironmentLabel={autoEnvironmentLabel}
@@ -690,8 +703,8 @@ export const BranchToolbar = memo(function BranchToolbar({
             envModeLocked={envModeLocked}
             environmentId={environmentId}
             availableEnvironments={runOnEnvironments ?? []}
-            showEnvironmentPicker={showEnvironmentPicker}
-            showEnvironmentIndicator={showEnvironmentIndicator}
+            showEnvironmentPicker={showEnvironmentPicker && !cloudSessions.available}
+            showEnvironmentIndicator={showEnvironmentIndicator && !cloudSessions.available}
             onEnvironmentChange={onEnvironmentChange}
             effectiveEnvMode={effectiveEnvMode}
             activeWorktreePath={activeWorktreePath}
