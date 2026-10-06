@@ -5,6 +5,7 @@ import type * as Cause from "effect/Cause";
 import { toastManager } from "~/components/ui/toast";
 
 import { cloudSessionFailureDescription } from "./t3team-cloudSessionFailureDescription";
+import { requestCloudSessionSignIn } from "./t3team-cloudSessionSignIn";
 
 /** The title for a create failure nothing more specific is known about. */
 export const CLOUD_SESSION_CREATE_FAILED_TITLE = "Could not start a cloud session.";
@@ -55,6 +56,18 @@ export function cloudSessionCreateFailureToast(result: { readonly cause: Cause.C
   };
 }
 
-export function reportCloudSessionCreateFailure(result: { readonly cause: Cause.Cause<unknown> }) {
+/**
+ * A create that failed only because gh is not signed in to the session host does not end in a
+ * toast: the app runs the gh sign-in and then `retry` (the same create). Anything else is a toast.
+ */
+export function reportCloudSessionCreateFailure(
+  result: { readonly cause: Cause.Cause<unknown> },
+  retry: () => void,
+) {
+  const failure = squashAtomCommandFailure(result);
+  if (isCloudSessionFailed(failure) && failure.reason === "unauthorized") {
+    requestCloudSessionSignIn(retry);
+    return;
+  }
   toastManager.add({ type: "error", ...cloudSessionCreateFailureToast(result) });
 }

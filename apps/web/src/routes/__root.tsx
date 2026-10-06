@@ -66,6 +66,7 @@ import { isT3TeamShellPath } from "../t3team/t3team-upstreamRouteBridge";
 import { useUpstreamRouteBridge } from "../t3team/t3team-useUpstreamRouteBridge";
 import { T3TeamPackAppearanceDefaultsSync } from "../t3team/t3team-PackAppearanceDefaultsSync";
 import { T3TeamPackAppearanceSync } from "../t3team/t3team-PackAppearanceSync";
+import { CloudSessionSignInDialogHost } from "../cloud/t3team-CloudSessionSignInDialogHost";
 import { useT3TeamPackAppearance } from "../t3team/t3team-packAppearance";
 // Registers the composing heartbeat with the composer draft store's sink (side effect only).
 import "../t3team/chat/t3team-threadComposingSignal";
@@ -275,6 +276,7 @@ function RootRouteView() {
           {primaryEnvironmentAuthenticated ? <DesktopAppActivationCoordinator /> : null}
           {isElectron ? <RunningThreadKeepAlive /> : null}
           <RelayClientInstallDialog />
+          <CloudSessionSignInDialogHost />
           <ConnectOnboardingDialog />
           <SshPasswordPromptDialog />
           <SnapShotCoordinator />

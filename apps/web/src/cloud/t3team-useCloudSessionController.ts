@@ -105,7 +105,7 @@ export function useCloudSessionController() {
             });
             refreshCloudSessionList();
           } else {
-            reportCloudSessionCreateFailure(result);
+            reportCloudSessionCreateFailure(result, () => onCreate(projectId));
           }
         })
         .finally(() => setCreatePending(false));
