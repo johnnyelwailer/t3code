@@ -44,6 +44,7 @@ describe("host-aware action links", () => {
     blockers: [],
     decisions: [],
     claims: [],
+    tickets: [],
     changeRequests: [
       {
         id: "ghe.example.com:hive/app#9",

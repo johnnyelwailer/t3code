@@ -125,16 +125,7 @@ export type DigestBlocker = {
   readonly number: number;
 };
 
-/**
- * One concrete next step on a digest item: either a link (open thread / PR / CI) or a recipe
- * starter (launches a workflow, e.g. "handle review comments"). Items carry 0..n; the first
- * is primary and always visible, the rest reveal on row hover.
- */
-export type DigestItemAction = {
-  readonly label: string;
-  readonly href?: string;
-  readonly recipe?: string;
-};
+export type { DigestItemAction } from "./t3team-digestRecipeAction";
 
 export type DigestTransition = {
   readonly ticketId: string;
