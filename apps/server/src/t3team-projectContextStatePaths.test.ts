@@ -80,7 +80,7 @@ it.effect("persists the browser mirror with physical paths before CAS hashing", 
           Effect.provide(
             Layer.mergeAll(
               NodeServices.layer,
-              persistence.SqlitePersistenceMemory,
+              persistence.layerMemory,
               workspace.layer.pipe(Layer.provide(NodeServices.layer)),
             ),
           ),

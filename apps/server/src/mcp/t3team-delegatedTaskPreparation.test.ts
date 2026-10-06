@@ -18,8 +18,10 @@ import * as Ref from "effect/Ref";
 import type { ProviderAdapterV2Shape } from "../orchestration-v2/ProviderAdapter.ts";
 import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterRegistry.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
+import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
+import * as SecretRequests from "../secrets/SecretRequests.ts";
 import type { McpInvocationScope } from "./McpInvocationContext.ts";
 import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
 import {
@@ -38,9 +40,13 @@ const modelSelection = { instanceId, model: "gpt-5.4" };
 
 const scope: McpInvocationScope = {
   environmentId: EnvironmentId.make("environment:prep"),
-  threadId: parentThreadId,
-  providerSessionId: "provider-session:prep",
-  providerInstanceId: instanceId,
+  requestNamespace: "provider-session:prep",
+  thread: {
+    threadId: parentThreadId,
+    providerSessionId: "provider-session:prep",
+    providerInstanceId: instanceId,
+  },
+  client: undefined,
   capabilities: new Set(["orchestration"]),
   issuedAt: 1,
 };
@@ -156,6 +162,8 @@ const makeDependencies = (
       }),
     ),
     Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
+    Layer.mock(ProjectService.ProjectService)({}),
+    Layer.mock(SecretRequests.SecretRequests)({}),
   );
 };
 

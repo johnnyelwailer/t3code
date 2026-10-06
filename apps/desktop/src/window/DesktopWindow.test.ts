@@ -1421,7 +1421,7 @@ describe("DesktopWindow", () => {
         windowOpenHandler = handler;
       }) as typeof fakeWindow.window.webContents.setWindowOpenHandler;
 
-      const layer = makeTestLayer({
+      const layer = layerTest({
         window: fakeWindow.window,
         createCount,
         mainWindow,

@@ -35,7 +35,7 @@ import {
   MAX_TURN_INACTIVITY_SELFHEAL_ATTEMPTS,
   TurnInactivityPolicy,
 } from "./t3team-turnInactivityPolicy.ts";
-import { makeOrchestratorV2ReplayLayerWithRegistry } from "./testkit/ProviderReplayHarness.ts";
+import { layerWithRegistry } from "./testkit/ProviderReplayHarness.ts";
 import { checkpointWorkspace } from "./testkit/ReplayFixtureWorkspace.ts";
 
 const instanceId = ProviderInstanceId.make(PACK_DRIVER);
@@ -67,7 +67,7 @@ const runScenario = (name: string, scenario: Scenario) =>
           },
         },
       });
-      const registry = ProviderAdapterRegistry.makeLayerEffect(
+      const registry = ProviderAdapterRegistry.layerFromAdaptersEffect(
         Effect.gen(function* () {
           const requests = yield* ProviderContinuationRequests.ProviderContinuationRequests;
           return [
@@ -160,7 +160,7 @@ const runScenario = (name: string, scenario: Scenario) =>
         };
       }).pipe(
         Effect.provide(
-          makeOrchestratorV2ReplayLayerWithRegistry({ name }, registry, {
+          layerWithRegistry({ name }, registry, {
             runEffectWorker: false,
           }).pipe(Layer.provide(policy)),
         ),

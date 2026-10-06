@@ -2284,8 +2284,14 @@ const make = Effect.gen(function* () {
               "Mailbox delivery is not available on this server.",
             );
           }
+          if (scope.thread === undefined) {
+            return yield* failure(
+              "invalid_request",
+              "Mailbox delivery requires a calling thread.",
+            );
+          }
           const queued = yield* threadMailbox.send({
-            senderThreadId: scope.threadId,
+            senderThreadId: scope.thread.threadId,
             targetThreadId: input.threadId,
             messageId,
             text: input.message,

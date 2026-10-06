@@ -127,8 +127,8 @@ it.effect(
 
       // This is exactly what McpHttpServer's auth middleware does: registry.resolve(bearer).
       const scope = yield* registry.resolve(token);
-      expect(scope?.threadId).toBe(threadId);
-      expect(scope?.providerInstanceId).toBe(providerInstanceId);
+      expect(scope?.thread?.threadId).toBe(threadId);
+      expect(scope?.thread?.providerInstanceId).toBe(providerInstanceId);
 
       const rejected = yield* registry.resolve("not-a-real-token");
       expect(rejected).toBeUndefined();
@@ -154,9 +154,13 @@ it.effect(
         .pipe(
           Effect.provideService(McpInvocationContext.McpInvocationContext, {
             environmentId,
-            threadId,
-            providerSessionId: "provider-session-recipe-mcp-live",
-            providerInstanceId,
+            requestNamespace: "provider-session-recipe-mcp-live",
+            thread: {
+              threadId,
+              providerSessionId: "provider-session-recipe-mcp-live",
+              providerInstanceId,
+            },
+            client: undefined,
             capabilities: new Set<McpInvocationContext.McpCapability>(["orchestration"]),
             issuedAt: 1,
           }),
@@ -187,9 +191,13 @@ it.effect(
         .pipe(
           Effect.provideService(McpInvocationContext.McpInvocationContext, {
             environmentId,
-            threadId,
-            providerSessionId: "provider-session-recipe-mcp-live",
-            providerInstanceId,
+            requestNamespace: "provider-session-recipe-mcp-live",
+            thread: {
+              threadId,
+              providerSessionId: "provider-session-recipe-mcp-live",
+              providerInstanceId,
+            },
+            client: undefined,
             capabilities: new Set<McpInvocationContext.McpCapability>(["orchestration"]),
             issuedAt: 1,
           }),

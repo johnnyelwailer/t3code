@@ -68,7 +68,7 @@ export class ProjectionProjectSourceBindingRepository extends Context.Service<
   ProjectionProjectSourceBindingRepository,
   ProjectionProjectSourceBindingRepositoryShape
 >()(
-  "t3/persistence/Services/t3team-ProjectionProjectSourceBindings/ProjectionProjectSourceBindingRepository",
+  "t3/persistence/t3team-ProjectionProjectSourceBindings/ProjectionProjectSourceBindingRepository",
 ) {}
 
 const ProjectSourceBindingDbRow = Schema.Struct({

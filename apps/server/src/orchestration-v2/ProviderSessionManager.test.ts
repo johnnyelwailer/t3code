@@ -818,7 +818,7 @@ it.effect("ProviderSessionManagerV2 closes what an interrupted open acquired", (
 
     yield* effect.pipe(
       Effect.provide(
-        makeTestLayer({ state, idleTimeoutMs: 60_000, hangOpenAfterAcquire: acquired }),
+        layerTest({ state, idleTimeoutMs: 60_000, hangOpenAfterAcquire: acquired }),
       ),
     );
   }),

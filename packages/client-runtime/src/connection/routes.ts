@@ -34,6 +34,8 @@ export function connectionRouteId(target: ConnectionTarget): string {
     case "BearerConnectionTarget":
     case "SshConnectionTarget":
       return target.connectionId;
+    case "BrokerConnectionTarget":
+      return target.sessionId;
   }
 }
 
@@ -88,6 +90,7 @@ function routeHostname(route: ConnectionRoute): string | null {
 export function connectionRouteKind(route: ConnectionRoute): ConnectionRouteKind {
   switch (route.target._tag) {
     case "RelayConnectionTarget":
+    case "BrokerConnectionTarget":
       return "relay";
     case "SshConnectionTarget":
       return "ssh";

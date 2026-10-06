@@ -157,7 +157,7 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
         // token of the thread adopts the new scope; they all die together on
         // `revokeThread` or when the thread stops showing signs of life.
         for (const [existingHash, record] of next) {
-          if (record.scope.threadId === scope.threadId) {
+          if (record.scope.thread.threadId === scope.thread.threadId) {
             next.set(existingHash, { ...record, scope, lastAliveAt: issuedAt });
           }
         }

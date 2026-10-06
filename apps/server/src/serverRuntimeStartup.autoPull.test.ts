@@ -23,6 +23,7 @@ import * as ProviderRuntimeRecovery from "./orchestration-v2/ProviderRuntimeReco
 import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManager.ts";
 import * as ThreadLaunch from "./orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagement from "./orchestration-v2/ThreadManagementService.ts";
+import * as Persistence from "./persistence/Sqlite.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
 import * as ProjectService from "./project/ProjectService.ts";
 import * as AgentAwarenessRelay from "./relay/AgentAwarenessRelay.ts";
@@ -31,6 +32,10 @@ import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as ServerSettings from "./serverSettings.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
+import { T3TeamChildThreadMetadataLive } from "./t3team-childThreadMetadata.ts";
+import * as T3TeamThreadArtifactsStore from "./t3team-v2/t3team-threadArtifactsStore.ts";
+import * as T3TeamThreadFactsStore from "./t3team-v2/t3team-threadFactsStore.ts";
+import * as T3TeamThreadLineage from "./t3team-v2/t3team-threadLineage.ts";
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 
 it.effect("parks automatic pull until activation without delaying command readiness", () =>
@@ -170,7 +175,13 @@ it.effect("parks automatic pull until activation without delaying command readin
           address: NetAddress.inetAddressFromIpStringUnsafe("127.0.0.1", 3773),
         }),
         Path.layer,
-      );
+        // t3team: the V1-lineage legacy cutover passes run inline during startup
+        // (serverRuntimeStartup.ts); a fresh in-memory database makes both a clean no-op.
+        T3TeamThreadLineage.layer,
+        T3TeamChildThreadMetadataLive,
+        T3TeamThreadFactsStore.layer,
+        T3TeamThreadArtifactsStore.layer,
+      ).pipe(Layer.provide(Persistence.layerMemory), Layer.orDie);
 
       yield* Effect.gen(function* () {
         const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;

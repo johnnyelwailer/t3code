@@ -139,7 +139,7 @@ export interface WorkflowSignalStoreShape {
 export class WorkflowSignalStore extends Context.Service<
   WorkflowSignalStore,
   WorkflowSignalStoreShape
->()("t3/persistence/Services/WorkflowSignalStore") {}
+>()("t3/persistence/WorkflowSignalStore") {}
 
 // The JSON columns (`params_json`, `payload_json`) decode back to their domain shapes on read —
 // the same mapFields override pattern as `WorkflowRunDbRow` in WorkflowRuns.ts.

@@ -44,7 +44,7 @@ import * as SqlClient from "effect/sql/SqlClient";
  * `startWorkflow` / `resumeWorkflow` / `appendResolvedEntry`.
  */
 export class WorkflowJournalStore extends Context.Service<WorkflowJournalStore, JournalStore>()(
-  "t3/persistence/SqliteJournalStore",
+  "t3/persistence/SqliteJournalStore/WorkflowJournalStore",
 ) {}
 
 interface EntryJsonRow {

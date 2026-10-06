@@ -33,9 +33,13 @@ import { WORKFLOW_AUTHOR_TOOL_IDS } from "./t3team-workflowAuthorTurn.ts";
 const AUTHOR = ThreadId.make("run-mcp:author");
 const scopeFor = (threadId: ThreadId): McpInvocationContext.McpInvocationScope => ({
   environmentId: EnvironmentId.make("environment-author"),
-  threadId,
-  providerSessionId: "provider-session-author",
-  providerInstanceId: ProviderInstanceId.make("codex"),
+  requestNamespace: "provider-session-author",
+  thread: {
+    threadId,
+    providerSessionId: "provider-session-author",
+    providerInstanceId: ProviderInstanceId.make("codex"),
+  },
+  client: undefined,
   capabilities: new Set(["orchestration", "preview", "worktree", "device", "pull-requests"]),
   issuedAt: 1,
 });
@@ -83,7 +87,7 @@ it.effect("resolves an author thread's credential with no capabilities", () =>
         })
         .pipe(Effect.map((issued) => issued.config.authorizationHeader.replace(/^Bearer\s+/, "")));
     const author = yield* sessions.resolve(yield* issue(AUTHOR));
-    expect(author?.threadId).toBe(AUTHOR);
+    expect(author?.thread?.threadId).toBe(AUTHOR);
     expect(author?.capabilities.size).toBe(0);
     const ordinary = yield* sessions.resolve(yield* issue(ThreadId.make("thread-ordinary")));
     expect(ordinary?.capabilities.has("orchestration")).toBe(true);

@@ -84,7 +84,7 @@ const gitSubcommandArgs = (raw: ReadonlyArray<string>): ReadonlyArray<string> =>
 /** Contents of each pathspec file the mocked `git add` sees. */
 const pathspecReads: string[] = [];
 
-const DriverLayer = Layer.mergeAll(GitVcsDriver.vcsLayer, GitVcsDriver.layer).pipe(
+const DriverLayer = Layer.mergeAll(GitVcsDriver.layerVcs, GitVcsDriver.layer).pipe(
   Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-git-ckpt-index-" })),
   Layer.provideMerge(
     Layer.succeed(VcsProcess.VcsProcess, {
@@ -195,7 +195,7 @@ it.effect("captureCheckpoint skips an unindexable reserved-name file instead of 
 });
 
 /** Driver layer for a repo where EVERY candidate path is a reserved name. */
-const DriverLayerAllUnindexable = Layer.mergeAll(GitVcsDriver.vcsLayer, GitVcsDriver.layer).pipe(
+const DriverLayerAllUnindexable = Layer.mergeAll(GitVcsDriver.layerVcs, GitVcsDriver.layer).pipe(
   Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-git-ckpt-index-unidx-" })),
   Layer.provideMerge(
     Layer.succeed(VcsProcess.VcsProcess, {
@@ -329,7 +329,7 @@ const makeAddExitError = (input: { cwd: string }) =>
     detail: "fatal: unable to index 'nul'",
   });
 
-const DriverLayerAddTimeout = Layer.mergeAll(GitVcsDriver.vcsLayer, GitVcsDriver.layer).pipe(
+const DriverLayerAddTimeout = Layer.mergeAll(GitVcsDriver.layerVcs, GitVcsDriver.layer).pipe(
   Layer.provide(ServerConfig.layerTest(process.cwd(), { prefix: "t3-git-ckpt-addto-" })),
   Layer.provideMerge(
     Layer.succeed(VcsProcess.VcsProcess, {

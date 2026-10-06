@@ -37,7 +37,7 @@ export interface ResourcePressureEventRepositoryShape {
 export class ResourcePressureEventRepository extends Context.Service<
   ResourcePressureEventRepository,
   ResourcePressureEventRepositoryShape
->()("t3/persistence/Services/t3team-ResourcePressureEvents/ResourcePressureEventRepository") {}
+>()("t3/persistence/t3team-ResourcePressureEvents/ResourcePressureEventRepository") {}
 
 const ReasonsFromJson = Schema.fromJsonString(Schema.Array(Schema.String));
 

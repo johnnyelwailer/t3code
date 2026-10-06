@@ -76,10 +76,10 @@ it.effect("a session restart keeps the token the running agent still holds valid
 
     const viaOld = yield* registry.resolve(bearer(first));
     const viaNew = yield* registry.resolve(bearer(second));
-    expect(viaOld?.threadId).toBe(threadId);
-    expect(viaNew?.threadId).toBe(threadId);
+    expect(viaOld?.thread?.threadId).toBe(threadId);
+    expect(viaNew?.thread?.threadId).toBe(threadId);
     // Both tokens describe the SAME (latest) provider session.
-    expect(viaOld?.providerSessionId).toBe(second.config.providerSessionId);
+    expect(viaOld?.thread?.providerSessionId).toBe(second.config.providerSessionId);
     expect(viaOld?.issuedAt).toBe(viaNew?.issuedAt);
   }),
 );
@@ -102,7 +102,7 @@ it.effect("the restarted session's scope wins for the old token", () =>
     const scope = yield* registry.resolve(bearer(first));
     // The narrowed request dropped preview and device; only upstream's baseline remains.
     expect([...(scope?.capabilities ?? [])].sort()).toEqual([...BASELINE]);
-    expect(scope?.providerInstanceId).toBe("pack-provider-2");
+    expect(scope?.thread?.providerInstanceId).toBe("pack-provider-2");
   }),
 );
 
@@ -125,7 +125,7 @@ it.effect("liveness is shared: the restart refreshes the old token, a stop revok
     });
     // Without the restart refreshing it, A would have lapsed here.
     timestamp += LIVENESS_WINDOW_MS - 1;
-    expect((yield* registry.resolve(bearer(first)))?.threadId).toBe(threadId);
+    expect((yield* registry.resolve(bearer(first)))?.thread?.threadId).toBe(threadId);
 
     yield* registry.revokeThread(threadId);
     expect(yield* registry.resolve(bearer(first))).toBeUndefined();
@@ -170,7 +170,7 @@ it.effect("a token that lapsed before the restart stays dead", () =>
       capabilities: new Set(),
     });
     expect(yield* registry.resolve(bearer(first))).toBeUndefined();
-    expect((yield* registry.resolve(bearer(second)))?.threadId).toBe(threadId);
+    expect((yield* registry.resolve(bearer(second)))?.thread?.threadId).toBe(threadId);
   }),
 );
 
@@ -189,8 +189,8 @@ it.effect("other threads' tokens are not touched by a restart", () =>
     });
     const scope = yield* registry.resolve(bearer(other));
     // No cross-thread carry-over: the other thread keeps its own session, thread and scope.
-    expect(scope?.threadId).toBe("thread-other");
-    expect(scope?.providerSessionId).toBe(other.config.providerSessionId);
+    expect(scope?.thread?.threadId).toBe("thread-other");
+    expect(scope?.thread?.providerSessionId).toBe(other.config.providerSessionId);
     expect([...(scope?.capabilities ?? [])].sort()).toEqual([...BASELINE, "preview"].sort());
   }),
 );
@@ -213,7 +213,7 @@ it.effect("issueActiveMcpCredential twice for one thread leaves the first token 
     expect(first).toBeDefined();
     expect(second).toBeDefined();
     const scope = yield* registry.resolve(bearer(first!));
-    expect(scope?.threadId).toBe(threadId);
-    expect(scope?.providerSessionId).toBe(second!.config.providerSessionId);
+    expect(scope?.thread?.threadId).toBe(threadId);
+    expect(scope?.thread?.providerSessionId).toBe(second!.config.providerSessionId);
   }).pipe(Effect.provide(McpSessionRegistry.layer.pipe(Layer.provide(infrastructure)))),
 );

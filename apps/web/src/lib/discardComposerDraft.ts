@@ -59,7 +59,7 @@ export function discardComposerDraft(target: ComposerThreadTarget): void {
               ? {
                   ...draft,
                   images: draft.images.map((image) =>
-                    image.previewUrl.startsWith("blob:")
+                    image.previewUrl?.startsWith("blob:") && image.file
                       ? { ...image, previewUrl: URL.createObjectURL(image.file) }
                       : image,
                   ),

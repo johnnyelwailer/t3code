@@ -21,7 +21,7 @@ import * as EffectWorker from "./orchestration-v2/EffectWorker.ts";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
 import * as ProviderAdapterRegistry from "./orchestration-v2/ProviderAdapterRegistry.ts";
 import * as ProviderContinuationRequests from "./orchestration-v2/ProviderContinuationRequests.ts";
-import { makeOrchestratorV2ReplayLayerWithRegistry } from "./orchestration-v2/testkit/ProviderReplayHarness.ts";
+import { layerWithRegistry } from "./orchestration-v2/testkit/ProviderReplayHarness.ts";
 import { checkpointWorkspace } from "./orchestration-v2/testkit/ReplayFixtureWorkspace.ts";
 import { makeScriptedPack, PACK_DRIVER } from "./t3team-pack-driver.fixtures.ts";
 import { makePackOrchestrationAdapter } from "./t3team-pack-driverAdapter.ts";
@@ -35,7 +35,7 @@ it.effect("delivers continuation wakes and agent messages to a pack provider as 
     Effect.gen(function* () {
       const cwd = yield* checkpointWorkspace("t3team-pack-wake");
       const pack = makeScriptedPack({ cwd });
-      const registry = ProviderAdapterRegistry.makeLayerEffect(
+      const registry = ProviderAdapterRegistry.layerFromAdaptersEffect(
         Effect.gen(function* () {
           const requests = yield* ProviderContinuationRequests.ProviderContinuationRequests;
           return [
@@ -164,7 +164,7 @@ it.effect("delivers continuation wakes and agent messages to a pack provider as 
         assert.lengthOf(pack.opened, 1);
       }).pipe(
         Effect.provide(
-          makeOrchestratorV2ReplayLayerWithRegistry({ name: "t3team-pack-wake" }, registry, {
+          layerWithRegistry({ name: "t3team-pack-wake" }, registry, {
             runEffectWorker: false,
             runContinuationWorker: true,
           }),

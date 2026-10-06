@@ -13,8 +13,10 @@ import { expect, it } from "vite-plus/test";
 
 import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterRegistry.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
+import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
+import * as SecretRequests from "../secrets/SecretRequests.ts";
 import type * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as OrchestratorMcpService from "./OrchestratorMcpService.ts";
 import {
@@ -30,9 +32,13 @@ const instanceId = ProviderInstanceId.make("codex");
 
 const scope: McpInvocationContext.McpInvocationScope = {
   environmentId: EnvironmentId.make("environment-mailbox"),
-  threadId: senderId,
-  providerSessionId: "provider-session-mailbox",
-  providerInstanceId: instanceId,
+  requestNamespace: "provider-session-mailbox",
+  thread: {
+    threadId: senderId,
+    providerSessionId: "provider-session-mailbox",
+    providerInstanceId: instanceId,
+  },
+  client: undefined,
   capabilities: new Set(["orchestration"]),
   issuedAt: 1,
 };
@@ -83,6 +89,8 @@ const makeLayer = (mailbox: Layer.Layer<never>) =>
         Layer.mock(ProviderAdapterRegistry.ProviderAdapterRegistryV2)({
           list: () => Effect.succeed([]),
         }),
+        Layer.mock(ProjectService.ProjectService)({}),
+        Layer.mock(SecretRequests.SecretRequests)({}),
         NodeCrypto.layer,
       ),
     ),

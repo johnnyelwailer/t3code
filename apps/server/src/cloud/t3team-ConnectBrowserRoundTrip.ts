@@ -4,7 +4,7 @@ import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import * as Encoding from "effect/Encoding";
+import * as Base64Url from "effect/encoding/Base64Url";
 
 import type { CloudCliTokenManagerError, PersistedToken } from "./CliTokenManager.ts";
 import { cloudCliOAuthConfig, hostedAppUrlConfig } from "./publicConfig.ts";
@@ -22,11 +22,11 @@ const fail = (
 /** PKCE verifier + S256 challenge and a CSRF state, for any loopback browser sign-in. */
 export const makePkceRequest = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
-  const verifier = Encoding.encodeBase64Url(yield* crypto.randomBytes(32));
-  const challenge = Encoding.encodeBase64Url(
+  const verifier = Base64Url.encode(yield* crypto.randomBytes(32));
+  const challenge = Base64Url.encode(
     yield* crypto.digest("SHA-256", new TextEncoder().encode(verifier)),
   );
-  const state = Encoding.encodeBase64Url(yield* crypto.randomBytes(16));
+  const state = Base64Url.encode(yield* crypto.randomBytes(16));
   return { verifier, challenge, state };
 });
 

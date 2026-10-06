@@ -28,9 +28,13 @@ it("maps or explicitly policy-excludes every canonical implemented tool", () => 
 const threadId = ThreadId.make("thread-t3team-mcp-test");
 const invocation: McpInvocationContext.McpInvocationScope = {
   environmentId: EnvironmentId.make("environment-t3team-mcp-test"),
-  threadId,
-  providerSessionId: "provider-session-t3team-mcp-test",
-  providerInstanceId: ProviderInstanceId.make("pack-test"),
+  requestNamespace: "provider-session-t3team-mcp-test",
+  thread: {
+    threadId,
+    providerSessionId: "provider-session-t3team-mcp-test",
+    providerInstanceId: ProviderInstanceId.make("pack-test"),
+  },
+  client: undefined,
   capabilities: new Set(["orchestration"]),
   issuedAt: 1,
 };

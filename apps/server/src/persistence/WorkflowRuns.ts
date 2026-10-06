@@ -381,7 +381,7 @@ export interface WorkflowRunRepositoryShape {
 export class WorkflowRunRepository extends Context.Service<
   WorkflowRunRepository,
   WorkflowRunRepositoryShape
->()("t3/persistence/Services/WorkflowRuns/WorkflowRunRepository") {}
+>()("t3/persistence/WorkflowRuns/WorkflowRunRepository") {}
 
 // The JSON columns (`args_json`, `model_json`) decode back to their domain shapes on read.
 const WorkflowRunDbRow = WorkflowRun.mapFields(

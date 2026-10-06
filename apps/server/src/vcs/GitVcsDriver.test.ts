@@ -126,7 +126,7 @@ it.effect("GitVcsDriver.execute preserves redacted stderr in GitCommandError", (
     assert.ok(error.stderr!.includes("unknown option"));
     assert.notInclude(error.stderr!, secret);
     assert.notInclude(error.message, secret);
-  }).pipe(Effect.provide(GitContractLayer));
+  }).pipe(Effect.provide(layerGitContract));
 });
 
 const makeCheckpointFixture = Effect.fn("makeCheckpointFixture")(function* (
