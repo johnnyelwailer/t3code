@@ -43,11 +43,10 @@ export const makeT3TeamV2TestLayer = (
   return Layer.mergeAll(
     database,
     ProjectionStore.layer.pipe(Layer.provide(database)),
-    layerWithRegistry(
-      { name },
-      ProviderAdapterRegistry.layerFromAdapters([adapter]),
-      { databaseLayer: database, runEffectWorker: false },
-    ).pipe(Layer.provide(overrides)),
+    layerWithRegistry({ name }, ProviderAdapterRegistry.layerFromAdapters([adapter]), {
+      databaseLayer: database,
+      runEffectWorker: false,
+    }).pipe(Layer.provide(overrides)),
     ThreadMessageRecorder.layer.pipe(Layer.provide(database)),
     ThreadLineage.layer.pipe(Layer.provide(database)),
   );

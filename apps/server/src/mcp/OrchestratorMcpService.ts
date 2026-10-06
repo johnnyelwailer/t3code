@@ -2285,10 +2285,7 @@ const make = Effect.gen(function* () {
             );
           }
           if (scope.thread === undefined) {
-            return yield* failure(
-              "invalid_request",
-              "Mailbox delivery requires a calling thread.",
-            );
+            return yield* failure("invalid_request", "Mailbox delivery requires a calling thread.");
           }
           const queued = yield* threadMailbox.send({
             senderThreadId: scope.thread.threadId,

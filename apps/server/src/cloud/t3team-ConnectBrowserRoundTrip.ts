@@ -80,7 +80,7 @@ export const runConnectBrowserRoundTrip = Effect.fn("cloud.connect.browser_round
           );
         const code = yield* Deferred.await(callback).pipe(
           Effect.timeout(input.timeout),
-          Effect.catchTag("TimeoutError", (cause) => fail("browser_callback_timeout", cause)),
+          Effect.catchTags({ TimeoutError: (cause) => fail("browser_callback_timeout", cause) }),
         );
         const token = yield* exchangeLoopbackAuthorizationCode({
           metadata,

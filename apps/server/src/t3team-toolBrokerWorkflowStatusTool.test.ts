@@ -10,10 +10,7 @@ import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-import type {
-  WorkflowRun,
-  WorkflowRunRepositoryShape,
-} from "./persistence/WorkflowRuns.ts";
+import type { WorkflowRun, WorkflowRunRepositoryShape } from "./persistence/WorkflowRuns.ts";
 import { makeWorkflowStatusToolHandlers } from "./t3team-toolBrokerWorkflowStatusTool.ts";
 
 const threadId = ThreadId.make("thread-status");

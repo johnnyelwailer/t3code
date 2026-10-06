@@ -79,9 +79,12 @@ export const make = Effect.gen(function* () {
   ) =>
     Deferred.await(deferred).pipe(
       Effect.timeout(timeout),
-      Effect.catchTag("TimeoutError", (cause) =>
-        Effect.fail(new ConnectCredentialMintError({ reason: "browser_callback_timeout", cause })),
-      ),
+      Effect.catchTags({
+        TimeoutError: (cause) =>
+          Effect.fail(
+            new ConnectCredentialMintError({ reason: "browser_callback_timeout", cause }),
+          ),
+      }),
     );
 
   const mint: ConnectCredentialMinter["Service"]["mint"] = (input) => {

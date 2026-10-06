@@ -8,10 +8,7 @@
  */
 import * as Effect from "effect/Effect";
 
-import type {
-  WorkflowRun,
-  WorkflowRunRepositoryShape,
-} from "./persistence/WorkflowRuns.ts";
+import type { WorkflowRun, WorkflowRunRepositoryShape } from "./persistence/WorkflowRuns.ts";
 import type { WorkflowSignalStoreShape } from "./persistence/WorkflowSignalStore.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
 import { retireWorkflowAuthorThread } from "./t3team-workflowAuthorThreadCleanup.ts";

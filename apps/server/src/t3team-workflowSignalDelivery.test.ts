@@ -21,10 +21,7 @@ import { assertInstanceOf } from "@effect/vitest/utils";
 import * as Effect from "effect/Effect";
 
 import { PersistenceSqlError } from "./persistence/Errors.ts";
-import type {
-  ClearWorkflowRunPendingInput,
-  WorkflowRun,
-} from "./persistence/WorkflowRuns.ts";
+import type { ClearWorkflowRunPendingInput, WorkflowRun } from "./persistence/WorkflowRuns.ts";
 import type { InsertSignalInboxEntryInput } from "./persistence/WorkflowSignalStore.ts";
 import type { WorkflowRegisteredRun } from "./t3team-workflowEngineRegistry.ts";
 import {

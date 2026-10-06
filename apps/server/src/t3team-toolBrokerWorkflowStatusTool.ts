@@ -9,10 +9,7 @@ import type { ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-import type {
-  WorkflowRun,
-  WorkflowRunRepositoryShape,
-} from "./persistence/WorkflowRuns.ts";
+import type { WorkflowRun, WorkflowRunRepositoryShape } from "./persistence/WorkflowRuns.ts";
 
 const RECENT_RUNS_LIMIT = 10;
 

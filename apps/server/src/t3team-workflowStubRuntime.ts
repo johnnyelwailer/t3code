@@ -36,11 +36,9 @@ export function makeWorkflowStubRuntime(options: {
 }) {
   const provider = makeWorkflowStubProvider(options.respond);
   const database = SqlitePersistenceMemory;
-  const orchestration = layerWithRegistry(
-    { name: options.name },
-    provider.registryLayer,
-    { databaseLayer: database },
-  );
+  const orchestration = layerWithRegistry({ name: options.name }, provider.registryLayer, {
+    databaseLayer: database,
+  });
   const threads = ThreadManagementService.layer.pipe(Layer.provide(orchestration));
   const foundation = T3TeamV2FoundationLive.pipe(Layer.provide(database));
   const persistence = Layer.mergeAll(
