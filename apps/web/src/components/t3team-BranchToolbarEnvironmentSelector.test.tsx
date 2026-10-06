@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import { type CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
