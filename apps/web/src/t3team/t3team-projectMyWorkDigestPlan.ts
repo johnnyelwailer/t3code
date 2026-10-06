@@ -73,6 +73,14 @@ export function digestFacetsFor(
   return facets;
 }
 
+/**
+ * Anything but a future sprint: no sprint, a closed one the ticket was carried out of unfinished,
+ * or a state this code does not know — an unknown value must not hide the viewer's work.
+ */
+function isOutsideAnySprint(ticket: ProjectTicket): boolean {
+  return ticket.sprintState?.trim().toLowerCase() !== "future";
+}
+
 type Bucket = {
   readonly id: string;
   readonly heading: string;
@@ -121,6 +129,15 @@ const BUCKETS: readonly Bucket[] = [
     heading: "Up next this sprint",
     placement: "main",
     accepts: (_f, ticket) => ticket.sprintState?.toLowerCase() === "active",
+  },
+  // The viewer's open tickets outside any running or planned sprint (e.g. "In Analysis" on a
+  // board without sprints) are still their work: they surface with their status here instead of
+  // collapsing into "Parked". Only work planned into a future sprint stays parked.
+  {
+    id: "your-tickets",
+    heading: "Your tickets",
+    placement: "main",
+    accepts: (_f, ticket) => isOutsideAnySprint(ticket),
   },
   { id: "rest", heading: "Parked", placement: "footer", accepts: () => true },
 ];

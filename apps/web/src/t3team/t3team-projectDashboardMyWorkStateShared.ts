@@ -11,6 +11,7 @@ export type ProjectMyWorkTableSortDirection = "asc" | "desc";
 
 export interface ProjectDashboardMyWorkRouteSearch {
   myWorkQ?: string;
+  myWorkLens?: ProjectMyWorkLens;
   myWorkView?: ProjectMyWorkViewMode;
   myWorkGroup?: ProjectMyWorkGroupMode;
   myWorkStatus?: ProjectMyWorkStatusCategory;
@@ -69,6 +70,7 @@ export const projectMyWorkTableSortDirectionValues = new Set<ProjectMyWorkTableS
 
 export const projectDashboardMyWorkRouteSearchKeys = [
   "myWorkQ",
+  "myWorkLens",
   "myWorkView",
   "myWorkGroup",
   "myWorkStatus",
@@ -147,6 +149,11 @@ export function parseProjectDashboardMyWorkRouteSearch(
 
   if (typeof search.myWorkQ === "string") {
     parsed.myWorkQ = search.myWorkQ;
+  }
+
+  const lens = parseRouteEnum(search.myWorkLens, projectMyWorkLensValues);
+  if (lens !== undefined) {
+    parsed.myWorkLens = lens;
   }
 
   const viewMode = parseRouteEnum(search.myWorkView, projectMyWorkViewModeValues);

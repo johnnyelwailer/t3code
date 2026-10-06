@@ -93,7 +93,7 @@ export function ProjectMyWorkContent({
     filteredWorkItemsCount: filteredWorkItems.length,
   });
   const renderTicketExtra = (ticket: ProjectTicket, compact?: boolean) =>
-    renderProjectMyWorkTicketExtra({ ticket, compact });
+    renderProjectMyWorkTicketExtra({ ticket, compact, githubActivityByWorkItem });
 
   const renderBody = () => {
     // The digest lens has its own server-aggregated data and its own loading/empty states, so it
@@ -122,7 +122,9 @@ export function ProjectMyWorkContent({
       );
     }
 
-    if (lens === "board" || viewMode === "kanban") {
+    // The lens decides the layout: the Hierarchy lens is the tree even though the default
+    // view mode is still "kanban", so `?myWorkLens=hierarchy` never renders a board.
+    if (lens === "board" || (viewMode === "kanban" && lens !== "hierarchy")) {
       return (
         <ProjectDashboardKanban
           kanbanColumns={kanbanColumns}

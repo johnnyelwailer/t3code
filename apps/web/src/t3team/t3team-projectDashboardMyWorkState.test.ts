@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  buildProjectDashboardMyWorkRouteSearch,
+  parseProjectDashboardMyWorkRouteSearch,
   resolveProjectDashboardMyWorkState,
   type PersistedProjectDashboardMyWorkState,
   type ProjectDashboardMyWorkRouteSearch,
@@ -54,6 +56,7 @@ describe("project dashboard my work state", () => {
 
     expect(resolveProjectDashboardMyWorkState({ persisted, search })).toEqual({
       query: "route query",
+      // A fully mirrored (pre-myWorkLens) route says nothing about the lens: default stays.
       lens: "digest",
       viewMode: "table",
       groupMode: "hierarchy",
@@ -106,13 +109,70 @@ describe("project dashboard my work state", () => {
     });
   });
 
-  it("keeps a persisted lens — the route search never mirrors it", () => {
+  // Intentional change: the lens used to live only in local storage, so a link carrying
+  // `myWorkView`/`myWorkGroup` was ignored under a persisted digest. The URL now wins.
+  it("lets the route's myWorkLens override a persisted lens", () => {
     expect(
       resolveProjectDashboardMyWorkState({
         persisted: { lens: "board" },
+        search: { myWorkLens: "digest", myWorkView: "table" },
+      }),
+    ).toMatchObject({ lens: "digest", viewMode: "table" });
+  });
+
+  it("maps a view-only link to the lens that renders it, over a persisted digest", () => {
+    expect(
+      resolveProjectDashboardMyWorkState({
+        persisted: { lens: "digest" },
+        search: { myWorkView: "kanban", myWorkGroup: "hierarchy" },
+      }),
+    ).toMatchObject({ lens: "board", viewMode: "kanban", groupMode: "hierarchy" });
+    expect(
+      resolveProjectDashboardMyWorkState({
+        persisted: { lens: "digest" },
         search: { myWorkView: "table" },
       }),
-    ).toMatchObject({ lens: "board", viewMode: "table" });
+    ).toMatchObject({ lens: "hierarchy", viewMode: "table" });
+  });
+
+  it("keeps a saved digest for an old URL that mirrored the whole default state", () => {
+    // Builds before myWorkLens wrote `myWorkView=kanban&myWorkGroup=hierarchy` (the defaults)
+    // plus the sort keys into every URL; reading that as a board request would lose the digest.
+    expect(
+      resolveProjectDashboardMyWorkState({
+        persisted: { lens: "digest" },
+        search: {
+          myWorkQ: "",
+          myWorkView: "kanban",
+          myWorkGroup: "hierarchy",
+          myWorkStatus: "all",
+          myWorkSort: "updated",
+          myWorkDir: "desc",
+        },
+      }),
+    ).toMatchObject({ lens: "digest", viewMode: "kanban" });
+  });
+
+  it("keeps the persisted lens when the URL says nothing about the view", () => {
+    expect(
+      resolveProjectDashboardMyWorkState({
+        persisted: { lens: "board" },
+        search: { myWorkQ: "q" },
+      }),
+    ).toMatchObject({ lens: "board", query: "q" });
+  });
+
+  it("writes the lens to the URL and reads it back unchanged", () => {
+    const state = resolveProjectDashboardMyWorkState({ persisted: { lens: "board" } });
+    const search = buildProjectDashboardMyWorkRouteSearch(state);
+    expect(search.myWorkLens).toBe("board");
+    const reparsed = parseProjectDashboardMyWorkRouteSearch(
+      search as unknown as Record<string, unknown>,
+    );
+    expect(
+      resolveProjectDashboardMyWorkState({ persisted: { lens: "digest" }, search: reparsed }),
+    ).toMatchObject({ lens: "board" });
+    expect(parseProjectDashboardMyWorkRouteSearch({ myWorkLens: "bogus" })).toEqual({});
   });
 
   it("applies the beta default lens only when no lens has been persisted", () => {
