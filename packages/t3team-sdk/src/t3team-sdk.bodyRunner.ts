@@ -27,6 +27,7 @@ import type { DurableWorkflowRuntime } from "./t3team-sdk.durableRuntime.ts";
 import { createRetryPrimitives } from "./t3team-sdk.retryPrimitive.ts";
 import type { ReducePrimitives } from "./t3team-sdk.reducePrimitive.ts";
 import { createSchedulePrimitives } from "./t3team-sdk.schedulePrimitive.ts";
+import { withDurableWait } from "./t3team-sdk.durableWait.ts";
 import type { CheckpointPrimitives, CheckpointRecord } from "@runbook/core/checkpoint";
 import { createSignalPrimitives } from "./t3team-sdk.signalPrimitive.ts";
 import {
@@ -151,7 +152,13 @@ export async function runPreparedBody(opts: {
     // gate which scripts are callable — that is limited by recipe ownership (Epic 25 §Scripts).
     scripts: capabilities.has("script") ? buildScriptTree(opts.scripts, opts.runtime) : {},
     runtime: opts.runtime,
-    primitives: opts.primitives,
+    // `wait(ms)` parks on the same `waitUntil` clock when `"schedule"` is declared.
+    primitives: withDurableWait({
+      primitives: opts.primitives,
+      runtime: opts.runtime,
+      schedule,
+      capabilities,
+    }),
     checkpoint: bounded.checkpoint,
     resume: opts.resume,
     watermark: opts.watermark ?? bounded.watermark,

@@ -81,7 +81,7 @@ export function makeRecipeToolHandlers<E>(deps: {
         );
       }
       if (typeof args.path !== "string" || args.path.trim().length === 0) {
-        return Effect.fail("t3team.recipe.validate requires a non-empty 'path' or 'source'.");
+        return Effect.fail("t3_recipe_validate requires a non-empty 'path' or 'source'.");
       }
       const requestedPath = args.path;
       return workspaceRoot(threadId).pipe(

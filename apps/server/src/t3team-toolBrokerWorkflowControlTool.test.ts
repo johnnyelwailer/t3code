@@ -112,7 +112,9 @@ repoLayer("t3team.orchestration.pause / stop", (it) => {
       const value = yield* h.handlers(launchThreadId).controlWorkflowRun("pause", { runId });
 
       assert.strictEqual(value.status, "paused");
-      assert.match(value.hint, /t3team\.orchestration\.resume/);
+      // The agent's name for the tool, never the broker id it cannot call.
+      assert.match(value.hint, /t3_orchestration_resume/);
+      assert.notMatch(value.hint, /t3team\.orchestration\./);
       assert.strictEqual(Option.getOrThrow(yield* h.repo.getById({ runId })).status, "paused");
       assert.strictEqual(h.registry.peekPending(`${runId}:child`), undefined);
       assert.strictEqual(h.rearmed(), 1);

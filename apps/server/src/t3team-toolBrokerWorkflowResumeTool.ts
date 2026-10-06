@@ -54,7 +54,7 @@ export type T3TeamWorkflowResumeToolHandlers = {
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 const notFoundHint = (runId: string) =>
-  `No orchestration run found for runId '${runId}'. Use t3team.orchestration.status to list your ` +
+  `No orchestration run found for runId '${runId}'. Use t3_orchestration_status to list your ` +
   "recent runs.";
 
 /** Build the per-thread `t3team.orchestration.resume` handler factory. */
@@ -66,7 +66,7 @@ export function makeWorkflowResumeToolHandlers<E>(
       Effect.gen(function* () {
         const runId = args.runId?.trim() ?? "";
         if (runId.length === 0) {
-          return yield* Effect.fail("t3team.orchestration.resume requires a runId.");
+          return yield* Effect.fail("t3_orchestration_resume requires a runId.");
         }
         const found = yield* deps.runRepository
           .getById({ runId })

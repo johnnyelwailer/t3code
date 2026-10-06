@@ -12,6 +12,7 @@ import {
   T3TEAM_CHILDREN_TOOL_ID,
   type T3TeamChildrenToolDeps,
 } from "./t3team-toolBrokerChildrenTypes.ts";
+import { mcpToolNameOf } from "./t3team-mcpCanonicalToolMap.ts";
 
 export { opUsage } from "./t3team-toolBrokerChildrenUsage.ts";
 
@@ -30,7 +31,7 @@ export function loadTarget(
       if (!shell) return Effect.fail(`Thread ${threadId} was not found.`);
       if (shell.projectId !== deps.callerProjectId) {
         return Effect.fail(
-          `Thread ${threadId} is in a different project; ${T3TEAM_CHILDREN_TOOL_ID} only reaches threads in the caller's project.`,
+          `Thread ${threadId} is in a different project; ${mcpToolNameOf(T3TEAM_CHILDREN_TOOL_ID)} only reaches threads in the caller's project.`,
         );
       }
       return Effect.succeed(shell);

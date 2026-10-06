@@ -115,7 +115,7 @@ export const replaceRunSourceIfRequested = <E>(
     if (trimmed.length === 0) return;
     if (!deps.fileSystem || !deps.path) {
       return yield* Effect.fail(
-        "Filesystem services are not available for t3team.orchestration.resume in this runtime.",
+        "Filesystem services are not available for t3_orchestration_resume in this runtime.",
       );
     }
     const workspaceRoot = yield* workspaceRootFor(deps, threadId);
