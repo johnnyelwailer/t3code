@@ -105,3 +105,11 @@ export function sessionWorkspaceName(
   if (name === raw && name.length <= WORKSPACE_LIMIT - 1) return `${name}_`;
   return `${name.slice(0, WORKSPACE_LIMIT - 10)}-${shortHash(JSON.stringify(parts))}_`;
 }
+
+/** The project's pool: `<owner>.<repo>`, lower case — the prefix of its prebuilt image tags. */
+export function standbyPoolKey(repository: Pick<MachineRepository, "owner" | "name">): string {
+  return `${repository.owner}/${repository.name}`
+    .toLowerCase()
+    .replace(/[^a-z0-9_.-]/g, ".")
+    .slice(0, 100);
+}

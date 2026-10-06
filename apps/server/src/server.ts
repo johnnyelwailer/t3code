@@ -255,6 +255,9 @@ import { T3TeamThreadEngagementLive } from "./t3team-threadEngagement.ts";
 import { T3TeamChildStatusReactorLive } from "./t3team-childStatusReactor.ts";
 import { T3TeamActivityLabelReactorLive } from "./t3team-activityLabelReactor.ts";
 import { T3TeamChildSettleSweeperLive } from "./t3team-childSettleSweeper.ts";
+import { StandbyInterestLive } from "./cloud/t3team-StandbyInterest.ts";
+import { layer as CloudSessionMachinesLayer } from "./cloud/t3team-CloudSessionMachine.ts";
+import { layer as ProjectMachineDiscoveryLayer } from "./project/t3team-ProjectMachineDiscovery.ts";
 import { T3TeamSettleGuardsLive } from "./t3team-childSettleGuards.ts";
 import { T3TeamThreadTransientTurnRetryLive } from "./t3team-threadTransientTurnRetry.ts";
 import {
@@ -1364,6 +1367,15 @@ const makeServerLayer = Layer.unwrap(
       T3TeamChildStatusReactorLive,
       T3TeamActivityLabelReactorLive,
       T3TeamChildSettleSweeperLive,
+      // t3team: tells the cloud-session broker which projects to keep warm machines for (#562).
+      StandbyInterestLive.pipe(
+        Layer.provide(
+          CloudSessionMachinesLayer.pipe(
+            Layer.provide(GitHubCli.layer),
+            Layer.provide(ProjectMachineDiscoveryLayer),
+          ),
+        ),
+      ),
       T3TeamThreadSilenceWatchReactorLive,
       T3TeamThreadTransientTurnRetryLive,
       T3TeamWorkflowEngineRehydrateLive,
