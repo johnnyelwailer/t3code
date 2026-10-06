@@ -36,6 +36,13 @@ describe("runOnRows", () => {
   it("gives a session whose machine is not connected here no environment", () => {
     const rows = runOnRows([PRIMARY], [session("1")], PRIMARY.environmentId);
     expect(rows.cloud[0]?.environment).toBeNull();
+    expect(rows.cloud[0]?.unavailable).toBe(false);
+  });
+
+  it("marks a machine connected without this project as unavailable, not as one to connect", () => {
+    const rows = runOnRows([PRIMARY], [session("1")], PRIMARY.environmentId, new Set(["env-1"]));
+    expect(rows.cloud[0]?.environment).toBeNull();
+    expect(rows.cloud[0]?.unavailable).toBe(true);
   });
 
   it("still folds the same ordinary machine reachable under two ids", () => {

@@ -8,6 +8,8 @@ export interface RunOnCloudRow {
   readonly name: string;
   /** The machine's environment, once it is connected here: the row is then a selectable choice. */
   readonly environment: EnvironmentOption | null;
+  /** Connected, but without this thread's project: nothing here can run on it. */
+  readonly unavailable: boolean;
 }
 
 /**
@@ -20,6 +22,7 @@ export function runOnRows(
   environments: readonly EnvironmentOption[],
   sessions: readonly CloudSession[],
   activeEnvironmentId: EnvironmentOption["environmentId"],
+  connectedEnvironmentIds: ReadonlySet<string> = new Set(),
 ): { readonly machines: EnvironmentOption[]; readonly cloud: RunOnCloudRow[] } {
   const sessionByEnvironment = new Map(
     sessions.flatMap((session) =>
@@ -39,13 +42,20 @@ export function runOnRows(
   }
   return {
     machines: dedupeRunOnEnvironments(others, activeEnvironmentId),
-    cloud: sessions.map((session) => ({
-      session,
-      name: cloudSessionDisplayName(session),
-      environment:
+    cloud: sessions.map((session) => {
+      const environment =
         session.environmentId === undefined
           ? null
-          : (cloudEnvironments.get(session.environmentId) ?? null),
-    })),
+          : (cloudEnvironments.get(session.environmentId) ?? null);
+      return {
+        session,
+        name: cloudSessionDisplayName(session),
+        environment,
+        unavailable:
+          environment === null &&
+          session.environmentId !== undefined &&
+          connectedEnvironmentIds.has(session.environmentId),
+      };
+    }),
   };
 }

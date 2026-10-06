@@ -43,12 +43,15 @@ export interface BranchToolbarEnvironmentSelectorProps {
   /**
    * Cloud sessions worth showing under "Cloud" while they are not ready: the
    * ones still provisioning (read-only, so the machine you just asked for is
-   * visible where you pick a machine) and the most recent failed one, with
-   * its failure reason. A ready session is deliberately absent: it has joined
-   * `availableEnvironments` by then and listing it twice would be a lie about
-   * how many machines exist.
+   * visible where you pick a machine), ready ones, and the most recent failed one, with
+   * its failure reason. t3team: each is listed once, by name (`t3team-runOnCloudRows.ts`).
    */
   pendingCloudSessions?: readonly CloudSession[];
+  /**
+   * t3team: every environment connected on this client, whatever its project. A cloud machine
+   * connected without this thread's project is shown as unavailable, not as one to connect.
+   */
+  connectedEnvironmentIds?: ReadonlySet<string>;
   /**
    * Present when the server has a cloud provider configured: the menu offers a
    * one-click "New cloud session". Absent hides the action item entirely.
@@ -97,6 +100,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   onEnvironmentChange,
   displayMode = "toolbar",
   pendingCloudSessions,
+  connectedEnvironmentIds,
   onCreateCloudSession,
   cloudSessionCreatePending = false,
   cloudSessionProject,
@@ -113,8 +117,14 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
     onCreateCloudSession !== undefined || onSetupCloudSessions !== undefined;
   // t3team: one list — the machines, then one row per cloud session (connected or not).
   const { machines: runOnEnvironments, cloud: cloudRows } = useMemo(
-    () => runOnRows(availableEnvironments, pendingCloudSessions ?? [], environmentId),
-    [availableEnvironments, environmentId, pendingCloudSessions],
+    () =>
+      runOnRows(
+        availableEnvironments,
+        pendingCloudSessions ?? [],
+        environmentId,
+        connectedEnvironmentIds,
+      ),
+    [availableEnvironments, connectedEnvironmentIds, environmentId, pendingCloudSessions],
   );
   const connectedCloudEnvironments = useMemo(
     () => cloudRows.flatMap((row) => (row.environment === null ? [] : [row.environment])),
@@ -134,20 +144,35 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   // polling, and the just-created session appears in the open list.
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const connectedEnvironmentIds = useMemo(
+  const projectEnvironmentIds = useMemo(
     () => new Set<string>(availableEnvironments.map((env) => env.environmentId)),
     [availableEnvironments],
   );
   // Clicking a ready machine connects it, then runs the thread there: once its environment
-  // registers, it is selected and the menu closes. Until then the row says it is connecting.
+  // registers for this project, it is selected and the menu closes. Until then the row says it
+  // is connecting; a machine that connects without this project stops there, shown unavailable.
   const [selectWhenConnected, setSelectWhenConnected] = useState<string | null>(null);
+  // The machine the user just tried that turned out not to have this project: it stays listed,
+  // saying why. Other projects' machines are not listed at all — nothing here can run on them.
+  const [refusedEnvironmentId, setRefusedEnvironmentId] = useState<string | null>(null);
   useEffect(() => {
-    if (selectWhenConnected === null || !connectedEnvironmentIds.has(selectWhenConnected)) return;
-    setSelectWhenConnected(null);
-    onEnvironmentChange?.(selectWhenConnected as EnvironmentId);
-    setMenuOpen(false);
-    onCloudMenuOpenChange?.(false);
-  }, [connectedEnvironmentIds, onCloudMenuOpenChange, onEnvironmentChange, selectWhenConnected]);
+    if (selectWhenConnected === null) return;
+    if (projectEnvironmentIds.has(selectWhenConnected)) {
+      setSelectWhenConnected(null);
+      onEnvironmentChange?.(selectWhenConnected as EnvironmentId);
+      setMenuOpen(false);
+      onCloudMenuOpenChange?.(false);
+    } else if (connectedEnvironmentIds?.has(selectWhenConnected)) {
+      setRefusedEnvironmentId(selectWhenConnected);
+      setSelectWhenConnected(null);
+    }
+  }, [
+    connectedEnvironmentIds,
+    onCloudMenuOpenChange,
+    onEnvironmentChange,
+    projectEnvironmentIds,
+    selectWhenConnected,
+  ]);
 
   const environmentItems = useMemo(
     () => [
@@ -317,24 +342,28 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
               ))}
           {onCreateCloudSession && (
             <>
-              {cloudRows.map((row) => (
-                <RunOnCloudRow
-                  key={row.session.sessionId}
-                  row={row}
-                  selectable={onEnvironmentChange !== undefined}
-                  connecting={
-                    selectWhenConnected !== null &&
-                    selectWhenConnected === row.session.environmentId
-                  }
-                  onConnect={(session) => {
-                    onCloudSessionAction?.(session);
-                    if (session.environmentId !== undefined) {
-                      setSelectWhenConnected(session.environmentId);
+              {cloudRows
+                .filter(
+                  (row) => !row.unavailable || row.session.environmentId === refusedEnvironmentId,
+                )
+                .map((row) => (
+                  <RunOnCloudRow
+                    key={row.session.sessionId}
+                    row={row}
+                    selectable={onEnvironmentChange !== undefined}
+                    connecting={
+                      selectWhenConnected !== null &&
+                      selectWhenConnected === row.session.environmentId
                     }
-                  }}
-                  onDismiss={onDismissCloudSession}
-                />
-              ))}
+                    onConnect={(session) => {
+                      onCloudSessionAction?.(session);
+                      if (session.environmentId !== undefined) {
+                        setSelectWhenConnected(session.environmentId);
+                      }
+                    }}
+                    onDismiss={onDismissCloudSession}
+                  />
+                ))}
               {/* Mouse-only on purpose: dispatching a VM is a real cost, so this
                   row is outside the arrow-key focus order (finding: one Enter
                   must not provision a machine). */}

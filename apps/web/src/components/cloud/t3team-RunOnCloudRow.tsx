@@ -39,7 +39,7 @@ export function RunOnCloudRow(props: {
       </SelectItem>
     );
   }
-  if (session.phase === "ready" && row.environment === null) {
+  if (session.phase === "ready" && row.environment === null && !row.unavailable) {
     return (
       <button
         type="button"
@@ -67,7 +67,10 @@ export function RunOnCloudRow(props: {
         kind="cloud"
         className={cn("mt-1 size-3 shrink-0", working && "animate-pulse")}
       />
-      <RowText title={row.name} detail={rowDetail(session)} />
+      <RowText
+        title={row.name}
+        detail={row.unavailable ? "Doesn't have this project" : rowDetail(session)}
+      />
       {session.phase === "failed" && props.onDismiss ? (
         <button
           type="button"

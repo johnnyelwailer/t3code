@@ -281,6 +281,43 @@ describe("BranchToolbarEnvironmentSelector", () => {
     expect(onEnvironmentChange).toHaveBeenCalledWith("env-cloud");
   });
 
+  it("stops connecting, and says why, when the machine connects without this project", () => {
+    const ready = {
+      sessionId: "1",
+      phase: "ready",
+      environmentId: "env-cloud",
+      machineLabel: "ubuntu-slim",
+      remainingSeconds: null,
+    } as unknown as CloudSession;
+    const props = {
+      onEnvironmentChange: vi.fn(),
+      onCreateCloudSession: () => {},
+      onCloudSessionAction: () => {},
+      pendingCloudSessions: [ready],
+    };
+    mountSelector(props);
+    act(() => {
+      Array.from(liveContainer?.querySelectorAll("button") ?? [])
+        .find((button) => button.textContent?.startsWith("Cloud session"))
+        ?.click();
+    });
+    expect(liveContainer?.textContent).toContain("Connecting…");
+    act(() => {
+      liveRoot?.render(
+        <BranchToolbarEnvironmentSelector
+          envLocked={false}
+          environmentId={PRIMARY.environmentId}
+          availableEnvironments={[PRIMARY]}
+          connectedEnvironmentIds={new Set(["env-cloud"])}
+          {...props}
+        />,
+      );
+    });
+    expect(liveContainer?.textContent).not.toContain("Connecting…");
+    expect(liveContainer?.textContent).toContain("Doesn't have this project");
+    expect(props.onEnvironmentChange).not.toHaveBeenCalled();
+  });
+
   it("shows a create in flight at once, and a second click cannot start a second machine", () => {
     const onCreateCloudSession = vi.fn();
     mountSelector({ onCreateCloudSession, cloudSessionCreatePending: true });
