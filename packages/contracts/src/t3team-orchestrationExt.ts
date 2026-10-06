@@ -80,7 +80,7 @@ export type OrchestrationWorkflowRunStatus = typeof OrchestrationWorkflowRunStat
  * pointing at a DIFFERENT environment than the creating server's own.
  *
  * Delivery boundary (documented, not built here): inter-agent messaging
- * (`t3_thread_send` mailbox / `t3team_children` ops) reaches only threads in THIS
+ * (`t3_thread_send` mailbox / `t3_task_ops` ops) reaches only threads in THIS
  * environment's store. A cross-environment child is recorded, bound, and
  * visible to its parent with its environment shown; routing execution and
  * report-back across environments is a separate design (no relay invented
