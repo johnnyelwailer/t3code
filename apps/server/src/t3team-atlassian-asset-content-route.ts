@@ -1,10 +1,10 @@
-import * as Mime from "effect/unstable/http/Mime";
+import * as Mime from "effect/http/Mime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
-import { HttpRouter } from "effect/unstable/http";
-import { HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
+import { HttpRouter } from "effect/http";
+import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import { providerForAccount } from "./t3team-atlassian-auth-store.ts";
 import { tryAtlassianPromise } from "./t3team-atlassian-http.ts";
 import { WorkspacePaths } from "./workspace/WorkspacePaths.ts";

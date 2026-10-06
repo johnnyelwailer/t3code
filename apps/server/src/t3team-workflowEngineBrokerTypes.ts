@@ -47,7 +47,7 @@ export interface WorkflowEngineWatch {
 
 /**
  * Write-through to the durable `workflow_runs` record. The host implements this over
- * {@link import("./persistence/Services/WorkflowRuns.ts").WorkflowRunRepository}; absent (SDK
+ * {@link import("./persistence/WorkflowRuns.ts").WorkflowRunRepository}; absent (SDK
  * fs path / tests) the run is purely in-memory.
  */
 export interface WorkflowRunLifecycle {

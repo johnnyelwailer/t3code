@@ -8,8 +8,8 @@
 import type { ModelSelection, ProjectId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
-import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
+import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
+import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";
 import type { T3TeamRecipeHarnessRecipe } from "./t3team-recipeWorkflowHarnessRecipe.ts";
 import { T3TEAM_HARNESS_ISO as ISO } from "./t3team-recipeWorkflowHarnessSetup.ts";
 import {

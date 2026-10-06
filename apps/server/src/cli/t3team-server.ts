@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect";
 import * as Config from "effect/Config";
 import * as Data from "effect/Data";
 import * as Option from "effect/Option";
-import { Command, GlobalFlag } from "effect/unstable/cli";
+import { Command, GlobalFlag } from "effect/cli";
 
 import { ServerConfig, type StartupPresentation } from "../config.ts";
 // One server layer, two binaries. `server.ts` already composes every t3team route and reactor,

@@ -8,10 +8,10 @@
 import { ThreadId } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import { readCachedBacklogViewRow } from "./t3team-atlassian-backlog-cacheQueries.ts";
 import {
   parseJson,

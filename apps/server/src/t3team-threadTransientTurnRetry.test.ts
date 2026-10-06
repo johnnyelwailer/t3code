@@ -16,7 +16,7 @@ import {
   priorRetryAttempts,
   transientRetryMessageId,
 } from "./t3team-threadTransientTurnRetryPlan.ts";
-import { retryDirectiveSeconds } from "./provider/Layers/t3team-claude-gateway-retry.ts";
+import { retryDirectiveSeconds } from "./provider/t3team-claude-gateway-retry.ts";
 
 describe("transientTurnRetryDelayMs", () => {
   it("honors a gateway retry_after_seconds directive with a small cushion", () => {

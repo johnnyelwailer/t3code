@@ -8,7 +8,7 @@ import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Semaphore from "effect/Semaphore";
-import type * as HttpClient from "effect/unstable/http/HttpClient";
+import type * as HttpClient from "effect/http/HttpClient";
 
 import type * as ServerSecretStore from "../auth/ServerSecretStore.ts";
 import type * as ExternalLauncher from "../process/externalLauncher.ts";

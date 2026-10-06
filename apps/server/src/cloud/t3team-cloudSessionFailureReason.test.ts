@@ -1,6 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
-import { ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcessSpawner } from "effect/process";
 
 import type * as VcsProcess from "../vcs/VcsProcess.ts";
 import { workflowHistoryUrl } from "./t3team-CloudSessionFleet.ts";

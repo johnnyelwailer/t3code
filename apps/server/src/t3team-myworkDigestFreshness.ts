@@ -10,7 +10,7 @@
 
 import { AtlassianIntegrationProvider } from "@t3tools/integrations-atlassian";
 import * as Effect from "effect/Effect";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { providerForAccount } from "./t3team-atlassian-auth-store.ts";
 import {

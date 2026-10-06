@@ -15,8 +15,8 @@ const AUTHOR_BROKER_IDS: ReadonlySet<string> = new Set(WORKFLOW_AUTHOR_TOOL_IDS)
 const NO_CAPABILITIES: McpInvocationScope["capabilities"] = new Set();
 
 /** The scope a resolved credential runs with: an author thread's loses every capability. */
-export const workflowAuthorMcpScope = (scope: McpInvocationScope): McpInvocationScope =>
-  isWorkflowAuthorThread(String(scope.threadId))
+export const workflowAuthorMcpScope = <S extends McpInvocationScope>(scope: S): S =>
+  isWorkflowAuthorThread(String(scope.thread?.threadId))
     ? { ...scope, capabilities: NO_CAPABILITIES }
     : scope;
 
@@ -28,6 +28,6 @@ export const mayCallT3TeamBrokerTool = (
   scope: McpInvocationScope,
   brokerToolId: string,
 ): boolean =>
-  isWorkflowAuthorThread(String(scope.threadId))
+  isWorkflowAuthorThread(String(scope.thread?.threadId))
     ? AUTHOR_BROKER_IDS.has(brokerToolId)
     : scope.capabilities.has("orchestration");

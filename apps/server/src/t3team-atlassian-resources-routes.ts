@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { HttpRouter } from "effect/unstable/http";
+import { HttpRouter } from "effect/http";
 
 import { errorResponse, okJson, readJsonBody } from "./t3team-atlassian-http.ts";
 import { type T3TeamPollEnvelope, toT3TeamPollResult } from "./t3team-integration-polling.ts";

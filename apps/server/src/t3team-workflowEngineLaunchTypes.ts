@@ -26,7 +26,7 @@ import type {
 
 import type { WorkflowRunLifecycle } from "./t3team-workflowEngineBrokerTypes.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
-import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
+import type { WorkflowSignalStoreShape } from "./persistence/WorkflowSignalStore.ts";
 import type { WorkflowRepairIntent } from "./t3team-workflowSelfHeal.ts";
 import type { WorkflowStepActivityEmitter } from "./t3team-workflowEngineStepActivities.ts";
 import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";

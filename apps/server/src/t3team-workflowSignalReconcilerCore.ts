@@ -40,7 +40,7 @@ import {
 
 import type { WorkflowSignalDeliveryShape } from "./t3team-workflowSignalDelivery.ts";
 import type { WorkflowSignalSourceCatalog } from "./t3team-workflowSignalCatalog.ts";
-import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
+import type { WorkflowSignalStoreShape } from "./persistence/WorkflowSignalStore.ts";
 
 /** The delivery trust boundary per source name: only the declared signals may be emitted. */
 const EMITS_BY_SOURCE: Readonly<Record<string, ReadonlySet<string>>> = Object.fromEntries(

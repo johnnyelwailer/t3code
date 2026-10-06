@@ -21,7 +21,7 @@ import * as Stream from "effect/Stream";
 
 import { makeManualOnlyProviderMaintenanceCapabilities } from "./provider/providerMaintenance.ts";
 import { applyUsageLimitsUpdate } from "./provider/providerUsageLimits.ts";
-import type { ServerProviderShape } from "./provider/Services/ServerProvider.ts";
+import type { ServerProviderShape } from "./provider/ServerProvider.ts";
 import {
   degradedServerProvider,
   packSnapshotToServerProvider,

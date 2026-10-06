@@ -7,7 +7,7 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import * as Stream from "effect/Stream";
-import type { Atom } from "effect/unstable/reactivity";
+import type { Atom } from "effect/reactivity";
 
 import type { EnvironmentRegistry } from "../connection/registry.ts";
 import { subscribeWhenSupported } from "../rpc/t3team-capabilityGatedSubscription.ts";
@@ -70,7 +70,7 @@ export function createT3TeamThreadFactsAtoms<R, E>(
         subscribeWhenSupported(WS_METHODS.t3teamSubscribeThreadFacts, input, {
           supported: supportsT3TeamThreadFacts,
           unsupported: { type: "snapshot", facts: [] },
-        }).pipe(Stream.scan(EMPTY_T3TEAM_THREAD_FACTS, applyT3TeamThreadFactsEvent)),
+        }).pipe(Stream.scan(() => EMPTY_T3TEAM_THREAD_FACTS, applyT3TeamThreadFactsEvent)),
     }),
   };
 }

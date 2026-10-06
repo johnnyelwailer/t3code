@@ -8,7 +8,7 @@
  * Watches registered on V1 (persisted as watcher-thread activities) are not
  * carried over: they are short-lived coordination aids an agent re-arms.
  */
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as Effect from "effect/Effect";
 
 export default Effect.gen(function* () {

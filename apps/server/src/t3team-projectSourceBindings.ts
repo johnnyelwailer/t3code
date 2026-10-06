@@ -16,21 +16,21 @@
  *   (deletes through other paths are swept by `t3team-projectSourceEventsReactor.ts`).
  */
 import type { ProjectId, ProjectSourceBinding } from "@t3tools/contracts";
+import * as KeyedLock from "@t3tools/shared/KeyedLock";
 import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
-import { makeKeyedSerialExecutor } from "./orchestration-v2/KeyedSerialExecutor.ts";
 import { ProjectStoreV2 } from "./orchestration-v2/ProjectStore.ts";
-import { ProjectionProjectSourceBindingRepositoryLive } from "./persistence/Layers/t3team-ProjectionProjectSourceBindings.ts";
+import { ProjectionProjectSourceBindingRepositoryLive } from "./persistence/t3team-ProjectionProjectSourceBindings.ts";
 import {
   type ProjectionProjectSourceBinding,
   ProjectionProjectSourceBindingRepository,
-} from "./persistence/Services/t3team-ProjectionProjectSourceBindings.ts";
+} from "./persistence/t3team-ProjectionProjectSourceBindings.ts";
 import { ProjectOperationError } from "./project/ProjectService.ts";
 import {
   ProjectSourceMutationHook,
@@ -63,7 +63,7 @@ const makeProjectSourceMutationHook = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const bindings = yield* ProjectionProjectSourceBindingRepository;
   const projects = yield* ProjectStoreV2;
-  const locks = yield* makeKeyedSerialExecutor<string>();
+  const locks = yield* KeyedLock.make<string>();
 
   const failOperation = (projectId: ProjectId) => (cause: unknown) =>
     new ProjectOperationError({ operation: "dispatch-project-command", projectId, cause });

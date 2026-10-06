@@ -32,14 +32,14 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import { afterAll } from "vite-plus/test";
 
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
-import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStore.ts";
-import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
-import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
+import { WorkflowJournalStoreLive } from "./persistence/SqliteJournalStore.ts";
+import { WorkflowRunRepositoryLive } from "./persistence/WorkflowRuns.ts";
+import { WorkflowJournalStore } from "./persistence/SqliteJournalStore.ts";
 import {
   WorkflowRunRepository,
   type WorkflowRunRepositoryShape,
-} from "./persistence/Services/WorkflowRuns.ts";
+} from "./persistence/WorkflowRuns.ts";
 import {
   buildRunningWorkflowRunRow,
   makeWorkflowRunLifecycle,

@@ -8,9 +8,9 @@ import {
 } from "@t3tools/project-recipes";
 import { BUNDLED_DASHBOARD_WIDGETS } from "@t3tools/t3team-skill-packs";
 import * as Effect from "effect/Effect";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
 import { createT3TeamThreadToolBinding } from "./t3team-toolBrokerBinding.ts";
 import { makeMyWorkHandlers } from "./t3team-toolBrokerMyWorkHandlers.ts";

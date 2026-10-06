@@ -7,7 +7,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as ConfigProvider from "effect/ConfigProvider";
-import * as HttpClient from "effect/unstable/http/HttpClient";
+import * as HttpClient from "effect/http/HttpClient";
 
 import * as ExternalLauncher from "../process/externalLauncher.ts";
 import * as ServerSecretStore from "../auth/ServerSecretStore.ts";
@@ -79,9 +79,12 @@ export const make = Effect.gen(function* () {
   ) =>
     Deferred.await(deferred).pipe(
       Effect.timeout(timeout),
-      Effect.catchTag("TimeoutError", (cause) =>
-        Effect.fail(new ConnectCredentialMintError({ reason: "browser_callback_timeout", cause })),
-      ),
+      Effect.catchTags({
+        TimeoutError: (cause) =>
+          Effect.fail(
+            new ConnectCredentialMintError({ reason: "browser_callback_timeout", cause }),
+          ),
+      }),
     );
 
   const mint: ConnectCredentialMinter["Service"]["mint"] = (input) => {

@@ -17,6 +17,7 @@ import type {
   DigestSection,
 } from "~/t3team/t3team-projectMyWorkDigestPlan";
 import { WorkItemPersonAvatar } from "~/t3team/workitem/t3team-WorkItemPersonAvatar";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/t3team/components/ui/t3team-tooltip";
 
 /**
  * A person: their GitHub face and first name. Where the panel is narrow the face carries it alone
@@ -25,17 +26,27 @@ import { WorkItemPersonAvatar } from "~/t3team/workitem/t3team-WorkItemPersonAva
 function DigestPersonPill({ person }: { person: DigestPrPerson }) {
   const first = person.name.split(" ")[0];
   return (
-    <span className="inline-flex items-center gap-1 text-foreground/80" title={person.name}>
-      <WorkItemPersonAvatar
-        person={{
-          displayName: person.name,
-          ...(person.avatarUrl ? { avatarUrl: person.avatarUrl } : {}),
-        }}
-        size="sm"
-        {...(person.avatarUrl ? {} : { className: "@md/reviews:hidden" })}
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            className="inline-flex items-center gap-1 text-foreground/80"
+            aria-label={person.name}
+          >
+            <WorkItemPersonAvatar
+              person={{
+                displayName: person.name,
+                ...(person.avatarUrl ? { avatarUrl: person.avatarUrl } : {}),
+              }}
+              size="sm"
+              {...(person.avatarUrl ? {} : { className: "@md/reviews:hidden" })}
+            />
+            <span className="hidden @md/reviews:inline">{first}</span>
+          </span>
+        }
       />
-      <span className="hidden @md/reviews:inline">{first}</span>
-    </span>
+      <TooltipPopup side="top">{person.name}</TooltipPopup>
+    </Tooltip>
   );
 }
 

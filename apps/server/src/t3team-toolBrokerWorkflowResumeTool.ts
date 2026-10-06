@@ -14,7 +14,7 @@ import type { ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
-import type { WorkflowRun } from "./persistence/Services/WorkflowRuns.ts";
+import type { WorkflowRun } from "./persistence/WorkflowRuns.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
 import {
   makeResumePausedRun,

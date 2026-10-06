@@ -5,7 +5,7 @@
  * pressure, pack extensions). Written by `t3team-v2/t3team-threadFactsStore.ts`
  * and streamed to clients over `t3team.subscribeThreadFacts`.
  */
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as Effect from "effect/Effect";
 
 export default Effect.gen(function* () {

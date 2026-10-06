@@ -1,3 +1,4 @@
+/* oxlint-disable shadcn/no-arbitrary-values -- Base UI drawer swipe CSS vars (--drawer-swipe-*) need calc()/cubic-bezier; not expressible as theme tokens. */
 import { Drawer } from "@base-ui/react/drawer";
 import { ChevronUpIcon } from "lucide-react";
 import type { ReactNode } from "react";

@@ -2,7 +2,7 @@ import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import {
   attachDigestArrangement,
   clearDigestArrangement,

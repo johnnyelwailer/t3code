@@ -1,9 +1,9 @@
 import { assert, it } from "@effect/vitest";
 import type { AtlassianBacklogSprint } from "@t3tools/integrations-atlassian";
 import * as Effect from "effect/Effect";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import type { BacklogResourceRef } from "./t3team-atlassian-backlog-cacheShared.ts";
 import { serializeBacklogCacheJson } from "./t3team-atlassian-backlog-cacheQueries.ts";
 import { ensureBacklogCacheTables } from "./t3team-atlassian-backlog-cacheTables.ts";

@@ -22,8 +22,8 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 
-import type { WorkflowRun } from "./persistence/Services/WorkflowRuns.ts";
-import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
+import type { WorkflowRun } from "./persistence/WorkflowRuns.ts";
+import type { WorkflowSignalStoreShape } from "./persistence/WorkflowSignalStore.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 
 export interface SignalParkDrainResult {

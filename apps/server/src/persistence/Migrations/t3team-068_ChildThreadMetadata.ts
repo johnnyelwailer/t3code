@@ -4,7 +4,7 @@
  * thread it is placed under when that differs from its lineage parent.
  * Written by `t3team-childThreadMetadata.ts` when delegate_task creates a child.
  */
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as Effect from "effect/Effect";
 
 export default Effect.gen(function* () {

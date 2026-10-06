@@ -8,7 +8,7 @@
  *   lineage (settle guards, the child-settle sweep, the stop cascade); it uses
  *   the exact expression those queries filter on, or SQLite would not use it.
  */
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import * as Effect from "effect/Effect";
 
 export default Effect.gen(function* () {

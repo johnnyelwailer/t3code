@@ -9,7 +9,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 
-import type { ResourcePressureEventRepositoryShape } from "./persistence/Services/t3team-ResourcePressureEvents.ts";
+import type { ResourcePressureEventRepositoryShape } from "./persistence/t3team-ResourcePressureEvents.ts";
 import { bucketByClass, descendsFrom, indexByPid } from "./t3team-resourcePressureClasses.ts";
 import {
   classifyPressure,

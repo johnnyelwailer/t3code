@@ -8,7 +8,7 @@
 import type { ThreadId as ThreadIdType } from "@t3tools/contracts";
 import type * as Effect from "effect/Effect";
 
-import type { ProviderRegistryShape } from "./provider/Services/ProviderRegistry.ts";
+import type { ProviderRegistry } from "./provider/ProviderRegistry.ts";
 import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshService.ts";
 import type { T3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
 import type { ResourcePressureMonitorShape } from "./t3team-resourcePressureMonitor.ts";
@@ -30,7 +30,7 @@ export interface BindSessionDeps {
   readonly contextStore: T3TeamThreadToolContextStoreShape;
   readonly genericThreadToolIds: readonly string[];
   readonly reads: T3TeamThreadReads;
-  readonly providerRegistry: ProviderRegistryShape | undefined;
+  readonly providerRegistry: ProviderRegistry["Service"] | undefined;
   readonly usageLimitSources: UsageLimitSources["Service"] | undefined;
   readonly resourcePressure: ResourcePressureMonitorShape | undefined;
   readonly contextRefresh: T3TeamContextRefreshServiceShape;

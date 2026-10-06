@@ -33,7 +33,7 @@ import type { PullRequestActivity, PullRequestDetail } from "@t3tools/contracts"
 import { PersistenceSqlError } from "./persistence/Errors.ts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
+import type { WorkflowSignalStoreShape } from "./persistence/WorkflowSignalStore.ts";
 
 // ---------------------------------------------------------------------------
 // Tier A diff logic

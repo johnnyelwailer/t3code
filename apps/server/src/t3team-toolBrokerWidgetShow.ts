@@ -10,7 +10,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { WorkspacePaths } from "./workspace/WorkspacePaths.ts";
 import type { T3TeamToolCallResult } from "./t3team-toolBroker.ts";

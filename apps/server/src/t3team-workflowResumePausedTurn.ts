@@ -11,8 +11,8 @@
  */
 import * as Effect from "effect/Effect";
 
-import type { WorkflowRun } from "./persistence/Services/WorkflowRuns.ts";
-import type { WorkflowSignalStoreShape } from "./persistence/Services/WorkflowSignalStore.ts";
+import type { WorkflowRun } from "./persistence/WorkflowRuns.ts";
+import type { WorkflowSignalStoreShape } from "./persistence/WorkflowSignalStore.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 import type { InterruptedTurnRetry } from "./t3team-workflowEngineTurnRetry.ts";
 import {

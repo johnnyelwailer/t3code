@@ -8,7 +8,7 @@
  * project, and a host that fails this round is skipped, never the digest.
  */
 
-import { homedir } from "node:os";
+import * as NodeOS from "node:os";
 
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -46,7 +46,7 @@ function searchHost(
 ): Effect.Effect<DigestPrEntry[]> {
   return gh
     .execute({
-      cwd: homedir(),
+      cwd: NodeOS.homedir(),
       args: ["search", "prs", `--${role}`, "@me", "--state", "open"].concat([
         "--limit",
         VIEWER_PR_LIMIT,
@@ -86,7 +86,7 @@ export function loadViewerPrEntries(): Effect.Effect<DigestPrEntry[], never, Git
   return Effect.gen(function* () {
     const gh = yield* GitHubCli.GitHubCli;
     const status = yield* gh
-      .execute({ cwd: homedir(), args: ["auth", "status", "--json", "hosts"] })
+      .execute({ cwd: NodeOS.homedir(), args: ["auth", "status", "--json", "hosts"] })
       .pipe(Effect.option);
     const parsed = status._tag === "Some" ? decodeHosts(status.value.stdout) : undefined;
     const hosts = parsed?._tag === "Some" ? Object.keys(parsed.value.hosts) : [];

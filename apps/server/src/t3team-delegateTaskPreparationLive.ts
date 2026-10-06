@@ -20,7 +20,7 @@ import {
 } from "./mcp/t3team-delegatedTaskPreparation.ts";
 import { ProjectStoreV2 } from "./orchestration-v2/ProjectStore.ts";
 import { ProjectSetupScriptRunner } from "./project/ProjectSetupScriptRunner.ts";
-import { ProviderRegistry } from "./provider/Services/ProviderRegistry.ts";
+import { ProviderRegistry } from "./provider/ProviderRegistry.ts";
 import { SourceControlProviderRegistry } from "./sourceControl/SourceControlProviderRegistry.ts";
 import { T3TeamChildThreadMetadata } from "./t3team-childThreadMetadata.ts";
 import { ResourcePressureMonitor } from "./t3team-resourcePressureMonitor.ts";

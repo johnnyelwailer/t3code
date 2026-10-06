@@ -1,33 +1,15 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
-import {
-  NonNegativeInt,
-  TextGenerationError,
-  type ChatAttachment,
-  type ModelSelection,
-  type OpenCodeSettings,
-} from "@t3tools/contracts";
-import { formatGeneratedBranchName, sanitizeFeatureBranchName } from "@t3tools/shared/git";
+import { NonNegativeInt, TextGenerationError, type OpenCodeSettings } from "@t3tools/contracts";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
-import { extractJsonObject } from "@t3tools/shared/schemaJson";
 
 import * as ServerConfig from "../config.ts";
 import { resolveAttachmentPath } from "../attachmentStore.ts";
-import {
-  buildActivityLabelPrompt,
-  buildBranchNamePrompt,
-  buildCommitMessagePrompt,
-  buildPrContentPrompt,
-  buildThreadTitlePrompt,
-} from "./TextGenerationPrompts.ts";
-import * as TextGeneration from "./TextGeneration.ts";
-import {
-  sanitizeActivityLabel,
-  sanitizeCommitSubject,
-  sanitizePrTitle,
-  sanitizeThreadTitle,
-} from "./TextGenerationUtils.ts";
+import type * as TextGeneration from "./TextGeneration.ts";
+import * as TextGenerationOperations from "./TextGenerationOperations.ts";
+import { buildActivityLabelPrompt } from "./TextGenerationPrompts.ts";
+import { sanitizeActivityLabel } from "./TextGenerationUtils.ts";
 import * as OpenCodeRuntime from "../provider/opencodeRuntime.ts";
 import * as OpenCodeServerOwner from "../provider/OpenCodeServerOwner.ts";
 
@@ -39,8 +21,6 @@ const OpenCodeTextGenerationOperation = Schema.Literals([
   "generateActivityLabel",
   "generateStructured",
 ]);
-
-type OpenCodeTextGenerationOperation = typeof OpenCodeTextGenerationOperation.Type;
 
 const openCodeTextGenerationErrorContext = {
   operation: OpenCodeTextGenerationOperation,
@@ -181,14 +161,9 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
   const openCodeRuntime = yield* OpenCodeRuntime.OpenCodeRuntime;
   const serverOwner = yield* OpenCodeServerOwner.OpenCodeServerOwner;
 
-  const runOpenCodeJson = Effect.fn("runOpenCodeJson")(function* <S extends Schema.Top>(input: {
-    readonly operation: OpenCodeTextGenerationOperation;
-    readonly cwd: string;
-    readonly prompt: string;
-    readonly outputSchemaJson: S;
-    readonly modelSelection: ModelSelection;
-    readonly attachments?: ReadonlyArray<ChatAttachment> | undefined;
-  }) {
+  const runOpenCodeJson = Effect.fn("runOpenCodeJson")(function* <S extends Schema.Top>(
+    input: TextGenerationOperations.Request<S>,
+  ) {
     const parsedModel = OpenCodeRuntime.parseOpenCodeModelSlug(input.modelSelection.model);
     if (!parsedModel) {
       return yield* new TextGenerationError({
@@ -348,132 +323,8 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
       }),
     );
 
-    const decodeOutput = Schema.decodeEffect(Schema.fromJsonString(input.outputSchemaJson));
-    return yield* decodeOutput(extractJsonObject(rawOutput)).pipe(
-      Effect.catchTags({
-        SchemaError: (cause) =>
-          Effect.fail(
-            new TextGenerationError({
-              operation: input.operation,
-              detail: "OpenCode returned invalid structured output.",
-              cause,
-            }),
-          ),
-      }),
-    );
+    return yield* TextGenerationOperations.decodeJsonReply(input, "OpenCode", rawOutput);
   });
-
-  return makeOpenCodeOperations(runOpenCodeJson);
-});
-
-/** Runs one prompt and decodes its reply as `outputSchemaJson`, for either OpenCode runtime. */
-export type OpenCodeJsonRunner = <S extends Schema.Top>(input: {
-  readonly operation: OpenCodeTextGenerationOperation;
-  readonly cwd: string;
-  readonly prompt: string;
-  readonly outputSchemaJson: S;
-  readonly modelSelection: ModelSelection;
-  readonly attachments?: ReadonlyArray<ChatAttachment> | undefined;
-}) => Effect.Effect<S["Type"], TextGenerationError, S["DecodingServices"]>;
-
-/** The four text generation operations over an OpenCode prompt runner. */
-export function makeOpenCodeOperations(
-  runOpenCodeJson: OpenCodeJsonRunner,
-): TextGeneration.TextGeneration["Service"] {
-  const generateCommitMessage: TextGeneration.TextGeneration["Service"]["generateCommitMessage"] =
-    Effect.fn("OpenCodeTextGeneration.generateCommitMessage")(function* (input) {
-      const { prompt, outputSchema } = buildCommitMessagePrompt({
-        branch: input.branch,
-        stagedSummary: input.stagedSummary,
-        stagedPatch: input.stagedPatch,
-        includeBranch: input.includeBranch === true,
-        policy: input.policy,
-      });
-      const generated = yield* runOpenCodeJson({
-        operation: "generateCommitMessage",
-        cwd: input.cwd,
-        prompt,
-        outputSchemaJson: outputSchema,
-        modelSelection: input.modelSelection,
-      });
-
-      return {
-        subject: sanitizeCommitSubject(generated.subject),
-        body: generated.body.trim(),
-        ...("branch" in generated && typeof generated.branch === "string"
-          ? { branch: sanitizeFeatureBranchName(generated.branch) }
-          : {}),
-      };
-    });
-
-  const generatePrContent: TextGeneration.TextGeneration["Service"]["generatePrContent"] =
-    Effect.fn("OpenCodeTextGeneration.generatePrContent")(function* (input) {
-      const { prompt, outputSchema } = buildPrContentPrompt({
-        baseBranch: input.baseBranch,
-        headBranch: input.headBranch,
-        commitSummary: input.commitSummary,
-        diffSummary: input.diffSummary,
-        diffPatch: input.diffPatch,
-        policy: input.policy,
-        changeRequestTemplate: input.changeRequestTemplate,
-      });
-      const generated = yield* runOpenCodeJson({
-        operation: "generatePrContent",
-        cwd: input.cwd,
-        prompt,
-        outputSchemaJson: outputSchema,
-        modelSelection: input.modelSelection,
-      });
-
-      return {
-        title: sanitizePrTitle(generated.title),
-        body: generated.body.trim(),
-      };
-    });
-
-  const generateBranchName: TextGeneration.TextGeneration["Service"]["generateBranchName"] =
-    Effect.fn("OpenCodeTextGeneration.generateBranchName")(function* (input) {
-      const { prompt, outputSchema } = buildBranchNamePrompt({
-        message: input.message,
-        attachments: input.attachments,
-        naming: input.naming,
-      });
-      const generated = yield* runOpenCodeJson({
-        operation: "generateBranchName",
-        cwd: input.cwd,
-        prompt,
-        outputSchemaJson: outputSchema,
-        modelSelection: input.modelSelection,
-        attachments: input.attachments,
-      });
-
-      return {
-        branch: formatGeneratedBranchName(generated.branch, input.naming),
-      };
-    });
-
-  const generateThreadTitle: TextGeneration.TextGeneration["Service"]["generateThreadTitle"] =
-    Effect.fn("OpenCodeTextGeneration.generateThreadTitle")(function* (input) {
-      const { prompt, outputSchema } = buildThreadTitlePrompt({
-        message: input.message,
-        previousTitle: input.previousTitle,
-        linkedContext: input.linkedContext,
-        attachments: input.attachments,
-      });
-      const generated = yield* runOpenCodeJson({
-        operation: "generateThreadTitle",
-        cwd: input.cwd,
-        prompt,
-        outputSchemaJson: outputSchema,
-        modelSelection: input.modelSelection,
-        attachments: input.attachments,
-      });
-
-      return {
-        title: sanitizeThreadTitle(generated.title),
-        ...(generated.needsRefinement ? { needsRefinement: true } : {}),
-      };
-    });
 
   // The OpenCode session API carries no reasoning-effort or thinking-budget
   // parameter (the aux model selection is option-stripped by the caller), so
@@ -485,7 +336,7 @@ export function makeOpenCodeOperations(
         operation: "generateActivityLabel",
         cwd: input.cwd,
         prompt,
-        outputSchemaJson: outputSchema,
+        outputSchema,
         modelSelection: input.modelSelection,
       });
 
@@ -501,16 +352,13 @@ export function makeOpenCodeOperations(
       operation: "generateStructured",
       cwd: input.cwd,
       prompt: input.prompt,
-      outputSchemaJson: input.outputSchema,
+      outputSchema: input.outputSchema,
       modelSelection: input.modelSelection,
     });
 
   return {
-    generateCommitMessage,
-    generatePrContent,
-    generateBranchName,
-    generateThreadTitle,
+    ...TextGenerationOperations.fromRunner("OpenCodeTextGeneration", runOpenCodeJson),
     generateActivityLabel,
     generateStructured,
   } satisfies TextGeneration.TextGeneration["Service"];
-}
+});

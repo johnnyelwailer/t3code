@@ -12,12 +12,12 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it, vi } from "vite-plus/test";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { HttpBody, HttpClient, HttpRouter } from "effect/unstable/http";
+import { HttpBody, HttpClient, HttpRouter } from "effect/http";
 
 import type { OrchestrationProjectShell } from "@t3tools/contracts";
 
 import { ProjectStoreV2 } from "./orchestration-v2/ProjectStore.ts";
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import { layerMemory as SqlitePersistenceMemory } from "./persistence/Sqlite.ts";
 import { t3teamMyWorkDigestRouteLayer } from "./t3team-myworkDigest-routes.ts";
 import { digestArrangementKey, storeDigestArrangement } from "./t3team-myworkDigestArrangement.ts";
 import type { T3TeamMyWorkDigestInput } from "./t3team-myworkDigestTypes.ts";

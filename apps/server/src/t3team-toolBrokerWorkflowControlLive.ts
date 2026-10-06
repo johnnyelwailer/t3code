@@ -9,8 +9,8 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
-import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
+import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
+import { WorkflowSignalStore } from "./persistence/WorkflowSignalStore.ts";
 import { makeWorkflowControlToolHandlers } from "./t3team-toolBrokerWorkflowControlTool.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
 import { T3TeamWorkflowHost } from "./t3team-workflowHost.ts";

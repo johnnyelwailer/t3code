@@ -12,7 +12,7 @@
 import { CommandId, ProjectId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import { HttpRouter } from "effect/unstable/http";
+import { HttpRouter } from "effect/http";
 
 import * as ProjectService from "./project/ProjectService.ts";
 import {

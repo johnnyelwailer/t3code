@@ -5,7 +5,7 @@
  * the core looks the handler up (so capability gates, the author scope and results are identical).
  */
 import * as Effect from "effect/Effect";
-import type { McpProtocol } from "effect/unstable/ai";
+import type { McpProtocol } from "effect/ai";
 
 /** The replacement for a deprecated tool name; any other name is returned as-is. */
 export const resolveToolNameAlias = (

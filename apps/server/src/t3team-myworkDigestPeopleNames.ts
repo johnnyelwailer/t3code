@@ -7,7 +7,7 @@
  * dozen are in flight across all projects, and a person two projects share is asked once.
  */
 
-import { homedir } from "node:os";
+import * as NodeOS from "node:os";
 
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -30,7 +30,7 @@ const decodeProfile = Schema.decodeUnknownOption(
 function lookup(gh: GitHubCli.GitHubCli["Service"], host: string, login: string) {
   return gh
     .execute({
-      cwd: homedir(),
+      cwd: NodeOS.homedir(),
       args: ["api", `users/${login}`],
       env: { GH_HOST: host },
       rateLimitHost: host,

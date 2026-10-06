@@ -14,7 +14,7 @@
  */
 import * as Effect from "effect/Effect";
 import * as Scope from "effect/Scope";
-import type { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import type { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 export const CODEX_APP_SERVER_FORCE_KILL_AFTER = "2 seconds" as const;
 
