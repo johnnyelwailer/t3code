@@ -2,7 +2,7 @@
  * Runtime feature flag: project main repository — designate one linked repository as the
  * project's main repository (its checkout becomes the shared workspace and holds the state
  * dir), switch it with state migration, auto-detect it from linked clones, and default
- * `t3team.thread.start_child` worktree isolation to it.
+ * `delegate_task` worktree isolation to it.
  *
  * The server advertises the flag to clients through `ServerConfig.mainRepository`.
  *
