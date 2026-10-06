@@ -45,6 +45,8 @@ export type DigestReviewer = {
 export type DigestChangeRequest = {
   readonly id: string;
   readonly ticketId: string;
+  /** The PR host (github.com or a GHE install); absent means github.com. */
+  readonly host?: string;
   readonly repo: string;
   readonly number: number;
   readonly state:
@@ -88,6 +90,8 @@ export type DigestTransition = {
 
 export type DigestSprint = {
   readonly name: string;
+  /** Jira sprint state when the server knows it; `active` can still be past its end date. */
+  readonly state?: string;
   readonly goal: readonly string[];
   readonly startDate: string;
   readonly endDate: string;

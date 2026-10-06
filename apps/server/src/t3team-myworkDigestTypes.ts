@@ -77,6 +77,8 @@ export type T3TeamDigestChangeRequestState =
 
 export type T3TeamDigestChangeRequest = {
   readonly id: string;
+  /** The host `repo` lives on (github.com or a GitHub Enterprise install), so links can follow it. */
+  readonly host: string;
   readonly repo: string;
   readonly number: number;
   readonly state: T3TeamDigestChangeRequestState;
@@ -111,6 +113,8 @@ export type T3TeamDigestBurndown = {
 
 export type T3TeamDigestSprint = {
   readonly name: string;
+  /** Jira's sprint state (`active` / `closed` / `future`), so a stale `active` can be labelled. */
+  readonly state?: string;
   readonly goal?: string;
   readonly startDate?: string;
   readonly endDate?: string;

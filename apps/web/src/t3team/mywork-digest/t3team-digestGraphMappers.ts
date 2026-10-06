@@ -106,8 +106,11 @@ export function payloadToDigestGraph(input: {
     // view hides the sprint row entirely (the contract carries one sprint).
     if (sprint === undefined && data.sprint !== undefined) {
       const now = new Date().toISOString();
+      // Missing dates collapse to one instant (`start === end`); `digestSprintProgress` reads
+      // that as "unknown" and the header hides its progress row.
       sprint = {
         name: data.sprint.name,
+        ...(data.sprint.state !== undefined ? { state: data.sprint.state } : {}),
         goal: digestSprintGoals(data.sprint.goal),
         startDate: data.sprint.startDate ?? now,
         endDate: data.sprint.endDate ?? now,
@@ -179,6 +182,7 @@ export function payloadToDigestGraph(input: {
       changeRequests.push({
         id: pr.id,
         ticketId,
+        ...(pr.host !== undefined ? { host: pr.host } : {}),
         repo: pr.repo,
         number: pr.number,
         state: pr.state,
