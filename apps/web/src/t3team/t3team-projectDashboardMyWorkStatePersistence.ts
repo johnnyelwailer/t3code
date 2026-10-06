@@ -64,6 +64,11 @@ export function readPersistedProjectDashboardMyWorkState(
       persisted.hasCustomizedKanbanLanes = parsed.hasCustomizedKanbanLanes;
     }
 
+    const collapsedKanbanColumnIds = parsePersistedStringList(parsed.collapsedKanbanColumnIds);
+    if (collapsedKanbanColumnIds !== undefined) {
+      persisted.collapsedKanbanColumnIds = collapsedKanbanColumnIds;
+    }
+
     const excludedTypeKeys = parsePersistedStringList(parsed.excludedTypeKeys);
     if (excludedTypeKeys !== undefined) persisted.excludedTypeKeys = excludedTypeKeys;
 
@@ -200,6 +205,10 @@ export function areProjectDashboardMyWorkStatesEqual(
     left.hasCustomizedKanbanLanes === right.hasCustomizedKanbanLanes &&
     left.hiddenKanbanColumnIds.length === right.hiddenKanbanColumnIds.length &&
     left.hiddenKanbanColumnIds.every((key, index) => key === right.hiddenKanbanColumnIds[index]) &&
+    left.collapsedKanbanColumnIds.length === right.collapsedKanbanColumnIds.length &&
+    left.collapsedKanbanColumnIds.every(
+      (key, index) => key === right.collapsedKanbanColumnIds[index],
+    ) &&
     left.excludedTypeKeys.length === right.excludedTypeKeys.length &&
     left.excludedTypeKeys.every((key, index) => key === right.excludedTypeKeys[index]) &&
     left.selectedPriority === right.selectedPriority &&

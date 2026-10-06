@@ -2,7 +2,6 @@ import {
   MenuCheckboxItem,
   MenuGroup,
   MenuGroupLabel,
-  MenuItem,
   MenuRadioGroup,
   MenuRadioItem,
   MenuSeparator,
@@ -10,11 +9,20 @@ import {
   MenuSubPopup,
   MenuSubTrigger,
 } from "~/t3team/components/ui/t3team-menu";
+import { ProjectMyWorkOptionsMenuLanesSub } from "~/t3team/t3team-ProjectMyWorkOptionsMenuLanesSub";
+import { ProjectMyWorkOptionsMenuSortItems } from "~/t3team/t3team-ProjectMyWorkOptionsMenuSortItems";
 import type { ProjectMyWorkStatusCategory } from "~/t3team/t3team-projectMyWork";
 import type { ProjectMyWorkViewMode } from "~/t3team/t3team-projectDashboardMyWorkState";
+import { getProjectMyWorkLensOptions } from "~/t3team/t3team-projectMyWorkLensOptions";
 import type { ProjectMyWorkOptionsMenuProps } from "~/t3team/t3team-projectMyWorkOptionsMenuTypes";
 
+/**
+ * The view half of the options menu. Each control is gated on the active lens (see
+ * `getProjectMyWorkLensOptions`): status focus and "Hide epics" filter every lens, the rest only
+ * appear where they change what is on screen.
+ */
 export function ProjectMyWorkOptionsMenuViewSection({
+  lens,
   viewMode,
   onViewModeChange,
   groupMode,
@@ -32,6 +40,7 @@ export function ProjectMyWorkOptionsMenuViewSection({
   onTableSortDirectionChange,
 }: Pick<
   ProjectMyWorkOptionsMenuProps,
+  | "lens"
   | "viewMode"
   | "onViewModeChange"
   | "groupMode"
@@ -48,27 +57,28 @@ export function ProjectMyWorkOptionsMenuViewSection({
   | "tableSortDirection"
   | "onTableSortDirectionChange"
 >) {
+  const available = getProjectMyWorkLensOptions(lens);
   return (
     <>
       <MenuGroup>
         <MenuGroupLabel>View</MenuGroupLabel>
 
-        <MenuSub>
-          <MenuSubTrigger>Mode</MenuSubTrigger>
-          <MenuSubPopup className="min-w-56">
-            <MenuRadioGroup
-              value={viewMode}
-              onValueChange={(value) => onViewModeChange(value as ProjectMyWorkViewMode)}
-            >
-              <MenuRadioItem value="table">Table</MenuRadioItem>
-              <MenuRadioItem value="list">List</MenuRadioItem>
-              <MenuRadioItem value="grid">Cards</MenuRadioItem>
-              <MenuRadioItem value="kanban">Board</MenuRadioItem>
-            </MenuRadioGroup>
-          </MenuSubPopup>
-        </MenuSub>
+        {available.viewMode ? (
+          <MenuSub>
+            <MenuSubTrigger>Layout</MenuSubTrigger>
+            <MenuSubPopup className="min-w-56">
+              <MenuRadioGroup
+                value={viewMode === "grid" ? "grid" : "list"}
+                onValueChange={(value) => onViewModeChange(value as ProjectMyWorkViewMode)}
+              >
+                <MenuRadioItem value="list">List</MenuRadioItem>
+                <MenuRadioItem value="grid">Cards</MenuRadioItem>
+              </MenuRadioGroup>
+            </MenuSubPopup>
+          </MenuSub>
+        ) : null}
 
-        {viewMode !== "kanban" ? (
+        {available.grouping ? (
           <MenuSub>
             <MenuSubTrigger>Grouping</MenuSubTrigger>
             <MenuSubPopup className="min-w-56">
@@ -92,7 +102,10 @@ export function ProjectMyWorkOptionsMenuViewSection({
                 onStatusCategoryChange(value as ProjectMyWorkStatusCategory)
               }
             >
-              <MenuRadioItem value="all">All work</MenuRadioItem>
+              {/* The list lens hides Done until a status is asked for (shouldHideDoneWork). */}
+              <MenuRadioItem value="all">
+                {lens === "hierarchy" ? "Open work" : "All work"}
+              </MenuRadioItem>
               <MenuRadioItem value="active">Active</MenuRadioItem>
               <MenuRadioItem value="review">Review</MenuRadioItem>
               <MenuRadioItem value="done">Done</MenuRadioItem>
@@ -100,26 +113,14 @@ export function ProjectMyWorkOptionsMenuViewSection({
           </MenuSubPopup>
         </MenuSub>
 
-        <MenuSub>
-          <MenuSubTrigger>Sort items</MenuSubTrigger>
-          <MenuSubPopup className="min-w-56">
-            <MenuRadioGroup value={tableSortBy} onValueChange={onTableSortByChange}>
-              <MenuRadioItem value="updated">Last updated</MenuRadioItem>
-              <MenuRadioItem value="title">Title</MenuRadioItem>
-              <MenuRadioItem value="status">Status</MenuRadioItem>
-              <MenuRadioItem value="assignee">Owner</MenuRadioItem>
-            </MenuRadioGroup>
-          </MenuSubPopup>
-        </MenuSub>
-
-        <MenuItem
-          onClick={() => onTableSortDirectionChange(tableSortDirection === "asc" ? "desc" : "asc")}
-        >
-          Sort direction
-          <span className="ml-auto text-2xs text-muted-foreground">
-            {tableSortDirection === "asc" ? "Ascending" : "Descending"}
-          </span>
-        </MenuItem>
+        {available.sort ? (
+          <ProjectMyWorkOptionsMenuSortItems
+            tableSortBy={tableSortBy}
+            onTableSortByChange={onTableSortByChange}
+            tableSortDirection={tableSortDirection}
+            onTableSortDirectionChange={onTableSortDirectionChange}
+          />
+        ) : null}
       </MenuGroup>
 
       <MenuSeparator />
@@ -135,38 +136,14 @@ export function ProjectMyWorkOptionsMenuViewSection({
         </MenuCheckboxItem>
       </MenuGroup>
 
-      {viewMode === "kanban" ? (
+      {available.kanbanLanes ? (
         <>
           <MenuSeparator />
-
-          <MenuSub>
-            <MenuSubTrigger>Status lanes</MenuSubTrigger>
-            <MenuSubPopup className="min-w-60">
-              <MenuGroup>
-                <MenuGroupLabel>Visible lanes</MenuGroupLabel>
-                {kanbanLaneOptions.length > 0 ? (
-                  kanbanLaneOptions.map((option) => (
-                    <MenuCheckboxItem
-                      key={option.id}
-                      checked={!hiddenKanbanColumnIds.includes(option.id)}
-                      onCheckedChange={(checked) =>
-                        onKanbanLaneVisibilityChange(option.id, Boolean(checked))
-                      }
-                    >
-                      <span className="flex w-full items-center gap-2">
-                        <span>{option.title}</span>
-                        <span className="ml-auto text-2xs text-muted-foreground">
-                          {option.count}
-                        </span>
-                      </span>
-                    </MenuCheckboxItem>
-                  ))
-                ) : (
-                  <MenuItem disabled>No lanes available</MenuItem>
-                )}
-              </MenuGroup>
-            </MenuSubPopup>
-          </MenuSub>
+          <ProjectMyWorkOptionsMenuLanesSub
+            hiddenKanbanColumnIds={hiddenKanbanColumnIds}
+            onKanbanLaneVisibilityChange={onKanbanLaneVisibilityChange}
+            kanbanLaneOptions={kanbanLaneOptions}
+          />
         </>
       ) : null}
 

@@ -16,6 +16,7 @@ import {
 import { useAtlassianCurrentUserDisplayNameState } from "~/t3team/hooks/t3team-useAtlassianCurrentUserDisplayName";
 import { readProjectSetupProfileIdFromProject } from "~/t3team/hooks/t3team-createProjectBootstrap";
 import { useProjectMyWorkDerivedData } from "~/t3team/hooks/t3team-useProjectMyWorkDerivedData";
+import { useProjectKanbanColumnCollapse } from "~/t3team/hooks/t3team-useProjectKanbanColumnCollapse";
 import { useProjectKanbanBoardColumns } from "~/t3team/hooks/t3team-useProjectKanbanBoardColumns";
 import { useProjectMyWork } from "~/t3team/hooks/t3team-useProjectMyWork";
 import { type ProjectMyWorkStatusCategory } from "~/t3team/t3team-projectMyWork";
@@ -72,6 +73,7 @@ export function useProjectMyWorkState({
     tableSortDirection,
   } = state;
   const deferredQuery = useDeferredValue(query);
+  const columnCollapse = useProjectKanbanColumnCollapse({ state, setState });
   const updateState = useCallback(
     (partial: Partial<typeof state>) => {
       setState((current) => ({ ...current, ...partial }));
@@ -105,6 +107,7 @@ export function useProjectMyWorkState({
     boardColumns,
     availableStatuses,
     kanbanProfileId,
+    lens,
   });
   const loading = shouldShowProjectMyWorkLoadingState({
     resourcesLoading,
@@ -141,6 +144,7 @@ export function useProjectMyWorkState({
     setStatusCategory: (value: ProjectMyWorkStatusCategory) =>
       updateState({ statusCategory: value }),
     hiddenKanbanColumnIds: normalizedHiddenKanbanColumnIds,
+    columnCollapse,
     toggleKanbanLaneVisibility: (columnId: string, visible: boolean) =>
       setState((current) => ({
         ...current,
@@ -178,6 +182,7 @@ export function useProjectMyWorkState({
     setTableSortDirection: (value: ProjectMyWorkTableSortDirection) =>
       updateState({ tableSortDirection: value }),
     activeOptionsCount: countProjectMyWorkActiveOptions({
+      lens,
       statusCategory,
       selectedPriority,
       selectedStatus,

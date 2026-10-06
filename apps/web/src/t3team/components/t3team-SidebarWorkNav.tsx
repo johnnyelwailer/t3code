@@ -1,127 +1,64 @@
 /**
- * "My work" and "Backlog" as inline items of the sidebar's bottom utility row.
+ * "My work" as an inline item of the sidebar's bottom utility row.
  *
- * Both are always there. "My work" follows the sidebar's project scope: scoped → that project's
- * board, otherwise the cross-project view. A backlog is one project's hierarchy plus its own Jira
- * planning, so without a scope "Backlog" asks which project first instead of flattening several.
+ * It follows the sidebar's project scope: scoped → that project's board, otherwise the
+ * cross-project view. The Backlog is not here: it is a segment of the My work view switch (in the
+ * project's dashboard header, and in the all-projects view where it asks which project).
  */
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import { InboxIcon, ListTreeIcon } from "lucide-react";
-import { useCallback, useMemo, type ReactElement, type ReactNode } from "react";
+import { InboxIcon } from "lucide-react";
+import { useCallback } from "react";
 
 import { SidebarMenuButton, SidebarMenuItem, useSidebar } from "~/components/ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
-import { useProjectStore } from "~/t3team/hooks/t3team-useProjectStore";
-import {
-  Menu,
-  MenuGroup,
-  MenuGroupLabel,
-  MenuItem,
-  MenuPopup,
-  MenuTrigger,
-} from "~/t3team/components/ui/t3team-menu";
-import { selectBoundProjects } from "~/t3team/t3team-AllProjectsMyWorkView";
 import { readScopeFooterActiveEntry } from "~/t3team/t3team-scopeRouteSync.logic";
 import { useT3TeamSidebarProjectScope } from "~/t3team/t3team-sidebarProjectScopeStore";
 
-type ProjectView = "my-work" | "backlog";
-
-function WorkNavButton({
-  label,
-  icon,
-  isActive,
-  onClick,
-  render,
-}: {
-  label: string;
-  icon: ReactNode;
-  isActive: boolean;
-  onClick?: () => void;
-  render?: (button: ReactElement) => ReactElement;
-}) {
-  const button = (
-    <SidebarMenuButton aria-label={label} isActive={isActive} onClick={onClick} size="icon">
-      {icon}
-    </SidebarMenuButton>
-  );
-  return (
-    <SidebarMenuItem className="shrink-0">
-      <Tooltip>
-        <TooltipTrigger render={render ? render(button) : button} />
-        <TooltipPopup side="top">{label}</TooltipPopup>
-      </Tooltip>
-    </SidebarMenuItem>
-  );
-}
+const MY_WORK_LABEL = "My work";
 
 export function T3TeamSidebarWorkNavItems() {
   const navigate = useNavigate();
   const { isMobile, setOpenMobile } = useSidebar();
   const scopedProjectId = useT3TeamSidebarProjectScope((state) => state.scopedProjectId);
-  const { allProjects } = useProjectStore();
-  const backlogProjects = useMemo(() => selectBoundProjects(allProjects), [allProjects]);
   // A primitive selection, so only a change of board re-renders the row, not every navigation.
   const activeView = useLocation({
     select: (location) =>
       readScopeFooterActiveEntry(location.pathname, location.search as Record<string, unknown>),
   });
 
-  const openProjectView = useCallback(
-    (projectId: string, projectView: ProjectView) => {
-      if (isMobile) setOpenMobile(false);
+  const openMyWork = useCallback(() => {
+    if (isMobile) setOpenMobile(false);
+    if (scopedProjectId !== null) {
       void navigate({
         to: "/t3team/projects/$projectId",
-        params: { projectId },
-        search: { projectView },
+        params: { projectId: scopedProjectId },
+        search: { projectView: "my-work" },
       });
-    },
-    [isMobile, navigate, setOpenMobile],
-  );
-  const openMyWork = useCallback(() => {
-    if (scopedProjectId !== null) return openProjectView(scopedProjectId, "my-work");
-    if (isMobile) setOpenMobile(false);
+      return;
+    }
     void navigate({ to: "/t3team/my-work" });
-  }, [isMobile, navigate, openProjectView, scopedProjectId, setOpenMobile]);
+  }, [isMobile, navigate, scopedProjectId, setOpenMobile]);
+
+  // The Backlog is a segment of the My work view switch now, so both views light this item.
+  const isActive = activeView === "my-work" || activeView === "backlog";
 
   return (
-    <>
-      <WorkNavButton
-        label="My work"
-        icon={<InboxIcon />}
-        isActive={activeView === "my-work"}
-        onClick={openMyWork}
-      />
-      {scopedProjectId !== null ? (
-        <WorkNavButton
-          label="Backlog"
-          icon={<ListTreeIcon />}
-          isActive={activeView === "backlog"}
-          onClick={() => openProjectView(scopedProjectId, "backlog")}
+    <SidebarMenuItem className="shrink-0">
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <SidebarMenuButton
+              aria-label={MY_WORK_LABEL}
+              isActive={isActive}
+              onClick={openMyWork}
+              size="icon"
+            >
+              <InboxIcon />
+            </SidebarMenuButton>
+          }
         />
-      ) : (
-        <Menu>
-          <WorkNavButton
-            label="Backlog"
-            icon={<ListTreeIcon />}
-            isActive={activeView === "backlog"}
-            render={(button) => <MenuTrigger render={button} />}
-          />
-          <MenuPopup side="top" align="start" className="min-w-56">
-            <MenuGroup>
-              <MenuGroupLabel>Backlog of…</MenuGroupLabel>
-              {backlogProjects.length === 0 ? (
-                <MenuItem disabled>No project with a backlog yet</MenuItem>
-              ) : (
-                backlogProjects.map((project) => (
-                  <MenuItem key={project.id} onClick={() => openProjectView(project.id, "backlog")}>
-                    {project.title}
-                  </MenuItem>
-                ))
-              )}
-            </MenuGroup>
-          </MenuPopup>
-        </Menu>
-      )}
-    </>
+        <TooltipPopup side="top">{MY_WORK_LABEL}</TooltipPopup>
+      </Tooltip>
+    </SidebarMenuItem>
   );
 }

@@ -1,3 +1,4 @@
+import type { ProjectMyWorkLens } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
 import type {
   ProjectMyWorkTableSortBy,
   ProjectMyWorkTableSortDirection,
@@ -10,6 +11,7 @@ import type {
 } from "~/t3team/t3team-projectMyWork";
 
 export interface ProjectMyWorkOptionsMenuProps {
+  lens: ProjectMyWorkLens;
   activeOptionsCount: number;
   viewMode: ProjectMyWorkViewMode;
   onViewModeChange: (value: ProjectMyWorkViewMode) => void;

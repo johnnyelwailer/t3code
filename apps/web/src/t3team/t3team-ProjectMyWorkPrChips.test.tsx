@@ -76,7 +76,6 @@ function contentProps(lens: "hierarchy" | "board", viewMode: ContentProps["viewM
     filteredWorkItems: tickets,
     visibleHierarchy,
     lens,
-    onLensChange: () => {},
     viewMode,
     groupMode: "flat",
     tableSortBy: "updated",

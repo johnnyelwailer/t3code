@@ -5,6 +5,7 @@ import type {
   ProjectMyWorkStatusCategory,
 } from "~/t3team/t3team-projectMyWork";
 import type { ProjectMyWorkLoadStatus } from "~/t3team/t3team-projectMyWorkContentState";
+import type { ProjectMyWorkLens } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
 import type { ProjectDashboardMyWorkState } from "~/t3team/t3team-projectDashboardMyWorkState";
 import type { ProjectTicketKanbanBoardColumn } from "~/t3team/t3team-projectTicketStatus";
 import { matchesProjectTicketStatusCategory } from "~/t3team/t3team-projectTicketStatus";
@@ -125,7 +126,9 @@ export const PROJECT_MY_WORK_RESET_OPTIONS_PATCH: Partial<ProjectDashboardMyWork
   selectedStatus: "all",
 };
 
+/** Hidden lanes only exist on the board, so other lenses do not count them as an active option. */
 export function countProjectMyWorkActiveOptions(input: {
+  lens: ProjectMyWorkLens;
   statusCategory: ProjectMyWorkStatusCategory | "all";
   selectedPriority: string;
   selectedStatus: string;
@@ -137,7 +140,9 @@ export function countProjectMyWorkActiveOptions(input: {
     Number(input.statusCategory !== "all") +
     Number(input.selectedPriority !== "all") +
     Number(input.selectedStatus !== "all") +
-    (input.hasCustomizedKanbanLanes ? input.hiddenKanbanColumnIds.length : 0) +
+    (input.lens === "board" && input.hasCustomizedKanbanLanes
+      ? input.hiddenKanbanColumnIds.length
+      : 0) +
     input.excludedTypeKeys.length
   );
 }

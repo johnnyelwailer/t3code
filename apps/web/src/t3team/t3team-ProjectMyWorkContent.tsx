@@ -19,10 +19,8 @@ import {
 } from "~/t3team/t3team-projectMyWorkContentHelpers";
 import { ProjectMyWorkDigestContent } from "~/t3team/t3team-ProjectMyWorkDigestContent";
 import type { DigestFilterState } from "~/t3team/t3team-projectMyWorkDigestTypes";
-import {
-  ProjectMyWorkViewSwitch,
-  type ProjectMyWorkLens,
-} from "~/t3team/t3team-ProjectMyWorkViewSwitch";
+import type { ProjectMyWorkLens } from "~/t3team/t3team-ProjectMyWorkViewSwitch";
+import type { ProjectDashboardKanbanColumnCollapse } from "~/t3team/t3team-projectDashboardKanbanCollapse";
 import type {
   ProjectMyWorkTableSortBy,
   ProjectMyWorkTableSortDirection,
@@ -42,7 +40,6 @@ export function ProjectMyWorkContent({
   filteredWorkItems,
   visibleHierarchy,
   lens,
-  onLensChange,
   viewMode,
   groupMode,
   tableSortBy,
@@ -52,6 +49,7 @@ export function ProjectMyWorkContent({
   githubActivityByWorkItem,
   jiraLastCheckedAt,
   digestFilters,
+  columnCollapse,
   onTableSortByChange,
   onTableSortDirectionChange,
   onMoveTicketToStatus,
@@ -65,7 +63,6 @@ export function ProjectMyWorkContent({
   filteredWorkItems: readonly ProjectTicket[];
   visibleHierarchy: ProjectMyWorkVisibleHierarchy;
   lens: ProjectMyWorkLens;
-  onLensChange: (value: ProjectMyWorkLens) => void;
   viewMode: "table" | "list" | "grid" | "kanban";
   groupMode: "flat" | "hierarchy";
   tableSortBy: ProjectMyWorkTableSortBy;
@@ -75,6 +72,7 @@ export function ProjectMyWorkContent({
   githubActivityByWorkItem: ReadonlyMap<string, ReadonlyArray<GitHubWorkActivityItem>>;
   jiraLastCheckedAt?: number;
   digestFilters?: DigestFilterState | undefined;
+  columnCollapse?: ProjectDashboardKanbanColumnCollapse;
   onTableSortByChange: (value: ProjectMyWorkTableSortBy) => void;
   onTableSortDirectionChange: (value: ProjectMyWorkTableSortDirection) => void;
   onMoveTicketToStatus?: (ticket: ProjectTicket, targetStatus: string) => Promise<string>;
@@ -145,6 +143,7 @@ export function ProjectMyWorkContent({
           onOpenTicket={onOpenTicket}
           onTicketContextMenu={openTicketAgentContextMenu}
           renderTicketExtra={renderTicketExtra}
+          {...(columnCollapse ? { columnCollapse } : {})}
           {...(onMoveTicketToStatus ? { onMoveTicketToStatus } : {})}
         />
       );
@@ -175,6 +174,8 @@ export function ProjectMyWorkContent({
           hierarchy={visibleHierarchy.hierarchy}
           contextByTicketId={visibleHierarchy.contextByTicketId}
           matchedTicketIds={visibleHierarchy.matchedTicketIds}
+          sortBy={tableSortBy}
+          sortDirection={tableSortDirection}
           {...(jiraLastCheckedAt !== undefined ? { jiraLastCheckedAt } : {})}
           onTicketContextMenu={openTicketAgentContextMenu}
           getTicketAgentContext={getTicketAgentContext}
@@ -200,12 +201,5 @@ export function ProjectMyWorkContent({
     );
   };
 
-  return (
-    <div className="space-y-4">
-      <div>
-        <ProjectMyWorkViewSwitch lens={lens} onLensChange={onLensChange} />
-      </div>
-      {renderBody()}
-    </div>
-  );
+  return <div className="space-y-4">{renderBody()}</div>;
 }
