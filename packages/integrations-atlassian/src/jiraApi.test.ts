@@ -58,6 +58,23 @@ describe("JiraApiClient", () => {
     expect(asset.mimeType).toBe("image/svg+xml");
     const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
     expect(JSON.stringify(init.headers)).not.toContain("access-token");
+    // The asset route is unauthenticated: a redirect must not steer the server elsewhere.
+    expect(init.redirect).toBe("error");
+  });
+
+  it("does not treat a non-icon path on the OAuth site as a public asset", async () => {
+    globalThis.fetch = vi.fn() as unknown as typeof fetch;
+    const client = new JiraApiClient({
+      kind: "oauth",
+      cloudId: "cloud-123",
+      siteUrl: "https://test.atlassian.net",
+      accessToken: "access-token",
+    });
+
+    await expect(
+      client.downloadAsset("https://test.atlassian.net/secure/attachment/1/x.png"),
+    ).rejects.toThrow(/outside the authenticated origin/);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
   it("still refuses an OAuth asset on any origin other than the gateway or its own site", async () => {

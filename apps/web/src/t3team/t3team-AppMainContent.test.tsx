@@ -5,10 +5,10 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { AppMainContent } from "./t3team-AppMainContent";
 
 const useProjectWorkspaceAutoSyncMock = vi.fn();
-let projectSnapshotsReady = true;
+let shellsBootstrapped = true;
 
 vi.mock("~/state/entities", () => ({
-  useAllEnvironmentProjectSnapshotsReady: () => projectSnapshotsReady,
+  useAllEnvironmentShellsBootstrapped: () => shellsBootstrapped,
 }));
 
 vi.mock("~/t3team/t3team-projectMyWorkContentState", () => ({
@@ -90,7 +90,7 @@ const looseProjectThread = {
 describe("AppMainContent", () => {
   beforeEach(() => {
     useProjectWorkspaceAutoSyncMock.mockClear();
-    projectSnapshotsReady = true;
+    shellsBootstrapped = true;
   });
 
   const renderHome = () =>
@@ -118,12 +118,12 @@ describe("AppMainContent", () => {
       />,
     );
 
-  it("shows a loading state, not first-run setup, before the first project snapshot", () => {
-    projectSnapshotsReady = false;
+  it("shows a loading state, not first-run setup, before the environments have bootstrapped", () => {
+    shellsBootstrapped = false;
     expect(renderHome()).toContain("projects-loading");
   });
 
-  it("falls through to the home surface once the snapshot confirms there are no projects", () => {
+  it("falls through to the home surface once bootstrapping confirms there are no projects", () => {
     expect(renderHome()).not.toContain("projects-loading");
   });
 

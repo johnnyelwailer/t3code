@@ -74,7 +74,10 @@ export function DigestItemActions({ actions }: { actions: readonly DigestItemAct
   return (
     <div className="pointer-events-none mt-1.5 flex min-w-0 flex-wrap items-center justify-end gap-1.5 opacity-0 transition-opacity duration-150 ease-out group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 max-sm:pointer-events-auto max-sm:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100">
       {available.map((action) => (
-        <DigestActionPill key={action.label} action={action} />
+        <DigestActionPill
+          key={`${action.label}|${action.href ?? action.scope?.changeRequest.repo ?? ""}`}
+          action={action}
+        />
       ))}
     </div>
   );

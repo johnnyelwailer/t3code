@@ -17,7 +17,7 @@ import { useCallback, useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
 import { useNowMinute } from "~/hooks/useNowMinute";
-import { useAllEnvironmentProjectSnapshotsReady } from "~/state/entities";
+import { useAllEnvironmentShellsBootstrapped } from "~/state/entities";
 
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { JiraSessionExpiredPanel } from "~/t3team/components/t3team-JiraSessionExpiredPanel";
@@ -59,7 +59,7 @@ export function AllProjectsMyWorkView({
   const { allProjects } = useProjectStore();
   const { flags } = useT3TeamBetaFlags();
   const boundProjects = useMemo(() => selectBoundProjects(allProjects), [allProjects]);
-  const projectSnapshotsReady = useAllEnvironmentProjectSnapshotsReady();
+  const shellsBootstrapped = useAllEnvironmentShellsBootstrapped();
   const navigate = useNavigate();
   const openBacklog = useCallback(
     (projectId: string) =>
@@ -118,8 +118,8 @@ export function AllProjectsMyWorkView({
   }, [digestGraph, nowMs]);
 
   if (boundProjects.length === 0) {
-    // Before the first project snapshot "no projects" only means "not loaded yet".
-    if (!projectSnapshotsReady) {
+    // Until every environment has answered (or given up), "no projects" only means "not loaded yet".
+    if (!shellsBootstrapped) {
       return (
         <div className="flex w-full flex-col p-4 sm:p-6">
           <ProjectMyWorkLoadingState />

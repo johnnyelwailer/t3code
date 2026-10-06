@@ -153,12 +153,18 @@ export class JiraApiClient {
    * An OAuth client talks to `api.atlassian.com`, but Jira still hands out some asset URLs on the
    * site itself — the built-in issue-type icons (`<site>/images/icons/issuetypes/epic.svg`). The
    * bearer token is not valid there, and those files are public, so they are fetched without it.
-   * Only the connection's own site qualifies; the token never leaves the gateway.
+   * Only the connection's own site and its static `/images/` tree qualify, and redirects are
+   * refused (the asset route is unauthenticated, so a redirect must not steer the fetch elsewhere).
+   * The token never leaves the gateway.
    */
   private isOAuthSiteUrl(url: string): boolean {
     if (this.auth.kind !== "oauth" || !this.auth.siteUrl) return false;
     try {
-      return new URL(url).origin === new URL(this.auth.siteUrl).origin;
+      const parsed = new URL(url);
+      return (
+        parsed.origin === new URL(this.auth.siteUrl).origin &&
+        parsed.pathname.startsWith("/images/")
+      );
     } catch {
       return false;
     }
@@ -168,7 +174,7 @@ export class JiraApiClient {
     const path = new URL(url).pathname;
     let response: Response;
     try {
-      response = await fetchWithJiraTimeout(url, { headers: { Accept: "*/*" } });
+      response = await fetchWithJiraTimeout(url, { headers: { Accept: "*/*" }, redirect: "error" });
     } catch (cause) {
       throw new AtlassianNetworkError({ cause, path });
     }

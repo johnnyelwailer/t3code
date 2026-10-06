@@ -195,7 +195,8 @@ export function useMyWorkDigestGraph(input: UseMyWorkDigestGraphInput): UseMyWor
       intervalMs: ATLASSIAN_RESOURCES_POLL_INTERVAL_MS,
       maxAgeMs: ATLASSIAN_RESOURCES_CACHE_MAX_AGE_MS,
       getUpdatedAt: () => lastCheckedAtRef.current,
-      poll: () => loadRef.current(scope, entries),
+      // Same signature, but names can change underneath: send the latest entries each tick.
+      poll: () => loadRef.current(scope, entriesRef.current),
     });
     return () => {
       poller.dispose();
