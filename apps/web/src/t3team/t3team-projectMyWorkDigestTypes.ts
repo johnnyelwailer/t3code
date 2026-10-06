@@ -79,8 +79,27 @@ export type DigestReviewRequest = {
   readonly number: number;
   readonly title: string;
   readonly updatedAt: string;
+  /** Who opened it: the person waiting on the viewer. */
+  readonly author?: string;
   readonly workItemKey?: string;
   readonly ticketId?: string;
+};
+
+/**
+ * A person one of the viewer's tickets depends on, or who depends on it: their ticket `blocks`
+ * the viewer's (`you-wait-on`), the viewer's blocks theirs (`waits-on-you`), or it shares the
+ * story (`same-story`: the backend to the viewer's frontend).
+ */
+export type DigestDependency = {
+  readonly ticketId: string;
+  readonly relation: "waits-on-you" | "you-wait-on" | "same-story";
+  readonly other: {
+    readonly key: string;
+    readonly title: string;
+    readonly status: string;
+    readonly assignee?: string;
+    readonly url?: string;
+  };
 };
 
 /** A PR that gates a ticket: the ticket's action line reads "blocked by enabler PR repo#n". */
@@ -138,6 +157,7 @@ export type DigestGraph = {
   readonly changeRequests: readonly DigestChangeRequest[];
   /** Absent on graphs built before the review lane existed (fixtures, stories). */
   readonly reviewRequests?: readonly DigestReviewRequest[];
+  readonly dependencies?: readonly DigestDependency[];
   readonly transitions: readonly DigestTransition[];
   readonly blockers: readonly DigestBlocker[];
 };

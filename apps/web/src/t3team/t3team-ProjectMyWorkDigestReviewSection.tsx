@@ -66,7 +66,10 @@ export function DigestReviewSection({
                 <span className="truncate font-mono">
                   {review.repo}#{review.number}
                 </span>
-                <span>waiting {formatDigestAgo(nowMs, review.updatedAt)}</span>
+                <span className={review.author ? "text-warning" : undefined}>
+                  {review.author ? `${review.author} waiting` : "waiting"}{" "}
+                  {formatDigestAgo(nowMs, review.updatedAt)}
+                </span>
                 {review.workItemKey ? (
                   <span
                     role={review.ticketId ? "link" : undefined}

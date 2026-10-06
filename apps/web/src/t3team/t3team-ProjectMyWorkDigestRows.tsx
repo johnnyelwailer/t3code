@@ -12,6 +12,7 @@ import type { DigestClaim, DigestGraph } from "~/t3team/t3team-projectMyWorkDige
 import type { ProjectTicket } from "~/t3team/t3team-types";
 import { DigestAgentDots } from "~/t3team/t3team-ProjectMyWorkDigestAgentDots";
 import { DigestItemActions } from "~/t3team/t3team-ProjectMyWorkDigestActions";
+import { DigestDependencyLine } from "~/t3team/t3team-ProjectMyWorkDigestDependencies";
 import { DigestPeoplePills } from "~/t3team/t3team-ProjectMyWorkDigestPeople";
 import { DigestPrChips } from "~/t3team/t3team-ProjectMyWorkDigestPrChips";
 import { digestRepoLabeler } from "~/t3team/t3team-projectMyWorkDigestRepoLabels";
@@ -176,6 +177,7 @@ export function DigestItemRow({
         <DigestChips graph={graph} ticketId={ticket.id} nowMs={nowMs} claims={claims} />
         {hasPrs || action || why || !dots ? null : <span className="inline-flex">{dots}</span>}
       </div>
+      <DigestDependencyLine graph={graph} ticketId={ticket.id} />
       <DigestItemActions actions={actions} />
     </div>
   );
