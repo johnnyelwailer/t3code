@@ -153,7 +153,7 @@ export type ListRecentWorkflowRunsInput = typeof ListRecentWorkflowRunsInput.Typ
  * A global `ORDER BY updated_at LIMIT` hides a live row once enough other runs
  * move, so the guard queries this set by launch thread instead.
  */
-export const WORKFLOW_RUN_NON_TERMINAL_STATUSES = [
+const WORKFLOW_RUN_NON_TERMINAL_STATUSES = [
   "authoring",
   "queued",
   "running",

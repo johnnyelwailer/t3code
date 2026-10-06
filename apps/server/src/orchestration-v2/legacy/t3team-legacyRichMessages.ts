@@ -77,7 +77,7 @@ export function legacySystemRowArtifacts(
 }
 
 /** The artifact id a fork copy gets when its original id belongs to another thread. */
-export const legacyForkCopyArtifactId = (artifactId: string, threadId: string) =>
+const legacyForkCopyArtifactId = (artifactId: string, threadId: string) =>
   `${artifactId}@${threadId}`;
 
 const isDraftPayload = (payload: unknown): payload is DraftAttachment =>

@@ -12,7 +12,7 @@ export type ScopePillItem =
     };
 
 /** An add entry's name; the site host joins it only when more than one site is connected. */
-export function addEntryLabel(entry: JiraCatalogProject, multiSite: boolean): string {
+function addEntryLabel(entry: JiraCatalogProject, multiSite: boolean): string {
   return multiSite && entry.siteHost ? `${entry.title} (${entry.siteHost})` : entry.title;
 }
 
