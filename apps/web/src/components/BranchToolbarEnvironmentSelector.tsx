@@ -56,6 +56,12 @@ export interface BranchToolbarEnvironmentSelectorProps {
    */
   onCreateCloudSession?: () => void;
   /**
+   * t3team: a create is on its way to the server (resolving the machine, dispatching), which takes
+   * seconds before the session's own row exists; the create row shows it at once and stops a
+   * second click from starting a second machine.
+   */
+  cloudSessionCreatePending?: boolean;
+  /**
    * The project "New cloud session" starts for, when it lives on the environment sessions are
    * created on: the item then says which machine (devcontainer) the session will run in.
    */
@@ -93,6 +99,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   displayMode = "toolbar",
   pendingCloudSessions,
   onCreateCloudSession,
+  cloudSessionCreatePending = false,
   cloudSessionProject,
   onSetupCloudSessions,
   onCloudSessionAction,
@@ -391,13 +398,32 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                   must not provision a machine). */}
               <button
                 type="button"
+                disabled={cloudSessionCreatePending}
+                aria-busy={cloudSessionCreatePending}
                 onClick={() => onCreateCloudSession?.()}
-                className="flex w-full cursor-pointer items-start gap-1.5 rounded-sm px-2 py-1.5 text-foreground hover:bg-muted/40 sm:text-sm"
+                className={cn(
+                  "flex w-full items-start gap-1.5 rounded-sm px-2 py-1.5 text-foreground sm:text-sm",
+                  cloudSessionCreatePending
+                    ? "cursor-default text-muted-foreground"
+                    : "cursor-pointer hover:bg-muted",
+                )}
               >
-                <CloudIcon className="mt-0.5 size-3 shrink-0 self-start" aria-hidden="true" />
+                <CloudIcon
+                  className={cn(
+                    "mt-0.5 size-3 shrink-0 self-start",
+                    cloudSessionCreatePending && "animate-pulse",
+                  )}
+                  aria-hidden="true"
+                />
                 <span className="flex min-w-0 flex-col items-start text-left">
-                  <span>New cloud session</span>
-                  {cloudSessionProject ? (
+                  <span>
+                    {cloudSessionCreatePending ? "Requesting a machine…" : "New cloud session"}
+                  </span>
+                  {cloudSessionCreatePending ? (
+                    <span className="max-w-full truncate text-muted-foreground text-xs">
+                      Asking the fleet; this takes a few seconds
+                    </span>
+                  ) : cloudSessionProject ? (
                     <span className="max-w-full truncate text-muted-foreground text-xs">
                       <CloudSessionMachineHint {...cloudSessionProject} />
                     </span>
