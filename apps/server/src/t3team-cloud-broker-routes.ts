@@ -39,7 +39,9 @@ const sessionIdOf = (body: { readonly sessionId?: unknown }) => {
 
 /** The environment the client knows the session by, when it sent one (an opaque id). */
 const environmentIdOf = (body: { readonly environmentId?: unknown }) =>
-  typeof body.environmentId === "string" && /^[\w.:-]{1,128}$/.test(body.environmentId)
+  typeof body.environmentId === "string" &&
+  body.environmentId.trim() !== "" &&
+  body.environmentId.length <= 256
     ? body.environmentId
     : undefined;
 

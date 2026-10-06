@@ -317,7 +317,7 @@ describe("BranchToolbarEnvironmentSelector", () => {
     // A fresh machine registers its project seconds after connecting: still connecting.
     expect(liveContainer?.textContent).toContain("Connecting…");
     act(() => {
-      vi.advanceTimersByTime(30_000);
+      vi.advanceTimersByTime(60_000);
     });
     expect(liveContainer?.textContent).not.toContain("Connecting…");
     expect(liveContainer?.textContent).toContain("Doesn't have this project");
