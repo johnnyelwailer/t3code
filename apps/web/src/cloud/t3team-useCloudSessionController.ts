@@ -142,7 +142,7 @@ export function useCloudSessionController() {
   );
 
   const onSessionAction = useCallback(
-    (session: CloudSession, projectId?: ProjectId) => {
+    (session: CloudSession) => {
       if (session.phase === "ready") {
         beginConnect(session);
         return;
@@ -151,8 +151,7 @@ export function useCloudSessionController() {
         // "Start another": a fresh session at the remembered duration. The
         // record carries no requested hold (the runs API omits dispatch
         // inputs), so replaying the ended session's own is not possible.
-        // A machine session restarts in the machine of the caller's project.
-        onCreate(durationSeconds, session.projectMachine ? projectId : undefined);
+        onCreate(durationSeconds);
         return;
       }
       cancelRun(session, "cancel", "Cancelling that session…");
