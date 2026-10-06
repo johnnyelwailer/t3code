@@ -27,6 +27,7 @@ import type { ProjectTicket } from "~/t3team/t3team-types";
 
 import {
   buildTicketIndex,
+  digestReviewRequests,
   countUnhandledThreads,
   digestSprintGoals,
   oldestJiraSync,
@@ -191,6 +192,7 @@ export function payloadToDigestGraph(input: {
   });
 
   const jiraSyncedAt = oldestJiraSync(input.payload.projects);
+  const reviewRequests = digestReviewRequests(input.payload.projects, resolveTicketId);
   return {
     scope: input.payload.scope,
     projects,
@@ -202,6 +204,7 @@ export function payloadToDigestGraph(input: {
     claims,
     decisions,
     changeRequests,
+    reviewRequests,
     transitions,
     blockers,
   };

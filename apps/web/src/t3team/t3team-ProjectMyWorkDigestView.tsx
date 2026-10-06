@@ -1,5 +1,6 @@
 import { digestLaneLayout } from "~/t3team/t3team-projectMyWorkDigestLaneLayout";
 import { digestShownTicketIds } from "~/t3team/t3team-projectMyWorkDigestGroups";
+import { DigestReviewSection } from "~/t3team/t3team-ProjectMyWorkDigestReviewSection";
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import {
   FooterSection,
@@ -81,9 +82,13 @@ export function ProjectMyWorkDigestView({
         <div className={lanes.gridClassName}>
           {lanes.showSide ? (
             <div className="min-w-0 space-y-8">
-              {side.map((s) => (
-                <SideSection key={s.id} section={s} {...lane} />
-              ))}
+              {side.map((s) =>
+                s.kind === "reviews" ? (
+                  <DigestReviewSection key={s.id} section={s} {...lane} />
+                ) : (
+                  <SideSection key={s.id} section={s} {...lane} />
+                ),
+              )}
             </div>
           ) : null}
           {lanes.showMain ? (

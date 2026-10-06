@@ -39,12 +39,6 @@ export const DIGEST_BUCKETS: readonly DigestBucket[] = [
     accepts: (f) => f.includes("decision"),
   },
   {
-    id: "review",
-    heading: "Waiting for your review",
-    placement: "side",
-    accepts: (f) => f.includes("changeRequest"),
-  },
-  {
     id: "order",
     heading: "Priority",
     placement: "main",

@@ -98,6 +98,10 @@ export type MyWorkDigestPayload = {
         | "merged";
       readonly updatedAt: string;
       readonly workItemKey?: string;
+      readonly title?: string;
+      /** The viewer wrote it, or is asked to review it (host-wide search; absent on older servers). */
+      readonly viewerAuthored?: boolean;
+      readonly viewerReviewRequested?: boolean;
       /** Open PRs only, off the server's cached detail read. */
       readonly reviewers?: ReadonlyArray<{ readonly name: string; readonly login: string }>;
       readonly unhandledReviewThreads?: ReadonlyArray<{ readonly lastCommentAt?: string }>;

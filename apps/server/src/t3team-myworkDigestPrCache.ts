@@ -23,6 +23,7 @@ import * as Option from "effect/Option";
 
 import type { PullRequestService } from "./pullRequest/PullRequestService.ts";
 import { loadPrEntries, type PrReadResult } from "./t3team-myworkDigestPr.ts";
+import { loadViewerPrEntries } from "./t3team-myworkDigestViewerPrs.ts";
 
 /** How long a cold first read may hold the digest before it ships without change requests. */
 const DIGEST_PR_FIRST_READ_WAIT = Duration.millis(1_200);
@@ -31,10 +32,10 @@ const DIGEST_PR_FRESH_MS = 30_000;
 /** App projects whose last read is kept; the least recently read is dropped past this. */
 const MAX_CACHED_READS = 64;
 
-type CachedRead = { readonly read: PrReadResult | undefined; readonly atMs: number };
+type CachedRead = { readonly read: unknown; readonly atMs: number };
 
 const cachedReads = new Map<string, CachedRead>();
-const refreshes = new Map<string, Fiber.Fiber<PrReadResult | undefined>>();
+const refreshes = new Map<string, Fiber.Fiber<unknown>>();
 
 export type DigestPrRead = {
   readonly read: PrReadResult | undefined;
@@ -42,51 +43,62 @@ export type DigestPrRead = {
   readonly pending: boolean;
 };
 
-function startRefresh(appProjectId: string) {
+function startRefresh<A, R>(key: string, load: Effect.Effect<A, never, R>) {
   return Effect.gen(function* () {
-    const running = refreshes.get(appProjectId);
+    const running = refreshes.get(key) as Fiber.Fiber<A> | undefined;
     if (running !== undefined) return running;
     // Yield first so the fiber cannot finish (and run its cleanup) before it is registered.
     const fiber = yield* Effect.yieldNow.pipe(
-      Effect.andThen(loadPrEntries(appProjectId)),
+      Effect.andThen(load),
       Effect.tap((read) =>
-        Clock.currentTimeMillis.pipe(Effect.map((atMs) => rememberRead(appProjectId, read, atMs))),
+        Clock.currentTimeMillis.pipe(Effect.map((atMs) => rememberRead(key, read, atMs))),
       ),
-      Effect.ensuring(Effect.sync(() => refreshes.delete(appProjectId))),
+      Effect.ensuring(Effect.sync(() => refreshes.delete(key))),
       Effect.forkDetach,
     );
-    refreshes.set(appProjectId, fiber);
+    refreshes.set(key, fiber);
     return fiber;
   });
 }
 
-function rememberRead(appProjectId: string, read: PrReadResult | undefined, atMs: number) {
-  cachedReads.delete(appProjectId);
-  cachedReads.set(appProjectId, { read, atMs });
+function rememberRead(key: string, read: unknown, atMs: number) {
+  cachedReads.delete(key);
+  cachedReads.set(key, { read, atMs });
   const oldest = cachedReads.size > MAX_CACHED_READS ? cachedReads.keys().next().value : undefined;
   if (oldest !== undefined) cachedReads.delete(oldest);
+}
+
+/** Stale-while-revalidate for one keyed read; `fallback` is what a cold read ships meanwhile. */
+function readCached<A, R>(key: string, load: Effect.Effect<A, never, R>, fallback: A) {
+  return Effect.gen(function* () {
+    const nowMs = yield* Clock.currentTimeMillis;
+    const cached = cachedReads.get(key);
+    if (cached !== undefined) {
+      if (nowMs - cached.atMs >= DIGEST_PR_FRESH_MS) yield* startRefresh(key, load);
+      return { read: cached.read as A, pending: refreshes.has(key) };
+    }
+    const fiber = yield* startRefresh(key, load);
+    const landed = yield* Fiber.join(fiber).pipe(Effect.timeoutOption(DIGEST_PR_FIRST_READ_WAIT));
+    return Option.isSome(landed)
+      ? { read: landed.value, pending: false }
+      : { read: fallback, pending: true };
+  });
 }
 
 export function loadDigestPrEntries(
   appProjectId: string | undefined,
 ): Effect.Effect<DigestPrRead, never, PullRequestService> {
-  return Effect.gen(function* () {
-    if (appProjectId === undefined) return { read: undefined, pending: false };
-    const nowMs = yield* Clock.currentTimeMillis;
-    const cached = cachedReads.get(appProjectId);
-    if (cached !== undefined) {
-      if (nowMs - cached.atMs >= DIGEST_PR_FRESH_MS) yield* startRefresh(appProjectId);
-      return { read: cached.read, pending: refreshes.has(appProjectId) };
-    }
-    const fiber = yield* startRefresh(appProjectId);
-    const landed = yield* Fiber.join(fiber).pipe(Effect.timeoutOption(DIGEST_PR_FIRST_READ_WAIT));
-    return Option.isSome(landed)
-      ? { read: landed.value, pending: false }
-      : { read: undefined, pending: true };
-  });
+  if (appProjectId === undefined) return Effect.succeed({ read: undefined, pending: false });
+  return readCached(`project:${appProjectId}`, loadPrEntries(appProjectId), undefined);
 }
 
-/** Test-only: forget every cached read and running refresh. */
+/** The viewer's PRs across every signed-in host — one read shared by every project. */
+export function loadDigestViewerPrEntries() {
+  return readCached("viewer", loadViewerPrEntries(), [] as ViewerPrs);
+}
+
+type ViewerPrs = Effect.Success<ReturnType<typeof loadViewerPrEntries>>;
+
 export function resetDigestPrCacheForTests(): void {
   cachedReads.clear();
   refreshes.clear();

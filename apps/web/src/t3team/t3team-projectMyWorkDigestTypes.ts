@@ -63,6 +63,22 @@ export type DigestChangeRequest = {
   readonly updatedAt: string;
 };
 
+/**
+ * Someone else's PR waiting for the viewer's review — work they owe a colleague, not their own.
+ * `ticketId` is set when the PR names a ticket the digest holds; a colleague's ticket keeps just
+ * its key.
+ */
+export type DigestReviewRequest = {
+  readonly id: string;
+  readonly host?: string;
+  readonly repo: string;
+  readonly number: number;
+  readonly title: string;
+  readonly updatedAt: string;
+  readonly workItemKey?: string;
+  readonly ticketId?: string;
+};
+
 /** A PR that gates a ticket: the ticket's action line reads "blocked by enabler PR repo#n". */
 export type DigestBlocker = {
   readonly ticketId: string;
@@ -116,6 +132,8 @@ export type DigestGraph = {
   readonly claims: readonly DigestClaim[];
   readonly decisions: readonly DigestDecision[];
   readonly changeRequests: readonly DigestChangeRequest[];
+  /** Absent on graphs built before the review lane existed (fixtures, stories). */
+  readonly reviewRequests?: readonly DigestReviewRequest[];
   readonly transitions: readonly DigestTransition[];
   readonly blockers: readonly DigestBlocker[];
 };
@@ -126,9 +144,15 @@ export type DigestItemRef = { readonly ticketId: string; readonly why?: string }
 
 export type DigestPlacement = "side" | "main" | "footer";
 
+/**
+ * One block of the digest. `items` sections list tickets; `reviews` sections list the PRs in
+ * `reviewIds` (graph `reviewRequests` ids) — PRs, because a review owed is not one of the viewer's
+ * tickets. A plan from any producer (the heuristic, an agent) arranges these same kinds.
+ */
 export type DigestSection = {
   readonly id: string;
-  readonly kind: "items";
+  readonly kind: "items" | "reviews";
+  readonly reviewIds?: readonly string[];
   readonly placement: DigestPlacement;
   readonly heading: string;
   readonly hint?: string;

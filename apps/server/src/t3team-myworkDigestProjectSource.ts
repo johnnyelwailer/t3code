@@ -13,7 +13,8 @@ import { resolveDigestTicketRef } from "./t3team-myworkDigestAggregation.ts";
 import { loadDigestBurndownContext } from "./t3team-myworkDigestBurndownBackfill.ts";
 import { kickDigestMirrorSync, readDigestJiraSyncedAtMs } from "./t3team-myworkDigestFreshness.ts";
 import { toDigestPrEntries } from "./t3team-myworkDigestPr.ts";
-import { loadDigestPrEntries } from "./t3team-myworkDigestPrCache.ts";
+import { loadDigestPrEntries, loadDigestViewerPrEntries } from "./t3team-myworkDigestPrCache.ts";
+import { viewerPrsForProject } from "./t3team-myworkDigestViewerPrs.ts";
 import {
   readDigestEstimateUnit,
   type DigestThreadRow,
@@ -72,7 +73,9 @@ export function loadDigestProjectSource(
       ...identity,
       sinceMs: ctx.nowMs - DIGEST_TRANSITION_LOOKBACK_MS,
     });
-    const { read: prRead, pending } = yield* loadDigestPrEntries(appProjectId);
+    const { read: prRead, pending: projectPrsPending } = yield* loadDigestPrEntries(appProjectId);
+    const viewerPrs = yield* loadDigestViewerPrEntries();
+    const pending = projectPrsPending || viewerPrs.pending;
     const jiraSyncedAtMs = yield* readDigestJiraSyncedAtMs(project);
 
     // Burndown history: the sprint's backfilled changelog rows; when the
@@ -130,7 +133,11 @@ export function loadDigestProjectSource(
       })),
       claims,
       decisions,
-      prEntries: toDigestPrEntries(prRead),
+      prEntries: viewerPrsForProject({
+        viewerEntries: viewerPrs.read,
+        projectEntries: toDigestPrEntries(prRead),
+        ticketDisplayIds: tickets.map((ticket) => ticket.displayId),
+      }),
       transitions: transitions.map((row) => ({
         ticketRef: {
           issueId: row.issueId,

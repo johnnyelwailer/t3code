@@ -110,6 +110,9 @@ export function assembleMyWorkDigestChangeRequests(
       state: digestChangeRequestStateFromPr(entry),
       updatedAt: entry.updatedAt,
       ...(workItemKey !== undefined ? { workItemKey } : {}),
+      title: entry.title,
+      ...(entry.viewerAuthored !== undefined ? { viewerAuthored: entry.viewerAuthored } : {}),
+      ...(entry.viewerReviewRequested ? { viewerReviewRequested: true } : {}),
       ...(entry.reviewers !== undefined ? { reviewers: entry.reviewers } : {}),
       ...(entry.unhandledReviewThreads !== undefined
         ? { unhandledReviewThreads: entry.unhandledReviewThreads }

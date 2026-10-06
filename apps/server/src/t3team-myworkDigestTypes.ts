@@ -85,6 +85,10 @@ export type T3TeamDigestChangeRequest = {
   readonly updatedAt: string;
   /** The matched ticket's key, when the PR title/branch names one of this project's issues. */
   readonly workItemKey?: string;
+  readonly title?: string;
+  /** The viewer wrote it — theirs to move, as opposed to someone else's up for their review. */
+  readonly viewerAuthored?: boolean;
+  readonly viewerReviewRequested?: boolean;
   /** Open PRs only, off the cached detail/activity reads. */
   readonly reviewers?: ReadonlyArray<{ readonly name: string; readonly login: string }>;
   readonly unhandledReviewThreads?: ReadonlyArray<{ readonly lastCommentAt?: string }>;
@@ -177,6 +181,8 @@ export type T3TeamDigestProjectSource = {
     readonly isDraft: boolean;
     readonly updatedAt: string;
     readonly viewerReviewRequested: boolean;
+    /** The viewer wrote it; set by the host-wide search, absent on a repository listing. */
+    readonly viewerAuthored?: boolean;
     readonly reviewDecision?: string;
     readonly checksState?: string;
     /** Open PRs only, from the cached detail/activity reads. */
