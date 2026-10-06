@@ -12,7 +12,7 @@ import * as SqlClient from "effect/sql/SqlClient";
 
 import { ServerConfig } from "./config.ts";
 import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
-import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
+import { WorkflowRunRepository } from "./persistence/WorkflowRuns.ts";
 import { PullRequestService } from "./pullRequest/PullRequestService.ts";
 import { GitHubCli } from "./sourceControl/GitHubCli.ts";
 import { T3TeamChildThreadMetadata } from "./t3team-childThreadMetadata.ts";

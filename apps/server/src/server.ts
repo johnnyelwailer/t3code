@@ -630,7 +630,7 @@ const T3TeamToolBrokerLayerLive = T3TeamToolBrokerLive.pipe(
   // pull requests; they are in the runtime head, which the broker does not see (same references).
   Layer.provide(WorkflowRunRepositoryLive),
   Layer.provide(T3TeamChildThreadMetadataLive),
-  Layer.provide(PullRequestServiceLive),
+  Layer.provide(layerPullRequestService),
 );
 
 // Webhook URLs go through the relay only when the managed tunnel it forwards
