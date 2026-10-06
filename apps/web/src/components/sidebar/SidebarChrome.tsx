@@ -245,9 +245,8 @@ export const SidebarChromeFooter = memo(function SidebarChromeFooter() {
       <SidebarThreadUndoNotice />
       <SidebarProviderUpdatePill />
       <SidebarUpdateArchitectureWarning />
-      {/* The fork's t3team team-nav rows live inside SidebarUtilityMenu (top of
-          its render) so they stay visible on every route, matching the fork's
-          pre-extraction footer behavior. */}
+      {/* The fork's t3team work-nav items (My work, Backlog) sit inline in
+          SidebarUtilityMenu's icon row so they stay visible on every route. */}
       <SidebarUtilityMenu />
     </SidebarFooter>
   );

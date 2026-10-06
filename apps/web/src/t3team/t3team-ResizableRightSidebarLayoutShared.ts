@@ -73,7 +73,10 @@ export function useElementFitsWidth(minWidth: number) {
   const [node, setNode] = useState<HTMLDivElement | null>(null);
   const [fits, setFits] = useState(true);
   useLayoutEffect(() => {
-    if (!node || typeof ResizeObserver === "undefined") return;
+    if (!node) return;
+    // Measure on attach, before paint: a narrow pane must not flash the split for one frame.
+    setFits(node.getBoundingClientRect().width >= minWidth);
+    if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(([entry]) => {
       if (entry) setFits(entry.contentRect.width >= minWidth);
     });

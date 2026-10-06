@@ -83,10 +83,10 @@ export function ResizableRightSidebarLayout({
   );
 
   useEffect(() => {
-    if (showTabs) {
+    if (!isDesktop) {
       setMobilePanel(mobileDefaultPanel);
     }
-  }, [showTabs, mobileDefaultPanel]);
+  }, [isDesktop, mobileDefaultPanel]);
 
   const handleResizePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLButtonElement>) => {
