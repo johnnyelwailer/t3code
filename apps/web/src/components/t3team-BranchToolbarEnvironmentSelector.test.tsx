@@ -198,7 +198,7 @@ describe("BranchToolbarEnvironmentSelector", () => {
 
     const label = findCreateButton()?.textContent ?? "";
     expect(label).toContain("New cloud session");
-    expect(label).toContain("· 4h");
+    expect(label).toContain("Runs 4h");
   });
 
   it("wires menu open/close to the polling callback", () => {

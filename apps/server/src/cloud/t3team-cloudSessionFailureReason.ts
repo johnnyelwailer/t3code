@@ -51,6 +51,11 @@ export function cloudSessionFailureReason(
     if (steps.length > 0 && steps.every((candidate) => candidate.status === "pending")) {
       return NO_MACHINE;
     }
+    // Lost between steps: work finished up to a point and the rest never started.
+    const lastDone = steps.findLast((candidate) => candidate.status === "completed");
+    if (lastDone !== undefined && steps.some((candidate) => candidate.status === "pending")) {
+      return `The cloud machine stopped responding after “${lastDone.name}”. Start another to try again.`;
+    }
   }
   return (
     (run.conclusion === null ? undefined : CONCLUSION_REASONS[run.conclusion]) ?? GENERIC_FAILURE

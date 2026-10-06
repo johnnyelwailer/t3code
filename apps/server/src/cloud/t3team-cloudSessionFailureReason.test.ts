@@ -96,6 +96,18 @@ describe("cloudSessionFailureReason", () => {
     );
   });
 
+  it("says the machine stopped responding when it was lost between steps", () => {
+    const steps = [
+      { name: "Set up job", status: "completed", conclusion: "success" },
+      { name: "Checkout the t3code fork", status: "completed", conclusion: "success" },
+      { name: "Bring up the project machine", status: "pending", conclusion: null },
+    ];
+    assert.equal(
+      cloudSessionFailureReason(failedRun, steps),
+      "The cloud machine stopped responding after “Checkout the t3code fork”. Start another to try again.",
+    );
+  });
+
   it("says no machine became free when no step ever started", () => {
     const steps = [{ name: "Set up job", status: "pending", conclusion: null }];
     assert.equal(
