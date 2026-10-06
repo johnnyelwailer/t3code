@@ -13,7 +13,8 @@ import { resolveDigestTicketRef } from "./t3team-myworkDigestAggregation.ts";
 import { loadDigestBurndownContext } from "./t3team-myworkDigestBurndownBackfill.ts";
 import { kickDigestMirrorSync, readDigestJiraSyncedAtMs } from "./t3team-myworkDigestFreshness.ts";
 import { toDigestPrEntries } from "./t3team-myworkDigestPr.ts";
-import { loadDigestPrEntries } from "./t3team-myworkDigestPrCache.ts";
+import { loadDigestPrEntries, loadDigestViewerPrEntries } from "./t3team-myworkDigestPrCache.ts";
+import { viewerPrsForProject } from "./t3team-myworkDigestViewerPrs.ts";
 import {
   readDigestEstimateUnit,
   type DigestThreadRow,
@@ -26,6 +27,7 @@ import type {
   T3TeamDigestProjectSource,
   T3TeamMyWorkDigestProjectInput,
 } from "./t3team-myworkDigestTypes.ts";
+import { readDigestDependencies } from "./t3team-myworkDigestDependencies.ts";
 import { readDigestViewerTickets } from "./t3team-myworkDigestViewer.ts";
 
 const DIGEST_TRANSITION_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
@@ -72,8 +74,11 @@ export function loadDigestProjectSource(
       ...identity,
       sinceMs: ctx.nowMs - DIGEST_TRANSITION_LOOKBACK_MS,
     });
-    const { read: prRead, pending } = yield* loadDigestPrEntries(appProjectId);
+    const { read: prRead, pending: projectPrsPending } = yield* loadDigestPrEntries(appProjectId);
+    const viewerPrs = yield* loadDigestViewerPrEntries();
+    const pending = projectPrsPending || viewerPrs.pending;
     const jiraSyncedAtMs = yield* readDigestJiraSyncedAtMs(project);
+    const dependencies = yield* readDigestDependencies({ identity, assigned: viewer.assigned });
 
     // Burndown history: the sprint's backfilled changelog rows; when the
     // backfill has not run yet this round it is kicked in the background
@@ -130,7 +135,11 @@ export function loadDigestProjectSource(
       })),
       claims,
       decisions,
-      prEntries: toDigestPrEntries(prRead),
+      prEntries: viewerPrsForProject({
+        viewerEntries: viewerPrs.read,
+        projectEntries: toDigestPrEntries(prRead),
+        ticketDisplayIds: tickets.map((ticket) => ticket.displayId),
+      }),
       transitions: transitions.map((row) => ({
         ticketRef: {
           issueId: row.issueId,
@@ -147,6 +156,7 @@ export function loadDigestProjectSource(
       nowIso: ctx.nowIso,
       ...(prRead?.note !== undefined ? { changeRequestNote: prRead.note } : {}),
       ...(jiraSyncedAtMs !== undefined ? { jiraSyncedAt: millisToIso(jiraSyncedAtMs) } : {}),
+      ...(dependencies.length > 0 ? { dependencies } : {}),
     };
     return { source, viewerUnresolved: viewer.unresolved, changeRequestsPending: pending };
   });

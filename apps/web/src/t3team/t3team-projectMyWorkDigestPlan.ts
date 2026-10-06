@@ -6,6 +6,8 @@ export type {
   DigestDecision,
   DigestReviewer,
   DigestChangeRequest,
+  DigestReviewRequest,
+  DigestDependency,
   DigestBlocker,
   DigestItemAction,
   DigestTransition,
@@ -24,6 +26,7 @@ import type {
   DigestFacet,
   DigestGraph,
   DigestPlan,
+  DigestSection,
   ResolvedDigestPlan,
 } from "./t3team-projectMyWorkDigestTypes";
 
@@ -74,6 +77,23 @@ export function digestFacetsFor(
 
 import { DIGEST_BUCKETS } from "./t3team-projectMyWorkDigestBuckets";
 
+/** Reviews the viewer owes, ahead of their own work: someone is blocked on each of them. */
+function reviewSections(graph: DigestGraph): DigestSection[] {
+  const reviewIds = (graph.reviewRequests ?? []).map((review) => review.id);
+  if (reviewIds.length === 0) return [];
+  return [
+    {
+      id: "to-review",
+      kind: "reviews",
+      placement: "side",
+      heading: "To review",
+      hint: "other people's pull requests waiting for you",
+      items: [],
+      reviewIds,
+    },
+  ];
+}
+
 function byRecency(left: ProjectTicket, right: ProjectTicket): number {
   return Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
 }
@@ -104,7 +124,11 @@ export function buildHeuristicDigestPlan(
           : { ticketId: ticket.id };
       }),
   })).filter((section) => section.items.length > 0);
-  return { producer: "heuristic", producedAt: new Date(nowMs).toISOString(), sections };
+  return {
+    producer: "heuristic",
+    producedAt: new Date(nowMs).toISOString(),
+    sections: onlyTicketIds === undefined ? [...reviewSections(graph), ...sections] : sections,
+  };
 }
 
 export function resolveDigestPlan(
@@ -115,12 +139,18 @@ export function resolveDigestPlan(
   const live = new Set(graph.tickets.filter((t) => !isDigestTicketDone(t)).map((t) => t.id));
   const referenced = new Set(plan.sections.flatMap((s) => s.items.map((i) => i.ticketId)));
   const droppedTicketIds = [...referenced].filter((id) => !live.has(id));
+  const reviewIds = new Set((graph.reviewRequests ?? []).map((review) => review.id));
   const sections = plan.sections
     .map((section) => ({
       ...section,
       items: section.items.filter((item) => live.has(item.ticketId)),
+      ...(section.reviewIds !== undefined
+        ? { reviewIds: section.reviewIds.filter((id) => reviewIds.has(id)) }
+        : {}),
     }))
-    .filter((section) => section.items.length > 0);
+    .filter((section) =>
+      section.kind === "reviews" ? (section.reviewIds?.length ?? 0) > 0 : section.items.length > 0,
+    );
   const unseen = new Set(
     graph.tickets
       .filter((t) => live.has(t.id) && isMine(t, graph) && !referenced.has(t.id))

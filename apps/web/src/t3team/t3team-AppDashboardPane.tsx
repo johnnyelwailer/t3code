@@ -4,6 +4,7 @@ import type { ProjectShellProject } from "@t3tools/project-context";
 import type { ProjectKickoffThreadInput } from "~/t3team/t3team-kickoffTypes";
 import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeState";
 import { ProjectDashboardKickoffAside } from "~/t3team/t3team-ProjectDashboardKickoffAside";
+import { DigestPrAside } from "~/t3team/t3team-DigestPrAside";
 import { T3TeamDashboardRecipeActionProvider } from "~/t3team/t3team-dashboardRecipeActions";
 import { useProjectWorkspaceAutoSync } from "~/t3team/hooks/t3team-useProjectWorkspaceAutoSync";
 import { ResizableRightSidebarLayout } from "~/t3team/t3team-ResizableRightSidebarLayout";
@@ -81,38 +82,43 @@ export function AppDashboardPane({
             </div>
           }
           aside={
-            <ProjectDashboardKickoffAside
-              project={project}
-              dashboardMode={activeDashboardMode}
-              activeThread={activeThread}
-              providers={providers}
-              isConnected={isConnected}
-              onOpenThread={(threadId) => onOpenThread(project.id, threadId)}
-              onOpenFullThread={(threadId) => onOpenFullThread(project.id, threadId)}
-              onThreadKickoffConsumed={onThreadKickoffConsumed}
-              onKickoffThread={(
-                kickoffMessage,
-                kickoffPending,
-                kickoffModelSelection,
-                kickoffRuntimeMode,
-                kickoffInteractionMode,
-                selectedToolIds,
-                kickoffContextAttachments,
-                kickoffWorkflow,
-              ) => {
-                onKickoffProjectThread({
-                  projectId: project.id,
-                  dashboardMode: activeDashboardMode,
-                  kickoffMessage,
-                  ...(kickoffPending !== undefined ? { kickoffPending } : {}),
-                  kickoffModelSelection,
-                  kickoffRuntimeMode,
-                  kickoffInteractionMode,
-                  selectedToolIds,
-                  kickoffContextAttachments,
-                  ...(kickoffWorkflow ? { kickoffWorkflow } : {}),
-                });
-              }}
+            <DigestPrAside
+              projectId={project.id}
+              fallback={
+                <ProjectDashboardKickoffAside
+                  project={project}
+                  dashboardMode={activeDashboardMode}
+                  activeThread={activeThread}
+                  providers={providers}
+                  isConnected={isConnected}
+                  onOpenThread={(threadId) => onOpenThread(project.id, threadId)}
+                  onOpenFullThread={(threadId) => onOpenFullThread(project.id, threadId)}
+                  onThreadKickoffConsumed={onThreadKickoffConsumed}
+                  onKickoffThread={(
+                    kickoffMessage,
+                    kickoffPending,
+                    kickoffModelSelection,
+                    kickoffRuntimeMode,
+                    kickoffInteractionMode,
+                    selectedToolIds,
+                    kickoffContextAttachments,
+                    kickoffWorkflow,
+                  ) => {
+                    onKickoffProjectThread({
+                      projectId: project.id,
+                      dashboardMode: activeDashboardMode,
+                      kickoffMessage,
+                      ...(kickoffPending !== undefined ? { kickoffPending } : {}),
+                      kickoffModelSelection,
+                      kickoffRuntimeMode,
+                      kickoffInteractionMode,
+                      selectedToolIds,
+                      kickoffContextAttachments,
+                      ...(kickoffWorkflow ? { kickoffWorkflow } : {}),
+                    });
+                  }}
+                />
+              }
             />
           }
         />

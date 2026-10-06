@@ -10,6 +10,14 @@
 
 import type { BacklogResourceRef } from "./t3team-atlassian-backlog-cacheShared.ts";
 import type { T3TeamPollEnvelope } from "./t3team-integration-polling.ts";
+import type { T3TeamDigestChangeRequest } from "./t3team-myworkDigestTypesPrs.ts";
+import type { T3TeamDigestDependency } from "./t3team-myworkDigestDependencies.ts";
+
+export type {
+  T3TeamDigestChangeRequest,
+  T3TeamDigestChangeRequestState,
+} from "./t3team-myworkDigestTypesPrs.ts";
+export type { T3TeamDigestDependency } from "./t3team-myworkDigestDependencies.ts";
 
 export type T3TeamMyWorkDigestAccountRef = {
   readonly id: string;
@@ -65,31 +73,6 @@ export type T3TeamDigestDecision = {
   readonly askedAt: string;
 };
 
-/** Mirrors the web `DigestChangeRequest.state` union one-to-one. */
-export type T3TeamDigestChangeRequestState =
-  | "draft"
-  | "open"
-  | "needs-you"
-  | "changes-requested"
-  | "ci-failing"
-  | "approved"
-  | "merged";
-
-export type T3TeamDigestChangeRequest = {
-  readonly id: string;
-  /** The host `repo` lives on (github.com or a GitHub Enterprise install), so links can follow it. */
-  readonly host: string;
-  readonly repo: string;
-  readonly number: number;
-  readonly state: T3TeamDigestChangeRequestState;
-  readonly updatedAt: string;
-  /** The matched ticket's key, when the PR title/branch names one of this project's issues. */
-  readonly workItemKey?: string;
-  /** Open PRs only, off the cached detail/activity reads. */
-  readonly reviewers?: ReadonlyArray<{ readonly name: string; readonly login: string }>;
-  readonly unhandledReviewThreads?: ReadonlyArray<{ readonly lastCommentAt?: string }>;
-};
-
 export type T3TeamDigestTransition = {
   readonly ticketRef: T3TeamDigestTicketRef;
   readonly from: string;
@@ -134,6 +117,8 @@ export type T3TeamDigestProjectData = {
   readonly changeRequestNote?: string;
   /** When the project's Jira tickets last matched Jira (ISO); absent before any sync. */
   readonly jiraSyncedAt?: string;
+  /** Who the viewer's tickets hang together with (Jira links, same story). */
+  readonly dependencies?: ReadonlyArray<T3TeamDigestDependency>;
 };
 
 export type T3TeamMyWorkDigestPayload = {
@@ -177,6 +162,9 @@ export type T3TeamDigestProjectSource = {
     readonly isDraft: boolean;
     readonly updatedAt: string;
     readonly viewerReviewRequested: boolean;
+    /** The viewer wrote it; set by the host-wide search, absent on a repository listing. */
+    readonly viewerAuthored?: boolean;
+    readonly authorLogin?: string;
     readonly reviewDecision?: string;
     readonly checksState?: string;
     /** Open PRs only, from the cached detail/activity reads. */
@@ -206,6 +194,8 @@ export type T3TeamDigestProjectSource = {
   /** Set when the PR host could not be read this round; carried to the payload. */
   readonly changeRequestNote?: string;
   readonly jiraSyncedAt?: string;
+  /** Who the viewer's tickets hang together with (Jira links, same story). */
+  readonly dependencies?: ReadonlyArray<T3TeamDigestDependency>;
   /** The round's clock, so the burndown "today" and unhandled-comment cutoffs are deterministic. */
   readonly nowIso: string;
 };

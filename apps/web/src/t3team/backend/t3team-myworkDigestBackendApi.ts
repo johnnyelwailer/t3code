@@ -98,9 +98,26 @@ export type MyWorkDigestPayload = {
         | "merged";
       readonly updatedAt: string;
       readonly workItemKey?: string;
+      readonly title?: string;
+      /** The viewer wrote it, or is asked to review it (host-wide search; absent on older servers). */
+      readonly viewerAuthored?: boolean;
+      readonly viewerReviewRequested?: boolean;
+      readonly authorLogin?: string;
       /** Open PRs only, off the server's cached detail read. */
       readonly reviewers?: ReadonlyArray<{ readonly name: string; readonly login: string }>;
       readonly unhandledReviewThreads?: ReadonlyArray<{ readonly lastCommentAt?: string }>;
+    }>;
+    /** Who the viewer's tickets hang together with: Jira `blocks` links both ways, same story. */
+    readonly dependencies?: ReadonlyArray<{
+      readonly ticketKey: string;
+      readonly relation: "waits-on-you" | "you-wait-on" | "same-story";
+      readonly other: {
+        readonly key: string;
+        readonly title: string;
+        readonly status: string;
+        readonly assignee?: string;
+        readonly url?: string;
+      };
     }>;
     /** PRs that gate a ticket: Jira "is blocked by" links or PR body mentions. */
     readonly blockers?: ReadonlyArray<{

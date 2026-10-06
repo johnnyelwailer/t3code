@@ -14,10 +14,14 @@ import type {
   MyWorkDigestProjectInput,
 } from "~/t3team/backend/t3team-myworkDigestBackendApi";
 import { resourceRefToProjectTicket } from "~/t3team/t3team-ticketMappers";
+import {
+  digestDependencies,
+  digestReviewRequests,
+  digestTicketChangeRequests,
+} from "./t3team-digestGraphPrJoins";
 import type {
   DigestBlocker,
   DigestClaim,
-  DigestChangeRequest,
   DigestDecision,
   DigestGraph,
   DigestSprint,
@@ -27,7 +31,6 @@ import type { ProjectTicket } from "~/t3team/t3team-types";
 
 import {
   buildTicketIndex,
-  countUnhandledThreads,
   digestSprintGoals,
   oldestJiraSync,
   resolveIndexedTicketId,
@@ -108,7 +111,6 @@ export function payloadToDigestGraph(input: {
 
   const claims: DigestClaim[] = [];
   const decisions: DigestDecision[] = [];
-  const changeRequests: DigestChangeRequest[] = [];
   const blockers: DigestBlocker[] = [];
   const transitions: DigestTransition[] = [];
   let burndown: DigestGraph["burndown"];
@@ -138,25 +140,6 @@ export function payloadToDigestGraph(input: {
         // TODO(digest): requiredRole has no server source yet — empty for now.
         requiredRole: "",
         askedAt: decision.askedAt,
-      });
-    }
-    for (const pr of data.changeRequests) {
-      if (pr.workItemKey === undefined) continue;
-      const ticketId = resolveTicketId(position, { issueKey: pr.workItemKey });
-      if (ticketId === "") continue;
-      changeRequests.push({
-        id: pr.id,
-        ticketId,
-        ...(pr.host !== undefined ? { host: pr.host } : {}),
-        repo: pr.repo,
-        number: pr.number,
-        state: pr.state,
-        updatedAt: pr.updatedAt,
-        // TODO(digest-data): per-reviewer verdicts have no host source yet; PR-level only.
-        reviewers: pr.reviewers ?? [],
-        ...(pr.unhandledReviewThreads !== undefined
-          ? { unhandledComments: countUnhandledThreads(pr.unhandledReviewThreads, lastVisitMs) }
-          : {}),
       });
     }
     for (const blocker of data.blockers ?? []) {
@@ -191,6 +174,11 @@ export function payloadToDigestGraph(input: {
   });
 
   const jiraSyncedAt = oldestJiraSync(input.payload.projects);
+  const projectIdAt = (at: number) => projects[at]?.id ?? "";
+  const joins = [input.payload.projects, resolveTicketId] as const;
+  const changeRequests = digestTicketChangeRequests(...joins, projectIdAt, lastVisitMs);
+  const reviewRequests = digestReviewRequests(...joins, projectIdAt);
+  const dependencies = digestDependencies(...joins);
   return {
     scope: input.payload.scope,
     projects,
@@ -202,6 +190,8 @@ export function payloadToDigestGraph(input: {
     claims,
     decisions,
     changeRequests,
+    reviewRequests,
+    dependencies,
     transitions,
     blockers,
   };
