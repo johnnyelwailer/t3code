@@ -1,4 +1,4 @@
-import type { ScopedProjectRef } from "@t3tools/contracts";
+import type { CloudSession, ScopedProjectRef } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { type ComponentProps, useCallback, useMemo } from "react";
 
@@ -57,6 +57,10 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
     () => onCreate(durationSeconds, cloudSessionProject?.projectId),
     [cloudSessionProject, durationSeconds, onCreate],
   );
+  const onCloudSessionAction = useCallback(
+    (session: CloudSession) => onSessionAction(session, cloudSessionProject?.projectId),
+    [cloudSessionProject, onSessionAction],
+  );
   // Unconfigured: the entry leaves for the Connections settings, where provisioning lives.
   const onSetupCloudSessions = useCallback(() => {
     void navigate({ to: "/settings/connections" });
@@ -71,7 +75,7 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
               onCreateCloudSession,
               cloudSessionDurationLabel: formatHoldDuration(durationSeconds),
               ...(cloudSessionProject ? { cloudSessionProject } : {}),
-              onCloudSessionAction: onSessionAction,
+              onCloudSessionAction,
               onCloudMenuOpenChange,
             }
           : { onSetupCloudSessions },
@@ -81,8 +85,8 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
       configured,
       durationSeconds,
       onCloudMenuOpenChange,
+      onCloudSessionAction,
       onCreateCloudSession,
-      onSessionAction,
       onSetupCloudSessions,
       pendingCloudSessions,
     ],
