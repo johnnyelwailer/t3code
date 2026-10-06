@@ -697,8 +697,8 @@ export const BranchToolbar = memo(function BranchToolbar({
           ) : null}
           <MobileRunContextSelector
             forceNewWorktree={forceNewWorktree}
-            autoEnvironmentLabel={autoEnvironmentLabel}
-            onAutoEnvironment={onAutoEnvironment}
+            autoEnvironmentLabel={cloudSessions.available ? undefined : autoEnvironmentLabel}
+            onAutoEnvironment={cloudSessions.available ? undefined : onAutoEnvironment}
             envLocked={envLocked}
             envModeLocked={envModeLocked}
             environmentId={environmentId}

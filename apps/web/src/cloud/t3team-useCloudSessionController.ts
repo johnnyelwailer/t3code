@@ -22,6 +22,7 @@ import { useCloudSessionConnect } from "./t3team-useCloudSessionConnect";
 import { liveCloudSessionForEnvironment } from "./t3team-cloudSessionEnvironmentMatch";
 import { useCloudSessionDuration } from "./t3team-useCloudSessionDuration";
 import { reportCloudSessionCreateFailure } from "./t3team-cloudSessionFailure";
+import { useRetireEndedCloudSessionEnvironments } from "./t3team-useRetireEndedCloudSessionEnvironments";
 
 /**
  * Drives the cloud session surfaces (settings panel + "Run on" menu): create,
@@ -43,6 +44,7 @@ export function useCloudSessionController() {
   const [cloudMenuOpen, setCloudMenuOpen] = useState(false);
   const [panelVisible, setPanelVisible] = useState(false);
 
+  useRetireEndedCloudSessionEnvironments(serverSessions, loading);
   const sessions = useMemo(
     () => mergeLocalCloudSession(serverSessions, localSession),
     [serverSessions, localSession],
