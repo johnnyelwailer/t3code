@@ -22,6 +22,20 @@ const BrokerSession = Schema.Struct({
 });
 export type BrokerSession = typeof BrokerSession.Type;
 const SessionsResponse = Schema.Struct({ sessions: Schema.Array(BrokerSession) });
+const ClaimResponse = Schema.Struct({ sessionId: Schema.String });
+
+/** What a claimed standby becomes: the dispatch inputs of a cold project-machine session. */
+export interface StandbyClaim {
+  readonly poolKey: string;
+  readonly secrets: Readonly<Record<string, string>>;
+  readonly session: {
+    readonly workspace: string;
+    readonly repository: string;
+    readonly commit: string;
+    readonly devcontainer: string;
+    readonly healthCheck: string;
+  };
+}
 
 const failed = (message: string, status?: number) =>
   new CloudSessionFailedError({
@@ -73,6 +87,33 @@ export const makeNexiBrokerClient = Effect.fn("cloud.broker.client.make")(functi
       SessionsResponse,
       "the session list",
     ).pipe(Effect.map((body) => body.sessions)),
+    /**
+     * Hands this user a warm standby of the project (#562 option B). Null when the broker has none
+     * idle (404) — the caller then dispatches a session the cold way.
+     */
+    claimStandby: (claim: StandbyClaim) =>
+      Effect.gen(function* () {
+        const token = yield* accessToken;
+        const response = yield* http
+          .execute(
+            HttpClientRequest.post(`${config.url}/v1/sessions/claim`).pipe(
+              HttpClientRequest.bodyJsonUnsafe(claim),
+              HttpClientRequest.bearerToken(token),
+            ),
+          )
+          .pipe(Effect.mapError(() => failed("The Nexi broker could not be reached (a claim).")));
+        if (response.status === 404) return null;
+        if (response.status >= 400) {
+          return yield* failed(
+            `The Nexi broker refused a claim (HTTP ${response.status}).`,
+            response.status,
+          );
+        }
+        return yield* HttpClientResponse.schemaBodyJson(ClaimResponse)(response).pipe(
+          Effect.map((body) => body.sessionId),
+          Effect.mapError(() => failed("The Nexi broker answered a claim unexpectedly.")),
+        );
+      }),
     mintPairing: (runId: string) =>
       call(
         HttpClientRequest.post(`${config.url}/v1/sessions/${encodeURIComponent(runId)}/pairing`),

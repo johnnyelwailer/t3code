@@ -17,6 +17,7 @@ import * as VcsProcess from "../vcs/VcsProcess.ts";
 import * as GitHubCli from "../sourceControl/GitHubCli.ts";
 import * as CliTokenManager from "./CliTokenManager.ts";
 import * as ConnectCredentialMinter from "./t3team-ConnectCredentialMinter.ts";
+import type { StandbyClaim } from "./t3team-NexiBrokerClient.ts";
 import * as NexiBrokerService from "./t3team-NexiBrokerService.ts";
 import { ConnectCredentialMintError } from "./t3team-ConnectCredentialMintError.ts";
 import * as CloudSessionService from "./t3team-CloudSessionService.ts";
@@ -437,6 +438,8 @@ describe("CloudSessionService.create over the Nexi broker", () => {
       requestGrant,
       attach: () => Effect.die("unused"),
       pair: () => Effect.die("unused"),
+      claimStandby: () => Effect.succeed(null),
+      sessions: Effect.succeed([]),
     });
   const providersWith = (
     execute: ReturnType<typeof makeGithubMock>["execute"],
@@ -537,6 +540,51 @@ describe("CloudSessionService.create over the Nexi broker", () => {
         .map((call) => `${call.args.join(" ")} ${call.stdin ?? ""}`)
         .join("\n");
       assert.notInclude(everything, "ghp_never-an-input");
+    }),
+  );
+
+  it.effect("a warm standby of the project is claimed instead of dispatching a session", () =>
+    Effect.gen(function* () {
+      const { calls, execute } = makeGithubMock();
+      const claims: Array<StandbyClaim> = [];
+      const machines = Layer.mock(CloudSessionMachines)({
+        resolve: () =>
+          Effect.succeed({
+            repository: {
+              url: "https://nexplore.ghe.com/Acme/API.git",
+              host: "nexplore.ghe.com",
+              owner: "Acme",
+              name: "API",
+            },
+            commit: "b".repeat(40),
+            devcontainerPath: ".devcontainer/devcontainer.json",
+            healthCheck: null,
+            token: "ghp_claimed",
+            author: { name: "Pj", email: "pj@example.test" },
+          }),
+      });
+      const broker = Layer.succeed(NexiBrokerService.NexiBrokerService, {
+        enabled: true,
+        status: { enabled: true, accountId: "acme" },
+        requestGrant: () => Effect.die("a claimed session needs no grant"),
+        attach: () => Effect.die("unused"),
+        pair: () => Effect.die("unused"),
+        claimStandby: (claim) => Effect.sync(() => (claims.push(claim), "777")),
+        sessions: Effect.succeed([]),
+      });
+      const session = yield* create(providersWith(execute, broker, machines), ProjectId.make("p1"));
+      assert.equal(session.sessionId, "777");
+      assert.equal(session.phase, "preparing");
+      assert.equal(session.name, "API");
+      assert.deepEqual(
+        claims.map((c) => [c.poolKey, c.session.workspace, c.session.commit]),
+        [["acme.api", "m-pj.Acme.API_", "b".repeat(40)]],
+      );
+      assert.equal(claims[0]?.secrets.GIT_TOKEN, "ghp_claimed");
+      assert.isFalse(
+        calls.some((call) => call.args.join(" ").includes("/dispatches")),
+        "no dispatch",
+      );
     }),
   );
 
