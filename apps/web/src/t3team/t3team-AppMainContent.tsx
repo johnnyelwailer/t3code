@@ -12,7 +12,10 @@ import { AllProjectsMyWorkView } from "~/t3team/t3team-AllProjectsMyWorkView";
 import { AppDraftPane } from "~/t3team/t3team-AppDraftPane";
 import { AppThreadPane } from "~/t3team/t3team-AppThreadPane";
 import { useT3TeamScratchHomeChat } from "~/t3team/t3team-useScratchHomeChat";
-import { resolveWorkHomeProject } from "~/t3team/t3team-appMainContentResolution";
+import {
+  opensAllProjectsMyWorkHome,
+  resolveWorkHomeProject,
+} from "~/t3team/t3team-appMainContentResolution";
 import { resolveT3TeamSetupSurfaceReason } from "~/t3team/t3team-setupSurfaceReason";
 import { useAppMainContentThreadResolution } from "~/t3team/t3team-useAppMainContentThreadResolution";
 
@@ -128,6 +131,17 @@ export function AppMainContent({
           renderDashboard={renderDashboard}
         />
       );
+    }
+    // Startup lands on your work when there is any; the new conversation is one click away.
+    if (
+      opensAllProjectsMyWorkHome({
+        allProjects,
+        selectedProjectId,
+        showInitialSetup,
+        hasRouteView: false,
+      })
+    ) {
+      return <AllProjectsMyWorkView onOpenTicket={onOpenTicket} />;
     }
 
     return homeBrowser;
