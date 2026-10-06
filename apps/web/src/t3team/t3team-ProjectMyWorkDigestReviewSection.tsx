@@ -3,8 +3,13 @@ import type { MouseEvent } from "react";
 
 import { T3SurfacePanel } from "~/t3team/components/ui/t3team-surface";
 import { DigestKicker, formatDigestAgo } from "~/t3team/t3team-ProjectMyWorkDigestChips";
+import { DigestItemActions } from "~/t3team/t3team-ProjectMyWorkDigestActions";
 import { openDigestPullRequest } from "~/t3team/t3team-digestPrAsideStore";
-import { digestPrUrl, digestTitleWithoutKey } from "~/t3team/t3team-projectMyWorkDigestFacts";
+import {
+  digestPrUrl,
+  digestReviewActions,
+  digestTitleWithoutKey,
+} from "~/t3team/t3team-projectMyWorkDigestFacts";
 import type {
   DigestGraph,
   DigestPrPerson,
@@ -112,48 +117,48 @@ export function DigestReviewSection({
               number: review.number,
             });
           };
-          // The PR is the row's link; the ticket key sits beside it as its own button, never a
-          // link inside a link.
+          // The PR is the row's link; the ticket key and the next-step pills sit beside and below
+          // it as their own buttons, never a link inside a link.
           return (
-            <div
-              key={review.id}
-              className="flex min-w-0 items-start gap-2 px-3 py-2 hover:bg-accent/30"
-            >
-              <a
-                href={digestPrUrl(review)}
-                target="_blank"
-                rel="noreferrer"
-                onClick={openPullRequest}
-                className="block min-w-0 flex-1"
-              >
-                <p className="line-clamp-2 break-words text-sm font-medium leading-5">
-                  {digestTitleWithoutKey(review.title, review.workItemKey)}
-                </p>
-                <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                  {review.author ? <DigestPersonPill person={review.author} /> : null}
-                  <span>updated {formatDigestAgo(nowMs, review.updatedAt)} ago</span>
-                  <span className="truncate font-mono">
-                    {review.repo}#{review.number}
-                  </span>
-                  {review.additions !== undefined && review.deletions !== undefined ? (
-                    <span className="font-mono tabular-nums">
-                      <span className="text-success">+{review.additions}</span>{" "}
-                      <span className="text-destructive">−{review.deletions}</span>
-                    </span>
-                  ) : null}
-                </p>
-                <ReviewCoverage review={review} />
-              </a>
-              {review.workItemKey ? (
-                <button
-                  type="button"
-                  disabled={!review.ticketId}
-                  onClick={openTicket}
-                  className="shrink-0 font-mono text-xs text-muted-foreground enabled:text-foreground enabled:hover:underline"
+            <div key={review.id} className="group px-3 py-2 hover:bg-accent/30">
+              <div className="flex min-w-0 items-start gap-2">
+                <a
+                  href={digestPrUrl(review)}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={openPullRequest}
+                  className="block min-w-0 flex-1"
                 >
-                  {review.workItemKey}
-                </button>
-              ) : null}
+                  <p className="line-clamp-2 break-words text-sm font-medium leading-5">
+                    {digestTitleWithoutKey(review.title, review.workItemKey)}
+                  </p>
+                  <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                    {review.author ? <DigestPersonPill person={review.author} /> : null}
+                    <span>updated {formatDigestAgo(nowMs, review.updatedAt)} ago</span>
+                    <span className="truncate font-mono">
+                      {review.repo}#{review.number}
+                    </span>
+                    {review.additions !== undefined && review.deletions !== undefined ? (
+                      <span className="font-mono tabular-nums">
+                        <span className="text-success">+{review.additions}</span>{" "}
+                        <span className="text-destructive">−{review.deletions}</span>
+                      </span>
+                    ) : null}
+                  </p>
+                  <ReviewCoverage review={review} />
+                </a>
+                {review.workItemKey ? (
+                  <button
+                    type="button"
+                    disabled={!review.ticketId}
+                    onClick={openTicket}
+                    className="shrink-0 font-mono text-xs text-muted-foreground enabled:text-foreground enabled:hover:underline"
+                  >
+                    {review.workItemKey}
+                  </button>
+                ) : null}
+              </div>
+              <DigestItemActions actions={digestReviewActions(review)} />
             </div>
           );
         })}

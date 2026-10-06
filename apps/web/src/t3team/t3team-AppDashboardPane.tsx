@@ -6,6 +6,8 @@ import type { ProjectDashboardMode } from "~/t3team/t3team-projectDashboardModeS
 import { ProjectDashboardKickoffAside } from "~/t3team/t3team-ProjectDashboardKickoffAside";
 import { DigestPrAside } from "~/t3team/t3team-DigestPrAside";
 import { useDigestPrAsideStore } from "~/t3team/t3team-digestPrAsideStore";
+import { DigestRecipeCatalogProvider } from "~/t3team/t3team-digestRecipeCatalog";
+import { useDigestRecipeLaunchStore } from "~/t3team/t3team-digestRecipeLaunchStore";
 import { T3TeamDashboardRecipeActionProvider } from "~/t3team/t3team-dashboardRecipeActions";
 import { useProjectWorkspaceAutoSync } from "~/t3team/hooks/t3team-useProjectWorkspaceAutoSync";
 import { ResizableRightSidebarLayout } from "~/t3team/t3team-ResizableRightSidebarLayout";
@@ -62,71 +64,75 @@ export function AppDashboardPane({
     onRememberEmbeddedThread(activeThread.id);
   }, [activeThread, onRememberEmbeddedThread]);
 
-  // Opening a PR from the digest raises the drawer where the aside cannot sit beside the view.
+  // Opening a PR, or staging a recipe, from the digest raises the drawer where the aside cannot
+  // sit beside the view.
   const openedPullRequest = useDigestPrAsideStore((state) => state.pullRequest);
+  const recipeRequest = useDigestRecipeLaunchStore((state) => state.request);
 
   return (
     <T3TeamDashboardRecipeViewProvider>
       <T3TeamDashboardRecipeActionProvider>
-        <ResizableRightSidebarLayout
-          storageKey="t3team_dashboard_right_sidebar"
-          collapsedStorageKey={getProjectDashboardRightSidebarCollapsedStorageKey({
-            projectId: project.id,
-            dashboardMode: activeDashboardMode,
-            embeddedThreadId: activeThreadId,
-          })}
-          minAsideWidth={22 * 16}
-          defaultAsideWidth={24 * 16}
-          mobileDefaultPanel={activeThread ? "aside" : "main"}
-          mobileMainLabel={activeDashboardMode === "backlog" ? "Backlog" : "My work"}
-          mobileAsideLabel={openedPullRequest ? "Pull request" : activeThread ? "Chat" : "Agent"}
-          mobileAsideRequest={openedPullRequest}
-          main={
-            <div className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden">
-              {renderDashboard(project)}
-            </div>
-          }
-          aside={
-            <DigestPrAside
-              projectId={project.id}
-              fallback={
-                <ProjectDashboardKickoffAside
-                  project={project}
-                  dashboardMode={activeDashboardMode}
-                  activeThread={activeThread}
-                  providers={providers}
-                  isConnected={isConnected}
-                  onOpenThread={(threadId) => onOpenThread(project.id, threadId)}
-                  onOpenFullThread={(threadId) => onOpenFullThread(project.id, threadId)}
-                  onThreadKickoffConsumed={onThreadKickoffConsumed}
-                  onKickoffThread={(
-                    kickoffMessage,
-                    kickoffPending,
-                    kickoffModelSelection,
-                    kickoffRuntimeMode,
-                    kickoffInteractionMode,
-                    selectedToolIds,
-                    kickoffContextAttachments,
-                    kickoffWorkflow,
-                  ) => {
-                    onKickoffProjectThread({
-                      projectId: project.id,
-                      dashboardMode: activeDashboardMode,
+        <DigestRecipeCatalogProvider project={project} launchable={activeThread === null}>
+          <ResizableRightSidebarLayout
+            storageKey="t3team_dashboard_right_sidebar"
+            collapsedStorageKey={getProjectDashboardRightSidebarCollapsedStorageKey({
+              projectId: project.id,
+              dashboardMode: activeDashboardMode,
+              embeddedThreadId: activeThreadId,
+            })}
+            minAsideWidth={22 * 16}
+            defaultAsideWidth={24 * 16}
+            mobileDefaultPanel={activeThread ? "aside" : "main"}
+            mobileMainLabel={activeDashboardMode === "backlog" ? "Backlog" : "My work"}
+            mobileAsideLabel={openedPullRequest ? "Pull request" : activeThread ? "Chat" : "Agent"}
+            mobileAsideRequest={openedPullRequest ?? recipeRequest}
+            main={
+              <div className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden">
+                {renderDashboard(project)}
+              </div>
+            }
+            aside={
+              <DigestPrAside
+                projectId={project.id}
+                fallback={
+                  <ProjectDashboardKickoffAside
+                    project={project}
+                    dashboardMode={activeDashboardMode}
+                    activeThread={activeThread}
+                    providers={providers}
+                    isConnected={isConnected}
+                    onOpenThread={(threadId) => onOpenThread(project.id, threadId)}
+                    onOpenFullThread={(threadId) => onOpenFullThread(project.id, threadId)}
+                    onThreadKickoffConsumed={onThreadKickoffConsumed}
+                    onKickoffThread={(
                       kickoffMessage,
-                      ...(kickoffPending !== undefined ? { kickoffPending } : {}),
+                      kickoffPending,
                       kickoffModelSelection,
                       kickoffRuntimeMode,
                       kickoffInteractionMode,
                       selectedToolIds,
                       kickoffContextAttachments,
-                      ...(kickoffWorkflow ? { kickoffWorkflow } : {}),
-                    });
-                  }}
-                />
-              }
-            />
-          }
-        />
+                      kickoffWorkflow,
+                    ) => {
+                      onKickoffProjectThread({
+                        projectId: project.id,
+                        dashboardMode: activeDashboardMode,
+                        kickoffMessage,
+                        ...(kickoffPending !== undefined ? { kickoffPending } : {}),
+                        kickoffModelSelection,
+                        kickoffRuntimeMode,
+                        kickoffInteractionMode,
+                        selectedToolIds,
+                        kickoffContextAttachments,
+                        ...(kickoffWorkflow ? { kickoffWorkflow } : {}),
+                      });
+                    }}
+                  />
+                }
+              />
+            }
+          />
+        </DigestRecipeCatalogProvider>
       </T3TeamDashboardRecipeActionProvider>
     </T3TeamDashboardRecipeViewProvider>
   );

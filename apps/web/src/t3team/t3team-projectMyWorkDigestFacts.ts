@@ -4,7 +4,9 @@ import {
   type DigestGraph,
   type DigestItemAction,
   type DigestReviewer,
+  type DigestReviewRequest,
 } from "~/t3team/t3team-projectMyWorkDigestPlan";
+import { digestChangeRequestScope } from "~/t3team/t3team-digestRecipeAction";
 import { buildProjectTicketHierarchy } from "~/t3team/t3team-ticketHierarchy";
 
 const STALE_AFTER_MS = 3 * 24 * 60 * 60 * 1000;
@@ -81,7 +83,7 @@ export function digestActionLine(graph: DigestGraph, ticketId: string): DigestAc
 /**
  * The concrete next steps a digest item offers, derived from its state in the same priority
  * order as the action line. The first entry is primary (always visible); the rest reveal on
- * row hover. Links open threads/PRs; `recipe` entries would start a workflow instead.
+ * row hover. Links open threads/PRs; `recipe` entries stage that recipe, scoped to their PR.
  */
 export function digestItemActions(
   graph: DigestGraph,
@@ -106,26 +108,42 @@ export function digestItemActions(
     return actions;
   }
   const prs = digestPrsFor(graph, ticketId);
+  const ticket = graph.tickets.find((entry) => entry.id === ticketId);
+  const onPr = (label: string, recipe: string, pr: DigestChangeRequest): DigestItemAction => {
+    const scope = digestChangeRequestScope({
+      ...pr,
+      projectId: pr.projectId ?? ticket?.projectId,
+      ...(ticket ? { workItem: { key: ticket.ref.displayId, title: ticket.ref.title } } : {}),
+    });
+    return scope ? { label, recipe, scope } : { label, recipe };
+  };
   const reReview = prs.find((pr) => pr.state === "changes-requested");
   if (reReview) {
-    actions.push(
-      { label: "Handle comments", recipe: "handle-pr-comments" },
-      { label: "Open PR", href: digestPrUrl(reReview) },
-    );
+    actions.push(onPr("Handle comments", "pr-handle-comments", reReview), {
+      label: "Open PR",
+      href: digestPrUrl(reReview),
+    });
     return actions;
   }
   const yours = prs.find((pr) => pr.state === "needs-you");
   if (yours) {
-    actions.push({ label: "Review PR", href: digestPrUrl(yours) });
+    actions.push(
+      { label: "Review PR", href: digestPrUrl(yours) },
+      onPr("Review with agent", "pr-review", yours),
+    );
     return actions;
   }
   const failing = prs.find((pr) => pr.state === "ci-failing");
   if (failing) {
-    actions.push({ label: "View CI", href: digestPrUrl(failing) });
+    actions.push(
+      { label: "View CI", href: digestPrUrl(failing) },
+      onPr("Fix checks", "pr-fix-ci", failing),
+    );
     return actions;
   }
-  if (prs.some((pr) => (pr.unhandledComments ?? 0) > 0)) {
-    actions.push({ label: "Handle comments", recipe: "handle-pr-comments" });
+  const commented = prs.find((pr) => (pr.unhandledComments ?? 0) > 0);
+  if (commented) {
+    actions.push(onPr("Handle comments", "pr-handle-comments", commented));
     return actions;
   }
   const stale = graph.claims.some(
@@ -134,6 +152,15 @@ export function digestItemActions(
   );
   if (stale) actions.push({ label: "Nudge", recipe: "nudge-agent-thread" });
   return actions;
+}
+
+/** A review request's next step: hand the review to an agent, scoped to that PR. */
+export function digestReviewActions(review: DigestReviewRequest): readonly DigestItemAction[] {
+  const scope = digestChangeRequestScope({
+    ...review,
+    ...(review.workItemKey ? { workItem: { key: review.workItemKey } } : {}),
+  });
+  return scope ? [{ label: "Review with agent", recipe: "pr-review", scope }] : [];
 }
 
 /**
