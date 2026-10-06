@@ -62,7 +62,7 @@ export function DigestTicketAside({
           <Button
             size="icon-xs"
             variant="ghost"
-            onClick={ticket.openFullPage}
+            onClick={() => ticket.openFullPage?.(ticket.ticketId)}
             aria-label="Open full page"
             title="Open full page"
           >
@@ -90,7 +90,9 @@ export function DigestTicketAside({
           <XIcon className="size-3.5" />
         </Button>
       </div>
-      <div className="min-h-0 flex-1 overflow-hidden">
+      {/* A flex column, as on the ticket page: the detail layout's own scroll area fills it and
+          scrolls, instead of growing with its content and being clipped. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <WorkItemDetailMain
           {...buildWorkItemDetailMainProps({
             view,

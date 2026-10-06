@@ -44,9 +44,9 @@ export function ProjectMyWorkDigestContent({
       projectId: project.id,
       ticketId,
       // The page replaces the aside: coming back to the digest shows the default aside again.
-      openFullPage: () => {
+      openFullPage: (shownTicketId) => {
         closeDigestPullRequest();
-        onOpenTicket(project.id, ticketId);
+        onOpenTicket(project.id, shownTicketId);
       },
     });
   const projects = useMemo(() => [project], [project]);

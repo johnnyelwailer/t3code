@@ -9,8 +9,8 @@ import { create } from "zustand";
 export type DigestAsideTicket = {
   readonly projectId: string;
   readonly ticketId: string;
-  /** The full ticket page, for when the aside is not enough. */
-  readonly openFullPage?: () => void;
+  /** The full page of the ticket the aside shows now (it may have moved to a parent or child). */
+  readonly openFullPage?: (ticketId: string) => void;
 };
 
 type DigestPrAsideStore = {
