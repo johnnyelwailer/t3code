@@ -1,5 +1,5 @@
 /**
- * Pure half of `t3team_ask_user`: turns the tool input into one V2
+ * Pure half of `t3_ask_user`: turns the tool input into one V2
  * `OrchestrationV2UserInputQuestion` plus soft authoring warnings.
  *
  * V2 questions carry no separate context field, so the `context` markdown is
@@ -58,7 +58,7 @@ export const buildAskUserQuestion = (
   | { readonly error: string } => {
   const questionText = input.question.trim();
   if (questionText.length === 0) {
-    return { error: "t3team_ask_user requires a non-empty 'question'." };
+    return { error: "t3_ask_user requires a non-empty 'question'." };
   }
   const contextText = (input.context ?? "").trim();
   const options = normalizeAskUserOptions(input.options);

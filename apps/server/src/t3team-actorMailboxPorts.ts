@@ -4,7 +4,7 @@
  *
  * - `ThreadMailboxDelivery` — `t3_thread_send` mode "mailbox" (provided to
  *   `McpHttpServer.layer` in server.ts);
- * - `T3TeamMailboxDrainPort` — `t3team_children op:"drain"`: deliver the
+ * - `T3TeamMailboxDrainPort` — `t3_task_ops op:"drain"`: deliver the
  *   caller's own pending messages now, skipping the coalescing window
  *   (provided to the tool broker layer in server.ts).
  *

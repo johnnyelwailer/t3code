@@ -24,6 +24,6 @@ export function opUsage(op: T3TeamChildOp | string): string {
   if (usage !== undefined) return usage;
   const moved = T3TEAM_CHILD_REMOVED_OPS[op];
   return moved !== undefined
-    ? `op '${op}' was removed from t3team_children: ${moved}.`
+    ? `op '${op}' was removed from t3_task_ops: ${moved}.`
     : `Unknown op '${op}'. Valid ops: ${T3TEAM_CHILD_OPS.join(", ")}.`;
 }

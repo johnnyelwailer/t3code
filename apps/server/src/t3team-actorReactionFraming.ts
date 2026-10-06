@@ -2,7 +2,7 @@
  * Inter-agent digest FRAMING: the text of the ONE run a claimed mailbox
  * batch is delivered as (t3team-actorMailboxDelivery.ts). Sender, subject and
  * urgency per message; short bodies inlined, long bodies as subject plus a
- * `t3team_read_message` pointer; bursts folded (GHE #157).
+ * `t3_read_message` pointer; bursts folded (GHE #157).
  *
  * @module t3team-actorReactionFraming
  */
@@ -14,7 +14,7 @@ import { renderAutomatedBurstBlock, splitAutomatedBurst } from "./t3team-actorBu
  * The digest for a CLAIMED BATCH: one run per batch instead of one per
  * message. When a batch carries more than the fold threshold of non-urgent
  * entries, those are rendered as ONE compact list (one line each + a
- * `t3team_read_message` pointer); urgent entries keep their own full block.
+ * `t3_read_message` pointer); urgent entries keep their own full block.
  */
 export const buildActorReactionDigestInput = (
   entries: ReadonlyArray<T3TeamActorMailboxEntry>,

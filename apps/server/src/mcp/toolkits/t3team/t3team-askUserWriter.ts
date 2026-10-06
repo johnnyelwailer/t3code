@@ -1,5 +1,5 @@
 /**
- * Records a `t3team_ask_user` question as a V2 message-capability runtime
+ * Records a `t3_ask_user` question as a V2 message-capability runtime
  * request on the thread's active run (critic G14): a `user_input_request`
  * node under the run's root node, a pending `runtime-request` with
  * `responseCapability: {type: "message"}`, and a `user_input_request` turn
@@ -95,7 +95,7 @@ const make = Effect.gen(function* () {
       const { run, providerThread, providerTurn } =
         yield* projections.getRunningTurnContext(threadId);
       if (run === undefined || run.rootNodeId === null) {
-        return yield* fail("t3team_ask_user can only be called during an active turn.");
+        return yield* fail("t3_ask_user can only be called during an active turn.");
       }
       const rootNodeId = run.rootNodeId;
 

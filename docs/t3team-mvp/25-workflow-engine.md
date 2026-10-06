@@ -18,7 +18,7 @@ change, not a cleanup:
   `t3team.workflow.run` / `.status` / `.resume` resolve to `t3team.orchestration.*` before the
   permission gate (stored widget allowlists may carry them; they never appear in a catalog). The
   MCP tools `t3team_workflow_run` / `_status` / `_resume` were removed: each was a second full
-  tool definition in every agent's context. Agents and packs call `t3team_orchestration_*`.
+  tool definition in every agent's context. Agents and packs call `t3_orchestration_*` (formerly `t3team_orchestration_*`, now a deprecated alias).
 
 ## Purpose
 
