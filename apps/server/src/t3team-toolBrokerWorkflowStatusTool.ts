@@ -105,7 +105,7 @@ const toStatusResult = (row: WorkflowRun): WorkflowStatusToolResult => ({
 
 const notFoundHint = (runId: string) =>
   `No orchestration run found for runId '${runId}'. Omit runId to list the most recent runs, or ` +
-  "double-check the runId returned by t3team.orchestration.run.";
+  "double-check the runId returned by t3_orchestration_run.";
 
 /** Over-fetch factor for list mode: rows are filtered to the calling thread after the query. */
 const RECENT_RUNS_SCAN_LIMIT = 50;

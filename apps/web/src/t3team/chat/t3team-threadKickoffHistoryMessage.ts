@@ -26,7 +26,7 @@ export function buildThreadKickoffHistoryMessage(input: {
     text: trimmedMessage,
     createdAt: input.createdAt,
     updatedAt: input.createdAt,
-    turnId: null,
+    runId: null,
     streaming: false,
   };
 }

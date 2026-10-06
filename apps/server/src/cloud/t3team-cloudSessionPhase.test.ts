@@ -4,6 +4,7 @@ import {
   cloudSessionDurationSeconds,
   cloudSessionElapsedSeconds,
   deriveCloudSessionPhase,
+  deriveMachineStage,
 } from "./t3team-cloudSessionPhase.ts";
 import type { WorkflowJobStep, WorkflowRunSummary } from "./t3team-githubActionsSessionClient.ts";
 
@@ -207,6 +208,37 @@ describe("deriveCloudSessionPhase", () => {
       { name: "Totally different step", status: "in_progress", conclusion: null },
     ];
     expect(deriveCloudSessionPhase(run(), renamed)).toBe("preparing");
+  });
+});
+
+describe("deriveMachineStage", () => {
+  const machineSteps = (reachedNames: ReadonlyArray<string>): readonly WorkflowJobStep[] =>
+    [
+      "Checkout the t3code fork",
+      "Redeem the session's secrets from the broker",
+      "Bring up the project machine",
+      "Check the project machine's health",
+      "Install the prebuilt server bundle (fast path)",
+      "Install dependencies and build the fork (source fallback)",
+    ].map((name) =>
+      reachedNames.includes(name)
+        ? { name, status: "in_progress", conclusion: null }
+        : { name, status: "pending", conclusion: null },
+    );
+
+  it("names the machine milestone, most advanced first", () => {
+    expect(deriveMachineStage(machineSteps(["Checkout the t3code fork"]))).toBeUndefined();
+    expect(deriveMachineStage(machineSteps(["Bring up the project machine"]))).toBe("building");
+    expect(deriveMachineStage(machineSteps(["Check the project machine's health"]))).toBe(
+      "checking",
+    );
+    expect(
+      deriveMachineStage(machineSteps(["Install the prebuilt server bundle (fast path)"])),
+    ).toBe("installing");
+  });
+
+  it("knows nothing from unreadable steps", () => {
+    expect(deriveMachineStage(null)).toBeUndefined();
   });
 });
 

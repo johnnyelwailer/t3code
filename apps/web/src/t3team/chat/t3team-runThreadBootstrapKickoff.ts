@@ -1,4 +1,12 @@
-import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
+import {
+  MessageId,
+  ProjectId,
+  ThreadId,
+  withT3TeamMessageExtContext,
+  type ModelSelection,
+  type ProviderInteractionMode,
+  type RuntimeMode,
+} from "@t3tools/contracts";
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { isDuplicateThreadCreateError } from "~/t3team/chat/t3team-duplicateThreadCreateError";
@@ -170,16 +178,17 @@ export async function runThreadBootstrapKickoff(input: RunThreadBootstrapKickoff
     return;
   }
 
-  await input.backend.dispatchCommand({
-    type: "thread.turn.start",
-    commandId: randomUUID() as any,
-    threadId: input.threadId as any,
+  const messageContext = t3teamMessageExt
+    ? withT3TeamMessageExtContext(t3teamMessageExt)
+    : undefined;
+  await input.backend.orchestration.startThreadTurn({
+    threadId: ThreadId.make(input.threadId),
     message: {
-      messageId: randomUUID() as any,
+      messageId: MessageId.make(randomUUID()),
       role: "user",
       text: bootstrapMessage,
       attachments: [],
-      ...(t3teamMessageExt ? { t3teamExt: t3teamMessageExt } : {}),
+      ...(messageContext ? { context: messageContext } : {}),
     },
     modelSelection: input.kickoffModelSelection,
     titleSeed: input.title,
@@ -187,7 +196,7 @@ export async function runThreadBootstrapKickoff(input: RunThreadBootstrapKickoff
     interactionMode: input.kickoffInteractionMode,
     bootstrap: {
       createThread: {
-        projectId: input.canonicalProjectId as any,
+        projectId: ProjectId.make(input.canonicalProjectId),
         title: input.title,
         modelSelection: input.kickoffModelSelection,
         runtimeMode: input.kickoffRuntimeMode,
@@ -197,7 +206,6 @@ export async function runThreadBootstrapKickoff(input: RunThreadBootstrapKickoff
         createdAt: input.createdAt,
       },
     },
-    createdAt: input.createdAt,
   });
   finalizeThreadBootstrapKickoff({
     environmentId: input.environmentId,

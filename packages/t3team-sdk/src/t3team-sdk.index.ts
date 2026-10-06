@@ -5,7 +5,6 @@ export { asNamedAttachments, renderAgentAttachments } from "./t3team-sdk.askAtta
 export { appendResolvedEntry, createHostBroker, createMockBroker } from "./t3team-sdk.broker.ts";
 export type { HandleDispatch } from "@runbook/core/handles";
 export { createThreadPrimitives } from "./t3team-sdk.threadPrimitives.ts";
-export { builtinTools } from "./t3team-sdk.builtins.ts";
 export { hashArgs } from "./t3team-sdk.canonicalJson.ts";
 export {
   createDurableWorkflowRuntime,
@@ -203,7 +202,6 @@ export type {
   MockBroker,
   MockBrokerOutcome,
 } from "./t3team-sdk.broker.ts";
-export type { BuiltinToolsTree } from "./t3team-sdk.builtins.ts";
 export type {
   AbortedResult,
   DurableWorkflowRuntime,

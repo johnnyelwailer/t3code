@@ -1,123 +1,156 @@
 /**
- * Host-side guarantee for the hidden author thread.
+ * Host-side guarantee for the hidden author thread, on orchestration V2's runtime-request path.
  *
- * A `request.opened` for that thread is settled here and never becomes an activity
- * the user can answer. The thread is the author session registry, the same record
- * the broker uses to treat `t3team.orchestration.run` as a submission.
+ * A pending runtime request raised on that thread is settled here, inside the run's provider
+ * event stream (`RunExecutionService`), BEFORE it is ingested — so it never becomes a pending
+ * request a user or another agent (`t3_pending_request_respond`) could answer. The thread is
+ * recognized by the author session registry, the same record the broker uses to treat
+ * `t3team.orchestration.run` as a submission, or by its deterministic `<runId>:author` id (a
+ * restart loses the registry, never the id).
  *
- * The decision is the tool's identity, not the request type. Claude's `canUseTool`
- * (`ClaudeAdapter.ts`, method `canUseTool/request`) puts the SDK tool name on
- * `payload.args.toolName`. That name is `mcp__<server>__<tool>` and the server key
- * registered for this host is `t3-code` (`ClaudeAdapter.ts` `mcpServers`). Codex's
- * `item/tool/call` (`CodexAdapter.ts`) puts `DynamicToolCallParams.tool` on
- * `payload.args.tool`, with an optional `namespace`. Cursor's
- * `session/request_permission` (`CursorAdapter.ts`) stores the ACP request as
- * `payload.args`; the protocol's tool call has no id field, so the name is
- * `toolCall.title`. Each of those strings is accepted only when it is an exact key
- * of `T3TEAM_MCP_CANONICAL_TOOL_MAP` (or that key after the Claude server prefix,
- * or a deprecated alias of such a key) and the mapped broker id is one of
- * `WORKFLOW_AUTHOR_TOOL_IDS`. Shell, file, and every other tool are declined.
+ * The decision fails closed. A request is accepted only when it is provably the author's own host
+ * tool:
+ *  - Codex asks for an MCP tool call through an elicitation; V2 keys a form elicitation as
+ *    `mcp-elicitation:<server>`, so only the `t3-code` server's is accepted.
+ *  - Any other approval is accepted only when the stream already carried the tool call as a
+ *    `dynamic_tool` item with the request's native id, whose tool name is exactly an author tool
+ *    (its MCP name, optionally behind the Claude `mcp__t3-code__` prefix, or the broker id). An ACP terminal call whose title names an author tool is a
+ *    `command_execution` item, never `dynamic_tool`, so the title cannot spoof the gate.
+ * Commands, file reads and changes, web fetches and every other tool are declined. Questions
+ * (`user_input`) and auth refreshes are not approvals and are left to the normal path.
+ *
+ * Claude pre-approves the `t3-code` MCP tools (`claudeMcpQueryOverrides`), so its author never
+ * asks for them; what those tools may DO for the author is bounded separately by
+ * `t3team-workflowAuthorMcpScope.ts`.
  */
-import { ApprovalRequestId, type ProviderRuntimeEvent, type ThreadId } from "@t3tools/contracts";
-import * as Effect from "effect/Effect";
+import type {
+  OrchestrationV2RuntimeRequest,
+  OrchestrationV2TurnItem,
+  ProviderApprovalDecision,
+} from "@t3tools/contracts";
 
-import {
-  T3TEAM_MCP_CANONICAL_TOOL_MAP,
-  T3TEAM_MCP_DEPRECATED_TOOL_ALIASES,
-} from "./mcp/toolkits/t3team/tools.ts";
-import type { ProviderServiceError } from "./provider/Errors.ts";
+import { isWorkflowAuthorThread } from "./t3team-workflowAuthorSession.ts";
 import { WORKFLOW_AUTHOR_TOOL_IDS } from "./t3team-workflowAuthorTurn.ts";
-import { workflowAuthorSessionForThread } from "./t3team-workflowAuthorSession.ts";
 
 /** MCP server key every in-repo driver registers for the host toolkit. */
 const T3_MCP_SERVER_NAME = "t3-code";
-/** Claude SDK tool name for that server: `mcp__` + server key + `__` + MCP tool name. */
-const CLAUDE_T3_TOOL_PREFIX = `mcp__${T3_MCP_SERVER_NAME}__`;
+/** SDK-side names for that server's tools; harnesses may normalize the dash. */
+const T3_TOOL_PREFIXES = [`mcp__${T3_MCP_SERVER_NAME}__`, "mcp__t3_code__"] as const;
+const T3_ELICITATION_NATIVE_ID = `mcp-elicitation:${T3_MCP_SERVER_NAME}`;
 
-const MCP_BROKER_ID: Readonly<Record<string, string>> = T3TEAM_MCP_CANONICAL_TOOL_MAP;
-const MCP_ALIAS: Readonly<Record<string, string>> = T3TEAM_MCP_DEPRECATED_TOOL_ALIASES;
+/**
+ * MCP name → broker id for the author's tools, the same pairs as `T3TEAM_MCP_CANONICAL_TOOL_MAP`
+ * (a test pins the parity). Local so the run's event stream does not import the MCP toolkit.
+ */
+export const WORKFLOW_AUTHOR_MCP_TOOL_NAMES: Readonly<Record<string, string>> = {
+  t3_recipe_validate: "t3team.recipe.validate",
+  t3_orchestration_run: "t3team.orchestration.run",
+  // Old names (t3team-mcpToolAliases.ts) are dispatch aliases: calls for them reach the same broker tools.
+  t3team_recipe_validate: "t3team.recipe.validate",
+  t3team_orchestration_run: "t3team.orchestration.run",
+};
 const AUTHOR_BROKER_IDS: ReadonlySet<string> = new Set(WORKFLOW_AUTHOR_TOOL_IDS);
-/** ACP `ToolKind`s that run commands, change files or reach the network. */
-const ACP_NON_AUTHOR_TOOL_KINDS: ReadonlySet<string> = new Set([
-  "execute",
-  "edit",
-  "delete",
-  "move",
-  "fetch",
+
+/** Request kinds that are approvals. Anything else is not this gate's to answer. */
+const APPROVAL_KINDS: ReadonlySet<OrchestrationV2RuntimeRequest["kind"]> = new Set([
+  "command",
+  "file-read",
+  "file-change",
+  "mcp-elicitation",
+  "permission",
+  "dynamic_tool_call",
 ]);
 
-const brokerIdForMcpName = (mcpName: string): string | undefined => {
-  const canonicalName = MCP_ALIAS[mcpName] ?? mcpName;
-  return MCP_BROKER_ID[canonicalName];
-};
-
-/** Exact map lookup. The Claude prefix is stripped once; the remainder must be a map key. */
-const brokerIdForProviderToolName = (toolName: string): string | undefined => {
-  const direct = brokerIdForMcpName(toolName);
-  if (direct !== undefined) return direct;
-  if (AUTHOR_BROKER_IDS.has(toolName)) return toolName;
-  if (!toolName.startsWith(CLAUDE_T3_TOOL_PREFIX)) return undefined;
-  return brokerIdForMcpName(toolName.slice(CLAUDE_T3_TOOL_PREFIX.length));
-};
-
-const isAuthorToolName = (toolName: string | undefined): boolean => {
-  if (toolName === undefined) return false;
-  const brokerId = brokerIdForProviderToolName(toolName);
+/** Exact lookup: one known prefix stripped at most once; the remainder must be a map key. */
+export const isWorkflowAuthorToolName = (toolName: string | null | undefined): boolean => {
+  if (toolName === null || toolName === undefined) return false;
+  if (AUTHOR_BROKER_IDS.has(toolName)) return true;
+  const prefix = T3_TOOL_PREFIXES.find((candidate) => toolName.startsWith(candidate));
+  const mcpName = prefix === undefined ? toolName : toolName.slice(prefix.length);
+  const brokerId = WORKFLOW_AUTHOR_MCP_TOOL_NAMES[mcpName];
   return brokerId !== undefined && AUTHOR_BROKER_IDS.has(brokerId);
 };
 
-const readString = (value: unknown): string | undefined =>
-  typeof value === "string" && value.length > 0 ? value : undefined;
+/** The decision for one author-thread request; `undefined` = not an approval, leave it alone. */
+export function decideWorkflowAuthorRequest(
+  request: OrchestrationV2RuntimeRequest,
+  toolItem: OrchestrationV2TurnItem | undefined,
+): ProviderApprovalDecision | undefined {
+  if (!APPROVAL_KINDS.has(request.kind)) return undefined;
+  if (request.kind === "mcp-elicitation") {
+    return request.nativeRequestRef?.nativeId === T3_ELICITATION_NATIVE_ID ? "accept" : "decline";
+  }
+  if (request.kind === "file-read" || request.kind === "file-change") return "decline";
+  // ACP leaves `toolName` null and names the tool in the title; the item TYPE is what rules out
+  // a command, so a title is trusted only on a `dynamic_tool` item.
+  return toolItem?.type === "dynamic_tool" &&
+    isWorkflowAuthorToolName(toolItem.toolName ?? toolItem.title)
+    ? "accept"
+    : "decline";
+}
 
-const readRecord = (value: unknown): Readonly<Record<string, unknown>> | undefined =>
-  value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Readonly<Record<string, unknown>>)
-    : undefined;
-
-const authorOwnsOpenedRequest = (
-  event: Extract<ProviderRuntimeEvent, { readonly type: "request.opened" }>,
-): boolean => {
-  const method = event.raw?.method;
-  const args = readRecord(event.payload.args);
-  if (method === undefined || args === undefined) return false;
-  if (method === "canUseTool/request") return isAuthorToolName(readString(args.toolName));
-  if (method === "item/tool/call") {
-    const namespace = args.namespace;
-    if (namespace !== undefined && namespace !== null && namespace !== T3_MCP_SERVER_NAME) {
-      return false;
+/** The slice of a V2 provider event this gate reads. */
+export type WorkflowAuthorGateEvent =
+  | { readonly type: "turn_item.updated"; readonly turnItem: OrchestrationV2TurnItem }
+  | {
+      readonly type: "runtime_request.updated";
+      readonly threadId?: string | undefined;
+      readonly runtimeRequest: OrchestrationV2RuntimeRequest;
     }
-    return isAuthorToolName(readString(args.tool));
-  }
-  if (method === "session/request_permission") {
-    // The ACP title is CLI-generated and may carry command text, so a matching title is not
-    // enough: a call the protocol classifies as exec/write/network is never the author's tool.
-    const toolCall = readRecord(args.toolCall);
-    const kind = readString(toolCall?.kind);
-    if (kind !== undefined && ACP_NON_AUTHOR_TOOL_KINDS.has(kind)) return false;
-    return isAuthorToolName(readString(toolCall?.title));
-  }
-  return false;
-};
+  | { readonly type: string };
 
-export const settleAuthorThreadApproval = (input: {
-  readonly threadId: ThreadId;
-  readonly requestId: ApprovalRequestId | undefined;
-  readonly event: Extract<ProviderRuntimeEvent, { readonly type: "request.opened" }>;
-  readonly respondToRequest: (request: {
-    readonly threadId: ThreadId;
-    readonly requestId: ApprovalRequestId;
-    readonly decision: "accept" | "decline";
-  }) => Effect.Effect<void, ProviderServiceError>;
-}): Effect.Effect<boolean, ProviderServiceError> => {
-  if (workflowAuthorSessionForThread(String(input.threadId)) === undefined) {
-    return Effect.succeed(false);
-  }
-  if (input.requestId === undefined) return Effect.succeed(true);
-  return input
-    .respondToRequest({
-      threadId: input.threadId,
-      requestId: input.requestId,
-      decision: authorOwnsOpenedRequest(input.event) ? "accept" : "decline",
-    })
-    .pipe(Effect.as(true));
-};
+export interface WorkflowAuthorApprovalGate {
+  /**
+   * Observe one provider event of a run on `runThreadId`. Returns the response to send when the
+   * event is a pending author-thread approval (the caller answers it and does NOT ingest it).
+   */
+  readonly observe: (
+    event: WorkflowAuthorGateEvent,
+    runThreadId: string,
+  ) =>
+    | {
+        readonly requestId: OrchestrationV2RuntimeRequest["id"];
+        readonly decision: ProviderApprovalDecision;
+      }
+    | undefined;
+}
+
+/**
+ * One gate per run stream: it remembers the author run's tool items by native id. Fail closed on
+ * both identity and evidence: the run is gated when EITHER its thread or the event's thread is an
+ * author thread, and a native id that ever carried a non-`dynamic_tool` item (a command, a file
+ * change) can never be accepted, whatever later item reuses it.
+ */
+export function makeWorkflowAuthorApprovalGate(): WorkflowAuthorApprovalGate {
+  const toolItems = new Map<string, OrchestrationV2TurnItem>();
+  const tainted = new Set<string>();
+  const isAuthor = (runThreadId: string, eventThreadId: string | undefined) =>
+    isWorkflowAuthorThread(runThreadId) ||
+    (eventThreadId !== undefined && isWorkflowAuthorThread(eventThreadId));
+  return {
+    observe: (event, runThreadId) => {
+      if (event.type === "turn_item.updated" && "turnItem" in event) {
+        const item = event.turnItem;
+        const nativeId = item.nativeItemRef?.nativeId;
+        if (nativeId === undefined || nativeId === null) return undefined;
+        if (!isAuthor(runThreadId, item.threadId)) return undefined;
+        if (item.type !== "dynamic_tool") tainted.add(nativeId);
+        toolItems.set(nativeId, item);
+        return undefined;
+      }
+      if (event.type !== "runtime_request.updated" || !("runtimeRequest" in event)) {
+        return undefined;
+      }
+      const request = event.runtimeRequest;
+      if (request.status !== "pending") return undefined;
+      if (!isAuthor(runThreadId, event.threadId)) return undefined;
+      const nativeId = request.nativeRequestRef?.nativeId;
+      const toolItem =
+        nativeId === undefined || nativeId === null || tainted.has(nativeId)
+          ? undefined
+          : toolItems.get(nativeId);
+      const decision = decideWorkflowAuthorRequest(request, toolItem);
+      return decision === undefined ? undefined : { requestId: request.id, decision };
+    },
+  };
+}

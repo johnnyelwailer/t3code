@@ -210,8 +210,9 @@ const makeDependencies = Effect.fn("TestConnectionResolver.makeDependencies")((o
       BrokerEnvironmentGateway.of({
         attach:
           options?.attachBroker ??
-          (() =>
+          ((input) =>
             Effect.succeed({
+              sessionId: input.sessionId,
               httpBaseUrl: "http://127.0.0.1:4020",
               wsBaseUrl: "ws://127.0.0.1:4020",
             })),
@@ -235,9 +236,12 @@ describe("ConnectionResolver", () => {
     readonly rejectBearer?: (
       token: string,
     ) => ConnectionBlockedError | ConnectionTransientError | null;
+    /** The session the server attached instead, as when the known one has ended. */
+    readonly liveSessionId?: string;
   }) {
     const attached = yield* Ref.make<ReadonlyArray<string>>([]);
     const pairings = yield* Ref.make(0);
+    const pairedSessions = yield* Ref.make<ReadonlyArray<string>>([]);
     const bearers = yield* Ref.make<ReadonlyArray<{ token: string; method: string }>>([]);
     const tokenExchanges: Array<string> = [];
     const credentials = new Map(options?.credentials ?? []);
@@ -249,9 +253,17 @@ describe("ConnectionResolver", () => {
           ...values,
           `${input.sessionId}:${input.expectedEnvironmentId}`,
         ]).pipe(
-          Effect.as({ httpBaseUrl: "http://127.0.0.1:4020", wsBaseUrl: "ws://127.0.0.1:4020" }),
+          Effect.as({
+            sessionId: options?.liveSessionId ?? input.sessionId,
+            httpBaseUrl: "http://127.0.0.1:4020",
+            wsBaseUrl: "ws://127.0.0.1:4020",
+          }),
         ),
-      pairBroker: () => Ref.update(pairings, (n) => n + 1).pipe(Effect.as("broker-pairing")),
+      pairBroker: (input) =>
+        Ref.update(pairings, (n) => n + 1).pipe(
+          Effect.andThen(Ref.update(pairedSessions, (values) => [...values, input.sessionId])),
+          Effect.as("broker-pairing"),
+        ),
       authorizeBearer: (input) =>
         Effect.gen(function* () {
           yield* Ref.update(bearers, (values) => [
@@ -270,7 +282,7 @@ describe("ConnectionResolver", () => {
         }),
     });
     const resolver = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(layer));
-    return { resolver, credentials, attached, pairings, bearers, tokenExchanges };
+    return { resolver, credentials, attached, pairings, pairedSessions, bearers, tokenExchanges };
   });
 
   it.effect("connects a broker session once by pairing, then reuses the stored bearer", () =>
@@ -296,6 +308,25 @@ describe("ConnectionResolver", () => {
         { token: "broker-bearer", method: "relay" },
         { token: "broker-bearer", method: "relay" },
       ]);
+    }),
+  );
+
+  it.effect("follows the workspace's live session when the known one has ended", () =>
+    Effect.gen(function* () {
+      // A new session in the same workspace serves the same environment (the snapshot keeps its
+      // id): the server attaches the live one, and pairing and the bearer go with it.
+      const harness = yield* makeBrokerHarness({
+        credentials: [
+          ["nexi-broker:290877467", new BearerConnectionCredential({ token: "old-bearer" })],
+        ],
+        liveSessionId: "299999999",
+      });
+      yield* harness.resolver.prepare(catalogEntry(BROKER_TARGET));
+      expect(yield* Ref.get(harness.pairedSessions)).toEqual(["299999999"]);
+      expect(harness.credentials.has("nexi-broker:299999999")).toBe(true);
+      expect((yield* Ref.get(harness.bearers)).map((bearer) => bearer.token)).not.toContain(
+        "old-bearer",
+      );
     }),
   );
 
@@ -338,6 +369,24 @@ describe("ConnectionResolver", () => {
     }),
   );
 
+  it.effect("blocks an old host during discovery before opening orchestration RPC", () =>
+    Effect.gen(function* () {
+      const brokerLayer = yield* makeDependencies({ descriptorProtocolVersion: null });
+      const broker = yield* ConnectionResolver.ConnectionResolver.pipe(Effect.provide(brokerLayer));
+      const target = new PrimaryConnectionTarget({
+        environmentId: ENVIRONMENT_ID,
+        label: "Primary",
+        httpBaseUrl: "http://127.0.0.1:3777",
+        wsBaseUrl: "ws://127.0.0.1:3777",
+      });
+
+      const error = yield* Effect.flip(broker.prepare(catalogEntry(target)));
+
+      expect(error).toMatchObject({ reason: "unsupported" });
+      expect(error.message).toContain("Update T3 Code on Compatible environment");
+    }),
+  );
+
   it.effect("blocks an incompatible host during discovery before opening orchestration RPC", () =>
     Effect.gen(function* () {
       const brokerLayer = yield* makeDependencies({
@@ -374,7 +423,7 @@ describe("ConnectionResolver", () => {
         label: "Primary",
         httpBaseUrl: "http://127.0.0.1:3777",
         socketUrl:
-          "ws://127.0.0.1:3777/ws?clientSurface=web&clientDeviceType=desktop&connectionMethod=direct&orchestrationProtocol=1",
+          "ws://127.0.0.1:3777/ws?clientSurface=web&clientDeviceType=desktop&connectionMethod=direct&orchestrationProtocol=2",
         httpAuthorization: null,
         target,
       });
@@ -412,7 +461,7 @@ describe("ConnectionResolver", () => {
       });
 
       expect(yield* broker.prepare(catalogEntry(target))).toMatchObject({
-        socketUrl: "ws://127.0.0.1:3777/ws?wsTicket=desktop&orchestrationProtocol=1",
+        socketUrl: "ws://127.0.0.1:3777/ws?wsTicket=desktop&orchestrationProtocol=2",
         httpAuthorization: { _tag: "Bearer", token: "desktop-bearer" },
         target,
       });
@@ -577,8 +626,9 @@ describe("ConnectionResolver", () => {
     }),
   );
 
-  for (const scenario of ["unchanged", "changed", "revocation-failed"] as const) {
-    it.effect(`handles ${scenario} SSH routing consent before saving or authorizing`, () =>
+  it.effect.each(["unchanged", "changed", "revocation-failed"] as const)(
+    "handles %s SSH routing consent before saving or authorizing",
+    (scenario) =>
       Effect.gen(function* () {
         const calls: string[] = [];
         const target = new SshConnectionTarget({
@@ -670,8 +720,7 @@ describe("ConnectionResolver", () => {
         }
         expect(yield* permissions.get(entry)).toBe(scenario === "changed" ? "off" : "read-write");
       }),
-    );
-  }
+  );
 
   it.effect("preserves relay authorization failure classification and trace details", () =>
     Effect.gen(function* () {

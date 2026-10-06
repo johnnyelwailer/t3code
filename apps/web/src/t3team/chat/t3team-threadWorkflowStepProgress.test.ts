@@ -4,7 +4,8 @@
  * a duration exists at all (see `ProjectRecipeWorkflowStepActivityPayload.durationMs`); this
  * derivation just needs to not drop it, and to not invent one when the payload has none.
  */
-import { EventId, type OrchestrationThreadActivity } from "@t3tools/contracts";
+import { EventId } from "@t3tools/contracts";
+import type { T3TeamThreadActivityRecord } from "~/t3team/chat/t3team-threadActivityRecord";
 import {
   PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP,
   type ProjectRecipeWorkflowStepActivityPayload,
@@ -17,7 +18,7 @@ const RUN_ID = "run-1";
 
 function stepActivity(
   payload: ProjectRecipeWorkflowStepActivityPayload,
-): OrchestrationThreadActivity {
+): T3TeamThreadActivityRecord {
   return {
     id: EventId.make(`t3team-wf-step:${payload.stepId}`),
     tone: payload.phase === "failed" ? "error" : "info",

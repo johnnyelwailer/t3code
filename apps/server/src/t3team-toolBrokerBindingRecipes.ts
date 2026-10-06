@@ -8,6 +8,7 @@ import {
   executeWorkflowSdkRecipeTool,
   WorkflowSdkBridgeError,
 } from "./t3team-workflowSdkToolBridge.ts";
+import { mcpToolNameOf } from "./t3team-mcpCanonicalToolMap.ts";
 
 export type T3TeamRecipeToolId = "t3team.recipe.list" | "t3team.recipe.validate";
 
@@ -48,9 +49,9 @@ export function callT3TeamRecipeTool(input: {
     okResult,
     (message) =>
       errorResult(
-        message.startsWith(`${input.tool} requires`)
+        message.startsWith(`${mcpToolNameOf(input.tool)} requires`)
           ? message
-          : `Failed to run ${input.tool}: ${message}`,
+          : `Failed to run ${mcpToolNameOf(input.tool)}: ${message}`,
       ),
   );
 }

@@ -2,7 +2,7 @@
 /**
  * `t3team.orchestration.run` — handler-level acceptance against the REAL durable engine seams: an
  * in-memory SQLite run repo + journal store, the real launch funnel, the real author session /
- * turn machinery, and a captured orchestration dispatch standing in for the live engine. The test
+ * turn machinery, and a recording workflow host standing in for the live orchestrator. The test
  * plays the AUTHOR: it answers the captured author turn by calling the same broker handler from the
  * author thread (a submission), then ends the turn through the registry's pending ask — exactly the
  * path the reactor takes when the provider's final message lands.
@@ -14,7 +14,6 @@ import * as NodeTimersPromises from "node:timers/promises";
 import { assert, describe, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
-  type OrchestrationCommand,
   ProjectId,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -49,6 +48,7 @@ import {
 import { WORKFLOW_AUTHOR_TOOL_IDS } from "./t3team-workflowAuthorTurn.ts";
 import { resetWorkflowAuthorSessions } from "./t3team-workflowAuthorSession.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
+import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
 import { setWorkflowEphemeralConcurrencyPolicy } from "./t3team-workflowEphemeralConcurrencyPolicy.ts";
 
 const threadId = ThreadId.make("thread-eph");
@@ -133,7 +133,7 @@ const testLayer = it.layer(
   ),
 );
 
-/** Real fs/path + real durable seams over an in-memory DB; dispatch is captured. */
+/** Real fs/path + real durable seams over an in-memory DB; host operations are recorded. */
 let harnessCount = 0;
 const makeProvider = (
   instanceId: string,
@@ -168,7 +168,7 @@ const makeHarness = Effect.fn("makeHarness")(function* (
   const workspaceRoot = yield* fileSystem.makeTempDirectoryScoped({
     prefix: "t3team-ephemeral-run-",
   });
-  const dispatched: OrchestrationCommand[] = [];
+  const fakeHost = makeFakeWorkflowHost();
   const toolContexts = new Map<string, T3TeamTurnToolContext | null | undefined>();
   const registry = makeWorkflowEngineRegistry();
   resetWorkflowAuthorSessions();
@@ -182,10 +182,7 @@ const makeHarness = Effect.fn("makeHarness")(function* (
       runRepository: repo,
       journalStore: store,
       rearmScheduler: () => Promise.resolve(),
-      dispatch: (command) => {
-        dispatched.push(command);
-        return Promise.resolve();
-      },
+      host: fakeHost.host,
     },
     contextStore: {
       put: ({ threadId: id, toolContext }) =>
@@ -222,16 +219,18 @@ const makeHarness = Effect.fn("makeHarness")(function* (
       await pending!.resolveLive!(reply);
     });
   const authorArchives = (runId: string) =>
-    dispatched.filter(
-      (command) => command.type === "thread.archive" && command.threadId === `${runId}:author`,
+    fakeHost.calls.filter(
+      (call) => call.op === "archiveThread" && call.input === `${runId}:author`,
     );
   const failureNotices = (runId: string) =>
-    dispatched.filter(
-      (command) =>
-        command.type === "thread.message.upsert" &&
-        command.message.messageId === `t3team-wf-result:${runId}` &&
-        command.message.text.includes("⚠️"),
-    );
+    fakeHost
+      .messages()
+      .filter(
+        (message) =>
+          message.messageId === `t3team-wf-result:${runId}` && message.text.includes("⚠️"),
+      );
+  const authorStep = (runId: string) =>
+    fakeHost.activities().filter((activity) => activity.id === `t3team-wf-step:${runId}:author`);
   return {
     handlers,
     factory,
@@ -239,8 +238,9 @@ const makeHarness = Effect.fn("makeHarness")(function* (
     endAuthorTurn,
     failureNotices,
     authorArchives,
+    authorStep,
     toolContexts,
-    dispatched,
+    fakeHost,
     workspaceRoot,
     repo,
     registry,
@@ -320,33 +320,22 @@ testLayer("t3team.orchestration.run — authored ephemeral orchestrations", (it)
           yield* waitForAuthorTurn(h.registry, authorThreadId);
 
           // A hidden, ephemeral author thread scoped to exactly its three tools.
-          const created = h.dispatched.find(
-            (command) => command.type === "thread.create" && command.threadId === authorThreadId,
-          );
+          const created = h.fakeHost.creates().find((create) => create.threadId === authorThreadId);
           assert.isDefined(created);
-          if (created?.type === "thread.create") {
-            assert.strictEqual(created.retention, "ephemeral");
-            // The caller's thread is full-access / default. The author never inherits that.
-            assert.strictEqual(created.interactionMode, "plan");
-            assert.strictEqual(created.runtimeMode, "approval-required");
-          }
-          const kickoff = h.dispatched.find(
-            (command) =>
-              command.type === "thread.turn.start" && command.threadId === authorThreadId,
-          );
-          if (kickoff?.type === "thread.turn.start") {
-            assert.strictEqual(kickoff.interactionMode, "plan");
-            assert.strictEqual(kickoff.runtimeMode, "approval-required");
-          }
+          assert.strictEqual(created?.retention, "ephemeral");
+          // The caller's thread is full-access / default. The author never inherits that.
+          assert.strictEqual(created?.interactionMode, "plan");
+          assert.strictEqual(created?.runtimeMode, "approval-required");
+          // Hidden host machinery: never linked into the caller's roster as a child.
+          assert.isUndefined(created?.parentThreadId);
+          const kickoff = h.fakeHost.turns().find((turn) => turn.threadId === authorThreadId);
+          assert.isDefined(kickoff);
+          // The live catalog rides the kickoff (V2 has no broker models tool).
+          assert.include(kickoff?.text ?? "", "## Live provider catalog");
           // The card's "Authoring" step carries NO thread id: the author is not openable.
-          const authorStep = h.dispatched.find(
-            (command) =>
-              command.type === "thread.activity.append" &&
-              command.activity.id === `t3team-wf-step:${runId}:author`,
-          );
-          if (authorStep?.type === "thread.activity.append") {
-            assert.isUndefined((authorStep.activity.payload as { threadId?: string }).threadId);
-          }
+          const [authorStep] = h.authorStep(runId);
+          assert.isDefined(authorStep);
+          assert.isUndefined((authorStep?.payload as { threadId?: string } | undefined)?.threadId);
           assert.deepStrictEqual(
             h.toolContexts.get(authorThreadId)?.tools.map((tool) => tool.id),
             [...WORKFLOW_AUTHOR_TOOL_IDS],
@@ -358,11 +347,9 @@ testLayer("t3team.orchestration.run — authored ephemeral orchestrations", (it)
             "authoring",
           );
           assert.isTrue(
-            h.dispatched.some(
-              (command) =>
-                command.type === "thread.message.upsert" &&
-                command.message.messageId === `t3team-wf-shape:${runId}`,
-            ),
+            h.fakeHost
+              .messages()
+              .some((message) => message.messageId === `t3team-wf-shape:${runId}`),
           );
 
           // First draft: the incident's unbound import. The verdict is a TOOL RESULT for the author.
@@ -383,12 +370,8 @@ testLayer("t3team.orchestration.run — authored ephemeral orchestrations", (it)
           assert.isTrue(NodeFS.existsSync(`${h.workspaceRoot}/.t3team-runs/${runId}/workflow.ts`));
           // Nothing fixable ever reached the caller's thread.
           assert.deepStrictEqual(h.failureNotices(runId), []);
-          const authorSteps = h.dispatched.filter(
-            (command) =>
-              command.type === "thread.activity.append" &&
-              command.activity.id === `t3team-wf-step:${runId}:author`,
-          );
-          assert.isAtLeast(authorSteps.length, 2);
+          // Sent, then resolved: the same keyed activity is upserted twice.
+          assert.isAtLeast(h.authorStep(runId).length, 2);
           // A completed run has no repairs left to ask for: its author thread is retired.
           assert.strictEqual(h.authorArchives(runId).length, 1);
         }),
@@ -409,11 +392,9 @@ testLayer("t3team.orchestration.run — authored ephemeral orchestrations", (it)
         assert.strictEqual(row.status, "failed");
         const notices = h.failureNotices(runId);
         assert.strictEqual(notices.length, 1);
-        if (notices[0]?.type === "thread.message.upsert") {
-          assert.strictEqual(notices[0].threadId, h.threadId);
-          assert.include(notices[0].message.text, "cannot continue");
-          assert.include(notices[0].message.text, "guardrails forbid");
-        }
+        assert.strictEqual(notices[0]?.threadId, h.threadId);
+        assert.include(notices[0]?.text ?? "", "cannot continue");
+        assert.include(notices[0]?.text ?? "", "guardrails forbid");
         // A late submission has nobody waiting for it.
         const late = yield* h.authorSubmits(runId, PURE_SUM_SOURCE).pipe(Effect.result);
         assert.strictEqual(late._tag, "Failure");
@@ -434,17 +415,14 @@ testLayer("t3team.orchestration.run — authored ephemeral orchestrations", (it)
           const row = yield* waitForRunStatus(h.repo, runId, "failed");
           assert.strictEqual(row.status, "failed");
           assert.isTrue(
-            h.dispatched.some(
-              (command) =>
-                command.type === "thread.turn.interrupt" && command.threadId === `${runId}:author`,
+            h.fakeHost.calls.some(
+              (call) => call.op === "interrupt" && call.input.threadId === `${runId}:author`,
             ),
             "the provider keeps spending unless the turn is interrupted",
           );
           const notices = h.failureNotices(runId);
           assert.strictEqual(notices.length, 1);
-          if (notices[0]?.type === "thread.message.upsert") {
-            assert.include(notices[0].message.text, "did not finish");
-          }
+          assert.include(notices[0]?.text ?? "", "did not finish");
           assert.isUndefined(h.registry.peekPending(`${runId}:author`));
           assert.strictEqual(h.authorArchives(runId).length, 1);
         }),
@@ -465,15 +443,10 @@ testLayer("t3team.orchestration.run — authored ephemeral orchestrations", (it)
           assert.strictEqual(result.status, "authoring");
           const { runId } = result;
           yield* waitForAuthorTurn(h.registry, `${runId}:author`);
-          const kickoff = h.dispatched.find(
-            (command) =>
-              command.type === "thread.turn.start" && command.threadId === `${runId}:author`,
-          );
+          const kickoff = h.fakeHost.turns().find((turn) => turn.threadId === `${runId}:author`);
           assert.isDefined(kickoff);
-          if (kickoff?.type === "thread.turn.start") {
-            assert.include(kickoff.message.text, "temp.approval");
-            assert.include(kickoff.message.text, intent.goal);
-          }
+          assert.include(kickoff?.text ?? "", "temp.approval");
+          assert.include(kickoff?.text ?? "", intent.goal);
           const launched = yield* h.authorSubmits(runId, ASK_USER_SOURCE);
           assert.strictEqual(launched.status, "accepted");
           yield* h.endAuthorTurn(runId, "Launched.");
@@ -720,26 +693,17 @@ testLayer("t3team.orchestration.run — authored ephemeral orchestrations", (it)
         });
         const started = yield* relocated.handlers.runWorkflow({ intent });
         assert.strictEqual(started.status, "authoring");
-        const created = relocated.dispatched.find(
-          (command) =>
-            command.type === "thread.create" && command.threadId === `${started.runId}:author`,
-        );
-        assert.isTrue(created?.type === "thread.create");
-        if (created?.type === "thread.create") {
-          assert.strictEqual(String(created.modelSelection.instanceId), "codex-safe");
-          assert.strictEqual(created.runtimeMode, "approval-required");
-        }
-        const step = relocated.dispatched.find(
-          (command) =>
-            command.type === "thread.activity.append" &&
-            command.activity.id === `t3team-wf-step:${started.runId}:author`,
-        );
-        assert.isTrue(step?.type === "thread.activity.append");
-        if (step?.type === "thread.activity.append") {
-          const detail = (step.activity.payload as { detail?: string }).detail ?? "";
-          assert.include(detail, "codex-safe");
-          assert.include(detail, "inst-1");
-        }
+        const created = relocated.fakeHost
+          .creates()
+          .find((create) => create.threadId === `${started.runId}:author`);
+        assert.isDefined(created);
+        assert.strictEqual(String(created?.modelSelection.instanceId), "codex-safe");
+        assert.strictEqual(created?.runtimeMode, "approval-required");
+        const [step] = relocated.authorStep(started.runId);
+        assert.isDefined(step);
+        const detail = (step?.payload as { detail?: string } | undefined)?.detail ?? "";
+        assert.include(detail, "codex-safe");
+        assert.include(detail, "inst-1");
       }),
     ),
   );

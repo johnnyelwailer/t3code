@@ -1,22 +1,21 @@
 /**
- * Pack-owned provider driver contract.
+ * Pack-owned provider driver contract (schemaVersion 2).
  *
  * A pack may ship an *executable* provider driver — code that owns config,
  * auth, model policy and the live session lifecycle — instead of the
  * data-only `AgentProviderDefinition` (which is fixed to the host's
- * OpenCode harness). This module defines that contract entirely in terms of
- * Promise / AsyncIterable so the SDK never leaks host Effect types.
+ * OpenCode harness). The driver's live surface is an orchestration V2
+ * provider adapter (`./provider-orchestration.ts`), defined entirely in terms
+ * of Promise / AsyncIterable and canonical JSON so the SDK never leaks host
+ * Effect types.
  *
- * The host bridges every method back into its Effect-based `ProviderDriver`
- * SPI; see `apps/server/src/t3team-pack-driverBridge.ts`. `resumeCursor`
- * stays opaque (`unknown`) end to end so reconnect keeps working without the
- * pack having to model the host's persistence.
+ * The host maps every method one-to-one onto its Effect-based
+ * `ProviderInstance.orchestrationAdapter`; see
+ * `apps/server/src/t3team-pack-driverBridge.ts`.
  *
  * @module provider-driver
  */
-
-/** Opaque, provider-defined resume token. Persisted and replayed verbatim. */
-export type PackResumeCursor = unknown;
+import type { PackOrchestrationAdapter } from "./provider-orchestration.ts";
 
 export type PackProviderModel = {
   readonly slug: string;
@@ -45,58 +44,6 @@ export type PackProviderSnapshot = {
    * the built-in Grok provider does the same.
    */
   readonly showInteractionModeToggle?: boolean;
-};
-
-export type PackSessionStartInput = {
-  readonly threadId: string;
-  readonly runtimeMode: string;
-  /** Provider-scoped access to the host MCP endpoint for this thread. */
-  readonly mcp?: {
-    readonly endpoint: string;
-    readonly authorizationHeader: string;
-  };
-  readonly cwd?: string;
-  readonly resumeCursor?: PackResumeCursor;
-  /** Opaque host `ModelSelection`; forward verbatim. */
-  readonly modelSelection?: unknown;
-  /** Opaque host `ProviderApprovalPolicy`; forward verbatim. */
-  readonly approvalPolicy?: unknown;
-  /** Opaque host `ProviderSandboxMode`; forward verbatim. */
-  readonly sandboxMode?: unknown;
-};
-
-export type PackProviderSession = {
-  readonly threadId: string;
-  readonly status: string;
-  readonly runtimeMode: string;
-  readonly cwd?: string;
-  readonly model?: string;
-  readonly resumeCursor?: PackResumeCursor;
-  readonly [key: string]: unknown;
-};
-
-export type PackSendTurnInput = {
-  readonly threadId: string;
-  readonly input?: string;
-  /** Opaque host `ChatAttachment[]`; forward verbatim. */
-  readonly attachments?: readonly unknown[];
-  /** Opaque host `ModelSelection`; forward verbatim. */
-  readonly modelSelection?: unknown;
-  /** Opaque host `ProviderInteractionMode`; forward verbatim. */
-  readonly interactionMode?: unknown;
-  /** "user" for a typed message, "automated" for fork automation; absent = treat as "user". */
-  readonly turnOrigin?: "user" | "automated";
-};
-
-export type PackTurnStartResult = {
-  readonly threadId: string;
-  readonly turnId: string;
-  readonly resumeCursor?: PackResumeCursor;
-};
-
-export type PackThreadSnapshot = {
-  readonly threadId: string;
-  readonly turns: readonly unknown[];
 };
 
 export type PackTextGeneration = {
@@ -152,8 +99,9 @@ export type PackTextGeneration = {
 /**
  * Host capabilities handed to a pack driver's `create`. `createOpenCodeHarness`
  * lets a pack compose the reviewed host OpenCode harness and decorate it —
- * wrap `startSession` for retry, wrap `events()` for normalization — while
- * owning config/auth/model policy itself.
+ * wrap `orchestration.openSession` / a session's `startTurn` for retry, wrap a
+ * session's `events()` for normalization — while owning config/auth/model
+ * policy itself. Its entities already carry the pack's own driver kind.
  */
 export type PackHostCapabilities = {
   readonly createOpenCodeHarness: (options: {
@@ -237,40 +185,19 @@ export type PackJobControlResult =
   | { readonly kind: "unknown-job"; readonly jobId: string };
 
 /**
- * One live provider instance owned by the pack. Method semantics mirror the
- * host `ProviderAdapter` surface one-to-one so the bridge is mechanical.
- * Every emitted event object SHOULD be `ProviderRuntimeEvent`-shaped; the
- * host defensively re-stamps `provider`/`providerInstanceId` and drops
- * events that fail to decode.
+ * One live provider instance owned by the pack: its snapshot, its V2
+ * orchestration adapter and optional text generation.
  */
 export type PackProviderInstance = {
   snapshot(): PackProviderSnapshot;
   subscribeSnapshot?(listener: (snapshot: PackProviderSnapshot) => void): () => void;
-  startSession(input: PackSessionStartInput): Promise<PackProviderSession>;
-  sendTurn(input: PackSendTurnInput): Promise<PackTurnStartResult>;
-  interruptTurn(threadId: string, turnId?: string): Promise<void>;
-  respondToRequest(threadId: string, requestId: string, decision: unknown): Promise<void>;
-  respondToUserInput(threadId: string, requestId: string, answers: unknown): Promise<void>;
-  stopSession(threadId: string): Promise<void>;
-  hasSession(threadId: string): Promise<boolean>;
-  listSessions(): Promise<readonly PackProviderSession[]>;
-  readThread(threadId: string): Promise<PackThreadSnapshot>;
-  rollbackThread(threadId: string, numTurns: number): Promise<PackThreadSnapshot>;
-  /**
-   * Out-of-band control of the thread's background bash jobs (list / cancel /
-   * read retained output). Promise-based like the rest of the surface.
-   * OPTIONAL: a runtime that keeps no jobs omits it, and the host must treat
-   * absence as "not supported" (its capability check, never a call).
-   */
-  jobControl?(threadId: string, request: PackJobControlRequest): Promise<PackJobControlResult>;
+  readonly orchestration: PackOrchestrationAdapter;
   readonly textGeneration?: PackTextGeneration;
-  stopAll(): Promise<void>;
-  events(): AsyncIterable<unknown>;
   dispose(): Promise<void>;
 };
 
 export type PackProviderDriverDefinition = {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 2;
   readonly driver: string;
   readonly displayName: string;
   readonly supportsMultipleInstances?: boolean;
@@ -284,6 +211,11 @@ export const defineProviderDriver = <const T extends PackProviderDriverDefinitio
 ): T => {
   if (!identifier.test(definition.driver)) {
     throw new Error("Provider driver must be a lowercase pack identifier");
+  }
+  if (definition.schemaVersion !== 2) {
+    throw new Error(
+      `Provider driver ${definition.driver} must use schemaVersion 2 (orchestration V2 adapter)`,
+    );
   }
   if (typeof definition.create !== "function") {
     throw new Error(`Provider driver ${definition.driver} must define a create function`);

@@ -1,27 +1,21 @@
 /* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Legacy async tests intentionally bridge Effect runtimes; tracked cleanup is separate from upstream green gate. */
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { createQueryable } from "@t3tools/project-context";
 
 import * as Effect from "effect/Effect";
-import * as Stream from "effect/Stream";
 
-import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
+// The orchestration (workflow) tool wiring is ported separately; these tests cover the broker's
+// own binding and host tools, so stand the workflow tools in as "not wired".
+vi.mock("./t3team-toolBrokerWorkflowToolsWiring.ts", () => ({
+  makeWorkflowToolsForThread: () => Effect.succeed({}),
+}));
+
 import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
 import {
   createThreadToolContext,
   makeBrokerLayer,
   threadId,
 } from "./t3team-toolBrokerTestUtils.ts";
-
-const orchestrationMock: OrchestrationEngineShape = {
-  readEvents: () => Stream.empty,
-  readThreadEvents: () => Stream.empty,
-  getThreadReplayStats: () => Effect.die("unused"),
-  dispatch: () => Effect.succeed({ sequence: 1 }),
-  streamDomainEvents: Stream.empty,
-  subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
-  latestSequence: Effect.succeed(0),
-};
 
 function makeRenderContext() {
   return {
@@ -63,7 +57,7 @@ describe("T3TeamToolBroker allowed tool groups", () => {
           toolContext: createThreadToolContext({
             tools: [
               { id: "t3team.view.read", label: "Read view", capabilities: ["read"] },
-              { id: "t3team.thread.rename", label: "Rename thread", capabilities: ["write"] },
+              { id: "t3team.widget.show", label: "Show widget", capabilities: ["write"] },
             ],
           }),
           allowedToolGroups: ["integration.read"],
@@ -72,12 +66,12 @@ describe("T3TeamToolBroker allowed tool groups", () => {
         const readResult = yield* binding!.callTool({ server: "t3team", tool: "t3team.view.read" });
         const writeResult = yield* binding!.callTool({
           server: "t3team",
-          tool: "t3team.thread.rename",
-          arguments: { title: "Renamed" },
+          tool: "t3team.widget.show",
+          arguments: { title: "chart", widget_code: "<div></div>" },
         });
 
         return { binding, readResult, writeResult };
-      }).pipe(Effect.provide(makeBrokerLayer(orchestrationMock))),
+      }).pipe(Effect.provide(makeBrokerLayer())),
     );
 
     expect(result.binding?.listServers()[0]?.tools).toEqual({
@@ -101,7 +95,7 @@ describe("T3TeamToolBroker allowed tool groups", () => {
           arguments: { query: "anything" },
         });
         return { binding, searchResult };
-      }).pipe(Effect.provide(makeBrokerLayer(orchestrationMock))),
+      }).pipe(Effect.provide(makeBrokerLayer())),
     );
 
     const tools = result.binding?.listServers()[0]?.tools ?? {};
@@ -158,7 +152,7 @@ describe("T3TeamToolBroker allowed tool groups", () => {
         });
 
         return { binding, toolResult };
-      }).pipe(Effect.provide(makeBrokerLayer(orchestrationMock))),
+      }).pipe(Effect.provide(makeBrokerLayer())),
     );
 
     expect(result.binding?.listServers()[0]?.tools).toEqual({
@@ -209,7 +203,7 @@ describe("T3TeamToolBroker allowed tool groups", () => {
           tool: "t3team.backlog.set_assignee_filter",
           arguments: { mode: "current-user" },
         });
-      }).pipe(Effect.provide(makeBrokerLayer(orchestrationMock))),
+      }).pipe(Effect.provide(makeBrokerLayer())),
     );
 
     expect(result.isError).toBe(true);
@@ -249,7 +243,7 @@ describe("T3TeamToolBroker allowed tool groups", () => {
             assignee_display_name: "Pat Jones",
           },
         });
-      }).pipe(Effect.provide(makeBrokerLayer(orchestrationMock))),
+      }).pipe(Effect.provide(makeBrokerLayer())),
     );
 
     expect(result.isError).toBeUndefined();
@@ -305,7 +299,7 @@ describe("T3TeamToolBroker allowed tool groups", () => {
           tool: "t3team.work_item.estimate.draft_update",
           arguments: { estimate_value: 3, estimate_mode: "hours" },
         });
-      }).pipe(Effect.provide(makeBrokerLayer(orchestrationMock))),
+      }).pipe(Effect.provide(makeBrokerLayer())),
     );
 
     expect(result.isError).toBe(true);
@@ -326,12 +320,12 @@ describe("T3TeamToolBroker allowed tool groups", () => {
         const readResult = yield* binding!.callTool({ server: "t3team", tool: "t3team.view.read" });
         const writeResult = yield* binding!.callTool({
           server: "t3team",
-          tool: "t3team.thread.rename",
-          arguments: { title: "Renamed" },
+          tool: "t3team.widget.show",
+          arguments: { title: "chart", widget_code: "<div></div>" },
         });
 
         return { binding, readResult, writeResult };
-      }).pipe(Effect.provide(makeBrokerLayer(orchestrationMock))),
+      }).pipe(Effect.provide(makeBrokerLayer())),
     );
 
     expect(result.binding?.listServers()[0]?.tools).toEqual({

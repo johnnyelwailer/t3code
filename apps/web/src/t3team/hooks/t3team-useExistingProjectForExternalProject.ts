@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 
 import { useProjects } from "~/state/entities";
+import { readLiveProjectSourceBinding } from "~/t3team/t3team-projectSourceBinding";
 
 export interface ExistingProjectMatch {
   readonly projectId: string;
@@ -32,7 +33,7 @@ export function useExistingProjectForExternalProject(input: {
 
     const wanted = new Set(externalProjectIds);
     for (const project of liveProjects) {
-      const source = project.source;
+      const source = readLiveProjectSourceBinding(project);
       if (!source || source.provider === "local") continue;
       if (source.accountId !== accountId) continue;
       if (!wanted.has(source.externalProjectId)) continue;

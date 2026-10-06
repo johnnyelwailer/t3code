@@ -15,7 +15,11 @@
  */
 import type { ModelSelection } from "@t3tools/contracts";
 import {
+  type AccountDefinition,
   type AgentProviderDefinition,
+  type CompletionWakeRendererDefinition,
+  defineAccount,
+  type ModelPolicyDefinition,
   type PackActivationContext,
   type PackProviderDriverDefinition as PackApiProviderDriverDefinition,
   type PackSetupProfileDefinition,
@@ -27,7 +31,6 @@ import {
   decodeSetupProfileDefinition,
   decodeThemeDefinition,
   type LoadedAiProviderDefinition,
-  type PackProviderDriverDefinition,
 } from "@t3team/packs";
 
 import {
@@ -37,8 +40,12 @@ import {
   type DistributionTheme,
 } from "@t3code/distribution";
 
+import { setPackAccounts } from "./account/t3team-packAccounts.ts";
+import { setDistributionModelPolicy } from "./t3team-configuredDefaultModelSelection.ts";
 import { packAiProvidersToInstanceConfigMap } from "./t3team-pack-aiProvider.ts";
+import { setPackCompletionWakeRenderer } from "./t3team-pack-completionWakeRenderer.ts";
 import { setPackAppearanceOverlay } from "./t3team-pack-appearanceOverlay.ts";
+import { toPackProviderDriverDefinition } from "./t3team-pack-driverDefinition.ts";
 import { setPackProviderOverlay } from "./t3team-pack-providerOverlay.ts";
 import { setPackSetupProfileOverlay } from "./t3team-pack-setupProfileOverlay.ts";
 import { setWorkflowAgentModelPolicy } from "./t3team-workflowAgentModelPolicy.ts";
@@ -89,6 +96,9 @@ export const activateCompiledInDistribution = async (): Promise<void> => {
   let repairPolicy: WorkflowRepairPolicyDefinition | undefined;
   let agentModelPolicy: WorkflowAgentModelPolicyDefinition | undefined;
   let ephemeralPolicy: WorkflowEphemeralConcurrencyPolicyDefinition | undefined;
+  let modelPolicy: ModelPolicyDefinition | undefined;
+  let wakeRenderer: CompletionWakeRendererDefinition | undefined;
+  const accounts: AccountDefinition[] = [];
 
   if (activateDistribution) {
     const context: PackActivationContext = {
@@ -118,6 +128,15 @@ export const activateCompiledInDistribution = async (): Promise<void> => {
       },
       defineWorkflowEphemeralConcurrencyPolicy: (definition) => {
         ephemeralPolicy = definition;
+      },
+      defineModelPolicy: (definition) => {
+        modelPolicy = definition;
+      },
+      defineCompletionWakeRenderer: (definition) => {
+        wakeRenderer = definition;
+      },
+      defineAccount: (definition) => {
+        accounts.push(defineAccount(definition));
       },
       resolveAssetDataUrl: async (relativePath) => {
         const inlined = distributionAssets[relativePath];
@@ -163,7 +182,7 @@ export const activateCompiledInDistribution = async (): Promise<void> => {
       driverDefinitions: new Map(
         drivers.map((definition) => [
           definition.driver,
-          definition as unknown as PackProviderDriverDefinition,
+          toPackProviderDriverDefinition("distribution", definition),
         ]),
       ),
     });
@@ -190,6 +209,9 @@ export const activateCompiledInDistribution = async (): Promise<void> => {
     );
   }
   if (ephemeralPolicy) setWorkflowEphemeralConcurrencyPolicy(ephemeralPolicy);
+  if (modelPolicy) setDistributionModelPolicy(modelPolicy);
+  if (wakeRenderer) setPackCompletionWakeRenderer(wakeRenderer);
+  if (accounts.length > 0) setPackAccounts(accounts);
   if (distributionTheme) {
     const theme = decodeThemeDefinition(resolveThemeBrand(distributionTheme, distributionAssets));
     setPackAppearanceOverlay({ ...theme, themeId: theme.id });

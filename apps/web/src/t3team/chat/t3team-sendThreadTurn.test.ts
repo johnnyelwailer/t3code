@@ -1,32 +1,51 @@
 import { describe, expect, it } from "vite-plus/test";
-import type { ClientOrchestrationCommand } from "@t3tools/contracts";
+import type { StartThreadTurnInput } from "@t3tools/client-runtime/operations";
+import { readT3TeamMessageExtContext } from "@t3tools/contracts";
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { sendT3TeamThreadTurn } from "./t3team-sendThreadTurn";
 
 function fakeBackend(input?: { readonly rejectWith?: string }) {
-  const commands: ClientOrchestrationCommand[] = [];
+  const turns: StartThreadTurnInput[] = [];
   const backend = {
-    async dispatchCommand(command: ClientOrchestrationCommand) {
-      if (input?.rejectWith) throw new Error(input.rejectWith);
-      commands.push(command);
+    orchestration: {
+      async startThreadTurn(turn: StartThreadTurnInput) {
+        if (input?.rejectWith) throw new Error(input.rejectWith);
+        turns.push(turn);
+      },
     },
   } as unknown as BackendApi;
-  return { backend, commands };
+  return { backend, commands: turns };
 }
 
 describe("sendT3TeamThreadTurn", () => {
-  it("starts a user turn on the addressed thread without any chat-view state", async () => {
+  it("queues a user message on the addressed thread without any chat-view state", async () => {
     const { backend, commands } = fakeBackend();
 
     await sendT3TeamThreadTurn({ backend, threadId: "thread-9", text: "  please revise  " });
 
     expect(commands).toHaveLength(1);
-    const command = commands[0]!;
-    expect(command.type).toBe("thread.turn.start");
-    expect(command).toMatchObject({
+    expect(commands[0]).toMatchObject({
       threadId: "thread-9",
+      dispatchMode: "queue",
       message: { role: "user", text: "please revise", attachments: [] },
+    });
+    expect(commands[0]?.message.context).toBeUndefined();
+  });
+
+  it("carries the fork message ext as a message context record", async () => {
+    const { backend, commands } = fakeBackend();
+
+    await sendT3TeamThreadTurn({
+      backend,
+      threadId: "thread-9",
+      text: "Widget action: approve",
+      t3teamExt: { displayText: "approve", visibleToUser: false },
+    });
+
+    expect(readT3TeamMessageExtContext(commands[0]?.message.context)).toEqual({
+      displayText: "approve",
+      visibleToUser: false,
     });
   });
 

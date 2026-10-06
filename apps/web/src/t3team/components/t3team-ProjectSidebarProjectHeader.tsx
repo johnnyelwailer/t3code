@@ -17,7 +17,7 @@ type ProjectStatus = {
   colorClass: string;
   dotClass: string;
   pulse?: boolean;
-  /** GHE #208: the `waiting` state's slower pulse variant. */
+  /** Optional override of the pulse animation (e.g. the slower "waiting" motion). */
   pulseClass?: string;
 };
 

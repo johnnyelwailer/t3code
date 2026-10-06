@@ -22,7 +22,7 @@ import type {
 import { workflowAuthorStepDetail } from "./t3team-workflowAuthorModel.ts";
 import { buildPreparedWorkflowLifecycle } from "./t3team-workflowEphemeralLifecycle.ts";
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
-import { buildWorkflowShapePreviewCommand } from "./t3team-workflowShapePreview.ts";
+import { buildWorkflowShapePreviewMessage } from "./t3team-workflowShapePreview.ts";
 
 export const admitAuthoringRun = Effect.fn("admitAuthoringRun")(function* (input: {
   readonly launch: PreparedWorkflowLaunchDeps;
@@ -60,13 +60,12 @@ export const admitAuthoringRun = Effect.fn("admitAuthoringRun")(function* (input
     );
   });
   yield* Effect.promise(() =>
-    launch.dispatch(
-      buildWorkflowShapePreviewCommand({
+    launch.host.postMessage(
+      buildWorkflowShapePreviewMessage({
         threadId: prepared.launchThreadId,
         workflowPath: prepared.workflowPath,
         sourceText: "",
         runId: prepared.runId,
-        nowIso: nowIso(),
         fallbackName: workflowStepDetailSnippet(prepared.intent.goal, 60),
       }),
     ),
@@ -75,8 +74,7 @@ export const admitAuthoringRun = Effect.fn("admitAuthoringRun")(function* (input
     runId: prepared.runId,
     projectId: prepared.projectId,
     launchThreadId: prepared.launchThreadId,
-    dispatch: launch.dispatch,
-    newId: authorDeps.newId,
+    host: launch.host,
     nowIso,
   });
   const authorThreadId = yield* Effect.promise(() =>

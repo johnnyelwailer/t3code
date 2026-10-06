@@ -1,3 +1,5 @@
+import type { ThreadShell } from "~/types";
+
 const DEFAULT_MAX_T3TEAM_THREAD_DEBUG_EVENTS = 500;
 
 export type T3TeamThreadDebugEvent = {
@@ -66,23 +68,22 @@ export function summarizeT3TeamThreadEvent(event: unknown): Record<string, unkno
   return summary;
 }
 
-export function summarizeT3TeamServerThread(thread: unknown): Record<string, unknown> | null {
-  if (!isRecord(thread)) {
+/** A compact debug summary of a live thread shell (any subset of it). */
+export function summarizeT3TeamServerThread(
+  thread: Partial<ThreadShell> | null | undefined,
+): Record<string, unknown> | null {
+  if (!thread) {
     return null;
   }
-
-  const latestTurn = isRecord(thread.latestTurn) ? thread.latestTurn : null;
-  const session = isRecord(thread.session) ? thread.session : null;
-
   return {
-    id: typeof thread.id === "string" ? thread.id : null,
-    projectId: typeof thread.projectId === "string" ? thread.projectId : null,
-    title: typeof thread.title === "string" ? thread.title : null,
-    messageCount: Array.isArray(thread.messages) ? thread.messages.length : null,
-    latestTurnId: latestTurn && typeof latestTurn.turnId === "string" ? latestTurn.turnId : null,
-    sessionStatus: session && typeof session.status === "string" ? session.status : null,
-    archivedAt: typeof thread.archivedAt === "string" ? thread.archivedAt : null,
-    error: typeof thread.error === "string" ? thread.error : null,
+    id: thread.id ?? null,
+    projectId: thread.projectId ?? null,
+    title: thread.title ?? null,
+    visibleItemCount: thread.visibleItemCount ?? null,
+    latestRunId: thread.latestRun?.runId ?? null,
+    runtimeStatus: thread.runtime?.status ?? null,
+    archivedAt: thread.archivedAt ?? null,
+    error: thread.runtime?.lastError ?? null,
   };
 }
 

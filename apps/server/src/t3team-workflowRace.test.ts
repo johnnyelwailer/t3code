@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import type { WorkflowRunLifecycle } from "./t3team-workflowEngineBrokerTypes.ts";
 import { createWorkflowRunController } from "./t3team-workflowEngineLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
 import { createWorkflowLiveSettlement } from "./t3team-workflowLiveSettlement.ts";
 
 const lifecycle = (overrides: Partial<WorkflowRunLifecycle> = {}): WorkflowRunLifecycle => ({
@@ -27,7 +28,7 @@ describe("workflow orchestration race boundaries", () => {
       releaseCompleted = resolve;
     });
     const onComplete = vi.fn(async () => {});
-    const dispatch = vi.fn(async () => {});
+    const fake = makeFakeWorkflowHost();
     const controller = createWorkflowRunController({
       runId: "stop-vs-complete",
       workflowPath: "/tmp/not-loaded.workflow.ts",
@@ -39,7 +40,7 @@ describe("workflow orchestration race boundaries", () => {
       runtimeMode: "full-access",
       interactionMode: "default",
       registry,
-      dispatch,
+      host: fake.host,
       newId: () => "id",
       nowIso: () => "2026-07-19T00:00:00.000Z",
       lifecycle: lifecycle({ recordCompleted: () => completedGate }),
@@ -53,7 +54,7 @@ describe("workflow orchestration race boundaries", () => {
 
     expect(await settling).toBe("suspended");
     expect(onComplete).not.toHaveBeenCalled();
-    expect(dispatch).not.toHaveBeenCalled();
+    expect(fake.calls).toEqual([]);
   });
 
   it("Pause/Stop winning admission leaves the durable reply unresolved", async () => {
@@ -70,7 +71,7 @@ describe("workflow orchestration race boundaries", () => {
       runtimeMode: "full-access",
       interactionMode: "default",
       registry,
-      dispatch: vi.fn(async () => {}),
+      host: makeFakeWorkflowHost().host,
       newId: () => "id",
       nowIso: () => "2026-07-19T00:00:00.000Z",
       lifecycle: lifecycle({ recordActive }),

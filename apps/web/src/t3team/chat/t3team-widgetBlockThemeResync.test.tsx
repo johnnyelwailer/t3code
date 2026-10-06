@@ -11,7 +11,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi, type Mock } from "vite-plus/test";
 
-vi.mock("~/state/entities", () => ({ useThread: () => null }));
+vi.mock("~/state/entities", () => ({ useThreadShell: () => null }));
 // Each snapshot call gets a distinct marker, so a rebuilt srcdoc is observable: if the
 // controller ever re-snapshots, the marker number in the iframe's srcdoc must advance.
 let snapshotCalls = 0;

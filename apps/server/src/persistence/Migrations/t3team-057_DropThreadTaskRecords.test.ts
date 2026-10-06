@@ -10,8 +10,8 @@ import { runMigrations } from "../Migrations.ts";
  * t3team-057 (id 70) drops `thread_task_records` (created by t3team-056, id
  * 69). The task journal was replaced by provider-native plan events
  * (`turn.plan.updated`), so the store had no remaining consumer. The data
- * move itself is NOT a migration: `apps/server/scripts/t3team-replay-task-records-to-
- * plans.ts` re-records live threads' lists through the orchestration engine
+ * move itself is NOT a migration: the one-time (since removed) replay script
+ * re-recorded live threads' lists through the orchestration engine
  * BEFORE a build containing this migration is started. The test applies
  * through 69 (table created) and checks that 70 removes it, with and without
  * data.

@@ -2,13 +2,17 @@
  * `@t3team/sdk/time` (Epic 27 §Time & scheduling helpers): `nextWeekday` and `nextCron` must be
  * pure transforms of their `fromEpochMs` input — a workflow body replays them from the journal,
  * never from the real clock. These tests pin known dates, purity across repeat calls, and (via
- * `effect`'s own `fast-check` re-export) the properties the spec calls out: the result is
+ * `effect/unstable/arbitrary`) the properties the spec calls out: the result is
  * always strictly after `fromEpochMs`, and it's the MINIMAL matching instant, not just *a*
  * later one.
  */
 import * as DateTime from "effect/DateTime";
-import { FastCheck as fc } from "effect/testing";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
+import * as Arbitrary from "effect/unstable/arbitrary/Arbitrary";
 import { describe, expect, it } from "vite-plus/test";
+
+import { it as effectIt } from "./t3team-sdk.testEffect.ts";
 
 import { nextCron, nextWeekday, WEEKDAY_NUMBERS, type Weekday } from "./t3team-sdk.time.ts";
 
@@ -22,7 +26,22 @@ const WEEKDAYS: ReadonlyArray<Weekday> = [
   "saturday",
 ];
 
-const EPOCH_RANGE = { min: Date.UTC(2020, 0, 1), max: Date.UTC(2035, 0, 1) };
+const intBetween = (min: number, max: number) =>
+  Arbitrary.schema(Schema.Int.check(Schema.isBetween({ minimum: min, maximum: max })));
+
+const epochMs = intBetween(Date.UTC(2020, 0, 1), Date.UTC(2035, 0, 1));
+const weekdayArb = Arbitrary.schema(Schema.Literals(WEEKDAYS));
+
+/** Runs `property` over generated values; a falsified/exhausted result fails the test with effect's report. */
+const checkProperty = <A>(arbitrary: Arbitrary.Arbitrary<A>, property: (value: A) => void) =>
+  Effect.gen(function* () {
+    const result = yield* Arbitrary.checkEffect(arbitrary, (value) => {
+      property(value);
+      return true;
+    });
+    const failure = Arbitrary.formatCheckFailure(result);
+    if (failure !== undefined) throw new Error(failure);
+  });
 
 describe("@t3team/sdk/time", () => {
   describe("nextWeekday", () => {
@@ -58,14 +77,12 @@ describe("@t3team/sdk/time", () => {
       expect(second).toBe(first);
     });
 
-    it("property: result always lands on the requested weekday/local-time, strictly after fromEpochMs", () => {
-      fc.assert(
-        fc.property(
-          fc.integer(EPOCH_RANGE),
-          fc.constantFrom(...WEEKDAYS),
-          fc.integer({ min: 0, max: 23 }),
-          fc.integer({ min: 0, max: 59 }),
-          (from, weekday, hour, minute) => {
+    effectIt.effect(
+      "property: result always lands on the requested weekday/local-time, strictly after fromEpochMs",
+      () =>
+        checkProperty(
+          Arbitrary.all([epochMs, weekdayArb, intBetween(0, 23), intBetween(0, 59)]),
+          ([from, weekday, hour, minute]) => {
             const at = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
             const tz = "Europe/Zurich";
             const result = nextWeekday(from, { weekday, at, tz });
@@ -79,8 +96,7 @@ describe("@t3team/sdk/time", () => {
             expect(parts.minute).toBe(minute);
           },
         ),
-      );
-    });
+    );
   });
 
   describe("nextCron", () => {
@@ -96,23 +112,21 @@ describe("@t3team/sdk/time", () => {
       expect(new Date(result).toISOString()).toBe("2026-10-05T07:00:00.000Z");
     });
 
-    it("property: result is always strictly after fromEpochMs", () => {
-      fc.assert(
-        fc.property(fc.integer(EPOCH_RANGE), (from) => {
-          const result = nextCron(from, "*/15 * * * *", { tz: "UTC" });
-          expect(result).toBeGreaterThan(from);
-        }),
-      );
-    });
+    effectIt.effect("property: result is always strictly after fromEpochMs", () =>
+      checkProperty(epochMs, (from) => {
+        const result = nextCron(from, "*/15 * * * *", { tz: "UTC" });
+        expect(result).toBeGreaterThan(from);
+      }),
+    );
 
-    it("property: result is the MINIMAL match — the next whole minute after fromEpochMs", () => {
-      fc.assert(
-        fc.property(fc.integer(EPOCH_RANGE), (from) => {
+    effectIt.effect(
+      "property: result is the MINIMAL match — the next whole minute after fromEpochMs",
+      () =>
+        checkProperty(epochMs, (from) => {
           const result = nextCron(from, "* * * * *", { tz: "UTC" });
           const expectedMinimal = (Math.floor(from / 60_000) + 1) * 60_000;
           expect(result).toBe(expectedMinimal);
         }),
-      );
-    });
+    );
   });
 });

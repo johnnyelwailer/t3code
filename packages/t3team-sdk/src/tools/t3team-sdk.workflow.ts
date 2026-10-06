@@ -61,7 +61,7 @@ export const runWorkflowTool = defineTool({
     // contradiction (which one is the run?), so only that combination is refused.
     if (source.length > 0 && workflowPath.length > 0) {
       throw new Error(
-        "t3team.orchestration.run requires at most one of 'source' or 'workflowPath' (an existing .workflow.ts in the workspace); omit both to have the orchestration authored from 'intent'.",
+        "t3_orchestration_run requires at most one of 'source' or 'workflowPath' (an existing .workflow.ts in the workspace); omit both to have the orchestration authored from 'intent'.",
       );
     }
     const intent = {
@@ -71,7 +71,7 @@ export const runWorkflowTool = defineTool({
     };
     if (intent.goal.length === 0 || intent.expectedOutcome.length === 0) {
       throw new Error(
-        "t3team.orchestration.run requires nonblank intent.goal and intent.expectedOutcome.",
+        "t3_orchestration_run requires nonblank intent.goal and intent.expectedOutcome.",
       );
     }
     if (
@@ -79,13 +79,11 @@ export const runWorkflowTool = defineTool({
       intent.guardrails.some((guardrail) => guardrail.length === 0)
     ) {
       throw new Error(
-        "t3team.orchestration.run requires intent.guardrails with at least one nonblank guardrail.",
+        "t3_orchestration_run requires intent.guardrails with at least one nonblank guardrail.",
       );
     }
     if (!ctx.t3team?.runWorkflow) {
-      throw new Error(
-        "t3team.orchestration.run requires a t3team workflow client in ToolHandlerCtx.",
-      );
+      throw new Error("t3_orchestration_run requires a t3team workflow client in ToolHandlerCtx.");
     }
     // The host result is re-validated against RunWorkflowToolResult by executeToolHandler.
     return (await ctx.t3team.runWorkflow({

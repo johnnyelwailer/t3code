@@ -95,7 +95,7 @@ export function makeWorkflowRunToolHandlers<E>(
       if (session !== undefined) return submitAuthoredWorkflowSource(session, args);
       if (!fileSystem || !path) {
         return Effect.fail(
-          "Filesystem services are not available for t3team.orchestration.run in this runtime.",
+          "Filesystem services are not available for t3_orchestration_run in this runtime.",
         );
       }
       return Effect.gen(function* () {

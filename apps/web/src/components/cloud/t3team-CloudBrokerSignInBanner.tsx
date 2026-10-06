@@ -1,18 +1,25 @@
-import { useCloudBrokerAuth } from "~/cloud/t3team-useCloudBrokerAuth";
+import { useAccount } from "~/account/t3team-useAccounts";
+import { useCloudBrokerStatus } from "~/cloud/t3team-useCloudBrokerStatus";
 
-import { CloudBrokerSignInCard } from "./t3team-CloudBrokerSignInCard";
+import { AccountSignInCard } from "../account/t3team-AccountSignInCard";
 
-/** The sign-in card, connected to this machine's server. Renders nothing when no broker is configured. */
+/**
+ * The sign-in cloud sessions need, for the account the broker authenticates with. Renders nothing
+ * without a broker, or once that account is signed in.
+ */
 export function CloudBrokerSignInBanner() {
-  const auth = useCloudBrokerAuth();
+  const broker = useCloudBrokerStatus();
+  const { account, pending, error, signIn, openVerification } = useAccount(
+    broker?.enabled ? broker.accountId : null,
+  );
   return (
-    <CloudBrokerSignInCard
-      status={auth.status}
-      pending={auth.pending}
-      error={auth.error}
-      onSignIn={auth.signIn}
-      onSignOut={auth.signOut}
-      onOpenVerification={auth.openVerification}
+    <AccountSignInCard
+      account={account}
+      purpose="to use cloud sessions"
+      pending={pending}
+      error={error}
+      onSignIn={signIn}
+      onOpenVerification={openVerification}
     />
   );
 }

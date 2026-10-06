@@ -2,7 +2,7 @@
  * Memory-pressure banner on a thread (flag `NEXI_FF_RESOURCE_PRESSURE`,
  * advertised as `ServerConfig.resourcePressure`; off = no query, no item).
  *
- *  - paused: derived from the thread's `resource-pressure.*` activity trail —
+ *  - paused: the thread fact `resourcePressurePaused` —
  *    "Paused · memory pressure", its turns resume automatically;
  *  - otherwise, while the server's latest sample is warn/critical: a notice.
  *
@@ -14,7 +14,7 @@ import { useEffect, useMemo } from "react";
 
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
-import { deriveResourcePressurePause } from "../../t3team/t3team-threadResourceCleanup.logic";
+import { useT3TeamThreadFacts } from "../../state/t3team-threadSideStreams";
 import { useThreadResourceCleanup } from "../../t3team/t3team-useThreadResourceCleanup";
 import { Button } from "../ui/button";
 import type { ComposerBannerStackItem } from "./ComposerBannerStack";
@@ -26,9 +26,8 @@ export function useResourcePressureBannerItem(input: {
   readonly enabled: boolean;
   readonly environmentId: EnvironmentId | null;
   readonly threadId: ThreadId | null;
-  readonly activities: ReadonlyArray<{ readonly kind: string; readonly createdAt: string }>;
 }): ComposerBannerStackItem | null {
-  const { enabled, environmentId, threadId, activities } = input;
+  const { enabled, environmentId, threadId } = input;
   const active = enabled && environmentId !== null && threadId !== null;
   const query = useEnvironmentQuery(
     active ? serverEnvironment.resourcePressure({ environmentId, input: {} }) : null,
@@ -40,25 +39,34 @@ export function useResourcePressureBannerItem(input: {
     return () => clearInterval(timer);
   }, [active, refresh]);
   const { cleanUp, busy } = useThreadResourceCleanup(environmentId);
-  const paused = useMemo(
-    () => (active ? deriveResourcePressurePause(activities) : null),
-    [active, activities],
-  );
+  const paused =
+    useT3TeamThreadFacts(active ? environmentId : null, threadId)?.resourcePressurePaused === true;
   const level = query.data?.snapshot?.level ?? "ok";
-  if (!active || (paused === null && level === "ok")) return null;
-  return {
-    id: "resource-pressure",
-    variant: paused !== null || level === "critical" ? "warning" : "info",
-    priority: paused !== null ? "urgent" : "notice",
-    icon: <span className="size-1.5 rounded-full bg-warning" aria-hidden="true" />,
-    title:
-      paused !== null
-        ? "Paused · memory pressure — resumes automatically once it clears"
-        : `Memory pressure ${level}`,
-    actions: (
-      <Button size="xs" variant="ghost" disabled={busy} onClick={() => void cleanUp(threadId)}>
-        Clean up resources…
-      </Button>
-    ),
-  };
+  const show = active && (paused || level !== "ok");
+  // Stable across unrelated host renders: the composer banner stack memoizes on it.
+  return useMemo<ComposerBannerStackItem | null>(
+    () =>
+      show
+        ? {
+            id: "resource-pressure",
+            variant: paused || level === "critical" ? "warning" : "info",
+            priority: paused ? "urgent" : "notice",
+            icon: <span className="size-1.5 rounded-full bg-warning" aria-hidden="true" />,
+            title: paused
+              ? "Paused · memory pressure — resumes automatically once it clears"
+              : `Memory pressure ${level}`,
+            actions: (
+              <Button
+                size="xs"
+                variant="ghost"
+                disabled={busy}
+                onClick={() => void cleanUp(threadId)}
+              >
+                Clean up resources…
+              </Button>
+            ),
+          }
+        : null,
+    [busy, cleanUp, level, paused, show, threadId],
+  );
 }

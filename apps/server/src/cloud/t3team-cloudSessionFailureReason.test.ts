@@ -84,6 +84,38 @@ describe("cloudSessionFailureReason", () => {
     assert.equal(cloudSessionFailureReason(failedRun, steps), "Timed out at “Start t3 serve”.");
   });
 
+  it("says the machine stopped responding when the run ended mid-step (a lost runner)", () => {
+    const steps = [
+      { name: "Set up job", status: "completed", conclusion: "success" },
+      { name: "Install Node 24 and pnpm 11.10.0", status: "in_progress", conclusion: null },
+      { name: "Bring up the project machine", status: "pending", conclusion: null },
+    ];
+    assert.equal(
+      cloudSessionFailureReason(failedRun, steps),
+      "The cloud machine stopped responding at “Install Node 24 and pnpm 11.10.0”. Start another to try again.",
+    );
+  });
+
+  it("says the machine stopped responding when it was lost between steps", () => {
+    const steps = [
+      { name: "Set up job", status: "completed", conclusion: "success" },
+      { name: "Checkout the t3code fork", status: "completed", conclusion: "success" },
+      { name: "Bring up the project machine", status: "pending", conclusion: null },
+    ];
+    assert.equal(
+      cloudSessionFailureReason(failedRun, steps),
+      "The cloud machine stopped responding after “Checkout the t3code fork”. Start another to try again.",
+    );
+  });
+
+  it("says no machine became free when no step ever started", () => {
+    const steps = [{ name: "Set up job", status: "pending", conclusion: null }];
+    assert.equal(
+      cloudSessionFailureReason(failedRun, steps),
+      "No cloud machine became free in time. Start another to try again.",
+    );
+  });
+
   it("falls back to the run conclusion, then a concise generic — never the raw string", () => {
     assert.equal(
       cloudSessionFailureReason({ conclusion: "timed_out" }, null),

@@ -32,7 +32,7 @@ export async function generateWorkflowRepairViaAuthor(ctx: {
     | "interactionMode"
     | "modelSelection"
     | "registry"
-    | "dispatch"
+    | "host"
     | "newId"
     | "nowIso"
   >;
@@ -95,7 +95,7 @@ export async function generateWorkflowRepairViaAuthor(ctx: {
     if (reply.error instanceof WorkflowAuthorTurnStopped || ctx.stopped()) {
       throw new Error("Workflow was stopped");
     }
-    // A timeout / dispatch failure is transient: the loop may try again within its budget.
+    // A timeout / host failure is transient: the loop may try again within its budget.
     return {
       kind: "cannotRepair",
       reason: reply.error instanceof Error ? reply.error.message : String(reply.error),

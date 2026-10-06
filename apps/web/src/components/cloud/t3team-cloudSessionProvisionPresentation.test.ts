@@ -6,7 +6,6 @@ import {
   isCloudSessionProvisionPending,
   presentCloudSession,
 } from "./t3team-cloudSessionProvisionPresentation";
-import { formatHoldDuration } from "./t3team-cloudSessionHoldFormat";
 
 const session = (overrides: Partial<CloudSession> = {}): CloudSession => ({
   sessionId: "s1",
@@ -76,12 +75,27 @@ describe("presentCloudSession", () => {
   });
 });
 
-describe("formatHoldDuration", () => {
-  it("tags the picker's choices compactly", () => {
-    expect(formatHoldDuration(3600)).toBe("1h");
-    expect(formatHoldDuration(4 * 3600)).toBe("4h");
-    expect(formatHoldDuration(90 * 60)).toBe("1h 30m");
-    expect(formatHoldDuration(45 * 60)).toBe("45m");
+describe("presentCloudSession for a project machine", () => {
+  const preparing = (overrides: Partial<CloudSession>) =>
+    presentCloudSession(session({ phase: "preparing", elapsedSeconds: 75, ...overrides }));
+
+  it("names each machine milestone instead of building the workspace", () => {
+    expect(preparing({ projectMachine: true, machineStage: "building" })).toMatchObject({
+      title: "Building the project machine",
+      detail: "From its devcontainer · 1m 15s",
+      tone: "working",
+    });
+    expect(preparing({ projectMachine: true, machineStage: "checking" }).title).toBe(
+      "Checking the project machine",
+    );
+    expect(preparing({ projectMachine: true, machineStage: "installing" }).title).toBe(
+      "Setting up Nexi in the machine",
+    );
+    expect(preparing({ projectMachine: true }).title).toBe("Preparing the project machine");
+  });
+
+  it("keeps the plain session's words", () => {
+    expect(preparing({}).title).toBe("Building the workspace");
   });
 });
 

@@ -1,4 +1,4 @@
-import { ApprovalRequestId } from "@t3tools/contracts";
+import { RuntimeRequestId } from "@t3tools/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -6,7 +6,8 @@ import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import type { PendingUserInput } from "../../session-logic";
 
 const prompt: PendingUserInput = {
-  requestId: ApprovalRequestId.make("request-1"),
+  requestId: RuntimeRequestId.make("request-1"),
+  responseCapability: "live" as const,
   createdAt: "2026-08-15T00:00:00.000Z",
   questions: [
     {
@@ -22,6 +23,13 @@ const prompt: PendingUserInput = {
   ],
   dismissible: true,
 };
+
+// Ask-user questions may carry a markdown `context`; the V2 question type does not declare it yet.
+function withQuestionContext(
+  question: PendingUserInput["questions"][number] & { readonly context: string },
+): PendingUserInput["questions"][number] {
+  return question;
+}
 
 function renderPanel(pendingUserInput: PendingUserInput = prompt) {
   return renderToStaticMarkup(
@@ -73,7 +81,8 @@ describe("ComposerPendingUserInputPanel", () => {
       <ComposerPendingUserInputPanel
         pendingUserInputs={[
           {
-            requestId: ApprovalRequestId.make("request-md"),
+            requestId: RuntimeRequestId.make("request-md"),
+            responseCapability: "live",
             createdAt: "2026-08-15T00:00:00.000Z",
             dismissible: false,
             questions: [
@@ -115,11 +124,12 @@ describe("ComposerPendingUserInputPanel", () => {
       <ComposerPendingUserInputPanel
         pendingUserInputs={[
           {
-            requestId: ApprovalRequestId.make("request-ctx"),
+            requestId: RuntimeRequestId.make("request-ctx"),
+            responseCapability: "live",
             createdAt: "2026-08-15T00:00:00.000Z",
             dismissible: false,
             questions: [
-              {
+              withQuestionContext({
                 id: "question-ctx",
                 header: "Ship order",
                 question: "Which of these should we ship first?",
@@ -129,7 +139,7 @@ describe("ComposerPendingUserInputPanel", () => {
                   { label: "Ship B", description: "User requested" },
                 ],
                 multiSelect: false,
-              },
+              }),
             ],
           },
         ]}

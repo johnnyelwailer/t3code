@@ -25,7 +25,7 @@ function buildMessage(id: string, text: string, t3teamExt?: ChatMessage["t3teamE
     streaming: false,
     createdAt: CREATED_AT,
     updatedAt: CREATED_AT,
-    turnId: null,
+    runId: null,
     ...(t3teamExt ? { t3teamExt } : {}),
   };
 }

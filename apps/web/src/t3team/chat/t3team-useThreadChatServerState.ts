@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { PROJECT_RECIPE_ACTIVITY_KIND_LAUNCH } from "@t3tools/project-recipes";
 
 import { usePrimaryEnvironmentId } from "~/state/environments";
-import { useProjects, useThread } from "~/state/entities";
+import { useProjects, useThreadShell } from "~/state/entities";
+import { useT3TeamThreadFacts } from "~/state/t3team-threadSideStreams";
 import { summarizeT3TeamServerThread } from "~/t3team/chat/t3team-threadDebug";
 import { buildThreadKickoffHistoryMessage } from "~/t3team/chat/t3team-threadKickoffHistoryMessage";
 import {
@@ -44,15 +44,14 @@ export function useThreadChatServerState({
     () => (environmentId ? scopeThreadRef(environmentId, threadId as never) : null),
     [environmentId, threadId],
   );
-  const serverThread = useThread(threadRef);
+  const serverThread = useThreadShell(threadRef);
   const hasServerThread = serverThread !== null;
   const serverThreadSummary = summarizeT3TeamServerThread(serverThread);
-  const serverMessageCount =
-    typeof serverThreadSummary?.messageCount === "number" ? serverThreadSummary.messageCount : 0;
-  const hasServerLaunchActivity =
-    serverThread?.activities.some(
-      (activity) => activity.kind === PROJECT_RECIPE_ACTIVITY_KIND_LAUNCH,
-    ) ?? false;
+  const serverMessageCount = serverThread?.visibleItemCount ?? 0;
+  // A workflow run launched from this thread is the fork thread fact `workflowRunStatus` (the
+  // client-side launch claim `tryClaimRecipeWorkflowLaunch` still guards the race before it lands).
+  const facts = useT3TeamThreadFacts(environmentId, threadRef?.threadId ?? null);
+  const hasServerLaunchActivity = facts?.workflowRunStatus != null;
   const useKickoffHistoryMessage = isWaitingForKickoffInput(kickoffWorkflow, kickoffPending);
   const kickoffHistoryMessage = useMemo(
     () =>

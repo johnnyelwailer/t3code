@@ -190,6 +190,9 @@ const MOCK_SNAPSHOTS: Record<string, ResourceSnapshot> = {
 };
 
 export class MockIntegrationProvider implements IntegrationProvider {
+  // Deterministic ids keep mock-driven flows reproducible.
+  private preparedMutationCount = 0;
+
   readonly id = "atlassian";
   readonly kind = "atlassian";
 
@@ -244,7 +247,7 @@ export class MockIntegrationProvider implements IntegrationProvider {
 
   async prepareMutation(input: PrepareMutationInput): Promise<PreparedMutation> {
     return {
-      mutationId: crypto.randomUUID(),
+      mutationId: `mock-mutation-${++this.preparedMutationCount}`,
       preview: `Prepared mutation for action ${input.actionId}`,
       editableFields: ["body"],
       payload: input.payload,

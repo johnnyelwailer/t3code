@@ -1,7 +1,7 @@
 /**
  * Builds a run's t3team controller: its host-neutral funnel
  * (`createWorkflowRunHost` from `@t3team/sdk`) plus the t3team-specific
- * pieces wired around it — the dispatch-based broker and run options
+ * pieces wired around it — the host-backed broker and run options
  * (`t3team-workflowEngineControllerEnv.ts`), the step-activity UX sinks,
  * the agent self-repair funnel, and the terminal-failure sequence.
  *
@@ -60,9 +60,7 @@ export function createWorkflowRunController(
           workflowRunId: input.runId,
           output: result.result,
           projectId: input.projectId,
-          dispatch: input.dispatch,
-          newId: input.newId,
-          nowIso: input.nowIso,
+          host: input.host,
         });
         // A throwing output sink must not flip the run to "failed" after the completion
         // message already posted (double-notify), and must not skip retiring the author.
@@ -74,12 +72,7 @@ export function createWorkflowRunController(
             sinkError,
           );
         }
-        await retireWorkflowAuthorThread({
-          runId: input.runId,
-          dispatch: input.dispatch,
-          newId: input.newId,
-          nowIso: input.nowIso,
-        });
+        await retireWorkflowAuthorThread({ runId: input.runId, host: input.host });
       },
       onFailed: async ({ phase, error }) => {
         await settleWorkflowRunFailure({
@@ -89,9 +82,7 @@ export function createWorkflowRunController(
           registry: input.registry,
           lifecycle: input.lifecycle,
           stepActivities,
-          dispatch: input.dispatch,
-          newId: input.newId,
-          nowIso: input.nowIso,
+          host: input.host,
           onError: input.onError,
           phase: phase === "host" ? "resume" : phase,
           // Only an ephemeral, agent-authored run carries a repair intent, and only its reader

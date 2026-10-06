@@ -5,7 +5,6 @@
  * ceiling. The tools are a coherent slice of that surface — everything an agent can be handed —
  * so they are the natural group to lift, and consumers still reach them through the root barrel.
  */
-export { renameThreadTool } from "./tools/t3team-sdk.t3team.ts";
 export { listRecipesTool, validateRecipeTool } from "./tools/t3team-sdk.t3teamRecipes.ts";
 export type {
   RunWorkflowToolArgs,
@@ -13,7 +12,6 @@ export type {
   WorkflowRunIntent,
 } from "./tools/t3team-sdk.workflow.ts";
 export { runWorkflowTool } from "./tools/t3team-sdk.workflow.ts";
-export type { RenameThreadToolArgs, RenameThreadToolResult } from "./tools/t3team-sdk.t3team.ts";
 export type {
   ListRecipesToolResult,
   RecipeListEntry,

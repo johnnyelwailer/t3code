@@ -1,16 +1,17 @@
-import { CommandId, ThreadId, type OrchestrationCommand } from "@t3tools/contracts";
-
-import { retireWorkflowAuthorThread } from "./t3team-workflowAuthorThreadCleanup.ts";
-import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
+/**
+ * A user Stop on a launch thread stops the workflows it launched: their queued admissions are
+ * cancelled, their durable rows settle `cancelled` through the master stop, and the active run of
+ * every thread they spawned is interrupted.
+ */
 import { workflowAdmissionQueue } from "./t3team-workflowAdmissionQueue.ts";
-
-let childrenRetired = 0;
+import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
+import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
+import { retireWorkflowAuthorThread } from "./t3team-workflowAuthorThreadCleanup.ts";
 
 export async function stopWorkflowsOwnedByThread(input: {
   readonly registry: T3TeamWorkflowEngineRegistryShape;
   readonly threadId: string;
-  readonly createdAt: string;
-  readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
+  readonly host: Pick<WorkflowHostPort, "interrupt" | "archiveThread">;
 }): Promise<void> {
   for (const runId of input.registry.runsOwnedByThread(input.threadId)) {
     const children = input.registry.childThreadsForRun(runId);
@@ -22,18 +23,12 @@ export async function stopWorkflowsOwnedByThread(input: {
     input.registry.cancelRun(runId);
     await durableStop;
     for (const childThreadId of children) {
-      await input.dispatch({
-        type: "thread.turn.interrupt",
-        commandId: CommandId.make(`t3team-master-stop:${runId}:${childThreadId}`),
-        threadId: ThreadId.make(childThreadId),
-        createdAt: input.createdAt,
+      await input.host.interrupt({
+        threadId: childThreadId,
+        reason: "Workflow stopped",
+        origin: "user",
       });
     }
-    await retireWorkflowAuthorThread({
-      runId,
-      dispatch: input.dispatch,
-      newId: () => `${runId}:${childrenRetired++}`,
-      nowIso: () => input.createdAt,
-    });
+    await retireWorkflowAuthorThread({ runId, host: input.host });
   }
 }

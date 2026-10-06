@@ -14,6 +14,7 @@ import {
   BlocksIcon,
   BotIcon,
   createLucideIcon,
+  CalendarClockIcon,
   GitBranchIcon,
   HardDriveIcon,
   PanelsTopLeftIcon,
@@ -50,7 +51,7 @@ import {
 } from "./settingsSearch";
 import { useAvailableSettingsSearchItems } from "./useAvailableSettingsSearchItems";
 import { validateSettingsScopeSearch } from "./settingsScope";
-import { CloudBrokerSidebarEntry } from "../cloud/t3team-CloudBrokerSidebarEntry";
+import { AccountSidebarEntry } from "../account/t3team-AccountSidebarEntry";
 
 const SnapShotIcon = createLucideIcon("snap-shot", [
   [
@@ -104,6 +105,7 @@ const SETTINGS_SECTION_ICONS: Readonly<
   "/settings/providers": BotIcon,
   "/settings/connected-tools": KeyRoundIcon,
   "/settings/integrations": BlocksIcon,
+  "/settings/scheduled-tasks": CalendarClockIcon,
   "/settings/source-control": GitBranchIcon,
   "/settings/storage": HardDriveIcon,
   "/settings/connections": Link2Icon,
@@ -379,7 +381,7 @@ export function SettingsSidebarNav({ pathname }: { pathname: string }) {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <CloudBrokerSidebarEntry />
+        <AccountSidebarEntry />
         <Suspense fallback={null}>
           <T3ConnectSidebarSignIn />
         </Suspense>

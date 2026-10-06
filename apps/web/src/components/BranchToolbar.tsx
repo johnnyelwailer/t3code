@@ -1,6 +1,6 @@
+import { ComposerContextLabel } from "./ComposerContextLabel";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { useNavigate } from "@tanstack/react-router";
 import {
   ChevronDownIcon,
   FolderGit2Icon,
@@ -21,9 +21,7 @@ import {
 } from "react";
 
 import { useComposerDraftStore, type DraftId } from "../composerDraftStore";
-import { useCloudSessionController } from "../cloud/t3team-useCloudSessionController";
-import { runOnCloudSessions } from "./cloud/t3team-cloudSessionSplit";
-import { formatHoldDuration } from "./cloud/t3team-cloudSessionHoldFormat";
+import { useT3TeamRunOnCloudSessionProps } from "./cloud/t3team-useRunOnCloudSessionProps";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useProject, useThreadShell, useThreadShellsForProjectRefs } from "../state/entities";
 import {
@@ -71,6 +69,8 @@ export interface BranchToolbarHandle {
 }
 
 interface BranchToolbarProps {
+  layout?: "composer" | "panel";
+  panelSection?: "all" | "workspace" | "branch";
   forceNewWorktree?: boolean;
   ref?: Ref<BranchToolbarHandle>;
   environmentId: EnvironmentId;
@@ -184,18 +184,10 @@ const MobileRunContextSelector = memo(function MobileRunContextSelector({
   const triggerContent = (
     <>
       {icon}
-      <span
-        data-composer-label
-        className="min-w-0 max-w-[240px] group-data-[compact]/composer-context:max-w-0"
-      >
-        <span
-          data-composer-label-motion
-          className="block w-full min-w-0 max-w-[240px] truncate transition-opacity duration-180 ease-drawer group-data-[compact]/composer-context:opacity-0 motion-reduce:transition-none"
-        >
-          {autoEnvironmentLabel ??
-            (showEnvironmentIndicator ? (activeEnvironment?.label ?? "Run on") : workspaceLabel)}
-        </span>
-      </span>
+      <ComposerContextLabel>
+        {autoEnvironmentLabel ??
+          (showEnvironmentIndicator ? (activeEnvironment?.label ?? "Run on") : workspaceLabel)}
+      </ComposerContextLabel>
     </>
   );
 
@@ -509,6 +501,8 @@ function useLabelsOverflow(element: HTMLDivElement | null): boolean {
 }
 
 export const BranchToolbar = memo(function BranchToolbar({
+  layout = "composer",
+  panelSection = "all",
   forceNewWorktree = false,
   ref,
   environmentId,
@@ -620,35 +614,14 @@ export const BranchToolbar = memo(function BranchToolbar({
   const [stripElement, setStripElement] = useState<HTMLDivElement | null>(null);
   const labelsOverflow = useLabelsOverflow(stripElement);
 
-  // Cloud sessions shown in the "Run on" menu: everything still provisioning
-  // plus the most recent failed session (never silently forgotten). Read the
-  // split rule's doc for why ready sessions stay out of this list. Both
-  // derived values are memoised: the selector is memo'd and this strip
-  // re-renders on every keystroke, so a fresh array or callback here would
-  // defeat its memo.
-  // When there is no primary environment, no cloud affordance is passed and
-  // the menu renders exactly as it did before.
-  const cloudSessions = useCloudSessionController();
-  const pendingCloudSessions = useMemo(
-    () => (cloudSessions.available ? runOnCloudSessions(cloudSessions.sessions) : []),
-    [cloudSessions.available, cloudSessions.sessions],
-  );
-  const onCreateCloudSession = useCallback(
-    () => cloudSessions.onCreate(cloudSessions.durationSeconds),
-    [cloudSessions.durationSeconds, cloudSessions.onCreate],
-  );
-  // Unconfigured: the entry is a setup affordance, not a machine promise.
-  // The provisioning panel lives in the Connections settings, so the item
-  // leaves there — the same target the "Set up connections" link uses.
-  const navigate = useNavigate();
-  const onSetupCloudSessions = useCallback(() => {
-    void navigate({ to: "/settings/connections" });
-  }, [navigate]);
+  // t3team: the "Run on" menu's cloud entries (shared with the thread details panel).
+  const cloudSessions = useT3TeamRunOnCloudSessionProps(activeProjectRef);
 
   // The same machine can reach the catalog under two environment ids (its T3
   // Connect identity and a relay id minted when a cloud session's relay link
   // was published). The Run-on menus must not list it twice; the dedupe is
-  // scoped to these menus so no other surface's environment list changes.
+  // scoped to these menus so no other surface's environment list changes. The Run-on selector
+  // takes the full list: it de-duplicates itself, and must see every cloud machine.
   const runOnEnvironments = useMemo(
     () =>
       availableEnvironments ? dedupeRunOnEnvironments(availableEnvironments, environmentId) : null,
@@ -661,6 +634,40 @@ export const BranchToolbar = memo(function BranchToolbar({
     runOnEnvironments !== null && (showEnvironmentIndicator || cloudSessions.available);
 
   if (!hasActiveThread || !activeProject) return null;
+
+  if (layout === "panel") {
+    return (
+      <div className="flex w-full flex-col" data-thread-panel-run-context>
+        {panelSection !== "branch" ? (
+          <BranchToolbarEnvModeSelector
+            displayMode="panel"
+            envLocked={envModeLocked}
+            effectiveEnvMode={effectiveEnvMode}
+            activeWorktreePath={activeWorktreePath}
+            workspaceRoot={activeProject.workspaceRoot}
+            onEnvModeChange={onEnvModeChange}
+          />
+        ) : null}
+        {panelSection !== "workspace" ? (
+          <BranchToolbarBranchSelector
+            displayMode="panel"
+            className="w-full"
+            environmentId={environmentId}
+            threadId={threadId}
+            {...(draftId ? { draftId } : {})}
+            envLocked={envLocked}
+            effectiveEnvModeOverride={effectiveEnvMode}
+            {...(activeThreadBranchOverride !== undefined ? { activeThreadBranchOverride } : {})}
+            {...(onActiveThreadBranchOverrideChange ? { onActiveThreadBranchOverrideChange } : {})}
+            startFromOrigin={startFromOrigin}
+            onStartFromOriginChange={onStartFromOriginChange}
+            {...(onCheckoutPullRequestRequest ? { onCheckoutPullRequestRequest } : {})}
+            {...(onComposerFocusRequest ? { onComposerFocusRequest } : {})}
+          />
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <ComposerSurface.ContextStrip
@@ -676,16 +683,29 @@ export const BranchToolbar = memo(function BranchToolbar({
     >
       {showGitControls ? (
         <div className="contents @3xl/composer-surface:hidden">
+          {/* t3team: cloud sessions keep their Run-on entry in the narrow strip too; the compact
+              selector below then leaves the environment to it. */}
+          {cloudSessions.available && availableEnvironments ? (
+            <BranchToolbarEnvironmentSelector
+              autoEnvironmentLabel={autoEnvironmentLabel}
+              onAutoEnvironment={onAutoEnvironment}
+              envLocked={envLocked}
+              environmentId={environmentId}
+              availableEnvironments={availableEnvironments}
+              {...(showEnvironmentPicker && onEnvironmentChange ? { onEnvironmentChange } : {})}
+              {...cloudSessions.selectorProps}
+            />
+          ) : null}
           <MobileRunContextSelector
             forceNewWorktree={forceNewWorktree}
-            autoEnvironmentLabel={autoEnvironmentLabel}
-            onAutoEnvironment={onAutoEnvironment}
+            autoEnvironmentLabel={cloudSessions.available ? undefined : autoEnvironmentLabel}
+            onAutoEnvironment={cloudSessions.available ? undefined : onAutoEnvironment}
             envLocked={envLocked}
             envModeLocked={envModeLocked}
             environmentId={environmentId}
             availableEnvironments={runOnEnvironments ?? []}
-            showEnvironmentPicker={showEnvironmentPicker}
-            showEnvironmentIndicator={showEnvironmentIndicator}
+            showEnvironmentPicker={showEnvironmentPicker && !cloudSessions.available}
+            showEnvironmentIndicator={showEnvironmentIndicator && !cloudSessions.available}
             onEnvironmentChange={onEnvironmentChange}
             effectiveEnvMode={effectiveEnvMode}
             activeWorktreePath={activeWorktreePath}
@@ -704,27 +724,16 @@ export const BranchToolbar = memo(function BranchToolbar({
             composerControlsHostRef ? "shrink" : "flex-1",
           )}
         >
-          {showRunOnSelector && runOnEnvironments && (
+          {showRunOnSelector && availableEnvironments && (
             <>
               <BranchToolbarEnvironmentSelector
                 autoEnvironmentLabel={autoEnvironmentLabel}
                 onAutoEnvironment={onAutoEnvironment}
                 envLocked={envLocked}
                 environmentId={environmentId}
-                availableEnvironments={runOnEnvironments}
+                availableEnvironments={availableEnvironments}
                 {...(showEnvironmentPicker && onEnvironmentChange ? { onEnvironmentChange } : {})}
-                {...(cloudSessions.available && cloudSessions.configured
-                  ? {
-                      pendingCloudSessions,
-                      onCreateCloudSession,
-                      cloudSessionDurationLabel: formatHoldDuration(cloudSessions.durationSeconds),
-                      onCloudSessionAction: cloudSessions.onSessionAction,
-                      onCloudMenuOpenChange: cloudSessions.onCloudMenuOpenChange,
-                    }
-                  : {})}
-                {...(cloudSessions.available && !cloudSessions.configured
-                  ? { onSetupCloudSessions }
-                  : {})}
+                {...cloudSessions.selectorProps}
               />
               {showGitControls ? (
                 <Separator

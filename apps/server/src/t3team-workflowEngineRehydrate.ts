@@ -1,25 +1,27 @@
 /**
  * Boot rehydration for durable workflow runs (Epic 25 §Open question 2).
  *
- * On startup — after the orchestration reactors are live, before the welcome event — every
- * `workflow_runs` row in status `suspended` is rebuilt into a live, resumable run:
+ * On startup — once the workflow reactor is live, and before the signal reconciler starts any
+ * source (it waits on the rehydrate gate) — every `workflow_runs` row in status `suspended` is
+ * rebuilt into a live, resumable run:
  *   • DATA from the DB — workflow path, launch args, project/model/mode, and the pending ask —
  *     is read off the row.
- *   • CODE from the host layers — the orchestration `dispatch`, the SQLite journal store, the
- *     in-memory registry, the lifecycle write-through — is reconstructed here and handed to
+ *   • CODE from the host layers — the workflow host, the SQLite journal store, the in-memory
+ *     registry, the lifecycle write-through — is reconstructed here and handed to
  *     {@link createWorkflowRunController}, the SAME builder the live launch uses.
  * The controller re-registers the run's `resume` closure; restoring the pending ask into the
  * in-memory registry then makes the reactor behave identically whether the ask was set this
- * uptime or recovered from a prior one. No local-disk journal is involved — replay reads the
+ * uptime or recovered from a prior one — its durable sweep re-judges a restored `askAgent` step
+ * against V2 state, so a step whose run ended while the server was down settles on the first
+ * sweep. No local-disk journal is involved — replay reads the
  * DB-backed journal through the injected store.
  *
  * ── Clock-parked runs (Epic 27) ──────────────────────────────────────────────
  * A run parked on `waitUntil` is in status `sleeping`, not `suspended`. It rebuilds the same
  * resume closure (so the scheduler can drive it forward), but is woken by the CLOCK, not an
- * event — so it does NOT restore a reactor pending ask; instead the scheduler re-arms its
- * `wake_at`. A deadline that passed during downtime fires immediately on the first arm. The
- * rebuilt lifecycle's `onSleep` re-pokes the scheduler so a run that sleeps again keeps the
- * soonest-deadline timer current.
+ * event — so it does NOT restore a reactor pending ask; instead the scheduler's sweep reads its
+ * `wake_at` on every tick. Rehydration opens that sweep once the closures exist, and a deadline
+ * that passed during downtime wakes on the opening catch-up pass.
  *
  * Single-instance only (Epic 25 §Out of scope): no lease/lock, so this assumes one server owns
  * these rows. A row whose pending ask is missing is logged and skipped (it cannot be resolved).
@@ -32,15 +34,14 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
 import { ServerConfig } from "./config.ts";
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
-import { t3teamRandomUUID } from "./t3team-random.ts";
 import { retireWorkflowAuthorThread } from "./t3team-workflowAuthorThreadCleanup.ts";
 import { deliverWorkflowFailure } from "./t3team-workflowCompletionMessage.ts";
 import { T3TeamWorkflowEngineReactorLive } from "./t3team-workflowEngineReactor.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import { T3TeamWorkflowHost, toWorkflowHostPort } from "./t3team-workflowHost.ts";
 import { resolveRehydratedWorkflowScripts } from "./t3team-workflowRehydrateScripts.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 import { drainSignalParkInbox } from "./t3team-workflowSignalParkDrain.ts";
@@ -67,7 +68,7 @@ const rehydrateSuspendedWorkflowRunsCore = Effect.fn("rehydrateSuspendedWorkflow
     rehydrateGate?.markInFlight();
     const store = yield* WorkflowJournalStore;
     const registry = yield* T3TeamWorkflowEngineRegistry;
-    const orchestration = yield* OrchestrationEngineService;
+    const host = toWorkflowHostPort(yield* T3TeamWorkflowHost);
     const serverConfig = yield* ServerConfig;
     const scheduler = yield* T3TeamWorkflowScheduler;
     // Restored runs must keep the same `getTools()` tree they launched with — no more and no less.
@@ -82,8 +83,6 @@ const rehydrateSuspendedWorkflowRunsCore = Effect.fn("rehydrateSuspendedWorkflow
     const paused = yield* repo.listByStatus({ status: "paused" });
     const queued = yield* repo.listByStatus({ status: "queued" });
     const watching = yield* repo.listByStatus({ status: "watching" });
-    const dispatch = (command: Parameters<typeof orchestration.dispatch>[0]): Promise<void> =>
-      Effect.runPromise(orchestration.dispatch(command)).then(() => undefined);
 
     // A process died while executing a non-idempotent live step. Never blindly replay it at
     // boot: surface Needs attention instead of leaving a forever-running orphan — and TELL the
@@ -109,19 +108,15 @@ const rehydrateSuspendedWorkflowRunsCore = Effect.fn("rehydrateSuspendedWorkflow
           workflowRunId: run.runId,
           errorText:
             "The server restarted while this orchestration was being authored; it was not started.",
-          dispatch,
-          newId: () => t3teamRandomUUID(),
-          nowIso,
+          host,
         }),
       );
+      if (run.launchThreadId !== null) {
+        const launchThreadId = run.launchThreadId;
+        yield* Effect.promise(() => host.syncRunFacts(launchThreadId).catch(() => undefined));
+      }
       yield* Effect.promise(() =>
-        retireWorkflowAuthorThread({
-          runId: run.runId,
-          dispatch,
-          newId: () => t3teamRandomUUID(),
-          nowIso,
-          force: true,
-        }),
+        retireWorkflowAuthorThread({ runId: run.runId, host, force: true }),
       );
     }
     const running = yield* repo.listByStatus({ status: "running" });
@@ -133,21 +128,17 @@ const rehydrateSuspendedWorkflowRunsCore = Effect.fn("rehydrateSuspendedWorkflow
           launchThreadId: run.launchThreadId ?? undefined,
           workflowRunId: run.runId,
           errorText: "The server restarted while this run was executing; it was not resumed.",
-          dispatch,
-          newId: () => t3teamRandomUUID(),
-          nowIso,
+          host,
         }),
       );
+      if (run.launchThreadId !== null) {
+        const launchThreadId = run.launchThreadId;
+        yield* Effect.promise(() => host.syncRunFacts(launchThreadId).catch(() => undefined));
+      }
       // A running row may still hold the author thread that repairs it. The process
       // that owned that conversation is gone, so the thread is retired with the run.
       yield* Effect.promise(() =>
-        retireWorkflowAuthorThread({
-          runId: run.runId,
-          dispatch,
-          newId: () => t3teamRandomUUID(),
-          nowIso,
-          force: true,
-        }),
+        retireWorkflowAuthorThread({ runId: run.runId, host, force: true }),
       );
     }
     if (
@@ -156,8 +147,11 @@ const rehydrateSuspendedWorkflowRunsCore = Effect.fn("rehydrateSuspendedWorkflow
       paused.length === 0 &&
       queued.length === 0 &&
       watching.length === 0
-    )
+    ) {
+      // Nothing to rebuild: open the scheduler's wake sweep for runs that park later.
+      yield* Effect.promise(() => scheduler.rearm());
       return;
+    }
 
     // The journal lives in the DB (store), so `runsRoot` only backs the workspace-root default
     // for tool scratch files; the server cwd matches the bootstrapped project's workspace.
@@ -168,7 +162,7 @@ const rehydrateSuspendedWorkflowRunsCore = Effect.fn("rehydrateSuspendedWorkflow
       store,
       registry,
       runsRoot,
-      dispatch,
+      host,
       rearmScheduler: () => scheduler.rearm(),
       toolBroker,
       nowIso,
@@ -278,8 +272,8 @@ const rehydrateSuspendedWorkflowRunsCore = Effect.fn("rehydrateSuspendedWorkflow
       }
     }
 
-    // Arm the single soonest-deadline timer over every rebuilt sleeping run. A past-due deadline
-    // computes a 0ms delay and fires immediately — the downtime catch-up guarantee.
+    // Open the scheduler's wake sweep now that every sleeping run's closure is rebuilt. Its
+    // catch-up pass wakes a deadline that passed during downtime — the boot guarantee.
     yield* Effect.promise(() => scheduler.rearm());
 
     yield* Effect.logInfo("rehydrated durable workflow runs", { restored, armed, woken });

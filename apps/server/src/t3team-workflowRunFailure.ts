@@ -7,8 +7,6 @@
  * "agent hallucinates the run is still going" bug happened the first time.
  */
 
-import type { OrchestrationCommand } from "@t3tools/contracts";
-
 import { retireWorkflowAuthorThread } from "./t3team-workflowAuthorThreadCleanup.ts";
 import { deliverWorkflowFailure } from "./t3team-workflowCompletionMessage.ts";
 import {
@@ -19,6 +17,7 @@ import {
 import type { WorkflowRunLifecycle } from "./t3team-workflowEngineBrokerTypes.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 import type { WorkflowStepActivityEmitter } from "./t3team-workflowEngineStepActivities.ts";
+import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
 
 export async function settleWorkflowRunFailure(input: {
   readonly runId: string;
@@ -27,9 +26,7 @@ export async function settleWorkflowRunFailure(input: {
   readonly registry: T3TeamWorkflowEngineRegistryShape;
   readonly lifecycle: WorkflowRunLifecycle | undefined;
   readonly stepActivities: WorkflowStepActivityEmitter;
-  readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
-  readonly newId: () => string;
-  readonly nowIso: () => string;
+  readonly host: WorkflowHostPort;
   readonly onError: ((error: unknown) => Promise<void>) | undefined;
   /** Which funnel is settling — the coarse half of the persisted failing-step label. */
   readonly phase?: WorkflowFailurePhase;
@@ -60,15 +57,8 @@ export async function settleWorkflowRunFailure(input: {
     errorText,
     ...(input.hostOwnsSource !== undefined ? { hostOwnsSource: input.hostOwnsSource } : {}),
     resumable: input.retainPendingStep === true,
-    dispatch: input.dispatch,
-    newId: input.newId,
-    nowIso: input.nowIso,
+    host: input.host,
   });
   await input.onError?.(input.error);
-  await retireWorkflowAuthorThread({
-    runId: input.runId,
-    dispatch: input.dispatch,
-    newId: input.newId,
-    nowIso: input.nowIso,
-  });
+  await retireWorkflowAuthorThread({ runId: input.runId, host: input.host });
 }

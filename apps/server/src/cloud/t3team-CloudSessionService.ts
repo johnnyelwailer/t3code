@@ -1,5 +1,6 @@
 import {
   type CloudSession,
+  type CloudSessionCreateInput,
   CloudSessionFailedError,
   type CloudSessionListResult,
 } from "@t3tools/contracts";
@@ -19,10 +20,13 @@ import { resolveFleetConfig, workflowHistoryUrl } from "./t3team-CloudSessionFle
 import { makeFailureReasonCache } from "./t3team-cloudSessionFailureReason.ts";
 import { ConnectCredentialMinter } from "./t3team-ConnectCredentialMinter.ts";
 import { dispatchAndDiscoverSession } from "./t3team-CloudSessionDispatch.ts";
+import { sessionWorkspaceName } from "./t3team-cloudSessionMachineNames.ts";
 import { dispatchCredentialHandoff } from "./t3team-CloudSessionMintGate.ts";
 import { makePayloadIssueCleanup } from "./t3team-CloudSessionPayloadCleanup.ts";
-import { makeSessionTag, projectCloudSession } from "./t3team-CloudSessionProjection.ts";
+import { projectCloudSession } from "./t3team-CloudSessionProjection.ts";
+import { makeSessionTag } from "./t3team-cloudSessionName.ts";
 import { NexiBrokerService } from "./t3team-NexiBrokerService.ts";
+import { CloudSessionMachines } from "./t3team-CloudSessionMachine.ts";
 
 /**
  * Starts and tracks *cloud sessions*: full Nexi workspaces provisioned on
@@ -54,9 +58,9 @@ export class CloudSessionService extends Context.Service<
   CloudSessionService,
   {
     readonly list: Effect.Effect<CloudSessionListResult, CloudSessionFailedError>;
-    readonly create: (input: {
-      readonly durationSeconds: number;
-    }) => Effect.Effect<CloudSession, CloudSessionFailedError>;
+    readonly create: (
+      input: CloudSessionCreateInput,
+    ) => Effect.Effect<CloudSession, CloudSessionFailedError>;
     readonly cancel: (input: {
       readonly sessionId: string;
     }) => Effect.Effect<void, CloudSessionFailedError>;
@@ -68,6 +72,7 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
   const cloudCli = yield* CliTokenManager.CloudCliTokenManager;
   const minter = yield* ConnectCredentialMinter;
   const broker = yield* NexiBrokerService;
+  const machines = yield* CloudSessionMachines;
   const handoffEnabled = yield* isSessionCredentialIssueEnabled();
   const { repoRef, machineLabel } = yield* resolveFleetConfig();
 
@@ -127,11 +132,35 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
       // "newest run we had not seen" instead is wrong under concurrency — two
       // users dispatching in the same second can each be handed the other's
       // session, and then cancelling yours kills theirs.
-      const sessionTag = yield* makeSessionTag;
+      //
+      // Project machine (#562), resolved before any side effect; null means a plain session. Its
+      // repository token reaches the session only as a broker-held secret, so it needs the broker.
+      const machine =
+        input.projectId === undefined ? null : yield* machines.resolve(input.projectId);
+      // The caller's name for it, else its repository's (t3team-cloudSessionName.ts).
+      const sessionTag = yield* makeSessionTag(input.name ?? machine?.repository.name ?? null);
+      if (machine !== null && !broker.enabled) {
+        return yield* new CloudSessionFailedError({
+          reason: "machine_unavailable",
+          message:
+            "Project machines need the cloud-session broker and its account sign-in, which this build does not have.",
+        });
+      }
 
       // Broker mode: a grant only a run this login dispatched can redeem replaces the whole T3
       // Connect handoff. Fails with `broker_sign_in_required` before any dispatch when signed out.
-      const brokerGrant = broker.enabled ? yield* broker.requestGrant(login) : null;
+      const brokerGrant = broker.enabled
+        ? yield* broker.requestGrant(
+            login,
+            machine
+              ? {
+                  GIT_TOKEN: machine.token,
+                  GIT_AUTHOR_NAME: machine.author.name,
+                  GIT_AUTHOR_EMAIL: machine.author.email,
+                }
+              : undefined,
+          )
+        : null;
 
       // Credential handoff, with the in-app mint fallback: if this machine
       // has no usable T3 Connect credential yet, the mint (a browser
@@ -160,6 +189,8 @@ const make = Effect.fn("cloud.session_service.make")(function* () {
         listRuns: gh.listRunsFor(login),
         discoveryAttempts: DISPATCH_DISCOVERY_ATTEMPTS,
         brokerGrant,
+        machine,
+        workspace: sessionWorkspaceName(login, machine?.repository ?? null),
       });
     });
 

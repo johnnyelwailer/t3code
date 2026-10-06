@@ -34,9 +34,9 @@ const writePack = (input: {
     };
   });
 
-const DRIVER_ACTIVATE = (driver: string) =>
+const DRIVER_ACTIVATE = (driver: string, schemaVersion = 2) =>
   `export default ({ defineProviderDriver }) => defineProviderDriver({
-    schemaVersion: 1, driver: ${JSON.stringify(driver)}, displayName: "Driver ${driver}",
+    schemaVersion: ${schemaVersion}, driver: ${JSON.stringify(driver)}, displayName: "Driver ${driver}",
     create: async () => ({})
   });`;
 
@@ -77,6 +77,22 @@ nodeLayer("loadPackProviderOverlay provider drivers", (it) => {
       ).pipe(Effect.flip);
       expect(error.cause).toMatchObject({
         message: expect.stringContaining("without provider-driver:nexidriver capability"),
+      });
+    }),
+  );
+
+  it.effect("rejects a schemaVersion 1 (V1 adapter) driver at activation", () =>
+    Effect.gen(function* () {
+      const pack = yield* writePack({
+        id: "legacy",
+        capabilities: ["provider-driver:legacydriver"],
+        activate: DRIVER_ACTIVATE("legacydriver", 1),
+      });
+      const error = yield* Effect.tryPromise(() =>
+        loadPackProviderOverlay(overlayInput([pack])),
+      ).pipe(Effect.flip);
+      expect(error.cause).toMatchObject({
+        message: expect.stringContaining("requires schemaVersion 2"),
       });
     }),
   );

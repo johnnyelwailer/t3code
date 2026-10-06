@@ -2,14 +2,13 @@
 /**
  * Driving the author agent: ONE hidden ephemeral thread per run, and one awaited turn per request.
  *
- * The mechanism is the engine's own `thread.turn` ask, not a bespoke loop: the turn is dispatched
- * through the orchestration engine, the reactor resolves the registry's pending entry when the
+ * The mechanism is the engine's own `thread.turn` ask, not a bespoke loop: the turn is queued
+ * through the workflow host (`T3TeamWorkflowHost.startTurn`), the reactor resolves the registry's pending entry when the
  * provider's final assistant message lands (`t3team-workflowEngineReactorTasks.ts`), and the
  * author's tool calls arrive through the ordinary broker binding — scoped by the restricted tool
- * context installed here, so the author can validate, read the live model catalog and submit,
- * and nothing else.
+ * context installed here, so the author can validate and submit, and nothing else.
  */
-import { CommandId, MessageId, ThreadId, type OrchestrationCommand } from "@t3tools/contracts";
+import { ThreadId } from "@t3tools/contracts";
 import type {
   ModelSelection,
   ProjectId,
@@ -19,29 +18,36 @@ import type {
 import * as Effect from "effect/Effect";
 
 import type { T3TeamThreadToolContextStoreShape } from "./t3team-threadToolContextStore.ts";
+import { workflowAuthorThreadId } from "./t3team-workflowAuthorSession.ts";
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
+import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
+import { newWorkflowStepPromptMessageId } from "./t3team-workflowTurnPrompt.ts";
 
 /**
  * The author runs in PLAN interaction mode (drivers that honor it drop native edit/shell tools)
  * AND always in `approval-required`, never the caller's runtime mode. A driver that still asks
- * the host (`t3team-workflowAuthorApproval.ts`) is answered there: the allowlist below is
- * accepted, and a command, file change, or any other tool is declined. The prompt never
- * reaches a user who cannot see this hidden thread.
+ * the host is answered by `t3team-workflowAuthorApproval.ts` (wired into the V2 run's provider
+ * event stream): a command, file read or change, or any non-host tool is declined. The prompt
+ * never reaches a user who cannot see this hidden thread.
  */
-export const WORKFLOW_AUTHOR_INTERACTION_MODE = "plan" as const;
+const WORKFLOW_AUTHOR_INTERACTION_MODE = "plan" as const;
 
 /** Codex maps this to approvalPolicy `untrusted` and a read-only sandbox. Never the caller's mode. */
-export const WORKFLOW_AUTHOR_RUNTIME_MODE = "approval-required" as const;
+const WORKFLOW_AUTHOR_RUNTIME_MODE = "approval-required" as const;
 
-/** The author's entire tool surface. `t3team.orchestration.run` from this thread is a submission. */
+/**
+ * The author's entire tool surface. `t3team.orchestration.run` from this thread is a submission.
+ * The live model catalog rides the kickoff turn (`t3team-workflowAuthorPrompt.ts`): V2 has no
+ * broker models tool, and upstream's `orchestrator_capabilities` needs the full orchestration
+ * credential the author is never given (`t3team-workflowAuthorMcpScope.ts`).
+ */
 export const WORKFLOW_AUTHOR_TOOL_IDS = [
-  "t3team.runtime.models",
   "t3team.recipe.validate",
   "t3team.orchestration.run",
 ] as const;
 
 export interface WorkflowAuthorThreadDeps {
-  readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
+  readonly host: Pick<WorkflowHostPort, "createThread" | "startTurn" | "interrupt">;
   readonly registry: T3TeamWorkflowEngineRegistryShape;
   readonly contextStore?: Pick<T3TeamThreadToolContextStoreShape, "put"> | undefined;
   readonly newId: () => string;
@@ -63,22 +69,9 @@ export async function createWorkflowAuthorThread(
   deps: WorkflowAuthorThreadDeps,
   input: WorkflowAuthorThreadInput,
 ): Promise<string> {
-  const authorThreadId = `${input.runId}:author`;
+  const authorThreadId = workflowAuthorThreadId(input.runId);
   deps.registry.registerChildThread(input.runId, authorThreadId);
-  await deps.dispatch({
-    type: "thread.create",
-    commandId: CommandId.make(`t3team-wf:author:create:${deps.newId()}`),
-    threadId: ThreadId.make(authorThreadId),
-    projectId: input.projectId,
-    title: "Orchestration author",
-    modelSelection: input.authorModelSelection,
-    runtimeMode: WORKFLOW_AUTHOR_RUNTIME_MODE,
-    interactionMode: WORKFLOW_AUTHOR_INTERACTION_MODE,
-    branch: null,
-    worktreePath: null,
-    createdAt: deps.nowIso(),
-    retention: "ephemeral",
-  });
+  // The tool scope lands BEFORE the thread exists, so no turn can ever bind the generic set.
   if (deps.contextStore !== undefined) {
     await Effect.runPromise(
       deps.contextStore.put({
@@ -91,6 +84,16 @@ export async function createWorkflowAuthorThread(
       }),
     );
   }
+  // No `parentThreadId`: the author is hidden host machinery, never a roster child.
+  await deps.host.createThread({
+    threadId: authorThreadId,
+    projectId: input.projectId,
+    title: "Orchestration author",
+    modelSelection: input.authorModelSelection,
+    runtimeMode: WORKFLOW_AUTHOR_RUNTIME_MODE,
+    interactionMode: WORKFLOW_AUTHOR_INTERACTION_MODE,
+    retention: "ephemeral",
+  });
   return authorThreadId;
 }
 
@@ -119,10 +122,15 @@ export function driveWorkflowAuthorTurn(
       if (timer !== undefined) clearTimeout(timer);
       settle();
     };
+    // The reactor matches the answer by the prompt message id, unique per attempt.
+    const promptMessageId = newWorkflowStepPromptMessageId(
+      `${input.correlationId}:${deps.newId()}`,
+    );
     deps.registry.setPending(input.authorThreadId, {
       runId: input.runId,
       correlationId: input.correlationId,
       kind: "thread.turn",
+      promptMessageId,
       resolveLive: async (reply) =>
         done(() => resolve(typeof reply === "string" ? reply : JSON.stringify(reply))),
       cancelLive: () => done(() => reject(new WorkflowAuthorTurnStopped())),
@@ -130,33 +138,19 @@ export function driveWorkflowAuthorTurn(
     timer = setTimeout(() => {
       deps.registry.takePending(input.authorThreadId);
       // The provider keeps spending otherwise: stop the turn, not just our wait on it.
-      void deps
-        .dispatch({
-          type: "thread.turn.interrupt",
-          commandId: CommandId.make(`t3team-wf:author:interrupt:${deps.newId()}`),
-          threadId: ThreadId.make(input.authorThreadId),
-          createdAt: deps.nowIso(),
-        })
+      void deps.host
+        .interrupt({ threadId: input.authorThreadId, reason: "Orchestration author timed out" })
         .catch(() => {});
       reject(new Error(`The orchestration author did not finish within ${input.timeoutMs} ms.`));
     }, input.timeoutMs);
-    deps
-      .dispatch({
-        type: "thread.turn.start",
-        commandId: CommandId.make(`t3team-wf:author:turn:${deps.newId()}`),
-        threadId: ThreadId.make(input.authorThreadId),
-        message: {
-          messageId: MessageId.make(deps.newId()),
-          role: "user",
-          text: input.text,
-          attachments: [],
-          // Marks the start as automated for decider turn admission; nobody typed this.
-          t3teamExt: { author: { kind: "system" } },
-        },
+    deps.host
+      .startTurn({
+        threadId: input.authorThreadId,
+        messageId: promptMessageId,
+        text: input.text,
         modelSelection: input.authorModelSelection,
-        runtimeMode: WORKFLOW_AUTHOR_RUNTIME_MODE,
-        interactionMode: WORKFLOW_AUTHOR_INTERACTION_MODE,
-        createdAt: deps.nowIso(),
+        // Marks the turn as automated; nobody typed this.
+        author: { kind: "system", workflowRunId: input.runId },
       })
       .catch((error: unknown) => {
         deps.registry.takePending(input.authorThreadId);

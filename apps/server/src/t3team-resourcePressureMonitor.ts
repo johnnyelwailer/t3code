@@ -16,9 +16,10 @@
  * overlap because the loop is sequential. Level transitions (after hysteresis)
  * are appended to the durable `resource_pressure_events` journal and logged,
  * and every sampled level feeds the auto-pause state machine
- * (`t3team-resourcePressureAutoPause.ts`) that holds turn starts while
- * critical. With the flag off the layer forks nothing, reports
- * `enabled: false` and exposes no auto-pause (the turn gate is a no-op).
+ * (`t3team-resourcePressureAutoPause.ts`). On orchestration V2 nothing holds
+ * turn starts yet: the turn gate needs a turn-admission hook in the V2 turn
+ * start path, which does not exist (deferred). With the flag off the layer
+ * forks nothing, reports `enabled: false` and exposes no auto-pause.
  *
  * @module t3team-resourcePressureMonitor
  */

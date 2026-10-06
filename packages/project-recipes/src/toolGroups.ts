@@ -116,7 +116,7 @@ export const PROJECT_RECIPE_TOOL_GROUP_BY_TOOL_ID = {
   // arbitrary orchestration code, optionally with a corrected `source`) — a caller that already
   // holds `thread.handoff` could reach the same effect via `run` again, so a narrower group for
   // `resume` alone would not reduce the actual blast radius, only add friction to the intended
-  // run -> observe -> fix -> resume recovery loop (see the t3team_orchestration_resume description).
+  // run -> observe -> fix -> resume recovery loop (see the t3_orchestration_resume description).
   "t3team.orchestration.status": PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP.id,
   "t3team.orchestration.resume": PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP.id,
   // `pause` / `stop` only ever act on the caller's OWN runs (scoped by launch thread) and can
@@ -125,16 +125,11 @@ export const PROJECT_RECIPE_TOOL_GROUP_BY_TOOL_ID = {
   "t3team.orchestration.stop": PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP.id,
   "t3team.recipe.validate": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.thread.read_current": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
-  "t3team.thread.rename": PROJECT_RECIPE_VIEW_STATE_TOOL_GROUP.id,
-  // The durable task journal. `write` is grouped with `thread.rename` rather than with the
-  // draft mutations: it changes only this thread's own local state, commits nothing outward,
-  // and needs no user approval step.
   "t3team.thread.search": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.thread.search_source": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.thread.read_message": PROJECT_RECIPE_INTEGRATION_READ_TOOL_GROUP.id,
   "t3team.thread.rename.draft_update": PROJECT_RECIPE_MUTATION_DRAFT_TOOL_GROUP.id,
   "t3team.thread.create_context_bound": PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP.id,
-  "t3team.thread.start_child": PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP.id,
   "t3team.thread.children": PROJECT_RECIPE_THREAD_HANDOFF_TOOL_GROUP.id,
   "t3team.widget.show": PROJECT_RECIPE_VIEW_STATE_TOOL_GROUP.id,
 } as const satisfies Readonly<Record<string, ProjectRecipeToolGroupId>>;

@@ -17,7 +17,7 @@ import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { threadEnvironment } from "~/state/threads";
 import { useEnvironment } from "~/state/environments";
 import { useAtomCommand } from "~/state/use-atom-command";
-import { useThreadDetail } from "~/state/entities";
+import { useThreadProjection } from "~/state/entities";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import { launchStagedComposerActionOnThread } from "~/t3team/chat/t3team-threadStagedActionLaunch";
 import { dispatchT3TeamOutboxEntry } from "~/t3team/outbox/t3team-outboxDispatch";
@@ -58,7 +58,7 @@ export function useT3TeamOutboxDrain(input: {
   const headThreadRef = headEntry
     ? scopeThreadRef(input.environmentId, headEntry.threadId as ThreadId)
     : null;
-  const headThread = useThreadDetail(headThreadRef);
+  const headThread = useThreadProjection(headThreadRef);
 
   const depsRef = useRef<{
     backend: BackendApi | null | undefined;
@@ -68,7 +68,7 @@ export function useT3TeamOutboxDrain(input: {
   depsRef.current = {
     backend: input.backend,
     startTurn,
-    headMessages: headThread?.messages ?? null,
+    headMessages: headThread?.projection.messages ?? null,
   };
 
   useEffect(() => {

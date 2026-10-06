@@ -26,14 +26,16 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import { createQueryable } from "@t3tools/project-context";
 import type { ProjectRecipeRenderContext } from "@t3tools/project-recipes";
-import { type OrchestrationCommand, ProjectId, ProviderInstanceId } from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import { defineRecipe, type WorkflowRef } from "@t3team/sdk";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import { discoverProjectRecipes } from "./t3team-projectRecipeDiscovery.ts";
+import { HIDDEN_T3TEAM_DIR } from "./t3team-project-repository-utils.ts";
 import { launchWorkflowRecipe } from "./t3team-workflowEngineLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
 
 const fixtureRoot = NodePath.join(
   NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)),
@@ -48,7 +50,7 @@ afterAll(() => {
   NodeFS.rmSync(runsRoot, { recursive: true, force: true });
 });
 
-const recipeRoot = NodePath.join(workspaceRoot, ".t3team", "recipes", "example-pr-review");
+const recipeRoot = NodePath.join(workspaceRoot, HIDDEN_T3TEAM_DIR, "recipes", "example-pr-review");
 NodeFS.mkdirSync(recipeRoot, { recursive: true });
 NodeFS.writeFileSync(
   NodePath.join(recipeRoot, "example-pr-review.workflow.ts"),
@@ -175,10 +177,7 @@ describe("recipe.ts discovery + engine launch", () => {
 
     // ── 2. Launch the discovered workflow through the real engine path ─────────
     const registry = makeWorkflowEngineRegistry();
-    const dispatched: OrchestrationCommand[] = [];
-    const dispatch = async (command: OrchestrationCommand): Promise<void> => {
-      dispatched.push(command);
-    };
+    const host = makeFakeWorkflowHost();
     let seq = 0;
     let completed: unknown;
 
@@ -195,7 +194,7 @@ describe("recipe.ts discovery + engine launch", () => {
       runtimeMode: "full-access",
       interactionMode: "default",
       registry,
-      dispatch,
+      host: host.host,
       newId: () => `id-${(seq += 1)}`,
       nowIso: () => "2026-01-01T00:00:00.000Z",
       onComplete: async (output) => {
@@ -205,15 +204,9 @@ describe("recipe.ts discovery + engine launch", () => {
 
     // Parks on the agent's isolated-thread turn.
     expect(result.status).toBe("suspended");
-    // The step-activity emitter fires a `thread.activity.append` live-status pip ahead of each
-    // real orchestration command it shadows (best-effort; UI observability only — see
-    // t3team-workflowEngineStepActivities.ts).
-    expect(dispatched.map((command) => command.type)).toEqual([
-      "thread.activity.append",
-      "thread.activity.append",
-      "thread.create",
-      "thread.turn.start",
-    ]);
+    // The step-activity emitter upserts a live-status pip ahead of each real host operation it
+    // shadows (best-effort; UI observability only — see t3team-workflowEngineStepActivities.ts).
+    expect(host.ops()).toEqual(["upsertActivity", "upsertActivity", "createThread", "startTurn"]);
 
     const run = registry.getRun(runId);
     expect(run).toBeDefined();
@@ -225,14 +218,14 @@ describe("recipe.ts discovery + engine launch", () => {
 
     // The user escalation fired as a system message into the launching thread — preceded by two
     // more step-activity pips shadowing the resumed turn's resolution and the follow-up ask.
-    expect(dispatched.map((command) => command.type)).toEqual([
-      "thread.activity.append",
-      "thread.activity.append",
-      "thread.create",
-      "thread.turn.start",
-      "thread.activity.append",
-      "thread.activity.append",
-      "thread.message.upsert",
+    expect(host.ops()).toEqual([
+      "upsertActivity",
+      "upsertActivity",
+      "createThread",
+      "startTurn",
+      "upsertActivity",
+      "upsertActivity",
+      "postMessage",
     ]);
 
     // Reactor step 2: the user replies in the launching thread.

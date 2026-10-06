@@ -37,8 +37,8 @@ const WORKFLOW_REPORT_TIMEOUT_MS = 120_000;
 /**
  * The utility-model call, injected. Shaped like the `generateRepairStructured` port on
  * `LaunchWorkflowRecipeInput` (`t3team-workflowEngineLaunchTypes.ts:80`), for the same reason: the
- * engine-side modules stay free of Effect services and the live wiring resolves `TextGeneration`
- * once, at the edge (`t3team-workflowReportComposerLive.ts`).
+ * engine-side modules stay free of Effect services and whatever wires the composer resolves
+ * `TextGeneration` once, at the edge.
  */
 export type GenerateWorkflowReport = (input: {
   readonly prompt: string;

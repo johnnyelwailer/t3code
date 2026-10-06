@@ -64,14 +64,18 @@ function renderRepair(project: ProjectShellProject) {
 }
 
 describe("useRepairProjectBinding", () => {
-  let dispatchCommand: ReturnType<typeof vi.fn<BackendApi["dispatchCommand"]>>;
+  let updateProjectSource: ReturnType<
+    typeof vi.fn<BackendApi["orchestration"]["updateProjectSource"]>
+  >;
 
   beforeEach(() => {
-    dispatchCommand = vi.fn<BackendApi["dispatchCommand"]>().mockResolvedValue(undefined);
+    updateProjectSource = vi
+      .fn<BackendApi["orchestration"]["updateProjectSource"]>()
+      .mockResolvedValue(undefined);
     const baseBackend = createMockBackend();
     backendRef.current = {
       ...baseBackend,
-      dispatchCommand,
+      orchestration: { ...baseBackend.orchestration, updateProjectSource },
       atlassian: {
         ...baseBackend.atlassian,
         listAccounts: vi.fn().mockResolvedValue([]),
@@ -88,7 +92,7 @@ describe("useRepairProjectBinding", () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(dispatchCommand).not.toHaveBeenCalled();
+    expect(updateProjectSource).not.toHaveBeenCalled();
 
     act(() => {
       rendered.value().setSelectedAccount(account);
@@ -101,16 +105,15 @@ describe("useRepairProjectBinding", () => {
     act(() => {
       rendered.value().setSelectedProject(iesSandbox);
     });
-    expect(dispatchCommand).not.toHaveBeenCalled();
+    expect(updateProjectSource).not.toHaveBeenCalled();
 
     const result: { current: ProjectShellProject | null } = { current: null };
     await act(async () => {
       result.current = await rendered.value().confirmRepair();
     });
 
-    expect(dispatchCommand).toHaveBeenCalledTimes(1);
-    const [command] = dispatchCommand.mock.calls[0] as [Record<string, unknown>];
-    expect(command.type).toBe("project.meta.update");
+    expect(updateProjectSource).toHaveBeenCalledTimes(1);
+    const [command] = updateProjectSource.mock.calls[0]!;
     expect(command.projectId).toBe("proj-1");
     expect(command.source).toEqual({
       provider: "atlassian",
@@ -124,7 +127,7 @@ describe("useRepairProjectBinding", () => {
   });
 
   it("surfaces a duplicate-binding failure without silently updating the stored project", async () => {
-    dispatchCommand.mockRejectedValue(
+    updateProjectSource.mockRejectedValue(
       new Error(
         "Orchestration command invariant failed (project.meta.update): externalProjectId is already bound to project 'other-project'",
       ),

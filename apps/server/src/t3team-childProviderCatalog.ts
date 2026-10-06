@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 /**
  * Module-singleton seam (same pattern as `t3team-workflowAgentModelPolicy.ts`) that hands
  * workflow-engine child spawning (`thread.turn` / `thread.create`) the same live provider
- * snapshots `t3team.thread.start_child` uses, so cross-provider model selections in ephemeral
+ * snapshots the delegate_task target resolution uses, so cross-provider model selections in ephemeral
  * workflows are validated against the same provider instances rather than blindly mapped.
  *
  * Set once at server boot by `T3TeamToolBrokerLive` (which already resolves `ProviderRegistry`

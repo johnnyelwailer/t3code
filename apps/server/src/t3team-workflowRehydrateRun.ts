@@ -19,7 +19,6 @@
  * Every dependency is passed in rather than resolved here: this must not acquire services of its
  * own, or boot ordering would stop being the sweep's decision.
  */
-import type { OrchestrationCommand } from "@t3tools/contracts";
 import type { AnyScriptRef, JournalStore } from "@t3team/sdk";
 import * as Effect from "effect/Effect";
 
@@ -37,6 +36,7 @@ import {
 import type { T3TeamWorkflowEngineRegistryShape } from "./t3team-workflowEngineRegistry.ts";
 import { resolveWorkflowAgentModel } from "./t3team-workflowAgentModelPolicy.ts";
 import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
+import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
 
 /** Derived from the consumer rather than re-declared, so it cannot drift from the real broker. */
 type HostDraftToolBroker = Parameters<typeof makeT3TeamWorkflowHostDraftToolClient>[0]["broker"];
@@ -46,7 +46,7 @@ export type WorkflowRunRehydratorDeps = {
   readonly store: JournalStore;
   readonly registry: T3TeamWorkflowEngineRegistryShape;
   readonly runsRoot: string;
-  readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
+  readonly host: WorkflowHostPort;
   readonly rearmScheduler: () => Promise<void>;
   readonly toolBroker: HostDraftToolBroker | undefined;
   readonly nowIso: () => string;
@@ -56,17 +56,8 @@ export type WorkflowRunRehydratorDeps = {
 };
 
 export function makeWorkflowRunRehydrator(deps: WorkflowRunRehydratorDeps) {
-  const {
-    repo,
-    store,
-    registry,
-    runsRoot,
-    dispatch,
-    rearmScheduler,
-    toolBroker,
-    nowIso,
-    signalStore,
-  } = deps;
+  const { repo, store, registry, runsRoot, host, rearmScheduler, toolBroker, nowIso, signalStore } =
+    deps;
 
   const hostToolClientFor = (run: WorkflowRun) => {
     const grant = run.hostToolGrant;
@@ -86,8 +77,7 @@ export function makeWorkflowRunRehydrator(deps: WorkflowRunRehydratorDeps) {
       onSleep: () => {
         void rearmScheduler();
       },
-      dispatch,
-      newId: () => t3teamRandomUUID(),
+      host,
     });
 
   /** Shared launch shape for a restored run, so rebuild and restart cannot drift apart. */
@@ -111,7 +101,7 @@ export function makeWorkflowRunRehydrator(deps: WorkflowRunRehydratorDeps) {
       runtimeMode: run.runtimeMode,
       interactionMode: run.interactionMode,
       registry,
-      dispatch,
+      host,
       newId: () => t3teamRandomUUID(),
       nowIso,
       store,

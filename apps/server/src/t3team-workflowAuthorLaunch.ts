@@ -32,11 +32,11 @@ import type {
 import { checkWorkflowSource } from "./t3team-workflowSourceCheck.ts";
 
 /** Ceiling for one authoring turn; a turn that outlives it is a failed authoring, reported once. */
-export const WORKFLOW_AUTHOR_TURN_TIMEOUT_MS = 15 * 60_000;
+const WORKFLOW_AUTHOR_TURN_TIMEOUT_MS = 15 * 60_000;
 
 export interface WorkflowAuthorLaunchDeps {
   readonly launch: PreparedWorkflowLaunchDeps;
-  readonly author: Omit<WorkflowAuthorThreadDeps, "dispatch" | "registry">;
+  readonly author: Omit<WorkflowAuthorThreadDeps, "host" | "registry">;
   /** Live provider snapshots for the source check's model gate; absent skips that gate. */
   readonly listProviders?: (() => Promise<ReadonlyArray<ServerProvider>>) | undefined;
   readonly turnTimeoutMs?: number | undefined;
@@ -63,7 +63,6 @@ export const startAuthoredWorkflowRun = Effect.fn("startAuthoredWorkflowRun")(fu
   if (fileSystem === undefined || path === undefined) {
     return yield* Effect.fail("Filesystem services are required to author an orchestration.");
   }
-  const nowIso = deps.author.nowIso;
   const workflowPath = path.join(input.workspaceRoot, ".t3team-runs", input.runId, "workflow.ts");
   const prepared = {
     ...input,
@@ -73,7 +72,7 @@ export const startAuthoredWorkflowRun = Effect.fn("startAuthoredWorkflowRun")(fu
   } satisfies PreparedWorkflowLaunchInput;
   const authorDeps: WorkflowAuthorThreadDeps = {
     ...deps.author,
-    dispatch: launch.dispatch,
+    host: launch.host,
     registry: launch.registry,
   };
 
@@ -134,6 +133,7 @@ export const startAuthoredWorkflowRun = Effect.fn("startAuthoredWorkflowRun")(fu
         intent: input.intent,
         args: input.args,
         draftSource: input.draftSource,
+        providers,
       }),
       timeoutMs: deps.turnTimeoutMs ?? WORKFLOW_AUTHOR_TURN_TIMEOUT_MS,
     }).then(
@@ -142,13 +142,7 @@ export const startAuthoredWorkflowRun = Effect.fn("startAuthoredWorkflowRun")(fu
     ),
   );
   session.submit = undefined;
-  const retire = () =>
-    retireWorkflowAuthorThread({
-      runId: input.runId,
-      dispatch: launch.dispatch,
-      newId: deps.author.newId,
-      nowIso,
-    });
+  const retire = () => retireWorkflowAuthorThread({ runId: input.runId, host: launch.host });
   if (
     isStopped() ||
     (outcome.kind === "failed" && outcome.error instanceof WorkflowAuthorTurnStopped)
@@ -181,9 +175,7 @@ export const startAuthoredWorkflowRun = Effect.fn("startAuthoredWorkflowRun")(fu
       registry: launch.registry,
       lifecycle,
       stepActivities,
-      dispatch: launch.dispatch,
-      newId: deps.author.newId,
-      nowIso,
+      host: launch.host,
       onError: input.onError,
       phase: "launch",
       hostOwnsSource: true,

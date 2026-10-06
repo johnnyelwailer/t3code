@@ -19,7 +19,6 @@ import {
   type WorkflowRef,
   withWorkflowRuntime,
 } from "./t3team-sdk.index.ts";
-import { renameThreadTool } from "./tools/t3team-sdk.t3team.ts";
 import { validateRecipeTool } from "./tools/t3team-sdk.t3teamRecipes.ts";
 
 let idCounter = 0;
@@ -168,21 +167,6 @@ describe("workflow-sdk", () => {
     ).toThrow("does not resolve to an existing file");
   });
 
-  it("executes the migrated rename tool through the registration map", async () => {
-    const result = await executeRegisteredTool(
-      renameThreadTool.id,
-      { title: "  Updated title  " },
-      createToolCtx({
-        threadId: "thread-1",
-        t3team: {
-          renameThread: async ({ title }) => ({ ok: true, title, threadId: "thread-1" }),
-        },
-      }),
-    );
-
-    expect(result).toEqual({ ok: true, title: "Updated title", threadId: "thread-1" });
-  });
-
   it("t3team.recipe.validate rejects when neither 'path' nor 'source' is given", async () => {
     await expect(
       executeRegisteredTool(
@@ -195,7 +179,7 @@ describe("workflow-sdk", () => {
         }),
       ),
     ).rejects.toThrow(
-      "t3team.recipe.validate requires exactly one of 'path' (workspace .workflow.ts or recipe directory) or 'source' (inline workflow TypeScript).",
+      "t3_recipe_validate requires exactly one of 'path' (workspace .workflow.ts or recipe directory) or 'source' (inline workflow TypeScript).",
     );
   });
 
@@ -211,7 +195,7 @@ describe("workflow-sdk", () => {
         }),
       ),
     ).rejects.toThrow(
-      "t3team.recipe.validate requires exactly one of 'path' (workspace .workflow.ts or recipe directory) or 'source' (inline workflow TypeScript).",
+      "t3_recipe_validate requires exactly one of 'path' (workspace .workflow.ts or recipe directory) or 'source' (inline workflow TypeScript).",
     );
   });
 

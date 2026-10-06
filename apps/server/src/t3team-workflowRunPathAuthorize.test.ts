@@ -24,6 +24,7 @@ import {
 import { listProjectRecipesForAgent } from "./t3team-recipeAgentList.ts";
 import { validateProjectRecipeWorkflowForAgent } from "./t3team-recipeAgentValidate.ts";
 import { resolveRunWorkflowPath } from "./t3team-workflowRunPathAuthorize.ts";
+import { HIDDEN_T3TEAM_DIR } from "./t3team-project-repository-utils.ts";
 
 const fixturesRoot = NodeURL.fileURLToPath(new URL("../__fixtures__/", import.meta.url));
 
@@ -179,7 +180,7 @@ describe("resolveRunWorkflowPath — execution authorization", () => {
         const packDir = yield* makeTempDir("t3team-run-auth-pack-");
         const workspaceRoot = yield* makeTempDir("t3team-run-auth-ws-");
         const packRecipeRoot = path.join(packDir, "recipes/triage");
-        const localRecipeRoot = path.join(workspaceRoot, ".t3team/recipes/triage");
+        const localRecipeRoot = path.join(workspaceRoot, `${HIDDEN_T3TEAM_DIR}/recipes/triage`);
         yield* writeRecipeDir({ root: packRecipeRoot, id: "triage", displayName: "Pack triage" });
         yield* writeRecipeDir({
           root: localRecipeRoot,

@@ -15,6 +15,7 @@ import {
   resolveCloudSessionEnvironment,
   type RelayEnvironmentCandidate,
 } from "~/components/cloud/t3team-cloudSessionConnect";
+import { cloudSessionDisplayName } from "~/components/cloud/t3team-cloudSessionDisplayName";
 import { toastManager } from "~/components/ui/toast";
 
 type RegisterRelay = (
@@ -32,7 +33,7 @@ function brokerRegistration(session: CloudSession): BrokerConnectionRegistration
   return new BrokerConnectionRegistration({
     target: new BrokerConnectionTarget({
       environmentId: EnvironmentId.make(environmentId),
-      label: "Cloud session",
+      label: cloudSessionDisplayName(session),
       sessionId: session.sessionId,
     }),
   });

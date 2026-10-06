@@ -6,17 +6,15 @@
  * mid-flight), then archive. Best-effort: a thread that never existed or is already archived is
  * not an error anyone can act on.
  */
-import { CommandId, ThreadId, type OrchestrationCommand } from "@t3tools/contracts";
-
-import { workflowAuthorSessionForRun } from "./t3team-workflowAuthorSession.ts";
-
-export const workflowAuthorThreadId = (runId: string): string => `${runId}:author`;
+import {
+  workflowAuthorSessionForRun,
+  workflowAuthorThreadId,
+} from "./t3team-workflowAuthorSession.ts";
+import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
 
 export async function retireWorkflowAuthorThread(input: {
   readonly runId: string;
-  readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
-  readonly newId: () => string;
-  readonly nowIso: () => string;
+  readonly host: Pick<WorkflowHostPort, "interrupt" | "archiveThread">;
   /** Retire even without a live session (boot rehydration of an interrupted authoring row). */
   readonly force?: boolean;
 }): Promise<void> {
@@ -26,20 +24,7 @@ export async function retireWorkflowAuthorThread(input: {
     session.submit = undefined;
     session.declined = true;
   }
-  const threadId = ThreadId.make(session?.authorThreadId ?? workflowAuthorThreadId(input.runId));
-  await input
-    .dispatch({
-      type: "thread.turn.interrupt",
-      commandId: CommandId.make(`t3team-wf:author:retire-interrupt:${input.newId()}`),
-      threadId,
-      createdAt: input.nowIso(),
-    })
-    .catch(() => {});
-  await input
-    .dispatch({
-      type: "thread.archive",
-      commandId: CommandId.make(`t3team-wf:author:archive:${input.newId()}`),
-      threadId,
-    })
-    .catch(() => {});
+  const threadId = session?.authorThreadId ?? workflowAuthorThreadId(input.runId);
+  await input.host.interrupt({ threadId, reason: "Orchestration author retired" }).catch(() => {});
+  await input.host.archiveThread(threadId).catch(() => {});
 }

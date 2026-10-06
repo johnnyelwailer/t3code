@@ -9,7 +9,7 @@ import { AsyncResult } from "effect/unstable/reactivity";
 
 import { describe, expect, it } from "vite-plus/test";
 
-import { cloudSessionFailureDescription } from "./t3team-cloudSessionToast";
+import { cloudSessionFailureDescription } from "./t3team-cloudSessionFailureDescription";
 
 const failure = (error: unknown) => AsyncResult.failure(Cause.fail(error));
 

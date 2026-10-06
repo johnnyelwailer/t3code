@@ -46,6 +46,17 @@ export function registerWorkflowAuthorSession(session: WorkflowAuthorSession): v
 }
 
 export const workflowAuthorSessionForThread = (threadId: string) => byAuthorThread.get(threadId);
+
+/** The author thread's deterministic id; it outlives the process-local registry. */
+export const workflowAuthorThreadId = (runId: string): string => `${runId}:author`;
+const AUTHOR_THREAD_SUFFIX = workflowAuthorThreadId("");
+
+/**
+ * Whether `threadId` is a hidden author thread: registered this uptime, or carrying the
+ * deterministic id (a thread left from before a restart is still sandboxed, never trusted).
+ */
+export const isWorkflowAuthorThread = (threadId: string): boolean =>
+  byAuthorThread.has(threadId) || threadId.endsWith(AUTHOR_THREAD_SUFFIX);
 export const workflowAuthorSessionForRun = (runId: string) => byRun.get(runId);
 
 /** Test seam. Sessions are otherwise kept for the process lifetime: a thread that once authored

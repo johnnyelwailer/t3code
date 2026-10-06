@@ -15,11 +15,19 @@ import { activateCompiledInDistribution } from "../t3team-distribution-bootstrap
 import {
   inspectConfiguredWorkspacePacks,
   loadPackAppearanceOverlay,
+  loadPackModelPolicy,
   loadPackProviderOverlay,
   loadPackWorkflowAgentModelPolicy,
   loadPackWorkflowEphemeralConcurrencyPolicy,
   loadPackWorkflowRepairPolicy,
 } from "../t3team-pack-host.ts";
+import { setDistributionModelPolicy } from "../t3team-configuredDefaultModelSelection.ts";
+import { packAccounts, setPackAccounts } from "../account/t3team-packAccounts.ts";
+import { loadPackAccounts } from "../t3team-pack-accounts.ts";
+import {
+  loadPackCompletionWakeRenderer,
+  setPackCompletionWakeRenderer,
+} from "../t3team-pack-completionWakeRenderer.ts";
 import { setPackAppearanceOverlay } from "../t3team-pack-appearanceOverlay.ts";
 import {
   loadPackSetupProfileOverlay,
@@ -122,6 +130,62 @@ export const runT3TeamServerCommand = (
           Effect.logWarning("Workspace pack setup profile loading failed", { cause }).pipe(
             Effect.as(undefined),
           ),
+        ),
+      );
+      yield* Effect.tryPromise({
+        try: () => loadPackAccounts(packDiagnostic),
+        catch: (cause) => new WorkspacePackLoadError({ cause }),
+      }).pipe(
+        // Added to the compiled-in distribution's accounts, which win on a shared id.
+        Effect.tap((accounts) =>
+          Effect.gen(function* () {
+            const taken = new Set(packAccounts().map((account) => account.id));
+            const added = accounts.filter((account) => !taken.has(account.id));
+            for (const skipped of accounts.filter((account) => taken.has(account.id))) {
+              yield* Effect.logWarning(
+                "Workspace pack account skipped: the id is already defined",
+                {
+                  account: skipped.id,
+                },
+              );
+            }
+            if (added.length > 0) setPackAccounts([...packAccounts(), ...added]);
+          }),
+        ),
+        Effect.catch((cause) =>
+          Effect.logWarning("Workspace pack account loading failed", { cause }).pipe(
+            Effect.as(undefined),
+          ),
+        ),
+      );
+      yield* Effect.tryPromise({
+        try: () => loadPackModelPolicy(packDiagnostic),
+        catch: (cause) => new WorkspacePackLoadError({ cause }),
+      }).pipe(
+        Effect.tap((policy) =>
+          Effect.sync(() => {
+            if (policy !== undefined) setDistributionModelPolicy(policy);
+          }),
+        ),
+        Effect.catch((cause) =>
+          Effect.logWarning("Workspace pack model policy loading failed", { cause }).pipe(
+            Effect.as(undefined),
+          ),
+        ),
+      );
+      yield* Effect.tryPromise({
+        try: () => loadPackCompletionWakeRenderer(packDiagnostic),
+        catch: (cause) => new WorkspacePackLoadError({ cause }),
+      }).pipe(
+        Effect.tap((renderer) =>
+          Effect.sync(() => {
+            if (renderer !== undefined) setPackCompletionWakeRenderer(renderer);
+          }),
+        ),
+        Effect.catch((cause) =>
+          Effect.logWarning("Workspace pack completion wake renderer loading failed", {
+            cause,
+          }).pipe(Effect.as(undefined)),
         ),
       );
       yield* Effect.tryPromise({

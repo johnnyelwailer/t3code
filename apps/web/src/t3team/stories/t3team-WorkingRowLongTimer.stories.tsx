@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
 
-import type { TurnId } from "@t3tools/contracts";
+import type { RunId } from "@t3tools/contracts";
 import { TimelineRowActivityCtx, WorkingTimelineRow } from "~/components/chat/MessagesTimeline";
 import type { ActivityState } from "~/t3team/t3team-activityStateDisplay";
 
@@ -33,16 +33,16 @@ function Row({
     <TimelineRowActivityCtx.Provider
       value={{
         isWorking: true,
+        activeTurnInProgress: true,
         isPreparingWorktree: false,
         isCompacting: false,
         isRevertingCheckpoint: false,
-        latestTurnId: "turn-long-timer" as TurnId,
+        latestRunId: "turn-long-timer" as RunId,
         workingStepLabel,
         activeAgents: [],
         backgroundJobs: [],
         onOpenAgents: () => {},
         threadActivityState,
-        unsettledTurnId: null,
         backgroundWorktreeSetup: null,
       }}
     >

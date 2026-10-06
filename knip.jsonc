@@ -111,13 +111,22 @@
         "scripts/cli.ts",
         "scripts/evaluate-thread-titles.ts",
         "scripts/measure-pr-preview.ts",
+        "scripts/probe-claude-fork-local-rollback-replay.ts",
+        "scripts/update-test-shard-weights.ts",
+        "scripts/verify-background-live.ts",
         "src/provider/testFixtures/*.mjs",
         // One-off operator script, run by path (it imports its -run/-mapping/-layers siblings).
         "scripts/t3team-replay-task-records-to-plans.ts",
+        // Workflow fixtures loaded at runtime by URL (new URL("../__fixtures__/" + name)) from
+        // the t3team-workflowEngine{DecisionCard,Reactor} integration tests, not imported.
+        "__fixtures__/t3team-decisionChoice.workflow.ts",
+        "__fixtures__/t3team-parallelAgentsAfterResume.workflow.ts",
       ],
       // Keep the transitive Effect runtime pinned for standalone npm installs.
       // The Vite+ web build prerequisite.
-      "ignoreDependencies": ["@effect/platform-node-shared", "@t3tools/web"],
+      // undici: a bundle external (Cursor's closure) that inlined pi-coding-agent imports at
+      // runtime; no source file imports it, but dist/ cannot start without it.
+      "ignoreDependencies": ["@effect/platform-node-shared", "@t3tools/web", "undici"],
     },
     "apps/desktop": {
       // Electron loads these bundles by filename rather than importing them.
@@ -169,9 +178,10 @@
       },
     },
     "apps/mobile": {
-      // Expo loads plugins by string; Metro embeds the browser entry in the native WebView.
+      // Expo loads plugins and the fingerprint config by string; Metro embeds the browser entry in the native WebView.
       "entry": [
         "index.ts!",
+        "fingerprint.config.js",
         "plugins/*.cjs",
         "scripts/generate-device-stream.mts",
         "src/features/devices/device-stream.browser.ts!",
@@ -197,7 +207,13 @@
     "packages/t3team-sdk": {
       // Operator-run e2e driver (`node e2e/t3team-sdk.boundedExecution.e2e.ts start|resume`);
       // it loads the workflow module by path, not by import.
-      "entry": ["e2e/t3team-sdk.boundedExecution.e2e.ts", "e2e/*.workflow.ts"],
+      // The workflow-reference generator is run by path to regenerate the checked-in
+      // t3team-sdk.workflowReference.generated.ts (its test names the command).
+      "entry": [
+        "e2e/t3team-sdk.boundedExecution.e2e.ts",
+        "e2e/*.workflow.ts",
+        "scripts/t3team-generate-workflow-reference.ts",
+      ],
     },
     "packages/client-runtime": {
       // Fork debt baseline (2026-09-09): exports consumed only by fork modules that are

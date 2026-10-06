@@ -1,6 +1,11 @@
+import type { AccountDefinition } from "./account.ts";
+import type { CompletionWakeRendererDefinition } from "./completion-wake.ts";
 import type { PackProviderDriverDefinition } from "./provider-driver.ts";
 
 export * from "./provider-driver.ts";
+export * from "./provider-orchestration.ts";
+export * from "./completion-wake.ts";
+export * from "./account.ts";
 
 export type PackAssetResolver = (relativePath: string, mimeType: string) => Promise<string>;
 
@@ -24,6 +29,28 @@ export type WorkflowAgentModelPolicyDefinition = {
         readonly model: string;
         readonly options?: Record<string, unknown>;
       };
+};
+
+/** A model selection a pack names: an instance id, a model slug and optional model options. */
+export type PackModelSelectionDefinition = {
+  readonly instanceId: string;
+  readonly model: string;
+  readonly options?: Record<string, unknown>;
+};
+
+/**
+ * Distribution model defaults (capability `model-policy:v1`).
+ * - `defaultModelSelection` is the host default model: the welcome thread's model and the
+ *   text-generation default while the user has not chosen one.
+ * - `textGenerationModelSelection` pins every server-side text generator (thread titles, branch
+ *   names, commit/PR text, activity labels) regardless of user settings, including the user's
+ *   source-control writer model and per-project overrides, e.g. to keep generated text on a
+ *   distribution-approved provider. Structured background generation (child status, workflow
+ *   repair) is not pinned; the workflow agent / repair model policies choose its model.
+ */
+export type ModelPolicyDefinition = {
+  readonly defaultModelSelection?: PackModelSelectionDefinition;
+  readonly textGenerationModelSelection?: PackModelSelectionDefinition;
 };
 
 export type WorkflowEphemeralConcurrencyPolicyDefinition = {
@@ -148,6 +175,10 @@ export type PackActivationContext = {
   readonly defineWorkflowEphemeralConcurrencyPolicy: (
     definition: WorkflowEphemeralConcurrencyPolicyDefinition,
   ) => void;
+  readonly defineModelPolicy: (definition: ModelPolicyDefinition) => void;
+  readonly defineCompletionWakeRenderer: (definition: CompletionWakeRendererDefinition) => void;
+  /** An account the app signs the user in to; see `AccountDefinition`. */
+  readonly defineAccount: (definition: AccountDefinition) => void;
   readonly resolveAssetDataUrl: PackAssetResolver;
 };
 

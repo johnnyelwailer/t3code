@@ -118,6 +118,7 @@ import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/men
 import { Switch } from "../ui/switch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { Alert, AlertDescription } from "../ui/alert";
 import { Button } from "../ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
 import { AnimatedHeight } from "../AnimatedHeight";
@@ -144,9 +145,15 @@ import {
   supportsServerUpdateThreadContinuation,
 } from "~/versionSkew";
 import { hasCloudPublicConfig } from "~/cloud/publicConfig";
+import { RemoveT3ConnectEnvironmentDialog } from "../clerk/RemoveT3ConnectEnvironmentDialog";
 import { useCloudLinkController } from "~/cloud/useCloudLinkController";
 import { useCloudSessionController } from "~/cloud/t3team-useCloudSessionController";
 import { savedEnvironmentForCloudSession } from "~/cloud/t3team-cloudSessionEnvironmentMatch";
+import { endedCloudSessionEnvironmentIds } from "~/cloud/t3team-endedCloudSessionEnvironments";
+import {
+  LOCAL_ENVIRONMENT_LABEL,
+  primaryEnvironmentLabel,
+} from "~/connection/t3team-localEnvironmentLabel";
 import { authEnvironment } from "~/state/auth";
 import { environmentCatalog } from "~/connection/catalog";
 import {
@@ -166,11 +173,13 @@ import {
   usePrimaryEnvironment,
   useRelayEnvironmentDiscovery,
 } from "~/state/environments";
+import { APP_VERSION } from "~/branding";
 import { requestConfirmDialog } from "~/confirmDialog";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { primaryServerKeybindingsAtom, serverEnvironment } from "~/state/server";
 import { ConnectionStatusDot } from "../ConnectionStatusDot";
 import {
+  OutdatedServerUpdateAction,
   ServerUpdateAction,
   ServerUpdateProgress,
   ServerUpdatesAction,
@@ -1437,6 +1446,8 @@ type SavedBackendListRowProps = {
   onRemove: (environment: EnvironmentPresentation) => void;
   /** A live cloud session's machine: a read-only connect target (the panel owns it). */
   isCloudSession: boolean;
+  /** t3team: this environment's cloud session ended; it can only be removed. */
+  cloudSessionEnded?: boolean;
 };
 
 /**
@@ -1487,6 +1498,7 @@ function SavedBackendListRow({
   onSetEnabled,
   onRemove,
   isCloudSession,
+  cloudSessionEnded = false,
 }: SavedBackendListRowProps) {
   const environmentId = environment.environmentId;
   const unsupported = environment.connection.phase === "unsupported";
@@ -1529,7 +1541,9 @@ function SavedBackendListRow({
   const serverUpdateState = useAtomValue(serverEnvironment.updateStateAtom(environmentId));
   const resumingServerUpdate =
     serverUpdateState.status === "running" && serverUpdateState.stage === "resuming";
-  const status = savedBackendStatus(environment);
+  const status = cloudSessionEnded
+    ? ({ text: "Session ended", tone: "muted" } as const)
+    : savedBackendStatus(environment);
   const serverVersion = environment.serverConfig?.environment.serverVersion ?? null;
   // A saved T3 Connect machine this device has never reached (unsupported,
   // or not yet connected) still has a descriptor from relay discovery, so
@@ -1611,6 +1625,17 @@ function SavedBackendListRow({
         ) : null
       }
     >
+      {unsupported &&
+      environment.entry.serverUpdateRequired === true &&
+      serverUpdateState.status !== "running" ? (
+        <OutdatedServerUpdateAction
+          environmentId={environmentId}
+          serverLabel={`${environment.label} server`}
+          fromVersion={lastDescriptor?.serverVersion}
+          targetVersion={APP_VERSION}
+          label={serverUpdateState.status === "failed" ? "Retry update" : "Update"}
+        />
+      ) : null}
       {showUpdateAction ? (
         <ServerUpdateAction
           environmentId={environmentId}
@@ -1630,6 +1655,7 @@ function SavedBackendListRow({
           isConnecting={environment.connection.phase === "connecting"}
           isRemoving={isRemoving}
           isCloudSession={isCloudSession}
+          sessionEnded={cloudSessionEnded}
           onConnect={() => onSetEnabled(environmentId, true)}
           onRemove={() => onRemove(environment)}
         />
@@ -1900,6 +1926,10 @@ export function ConnectionsSettings() {
         (environment) => !isDesktopLocalConnectionTarget(environment.entry.target),
       ),
     [savedEnvironments],
+  );
+  const endedCloudSessionEnvironments = useMemo(
+    () => endedCloudSessionEnvironmentIds(listedEnvironments, cloudSessions.sessions),
+    [listedEnvironments, cloudSessions.sessions],
   );
   // Machines "Update all" can reach: switched on, connected, behind the client
   // version, remotely updatable, and not already mid-update. The button only
@@ -2554,18 +2584,8 @@ export function ConnectionsSettings() {
     [setEnvironmentEnabled],
   );
 
-  // Removing forgets the pairing, credentials, and cached threads on this
-  // device. Switching off is the reversible path, so removal always confirms.
-  const handleRemoveSavedBackend = useCallback(
+  const removeSavedBackend = useCallback(
     async (environment: EnvironmentPresentation) => {
-      // Fail closed: no mounted confirm host means no removal.
-      const confirmed = await requestConfirmDialog(
-        `Remove ${environment.label} from this device?\nThis forgets its pairing, credentials, and cached threads here. Switch it off instead to keep it saved.`,
-        { variant: "destructive" },
-      );
-      if (confirmed !== true) {
-        return;
-      }
       const environmentId = environment.environmentId;
       setRemovingSavedEnvironmentId(environmentId);
       setSavedBackendError(null);
@@ -2585,6 +2605,28 @@ export function ConnectionsSettings() {
       }
     },
     [removeEnvironment],
+  );
+
+  // Removing forgets the pairing, credentials, and cached threads on this
+  // device. Switching off is the reversible path, so removal always confirms.
+  // T3 Connect environments get their own dialog: removing one here leaves its
+  // account registration, so it points to where that can be deregistered.
+  const [pendingT3ConnectRemoval, setPendingT3ConnectRemoval] =
+    useState<EnvironmentPresentation | null>(null);
+  const handleRemoveSavedBackend = useCallback(
+    async (environment: EnvironmentPresentation) => {
+      if (environment.relayManaged && hasCloudPublicConfig()) {
+        setPendingT3ConnectRemoval(environment);
+        return;
+      }
+      // Fail closed: no mounted confirm host means no removal.
+      const confirmed = await requestConfirmDialog(
+        `Remove ${environment.label} from this device?\nThis forgets its pairing, credentials, and cached threads here. Switch it off instead to keep it saved.`,
+        { variant: "destructive" },
+      );
+      if (confirmed === true) await removeSavedBackend(environment);
+    },
+    [removeSavedBackend],
   );
 
   // The cloud panel owns a session's "Forget": the same confirmed removal the
@@ -2850,9 +2892,9 @@ export function ConnectionsSettings() {
           </label>
         </div>
         {savedBackendError || discoveredSshHostsError ? (
-          <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-            {savedBackendError ?? discoveredSshHostsError}
-          </div>
+          <Alert variant="error">
+            <AlertDescription>{savedBackendError ?? discoveredSshHostsError}</AlertDescription>
+          </Alert>
         ) : null}
         <Button
           variant="outline"
@@ -3329,7 +3371,11 @@ export function ConnectionsSettings() {
           <SettingsSection
             {...searchableSetting("connections-environment")}
             title={
-              primaryEnvironment?.label ?? (desktopBridge ? "This machine" : "Primary environment")
+              primaryEnvironment
+                ? primaryEnvironmentLabel(primaryEnvironment.label)
+                : desktopBridge
+                  ? LOCAL_ENVIRONMENT_LABEL
+                  : "Primary environment"
             }
             icon={
               <EnvironmentMachineIcon
@@ -3811,6 +3857,7 @@ export function ConnectionsSettings() {
             onSetEnabled={handleSetSavedBackendEnabled}
             onRemove={handleRemoveSavedBackend}
             isCloudSession={cloudSessions.hasLiveCloudSession(environment.environmentId)}
+            cloudSessionEnded={endedCloudSessionEnvironments.has(environment.environmentId)}
           />
         ))}
         {cloudSessions.available ? (
@@ -3818,9 +3865,8 @@ export function ConnectionsSettings() {
             <CloudSessionProvisionPanel
               sessions={cloudSessions.sessions}
               loading={cloudSessions.loading}
+              loadError={cloudSessions.loadError}
               createPending={cloudSessions.createPending}
-              durationSeconds={cloudSessions.durationSeconds}
-              onDurationChange={cloudSessions.onDurationChange}
               onCreate={cloudSessions.onCreate}
               onSessionAction={cloudSessions.onSessionAction}
               onSessionSecondaryAction={cloudSessions.onSessionSecondaryAction}
@@ -3848,6 +3894,17 @@ export function ConnectionsSettings() {
           savedEnvironments={savedEnvironments}
         />
       </SettingsSection>
+      {hasCloudPublicConfig() ? (
+        <RemoveT3ConnectEnvironmentDialog
+          environmentLabel={pendingT3ConnectRemoval?.label ?? null}
+          onCancel={() => setPendingT3ConnectRemoval(null)}
+          onConfirm={() => {
+            if (!pendingT3ConnectRemoval) return;
+            setPendingT3ConnectRemoval(null);
+            void removeSavedBackend(pendingT3ConnectRemoval);
+          }}
+        />
+      ) : null}
       <LoadBalancingSettings environments={loadBalancingEnvironments} />
       <GitHubRoutingSettings environments={loadBalancingEnvironments} />
     </SettingsPageContainer>

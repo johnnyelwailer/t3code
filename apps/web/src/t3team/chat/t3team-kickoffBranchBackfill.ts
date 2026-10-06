@@ -1,24 +1,27 @@
+import { ThreadId } from "@t3tools/contracts";
+
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import type { ThreadBootstrapDispatchState } from "~/t3team/chat/t3team-threadBootstrapPlan";
 import { recordT3TeamThreadDebug } from "~/t3team/chat/t3team-threadDebug";
-import { randomUUID } from "~/lib/utils";
 
 /**
  * Backfills the branch onto an already-dispatched thread once the workspace's git status query
  * resolves. The create/kickoff dispatch never waits for that query (see
  * `runThreadBootstrapEffect`), so it may have gone out with `branch: null`; once `initialBranch`
- * has a real value this sends it via `thread.meta.update`, guarded by `expectedBranch: null` so it
- * never clobbers a branch the user (or a later turn) already set explicitly, and by
- * `branchBackfillSent` so it fires at most once per thread.
+ * has a real value this sends it via `thread.metadata.update`. V2 has no compare-and-set on the
+ * branch, so it is skipped when the live thread already carries a branch (set by the user or a
+ * later turn), and `branchBackfillSent` makes it fire at most once per thread.
  */
 export function maybeBackfillKickoffBranch(input: {
   backend: BackendApi;
   threadId: string;
   initialBranch: string | undefined;
   hasServerThread: boolean;
+  /** The live thread's branch; a non-null value means someone already set it. */
+  serverBranch: string | null | undefined;
   state: ThreadBootstrapDispatchState;
 }): void {
-  const { backend, threadId, initialBranch, hasServerThread, state } = input;
+  const { backend, threadId, initialBranch, hasServerThread, serverBranch, state } = input;
 
   // Only fires for a thread THIS hook dispatched with an unresolved branch (`dispatchedBranch ===
   // null`). `undefined` means nothing was dispatched here (e.g. a server thread that showed up
@@ -29,6 +32,7 @@ export function maybeBackfillKickoffBranch(input: {
   // where the reset flag never gets another effect pass and the thread stayed branchless forever.
   if (
     !hasServerThread ||
+    (serverBranch !== null && serverBranch !== undefined) ||
     state.dispatchedBranch !== null ||
     state.branchBackfillSent ||
     initialBranch === undefined
@@ -37,14 +41,8 @@ export function maybeBackfillKickoffBranch(input: {
   }
 
   state.branchBackfillSent = true;
-  void backend
-    .dispatchCommand({
-      type: "thread.meta.update",
-      commandId: randomUUID() as any,
-      threadId: threadId as any,
-      branch: initialBranch,
-      expectedBranch: null,
-    })
+  void backend.orchestration
+    .updateThreadMetadata({ threadId: ThreadId.make(threadId), branch: initialBranch })
     .then(() => {
       state.dispatchedBranch = initialBranch;
     })

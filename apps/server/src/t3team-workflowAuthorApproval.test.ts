@@ -1,303 +1,181 @@
 /**
- * Author-thread approvals are settled by the production runtime ingestion path —
- * the same function that turns `request.opened` into a user-visible activity —
- * and that activity is never dispatched. An allowlisted broker tool is accepted;
- * a command or file change is declined.
+ * The author-thread decision table on V2's runtime-request shape, one case per provider shape the
+ * V1 gate covered (Claude `canUseTool`, Codex app-server, Cursor ACP). The stream-level proof —
+ * settled before ingestion on the real run path — is `orchestration-v2/t3team-workflowAuthorGate.test.ts`.
  */
 import { assert, it } from "@effect/vitest";
-import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
-  EventId,
+  NodeId,
+  type OrchestrationV2RuntimeRequest,
+  type OrchestrationV2TurnItem,
   ProviderDriverKind,
-  ProviderInstanceId,
   RuntimeRequestId,
   ThreadId,
-  type CanonicalRequestType,
-  type OrchestrationCommand,
-  type ProviderRuntimeEvent,
-  type RuntimeEventRawSource,
+  TurnItemId,
 } from "@t3tools/contracts";
-import { createModelSelection } from "@t3tools/shared/model";
-import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import * as Queue from "effect/Queue";
-import * as Stream from "effect/Stream";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as DateTime from "effect/DateTime";
 
-import * as CheckpointStore from "./checkpointing/CheckpointStore.ts";
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
-import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
-import { ProviderRuntimeIngestionLive } from "./orchestration/Layers/ProviderRuntimeIngestion.ts";
-import { OrchestrationProjectionSnapshotQueryLive } from "./orchestration/Layers/ProjectionSnapshotQuery.ts";
-import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
-import { ProviderRuntimeIngestionService } from "./orchestration/Services/ProviderRuntimeIngestion.ts";
-import * as ThreadBackgroundLiveness from "./orchestration/ThreadBackgroundLiveness.ts";
-import * as ThreadPlanProgress from "./orchestration/ThreadPlanProgress.ts";
-import * as ThreadSilenceWatchdog from "./orchestration/ThreadSilenceWatchdog.ts";
-import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
-import { ProviderService, type ProviderServiceShape } from "./provider/Services/ProviderService.ts";
-import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
-import { ServerSettingsService } from "./serverSettings.ts";
 import {
+  decideWorkflowAuthorRequest,
+  isWorkflowAuthorToolName,
+} from "./t3team-workflowAuthorApproval.ts";
+import {
+  isWorkflowAuthorThread,
   registerWorkflowAuthorSession,
   resetWorkflowAuthorSessions,
 } from "./t3team-workflowAuthorSession.ts";
 
-const AUTHOR_THREAD = "run-author:author";
-const events = Effect.runSync(Queue.unbounded<ProviderRuntimeEvent>());
-const decisions = Effect.runSync(
-  Queue.unbounded<{ readonly threadId: string; readonly decision: string }>(),
-);
-const dispatched: OrchestrationCommand[] = [];
+const driver = ProviderDriverKind.make("codex");
+const now = DateTime.makeUnsafe(0);
 
-const provider = {
-  streamEvents: Stream.fromQueue(events),
-  respondToRequest: (input: { readonly threadId: ThreadId; readonly decision: string }) =>
-    Queue.offer(decisions, {
-      threadId: String(input.threadId),
-      decision: input.decision,
-    }).pipe(Effect.asVoid),
-} as unknown as ProviderServiceShape;
-
-const opened = (
-  id: string,
-  providerKind: string,
-  requestType: CanonicalRequestType,
-  source: RuntimeEventRawSource,
-  method: string,
-  args: unknown,
-): ProviderRuntimeEvent => ({
-  type: "request.opened",
-  eventId: EventId.make(id),
-  provider: ProviderDriverKind.make(providerKind),
-  createdAt: "2026-07-18T00:00:00.000Z",
-  threadId: ThreadId.make(AUTHOR_THREAD),
-  requestId: RuntimeRequestId.make(id),
-  payload: { requestType, args },
-  raw: { source, method, payload: args },
+const req = (
+  kind: OrchestrationV2RuntimeRequest["kind"],
+  nativeId: string | null = "call-1",
+): OrchestrationV2RuntimeRequest => ({
+  id: RuntimeRequestId.make(`req:${kind}`),
+  nodeId: NodeId.make("node:approval"),
+  providerTurnId: null,
+  nativeRequestRef: nativeId === null ? null : { driver, nativeId, strength: "strong" },
+  kind,
+  status: "pending",
+  responseCapability: { type: "message" },
+  createdAt: now,
+  resolvedAt: null,
 });
 
-const cases: ReadonlyArray<{ readonly event: ProviderRuntimeEvent; readonly decision: string }> = [
+const item = (
+  type: "dynamic_tool" | "command_execution" | "file_change",
+  name: { readonly toolName?: string | null; readonly title?: string | null },
+): OrchestrationV2TurnItem =>
+  ({
+    id: TurnItemId.make("item"),
+    threadId: ThreadId.make("run:author"),
+    runId: null,
+    nodeId: null,
+    providerThreadId: null,
+    providerTurnId: null,
+    nativeItemRef: { driver, nativeId: "call-1", strength: "strong" },
+    parentItemId: null,
+    ordinal: 1,
+    status: "running",
+    title: name.title ?? null,
+    startedAt: now,
+    completedAt: null,
+    updatedAt: now,
+    type,
+    ...(type === "dynamic_tool" ? { toolName: name.toolName ?? null, input: {} } : {}),
+  }) as unknown as OrchestrationV2TurnItem;
+
+const cases: ReadonlyArray<{
+  readonly name: string;
+  readonly request: OrchestrationV2RuntimeRequest;
+  readonly toolItem?: OrchestrationV2TurnItem;
+  readonly decision: string | undefined;
+}> = [
+  // Claude canUseTool
   {
+    name: "claude validate",
+    request: req("dynamic_tool_call"),
+    toolItem: item("dynamic_tool", { toolName: "mcp__t3-code__t3_recipe_validate" }),
     decision: "accept",
-    event: opened(
-      "claude-validate",
-      "claudeAgent",
-      "dynamic_tool_call",
-      "claude.sdk.permission",
-      "canUseTool/request",
-      { toolName: "mcp__t3-code__t3team_recipe_validate", input: { source: "export default {}" } },
-    ),
   },
   {
+    name: "claude bash",
+    request: req("command"),
+    toolItem: item("command_execution", { title: "rm -rf /" }),
     decision: "decline",
-    event: opened(
-      "claude-bash",
-      "claudeAgent",
-      "command_execution_approval",
-      "claude.sdk.permission",
-      "canUseTool/request",
-      { toolName: "Bash", input: { command: "rm -rf /" } },
-    ),
   },
   {
+    name: "claude edit",
+    request: req("file-change"),
+    toolItem: item("file_change", { title: "secret.ts" }),
     decision: "decline",
-    event: opened(
-      "claude-edit",
-      "claudeAgent",
-      "file_change_approval",
-      "claude.sdk.permission",
-      "canUseTool/request",
-      { toolName: "Edit", input: { file_path: "secret.ts" } },
-    ),
   },
   {
+    name: "claude status (a t3team tool that is not the author's)",
+    request: req("dynamic_tool_call"),
+    toolItem: item("dynamic_tool", { toolName: "mcp__t3-code__t3_orchestration_status" }),
     decision: "decline",
-    event: opened(
-      "claude-status",
-      "claudeAgent",
-      "dynamic_tool_call",
-      "claude.sdk.permission",
-      "canUseTool/request",
-      { toolName: "mcp__t3-code__t3team_orchestration_status" },
-    ),
   },
   {
+    name: "claude other server",
+    request: req("dynamic_tool_call"),
+    toolItem: item("dynamic_tool", { toolName: "mcp__other__t3_recipe_validate" }),
     decision: "decline",
-    event: opened(
-      "claude-other-server",
-      "claudeAgent",
-      "dynamic_tool_call",
-      "claude.sdk.permission",
-      "canUseTool/request",
-      { toolName: "mcp__other__t3team_recipe_validate" },
-    ),
   },
+  // Codex app-server
   {
+    name: "codex t3-code MCP elicitation",
+    request: req("mcp-elicitation", "mcp-elicitation:t3-code"),
     decision: "accept",
-    event: opened(
-      "codex-validate",
-      "codex",
-      "dynamic_tool_call",
-      "codex.app-server.request",
-      "item/tool/call",
-      { tool: "t3team_recipe_validate", namespace: "t3-code", arguments: {} },
-    ),
   },
+  { name: "codex command", request: req("command"), decision: "decline" },
+  { name: "codex file", request: req("file-change"), decision: "decline" },
+  { name: "codex file read", request: req("file-read"), decision: "decline" },
   {
+    name: "codex foreign MCP elicitation",
+    request: req("mcp-elicitation", "mcp-elicitation:other"),
     decision: "decline",
-    event: opened(
-      "codex-command",
-      "codex",
-      "command_execution_approval",
-      "codex.app-server.request",
-      "item/commandExecution/requestApproval",
-      { command: "rm -rf /" },
-    ),
   },
+  // Cursor ACP
   {
-    decision: "decline",
-    event: opened(
-      "codex-file",
-      "codex",
-      "file_change_approval",
-      "codex.app-server.request",
-      "item/fileChange/requestApproval",
-      { grantRoot: "/tmp" },
-    ),
-  },
-  {
+    name: "cursor validate (title only)",
+    request: req("command"),
+    toolItem: item("dynamic_tool", { toolName: null, title: "t3_recipe_validate" }),
     decision: "accept",
-    event: opened(
-      "cursor-validate",
-      "cursor",
-      "dynamic_tool_call",
-      "acp.jsonrpc",
-      "session/request_permission",
-      { toolCall: { toolCallId: "call-1", title: "t3team_recipe_validate", kind: "other" } },
-    ),
   },
   {
+    name: "cursor shell",
+    request: req("command"),
+    toolItem: item("command_execution", { title: "rm -rf /" }),
     decision: "decline",
-    event: opened(
-      "cursor-shell",
-      "cursor",
-      "command_execution_approval",
-      "acp.jsonrpc",
-      "session/request_permission",
-      { toolCall: { toolCallId: "call-2", title: "rm -rf /", kind: "execute" } },
-    ),
   },
+  { name: "cursor edit", request: req("file-change"), decision: "decline" },
   {
+    name: "cursor exec with a spoofed author title",
+    request: req("command"),
+    toolItem: item("command_execution", { title: "t3_recipe_validate" }),
     decision: "decline",
-    event: opened(
-      "cursor-edit",
-      "cursor",
-      "file_change_approval",
-      "acp.jsonrpc",
-      "session/request_permission",
-      { toolCall: { toolCallId: "call-3", title: "Edit secret.ts", kind: "edit" } },
-    ),
   },
-  {
-    // A terminal call whose CLI-generated title equals an allowlisted tool name is still exec.
-    decision: "decline",
-    event: opened(
-      "cursor-exec-spoofed-title",
-      "cursor",
-      "command_execution_approval",
-      "acp.jsonrpc",
-      "session/request_permission",
-      { toolCall: { toolCallId: "call-4", title: "t3team_recipe_validate", kind: "execute" } },
-    ),
-  },
+  { name: "permission with no tool item", request: req("permission"), decision: "decline" },
+  // Not approvals: left to the normal path.
+  { name: "question", request: req("user_input"), decision: undefined },
+  { name: "auth refresh", request: req("auth_refresh"), decision: undefined },
 ];
 
-const engine = {
-  dispatch: (command: OrchestrationCommand) =>
-    Effect.sync(() => {
-      dispatched.push(command);
-      return { sequence: dispatched.length };
-    }),
-  streamDomainEvents: Stream.never,
-} as unknown as OrchestrationEngineShape;
+it("accepts only the author's own tool and declines shell, file and every other request", () => {
+  for (const testCase of cases) {
+    assert.strictEqual(
+      decideWorkflowAuthorRequest(testCase.request, testCase.toolItem),
+      testCase.decision,
+      testCase.name,
+    );
+  }
+});
 
-const layer = ProviderRuntimeIngestionLive.pipe(
-  Layer.provideMerge(OrchestrationProjectionSnapshotQueryLive),
-  Layer.provide(ThreadBackgroundLiveness.layer),
-  Layer.provide(ThreadPlanProgress.layer),
-  Layer.provide(ThreadSilenceWatchdog.layer),
-  Layer.provide(ServerSettingsService.layerTest()),
-  Layer.provide(Layer.succeed(ProviderService, provider)),
-  Layer.provide(Layer.succeed(OrchestrationEngineService, engine)),
-  Layer.provide(Layer.succeed(CheckpointStore.CheckpointStore, {} as never)),
-  Layer.provide(RepositoryIdentityResolver.layer),
-  Layer.provideMerge(SqlitePersistenceMemory),
-  Layer.provideMerge(NodeServices.layer),
-);
+it("names a tool exactly: one known prefix, then an author MCP name or broker id", () => {
+  assert.isTrue(isWorkflowAuthorToolName("t3_orchestration_run"));
+  assert.isTrue(isWorkflowAuthorToolName("mcp__t3_code__t3_orchestration_run"));
+  assert.isTrue(isWorkflowAuthorToolName("t3team.recipe.validate"));
+  assert.isFalse(isWorkflowAuthorToolName("mcp__t3-code__mcp__t3-code__t3_orchestration_run"));
+  assert.isFalse(isWorkflowAuthorToolName("t3_orchestration_run "));
+  assert.isFalse(isWorkflowAuthorToolName("delegate_task"));
+  assert.isFalse(isWorkflowAuthorToolName(null));
+});
 
-it.live("accepts an author tool and declines shell and file requests", () =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      resetWorkflowAuthorSessions();
-      yield* Effect.addFinalizer(() => Effect.sync(resetWorkflowAuthorSessions));
-      const sql = yield* SqlClient.SqlClient;
-      const snapshotQuery = yield* ProjectionSnapshotQuery;
-      const ingestion = yield* ProviderRuntimeIngestionService;
-      yield* sql`
-        INSERT INTO projection_projects (
-          project_id, title, workspace_root, default_model_selection_json, scripts_json,
-          created_at, updated_at, deleted_at
-        ) VALUES (
-          'project-author', 'Author', '/tmp/author',
-          '{"provider":"codex","model":"gpt"}', '[]',
-          '2026-06-08T00:00:00.000Z', '2026-06-08T00:00:01.000Z', NULL
-        )
-      `;
-      yield* sql`
-        INSERT INTO projection_threads (
-          thread_id, project_id, title, model_selection_json, runtime_mode, interaction_mode,
-          branch, worktree_path, retention, latest_turn_id, latest_user_message_at,
-          pending_approval_count, pending_user_input_count, has_actionable_proposed_plan,
-          created_at, updated_at, archived_at, deleted_at
-        ) VALUES (
-          ${AUTHOR_THREAD}, 'project-author', 'Orchestration author',
-          '{"provider":"codex","model":"gpt"}', 'approval-required', 'plan',
-          NULL, NULL, 'ephemeral', NULL, NULL, 0, 0, 0,
-          '2026-06-08T00:00:02.000Z', '2026-06-08T00:00:03.000Z', NULL, NULL
-        )
-      `;
-      const visible = yield* snapshotQuery.getThreadRuntimeContext(ThreadId.make(AUTHOR_THREAD));
-      assert.isTrue(Option.isSome(visible));
-      registerWorkflowAuthorSession({
-        runId: "run-author",
-        launchThreadId: "launch-1",
-        authorThreadId: AUTHOR_THREAD,
-        authorModelSelection: createModelSelection(ProviderInstanceId.make("codex"), "gpt"),
-        intent: {
-          goal: "Write the orchestration.",
-          expectedOutcome: "A workflow file.",
-          guardrails: ["Do not edit the repository."],
-        },
-        submit: undefined,
-        declined: false,
-      });
-
-      yield* ingestion.start();
-      for (const item of cases) {
-        yield* Queue.offer(events, item.event);
-        const decision = yield* Queue.take(decisions).pipe(Effect.timeout("5 seconds"));
-        assert.strictEqual(decision.threadId, AUTHOR_THREAD);
-        assert.strictEqual(decision.decision, item.decision);
-      }
-      yield* ingestion.drain;
-      assert.isFalse(
-        dispatched.some(
-          (command) =>
-            command.type === "thread.activity.append" && String(command.threadId) === AUTHOR_THREAD,
-        ),
-      );
-    }).pipe(Effect.provide(layer)),
-  ),
-);
+it("recognizes the author thread by session or by its deterministic id", () => {
+  resetWorkflowAuthorSessions();
+  assert.isFalse(isWorkflowAuthorThread("thread-user"));
+  assert.isTrue(isWorkflowAuthorThread("run-from-before-restart:author"));
+  registerWorkflowAuthorSession({
+    runId: "run-live",
+    launchThreadId: "launch-1",
+    authorThreadId: "custom-author-thread",
+    authorModelSelection: { instanceId: "codex", model: "gpt" } as never,
+    intent: { goal: "g", expectedOutcome: "o", guardrails: ["x"] },
+    submit: undefined,
+    declined: false,
+  });
+  assert.isTrue(isWorkflowAuthorThread("custom-author-thread"));
+  resetWorkflowAuthorSessions();
+});

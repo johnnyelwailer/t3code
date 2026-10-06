@@ -24,6 +24,7 @@ import { it as effectIt } from "@effect/vitest";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import { discoverProjectRecipes } from "./t3team-projectRecipeDiscovery.ts";
+import { HIDDEN_T3TEAM_DIR } from "./t3team-project-repository-utils.ts";
 import { resolvePromptActionSource } from "./t3team-projectRecipePromptAction.ts";
 
 const fixtureRoot = NodePath.join(
@@ -35,7 +36,12 @@ afterAll(() => {
   NodeFS.rmSync(workspaceRoot, { recursive: true, force: true });
 });
 
-const recipeRoot = NodePath.join(workspaceRoot, ".t3team", "recipes", "explain-selected-work");
+const recipeRoot = NodePath.join(
+  workspaceRoot,
+  HIDDEN_T3TEAM_DIR,
+  "recipes",
+  "explain-selected-work",
+);
 NodeFS.mkdirSync(recipeRoot, { recursive: true });
 NodeFS.writeFileSync(
   NodePath.join(recipeRoot, "prompt.md"),

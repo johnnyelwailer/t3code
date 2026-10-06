@@ -6,8 +6,6 @@
 import * as Schema from "effect/Schema";
 import { Tool, Toolkit } from "effect/unstable/ai";
 
-import { OrchestrationEngineService } from "../../../orchestration/Services/OrchestrationEngine.ts";
-import { ProjectionThreadActivityRepository } from "../../../persistence/Services/ProjectionThreadActivities.ts";
 import {
   T3TEAM_WIDGET_AUTHORING_GUIDANCE,
   T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION,
@@ -18,44 +16,17 @@ import {
 } from "@t3tools/project-context/t3teamToolCatalog";
 import { T3TeamToolBroker } from "../../../t3team-toolBroker.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
+import { T3TEAM_MCP_CANONICAL_TOOL_MAP } from "../../../t3team-mcpCanonicalToolMap.ts";
+import { T3TeamAskUserWriter } from "./t3team-askUserWriter.ts";
 
 const dependencies = [McpInvocationContext.McpInvocationContext, T3TeamToolBroker];
 
-// t3team_ask_user does not route through the t3team broker: the handler
-// appends a durable user-input.requested activity (responseMode "message")
-// to the orchestration thread directly and returns immediately — the answer
-// arrives later as a new-turn user message via the decider's message mode
-// branch. It needs the OrchestrationEngine (command dispatch) and the
-// projection activity repository (one-pending-question-per-thread check,
-// same query the shell pending count uses).
-const askUserDependencies = [
-  McpInvocationContext.McpInvocationContext,
-  OrchestrationEngineService,
-  ProjectionThreadActivityRepository,
-];
+// t3_ask_user does not route through the t3team broker: the handler records
+// the question on the thread directly (a V2 message-capability runtime request)
+// and returns immediately; the answer arrives later as a user message.
+const askUserDependencies = [McpInvocationContext.McpInvocationContext, T3TeamAskUserWriter];
 
-/** Canonical broker tools exposed through provider-safe MCP names. Keep this registry beside
- * the toolkit; the parity test requires every implemented catalog tool to be mapped or named
- * in the explicit policy-exclusion set. */
-export const T3TEAM_MCP_CANONICAL_TOOL_MAP = {
-  t3team_models: "t3team.runtime.models",
-  t3team_provider_usage: "t3team.runtime.provider_usage",
-  t3team_rename_thread: "t3team.thread.rename",
-  t3team_search_thread: "t3team.thread.search",
-  t3team_search_source: "t3team.thread.search_source",
-  t3team_read_message: "t3team.thread.read_message",
-  t3team_ask_user: "t3team.thread.ask_user",
-  t3team_start_child: "t3team.thread.start_child",
-  t3team_children: "t3team.thread.children",
-  t3team_orchestration_run: "t3team.orchestration.run",
-  t3team_orchestration_status: "t3team.orchestration.status",
-  t3team_orchestration_resume: "t3team.orchestration.resume",
-  t3team_orchestration_pause: "t3team.orchestration.pause",
-  t3team_orchestration_stop: "t3team.orchestration.stop",
-  t3team_show_widget: "t3team.widget.show",
-  t3team_recipe_list: "t3team.recipe.list",
-  t3team_recipe_validate: "t3team.recipe.validate",
-} as const;
+export { T3TEAM_MCP_CANONICAL_TOOL_MAP };
 
 /**
  * The broker catalog's description for a canonical tool, with every canonical id the text names
@@ -68,16 +39,6 @@ export function mcpDescriptionOf(canonicalId: T3TeamImplementedToolId): string {
   }
   return text;
 }
-
-/** Deprecated MCP tool name → its replacement. The old agent-orchestration names
- * (`t3team_workflow_*`) stay callable so pack configs, agent prompts, and live
- * transcripts that reference them keep working; both names dispatch to the same
- * canonical broker tool. */
-export const T3TEAM_MCP_DEPRECATED_TOOL_ALIASES = {
-  t3team_workflow_run: "t3team_orchestration_run",
-  t3team_workflow_status: "t3team_orchestration_status",
-  t3team_workflow_resume: "t3team_orchestration_resume",
-} as const;
 
 /**
  * Canonical tools deliberately NOT on the provider `/mcp` surface. The parity test forces an
@@ -115,28 +76,13 @@ export class T3TeamMcpToolError extends Schema.TaggedError<T3TeamMcpToolError>()
   { message: Schema.String },
 ) {}
 
-const T3TeamRenameThreadTool = Tool.make("t3team_rename_thread", {
-  description: "Rename the current t3team thread.",
-  parameters: Schema.Struct({ title: Schema.String }),
-  success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
-  dependencies,
-});
-
-const T3TeamModelsTool = Tool.make("t3team_models", {
-  description: mcpDescriptionOf("t3team.runtime.models"),
-  success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
-  dependencies,
-});
-
-const T3TeamProviderUsageTool = Tool.make("t3team_provider_usage", {
+const T3TeamProviderUsageTool = Tool.make("t3_provider_usage", {
   description:
     "Read the provider usage-limit windows (session / weekly / monthly quota: usedPercent, resetsAt, severity normal|warning|critical) per provider INSTANCE (one account each), plus accounts reported by configured usage hubs. Values come from the host's live provider snapshots (periodic probe + in-turn rate-limit updates), with checkedAt per instance. Call it to check how close an account is to its limit before delegating long work to it. Optional provider_instance_id filters to one instance. An instance without data says why in unavailable.",
   parameters: Schema.Struct({
     provider_instance_id: Schema.optional(Schema.String).annotate({
       description:
-        "Optional provider INSTANCE id (as returned by t3team_models). Omit to list every enabled instance and hub account.",
+        "Optional provider INSTANCE id (as listed by orchestrator_capabilities). Omit to list every enabled instance and hub account.",
     }),
   }),
   success: Schema.Unknown,
@@ -144,142 +90,34 @@ const T3TeamProviderUsageTool = Tool.make("t3team_provider_usage", {
   dependencies,
 });
 
-const T3TeamStartChildTool = Tool.make("t3team_start_child", {
-  description:
-    "Create a child t3team session from the current thread. `isolation` is required and decides where the child works: 'shared' runs it in the project's shared checkout (no new branch), 'own-worktree' gives it a dedicated branch + worktree — of the linked repo named by `repo_full_name`, or of the project's own repository when the project workspace IS a git repository (monorepo-as-metarepo) or a plain local workspace. Use `effort` " +
-    "('light' | 'standard' | 'high') to ask for a thinking tier WITHOUT naming a provider or " +
-    "model — it is mapped onto whatever reasoning control the resolved provider exposes, and " +
-    "on providers that expose none it falls back to the model tier when the model slugs form " +
-    "the effort ladder (light -> lowest rung, standard -> default/middle rung, high -> highest " +
-    "rung); an effort that cannot be honored surfaces an effort_note in the launch result. " +
-    "Only reach for `provider`/`model`/" +
-    "`reasoning_effort` when you genuinely need that exact target.",
-  parameters: Schema.Struct({
-    name: Schema.String.annotate({
-      description: "Name for the new child session.",
-    }),
-    isolation: Schema.Literals(["shared", "own-worktree"]).annotate({
-      description:
-        "Required. Where the child works: 'shared' = the project's shared checkout, no new branch or worktree (planning, triage, synthesis, read-only review); 'own-worktree' = a dedicated branch + worktree (implementation, debugging, tests, PR work). With 'own-worktree', pass 'repo_full_name' to pick a linked repo; omit it to isolate in the project's own repository (a monorepo used as the main repository, or a local workspace without linked repos).",
-    }),
-    ticket_id: Schema.optional(Schema.String).annotate({
-      description:
-        "Optional project ticket ID to attach the child session to. When this differs from the current ticket, the new session is attached directly under that ticket instead of nesting under the current thread.",
-    }),
-    kickoff_prompt: Schema.optional(Schema.String).annotate({
-      description: "Optional first prompt sent to the child session.",
-    }),
-    kickoff_mode: Schema.optional(Schema.Literals(["plan", "interactive", "autopilot"])).annotate({
-      description:
-        "Optional kickoff style. 'plan' maps to plan mode; 'interactive' and 'autopilot' currently map to the default interaction mode.",
-    }),
-    // Optional provider instance id to run the child on a DIFFERENT provider than
-    // the parent (e.g. spawn a Codex child from a Claude parent for cross-provider
-    // review). Omit to inherit the parent's provider; `model` must be one of that
-    // provider's models.
-    provider: Schema.optional(Schema.String).annotate({
-      description:
-        "Optional provider INSTANCE id to run the child on a different provider. Read it from t3team_models immediately before the call; omit it to inherit the parent provider.",
-    }),
-    model: Schema.optional(Schema.String).annotate({
-      description:
-        "Optional model slug for the child. Omit it to use that instance's declared default (isDefault). The same instance with no declared default keeps the parent model; another instance with no declared default fails and lists its slugs. Pass an exact slug from t3team_models, including a legacy one, when you need a specific model.",
-    }),
-    reasoning_effort: Schema.optional(Schema.Literals(["low", "medium", "high"])).annotate({
-      description:
-        "Optional PROVIDER-SPECIFIC reasoning effort override for the child session. Prefer the provider-agnostic 'effort' unless you need this exact value; 'reasoning_effort' wins when both are given.",
-    }),
-    // Provider-agnostic thinking tier — the same ladder workflow child turns use. Prefer this
-    // over `reasoning_effort`, which needs the provider's own vocabulary. `reasoning_effort`
-    // wins if both are given.
-    effort: Schema.optional(Schema.Literals(["light", "standard", "high"])).annotate({
-      description:
-        "Optional provider-agnostic thinking tier for the child session. Ask for a tier without naming a provider or model: it is mapped onto whatever reasoning control the resolved provider/model exposes, and is ignored when it exposes none.",
-    }),
-    repo_full_name: Schema.optional(Schema.String).annotate({
-      description:
-        "Optional, only with isolation='own-worktree'. Linked repository to open in a fresh scoped worktree, for example 'owner/repo' or 'github.com/owner/repo'. Required in legacy projects that wrap linked repos. In a monorepo project (workspace is itself a git repository used as the main repository) you may pass the main repository's own URL to isolate there explicitly, or omit it; in a local workspace (no linked repos) omit it to isolate in the local repository.",
-    }),
-    repo_ref: Schema.optional(Schema.String).annotate({
-      description:
-        "Optional branch, tag, or commit to use as the base ref for the child's worktree (linked or local). Only valid with isolation='own-worktree'. When omitted, the repository default branch is used.",
-    }),
-    environment: Schema.optional(
-      Schema.Struct({
-        id: Schema.String,
-        label: Schema.optional(Schema.String),
-      }),
-    ).annotate({
-      description:
-        "Optional execution environment to bind the child session to — a DIFFERENT T3 server than this one. Omit to keep the child in this environment. The thread record and handoff are stamped with the target environment; inter-agent messaging (send_message, mailbox, children ops) stays same-environment, so report-back from a cross-environment child needs a separate channel (the launch result's environment_note documents this boundary).",
-    }),
-  }),
-  success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
-  dependencies,
-});
-
-// Child-thread management: ONE meta tool with an `op` discriminator (list /
-// status / wait / watch / unwatch / stop / close / sweep / help) instead of a tool
-// per operation, so the context cost stays one compact description no matter
-// how many ops exist. Per-op detail is discovered on demand via `help` or
-// carried in a malformed call's error message. Routes to the t3team.thread.
-// children broker tool. This tool is STATE (child liveness / completion);
-// child→parent CONTENT still flows through t3team_send_message.
+// Child-thread operations upstream does not have: ONE meta tool with an `op`
+// discriminator, so the context cost stays one compact description. Spawning,
+// status, waiting and stopping are upstream's delegate_task / task_status /
+// task_cancel / t3_thread_* tools.
 const CHILDREN_TOOL_DESCRIPTION =
-  "Manage this thread's child sessions (STATE, not content — use send_message to talk to a " +
-  "child). One tool; `op` selects the operation:\n" +
-  "- list: this thread's children with live state (all:true = whole project; " +
-  "include_settled:true lists settled children too — they are excluded by default)\n" +
-  "- status: one thread's current turn state, in-progress work, elapsed\n" +
-  "- wait: durably resume this turn when a child reaches a terminal state (on: " +
-  "terminal|completed|failed; timeout in ms)\n" +
+  "Child-thread operations beyond delegate_task / task_status / task_cancel / t3_thread_*. " +
+  "One tool; `op` selects the operation:\n" +
   "- watch: silence-watch a thread — this thread is notified when the target has had no " +
-  "activity for `timeout` ms (default 900000; per-subscription), re-notified at each multiple " +
-  "while it stays silent; the note flags a pending tool call (legitimate long op) vs. no " +
-  "active tool (the stuck signal)\n" +
-  "- unwatch: cancel all silence watches on the target\n" +
-  "- stop: halt a child's running turn\n" +
-  "- close: mark a child done from this side\n" +
-  "- sweep: settle terminal (completed/failed/aborted) threads in bulk — given thread ids " +
-  "and/or all of this thread's terminal children older than N hours. Cleanup protocol: verify " +
-  "each state first (final result / discarded work / unpushed work in worktrees), then sweep; " +
-  "settled threads keep their transcripts and drop out of the active rosters\n" +
-  "- drain: claim THIS thread's own pending inter-agent mailbox now, instead of waiting for " +
-  "the boundary drain — takes no arguments; returns dispatched (idle → digest started now), " +
-  "queued (mid-turn → arrives when the turn ends), or held (suppressed → stays in the " +
-  "timeline until the user re-engages)\n" +
-  "- environments: read-only discovery of the environments t3team_start_child's `environment` " +
-  "argument can target — this server's own environment (isDefault:true) plus the distinct " +
-  "cross-environment bindings already recorded on threads in this store (with label, " +
-  "bound-thread count, newest activity); every entry states its delivery boundary " +
-  "(cross-env children run on the target, visible here; messaging stays same-environment)\n" +
-  "- help: exact schema for one op (op_name)";
+  "activity for `timeout` ms (default 15 minutes), re-notified at each multiple while it " +
+  "stays silent; the note flags a pending tool call (legitimate long op) vs. no active tool " +
+  "(the stuck signal)\n" +
+  "- unwatch: cancel this thread's silence watches on the target\n" +
+  "- sweep: settle finished (completed/failed/aborted) threads in bulk — given thread_ids " +
+  "and/or all of this thread's finished children older than all_older_than_hours. Verify " +
+  "each first (final result / discarded work / unpushed work in worktrees)\n" +
+  "- drain: claim THIS thread's own pending inter-agent mailbox now (no arguments)\n" +
+  "- environments: read-only — the environments delegate_task's extensions.environment " +
+  "can target, each with its delivery boundary\n" +
+  "- help: exact usage for one op (op_name)";
 
-const T3TeamChildrenTool = Tool.make("t3team_children", {
+const T3TeamChildrenTool = Tool.make("t3_task_ops", {
   description: CHILDREN_TOOL_DESCRIPTION,
   parameters: Schema.Struct({
-    op: Schema.Literals([
-      "list",
-      "status",
-      "wait",
-      "watch",
-      "unwatch",
-      "stop",
-      "close",
-      "sweep",
-      "drain",
-      "environments",
-      "help",
-    ]),
+    op: Schema.Literals(["watch", "unwatch", "sweep", "drain", "environments", "help"]),
     thread_id: Schema.optional(Schema.String),
     thread_ids: Schema.optional(Schema.Array(Schema.String)),
-    on: Schema.optional(Schema.Literals(["terminal", "completed", "failed"])),
     timeout: Schema.optional(Schema.Number),
-    all: Schema.optional(Schema.Boolean),
     all_older_than_hours: Schema.optional(Schema.Number),
-    include_settled: Schema.optional(Schema.Boolean),
-    reason: Schema.optional(Schema.String),
     op_name: Schema.optional(Schema.String),
   }),
   success: Schema.Unknown,
@@ -288,9 +126,9 @@ const T3TeamChildrenTool = Tool.make("t3team_children", {
 });
 
 // Search the CURRENT thread's transcript (case-insensitive substring). Read-only;
-// routes to the t3team.thread.search broker tool. Complements t3team_search_source
-// (fork source) and t3team_read_message (full body by message id).
-const T3TeamSearchThreadTool = Tool.make("t3team_search_thread", {
+// routes to the t3team.thread.search broker tool. Complements t3_search_source
+// (fork source) and t3_read_message (full body by message id).
+const T3TeamSearchThreadTool = Tool.make("t3_search_thread", {
   description:
     "Search the CURRENT thread — its messages AND its tool activity (commands and their " +
     "output, file reads, tool calls) — e.g. to recover a decision, a requirement or a " +
@@ -301,7 +139,7 @@ const T3TeamSearchThreadTool = Tool.make("t3team_search_thread", {
     "result reports hasMore. Narrow with scope ('messages' or 'activities') or 'role' " +
     "(a message role such as user/assistant/actor, or an activity kind such as bash). " +
     "Each match carries its 1-based position within its own stream, a snippet, and either " +
-    "message_id (pass to t3team_read_message for the full body) or activity_id. Note that " +
+    "message_id (pass to t3_read_message for the full body) or activity_id. Note that " +
     "an activity records only the first 500 characters of a tool result. " +
     "Optionally pass 'question' to get a direct answer ('why did the deploy fail?', " +
     "'what did we decide about retries?') instead of only locations: the matched " +
@@ -328,11 +166,11 @@ const T3TeamSearchThreadTool = Tool.make("t3team_search_thread", {
 // Search the full transcript of the thread this one was forked from (the fork
 // provenance note identifies the source). Read-only; routes to the
 // t3team.thread.search_source broker tool.
-const T3TeamSearchSourceTool = Tool.make("t3team_search_source", {
+const T3TeamSearchSourceTool = Tool.make("t3_search_source", {
   description:
     "Search the FULL transcript of the thread this thread was forked from — its messages " +
-    "and its tool activity — including the middle a truncated fork omitted. Only works in " +
-    "a forked thread. Pass a case-insensitive 'query' substring; a multi-word query that " +
+    "and its tool activity — including details the fork's compacted handoff left out. Only " +
+    "works in a forked thread. Pass a case-insensitive 'query' substring; a multi-word query that " +
     "matches nothing verbatim is retried requiring every word (reported as matchMode). " +
     "Newest matches come first unless order is 'oldest'. Page with 'offset' when the " +
     "result reports hasMore. Narrow with scope ('messages' or 'activities'). Each match " +
@@ -354,7 +192,7 @@ const T3TeamSearchSourceTool = Tool.make("t3team_search_source", {
 // inter-agent bodies are summarized on delivery; the summary marker carries
 // the message id, which this tool takes. Read-only; routes to the
 // t3team.thread.read_message broker tool.
-const T3TeamReadMessageTool = Tool.make("t3team_read_message", {
+const T3TeamReadMessageTool = Tool.make("t3_read_message", {
   description:
     "Read the FULL body of a previously delivered inter-agent message in this thread. Long " +
     "inter-agent message bodies are summarized on delivery; the marker in the delivered " +
@@ -362,44 +200,6 @@ const T3TeamReadMessageTool = Tool.make("t3team_read_message", {
     "persisted text.",
   parameters: Schema.Struct({
     message_id: Schema.String,
-  }),
-  success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
-  dependencies,
-});
-
-// Cross-thread delivery: routes to the dedicated broker.sendMessage capability
-// (not the bound-thread callTool dispatch), which records a first-class actor
-// message and drives the recipient thread to react. The sender is the calling
-// thread; the recipient reacts and can reply back the same way.
-const T3TeamSendMessageTool = Tool.make("t3team_send_message", {
-  description:
-    "Send a message to another agent's thread. This is a one-shot handoff: use it ONLY when " +
-    "you have content the recipient does not already have and can act on. Allowed messages: " +
-    "a final result for your parent, a follow-up task or handoff for a child, an answer to a " +
-    "question the recipient explicitly asked, or a genuine blocker that needs the " +
-    "recipient's decision. NEVER send acknowledgment, thanks, status-only, or 'noted/received' " +
-    "messages, and NEVER send incremental progress pings — report ONCE, when you are " +
-    "completely done. Solve simple blockers yourself first; escalate only when truly stuck. " +
-    "If your reply would not change what the recipient does, do not send it. A final result is " +
-    "ONE verdict line plus where the evidence lives (a file path, a widget, a structured " +
-    "return) — never the report body pasted in. The recipient " +
-    "reacts to every message automatically, so an ack triggers another turn on the other " +
-    "side. Delivery: 'summary' is the SUBJECT of the message — a very short line (a few " +
-    "words) that titles the card and the digest one-liner. Keep the " +
-    "body short (telegram " +
-    "style: state, decision, request). Provide a short 'summary' " +
-    "subject; without " +
-    "one, a subject is derived from the body's opening at delivery. Address it with the " +
-    "target thread id. Set `urgent: true` ONLY " +
-    "for a hard blocker or a question that unblocks the recipient — urgent messages wake " +
-    "an idle recipient immediately; everything else waits in the coalescing window and " +
-    "arrives as one digest.",
-  parameters: Schema.Struct({
-    to_thread_id: Schema.String,
-    text: Schema.String,
-    summary: Schema.optional(Schema.String),
-    urgent: Schema.optional(Schema.Boolean),
   }),
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
@@ -428,7 +228,7 @@ const orchestrationRunParameters = Schema.Struct({
 // hand-written copy that drifts (review of fork #350).
 const orchestrationRunDescription = mcpDescriptionOf("t3team.orchestration.run");
 
-const T3TeamOrchestrationRunTool = Tool.make("t3team_orchestration_run", {
+const T3TeamOrchestrationRunTool = Tool.make("t3_orchestration_run", {
   description: orchestrationRunDescription,
   parameters: orchestrationRunParameters,
   success: Schema.Unknown,
@@ -436,7 +236,7 @@ const T3TeamOrchestrationRunTool = Tool.make("t3team_orchestration_run", {
   dependencies,
 });
 
-// Read-only observability for a run launched via t3team_orchestration_run: what
+// Read-only observability for a run launched via t3_orchestration_run: what
 // it's doing now and what (if anything) to do next. Routes to the
 // t3team.orchestration.status broker tool. Prefer this over guessing from silence
 // after a handoff.
@@ -445,7 +245,7 @@ const orchestrationStatusDescription =
   "runId to list recent runs.";
 const orchestrationStatusParameters = Schema.Struct({ runId: Schema.optional(Schema.String) });
 
-const T3TeamOrchestrationStatusTool = Tool.make("t3team_orchestration_status", {
+const T3TeamOrchestrationStatusTool = Tool.make("t3_orchestration_status", {
   description: orchestrationStatusDescription,
   parameters: orchestrationStatusParameters,
   success: Schema.Unknown,
@@ -465,7 +265,7 @@ const orchestrationResumeParameters = Schema.Struct({
   args: Schema.optional(Schema.Unknown),
 });
 
-const T3TeamOrchestrationResumeTool = Tool.make("t3team_orchestration_resume", {
+const T3TeamOrchestrationResumeTool = Tool.make("t3_orchestration_resume", {
   description: orchestrationResumeDescription,
   parameters: orchestrationResumeParameters,
   success: Schema.Unknown,
@@ -478,55 +278,25 @@ const T3TeamOrchestrationResumeTool = Tool.make("t3team_orchestration_resume", {
 // tools. Stop a superseded run BEFORE launching its replacement, never beside it.
 const orchestrationControlParameters = Schema.Struct({ runId: Schema.String });
 
-const T3TeamOrchestrationPauseTool = Tool.make("t3team_orchestration_pause", {
+const T3TeamOrchestrationPauseTool = Tool.make("t3_orchestration_pause", {
   description:
     "Pause one of your agent-orchestration runs at its current waiting point (a parked agent " +
-    "turn, user decision, or timer). Pass the `runId` from t3team_orchestration_run/" +
-    "t3team_orchestration_status. The run keeps its continuation; resume it with " +
-    "t3team_orchestration_resume. Returns {runId, status: 'paused', hint}.",
+    "turn, user decision, or timer). Pass the `runId` from t3_orchestration_run/" +
+    "t3_orchestration_status. The run keeps its continuation; resume it with " +
+    "t3_orchestration_resume. Returns {runId, status: 'paused', hint}.",
   parameters: orchestrationControlParameters,
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
   dependencies,
 });
 
-const T3TeamOrchestrationStopTool = Tool.make("t3team_orchestration_stop", {
+const T3TeamOrchestrationStopTool = Tool.make("t3_orchestration_stop", {
   description:
     "Stop one of your agent-orchestration runs for good: cancels it, interrupts its child agent " +
     "turns, and frees its capacity. Use this on a superseded or stuck run BEFORE launching a " +
     "replacement, so two runs never work the same queue. Pass the `runId`. Returns {runId, " +
     "status: 'cancelled', hint}.",
   parameters: orchestrationControlParameters,
-  success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
-  dependencies,
-});
-
-// Deprecated aliases (see T3TEAM_MCP_DEPRECATED_TOOL_ALIASES): identical schemas,
-// same canonical broker target. Kept so existing pack configs and agent prompts
-// that name `t3team_workflow_*` do not silently lose the capability.
-const deprecated = (replacement: string) =>
-  `DEPRECATED alias for ${replacement} — use that name instead. `;
-
-const T3TeamWorkflowRunTool = Tool.make("t3team_workflow_run", {
-  description: deprecated("t3team_orchestration_run") + orchestrationRunDescription,
-  parameters: orchestrationRunParameters,
-  success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
-  dependencies,
-});
-
-const T3TeamWorkflowStatusTool = Tool.make("t3team_workflow_status", {
-  description: deprecated("t3team_orchestration_status") + orchestrationStatusDescription,
-  parameters: orchestrationStatusParameters,
-  success: Schema.Unknown,
-  failure: T3TeamMcpToolError,
-  dependencies,
-});
-
-const T3TeamWorkflowResumeTool = Tool.make("t3team_workflow_resume", {
-  description: deprecated("t3team_orchestration_resume") + orchestrationResumeDescription,
-  parameters: orchestrationResumeParameters,
   success: Schema.Unknown,
   failure: T3TeamMcpToolError,
   dependencies,
@@ -539,9 +309,9 @@ const T3TeamWorkflowResumeTool = Tool.make("t3team_workflow_resume", {
 // their composer until they answer or dismiss it (durable message-mode
 // question — survives the turn ending and restarts). The tool returns
 // immediately; the answer arrives in a later turn as a user message. The
-// handler appends the user-input.requested activity directly and refuses to
-// ask a second question while one is pending.
-const T3TeamAskUserTool = Tool.make("t3team_ask_user", {
+// handler records a V2 message-capability runtime request on the active run
+// and refuses to ask a second question while one is pending.
+const T3TeamAskUserTool = Tool.make("t3_ask_user", {
   description:
     "Ask the user a structured question. The question docks in the user's composer and stays " +
     "open until they answer or dismiss it — it survives this turn ending and session/app " +
@@ -608,7 +378,7 @@ const T3TeamAskUserTool = Tool.make("t3team_ask_user", {
 // description plus the `widget_code` property description are what the agent actually sees when
 // it fills the schema; t3team-mcpToolInputSchema.test.ts locks both to the documented contract so
 // they cannot drift from the catalog snapshot again.
-export const T3TeamShowWidgetTool = Tool.make("t3team_show_widget", {
+export const T3TeamShowWidgetTool = Tool.make("t3_show_widget", {
   description: T3TEAM_WIDGET_SHOW_TOOL_DESCRIPTION,
   parameters: Schema.Struct({
     title: Schema.String.annotate({
@@ -641,7 +411,7 @@ export const T3TeamShowWidgetTool = Tool.make("t3team_show_widget", {
 // like every sibling, so it needs `McpInvocationContext` + `T3TeamToolBroker` in scope —
 // as `Tool.dynamic` that was a type error (R was `T3TeamToolBroker | McpInvocationContext`,
 // expected `never`). It takes no arguments, which `Schema.Struct({})` expresses.
-const T3TeamRecipeListTool = Tool.make("t3team_recipe_list", {
+const T3TeamRecipeListTool = Tool.make("t3_recipe_list", {
   description:
     "List every saved recipe orchestration you can run — both the project's own and the ones " +
     "shipped by installed packs. Each entry carries {id, title, recipePath, workflowPath?, " +
@@ -659,14 +429,14 @@ const T3TeamRecipeListTool = Tool.make("t3team_recipe_list", {
 
 // Static, read-only validation of an orchestration before running it — either an
 // existing on-disk recipe (`path`) or inline source (`source`, the same body
-// passed to t3team_orchestration_run). Routes to the t3team.recipe.validate
+// passed to t3_orchestration_run). Routes to the t3team.recipe.validate
 // broker tool; never writes or executes anything.
-const T3TeamRecipeValidateTool = Tool.make("t3team_recipe_validate", {
+const T3TeamRecipeValidateTool = Tool.make("t3_recipe_validate", {
   description:
     "Statically validate an agent orchestration before running it: pass `source` (inline " +
-    "orchestration TypeScript — same body you would pass to t3team_orchestration_run) or `path` " +
+    "orchestration TypeScript — same body you would pass to t3_orchestration_run) or `path` " +
     "(a .workflow.ts or recipe directory in the workspace). Returns {ok, meta?, shape?, " +
-    "errors[]}; fix errors and re-validate until ok before calling t3team_orchestration_run. " +
+    "errors[]}; fix errors and re-validate until ok before calling t3_orchestration_run. " +
     "Nothing is executed or written.",
   parameters: Schema.Struct({
     path: Schema.optional(Schema.String),
@@ -677,26 +447,48 @@ const T3TeamRecipeValidateTool = Tool.make("t3team_recipe_validate", {
   dependencies,
 });
 
+// Read the skill names this thread's delegate_task requested (skills-as-subagents Phase 1):
+// the child's driver calls it at session start, then resolves the names, bodies and
+// allowed-tools from the PACK's skill registry. The host persists REQUESTED names only
+// (it does not know the skill catalog — no second catalog), so nothing is resolved here.
+// Clean empty result for threads without skill delegation: the driver's soft-fail yields
+// today's behavior.
+const T3TeamThreadSkillMetadataTool = Tool.make("t3team_thread_skill_metadata", {
+  description:
+    "Read the skill names this thread's delegate_task requested. Call it at session start " +
+    "with this thread's own id to get { skills: string[] } — the REQUESTED skill names to " +
+    "resolve against your skill registry (bodies, allowed-tools). An empty array means this " +
+    "thread was not started with skill delegation. The host stores requested names only, so " +
+    "resolve names, bodies and allowed tools yourself; an unresolvable name is a driver-level " +
+    "error that enumerates the available skills.",
+  parameters: Schema.Struct({
+    threadId: Schema.optional(Schema.String).annotate({
+      description: "Thread to read; defaults to this thread. Pass the child thread's own id.",
+    }),
+  }),
+  success: Schema.Struct({
+    skills: Schema.Array(Schema.String).annotate({
+      description: "Requested skill names; empty when this thread has no skill delegation.",
+    }),
+  }),
+  failure: T3TeamMcpToolError,
+  dependencies: [McpInvocationContext.McpInvocationContext],
+});
+
 export const T3TeamToolkit = Toolkit.make(
-  T3TeamModelsTool,
   T3TeamProviderUsageTool,
-  T3TeamRenameThreadTool,
   T3TeamSearchThreadTool,
   T3TeamSearchSourceTool,
   T3TeamReadMessageTool,
   T3TeamAskUserTool,
-  T3TeamStartChildTool,
   T3TeamChildrenTool,
-  T3TeamSendMessageTool,
   T3TeamOrchestrationRunTool,
   T3TeamOrchestrationStatusTool,
   T3TeamOrchestrationResumeTool,
   T3TeamOrchestrationPauseTool,
   T3TeamOrchestrationStopTool,
-  T3TeamWorkflowRunTool,
-  T3TeamWorkflowStatusTool,
-  T3TeamWorkflowResumeTool,
   T3TeamShowWidgetTool,
   T3TeamRecipeListTool,
   T3TeamRecipeValidateTool,
+  T3TeamThreadSkillMetadataTool,
 );

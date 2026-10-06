@@ -17,7 +17,7 @@
  *     admitted. Live incident: an unparseable `.workflow.ts` was "accepted", then failed
  *     asynchronously at rehydration with a bare `SyntaxError` — the author saw no actionable
  *     feedback. Both the inline-`source` and every `workflowPath` branch fail synchronously
- *     with the reason + the authoring manual now.
+ *     with the specific reason now.
  */
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -72,7 +72,7 @@ export const persistEphemeralWorkflowSource = (input: {
 
 /**
  * Read an authorized workflow file and run it through the launch precheck, so an unparseable or
- * malformed source fails the tool call synchronously (reason + authoring manual) instead of
+ * malformed source fails the tool call synchronously (with the specific reason) instead of
  * dying asynchronously at rehydration. Returns the source text.
  */
 const readAndPrecheckSource = (input: {

@@ -7,6 +7,7 @@ import type { EnvironmentSetupProfile } from "@t3tools/contracts";
 import type { T3TeamProfile } from "@t3tools/t3team-skill-packs";
 
 import type { WorkspacePackHostDiagnostic } from "./t3team-pack-host.ts";
+import { inertPackActivationContext } from "./t3team-pack-activationContext.ts";
 
 const SETUP_PROFILE_CAPABILITY = "setup-profile:v1";
 
@@ -78,9 +79,7 @@ export const loadPackSetupProfileOverlay = async (
   const collected: SetupProfileDefinition[] = [];
   for (const pack of packs) {
     await activateWorkspacePack(pack, {
-      defineAgentProvider: () => undefined,
-      defineProviderDriver: () => undefined,
-      defineTheme: () => undefined,
+      ...inertPackActivationContext,
       defineSetupProfile: (definition) => {
         if (!pack.manifest.capabilities.includes(SETUP_PROFILE_CAPABILITY)) {
           throw new Error(
@@ -88,12 +87,6 @@ export const loadPackSetupProfileOverlay = async (
           );
         }
         collected.push(decodeSetupProfileDefinition(definition));
-      },
-      defineWorkflowRepairPolicy: () => undefined,
-      defineWorkflowAgentModelPolicy: () => undefined,
-      defineWorkflowEphemeralConcurrencyPolicy: () => undefined,
-      resolveAssetDataUrl: async () => {
-        throw new Error("Asset resolution is only available to pack activation code");
       },
     });
   }

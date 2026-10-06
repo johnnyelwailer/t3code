@@ -17,19 +17,13 @@ const sourceThread: SearchSourceThreadDetail = {
     { id: "s3", role: "user", text: "Now handle the AUTH edge case for SSO" },
     { id: "s4", role: "assistant", text: "Done." },
   ],
+  forkSourceThreadId: null,
 };
 
 const forkedThread: SearchSourceThreadDetail = {
   title: "Original thread (fork)",
-  messages: [
-    {
-      id: "c1",
-      role: "system",
-      text: "This thread was forked from ...",
-      t3teamExt: { forkSource: { threadId: "thread-source" } },
-    },
-    { id: "c2", role: "user", text: "continue" },
-  ],
+  messages: [{ id: "c2", role: "user", text: "continue" }],
+  forkSourceThreadId: "thread-source",
 };
 
 const run = (
@@ -88,7 +82,7 @@ describe("callT3TeamSearchSourceTool", () => {
         loadThreadDetail: (id) =>
           Effect.succeed(
             id === currentThreadId
-              ? { messages: [{ id: "x", role: "user", text: "hi" }] }
+              ? { messages: [{ id: "x", role: "user", text: "hi" }], forkSourceThreadId: null }
               : undefined,
           ),
       },
@@ -146,6 +140,7 @@ describe("callT3TeamSearchSourceTool", () => {
         role: "user",
         text: "needle here",
       })),
+      forkSourceThreadId: null,
     };
     const result = await run(
       { query: "needle", limit: 999 },

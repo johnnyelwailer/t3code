@@ -4,9 +4,9 @@
  *
  * The resource-pressure monitor owns one instance: its sample loop feeds
  * `observe` after every sample, and resumed threads are queued on
- * `resumed` for the provider command reactor, which replays their held turn
- * starts. The reactor's turn-start gate calls `admitTurn`, and the turn
- * context assembly calls `takeTurnNote`. State is in memory only: a server
+ * `resumed`. A turn-start gate is meant to call `admitTurn`/`takeTurnNote`
+ * and replay `resumed` threads; on orchestration V2 no gate is wired yet (the
+ * V2 turn start has no admission hook), so nothing is held. State is in memory only: a server
  * restart drops the paused set (the held messages stay in the thread and the
  * user can resend them).
  *

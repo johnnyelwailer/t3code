@@ -1,249 +1,198 @@
 /**
- * Per-thread mailbox for inter-agent ("actor") messages.
+ * Durable inter-agent mailbox (`t3team_thread_mailbox`, migration 92): the
+ * messages sent with `t3_thread_send` mode "mailbox", waiting to reach their
+ * recipient as ONE coalesced digest run (t3team-actorMailboxDelivery.ts),
+ * plus the per-thread user-stop holds that pause delivery.
  *
- * The host has no turn queue of its own — a provider `sendTurn` is fire-and-
- * forget and running two turns on one session at once corrupts its state. So
- * when an actor message arrives for a thread that is mid-turn, it must wait.
- * This mailbox holds those queued messages and a per-thread `reacting` flag,
- * which together let {@link T3TeamActorMessageReactorLive} serialize reactions:
- * exactly one reaction turn per thread is in flight at a time.
- *
- * `takeNextForDispatch` is the atomic drain primitive: it hands back the WHOLE
- * pending batch (or up to a cap) for a thread (and flips `reacting` on) only
- * when the thread is not already reacting. The reactor pairs it with a read-
- * model "is the thread busy?" check; the `reacting` flag additionally covers
- * the brief window after a reaction is dispatched but before the projection
- * reflects the new running turn. Batching is what coalesces an inter-agent
- * message burst into ONE reaction turn instead of one turn per message.
- *
- * The mailbox also owns the ONCE-PER-SESSION briefing flag: the standing
- * inter-agent protocol is appended to a thread's first digest since process
- * start (`isBriefed`/`markBriefed`), not repeated on every message.
- *
- * State is in-memory and process-local (matching the provider sessions it
- * guards); it is intentionally not persisted.
+ * Being a table, it survives restarts without event replay: pending entries
+ * stay pending, a digest that was claimed but not marked delivered is
+ * re-dispatched with the same id (idempotent), and a hold stays until the
+ * user writes again (holds: t3team-actorMailboxHolds.ts). Entries for a
+ * deleted recipient are retired as `failed`.
  *
  * @module t3team-actorMailbox
  */
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Ref from "effect/Ref";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 
-export interface T3TeamActorMailboxEntry {
-  readonly messageId: string;
-  readonly fromThreadId: string;
-  readonly fromTitle: string;
-  readonly fromProjectId: string;
-  readonly text: string;
-  /**
-   * Optional short summary of `text` for delivery: when the body exceeds the
-   * delivery cap, the reaction input carries this summary (or an auto-
-   * generated one when absent) plus the message id. See
-   * t3team-actorReactionInput.ts.
-   */
-  readonly summary?: string;
-  readonly urgency: "normal" | "urgent";
-  readonly hopCount: number;
-  readonly rootThreadId: string;
-  readonly createdAt: string;
-  readonly dispatchAttempts: number;
-}
+import {
+  type ClaimedDigest,
+  groupClaimedDigests,
+  MAILBOX_ENTRY_COLUMNS,
+  type MailboxEntryRow,
+  mailboxEntryFromRow,
+  type T3TeamActorMailboxEntry,
+} from "./t3team-actorMailboxEntry.ts";
 
-interface ThreadMailboxState {
-  readonly queue: ReadonlyArray<T3TeamActorMailboxEntry>;
-  readonly reacting: boolean;
-  /**
-   * Set when the user explicitly stops this thread's turn. While true, a
-   * queued actor message stays visible in the timeline but does NOT get
-   * auto-dispatched into a reaction turn — otherwise an incoming actor
-   * message re-opens the exact turn the user just told the agent to stop,
-   * and "Stop generation" never converges. Cleared when the user sends the
-   * thread's next real message (see T3TeamActorMessageReactorLive).
-   */
-  readonly suppressed: boolean;
-}
+import { makeMailboxHoldOps, type MailboxHoldOps } from "./t3team-actorMailboxHolds.ts";
 
-const EMPTY: ThreadMailboxState = { queue: [], reacting: false, suppressed: false };
+export type { ClaimedDigest, T3TeamActorMailboxEntry } from "./t3team-actorMailboxEntry.ts";
 
-export interface T3TeamActorMailboxShape {
-  /** Append an actor message to a thread's queue. */
-  readonly enqueue: (threadId: string, entry: T3TeamActorMailboxEntry) => Effect.Effect<boolean>;
-  /**
-   * Atomically claim the pending batch for a thread: if the thread is not
-   * already reacting and has queued entries, flip `reacting` on and return
-   * them all (in arrival order, up to `cap` when given — anything past the
-   * cap stays queued for the next drain); otherwise return `[]` and leave
-   * state untouched.
-   */
-  readonly takeNextForDispatch: (
-    threadId: string,
-    cap?: number,
-  ) => Effect.Effect<ReadonlyArray<T3TeamActorMailboxEntry>>;
-  /** Release the reacting flag (called when the thread's turn ends). */
-  readonly clearReacting: (threadId: string) => Effect.Effect<void>;
-  /**
-   * Release a failed claim and requeue the whole batch at the front (preserving
-   * order), retrying up to the per-entry attempt cap.
-   */
-  readonly requeueFailed: (
-    threadId: string,
-    entries: ReadonlyArray<T3TeamActorMailboxEntry>,
-  ) => Effect.Effect<boolean>;
-  /** Whether a reaction turn is currently in flight for the thread. */
-  readonly isReacting: (threadId: string) => Effect.Effect<boolean>;
-  /** Read-only view of the thread's pending queue (no claim, no flags). */
-  readonly peekPending: (threadId: string) => Effect.Effect<ReadonlyArray<T3TeamActorMailboxEntry>>;
-  /**
-   * Whether the thread's standing-instruction briefing has already been
-   * delivered this process lifetime ("once per session").
-   */
-  readonly isBriefed: (threadId: string) => Effect.Effect<boolean>;
-  /** Mark the briefing delivered (call only when the briefed digest actually dispatched). */
-  readonly markBriefed: (threadId: string) => Effect.Effect<void>;
-  /** Mark the thread suppressed: queued/future actor messages enqueue but do not auto-dispatch. */
-  readonly suppress: (threadId: string) => Effect.Effect<void>;
-  /** Lift suppression (called when the user sends the thread's next real message). */
-  readonly clearSuppression: (threadId: string) => Effect.Effect<void>;
-  /** Whether auto-dispatch is currently suppressed for the thread. */
-  readonly isSuppressed: (threadId: string) => Effect.Effect<boolean>;
-}
+export class T3TeamActorMailboxError extends Schema.TaggedError<T3TeamActorMailboxError>()(
+  "T3TeamActorMailboxError",
+  { operation: Schema.String, cause: Schema.Defect() },
+) {}
 
-export const makeT3TeamActorMailbox: Effect.Effect<T3TeamActorMailboxShape> = Effect.gen(
-  function* () {
-    const state = yield* Ref.make(new Map<string, ThreadMailboxState>());
-    const knownMessageIds = yield* Ref.make(new Set<string>());
-    const briefed = yield* Ref.make(new Set<string>());
+/** Dispatch attempts after which a claimed batch is given up (state `failed`). */
+const MAX_DISPATCH_ATTEMPTS = 3;
 
-    const read = (map: Map<string, ThreadMailboxState>, threadId: string): ThreadMailboxState =>
-      map.get(threadId) ?? EMPTY;
+type Op<A> = Effect.Effect<A, T3TeamActorMailboxError>;
 
-    const enqueue: T3TeamActorMailboxShape["enqueue"] = (threadId, entry) =>
-      Ref.modify(knownMessageIds, (known) => {
-        if (known.has(entry.messageId)) return [false, known] as const;
-        const next = new Set(known);
-        next.add(entry.messageId);
-        return [true, next] as const;
-      }).pipe(
-        Effect.tap((fresh) =>
-          fresh
-            ? Ref.update(state, (map) => {
-                const current = read(map, threadId);
-                const next = new Map(map);
-                next.set(threadId, { ...current, queue: [...current.queue, entry] });
-                return next;
-              })
-            : Effect.void,
+export class T3TeamActorMailboxStore extends Context.Service<
+  T3TeamActorMailboxStore,
+  {
+    /** Inserts a new entry; false when the message id is already known (idempotent send). */
+    readonly enqueue: (
+      entry: T3TeamActorMailboxEntry,
+      state?: "pending" | "surfaced",
+    ) => Op<boolean>;
+    /** An entry delivered to `threadId` (any state), for `t3_read_message`. */
+    readonly find: (threadId: string, messageId: string) => Op<T3TeamActorMailboxEntry | null>;
+    /** Pending entries of a thread, oldest first. */
+    readonly pending: (threadId: string) => Op<ReadonlyArray<T3TeamActorMailboxEntry>>;
+    /** Threads with pending or claimed entries, except archived ones (they wait for unarchive). */
+    readonly threadsWithWork: () => Op<ReadonlyArray<string>>;
+    /** Moves exactly these pending entries to `claimed` under `digestMessageId`; false on a race. */
+    readonly claim: (input: {
+      readonly threadId: string;
+      readonly messageIds: ReadonlyArray<string>;
+      readonly digestMessageId: string;
+    }) => Op<boolean>;
+    /** Claimed digests of a thread (dispatch interrupted, e.g. by a restart). */
+    readonly claimed: (threadId: string) => Op<ReadonlyArray<ClaimedDigest>>;
+    readonly markDelivered: (digestMessageId: string, deliveredAt: string) => Op<void>;
+    /** A failed dispatch: back to pending, or `failed` after the attempt cap. */
+    readonly release: (digestMessageId: string) => Op<void>;
+    /** Dispatch attempts already made for these entries (max), for a fresh digest id. */
+    readonly attempts: (messageIds: ReadonlyArray<string>) => Op<number>;
+    /** Hop/root of the digest that started a run, for replies sent from that run. */
+    readonly replyContext: (
+      digestMessageId: string,
+    ) => Op<{ readonly hopCount: number; readonly rootThreadId: string } | null>;
+    /**
+     * A deleted recipient: its pending and claimed entries can never be delivered, so they
+     * become `failed` (out of every sweep), and its hold is dropped.
+     */
+    readonly retireRecipient: (threadId: string) => Op<void>;
+  } & MailboxHoldOps
+>()("t3/t3team-actorMailbox/T3TeamActorMailboxStore") {}
+
+const make = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
+  const columns = sql.literal(MAILBOX_ENTRY_COLUMNS);
+  const op =
+    (operation: string) =>
+    <A, E>(effect: Effect.Effect<A, E>) =>
+      effect.pipe(Effect.mapError((cause) => new T3TeamActorMailboxError({ operation, cause })));
+
+  return T3TeamActorMailboxStore.of({
+    enqueue: (entry, state = "pending") =>
+      sql<{ readonly message_id: string }>`
+        INSERT INTO t3team_thread_mailbox (message_id, to_thread_id, from_thread_id, from_title,
+          text, summary, urgency, hop_count, root_thread_id, state, created_at)
+        VALUES (${entry.messageId}, ${entry.toThreadId}, ${entry.fromThreadId}, ${entry.fromTitle},
+          ${entry.text}, ${entry.summary ?? null}, ${entry.urgency}, ${entry.hopCount},
+          ${entry.rootThreadId}, ${state}, ${entry.createdAt})
+        ON CONFLICT(message_id) DO NOTHING
+        RETURNING message_id`.pipe(
+        Effect.map((rows) => rows.length > 0),
+        op("enqueue"),
+      ),
+    find: (threadId, messageId) =>
+      sql<MailboxEntryRow>`SELECT ${columns} FROM t3team_thread_mailbox
+        WHERE to_thread_id = ${threadId} AND message_id = ${messageId}`.pipe(
+        Effect.map(([row]) => (row === undefined ? null : mailboxEntryFromRow(row))),
+        op("find"),
+      ),
+    pending: (threadId) =>
+      sql<MailboxEntryRow>`SELECT ${columns} FROM t3team_thread_mailbox
+        WHERE to_thread_id = ${threadId} AND state = 'pending'
+        ORDER BY created_at ASC, message_id ASC`.pipe(
+        Effect.map((rows) => rows.map(mailboxEntryFromRow)),
+        op("pending"),
+      ),
+    // A deleted (or never projected) recipient stays in, so the drain retires it.
+    threadsWithWork: () =>
+      sql<{ readonly to_thread_id: string }>`SELECT DISTINCT m.to_thread_id
+        FROM t3team_thread_mailbox m
+        LEFT JOIN orchestration_v2_projection_threads t ON t.thread_id = m.to_thread_id
+        WHERE m.state IN ('pending', 'claimed')
+          AND (t.archived_at IS NULL OR t.deleted_at IS NOT NULL)`.pipe(
+        Effect.map((rows) => rows.map((row) => row.to_thread_id)),
+        op("threadsWithWork"),
+      ),
+    claim: ({ threadId, messageIds, digestMessageId }) =>
+      sql
+        .withTransaction(
+          Effect.gen(function* () {
+            const rows = yield* sql<{ readonly message_id: string }>`UPDATE t3team_thread_mailbox
+              SET state = 'claimed', digest_message_id = ${digestMessageId}
+              WHERE to_thread_id = ${threadId} AND state = 'pending'
+                AND ${sql.in("message_id", messageIds)}
+              RETURNING message_id`;
+            // A racing claim took some of them: undo ours, report the race.
+            if (rows.length !== messageIds.length) {
+              yield* sql`UPDATE t3team_thread_mailbox SET state = 'pending', digest_message_id = NULL
+                WHERE digest_message_id = ${digestMessageId} AND state = 'claimed'`;
+              return false;
+            }
+            return true;
+          }),
+        )
+        .pipe(op("claim")),
+    claimed: (threadId) =>
+      sql<MailboxEntryRow>`SELECT ${columns} FROM t3team_thread_mailbox
+        WHERE to_thread_id = ${threadId} AND state = 'claimed'
+        ORDER BY created_at ASC, message_id ASC`.pipe(
+        Effect.map(groupClaimedDigests),
+        op("claimed"),
+      ),
+    markDelivered: (digestMessageId, deliveredAt) =>
+      sql`UPDATE t3team_thread_mailbox SET state = 'delivered', delivered_at = ${deliveredAt}
+        WHERE digest_message_id = ${digestMessageId} AND state = 'claimed'`.pipe(
+        Effect.asVoid,
+        op("markDelivered"),
+      ),
+    release: (digestMessageId) =>
+      sql`UPDATE t3team_thread_mailbox SET
+          state = CASE WHEN dispatch_attempts + 1 >= ${MAX_DISPATCH_ATTEMPTS}
+            THEN 'failed' ELSE 'pending' END,
+          digest_message_id = CASE WHEN dispatch_attempts + 1 >= ${MAX_DISPATCH_ATTEMPTS}
+            THEN digest_message_id ELSE NULL END,
+          dispatch_attempts = dispatch_attempts + 1
+        WHERE digest_message_id = ${digestMessageId} AND state = 'claimed'`.pipe(
+        Effect.asVoid,
+        op("release"),
+      ),
+    attempts: (messageIds) =>
+      sql<{ readonly attempts: number | null }>`SELECT MAX(dispatch_attempts) AS attempts
+        FROM t3team_thread_mailbox WHERE ${sql.in("message_id", messageIds)}`.pipe(
+        Effect.map((rows) => rows[0]?.attempts ?? 0),
+        op("attempts"),
+      ),
+    replyContext: (digestMessageId) =>
+      sql<{ readonly hop_count: number; readonly root_thread_id: string }>`
+        SELECT hop_count, root_thread_id FROM t3team_thread_mailbox
+        WHERE digest_message_id = ${digestMessageId}
+        ORDER BY hop_count DESC LIMIT 1`.pipe(
+        Effect.map(([row]) =>
+          row === undefined ? null : { hopCount: row.hop_count, rootThreadId: row.root_thread_id },
         ),
-      );
+        op("replyContext"),
+      ),
+    retireRecipient: (threadId) =>
+      sql`UPDATE t3team_thread_mailbox SET state = 'failed'
+        WHERE to_thread_id = ${threadId} AND state IN ('pending', 'claimed')`.pipe(
+        Effect.andThen(sql`DELETE FROM t3team_thread_mailbox_holds WHERE thread_id = ${threadId}`),
+        sql.withTransaction,
+        Effect.asVoid,
+        op("retireRecipient"),
+      ),
+    ...makeMailboxHoldOps(sql, op),
+  });
+});
 
-    const takeNextForDispatch: T3TeamActorMailboxShape["takeNextForDispatch"] = (threadId, cap) =>
-      Ref.modify(state, (map) => {
-        const current = read(map, threadId);
-        if (current.reacting || current.suppressed || current.queue.length === 0) {
-          return [[], map] as const;
-        }
-        const limited = cap !== undefined && cap >= 0 ? current.queue.slice(0, cap) : current.queue;
-        const rest = current.queue.slice(limited.length);
-        const next = new Map(map);
-        next.set(threadId, { ...current, queue: rest, reacting: true });
-        return [limited, next] as const;
-      });
-
-    const clearReacting: T3TeamActorMailboxShape["clearReacting"] = (threadId) =>
-      Ref.update(state, (map) => {
-        const current = read(map, threadId);
-        if (!current.reacting) {
-          return map;
-        }
-        const next = new Map(map);
-        next.set(threadId, { ...current, reacting: false });
-        return next;
-      });
-
-    const requeueFailed: T3TeamActorMailboxShape["requeueFailed"] = (threadId, entries) =>
-      Ref.modify(state, (map) => {
-        const current = read(map, threadId);
-        const retried = entries.filter(({ dispatchAttempts }) => dispatchAttempts + 1 < 3);
-        const next = new Map(map);
-        next.set(threadId, {
-          ...current,
-          queue: [
-            ...retried.map((entry) => ({ ...entry, dispatchAttempts: entry.dispatchAttempts + 1 })),
-            ...current.queue,
-          ],
-          reacting: false,
-        });
-        return [retried.length > 0, next] as const;
-      });
-
-    const isReacting: T3TeamActorMailboxShape["isReacting"] = (threadId) =>
-      Ref.get(state).pipe(Effect.map((map) => read(map, threadId).reacting));
-
-    const peekPending: T3TeamActorMailboxShape["peekPending"] = (threadId) =>
-      Ref.get(state).pipe(Effect.map((map) => read(map, threadId).queue));
-
-    const isBriefed: T3TeamActorMailboxShape["isBriefed"] = (threadId) =>
-      Ref.get(briefed).pipe(Effect.map((set) => set.has(threadId)));
-
-    const markBriefed: T3TeamActorMailboxShape["markBriefed"] = (threadId) =>
-      Ref.update(briefed, (set) => {
-        if (set.has(threadId)) {
-          return set;
-        }
-        const next = new Set(set);
-        next.add(threadId);
-        return next;
-      });
-
-    const suppress: T3TeamActorMailboxShape["suppress"] = (threadId) =>
-      Ref.update(state, (map) => {
-        const current = read(map, threadId);
-        if (current.suppressed) {
-          return map;
-        }
-        const next = new Map(map);
-        next.set(threadId, { ...current, suppressed: true });
-        return next;
-      });
-
-    const clearSuppression: T3TeamActorMailboxShape["clearSuppression"] = (threadId) =>
-      Ref.update(state, (map) => {
-        const current = read(map, threadId);
-        if (!current.suppressed) {
-          return map;
-        }
-        const next = new Map(map);
-        next.set(threadId, { ...current, suppressed: false });
-        return next;
-      });
-
-    const isSuppressed: T3TeamActorMailboxShape["isSuppressed"] = (threadId) =>
-      Ref.get(state).pipe(Effect.map((map) => read(map, threadId).suppressed));
-
-    return {
-      enqueue,
-      takeNextForDispatch,
-      clearReacting,
-      requeueFailed,
-      isReacting,
-      peekPending,
-      isBriefed,
-      markBriefed,
-      suppress,
-      clearSuppression,
-      isSuppressed,
-    };
-  },
-);
-
-/**
- * Shared mailbox service: the process's ONE in-memory actor mailbox, provided
- * by {@link T3TeamActorMailboxLive} so the reactor, the `drain` tool op and
- * any other dispatcher claim/peek against the same state.
- */
-export const T3TeamActorMailbox = Context.Service<"T3TeamActorMailbox", T3TeamActorMailboxShape>(
-  "T3TeamActorMailbox",
-);
-
-export const T3TeamActorMailboxLive = Layer.effect(T3TeamActorMailbox, makeT3TeamActorMailbox);
+export const T3TeamActorMailboxStoreLive = Layer.effect(T3TeamActorMailboxStore, make);

@@ -21,7 +21,7 @@
  * NEVER block typing or message sending.
  */
 
-import { EnvironmentId, ORCHESTRATION_WS_METHODS, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ThreadId, WS_METHODS } from "@t3tools/contracts";
 import { createEnvironmentRpcCommand, runAtomCommand } from "@t3tools/client-runtime/state/runtime";
 
 import { connectionAtomRuntime } from "~/connection/runtime";
@@ -31,7 +31,7 @@ import { setThreadComposingReporter } from "~/t3team/chat/t3team-threadComposing
 
 const noteThreadComposingCommand = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "t3team:orchestration:noteComposing",
-  tag: ORCHESTRATION_WS_METHODS.noteComposing,
+  tag: WS_METHODS.orchestrationNoteComposing,
 });
 
 /** While typing continues, re-send the beat at most this often. */
@@ -84,7 +84,7 @@ export function reportThreadComposing(threadId: string | null | undefined): void
     return;
   }
   // The heartbeat targets the SAME environment as every other t3team thread
-  // command (runT3TeamOrchestrationDispatch resolves it identically): if no
+  // write (the t3team orchestration API resolves it identically): if no
   // environment is paired there is no server to hold — do not even track
   // pacing state for it.
   const environmentId = appAtomRegistry.get(primaryEnvironmentIdAtom);

@@ -1,13 +1,13 @@
 /**
  * Effectful orchestration for `t3team.widget.show`: validate input, persist the widget body
  * as a durable Epic 08 rich artifact (format html, via the content-addressed blob store),
- * register the widget's capability allowlist, then upsert a system message carrying the
- * `widget` attachment so the timeline renders it inline.
+ * register the widget's capability allowlist, then record a `widget` thread artifact (U0
+ * artifacts side store, `t3team.subscribeThreadArtifacts`) so the timeline renders it inline.
+ * V2 messages carry no rich payload, so the artifact — not a message — is the carrier.
  */
 
-import { CommandId, MessageId, type OrchestrationCommand, ThreadId } from "@t3tools/contracts";
+import { ThreadId } from "@t3tools/contracts";
 import type * as Context from "effect/Context";
-import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import type * as Path from "effect/Path";
@@ -19,6 +19,7 @@ import { ensureT3TeamContextCacheTables } from "./t3team-context-cache-tables.ts
 import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
 import type { T3TeamToolCallResult } from "./t3team-toolBroker.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
+import type { T3TeamThreadArtifactsStore } from "./t3team-v2/t3team-threadArtifactsStore.ts";
 import type { T3TeamWidgetRegistryShape } from "./t3team-widgetRegistry.ts";
 import {
   buildT3TeamWidgetArtifactRelativePath,
@@ -32,11 +33,18 @@ export type T3TeamWidgetPersistenceServices =
   | SqlClient.SqlClient
   | WorkspacePaths;
 
+/** Artifact kind of a widget row in the thread artifacts store. */
+export const T3TEAM_WIDGET_ARTIFACT_KIND = "widget";
+
+/** Deterministic artifact id of a widget, so a retried write is idempotent. */
+export const t3teamWidgetArtifactId = (widgetId: string) => `widget:${widgetId}`;
+
 export interface T3TeamWidgetShowDeps {
   readonly threadId: string;
   readonly workspaceRoot: string | undefined;
   readonly registry: T3TeamWidgetRegistryShape;
-  readonly dispatch: (command: OrchestrationCommand) => Effect.Effect<unknown, string>;
+  /** Durable artifact write (`T3TeamThreadArtifactsStore.upsert`). */
+  readonly recordArtifact: T3TeamThreadArtifactsStore["Service"]["upsert"];
   /** Services the CAS persistence path needs (SqlClient, FileSystem, Path, ...), captured by
    * the broker layer at build time. Persistence is skipped when they are unavailable. */
   readonly persistenceContext: Context.Context<T3TeamWidgetPersistenceServices> | undefined;
@@ -90,32 +98,20 @@ export function callT3TeamWidgetShowTool(input: {
       parsed,
       artifactRelativePath,
     });
-    const dispatched = yield* deps
-      .dispatch({
-        type: "thread.message.upsert",
-        commandId: CommandId.make(`server:t3team:widget:${t3teamRandomUUID()}`),
+    const recorded = yield* deps
+      .recordArtifact({
+        id: t3teamWidgetArtifactId(widgetId),
         threadId: ThreadId.make(deps.threadId),
-        message: {
-          messageId: MessageId.make(t3teamRandomUUID()),
-          role: "system",
-          text: "",
-          turnId: null,
-          streaming: false,
-          t3teamExt: {
-            author: { kind: "system" },
-            visibleToUser: true,
-            visibleToAgent: false,
-            attachments: [attachment],
-          },
-        },
-        createdAt: DateTime.formatIso(yield* DateTime.now),
+        messageId: null,
+        kind: T3TEAM_WIDGET_ARTIFACT_KIND,
+        payload: attachment,
       })
       .pipe(Effect.result);
-    if (dispatched._tag === "Failure") {
-      return errorResult("Failed to post the widget message to the thread.");
+    if (recorded._tag === "Failure") {
+      return errorResult("Failed to post the widget to the thread.");
     }
 
-    // Register only after the message dispatch succeeded, so failed dispatches never
+    // Register only after the artifact write succeeded, so failed writes never
     // consume registry slots (the registry is bounded per thread and globally).
     yield* deps.registry.put({
       widgetId,

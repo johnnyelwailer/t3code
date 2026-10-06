@@ -58,7 +58,7 @@ function shapeMessage(id: string, capabilities?: ReadonlyArray<unknown>): ChatMe
     streaming: false,
     createdAt: "2026-06-14T00:00:00.000Z",
     updatedAt: "2026-06-14T00:00:00.000Z",
-    turnId: null,
+    runId: null,
     t3teamExt: {
       visibleToUser: true,
       attachments: [

@@ -1,111 +1,109 @@
-import { CommandId, ThreadId, type OrchestrationEvent } from "@t3tools/contracts";
+/**
+ * Feeds the child-status summarizer from V2: every finished, meaningful turn
+ * item of an app-owned subagent child (`shell.lineage.relationshipToParent:
+ * "subagent"`, not a provider-native subagent) updates that child's
+ * recent-activity window; the debounced summary is
+ * written as the child's `childStatus` thread fact (side stream, never chat).
+ *
+ * Live tail only (`streamDomainEvents`): a status is a best-effort hint about
+ * current work, so nothing is replayed after a restart; the next finished
+ * item regenerates it.
+ * @module t3team-childStatusReactor
+ */
+import {
+  isProviderNativeSubagentThread,
+  type OrchestrationV2DomainEvent,
+  ThreadId,
+} from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
-import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
-import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
+import { forkParked } from "./serverActivation.ts";
 import { TextGeneration } from "./textGeneration/TextGeneration.ts";
-import { createChildStatusEventReactor } from "./t3team-childStatusSummarizer.ts";
+import {
+  appendRecentActivity,
+  type ChildActivity,
+  childStatusPrompt,
+  makeChildStatusSummarizer,
+  turnItemActivity,
+} from "./t3team-childStatusSummarizer.ts";
+import { T3TeamThreadFactsStore } from "./t3team-v2/t3team-threadFactsStore.ts";
 import { resolveWorkflowAgentModel } from "./t3team-workflowAgentModelPolicy.ts";
-import { t3teamRandomUUID } from "./t3team-random.ts";
 
 const ChildStatusOutput = Schema.Struct({ status: Schema.String });
+/** Children whose recent activity is remembered; the oldest is dropped beyond this. */
+const MAX_TRACKED_CHILDREN = 256;
 
-const isChildThread = (thread: {
-  readonly id: string;
-  readonly activities: ReadonlyArray<{ readonly kind: string }>;
-}) =>
-  thread.id.includes(":repair:") ||
-  thread.activities.some((activity) => activity.kind === "t3team.handoff.created");
-
-/** Observes domain events and performs a separate structured generation request. */
 export const T3TeamChildStatusReactorLive = Layer.effectDiscard(
   Effect.gen(function* () {
-    const engine = yield* OrchestrationEngineService;
-    const query = yield* ProjectionSnapshotQuery;
+    const threads = yield* ThreadManagementService;
     const textGeneration = yield* TextGeneration;
-    const reactor = createChildStatusEventReactor({
-      loadChild: async (threadId) => {
-        const detail = await Effect.runPromise(
-          query
-            .getThreadDetailById(ThreadId.make(threadId))
-            .pipe(Effect.orElseSucceed(() => Option.none())),
-        );
-        const child = Option.getOrUndefined(detail);
-        return child && isChildThread(child)
-          ? { id: child.id, modelSelection: resolveWorkflowAgentModel(child.modelSelection) }
-          : null;
-      },
-      generate: async ({ modelSelection, activity }) => {
-        if (!textGeneration.generateStructured) return null;
-        const prompt = [
-          'Summarize the child agent\'s current work as JSON: {"status":"..."}.',
-          "Use 3-96 plain-text characters, present tense, specific and concise.",
-          "Do not mention models, prompts, tools, agents, or internal runtime details.",
-          `Recent activity metadata: ${JSON.stringify(activity)}`,
-        ].join("\n");
-        return Effect.runPromise(
-          textGeneration.generateStructured({
-            cwd: process.cwd(),
-            prompt,
-            outputSchema: ChildStatusOutput,
-            modelSelection,
-          }),
-        );
-      },
-      persist: async ({ threadId, status }) => {
-        await Effect.runPromise(
-          engine.dispatch({
-            type: "thread.meta.update",
-            commandId: CommandId.make(`server:t3team:child-status:${t3teamRandomUUID()}`),
-            threadId: ThreadId.make(threadId),
-            childStatus: status,
-          }),
-        );
-      },
-      nowIso: () => DateTime.formatIso(DateTime.nowUnsafe()),
-      onError: (cause) => {
-        Effect.runFork(Effect.logWarning("child status summarizer timer failed", { cause }));
-      },
+    const facts = yield* T3TeamThreadFactsStore;
+    const generateStructured = textGeneration.generateStructured;
+    // Hosts without a structured-generation driver have no summaries (fail-open).
+    if (generateStructured === undefined) return;
+
+    const summarizer = yield* makeChildStatusSummarizer({
+      debounce: "1500 millis",
+      generate: ({ modelSelection, activity }) =>
+        generateStructured({
+          cwd: process.cwd(),
+          prompt: childStatusPrompt(activity),
+          outputSchema: ChildStatusOutput,
+          modelSelection,
+        }),
+      persist: (threadId, status) =>
+        facts.upsert(ThreadId.make(threadId), { childStatus: status }).pipe(Effect.asVoid),
+      onFailure: (threadId, error) =>
+        Effect.logWarning("t3team child status summary failed", { threadId, error }),
     });
 
-    const note = (event: OrchestrationEvent) =>
+    const recent = new Map<string, ReadonlyArray<ChildActivity>>();
+    const handle = (event: OrchestrationV2DomainEvent) =>
       Effect.gen(function* () {
-        const meaningful =
-          event.type === "thread.turn-diff-completed"
-            ? {
-                threadId: event.payload.threadId,
-                kind: "turn.completed",
-                summary: event.payload.status,
-              }
-            : event.type === "thread.activity-appended" &&
-                event.payload.activity.kind !== "t3team.handoff.created"
-              ? {
-                  threadId: event.payload.threadId,
-                  kind: event.payload.activity.kind,
-                  summary: event.payload.activity.summary,
-                }
-              : null;
-        if (!meaningful) return;
-        yield* Effect.promise(() => reactor.handle(meaningful));
+        if (event.type !== "turn-item.updated") return;
+        const activity = turnItemActivity(event.payload);
+        if (activity === null) return;
+        const shell = yield* threads.getThreadShell(event.threadId);
+        if (
+          shell === null ||
+          shell.lineage.parentThreadId === null ||
+          shell.lineage.relationshipToParent !== "subagent" ||
+          // The provider's own subagents are hidden and run inside the parent's turn: no summary.
+          isProviderNativeSubagentThread(shell)
+        ) {
+          return;
+        }
+        const window = appendRecentActivity(recent.get(shell.id) ?? [], activity);
+        recent.delete(shell.id);
+        recent.set(shell.id, window);
+        if (recent.size > MAX_TRACKED_CHILDREN) recent.delete(recent.keys().next().value!);
+        yield* summarizer.note({
+          threadId: shell.id,
+          modelSelection: resolveWorkflowAgentModel(shell.modelSelection),
+          activity: window,
+        });
       });
 
-    yield* Effect.forkScoped(
-      Stream.runForEach(engine.streamDomainEvents, (event) =>
-        note(event).pipe(
+    yield* forkParked(
+      Stream.runForEach(threads.streamDomainEvents, (event) =>
+        handle(event).pipe(
           Effect.catchCause((cause) =>
             Cause.hasInterruptsOnly(cause)
-              ? Effect.failCause(cause)
-              : Effect.logWarning("child status reactor event failed", {
+              ? Effect.interrupt
+              : Effect.logWarning("t3team child status event failed", {
                   eventType: event.type,
                   cause: Cause.pretty(cause),
                 }),
           ),
+        ),
+      ).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning("t3team child status stream ended", { cause: Cause.pretty(cause) }),
         ),
       ),
     );

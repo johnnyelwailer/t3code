@@ -1,7 +1,7 @@
 /**
- * Limits + pure helpers for the actor-message reactor (split out of
- * `t3team-actorMessageReactor.ts`): hop cap, coalescing debounce window,
- * per-turn batch cap, and the thread-busy check.
+ * Limits + pure helpers for inter-agent mailbox delivery
+ * (t3team-actorMailboxDelivery.ts): hop cap, coalescing debounce window,
+ * per-digest batch cap, typing lapse, and the thread-busy check.
  */
 
 /**
@@ -26,7 +26,7 @@ export const T3TEAM_ACTOR_MESSAGE_HOP_CAP = 6;
  * immediately, still batched). An `urgent` entry in the pending batch
  * bypasses the window entirely (claims immediately; see the reactor's drain).
  */
-export const T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS = 60_000;
+const T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS = 60_000;
 const T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS_ENV = "T3TEAM_ACTOR_MESSAGE_DEBOUNCE_MS";
 
 /** Resolve the coalescing debounce window, honoring the env override. */
@@ -62,16 +62,19 @@ export function resolveActorMessageBatchMax(): number {
   return T3TEAM_ACTOR_MESSAGE_BATCH_MAX;
 }
 
-export const isThreadBusy = (thread: {
-  readonly session: { readonly status: string } | null;
-  readonly latestTurn: { readonly state: string } | null;
-}): boolean => {
-  const status = thread.session?.status;
-  if (status === "running" || status === "starting") {
-    return true;
-  }
-  return thread.latestTurn?.state === "running";
-};
+const ACTIVE_SHELL_STATUSES: ReadonlySet<string> = new Set([
+  "preparing",
+  "queued",
+  "starting",
+  "running",
+  "waiting",
+]);
+
+/** A thread is busy while it has an active or queued run; digests land only on idle threads. */
+export const isMailboxThreadBusy = (shell: {
+  readonly status: string;
+  readonly activeRunId: string | null;
+}): boolean => shell.activeRunId !== null || ACTIVE_SHELL_STATUSES.has(shell.status);
 
 /**
  * TYPING LAPSE: the composing heartbeat is a per-thread "the user is actively

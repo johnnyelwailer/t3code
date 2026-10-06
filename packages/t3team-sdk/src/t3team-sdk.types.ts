@@ -63,11 +63,6 @@ export interface ToolWorkspace {
 }
 
 export interface T3TeamToolHandlerClient {
-  readonly renameThread: (input: { readonly title: string }) => Promise<{
-    readonly ok: true;
-    readonly title: string;
-    readonly threadId?: string | undefined;
-  }>;
   /** Host-provided project-recipe listing; result is validated against the tool result schema. */
   readonly listRecipes?: () => Promise<unknown>;
   /** Host-provided static workflow validation; result is validated against the tool result schema. */

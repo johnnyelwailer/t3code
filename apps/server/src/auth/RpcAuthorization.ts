@@ -7,7 +7,7 @@ import {
   AuthRelayWriteScope,
   AuthReviewWriteScope,
   AuthTerminalOperateScope,
-  ORCHESTRATION_WS_METHODS,
+  ORCHESTRATION_V2_WS_METHODS,
   type AuthEnvironmentScope,
   WS_METHODS,
   WsRpcGroup,
@@ -22,23 +22,30 @@ type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
  * runtime failure.
  */
 export const RPC_REQUIRED_SCOPES = {
-  [ORCHESTRATION_WS_METHODS.dispatchCommand]: AuthOrchestrationOperateScope,
-  [ORCHESTRATION_WS_METHODS.getWorkflowScript]: AuthOrchestrationReadScope,
-  [ORCHESTRATION_WS_METHODS.getTurnDiff]: AuthOrchestrationReadScope,
-  [ORCHESTRATION_WS_METHODS.getFullThreadDiff]: AuthOrchestrationReadScope,
-  [ORCHESTRATION_WS_METHODS.searchThreads]: AuthOrchestrationReadScope,
-  [ORCHESTRATION_WS_METHODS.subscribeShell]: AuthOrchestrationReadScope,
-  [ORCHESTRATION_WS_METHODS.getArchivedShellSnapshot]: AuthOrchestrationReadScope,
-  [ORCHESTRATION_WS_METHODS.subscribeThread]: AuthOrchestrationReadScope,
-  // Per-thread composing heartbeat: mutates the server's engagement state
-  // (the inter-agent drain back-off), so it operates rather than reads. Every
-  // standard client session already carries orchestration:operate — it is the
-  // same scope every t3team thread command (turn.start, archive, …) flows
-  // through, so the caller is authenticated exactly like any other act on a
-  // thread in this environment. The signal is per-thread and self-clearing
-  // (typing-lapse window), so the scope is the full authorization: it is
-  // strictly weaker than starting a turn on the same thread.
-  [ORCHESTRATION_WS_METHODS.noteComposing]: AuthOrchestrationOperateScope,
+  [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: AuthOrchestrationOperateScope,
+  [ORCHESTRATION_V2_WS_METHODS.getWorkflowScript]: AuthOrchestrationReadScope,
+  [ORCHESTRATION_V2_WS_METHODS.getTurnDiff]: AuthOrchestrationReadScope,
+  [ORCHESTRATION_V2_WS_METHODS.getFullThreadDiff]: AuthOrchestrationReadScope,
+  [ORCHESTRATION_V2_WS_METHODS.searchThreads]: AuthOrchestrationReadScope,
+  [ORCHESTRATION_V2_WS_METHODS.getArchivedShellSnapshot]: AuthOrchestrationReadScope,
+  [ORCHESTRATION_V2_WS_METHODS.getThreadProjection]: AuthOrchestrationReadScope,
+  [ORCHESTRATION_V2_WS_METHODS.launchThread]: AuthOrchestrationOperateScope,
+  [ORCHESTRATION_V2_WS_METHODS.subscribeArchivedShell]: AuthOrchestrationReadScope,
+  [ORCHESTRATION_V2_WS_METHODS.subscribeShell]: AuthOrchestrationReadScope,
+  [ORCHESTRATION_V2_WS_METHODS.subscribeThread]: AuthOrchestrationReadScope,
+  [WS_METHODS.projectsMutate]: AuthOrchestrationOperateScope,
+  // t3team: per-thread composing heartbeat (wire name "orchestration.noteComposing"; V2 removed
+  // ORCHESTRATION_WS_METHODS, so the fork RPC is registered under WS_METHODS). It mutates the
+  // server's engagement state (the inter-agent drain back-off), so it operates rather than reads.
+  // Every standard client session already carries orchestration:operate, the same scope every
+  // thread command flows through. The signal is per-thread and self-clearing (typing-lapse
+  // window), so the scope is the full authorization: it is strictly weaker than starting a turn.
+  [WS_METHODS.orchestrationNoteComposing]: AuthOrchestrationOperateScope,
+  // t3team: fork thread facts/artifacts side streams are thread reads like subscribeThread.
+  [WS_METHODS.t3teamSubscribeThreadFacts]: AuthOrchestrationReadScope,
+  [WS_METHODS.t3teamSubscribeThreadArtifacts]: AuthOrchestrationReadScope,
+  // t3team: "stop including sub-runs" interrupts runs, like interrupting one thread.
+  [WS_METHODS.t3teamStopThreadCascade]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverProbe]: AuthOrchestrationReadScope,
   [WS_METHODS.serverGetConfig]: AuthOrchestrationReadScope,
   [WS_METHODS.serverRefreshProviders]: AuthOrchestrationOperateScope,
@@ -46,6 +53,10 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.providerAuthStart]: AuthOrchestrationOperateScope,
   [WS_METHODS.providerConsumeResetCredit]: AuthOrchestrationOperateScope,
   [WS_METHODS.providerAuthComplete]: AuthOrchestrationOperateScope,
+  [WS_METHODS.chatGptReconnectProfile]: AuthOrchestrationOperateScope,
+  [WS_METHODS.chatGptImportProfile]: AuthOrchestrationOperateScope,
+  [WS_METHODS.chatGptHandoffSubscribe]: AuthOrchestrationOperateScope,
+  [WS_METHODS.codexAuthCallbackSubscribe]: AuthOrchestrationOperateScope,
   [WS_METHODS.providerAuthRespond]: AuthOrchestrationOperateScope,
   [WS_METHODS.providerAuthCancel]: AuthOrchestrationOperateScope,
   [WS_METHODS.providerAuthLogout]: AuthOrchestrationOperateScope,
@@ -61,6 +72,17 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.serverRemoveKeybinding]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverGetSettings]: AuthOrchestrationReadScope,
   [WS_METHODS.serverUpdateSettings]: AuthOrchestrationOperateScope,
+  [WS_METHODS.serverSearchAcpRegistry]: AuthOrchestrationReadScope,
+  [WS_METHODS.serverPrepareAcpRegistryAgent]: AuthOrchestrationOperateScope,
+  [WS_METHODS.serverUninstallAcpRegistryManagedBinary]: AuthOrchestrationOperateScope,
+  [WS_METHODS.serverAcceptAcpRegistryUrlAuth]: AuthOrchestrationOperateScope,
+  [WS_METHODS.serverListAcpRegistrySessions]: AuthOrchestrationReadScope,
+  [WS_METHODS.serverImportAcpRegistrySession]: AuthOrchestrationOperateScope,
+  [WS_METHODS.serverDeleteAcpRegistrySession]: AuthOrchestrationOperateScope,
+  [WS_METHODS.serverListAcpRegistryProviders]: AuthOrchestrationReadScope,
+  [WS_METHODS.serverSetAcpRegistryProvider]: AuthOrchestrationOperateScope,
+  [WS_METHODS.serverDisableAcpRegistryProvider]: AuthOrchestrationOperateScope,
+  [WS_METHODS.serverLogoutAcpRegistry]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverDiscoverSourceControl]: AuthOrchestrationReadScope,
   [WS_METHODS.serverGetTraceDiagnostics]: AuthOrchestrationReadScope,
   [WS_METHODS.serverGetProcessDiagnostics]: AuthOrchestrationReadScope,
@@ -78,6 +100,12 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.serverReportClientActivity]: AuthOrchestrationReadScope,
   [WS_METHODS.serverReportHostPowerState]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverGetBackgroundPolicy]: AuthOrchestrationReadScope,
+  [WS_METHODS.scheduledTasksList]: AuthOrchestrationReadScope,
+  [WS_METHODS.scheduledTasksSubscribe]: AuthOrchestrationReadScope,
+  [WS_METHODS.scheduledTasksUpsert]: AuthOrchestrationOperateScope,
+  [WS_METHODS.scheduledTasksSetEnabled]: AuthOrchestrationOperateScope,
+  [WS_METHODS.scheduledTasksDelete]: AuthOrchestrationOperateScope,
+  [WS_METHODS.scheduledTasksRunNow]: AuthOrchestrationOperateScope,
   [WS_METHODS.cloudGetRelayClientStatus]: AuthRelayReadScope,
   [WS_METHODS.cloudInstallRelayClient]: AuthRelayWriteScope,
   [WS_METHODS.cloudSessionList]: AuthRelayReadScope,
@@ -85,6 +113,8 @@ export const RPC_REQUIRED_SCOPES = {
   // so they sit behind the write scope alongside relay-client installation.
   [WS_METHODS.cloudSessionCreate]: AuthRelayWriteScope,
   [WS_METHODS.cloudSessionCancel]: AuthRelayWriteScope,
+  // Reads committed files in the project's own checkouts, like the other project reads.
+  [WS_METHODS.projectMachineDiscover]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsList]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsListStats]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsSummary]: AuthOrchestrationReadScope,
@@ -94,6 +124,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.pullRequestsLinkedThreads]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsDetail]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsPreview]: AuthOrchestrationReadScope,
+  [WS_METHODS.pullRequestsChecks]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsActivity]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsThreadComments]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsDiffFileContents]: AuthOrchestrationReadScope,
@@ -129,11 +160,14 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.projectsSearchContents]: AuthOrchestrationReadScope,
   [WS_METHODS.projectsSearchEntries]: AuthOrchestrationReadScope,
   [WS_METHODS.projectsWriteFile]: AuthOrchestrationOperateScope,
+  [WS_METHODS.projectsEnsureScratch]: AuthOrchestrationOperateScope,
+  [WS_METHODS.projectsCreateNew]: AuthOrchestrationOperateScope,
   [WS_METHODS.shellOpenInEditor]: AuthOrchestrationOperateScope,
   [WS_METHODS.filesystemBrowse]: AuthOrchestrationReadScope,
   [WS_METHODS.agentSessionsScan]: AuthOrchestrationReadScope,
   [WS_METHODS.agentSessionsImport]: AuthOrchestrationOperateScope,
   [WS_METHODS.assetsCreateUrl]: AuthOrchestrationReadScope,
+  [WS_METHODS.assetsPersistChatAttachments]: AuthOrchestrationOperateScope,
   [WS_METHODS.attachmentsCreateUploadUrl]: AuthOrchestrationOperateScope,
   [WS_METHODS.attachmentsDelete]: AuthOrchestrationOperateScope,
   [WS_METHODS.providerUploadFeedback]: AuthOrchestrationOperateScope,

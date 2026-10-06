@@ -5,12 +5,12 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { McpSchema, McpServer } from "effect/unstable/ai";
 
+import { T3TeamChildThreadMetadata } from "../../../t3team-childThreadMetadata.ts";
 import { T3TeamToolBroker, type T3TeamToolBinding } from "../../../t3team-toolBroker.ts";
 import { T3TeamToolkitRegistrationLive } from "../../McpHttpServer.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import {
   T3TEAM_MCP_CANONICAL_TOOL_MAP,
-  T3TEAM_MCP_DEPRECATED_TOOL_ALIASES,
   T3TEAM_MCP_POLICY_EXCLUDED_CANONICAL_TOOLS,
   mcpDescriptionOf,
   T3TeamToolkit,
@@ -31,7 +31,7 @@ const invocation: McpInvocationContext.McpInvocationScope = {
   threadId,
   providerSessionId: "provider-session-t3team-mcp-test",
   providerInstanceId: ProviderInstanceId.make("pack-test"),
-  capabilities: new Set(),
+  capabilities: new Set(["orchestration"]),
   issuedAt: 1,
 };
 const client = McpSchema.McpServerClient.of({
@@ -66,7 +66,6 @@ it.effect("routes MCP wrappers through the bound broker callTool dispatch", () =
     },
   };
   const broker = T3TeamToolBroker.of({
-    sendMessage: () => Effect.succeed(undefined),
     bindSession: ({ threadId: boundThreadId }) =>
       Effect.succeed(boundThreadId === threadId ? binding : undefined),
     bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
@@ -79,12 +78,12 @@ it.effect("routes MCP wrappers through the bound broker callTool dispatch", () =
   return Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
     const result = yield* server.callTool({
-      name: "t3team_show_widget",
+      name: "t3_show_widget",
       arguments: {
         title: "MCP widget",
         widget_code: "<button>Continue</button>",
         format: "html",
-        capabilities: { tools: ["t3team.thread.rename"] },
+        capabilities: { tools: ["t3team.view.read"] },
       },
     });
 
@@ -97,7 +96,7 @@ it.effect("routes MCP wrappers through the bound broker callTool dispatch", () =
           title: "MCP widget",
           widget_code: "<button>Continue</button>",
           format: "html",
-          capabilities: { tools: ["t3team.thread.rename"] },
+          capabilities: { tools: ["t3team.view.read"] },
         },
       },
     ]);
@@ -108,75 +107,21 @@ it.effect("routes MCP wrappers through the bound broker callTool dispatch", () =
   );
 });
 
-// The agent-orchestration rename kept the old MCP names as deprecated aliases:
-// pack configs, agent prompts, and live transcripts still say t3team_workflow_*,
-// and a hard break would silently strip the capability from running agents.
-const orchestrationAliasCases = [
-  {
-    deprecated: "t3team_workflow_run",
-    current: "t3team_orchestration_run",
-    args: {
-      source: "export const meta = { name: 'x' };",
-      intent: { goal: "g", expectedOutcome: "o", guardrails: ["none"] },
-    },
-  },
-  { deprecated: "t3team_workflow_status", current: "t3team_orchestration_status", args: {} },
-  {
-    deprecated: "t3team_workflow_resume",
-    current: "t3team_orchestration_resume",
-    args: { runId: "run-1" },
-  },
-] as const;
-
-it("declares every deprecated orchestration alias with a mapped replacement", () => {
-  expect(orchestrationAliasCases.map(({ deprecated, current }) => [deprecated, current])).toEqual(
-    Object.entries(T3TEAM_MCP_DEPRECATED_TOOL_ALIASES),
+// The agent-orchestration rename's MCP aliases are gone: each was a second full tool definition
+// in every agent's context for an operation it already had.
+it("exposes only the t3team_orchestration_* names, not the t3team_workflow_* aliases", () => {
+  const names = Object.keys(T3TeamToolkit.tools);
+  expect(names).toEqual(
+    expect.arrayContaining([
+      "t3_orchestration_run",
+      "t3_orchestration_status",
+      "t3_orchestration_resume",
+    ]),
   );
+  expect(names.filter((name) => name.startsWith("t3team_workflow_"))).toEqual([]);
 });
 
-for (const { deprecated, current, args } of orchestrationAliasCases) {
-  it.effect(`dispatches ${deprecated} and ${current} to the same broker tool`, () => {
-    const calls: Array<string> = [];
-    const binding: T3TeamToolBinding = {
-      threadId,
-      listServers: () => [],
-      readResource: ({ uri }) => Effect.succeed({ contents: [{ uri, text: "{}" }] }),
-      callTool: ({ tool }) => {
-        calls.push(tool);
-        return Effect.succeed({
-          content: [{ type: "text" as const, text: "ok" }],
-          structuredContent: { ok: true },
-        });
-      },
-    };
-    const broker = T3TeamToolBroker.of({
-      sendMessage: () => Effect.succeed(undefined),
-      bindSession: ({ threadId: boundThreadId }) =>
-        Effect.succeed(boundThreadId === threadId ? binding : undefined),
-      bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
-    });
-    const TestLayer = T3TeamToolkitRegistrationLive.pipe(
-      Layer.provideMerge(McpServer.McpServer.layer),
-      Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
-    );
-
-    return Effect.gen(function* () {
-      const server = yield* McpServer.McpServer;
-      yield* server.callTool({ name: current, arguments: args });
-      yield* server.callTool({ name: deprecated, arguments: args });
-
-      expect(calls).toHaveLength(2);
-      expect(calls[0]).toBe(T3TEAM_MCP_CANONICAL_TOOL_MAP[current]);
-      expect(calls[1]).toBe(calls[0]);
-    }).pipe(
-      Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
-      Effect.provideService(McpSchema.McpServerClient, client),
-      Effect.provide(TestLayer),
-    );
-  });
-}
-
-it.effect("routes t3team_recipe_list through the bound broker callTool dispatch", () => {
+it.effect("routes t3_recipe_list through the bound broker callTool dispatch", () => {
   const calls: Array<{
     readonly threadId: ThreadId;
     readonly tool: string;
@@ -195,7 +140,6 @@ it.effect("routes t3team_recipe_list through the bound broker callTool dispatch"
     },
   };
   const broker = T3TeamToolBroker.of({
-    sendMessage: () => Effect.succeed(undefined),
     bindSession: ({ threadId: boundThreadId }) =>
       Effect.succeed(boundThreadId === threadId ? binding : undefined),
     bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
@@ -208,7 +152,7 @@ it.effect("routes t3team_recipe_list through the bound broker callTool dispatch"
   return Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
     const result = yield* server.callTool({
-      name: "t3team_recipe_list",
+      name: "t3_recipe_list",
       arguments: {},
     });
 
@@ -226,7 +170,7 @@ it.effect("routes t3team_recipe_list through the bound broker callTool dispatch"
   );
 });
 
-it.effect("routes t3team_recipe_validate through the bound broker callTool dispatch", () => {
+it.effect("routes t3_recipe_validate through the bound broker callTool dispatch", () => {
   const calls: Array<{
     readonly threadId: ThreadId;
     readonly tool: string;
@@ -245,7 +189,6 @@ it.effect("routes t3team_recipe_validate through the bound broker callTool dispa
     },
   };
   const broker = T3TeamToolBroker.of({
-    sendMessage: () => Effect.succeed(undefined),
     bindSession: ({ threadId: boundThreadId }) =>
       Effect.succeed(boundThreadId === threadId ? binding : undefined),
     bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
@@ -258,7 +201,7 @@ it.effect("routes t3team_recipe_validate through the bound broker callTool dispa
   return Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
     const result = yield* server.callTool({
-      name: "t3team_recipe_validate",
+      name: "t3_recipe_validate",
       arguments: { source: "export const meta = { name: 'x' };" },
     });
 
@@ -277,6 +220,46 @@ it.effect("routes t3team_recipe_validate through the bound broker callTool dispa
   );
 });
 
+it.effect(
+  "refuses a credential without the orchestration capability before reaching the broker",
+  () => {
+    const calls: Array<string> = [];
+    const broker = T3TeamToolBroker.of({
+      bindSession: () =>
+        Effect.sync(() => {
+          calls.push("bindSession");
+          return undefined;
+        }),
+      bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
+    });
+    const TestLayer = T3TeamToolkitRegistrationLive.pipe(
+      Layer.provideMerge(McpServer.McpServer.layer),
+      Layer.provideMerge(Layer.succeed(T3TeamToolBroker, broker)),
+    );
+
+    return Effect.gen(function* () {
+      const server = yield* McpServer.McpServer;
+      const result = yield* server.callTool({
+        name: "t3_task_ops",
+        arguments: { op: "environments" },
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content).toEqual([
+        expect.objectContaining({
+          text: expect.stringContaining("does not grant orchestration capabilities"),
+        }),
+      ]);
+      expect(calls).toEqual([]);
+    }).pipe(
+      Effect.provideService(McpInvocationContext.McpInvocationContext, {
+        ...invocation,
+        capabilities: new Set<McpInvocationContext.McpCapability>(),
+      }),
+      Effect.provideService(McpSchema.McpServerClient, client),
+      Effect.provide(TestLayer),
+    );
+  },
+);
 // Hand-written help drifted from the runtime (it taught an unbound name) and flooded the parent's
 // context. The topics now live where they are needed: tool descriptions and the author agent's
 // generated reference. A `t3team_help` tool must never come back.
@@ -287,11 +270,90 @@ it("no longer registers t3team_help: tool descriptions alone must be enough", ()
 
 // In-app agents read the BROKER catalog (TOOL_SPECS copies its descriptions); MCP agents read the
 // toolkit. One description source, rendered with each surface's tool names (fork #350 review).
-it("MCP and broker surfaces expose the SAME description text for run, resume and models", () => {
+// (`t3team_models` is not on the V2 surface — upstream's `orchestrator_capabilities` replaces it.)
+
+// Skills-as-subagents Phase 1 read path: t3team_thread_skill_metadata answers from the
+// delegated-child metadata table, with a clean EMPTY result (never an error) for threads
+// without skill delegation — the driver's soft-fail then yields today's behavior.
+const skillMetadataCall = Effect.fn("T3TeamToolkitTest.skillMetadataCall")(function* (
+  expectedForThread: ReadonlyArray<string>,
+) {
+  const server = yield* McpServer.McpServer;
+  // No threadId: the invocation's own thread (none of these fixtures has skill metadata).
+  const withoutArg = yield* server.callTool({
+    name: "t3team_thread_skill_metadata",
+    arguments: {},
+  });
+  expect(withoutArg.structuredContent).toEqual({ skills: [] });
+  const forThread = yield* server.callTool({
+    name: "t3team_thread_skill_metadata",
+    arguments: { threadId: "thread:child-skills" },
+  });
+  expect(forThread.structuredContent).toEqual({ skills: expectedForThread });
+  const unknownThread = yield* server.callTool({
+    name: "t3team_thread_skill_metadata",
+    arguments: { threadId: "thread:unknown" },
+  });
+  expect(unknownThread.structuredContent).toEqual({ skills: [] });
+});
+
+const emptySkillMetadataLayer = T3TeamToolkitRegistrationLive.pipe(
+  Layer.provideMerge(McpServer.McpServer.layer),
+  Layer.provideMerge(
+    Layer.succeed(
+      T3TeamToolBroker,
+      T3TeamToolBroker.of({
+        bindSession: () => Effect.succeed(undefined),
+        bindReadOnly: () => Effect.void.pipe(Effect.as(undefined)),
+      }),
+    ),
+  ),
+);
+
+it.effect("t3team_thread_skill_metadata yields an empty result without a metadata store", () =>
+  skillMetadataCall([]).pipe(
+    Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+    Effect.provideService(McpSchema.McpServerClient, client),
+    Effect.provide(emptySkillMetadataLayer),
+  ),
+);
+
+it.effect(
+  "t3team_thread_skill_metadata reads the requested names from child-thread metadata",
+  () => {
+    const store = T3TeamChildThreadMetadata.of({
+      upsert: () => Effect.void,
+      listByChildThreadIds: (childThreadIds) =>
+        Effect.succeed(
+          childThreadIds.includes("thread:child-skills")
+            ? [
+                {
+                  childThreadId: "thread:child-skills",
+                  parentThreadId: "thread:parent",
+                  placementThreadId: null,
+                  ticketId: null,
+                  skills: ["deploy-staging"],
+                  createdAt: "2026-10-05T00:00:00.000Z",
+                },
+              ]
+            : [],
+        ),
+    });
+    const TestLayer = emptySkillMetadataLayer.pipe(
+      Layer.provideMerge(Layer.succeed(T3TeamChildThreadMetadata, store)),
+    );
+    return skillMetadataCall(["deploy-staging"]).pipe(
+      Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+      Effect.provideService(McpSchema.McpServerClient, client),
+      Effect.provide(TestLayer),
+    );
+  },
+);
+
+it("MCP and broker surfaces expose the SAME description text for run and resume", () => {
   const cases = [
-    ["t3team_orchestration_run", "t3team.orchestration.run"],
-    ["t3team_orchestration_resume", "t3team.orchestration.resume"],
-    ["t3team_models", "t3team.runtime.models"],
+    ["t3_orchestration_run", "t3team.orchestration.run"],
+    ["t3_orchestration_resume", "t3team.orchestration.resume"],
   ] as const;
   for (const [mcpName, canonicalId] of cases) {
     const mcp = (T3TeamToolkit.tools as Record<string, { readonly description?: string }>)[mcpName];
@@ -304,11 +366,7 @@ it("MCP and broker surfaces expose the SAME description text for run, resume and
     }
     expect(unmapped).toBe(broker);
     expect(broker).toContain(
-      canonicalId === "t3team.orchestration.resume"
-        ? "corrected 'args'"
-        : canonicalId === "t3team.runtime.models"
-          ? "declared default"
-          : "'intent'",
+      canonicalId === "t3team.orchestration.resume" ? "corrected 'args'" : "'intent'",
     );
   }
 });

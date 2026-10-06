@@ -1,4 +1,10 @@
-import type { ModelSelection, ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
+import {
+  ProjectId,
+  ThreadId,
+  type ModelSelection,
+  type ProviderInteractionMode,
+  type RuntimeMode,
+} from "@t3tools/contracts";
 
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import {
@@ -6,7 +12,6 @@ import {
   type ThreadBootstrapAction,
 } from "~/t3team/chat/t3team-threadBootstrapInstrumentation";
 import type { ThreadBootstrapDispatchState } from "~/t3team/chat/t3team-threadBootstrapPlan";
-import { randomUUID } from "~/lib/utils";
 
 export async function ensureThreadBootstrapProject(input: {
   backend: BackendApi;
@@ -37,15 +42,12 @@ export async function ensureThreadBootstrapProject(input: {
   });
 
   try {
-    await input.backend.dispatchCommand({
-      type: "project.create",
-      commandId: randomUUID() as any,
-      projectId: input.canonicalProjectId as any,
+    await input.backend.orchestration.createProject({
+      projectId: ProjectId.make(input.canonicalProjectId),
       title: input.projectTitle,
       workspaceRoot: input.projectWorkspaceRoot,
       createWorkspaceRootIfMissing: true,
       defaultModelSelection: input.kickoffModelSelection,
-      createdAt: input.createdAt,
       source: { provider: "local" },
     });
     recordThreadBootstrapEvent("thread-bootstrap.project-create.success", {
@@ -82,18 +84,15 @@ export async function dispatchThreadBootstrapCreate(input: {
     title: input.title,
   });
 
-  await input.backend.dispatchCommand({
-    type: "thread.create",
-    commandId: randomUUID() as any,
-    threadId: input.threadId as any,
-    projectId: input.canonicalProjectId as any,
+  await input.backend.orchestration.createThread({
+    threadId: ThreadId.make(input.threadId),
+    projectId: ProjectId.make(input.canonicalProjectId),
     title: input.title,
     modelSelection: input.kickoffModelSelection,
     runtimeMode: input.kickoffRuntimeMode,
     interactionMode: input.kickoffInteractionMode,
     branch: input.kickoffBranch,
     worktreePath: null,
-    createdAt: input.createdAt,
   });
   recordThreadBootstrapEvent("thread-bootstrap.thread-create.success", {
     environmentId: input.environmentId,

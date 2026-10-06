@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
-import type { OrchestrationThreadActivity } from "@t3tools/contracts";
+import { type OrchestrationV2TurnItem, ThreadId, TurnItemId } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 
 import type { WorkLogEntry } from "~/session-logic";
+import { makeLiveThreadShell } from "~/t3team/hooks/t3team-threadBridge.testSupport";
 
 import {
   describeActorOutboundSend,
@@ -10,18 +12,16 @@ import {
   isActorOutboundSendMessageEntry,
 } from "./t3team-actorOutbound";
 
-function activity(
-  kind: OrchestrationThreadActivity["kind"],
-  payload: Record<string, unknown>,
-): OrchestrationThreadActivity {
-  return {
-    id: `act-${kind}-${Math.random().toString(36).slice(2)}`,
-    createdAt: "2026-07-19T08:00:00.000Z",
-    tone: "info",
-    kind,
-    summary: "summary",
-    payload,
-  } as OrchestrationThreadActivity;
+function shell(id: string, title: string, parent: string | null = null) {
+  return makeLiveThreadShell({
+    id: ThreadId.make(id),
+    title,
+    lineage: {
+      rootThreadId: ThreadId.make(parent ?? id),
+      parentThreadId: parent === null ? null : ThreadId.make(parent),
+      relationshipToParent: parent === null ? null : "subagent",
+    },
+  });
 }
 
 const PARENT_ID = "parent-thread";
@@ -33,57 +33,74 @@ const sendEntry = (overrides: Partial<WorkLogEntry> = {}): WorkLogEntry => ({
   createdAt: "2026-07-19T08:30:00.000Z",
   label: "MCP tool call",
   tone: "tool",
-  itemType: "mcp_tool_call",
-  detail: `t3team_send_message: {"to_thread_id":"${PARENT_ID}","text":"done"}`,
+  itemType: "dynamic_tool",
+  detail: `t3_thread_send: {"threadId":"${PARENT_ID}","mode":"mailbox","text":"done"}`,
   ...overrides,
 });
 
+function dynamicToolEntry(toolName: string, input: Record<string, unknown>): WorkLogEntry {
+  const at = DateTime.makeUnsafe("2026-07-19T08:30:00.000Z");
+  const item: OrchestrationV2TurnItem = {
+    id: TurnItemId.make("send-item"),
+    threadId: ThreadId.make("me"),
+    runId: null,
+    nodeId: null,
+    providerThreadId: null,
+    providerTurnId: null,
+    nativeItemRef: null,
+    parentItemId: null,
+    ordinal: 0,
+    status: "completed",
+    title: null,
+    startedAt: at,
+    completedAt: at,
+    updatedAt: at,
+    type: "dynamic_tool",
+    toolName,
+    input,
+    output: null,
+  };
+  const { detail: _detail, ...entry } = sendEntry();
+  return {
+    ...entry,
+    projectedItem: {
+      position: 0,
+      visibility: "local",
+      sourceThreadId: item.threadId,
+      sourceItemId: item.id,
+      item,
+    },
+  };
+}
+
 describe("deriveActorOutboundRelations", () => {
-  it("reads the parent id from the thread's own handoff.created activity", () => {
-    const relations = deriveActorOutboundRelations([
-      activity("t3team.handoff.created", {
-        parentThreadId: PARENT_ID,
-        parentTitle: "Parent",
-        childThreadId: "me",
-        childTitle: "Me",
-      }),
-    ]);
+  it("reads the parent from the thread's own subagent lineage", () => {
+    const me = shell("me", "Me", PARENT_ID);
+    const relations = deriveActorOutboundRelations({ thread: me, threads: [me] });
     expect(relations.parentThreadId).toBe(PARENT_ID);
     expect(relations.childTitles.size).toBe(0);
   });
 
-  it("collects direct children with titles from handoff.started activities", () => {
-    const relations = deriveActorOutboundRelations([
-      activity("t3team.handoff.started", {
-        parentThreadId: "me",
-        childThreadId: CHILD_A_ID,
-        childTitle: "Child A",
-      }),
-      activity("t3team.handoff.started", {
-        parentThreadId: "me",
-        childThreadId: CHILD_B_ID,
-        childTitle: "Child B",
-      }),
-    ]);
+  it("collects direct children with titles from the shells that name it as parent", () => {
+    const me = shell("me", "Me");
+    const relations = deriveActorOutboundRelations({
+      thread: me,
+      threads: [
+        me,
+        shell(CHILD_A_ID, "Child A", "me"),
+        shell(CHILD_B_ID, "Child B", "me"),
+        shell("grandchild", "Grandchild", CHILD_A_ID),
+      ],
+    });
     expect(relations.parentThreadId).toBeNull();
-    expect(relations.childTitles.get(CHILD_A_ID)).toBe("Child A");
-    expect(relations.childTitles.get(CHILD_B_ID)).toBe("Child B");
+    expect([...relations.childTitles]).toEqual([
+      [CHILD_A_ID, "Child A"],
+      [CHILD_B_ID, "Child B"],
+    ]);
   });
 
-  it("ignores workflow-owned handoffs for the parent relation (server parity)", () => {
-    const relations = deriveActorOutboundRelations([
-      activity("t3team.handoff.created", {
-        workflowRunId: "wf-1",
-        parentThreadId: PARENT_ID,
-        childThreadId: "me",
-        childTitle: "Me",
-      }),
-    ]);
-    expect(relations.parentThreadId).toBeNull();
-  });
-
-  it("returns empty relations without activities", () => {
-    const relations = deriveActorOutboundRelations(undefined);
+  it("returns empty relations without a thread", () => {
+    const relations = deriveActorOutboundRelations({ thread: null, threads: [] });
     expect(relations.parentThreadId).toBeNull();
     expect(relations.childTitles.size).toBe(0);
   });
@@ -97,24 +114,22 @@ describe("isActorOutboundSendMessageEntry", () => {
   it("detects the provider-prefixed MCP tool name in the detail", () => {
     expect(
       isActorOutboundSendMessageEntry(
-        sendEntry({ detail: `mcp__t3team__t3team_send_message: {"to_thread_id":"${PARENT_ID}"}` }),
+        sendEntry({ detail: `mcp__t3__t3_thread_send: {"threadId":"${PARENT_ID}"}` }),
       ),
     ).toBe(true);
   });
 
-  it("detects the structured item name on toolData", () => {
+  it("detects the structured tool name of the dynamic tool item", () => {
+    expect(isActorOutboundSendMessageEntry(dynamicToolEntry("t3_thread_send", {}))).toBe(true);
     expect(
-      isActorOutboundSendMessageEntry({
-        label: "MCP tool call",
-        toolData: { name: "t3team_send_message" },
-      }),
-    ).toBe(true);
+      isActorOutboundSendMessageEntry(dynamicToolEntry("t3_thread_send_attachments", {})),
+    ).toBe(false);
   });
 
   it("does not match unrelated tool calls", () => {
     expect(
       isActorOutboundSendMessageEntry(
-        sendEntry({ detail: 'mcp__t3team__t3team_search_thread: {"query":"x"}' }),
+        sendEntry({ detail: 'mcp__t3__t3_thread_send_attachments: {"threadId":"x"}' }),
       ),
     ).toBe(false);
     expect(isActorOutboundSendMessageEntry(sendEntry({ detail: "Read File: /src/x.ts" }))).toBe(
@@ -127,43 +142,30 @@ describe("extractActorOutboundTargetThreadId", () => {
   it("prefers the structured input on the item", () => {
     expect(
       extractActorOutboundTargetThreadId(
-        sendEntry({
-          toolData: { name: "t3team_send_message", input: { to_thread_id: CHILD_A_ID } },
-        }),
+        dynamicToolEntry("t3_thread_send", { threadId: CHILD_A_ID, mode: "mailbox" }),
       ),
     ).toBe(CHILD_A_ID);
   });
 
-  it("falls back to the to_thread_id argument in the persisted detail JSON", () => {
+  it("falls back to the threadId argument in the persisted detail JSON", () => {
     expect(extractActorOutboundTargetThreadId(sendEntry())).toBe(PARENT_ID);
   });
 
   it("returns null when the target is not persisted", () => {
     expect(
-      extractActorOutboundTargetThreadId(sendEntry({ detail: "t3team_send_message: [truncated]" })),
+      extractActorOutboundTargetThreadId(sendEntry({ detail: "t3_thread_send: [truncated]" })),
     ).toBe(null);
   });
 });
 
 describe("describeActorOutboundSend", () => {
-  const parentRelations = deriveActorOutboundRelations([
-    activity("t3team.handoff.created", {
-      parentThreadId: PARENT_ID,
-      childThreadId: "me",
-      childTitle: "Me",
-    }),
-  ]);
-
-  const childRelations = deriveActorOutboundRelations([
-    activity("t3team.handoff.started", {
-      childThreadId: CHILD_A_ID,
-      childTitle: "Child A",
-    }),
-    activity("t3team.handoff.started", {
-      childThreadId: CHILD_B_ID,
-      childTitle: "Child B",
-    }),
-  ]);
+  const me = shell("me", "Me", PARENT_ID);
+  const parentRelations = deriveActorOutboundRelations({ thread: me, threads: [me] });
+  const root = shell("me", "Me");
+  const childRelations = deriveActorOutboundRelations({
+    thread: root,
+    threads: [shell(CHILD_A_ID, "Child A", "me"), shell(CHILD_B_ID, "Child B", "me")],
+  });
 
   it("names the parent when the target is this thread's parent", () => {
     expect(describeActorOutboundSend(sendEntry(), parentRelations)).toBe("Sent message to parent");
@@ -171,7 +173,7 @@ describe("describeActorOutboundSend", () => {
 
   it("names the child by title when the target is a direct child", () => {
     const entry = sendEntry({
-      detail: `t3team_send_message: {"to_thread_id":"${CHILD_B_ID}","text":"hi"}`,
+      detail: `t3_thread_send: {"threadId":"${CHILD_B_ID}","text":"hi"}`,
     });
     expect(describeActorOutboundSend(entry, childRelations)).toBe("Sent message to «Child B»");
   });
@@ -183,7 +185,7 @@ describe("describeActorOutboundSend", () => {
     // Unknown target id (detail truncated) is never guessed:
     expect(
       describeActorOutboundSend(
-        sendEntry({ detail: "t3team_send_message: [truncated]" }),
+        sendEntry({ detail: "t3_thread_send: [truncated]" }),
         parentRelations,
       ),
     ).toBe("Sent message to another thread");

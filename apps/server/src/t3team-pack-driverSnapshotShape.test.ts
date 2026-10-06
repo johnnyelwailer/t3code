@@ -5,7 +5,7 @@
  */
 import { assert, describe, it } from "@effect/vitest";
 import { ProviderDriverKind, ProviderInstanceId } from "@t3tools/contracts";
-import type { PackProviderInstance, PackProviderSnapshot } from "@t3team/packs";
+import type { PackProviderInstance, PackProviderSnapshot } from "@t3team/pack-api";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Stream from "effect/Stream";

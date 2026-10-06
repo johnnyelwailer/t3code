@@ -8,8 +8,7 @@ import {
   splitAutomatedBurst,
 } from "./t3team-actorBurstFold.ts";
 import { buildActorReactionDigestInput } from "./t3team-actorReactionInput.ts";
-import { buildActorRestartHoldSummary } from "./t3team-actorRestartHold.ts";
-import type { T3TeamActorMailboxEntry } from "./t3team-actorMailbox.ts";
+import type { T3TeamActorMailboxEntry } from "./t3team-actorMailboxEntry.ts";
 
 /** Build a minimal actor mailbox entry; `summary`/`urgency` are overridable. */
 const makeEntry = (
@@ -23,16 +22,15 @@ const makeEntry = (
   } = {},
 ): T3TeamActorMailboxEntry => ({
   messageId,
+  toThreadId: "target",
   fromThreadId: over.fromThreadId ?? "watcher",
   fromTitle: over.fromTitle ?? "Silence Watch",
-  fromProjectId: "project",
   text: over.text ?? `Target «${messageId}» stopped abnormally.`,
   ...(over.summary !== undefined ? { summary: over.summary } : {}),
   urgency: over.urgency ?? "normal",
   hopCount: 1,
   rootThreadId: "root",
   createdAt: "2026-09-12T18:00:00.000Z",
-  dispatchAttempts: 0,
 });
 
 /** N distinct non-urgent entries — the deduplicated set the ledger hands down. */
@@ -90,10 +88,10 @@ describe("renderAutomatedBurstBlock", () => {
   it("renders one compact list: count header, one line per item, and the read pointer", () => {
     const block = renderAutomatedBurstBlock(burst(7));
     expect(block).toContain("[Inter-agent burst: 7 messages folded");
-    expect(block).toContain("read any in full with t3team_read_message");
+    expect(block).toContain("read any in full with t3_read_message");
     const itemLines = block.split("\n").filter((l) => l.startsWith("- id "));
     expect(itemLines).toHaveLength(7);
-    // Every item's id is retrievable on demand via t3team_read_message.
+    // Every item's id is retrievable on demand via t3_read_message.
     for (let i = 1; i <= 7; i += 1) expect(block).toContain(`id msg-${i} `);
   });
 });
@@ -148,26 +146,6 @@ describe("buildActorReactionDigestInput · burst fold", () => {
   });
 });
 
-describe("buildActorRestartHoldSummary · burst fold", () => {
-  it("folds a held burst of non-urgent messages into ONE compact list", () => {
-    const out = buildActorRestartHoldSummary({ entries: burst(9), interruptedChildren: [] });
-    expect(out).toContain("[Inter-agent burst: 9 messages folded");
-    const itemLines = out.split("\n").filter((l) => l.startsWith("- id "));
-    expect(itemLines).toHaveLength(9);
-    // The held-messages inlined-body form is replaced, not duplicated.
-    expect(out).toContain("9 inter-agent message(s) were pending");
-  });
-
-  it("keeps the full per-line form for a sub-threshold held batch", () => {
-    const out = buildActorRestartHoldSummary({
-      entries: burst(ACTOR_BURST_FOLD_THRESHOLD),
-      interruptedChildren: [],
-    });
-    expect(out).not.toContain("[Inter-agent burst:");
-    expect(out).toContain("[msg-1] from «Silence Watch» (thread watcher):");
-  });
-});
-
 /**
  * Real-row measurement (thread fbdb583b shape): 12 DISTINCT "stopped"
  * silence-watch notices after the #222 ledger dedup (32 raw -> 12). Each body
@@ -182,16 +160,15 @@ const realShape = (i: number): T3TeamActorMailboxEntry => {
     `(error) while you were watching it for silence (watch w${i + 1}). The watch is closed.`;
   return {
     messageId: `r-${i + 1}`,
+    toThreadId: "target",
     fromThreadId: `fbdb-${i + 1}`,
     fromTitle: title,
-    fromProjectId: "project",
     text,
     summary: `Watched thread stopped: ${title}`,
     urgency: "normal",
     hopCount: 0,
     rootThreadId: "root",
     createdAt: "2026-09-12T18:00:00.000Z",
-    dispatchAttempts: 0,
   };
 };
 const bytes = (s: string) => new TextEncoder().encode(s).length;
@@ -218,7 +195,7 @@ describe("buildActorReactionDigestInput · real-row savings (fbdb583b shape)", (
     // Strictly smaller, and every id is still retrievable on demand.
     expect(bytes(after)).toBeLessThan(bytes(before));
     expect(after).toContain("[Inter-agent burst: 12 messages folded");
-    expect(after).toContain("read any in full with t3team_read_message");
+    expect(after).toContain("read any in full with t3_read_message");
     for (let i = 1; i <= 12; i += 1) expect(after).toContain(`id r-${i} `);
     // The compact form does NOT inline the full bodies (one line each, capped).
     expect(after).not.toContain("reached a terminal state");
