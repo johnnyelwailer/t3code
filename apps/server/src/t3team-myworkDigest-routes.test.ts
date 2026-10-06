@@ -14,6 +14,9 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { HttpBody, HttpClient, HttpRouter } from "effect/unstable/http";
 
+import type { OrchestrationProjectShell } from "@t3tools/contracts";
+
+import { ProjectStoreV2 } from "./orchestration-v2/ProjectStore.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import { t3teamMyWorkDigestRouteLayer } from "./t3team-myworkDigest-routes.ts";
 import { digestArrangementKey, storeDigestArrangement } from "./t3team-myworkDigestArrangement.ts";
@@ -27,7 +30,23 @@ vi.mock("./t3team-myworkDigest.ts", () => ({
 const routeTestLayer = HttpRouter.serve(t3teamMyWorkDigestRouteLayer, {
   disableListenLog: true,
   disableLogger: true,
-}).pipe(Layer.provideMerge(NodeHttpServer.layerTest), Layer.provideMerge(SqlitePersistenceMemory));
+}).pipe(
+  Layer.provideMerge(NodeHttpServer.layerTest),
+  Layer.provideMerge(SqlitePersistenceMemory),
+  // The reset route resolves identity from the server's own bindings, not the request body.
+  Layer.provideMerge(
+    Layer.succeed(ProjectStoreV2, {
+      listShells: () =>
+        Effect.succeed([
+          {
+            id: "app-1",
+            title: "IES NG",
+            source: { provider: "atlassian", accountId: "acct-1", externalProjectId: "IES" },
+          } as unknown as OrchestrationProjectShell,
+        ]),
+    } as unknown as ProjectStoreV2["Service"]),
+  ),
+);
 
 const runRouteTest = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   Effect.runPromise(

@@ -83,7 +83,14 @@ export const makeMyWorkHandlers = (input: {
       }),
     arrange: ({ projectId, plan, reset, threadId }) =>
       Effect.gen(function* () {
-        const digest = yield* resolveDigestInput(projectId, threadId);
+        // Writes stay in the caller's project: a thread in project A cannot rearrange B's digest.
+        const own = yield* callerProjectId(undefined, threadId);
+        if (own !== undefined && projectId !== undefined && projectId !== own) {
+          return yield* Effect.fail(
+            `This thread belongs to project '${own}'; it can only arrange that project's digest.`,
+          );
+        }
+        const digest = yield* resolveDigestInput(projectId ?? own, threadId);
         const key = digestArrangementKey(digest);
         if (key === undefined) {
           return yield* Effect.fail("Cannot resolve a viewer and scope for this arrangement.");

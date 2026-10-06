@@ -103,6 +103,15 @@ it.layer(SqlitePersistenceMemory)("t3team.mywork.* tools", (it) => {
     }),
   );
 
+  it.effect("refuses to arrange another project than the calling thread's", () =>
+    Effect.gen(function* () {
+      const { call } = yield* makeBindingWith(() => Effect.succeed("app-2"));
+      const result = yield* call(ARRANGE, { projectId: "app-1", reset: true });
+      assert.isTrue(result.isError);
+      assert.include(asText(result), "can only arrange that project");
+    }),
+  );
+
   it.effect("reads the digest for one project, or for every bound project", () =>
     Effect.gen(function* () {
       const { call, loaded } = yield* makeBinding;

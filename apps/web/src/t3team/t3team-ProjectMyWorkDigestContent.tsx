@@ -14,6 +14,7 @@ import { JiraSignInPanel } from "~/t3team/components/t3team-JiraSignInPanel";
 import { useMyWorkDigestGraph } from "~/t3team/mywork-digest/t3team-useMyWorkDigestGraph";
 import { readMyWorkDigestArrangementApi } from "~/t3team/backend/t3team-myworkDigestArrangementApi";
 import { useBackend } from "~/t3team/backend/t3team-index";
+import { toastManager } from "~/components/ui/toast";
 import { toDigestProjectEntries } from "~/t3team/mywork-digest/t3team-digestProjectEntries";
 import { ProjectMyWorkDigestErrorState } from "~/t3team/t3team-ProjectMyWorkDigestErrorState";
 import { ProjectMyWorkDigestRetryState } from "~/t3team/t3team-ProjectMyWorkDigestRetryState";
@@ -51,11 +52,19 @@ export function ProjectMyWorkDigestContent({
     });
   const resetArrangement = arrangementApi
     ? async () => {
-        await arrangementApi.resetMyWorkDigestArrangement({
-          scope: "project",
-          projects: toDigestProjectEntries(projects),
-        });
-        reload();
+        try {
+          await arrangementApi.resetMyWorkDigestArrangement({
+            scope: "project",
+            projects: toDigestProjectEntries(projects),
+          });
+          reload();
+        } catch (error) {
+          toastManager.add({
+            type: "error",
+            title: "Could not go back to the default arrangement.",
+            description: error instanceof Error ? error.message : undefined,
+          });
+        }
       }
     : undefined;
   // The My Work filter bar (search, status category, hidden types, priority, status) shapes the

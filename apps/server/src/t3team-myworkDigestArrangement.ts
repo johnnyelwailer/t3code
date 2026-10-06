@@ -118,7 +118,12 @@ export function clearDigestArrangement(identity: T3TeamBacklogCacheIdentity, sco
 
 /** Who and which scope an arrangement belongs to; undefined when the request cannot be keyed. */
 export function digestArrangementKey(input: T3TeamMyWorkDigestInput) {
-  const identity = digestLastVisitIdentity(input);
+  // The all-projects identity must not depend on the order the client lists projects in: with
+  // several Jira accounts, projects[0] would flip and the arrangement would seem to vanish.
+  const stable = [...input.projects].toSorted((a, b) =>
+    `${a.account.provider}|${a.account.id}`.localeCompare(`${b.account.provider}|${b.account.id}`),
+  );
+  const identity = digestLastVisitIdentity({ ...input, projects: stable });
   const scope = digestArrangementScope(input);
   return identity === undefined || scope === undefined ? undefined : { identity, scope };
 }
