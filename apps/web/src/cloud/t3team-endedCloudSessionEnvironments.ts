@@ -23,10 +23,21 @@ export function endedCloudSessionEnvironmentIds(
       .filter((session) => isTerminalCloudSessionPhase(session.phase))
       .map((session) => session.sessionId),
   );
+  // A workspace's next session serves the same environment (the snapshot keeps its id): while one
+  // is live, the environment has not ended, whichever session it was first connected through.
+  const live = new Set(
+    sessions
+      .filter((session) => !isTerminalCloudSessionPhase(session.phase))
+      .flatMap((session) => (session.environmentId === undefined ? [] : [session.environmentId])),
+  );
   const result = new Set<EnvironmentId>();
   if (ended.size === 0) return result;
   for (const { environmentId, entry } of environments) {
-    if (entry.target._tag === "BrokerConnectionTarget" && ended.has(entry.target.sessionId)) {
+    if (
+      entry.target._tag === "BrokerConnectionTarget" &&
+      ended.has(entry.target.sessionId) &&
+      !live.has(environmentId)
+    ) {
       result.add(environmentId);
     }
   }

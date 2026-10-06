@@ -32,6 +32,7 @@ vi.mock("lucide-react", () => ({
   CloudIcon: "svg",
   ScaleIcon: "svg",
   SettingsIcon: "svg",
+  XIcon: "svg",
 }));
 vi.mock("./ui/select", () => ({
   Select: (props: {
@@ -193,30 +194,44 @@ describe("BranchToolbarEnvironmentSelector", () => {
     expect(onCreateCloudSession).toHaveBeenCalledTimes(1);
   });
 
-  it("lists a connected cloud machine once: as its environment, not again as a ready session", () => {
-    const cloudEnv = {
-      environmentId: EnvironmentId.make("env-cloud"),
+  it("lists every cloud machine once, by name, in the one Run on list", () => {
+    // Two connected machines, both registered under the generic label: neither folds into the
+    // other, neither appears a second time as a session, and each shows its own name.
+    const cloudEnv = (id: string) => ({
+      environmentId: EnvironmentId.make(id),
       projectId: ProjectId.make("project-x"),
       label: "Cloud session",
       isPrimary: false,
       machine: "server" as const,
-    };
-    const ready = {
-      sessionId: "1",
-      phase: "ready",
-      environmentId: "env-cloud",
-      machineLabel: "ubuntu-slim",
-    } as unknown as CloudSession;
+    });
+    const session = (id: string, name?: string) =>
+      ({
+        sessionId: id,
+        phase: "ready",
+        environmentId: `env-${id}`,
+        machineLabel: "ubuntu-slim",
+        remainingSeconds: null,
+        ...(name ? { name } : {}),
+      }) as unknown as CloudSession;
     mountSelector({
-      availableEnvironments: [PRIMARY, cloudEnv],
+      availableEnvironments: [PRIMARY, cloudEnv("env-1"), cloudEnv("env-2")],
       onEnvironmentChange: () => {},
       onCreateCloudSession: () => {},
-      pendingCloudSessions: [ready],
+      pendingCloudSessions: [session("1", "nexi-machine-qa"), session("2")],
     });
-    const rows = Array.from(liveContainer?.querySelectorAll("button") ?? []).map(
-      (button) => button.textContent ?? "",
+    const items = Array.from(liveContainer?.querySelectorAll("[data-select-item]") ?? []).map(
+      (item) => item.textContent ?? "",
     );
-    expect(rows.some((text) => text.startsWith("Ready"))).toBe(false);
+    expect(items).toEqual([
+      PRIMARY.label,
+      "nexi-machine-qaReady · ubuntu-slim",
+      "Cloud sessionReady · ubuntu-slim",
+    ]);
+    expect(testState.selectProps?.items?.map((item) => item.label)).toEqual([
+      PRIMARY.label,
+      "nexi-machine-qa",
+      "Cloud session",
+    ]);
   });
 
   it("clicking a ready machine connects it, then selects it for the thread", () => {
@@ -236,7 +251,7 @@ describe("BranchToolbarEnvironmentSelector", () => {
     };
     mountSelector(props);
     const readyRow = Array.from(liveContainer?.querySelectorAll("button") ?? []).find((button) =>
-      button.textContent?.startsWith("Ready"),
+      button.textContent?.startsWith("Cloud session"),
     );
     act(() => {
       readyRow?.click();
@@ -264,6 +279,50 @@ describe("BranchToolbarEnvironmentSelector", () => {
       );
     });
     expect(onEnvironmentChange).toHaveBeenCalledWith("env-cloud");
+  });
+
+  it("waits for a connected machine's project, then says why it cannot run here", () => {
+    vi.useFakeTimers();
+    const ready = {
+      sessionId: "1",
+      phase: "ready",
+      environmentId: "env-cloud",
+      machineLabel: "ubuntu-slim",
+      remainingSeconds: null,
+    } as unknown as CloudSession;
+    const props = {
+      onEnvironmentChange: vi.fn(),
+      onCreateCloudSession: () => {},
+      onCloudSessionAction: () => {},
+      pendingCloudSessions: [ready],
+    };
+    mountSelector(props);
+    act(() => {
+      Array.from(liveContainer?.querySelectorAll("button") ?? [])
+        .find((button) => button.textContent?.startsWith("Cloud session"))
+        ?.click();
+    });
+    expect(liveContainer?.textContent).toContain("Connecting…");
+    act(() => {
+      liveRoot?.render(
+        <BranchToolbarEnvironmentSelector
+          envLocked={false}
+          environmentId={PRIMARY.environmentId}
+          availableEnvironments={[PRIMARY]}
+          connectedEnvironmentIds={new Set(["env-cloud"])}
+          {...props}
+        />,
+      );
+    });
+    // A fresh machine registers its project seconds after connecting: still connecting.
+    expect(liveContainer?.textContent).toContain("Connecting…");
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(liveContainer?.textContent).not.toContain("Connecting…");
+    expect(liveContainer?.textContent).toContain("Doesn't have this project");
+    expect(props.onEnvironmentChange).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 
   it("shows a create in flight at once, and a second click cannot start a second machine", () => {

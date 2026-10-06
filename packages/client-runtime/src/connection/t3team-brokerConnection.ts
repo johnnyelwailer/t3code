@@ -28,6 +28,8 @@ import type {
  */
 
 export interface AttachedBrokerEnvironment {
+  /** The session attached: the target's, or the live one now serving the same environment. */
+  readonly sessionId: string;
   readonly httpBaseUrl: string;
   readonly wsBaseUrl: string;
 }
@@ -64,7 +66,7 @@ export const makeBrokerResolver = Effect.fn("clientRuntime.connection.broker.mak
         sessionId: target.sessionId,
         expectedEnvironmentId: target.environmentId,
       });
-      const key = brokerCredentialKey(target.sessionId);
+      const key = brokerCredentialKey(attached.sessionId);
       const authorize = (bearerToken: string) =>
         remote.authorizeBearer({
           expectedEnvironmentId: target.environmentId,
@@ -88,7 +90,7 @@ export const makeBrokerResolver = Effect.fn("clientRuntime.connection.broker.mak
         if (Option.isSome(reused)) return { ...reused.value, target } satisfies PreparedConnection;
       }
 
-      const pairingCredential = yield* gateway.pair({ sessionId: target.sessionId });
+      const pairingCredential = yield* gateway.pair({ sessionId: attached.sessionId });
       const access = yield* bootstrapRemoteBearerSession({
         httpBaseUrl: attached.httpBaseUrl,
         credential: pairingCredential,

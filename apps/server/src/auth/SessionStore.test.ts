@@ -338,6 +338,7 @@ it.layer(NodeServices.layer)("SessionStore.layer", (it) => {
         "terminal:operate",
         "review:write",
         "relay:read",
+        "relay:write",
       ]);
     }).pipe(Effect.provide(Layer.merge(layerSessionStore(), TestClock.layer()))),
   );

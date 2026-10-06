@@ -62,7 +62,9 @@ export const webBrokerEnvironmentGateway = BrokerEnvironmentGateway.of({
   attach: (input) =>
     Effect.gen(function* () {
       yield* requireSameMachine;
-      const result = yield* call(() => cloudBrokerApi.attach(input.sessionId));
+      const result = yield* call(() =>
+        cloudBrokerApi.attach(input.sessionId, String(input.expectedEnvironmentId)),
+      );
       if (String(result.environmentId) !== String(input.expectedEnvironmentId)) {
         return yield* new ConnectionBlockedError({
           reason: "configuration",
@@ -70,7 +72,11 @@ export const webBrokerEnvironmentGateway = BrokerEnvironmentGateway.of({
             "The cloud session now runs a different environment. Connect to it again from the cloud session list.",
         });
       }
-      return { httpBaseUrl: result.httpBaseUrl, wsBaseUrl: result.wsBaseUrl };
+      return {
+        sessionId: result.sessionId ?? input.sessionId,
+        httpBaseUrl: result.httpBaseUrl,
+        wsBaseUrl: result.wsBaseUrl,
+      };
     }),
   pair: (input) =>
     requireSameMachine.pipe(

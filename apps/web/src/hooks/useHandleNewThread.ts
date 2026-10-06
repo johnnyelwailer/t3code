@@ -34,6 +34,7 @@ import { environmentServerConfigsAtom } from "../state/server";
 import { resolveThreadRouteTarget } from "../threadRoutes";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import { useClientSettings } from "./useSettings";
+import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 
 interface NewThreadWorkspaceOptions {
   branch?: string | null;
@@ -464,12 +465,31 @@ export function useHandleNewThread() {
     });
   }, [projectOrder, projects]);
   const handleNewThread = useNewThreadHandler();
+  // t3team: the default project is the first one whose environment is reachable — a project on a
+  // machine that went away (an ended cloud session) cannot take a new thread.
+  // This computer always counts as reachable, even while it is still connecting at startup.
+  const { environments } = useEnvironments();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const defaultProject = useMemo(() => {
+    const offline = new Set(
+      environments
+        .filter(
+          (environment) =>
+            environment.connection.phase !== "connected" &&
+            environment.environmentId !== primaryEnvironmentId,
+        )
+        .map((environment) => environment.environmentId),
+    );
+    return (
+      orderedProjects.find((project) => !offline.has(project.environmentId)) ?? orderedProjects[0]
+    );
+  }, [environments, orderedProjects, primaryEnvironmentId]);
 
   return {
     activeDraftThread,
     activeThread,
-    defaultProjectRef: orderedProjects[0]
-      ? scopeProjectRef(orderedProjects[0].environmentId, orderedProjects[0].id)
+    defaultProjectRef: defaultProject
+      ? scopeProjectRef(defaultProject.environmentId, defaultProject.id)
       : null,
     handleNewThread,
     routeDraftId,

@@ -68,6 +68,10 @@ export const CloudSessionSchema = Schema.Struct({
   phase: CloudSessionPhaseSchema,
   /** Seconds since the session was dispatched. Never negative. */
   elapsedSeconds: Schema.Int,
+  /** What the session is for: its project's repository name. Absent for a plain session. */
+  name: Schema.optional(Schema.String),
+  /** When the session was dispatched (ISO 8601); absent until its run is visible. */
+  startedAt: Schema.optional(Schema.String),
   /** Remaining lifetime in seconds; null until the session is running. */
   remainingSeconds: Schema.NullOr(Schema.Int),
   /** Human-readable compute shape, e.g. "ubuntu-slim · 12 GB · 4 cores". */
@@ -128,6 +132,8 @@ export const CloudSessionCreateInputSchema = Schema.Struct({
    * session, exactly as without a project.
    */
   projectId: Schema.optional(ProjectId),
+  /** What to call the machine; defaults to the project's repository name, else none. */
+  name: Schema.optional(Schema.String),
 });
 export type CloudSessionCreateInput = typeof CloudSessionCreateInputSchema.Type;
 
