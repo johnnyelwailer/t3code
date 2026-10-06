@@ -265,6 +265,8 @@ import { T3TeamWorkflowEngineRegistryLive } from "./t3team-workflowEngineRegistr
 import { T3TeamWorkflowSchedulerLive } from "./t3team-workflowScheduler.ts";
 import { T3TeamWorkflowSchedulerSweepLive } from "./t3team-workflowSchedulerSweepLive.ts";
 import { T3TeamToolBrokerLive } from "./t3team-toolBrokerLive.ts";
+import * as HtmlRender from "./htmlRender/HtmlRender.ts";
+import * as PreviewBrowser from "./htmlRender/PreviewBrowser.ts";
 import { T3TeamV2FoundationLive } from "./t3team-v2/t3team-v2FoundationLive.ts";
 import * as T3TeamWorkflowHost from "./t3team-workflowHost.ts";
 import { T3TeamChildThreadMetadataLive } from "./t3team-childThreadMetadata.ts";
@@ -631,6 +633,10 @@ const T3TeamToolBrokerLayerLive = T3TeamToolBrokerLive.pipe(
   Layer.provide(WorkflowRunRepositoryLive),
   Layer.provide(T3TeamChildThreadMetadataLive),
   Layer.provide(layerPullRequestService),
+  // html format on t3_show_widget shims onto upstream HtmlRender.publish (Phil 2026-10-06).
+  // Same HtmlRender + PreviewBrowser pair the MCP html_render toolkit uses.
+  Layer.provide(HtmlRender.layer),
+  Layer.provide(PreviewBrowser.layer),
 );
 
 // Webhook URLs go through the relay only when the managed tunnel it forwards

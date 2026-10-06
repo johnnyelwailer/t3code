@@ -105,6 +105,15 @@ export type T3TeamWidgetCapabilities = typeof T3TeamWidgetCapabilities.Type;
  * agent-supplied SVG/HTML in a sandboxed iframe. The widget body is persisted as an Epic 08
  * RichArtifact (format html) — `artifact` is that durable ref; `html` is the render payload.
  */
+/** Upstream HtmlRender reference when format=html is shimmed onto html_render storage. */
+export const T3TeamWidgetHtmlRenderRef = Schema.Struct({
+  attachmentId: TrimmedNonEmptyString,
+  title: TrimmedNonEmptyString,
+  height: Schema.Number,
+  heights: Schema.optional(Schema.Array(Schema.Tuple([Schema.Number, Schema.Number]))),
+});
+export type T3TeamWidgetHtmlRenderRef = typeof T3TeamWidgetHtmlRenderRef.Type;
+
 export const T3TeamMessageWidgetAttachment = Schema.Struct({
   kind: Schema.Literal("widget"),
   widget: Schema.Struct({
@@ -114,6 +123,8 @@ export const T3TeamMessageWidgetAttachment = Schema.Struct({
      * mdx/tsx are reserved for the T1 safe-mdx renderer and T2b compose pipeline. */
     format: Schema.Literals(["html", "svg", "mdx", "tsx"]),
     html: Schema.String,
+    /** When set, clients render via HtmlRenderFrame (html format shim). Absent = legacy srcdoc. */
+    htmlRender: Schema.optional(T3TeamWidgetHtmlRenderRef),
     artifact: Schema.optional(T3TeamMessageArtifactRef),
     capabilities: Schema.optional(T3TeamWidgetCapabilities),
     loadingMessages: Schema.optional(Schema.Array(Schema.String)),

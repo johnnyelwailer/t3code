@@ -53,7 +53,8 @@ export interface ThreadMessagePayload {
   readonly text: string;
   readonly widget?: {
     readonly title: string;
-    readonly widgetCode: string;
+    readonly widgetCode?: string;
+    readonly intent?: string;
     readonly format?: "html" | "svg";
     readonly loadingMessages?: ReadonlyArray<string>;
   };
