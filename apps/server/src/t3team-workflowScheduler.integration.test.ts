@@ -4,17 +4,17 @@
  * Scheduler durability acceptance (Epic 27 §The scheduler service — the load-bearing slice).
  * The whole point: a run parked on `waitUntil` survives a server restart because BOTH its replay
  * journal (SqliteJournalStore) and its run record (`workflow_runs`, status `sleeping` + `wake_at`)
- * live in SQLite, and a scheduler — re-armed purely from the DB on boot — wakes it on the wall
+ * live in SQLite, and a scheduler sweep — reading the DB on every tick — wakes it on the wall
  * clock with NO manual resume.
  *
  * Each test launches the timer recipe (`now()` → `waitUntil(deadline)`) through the REAL launch
  * path with the DB-backed store + lifecycle, asserts the DB holds a `sleeping` row + `wake_at` +
  * a `wait.until` sent journal entry, then DISCARDS the in-memory registry AND scheduler to
  * simulate a restart. It rebuilds the resume closures purely from the DB (boot rehydration's
- * role) and arms a FRESH scheduler from the DB's `wake_at` (the scheduler's role) — driven by an
- * injected clock so the deadline fires deterministically — until the run completes with the
- * schema-validated result. A past-due deadline arms a 0ms delay and fires immediately (the
- * downtime catch-up guarantee).
+ * role) and opens a FRESH sweep over the DB's `wake_at` (the scheduler's role) — driven by an
+ * injected clock, with each `runDue` standing in for one upstream `Scheduler` tick — until the
+ * run completes with the schema-validated result. A past-due deadline wakes on the catch-up pass
+ * `rearm` starts (the downtime guarantee).
  */
 
 import * as NodeFS from "node:fs";
@@ -23,7 +23,7 @@ import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 
 import { assert, it } from "@effect/vitest";
-import { type OrchestrationCommand, ProjectId, ProviderInstanceId } from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
 import { appendResolvedEntry } from "@t3team/sdk";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as DateTime from "effect/DateTime";
@@ -49,11 +49,8 @@ import {
   launchWorkflowRecipe,
 } from "./t3team-workflowEngineLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
-import {
-  makeWorkflowScheduler,
-  toSchedulerSleepingRun,
-  type WorkflowSchedulerClock,
-} from "./t3team-workflowScheduler.ts";
+import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
+import { makeWorkflowScheduler, toSchedulerSleepingRun } from "./t3team-workflowScheduler.ts";
 import { makeSchedulerResume, orphanSleepingRun } from "./t3team-workflowSchedulerResume.ts";
 
 const workflowPath = NodeURL.fileURLToPath(
@@ -65,42 +62,30 @@ afterAll(() => NodeFS.rmSync(runsRoot, { recursive: true, force: true }));
 const projectId = ProjectId.make("proj-scheduler");
 const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "model-x");
 const nowIso = (): string => "2026-06-08T00:00:00.000Z";
-const noopDispatch = (_command: OrchestrationCommand): Promise<void> => Promise.resolve();
+const noopHost = makeFakeWorkflowHost().host;
 
 const HOUR_MS = 60 * 60 * 1000;
 
-/** A test clock whose `now` is mutable and whose single armed timer is captured, so a test can
- * assert the computed delay and fire the deadline deterministically (then await the resume). */
+/** A mutable wall clock: a test moves it, then runs one due pass (one `Scheduler` tick). */
 function makeManualClock(startMs: number): {
-  readonly clock: WorkflowSchedulerClock;
+  readonly now: () => number;
   readonly setNow: (ms: number) => void;
-  readonly armedDelay: () => number | undefined;
-  readonly fire: () => Promise<void>;
 } {
   let nowMs = startMs;
-  let armed: { readonly cb: () => unknown; readonly delayMs: number } | undefined;
   return {
-    clock: {
-      now: () => nowMs,
-      setTimer: (cb, delayMs) => {
-        armed = { cb, delayMs };
-        return { handle: true };
-      },
-      clearTimer: () => {
-        armed = undefined;
-      },
-    },
+    now: () => nowMs,
     setNow: (ms) => {
       nowMs = ms;
     },
-    armedDelay: () => armed?.delayMs,
-    fire: async () => {
-      const current = armed;
-      armed = undefined;
-      await current?.cb();
-    },
   };
 }
+
+const listSleepingFrom = (repo: WorkflowRunRepositoryShape) => () =>
+  Effect.runPromise(repo.listByStatus({ status: "sleeping" })).then((rows) =>
+    rows
+      .map(toSchedulerSleepingRun)
+      .filter((run): run is NonNullable<typeof run> => run !== undefined),
+  );
 
 const schedulerLayer = it.layer(
   Layer.mergeAll(
@@ -133,7 +118,7 @@ const rebuildSleepingFromDb = (
         runtimeMode: row.runtimeMode,
         interactionMode: row.interactionMode,
         registry,
-        dispatch: noopDispatch,
+        host: noopHost,
         newId: () => "id",
         nowIso,
         store,
@@ -168,7 +153,7 @@ const launchTimer = (
         runtimeMode: "full-access",
         interactionMode: "default",
         registry: makeWorkflowEngineRegistry(),
-        dispatch: noopDispatch,
+        host: noopHost,
         newId: () => `${runId}-id`,
         nowIso,
         store,
@@ -193,7 +178,7 @@ const launchTimer = (
   });
 
 schedulerLayer("workflow scheduler — DB-backed clock park survives a restart", (it) => {
-  it.effect("arms wake_at from the DB after a restart, fires at the deadline, and resumes", () =>
+  it.effect("reads wake_at from the DB after a restart, wakes at the deadline, and resumes", () =>
     Effect.gen(function* () {
       const repo = yield* WorkflowRunRepository;
       const store = yield* WorkflowJournalStore;
@@ -226,30 +211,25 @@ schedulerLayer("workflow scheduler — DB-backed clock park survives a restart",
       const completed: Array<Record<string, unknown>> = [];
       const registry = yield* rebuildSleepingFromDb(repo, store, completed);
 
-      // Arm a FRESH scheduler purely from the DB. Clock starts 1s before the deadline.
+      // Open a FRESH sweep purely over the DB. Clock starts 1s before the deadline.
       const manual = makeManualClock(deadlineMs - 1000);
       const scheduler = makeWorkflowScheduler({
-        listSleeping: () =>
-          Effect.runPromise(repo.listByStatus({ status: "sleeping" })).then((rows) =>
-            rows
-              .map(toSchedulerSleepingRun)
-              .filter((run): run is NonNullable<typeof run> => run !== undefined),
-          ),
+        listSleeping: listSleepingFrom(repo),
         resume: (rid, correlationId) => {
           const run = registry.getRun(rid);
           return run === undefined ? Promise.resolve() : run.resume(correlationId, {});
         },
-        clock: manual.clock,
+        now: manual.now,
       });
 
+      // Boot: `rearm` opens the sweep; its catch-up pass (joined here) finds nothing due yet.
       yield* Effect.promise(() => scheduler.rearm());
-      // The single timer is armed for the soonest deadline: 1s out.
-      assert.strictEqual(manual.armedDelay(), 1000);
-      assert.isUndefined(completed[0]); // not fired yet
+      yield* Effect.promise(() => scheduler.runDue());
+      assert.isUndefined(completed[0]); // not woken yet
 
-      // Reach the deadline and let the timer fire → resume → replay past waitUntil → complete.
+      // Reach the deadline; the next tick resumes → replays past waitUntil → completes.
       manual.setNow(deadlineMs);
-      yield* Effect.promise(() => manual.fire());
+      yield* Effect.promise(() => scheduler.runDue());
 
       // ── Completed from the DB-backed journal, with the validated result ──
       assert.deepStrictEqual(completed[0], { slept: true, deadline: deadlineMs });
@@ -259,12 +239,11 @@ schedulerLayer("workflow scheduler — DB-backed clock park survives a restart",
       assert.isNull(finalRow.wakeAt); // cleared on wake
       assert.isNull(finalRow.pendingCorrelationId);
       assert.isUndefined(registry.getRun(runId)); // completed runs are unregistered
-      assert.isFalse(manual.armedDelay() !== undefined); // no timer remains
       assert.isFalse(NodeFS.existsSync(NodePath.join(runsRoot, runId))); // NO local-disk journal
     }),
   );
 
-  it.effect("a deadline that passed during downtime fires immediately on the boot arm", () =>
+  it.effect("a deadline that passed during downtime wakes on the boot catch-up pass", () =>
     Effect.gen(function* () {
       const repo = yield* WorkflowRunRepository;
       const store = yield* WorkflowJournalStore;
@@ -280,23 +259,17 @@ schedulerLayer("workflow scheduler — DB-backed clock park survives a restart",
       // The clock is already PAST the deadline (downtime longer than the timer).
       const manual = makeManualClock(deadlineMs + 5000);
       const scheduler = makeWorkflowScheduler({
-        listSleeping: () =>
-          Effect.runPromise(repo.listByStatus({ status: "sleeping" })).then((rows) =>
-            rows
-              .map(toSchedulerSleepingRun)
-              .filter((run): run is NonNullable<typeof run> => run !== undefined),
-          ),
+        listSleeping: listSleepingFrom(repo),
         resume: (rid, correlationId) => {
           const run = registry.getRun(rid);
           return run === undefined ? Promise.resolve() : run.resume(correlationId, {});
         },
-        clock: manual.clock,
+        now: manual.now,
       });
 
+      // `rearm` starts the catch-up pass itself; `runDue` joins it rather than starting another.
       yield* Effect.promise(() => scheduler.rearm());
-      // Past-due arms at the 1s floor (not 0), then fires on the next tick — the loop guard.
-      assert.strictEqual(manual.armedDelay(), 1000);
-      yield* Effect.promise(() => manual.fire());
+      yield* Effect.promise(() => scheduler.runDue());
 
       assert.deepStrictEqual(completed[0], { slept: true, deadline: deadlineMs });
       assert.strictEqual(Option.getOrThrow(yield* repo.getById({ runId })).status, "completed");
@@ -305,7 +278,7 @@ schedulerLayer("workflow scheduler — DB-backed clock park survives a restart",
 });
 
 schedulerLayer("workflow scheduler — no-op resumes are orphaned, not hot-looped", (it) => {
-  it.effect("a due row whose run is unregistered is orphaned and never re-armed", () =>
+  it.effect("a due row whose run is unregistered is orphaned, told, and never re-tried", () =>
     Effect.gen(function* () {
       const repo = yield* WorkflowRunRepository;
       const store = yield* WorkflowJournalStore;
@@ -319,38 +292,44 @@ schedulerLayer("workflow scheduler — no-op resumes are orphaned, not hot-loope
       const registry = makeWorkflowEngineRegistry();
       // Clock is past the deadline, so the row is due on the first arm.
       const manual = makeManualClock(deadlineMs + 5000);
+      const told: Array<{ launchThreadId: string | undefined; errorText: string }> = [];
+      let reads = 0;
+      const listSleeping = listSleepingFrom(repo);
       const scheduler = makeWorkflowScheduler({
-        listSleeping: () =>
-          Effect.runPromise(repo.listByStatus({ status: "sleeping" })).then((rows) =>
-            rows
-              .map(toSchedulerSleepingRun)
-              .filter((run): run is NonNullable<typeof run> => run !== undefined),
-          ),
+        listSleeping: () => {
+          reads += 1;
+          return listSleeping();
+        },
         resume: makeSchedulerResume({
           getRun: (rid) => registry.getRun(rid),
-          orphan: (rid, correlationId) => orphanSleepingRun(repo, rid, correlationId),
+          orphan: (rid, correlationId) =>
+            orphanSleepingRun(repo, rid, correlationId, (launchThreadId, errorText) => {
+              told.push({ launchThreadId, errorText });
+              return Promise.resolve();
+            }),
         }),
-        clock: manual.clock,
+        now: manual.now,
       });
 
+      // One pass: resume finds no registered run → orphans the row and tells its launch thread.
       yield* Effect.promise(() => scheduler.rearm());
-      // Due → arms at the 1s floor, NOT 0 (the setTimeout(0) hot-loop guard).
-      assert.strictEqual(manual.armedDelay(), 1000);
-
-      // One tick: resume finds no registered run → orphans the row → re-arm finds nothing.
-      yield* Effect.promise(() => manual.fire());
+      yield* Effect.promise(() => scheduler.runDue());
 
       const orphaned = Option.getOrThrow(yield* repo.getById({ runId }));
       assert.strictEqual(orphaned.status, "failed"); // excluded from future listSleeping
       assert.isNull(orphaned.wakeAt);
       assert.isNull(orphaned.pendingCorrelationId);
-      // Bounded: the tick did NOT re-arm a fresh timer — no infinite listSleeping/setTimeout(0).
-      assert.isUndefined(manual.armedDelay());
+      assert.strictEqual(told.length, 1);
+      assert.strictEqual(told[0]?.launchThreadId, `launch-${runId}`);
+      // Bounded: the next tick finds nothing to wake and tells no one again.
+      yield* Effect.promise(() => scheduler.runDue());
+      assert.strictEqual(reads, 2);
+      assert.strictEqual(told.length, 1);
     }),
   );
 
   it.effect(
-    "a wrote:false wake (journaled pre-crash, never settled) is orphaned, not re-armed",
+    "a wrote:false wake (journaled pre-crash, never settled) is orphaned, not re-tried",
     () =>
       Effect.gen(function* () {
         const repo = yield* WorkflowRunRepository;
@@ -369,111 +348,96 @@ schedulerLayer("workflow scheduler — no-op resumes are orphaned, not hot-loope
         );
         assert.isTrue(wroteFirst); // the prior process's write succeeded
 
-        // Restart: rebuild the resume closure from the DB (still sleeping) and arm a fresh scheduler.
+        // Restart: rebuild the resume closure from the DB (still sleeping) and open a fresh sweep.
         const completed: Array<Record<string, unknown>> = [];
         const registry = yield* rebuildSleepingFromDb(repo, store, completed);
         const manual = makeManualClock(deadlineMs);
         const scheduler = makeWorkflowScheduler({
-          listSleeping: () =>
-            Effect.runPromise(repo.listByStatus({ status: "sleeping" })).then((rows) =>
-              rows
-                .map(toSchedulerSleepingRun)
-                .filter((run): run is NonNullable<typeof run> => run !== undefined),
-            ),
+          listSleeping: listSleepingFrom(repo),
           resume: makeSchedulerResume({
             getRun: (rid) => registry.getRun(rid),
             orphan: (rid, correlationId) => orphanSleepingRun(repo, rid, correlationId),
           }),
-          clock: manual.clock,
+          now: manual.now,
         });
 
+        // The pass resumes: appendResolvedEntry now returns wrote:false → orphanIfSleeping fails it.
         yield* Effect.promise(() => scheduler.rearm());
-        assert.strictEqual(manual.armedDelay(), 1000); // due → floor
-
-        // The tick resumes: appendResolvedEntry now returns wrote:false → orphanIfSleeping fails it.
-        yield* Effect.promise(() => manual.fire());
+        yield* Effect.promise(() => scheduler.runDue());
 
         const orphaned = Option.getOrThrow(yield* repo.getById({ runId }));
         assert.strictEqual(orphaned.status, "failed"); // NOT re-armed, NOT falsely completed
         assert.isUndefined(completed[0]); // the workflow body never re-ran
         assert.isNull(orphaned.wakeAt);
-        assert.isUndefined(manual.armedDelay()); // bounded: no fresh timer
       }),
   );
 });
 
-schedulerLayer("workflow scheduler — concurrent rearm", (it) => {
+schedulerLayer("workflow scheduler — passes", (it) => {
   it.effect("admits every due run before waiting for a slow first settlement", () =>
     Effect.gen(function* () {
       const nowMs = DateTime.makeUnsafe(nowIso()).epochMilliseconds;
-      const manual = makeManualClock(nowMs);
       let releaseFirst!: () => void;
       const first = new Promise<void>((resolve) => {
         releaseFirst = resolve;
       });
-      let reads = 0;
       const calls: string[] = [];
       const scheduler = makeWorkflowScheduler({
-        listSleeping: () => {
-          reads += 1;
-          return Promise.resolve(
-            reads <= 2
-              ? [
-                  { runId: "first", correlationId: "first:1", wakeAtMs: nowMs },
-                  { runId: "second", correlationId: "second:1", wakeAtMs: nowMs },
-                ]
-              : [],
-          );
-        },
+        listSleeping: () =>
+          Promise.resolve([
+            { runId: "first", correlationId: "first:1", wakeAtMs: nowMs },
+            { runId: "second", correlationId: "second:1", wakeAtMs: nowMs },
+            { runId: "later", correlationId: "later:1", wakeAtMs: nowMs + 60_000 },
+          ]),
         resume: (runId) => {
           calls.push(runId);
           return runId === "first" ? first : Promise.resolve();
         },
-        clock: manual.clock,
+        now: () => nowMs,
       });
 
       yield* Effect.promise(() => scheduler.rearm());
-      const firing = manual.fire();
+      const passing = scheduler.runDue();
       yield* Effect.promise(() => Promise.resolve());
+      // Both due runs entered before the first settled; the future deadline was left alone.
       assert.deepStrictEqual(calls, ["first", "second"]);
       releaseFirst();
-      yield* Effect.promise(() => firing);
-      assert.isUndefined(manual.armedDelay());
+      yield* Effect.promise(() => passing);
     }),
   );
 
-  it.effect("serializes stale DB reads so the newest deadline owns the timer", () =>
+  it.effect("stays shut until rearm, and a pass never overlaps itself", () =>
     Effect.gen(function* () {
-      let releaseFirst!: () => void;
-      const firstBlocked = new Promise<void>((resolve) => {
-        releaseFirst = resolve;
+      let reads = 0;
+      let releaseRead!: () => void;
+      const readBlocked = new Promise<void>((resolve) => {
+        releaseRead = resolve;
       });
-      let calls = 0;
-      const nowMs = DateTime.makeUnsafe(nowIso()).epochMilliseconds;
-      const manual = makeManualClock(nowMs);
       const scheduler = makeWorkflowScheduler({
         listSleeping: async () => {
-          calls += 1;
-          if (calls === 1) {
-            await firstBlocked;
-            return [{ runId: "old", correlationId: "old:1", wakeAtMs: nowMs + 60_000 }];
-          }
-          return [{ runId: "new", correlationId: "new:1", wakeAtMs: nowMs + 5_000 }];
+          reads += 1;
+          await readBlocked;
+          return [];
         },
         resume: () => Promise.resolve(),
-        clock: manual.clock,
       });
 
-      const oldRearm = scheduler.rearm();
-      const newRearm = scheduler.rearm();
-      yield* Effect.promise(() => Promise.resolve());
-      // The second DB read must not start until the first read + arm finishes.
-      assert.strictEqual(calls, 1);
-      releaseFirst();
-      yield* Effect.promise(() => Promise.all([oldRearm, newRearm]));
+      // Before boot rehydration opens it, a tick reads nothing (a due row would look orphaned).
+      yield* Effect.promise(() => scheduler.runDue());
+      assert.strictEqual(reads, 0);
 
-      assert.strictEqual(calls, 2);
-      assert.strictEqual(manual.armedDelay(), 5_000);
+      // rearm starts the catch-up pass; ticks and later rearms while it runs join it.
+      yield* Effect.promise(() => scheduler.rearm());
+      const joined = scheduler.runDue();
+      yield* Effect.promise(() => scheduler.rearm());
+      yield* Effect.promise(() => Promise.resolve());
+      assert.strictEqual(reads, 1);
+      releaseRead();
+      yield* Effect.promise(() => joined);
+
+      // Once it settled, the next tick is a fresh pass.
+      yield* Effect.promise(() => scheduler.runDue());
+      assert.strictEqual(reads, 2);
     }),
   );
 });

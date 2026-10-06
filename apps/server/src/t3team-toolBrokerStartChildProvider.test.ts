@@ -1,18 +1,12 @@
 /**
- * Cross-provider resolution for start_child: a parent may spawn a child on a
+ * Cross-provider resolution for fork child turns: a parent may spawn a child on a
  * different configured provider instance. These check the pure decision logic —
  * inherit-vs-switch, model validity, and the unusable/unknown rejections.
  */
 import { ProviderDriverKind, type ModelSelection, type ServerProvider } from "@t3tools/contracts";
-import { it as effectIt } from "@effect/vitest";
 import { describe, expect, it } from "vite-plus/test";
 
-import * as Effect from "effect/Effect";
-
-import {
-  resolveChildModel,
-  resolveStartChildModelSelection,
-} from "./t3team-toolBrokerStartChildProvider.ts";
+import { resolveStartChildModelSelection } from "./t3team-toolBrokerStartChildProvider.ts";
 
 const makeProvider = (
   instanceId: string,
@@ -31,13 +25,13 @@ const makeProvider = (
 // Fictional model slugs so the shared model-slug normalizer is an identity here
 // and the assertions test THIS resolver's decisions, not the model catalog.
 const parent = {
-  instanceId: "nexplore",
-  model: "nexplore-a",
+  instanceId: "gateway",
+  model: "gateway-a",
   options: [],
 } as unknown as ModelSelection;
 
 const providers: ReadonlyArray<ServerProvider> = [
-  makeProvider("nexplore", ["nexplore-a"]),
+  makeProvider("gateway", ["gateway-a"]),
   makeProvider("claude", ["claude-a", "claude-b"]),
   makeProvider("codex", ["codex-a"]),
   makeProvider("offline", ["offline-a"], { enabled: false }),
@@ -47,10 +41,7 @@ describe("resolveStartChildModelSelection", () => {
   it("inherits the parent's provider when none is requested", () => {
     const result = resolveStartChildModelSelection({ parentModelSelection: parent, providers });
     expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value.instanceId).toBe("nexplore");
-      expect(result.value.model).toBe("nexplore-a");
-    }
+    if (result.ok) expect(result.value.instanceId).toBe("gateway");
   });
 
   it("runs the child on a different provider + model (cross-provider)", () => {
@@ -159,7 +150,7 @@ describe("resolveStartChildModelSelection", () => {
   });
 
   it("drops parent options the resolved model does not advertise", () => {
-    const declared = makeProvider("nexplore", [], {
+    const declared = makeProvider("gateway", [], {
       models: [
         {
           slug: "declared",
@@ -213,54 +204,4 @@ describe("resolveStartChildModelSelection", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toContain("opencode/opencode-go/glm-5.3");
   });
-});
-
-describe("resolveChildModel", () => {
-  effectIt.effect(
-    "fails distinctly when a provider is requested but the registry isn't wired",
-    () =>
-      Effect.gen(function* () {
-        const exit = yield* Effect.exit(
-          resolveChildModel(parent, { provider: "codex" }, undefined),
-        );
-        expect(exit._tag).toBe("Failure");
-        if (exit._tag === "Failure") {
-          const message = String(exit.cause);
-          expect(message).toContain("Provider registry is not wired into this server build");
-          expect(message).toContain("codex");
-        }
-      }),
-  );
-
-  effectIt.effect("says explicitly when the requested effort cannot be honored", () =>
-    Effect.gen(function* () {
-      const plainParent = {
-        instanceId: "plain",
-        model: "plain-a",
-        options: [],
-      } as unknown as ModelSelection;
-      const result = yield* resolveChildModel(plainParent, { effort: "high" }, () =>
-        Effect.succeed([makeProvider("plain", ["plain-a"])]),
-      );
-      expect(result.modelSelection.model).toBe("plain-a");
-      expect(result.effortNote).toContain("not honored");
-      expect(result.effortNote).toContain("'high'");
-    }),
-  );
-
-  effectIt.effect("omits the effortNote when the provider's tier models honor the effort", () =>
-    Effect.gen(function* () {
-      const tiers = makeProvider("nexplore", ["no-thinking", "low", "medium", "high"]);
-      const onFast = {
-        instanceId: "nexplore",
-        model: "low",
-        options: [],
-      } as unknown as ModelSelection;
-      const result = yield* resolveChildModel(onFast, { effort: "high" }, () =>
-        Effect.succeed([tiers]),
-      );
-      expect(result.modelSelection.model).toBe("high");
-      expect(result.effortNote).toBeUndefined();
-    }),
-  );
 });

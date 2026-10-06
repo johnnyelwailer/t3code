@@ -7,7 +7,6 @@ import type { T3TeamToolBinding } from "./t3team-toolBroker.ts";
 import { errorResult, okResult } from "./t3team-toolBrokerHelpers.ts";
 import { makeResourcePressureAutoPause } from "./t3team-resourcePressureAutoPause.ts";
 import type { ResourcePressureMonitorShape } from "./t3team-resourcePressureMonitor.ts";
-import { composeTurnText } from "./t3team-resourcePressureTurnGate.ts";
 import { pressureLine, withPressureLines } from "./t3team-resourcePressureToolLine.ts";
 
 const GIB = 1024 ** 3;
@@ -43,14 +42,14 @@ const call = (surface: T3TeamToolBinding, tool: string) =>
   surface.callTool({ server: "t3team", tool, arguments: {} });
 
 describe("proactive pressure push on tool results", () => {
-  it.effect("start_child is never refused: its result carries the pressure line", () =>
+  it.effect("orchestration.resume is never refused: its result carries the pressure line", () =>
     Effect.gen(function* () {
       const monitor = monitorWith(yield* makeResourcePressureAutoPause());
       const surface = withPressureLines(binding(), monitor);
-      const result = yield* call(surface, "t3team.thread.start_child");
+      const result = yield* call(surface, "t3team.orchestration.resume");
       const line =
         "[host] memory pressure: critical · app tree 7.0 GiB · machine: macOS critical, 6% available · " +
-        "critical: expect dispatch backoff — new turns (including a new child's first turn) are held until pressure clears; finish in-flight work and end the turn";
+        "critical: do not start new children or parallel work; finish in-flight work and end the turn";
       assert.strictEqual(pressureLine(snapshot), line);
       assert.isUndefined(result.isError);
       assert.strictEqual(result.content.at(-1)?.text, line);
@@ -86,10 +85,5 @@ describe("proactive pressure push on tool results", () => {
     const original = binding();
     assert.strictEqual(withPressureLines(original, monitorWith(undefined)), original);
     assert.strictEqual(withPressureLines(original, undefined), original);
-  });
-
-  it("the turn note is prepended once, ahead of the restart steer", () => {
-    assert.strictEqual(composeTurnText([null, null], "hi"), "hi");
-    assert.strictEqual(composeTurnText(["note", "steer"], "hi"), "note\n\nsteer\n\nhi");
   });
 });

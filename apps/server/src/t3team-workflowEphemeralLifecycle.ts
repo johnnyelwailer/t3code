@@ -1,13 +1,12 @@
 /**
  * Builds the durable lifecycle for a prepared workflow run — the SQLite-backed row plus the
- * sleep/dispatch wiring the engine drives it through.
+ * sleep/host wiring the engine drives it through.
  *
  * Separate from `t3team-workflowEphemeralLaunch.ts` because this is where a run becomes RECOVERABLE:
  * the row is written before any detached execution starts, so a request disconnect leaves a run that
  * boot rehydration can find rather than an invisible source-only orphan. An `ephemeral` run enters
  * `queued` rather than `running` so the admission queue owns its promotion.
  */
-import { t3teamRandomUUID } from "./t3team-random.ts";
 import {
   buildRunningWorkflowRunRow,
   makeWorkflowRunLifecycle,
@@ -21,6 +20,8 @@ export function buildPreparedWorkflowLifecycle(input: {
   readonly deps: PreparedWorkflowLaunchDeps;
   readonly run: PreparedWorkflowLaunchInput;
   readonly nowIso: () => string;
+  /** Admit writes `authoring` in the same upsert. A direct launch stays `queued`. */
+  readonly initialStatus?: "queued" | "authoring";
 }) {
   const { deps, run, nowIso } = input;
   return makeWorkflowRunLifecycle({
@@ -47,13 +48,12 @@ export function buildPreparedWorkflowLifecycle(input: {
       // with no intent) leaves the column NULL — the domain field is optional, not defaulted, so
       // "never given one" and "given an empty one" stay distinguishable.
       ...(run.intent === undefined ? {} : { intent: run.intent }),
-      ...(run.origin === "ephemeral" ? { status: "queued" as const } : {}),
+      ...(run.origin === "ephemeral" ? { status: input.initialStatus ?? ("queued" as const) } : {}),
     },
     nowIso,
     onSleep: () => {
       void deps.rearmScheduler();
     },
-    dispatch: deps.dispatch,
-    newId: () => t3teamRandomUUID(),
+    host: deps.host,
   });
 }

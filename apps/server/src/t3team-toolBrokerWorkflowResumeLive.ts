@@ -5,23 +5,24 @@
  * services the tool simply reports "not enabled". Mirrors
  * ./t3team-toolBrokerWorkflowRunLive.ts / ./t3team-toolBrokerWorkflowStatusLive.ts.
  */
-import { type OrchestrationCommand, ThreadId } from "@t3tools/contracts";
+import type { ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import type * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import type * as Path from "effect/Path";
 
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
-import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import { ThreadManagementService } from "./orchestration-v2/ThreadManagementService.ts";
 import { WorkflowJournalStore } from "./persistence/Services/WorkflowJournalStore.ts";
 import { WorkflowRunRepository } from "./persistence/Services/WorkflowRuns.ts";
 import { WorkflowSignalStore } from "./persistence/Services/WorkflowSignalStore.ts";
+import { ProviderRegistry } from "./provider/Services/ProviderRegistry.ts";
 import type { WorkflowResumeToolDeps } from "./t3team-toolBrokerWorkflowResumeActions.ts";
 import {
   makeWorkflowResumeToolHandlers,
   type T3TeamWorkflowResumeToolHandlers,
 } from "./t3team-toolBrokerWorkflowResumeTool.ts";
 import { T3TeamWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import { T3TeamWorkflowHost, toWorkflowHostPort } from "./t3team-workflowHost.ts";
 import { T3TeamWorkflowScheduler } from "./t3team-workflowScheduler.ts";
 import { makeWorkflowTurnRedriveLive } from "./t3team-workflowTurnRedriveLive.ts";
 
@@ -31,7 +32,6 @@ export const makeWorkflowResumeToolsForThread = Effect.fn("makeWorkflowResumeToo
   function* (deps: {
     readonly fileSystem?: FileSystem.FileSystem | undefined;
     readonly path?: Path.Path | undefined;
-    readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
     readonly loadThreadProject: WorkflowResumeToolDeps<unknown>["loadThreadProject"];
   }) {
     const registry = Option.getOrUndefined(
@@ -40,27 +40,22 @@ export const makeWorkflowResumeToolsForThread = Effect.fn("makeWorkflowResumeToo
     const runRepository = Option.getOrUndefined(yield* Effect.serviceOption(WorkflowRunRepository));
     const journalStore = Option.getOrUndefined(yield* Effect.serviceOption(WorkflowJournalStore));
     const scheduler = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamWorkflowScheduler));
-    if (!registry || !runRepository || !journalStore || !scheduler) {
+    const host = Option.getOrUndefined(yield* Effect.serviceOption(T3TeamWorkflowHost));
+    if (!registry || !runRepository || !journalStore || !scheduler || !host) {
       return undefined;
     }
     // Re-driving a failed run's retained agent step (GHE #403) re-issues the step's prompt turn
-    // — the SAME re-drive the reactor uses for an interrupted step, built over the same engine
-    // dispatch + thread query. Optional: without them the failed-step resume reports itself
-    // unavailable instead of silently replaying into a dead `sent` entry.
-    const orchestration = Option.getOrUndefined(
-      yield* Effect.serviceOption(OrchestrationEngineService),
-    );
-    const threadQuery = Option.getOrUndefined(yield* Effect.serviceOption(ProjectionSnapshotQuery));
+    // — the SAME re-drive the reactor uses for an interrupted step, built over the same V2
+    // thread reads + host turn start. Optional: without the thread reads the failed-step resume
+    // reports itself unavailable instead of silently replaying into a dead `sent` entry.
+    const threads = Option.getOrUndefined(yield* Effect.serviceOption(ThreadManagementService));
     const signalStore = Option.getOrUndefined(yield* Effect.serviceOption(WorkflowSignalStore));
+    // Live provider snapshots for the corrected-source check's model gate (absent skips it).
+    const providerRegistry = Option.getOrUndefined(yield* Effect.serviceOption(ProviderRegistry));
     const turnRedrive =
-      orchestration === undefined || threadQuery === undefined
+      threads === undefined
         ? undefined
-        : makeWorkflowTurnRedriveLive({
-            registry,
-            runRepository,
-            orchestration,
-            threadQuery,
-          });
+        : makeWorkflowTurnRedriveLive({ registry, threads, host, runRepository });
     return makeWorkflowResumeToolHandlers({
       fileSystem: deps.fileSystem,
       path: deps.path,
@@ -68,11 +63,14 @@ export const makeWorkflowResumeToolsForThread = Effect.fn("makeWorkflowResumeToo
       registry,
       journalStore,
       rearmScheduler: () => scheduler.rearm(),
-      dispatch: deps.dispatch,
+      host: toWorkflowHostPort(host),
       loadThreadProject: deps.loadThreadProject,
       ...(turnRedrive === undefined ? {} : { turnRedrive }),
       // GHE #332: a `watching` run's resume drains its bridged inbox events here.
       ...(signalStore === undefined ? {} : { signalStore }),
+      ...(providerRegistry === undefined
+        ? {}
+        : { listProviders: () => providerRegistry.getProviders }),
     }) as (threadId: ThreadId) => T3TeamWorkflowResumeToolHandlers;
   },
 );

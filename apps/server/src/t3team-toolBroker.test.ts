@@ -1,32 +1,39 @@
 /* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Legacy async tests intentionally bridge Effect runtimes; tracked cleanup is separate from upstream green gate. */
 import { describe, expect, it, vi } from "vite-plus/test";
-import { ThreadId } from "@t3tools/contracts";
 
 import * as Effect from "effect/Effect";
 
+// The orchestration (workflow) tool wiring is ported separately; these tests cover the broker's
+// own binding and host tools, so stand the workflow tools in as "not wired".
+vi.mock("./t3team-toolBrokerWorkflowToolsWiring.ts", () => ({
+  makeWorkflowToolsForThread: () => Effect.succeed({}),
+}));
+
 import { T3TeamToolBroker, T3TEAM_CURRENT_VIEW_RESOURCE_URI } from "./t3team-toolBroker.ts";
+import { T3TEAM_GENERIC_THREAD_TOOL_IDS } from "./t3team-toolBrokerLive.ts";
 import {
   createThreadToolContext,
   makeBrokerLayer,
-  makeBrokerLayerWithOptions,
-  makeOrchestrationMock,
   threadId,
 } from "./t3team-toolBrokerTestUtils.ts";
 
-describe("T3TeamToolBrokerLive", () => {
-  it("lists selected tools and returns the current view payload", async () => {
-    const orchestrationMock = makeOrchestrationMock();
+const bind = (toolContext?: ReturnType<typeof createThreadToolContext>) =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const broker = yield* T3TeamToolBroker;
+      return yield* broker.bindSession({
+        threadId,
+        ...(toolContext === undefined ? {} : { toolContext }),
+      });
+    }).pipe(Effect.provide(makeBrokerLayer())),
+  );
 
-    const binding = await Effect.runPromise(
-      Effect.gen(function* () {
-        const broker = yield* T3TeamToolBroker;
-        return yield* broker.bindSession({
-          threadId,
-          toolContext: createThreadToolContext({
-            tools: [{ id: "t3team.view.read", label: "Read view", capabilities: ["read"] }],
-          }),
-        });
-      }).pipe(Effect.provide(makeBrokerLayer(orchestrationMock))),
+describe("T3TeamToolBrokerLive", () => {
+  it("lists selected tools and returns the current V2 view payload", async () => {
+    const binding = await bind(
+      createThreadToolContext({
+        tools: [{ id: "t3team.view.read", label: "Read view", capabilities: ["read"] }],
+      }),
     );
 
     expect(binding?.listServers()).toEqual([
@@ -52,12 +59,11 @@ describe("T3TeamToolBrokerLive", () => {
     expect(result.structuredContent).toEqual(
       expect.objectContaining({
         project: expect.objectContaining({ id: "project-1" }),
-        thread: expect.objectContaining({ id: threadId, title: "Original title" }),
-      }),
-    );
-    expect(result.structuredContent).toEqual(
-      expect.objectContaining({
         thread: expect.objectContaining({
+          id: threadId,
+          title: "Original title",
+          messageCount: 0,
+          latestRunId: null,
           executionScope: "metarepo",
           workspace: expect.objectContaining({
             executionScope: "metarepo",
@@ -70,57 +76,7 @@ describe("T3TeamToolBrokerLive", () => {
     );
   });
 
-  it("dispatches thread metadata updates for rename", async () => {
-    const dispatch = vi.fn((_command: unknown) => Promise.resolve({ sequence: 7 }));
-    const orchestrationMock = makeOrchestrationMock((command) =>
-      Effect.promise(() => dispatch(command)),
-    );
-
-    const result = await Effect.runPromise(
-      Effect.gen(function* () {
-        const broker = yield* T3TeamToolBroker;
-        const binding = yield* broker.bindSession({
-          threadId,
-          toolContext: createThreadToolContext({
-            tools: [
-              {
-                id: "t3team.thread.rename",
-                label: "Rename thread",
-                capabilities: ["write"],
-              },
-            ],
-          }),
-        });
-        return yield* binding!.callTool({
-          server: "t3team",
-          tool: "t3team.thread.rename",
-          arguments: { title: "  Updated title  " },
-        });
-      }).pipe(Effect.provide(makeBrokerLayer(orchestrationMock))),
-    );
-
-    expect(result).toEqual(
-      expect.objectContaining({
-        structuredContent: {
-          ok: true,
-          threadId,
-          title: "Updated title",
-        },
-      }),
-    );
-    expect(dispatch).toHaveBeenCalledTimes(1);
-    expect(dispatch.mock.calls[0]?.[0]).toEqual(
-      expect.objectContaining({
-        type: "thread.meta.update",
-        threadId,
-        title: "Updated title",
-      }),
-    );
-  });
-
   it("falls back to the stored thread tool context when no toolContext is passed", async () => {
-    const orchestrationMock = makeOrchestrationMock();
-
     const binding = await Effect.runPromise(
       Effect.gen(function* () {
         const broker = yield* T3TeamToolBroker;
@@ -131,7 +87,7 @@ describe("T3TeamToolBrokerLive", () => {
           }),
         });
         return yield* broker.bindSession({ threadId });
-      }).pipe(Effect.provide(makeBrokerLayer(orchestrationMock))),
+      }).pipe(Effect.provide(makeBrokerLayer())),
     );
 
     expect(binding?.listServers()).toEqual([
@@ -143,350 +99,40 @@ describe("T3TeamToolBrokerLive", () => {
     ]);
   });
 
-  it("binds generic thread tools without a stored view context", async () => {
-    const orchestrationMock = makeOrchestrationMock();
-
-    const binding = await Effect.runPromise(
-      Effect.gen(function* () {
-        const broker = yield* T3TeamToolBroker;
-        return yield* broker.bindSession({ threadId });
-      }).pipe(Effect.provide(makeBrokerLayer(orchestrationMock))),
-    );
-
-    expect(binding?.listServers()[0]?.tools).toEqual({
-      "t3team.runtime.models": expect.objectContaining({ name: "t3team.runtime.models" }),
-      "t3team.runtime.provider_usage": expect.objectContaining({
-        name: "t3team.runtime.provider_usage",
-      }),
-      "t3team.thread.rename": expect.objectContaining({ name: "t3team.thread.rename" }),
-      "t3team.thread.start_child": expect.objectContaining({
-        name: "t3team.thread.start_child",
-      }),
-      "t3team.thread.children": expect.objectContaining({
-        name: "t3team.thread.children",
-      }),
-      "t3team.thread.search": expect.objectContaining({ name: "t3team.thread.search" }),
-      "t3team.thread.search_source": expect.objectContaining({
-        name: "t3team.thread.search_source",
-      }),
-      "t3team.thread.read_message": expect.objectContaining({
-        name: "t3team.thread.read_message",
-      }),
-      "t3team.orchestration.run": expect.objectContaining({ name: "t3team.orchestration.run" }),
-      // Orchestration lifecycle controls: status is read-only; resume/pause/stop
-      // are scoped to the CALLING thread's own runs (run row's launchThreadId),
-      // so they are safe to bind generically alongside run (see
-      // t3team-toolBrokerWorkflowControlTool.ts).
-      "t3team.orchestration.status": expect.objectContaining({
-        name: "t3team.orchestration.status",
-      }),
-      "t3team.orchestration.resume": expect.objectContaining({
-        name: "t3team.orchestration.resume",
-      }),
-      "t3team.orchestration.pause": expect.objectContaining({
-        name: "t3team.orchestration.pause",
-      }),
-      "t3team.orchestration.stop": expect.objectContaining({
-        name: "t3team.orchestration.stop",
-      }),
-      // Ad-hoc widgets are a host tool too — bound for every thread, with or
-      // without a stored view context (see genericThreadToolIds).
-      "t3team.widget.show": expect.objectContaining({ name: "t3team.widget.show" }),
-      "t3team.recipe.list": expect.objectContaining({ name: "t3team.recipe.list" }),
-      "t3team.recipe.validate": expect.objectContaining({ name: "t3team.recipe.validate" }),
-    });
-  });
-
-  it("creates and optionally starts a child session with session-style arguments", async () => {
-    const dispatch = vi.fn((_command: unknown) => Promise.resolve({ sequence: 11 }));
-    const orchestrationMock = makeOrchestrationMock((command) =>
-      Effect.promise(() => dispatch(command)),
-    );
-
-    const result = await Effect.runPromise(
-      Effect.gen(function* () {
-        const broker = yield* T3TeamToolBroker;
-        const binding = yield* broker.bindSession({
-          threadId,
-          toolContext: createThreadToolContext({
-            tools: [
-              {
-                id: "t3team.thread.start_child",
-                label: "Start child session",
-                capabilities: ["write"],
-              },
-            ],
-            view: {
-              ticketId: "PROJ-123",
-              displayMode: "embedded",
-            },
-          }),
-        });
-
-        expect(binding).toBeDefined();
-
-        const result = yield* binding!.callTool({
-          server: "t3team",
-          tool: "t3team.thread.start_child",
-          arguments: {
-            name: "Child session",
-            execution_scope: "metarepo",
-            kickoff_prompt: "Investigate the flaky checkout flow",
-            kickoff_mode: "plan",
-            model: "gpt-5.4",
-            reasoning_effort: "high",
-          },
-        });
-
-        const childThreadId = ThreadId.make(
-          (result.structuredContent as { project_session_id: string }).project_session_id,
-        );
-        const childBinding = yield* broker.bindSession({ threadId: childThreadId });
-
-        expect(childBinding?.listServers()).toEqual([
-          expect.objectContaining({
-            tools: {
-              "t3team.thread.start_child": expect.objectContaining({
-                title: "Start child session",
-              }),
-            },
-          }),
-        ]);
-
-        return result;
-      }).pipe(Effect.provide(makeBrokerLayer(orchestrationMock))),
-    );
-
-    expect(result).toEqual(
-      expect.objectContaining({
-        structuredContent: expect.objectContaining({
-          ok: true,
-          project_session_id: expect.any(String),
-          name: "Child session",
-          execution_scope: "metarepo",
-          started: true,
-          requested_kickoff_mode: "plan",
-          interaction_mode: "plan",
-          // The launch result states the approval obligation up front: the
-          // child will stop and wait, and how the parent will see it.
-          plan_obligation: expect.stringContaining("awaitingParent"),
-        }),
-      }),
-    );
-
-    const planObligation = (result.structuredContent as { plan_obligation?: string })
-      .plan_obligation;
-    expect(planObligation).toContain("wait ");
-    expect(planObligation).toContain("approval");
-    expect(planObligation).toContain("t3team_children");
-
-    const childThreadId = (result.structuredContent as { project_session_id: string })
-      .project_session_id;
-
-    expect(dispatch.mock.calls).toEqual(
-      expect.arrayContaining([
-        [
-          expect.objectContaining({
-            type: "thread.create",
-            threadId: childThreadId,
-            projectId: "project-1",
-            title: "Child session",
-            runtimeMode: "full-access",
-            interactionMode: "plan",
-            modelSelection: {
-              instanceId: "codex",
-              model: "gpt-5.4",
-            },
-          }),
-        ],
-        [
-          expect.objectContaining({
-            type: "thread.activity.append",
-            threadId,
-            activity: expect.objectContaining({
-              kind: "t3team.handoff.started",
-              payload: expect.objectContaining({
-                parentThreadId: threadId,
-                childThreadId,
-                ticketId: "PROJ-123",
-              }),
-            }),
-          }),
-        ],
-        [
-          expect.objectContaining({
-            type: "thread.activity.append",
-            threadId: childThreadId,
-            activity: expect.objectContaining({
-              kind: "t3team.handoff.created",
-              payload: expect.objectContaining({
-                parentThreadId: threadId,
-                childThreadId,
-                ticketId: "PROJ-123",
-              }),
-            }),
-          }),
-        ],
-        [
-          expect.objectContaining({
-            type: "thread.turn.start",
-            threadId: childThreadId,
-            runtimeMode: "full-access",
-            interactionMode: "plan",
-            message: expect.objectContaining({
-              role: "user",
-              text: expect.stringContaining("Investigate the flaky checkout flow"),
-            }),
-            modelSelection: {
-              instanceId: "codex",
-              model: "gpt-5.4",
-            },
-          }),
-        ],
-      ]),
+  it("binds the generic host tools without a stored view context", async () => {
+    const binding = await bind();
+    expect(Object.keys(binding?.listServers()[0]?.tools ?? {}).toSorted()).toEqual(
+      [...T3TEAM_GENERIC_THREAD_TOOL_IDS].toSorted(),
     );
   });
 
-  it("attaches a retargeted child session beneath its parent", async () => {
-    const dispatch = vi.fn((_command: unknown) => Promise.resolve({ sequence: 17 }));
-    const orchestrationMock = makeOrchestrationMock((command) =>
-      Effect.promise(() => dispatch(command)),
-    );
-
-    const result = await Effect.runPromise(
-      Effect.gen(function* () {
-        const broker = yield* T3TeamToolBroker;
-        const binding = yield* broker.bindSession({
-          threadId,
-          toolContext: createThreadToolContext({
-            tools: [
-              {
-                id: "t3team.thread.start_child",
-                label: "Start child session",
-                capabilities: ["write"],
-              },
-            ],
-            view: {
-              ticketId: "proj-123",
-              displayMode: "thread",
-            },
-          }),
-        });
-
-        return yield* binding!.callTool({
-          server: "t3team",
-          tool: "t3team.thread.start_child",
-          arguments: {
-            name: "Sibling ticket session",
-            execution_scope: "metarepo",
-            ticket_id: "proj-456",
-          },
-        });
-      }).pipe(Effect.provide(makeBrokerLayer(orchestrationMock))),
-    );
-
-    expect(result).toEqual(
-      expect.objectContaining({
-        structuredContent: expect.objectContaining({
-          ok: true,
-          name: "Sibling ticket session",
-          started: false,
-        }),
-      }),
-    );
-
-    const childThreadId = (result.structuredContent as { project_session_id: string })
-      .project_session_id;
-    const childCreatedActivity = dispatch.mock.calls
-      .map((call) => call[0])
-      .find(
-        (command) =>
-          typeof command === "object" &&
-          command !== null &&
-          (command as { type?: string }).type === "thread.activity.append" &&
-          (command as { threadId?: string }).threadId === childThreadId,
-      ) as { activity: { payload: Record<string, unknown> } } | undefined;
-
-    expect(childCreatedActivity?.activity.payload).toEqual(
-      expect.objectContaining({
-        childThreadId,
-        childTitle: "Sibling ticket session",
-        parentThreadId: threadId,
-        parentTitle: "Original title",
-        ticketId: "proj-456",
-      }),
-    );
-  });
-
-  it("creates a child session without optional repo services", async () => {
-    const dispatch = vi.fn((_command: unknown) => Promise.resolve({ sequence: 13 }));
-    const orchestrationMock = makeOrchestrationMock((command) =>
-      Effect.promise(() => dispatch(command)),
-    );
-
-    const result = await Effect.runPromise(
-      Effect.gen(function* () {
-        const broker = yield* T3TeamToolBroker;
-        const binding = yield* broker.bindSession({
-          threadId,
-          toolContext: createThreadToolContext({
-            tools: [
-              {
-                id: "t3team.thread.start_child",
-                label: "Start child session",
-                capabilities: ["write"],
-              },
-            ],
-          }),
-        });
-
-        return yield* binding!.callTool({
-          server: "t3team",
-          tool: "t3team.thread.start_child",
-          arguments: {
-            name: "Child session",
-            execution_scope: "metarepo",
-          },
-        });
-      }).pipe(
-        Effect.provide(
-          makeBrokerLayerWithOptions(orchestrationMock, { includeStartChildServices: false }),
+  it("no longer serves the child spawn, rename and model tools upstream replaced", async () => {
+    const binding = await bind(
+      createThreadToolContext({
+        tools: ["t3team.thread.start_child", "t3team.thread.rename", "t3team.runtime.models"].map(
+          (id) => ({ id, label: id, capabilities: ["write"] as const }),
         ),
-      ),
-    );
-
-    expect(result).toEqual(
-      expect.objectContaining({
-        structuredContent: expect.objectContaining({
-          ok: true,
-          name: "Child session",
-          execution_scope: "metarepo",
-          started: false,
-          interaction_mode: "default",
-          setup_script_status: "not-requested",
-        }),
       }),
     );
+    expect(binding?.listServers()[0]?.tools).toEqual({});
+    for (const tool of ["t3team.thread.start_child", "t3team.thread.rename"]) {
+      const result = await Effect.runPromise(binding!.callTool({ server: "t3team", tool }));
+      expect(result.isError).toBe(true);
+    }
+  });
 
-    // No obligation sentence outside plan mode.
-    expect(
-      (result.structuredContent as { plan_obligation?: string }).plan_obligation,
-    ).toBeUndefined();
-
-    expect(dispatch.mock.calls).toEqual(
-      expect.arrayContaining([
-        [
-          expect.objectContaining({
-            type: "thread.create",
-            projectId: "project-1",
-            title: "Child session",
-            runtimeMode: "full-access",
-            interactionMode: "default",
-            branch: null,
-            worktreePath: null,
-          }),
-        ],
-      ]),
+  it("answers the children tool from the V2 thread", async () => {
+    const binding = await bind();
+    const result = await Effect.runPromise(
+      binding!.callTool({
+        server: "t3team",
+        tool: "t3team.thread.children",
+        arguments: { op: "environments" },
+      }),
+    );
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toEqual(
+      expect.objectContaining({ ok: true, op: "environments" }),
     );
   });
 });

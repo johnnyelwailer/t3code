@@ -1,9 +1,5 @@
-import type {
-  ProviderJobSummary,
-  ProviderSession,
-  ServerSignalProcessInput,
-} from "@t3tools/contracts";
-import { ThreadId } from "@t3tools/contracts";
+import type { ProviderJobSummary, ServerSignalProcessInput } from "@t3tools/contracts";
+import { ProviderSessionId, ThreadId } from "@t3tools/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -87,27 +83,23 @@ describe("per-thread cleanup execute", () => {
   const makeDeps = (enabled = true) => {
     const signals: ServerSignalProcessInput[] = [];
     const commands: string[] = [];
+    const providerSessionId = ProviderSessionId.make("session-1");
     const deps: ThreadCleanupDeps = {
       enabled,
       serverPid: 10,
       telemetry: { refresh: Effect.succeed(scan) },
-      providers: {
-        jobControl: () => Effect.succeed({ kind: "jobs", jobs: JOBS }),
-        listSessions: () =>
-          Effect.succeed([{ threadId, provider: "pi" } as unknown as ProviderSession]),
-      },
+      listJobs: () => Effect.succeed(JOBS),
+      liveSession: () => Effect.succeed({ providerSessionId, provider: "pi" }),
       signal: (input) =>
         Effect.sync(() => {
           signals.push(input);
           return { pid: input.pid, signal: input.signal, signaled: true, message: Option.none() };
         }),
-      engine: {
-        dispatch: (command) =>
-          Effect.sync(() => {
-            commands.push(command.type);
-            return { sequence: 1 };
-          }) as never,
-      },
+      stopSession: (input) =>
+        Effect.sync(() => {
+          commands.push(`detach:${input.providerSessionId}`);
+          return true;
+        }),
     };
     return { deps, signals, commands };
   };
@@ -132,7 +124,7 @@ describe("per-thread cleanup execute", () => {
         [12, 60],
       );
       assert.isTrue(result.agentSessionStopped);
-      assert.deepStrictEqual(commands, ["thread.session.stop"]);
+      assert.deepStrictEqual(commands, ["detach:session-1"]);
     }),
   );
 

@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { useEffect, useRef, useState } from "react";
 
-import type { TurnId } from "@t3tools/contracts";
+import type { RunId } from "@t3tools/contracts";
 import { TimelineRowActivityCtx, WorkingTimelineRow } from "~/components/chat/MessagesTimeline";
 import type { ActiveAgentEntry } from "~/t3team/chat/t3team-activeAgentsCore";
 import {
@@ -70,17 +70,17 @@ function RealWorkingRow({
     <TimelineRowActivityCtx.Provider
       value={{
         isWorking: true,
+        activeTurnInProgress: true,
         isPreparingWorktree: false,
         isCompacting: false,
         isRevertingCheckpoint: false,
-        latestTurnId: "turn-design-pass" as TurnId,
+        latestRunId: "turn-design-pass" as RunId,
         workingStepLabel,
         activeAgents,
         backgroundJobs: [],
         onOpenAgents,
         onOpenAgent,
         threadActivityState: threadState === "settled" ? null : threadState,
-        unsettledTurnId: null,
         backgroundWorktreeSetup: null,
       }}
     >

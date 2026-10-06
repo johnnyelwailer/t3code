@@ -132,6 +132,16 @@ const fileSizeOrZero = (candidate: string): number => {
 };
 
 /**
+ * Size of a home's state database: `statev2.sqlite` is the live one on V2, and
+ * `state.sqlite` is the V1 database (still the only one in a home V2 never opened).
+ */
+const stateBytes = (userdataDir: string, join: (first: string, ...segments: string[]) => string) =>
+  Math.max(
+    fileSizeOrZero(join(userdataDir, "statev2.sqlite")),
+    fileSizeOrZero(join(userdataDir, "state.sqlite")),
+  );
+
+/**
  * Move a pre-branding home (`~/.t3`) into the branded one, once.
  *
  * A build with bundled packs stores state under
@@ -160,12 +170,10 @@ export const migrateLegacyHomeIfNeeded = (input: {
   const { legacyDir, brandedDir, join, stamp } = input;
   if (legacyDir === brandedDir) return brandedDir;
 
-  const legacyState = join(legacyDir, "userdata", "state.sqlite");
-  if (fileSizeOrZero(legacyState) === 0) return brandedDir;
+  if (stateBytes(join(legacyDir, "userdata"), join) === 0) return brandedDir;
 
   const brandedUserdata = join(brandedDir, "userdata");
-  const brandedStateBytes = fileSizeOrZero(join(brandedUserdata, "state.sqlite"));
-  if (brandedStateBytes > EMPTY_STATE_DB_MAX_BYTES) return brandedDir;
+  if (stateBytes(brandedUserdata, join) > EMPTY_STATE_DB_MAX_BYTES) return brandedDir;
 
   try {
     NodeFS.mkdirSync(brandedDir, { recursive: true });
@@ -818,6 +826,10 @@ const resolveWslStartConfig = Effect.fn("desktop.backendConfiguration.resolveWsl
     desktopBootstrapToken: input.bootstrapToken,
     tailscaleServeEnabled: false,
     tailscaleServePort: 443,
+    // The packaged sidecar is a Windows executable and cannot run inside the
+    // Linux WSL backend. Keep the field absent instead of passing an unusable
+    // `/mnt/.../*.exe` path; WSL resource telemetry is reported unavailable.
+    // See docs/internals/resource-telemetry.md.
     ...buildObservabilityFragment(input.observabilitySettings),
   };
 

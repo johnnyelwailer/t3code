@@ -4,17 +4,21 @@ import {
   loadManifestThemes,
   activateWorkspacePack,
   resolveWorkspacePacks,
-  type PackProviderDriverDefinition,
+  type PackProviderDriverRegistration,
   type WorkspacePackResolution,
 } from "@t3team/packs";
+import type { PackProviderDriverDefinition } from "@t3team/pack-api";
 import type { EnvironmentAppearance } from "@t3tools/contracts";
 
 import { BUILT_IN_DRIVERS } from "./provider/builtInDrivers.ts";
 import { packAiProvidersToInstanceConfigMap } from "./t3team-pack-aiProvider.ts";
 import type { PackProviderOverlay } from "./t3team-pack-providerOverlay.ts";
+import { inertPackActivationContext } from "./t3team-pack-activationContext.ts";
+import { toPackProviderDriverDefinition } from "./t3team-pack-driverDefinition.ts";
 export { loadPackWorkflowRepairPolicy } from "./t3team-pack-workflowRepairPolicy.ts";
 export { loadPackWorkflowAgentModelPolicy } from "./t3team-pack-workflowAgentModelPolicy.ts";
 export { loadPackWorkflowEphemeralConcurrencyPolicy } from "./t3team-pack-workflowEphemeralConcurrencyPolicy.ts";
+export { loadPackModelPolicy } from "./t3team-pack-modelPolicy.ts";
 
 const BUILT_IN_DRIVER_KINDS = new Set(BUILT_IN_DRIVERS.map((driver) => String(driver.driverKind)));
 
@@ -59,6 +63,7 @@ export const loadPackProviderOverlay = async (
   const driverDefinitions = new Map<string, PackProviderDriverDefinition>();
   for (const pack of providerPacks) {
     await activateWorkspacePack(pack, {
+      ...inertPackActivationContext,
       defineAgentProvider: (definition) => {
         definitions.push(definition);
       },
@@ -70,14 +75,6 @@ export const loadPackProviderOverlay = async (
           definition,
         );
       },
-      defineTheme: () => undefined,
-      defineSetupProfile: () => undefined,
-      defineWorkflowRepairPolicy: () => undefined,
-      defineWorkflowAgentModelPolicy: () => undefined,
-      defineWorkflowEphemeralConcurrencyPolicy: () => undefined,
-      resolveAssetDataUrl: async () => {
-        throw new Error("Asset resolution is only available to pack activation code");
-      },
     });
   }
   return {
@@ -88,15 +85,16 @@ export const loadPackProviderOverlay = async (
 
 /**
  * Register one executable driver definition, enforcing the
- * `provider-driver:<driver>` capability gate and rejecting driver ids that
- * collide with another pack driver or a built-in driver.
+ * `provider-driver:<driver>` capability gate and the schemaVersion 2 contract,
+ * and rejecting driver ids that collide with another pack driver or a built-in driver.
  */
 const registerPackDriver = (
   registry: Map<string, PackProviderDriverDefinition>,
   packId: string,
   capabilities: ReadonlyArray<string>,
-  definition: PackProviderDriverDefinition,
+  registration: PackProviderDriverRegistration,
 ): void => {
+  const definition = toPackProviderDriverDefinition(packId, registration);
   const capability = `provider-driver:${definition.driver}`;
   if (!capabilities.includes(capability)) {
     throw new Error(
@@ -136,20 +134,12 @@ export const loadPackAppearanceOverlay = async (
   const activatedThemes: EnvironmentAppearance[] = [];
   for (const pack of themedPacks) {
     await activateWorkspacePack(pack, {
-      defineAgentProvider: () => undefined,
-      defineProviderDriver: () => undefined,
+      ...inertPackActivationContext,
       defineTheme: (theme) => {
         if (!pack.manifest.capabilities.includes("theme:v1")) {
           throw new Error(`Pack ${pack.manifest.id} defines a theme without theme:v1 capability`);
         }
         activatedThemes.push({ ...theme, themeId: theme.id });
-      },
-      defineSetupProfile: () => undefined,
-      defineWorkflowRepairPolicy: () => undefined,
-      defineWorkflowAgentModelPolicy: () => undefined,
-      defineWorkflowEphemeralConcurrencyPolicy: () => undefined,
-      resolveAssetDataUrl: async () => {
-        throw new Error("Asset resolution is only available to pack activation code");
       },
     });
   }

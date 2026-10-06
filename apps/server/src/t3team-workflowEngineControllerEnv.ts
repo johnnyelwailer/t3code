@@ -1,6 +1,6 @@
 /**
  * The t3team-side environment of a per-run workflow controller: the
- * dispatch-based broker, the live step-activity emitter, the authored-phase
+ * host-backed broker, the live step-activity emitter, the authored-phase
  * cell, the composition-branch failure log, and the assembled
  * `WorkflowRunOptions`.
  *
@@ -57,13 +57,12 @@ export function createWorkflowRunControllerEnv(
   // The live step-status emitter (UX slice 1). Terminal run activities are emitted in the
   // controller's host sinks (completed/failed), not in the durability lifecycle: the
   // controller is the single funnel BOTH the live launch and boot rehydration drive through,
-  // and it already holds `dispatch` + `launchThreadId`.
+  // and it already holds the host + `launchThreadId`.
   const stepActivities = createWorkflowStepActivityEmitter({
     runId: input.runId,
     projectId: input.projectId,
     launchThreadId: input.launchThreadId,
-    dispatch: input.dispatch,
-    newId: input.newId,
+    host: input.host,
     nowIso: input.nowIso,
   });
   const broker = createWorkflowEngineBroker({
@@ -76,7 +75,7 @@ export function createWorkflowRunControllerEnv(
     runtimeMode: input.runtimeMode,
     interactionMode: input.interactionMode,
     registry: input.registry,
-    dispatch: input.dispatch,
+    host: input.host,
     newId: input.newId,
     nowIso: input.nowIso,
     ...(input.lifecycle === undefined

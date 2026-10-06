@@ -24,6 +24,7 @@ import {
 import { listProjectRecipesForAgent } from "./t3team-recipeAgentList.ts";
 import { validateProjectRecipeWorkflowForAgent } from "./t3team-recipeAgentValidate.ts";
 import { resolveRunWorkflowPath } from "./t3team-workflowRunPathAuthorize.ts";
+import { HIDDEN_T3TEAM_DIR } from "./t3team-project-repository-utils.ts";
 
 const fixturesRoot = NodeURL.fileURLToPath(new URL("../__fixtures__/", import.meta.url));
 
@@ -179,7 +180,7 @@ describe("resolveRunWorkflowPath — execution authorization", () => {
         const packDir = yield* makeTempDir("t3team-run-auth-pack-");
         const workspaceRoot = yield* makeTempDir("t3team-run-auth-ws-");
         const packRecipeRoot = path.join(packDir, "recipes/triage");
-        const localRecipeRoot = path.join(workspaceRoot, ".t3team/recipes/triage");
+        const localRecipeRoot = path.join(workspaceRoot, `${HIDDEN_T3TEAM_DIR}/recipes/triage`);
         yield* writeRecipeDir({ root: packRecipeRoot, id: "triage", displayName: "Pack triage" });
         yield* writeRecipeDir({
           root: localRecipeRoot,
@@ -313,7 +314,7 @@ describe("resolveRunWorkflowPath — execution authorization", () => {
     );
   });
 
-  it("refuses an UNPARSEABLE workflow file synchronously with the authoring manual, before any launch", async () => {
+  it("refuses an UNPARSEABLE workflow file synchronously with the reason, before any launch", async () => {
     await run(
       Effect.gen(function* () {
         const path = yield* Path.Path;
@@ -343,8 +344,8 @@ describe("resolveRunWorkflowPath — execution authorization", () => {
         if (refused._tag === "Failure") {
           expect(refused.failure).toContain("rejected before launch");
           expect(refused.failure).toContain("unparseable workflow TypeScript");
-          // The full authoring manual rides the rejection so the agent can fix + resubmit.
-          expect(refused.failure).toContain("AGENT-ORCHESTRATION MANUAL");
+          // The reason only: the author agent carries the generated reference itself.
+          expect(refused.failure).not.toContain("MANUAL");
         }
         // Nothing durable was created: no snapshot, no run directory.
         expect(NodeFS.existsSync(path.join(workspaceRoot, ".t3team-runs", "run-bad"))).toBe(false);

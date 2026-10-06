@@ -45,11 +45,11 @@ vi.mock("~/t3team/hooks/t3team-useProjectWorkspaceAutoSync", () => ({
 }));
 
 vi.mock("./t3team-AppMainContentShell", () => ({
-  useHomeProjectChat: () => ({
-    homeChatProject: null,
-    homeChatThreadId: null,
-  }),
   useSyncActiveChatTarget: () => {},
+}));
+
+vi.mock("~/t3team/t3team-useScratchHomeChat", () => ({
+  useT3TeamScratchHomeChat: () => ({ scratchProject: null, startScratch: undefined }),
 }));
 
 const looseProject: ProjectShellProject = {

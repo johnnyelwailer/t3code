@@ -5,7 +5,6 @@ export { asNamedAttachments, renderAgentAttachments } from "./t3team-sdk.askAtta
 export { appendResolvedEntry, createHostBroker, createMockBroker } from "./t3team-sdk.broker.ts";
 export type { HandleDispatch } from "@runbook/core/handles";
 export { createThreadPrimitives } from "./t3team-sdk.threadPrimitives.ts";
-export { builtinTools } from "./t3team-sdk.builtins.ts";
 export { hashArgs } from "./t3team-sdk.canonicalJson.ts";
 export {
   createDurableWorkflowRuntime,
@@ -178,6 +177,21 @@ export { auditWorkflowSourceStatic, registryToolGroupResolver } from "./t3team-s
 export { scanCapabilities } from "./t3team-sdk.capabilityScan.ts";
 export { scanDeterminism } from "./t3team-sdk.determinismScan.ts";
 export { formatFinding } from "./t3team-sdk.staticAuditTypes.ts";
+// The author surface: what the loader binds (derived, never listed by hand), the reference text
+// generated from it, and the examples that reference ships (each one gate-checked in CI).
+export {
+  WORKFLOW_BOUND_GLOBAL_NAME_SET,
+  WORKFLOW_BOUND_GLOBAL_NAMES,
+} from "./t3team-sdk.workflowBoundNames.ts";
+export { WORKFLOW_AUTHOR_REFERENCE } from "./t3team-sdk.workflowReference.generated.ts";
+export {
+  collectWorkflowModelLiterals,
+  type WorkflowModelLiteral,
+} from "./t3team-sdk.modelLiteralScan.ts";
+export {
+  WORKFLOW_REFERENCE_EXAMPLES,
+  type WorkflowReferenceExample,
+} from "./t3team-sdk.workflowReferenceExamples.ts";
 export { normalizeCapabilities } from "./t3team-sdk.capabilityGating.ts";
 
 export type {
@@ -188,7 +202,6 @@ export type {
   MockBroker,
   MockBrokerOutcome,
 } from "./t3team-sdk.broker.ts";
-export type { BuiltinToolsTree } from "./t3team-sdk.builtins.ts";
 export type {
   AbortedResult,
   DurableWorkflowRuntime,

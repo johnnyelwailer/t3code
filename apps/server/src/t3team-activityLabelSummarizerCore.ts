@@ -7,7 +7,8 @@
  * by GHE #208).
  *
  * The deterministic 4-state word (thinking/writing/working/waiting) is the base
- * label and updates instantly with zero inference (see `t3team-activityState.ts`).
+ * label and updates instantly with zero inference (clients derive it from V2
+ * turn items).
  * The summarizer produces only the OPTIONAL free-text enrichment rendered after it
  * (`{state} · {detail}`), with throttled light-inference guarantees:
  *

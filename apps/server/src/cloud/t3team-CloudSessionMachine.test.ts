@@ -5,13 +5,13 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { type OrchestrationProjectShell, ProjectId } from "@t3tools/contracts";
+import { type Project, ProjectId } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
-import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import { ProjectService } from "../project/ProjectService.ts";
 import * as ProjectMachineDiscovery from "../project/t3team-ProjectMachineDiscovery.ts";
 import * as GitHubCli from "../sourceControl/GitHubCli.ts";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
@@ -55,9 +55,8 @@ const checkout = (
 };
 
 const resolveIn = (root: string, token = "ghp_user-token") => {
-  const projections = Layer.mock(ProjectionSnapshotQuery)({
-    getProjectShellById: () =>
-      Effect.succeed(Option.some({ workspaceRoot: root } as unknown as OrchestrationProjectShell)),
+  const projects = Layer.mock(ProjectService)({
+    getById: () => Effect.succeed(Option.some({ workspaceRoot: root } as unknown as Project)),
   });
   const gh = Layer.mock(GitHubCli.GitHubCli)({
     execute: (input) =>
@@ -72,7 +71,7 @@ const resolveIn = (root: string, token = "ghp_user-token") => {
           : Effect.fail({ _tag: "GitHubCliError" } as never),
   });
   const dependencies = Layer.mergeAll(
-    ProjectMachineDiscovery.layer.pipe(Layer.provide(projections)),
+    ProjectMachineDiscovery.layer.pipe(Layer.provide(projects)),
     VcsProcess.layer,
     gh,
   ).pipe(Layer.provideMerge(NodeServices.layer));

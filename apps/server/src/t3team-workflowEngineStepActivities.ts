@@ -1,25 +1,30 @@
 /**
  * Live workflow-step activity emission (UX slice 1 — "no black box"). Turns each primitive the
- * broker fires into a `thread.activity.append` on the LAUNCH thread, kind
- * `t3team.recipe.workflow.step`, so the web timeline can overlay live step status on the plan
- * (shape) card. The projector and client reducer both upsert activities BY ID, so re-emitting
- * the same id with a later phase replaces the step in place, live.
+ * broker fires into a keyed activity on the LAUNCH thread, kind `t3team.recipe.workflow.step`
+ * (a fork thread artifact, `T3TeamWorkflowHost.upsertActivity`), so the web timeline can overlay
+ * live step status on the plan (shape) card. Activities upsert BY ID, so re-emitting the same id
+ * with a later phase replaces the step in place, live — and the first write pins its timeline
+ * slot (`createdAt`).
  *
  * Id scheme: `t3team-wf-step:<correlationId>` — the SDK's correlationId is `<runId>:<seq>`
  * (journal seq), so it is unique per primitive, stable across restarts (a rehydrated run's
  * resolve re-emits onto the SAME activity), and its numeric seq suffix gives the client a
  * deterministic step order. The run-level terminal activity uses `t3team-wf-step:<runId>:run`.
  *
- * Emission is strictly best-effort: every dispatch failure is swallowed (the run must never
- * fail because a status pip could not be drawn), mirroring the broker's one-way delivery.
+ * Emission is strictly best-effort: every host failure is swallowed (the run must never fail
+ * because a status pip could not be drawn), mirroring the broker's one-way delivery.
  */
 
-import { CommandId, EventId, type OrchestrationCommand, ThreadId } from "@t3tools/contracts";
 import {
   PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP,
   type ProjectRecipeWorkflowStepActivityPayload,
   type ProjectRecipeWorkflowStepPhase,
 } from "@t3tools/project-recipes";
+
+import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
+
+/** Id of the step activity keyed by `stepId` (a correlationId, or `<runId>:run`). */
+export const workflowStepActivityId = (stepId: string) => `t3team-wf-step:${stepId}`;
 
 export interface WorkflowStepSentInput {
   readonly correlationId: string;
@@ -83,37 +88,28 @@ export function createWorkflowStepActivityEmitter(opts: {
   readonly projectId: string;
   /** Activities land on the launch thread; a headless run (undefined) emits nothing. */
   readonly launchThreadId: string | undefined;
-  readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
-  readonly newId: () => string;
+  readonly host: Pick<WorkflowHostPort, "upsertActivity">;
   readonly nowIso: () => string;
 }): WorkflowStepActivityEmitter {
-  // Remembers each sent step so its resolution re-emits with the SAME label + createdAt (the
-  // upsert replaces the activity — keeping createdAt pins the step's timeline slot). Empty
-  // after a restart; a post-rehydration resolve then degrades to a fresh generic entry.
+  // Remembers each sent step so its resolution re-emits with the SAME label (the upsert replaces
+  // the activity; the store keeps its first `createdAt`, which pins the step's timeline slot).
+  // Empty after a restart; a post-rehydration resolve then keeps only the generic fields.
   const sentByCorrelation = new Map<string, SentStepRecord>();
 
   const append = (
     stepId: string,
     payload: ProjectRecipeWorkflowStepActivityPayload,
     summary: string,
-    createdAt: string,
   ): Promise<void> => {
     if (opts.launchThreadId === undefined) return Promise.resolve();
-    return opts
-      .dispatch({
-        type: "thread.activity.append",
-        commandId: CommandId.make(`t3team-wf-step:${opts.newId()}`),
-        threadId: ThreadId.make(opts.launchThreadId),
-        activity: {
-          id: EventId.make(`t3team-wf-step:${stepId}`),
-          tone: payload.phase === "failed" ? "error" : "info",
-          kind: PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP,
-          summary,
-          payload,
-          turnId: null,
-          createdAt,
-        },
-        createdAt: opts.nowIso(),
+    return opts.host
+      .upsertActivity({
+        threadId: opts.launchThreadId,
+        id: workflowStepActivityId(stepId),
+        kind: PROJECT_RECIPE_ACTIVITY_KIND_WORKFLOW_STEP,
+        tone: payload.phase === "failed" ? "error" : "info",
+        summary,
+        payload,
       })
       .catch(() => {}); // best-effort: a lost status pip must never fail the run
   };
@@ -142,7 +138,6 @@ export function createWorkflowStepActivityEmitter(opts: {
           ...(input.workflowPhase === undefined ? {} : { workflowPhase: input.workflowPhase }),
         },
         input.detail ?? "Workflow activity",
-        createdAt,
       );
     },
     emitResolved: (correlationId, phase, error) => {
@@ -174,7 +169,6 @@ export function createWorkflowStepActivityEmitter(opts: {
           ...(durationMs === undefined ? {} : { durationMs }),
         },
         `Workflow step ${phase}: ${sent?.detail ?? sent?.stepKind ?? correlationId}`,
-        sent?.createdAt ?? opts.nowIso(),
       );
     },
     describePendingStep: () => {
@@ -197,7 +191,6 @@ export function createWorkflowStepActivityEmitter(opts: {
           ...(error === undefined ? {} : { error }),
         },
         phase === "completed" ? "Workflow run completed" : "Workflow run failed",
-        opts.nowIso(),
       ),
   };
 }

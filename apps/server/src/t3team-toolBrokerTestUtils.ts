@@ -1,29 +1,12 @@
 import { ThreadId } from "@t3tools/contracts";
-import * as Effect from "effect/Effect";
-import * as Stream from "effect/Stream";
-
-import { type OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 
 export {
   makeBrokerLayer,
   makeBrokerLayerWithLiveContextRefresh,
-  makeBrokerLayerWithOptions,
+  type TestDispatch,
 } from "./t3team-toolBrokerTestLayers.ts";
 
 export const threadId = ThreadId.make("thread-1");
-
-// Every case drives the broker through the same engine stub; only dispatch differs.
-export const makeOrchestrationMock = (
-  dispatch: OrchestrationEngineShape["dispatch"] = () => Effect.succeed({ sequence: 1 }),
-): OrchestrationEngineShape => ({
-  readEvents: () => Stream.empty,
-  readThreadEvents: () => Stream.empty,
-  getThreadReplayStats: () => Effect.die("unused"),
-  dispatch,
-  streamDomainEvents: Stream.empty,
-  subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
-  latestSequence: Effect.succeed(0),
-});
 
 type TestToolContextTool = {
   id: string;
@@ -60,18 +43,4 @@ export function createThreadToolContext(input: {
       },
     },
   };
-}
-
-export function joinPosix(...segments: ReadonlyArray<string>): string {
-  const normalized = segments
-    .filter((segment) => segment.length > 0)
-    .join("/")
-    .replace(/\/+/g, "/");
-  return normalized.startsWith("/") ? normalized : `/${normalized}`;
-}
-
-export function dirnamePosix(value: string): string {
-  const normalized = value.replace(/\/+/g, "/");
-  const lastSlashIndex = normalized.lastIndexOf("/");
-  return lastSlashIndex <= 0 ? "/" : normalized.slice(0, lastSlashIndex);
 }

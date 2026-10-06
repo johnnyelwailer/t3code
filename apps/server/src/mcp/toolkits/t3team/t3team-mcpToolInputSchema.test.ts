@@ -36,23 +36,20 @@ const toolkits = [
   { label: "preview", tools: toolkitTools(PreviewToolkit), atLeast: 10 },
 ];
 
-for (const { label, tools, atLeast } of toolkits) {
-  describe(`${label} MCP tool input schemas`, () => {
-    it("exports tools to check", () => {
-      expect(tools.length).toBeGreaterThan(atLeast);
-    });
-
-    for (const tool of tools) {
-      const name = (tool as { readonly name?: unknown }).name ?? "anonymous";
-      it(`${name} advertises an object inputSchema`, () => {
-        const schema = Tool.getJsonSchema(tool as never) as Record<string, unknown>;
-        // Top level only: `anyOf` INSIDE a property is just how an optional union renders and is fine.
-        expect(schema.anyOf, `${name} inputSchema must not be a top-level union`).toBeUndefined();
-        expect(schema.type).toBe("object");
-      });
-    }
+describe.each(toolkits)("$label MCP tool input schemas", ({ tools, atLeast }) => {
+  it("exports tools to check", () => {
+    expect(tools.length).toBeGreaterThan(atLeast);
   });
-}
+
+  it.each(
+    tools.map((tool) => [String((tool as { readonly name?: unknown }).name ?? "anonymous"), tool]),
+  )("%s advertises an object inputSchema", (name, tool) => {
+    const schema = Tool.getJsonSchema(tool as never) as Record<string, unknown>;
+    // Top level only: `anyOf` INSIDE a property is just how an optional union renders and is fine.
+    expect(schema.anyOf, `${name} inputSchema must not be a top-level union`).toBeUndefined();
+    expect(schema.type).toBe("object");
+  });
+});
 
 /**
  * The `t3team_show_widget` model-facing contract must stay in lockstep with the documented

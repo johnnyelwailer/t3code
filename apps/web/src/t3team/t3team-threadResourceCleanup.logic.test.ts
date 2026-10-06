@@ -2,13 +2,7 @@ import type { ResourcePressureCleanupPlan } from "@t3tools/contracts";
 import { ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  cleanupConfirmMessage,
-  cleanupResultTitle,
-  deriveResourcePressurePause,
-  KIND_PRESSURE_PAUSED,
-  KIND_PRESSURE_RESUMED,
-} from "./t3team-threadResourceCleanup.logic";
+import { cleanupConfirmMessage, cleanupResultTitle } from "./t3team-threadResourceCleanup.logic";
 
 const plan = (overrides: Partial<ResourcePressureCleanupPlan>): ResourcePressureCleanupPlan => ({
   threadId: ThreadId.make("t1"),
@@ -17,17 +11,6 @@ const plan = (overrides: Partial<ResourcePressureCleanupPlan>): ResourcePressure
   skipped: [],
   agentSession: null,
   ...overrides,
-});
-
-describe("thread memory-pressure pause", () => {
-  it("folds the activity trail: paused until the latest resumed", () => {
-    const paused = { kind: KIND_PRESSURE_PAUSED, createdAt: "2026-09-25T10:00:00.000Z" };
-    const resumed = { kind: KIND_PRESSURE_RESUMED, createdAt: "2026-09-25T10:01:00.000Z" };
-    const other = { kind: "tool.completed", createdAt: "2026-09-25T10:00:30.000Z" };
-    expect(deriveResourcePressurePause([])).toBeNull();
-    expect(deriveResourcePressurePause([paused, other])).toEqual({ since: paused.createdAt });
-    expect(deriveResourcePressurePause([paused, resumed])).toBeNull();
-  });
 });
 
 describe("thread cleanup confirm", () => {

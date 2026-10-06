@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
-import type { OrchestrationCommand } from "@t3tools/contracts";
 
+import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
 import {
   buildWorkflowFailureText,
   deliverWorkflowCompletion,
@@ -148,30 +148,27 @@ describe("extractFailureHeadlineText", () => {
 });
 
 describe("deliverWorkflowCompletion — the proposal card", () => {
-  const dispatchCapture = () => {
-    const dispatched: OrchestrationCommand[] = [];
-    return {
-      dispatched,
-      dispatch: async (command: OrchestrationCommand) => {
-        dispatched.push(command);
-      },
-    };
-  };
-
   const deliver = async (output: unknown) => {
-    const { dispatched, dispatch } = dispatchCapture();
+    const fake = makeFakeWorkflowHost();
     await deliverWorkflowCompletion({
       launchThreadId: "launch-1",
       workflowRunId: "run-1",
       output,
       projectId: "project-1",
-      dispatch,
-      newId: () => "id-1",
-      nowIso: () => "2026-07-28T00:00:00.000Z",
+      host: fake.host,
     });
-    const upsert = dispatched.find((command) => command.type === "thread.message.upsert");
-    return upsert?.type === "thread.message.upsert" ? upsert.message : undefined;
+    return fake.messages()[0];
   };
+
+  it("posts ONE per-run assistant result, held until the launch thread's run ends", async () => {
+    const message = await deliver({ summary: "Done." });
+    expect(message).toMatchObject({
+      threadId: "launch-1",
+      messageId: "t3team-wf-result:run-1",
+      role: "assistant",
+      afterActiveRun: true,
+    });
+  });
 
   it("carries a navigable ref for a run that proposed a draft, and keeps the text as the fallback", async () => {
     const message = await deliver({
@@ -181,7 +178,7 @@ describe("deliverWorkflowCompletion — the proposal card", () => {
       summary: "Proposed a rewritten description for NXAI-6 — review it on the work item.",
     });
 
-    expect(message?.t3teamExt?.attachments).toEqual([
+    expect(message?.ext?.attachments).toEqual([
       {
         kind: "work-item-draft",
         projectId: "project-1",
@@ -198,7 +195,7 @@ describe("deliverWorkflowCompletion — the proposal card", () => {
 
   it("carries no ref for a run that proposed nothing", async () => {
     const message = await deliver({ decision: "approved", summary: "All checks passed." });
-    expect(message?.t3teamExt).toBeUndefined();
+    expect(message?.ext).toBeUndefined();
     expect(message?.text).toBe("All checks passed.");
   });
 });

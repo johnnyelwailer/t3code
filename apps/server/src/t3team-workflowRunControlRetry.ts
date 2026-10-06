@@ -28,6 +28,7 @@ import {
   retainedFailedTurnStep,
 } from "./t3team-toolBrokerWorkflowResumeFailed.ts";
 import { t3teamRandomUUID } from "./t3team-random.ts";
+import { toWorkflowHostPort } from "./t3team-workflowHost.ts";
 
 /** What a failed-run retry needs on top of the shared control deps. The card's route wires all
  * of it from the durable-engine services; an environment without it simply does not offer retry. */
@@ -66,7 +67,7 @@ export const retryFailedWorkflowRun = (
     // needs the live turn re-drive. Check BEFORE the admission flip so the row is untouched.
     if (retainedFailedTurnStep(run) !== null && deps.turnRedrive === undefined) {
       return yield* Effect.fail(
-        "Re-driving a failed agent step is not available in this runtime (no thread query / dispatch).",
+        "Re-driving a failed agent step is not available in this runtime (no workflow host).",
       );
     }
     // Admission lock (GHE #411 §1 style): only a still-`failed` row is claimed — a second click,
@@ -88,7 +89,7 @@ export const retryFailedWorkflowRun = (
         registry: deps.registry,
         journalStore: retry.journalStore,
         rearmScheduler: deps.rearmScheduler,
-        dispatch: (command) => Effect.runPromise(deps.dispatch(command)).then(() => undefined),
+        host: toWorkflowHostPort(deps.host),
         loadThreadProject: retry.loadThreadProject,
         ...(deps.turnRedrive === undefined ? {} : { turnRedrive: deps.turnRedrive }),
       },

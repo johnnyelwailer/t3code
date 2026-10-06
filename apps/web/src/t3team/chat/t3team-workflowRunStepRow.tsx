@@ -51,6 +51,12 @@ function runtimeDetailLabel(detail: string | undefined): string | null {
  *  list can group consecutive dynamic rows by this same text. */
 export function fallbackRuntimeLabel(step: T3TeamWorkflowStepEntry): string {
   switch (step.stepKind) {
+    case "workflow.author":
+      return step.phase === "failed"
+        ? "Could not be authored"
+        : step.phase === "completed"
+          ? "Orchestration authored"
+          : "Authoring orchestration";
     case "workflow.self-heal":
       // The server supplies only these host-authored labels. Do not expose the repair
       // prompt, provider/model identity, or internal runtime kind in the card.

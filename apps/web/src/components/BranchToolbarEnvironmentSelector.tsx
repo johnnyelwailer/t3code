@@ -1,14 +1,21 @@
+import { ThreadDetailsSelectControl } from "./chat/ThreadDetailsControl";
+import { ComposerContextLabel } from "./ComposerContextLabel";
+import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
 import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { CloudIcon, ScaleIcon, SettingsIcon } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 
 import type { EnvironmentOption } from "./BranchToolbar.logic";
 import { dedupeRunOnEnvironments } from "./BranchToolbar.logic";
+import { cn } from "../lib/utils";
+import {
+  THREAD_DETAILS_PANEL_ICON_CLASS,
+  THREAD_DETAILS_PANEL_LOCKED_ROW_CLASS,
+} from "./chat/threadDetailsPanelStyles";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
 import { useComposerMenuProps } from "./chat/composerEventScope";
 import { presentCloudSession } from "./cloud/t3team-cloudSessionProvisionPresentation";
 import { CloudSessionMachineHint } from "./cloud/t3team-CloudSessionMachineHint";
-import { cn } from "~/lib/utils";
 import {
   Select,
   SelectGroup,
@@ -16,10 +23,8 @@ import {
   SelectItem,
   SelectPopup,
   SelectSeparator,
-  SelectTrigger,
   SelectValue,
 } from "./ui/select";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
 /**
  * Sentinel value for the "go set up cloud sessions" item, shown instead of the
@@ -34,9 +39,8 @@ export interface BranchToolbarEnvironmentSelectorProps {
   envLocked: boolean;
   environmentId: EnvironmentId;
   availableEnvironments: readonly EnvironmentOption[];
-  // Absent when there is only one environment to show: the indicator still
-  // renders (as a static label) so remote projects are always identifiable.
   onEnvironmentChange?: (environmentId: EnvironmentId) => void;
+  displayMode?: "toolbar" | "panel";
   /**
    * Cloud sessions worth showing under "Cloud" while they are not ready: the
    * ones still provisioning (read-only, so the machine you just asked for is
@@ -86,6 +90,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   environmentId,
   availableEnvironments,
   onEnvironmentChange,
+  displayMode = "toolbar",
   pendingCloudSessions,
   onCreateCloudSession,
   cloudSessionDurationLabel,
@@ -159,30 +164,32 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
     onCloudMenuOpenChange?.(open);
   };
 
+  // The static label carries the xs control's height (h-7 sm:h-6) as well as
+  // its padding: the composer context strip has no min-height of its own, and
+  // the glass seam joining it to the composer assumes a fixed strip height, so
+  // a shorter label would drag the seam out of line whenever this label is the
+  // only thing in the strip.
   if (envLocked || (onEnvironmentChange === undefined && !hasCloudAffordance)) {
+    const lockedRow = (
+      <span
+        className={cn(
+          "inline-flex h-7 min-w-0 max-w-full items-center gap-1 border border-transparent px-1.75 font-normal text-muted-foreground/70 text-xs sm:h-6",
+          displayMode === "panel" && THREAD_DETAILS_PANEL_LOCKED_ROW_CLASS,
+        )}
+        data-composer-context-control
+      >
+        <EnvironmentMachineIcon
+          kind={activeEnvironment?.machine ?? "server"}
+          className={displayMode === "panel" ? THREAD_DETAILS_PANEL_ICON_CLASS : "size-3 shrink-0"}
+        />
+        <ComposerContextLabel displayMode={displayMode}>
+          {activeEnvironment?.label ?? "Run on"}
+        </ComposerContextLabel>
+      </span>
+    );
     return (
       <Tooltip>
-        <TooltipTrigger
-          render={<span />}
-          className="inline-flex h-7 min-w-0 max-w-full items-center gap-1 border border-transparent px-1.75 font-normal text-muted-foreground/70 text-xs sm:h-6"
-          data-composer-context-control
-        >
-          <EnvironmentMachineIcon
-            kind={activeEnvironment?.machine ?? "server"}
-            className="size-3 shrink-0"
-          />
-          <span
-            data-composer-label
-            className="min-w-0 max-w-[240px] group-data-[compact]/composer-context:max-w-0"
-          >
-            <span
-              data-composer-label-motion
-              className="block w-full min-w-0 max-w-[240px] truncate transition-opacity duration-180 ease-drawer group-data-[compact]/composer-context:opacity-0 motion-reduce:transition-none"
-            >
-              {activeEnvironment?.label ?? "Run on"}
-            </span>
-          </span>
-        </TooltipTrigger>
+        <TooltipTrigger render={lockedRow} />
         <TooltipPopup>{activeEnvironment?.label ?? "Run on"}</TooltipPopup>
       </Tooltip>
     );
@@ -200,9 +207,8 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
       <Tooltip>
         <TooltipTrigger
           render={
-            <SelectTrigger
-              variant="ghost"
-              size="xs"
+            <ThreadDetailsSelectControl
+              panel={displayMode === "panel"}
               className="min-w-0 max-w-full"
               aria-label="Run on"
               data-composer-shortcut="composer.host"
@@ -211,32 +217,39 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
           }
         >
           {autoEnvironmentLabel ? (
-            <ScaleIcon className="size-3 shrink-0" aria-hidden="true" />
+            <ScaleIcon
+              className={
+                displayMode === "panel" ? THREAD_DETAILS_PANEL_ICON_CLASS : "size-3 shrink-0"
+              }
+              aria-hidden="true"
+            />
           ) : (
             <EnvironmentMachineIcon
               kind={activeEnvironment?.machine ?? "server"}
-              className="size-3 shrink-0"
+              className={
+                displayMode === "panel" ? THREAD_DETAILS_PANEL_ICON_CLASS : "size-3 shrink-0"
+              }
             />
           )}
-          <span
-            data-composer-label
-            className="min-w-0 max-w-[240px] group-data-[compact]/composer-context:max-w-0"
-          >
-            <span
-              data-composer-label-motion
-              className="block w-full min-w-0 max-w-[240px] truncate transition-opacity duration-180 ease-drawer group-data-[compact]/composer-context:opacity-0 motion-reduce:transition-none"
-            >
-              {onEnvironmentChange !== undefined ? (
-                <SelectValue />
-              ) : (
-                (activeEnvironment?.label ?? "Run on")
-              )}
-            </span>
-          </span>
+          <ComposerContextLabel displayMode={displayMode}>
+            {onEnvironmentChange !== undefined ? (
+              <SelectValue />
+            ) : (
+              (activeEnvironment?.label ?? "Run on")
+            )}
+          </ComposerContextLabel>
         </TooltipTrigger>
         <TooltipPopup>{autoEnvironmentLabel ?? activeEnvironment?.label ?? "Run on"}</TooltipPopup>
       </Tooltip>
-      <SelectPopup alignItemWithTrigger={false} {...composerFloatingLayerProps}>
+      <SelectPopup
+        alignItemWithTrigger={false}
+        {...(displayMode === "toolbar" ? composerFloatingLayerProps : {})}
+        {...(displayMode === "panel"
+          ? {
+              className: "w-(--anchor-width)",
+            }
+          : {})}
+      >
         <SelectGroup>
           <SelectGroupLabel>Run on</SelectGroupLabel>
           {onAutoEnvironment && (

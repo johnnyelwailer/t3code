@@ -1,14 +1,13 @@
 /**
- * The bounded re-drive, unit-level: a FAILED agent turn (the session died with `error`) re-drives
- * the step live or rehydrated, and when the budget is spent the run fails with the PROVIDER's
- * reason — not a generic "no reply text" (GHE #403 §1).
+ * The bounded re-drive, unit-level: a step whose run ended without an answer re-drives live or
+ * rehydrated, the due re-drive re-posts the step's prompt as a fresh turn (or waits for a run
+ * that took the step over, or consumes an answer that landed meanwhile), and when the budget is
+ * spent the run fails with the PROVIDER's reason — not a generic "no reply text" (GHE #403 §1).
  */
 import { assert, it } from "@effect/vitest";
-import type { OrchestrationCommand, OrchestrationThread } from "@t3tools/contracts";
+import { MessageId, withT3TeamMessageExtContext } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
 
-import { OrchestrationCommandInvariantError } from "./orchestration/Errors.ts";
 import {
   makeWorkflowEngineRegistry,
   type WorkflowPendingAsk,
@@ -18,103 +17,98 @@ import {
   failedTurnMessage,
   makeInterruptedTurnRetry,
   MAX_INTERRUPTED_TURN_REDRIVES,
-  type InterruptedTurnRetryDeps,
 } from "./t3team-workflowEngineTurnRetry.ts";
+import type { WorkflowHostStartTurnInput } from "./t3team-workflowHostPort.ts";
+import {
+  failingReads,
+  message,
+  records,
+  STEP_PROMPT,
+  STEP_THREAD as THREAD,
+  v2Run,
+} from "./t3team-workflowTurnRecords.fixtures.ts";
 
-const THREAD = "child-thread";
 const RUN = "run-1";
 const STEP = `${RUN}:3`;
+const AUTHOR = {
+  kind: "workflow" as const,
+  workflowRunId: RUN,
+  stepId: STEP,
+  label: "Pick next task",
+};
 
-/** A thread whose last user message is the step's prompt, stamped with the run + step author. */
-function threadWithPrompt(): OrchestrationThread {
-  return {
-    id: THREAD,
-    session: { status: "error", activeTurnId: null },
-    messages: [
-      {
-        id: "prompt-1",
-        role: "user",
-        t3teamExt: {
-          author: { kind: "workflow", workflowRunId: RUN, stepId: STEP, label: "Pick next task" },
-        },
-      },
-    ],
-  } as unknown as OrchestrationThread;
-}
+/** The step's prompt on the thread, stamped with the run + step author. */
+const prompt = message({
+  id: MessageId.make(STEP_PROMPT),
+  runId: null,
+  role: "user",
+  text: "Pick the next task.",
+  createdBy: "system",
+  creationSource: "server",
+  context: withT3TeamMessageExtContext({ author: AUTHOR })!,
+});
 
 function harness(input: {
-  readonly thread?: OrchestrationThread | undefined;
-  readonly dispatchInProgress?: boolean;
+  readonly status?: Parameters<typeof v2Run>[0];
+  readonly answer?: string;
+  readonly promptOnThread?: boolean;
+  readonly unreadable?: boolean;
+  readonly queueHeld?: boolean;
 }) {
   const registry = makeWorkflowEngineRegistry();
   const failed: unknown[] = [];
+  const resumed: unknown[] = [];
   const armed: Array<{ correlationId: string; delayMs: number }> = [];
   const journaled: number[] = [];
-  const dispatched: OrchestrationCommand[] = [];
+  const started: WorkflowHostStartTurnInput[] = [];
+  const cancelled: string[] = [];
   const run: WorkflowRegisteredRun = {
-    resume: () => Promise.resolve(),
+    resume: async (_correlationId, reply) => void resumed.push(reply),
     cancel: () => {},
-    fail: (error) => {
-      failed.push(error);
-      return Promise.resolve();
-    },
+    fail: async (error) => void failed.push(error),
   };
   registry.registerRun(RUN, run);
-  const deps: InterruptedTurnRetryDeps = {
+  const threads = input.unreadable
+    ? failingReads("read")
+    : records({
+        run: {
+          ...v2Run(input.status ?? "failed"),
+          ...(input.queueHeld ? { queueHeld: true } : {}),
+        },
+        messages: [
+          ...(input.promptOnThread === false ? [] : [prompt]),
+          ...(input.answer === undefined
+            ? []
+            : [message({ role: "assistant", text: input.answer })]),
+        ],
+      });
+  const retry = makeInterruptedTurnRetry({
     registry,
-    readThread: () =>
-      Effect.succeed(input.thread === undefined ? Option.none() : Option.some(input.thread)),
-    recordTurnRetries: (_runId, turnRetries) => {
-      journaled.push(turnRetries);
-      return Effect.void;
-    },
-    armTurnRetry: (_threadId, correlationId, delayMs) => {
-      armed.push({ correlationId, delayMs });
-      return Effect.void;
-    },
-    dispatch: (command) => {
-      dispatched.push(command);
-      if (input.dispatchInProgress === true) {
-        return Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: "turn in progress",
-          }),
-        );
-      }
-      return Effect.succeed({ sequence: dispatched.length });
-    },
+    threads,
+    startTurn: (turn) => Effect.sync(() => void started.push(turn)),
+    cancelQueuedRun: (_threadId, runId) => Effect.sync(() => void cancelled.push(runId)),
+    recordTurnRetries: (_runId, turnRetries) => Effect.sync(() => void journaled.push(turnRetries)),
+    armTurnRetry: (_threadId, correlationId, delayMs) =>
+      Effect.sync(() => void armed.push({ correlationId, delayMs })),
     backoffOverrideMs: 1,
-  };
-  return {
-    registry,
-    run,
-    failed,
-    armed,
-    journaled,
-    dispatched,
-    retry: makeInterruptedTurnRetry(deps),
-  };
+  });
+  return { registry, run, failed, resumed, armed, journaled, started, cancelled, retry };
 }
 
 const liveAsk: WorkflowPendingAsk = { runId: RUN, correlationId: STEP, kind: "thread.turn" };
 
 it.effect("settleFailedTurn re-drives a LIVE ask whose turn failed, with a fresh budget", () =>
   Effect.gen(function* () {
-    const h = harness({ thread: threadWithPrompt() });
-    // A live ask (set by the broker this uptime) has no `turnRetries` — unlike the silent-turn
-    // path, a failed turn still re-drives it.
+    const h = harness({});
     yield* h.retry.settleFailedTurn(THREAD, liveAsk, h.run, "Request timed out");
-
     assert.deepStrictEqual(h.failed, []);
     assert.deepStrictEqual(h.armed, [{ correlationId: STEP, delayMs: 1 }]);
     assert.deepStrictEqual(h.journaled, [1]);
     const pending = h.registry.peekPending(THREAD);
-    assert.strictEqual(pending?.runId, RUN);
     assert.strictEqual(pending?.correlationId, STEP);
-    assert.strictEqual(pending?.kind, "thread.turn");
     assert.strictEqual(pending?.turnRetries, 1);
-    assert.strictEqual(pending?.redriveArmed, true);
+    // Checks before the re-drive posts its prompt must not judge the dead run again.
+    assert.strictEqual(pending?.redriveScheduled, true);
   }),
 );
 
@@ -122,75 +116,95 @@ it.effect(
   "settleFailedTurn fails the run with the provider's reason once the budget is spent",
   () =>
     Effect.gen(function* () {
-      const h = harness({ thread: threadWithPrompt() });
+      const h = harness({});
       yield* h.retry.settleFailedTurn(
         THREAD,
         { ...liveAsk, turnRetries: MAX_INTERRUPTED_TURN_REDRIVES },
         h.run,
         "Request timed out",
       );
-
       assert.deepStrictEqual(h.armed, []);
-      assert.strictEqual(h.failed.length, 1);
-      const message = (h.failed[0] as Error).message;
-      assert.include(message, failedTurnMessage("Request timed out"));
-      assert.include(message, STEP);
-      assert.include(message, `${MAX_INTERRUPTED_TURN_REDRIVES} re-drives exhausted`);
+      const reason = (h.failed[0] as Error).message;
+      assert.include(reason, failedTurnMessage("Request timed out"));
+      assert.include(reason, STEP);
+      assert.include(reason, `${MAX_INTERRUPTED_TURN_REDRIVES} re-drives exhausted`);
+      assert.isUndefined(h.registry.peekPending(THREAD));
     }),
 );
 
-it.effect("processTurnRetry re-issues the SAME prompt through thread.turn.resume", () =>
+it.effect("processTurnRetry re-posts the SAME prompt as a fresh queued turn", () =>
   Effect.gen(function* () {
-    const h = harness({ thread: threadWithPrompt() });
+    const h = harness({});
+    h.registry.setPending(THREAD, { ...liveAsk, turnRetries: 1, redriveScheduled: true });
+    yield* h.retry.processTurnRetry({ threadId: THREAD, correlationId: STEP });
+    assert.strictEqual(h.started.length, 1);
+    const turn = h.started[0]!;
+    assert.strictEqual(turn.threadId, THREAD);
+    assert.strictEqual(turn.text, "Pick the next task.");
+    assert.deepStrictEqual(turn.author, AUTHOR);
+    assert.notStrictEqual(turn.messageId, STEP_PROMPT);
+    // The ask now waits on the NEW prompt's run.
+    const pending = h.registry.peekPending(THREAD);
+    assert.strictEqual(pending?.promptMessageId, turn.messageId);
+    assert.isUndefined(pending?.redriveScheduled);
+    assert.deepStrictEqual(h.failed, []);
+  }),
+);
+
+it.effect("processTurnRetry waits when a run already owns the step again", () =>
+  Effect.gen(function* () {
+    const h = harness({ status: "running" });
+    h.registry.setPending(THREAD, { ...liveAsk, turnRetries: 1, promptMessageId: STEP_PROMPT });
+    yield* h.retry.processTurnRetry({ threadId: THREAD, correlationId: STEP });
+    assert.deepStrictEqual(h.started, []);
+    assert.deepStrictEqual(h.failed, []);
+    assert.strictEqual(h.registry.peekPending(THREAD)?.correlationId, STEP);
+  }),
+);
+
+it.effect("processTurnRetry consumes an answer that landed while it waited", () =>
+  Effect.gen(function* () {
+    const h = harness({ status: "completed", answer: "Task 7." });
+    h.registry.setPending(THREAD, { ...liveAsk, turnRetries: 1, promptMessageId: STEP_PROMPT });
+    yield* h.retry.processTurnRetry({ threadId: THREAD, correlationId: STEP });
+    assert.deepStrictEqual(h.started, []);
+    assert.deepStrictEqual(h.resumed, ["Task 7."]);
+    assert.isUndefined(h.registry.peekPending(THREAD));
+  }),
+);
+
+it.effect("processTurnRetry fails the run instead of parking it when the prompt is gone", () =>
+  Effect.gen(function* () {
+    const h = harness({ promptOnThread: false });
     h.registry.setPending(THREAD, { ...liveAsk, turnRetries: 1 });
     yield* h.retry.processTurnRetry({ threadId: THREAD, correlationId: STEP });
-
-    assert.strictEqual(h.dispatched.length, 1);
-    const command = h.dispatched[0]!;
-    assert.strictEqual(command.type, "thread.turn.resume");
-    assert.ok(command.type === "thread.turn.resume");
-    assert.strictEqual(String(command.threadId), THREAD);
-    assert.strictEqual(String(command.messageId), "prompt-1");
-    assert.deepStrictEqual(h.failed, []);
-  }),
-);
-
-it.effect("processTurnRetry disarms the ask when the thread is already busy", () =>
-  Effect.gen(function* () {
-    const thread = {
-      ...threadWithPrompt(),
-      session: { status: "running", activeTurnId: "turn-live" },
-    } as OrchestrationThread;
-    const h = harness({ thread });
-    h.registry.setPending(THREAD, { ...liveAsk, turnRetries: 1, redriveArmed: true });
-
-    yield* h.retry.processTurnRetry({ threadId: THREAD, correlationId: STEP });
-
-    assert.strictEqual(h.dispatched.length, 0);
-    assert.strictEqual(h.registry.peekPending(THREAD)?.redriveArmed, undefined);
-  }),
-);
-
-it.effect("processTurnRetry disarms the ask when dispatch finds a turn in progress", () =>
-  Effect.gen(function* () {
-    const h = harness({ thread: threadWithPrompt(), dispatchInProgress: true });
-    h.registry.setPending(THREAD, { ...liveAsk, turnRetries: 1, redriveArmed: true });
-
-    yield* h.retry.processTurnRetry({ threadId: THREAD, correlationId: STEP });
-
-    assert.strictEqual(h.dispatched.length, 1);
-    assert.strictEqual(h.registry.peekPending(THREAD)?.redriveArmed, undefined);
-    assert.deepStrictEqual(h.failed, []);
-  }),
-);
-
-it.effect("settleFailedTurn fails the run instead of parking it when the prompt is gone", () =>
-  Effect.gen(function* () {
-    const h = harness({ thread: undefined });
-    yield* h.retry.settleFailedTurn(THREAD, liveAsk, h.run, "gateway down");
-
-    assert.deepStrictEqual(h.armed, []);
-    assert.strictEqual(h.failed.length, 1);
+    assert.deepStrictEqual(h.started, []);
     assert.match((h.failed[0] as Error).message, /can no longer be re-driven/);
+  }),
+);
+
+it.effect("processTurnRetry re-arms without spending budget when the thread cannot be read", () =>
+  Effect.gen(function* () {
+    const h = harness({ unreadable: true });
+    h.registry.setPending(THREAD, { ...liveAsk, turnRetries: 1, redriveScheduled: true });
+    yield* h.retry.processTurnRetry({ threadId: THREAD, correlationId: STEP });
+    assert.deepStrictEqual(h.started, []);
+    assert.deepStrictEqual(h.failed, []);
+    assert.deepStrictEqual(h.armed, [{ correlationId: STEP, delayMs: 1 }]);
+    assert.deepStrictEqual(h.journaled, []);
+    const pending = h.registry.peekPending(THREAD);
+    assert.strictEqual(pending?.turnRetries, 1);
+    assert.strictEqual(pending?.redriveScheduled, true);
+  }),
+);
+
+it.effect("processTurnRetry takes a held step run out of the queue before re-posting it", () =>
+  Effect.gen(function* () {
+    const h = harness({ status: "queued", queueHeld: true });
+    h.registry.setPending(THREAD, { ...liveAsk, turnRetries: 1, promptMessageId: STEP_PROMPT });
+    yield* h.retry.processTurnRetry({ threadId: THREAD, correlationId: STEP });
+    assert.deepStrictEqual(h.cancelled, [v2Run("queued").id]);
+    assert.strictEqual(h.started.length, 1);
+    assert.strictEqual(h.started[0]!.text, "Pick the next task.");
   }),
 );

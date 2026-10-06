@@ -22,7 +22,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
-import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import { ProjectService } from "./ProjectService.ts";
 import {
   HIDDEN_T3TEAM_DIR,
   MANIFEST_FILE_NAME,
@@ -82,7 +82,7 @@ const byIntent = <A extends { readonly machineFilePath: string | null }>(a: A, b
 const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const projections = yield* ProjectionSnapshotQuery;
+  const projects = yield* ProjectService;
 
   const checkouts = Effect.fn("projectMachine.checkouts")(function* (workspaceRoot: string) {
     const own = (yield* fileSystem
@@ -106,7 +106,7 @@ const make = Effect.gen(function* () {
 
   const resolveDefault: ProjectMachineDiscovery["Service"]["resolveDefault"] = (projectId) =>
     Effect.gen(function* () {
-      const project = yield* projections.getProjectShellById(projectId).pipe(
+      const project = yield* projects.getById(projectId).pipe(
         Effect.mapError(
           () =>
             new ProjectMachineDiscoveryError({

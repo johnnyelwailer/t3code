@@ -3,18 +3,20 @@
 // @effect-diagnostics cryptoRandomUUID:off -- test command ids only need uniqueness.
 /**
  * Host-level self-heal acceptance. This drives the real workflow engine, repair-child registry,
- * source replacement seam, and replay journal without starting a provider process.
+ * source replacement seam, and replay journal without starting a provider process; the workflow
+ * host is a recording fake, so assertions read what the run asked the host to do.
  */
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
-import { type OrchestrationCommand, ProjectId, ProviderInstanceId } from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import { launchWorkflowRecipe } from "./t3team-workflowEngineLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
 
 const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3team-self-heal-"));
 afterAll(() => NodeFS.rmSync(root, { recursive: true, force: true }));
@@ -49,7 +51,7 @@ describe("workflow self-heal — real host integration", () => {
     NodeFS.mkdirSync(NodePath.dirname(workflowPath), { recursive: true });
     NodeFS.writeFileSync(workflowPath, brokenSource);
     const registry = makeWorkflowEngineRegistry();
-    const commands: OrchestrationCommand[] = [];
+    const host = makeFakeWorkflowHost();
     const result = await launchWorkflowRecipe({
       runId,
       workflowPath,
@@ -61,9 +63,7 @@ describe("workflow self-heal — real host integration", () => {
       runtimeMode: "full-access",
       interactionMode: "default",
       registry,
-      dispatch: async (command) => {
-        commands.push(command);
-      },
+      host: host.host,
       newId: () => crypto.randomUUID(),
       nowIso: () => "2026-07-19T00:00:00.000Z",
       repairIntent: { goal: "finish", expectedOutcome: "valid result", guardrails: [] },
@@ -78,7 +78,7 @@ describe("workflow self-heal — real host integration", () => {
     });
 
     expect(result).toEqual({ runId, status: "completed" });
-    expect(commands.some((command) => command.type === "thread.create")).toBe(false);
+    expect(host.ops()).not.toContain("createThread");
     expect(NodeFS.readFileSync(workflowPath, "utf8")).toBe(fixedSource);
   });
 
@@ -99,7 +99,7 @@ describe("workflow self-heal — real host integration", () => {
       runtimeMode: "full-access",
       interactionMode: "default",
       registry,
-      dispatch: async () => {},
+      host: makeFakeWorkflowHost().host,
       newId: () => crypto.randomUUID(),
       nowIso: () => "2026-07-19T00:00:00.000Z",
       repairIntent: { goal: "finish", expectedOutcome: "valid result", guardrails: [] },
@@ -124,7 +124,7 @@ describe("workflow self-heal — real host integration", () => {
     NodeFS.mkdirSync(NodePath.dirname(workflowPath), { recursive: true });
     NodeFS.writeFileSync(workflowPath, brokenSource);
     const registry = makeWorkflowEngineRegistry();
-    const commands: OrchestrationCommand[] = [];
+    const host = makeFakeWorkflowHost();
     let ids = 0;
     const launch = launchWorkflowRecipe({
       runId,
@@ -137,15 +137,13 @@ describe("workflow self-heal — real host integration", () => {
       runtimeMode: "full-access",
       interactionMode: "default",
       registry,
-      dispatch: async (command) => {
-        commands.push(command);
-      },
+      host: host.host,
       newId: () => `id-${++ids}`,
       nowIso: () => "2026-07-19T00:00:00.000Z",
       repairIntent: { goal: "finish", expectedOutcome: "valid result", guardrails: ["same run"] },
       repairModelSelection: createModelSelection(
-        ProviderInstanceId.make("nexplore"),
-        "nexplore/coding",
+        ProviderInstanceId.make("repair-provider"),
+        "repair/coding",
       ),
       repairMaxAttempts: 3,
       readWorkflowSource: async () => NodeFS.readFileSync(workflowPath, "utf8"),
@@ -166,13 +164,9 @@ describe("workflow self-heal — real host integration", () => {
     // Pending delivery is only exposed after the hidden child create command has
     // completed, so its ephemeral retention is already durable before any shell
     // subscriber can observe the turn.
-    expect(commands).toEqual(
+    expect(host.creates()).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          type: "thread.create",
-          threadId: `${runId}:repair:1`,
-          retention: "ephemeral",
-        }),
+        expect.objectContaining({ threadId: `${runId}:repair:1`, retention: "ephemeral" }),
       ]),
     );
     await repair!.resolveLive!(
@@ -188,35 +182,26 @@ describe("workflow self-heal — real host integration", () => {
     expect(NodeFS.readFileSync(`${workflowPath}.original`, "utf8")).toBe(brokenSource);
     // The one-way message completed before the runtime error and is replayed from the journal.
     expect(
-      commands.filter(
-        (command) =>
-          command.type === "thread.message.upsert" &&
-          command.message.text === "The first completed step",
-      ),
+      host.messages().filter((message) => message.text === "The first completed step"),
     ).toHaveLength(1);
-    const creates = commands.filter((command) => command.type === "thread.create");
+    const creates = host.creates();
     expect(creates).toHaveLength(1);
     expect(creates[0]).toMatchObject({
       threadId: `${runId}:repair:1`,
-      modelSelection: { instanceId: "nexplore", model: "nexplore/coding" },
+      modelSelection: { instanceId: "repair-provider", model: "repair/coding" },
       retention: "ephemeral",
     });
-    expect(
-      commands.some(
-        (command) =>
-          command.type === "thread.activity.append" &&
-          command.activity.kind === "t3team.handoff.created",
-      ),
-    ).toBe(false);
+    expect(host.activities().some((activity) => activity.kind === "t3team.handoff.created")).toBe(
+      false,
+    );
 
-    const repairStatuses = commands.flatMap((command) =>
-      command.type === "thread.activity.append" &&
-      command.activity.kind === "t3team.recipe.workflow.step"
+    const repairStatuses = host.activities().flatMap((activity) =>
+      activity.kind === "t3team.recipe.workflow.step"
         ? [
             {
-              detail: String((command.activity.payload as { detail?: string }).detail ?? ""),
-              summary: command.activity.summary,
-              stepKind: String((command.activity.payload as { stepKind?: string }).stepKind ?? ""),
+              detail: String((activity.payload as { detail?: string }).detail ?? ""),
+              summary: activity.summary,
+              stepKind: String((activity.payload as { stepKind?: string }).stepKind ?? ""),
             },
           ]
         : [],
@@ -247,7 +232,7 @@ describe("workflow self-heal — real host integration", () => {
       'export const meta = { name: "self-heal", capabilities: ["user"] };\nthis is not valid workflow TypeScript',
     );
     const registry = makeWorkflowEngineRegistry();
-    const commands: OrchestrationCommand[] = [];
+    const host = makeFakeWorkflowHost();
     const launch = launchWorkflowRecipe({
       runId,
       workflowPath,
@@ -259,9 +244,7 @@ describe("workflow self-heal — real host integration", () => {
       runtimeMode: "full-access",
       interactionMode: "default",
       registry,
-      dispatch: async (command) => {
-        commands.push(command);
-      },
+      host: host.host,
       newId: () => crypto.randomUUID(),
       nowIso: () => "2026-07-19T00:00:00.000Z",
       repairIntent: { goal: "parse", expectedOutcome: "valid", guardrails: [] },
@@ -279,7 +262,7 @@ describe("workflow self-heal — real host integration", () => {
     );
 
     expect(await launch).toEqual({ runId, status: "completed" });
-    expect(commands.filter((command) => command.type === "thread.create")).toHaveLength(2);
+    expect(host.creates()).toHaveLength(2);
   });
 
   it("uses all three configured cannot-fix attempts before terminal failure", async () => {
@@ -288,7 +271,7 @@ describe("workflow self-heal — real host integration", () => {
     NodeFS.mkdirSync(NodePath.dirname(workflowPath), { recursive: true });
     NodeFS.writeFileSync(workflowPath, "not valid TypeScript");
     const registry = makeWorkflowEngineRegistry();
-    const commands: OrchestrationCommand[] = [];
+    const host = makeFakeWorkflowHost();
     const launch = launchWorkflowRecipe({
       runId,
       workflowPath,
@@ -300,9 +283,7 @@ describe("workflow self-heal — real host integration", () => {
       runtimeMode: "full-access",
       interactionMode: "default",
       registry,
-      dispatch: async (command) => {
-        commands.push(command);
-      },
+      host: host.host,
       newId: () => crypto.randomUUID(),
       nowIso: () => "2026-07-19T00:00:00.000Z",
       repairIntent: { goal: "parse", expectedOutcome: "valid", guardrails: [] },
@@ -317,7 +298,7 @@ describe("workflow self-heal — real host integration", () => {
       await pending!.resolveLive!(JSON.stringify({ outcome: "cannot-fix", reason: "unsupported" }));
     }
     expect(await launch).toEqual({ runId, status: "failed" });
-    expect(commands.filter((command) => command.type === "thread.create")).toHaveLength(3);
+    expect(host.creates()).toHaveLength(3);
     expect(registry.getRun(runId)).toBeUndefined();
   });
 });

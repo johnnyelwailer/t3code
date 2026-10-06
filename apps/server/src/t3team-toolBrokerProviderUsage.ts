@@ -122,7 +122,9 @@ export const makeReadProviderUsage =
       const sources = input.usageLimitSources ? yield* input.usageLimitSources.current : [];
       const instanceId = argsExit.value.provider_instance_id;
       if (instanceId !== undefined && !providers.some((p) => p.instanceId === instanceId)) {
-        return errorResult(`Unknown provider instance '${instanceId}'. Call t3team_models first.`);
+        return errorResult(
+          `Unknown provider instance '${instanceId}'. Check orchestrator_capabilities for the configured instances.`,
+        );
       }
       return okResult({
         providerUsage: buildProviderUsageResult({

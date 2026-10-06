@@ -10,6 +10,8 @@
 
 import * as Migrator from "effect/unstable/sql/Migrator";
 import * as Effect from "effect/Effect";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
+import { reconcileV2PreviewMigration } from "./reconcileV2PreviewMigration.ts";
 
 // Import all migrations statically
 import Migration0001 from "./Migrations/001_OrchestrationEvents.ts";
@@ -121,9 +123,30 @@ import Migration0080 from "./Migrations/053_PullRequestFilesViewed.ts";
 import Migration0081 from "./Migrations/054_ProjectionThreadsAutoSettleDisabledAt.ts";
 import Migration0082 from "./Migrations/t3team-062_ProjectionThreadShellT3TeamFacts.ts";
 import Migration0083 from "./Migrations/t3team-063_OrchestrationEventsTypeSequenceIndex.ts";
-// Project main repository (merged after the fork took 80-83 and t3team-062/063 above).
-import Migration0084 from "./Migrations/t3team-064_ProjectionProjectsMainRepository.ts";
-import Migration0085 from "./Migrations/t3team-065_FeatureFlags.ts";
+// New from the 2026-10-03 upstream sync (upstream 055/056: orchestration V2). Appended above the
+// fork's maximum id (83), as for every earlier sync: fork databases already recorded 55/56 as
+// AuthSessionClientConnection/ProjectionThreadLinkedPullRequest, so registering V2 at 55 would be
+// skipped on every existing fork install and boot would fail on the first orchestration_v2_* query.
+import Migration0084 from "./Migrations/055_OrchestrationV2.ts";
+import Migration0085 from "./Migrations/056_RemoveRedundantProjectionIndexes.ts";
+// Fork side stores for V2 (thread facts, thread artifacts); fork file numbers run 22 below ids.
+import Migration0086 from "./Migrations/t3team-064_ThreadFacts.ts";
+import Migration0087 from "./Migrations/t3team-065_ThreadArtifacts.ts";
+import Migration0090 from "./Migrations/t3team-068_ChildThreadMetadata.ts";
+import Migration0091 from "./Migrations/t3team-069_LineageCutover.ts";
+import Migration0092 from "./Migrations/t3team-070_ThreadMailbox.ts";
+import Migration0097 from "./Migrations/t3team-075_DropProviderUsageHolds.ts";
+import Migration0098 from "./Migrations/t3team-076_ThreadSilenceWatches.ts";
+import Migration0099 from "./Migrations/t3team-077_RepairForkPortTables.ts";
+// Project main repository + feature flags: main's sprint migrations. Main originally registered
+// these at 84/85, which this fork's V2 sync already uses, so they move above the current maximum
+// id (now 101) to keep the ledger monotonic on every existing fork install.
+import Migration0100 from "./Migrations/t3team-064_ProjectionProjectsMainRepository.ts";
+import Migration0101 from "./Migrations/t3team-065_FeatureFlags.ts";
+// Skills-as-subagents Phase 1 (WI-1): delegate_task `extensions.skills` persists the
+// REQUESTED skill names on the child's metadata row. The host never resolves them — the
+// child's driver loads them from its pack registry at session start (no second catalog).
+import Migration0102 from "./Migrations/t3team-078_SkillDelegationMetadata.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -135,7 +158,7 @@ import Migration0085 from "./Migrations/t3team-065_FeatureFlags.ts";
  * Uses Migrator.fromRecord which parses the key format and
  * returns migrations sorted by ID.
  */
-const migrationEntries = [
+export const migrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
   [2, "OrchestrationCommandReceipts", Migration0002],
   [3, "CheckpointDiffBlobs", Migration0003],
@@ -219,8 +242,25 @@ const migrationEntries = [
   [81, "ProjectionThreadsAutoSettleDisabledAt", Migration0081],
   [82, "ProjectionThreadShellT3TeamFacts", Migration0082],
   [83, "OrchestrationEventsTypeSequenceIndex", Migration0083],
-  [84, "ProjectionProjectsMainRepository", Migration0084],
-  [85, "FeatureFlags", Migration0085],
+  // Upstream 055/056 (orchestration V2) live at 84/85 in this fork's ledger; see the import comment.
+  // Preserve this migration's schema. Future V2 schema changes need new migrations. A new
+  // migration must take an id ABOVE the highest id registered here (currently 101) — never one of
+  // the gaps (88-89, 93-96): upgraded databases have recorded the maximum, and the Migrator skips
+  // every id at or below it. Upstream's reconcileV2PreviewMigration stays a no-op on fork ledgers
+  // (fork ids 53/54 are never named OrchestrationV2).
+  [84, "OrchestrationV2", Migration0084],
+  [85, "RemoveRedundantProjectionIndexes", Migration0085],
+  [86, "ThreadFacts", Migration0086],
+  [87, "ThreadArtifacts", Migration0087],
+  [90, "ChildThreadMetadata", Migration0090],
+  [91, "LineageCutover", Migration0091],
+  [92, "ThreadMailbox", Migration0092],
+  [97, "DropProviderUsageHolds", Migration0097],
+  [98, "ThreadSilenceWatches", Migration0098],
+  [99, "RepairForkPortTables", Migration0099],
+  [100, "ProjectionProjectsMainRepository", Migration0100],
+  [101, "FeatureFlags", Migration0101],
+  [102, "SkillDelegationMetadata", Migration0102],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
@@ -257,10 +297,42 @@ export interface RunMigrationsOptions {
 export const runMigrations = Effect.fn("runMigrations")(function* ({
   toMigrationInclusive,
 }: RunMigrationsOptions = {}) {
-  const executedMigrations = yield* run({ loader: makeMigrationLoader(toMigrationInclusive) });
+  const previewMigrations =
+    toMigrationInclusive === undefined || toMigrationInclusive >= 55
+      ? yield* reconcileV2PreviewMigration()
+      : [];
+  const executedMigrations = [
+    ...previewMigrations,
+    ...(yield* run({ loader: makeMigrationLoader(toMigrationInclusive) })),
+  ];
   const migrations = executedMigrations.map(([id, name]) => `${id}_${name}`);
   yield* migrations.length === 0
     ? Effect.logDebug("Database schema is current")
     : Effect.log("Migrations ran successfully").pipe(Effect.annotateLogs({ migrations }));
+
+  // The migrator keys on migration_id: a database that recorded a different
+  // migration under a shared id (local or fork builds) keeps that id and
+  // silently skips this build's migration at it. Surface the divergence so the
+  // skipped schema change is diagnosable.
+  const sql = yield* SqlClient.SqlClient;
+  const recorded = yield* sql<{
+    readonly migration_id: number;
+    readonly name: string;
+  }>`SELECT migration_id, name FROM effect_sql_migrations`;
+  const manifestNames = new Map<number, string>(migrationEntries.map(([id, name]) => [id, name]));
+  const divergent = recorded.flatMap((row) => {
+    const expected = manifestNames.get(row.migration_id);
+    if (expected === undefined) {
+      return [`${row.migration_id}:${row.name} (unknown to this build)`];
+    }
+    return expected === row.name
+      ? []
+      : [`${row.migration_id}:${row.name} (this build: ${expected})`];
+  });
+  if (divergent.length > 0) {
+    yield* Effect.logWarning(
+      "Database migration history diverges from this build; recorded migration ids are skipped, not reconciled by name.",
+    ).pipe(Effect.annotateLogs({ divergent }));
+  }
   return executedMigrations;
 });

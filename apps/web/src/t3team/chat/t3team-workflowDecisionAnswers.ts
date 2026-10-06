@@ -106,7 +106,11 @@ export function findT3TeamWorkflowDecisionAnswers(
     // can legitimately land in between for an ask with no correlated reply).
     for (let nextIndex = index + 1; nextIndex < messages.length; nextIndex += 1) {
       const candidate = messages[nextIndex]!;
-      if (candidate.role !== "user") {
+      // Only the person answers: a workflow prompt or a wake is user-role but not a reply.
+      if (
+        candidate.role !== "user" ||
+        (candidate.createdBy !== undefined && candidate.createdBy !== "user")
+      ) {
         continue;
       }
       if (candidate.text.length === 0) {

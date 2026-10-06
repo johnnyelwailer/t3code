@@ -11,32 +11,24 @@ import {
   normalizeThreadSearchScope,
   searchThreadEntries,
   type ThreadMessageSearchableActivity,
+  type ThreadMessageSearchableMessage,
 } from "./t3team-threadMessageSearch.ts";
 
 /**
- * `t3team.thread.search_source` — search the FULL transcript of the thread the
- * current thread was forked from. The fork provenance note (a system message
- * carrying `t3teamExt.forkSource`) identifies the source thread; this tool
- * makes the omitted middle of a truncated fork reachable again.
+ * `t3team.thread.search_source` — search the FULL transcript (messages and tool
+ * activity) of the thread the current thread was forked from. The source is the
+ * fork's V2 lineage parent; a fork starts from a compacted handoff of it, so
+ * this keeps the source's details reachable.
  */
 
 const SEARCH_SOURCE_TOOL_ID = "t3team.thread.search_source";
 
-type SearchSourceThreadMessage = {
-  readonly id: string;
-  readonly role: string;
-  readonly text?: string | null | undefined;
-  readonly createdAt?: string | undefined;
-  readonly t3teamExt?:
-    | { readonly forkSource?: { readonly threadId: string } | undefined }
-    | null
-    | undefined;
-};
-
 export type SearchSourceThreadDetail = {
   readonly title?: string | undefined;
-  readonly messages: ReadonlyArray<SearchSourceThreadMessage>;
+  readonly messages: ReadonlyArray<ThreadMessageSearchableMessage>;
   readonly activities?: ReadonlyArray<ThreadMessageSearchableActivity> | undefined;
+  /** The thread this one was forked from; null when it is not a fork. */
+  readonly forkSourceThreadId: string | null;
 };
 
 type SearchSourceArgs = {
@@ -85,20 +77,13 @@ export function callT3TeamSearchSourceTool(input: {
       return errorResult("Could not read the current thread to find its fork source.");
     }
 
-    // A fork of a fork carries the parent's older provenance note in its head
-    // plus its own newer one; the most recent note identifies the direct
-    // source whose omitted middle this tool exists to reach.
-    const notes = currentThread.messages.filter(
-      (message) => message.t3teamExt?.forkSource?.threadId,
-    );
-    const note = notes[notes.length - 1];
-    if (!note?.t3teamExt?.forkSource?.threadId) {
+    if (currentThread.forkSourceThreadId === null) {
       return errorResult(
         "This thread has no fork source. " +
           `${SEARCH_SOURCE_TOOL_ID} only works in a thread that was forked from another thread.`,
       );
     }
-    const sourceThreadId = ThreadId.make(note.t3teamExt.forkSource.threadId);
+    const sourceThreadId = ThreadId.make(currentThread.forkSourceThreadId);
 
     const sourceRead = yield* loadThreadDetail(sourceThreadId).pipe(Effect.result);
     if (sourceRead._tag === "Failure") {
@@ -118,7 +103,7 @@ export function callT3TeamSearchSourceTool(input: {
 
     return okResult({
       ok: true,
-      sourceThreadId: note.t3teamExt.forkSource.threadId,
+      sourceThreadId,
       ...(sourceThread.title ? { sourceThreadTitle: sourceThread.title } : {}),
       scope,
       order,

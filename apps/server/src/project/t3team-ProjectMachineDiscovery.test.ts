@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { type OrchestrationProjectShell, ProjectId } from "@t3tools/contracts";
+import { type Project, ProjectId } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -8,7 +8,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import type { PlatformError } from "effect/PlatformError";
 
-import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import { ProjectService } from "./ProjectService.ts";
 import {
   HIDDEN_T3TEAM_DIR,
   MANIFEST_FILE_NAME,
@@ -39,18 +39,18 @@ const discoverIn = (
     const fileSystem = yield* FileSystem.FileSystem;
     const root = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3team-machine-project-" });
     yield* seed(root);
-    const projections = Layer.mock(ProjectionSnapshotQuery)({
-      getProjectShellById: (id) =>
+    const projects = Layer.mock(ProjectService)({
+      getById: (id) =>
         Effect.succeed(
           id === projectId
-            ? Option.some({ workspaceRoot: root } as unknown as OrchestrationProjectShell)
+            ? Option.some({ workspaceRoot: root } as unknown as Project)
             : Option.none(),
         ),
     });
     return yield* Effect.gen(function* () {
       const discovery = yield* ProjectMachineDiscovery.ProjectMachineDiscovery;
       return yield* discovery.discover(projectId);
-    }).pipe(Effect.provide(ProjectMachineDiscovery.layer.pipe(Layer.provide(projections))));
+    }).pipe(Effect.provide(ProjectMachineDiscovery.layer.pipe(Layer.provide(projects))));
   });
 
 it.layer(NodeServices.layer)("ProjectMachineDiscovery", (it) => {
@@ -116,14 +116,14 @@ it.layer(NodeServices.layer)("ProjectMachineDiscovery", (it) => {
 
     it.effect("fails with unknown_project for a project this environment does not hold", () =>
       Effect.gen(function* () {
-        const projections = Layer.mock(ProjectionSnapshotQuery)({
-          getProjectShellById: () => Effect.succeed(Option.none()),
+        const projects = Layer.mock(ProjectService)({
+          getById: () => Effect.succeed(Option.none()),
         });
         const error = yield* Effect.gen(function* () {
           const discovery = yield* ProjectMachineDiscovery.ProjectMachineDiscovery;
           return yield* discovery.discover(projectId);
         }).pipe(
-          Effect.provide(ProjectMachineDiscovery.layer.pipe(Layer.provide(projections))),
+          Effect.provide(ProjectMachineDiscovery.layer.pipe(Layer.provide(projects))),
           Effect.flip,
         );
         expect(error.reason).toBe("unknown_project");

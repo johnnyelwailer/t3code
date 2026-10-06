@@ -118,8 +118,21 @@ export function workflow<I, O>(
 // --- Progress and control ----------------------------------------------------
 export const phase = call<[string], void>("phase");
 export const log = call<[string], void>("log");
-/** Durable timer: suspends the run if the deadline has not passed, and survives a restart. */
+/**
+ * Durable relative timer (`durationMs`): parks the run as `sleeping` without holding an agent
+ * turn. Survives a server restart — the deadline is persisted, and an overdue deadline found at
+ * restart resumes the run immediately instead of waiting another interval. Never poll, `setTimeout`,
+ * shell-sleep or rely on external cron: this IS the schedule. Requires `capabilities: ["schedule"]`.
+ */
 export const wait = call<[number], Promise<void>>("wait");
+/**
+ * Durable absolute timer (`epochMs`): the same park as {@link wait}, for a wall-clock instant —
+ * compute it with replay-safe arithmetic from {@link now} (`waitUntil(now() + 3 * HOUR)`), or from a
+ * calendar rule evaluated against `now()`. Recurring work is a loop around it: each iteration
+ * journals its `now()` and deadline, so a resume replays the same schedule. Requires the `schedule`
+ * capability. To keep the LAUNCH thread working on each wake, drive `getThread().askAgent(...)`
+ * (see `Thread.askAgent`); `agent()`/`spawnThread()` do the work elsewhere and leave it idle.
+ */
 export const waitUntil = call<[number], Promise<void>>("waitUntil");
 
 /**

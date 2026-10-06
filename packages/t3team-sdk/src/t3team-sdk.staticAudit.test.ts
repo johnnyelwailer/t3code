@@ -12,8 +12,8 @@ import { describe, expect, it } from "vite-plus/test";
 import { auditWorkflowSourceStatic } from "./t3team-sdk.staticAudit.ts";
 // Imported for its registration side effect: the default tool->group resolver reads the
 // `defineTool` registry, which a module only joins when it is loaded (the server broker does
-// the same). Without this, `tools.t3team.thread.rename` is an unknown id and stays silent.
-import "./tools/t3team-sdk.t3team.ts";
+// the same). Without this, `tools.t3team.orchestration.run` is an unknown id and stays silent.
+import "./tools/t3team-sdk.workflow.ts";
 
 const FIXTURES = NodePath.join(import.meta.dirname, "__fixtures__");
 
@@ -122,14 +122,14 @@ describe("static capability check", () => {
       absolutePath: NodePath.join(FIXTURES, "inline.workflow.ts"),
       sourceText: [
         "export const meta = { name: 'inline', capabilities: [] };",
-        "const out = await tools.t3team.thread.rename({ title: 'x' });",
+        "const out = await tools.t3team.orchestration.run({ source: 'x' });",
         "return { out };",
       ].join("\n"),
     };
     const findings = auditWorkflowSourceStatic(source, { declared: new Set() });
     expect(findings).toHaveLength(1);
     expect(findings[0]?.message).toContain("'t3team.thread.write'");
-    expect(findings[0]?.construct).toBe("tools.t3team.thread.rename");
+    expect(findings[0]?.construct).toBe("tools.t3team.orchestration.run");
   });
 
   it("skips capability rules when the capability set is unknowable", () => {
@@ -164,9 +164,16 @@ describe("capability check resolves imported bindings", () => {
       `}`,
     ]);
 
-    expect(findings).toHaveLength(1);
-    expect(findings[0]?.rule).toBe("missing-capability");
-    expect(findings[0]?.message).toContain("'schedule'");
+    // The capability facet still sees through the alias (gates `at` as waitUntil); the bindings
+    // facet additionally rejects the alias itself — the loader erases imports, so `at` would be
+    // undefined at runtime regardless of the capability.
+    const capability = findings.filter((item) => item.facet === "capability");
+    expect(capability).toHaveLength(1);
+    expect(capability[0]?.rule).toBe("missing-capability");
+    expect(capability[0]?.message).toContain("'schedule'");
+    expect(findings.filter((item) => item.facet === "bindings").map((item) => item.rule)).toEqual([
+      "aliased-import",
+    ]);
   });
 
   it("gates an author-named scripts tree", () => {

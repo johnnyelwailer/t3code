@@ -364,19 +364,14 @@ describe("claim agent labels", () => {
     expect(digestAgentLabel({ providerName: "codex", model: "gpt-5.1-codex" })).toBe(
       "Codex · gpt-5.1-codex",
     );
-    expect(digestAgentLabel({ providerName: "claude", model: "claude-sonnet-4-5" })).toBe(
+    expect(digestAgentLabel({ providerName: "claudeAgent", model: "claude-sonnet-4-5" })).toBe(
       "Claude · claude-sonnet-4-5",
     );
   });
 
-  it("falls back to the message-id inference, and to 'agent' last", () => {
-    expect(digestAgentLabel({ providerName: null, model: "m", inferredProvider: "codex" })).toBe(
-      "Codex · m",
-    );
+  it("falls back to 'agent' without a provider, and drops placeholder models", () => {
     expect(digestAgentLabel({ providerName: null, model: "m" })).toBe("agent · m");
-    expect(digestAgentLabel({ providerName: null, model: "", inferredProvider: "claude" })).toBe(
-      "Claude",
-    );
+    expect(digestAgentLabel({ providerName: "codex", model: "<synthetic>" })).toBe("Codex");
   });
 });
 

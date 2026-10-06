@@ -24,12 +24,7 @@ import type { T3TeamWorkflowControlToolHandlers } from "./t3team-toolBrokerWorkf
 import type { T3TeamContextRefreshServiceShape } from "./t3team-contextRefreshService.ts";
 import type { T3TeamDraftMutationPublisher } from "./t3team-draftMutationPublish.ts";
 
-export type CreateBindingInput<
-  TRenameError = never,
-  TStartChildError = never,
-  TReadError = never,
-  TBacklogAssigneeFilterError = never,
-> = {
+export type CreateBindingInput<TReadError = never, TBacklogAssigneeFilterError = never> = {
   readonly availableToolIds: ReadonlyArray<string>;
   readonly allowedToolGroups?: ReadonlyArray<string> | undefined;
   readonly scopeLabel: string;
@@ -37,9 +32,6 @@ export type CreateBindingInput<
   readonly threadId?: ThreadId;
   readonly toolContext?: T3TeamTurnToolContext;
   readonly readView: () => Effect.Effect<unknown, TReadError>;
-  readonly renameThread?: (title: string) => Effect.Effect<unknown, TRenameError>;
-  readonly renameThreadResult?: (title: string) => unknown;
-  readonly startChild?: (arguments_: unknown) => Effect.Effect<unknown, TStartChildError>;
   readonly setBacklogAssigneeFilter?: (
     mode: "current-user",
   ) => Effect.Effect<unknown, TBacklogAssigneeFilterError>;
@@ -70,22 +62,11 @@ export type CreateBindingInput<
     toolArgs: unknown,
     callerThreadId: ThreadId,
   ) => Effect.Effect<T3TeamToolCallResult>;
-  readonly readRuntimeModels?: () => Effect.Effect<T3TeamToolCallResult>;
   readonly readProviderUsage?: (toolArgs: unknown) => Effect.Effect<T3TeamToolCallResult>;
   readonly publishDraft?: T3TeamDraftMutationPublisher;
 };
-export function createToolSurface<
-  TRenameError,
-  TStartChildError,
-  TReadError,
-  TBacklogAssigneeFilterError,
->(
-  input: CreateBindingInput<
-    TRenameError,
-    TStartChildError,
-    TReadError,
-    TBacklogAssigneeFilterError
-  >,
+export function createToolSurface<TReadError, TBacklogAssigneeFilterError>(
+  input: CreateBindingInput<TReadError, TBacklogAssigneeFilterError>,
 ) {
   const toErrorMessage = (cause: unknown) =>
     cause instanceof Error ? cause.message : String(cause);
@@ -105,14 +86,6 @@ export function createToolSurface<
       ...(input.threadId ? { threadId: input.threadId } : {}),
       ...(input.toolContext ? { toolContext: input.toolContext } : {}),
       readView: () => input.readView().pipe(Effect.mapError(toErrorMessage)),
-      ...(input.renameThread ? { renameThread: input.renameThread } : {}),
-      ...(input.renameThreadResult ? { renameThreadResult: input.renameThreadResult } : {}),
-      ...(input.startChild
-        ? {
-            startChild: (arguments_: unknown) =>
-              input.startChild!(arguments_).pipe(Effect.mapError(toErrorMessage)),
-          }
-        : {}),
       ...(input.setBacklogAssigneeFilter
         ? {
             setBacklogAssigneeFilter: (mode: "current-user") =>
@@ -149,7 +122,6 @@ export function createToolSurface<
               input.manageChildren!(toolArgs, callerThreadId),
           }
         : {}),
-      ...(input.readRuntimeModels ? { readRuntimeModels: input.readRuntimeModels } : {}),
       ...(input.readProviderUsage ? { readProviderUsage: input.readProviderUsage } : {}),
       ...(input.publishDraft ? { publishDraft: input.publishDraft } : {}),
     });

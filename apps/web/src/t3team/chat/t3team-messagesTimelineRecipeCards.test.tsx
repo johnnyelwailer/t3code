@@ -122,7 +122,7 @@ describe("MessagesTimeline recipe cards", () => {
               streaming: false,
               createdAt: "2026-03-17T19:12:28.000Z",
               updatedAt: "2026-03-17T19:12:28.000Z",
-              turnId: null,
+              runId: null,
               t3teamExt: {
                 visibleToUser: true,
                 visibleToAgent: false,
@@ -176,7 +176,7 @@ describe("MessagesTimeline recipe cards", () => {
               streaming: false,
               createdAt: "2026-03-17T19:12:29.000Z",
               updatedAt: "2026-03-17T19:12:29.000Z",
-              turnId: null,
+              runId: null,
               t3teamExt: {
                 visibleToUser: true,
                 attachments: [
@@ -258,7 +258,7 @@ describe("MessagesTimeline recipe cards", () => {
               streaming: false,
               createdAt: "2026-03-17T19:12:30.000Z",
               updatedAt: "2026-03-17T19:12:30.000Z",
-              turnId: null,
+              runId: null,
               t3teamExt: {
                 visibleToUser: true,
                 visibleToAgent: false,
@@ -303,7 +303,7 @@ describe("MessagesTimeline recipe cards", () => {
               streaming: false,
               createdAt: "2026-03-17T19:12:31.000Z",
               updatedAt: "2026-03-17T19:12:31.000Z",
-              turnId: null,
+              runId: null,
               t3teamExt: {
                 author: { kind: "system", workflowRunId: "run-1" },
                 visibleToUser: true,
@@ -336,7 +336,7 @@ describe("MessagesTimeline recipe cards", () => {
               streaming: false,
               createdAt: "2026-03-17T19:12:32.000Z",
               updatedAt: "2026-03-17T19:12:32.000Z",
-              turnId: null,
+              runId: null,
               t3teamExt: {
                 author: { kind: "system", workflowRunId: "run-legacy" },
                 visibleToUser: true,
@@ -370,7 +370,7 @@ describe("MessagesTimeline recipe cards", () => {
               streaming: false,
               createdAt: "2026-03-17T19:12:33.000Z",
               updatedAt: "2026-03-17T19:12:33.000Z",
-              turnId: null,
+              runId: null,
               t3teamExt: {
                 author: { kind: "system", workflowRunId: "run-decision" },
                 status: "waiting-for-input",

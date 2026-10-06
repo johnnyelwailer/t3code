@@ -26,12 +26,9 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
-import * as Stream from "effect/Stream";
 import { afterAll } from "vite-plus/test";
 
 import { ServerConfig } from "./config.ts";
-import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import { WorkflowSignalStoreLive } from "./persistence/Layers/WorkflowSignalStore.ts";
 import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStore.ts";
@@ -52,6 +49,10 @@ import {
   T3TeamWorkflowEngineRegistryLive,
 } from "./t3team-workflowEngineRegistry.ts";
 import {
+  makeFakeWorkflowHost,
+  makeFakeWorkflowHostLayer,
+} from "./t3team-workflowHostFake.fixtures.ts";
+import {
   T3TeamWorkflowScheduler,
   T3TeamWorkflowSchedulerLive,
 } from "./t3team-workflowScheduler.ts";
@@ -64,18 +65,9 @@ const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "
 const threadId = ThreadId.make("resume-tool-thread");
 const nowIso = (): string => "2026-07-20T00:00:00.000Z";
 
-const stubEngine: OrchestrationEngineShape = {
-  readEvents: () => Stream.empty,
-  readThreadEvents: () => Stream.empty,
-  getThreadReplayStats: () => Effect.die("unused"),
-  dispatch: () => Effect.succeed({ sequence: 0 }),
-  streamDomainEvents: Stream.never,
-  subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
-  // Required by OrchestrationEngineShape since main's sidebar/turn work; this stub never
-  // dispatches, so the latest sequence is simply 0.
-  latestSequence: Effect.succeed(0),
-};
-const OrchestrationEngineTestLive = Layer.succeed(OrchestrationEngineService, stubEngine);
+// The resume path talks to orchestration only through the workflow host; a recording fake
+// stands in for it (the handlers take it directly; the scheduler gate needs no host).
+const fakeHost = makeFakeWorkflowHostLayer();
 
 const WorkflowEngineDurabilityTestLive = T3TeamWorkflowSchedulerLive.pipe(
   Layer.provideMerge(
@@ -90,7 +82,7 @@ const WorkflowEngineDurabilityTestLive = T3TeamWorkflowSchedulerLive.pipe(
 
 const TestLayer = Layer.mergeAll(
   WorkflowEngineDurabilityTestLive,
-  OrchestrationEngineTestLive,
+  fakeHost.layer,
   WorkflowSignalStoreLive.pipe(Layer.provide(SqlitePersistenceMemory)),
   ServerConfig.layerTest(cwd, { prefix: "t3-resume-tool-test-" }),
 ).pipe(Layer.provideMerge(NodeServices.layer));
@@ -105,7 +97,7 @@ const makeHandlers = Effect.gen(function* () {
     registry: yield* T3TeamWorkflowEngineRegistry,
     journalStore: yield* WorkflowJournalStore,
     rearmScheduler: () => scheduler.rearm(),
-    dispatch: () => Promise.resolve(),
+    host: fakeHost.host,
     loadThreadProject: () => Effect.succeed({ project: { workspaceRoot: cwd } }),
     signalStore: yield* WorkflowSignalStore,
   };
@@ -327,7 +319,7 @@ it.live(
           runtimeMode: "full-access",
           interactionMode: "default",
           registry: throwaway,
-          dispatch: () => Promise.resolve(),
+          host: makeFakeWorkflowHost().host,
           newId: () => `id-${(seq += 1)}`,
           nowIso,
           store,
@@ -358,4 +350,115 @@ it.live(
         return yield* Effect.die(new Error("timed out waiting for resumed run to complete"));
       });
     }).pipe(Effect.provide(TestLayer)),
+);
+
+// Review of fork #349: corrected source used to pass only the format precheck; the incident's
+// unbound import would have been accepted here and died at the re-drive.
+it.effect("refuses corrected source that fails the full check (unbound @t3team/sdk import)", () =>
+  Effect.gen(function* () {
+    const repo = yield* WorkflowRunRepository;
+    const handlers = yield* makeHandlers;
+    const runId = "failed-bad-fix";
+    const runDir = NodePath.join(cwd, ".t3team-runs", runId);
+    NodeFS.mkdirSync(runDir, { recursive: true });
+    NodeFS.writeFileSync(NodePath.join(runDir, "workflow.ts"), failingSource);
+    yield* repo.upsert({ ...baseRow(runId), status: "failed" });
+
+    const refused = yield* handlers
+      .resumeWorkflowRun({
+        runId,
+        source: [
+          `import { defineModelX } from "@t3team/sdk";`,
+          `export const meta = { name: "resume-tool.fixture" } as const;`,
+          `export default async function run() { return defineModelX({}); }`,
+        ].join("\n"),
+      })
+      .pipe(Effect.result);
+    assert.strictEqual(refused._tag, "Failure");
+    if (refused._tag === "Failure") {
+      assert.include(refused.failure, "defineModelX");
+      assert.include(refused.failure, "[bindings]");
+    }
+    // Nothing was swapped in.
+    assert.strictEqual(
+      NodeFS.readFileSync(NodePath.join(runDir, "workflow.ts"), "utf8"),
+      failingSource,
+    );
+  }).pipe(Effect.provide(TestLayer)),
+);
+
+// An input-contract fault is the one failure the CALLER can fix without touching source. The
+// decision "re-run this run with these inputs" is the tool argument; the same run (same card)
+// re-drives with the persisted correction. Before this, the description told agents to resume
+// with corrected args while the schema only accepted a source (fork #350 review).
+const inputsSource = `import { Schema } from "effect";
+export const Inputs = Schema.Struct({ a: Schema.Number, b: Schema.Number });
+export const Outputs = Schema.Struct({ sum: Schema.Number });
+export const meta = { name: "resume-tool.inputs", inputs: Inputs, outputs: Outputs } as const;
+const input = Schema.decodeSync(Inputs)(args);
+return { sum: input.a + input.b };
+`;
+
+it.live("failed on invalid inputs + corrected args: the SAME run re-drives and completes", () =>
+  Effect.gen(function* () {
+    const repo = yield* WorkflowRunRepository;
+    const store = yield* WorkflowJournalStore;
+    const handlers = yield* makeHandlers;
+    const runId = "failed-inputs-run";
+    const runDir = NodePath.join(cwd, ".t3team-runs", runId);
+    const workflowPath = NodePath.join(runDir, "workflow.ts");
+    NodeFS.mkdirSync(runDir, { recursive: true });
+    NodeFS.writeFileSync(workflowPath, inputsSource);
+
+    const throwaway = makeWorkflowEngineRegistry();
+    let seq = 0;
+    const badArgs = { a: "two", b: 3 };
+    const launched = yield* Effect.promise(() =>
+      launchWorkflowRecipe({
+        runId,
+        workflowPath,
+        args: badArgs,
+        runsRoot: NodePath.join(cwd, ".t3team-runs"),
+        launchThreadId: String(threadId),
+        projectId,
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        registry: throwaway,
+        host: makeFakeWorkflowHost().host,
+        newId: () => `inputs-${(seq += 1)}`,
+        nowIso,
+        store,
+        lifecycle: makeWorkflowRunLifecycle({
+          repo,
+          row: baseRow(runId, { args: badArgs }),
+          nowIso,
+        }),
+      }),
+    );
+    assert.strictEqual(launched.status, "failed");
+    const failedRow = Option.getOrThrow(yield* repo.getById({ runId }));
+    assert.strictEqual(failedRow.status, "failed");
+    assert.include(failedRow.failureReason ?? "", "Invalid inputs");
+
+    const value = yield* handlers.resumeWorkflowRun({ runId, args: { a: 2, b: 3 } });
+    assert.strictEqual(value.status, "accepted");
+    // The correction is durable on the row before the re-drive reads it.
+    assert.deepStrictEqual(Option.getOrThrow(yield* repo.getById({ runId })).args, { a: 2, b: 3 });
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const row = Option.getOrThrow(yield* repo.getById({ runId }));
+      if (row.status === "completed") break;
+      yield* Effect.sleep(Duration.millis(10));
+    }
+    const finalRow = Option.getOrThrow(yield* repo.getById({ runId }));
+    assert.strictEqual(`${finalRow.status}:${finalRow.failureReason ?? ""}`, "completed:");
+
+    // A PAUSED run keeps the inputs it is already running with.
+    const pausedId = "paused-no-args";
+    yield* repo.upsert({ ...baseRow(pausedId), status: "paused" });
+    const refused = yield* handlers
+      .resumeWorkflowRun({ runId: pausedId, args: { a: 1, b: 1 } })
+      .pipe(Effect.result);
+    assert.strictEqual(refused._tag, "Failure");
+  }).pipe(Effect.provide(TestLayer)),
 );

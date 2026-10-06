@@ -1,10 +1,8 @@
 import type { ModelSelection, ServerProvider, ServerProviderModel } from "@t3tools/contracts";
 import { resolveModelSlugForProvider } from "@t3tools/shared/model";
 
-import type {
-  T3TeamStartChildArgs,
-  T3TeamStartChildReasoningEffort,
-} from "./t3team-toolBrokerStartChildArgs.ts";
+/** A provider's OWN reasoning vocabulary, written straight onto the matching select option. */
+export type T3TeamStartChildReasoningEffort = "low" | "medium" | "high";
 
 type TargetProvider = Pick<ServerProvider, "driver" | "models">;
 
@@ -33,7 +31,10 @@ const reasoningOptionId = (
 
 export const buildStartChildModelSelection = (
   baseModelSelection: ModelSelection,
-  input: Pick<T3TeamStartChildArgs, "model" | "reasoningEffort">,
+  input: {
+    readonly model?: string | undefined;
+    readonly reasoningEffort?: T3TeamStartChildReasoningEffort | undefined;
+  },
   target?: TargetProvider,
 ): ModelSelection => {
   const nextModel = input.model ?? baseModelSelection.model;
@@ -65,13 +66,4 @@ export const buildStartChildModelSelection = (
     model: normalizedModel,
     ...(nextSelections ? { options: nextSelections } : {}),
   };
-};
-
-export const readModelSelectionReasoningEffort = (
-  modelSelection: ModelSelection,
-): string | undefined => {
-  const selection = modelSelection.options?.find(
-    (option) => typeof option.value === "string" && /reason|effort/i.test(option.id),
-  );
-  return typeof selection?.value === "string" ? selection.value : undefined;
 };

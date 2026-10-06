@@ -19,8 +19,6 @@ type LoadThreadViewThread = T3TeamViewWorkspaceThread & {
   readonly title: string;
   readonly runtimeMode: unknown;
   readonly interactionMode: unknown;
-  readonly messages: ReadonlyArray<unknown>;
-  readonly latestTurn?: { readonly turnId: unknown } | null | undefined;
 };
 
 type LoadThreadViewProject = T3TeamViewWorkspaceProject & {
@@ -28,20 +26,29 @@ type LoadThreadViewProject = T3TeamViewWorkspaceProject & {
   readonly title: string;
 };
 
-/** The `t3team.thread.view` read model over a thread + project lookup. Extracted from
- * `t3team-toolBrokerLive.ts` (additive LOC budget) — behavior unchanged. Generic so the
- * caller's concrete thread/project field types flow through untouched. */
+/** The `t3team.view.read` read model over a thread + project lookup and the thread's
+ * message count / latest run. Generic so the caller's concrete thread/project field types
+ * flow through untouched. */
 export const makeLoadThreadView =
   <E, TThread extends LoadThreadViewThread, TProject extends LoadThreadViewProject>(
     loadThreadProject: (
       threadId: ThreadIdType,
     ) => Effect.Effect<{ project: TProject; thread: TThread }, E>,
+    loadThreadStats: (
+      threadId: ThreadIdType,
+    ) => Effect.Effect<
+      { readonly messageCount: number; readonly latestRunId: string | null },
+      string
+    >,
   ) =>
   (threadId: ThreadIdType, toolContext: T3TeamTurnToolContext) =>
     Effect.gen(function* () {
       const resolved = yield* loadThreadProject(threadId).pipe(Effect.option);
       const thread = Option.isSome(resolved) ? resolved.value.thread : undefined;
       const project = Option.isSome(resolved) ? resolved.value.project : undefined;
+      const stats = thread
+        ? yield* loadThreadStats(threadId).pipe(Effect.option, Effect.map(Option.getOrUndefined))
+        : undefined;
       return {
         surface: toolContext.surface,
         state: toolContext.state,
@@ -59,8 +66,8 @@ export const makeLoadThreadView =
               title: thread.title,
               runtimeMode: thread.runtimeMode,
               interactionMode: thread.interactionMode,
-              messageCount: thread.messages.length,
-              latestTurnId: thread.latestTurn?.turnId ?? null,
+              messageCount: stats?.messageCount ?? null,
+              latestRunId: stats?.latestRunId ?? null,
               ...buildThreadWorkspaceView({ thread, project }),
             }
           : null,

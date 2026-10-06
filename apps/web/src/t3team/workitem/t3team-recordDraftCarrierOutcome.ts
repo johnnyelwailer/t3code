@@ -16,6 +16,7 @@
  *   the reader asked. A failed bookkeeping call must not turn "no thanks" into an error card.
  */
 
+import { primaryServerAuthInit } from "~/t3team/backend/t3team-t3BackendHttp";
 import type { BackendApi } from "~/t3team/backend/t3team-types";
 import type { T3TeamDraftMutation } from "~/t3team/t3team-draftMutationTypes";
 
@@ -34,9 +35,11 @@ export async function recordDraftCarrierOutcome(input: {
     return;
   }
 
+  const auth = await primaryServerAuthInit();
   const response = await fetch(`${httpBaseUrl}${T3TEAM_DRAFT_STATUS_PATH}`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    credentials: auth.credentials,
+    headers: { ...auth.headers, "content-type": "application/json" },
     body: JSON.stringify({
       threadId: input.draft.sourceThreadId,
       draftId: input.draft.id,

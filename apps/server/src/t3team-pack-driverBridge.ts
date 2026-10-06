@@ -10,19 +10,20 @@
  *
  * Config is opaque (`Schema.Unknown`) — packs validate their own config.
  * `create` maps pack rejections to `ProviderDriverError`, registers the pack
- * instance's `dispose()` as a scope finalizer, and delegates the adapter /
- * snapshot bridging to sibling modules.
+ * instance's `dispose()` as a scope finalizer, and delegates the orchestration
+ * adapter (`t3team-pack-driverAdapter.ts`), snapshot and text-generation
+ * bridging to sibling modules.
  *
  * @module t3team-pack-driverBridge
  */
+import type { PackHostCapabilities, PackProviderDriverDefinition } from "@t3team/pack-api";
 import { ProviderDriverKind, type ProviderInstanceEnvironment } from "@t3tools/contracts";
-import type { PackHostCapabilities, PackProviderDriverDefinition } from "@t3team/packs";
-import * as Deferred from "effect/Deferred";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
+import { ProviderContinuationRequests } from "./orchestration-v2/ProviderContinuationRequests.ts";
 import { ServerSettingsService } from "./serverSettings.ts";
 import { ProviderDriverError } from "./provider/Errors.ts";
 import {
@@ -30,7 +31,7 @@ import {
   type ProviderDriver,
   type ProviderInstance,
 } from "./provider/ProviderDriver.ts";
-import { makePackProviderAdapter } from "./t3team-pack-driverAdapter.ts";
+import { makePackOrchestrationAdapter } from "./t3team-pack-driverAdapter.ts";
 import { makeOpenCodeHarnessCapability } from "./t3team-pack-driverHarness.ts";
 import { makePackProviderSnapshot } from "./t3team-pack-driverSnapshotShape.ts";
 import { bridgePackTextGeneration } from "./t3team-pack-textGenerationBridge.ts";
@@ -117,6 +118,7 @@ export const bridgePackProviderDriver = (
           createOpenCodeHarness: makeOpenCodeHarnessCapability({
             ambient,
             scope,
+            driverKind,
             instanceId,
             displayName: resolvedName,
             environment,
@@ -140,14 +142,9 @@ export const bridgePackProviderDriver = (
               cause,
             }),
         });
-        // Tie the pack event stream to this instance's scope. Completing the
-        // deferred on scope close ends the stream (via `Stream.interruptWhen`),
-        // which is the termination `ProviderService.reconcileInstanceSubscriptions`
-        // depends on — a custom pack `events()` iterable does not self-terminate.
-        const closed = yield* Deferred.make<void>();
-        // Finalizers run LIFO: register `dispose()` first so the stream-interrupt
-        // finalizer (registered last) runs before we tear the pack instance down.
         // Bound `dispose()` so a hung/rejecting teardown cannot deadlock reconcile.
+        // Each open session closes (and ends its event stream) in its own session
+        // scope before the instance scope runs this.
         yield* Effect.addFinalizer(() =>
           // `Effect.promise` turns a rejection into a defect; `catchCause`
           // absorbs both that and the timeout so teardown always proceeds.
@@ -162,16 +159,16 @@ export const bridgePackProviderDriver = (
             ),
           ),
         );
-        yield* Effect.addFinalizer(() => Deferred.succeed(closed, undefined));
+        const continuationRequests = yield* ProviderContinuationRequests;
         const continuationIdentity = defaultProviderContinuationIdentity({
           driverKind,
           instanceId,
         });
-        const adapter = makePackProviderAdapter({
-          packInstance,
-          driverKind,
+        const orchestrationAdapter = makePackOrchestrationAdapter({
+          adapter: packInstance.orchestration,
+          driver: driverKind,
           instanceId,
-          interruptSignal: Deferred.await(closed),
+          offerContinuation: continuationRequests.offer,
         });
         const snapshot = yield* makePackProviderSnapshot({
           packInstance,
@@ -192,7 +189,7 @@ export const bridgePackProviderDriver = (
           configurationSource,
           enabled,
           snapshot,
-          adapter,
+          orchestrationAdapter,
           textGeneration: bridgePackTextGeneration(packInstance, driverKind),
         } satisfies ProviderInstance;
       }),

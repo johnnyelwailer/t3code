@@ -31,7 +31,8 @@ describe("AppMainContentHomeEmptyState", () => {
         onInlineProjectCreated={() => {}}
         showInitialSetup
         showAside={false}
-        homeChatProject={null}
+        scratchProject={null}
+        onStartScratch={undefined}
         providers={[]}
         isConnected
         onOpenHomeThread={() => {}}

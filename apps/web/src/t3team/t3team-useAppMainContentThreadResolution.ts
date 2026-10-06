@@ -25,32 +25,17 @@ export function useAppMainContentThreadResolution(input: {
   view: ViewState | null;
   allProjects: ProjectShellProject[];
   homeProject: ProjectShellProject | null;
-  homeChatProject: ProjectShellProject | null;
-  homeChatThreadId: string | null;
   getThreadsForProject: (projectId: string) => ProjectThread[];
 }) {
-  const {
-    view,
-    allProjects,
-    homeProject,
-    homeChatProject,
-    homeChatThreadId,
-    getThreadsForProject,
-  } = input;
+  const { view, allProjects, homeProject, getThreadsForProject } = input;
 
-  useSyncActiveChatTarget({
-    view,
-    getThreadsForProject,
-    homeChatProject,
-    homeChatThreadId,
-  });
+  useSyncActiveChatTarget(view);
 
   const activeThreadId = readActiveThreadIdFromView(view);
   const threadProject = resolveThreadProject({
     activeThreadId,
     view,
     allProjects,
-    homeChatProject,
   });
   const threadProjectThreads = threadProject ? getThreadsForProject(threadProject.id) : [];
   const resolvedThread = activeThreadId

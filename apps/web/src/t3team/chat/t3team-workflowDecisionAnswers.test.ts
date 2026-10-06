@@ -23,7 +23,7 @@ function askMessage(id: string, correlationId: string, question = "Proceed?"): C
     streaming: false,
     createdAt: "2026-06-09T00:00:00.000Z",
     updatedAt: "2026-06-09T00:00:00.000Z",
-    turnId: null,
+    runId: null,
     t3teamExt: {
       visibleToUser: true,
       status: "waiting-for-input",
@@ -52,7 +52,7 @@ function correlatedReply(id: string, correlationId: string, text = "Yes"): ChatM
     streaming: false,
     createdAt: "2026-06-09T00:00:01.000Z",
     updatedAt: "2026-06-09T00:00:01.000Z",
-    turnId: null,
+    runId: null,
     t3teamExt: { workflowReply: { value: true, correlationId } },
   } as ChatMessage;
 }
@@ -66,7 +66,7 @@ function systemNotification(id: string, text = "Step completed"): ChatMessage {
     streaming: false,
     createdAt: "2026-06-09T00:00:00.500Z",
     updatedAt: "2026-06-09T00:00:00.500Z",
-    turnId: null,
+    runId: null,
   } as ChatMessage;
 }
 
@@ -79,7 +79,7 @@ function legacyUserReply(id: string, text: string): ChatMessage {
     streaming: false,
     createdAt: "2026-06-09T00:00:01.000Z",
     updatedAt: "2026-06-09T00:00:01.000Z",
-    turnId: null,
+    runId: null,
   } as ChatMessage;
 }
 
@@ -124,6 +124,19 @@ describe("findT3TeamWorkflowDecisionAnswers", () => {
     const answers = findT3TeamWorkflowDecisionAnswers(
       entries([ask, notification, reply, laterUnrelated]),
     );
+
+    expect(answers.get("ask-legacy")).toEqual({ answerMessageId: "reply-legacy", text: "sure" });
+  });
+
+  it("legacy fallback skips user-role messages the person did not write", () => {
+    const ask = askMessage("ask-legacy", "run-2:1");
+    const workflowPrompt = {
+      ...legacyUserReply("prompt-parallel", "Review the diff"),
+      createdBy: "system",
+    } as ChatMessage;
+    const reply = legacyUserReply("reply-legacy", "sure");
+
+    const answers = findT3TeamWorkflowDecisionAnswers(entries([ask, workflowPrompt, reply]));
 
     expect(answers.get("ask-legacy")).toEqual({ answerMessageId: "reply-legacy", text: "sure" });
   });

@@ -9,17 +9,15 @@
 import type * as FileSystem from "effect/FileSystem";
 import * as Effect from "effect/Effect";
 
-import type { OrchestrationCommand } from "@t3tools/contracts";
-
-import { buildWorkflowShapePreviewCommand } from "./t3team-workflowShapePreview.ts";
+import type { WorkflowHostPort } from "./t3team-workflowHostPort.ts";
+import { buildWorkflowShapePreviewMessage } from "./t3team-workflowShapePreview.ts";
 
 export const emitWorkflowShapePreview = (input: {
   readonly fileSystem: FileSystem.FileSystem | undefined;
   readonly launchThreadId: string | undefined;
   readonly workflowPath: string;
   readonly runId: string;
-  readonly nowIso: () => string;
-  readonly dispatch: (command: OrchestrationCommand) => Promise<void>;
+  readonly host: Pick<WorkflowHostPort, "postMessage">;
 }) =>
   Effect.gen(function* () {
     const { fileSystem, launchThreadId } = input;
@@ -32,14 +30,12 @@ export const emitWorkflowShapePreview = (input: {
     if (shapeSource === null) {
       return;
     }
-    const shapeCommand = buildWorkflowShapePreviewCommand({
+    const message = buildWorkflowShapePreviewMessage({
       threadId: launchThreadId,
       workflowPath: input.workflowPath,
       sourceText: shapeSource,
       runId: input.runId,
-      nowIso: input.nowIso(),
     });
-    if (shapeCommand) {
-      yield* Effect.promise(() => input.dispatch(shapeCommand));
-    }
+    // Best-effort: a plan card that cannot post never affects the launch.
+    yield* Effect.promise(() => input.host.postMessage(message).catch(() => undefined));
   });

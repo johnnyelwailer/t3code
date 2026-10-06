@@ -34,11 +34,12 @@ const BACKTICK_BODY_SOURCE = [
 ].join("\n");
 
 describe("precheckWorkflowSource", () => {
-  it("rejects YAML with a message naming the missing entry contract and the full manual", () => {
+  it("rejects YAML with the specific reason only — no manual rides along (the author carries the reference)", () => {
     const error = precheckWorkflowSource(YAML_SOURCE);
     expect(error).not.toBeNull();
     expect(error).toContain("export const meta");
-    expect(error).toContain("AGENT-ORCHESTRATION MANUAL");
+    expect(error).not.toContain("MANUAL");
+    expect(error!.length).toBeLessThan(400);
   });
 
   it("accepts a real workflow TypeScript module", () => {
@@ -49,7 +50,6 @@ describe("precheckWorkflowSource", () => {
     const error = precheckWorkflowSource(BACKTICK_BODY_SOURCE);
     expect(error).not.toBeNull();
     expect(error).toContain("unparseable workflow TypeScript");
-    expect(error).toContain("AGENT-ORCHESTRATION MANUAL");
   });
 
   it("rejects a missing default-exported run function", () => {

@@ -9,8 +9,8 @@
  *
  * WHICH THREAD THE PROPOSAL LANDS ON: the client binds the LAUNCH thread per call, and a
  * thread-bound binding carries `publishDraft` pinned to that same thread id (`t3team-toolBrokerLive.ts`
- * → `makeT3TeamDraftMutationPublisher({ threadId, … })`), so the hidden `draft-mutation` carrier
- * message reaches the thread the user launched from — the one whose `ThreadChatView` ingests drafts.
+ * → `makeT3TeamDraftMutationPublisher({ threadId, … })`), so the `draft-mutation` thread artifact
+ * lands on the thread the user launched from — the one whose review surface shows its drafts.
  * Binding per call (not once at launch) also reads the thread's CURRENT tool context, like an agent
  * turn does, and re-applies the recipe's `allowedToolGroups` every time.
  *
@@ -115,10 +115,6 @@ export function makeT3TeamWorkflowHostDraftToolClient(input: {
   if (launchThreadId === undefined || launchThreadId.trim().length === 0) return undefined;
 
   return {
-    // Not part of this seam's scope; the draft family is. Mirrors the SDK bridge's stub.
-    renameThread: async () => {
-      throw new Error("t3team.thread.rename is not reachable through workflow host tools.");
-    },
     callHostTool: async ({ tool, args }) => {
       // Defence in depth: the tool tree already limits WHICH ids exist, and this keeps the
       // transport from widening if a future ref is registered against the same client.

@@ -23,19 +23,19 @@ import * as NodeURL from "node:url";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import { afterAll } from "vite-plus/test";
-import { type OrchestrationCommand, ProjectId, ProviderInstanceId } from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Stream from "effect/Stream";
 
-import { type OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
-import { makeBrokerLayer } from "./t3team-toolBrokerTestLayers.ts";
-import { createThreadToolContext, threadId } from "./t3team-toolBrokerTestUtils.ts";
+import { makeBrokerLayer, threadId } from "./t3team-toolBrokerTestUtils.ts";
+import type { T3TeamThreadArtifactInput } from "./t3team-v2/t3team-threadArtifactsStore.ts";
 import { launchWorkflowRecipe } from "./t3team-workflowEngineLaunch.ts";
 import { makeWorkflowEngineRegistry } from "./t3team-workflowEngineRegistry.ts";
+import { draftToolContext, findDraftArtifact } from "./t3team-workflowHostDraft.fixtures.ts";
 import { makeT3TeamWorkflowHostDraftToolClient } from "./t3team-workflowHostDraftTools.ts";
+import { makeFakeWorkflowHost } from "./t3team-workflowHostFake.fixtures.ts";
 import { resolveRecipeHostToolScope } from "./t3team-recipeWorkflowToolScope.ts";
 
 // `<apps/server>/.t3team-runs/` — gitignored, so a crashed run cannot leave files the additive
@@ -101,20 +101,12 @@ const undeclared = writeRecipe({ id: "undeclared-recipe" });
 
 const TestLayer = NodeServices.layer;
 
-const brokerDispatched: OrchestrationCommand[] = [];
-const brokerEngineMock: OrchestrationEngineShape = {
-  readEvents: () => Stream.empty,
-  readThreadEvents: () => Stream.empty,
-  getThreadReplayStats: () => Effect.die("unused"),
-  dispatch: (command) => {
-    brokerDispatched.push(command);
-    return Effect.succeed({ sequence: brokerDispatched.length });
-  },
-  streamDomainEvents: Stream.empty,
-  subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
-  latestSequence: Effect.succeed(0),
-};
-const EndToEndLayer = Layer.mergeAll(NodeServices.layer, makeBrokerLayer(brokerEngineMock));
+/** Every thread artifact the broker writes — where a proposed draft lands. */
+const brokerArtifacts: T3TeamThreadArtifactInput[] = [];
+const EndToEndLayer = Layer.mergeAll(
+  NodeServices.layer,
+  makeBrokerLayer(undefined, { onArtifact: (artifact) => brokerArtifacts.push(artifact) }),
+);
 
 /** Resolve the recipe's scope, wire a bridge with exactly that, and run its workflow. */
 const runUnderRecipeScope = Effect.fn("runUnderRecipeScope")(function* (input: {
@@ -124,15 +116,7 @@ const runUnderRecipeScope = Effect.fn("runUnderRecipeScope")(function* (input: {
   const broker = yield* T3TeamToolBroker;
   yield* broker.bindSession({
     threadId,
-    toolContext: createThreadToolContext({
-      tools: [
-        {
-          id: "t3team.work_item.description.draft_update",
-          label: "Draft description",
-          capabilities: ["write"],
-        },
-      ],
-    }),
+    toolContext: draftToolContext(),
   });
 
   const scope = yield* resolveRecipeHostToolScope(input.recipe);
@@ -159,7 +143,7 @@ const runUnderRecipeScope = Effect.fn("runUnderRecipeScope")(function* (input: {
       runtimeMode: "full-access",
       interactionMode: "default",
       registry: makeWorkflowEngineRegistry(),
-      dispatch: async () => undefined,
+      host: makeFakeWorkflowHost().host,
       newId: () => `${input.runId}-id-${(seq += 1)}`,
       nowIso: () => "2026-07-27T00:00:00.000Z",
       ...(client === undefined ? {} : { hostToolClient: client }),
@@ -173,35 +157,23 @@ const runUnderRecipeScope = Effect.fn("runUnderRecipeScope")(function* (input: {
 
 it.effect("end to end: the manifest's scope is what actually gates the body's draft call", () =>
   Effect.gen(function* () {
-    brokerDispatched.length = 0;
+    brokerArtifacts.length = 0;
 
     // Narrow recipe: declares reads only, so its own workflow's draft call is refused even though
     // the body declares `mutation.draft`.
     const refused = yield* runUnderRecipeScope({ runId: "scope-e2e-narrow", recipe: narrow });
     assert.strictEqual(refused.result.status, "failed");
     assert.include(String(refused.errors[0]), "requires group 'mutation.draft'");
-    assert.isTrue(
-      brokerDispatched.every(
-        (command) =>
-          command.type !== "thread.message.upsert" ||
-          !(command.message.t3teamExt?.attachments ?? []).some(
-            (entry) => entry.kind === "draft-mutation",
-          ),
-      ),
+    assert.isUndefined(
+      findDraftArtifact(brokerArtifacts),
       "no draft may be published under a read-only scope",
     );
 
     // Granting recipe: same body, same request (which supplies nothing), draft goes through.
     const allowed = yield* runUnderRecipeScope({ runId: "scope-e2e-granting", recipe: granting });
     assert.strictEqual(allowed.result.status, "completed");
-    assert.isTrue(
-      brokerDispatched.some(
-        (command) =>
-          command.type === "thread.message.upsert" &&
-          (command.message.t3teamExt?.attachments ?? []).some(
-            (entry) => entry.kind === "draft-mutation",
-          ),
-      ),
+    assert.isDefined(
+      findDraftArtifact(brokerArtifacts),
       "the granting recipe's scope must let the draft through",
     );
   }).pipe(Effect.provide(EndToEndLayer)),

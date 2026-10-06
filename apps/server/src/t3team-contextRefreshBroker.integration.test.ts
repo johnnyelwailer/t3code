@@ -1,9 +1,7 @@
 /* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- Broker integration bridges Effect for callTool assertions. */
 import { describe, expect, it } from "vite-plus/test";
 import * as Effect from "effect/Effect";
-import * as Stream from "effect/Stream";
 
-import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
 import { T3TeamToolBroker } from "./t3team-toolBroker.ts";
 import {
   createThreadToolContext,
@@ -15,19 +13,13 @@ import {
   registerContextRefreshTestCleanup,
   writeContextRefreshTestJson,
 } from "./t3team-contextRefreshTestFixtures.ts";
-import { buildJiraTicketEntryPoint } from "@t3tools/project-context/t3teamContextPaths";
+import {
+  buildJiraTicketEntryPoint,
+  T3TEAM_PROJECT_CONTEXT_ROOT,
+  T3TEAM_WORK_ITEMS_INDEX_PATH,
+} from "@t3tools/project-context/t3teamContextPaths";
 
 registerContextRefreshTestCleanup();
-
-const orchestrationMock: OrchestrationEngineShape = {
-  readEvents: () => Stream.empty,
-  readThreadEvents: () => Stream.empty,
-  getThreadReplayStats: () => Effect.die("unused"),
-  dispatch: () => Effect.succeed({ sequence: 1 }),
-  streamDomainEvents: Stream.empty,
-  subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
-  latestSequence: Effect.succeed(0),
-};
 
 const REFRESH_CONTEXT_TOOL = "t3team.work_item.refresh_context_bundle" as const;
 const CHEAP_AGENT_MODEL = "gpt-5.4-mini" as const;
@@ -67,7 +59,7 @@ function runRefreshContextAgentTurn(input: { readonly root: string; readonly pro
     return { refreshed, cached };
   }).pipe(
     Effect.provide(
-      makeBrokerLayerWithLiveContextRefresh(orchestrationMock, {
+      makeBrokerLayerWithLiveContextRefresh(undefined, {
         contextRefreshLayerPrefix: "t3team-broker-context-refresh-",
       }),
     ),
@@ -112,7 +104,7 @@ describe("T3TeamToolBroker refresh_context_bundle integration", () => {
         return { refreshed, cached };
       }).pipe(
         Effect.provide(
-          makeBrokerLayerWithLiveContextRefresh(orchestrationMock, {
+          makeBrokerLayerWithLiveContextRefresh(undefined, {
             contextRefreshLayerPrefix: "t3team-broker-context-refresh-",
           }),
         ),
@@ -161,17 +153,17 @@ describe("T3TeamToolBroker refresh_context_bundle integration", () => {
 
   it("resolves bound thread context displayId when refresh_context_bundle omits ticket_key", async () => {
     const { root, project } = makeContextRefreshTestWorkspace();
-    writeContextRefreshTestJson(root, ".t3team/context/work-items/ac-91.json", {
+    writeContextRefreshTestJson(root, `${T3TEAM_PROJECT_CONTEXT_ROOT}/work-items/ac-91.json`, {
       ticket: {
         id: "10001",
         ref: { id: "10001", displayId: "AC-91" },
       },
     });
-    writeContextRefreshTestJson(root, ".t3team/context/work-items/index.json", {
+    writeContextRefreshTestJson(root, T3TEAM_WORK_ITEMS_INDEX_PATH, {
       workItems: [
         {
           key: "ac-91",
-          relativePath: ".t3team/context/work-items/ac-91.json",
+          relativePath: `${T3TEAM_PROJECT_CONTEXT_ROOT}/work-items/ac-91.json`,
           ticketEntryPointRelativePath: buildJiraTicketEntryPoint(project.id, "ac-91"),
         },
       ],
@@ -207,7 +199,7 @@ describe("T3TeamToolBroker refresh_context_bundle integration", () => {
         });
       }).pipe(
         Effect.provide(
-          makeBrokerLayerWithLiveContextRefresh(orchestrationMock, {
+          makeBrokerLayerWithLiveContextRefresh(undefined, {
             contextRefreshLayerPrefix: "t3team-broker-context-refresh-bound-",
           }),
         ),

@@ -10,19 +10,19 @@
  *
  * `makeOpenCodeHarnessDriver` / `adaptOpenCodeHarnessSnapshot` expose that
  * same OpenCode runtime as a standalone `ProviderDriver` under a pack-defined
- * identity, restamping snapshot/adapter payloads and hiding built-in models.
+ * identity, restamping snapshot/orchestration-adapter payloads
+ * (`t3team-pack-driverRestamp.ts`) and hiding built-in models.
  *
  * @module t3team-pack-driverHarness
  */
+import type { PackHostCapabilities } from "@t3team/pack-api";
 import {
   OpenCodeSettings,
   ProviderInstanceId,
   type ProviderDriverKind,
   type ProviderInstanceEnvironment,
-  type ProviderSessionStartInput,
   type ServerProvider,
 } from "@t3tools/contracts";
-import type { PackHostCapabilities } from "@t3team/packs";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -38,6 +38,7 @@ import {
 import { OpenCodeDriver, type OpenCodeDriverEnv } from "./provider/Drivers/OpenCodeDriver.ts";
 import { openCodeUpstreamConfigContent } from "./t3team-pack-aiProvider.ts";
 import { providerInstanceToPack } from "./t3team-pack-driverHarnessWrap.ts";
+import { restampAdapter } from "./t3team-pack-driverRestamp.ts";
 
 const decodeOpenCodeSettings = Schema.decodeUnknownSync(OpenCodeSettings);
 
@@ -50,6 +51,8 @@ const decodeOpenCodeSettings = Schema.decodeUnknownSync(OpenCodeSettings);
 export const makeOpenCodeHarnessCapability = (input: {
   readonly ambient: Context.Context<never>;
   readonly scope: Scope.Scope;
+  /** The pack driver's identity; the harness entities are restamped onto it. */
+  readonly driverKind: ProviderDriverKind;
   readonly instanceId: ProviderInstanceId;
   readonly displayName: string | undefined;
   readonly environment: ProviderInstanceEnvironment;
@@ -83,7 +86,13 @@ export const makeOpenCodeHarnessCapability = (input: {
       );
     });
     return Effect.runPromiseWith(ambient)(build).then((instance) =>
-      providerInstanceToPack(instance, input.ambient),
+      providerInstanceToPack(
+        {
+          ...instance,
+          orchestrationAdapter: restampAdapter(instance.orchestrationAdapter, input.driverKind),
+        },
+        input.ambient,
+      ),
     );
   };
 };
@@ -116,31 +125,12 @@ export function makeOpenCodeHarnessDriver(input: {
             refresh: instance.snapshot.refresh.pipe(Effect.map(stampSnapshot)),
             streamChanges: instance.snapshot.streamChanges.pipe(Stream.map(stampSnapshot)),
           };
-          const adapter = {
-            ...instance.adapter,
-            provider: input.driverKind,
-            startSession: (startInput: ProviderSessionStartInput) =>
-              instance.adapter
-                .startSession(startInput)
-                .pipe(Effect.map((session) => ({ ...session, provider: input.driverKind }))),
-            listSessions: () =>
-              instance.adapter
-                .listSessions()
-                .pipe(
-                  Effect.map((sessions) =>
-                    sessions.map((session) => ({ ...session, provider: input.driverKind })),
-                  ),
-                ),
-            streamEvents: instance.adapter.streamEvents.pipe(
-              Stream.map((event) => ({ ...event, provider: input.driverKind })),
-            ),
-          };
           return {
             ...instance,
             driverKind: input.driverKind,
             continuationIdentity,
             snapshot,
-            adapter,
+            orchestrationAdapter: restampAdapter(instance.orchestrationAdapter, input.driverKind),
           } satisfies ProviderInstance;
         }),
       ),

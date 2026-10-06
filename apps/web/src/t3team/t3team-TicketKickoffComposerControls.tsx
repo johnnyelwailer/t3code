@@ -141,6 +141,7 @@ export function TicketKickoffComposerControls({
             compact={false}
             pendingAction={null}
             isRunning={false}
+            canInterrupt={false}
             showPlanFollowUpPrompt={false}
             promptHasText={text.trim().length > 0}
             isSendBusy={false}

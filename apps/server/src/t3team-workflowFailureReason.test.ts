@@ -29,12 +29,9 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
-import * as Stream from "effect/Stream";
 import { afterAll, describe, expect, it as vitestIt } from "vite-plus/test";
 
 import { ServerConfig } from "./config.ts";
-import type { OrchestrationEngineShape } from "./orchestration/Services/OrchestrationEngine.ts";
-import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import { WorkflowJournalStoreLive } from "./persistence/Layers/SqliteJournalStore.ts";
 import { WorkflowRunRepositoryLive } from "./persistence/Layers/WorkflowRuns.ts";
@@ -54,6 +51,10 @@ import {
   T3TeamWorkflowEngineRegistryLive,
 } from "./t3team-workflowEngineRegistry.ts";
 import {
+  makeFakeWorkflowHost,
+  makeFakeWorkflowHostLayer,
+} from "./t3team-workflowHostFake.fixtures.ts";
+import {
   userFacingFailureStep,
   workflowFailureReasonText,
   workflowFailureStepText,
@@ -71,18 +72,6 @@ const modelSelection = createModelSelection(ProviderInstanceId.make("inst-1"), "
 const threadId = ThreadId.make("failure-reason-thread");
 const nowIso = (): string => "2026-07-20T00:00:00.000Z";
 
-const stubEngine: OrchestrationEngineShape = {
-  readEvents: () => Stream.empty,
-  readThreadEvents: () => Stream.empty,
-  getThreadReplayStats: () => Effect.die("unused"),
-  dispatch: () => Effect.succeed({ sequence: 0 }),
-  streamDomainEvents: Stream.never,
-  subscribeDomainEvents: Effect.acquireRelease(Effect.succeed(Stream.empty), () => Effect.void),
-  // Required by OrchestrationEngineShape since main's sidebar/turn work; this stub never
-  // dispatches, so the latest sequence is simply 0.
-  latestSequence: Effect.succeed(0),
-};
-
 const TestLayer = Layer.mergeAll(
   T3TeamWorkflowSchedulerLive.pipe(
     Layer.provideMerge(
@@ -94,7 +83,7 @@ const TestLayer = Layer.mergeAll(
     ),
     Layer.provide(SqlitePersistenceMemory),
   ),
-  Layer.succeed(OrchestrationEngineService, stubEngine),
+  makeFakeWorkflowHostLayer().layer,
   ServerConfig.layerTest(cwd, { prefix: "t3-failure-reason-test-" }),
 ).pipe(Layer.provideMerge(NodeServices.layer));
 
@@ -107,7 +96,7 @@ const makeResumeHandlers = Effect.gen(function* () {
     registry: yield* T3TeamWorkflowEngineRegistry,
     journalStore: yield* WorkflowJournalStore,
     rearmScheduler: () => scheduler.rearm(),
-    dispatch: () => Promise.resolve(),
+    host: makeFakeWorkflowHost().host,
     loadThreadProject: () => Effect.succeed({ project: { workspaceRoot: cwd } }),
   };
   return makeWorkflowResumeToolHandlers(deps)(threadId);
@@ -169,7 +158,7 @@ it.live("a failed run reports WHY on status and resume, and the reason clears on
         runtimeMode: "full-access",
         interactionMode: "default",
         registry: makeWorkflowEngineRegistry(),
-        dispatch: () => Promise.resolve(),
+        host: makeFakeWorkflowHost().host,
         newId: () => `id-${(seq += 1)}`,
         nowIso,
         store,
