@@ -605,6 +605,9 @@ importers:
       stream-json:
         specifier: 3.6.0
         version: 3.6.0
+      undici:
+        specifier: 8.5.0
+        version: 8.5.0
       yaml:
         specifier: ^2.9.0
         version: 2.9.0
@@ -23665,7 +23668,7 @@ snapshots:
     dependencies:
       css-tree: 3.2.1
       ohash: 2.0.12
-      undici: 8.10.2
+      undici: 8.5.0
 
   unist-util-is@6.0.1:
     dependencies:
