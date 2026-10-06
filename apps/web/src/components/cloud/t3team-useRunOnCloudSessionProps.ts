@@ -20,6 +20,7 @@ type CloudSelectorProps = Pick<
   | "onCreateCloudSession"
   | "cloudSessionCreatePending"
   | "onCloudSessionAction"
+  | "cloudSessionConnectFailure"
   | "onDismissCloudSession"
   | "onCloudMenuOpenChange"
   | "onSetupCloudSessions"
@@ -45,7 +46,7 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
   const navigate = useNavigate();
   const { available, configured, sessions, onCreate, createPending } = cloudSessions;
   const { primaryEnvironmentId } = cloudSessions;
-  const { onSessionAction, onCloudMenuOpenChange } = cloudSessions;
+  const { onSessionAction, onCloudMenuOpenChange, connectFailure } = cloudSessions;
   // A failure surfaced in the menu stays dismissed once the user closed it (kept per browser; the
   // list only ever surfaces the newest session, so the stored ids never grow past a handful).
   const [dismissed, setDismissed] = useLocalStorage(
@@ -105,6 +106,7 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
               cloudSessionCreatePending: createPending,
               ...(cloudSessionProject ? { cloudSessionProject } : {}),
               onCloudSessionAction: onSessionAction,
+              cloudSessionConnectFailure: connectFailure,
               onDismissCloudSession,
               onCloudMenuOpenChange,
             }
@@ -114,6 +116,7 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
       cloudSessionProject,
       configured,
       connectedEnvironmentIds,
+      connectFailure,
       createPending,
       onCloudMenuOpenChange,
       onCreateCloudSession,

@@ -72,7 +72,7 @@ export function useCloudSessionController() {
     sessions,
   );
 
-  const { connectPendingSessionId, requestConnect } = useCloudSessionConnect({
+  const { connectPendingSessionId, connectFailure, requestConnect } = useCloudSessionConnect({
     sessions,
     relayCandidates,
     primaryEnvironmentId: environmentId,
@@ -194,6 +194,7 @@ export function useCloudSessionController() {
     pendingSessionId,
     pendingKind,
     pendingLabel,
+    connectFailure,
     onCreate,
     onSessionAction,
     onSessionSecondaryAction,

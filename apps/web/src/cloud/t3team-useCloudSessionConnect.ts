@@ -17,6 +17,13 @@ import {
 } from "~/components/cloud/t3team-cloudSessionConnect";
 import { cloudSessionDisplayName } from "~/components/cloud/t3team-cloudSessionDisplayName";
 import { toastManager } from "~/components/ui/toast";
+import { cloudSessionFailureDescription } from "./t3team-cloudSessionFailureDescription";
+
+/** Why the last connect attempt for a session ended without connecting; shown on its row. */
+export interface CloudSessionConnectFailure {
+  readonly sessionId: string;
+  readonly message: string;
+}
 
 type RegisterRelay = (
   registration: RelayConnectionRegistration | BrokerConnectionRegistration,
@@ -58,11 +65,13 @@ export function useCloudSessionConnect(input: {
   register: RegisterRelay;
 }): {
   readonly connectPendingSessionId: string | null;
+  readonly connectFailure: CloudSessionConnectFailure | null;
   readonly requestConnect: (sessionId: string) => void;
 } {
   const { sessions, relayCandidates, primaryEnvironmentId, environmentIdsBefore, register } = input;
   const [connectRequestId, setConnectRequestId] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
+  const [connectFailure, setConnectFailure] = useState<CloudSessionConnectFailure | null>(null);
   const firedForRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -74,12 +83,20 @@ export function useCloudSessionConnect(input: {
     const session = sessions.find((item) => item.sessionId === connectRequestId) ?? null;
     if (session === null || session.phase !== "ready") {
       setConnectRequestId(null);
+      setConnectFailure({
+        sessionId: connectRequestId,
+        message: "That cloud session is no longer ready.",
+      });
       return;
     }
     const broker = brokerRegistration(session);
     if (session.transport === "nexi_broker" && broker === null) {
       // Never guess a relay machine for a broker session: its id arrives once the VM is up.
       setConnectRequestId(null);
+      setConnectFailure({
+        sessionId: connectRequestId,
+        message: "Still starting — try again in a moment.",
+      });
       toastManager.add({
         type: "info",
         title: "This cloud session is still starting — try again in a moment.",
@@ -95,6 +112,10 @@ export function useCloudSessionConnect(input: {
         });
     if (target === null) {
       setConnectRequestId(null);
+      setConnectFailure({
+        sessionId: connectRequestId,
+        message: "Not visible to this app yet — try again in a moment.",
+      });
       toastManager.add({
         type: "info",
         title: "This session is ready — connect to it from your environment list.",
@@ -116,6 +137,10 @@ export function useCloudSessionConnect(input: {
         if (result._tag === "Success") {
           toastManager.add({ type: "success", title: `Connected to ${target.label}.` });
         } else if (!isAtomCommandInterrupted(result)) {
+          setConnectFailure({
+            sessionId: connectRequestId,
+            message: cloudSessionFailureDescription(result),
+          });
           toastManager.add({
             type: "error",
             title: "Could not connect to that cloud session.",
@@ -137,11 +162,13 @@ export function useCloudSessionConnect(input: {
   ]);
 
   const requestConnect = useCallback((sessionId: string) => {
+    setConnectFailure(null);
     setConnectRequestId(sessionId);
   }, []);
 
   return {
     connectPendingSessionId: registering ? connectRequestId : null,
+    connectFailure,
     requestConnect,
   };
 }
