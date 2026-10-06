@@ -39,6 +39,7 @@ export type DigestDecision = {
 export type DigestReviewer = {
   readonly name: string;
   readonly login: string;
+  readonly avatarUrl?: string;
   readonly decision?: "approved" | "changes-requested";
 };
 
@@ -109,6 +110,7 @@ export type DigestDependency = {
     readonly title: string;
     readonly status: string;
     readonly assignee?: string;
+    readonly assigneeAvatarUrl?: string;
     readonly url?: string;
   };
 };

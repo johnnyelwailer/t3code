@@ -26,7 +26,13 @@ function DependencyPerson({ dependency }: { dependency: DigestDependency }) {
             onClick={(event) => event.stopPropagation()}
             className="inline-flex items-center gap-1 text-foreground/80 hover:text-foreground"
           >
-            <WorkItemPersonAvatar person={{ displayName: name }} size="sm" />
+            <WorkItemPersonAvatar
+              person={{
+                displayName: name,
+                ...(other.assigneeAvatarUrl ? { avatarUrl: other.assigneeAvatarUrl } : {}),
+              }}
+              size="sm"
+            />
             <span>{name.split(" ")[0]}</span>
             {dependency.relation !== "same-story" ? (
               // Their ticket says what part they own (FE, BE, review…) and is what links the two.

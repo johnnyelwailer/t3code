@@ -96,6 +96,7 @@ export type MyWorkDigestPayload = {
         readonly title: string;
         readonly status: string;
         readonly assignee?: string;
+        readonly assigneeAvatarUrl?: string;
         readonly url?: string;
       };
     }>;

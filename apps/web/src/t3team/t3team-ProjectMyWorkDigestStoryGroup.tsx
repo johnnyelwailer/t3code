@@ -125,7 +125,10 @@ export function DigestOtherChildren({
           </span>
           {child.assignee ? (
             <WorkItemPersonAvatar
-              person={{ displayName: child.assignee }}
+              person={{
+                displayName: child.assignee,
+                ...(child.assigneeAvatarUrl ? { avatarUrl: child.assigneeAvatarUrl } : {}),
+              }}
               size="sm"
               isCurrentUser={child.assignee === viewerName}
             />

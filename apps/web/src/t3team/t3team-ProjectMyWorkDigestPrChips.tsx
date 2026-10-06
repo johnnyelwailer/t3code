@@ -59,7 +59,13 @@ export function DigestReviewerStack({
                 className="inline-flex opacity-80 hover:opacity-100"
                 aria-label={`Reviewed by ${reviewer.name}`}
               >
-                <WorkItemPersonAvatar person={{ displayName: reviewer.name }} size="sm" />
+                <WorkItemPersonAvatar
+                  person={{
+                    displayName: reviewer.name,
+                    ...(reviewer.avatarUrl ? { avatarUrl: reviewer.avatarUrl } : {}),
+                  }}
+                  size="sm"
+                />
               </a>
             }
           />

@@ -90,11 +90,11 @@ export function digestReviewRequests(
     }
   });
   // Nobody on it yet comes first — someone else already reviewing makes a PR less urgent for the
-  // viewer — then the one waiting longest.
+  // viewer — then not yet read (unknown), then already covered; within each, the longest waiting.
+  const coverage = (review: DigestReviewRequest) =>
+    review.engaged === undefined ? 1 : review.engaged.length > 0 ? 2 : 0;
   return [...byId.values()].toSorted(
-    (a, b) =>
-      Number((a.engaged?.length ?? 0) > 0) - Number((b.engaged?.length ?? 0) > 0) ||
-      Date.parse(a.updatedAt) - Date.parse(b.updatedAt),
+    (a, b) => coverage(a) - coverage(b) || Date.parse(a.updatedAt) - Date.parse(b.updatedAt),
   );
 }
 

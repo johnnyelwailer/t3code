@@ -11,7 +11,7 @@ import type {
   DigestReviewRequest,
   DigestSection,
 } from "~/t3team/t3team-projectMyWorkDigestPlan";
-import { PullRequestActorAvatar } from "~/components/pullRequest/pullRequestPresentation";
+import { WorkItemPersonAvatar } from "~/t3team/workitem/t3team-WorkItemPersonAvatar";
 
 /**
  * A person: their GitHub face and first name. Where the panel is narrow the face carries it alone
@@ -21,16 +21,14 @@ function DigestPersonPill({ person }: { person: DigestPrPerson }) {
   const first = person.name.split(" ")[0];
   return (
     <span className="inline-flex items-center gap-1 text-foreground/80" title={person.name}>
-      {person.avatarUrl ? (
-        <PullRequestActorAvatar
-          actor={{ login: person.login, name: person.name, avatarUrl: person.avatarUrl }}
-        />
-      ) : (
-        <PullRequestActorAvatar
-          actor={{ login: person.name, name: person.name, avatarUrl: null }}
-          className="@md/reviews:hidden"
-        />
-      )}
+      <WorkItemPersonAvatar
+        person={{
+          displayName: person.name,
+          ...(person.avatarUrl ? { avatarUrl: person.avatarUrl } : {}),
+        }}
+        size="sm"
+        {...(person.avatarUrl ? {} : { className: "@md/reviews:hidden" })}
+      />
       <span className="hidden @md/reviews:inline">{first}</span>
     </span>
   );
@@ -45,7 +43,8 @@ function ReviewCoverage({ review }: { review: DigestReviewRequest }) {
   const asked = (review.reviewers ?? []).filter(
     (reviewer) => !engaged.some((person) => person.login === reviewer.login),
   );
-  if (review.engaged === undefined && review.reviewers === undefined) return null;
+  // Not read yet: claim nothing rather than "nobody has reviewed".
+  if (review.engaged === undefined) return null;
   return (
     <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
       {engaged.length > 0 ? (
