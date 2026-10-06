@@ -2,7 +2,7 @@ import { ThreadDetailsSelectControl } from "./chat/ThreadDetailsControl";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
 import type { CloudSession, EnvironmentId, ProjectId } from "@t3tools/contracts";
-import { CloudIcon, ScaleIcon, SettingsIcon } from "lucide-react";
+import { CloudIcon, ScaleIcon, SettingsIcon, XIcon } from "lucide-react";
 import { memo, useMemo, useState } from "react";
 
 import type { EnvironmentOption } from "./BranchToolbar.logic";
@@ -73,6 +73,8 @@ export interface BranchToolbarEnvironmentSelectorProps {
    * configured; the same controller drives the Settings panel's Connect.
    */
   onCloudSessionAction?: (cloudSession: CloudSession) => void;
+  /** t3team: hides a surfaced failure from the menu once the user has seen it. */
+  onDismissCloudSession?: (cloudSession: CloudSession) => void;
   /**
    * Drives background polling of the session list for as long as the menu is
    * open (a provisioning session changes phase every few seconds). Absent or
@@ -94,6 +96,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
   cloudSessionProject,
   onSetupCloudSessions,
   onCloudSessionAction,
+  onDismissCloudSession,
   onCloudMenuOpenChange,
 }: BranchToolbarEnvironmentSelectorProps) {
   const composerFloatingLayerProps = useComposerMenuProps();
@@ -317,6 +320,16 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
                       )}
                     />
                     <CloudRowText title={presentation.title} detail={presentation.detail} />
+                    {cloudSession.phase === "failed" && onDismissCloudSession ? (
+                      <button
+                        type="button"
+                        aria-label="Dismiss"
+                        onClick={() => onDismissCloudSession(cloudSession)}
+                        className="-mr-1 shrink-0 cursor-pointer rounded-sm p-0.5 text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                      >
+                        <XIcon className="size-3" aria-hidden="true" />
+                      </button>
+                    ) : null}
                   </div>
                 );
               })}

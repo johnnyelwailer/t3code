@@ -1,10 +1,16 @@
-import type { ScopedProjectRef } from "@t3tools/contracts";
+import type { CloudSession, ScopedProjectRef } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 import { useNavigate } from "@tanstack/react-router";
 import { type ComponentProps, useCallback, useMemo } from "react";
 
 import { useCloudSessionController } from "~/cloud/t3team-useCloudSessionController";
 import type { BranchToolbarEnvironmentSelector } from "~/components/BranchToolbarEnvironmentSelector";
+import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { runOnCloudSessions } from "./t3team-cloudSessionSplit";
+
+const DISMISSED_FAILURES_KEY = "t3code:cloud-session-dismissed-failures";
+const DISMISSED_FAILURES_LIMIT = 20;
+const DismissedFailuresSchema = Schema.Array(Schema.String);
 
 type SelectorProps = ComponentProps<typeof BranchToolbarEnvironmentSelector>;
 type CloudSelectorProps = Pick<
@@ -12,6 +18,7 @@ type CloudSelectorProps = Pick<
   | "pendingCloudSessions"
   | "onCreateCloudSession"
   | "onCloudSessionAction"
+  | "onDismissCloudSession"
   | "onCloudMenuOpenChange"
   | "onSetupCloudSessions"
   | "cloudSessionProject"
@@ -36,9 +43,22 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
   const { available, configured, sessions, onCreate } = cloudSessions;
   const { primaryEnvironmentId } = cloudSessions;
   const { onSessionAction, onCloudMenuOpenChange } = cloudSessions;
+  // A failure surfaced in the menu stays dismissed once the user closed it (kept per browser; the
+  // list only ever surfaces the newest session, so the stored ids never grow past a handful).
+  const [dismissed, setDismissed] = useLocalStorage(
+    DISMISSED_FAILURES_KEY,
+    [] as ReadonlyArray<string>,
+    DismissedFailuresSchema,
+  );
+  const dismissedIds = useMemo(() => new Set(dismissed), [dismissed]);
   const pendingCloudSessions = useMemo(
-    () => (available ? runOnCloudSessions(sessions) : []),
-    [available, sessions],
+    () => (available ? runOnCloudSessions(sessions, dismissedIds) : []),
+    [available, dismissedIds, sessions],
+  );
+  const onDismissCloudSession = useCallback(
+    (session: CloudSession) =>
+      setDismissed((current) => [session.sessionId, ...current].slice(0, DISMISSED_FAILURES_LIMIT)),
+    [setDismissed],
   );
   const projectEnvironmentId = projectRef?.environmentId ?? null;
   const projectId = projectRef?.projectId ?? null;
@@ -69,6 +89,7 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
               onCreateCloudSession,
               ...(cloudSessionProject ? { cloudSessionProject } : {}),
               onCloudSessionAction: onSessionAction,
+              onDismissCloudSession,
               onCloudMenuOpenChange,
             }
           : { onSetupCloudSessions },
@@ -78,6 +99,7 @@ export function useT3TeamRunOnCloudSessionProps(projectRef: ScopedProjectRef | n
       configured,
       onCloudMenuOpenChange,
       onCreateCloudSession,
+      onDismissCloudSession,
       onSessionAction,
       onSetupCloudSessions,
       pendingCloudSessions,
